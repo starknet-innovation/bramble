@@ -38,9 +38,9 @@ describe("gasless route", () => {
     expect(GASLESS_FORWARDER_ADDRESS.SN_SEPOLIA).toBeNull();
   });
 
-  test("both networks stay off, so neither route is ready", () => {
-    expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: false, SN_SEPOLIA: false });
-    expect(gaslessRouteReady(gaslessRoute("SN_MAIN"))).toBe(false);
+  test("mainnet is on and Sepolia stays off, so only mainnet is ready", () => {
+    expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: true, SN_SEPOLIA: false });
+    expect(gaslessRouteReady(gaslessRoute("SN_MAIN"))).toBe(true);
     expect(gaslessRouteReady(gaslessRoute("SN_SEPOLIA"))).toBe(false);
     expect(gaslessRoute("SN_DEVNET")).toBeNull();
   });

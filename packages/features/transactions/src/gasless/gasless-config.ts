@@ -26,11 +26,12 @@ export const GASLESS_PAYMASTER_URLS: Readonly<Record<GaslessNetworkId, string>> 
 };
 
 /**
- * Wallet-side switches. Both stay off until the fee amount, lost-reply
- * tracking, and review copy are settled. Sepolia also has no forwarder.
+ * Wallet-side switches. Mainnet is on by Adrien's decision on Oct 28, 2026.
+ * The independent security review is still pending. Sepolia stays off: that
+ * network has no forwarder, so the route refuses.
  */
 export const GASLESS_FEES_ENABLED: Readonly<Record<GaslessNetworkId, boolean>> = {
-  SN_MAIN: false,
+  SN_MAIN: true,
   SN_SEPOLIA: false,
 };
 

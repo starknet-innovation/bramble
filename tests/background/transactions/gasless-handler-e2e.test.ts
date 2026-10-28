@@ -1,6 +1,6 @@
 /**
- * Gasless send through the real transfer handlers. The shipped flags stay
- * off. The test hooks inject an enabled mainnet route, the transport, and
+ * Gasless send through the real transfer handlers. Mainnet is on by Adrien's
+ * decision on Oct 28, 2026. The test hooks still replace the transport and
  * the clock so fetch cannot leave the process. Sepolia stays off. Mainnet
  * never builds deploy_and_invoke: an undeployed account is refused before
  * that request exists.
@@ -55,7 +55,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: false, SN_SEPOLIA: false });
+  expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: true, SN_SEPOLIA: false });
 });
 
 afterEach(closeGaslessHarness);

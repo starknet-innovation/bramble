@@ -1,8 +1,8 @@
 /**
  * Gasless dapp approval through the real invoke handlers. The Pay up to
- * button is the production card. The shipped flags stay off; the test hooks
- * inject an enabled mainnet route, the transport, and the clock. Sepolia
- * stays off.
+ * button is the production card. Mainnet is on by Adrien's decision on
+ * Oct 28, 2026. The test hooks still replace the transport and the clock.
+ * Sepolia stays off.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { INDETERMINATE_RPC_WRITE_MESSAGE } from "@bramble/starknet/provider";
@@ -36,7 +36,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: false, SN_SEPOLIA: false });
+  expect(GASLESS_FEES_ENABLED).toEqual({ SN_MAIN: true, SN_SEPOLIA: false });
 });
 
 afterEach(closeGaslessHarness);
