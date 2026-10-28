@@ -1,8 +1,11 @@
 //! The RPC history scan (`history/tx-history-scan.ts collectTransactionHistory` and
 //! `tx-history.ts decodeTransferEvent`) as a sans-IO step machine: `starknet_blockNumber`, then
-//! for each tracked token two key-filtered `starknet_getEvents` reads (outgoing, incoming) of up
-//! to three 100-event pages over the last 200 000 blocks (re-read over the last 20 000 when that
-//! overflows), then one `starknet_getBlockWithTxHashes` per distinct block for the timestamps.
+//! for each tracked token a one-event probe that learns its Transfer layout, then its reads of
+//! up to three 100-event pages over the last 200 000 blocks (re-read over the last 20 000 when
+//! that overflows): two key-filtered reads (outgoing, incoming) for an indexed token, one
+//! selector-only read for a legacy (Cairo 0) token, whose `from`/`to` are in `data` (Sherlock
+//! 223). A token's rows count only once all its reads succeeded. Then one
+//! `starknet_getBlockWithTxHashes` per distinct block for the timestamps.
 //!
 //! Failover (design §3.9): `accept` reports `Transport` when the endpoint failed; the host then
 //! calls `restart` and replays the whole scan on the next chain-id-verified endpoint, exactly as
@@ -47,8 +50,16 @@ pub enum ScanStep {
 #[derive(Debug, Clone)]
 enum Phase {
     Latest,
+    /// `emitsLegacyTransfers`: one Transfer event of the token, to learn its layout.
+    Probe {
+        token: usize,
+    },
     Events {
         token: usize,
+        /// A legacy token is read with the selector alone, so it has one filter.
+        legacy: bool,
+        /// The token's transfers from its finished filters, kept only if every read succeeds.
+        kept: Vec<(DecodedTransfer, usize)>,
         filter: usize,
         recent: bool,
         page: usize,
@@ -110,16 +121,7 @@ impl HistoryScan {
     // The first scannable token at or after `from`, or the timestamp phase when none is left.
     fn next_token(&self, scan: &mut Scan, from: usize) {
         match (from..self.tokens.len()).find(|i| self.scannable(*i)) {
-            Some(token) => {
-                scan.phase = Phase::Events {
-                    token,
-                    filter: 0,
-                    recent: false,
-                    page: 0,
-                    continuation: None,
-                    buffer: Vec::new(),
-                };
-            }
+            Some(token) => scan.phase = Phase::Probe { token },
             None => self.rank(scan),
         }
     }
@@ -189,9 +191,38 @@ impl HistoryScan {
         scan.phase = Phase::Done(entries);
     }
 
+    fn probe_call(&self, id: u64, scan: &Scan, token: usize) -> RpcRequest {
+        rpc_call(
+            id,
+            "starknet_getEvents",
+            json!({ "filter": {
+                "address": self.tokens[token].address,
+                "chunk_size": 1,
+                "from_block": { "block_number": scan.from_block },
+                "keys": [[TRANSFER_EVENT_KEY]],
+                "to_block": { "block_number": scan.latest },
+            } }),
+        )
+    }
+
+    // The probe's verdict: `Some(legacy)`, or `None` for an answer that is not an events page
+    // (the extension's probe throws a non-transport error there, which skips the token).
+    fn probed_layout(result: &JsValue) -> Option<bool> {
+        let first = match result.get("events") {
+            None | Some(JsValue::Null) => None,
+            Some(JsValue::Array(events)) => events.first(),
+            Some(_) => return None,
+        };
+        match first {
+            None => Some(false),
+            Some(event) => Some(event.get("keys")?.as_array()?.len() < 3),
+        }
+    }
+
     fn events_call(&self, id: u64, scan: &Scan) -> Option<RpcRequest> {
         let Phase::Events {
             token,
+            legacy,
             filter,
             recent,
             continuation,
@@ -200,10 +231,10 @@ impl HistoryScan {
         else {
             return None;
         };
-        let keys = if *filter == 0 {
-            json!([[TRANSFER_EVENT_KEY], [self.account]])
-        } else {
-            json!([[TRANSFER_EVENT_KEY], [], [self.account]])
+        let keys = match (*legacy, *filter) {
+            (true, _) => json!([[TRANSFER_EVENT_KEY]]),
+            (false, 0) => json!([[TRANSFER_EVENT_KEY], [self.account]]),
+            (false, _) => json!([[TRANSFER_EVENT_KEY], [], [self.account]]),
         };
         let from = if *recent {
             scan.from_block
@@ -233,6 +264,8 @@ impl HistoryScan {
     fn accept_events(&self, scan: &mut Scan, result: &JsValue) -> Result<(), ()> {
         let Phase::Events {
             token,
+            legacy,
+            kept,
             filter,
             recent,
             page,
@@ -277,12 +310,14 @@ impl HistoryScan {
                 return Ok(());
             }
         }
-        let (token, filter) = (*token, *filter);
-        let committed = std::mem::take(buffer);
-        scan.collected.extend(committed);
-        if filter == 0 {
+        let (token, legacy, filter) = (*token, *legacy, *filter);
+        let mut kept = std::mem::take(kept);
+        kept.append(buffer);
+        if !legacy && filter == 0 {
             scan.phase = Phase::Events {
                 token,
+                legacy,
+                kept,
                 filter: 1,
                 recent: false,
                 page: 0,
@@ -290,6 +325,7 @@ impl HistoryScan {
                 buffer: Vec::new(),
             };
         } else {
+            scan.collected.extend(kept);
             self.next_token(scan, token + 1);
         }
         Ok(())
@@ -347,6 +383,10 @@ impl HistoryScan {
                 let id = take_id(&mut scan, 0);
                 calls.push(rpc_call(id, "starknet_blockNumber", json!([])));
             }
+            Phase::Probe { token } => {
+                let id = take_id(&mut scan, 0);
+                calls.push(self.probe_call(id, &scan, token));
+            }
             Phase::Events { .. } => {
                 let id = take_id(&mut scan, 0);
                 if let Some(call) = self.events_call(id, &scan) {
@@ -371,7 +411,8 @@ impl HistoryScan {
         calls
     }
 
-    /// Judges one reply. A node error skips that token (or leaves that block undated).
+    /// Judges one reply. A node error skips that token, dropping the rows its earlier reads found
+    /// (or leaves that block undated).
     pub fn accept(&self, reply: RpcReply) -> ScanStep {
         let mut scan = self.lock();
         let Some(index) = scan.outstanding.iter().position(|(id, _)| *id == reply.id) else {
@@ -394,6 +435,25 @@ impl HistoryScan {
                 scan.from_block = latest.saturating_sub(HISTORY_BLOCK_WINDOW);
                 self.next_token(&mut scan, 0);
             }
+            Phase::Probe { token } => match &judged {
+                Reply::Result(JsValue::Null) => return ScanStep::Transport,
+                Reply::Result(result) => match Self::probed_layout(result) {
+                    Some(legacy) => {
+                        scan.phase = Phase::Events {
+                            token,
+                            legacy,
+                            kept: Vec::new(),
+                            filter: 0,
+                            recent: false,
+                            page: 0,
+                            continuation: None,
+                            buffer: Vec::new(),
+                        };
+                    }
+                    None => self.next_token(&mut scan, token + 1),
+                },
+                _ => self.next_token(&mut scan, token + 1),
+            },
             Phase::Events { token, .. } => match &judged {
                 Reply::Result(result) => {
                     if self.accept_events(&mut scan, result).is_err() {

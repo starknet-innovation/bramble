@@ -174,6 +174,7 @@ impl WalletCore {
         }
         let transfer = Transfer {
             symbol: token.symbol.clone(),
+            token_address: requested,
             is_strk: token.symbol == "STRK",
             recipient,
             amount,

@@ -9,6 +9,7 @@ fn entry(hash: &str, at: u64) -> Entry {
         account_id: SCOPE.into(),
         amount: Some("1.5".into()),
         counterparty: Some("0x1".into()),
+        direction: None,
         failure_notice: None,
         finalized_on_l1: None,
         hash: hash.into(),
@@ -19,6 +20,7 @@ fn entry(hash: &str, at: u64) -> Entry {
         submitted_at: at,
         summary: "Send 1.5 STRK to 0x1…0x1".into(),
         token: Some("STRK".into()),
+        token_address: None,
     }
 }
 

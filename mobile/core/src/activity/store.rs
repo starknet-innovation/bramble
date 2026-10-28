@@ -46,6 +46,8 @@ pub(crate) struct Entry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub counterparty: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure_notice: Option<String>,
     #[serde(
         default,
@@ -63,6 +65,8 @@ pub(crate) struct Entry {
     pub summary: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_address: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -129,11 +133,6 @@ pub(crate) fn parse_kind(text: &str) -> Option<ActivityKind> {
     }
 }
 
-/// `isUnresolvedTxStatus`.
-pub(crate) fn unresolved(status: TxStatus) -> bool {
-    matches!(status, TxStatus::Pending | TxStatus::Preconfirmed)
-}
-
 /// `monotonicTxStatus`: terminal failures stick, and progress never moves backwards.
 pub(crate) fn monotonic(current: TxStatus, observed: TxStatus) -> TxStatus {
     let terminal = |s: TxStatus| matches!(s, TxStatus::Rejected | TxStatus::Reverted);
@@ -181,6 +180,14 @@ fn valid(entry: &Entry, scope: &str) -> bool {
         && detail_ok(&entry.amount)
         && detail_ok(&entry.counterparty)
         && detail_ok(&entry.token)
+        && entry
+            .direction
+            .as_deref()
+            .is_none_or(|direction| matches!(direction, "in" | "out"))
+        && crate::history::activity::is_recorded_token_address(
+            entry.token_address.as_deref(),
+            entry.token.as_deref(),
+        )
         && entry
             .failure_notice
             .as_deref()

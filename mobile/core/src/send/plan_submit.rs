@@ -336,17 +336,20 @@ impl PlanState {
     /// extension's `recordSubmittedActivity`: a storage failure never blocks or rewrites a send.
     pub(super) fn persist_pending(&self, core: &WalletCore, hash: &Felt, invoke: bool) {
         let network_id = self.account.network.catalog_id();
-        let (kind, summary, amount, counterparty, token) = match (&self.kind, invoke) {
+        let (kind, summary, amount, counterparty, token, token_address) = match (&self.kind, invoke)
+        {
             (Kind::Transfer(t), true) => (
                 store::kind_text(ActivityKind::Transfer),
                 t.summary.clone(),
                 Some(t.amount_text.clone()),
                 Some(felt::canonical(&t.recipient)),
                 Some(t.symbol.clone()),
+                Some(felt::canonical(&t.token_address)),
             ),
             _ => (
                 store::kind_text(ActivityKind::Deploy),
                 DEPLOY_SUMMARY.to_string(),
+                None,
                 None,
                 None,
                 None,
@@ -358,6 +361,8 @@ impl PlanState {
                 account_id: self.account.account_id.clone(),
                 amount,
                 counterparty,
+                // A public send this wallet made moves value out (`wallet-ops.ts`).
+                direction: token.as_ref().map(|_| "out".into()),
                 failure_notice: None,
                 finalized_on_l1: None,
                 hash: felt::canonical(hash),
@@ -368,6 +373,7 @@ impl PlanState {
                 submitted_at: self.work.now_ms,
                 summary,
                 token,
+                token_address,
             },
         );
     }

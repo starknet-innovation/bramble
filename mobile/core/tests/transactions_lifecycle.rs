@@ -246,6 +246,7 @@ fn submitted_and_on_chain_rows_share_one_log() {
         account_id: id.clone(),
         amount: Some("2".into()),
         counterparty: Some("0x123".into()),
+        direction: None,
         failure_notice: None,
         finalized_on_l1: None,
         hash: "0x777".into(),
@@ -256,6 +257,7 @@ fn submitted_and_on_chain_rows_share_one_log() {
         submitted_at: 1,
         summary: "Received 2 STRK from 0x123".into(),
         token: Some("STRK".into()),
+        token_address: None,
     };
     let book = core.activity_book();
     let view = book.scan_apply(id.clone(), NetworkId::Sepolia, vec![incoming], 2_000.0);

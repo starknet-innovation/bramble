@@ -6,9 +6,10 @@
 use serde_json::{json, Map, Value};
 
 use super::explorer::is_account_id_for_network;
-use crate::activity::store::{kind_text, parse_kind, parse_status, status_text, unresolved};
+use crate::activity::store::{kind_text, parse_kind, parse_status, status_text};
 use crate::js::felt::{
-    canonical_felt, is_stark_field_element, same_felt, same_felt_value, uint256_felts,
+    canonical_felt, is_non_zero_felt, is_stark_field_element, same_felt, same_felt_value,
+    uint256_felts,
 };
 use crate::js::json::JsValue;
 use crate::js::num::{is_safe_integer, utf16_len, utf16_slice};
@@ -28,11 +29,23 @@ pub enum FailureNotice {
 
 /// The extension's `ActivityEntry`. Built only by the core (on-chain rows) or validated by it
 /// (`ActivityBook::record_local`).
+/// Whether value came into or went out of the account (`ActivityEntry.direction`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum TransferDirection {
+    In,
+    Out,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ActivityEntry {
     pub account_id: String,
     pub amount: Option<String>,
     pub counterparty: Option<String>,
+    /// Recorded where known: from the decoded transfer on discovered rows, `Out` on a send this
+    /// wallet made. The feed reads it before the summary, whose token symbol a third party
+    /// chooses (Sherlock 196). Absent on legacy rows and rows that are not one value movement.
+    #[uniffi(default = None)]
+    pub direction: Option<TransferDirection>,
     pub failure_notice: Option<FailureNotice>,
     pub finalized_on_l1: Option<bool>,
     pub hash: String,
@@ -43,6 +56,82 @@ pub struct ActivityEntry {
     pub submitted_at: u64,
     pub summary: String,
     pub token: Option<String>,
+    /// The canonical address of the token `token` names (issue 643); never without `token`.
+    #[uniffi(default = None)]
+    pub token_address: Option<String>,
+}
+
+/// `isRecordedTokenAddress`: absent, or one canonical non-zero field element beside a symbol.
+pub(crate) fn is_recorded_token_address(address: Option<&str>, token: Option<&str>) -> bool {
+    address.is_none_or(|address| {
+        token.is_some()
+            && is_non_zero_felt(address)
+            && canonical_felt(address).as_deref() == Some(address)
+    })
+}
+
+/// `activityToken`: the token's canonical address when it is a non-zero field element.
+pub(crate) fn activity_token_address(address: &str) -> Option<String> {
+    canonical_felt(address).filter(|address| is_non_zero_felt(address))
+}
+
+/// `isZeroAmountLabel`: `/^0(?:\.0*)?$/`, a formatted amount of zero.
+fn is_zero_amount_label(amount: &str) -> bool {
+    match amount.strip_prefix('0') {
+        Some(rest) => {
+            rest.is_empty()
+                || rest
+                    .strip_prefix('.')
+                    .is_some_and(|z| z.chars().all(|c| c == '0'))
+        }
+        None => false,
+    }
+}
+
+/// The symbol the explorer lane gives a token the wallet does not track.
+pub(crate) const UNTRACKED_TOKEN_SYMBOL: &str = "TOKEN";
+
+/// `withoutPlantedRows` (audit #163): the planted-row rule applied to rows stored before it
+/// existed, which reach the merge as local rows and would otherwise be kept. A zero-amount
+/// transfer and an outgoing untracked-token transfer are dropped; an incoming untracked-token
+/// transfer loses its counterparty. The extension spares `origin: "wallet"` rows; mobile records
+/// no origin, but its own sends are of a bundled token and never zero, so the rule cannot reach
+/// them.
+pub(crate) fn without_planted_rows(entries: Vec<ActivityEntry>) -> Vec<ActivityEntry> {
+    entries
+        .into_iter()
+        .filter_map(|mut entry| {
+            if entry.kind != ActivityKind::Transfer {
+                return Some(entry);
+            }
+            if entry.amount.as_deref().is_some_and(is_zero_amount_label) {
+                return None;
+            }
+            if entry.token.as_deref() != Some(UNTRACKED_TOKEN_SYMBOL) {
+                return Some(entry);
+            }
+            if entry.summary.starts_with("Sent ") {
+                return None;
+            }
+            entry.counterparty = None;
+            Some(entry)
+        })
+        .collect()
+}
+
+pub(crate) fn direction_text(direction: TransferDirection) -> &'static str {
+    match direction {
+        TransferDirection::In => "in",
+        TransferDirection::Out => "out",
+    }
+}
+
+pub(crate) fn parse_direction(text: &str) -> Option<TransferDirection> {
+    match text {
+        "in" => Some(TransferDirection::In),
+        "out" => Some(TransferDirection::Out),
+        _ => None,
+    }
 }
 
 fn optional_detail(value: Option<&String>) -> bool {
@@ -58,6 +147,7 @@ pub(crate) fn is_activity_entry(entry: &ActivityEntry) -> bool {
         && optional_detail(entry.amount.as_ref())
         && optional_detail(entry.counterparty.as_ref())
         && optional_detail(entry.token.as_ref())
+        && is_recorded_token_address(entry.token_address.as_deref(), entry.token.as_deref())
         && entry.not_found_count.is_none_or(|n| n <= MAX_SAFE_INTEGER)
 }
 
@@ -69,6 +159,9 @@ pub fn entry_to_json(entry: &ActivityEntry) -> Value {
     }
     if let Some(v) = &entry.counterparty {
         map.insert("counterparty".into(), json!(v));
+    }
+    if let Some(v) = entry.direction {
+        map.insert("direction".into(), json!(direction_text(v)));
     }
     if let Some(v) = entry.failure_notice {
         map.insert(
@@ -95,6 +188,9 @@ pub fn entry_to_json(entry: &ActivityEntry) -> Value {
     if let Some(v) = &entry.token {
         map.insert("token".into(), json!(v));
     }
+    if let Some(v) = &entry.token_address {
+        map.insert("tokenAddress".into(), json!(v));
+    }
     Value::Object(map)
 }
 
@@ -105,10 +201,11 @@ fn safe_count(value: &JsValue) -> Option<u64> {
 
 /// Reads a stored or fixture entry; `None` unless it passes `isActivityEntry`.
 pub fn entry_from_json(value: &JsValue) -> Option<ActivityEntry> {
-    const KEYS: [&str; 13] = [
+    const KEYS: [&str; 15] = [
         "accountId",
         "amount",
         "counterparty",
+        "direction",
         "failureNotice",
         "finalizedOnL1",
         "hash",
@@ -119,6 +216,7 @@ pub fn entry_from_json(value: &JsValue) -> Option<ActivityEntry> {
         "submittedAt",
         "summary",
         "token",
+        "tokenAddress",
     ];
     if !value
         .as_object()?
@@ -137,6 +235,10 @@ pub fn entry_from_json(value: &JsValue) -> Option<ActivityEntry> {
         account_id: text("accountId")?,
         amount: optional_text("amount")?,
         counterparty: optional_text("counterparty")?,
+        direction: match optional_text("direction")? {
+            None => None,
+            Some(text) => Some(parse_direction(&text)?),
+        },
         failure_notice: match value.get("failureNotice") {
             None => None,
             Some(JsValue::String(s)) if s == "pending" => Some(FailureNotice::Pending),
@@ -159,6 +261,7 @@ pub fn entry_from_json(value: &JsValue) -> Option<ActivityEntry> {
         submitted_at: safe_count(value.get("submittedAt")?)?,
         summary: text("summary")?,
         token: optional_text("token")?,
+        token_address: optional_text("tokenAddress")?,
     };
     is_activity_entry(&entry).then_some(entry)
 }
@@ -206,6 +309,11 @@ pub(crate) fn on_chain_activity_entry(
         account_id: account_id.to_string(),
         amount: Some(amount),
         counterparty: Some(decoded.counterparty.clone()),
+        direction: Some(if decoded.incoming {
+            TransferDirection::In
+        } else {
+            TransferDirection::Out
+        }),
         failure_notice: None,
         finalized_on_l1: None,
         hash: decoded.hash.clone(),
@@ -216,6 +324,7 @@ pub(crate) fn on_chain_activity_entry(
         submitted_at: timestamp_ms,
         summary: utf16_slice(&summary, 0, MAX_SUMMARY_LENGTH),
         token: Some(token.symbol.clone()),
+        token_address: activity_token_address(&token.address),
     }
 }
 
@@ -230,53 +339,39 @@ fn tx_key(entry: &ActivityEntry) -> String {
 /// The per-leg key chain rows de-duplicate on (`legKey` without the network prefix).
 pub(crate) fn leg_suffix(entry: &ActivityEntry) -> String {
     format!(
-        "\u{0}{}\u{0}{}\u{0}{}",
+        "\u{0}{}\u{0}{}\u{0}{}\u{0}{}",
         entry.token.as_deref().unwrap_or(""),
+        entry.token_address.as_deref().unwrap_or(""),
         entry.counterparty.as_deref().unwrap_or(""),
         entry.amount.as_deref().unwrap_or("")
     )
 }
 
-/// `mergeActivity`: local rows keep their identity (an unresolved one is promoted to accepted
-/// when the chain saw its transfer); chain-only rows de-duplicate per leg; newest first.
+fn leg_key(entry: &ActivityEntry) -> String {
+    format!("{}{}", tx_key(entry), leg_suffix(entry))
+}
+
+/// `mergeActivity`: every row is keyed per leg, local rows included, so a stored multi-leg
+/// transaction keeps all its legs (Sherlock 204). A transaction the wallet recorded owns every
+/// chain leg with its hash, and a chain leg never changes a local row's status: a reverted
+/// transaction still emits its fee `Transfer`, so only the status re-poll settles a row (#653).
+/// Newest first.
 pub fn merge_activity(local: &[ActivityEntry], on_chain: &[ActivityEntry]) -> Vec<ActivityEntry> {
     let mut by_key: Vec<(String, ActivityEntry)> = Vec::new();
-    let mut local_keys: Vec<String> = Vec::new();
-    let set =
-        |by_key: &mut Vec<(String, ActivityEntry)>, key: String, entry: ActivityEntry| match by_key
-            .iter_mut()
-            .find(|(k, _)| *k == key)
-        {
-            Some(slot) => slot.1 = entry,
-            None => by_key.push((key, entry)),
-        };
+    let mut local_txs: Vec<String> = Vec::new();
     for entry in local {
-        let key = tx_key(entry);
-        local_keys.push(key.clone());
-        set(&mut by_key, key, entry.clone());
-    }
-    for entry in on_chain {
-        let tk = tx_key(entry);
-        if local_keys.contains(&tk) {
-            let local_match = by_key
-                .iter()
-                .find(|(k, _)| *k == tk)
-                .map(|(_, e)| e.clone());
-            if let Some(found) = local_match {
-                if unresolved(found.status) && entry.status == TxStatus::Accepted {
-                    set(
-                        &mut by_key,
-                        tk,
-                        ActivityEntry {
-                            status: TxStatus::Accepted,
-                            ..found
-                        },
-                    );
-                }
-            }
+        let key = leg_key(entry);
+        if by_key.iter().any(|(k, _)| *k == key) {
             continue;
         }
-        let key = format!("{tk}{}", leg_suffix(entry));
+        by_key.push((key, entry.clone()));
+        local_txs.push(tx_key(entry));
+    }
+    for entry in on_chain {
+        if local_txs.contains(&tx_key(entry)) {
+            continue;
+        }
+        let key = leg_key(entry);
         if !by_key.iter().any(|(k, _)| *k == key) {
             by_key.push((key, entry.clone()));
         }
@@ -338,6 +433,53 @@ pub fn decode_transfer_event(event: &JsValue, account: &str) -> Option<DecodedTr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn planted_rows_are_dropped_or_stripped_as_the_extension_does() {
+        let row = |amount: &str, token: &str, summary: &str| ActivityEntry {
+            account_id: "SN_MAIN:0x1".into(),
+            amount: Some(amount.into()),
+            counterparty: Some("0x5".into()),
+            direction: None,
+            failure_notice: None,
+            finalized_on_l1: None,
+            hash: "0xabc".into(),
+            kind: ActivityKind::Transfer,
+            network: NetworkId::Mainnet,
+            not_found_count: None,
+            status: TxStatus::Accepted,
+            submitted_at: 1,
+            summary: summary.into(),
+            token: Some(token.into()),
+            token_address: None,
+        };
+        for zero in ["0", "0.", "0.000"] {
+            assert!(without_planted_rows(vec![row(zero, "STRK", "Received")]).is_empty());
+        }
+        for kept in ["0.01", "00", "10", "0.0001"] {
+            assert_eq!(
+                without_planted_rows(vec![row(kept, "STRK", "Received")]).len(),
+                1
+            );
+        }
+        assert!(without_planted_rows(vec![row("1", "TOKEN", "Sent 1 TOKEN to 0x5")]).is_empty());
+        let incoming = without_planted_rows(vec![row("1", "TOKEN", "Received 1 TOKEN")]);
+        assert_eq!(incoming[0].counterparty, None);
+        let tracked = without_planted_rows(vec![row("1", "STRK", "Sent 1 STRK to 0x5")]);
+        assert_eq!(tracked[0].counterparty.as_deref(), Some("0x5"));
+    }
+
+    #[test]
+    fn token_addresses_must_be_canonical_field_elements() {
+        let above_p = format!("0x{}", "f".repeat(64));
+        assert!(!is_recorded_token_address(Some(&above_p), Some("X")));
+        assert!(!is_recorded_token_address(Some("0x0"), Some("X")));
+        assert!(!is_recorded_token_address(Some("0x07"), Some("X")));
+        assert!(!is_recorded_token_address(Some("0x7"), None));
+        assert!(is_recorded_token_address(Some("0x7"), Some("X")));
+        assert_eq!(activity_token_address("-5"), None);
+        assert_eq!(activity_token_address("0x07").as_deref(), Some("0x7"));
+    }
 
     #[test]
     fn transfer_key_is_starknet_keccak() {

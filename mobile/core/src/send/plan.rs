@@ -91,6 +91,8 @@ impl Account {
 /// The one stored ERC-20 call every review, hash and record is derived from.
 pub(crate) struct Transfer {
     pub symbol: String,
+    /// The bundled token's contract, recorded on the activity row beside its symbol.
+    pub token_address: Felt,
     pub is_strk: bool,
     pub recipient: Felt,
     pub amount: U256,

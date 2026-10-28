@@ -78,6 +78,7 @@ final class PortfolioParityTests: XCTestCase {
             accountId: accountId,
             amount: row["amount"] as? String,
             counterparty: row["counterparty"] as? String,
+            direction: (row["direction"] as? String).flatMap { ["in": .in, "out": .out][$0] },
             failureNotice: nil,
             finalizedOnL1: nil,
             hash: hash,
@@ -87,7 +88,8 @@ final class PortfolioParityTests: XCTestCase {
             status: statuses[status] ?? .accepted,
             submittedAt: UInt64(submittedAt),
             summary: summary,
-            token: row["token"] as? String
+            token: row["token"] as? String,
+            tokenAddress: row["tokenAddress"] as? String
         )
     }
 

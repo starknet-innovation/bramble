@@ -5,7 +5,7 @@
 
 use std::sync::OnceLock;
 
-use super::activity::{ActivityEntry, ActivityKind};
+use super::activity::{ActivityEntry, ActivityKind, TransferDirection};
 use crate::account_names::short_label;
 use crate::js::num::{js_trim, utf16_len};
 use crate::js::regex::Regex;
@@ -148,10 +148,51 @@ fn private_appearance(summary: &str) -> Appearance {
     )
 }
 
-// `activityAppearance`: the summary decides swaps, staking, rewards, privacy and approvals; the
-// stored kind decides the rest.
+fn transfer_appearance(direction: ActivityDirection) -> Appearance {
+    if direction == ActivityDirection::In {
+        look(
+            Some(direction),
+            "arrowDownLeft",
+            "Transfer",
+            "Received",
+            "transfer",
+        )
+    } else {
+        look(
+            Some(direction),
+            "arrowDownRight",
+            "Transfer",
+            "Sent",
+            "transfer",
+        )
+    }
+}
+
+// `recordedTransferDirection`: a transfer's direction from what the wallet recorded, never from
+// words in the summary, whose token symbol a third party chooses (Sherlock 196). A discovered row
+// stored before `direction` existed begins with the wallet's own "Received " or "Sent ". The
+// extension also skips that fallback for `origin: "wallet"` rows; mobile records no origin, but
+// its own sends read "Send …", which neither prefix matches.
+fn recorded_transfer_direction(entry: &ActivityEntry) -> Option<ActivityDirection> {
+    if entry.kind != ActivityKind::Transfer {
+        return None;
+    }
+    match entry.direction {
+        Some(TransferDirection::In) => Some(ActivityDirection::In),
+        Some(TransferDirection::Out) => Some(ActivityDirection::Out),
+        None if entry.summary.starts_with("Received ") => Some(ActivityDirection::In),
+        None if entry.summary.starts_with("Sent ") => Some(ActivityDirection::Out),
+        None => None,
+    }
+}
+
+// `activityAppearance`: a transfer with a recorded direction reads from that alone; otherwise
+// the summary decides swaps, staking, rewards, privacy and approvals, and the stored kind the rest.
 pub(super) fn appearance(entry: &ActivityEntry) -> Appearance {
     use ActivityDirection::{In, Out};
+    if let Some(direction) = recorded_transfer_direction(entry) {
+        return transfer_appearance(direction);
+    }
     let summary = entry.summary.to_lowercase();
     if swap().is_match(&summary) {
         return look(Some(Out), "arrowLeftRight", "Swap", "Swapped", "swap");
@@ -189,14 +230,8 @@ pub(super) fn appearance(entry: &ActivityEntry) -> Appearance {
         return look(None, "keyRound", "Approval", title, "approval");
     }
     match entry.kind {
-        ActivityKind::Transfer if received().is_match(&summary) => look(
-            Some(In),
-            "arrowDownLeft",
-            "Transfer",
-            "Received",
-            "transfer",
-        ),
-        ActivityKind::Transfer => look(Some(Out), "arrowDownRight", "Transfer", "Sent", "transfer"),
+        ActivityKind::Transfer if received().is_match(&summary) => transfer_appearance(In),
+        ActivityKind::Transfer => transfer_appearance(Out),
         ActivityKind::Deploy => look(None, "rocket", "Deployment", "Deployed", "deploy"),
         ActivityKind::Declare => look(
             None,

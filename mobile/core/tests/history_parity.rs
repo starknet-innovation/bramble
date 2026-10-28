@@ -159,7 +159,7 @@ fn answer(chain: Chain, call: &RpcRequest) -> RpcReply {
             let key = format!(
                 "{}|{}|{}|{}",
                 text(filter, "address"),
-                list(filter, "keys").len() - 2,
+                list(filter, "keys").len() as i64 - 2,
                 num(at(filter, "from_block"), "block_number"),
                 opt_text(filter, "continuation_token").unwrap_or_default()
             );
