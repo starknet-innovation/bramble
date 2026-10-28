@@ -10,8 +10,9 @@ use super::model::DisplayCurrency;
 use super::ordered::OrderedMap;
 pub use super::price_cache::normalize_price_address;
 use super::price_cache::{
-    encode_uri_component, get_request, load_state, parse_answer, parse_chart, project, read_record,
-    snapshot_as_of, state_document, wanted_addresses, ChartEntry, Entry, PriceCache, State,
+    cache_covers, encode_uri_component, get_request, load_state, oldest_refresh, parse_answer,
+    parse_chart, prices_fresh, project, read_record, state_document, wanted_addresses,
+    within_window, ChartEntry, Entry, PriceCache, State,
 };
 use super::wire::{HttpOutcome, HttpRequest};
 use crate::networks::NetworkId;
@@ -114,8 +115,11 @@ impl PriceBook {
         })
     }
 
-    /// `getPrices`' decision: serve from the cache, or fetch these requests. Off mainnet the
-    /// cached projection is always served (never stale, never fetched), as the extension does.
+    /// `getPrices`' decision: serve from the cache, or fetch these requests. Off mainnet there is
+    /// no fiat by design: the cache only ever holds mainnet prices, and ETH and STRK share their
+    /// addresses across networks, so it is never served there (Sherlock 185). Freshness and the
+    /// reported capture time are per address, so one token's refresh never vouches for another's
+    /// age (mc-wallet #357).
     pub fn plan(
         &self,
         network: NetworkId,
@@ -124,35 +128,37 @@ impl PriceBook {
         now_ms: f64,
         cached_only: bool,
     ) -> PricePlan {
+        if network != NetworkId::Mainnet {
+            return PricePlan::Serve {
+                view: project(&addresses, None, &PriceCache::default(), currency, false),
+            };
+        }
         let state = self.state();
         let cache = &state.cache;
         let wanted = wanted_addresses(&addresses);
-        if network != NetworkId::Mainnet || wanted.is_empty() {
+        if wanted.is_empty() {
             return PricePlan::Serve {
                 view: project(&addresses, None, cache, currency, false),
             };
         }
-        let fresh = now_ms - cache.fetched_at < PRICE_TTL_MS;
-        let as_of = snapshot_as_of(cache.fetched_at);
+        let fresh = prices_fresh(cache, &wanted, now_ms, PRICE_TTL_MS);
+        let as_of = oldest_refresh(cache, &wanted);
         if cached_only {
             return PricePlan::Serve {
                 view: project(&addresses, as_of, cache, currency, !fresh),
             };
         }
-        let covers = wanted.iter().all(|a| {
-            cache.prices.get(a).is_some() || cache.checked.as_ref().is_some_and(|c| c.contains(a))
-        });
-        if fresh && covers {
+        if fresh && cache_covers(cache, &wanted) {
             return PricePlan::Serve {
                 view: project(&addresses, as_of, cache, currency, false),
             };
         }
         let backing_off = wanted.iter().all(|a| {
-            cache
-                .attempted
-                .as_ref()
-                .and_then(|m| m.get(a))
-                .is_some_and(|at| *at <= now_ms && now_ms - *at < PRICE_RETRY_BACKOFF_MS)
+            within_window(
+                cache.attempted.as_ref().and_then(|m| m.get(a)),
+                now_ms,
+                PRICE_RETRY_BACKOFF_MS,
+            )
         });
         if backing_off {
             return PricePlan::Serve {
@@ -173,7 +179,10 @@ impl PriceBook {
         }
     }
 
-    /// `fetchAndStorePrices`: judges each outcome and merges per the fetchedAt/asOf/stale rules.
+    /// `fetchAndStorePrices`: judges each outcome and merges per `mergeAnsweredPrices`. Only the
+    /// addresses that answered get a refresh time, so a failed leg keeps its old age; an address
+    /// that answered without a usable price loses its cached price and change, so the refresh
+    /// time never vouches for a price the feed no longer stands behind.
     pub fn apply(
         &self,
         network: NetworkId,
@@ -182,9 +191,12 @@ impl PriceBook {
         outcomes: Vec<PriceOutcome>,
         attempted_at_ms: f64,
     ) -> PriceView {
+        if network != NetworkId::Mainnet {
+            return project(&addresses, None, &PriceCache::default(), currency, false);
+        }
         let mut state = self.state();
         let wanted = wanted_addresses(&addresses);
-        if network != NetworkId::Mainnet || wanted.is_empty() {
+        if wanted.is_empty() {
             return project(&addresses, None, &state.cache, currency, false);
         }
         let previous = state.cache.clone();
@@ -205,17 +217,19 @@ impl PriceBook {
         }
         if answered.is_empty() {
             state.cache.attempted = Some(attempted);
-            return project(
-                &addresses,
-                snapshot_as_of(previous.fetched_at),
-                &state.cache,
-                currency,
-                true,
-            );
+            let as_of = oldest_refresh(&state.cache, &wanted);
+            return project(&addresses, as_of, &state.cache, currency, true);
         }
         let mut checked = previous.checked.clone().unwrap_or_default();
         let mut changes = previous.changes.clone().unwrap_or_default();
         let mut prices = previous.prices.clone();
+        let mut refreshed = previous.refreshed.clone().unwrap_or_default();
+        for (address, price, _) in &answered {
+            if price.is_none() {
+                prices.remove(address);
+                changes.remove(address);
+            }
+        }
         for (address, price, change) in &answered {
             if !checked.contains(address) {
                 checked.push(address.clone());
@@ -226,6 +240,7 @@ impl PriceBook {
             if let Some(price) = price {
                 prices.insert(address.clone(), *price);
             }
+            refreshed.insert(address.clone(), attempted_at_ms);
         }
         state.cache = PriceCache {
             attempted: Some(attempted),
@@ -233,29 +248,11 @@ impl PriceBook {
             checked: Some(checked),
             fetched_at: attempted_at_ms,
             prices,
+            refreshed: Some(refreshed),
         };
-        let unanswered: Vec<&String> = wanted
-            .iter()
-            .filter(|a| !answered.iter().any(|(b, _, _)| b == *a))
-            .collect();
-        if unanswered.is_empty() {
-            return project(
-                &addresses,
-                Some(attempted_at_ms),
-                &state.cache,
-                currency,
-                false,
-            );
-        }
-        let serves_cached = unanswered
-            .iter()
-            .any(|a| state.cache.prices.get(a).is_some());
-        let as_of = if serves_cached {
-            snapshot_as_of(previous.fetched_at)
-        } else {
-            Some(attempted_at_ms)
-        };
-        project(&addresses, as_of, &state.cache, currency, true)
+        let as_of = oldest_refresh(&state.cache, &wanted);
+        let stale = !prices_fresh(&state.cache, &wanted, attempted_at_ms, PRICE_TTL_MS);
+        project(&addresses, as_of, &state.cache, currency, stale)
     }
 
     /// `getTokenChart`'s decision for a token's 7-day series (address must be a non-zero felt).
@@ -271,19 +268,17 @@ impl PriceBook {
                 reason: "token address is not a field element".into(),
             });
         }
+        // As with prices: the chart cache only ever holds mainnet charts.
+        if network != NetworkId::Mainnet {
+            return Ok(ChartPlan::Serve { points: Vec::new() });
+        }
         let state = self.state();
         let key = format!("{}:{}", normalize_price_address(&address), currency.code());
         let cached = state.charts.get(&key);
-        if network != NetworkId::Mainnet {
-            return Ok(ChartPlan::Serve {
-                points: cached.map(|c| c.points.clone()).unwrap_or_default(),
-            });
-        }
         if let Some(cached) = cached {
             let fresh = cached.fetched_at > 0.0 && now_ms - cached.fetched_at < CHART_TTL_MS;
-            let backing_off = cached
-                .attempted_at
-                .is_some_and(|at| at <= now_ms && now_ms - at < PRICE_RETRY_BACKOFF_MS);
+            let backing_off =
+                within_window(cached.attempted_at.as_ref(), now_ms, PRICE_RETRY_BACKOFF_MS);
             if fresh || backing_off {
                 return Ok(ChartPlan::Serve {
                     points: cached.points.clone(),

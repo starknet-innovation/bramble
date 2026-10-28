@@ -31,6 +31,11 @@ impl<V> OrderedMap<V> {
         }
     }
 
+    /// Drops `key`, keeping every other key's order (`withoutKeys`).
+    pub fn remove(&mut self, key: &str) {
+        self.0.retain(|(k, _)| k != key);
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }

@@ -400,6 +400,29 @@ export const pricesBlock = async () => {
         now: t0 + 1_070_000,
       },
     ]),
+    // b78b0507: once the feed answers an address without a usable price ({} or one currency), its
+    // cached price and change are dropped rather than freshened by the new refresh time.
+    dropped: await runPriceTimeline([
+      { addresses: [STRK, ETH], answers: fresh, currency: "usd", networkId: "SN_MAIN", now: t0 },
+      {
+        addresses: [STRK, ETH],
+        answers: {
+          [STRK]: { body: "{}", status: 200 },
+          [ETH]: { body: body(ETH, '{"usd":2600}'), status: 200 },
+        },
+        currency: "usd",
+        networkId: "SN_MAIN",
+        now: t0 + 400_000,
+      },
+      {
+        addresses: [STRK, ETH],
+        answers: {},
+        cached: true,
+        currency: "usd",
+        networkId: "SN_MAIN",
+        now: t0 + 401_000,
+      },
+    ]),
     checked: await runPriceTimeline([
       {
         addresses: [UNPRICED],
