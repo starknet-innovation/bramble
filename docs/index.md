@@ -22,6 +22,9 @@ boundaries, release controls, and security posture.
   [runbook](https://github.com/starknet-innovation/bramble/tree/main/apps/ui-lab) covers local
   setup, testing, static builds, review controls, and safety boundaries.
 - [Architecture and internals](architecture/) explains the runtime and data model.
+- [Gasless fees](gasless-fees/) is the design for paying a public send or dapp invoke
+  in a token other than STRK (issue #752). The wallet path is built in
+  [#784](https://github.com/starknet-innovation/bramble/pull/784). Mainnet is on.
 - [Modular architecture](modular-architecture/) defines the package boundaries, typed invariants,
   target repository, migration sequence, and completion gates for the modular-monolith refactor.
 - [Wallet store architecture](wallet-store/) maps every persistent and session store, account
