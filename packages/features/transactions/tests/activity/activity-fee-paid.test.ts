@@ -17,6 +17,31 @@ const row: ActivityEntry = {
   summary: "Sent 1 STRK",
 };
 
+describe("userFee", () => {
+  test("records the token the user signed and still loads without it", () => {
+    expect(isActivityEntry(row)).toBe(true);
+    expect(
+      isActivityEntry({
+        ...row,
+        userFee: {
+          amount: "1200000",
+          token: "USDC",
+          tokenAddress: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a receipt-shaped fee stored as the user's token fee", () => {
+    expect(
+      isActivityEntry({
+        ...row,
+        userFee: { amount: "0x1", token: "USDC", tokenAddress: "0x1" },
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("feePaid", () => {
   test("is optional, so rows stored before it existed still load", () => {
     expect(isActivityEntry(row)).toBe(true);

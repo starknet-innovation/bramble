@@ -19,6 +19,7 @@ import {
 } from "@bramble/core/json";
 import { isWalletOrigin } from "@bramble/core/origin";
 import { isFeeEstimate as isFee } from "@bramble/starknet/fee-bounds";
+import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
@@ -166,6 +167,12 @@ const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
     ((value["fee"] ?? null) === null &&
       value["feeEstimateFailed"] !== true &&
       value["requiresDeployment"] !== true)) &&
+  (value["gaslessFees"] === undefined ||
+    (Array.isArray(value["gaslessFees"]) &&
+      value["gaslessFees"].length > 0 &&
+      value["gaslessFees"].length <= 3 &&
+      value["gaslessFees"].every(isGaslessFeeOffer) &&
+      (value["fee"] ?? null) !== null)) &&
   ((value["fee"] ?? null) !== null ||
     value["feeAffordability"] === undefined ||
     value["feeAffordability"] === "unknown");
@@ -187,6 +194,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "feeEstimateFailed",
       "feeEstimatePending",
       "flags",
+      "gaslessFees",
       "id",
       "insights",
       "kind",

@@ -39,6 +39,7 @@
     "@bramble/core": "workspace:*",
     "@bramble/starknet": "workspace:*",
     "@bramble/store": "workspace:*",
+    "@bramble/transactions": "workspace:*",
     "@bramble/wallet-model": "workspace:*",
     "@bramble/wallet-protocol": "workspace:*",
     "starknet": "10.8.0"

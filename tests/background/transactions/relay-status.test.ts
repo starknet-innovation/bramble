@@ -77,9 +77,13 @@ const refresh = async (
 beforeEach(() => resetRpcEndpointCooldownsForTests());
 
 describe("refreshRelaySignatures", () => {
-  test("a used nonce marks the row nonce-used", async () => {
-    const { calls, result } = await refresh({ nonce: ["0x0"] }, [input({ executeBefore: 2e9 })]);
+  test("a used nonce marks the row nonce-used and keeps the signed fee", async () => {
+    const userFee = { amount: "1000", decimals: 6, token: "USDC" };
+    const { calls, result } = await refresh({ nonce: ["0x0"] }, [
+      input({ executeBefore: 2e9, userFee }),
+    ]);
     expect(result[0]?.status).toBe("nonce-used");
+    expect(result[0]?.userFee).toEqual(userFee);
     expect(result[0]?.checkedAt).toBe(NOW);
     // Before the deadline no block is read; the nonce is asked at "latest".
     expect(calls).toEqual([
@@ -133,6 +137,16 @@ describe("refreshRelaySignatures", () => {
 
   test("an account type without a verified nonce view is never read", async () => {
     const { calls, result } = await refresh({ nonce: ["0x0"] }, [input({ checkable: false })]);
+    expect(calls).toEqual([]);
+    expect(result[0]?.status).toBe("signed");
+  });
+
+  // Expired claims the nonce was unused; without a verified view that is not
+  // known, so an unchecked row past its deadline stays as it was.
+  test("an unchecked row past Execute Before is never called expired", async () => {
+    const { calls, result } = await refresh({ nonce: ["0x1"], timestamp: DEADLINE }, [
+      input({ checkable: false }),
+    ]);
     expect(calls).toEqual([]);
     expect(result[0]?.status).toBe("signed");
   });

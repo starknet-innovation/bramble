@@ -163,6 +163,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
   "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
+  "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
   "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
 };

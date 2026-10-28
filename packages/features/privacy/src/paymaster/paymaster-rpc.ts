@@ -20,25 +20,16 @@ import {
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
 import {
+  PAYMASTER_TIMEOUT_MS,
+  type PaymasterHttp,
+  readBoundedPaymasterResponse,
+} from "@bramble/transactions/paymaster-http";
+import {
   Strk20FeeTokenUnsupportedError,
   sanitizeStrk20Detail,
   TOKEN_NOT_SUPPORTED_CODE,
 } from "../sdk/official-sdk-errors";
 import { STRK20_SUBMISSION_UNAVAILABLE } from "../service";
-
-/** The injected transport both paymaster entry points accept. */
-export type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-/**
- * This client's deadline on one relay request. It must end before the STRK20
- * gateway's own paymaster deadline (`PAYMASTER_UPSTREAM_TIMEOUT_MS` in
- * `apps/terminal/api/_lib/upstream-deadlines.ts`, pinned by a conformance test): when
- * the gateway gives up first, the wallet learns of a lost answer only as an
- * HTTP status, and when this client gives up first it learns of it as its own
- * deadline expiry. Both are read as a lost answer, but the order keeps the
- * deadline the wallet controls the one that normally fires (Sherlock 159).
- */
-export const PAYMASTER_TIMEOUT_MS = 20_000;
-const MAX_PAYMASTER_RESPONSE_BYTES = 1024 * 1024;
 /**
  * The one relay method that puts a transaction on the wire, mirroring
  * `BROADCAST_RPC_METHODS` in `@bramble/starknet/rpc-transport`: only a broadcast-capable call can
@@ -82,47 +73,6 @@ const relayReportedError = (method: string, reported: unknown): WalletError => {
   return isRecord(reported) && reported["code"] === TOKEN_NOT_SUPPORTED_CODE
     ? new Strk20FeeTokenUnsupportedError(message)
     : new WalletError(message);
-};
-
-const readBoundedResponse = async (response: Response): Promise<string | null> => {
-  const declaredLength = response.headers.get("content-length");
-  if (
-    declaredLength !== null &&
-    (!/^[0-9]+$/.test(declaredLength) || Number(declaredLength) > MAX_PAYMASTER_RESPONSE_BYTES)
-  ) {
-    return null;
-  }
-  const reader = response.body?.getReader();
-  if (!reader) {
-    return null;
-  }
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      length += value.byteLength;
-      if (length > MAX_PAYMASTER_RESPONSE_BYTES) {
-        await reader.cancel();
-        return null;
-      }
-      chunks.push(value);
-    }
-  } catch {
-    return null;
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
 };
 
 // A relay answer the wallet could not read is not the same thing as a relay
@@ -185,7 +135,7 @@ export const rpc = async (
   }
   let body: unknown;
   try {
-    const text = await readBoundedResponse(response);
+    const text = await readBoundedPaymasterResponse(response);
     if (text === null) {
       throw new Error("invalid response");
     }
