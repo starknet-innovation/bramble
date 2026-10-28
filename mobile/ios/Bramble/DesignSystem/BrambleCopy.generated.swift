@@ -21,7 +21,6 @@ enum BrambleCopy {
     static let securityRowOn = "{biometry} on"
     static let securitySubtitle = "How this device opens your wallet"
     static let securityTitle = "Unlock & auto-lock"
-    static let sendViewOnlyAccount = "Braavos accounts are view only for now."
     static let throttled = "Too many attempts. Try again in {time}."
     static let unlockWithBiometry = "Unlock with {biometry}"
     static let idleLockMs: UInt64 = 1800000

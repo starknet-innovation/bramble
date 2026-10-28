@@ -38,6 +38,10 @@ pub(crate) enum Authorization {
     /// estimates validate a query signature of the same shape, and the account's class and signer
     /// are read at one accepted block before anything is estimated or signed.
     ArgentSignerArray,
+    /// Braavos: a bare `[r, s]` like OpenZeppelin, but the account's class and signers are read
+    /// at one accepted block first, and its deployment carries the extended authorization
+    /// (`plan_deploy::braavos_deploy_signature`).
+    Braavos,
 }
 
 /// The DEPLOY_ACCOUNT an account's address commits to (`accountDeployment`), proven against the
@@ -48,8 +52,8 @@ pub(crate) struct Deployment {
     pub constructor_calldata: Vec<Felt>,
 }
 
-/// The acting account, as stored in the vault when the plan was prepared: an OpenZeppelin or a
-/// Ready (Argent) record that passed `wallet_accounts::signing_record`.
+/// The acting account, as stored in the vault when the plan was prepared: a record that passed
+/// `wallet_accounts::signing_record`.
 pub(crate) struct Account {
     pub network: NetworkId,
     pub address: Felt,
@@ -58,6 +62,7 @@ pub(crate) struct Account {
     /// `None` for a Ready record deployed with an older class: the extension deploys only the
     /// pinned Argent 0.4.0 release, so such an account can send once deployed and upgraded, but
     /// is never deployed from here ("Argent account class hash does not match the pinned release").
+    /// Likewise `None` for a Braavos record at the older base class.
     pub deployment: Option<Deployment>,
     /// The vault record's id, `<networkId>:<address>` (the extension's account id). It scopes
     /// activity and is what every signature for this plan is requested by.
@@ -69,11 +74,15 @@ impl Account {
         self.authorization == Authorization::ArgentSignerArray
     }
 
-    /// The signature an estimate carries: none for OpenZeppelin (validation skipped), the
-    /// extension's `argentQueryAccount` shape `(r, s) = (1, 1)` for Ready.
+    pub(crate) fn is_braavos(&self) -> bool {
+        self.authorization == Authorization::Braavos
+    }
+
+    /// The signature an invoke estimate carries: none for OpenZeppelin and Braavos (validation
+    /// skipped), the extension's `argentQueryAccount` shape `(r, s) = (1, 1)` for Ready.
     pub(crate) fn query_signature(&self) -> Vec<Felt> {
         match self.authorization {
-            Authorization::StarkPair => Vec::new(),
+            Authorization::StarkPair | Authorization::Braavos => Vec::new(),
             Authorization::ArgentSignerArray => self.signature(Felt::ONE, Felt::ONE),
         }
     }
@@ -81,7 +90,7 @@ impl Account {
     /// `serializeAccountSignature` for this account's family.
     pub(crate) fn signature(&self, r: Felt, s: Felt) -> Vec<Felt> {
         match self.authorization {
-            Authorization::StarkPair => vec![r, s],
+            Authorization::StarkPair | Authorization::Braavos => vec![r, s],
             // One signer, `Signer::Starknet` (variant 0), its public key, then `(r, s)`.
             Authorization::ArgentSignerArray => vec![Felt::ONE, Felt::ZERO, self.public_key, r, s],
         }
@@ -117,6 +126,11 @@ pub(crate) enum Expect {
     Owner(Probe),
     OwnerType(Probe),
     Guardian(Probe),
+    /// Braavos: `get_signers`, then `get_deferred_remove_signers` and the block's timestamp
+    /// only when a 2FA signer exists.
+    Signers(Probe),
+    DeferredRemoval(Probe),
+    BlockTime(Probe),
     ReviewNonce,
     ReviewEstimate,
     ReviewDeployNonce,
@@ -164,6 +178,8 @@ pub(crate) struct Work {
     pub block: Felt,
     /// `get_owner`, held until `get_owner_type` answers (the extension reads both at once).
     pub owner: Option<judge::CallAnswer>,
+    /// Braavos: when the requested 2FA removal expires, held until the block's timestamp answers.
+    pub expire_at: Felt,
     pub fee: Option<FeeQuote>,
     pub deploy_fee: Option<FeeQuote>,
     pub requires_deployment: bool,
@@ -357,12 +373,15 @@ impl PlanState {
             | Expect::Class(_)
             | Expect::Owner(_)
             | Expect::OwnerType(_)
-            | Expect::Guardian(_) => self.on_probe_reply(expect, answer),
+            | Expect::Guardian(_)
+            | Expect::Signers(_)
+            | Expect::DeferredRemoval(_)
+            | Expect::BlockTime(_) => self.on_probe_reply(expect, answer),
             Expect::ReviewChain
             | Expect::ReviewNonce
             | Expect::ReviewEstimate
             | Expect::ReviewDeployNonce
-            | Expect::ReviewDeployEstimate => self.on_review_reply(expect, answer),
+            | Expect::ReviewDeployEstimate => self.on_review_reply(core, expect, answer),
             _ => self.on_submit_reply(core, expect, answer),
         }
     }

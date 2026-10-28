@@ -2,7 +2,6 @@ package org.bramble.wallet
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.bramble.core.DeploymentState
 import org.bramble.core.NetworkInfo
 import org.bramble.core.SendException
 import org.bramble.core.StepReply
@@ -16,11 +15,11 @@ import org.bramble.wallet.send.SendDriver
 
 /**
  * The standalone Deploy account flow for the active account (Settings' "This account"), or null
- * while locked or for an account the core builds no deployment for ([sendRefusal]: Braavos). Its
- * plans are tracked so a lock cancels them.
+ * while locked. The core refuses a class it does not deploy, as the extension does. Its plans are
+ * tracked so a lock cancels them.
  */
 fun WalletStore.makeDeployModel(): DeployFlowModel? {
-    val account = activeRecord?.takeIf { sendRefusal(it) == null } ?: return null
+    val account = activeRecord ?: return null
     return DeployFlowModel(walletCore, networkInfo, account.id, rpc.transport) { plans += it }
 }
 
@@ -34,9 +33,7 @@ fun WalletStore.makeDeployModel(): DeployFlowModel? {
 suspend fun WalletStore.refreshSendState(ticket: Long = session.ticket()) {
     val account = activeRecord ?: return
     val network = networkInfo
-    // Only accounts this core can deploy are judged; the others stay Unknown.
-    val judged =
-        if (sendRefusal(account) == null) rpc.deploymentState(account.address, network) else DeploymentState.UNKNOWN
+    val judged = rpc.deploymentState(account.address, network)
     if (session.isCurrent(ticket) && activeRecord?.id == account.id) {
         deployment = judged
         settlePendingActivity(account.id, network, ticket)

@@ -14,6 +14,7 @@ use super::types::{
     FeeAffordability, ReviewFlag, RpcPurpose, SendFailureCode, SendStep, TransferReview,
 };
 use crate::felt;
+use crate::wallet::WalletCore;
 
 /// The standalone Deploy account summary (`deployment-ops.ts`).
 pub const DEPLOY_SUMMARY: &str = "Deploy account contract";
@@ -79,13 +80,6 @@ impl PlanState {
         )
     }
 
-    pub(crate) fn deploy_estimate_body(&self, id: u64) -> String {
-        let nonce = self.work.nonce;
-        let query = self.account.query_signature();
-        let skip = !self.account.is_argent();
-        rpc_bodies::estimate(id, None, self.deploy_tx(&nonce, &query).as_ref(), skip)
-    }
-
     fn read_deploy_nonce(&mut self) -> SendStep {
         self.rpc(
             Expect::ReviewDeployNonce,
@@ -125,6 +119,14 @@ impl PlanState {
                     // The probe just made is the deployment estimate's own read.
                     return self.read_deploy_nonce_if_deployable();
                 }
+                // `refuseUndeployedBraavos`: Braavos deploys only through its own reviewed
+                // deployment, never inside a send; the base class cannot deploy at all.
+                if self.account.is_braavos() {
+                    return match self.account.deployment {
+                        Some(_) => self.fail(SendFailureCode::BraavosDeployFirst, None),
+                        None => self.review(),
+                    };
+                }
                 if self.account.deployment.is_none() {
                     // `accountDeployment` refuses before the bulk estimate reads a nonce.
                     return self.review_deployment();
@@ -158,7 +160,12 @@ impl PlanState {
         self.read_deploy_nonce()
     }
 
-    pub(crate) fn on_review_reply(&mut self, expect: Expect, answer: Option<Answer>) -> SendStep {
+    pub(crate) fn on_review_reply(
+        &mut self,
+        core: &WalletCore,
+        expect: Expect,
+        answer: Option<Answer>,
+    ) -> SendStep {
         match expect {
             Expect::ReviewChain => match judge::chain(answer, self.account.network) {
                 ChainAnswer::Match => self.probe(Probe::Review),
@@ -195,12 +202,7 @@ impl PlanState {
             Expect::ReviewDeployNonce => match judge::nonce(answer) {
                 Some(nonce) => {
                     self.work.nonce = nonce;
-                    self.rpc(
-                        Expect::ReviewDeployEstimate,
-                        RpcPurpose::EstimateDeploymentFee,
-                        false,
-                        |s, id| s.deploy_estimate_body(id),
-                    )
+                    self.estimate_deployment(core, Expect::ReviewDeployEstimate)
                 }
                 None => self.review(),
             },

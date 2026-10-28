@@ -7,18 +7,11 @@ private let millisecondsPerSecond: Double = 1_000
 /// Send, deploy and local activity on top of `WalletStore`. Kept in its own file so the store
 /// itself only gained the few stored properties these need.
 extension WalletStore {
-    /// Why the active account cannot send, in the words the Send action shows instead of opening
-    /// the journey; nil for an account the core signs for (OpenZeppelin and Ready). The core
-    /// refuses the same records (`SendError.ViewOnlyAccount`), so this only saves a dead end.
-    var sendRefusal: String? {
-        guard let account = activeRecord else { return nil }
-        return account.viewOnly || account.family == .braavos ? BrambleCopy.sendViewOnlyAccount : nil
-    }
-
-    /// A Send journey for the active account, or nil while locked or when it cannot send.
+    /// A Send journey for the active account, or nil while locked. An undeployed Braavos account is
+    /// refused by the core's review (`braavosDeployFirst`), which names the way out.
     /// `token` opens it on that asset (a token screen's Send); the recipient is still chosen first.
     func makeSendModel(token: String? = nil) -> SendFlowModel? {
-        guard let account = activeRecord, sendRefusal == nil else { return nil }
+        guard let account = activeRecord else { return nil }
         return SendFlowModel(
             core: core,
             network: networkInfo,
@@ -30,10 +23,10 @@ extension WalletStore {
         ) { [weak self] plan in self?.plans.append(plan) }
     }
 
-    /// The standalone Deploy account flow for the active account (OpenZeppelin or Ready; the core
-    /// refuses a Ready class it does not deploy, as the extension does).
+    /// The standalone Deploy account flow for the active account (the core refuses a class it does
+    /// not deploy, as the extension does).
     func makeDeployModel() -> DeployFlowModel? {
-        guard let account = activeRecord, sendRefusal == nil else { return nil }
+        guard let account = activeRecord else { return nil }
         return DeployFlowModel(
             core: core,
             network: networkInfo,
@@ -50,8 +43,7 @@ extension WalletStore {
     func refreshSendState() async {
         guard let account = activeRecord else { return }
         let network = networkInfo
-        // Only accounts this core can deploy are read; the privacy gates take the rest as unknown.
-        deployment = sendRefusal == nil ? await rpc.deploymentState(of: account.address, on: network) : .unknown
+        deployment = await rpc.deploymentState(of: account.address, on: network)
         await observeActivity()
     }
 

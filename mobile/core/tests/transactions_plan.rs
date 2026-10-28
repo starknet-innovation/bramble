@@ -355,19 +355,13 @@ fn braavos_records_cannot_send_or_deploy() {
             ],
         )
         .unwrap();
-    // Ready (Argent) records plan like OpenZeppelin ones (`transactions_argent_parity.rs`);
-    // Braavos stays view-only.
+    // Ready (Argent) and Braavos records plan like OpenZeppelin ones; their chain state is
+    // judged by the plan (`transactions_argent_parity.rs`, `transactions_braavos_parity.rs`).
     let braavos = &restored[2];
     let mut transfer = request(ACCOUNT_1);
     transfer.account_id = braavos.id.clone();
-    assert_eq!(
-        core.clone().prepare_transfer(transfer).err(),
-        Some(SendError::ViewOnlyAccount)
-    );
-    assert_eq!(
-        core.clone().prepare_deployment(braavos.id.clone()).err(),
-        Some(SendError::ViewOnlyAccount)
-    );
+    assert!(core.clone().prepare_transfer(transfer).is_ok());
+    assert!(core.clone().prepare_deployment(braavos.id.clone()).is_ok());
     let mut ready = request(ACCOUNT_1);
     ready.account_id = restored[1].id.clone();
     assert!(core.clone().prepare_transfer(ready).is_ok());

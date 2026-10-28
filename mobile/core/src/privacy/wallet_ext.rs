@@ -50,7 +50,7 @@ impl WalletCore {
     /// A private-balance read for the vault record `account_id` (on its own network). Requires an
     /// unlocked wallet and records the session generation, so a lock (even one followed by a new
     /// unlock) fails the plan `Locked` at its next derivation. `UnknownAccount` for a record that is
-    /// missing, view-only or not OpenZeppelin; `NotConfigured` when the network has no plain
+    /// missing; `NotConfigured` when the network has no plain
     /// routing: Sepolia today, and any network whose routing turns OHTTP on.
     pub fn prepare_privacy_read(
         self: Arc<Self>,

@@ -174,7 +174,7 @@ the hash is then plain text. A receipt labels the row "Transaction".
 ### 2.7 Deploy account (standalone, from Settings)
 
 Opened by Settings › "This account" › "Deploy account" (§2.1). An account the core cannot deploy
-(view-only) shows why instead of the form.
+shows a failed deployment fee and cannot be confirmed.
 
 - **Rows.** Header "Deploy account", then Account (the name), Address (truncated) and Network.
   The Contract row, "What will happen" and "Risk and recovery" are gone.
@@ -403,8 +403,7 @@ as defence in depth.
 
 **Signing inside the core.** At a signing point the core runs `with_session(renew = true)`, which
 applies the idle lock first, checks the generation, passes the plan's record through the one
-signing gate (`signing_record`: no pending discovery, no view-only record; OpenZeppelin and
-Ready, accounts.md §2.7a), derives the key for the record's `account_index` as `kms::sign_hash` does (a per-call
+signing gate (`signing_record`: no pending discovery, a known record; accounts.md §2.7), derives the key for the record's `account_index` as `kms::sign_hash` does (a per-call
 zeroizing `SecretFelt`), checks that the returned public key equals the plan's stored
 `public_key`, signs, serialises the signature for the record's family (OZ `[r, s]`; Ready
 `[1, 0, public_key, r, s]`), and drops the key.

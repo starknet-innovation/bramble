@@ -43,7 +43,6 @@ import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.securityCopy
 import org.bramble.wallet.send.SendCopy
-import org.bramble.wallet.sendRefusal
 import org.bramble.wallet.setTheme
 import org.bramble.wallet.switchNetwork
 
@@ -71,7 +70,7 @@ fun SettingsHubScreen(
         }
         Eyebrow(SendCopy.settingsThisAccount)
         MenuGroup {
-            MenuRow(BrambleIconName.ROCKET, SendCopy.settingsDeployRow) { openDeploy(store, open) }
+            MenuRow(BrambleIconName.ROCKET, SendCopy.settingsDeployRow) { open(Flow.DEPLOY) }
         }
         Eyebrow("Preferences")
         MenuGroup {
@@ -107,18 +106,6 @@ fun SettingsHubScreen(
             modifier = Modifier.fillMaxWidth().padding(top = BrambleSpace.sm),
         )
     }
-}
-
-/**
- * Opens the Deploy account screen for the active account. An account the core never deploys
- * (view only, as Home's Send tile) is told why instead of opening a screen with nothing to do.
- */
-private fun openDeploy(
-    store: WalletStore,
-    open: (Flow) -> Unit,
-) {
-    val refusal = store.activeRecord?.let(::sendRefusal)
-    if (refusal != null) store.showToast(refusal) else open(Flow.DEPLOY)
 }
 
 /** The Security row's value: "Fingerprint on" or "Passphrase only". */

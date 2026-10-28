@@ -345,7 +345,6 @@ fn an_accounts_branch_records_vault_migrates_into_a_container() {
     );
     assert_eq!(sepolia[0].label.as_deref(), Some("Savings"));
     assert_eq!(sepolia[1].group_id.as_deref(), Some("long-term"));
-    assert!(sepolia[2].view_only);
     let active = core.active_account().unwrap().unwrap();
     assert_eq!(active.network, NetworkId::Mainnet);
     assert_eq!(active.public_key, sepolia[0].public_key);

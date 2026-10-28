@@ -249,9 +249,6 @@ final class SendFlowModel {
             recipientError = SendCopy.invalidRecipient
             stage = .recipient
             return
-        } catch SendError.ViewOnlyAccount {
-            amountError = BrambleCopy.sendViewOnlyAccount
-            return
         } catch {
             amountError = SendCopy.amountInvalid
             return

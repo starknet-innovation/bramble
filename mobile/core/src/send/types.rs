@@ -93,9 +93,12 @@ pub enum RpcPurpose {
     AddInvoke,
     TransactionStatus,
     TransactionReceipt,
-    /// Ready: `starknet_blockHashAndNumber`, the block the account-state reads are pinned to.
+    /// Ready and Braavos: `starknet_blockHashAndNumber`, the block the account-state reads are
+    /// pinned to.
     AcceptedBlock,
-    /// Ready: `starknet_call` of `get_owner`, `get_owner_type` or `get_guardian`.
+    /// Ready and Braavos: a read of the account's signer state at that block: `get_owner`,
+    /// `get_owner_type`, `get_guardian`, `get_signers`, `get_deferred_remove_signers`, or the
+    /// block's own timestamp.
     AccountSigner,
 }
 
@@ -176,9 +179,6 @@ pub enum SendError {
     Locked,
     #[error("unknown account")]
     UnknownAccount,
-    /// A Braavos record: restored to be seen, never signed for.
-    #[error("view-only account")]
-    ViewOnlyAccount,
     #[error("reply out of order")]
     OutOfOrder,
     #[error("plan closed")]
@@ -224,6 +224,17 @@ pub enum SendFailureCode {
     AccountOwnerTypeUnsupported,
     /// Ready: the deployed account has a guardian, a second approver the phrase cannot supply.
     AccountGuardianUnsupported,
+    /// Braavos: an undeployed account deploys only through its own reviewed deployment
+    /// (Settings → Deploy account), never inside a send.
+    BraavosDeployFirst,
+    /// Braavos: the account is not deployed and its class is not the one this wallet deploys.
+    BraavosNotDeployable,
+    /// Braavos: the account runs a class that is not an implementation this wallet signs for.
+    BraavosClassUnrecognised,
+    /// Braavos: this wallet's key is not the account's first Stark signer.
+    BraavosOwnerMismatch,
+    /// Braavos: a 2FA signer is active (its removal, if requested, has not expired).
+    BraavosStrongSigner,
 }
 
 /// A failure, with the hash of anything already accepted (a deployment, or an ambiguous write).

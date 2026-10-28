@@ -22,7 +22,6 @@ object BrambleCopy {
     const val securityRowOn = "{biometry} on"
     const val securitySubtitle = "How this device opens your wallet"
     const val securityTitle = "Unlock & auto-lock"
-    const val sendViewOnlyAccount = "Braavos accounts are view only for now."
     const val throttled = "Too many attempts. Try again in {time}."
     const val unlockWithBiometry = "Unlock with {biometry}"
     const val idleLockMs: Long = 1800000L

@@ -19,7 +19,7 @@ fn class_of(label: &str) -> String {
 }
 
 #[test]
-fn view_only_is_enforced_per_record_even_when_the_key_is_shared() {
+fn every_record_signs_through_one_gate_with_its_index_key() {
     let (_dir, _clock, core) = pending();
     assert!(
         core.sign_hash_for_account("SN_SEPOLIA:0x1".into(), "0x1".into())
@@ -54,17 +54,23 @@ fn view_only_is_enforced_per_record_even_when_the_key_is_shared() {
         restored[2].public_key, ozr.public_key,
         "Braavos's index 1 is on its own address ladder"
     );
-    assert!(braavos0.view_only && !ozr.view_only);
     assert_eq!(braavos0.type_label.as_deref(), Some("Braavos Account"));
 
-    assert!(matches!(
-        core.sign_hash_for_account(braavos0.id.clone(), "0x1".into()),
-        Err(CoreError::InvalidInput { .. })
-    ));
     let signed = core
         .sign_hash_for_account(ozr.id.clone(), "0x1".into())
         .unwrap();
     assert_eq!(signed.public_key, ozr.public_key);
+    // Braavos passes the same gate; what it may sign is decided on chain by the plan
+    // (`transactions_braavos_parity.rs`).
+    assert_eq!(
+        core.sign_hash_for_account(braavos0.id.clone(), "0x1".into())
+            .unwrap(),
+        signed
+    );
+    assert!(matches!(
+        core.sign_hash_for_account("SN_SEPOLIA:0x1".into(), "0x1".into()),
+        Err(CoreError::InvalidInput { .. })
+    ));
     // Argent on this wallet's ladder shares index 0's key too and passes the same gate: the plan
     // wraps its signature in the `argent-signer-array` layout (`transactions_argent_parity.rs`).
     assert_eq!(argent0.public_key, ozr.public_key);
@@ -133,7 +139,7 @@ fn switching_network_keeps_picks_or_projects_like_the_extension() {
     assert_eq!(mainnet.id, argent.id);
     assert_eq!(core.account_records(NetworkId::Mainnet).unwrap().len(), 1);
 
-    // Braavos projects too (view-only stays view-only).
+    // Braavos projects too.
     let (_dir2, _clock2, other) = pending();
     other
         .restore_recovered_accounts(
@@ -145,7 +151,7 @@ fn switching_network_keeps_picks_or_projects_like_the_extension() {
         .ensure_network_account(NetworkId::Mainnet)
         .unwrap()
         .unwrap();
-    assert!(projected.view_only);
+    assert_eq!(projected.family, AccountFamily::Braavos);
     assert_eq!(projected.class_hash, restored[2].class_hash);
 
     // Projection persists across lock and unlock.

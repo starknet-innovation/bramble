@@ -77,6 +77,21 @@ enum SendFailureText {
         case .accountGuardianUnsupported:
             SendCopy.failureAccountGuardianUnsupported
 
+        case .braavosDeployFirst:
+            SendCopy.failureBraavosDeployFirst
+
+        case .braavosNotDeployable:
+            SendCopy.failureBraavosNotDeployable
+
+        case .braavosClassUnrecognised:
+            SendCopy.failureBraavosClassUnrecognised
+
+        case .braavosOwnerMismatch:
+            SendCopy.failureBraavosOwnerMismatch
+
+        case .braavosStrongSigner:
+            SendCopy.failureBraavosStrongSigner
+
         case .boundsOutOfRange, .nodeError, .locked, .signingFailed:
             nil
         }

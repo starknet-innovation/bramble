@@ -246,7 +246,7 @@ PrivacyEntry, DetailSummary, DetailAction, PrivacyStatus, UnifiedBalance`. `Ledg
 are unreachable on mobile; they keep the copy table complete.
 
 The surface: `WalletCore::prepare_privacy_read(account_id)` (unlocked wallet; an OpenZeppelin
-record on its own network, view-only and Ready records are `UnknownAccount`; records the session
+record on its own network, any family, through the one signing gate; records the session
 generation, `NotConfigured` for Sepolia or an OHTTP network, no I/O) returns a
 `PrivacyReadPlan` with `advance(reply)` (wrong id or kind → `OutOfOrder`, closed) and `close()`.
 Pure functions: `privacy_configured`, `privacy_capabilities`, `max_privacy_response_bytes`,

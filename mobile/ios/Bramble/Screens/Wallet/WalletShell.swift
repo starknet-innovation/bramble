@@ -73,13 +73,9 @@ struct WalletShell: View {
         }
     }
 
-    /// Opens a Send journey. An account the core cannot sign for is refused up front, with why.
+    /// Opens a Send journey.
     private func openSend(_ flow: Flow) {
-        if let refusal = store.sendRefusal {
-            store.toast = refusal
-        } else {
-            flows.append(flow)
-        }
+        flows.append(flow)
     }
 
     /// The screen each pushed flow shows.

@@ -148,6 +148,14 @@ pub fn call_at_block(id: u64, address: &Felt, selector: &Felt, block: &Felt) -> 
 }
 
 /// `starknet_getNonce` at `latest`.
+pub fn block_at(id: u64, block: &Felt) -> String {
+    envelope(
+        id,
+        "starknet_getBlockWithTxHashes",
+        json!({ "block_id": pinned(block) }),
+    )
+}
+
 pub fn nonce(id: u64, address: &Felt) -> String {
     envelope(
         id,

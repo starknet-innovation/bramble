@@ -45,8 +45,6 @@ pub struct AccountRecord {
     /// "stark-pair" or "argent-signer-array".
     pub authorization_shape: String,
     pub group_id: Option<String>,
-    /// Braavos: restored to be seen, never signed for (§2.7).
-    pub view_only: bool,
     pub active: bool,
 }
 
@@ -78,7 +76,6 @@ fn render(payload: &VaultPayload, record: &StoredAccount) -> AccountRecord {
         type_label: type_label(record.family(), &class_hash),
         authorization_shape: authorization_shape(record.family(), &class_hash),
         group_id: groups::group_of(&payload.groups, &record.id).map(|group| group.id.clone()),
-        view_only: record.view_only(),
         active: payload.active_account_id.as_deref() == Some(record.id.as_str()),
     }
 }
@@ -88,25 +85,21 @@ fn render(payload: &VaultPayload, record: &StoredAccount) -> AccountRecord {
 pub(crate) enum SignRefusal {
     /// Unknown id, or the vault is still waiting for discovery (it holds no accounts).
     Unknown,
-    /// Braavos: restored to be seen, never signed for (`docs/accounts.md` §2.7).
-    ViewOnly,
 }
 
 impl From<SignRefusal> for CoreError {
     fn from(refusal: SignRefusal) -> Self {
         invalid(match refusal {
             SignRefusal::Unknown => "unknown account",
-            SignRefusal::ViewOnly => "this account is view only",
         })
     }
 }
 
 /// The one gate before any signature: the record must exist in a vault that is not waiting for
-/// discovery and must not be view-only. OpenZeppelin (`stark-pair`) and Ready/Argent
-/// (`argent-signer-array`) records pass; Braavos is view-only (`docs/accounts.md` §2.7). The
-/// signature array a transaction carries is the plan's, built for the record's family; a Ready
-/// account's live class and signer are checked on chain before any hash reaches this gate
-/// (`send/plan_probe.rs`).
+/// discovery. Every family passes. The signature array a transaction carries is the plan's,
+/// built for the record's family; a Ready or Braavos account's live class and signers are
+/// checked on chain before any hash reaches this gate (`send/plan_probe.rs`), and a Braavos
+/// account that is not deployed signs only its own deployment (`docs/accounts.md` §2.7).
 pub(crate) fn signing_record<'a>(
     payload: &'a VaultPayload,
     account_id: &str,
@@ -114,12 +107,7 @@ pub(crate) fn signing_record<'a>(
     if payload.recovery_pending {
         return Err(SignRefusal::Unknown);
     }
-    let record = payload.record(account_id).ok_or(SignRefusal::Unknown)?;
-    match record.family() {
-        _ if record.view_only() => Err(SignRefusal::ViewOnly),
-        AccountFamily::OpenZeppelin | AccountFamily::Argent => Ok(record),
-        AccountFamily::Braavos => Err(SignRefusal::ViewOnly),
-    }
+    payload.record(account_id).ok_or(SignRefusal::Unknown)
 }
 
 /// Signs `message_hash` with the key at the record's index on its ladder and checks the signer is the record's
@@ -314,8 +302,7 @@ impl WalletCore {
     }
 
     /// Signs a hash for one stored account, through the same gate as every transfer
-    /// (`signing_record`): refuses a vault still waiting for discovery, view-only (Braavos)
-    /// records and Argent/Ready records. The key is derived from the record's index, used, and
+    /// (`signing_record`): refuses a vault still waiting for discovery and an unknown id. The key is derived from the record's index, used, and
     /// wiped inside this call. Renews. See `docs/accounts.md` §2.7 for what this can and cannot
     /// guarantee.
     pub fn sign_hash_for_account(

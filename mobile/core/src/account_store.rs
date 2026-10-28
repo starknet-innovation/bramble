@@ -75,10 +75,6 @@ impl StoredAccount {
     pub(crate) fn ladder(&self) -> Ladder {
         self.ladder.expect("validated on open")
     }
-
-    pub(crate) fn view_only(&self) -> bool {
-        self.family() == AccountFamily::Braavos
-    }
 }
 
 /// Plaintext sealed inside the vault container. Only the phrase and passphrase are secret; they

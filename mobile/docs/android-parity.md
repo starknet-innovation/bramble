@@ -239,7 +239,7 @@ chevronRight, and hairlines are inset 16.
 | Group | Rows |
 |---|---|
 | Accounts & networks | Network (globe), value = network name |
-| This account (`SendCopy.settingsThisAccount`) | Deploy account (rocket), whatever the deployment state; opens Deploy account (a view-only account gets its refusal toast) |
+| This account (`SendCopy.settingsThisAccount`) | Deploy account (rocket), whatever the deployment state; opens Deploy account |
 | Preferences | Appearance (settings), value "Dark"/"Light" |
 | Backup & recovery | Reveal recovery secrets (lock) |
 | Security | Unlock & auto-lock (shield), value "Fingerprint on"/"Passphrase only"; Lock wallet (lockKeyhole, no chevron); Remove wallet from this device (alert, danger) |

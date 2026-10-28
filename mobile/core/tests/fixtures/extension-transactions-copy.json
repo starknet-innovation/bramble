@@ -159,7 +159,12 @@
       "accountNotDeployable": "Argent account class hash does not match the pinned release",
       "accountOwnerMismatch": "Deployed Argent account owner does not match the wallet signer",
       "accountOwnerTypeUnsupported": "Deployed Argent account owner type is not supported by this wallet",
-      "accountGuardianUnsupported": "Deployed Argent account guardian is not supported by this wallet"
+      "accountGuardianUnsupported": "Deployed Argent account guardian is not supported by this wallet",
+      "braavosDeployFirst": "Deploy this account first (Settings → Deploy account).",
+      "braavosNotDeployable": "This wallet does not deploy Braavos accounts",
+      "braavosClassUnrecognised": "Deployed Braavos account class is not a release this wallet recognizes",
+      "braavosOwnerMismatch": "Deployed Braavos account owner does not match the wallet signer",
+      "braavosStrongSigner": "Deployed Braavos account has an active 2FA signer"
     },
     "screens": {
       "activityRow": {

@@ -18,7 +18,6 @@ import org.bramble.core.TxStatus
 import org.bramble.core.WalletCore
 import org.bramble.core.formatTokenAmount
 import org.bramble.core.parseTokenAmount
-import org.bramble.wallet.design.BrambleCopy
 
 /**
  * The Send journey's UI state, mirroring iOS `SendFlowModel`: every protocol decision is the
@@ -31,7 +30,7 @@ class SendFlowModel(
     private val core: WalletCore,
     /** The network the journey sends on; its tokens are the ones offered. */
     val network: NetworkInfo,
-    /** The sending account; the core signs by its id and refuses Braavos records. */
+    /** The sending account; the core signs by its id. */
     val account: AccountRecord,
     private val balances: Map<String, String>,
     private val hooks: SendHooks = SendHooks(),
@@ -195,21 +194,12 @@ class SendFlowModel(
             core.prepareTransfer(
                 TransferRequest(network.network, account.id, token.address, to, amount, balances["STRK"]),
             )
-        } catch (error: SendException) {
-            when (error) {
-                is SendException.InvalidRecipient -> {
-                    recipientError = SendCopy.invalidRecipient
-                    stage = Stage.RECIPIENT
-                }
-
-                is SendException.ViewOnlyAccount -> {
-                    hooks.notice(BrambleCopy.sendViewOnlyAccount, false)
-                }
-
-                else -> {
-                    amountError = SendCopy.amountInvalid
-                }
-            }
+        } catch (_: SendException.InvalidRecipient) {
+            recipientError = SendCopy.invalidRecipient
+            stage = Stage.RECIPIENT
+            null
+        } catch (_: SendException) {
+            amountError = SendCopy.amountInvalid
             null
         }
 

@@ -28,6 +28,11 @@ class ReadyFailureTextTest {
                 SendFailureCode.ACCOUNT_OWNER_MISMATCH,
                 SendFailureCode.ACCOUNT_OWNER_TYPE_UNSUPPORTED,
                 SendFailureCode.ACCOUNT_GUARDIAN_UNSUPPORTED,
+                SendFailureCode.BRAAVOS_DEPLOY_FIRST,
+                SendFailureCode.BRAAVOS_NOT_DEPLOYABLE,
+                SendFailureCode.BRAAVOS_CLASS_UNRECOGNISED,
+                SendFailureCode.BRAAVOS_OWNER_MISMATCH,
+                SendFailureCode.BRAAVOS_STRONG_SIGNER,
             )
         for (code in codes) {
             assertNotEquals(code.name, SendCopy.failureDefault, SendFailureText.message(SendFailure(code, null, null)))

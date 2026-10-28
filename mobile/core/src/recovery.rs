@@ -117,10 +117,14 @@ pub(crate) fn is_creatable(family: AccountFamily, path: Ladder, class_hash: &Fel
 }
 
 /// Whether this wallet can deploy an account of this class (the UI's `deployableHere`), on any
-/// ladder: a funded Ready account at the release Bramble deploys is ready to deploy.
+/// ladder: a funded Ready account at the release Bramble deploys, or a Braavos one at the modern
+/// deployment class, is ready to deploy.
 fn deployable_here(family: AccountFamily, class_hash: &Felt) -> bool {
-    family == AccountFamily::OpenZeppelin
-        || (family == AccountFamily::Argent && *class_hash == catalog().argent_default)
+    match family {
+        AccountFamily::OpenZeppelin => true,
+        AccountFamily::Argent => *class_hash == catalog().argent_default,
+        AccountFamily::Braavos => *class_hash == catalog().braavos_deployment,
+    }
 }
 
 /// Whether the scan keeps a candidate: on-chain evidence, or a creatable account at index 0 or at
@@ -147,13 +151,15 @@ fn title(found: &Found) -> String {
 }
 
 fn hint(found: &Found) -> String {
-    if found.family == AccountFamily::Braavos {
-        let state = if found.deployed {
-            "Deployed on Starknet"
+    // `candidateState`: the modern deployment class deploys from here like any other account;
+    // an older base-class counterfactual still cannot.
+    if found.family == AccountFamily::Braavos && !found.deployed {
+        return if deployable_here(found.family, &found.class_hash) {
+            "Funded and ready to deploy"
         } else {
-            "Funded, not deployed"
-        };
-        return format!("{state} · view only for now");
+            "Funded, not deployed · view only for now"
+        }
+        .into();
     }
     let text = if found.deployed {
         "Deployed on Starknet"

@@ -150,6 +150,32 @@ pub fn single_felt(answer: Option<Answer>) -> CallAnswer {
     }
 }
 
+/// A `starknet_call` reply as all of its felts (Braavos's `get_signers`,
+/// `get_deferred_remove_signers`). `Err(true)` for a JSON-RPC error, `Err(false)` for a missing
+/// reply or any entry that is not a felt.
+pub fn call_felts(answer: Option<Answer>) -> Result<Vec<Felt>, bool> {
+    match answer {
+        Some(Answer::Result(Value::Array(values))) => values
+            .iter()
+            .map(|value| value.as_str().and_then(felt::parse))
+            .collect::<Option<Vec<_>>>()
+            .ok_or(false),
+        Some(Answer::Result(_)) | None => Err(false),
+        Some(Answer::Error { .. }) => Err(true),
+    }
+}
+
+/// A `starknet_getBlockWithTxHashes` reply's `timestamp`, with the same error split.
+pub fn block_timestamp(answer: Option<Answer>) -> Result<u64, bool> {
+    match answer {
+        Some(Answer::Result(result)) => {
+            result.get("timestamp").and_then(Value::as_u64).ok_or(false)
+        }
+        Some(Answer::Error { .. }) => Err(true),
+        None => Err(false),
+    }
+}
+
 /// A `starknet_getNonce` reply through `getNonceSafe`: a JSON-RPC error reads as 0 (how an
 /// undeployed account answers). A missing or malformed reply is `None`: the core does not sign
 /// on a nonce it could not read, which is stricter than starknet.js.
