@@ -10,7 +10,7 @@
 use serde_json::json;
 
 use super::model::{TokenBalance, TokenConfig};
-use super::tokens::{is_token_name, is_token_symbol, with_token_id};
+use super::tokens::{is_token_name, is_token_symbol, normalize_token_symbol, with_token_id};
 use super::wire::{classify, rpc_call, Reply, RpcReply, RpcRequest};
 use crate::js::big::parse_bigint;
 use crate::js::felt::{canonical_address, canonical_felt, is_stark_field_element, uint256_felts};
@@ -239,7 +239,7 @@ pub fn token_metadata_judge(
     else {
         return failed();
     };
-    let symbol = js_trim(&decode_erc20_string(symbol)).to_uppercase();
+    let symbol = normalize_token_symbol(&decode_erc20_string(symbol));
     if !is_token_symbol(&symbol) {
         return TokenMetaOutcome::Failed {
             message: UNSUPPORTED_SYMBOL.into(),

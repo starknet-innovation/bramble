@@ -84,6 +84,17 @@ export const tokensBlock = () => {
     }),
     candidate({ address: "0xabc", networkId: "SN_SEPOLIA", symbol: "STRK" }),
     candidate({ address: "0xabc", name: "", symbol: "rnETH", decimals: 25 }),
+    // A bridged `.e` ticker folds to its base too (#645): ETH.e and 5TRK.e spoof, a dotless USDCE
+    // still reads as USDC.e, and the two curated USDC contracts clear under either ticker.
+    candidate({ address: "0xdead", name: "Ether", symbol: "ETH.e" }),
+    candidate({ address: "0xbeef", name: "Ether", symbol: "5TRK.e" }),
+    candidate({ address: "0xdead", decimals: 6, symbol: "USDCE" }),
+    candidate({ address: "0xdead", decimals: 6, symbol: "USDC.e" }),
+    ...["USDC", "USDC.e"].flatMap((symbol) =>
+      ["0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb", USDC_ALIAS].map(
+        (address) => candidate({ address, decimals: 6, name: "USD Coin", symbol }),
+      ),
+    ),
   ];
   const config = withTokenId({
     address: STRK,
