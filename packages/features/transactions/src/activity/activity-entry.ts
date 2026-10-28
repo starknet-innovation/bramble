@@ -136,6 +136,16 @@ export type ActivityEntry = {
   readonly summary: string;
   readonly token?: string;
   /**
+   * The fee the user signed, when it was not the receipt's STRK. A paymaster
+   * receipt reports the relayer's STRK; storing that in `feePaid` would count
+   * it as the user's. Reconciliation leaves this row's `feePaid` empty.
+   */
+  readonly userFee?: {
+    readonly amount: string;
+    readonly token: string;
+    readonly tokenAddress: string;
+  };
+  /**
    * The canonical address of the token `token` names, recorded where the
    * writer knows it (issue 643). A symbol alone cannot tell two contracts that
    * share it apart, so the feed groups, filters and sorts by this address and
@@ -219,6 +229,26 @@ const isNotFoundCount = (value: unknown): value is number | undefined =>
 const isActivityKind = (value: unknown): value is ActivityEntry["kind"] =>
   value === "declare" || value === "deploy" || value === "invoke" || value === "transfer";
 
+const USER_FEE_AMOUNT = /^[1-9][0-9]{0,77}$/;
+const USER_FEE_TOKEN = /^[A-Za-z0-9.]{1,32}$/;
+
+const isUserFee = (value: unknown): boolean => {
+  if (value === undefined) {
+    return true;
+  }
+  return (
+    isRecord(value) &&
+    hasOnlyKnownKeys(value, ["amount", "token", "tokenAddress"]) &&
+    typeof value["amount"] === "string" &&
+    USER_FEE_AMOUNT.test(value["amount"]) &&
+    typeof value["token"] === "string" &&
+    USER_FEE_TOKEN.test(value["token"]) &&
+    typeof value["tokenAddress"] === "string" &&
+    isNonZeroStarkFieldElement(value["tokenAddress"]) &&
+    canonicalFelt(value["tokenAddress"]) === value["tokenAddress"]
+  );
+};
+
 const isOptionalDetail = (value: unknown): value is string | undefined =>
   value === undefined || (typeof value === "string" && value.length > 0 && value.length <= 200);
 
@@ -258,6 +288,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "summary",
     "token",
     "tokenAddress",
+    "userFee",
   ]) &&
   isStarknetNetworkId(value["networkId"]) &&
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
@@ -282,6 +313,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   isFailureNotice(value["failureNotice"]) &&
   (value["feePaid"] === undefined || isTransactionFee(value["feePaid"])) &&
   (value["feePayer"] === undefined || value["feePayer"] === "sponsor") &&
+  isUserFee(value["userFee"]) &&
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
   (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
   isNotFoundCount(value["notFoundCount"]) &&

@@ -17,7 +17,7 @@ import {
 
 const SUBMITTERS = [
   "apps/extension/src/background/accounts/deployment-ops.ts",
-  "apps/extension/src/background/accounts/wallet-ops.ts",
+  "apps/extension/src/background/accounts/transfer-ops.ts",
   "apps/extension/src/background/portfolio/allowance-ops.ts",
   "apps/extension/src/background/portfolio/nft-transfer-submit.ts",
   "apps/extension/src/background/privacy/strk20-approval-execution.ts",
@@ -86,9 +86,9 @@ describe("post-broadcast outcome integrity", () => {
   // accepted hash and for the signed hash of a lost reply alike.
   test("the send, swap, and pool executors keep every post-hash step behind the boundary", async () => {
     const expectations: Readonly<Record<string, readonly string[]>> = {
-      "apps/extension/src/background/accounts/wallet-ops.ts": [
+      "apps/extension/src/background/accounts/transfer-ops.ts": [
         "await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(pending)));",
-        "await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(transactionHash)));",
+        "recordSubmittedActivity(deps.activity, activityFor(transactionHash, signedFee))",
       ],
       "apps/extension/src/background/privacy/strk20-wallet-execution.ts": [
         "await afterBroadcast(async () => {\n    // Entering the pool",

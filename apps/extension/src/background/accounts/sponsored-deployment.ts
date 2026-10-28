@@ -16,6 +16,7 @@
  */
 
 import {
+  type DeploySponsorship,
   isSponsorableAccountType,
   type PaymasterHttp,
   quoteSponsoredDeploy,
@@ -67,14 +68,6 @@ export type SponsoredDeploymentDeps = {
     readonly networks?: SponsoredDeployNetworks;
   };
 };
-
-/**
- * What the deploy screen may offer: sponsored ("available"), declined by the
- * sponsor ("refused"), nothing ("none"), or the state of an earlier attempt —
- * "held" while its hold stands, "may-land" once it is over and the account is
- * not confirmed deployed.
- */
-export type DeploySponsorship = "available" | "held" | "may-land" | "none" | "refused";
 
 /** The chain could not say whether the account is deployed; nothing was sent. */
 export const DEPLOYMENT_STATUS_UNKNOWN =

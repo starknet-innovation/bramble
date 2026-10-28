@@ -375,12 +375,35 @@ export const bindApprovals = ({
       const unit = button.dataset["approvalFeeUnit"];
       const reviewedFee =
         overallFee !== undefined && unit !== undefined ? { overallFee, unit } : undefined;
+      const gaslessToken = button.dataset["gaslessToken"];
+      const gaslessAmount = button.dataset["gaslessAmount"];
+      const gaslessLabel = button.dataset["gaslessLabel"];
+      const gaslessDecimals = button.dataset["gaslessDecimals"];
+      const gaslessFee =
+        gaslessToken !== undefined &&
+        gaslessAmount !== undefined &&
+        gaslessLabel !== undefined &&
+        gaslessDecimals !== undefined
+          ? {
+              amount: gaslessAmount,
+              decimals: Number(gaslessDecimals),
+              label: gaslessLabel,
+              tokenAddress: gaslessToken,
+            }
+          : undefined;
       // Likewise the account a connection card named: read off the clicked
       // control, so the account the user saw is the one the decision reports.
       const reviewedAccountId = button.dataset["approvalAccount"];
       const transaction = TRANSACTION_APPROVALS.has(button.dataset["approvalKind"] ?? "");
       void wallet
-        .decideApproval(id, action === "approve", reviewedFee, reviewedAccountId, transaction)
+        .decideApproval(
+          id,
+          action === "approve",
+          reviewedFee,
+          reviewedAccountId,
+          transaction,
+          gaslessFee,
+        )
         .then(
           () => {
             // The status is read when the outcome paints, not when the decision

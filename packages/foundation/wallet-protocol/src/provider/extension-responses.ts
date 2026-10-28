@@ -133,6 +133,16 @@ export type PendingApproval = {
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
   readonly feeEstimatePending?: boolean;
+  /**
+   * Invoke only: tokens the user may choose for the network fee when STRK is
+   * short. Absent when gasless fees are off or none can be checked.
+   */
+  readonly gaslessFees?: readonly {
+    readonly amount: string;
+    readonly decimals: number;
+    readonly label: string;
+    readonly tokenAddress: string;
+  }[];
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];

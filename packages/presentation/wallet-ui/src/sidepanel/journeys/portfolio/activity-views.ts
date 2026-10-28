@@ -13,6 +13,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ActivityEntry, ActivityStatus } from "@bramble/transactions/activity";
+import type { RelaySignature } from "@bramble/transactions/relay-signatures";
 import { emptyState } from "@bramble/ui-kit/content";
 import { iconButton, segmentedControl } from "@bramble/ui-kit/controls";
 import { inputControl, selectField } from "@bramble/ui-kit/fields";
@@ -30,6 +31,7 @@ import {
 import type { ActivityPricing } from "./activity-format";
 import { activityViewState, setActivityViewState } from "./activity-view-state";
 import { activityEmptyCopy, transactionGroups, transactionList } from "./home-tabs";
+import { relaySection } from "./relay-rows";
 
 const HISTORY_UNAVAILABLE_NOTICE =
   "Couldn't load on-chain history. Showing this device's records only.";
@@ -126,6 +128,8 @@ const activityFeed = (
  * `contacts` are the network's address-book and account names the search can
  * resolve. The filter, sort and search controls render from the ephemeral view
  * state, which the binding also applies, so both sides read one source.
+ * `relays` are the OutsideExecution messages this device signed for relay,
+ * listed above the feed and outside its filters (issue 299).
  */
 export const activityScreen = (
   pending: readonly PendingApproval[],
@@ -136,6 +140,7 @@ export const activityScreen = (
   pricing?: ActivityPricing,
   todayKey: number | null = null,
   contacts: readonly ActivityContact[] = [],
+  relays: readonly RelaySignature[] = [],
 ): string => {
   const options = activityFilterOptions(transactions, pricing);
   const stored = activityViewState();
@@ -177,6 +182,7 @@ export const activityScreen = (
             </div>
           </section>`
     }
+    ${relaySection(relays)}
     <section class="section">
       ${historyUnavailable ? emptyState(HISTORY_UNAVAILABLE_NOTICE, "status") : ""}
       ${

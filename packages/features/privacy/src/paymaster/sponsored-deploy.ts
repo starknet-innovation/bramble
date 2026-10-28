@@ -25,6 +25,7 @@ import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
+import type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
 import type { AccountContractType } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
@@ -34,10 +35,10 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import { hash } from "starknet";
-import { BROADCAST_PAYMASTER_METHOD, type PaymasterHttp, rpc } from "./paymaster-rpc";
+import { BROADCAST_PAYMASTER_METHOD, rpc } from "./paymaster-rpc";
 
 /** The injected relay transport, re-exported for background callers and tests. */
-export type { PaymasterHttp } from "./paymaster-rpc";
+export type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
 
 /** Who pays a sponsored deployment's network fee, as the review names them. */
 export const SPONSORED_DEPLOY_SPONSOR = "Starknet Foundation";
@@ -72,6 +73,15 @@ export class SponsoredDeployUnavailableError extends WalletError {
     this.name = "SponsoredDeployUnavailableError";
   }
 }
+
+/**
+ * What the deploy screen may offer, as the background decides it: sponsored
+ * ("available"), declined by the sponsor ("refused"), nothing ("none"), or the
+ * state of an earlier attempt: "held" while its hold stands, "may-land" once it
+ * is over and the account is not confirmed deployed. Advisory display state;
+ * the submission re-checks everything it depends on.
+ */
+export type DeploySponsorship = "available" | "held" | "may-land" | "none" | "refused";
 
 /** One network's sponsored-deploy relay. */
 export type SponsoredDeployConfig = { readonly url: string };

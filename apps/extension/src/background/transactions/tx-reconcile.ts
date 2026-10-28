@@ -110,14 +110,17 @@ const expiredOutcomes = (
 const hasReceipt = (status: ActivityOutcome["status"]): boolean =>
   status === "accepted" || status === "reverted";
 
-// Only rows this wallet submitted get a fee: a receipt's fee is paid by the
-// transaction's sender, so on a discovered incoming transfer it is someone
-// else's, and so is a sponsored deployment's, which the sponsor's relay sent.
-// A recorded fee is final and never read again.
+// Only rows this wallet submitted get a receipt fee: a receipt's fee is paid
+// by the transaction's sender, so on a discovered incoming transfer it is
+// someone else's, and so is a sponsored deployment's, which the sponsor's
+// relay sent. A recorded fee is final and never read again. A gasless row
+// already names the token the user signed (`userFee`); the receipt's STRK is
+// the relayer's and must not replace it.
 const wantsFee = (entry: ActivityEntry, status: ActivityOutcome["status"]): boolean =>
   entry.origin === "wallet" &&
   entry.feePayer !== "sponsor" &&
   entry.feePaid === undefined &&
+  entry.userFee === undefined &&
   hasReceipt(status);
 
 /**

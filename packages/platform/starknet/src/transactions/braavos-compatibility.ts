@@ -52,6 +52,23 @@ const parseBraavosSigners = (result: readonly string[]): BraavosSigners => {
 };
 
 /**
+ * The account's stark signers in registration order, read at `blockIdentifier`.
+ * The first is the key a bare `(r, s)` is verified against; an empty list means
+ * no stark key controls the account. Throws on a malformed list or a failed read.
+ */
+export const readBraavosStarkSigners = async (
+  provider: RpcProvider,
+  address: string,
+  blockIdentifier: string,
+): Promise<readonly string[]> =>
+  parseBraavosSigners(
+    await provider.callContract(
+      { calldata: [], contractAddress: address, entrypoint: "get_signers" },
+      blockIdentifier,
+    ),
+  ).stark;
+
+/**
  * Whether a live class is a Braavos implementation release this wallet signs
  * for. Base/deployment classes are not: a deployed account never legitimately
  * runs one, so their authorization rules are not assumed.

@@ -6,15 +6,13 @@
  */
 
 import { isRecord } from "@bramble/core/json";
+import type { DeploySponsorship } from "@bramble/privacy/sponsored-deploy";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isFeeReviewResponse, isTransferResponse } from "../../popup/responses/responses";
 import { responseError } from "./runtime-errors";
 
-/**
- * What the deploy screen may offer, as the background decided it: "held" and
- * "may-land" describe an earlier sponsored attempt, during and after its hold.
- */
-export type DeploySponsorship = "available" | "held" | "may-land" | "none" | "refused";
+/** The background's deploy-screen offer, single-sourced with the background. */
+export type { DeploySponsorship };
 
 const SPONSORSHIPS: readonly unknown[] = ["available", "held", "may-land", "none", "refused"];
 

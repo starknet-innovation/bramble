@@ -108,7 +108,9 @@ const changeBadge = (change: number | undefined): string => {
   }
   const direction = change >= 0 ? "up" : "down";
   const arrow = change >= 0 ? "↑" : "↓";
-  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%<span class="token-change-win"> · 24h price</span></span>`;
+  // A short visible window keeps the figure honest (a 24h price move, not a
+  // balance change); screen readers get the full name in place of it.
+  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%<span class="token-change-win" aria-hidden="true"> · 24h</span><span class="sr-only"> 24h price change</span></span>`;
 };
 
 /**
