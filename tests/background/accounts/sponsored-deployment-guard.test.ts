@@ -32,6 +32,7 @@ import { createWallet, extensionSender, testExtension } from "../../support/back
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 import {
   accepted,
+  type Chain,
   sponsoredHarness as harness,
   lost,
   ozAccount,
@@ -69,6 +70,11 @@ const guardedTransfers = (
       async getDeploymentStatus() {
         return deployed;
       },
+      async verifyAccountClassHash({ expectedClassHash }) {
+        return deployed
+          ? { onChainClassHash: expectedClassHash, status: "verified" }
+          : { status: "undeployed" };
+      },
       async submitErc20Transfer() {
         sent.push("transfer");
         return { transactionHash: "0x1" } as never;
@@ -99,6 +105,10 @@ describe("sponsored attempt hold", () => {
         async getDeploymentStatus() {
           reads += 1;
           return false;
+        },
+        async verifyAccountClassHash() {
+          reads += 1;
+          return { status: "undeployed" };
         },
         async submitErc20Transfer() {
           return { transactionHash: "0x1" } as never;
@@ -208,6 +218,57 @@ describe("sponsored attempt hold", () => {
       expect(transfers.sent).toEqual(["transfer"]);
       expect(await offer(deps, INSIDE)).toBe("may-land");
     }
+  });
+
+  test("an accepted relay hash is not a deployment: the hold stands until the chain shows one", async () => {
+    const { activity, chain, deps, pending } = await harness({ relay: relay(accepted) });
+    await submit(deps, 0);
+    await activity.updateStatuses(
+      { "0x5ab": { status: "accepted" } },
+      { accountId: ozAccount.id, networkId: "SN_SEPOLIA" },
+    );
+    expect(await offer(deps, INSIDE)).toBe("held");
+    // Something at the address, but not the account's class, is not this deploy.
+    chain.deployed = true;
+    chain.classHash = "0x123";
+    expect(await offer(deps, INSIDE)).toBe("held");
+    expect(await submit(deps, INSIDE)).toEqual(HELD);
+    expect(pending.entry(ozAccount)).toBeDefined();
+    delete chain.classHash;
+    expect(await submit(deps, INSIDE)).toEqual({ error: "account already deployed" });
+    expect(pending.entry(ozAccount)).toBeUndefined();
+  });
+
+  test("a failed relay hash releases the hold only while the chain shows the address empty", async () => {
+    // The chain cannot be read, or the address runs another class.
+    const unconfirmed: readonly Partial<Chain>[] = [
+      { deployed: new Error("rpc down") },
+      { classHash: "0x123", deployed: true },
+    ];
+    for (const settle of unconfirmed) {
+      const { activity, chain, deps } = await harness({ relay: relay(accepted) });
+      await submit(deps, 0);
+      await activity.updateStatuses(
+        { "0x5ab": { status: "rejected" } },
+        { accountId: ozAccount.id, networkId: "SN_SEPOLIA" },
+      );
+      Object.assign(chain, settle);
+      expect(await offer(deps, INSIDE)).toBe("held");
+      expect(await submit(deps, INSIDE)).toEqual(HELD);
+    }
+  });
+
+  test("a relay hash Activity already holds is not recorded, and the hold stands", async () => {
+    const { activity, deps, pending } = await harness({ relay: relay(accepted) });
+    const scope = { accountId: ozAccount.id, networkId: "SN_SEPOLIA" } as const;
+    await activity.record({ ...scope, hash: "0x5ab", kind: "transfer", summary: "Sent 1 STRK" });
+    await activity.updateStatuses({ "0x5ab": { status: "rejected" } }, scope);
+    expect(await submit(deps, 0)).toMatchObject({ submissionUnknown: true });
+    const [row] = await activity.list();
+    expect(row).toMatchObject({ hash: "0x5ab", kind: "transfer", summary: "Sent 1 STRK" });
+    expect(row?.feePayer).toBeUndefined();
+    expect(pending.entry(ozAccount)?.hash).toBeUndefined();
+    expect(await submit(deps, INSIDE)).toEqual(HELD);
   });
 
   test("is reserved atomically: two concurrent submits make exactly one broadcast", async () => {

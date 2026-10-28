@@ -11,7 +11,7 @@ import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { isOutcomeUnknown } from "../runtime/runtime-errors";
-import { awaitConfirmation, type ConfirmationOutcome } from "../shared/confirm-submitted";
+import type { ConfirmationOutcome } from "../shared/confirm-submitted";
 import { buttonBusy, errorDetails, renderFragment, scopedStatus, showToast } from "../shared/dom";
 import {
   bindOutcomeReceipt,
@@ -27,6 +27,7 @@ import {
   isCurrentDeployJourney,
   leaveDeployScreen,
 } from "./deploy-journey";
+import { awaitDeployOutcome } from "./deploy-receipt-watch";
 import { deployCostLine } from "./deploy-sponsorship";
 import type { DeploymentPollScope, ShellBindingDeps } from "./shell-binding-deps";
 
@@ -170,11 +171,13 @@ const resumeDeployReceipt = (
   void paintDeployReceipt(deps, receipt.outcome, receipt.hash);
   if (receipt.settled) return;
   const live = (): boolean => successStage?.isConnected === true && journey.receipt === receipt;
-  void awaitConfirmation({
+  void awaitDeployOutcome({
+    accountId: journey.accountId,
     ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
     hash: receipt.hash,
-    loadActivity: () => deps.wallet.loadActivity(),
+    sponsored: receipt.sponsored,
     stillCurrent: live,
+    wallet: deps.wallet,
   }).then(async (outcome) => {
     if (!live() || receipt.settled) return;
     receipt.outcome = outcome;
@@ -359,8 +362,8 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     rebind();
     return true;
   };
-  const showReceipt = (hash: string): void => {
-    journey.receipt = { hash, outcome: null, settled: false };
+  const showReceipt = (hash: string, sponsored: boolean): void => {
+    journey.receipt = { hash, outcome: null, settled: false, sponsored };
     if (rebound()) return;
     scopedStatus(target, "");
     buttonBusy(target, false);
@@ -374,7 +377,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     void deps.wallet.deployAccountSponsored().then(
       (hash) => {
         journey.pressed = false;
-        showReceipt(hash);
+        showReceipt(hash, true);
       },
       (error: unknown) => {
         journey.pressed = false;
@@ -447,7 +450,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           buttonBusy(target, false);
           return;
         }
-        showReceipt(response);
+        showReceipt(response, false);
       },
       // Without a quote in hand this press only asked for one.
       (error: unknown) => {

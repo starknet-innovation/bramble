@@ -23,7 +23,13 @@ export type DeployJourney = {
   quoted: boolean;
   /** Why the screen's own quote failed, kept for the screen a repaint rebuilt. */
   quoteNote?: string;
-  receipt?: { readonly hash: string; outcome: ConfirmationOutcome | null; settled: boolean };
+  /** `sponsored`: the relay named the hash, so the chain, not it, decides. */
+  receipt?: {
+    readonly hash: string;
+    outcome: ConfirmationOutcome | null;
+    settled: boolean;
+    readonly sponsored: boolean;
+  };
   /**
    * The background's sponsored-deploy offer (issue 431), asked once per visit after
    * the fee is quoted. "available" makes Deploy the sponsored deploy.

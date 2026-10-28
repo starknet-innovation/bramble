@@ -94,8 +94,11 @@ export const accepted = (): Response =>
 /** A broadcast whose answer was lost. */
 export const lost = (): Response => new Response("bad gateway", { status: 502 });
 
-/** What the chain answers for the account's deployment status; tests may flip it. */
-export type Chain = { deployed: boolean | Error };
+/**
+ * What the chain answers for the account; tests may flip it. `classHash` is
+ * the class a deployed address runs, the account's own unless set.
+ */
+export type Chain = { classHash?: string; deployed: boolean | Error };
 
 /** Handler deps over the doubles above; shared `pending`/`activity` survive a "restart". */
 export const sponsoredHarness = async (input: {
@@ -124,6 +127,14 @@ export const sponsoredHarness = async (input: {
     async getDeploymentStatus() {
       if (chain.deployed instanceof Error) throw chain.deployed;
       return chain.deployed;
+    },
+    async verifyAccountClassHash({ expectedClassHash }) {
+      if (chain.deployed instanceof Error) throw chain.deployed;
+      if (!chain.deployed) return { status: "undeployed" as const };
+      const onChainClassHash = chain.classHash ?? expectedClassHash;
+      return onChainClassHash === expectedClassHash
+        ? { onChainClassHash, status: "verified" as const }
+        : { expectedClassHash, onChainClassHash, status: "mismatch" as const };
     },
     async getTokenBalances({ tokens }) {
       return tokens.map((token) => ({ ...token, balance: input.balance ?? "0", formatted: "0" }));

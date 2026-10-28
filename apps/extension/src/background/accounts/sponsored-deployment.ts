@@ -31,12 +31,15 @@ import {
 } from "@bramble/privacy/sponsored-deploy";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { accountDeployment } from "@bramble/starknet/deployment";
-import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import {
+  INDETERMINATE_RPC_WRITE_MESSAGE,
+  IndeterminateRpcWriteError,
+} from "@bramble/starknet/provider";
 import type { StarkHashSigner } from "@bramble/starknet/rpc";
 import { type ActivityLog, systemClock } from "@bramble/transactions/activity";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
@@ -209,6 +212,13 @@ const reserve = async (
     : { error: SPONSORED_DEPLOY_ALREADY_SENT };
 };
 
+// Whether no Activity row of any account already carries `hash`. An
+// unreadable log cannot show that, so it answers false.
+const isFreshHash = async (activity: ActivityLog, hash: string): Promise<boolean> => {
+  const rows = await activity.list().catch(() => null);
+  return rows !== null && !rows.some((row) => sameFelt(row.hash, hash));
+};
+
 // Sends the reserved deploy. Anything that sent nothing forgets the attempt; a
 // lost reply keeps it, and an accepted deploy keeps it with its hash.
 const send = async (
@@ -238,6 +248,12 @@ const send = async (
     await route.pending.forget(account).catch(() => undefined);
     return { error: error instanceof Error ? error.message : "sponsored deployment failed" };
   }
+  // The hash is the relay's claim. One this wallet already holds a row for
+  // would replace that row and shed its fee, so it is not recorded or tied to
+  // the attempt: the hold stays, and the chain decides when it ends.
+  if (!(await isFreshHash(deps.activity, transactionHash))) {
+    return submissionUnknownResponse(INDETERMINATE_RPC_WRITE_MESSAGE);
+  }
   await route.pending.recordHash(account, transactionHash).catch(() => undefined);
   await afterBroadcast(() =>
     recordSubmittedActivity(deps.activity, {
@@ -260,8 +276,11 @@ const send = async (
  * chain shows it deployed; and when the chain cannot say
  * ({@link DEPLOYMENT_STATUS_UNKNOWN}). The attempt is persisted before the
  * relay hears anything and forgotten only when it sent nothing. A lost reply
- * is answered as submission-unknown. An accepted deploy is recorded in
- * Activity as sponsored, so no fee is ever attributed to the user.
+ * is answered as submission-unknown, and so is a relay hash Activity already
+ * holds. Otherwise the relay's hash is recorded in Activity as a sponsored
+ * deploy, so no fee is ever attributed to the user. The hash is the relay's
+ * claim: whether the account is deployed is read from the chain, never from
+ * that hash's receipt.
  */
 export const submitSponsoredAccountDeployment = async (
   deps: SponsoredDeploymentDeps,

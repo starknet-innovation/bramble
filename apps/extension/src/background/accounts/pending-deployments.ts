@@ -7,7 +7,9 @@
  * sponsored one, the self-paid one and each automatic deploy-before-send —
  * refuses with {@link DEPLOYMENT_MAY_BE_ON_ITS_WAY}. The hold ends early when
  * the chain shows the account deployed or the attempt's recorded transaction
- * was rejected or reverted. After it, self-paid deploys go ahead: a duplicate
+ * was rejected or reverted while the chain still shows the account undeployed.
+ * The relay's hash is its claim, never proof: "deployed" means the chain shows
+ * the expected class at the stored address. After it, self-paid deploys go ahead: a duplicate
  * deploy never costs the user (a DEPLOY_ACCOUNT to a taken address is rejected
  * before it is charged; a sponsor deploy that loses the race reverts at the
  * sponsor's cost — verify on Sepolia before enabling). So the hold only stops
@@ -67,6 +69,9 @@ type Entry = {
 
 /** The account an entry belongs to. */
 export type PendingAccount = { readonly address: string; readonly networkId: StarknetNetworkId };
+
+/** An entry's account with the class its deployment must put at the address. */
+export type AttemptAccount = PendingAccount & { readonly classHash: string };
 
 /**
  * Durable sponsored-attempt entries. `load` must resolve before `reserve` or
@@ -189,7 +194,28 @@ export type SponsoredAttempt = "deployed" | "held" | "may-land" | "none";
 type AttemptDeps = {
   readonly activity?: Pick<ActivityLog, "list">;
   readonly pendingDeployments: PendingDeployments;
-  readonly runtimeRpc: Pick<RuntimeRpc, "getDeploymentStatus">;
+  readonly runtimeRpc: Pick<RuntimeRpc, "verifyAccountClassHash">;
+};
+
+/**
+ * What the chain shows at the account's stored address: "deployed" only for
+ * the expected class there, "undeployed" only for a confirmed empty address.
+ * Another class, a failed read, or no class reader wired is "unknown".
+ */
+export const accountOnChain = async (
+  rpc: Pick<RuntimeRpc, "verifyAccountClassHash">,
+  account: AttemptAccount,
+  rpcUrls: readonly string[],
+): Promise<"deployed" | "undeployed" | "unknown"> => {
+  const verification = await rpc
+    .verifyAccountClassHash?.({
+      accountAddress: account.address,
+      expectedClassHash: account.classHash,
+      rpcUrls,
+    })
+    .catch(() => null);
+  if (verification?.status === "verified") return "deployed";
+  return verification?.status === "undeployed" ? "undeployed" : "unknown";
 };
 
 // Whether the attempt's own recorded transaction has failed on chain.
@@ -202,28 +228,28 @@ const attemptFailed = async (deps: AttemptDeps, hash: string | undefined): Promi
 };
 
 /**
- * Resolves the account's sponsored attempt against the chain and Activity. A
- * deployed account deletes the entry; a failed attempt transaction ends the
- * hold early. An unreadable chain is not "deployed".
+ * Resolves the account's sponsored attempt against the chain and Activity. The
+ * expected class at the stored address deletes the entry ("deployed"). A failed
+ * attempt transaction ends the hold early only while the chain confirms the
+ * address empty: the relay's hash alone proves nothing about this account. An
+ * unreadable chain is neither deployed nor undeployed.
  */
 export const sponsoredAttemptState = async (
   deps: AttemptDeps,
-  account: PendingAccount,
+  account: AttemptAccount,
   rpcUrls: readonly string[],
   now: number,
 ): Promise<SponsoredAttempt> => {
   await deps.pendingDeployments.load();
   const entry = deps.pendingDeployments.entry(account);
   if (!entry) return "none";
-  const deployed = await deps.runtimeRpc
-    .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
-    .catch(() => null);
-  if (deployed === true) {
+  const chain = await accountOnChain(deps.runtimeRpc, account, rpcUrls);
+  if (chain === "deployed") {
     await deps.pendingDeployments.forget(account).catch(() => undefined);
     return "deployed";
   }
   if (now >= entry.holdUntil) return "may-land";
-  if (!(await attemptFailed(deps, entry.hash))) return "held";
+  if (chain !== "undeployed" || !(await attemptFailed(deps, entry.hash))) return "held";
   await deps.pendingDeployments.endHold(account).catch(() => undefined);
   return "may-land";
 };
@@ -245,7 +271,7 @@ export const guardDeployments = (
 ): RuntimeRpc => {
   const now = deps.now ?? systemClock;
   const guarded =
-    <I extends { readonly account: PendingAccount; readonly rpcUrls: readonly string[] }, R>(
+    <I extends { readonly account: AttemptAccount; readonly rpcUrls: readonly string[] }, R>(
       submit: (input: I) => Promise<R>,
     ) =>
     async (input: I): Promise<R> => {

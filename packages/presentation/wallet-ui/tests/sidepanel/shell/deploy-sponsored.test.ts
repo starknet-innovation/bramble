@@ -54,6 +54,7 @@ const wallet = (input: {
   readonly activity?: () => unknown;
   readonly sponsored: () => Promise<string>;
   readonly sponsorship: DeploySponsorship | (() => DeploySponsorship);
+  readonly verification?: () => unknown;
 }) => {
   const calls: string[] = [];
   return {
@@ -70,6 +71,7 @@ const wallet = (input: {
       deploySponsorship: async () =>
         typeof input.sponsorship === "function" ? input.sponsorship() : input.sponsorship,
       loadActivity: async () => input.activity?.() ?? { entries: [] },
+      loadClassHashVerification: async () => input.verification?.() ?? null,
       loadStatus: async () => ({ networkId: "SN_SEPOLIA" }),
     } as unknown as ShellBindingDeps["wallet"],
   };
@@ -102,6 +104,58 @@ describe("deploy Cost line", () => {
     expect(deployCostLine(quote, "may-land")).toEndWith(
       ". A sponsored deployment may still land. If it does, yours is refused at no cost.",
     );
+  });
+});
+
+// A binding scoped to one account that reads the chain once after a deploy.
+const bindWatching = (container: HTMLElement, stub: ShellBindingDeps["wallet"]): void =>
+  bindDeploy({
+    app: container,
+    confirmationDelaysMs: [0],
+    deploymentScope: () => ({ accountId: ACCOUNT, stillCurrent: () => true }),
+    render: async () => undefined,
+    setActiveView: () => undefined,
+    wallet: stub,
+  });
+
+const ACCOUNT = "SN_SEPOLIA:0xabc";
+
+describe("sponsored deploy receipt", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+  });
+
+  const receiptAfterDeploy = async (verification: string): Promise<string> => {
+    const container = mount();
+    const stub = wallet({
+      activity: () => ({ entries: [{ hash: "0x5ab", status: "accepted" }] }),
+      sponsored: async () => "0x5ab",
+      sponsorship: "available",
+      verification: () => ({
+        accountId: ACCOUNT,
+        ok: true,
+        verification:
+          verification === "verified"
+            ? { onChainClassHash: "0x1", status: "verified" }
+            : { status: "undeployed" },
+      }),
+    });
+    bindWatching(container, stub.wallet);
+    await tick();
+    press(container);
+    await tick();
+    await tick();
+    return container.querySelector("#deploy-success")?.textContent ?? "";
+  };
+
+  test("an accepted relay hash over an empty address is not 'Account deployed'", async () => {
+    const receipt = await receiptAfterDeploy("undeployed");
+    expect(receipt).toContain("Deployment submitted");
+    expect(receipt).not.toContain("Account deployed");
+  });
+
+  test("the account's class at its address is 'Account deployed'", async () => {
+    expect(await receiptAfterDeploy("verified")).toContain("Account deployed");
   });
 });
 
