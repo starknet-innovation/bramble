@@ -80,7 +80,6 @@ final class PortfolioStoreTests: XCTestCase {
             typeLabel: nil,
             authorizationShape: "stark-pair",
             groupId: nil,
-            viewOnly: false,
             active: true
         )
     }

@@ -16,8 +16,8 @@ use crate::{felt, kms, CoreError};
 impl WalletCore {
     /// Derives the scoped STRK20 viewing key of the record `account_id`, only while the session
     /// generation (`lock_epoch`) is still `generation` and the record still passes the signing gate
-    /// (an OpenZeppelin record whose key this phrase holds; view-only and Argent records are
-    /// refused). Checked under the session mutex held for the whole derivation, so a lock cannot
+    /// (a known record in a vault not waiting for discovery, any family, as the extension's
+    /// `deriveVaultStrk20ViewingKey`). Checked under the session mutex held for the whole derivation, so a lock cannot
     /// interleave; passive (never renews). `Err(CoreError::Locked)` otherwise. Never exported:
     /// the key goes straight into one request body (privacy/plan.rs).
     pub(crate) fn plan_viewing_key(
@@ -50,7 +50,7 @@ impl WalletCore {
     /// A private-balance read for the vault record `account_id` (on its own network). Requires an
     /// unlocked wallet and records the session generation, so a lock (even one followed by a new
     /// unlock) fails the plan `Locked` at its next derivation. `UnknownAccount` for a record that is
-    /// missing, view-only or not OpenZeppelin; `NotConfigured` when the network has no plain
+    /// missing; `NotConfigured` when the network has no plain
     /// routing: Sepolia today, and any network whose routing turns OHTTP on.
     pub fn prepare_privacy_read(
         self: Arc<Self>,

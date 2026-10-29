@@ -109,7 +109,7 @@ Motion snapshot passes.
 
 **Phase 0.5 — account parity (done; `docs/accounts.md`).** Vault v3 with typed account records,
 one active account, labels and groups, and one migration chain v1 → v2 → v3; sans-IO "Find your
-accounts" discovery for Bramble (OpenZeppelin), Ready (Argent) and Braavos (view-only); the
+accounts" discovery for Bramble (OpenZeppelin), Ready (Argent) and Braavos; the
 drawer's Add account ("Regular account", and "Multisig account" into the Ready Multisig
 gateway). Everything that acts for an account names its record id: signing, transfer and
 deployment plans, activity, shared-account signers, and private-balance reads

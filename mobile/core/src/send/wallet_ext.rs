@@ -28,7 +28,6 @@ impl From<SignRefusal> for SendError {
     fn from(refusal: SignRefusal) -> Self {
         match refusal {
             SignRefusal::Unknown => SendError::UnknownAccount,
-            SignRefusal::ViewOnly => SendError::ViewOnlyAccount,
         }
     }
 }
@@ -44,8 +43,10 @@ enum Use {
 /// The DEPLOY_ACCOUNT a record's address commits to (`accountDeployment`), or `None` when this
 /// wallet does not deploy the record's class. OpenZeppelin: salt 0 and `[public_key]`. Ready:
 /// only the pinned Argent 0.4.0 class, with the record's salt and Krusty's constructor calldata
-/// for that class (`[0, public_key, 1]`: a Starknet signer and no guardian). Either way the
-/// parameters must reproduce the stored address, or nothing is deployed.
+/// for that class (`[0, public_key, 1]`: a Starknet signer and no guardian). Braavos: only the
+/// modern deployment class, with the public key as salt and sole constructor argument (an older
+/// base-class counterfactual is refused, since its deployment authorization is not established).
+/// Every way, the parameters must reproduce the stored address, or nothing is deployed.
 fn deployment(record: &StoredAccount, address: &Felt, public_key: &Felt) -> Option<Deployment> {
     let class_hash = record.class_felt();
     let (salt, constructor_calldata) = match record.family() {
@@ -56,6 +57,9 @@ fn deployment(record: &StoredAccount, address: &Felt, public_key: &Felt) -> Opti
                 record.salt_felt()?,
                 argent.build_constructor_calldata(public_key),
             )
+        }
+        AccountFamily::Braavos if class_hash == account_catalog::catalog().braavos_deployment => {
+            (*public_key, vec![*public_key])
         }
         AccountFamily::Argent | AccountFamily::Braavos => return None,
     };
@@ -71,11 +75,10 @@ fn deployment(record: &StoredAccount, address: &Felt, public_key: &Felt) -> Opti
 fn plan_account(record: &StoredAccount) -> Result<Account, SendError> {
     let parse = |value: &str| felt::parse_non_zero(value).ok_or(SendError::UnknownAccount);
     let (address, public_key) = (parse(&record.address)?, parse(&record.public_key)?);
-    // A Braavos record reaches here only to read activity: `signing_record` refuses it, and a
-    // plan for it never reaches a signing point.
     let authorization = match record.family() {
         AccountFamily::Argent => Authorization::ArgentSignerArray,
-        AccountFamily::OpenZeppelin | AccountFamily::Braavos => Authorization::StarkPair,
+        AccountFamily::OpenZeppelin => Authorization::StarkPair,
+        AccountFamily::Braavos => Authorization::Braavos,
     };
     Ok(Account {
         network: record.network(),
@@ -98,8 +101,7 @@ impl WalletCore {
     }
 
     /// The stored record `account_id` names plus the session generation, for a plan being
-    /// prepared. A signing plan must pass `signing_record` (no view-only record, no pending
-    /// discovery). Passive: preparing or reading never renews the idle window.
+    /// prepared. A signing plan must pass `signing_record` (a known record, no pending discovery). Passive: preparing or reading never renews the idle window.
     fn plan_account_for(
         &self,
         account_id: &str,
@@ -122,14 +124,16 @@ impl WalletCore {
     /// record still passes the signing gate. `Err(CoreError::Locked)` when the wallet was locked,
     /// idle-locked, or re-unlocked since the plan was prepared (every lock and every new session
     /// advances `lock_epoch`, both under the session mutex held here). The key is derived from
-    /// the record's index, used, and wiped inside this call. Renews.
+    /// the record's index, used, and wiped inside this call. Renews the idle window only when
+    /// `renew`: a review's signature (Braavos's deployment estimate) is passive, as reads are.
     pub(crate) fn plan_sign(
         &self,
         generation: u64,
         account_id: &str,
         hash: &Felt,
+        renew: bool,
     ) -> Result<kms::Signature, CoreError> {
-        self.with_session(true, |session| {
+        self.with_session(renew, |session| {
             if self.lock_epoch.load(Ordering::SeqCst) != generation {
                 return Err(CoreError::Locked);
             }
@@ -144,9 +148,9 @@ impl WalletCore {
 impl WalletCore {
     /// Validates and canonicalises a transfer and returns its plan. Requires an unlocked wallet;
     /// records the session generation so a lock (even one followed by a new unlock) voids it.
-    /// The account is the vault record `request.account_id` on `request.network`: an
-    /// OpenZeppelin or Ready (Argent) record; a view-only (Braavos) record is refused before any
-    /// request is built.
+    /// The account is the vault record `request.account_id` on `request.network`. An undeployed
+    /// Braavos account is refused by the plan's review (`BraavosDeployFirst`): it deploys only
+    /// through `prepare_deployment`.
     /// Refuses a token that is not bundled for the network, an unparseable or zero recipient,
     /// and an amount the extension would refuse or no ERC-20 could carry.
     pub fn prepare_transfer(
@@ -192,7 +196,7 @@ impl WalletCore {
     }
 
     /// The standalone Deploy account flow for the home chip: the same machine without the invoke.
-    /// Only for a record that passes the signing gate (an OpenZeppelin or Ready account).
+    /// Only for a record that passes the signing gate.
     pub fn prepare_deployment(
         self: Arc<Self>,
         account_id: String,

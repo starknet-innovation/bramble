@@ -1,7 +1,8 @@
 //! The automatic (and standalone) account deployment inside a plan, as the extension's
 //! `ensureAccountDeployed` / `submitAccountDeployment`: re-estimate against the separately
 //! reviewed deployment fee, sign `compute_deploy_account_v3_hash` over the account's own
-//! deployment (OpenZeppelin or Ready), persist the pending record,
+//! deployment (OpenZeppelin, Ready, or Braavos with its extended authorization), persist the
+//! pending record,
 //! broadcast once, then wait for ACCEPTED_ON_L2/L1 and the receipt like starknet.js
 //! `waitForTransaction` (bounded at 200 attempts).
 
@@ -13,10 +14,61 @@ use super::plan_submit::{refusal_code, settle, Settled};
 use super::rpc_bodies::{self, DeployTx};
 use super::sign;
 use super::types::{RpcPurpose, SendFailureCode as Code, SendStep, TxStatus};
+use crate::account_catalog::catalog;
 use crate::activity::store;
 use crate::wallet::WalletCore;
 
 impl PlanState {
+    /// Braavos's extended deploy authorization (`braavosDeploySignature`): `[r, s, ...params,
+    /// aux_r, aux_s]`, where `(aux_r, aux_s)` signs `poseidon(params)` with the same key. The
+    /// parameters are signed first, as the extension signs them, so `hash` is the last signed.
+    pub(super) fn braavos_deploy_signature(
+        &mut self,
+        core: &WalletCore,
+        hash: &Felt,
+        renew: bool,
+    ) -> Result<Vec<Felt>, Code> {
+        let params =
+            sign::braavos_deploy_params(self.account.network, catalog().braavos_implementation);
+        let aux = self.sign_renewing(core, &sign::braavos_params_hash(&params), renew)?;
+        let mut signature = self.sign_renewing(core, hash, renew)?;
+        signature.extend(params);
+        signature.extend(aux);
+        Ok(signature)
+    }
+
+    /// Emits the deployment estimate at the read nonce. Ready validates its query signature and
+    /// OpenZeppelin skips validation; Braavos validates a real signature over the query-version
+    /// hash, since its constructor checks the deploy authorization even in an estimate.
+    pub(crate) fn estimate_deployment(&mut self, core: &WalletCore, expect: Expect) -> SendStep {
+        let nonce = self.work.nonce;
+        let (signature, skip) = match self.account.deployment.as_ref() {
+            Some(deployment) if self.account.is_braavos() => {
+                let hash = sign::deploy_query_hash(
+                    self.account.network,
+                    &self.account.address,
+                    deployment,
+                    &nonce,
+                );
+                // The review's estimate is passive; the confirmed re-estimate renews.
+                let renew = expect != Expect::ReviewDeployEstimate;
+                match self.braavos_deploy_signature(core, &hash, renew) {
+                    Ok(signature) => (signature, false),
+                    Err(code) => return self.fail(code, None),
+                }
+            }
+            _ => (self.account.query_signature(), !self.account.is_argent()),
+        };
+        self.rpc(
+            expect,
+            RpcPurpose::EstimateDeploymentFee,
+            false,
+            move |s, id| {
+                rpc_bodies::estimate(id, None, s.deploy_tx(&nonce, &signature).as_ref(), skip)
+            },
+        )
+    }
+
     pub(super) fn on_deploy_estimate(
         &mut self,
         core: &WalletCore,
@@ -57,7 +109,12 @@ impl PlanState {
             Ok(hash) => hash,
             Err(refusal) => return self.fail(refusal_code(refusal), None),
         };
-        let signature = match self.sign(core, &hash) {
+        let signed = if self.account.is_braavos() {
+            self.braavos_deploy_signature(core, &hash, true)
+        } else {
+            self.sign(core, &hash)
+        };
+        let signature = match signed {
             Ok(signature) => signature,
             Err(code) => return self.fail(code, None),
         };

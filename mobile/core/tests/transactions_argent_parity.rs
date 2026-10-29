@@ -62,61 +62,6 @@ fn ready_wallet(scenario: &Value) -> (tempfile::TempDir, Arc<WalletCore>, String
     (dir, core, record.id)
 }
 
-/// starknet.js sends `starknet_chainId` and `starknet_blockHashAndNumber` without params; the
-/// core sends `[]`.
-fn same_params(method: &str, mobile: &Value, extension: &Value) -> bool {
-    let bare = ["starknet_chainId", "starknet_blockHashAndNumber"].contains(&method);
-    mobile == extension || (bare && extension.is_null() && *mobile == json!([]))
-}
-
-/// Drives one phase: every RPC the plan emits must be the next recorded exchange. The review may
-/// insert its opening `starknet_chainId` (the extension's review does not prove the chain).
-fn drive(plan: &TransferPlan, mut step: SendStep, expected: &[Value], node: &mut Node) -> SendStep {
-    let mut next = 0;
-    loop {
-        match &step {
-            SendStep::Rpc { .. } => {
-                let (id, method, params, _) = rpc_parts(&step);
-                let reply = match expected.get(next) {
-                    Some(exchange) if exchange["method"] == method.as_str() => {
-                        assert!(
-                            same_params(&method, &params, &exchange["params"]),
-                            "{method} params differ:\nmobile    {params}\nextension {}",
-                            exchange["params"]
-                        );
-                        next += 1;
-                        exchange["reply"].clone()
-                    }
-                    _ if method == "starknet_chainId" => node.reply(&method, &params, None),
-                    other => panic!(
-                        "mobile sent {method} but the extension sent {:?}",
-                        other.map(|e| e["method"].clone())
-                    ),
-                };
-                step = plan.advance(rpc_reply(id, &reply)).unwrap();
-            }
-            SendStep::Wait { .. } => step = plan.advance(StepReply::WaitElapsed).unwrap(),
-            _ => {
-                assert_eq!(
-                    next,
-                    expected.len(),
-                    "mobile stopped before the extension did"
-                );
-                return step;
-            }
-        }
-    }
-}
-
-/// The review's recorded traffic, without the chain reads starknet.js makes inside estimates.
-fn review_calls(scenario: &Value) -> Vec<Value> {
-    ["reviewInvoke", "reviewDeployment"]
-        .iter()
-        .flat_map(|phase| scenario[phase].as_array().unwrap().clone())
-        .filter(|exchange| exchange["method"] != "starknet_chainId")
-        .collect()
-}
-
 fn transfer(core: &Arc<WalletCore>, scenario: &Value, account_id: &str) -> Arc<TransferPlan> {
     core.clone()
         .prepare_transfer(TransferRequest {

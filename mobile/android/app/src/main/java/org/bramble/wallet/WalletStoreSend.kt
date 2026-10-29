@@ -27,11 +27,11 @@ import org.bramble.wallet.send.recipientBook
 
 /**
  * A Send journey for the active account, with balances of this view only, opening on
- * [startToken] (a token screen's Send) when this network has it. Null while locked and for an
- * account the core will not sign for ([sendRefusal]: Braavos).
+ * [startToken] (a token screen's Send) when this network has it. Null while locked. An undeployed
+ * Braavos account is refused by the core's review (`BRAAVOS_DEPLOY_FIRST`), which names the way out.
  */
 fun WalletStore.makeSendModel(startToken: String? = null): SendFlowModel? {
-    val account = activeRecord?.takeIf { sendRefusal(it) == null } ?: return null
+    val account = activeRecord ?: return null
     val current = portfolio.rawBalances(networkInfo)
     return SendFlowModel(
         walletCore,

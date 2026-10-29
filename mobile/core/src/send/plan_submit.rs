@@ -64,6 +64,15 @@ impl PlanState {
         matches!(self.kind, Kind::Transfer(_))
     }
 
+    /// The refusal for a class this wallet does not deploy, in the family's own words.
+    fn not_deployable(&self) -> Code {
+        if self.account.is_braavos() {
+            Code::BraavosNotDeployable
+        } else {
+            Code::AccountNotDeployable
+        }
+    }
+
     /// `Confirm`: refuse a poisoned recipient and a moved session before anything else.
     pub(crate) fn confirm(&mut self, core: &WalletCore) -> Result<SendStep, SendError> {
         if let Kind::Transfer(transfer) = &self.kind {
@@ -127,12 +136,7 @@ impl PlanState {
                             |s, id| s.invoke_estimate_body(id, deployed),
                         )
                     } else {
-                        self.rpc(
-                            Expect::DeployEstimate,
-                            RpcPurpose::EstimateDeploymentFee,
-                            false,
-                            |s, id| s.deploy_estimate_body(id),
-                        )
+                        self.estimate_deployment(core, Expect::DeployEstimate)
                     }
                 }
                 None => self.fail(Code::PreparationUnavailable, None),
@@ -141,12 +145,7 @@ impl PlanState {
             Expect::DeployNonce => match judge::nonce(answer) {
                 Some(nonce) => {
                     self.work.nonce = nonce;
-                    self.rpc(
-                        Expect::DeployEstimate,
-                        RpcPurpose::EstimateDeploymentFee,
-                        false,
-                        |s, id| s.deploy_estimate_body(id),
-                    )
+                    self.estimate_deployment(core, Expect::DeployEstimate)
                 }
                 None => self.fail(Code::DeploymentStatusUnknown, None),
             },
@@ -179,9 +178,18 @@ impl PlanState {
     pub(crate) fn submit_probed(&mut self, outcome: Outcome) -> SendStep {
         match outcome {
             Outcome::Deployed if !self.is_transfer() => self.fail(Code::AlreadyDeployed, None),
+            // `refuseUndeployedBraavos`: a send never deploys a Braavos account.
+            Outcome::Undeployed
+                if self.is_transfer()
+                    && self.account.is_braavos()
+                    && self.account.deployment.is_some() =>
+            {
+                self.fail(Code::BraavosDeployFirst, None)
+            }
             // `accountDeployment` refuses a class this wallet does not deploy before any estimate.
             Outcome::Undeployed if self.account.deployment.is_none() => {
-                self.fail(Code::AccountNotDeployable, None)
+                let code = self.not_deployable();
+                self.fail(code, None)
             }
             Outcome::Deployed | Outcome::Undeployed => {
                 self.work.submit_deployed = matches!(outcome, Outcome::Deployed);
@@ -201,7 +209,8 @@ impl PlanState {
                 self.fail(Code::ReviewedDeploymentFeeRequired, None)
             }
             Outcome::Undeployed if self.account.deployment.is_none() => {
-                self.fail(Code::AccountNotDeployable, None)
+                let code = self.not_deployable();
+                self.fail(code, None)
             }
             Outcome::Undeployed => self.read_nonce(Expect::DeployNonce),
             Outcome::Refused(failure) => self.refuse(failure),
@@ -312,8 +321,18 @@ impl PlanState {
     /// Signs under the plan's session generation and returns the account's signature array
     /// (`serializeAccountSignature`). The public key must be the account's.
     pub(super) fn sign(&mut self, core: &WalletCore, hash: &Felt) -> Result<Vec<Felt>, Code> {
+        self.sign_renewing(core, hash, true)
+    }
+
+    /// `sign`, renewing the idle window only when `renew` (a review's signature does not).
+    pub(super) fn sign_renewing(
+        &mut self,
+        core: &WalletCore,
+        hash: &Felt,
+        renew: bool,
+    ) -> Result<Vec<Felt>, Code> {
         let signature = core
-            .plan_sign(self.generation, &self.account.account_id, hash)
+            .plan_sign(self.generation, &self.account.account_id, hash, renew)
             .map_err(|error| match error {
                 CoreError::Locked | CoreError::NoWallet => Code::Locked,
                 _ => Code::SigningFailed,

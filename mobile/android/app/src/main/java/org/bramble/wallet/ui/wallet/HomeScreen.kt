@@ -24,7 +24,6 @@ import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.fillPress
 import org.bramble.wallet.design.textStyle
-import org.bramble.wallet.sendRefusal
 import org.bramble.wallet.strkFunded
 
 /**
@@ -46,9 +45,7 @@ fun HomeScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md)) {
             val active = store.activeRecord
             ActionTile("Send", BrambleIconName.SEND, enabled = active != null, modifier = Modifier.weight(1f)) {
-                // Braavos (view only) and Ready accounts never open the send flow; the core would refuse them.
-                val refusal = active?.let(::sendRefusal)
-                if (refusal != null) store.showToast(refusal) else actions.send()
+                actions.send()
             }
             ActionTile("Swap", BrambleIconName.SHUFFLE, enabled = false, modifier = Modifier.weight(1f)) {}
             ActionTile("Receive", BrambleIconName.QR_CODE, modifier = Modifier.weight(1f), onClick = actions.receive)

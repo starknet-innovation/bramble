@@ -114,6 +114,15 @@ pub fn class_value(answer: Option<Answer>) -> ClassValue {
     }
 }
 
+/// `isBlockNotFoundError`: the pinned block is missing on this node (JSON-RPC 24, or the
+/// message says so). A load-balanced sibling a block behind answers this; it is not chain state.
+pub fn block_not_found(answer: &Option<Answer>) -> bool {
+    match answer {
+        Some(Answer::Error { code, text }) => *code == Some(24) || text.contains("block not found"),
+        _ => false,
+    }
+}
+
 /// A `starknet_blockHashAndNumber` reply (`acceptedBlockIdentifier`): the non-zero hash of the
 /// latest accepted block. `Err(true)` for a JSON-RPC error, `Err(false)` for anything unusable.
 pub fn accepted_block(answer: Option<Answer>) -> Result<Felt, bool> {
@@ -147,6 +156,32 @@ pub fn single_felt(answer: Option<Answer>) -> CallAnswer {
         Some(Answer::Result(_)) => CallAnswer::Value(None),
         Some(Answer::Error { .. }) => CallAnswer::NodeError,
         None => CallAnswer::Unreadable,
+    }
+}
+
+/// A `starknet_call` reply as all of its felts (Braavos's `get_signers`,
+/// `get_deferred_remove_signers`). `Err(true)` for a JSON-RPC error, `Err(false)` for a missing
+/// reply or any entry that is not a felt.
+pub fn call_felts(answer: Option<Answer>) -> Result<Vec<Felt>, bool> {
+    match answer {
+        Some(Answer::Result(Value::Array(values))) => values
+            .iter()
+            .map(|value| value.as_str().and_then(felt::parse))
+            .collect::<Option<Vec<_>>>()
+            .ok_or(false),
+        Some(Answer::Result(_)) | None => Err(false),
+        Some(Answer::Error { .. }) => Err(true),
+    }
+}
+
+/// A `starknet_getBlockWithTxHashes` reply's `timestamp`, with the same error split.
+pub fn block_timestamp(answer: Option<Answer>) -> Result<u64, bool> {
+    match answer {
+        Some(Answer::Result(result)) => {
+            result.get("timestamp").and_then(Value::as_u64).ok_or(false)
+        }
+        Some(Answer::Error { .. }) => Err(true),
+        None => Err(false),
     }
 }
 

@@ -312,11 +312,11 @@ fn a_locked_wallet_cannot_prepare() {
     );
 }
 
-/// Signing goes through the account record: a view-only (Braavos) record is refused before a plan
-/// exists, even though every family at one index shares the OZ record's key, while OpenZeppelin
-/// and Ready (Argent) records plan; a vault still waiting for discovery has nothing to send from.
+/// Signing goes through the account record. Every family at one index shares a key, so a Braavos
+/// record plans like an OpenZeppelin or Ready record; the plan reads the chain before it signs.
+/// A vault still waiting for discovery has nothing to send from.
 #[test]
-fn braavos_records_cannot_send_or_deploy() {
+fn braavos_records_plan_like_other_families() {
     let (_dir, _clock, core) = common_pending();
     let class = |label: &str| {
         bramble_core::account_classes()
@@ -355,19 +355,13 @@ fn braavos_records_cannot_send_or_deploy() {
             ],
         )
         .unwrap();
-    // Ready (Argent) records plan like OpenZeppelin ones (`transactions_argent_parity.rs`);
-    // Braavos stays view-only.
+    // Ready (Argent) and Braavos records plan like OpenZeppelin ones; their chain state is
+    // judged by the plan (`transactions_argent_parity.rs`, `transactions_braavos_parity.rs`).
     let braavos = &restored[2];
     let mut transfer = request(ACCOUNT_1);
     transfer.account_id = braavos.id.clone();
-    assert_eq!(
-        core.clone().prepare_transfer(transfer).err(),
-        Some(SendError::ViewOnlyAccount)
-    );
-    assert_eq!(
-        core.clone().prepare_deployment(braavos.id.clone()).err(),
-        Some(SendError::ViewOnlyAccount)
-    );
+    assert!(core.clone().prepare_transfer(transfer).is_ok());
+    assert!(core.clone().prepare_deployment(braavos.id.clone()).is_ok());
     let mut ready = request(ACCOUNT_1);
     ready.account_id = restored[1].id.clone();
     assert!(core.clone().prepare_transfer(ready).is_ok());

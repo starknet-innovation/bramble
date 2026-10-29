@@ -5,7 +5,13 @@
  * native apps cannot restate a class hash, a nickname word, or a timing by hand.
  */
 import { GROUP_ICONS } from "@bramble/settings/groups";
-import { ACCOUNT_CLASSES, ARGENT_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/account-families";
+import {
+  ACCOUNT_CLASSES,
+  ARGENT_ACCOUNT_CLASS_HASH,
+  BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  BRAAVOS_SIGNING_CLASS_HASHES,
+} from "@bramble/wallet-model/account-families";
 import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import { RECOVERY_SCAN_LIMITS, RESERVED_AGENT_ACCOUNT_INDEX } from "@bramble/wallet-model/recovery";
 // The side-panel modules below are not package exports: read here only to pin the mobile port.
@@ -30,6 +36,11 @@ export const renderAccountsCatalog = (): string => {
   const catalog = {
     generatedBy: HEADER,
     argentDefaultClassHash: ARGENT_ACCOUNT_CLASS_HASH,
+    braavos: {
+      deploymentClassHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
+      implementationClassHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+      signingClassHashes: BRAAVOS_SIGNING_CLASS_HASHES,
+    },
     classes: ACCOUNT_CLASSES.map((entry) => ({
       authorizationShape: entry.authorizationShape,
       classHash: entry.classHash,

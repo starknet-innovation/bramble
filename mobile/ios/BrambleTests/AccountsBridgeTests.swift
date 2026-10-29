@@ -77,7 +77,7 @@ final class AccountsBridgeTests: XCTestCase {
         }
         let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: selections)
         XCTAssertEqual(restored.map(\.address), vectors.map(\.address))
-        XCTAssertEqual(restored.filter(\.viewOnly).map(\.family), [.braavos, .braavos])
+        XCTAssertEqual(restored.filter { $0.family == .braavos }.count, 2)
     }
 
     func testClipboardIsLocalOnlyAndExpires() {

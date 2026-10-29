@@ -17,7 +17,7 @@ surface, single-sourced data, and storage). Section numbers carry on from there.
 | Label and group metadata leaking via backups or logs | Sealed in the vault, which is excluded from backup. Never in errors, logs or UserDefaults. XCUITest uses public fixtures only. |
 | Accidental restore of the wrong set | Nothing is written until Restore, which needs a selection (the extension dropped its acknowledgement tick, so mobile has none). Rows name each account's type and index, and the restore is one atomic write. |
 | Resource exhaustion via manual index or big selections | Index ≤ 0x7fffffff (krusty's unhardened bound). ≤ 40 per restore. Record cap 128. Label ≤ 64. |
-| Braavos signing with an unsupported account | The key is shared across families at one index, so a raw-hash signature for index `i` is cryptographically valid for **every** account at that index; a per-index refusal alone cannot stop it. `sign_hash_for_account` refuses `view_only` records and pending vaults; legacy `sign_hash(i)` signs only when an OZ record exists at `i`. Enforcement rests on the core signing only hashes it can attribute to a non-view-only account; the full fix is core-computed transaction hashes (transactions workstream). §2.7. |
+| Braavos signing with an unsupported account | The key is shared across families at one index, so a raw-hash signature for index `i` is cryptographically valid for **every** account at that index; a per-index refusal alone cannot stop it. `sign_hash_for_account` refuses unknown ids, pending vaults and Braavos records (which sign only inside a send plan, `docs/braavos.md`); legacy `sign_hash(i)` signs only when an OZ record exists at `i`. The plan reads the class and signers at one accepted block and refuses before signing when this wallet cannot authorize the account. §2.7. |
 | Signing before discovery finishes | Both signing entry points refuse while `recoveryPending` is set; a pending vault has no records. |
 | Network switch leaves no account | `ensure_network_account` keeps, picks or projects, as the extension does, and projects only through local derivation. |
 | Phase B private key typed on the device | Secure text entry, no autocorrect or learning (Android `IME_FLAG_NO_PERSONALIZED_LEARNING`). Single inbound crossing. Zeroized into `SecretFelt`. Never returned. Screen covered in the app switcher. |
@@ -69,10 +69,9 @@ waits for Phase B.
   → `Storage`.
 - Unit tests in each new module: label trimming, group edits, `display_name`.
 - Signing by record (`tests/accounts.rs`, `tests/transactions_plan.rs`): a vault holding OZ,
-  Ready and Braavos records at the **same index** — `sign_hash_for_account` signs only the OZ id,
-  refuses the Braavos (view-only) and Ready (unsupported) ids and every id on a recovery-pending
-  vault; `prepare_transfer`/`prepare_deployment` refuse the same records with
-  `ViewOnlyAccount`/`UnsupportedAccount`; `tests/ffi_surface.rs` fails if an exported function
+  Ready and Braavos records at the **same index** — `sign_hash_for_account` signs the OZ and Ready ids with
+  their index's key and refuses the Braavos id (it signs only inside a send plan) and every id on
+  a recovery-pending vault; `tests/ffi_surface.rs` fails if an exported function
   signs, plans or reads activity by index (the `sign_hash(index)` shim was removed in the merge).
 - Network projection (`tests/accounts.rs`): `ensure_network_account` keeps an on-network active
   account, picks the first record on the target network, and projects OZ (class re-resolved per

@@ -120,7 +120,9 @@ final class ReadyTransferBridgeTests: XCTestCase {
         )
         let codes: [SendFailureCode] = [
             .accountClassUnrecognised, .accountNotDeployable, .accountOwnerMismatch,
-            .accountOwnerTypeUnsupported, .accountGuardianUnsupported
+            .accountOwnerTypeUnsupported, .accountGuardianUnsupported, .braavosDeployFirst,
+            .braavosNotDeployable, .braavosClassUnrecognised, .braavosOwnerMismatch,
+            .braavosSignerListMalformed, .braavosStrongSigner
         ]
         for code in codes {
             XCTAssertNotNil(SendFailureText.reason(code), "\(code)")

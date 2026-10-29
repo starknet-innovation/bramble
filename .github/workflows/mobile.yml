@@ -57,7 +57,7 @@ jobs:
           rustup default "$RUST_TOOLCHAIN"
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
-      - run: cargo test --locked
+      - run: cargo test --locked --no-fail-fast
 
   lint:
     runs-on: macos-15

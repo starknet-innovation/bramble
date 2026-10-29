@@ -118,10 +118,19 @@ struct RawOpenZeppelin {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RawBraavos {
+    deployment_class_hash: String,
+    implementation_class_hash: String,
+    signing_class_hashes: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RawCatalog {
     #[serde(rename = "generatedBy")]
     _generated_by: String,
     argent_default_class_hash: String,
+    braavos: RawBraavos,
     classes: Vec<RawClass>,
     copy_feedback: RawCopyFeedback,
     family_names: RawFamilyNames,
@@ -145,6 +154,12 @@ pub(crate) struct ClassEntry {
 pub(crate) struct Catalog {
     pub classes: Vec<ClassEntry>,
     pub argent_default: Felt,
+    /// `BRAAVOS_DEPLOYMENT_CLASS_HASH`: the one Braavos class this wallet deploys.
+    pub braavos_deployment: Felt,
+    /// `BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH`: what a Braavos deployment installs.
+    pub braavos_implementation: Felt,
+    /// `BRAAVOS_SIGNING_CLASS_HASHES`: the implementations a deployed Braavos account may run.
+    pub braavos_signing: Vec<Felt>,
     pub open_zeppelin_class: Felt,
     pub open_zeppelin_type_label: Option<String>,
     pub family_names: [String; 3],
@@ -197,6 +212,14 @@ fn load() -> Catalog {
     Catalog {
         classes,
         argent_default: class_felt(&raw.argent_default_class_hash),
+        braavos_deployment: class_felt(&raw.braavos.deployment_class_hash),
+        braavos_implementation: class_felt(&raw.braavos.implementation_class_hash),
+        braavos_signing: raw
+            .braavos
+            .signing_class_hashes
+            .iter()
+            .map(|hash| class_felt(hash))
+            .collect(),
         open_zeppelin_class: class_felt(&raw.open_zeppelin.class_hash),
         open_zeppelin_type_label: raw.open_zeppelin.type_label,
         family_names: [

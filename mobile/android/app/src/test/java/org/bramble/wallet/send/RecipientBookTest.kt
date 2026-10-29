@@ -42,7 +42,6 @@ class RecipientBookTest {
         typeLabel = null,
         authorizationShape = "stark-pair",
         groupId = group,
-        viewOnly = false,
         active = index == 0,
     )
 

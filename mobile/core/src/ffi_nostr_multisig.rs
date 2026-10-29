@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+use crate::account_catalog::AccountFamily;
 use crate::argent_multisig::{self, ArgentMultisigConfig, ArgentMultisigPrediction};
 use crate::contact_card::{self, ContactCardParse, WalletContactCard};
 use crate::contacts::{self, network_catalog_id, network_from_catalog_id, Contact};
@@ -105,15 +106,18 @@ impl WalletCore {
         self.with_phrase(|_, _| Ok(()))
     }
 
-    /// `(record id, public key)` of every account record on `network` that can sign. Keys come
-    /// from the vault's records, which `open` re-derived from the phrase, never from an index.
+    /// `(record id, public key)` of every account record on `network` that may co-sign a
+    /// multisig: Braavos records are left out, matching the extension's funding list. Keys
+    /// come from the vault's records, which `open` re-derived from the phrase, never from an index.
     fn local_public_keys(&self, network: NetworkId) -> Result<Vec<(String, String)>, CoreError> {
         self.with_session(false, |session| {
             Ok(session
                 .payload
                 .accounts
                 .iter()
-                .filter(|record| record.network() == network && !record.view_only())
+                .filter(|record| {
+                    record.network() == network && record.family() != AccountFamily::Braavos
+                })
                 .map(|record| (record.id.clone(), record.public_key.clone()))
                 .collect())
         })

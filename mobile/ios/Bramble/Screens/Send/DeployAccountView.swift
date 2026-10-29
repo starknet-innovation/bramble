@@ -22,9 +22,6 @@ struct DeployAccountView: View {
                     } else {
                         form(model, account: account)
                     }
-                } else {
-                    // A view-only account has nothing this wallet can deploy; say why.
-                    StatusLine(text: store.sendRefusal)
                 }
             }
             .padding(BrambleMetrics.Screen.shellPadding)

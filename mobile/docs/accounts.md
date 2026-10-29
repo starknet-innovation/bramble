@@ -27,7 +27,7 @@ the difference with **Decision**.
 | Where copy exists | Manage accounts & groups (inline copy on each row, plus a receipt with Copy address / signer public key / class hash), Receive (full address plus the "Copy address" button), deploy review, approvals | `app/screens/flows.ts:280-397`; `send/receive-view.ts` |
 | Where copy is deliberately absent | Drawer rows (the row is the switch control) and the header | `shell/account-drawer.ts:1-17`; `sidepanel-copy-affordance.test.ts` |
 | Add account | Opens the chooser "Add a new account". "Regular account" always adds **OpenZeppelin** at `nextAccountIndex`, the lowest unused `starknet-bip44` index on this network for this seed. Duplicate id → "Account already exists". The new account becomes active. Toast: "Account added". | `service-creation.ts:65-90`; `vault/src/accounts/accounts.ts:361` |
-| Ready/Argent | The UI offers Ready only through **private-key import** (contract choice plus an optional salt) or through recovery discovery. It never creates Ready from the phrase. Braavos is never creatable; recovered Braavos accounts are "view only for now". | `settings/import-key-ui.ts`; `onboarding/import-key-ui.ts:80-110` |
+| Ready/Argent | The UI offers Ready only through **private-key import** (contract choice plus an optional salt) or through recovery discovery. It never creates Ready from the phrase. Braavos is never creatable; recovered Braavos accounts send, and deploy at the modern deployment class. | `settings/import-key-ui.ts`; `onboarding/import-key-ui.ts:80-110` |
 | Discovery | Indices 0-19 in batches of 4. Each index has 6 shapes: OZ, argent 0.3.1/0.3.0/0.4.0, braavos 1.0.0/base. Probe: `starknet_getClassHashAt` at `latest`. Only code 20 or /contract not found/i means "not deployed"; any other error propagates. If not deployed, `balanceOf` is read for the network's default ETH and STRK. Keep = deployed ∨ funded ∨ (creatable ∧ (index 0 ∨ manual)). Selectable = OZ ∨ deployed ∨ funded. Auto-selection caps at 40. Manual index 0..0x7fffffff. | `onboarding-ops.ts:46-190`; `wallet-model/src/accounts/recovery.ts` |
 | Restore | 1-40 selections, all distinct by `type:class:index`. Every selection is re-derived through Krusty, and derived addresses must be unique. The set is committed atomically. The first selection becomes active. | `vault/src/service/recovery.ts` |
 | Groups | `{id, name, icon, accountIds}`. Name 1-64 characters. Id = slug. Icon from `GROUP_ICONS` (18). An account is in at most one group. **There are no default groups**: "Operations" and "Long term" are ui-lab fixtures. | `features/settings/src/groups.ts`; `ui-lab/src/fixtures/journey-fixtures.ts:41-54` |
@@ -159,20 +159,19 @@ reads "Account imported".
 
 ### 2.7 Braavos
 
-Recovered Braavos rows can be restored and are displayed, but they are **view-only**. The hint
-says "· view only for now", and the header and Manage views show the "Braavos Account" type. This
-matches the extension's current state.
+Recovered Braavos rows are restored, displayed with the "Braavos Account" type, and send and
+deploy as the extension does ([braavos.md](braavos.md)). In discovery, an undeployed row at the modern deployment
+class reads "Funded and ready to deploy"; one at the older base class reads "Funded, not deployed ·
+view only for now", since nothing can deploy it from here.
 
-What "view-only" can and cannot mean is limited by the key layout. Every family at index `i` uses
-the same key, `m/44'/9004'/i'/0/0` (§1). A raw-hash signature made for index `i` is therefore a
-valid owner signature for **every** account at that index, the Braavos one included. A refusal
-keyed only by index cannot stop that. The core enforces view-only in the only way it can:
+Every family at index `i` uses the same key, `m/44'/9004'/i'/0/0` (§1), so a raw-hash signature
+made for index `i` is a valid owner signature for **every** account at that index. What an account
+may sign is therefore decided on chain by the plan, never by a per-record flag:
 
 - Every signature the core makes for an account passes one gate, `signing_record` in
-  `wallet_accounts.rs`: the vault must not be `recovery_pending`, the id must name a stored
-  record, and the record must not be `view_only` (OpenZeppelin and Ready pass, §2.7a). The
-  key is then derived from the record's `account_index`, and the signature's public key must equal
-  the record's, or the call fails as `Kms { sign }`.
+  `wallet_accounts.rs`: the vault must not be `recovery_pending` and the id must name a stored
+  record. Every family passes. The key is then derived from the record's `account_index`, and
+  the signature's public key must equal the record's, or the call fails as `Kms { sign }`.
 - `sign_hash_for_account(account_id, hash)` and the transfer plan's signer (`plan_sign`, which
   also checks the session generation) both use that gate. There is **no** index-based signing
   entry point any more: the deprecated `sign_hash(index, hash)` was removed in the merge, and
@@ -180,8 +179,9 @@ keyed only by index cannot stop that. The core enforces view-only in the only wa
 - **Residual risk (narrowed by the merge):** sends and deployments are now hashed inside the core
   over a request the core built (`TransferPlan`), bound to the record's address, so the host no
   longer chooses what a transfer signature commits to. `sign_hash_for_account` still signs a
-  host-supplied hash for an OZ or Ready record; a host holding the OZ record at index `i` could ask it to
-  sign a hash for another family's account at index `i` (same key). No UI path calls it; it
+  host-supplied hash for an OZ or Ready record (a Braavos record signs only inside a send plan,
+  after its on-chain checks); a host holding the record at index `i` could ask it to sign a
+  hash for another family's account at index `i` (same key). No UI path calls it; it
   stays for parity tests and is the candidate for removal once nothing needs a raw hash.
 
 ### 2.7a Ready (Argent) accounts send as the extension does
@@ -205,16 +205,15 @@ OpenZeppelin ones, with the extension's authorization (`authorizationShape` in
   Krusty's constructor calldata `[0, public_key, 1]`, checked to reproduce the stored address. A
   Ready record deployed with a 0.3.x class sends once deployed and upgraded, and is never
   deployed from here ("Argent account class hash does not match the pinned release").
-- **One gate.** `signing_record` admits OpenZeppelin and Ready records and refuses Braavos
-  (view-only) and a vault waiting for discovery; there is no second gate. The plan picks the
-  signature layout from the record's family when it is prepared.
+- **One gate.** `signing_record` admits every record and refuses a vault waiting for discovery;
+  there is no second gate. The plan picks the signature layout from the record's family when it
+  is prepared.
 - **Refusals.** At review, a refused account shows the failed fee estimate and cannot be
   confirmed, as in the extension. At confirmation (the chain changed since review) the plan fails
   with `AccountClassUnrecognised`, `AccountClassUnsupported` (with the class label),
   `AccountNotDeployable`, `AccountOwnerMismatch`, `AccountOwnerTypeUnsupported` or
   `AccountGuardianUnsupported`, whose copy is the extension's own text.
-- **Apps.** The Send action and Settings' Deploy account row now open for Ready accounts; Braavos
-  still shows "Braavos accounts are view only for now.".
+- **Apps.** The Send action and Settings' Deploy account row open for every account.
 
 Parity: `scripts/mobile-transactions-argent.ts` runs the extension's own send path for the
 published phrase's Ready account under each Argent class (0.4.0 deployed, undeployed and
@@ -268,7 +267,7 @@ lines and `pub use` lines.
     pub type_label: Option<String>,        // knownAccountType; None for an unknown class
     pub authorization_shape: String,       // "stark-pair" | "argent-signer-array"
     pub group_id: Option<String>,
-    pub view_only: bool, pub active: bool }
+    pub active: bool }
 
 #[derive(uniffi::Record)] pub struct AccountGroup { pub id: String, pub name: String,
     pub icon: String, pub account_ids: Vec<String> }
@@ -334,7 +333,7 @@ pub fn select_account(&self, account_id: String) -> Result<(), CoreError>;
 /// empty or recovery-pending vault.
 pub fn ensure_network_account(&self, network: NetworkId) -> Result<Option<AccountRecord>, CoreError>;
 pub fn add_regular_account(&self, network: NetworkId) -> Result<AccountRecord, CoreError>;
-/// Signs for one record: refuses view-only records and a recovery-pending vault (§2.7).
+/// Signs for one record: refuses an unknown id and a recovery-pending vault (§2.7).
 pub fn sign_hash_for_account(&self, account_id: String, message_hash: String) -> Result<StarkSignature, CoreError>;
 pub fn set_account_label(&self, account_id: String, label: String) -> Result<Option<String>, CoreError>;
 pub fn account_groups(&self) -> Result<Vec<AccountGroup>, CoreError>;

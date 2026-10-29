@@ -47,7 +47,6 @@ import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.textStyle
 import org.bramble.wallet.privacy.TokenPrivacySection
 import org.bramble.wallet.send.Receipt
-import org.bramble.wallet.sendRefusal
 import org.bramble.wallet.ui.CopyButton
 import org.bramble.wallet.ui.shortAddress
 
@@ -171,11 +170,11 @@ private fun BalanceSection(
 }
 
 /**
- * Whether the active account can open Send on [tokenAddress]: an account the core signs for, and
- * a token the Send journey offers (this network's own tokens).
+ * Whether the active account can open Send on [tokenAddress]: a token the Send journey offers
+ * (this network's own tokens).
  */
 private fun WalletStore.canSend(tokenAddress: String): Boolean =
-    activeRecord?.let { sendRefusal(it) == null } == true && networkInfo.tokens.any { it.address == tokenAddress }
+    activeRecord != null && networkInfo.tokens.any { it.address == tokenAddress }
 
 /** The contract receipt: address (with its copy control), symbol, decimals, network. */
 @Composable
