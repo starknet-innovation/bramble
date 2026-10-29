@@ -87,7 +87,8 @@ export const ONBOARDING_STYLES = `
     overflow-y: auto;
     padding: ${SPACE.xxl} clamp(${SPACE.xl}, 7vw, ${SPACE.xxl});
     position: relative;
-    scrollbar-gutter: stable;
+    /* Mirrored like the document's, so a classic scrollbar keeps the step centred (issue 795). */
+    scrollbar-gutter: stable both-edges;
   }
   .onboarding-wizard > .onboarding-step {
     inset: 0;
