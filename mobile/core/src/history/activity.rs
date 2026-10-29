@@ -404,6 +404,10 @@ pub fn decode_transfer_event(event: &JsValue, account: &str) -> Option<DecodedTr
         (data.get(2), data.get(3))
     };
     let (amount_low, amount_high) = uint256_felts(low, high)?;
+    // Audit #163: zero in either direction is planted (`transfer_from` of 0 needs no allowance).
+    if amount_low == 0 && amount_high == 0 {
+        return None;
+    }
     let from = canonical_felt(raw_from?.as_str()?)?;
     let to = canonical_felt(raw_to?.as_str()?)?;
     if !is_stark_field_element(&from) || !is_stark_field_element(&to) {

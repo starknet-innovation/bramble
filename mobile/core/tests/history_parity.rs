@@ -309,3 +309,98 @@ fn activity_ids_validator_and_merge() {
         assert_eq!(entries_json(&merged), expected_entries(at(c, "out")));
     }
 }
+
+/// Audit #163 part A, the RPC cases from `planted-history-rows.test.ts`.
+const PLANTED_ACCOUNT: &str = "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";
+const PLANTED_LOOKALIKE: &str = "0x1176a1bd84444c89232ec27754698e5d2e7e1a7f1539f12027f28b23ec9f3d8";
+const PLANTED_TOKEN: &str = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+const TRANSFER_KEY: &str = "0x99cd8bde557814842a3121e8ddfd433a539b8c9f14bf31ebf108d12e6196e9";
+
+fn planted_event(from: &str, to: &str, amount: &str, hash: &str) -> JsValue {
+    t::parse_json(&format!(
+        r#"{{"block_number":10,"data":["{amount}","0"],"keys":["{TRANSFER_KEY}","{from}","{to}"],"transaction_hash":"{hash}"}}"#
+    ))
+    .expect("event")
+}
+
+#[test]
+fn a_zero_amount_transfer_is_dropped_in_both_directions() {
+    assert!(t::decode_transfer_event(
+        &planted_event(PLANTED_ACCOUNT, PLANTED_LOOKALIKE, "0", "0x1"),
+        PLANTED_ACCOUNT
+    )
+    .is_none());
+    assert!(t::decode_transfer_event(
+        &planted_event(PLANTED_LOOKALIKE, PLANTED_ACCOUNT, "0x0", "0x2"),
+        PLANTED_ACCOUNT
+    )
+    .is_none());
+    let kept = t::decode_transfer_event(
+        &planted_event(PLANTED_ACCOUNT, PLANTED_LOOKALIKE, "1", "0x3"),
+        PLANTED_ACCOUNT,
+    )
+    .expect("a non-zero transfer");
+    assert!(!kept.incoming);
+}
+
+#[test]
+fn a_planted_zero_transfer_never_becomes_a_sent_row() {
+    let account_id = activity_account_id(NetworkId::Mainnet, PLANTED_ACCOUNT.into()).unwrap();
+    let scan = HistoryScan::new(
+        account_id,
+        NetworkId::Mainnet,
+        vec![TokenConfig {
+            id: format!("SN_MAIN:STRK:{PLANTED_TOKEN}"),
+            network: NetworkId::Mainnet,
+            address: PLANTED_TOKEN.into(),
+            symbol: "STRK".into(),
+            name: "Starknet Token".into(),
+            decimals: 18,
+        }],
+    )
+    .unwrap();
+    let page = format!(
+        "[{},{},{}]",
+        event_json(PLANTED_ACCOUNT, PLANTED_LOOKALIKE, "0", "0xbad"),
+        event_json(PLANTED_LOOKALIKE, PLANTED_ACCOUNT, "0", "0xbad2"),
+        event_json(PLANTED_ACCOUNT, PLANTED_LOOKALIKE, "5", "0x900d"),
+    );
+    loop {
+        let calls = scan.next_calls();
+        if calls.is_empty() {
+            break;
+        }
+        for call in calls {
+            let parsed = t::parse_json(&call.body).unwrap();
+            let method = text(&parsed, "method");
+            let result = match method.as_str() {
+                "starknet_blockNumber" => "500".to_string(),
+                "starknet_getEvents" => format!(r#"{{"events":{page}}}"#),
+                "starknet_getBlockWithTxHashes" => r#"{"timestamp":1700000010}"#.to_string(),
+                other => panic!("unexpected {other}"),
+            };
+            assert_eq!(
+                scan.accept(RpcReply {
+                    id: call.id,
+                    status: 200,
+                    body: Some(format!(
+                        r#"{{"jsonrpc":"2.0","id":{},"result":{result}}}"#,
+                        call.id
+                    )),
+                }),
+                ScanStep::Continue
+            );
+        }
+    }
+    let rows = scan.finish().unwrap();
+    assert_eq!(
+        rows.iter().map(|row| row.hash.as_str()).collect::<Vec<_>>(),
+        ["0x900d"]
+    );
+}
+
+fn event_json(from: &str, to: &str, amount: &str, hash: &str) -> String {
+    format!(
+        r#"{{"block_number":10,"data":["{amount}","0"],"keys":["{TRANSFER_KEY}","{from}","{to}"],"transaction_hash":"{hash}"}}"#
+    )
+}
