@@ -113,6 +113,10 @@ private fun DeployForm(
                 )
             }
         }
+        if (model.stage != DeployFlowModel.Stage.ALREADY_DEPLOYED) {
+            // Deploying by hand is optional: the first send deploys too (issue 662).
+            Text(SendCopy.deployNote, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
+        }
         PillButton(
             view.button,
             icon = BrambleIconName.CHECK,

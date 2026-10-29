@@ -11,11 +11,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -74,7 +81,11 @@ private fun ReviewFactsList(
     val skin = LocalSkin.current
     Column(Modifier.fillMaxWidth().background(skin.panel, panelShape).padding(horizontal = BrambleSpace.lg)) {
         Fact(SendCopy.fromRowLabel) {
-            FactValue(model.account.displayName, model.account.shortAddress)
+            FactValue(
+                model.account.displayName,
+                model.account.shortAddress,
+                SendCopy.showFullSender to model.account.address,
+            )
         }
         Hairline()
         Fact(SendCopy.toRowLabel) {
@@ -84,6 +95,7 @@ private fun ReviewFactsList(
                     model.recipientLabel !=
                         null
                 },
+                SendCopy.showFullRecipient to review.recipient,
             )
             CopyButton(store, review.recipient, SendCopy.copyRecipient)
         }
@@ -127,11 +139,15 @@ private fun Fact(
     }
 }
 
-/** A fact's name over its truncated address (in code), right-aligned. */
+/**
+ * A fact's name over its truncated address (in code), right-aligned, and the disclosure that
+ * reveals the full address in place (`reveal`: its summary line and the address).
+ */
 @Composable
 private fun FactValue(
     name: String,
     address: String?,
+    reveal: Pair<String, String>,
 ) {
     val skin = LocalSkin.current
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
@@ -143,6 +159,36 @@ private fun FactValue(
             style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold),
         )
         address?.let { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption, mono = true)) }
+        AddressReveal(reveal.first, reveal.second)
+    }
+}
+
+/**
+ * `details.address-reveal`: a disclosure that shows the full address in place, selectable, so the
+ * reviewer can check every character against the source they were given.
+ */
+@Composable
+private fun AddressReveal(
+    label: String,
+    address: String,
+) {
+    val skin = LocalSkin.current
+    var open by rememberSaveable { mutableStateOf(false) }
+    Text(
+        label,
+        color = skin.muted,
+        style = textStyle(BrambleTypeScale.caption),
+        modifier = Modifier.toggleable(value = open, role = Role.Button, onValueChange = { open = it }),
+    )
+    if (open) {
+        SelectionContainer {
+            Text(
+                address,
+                color = skin.text,
+                textAlign = TextAlign.End,
+                style = textStyle(BrambleTypeScale.caption, mono = true),
+            )
+        }
     }
 }
 

@@ -45,17 +45,23 @@ final class SendReviewCopyTests: XCTestCase {
         let review: [String: Any] = try fixtureValue(copy()["screens"] as? [String: Any] ?? [:], "review")
         let summary: [String] = try fixtureValue(review, "summary")
         let labels: [String] = try fixtureValue(review, "summaryLabels")
-        // The rendered list: label, value, detail for each fact; the addresses are the titles.
-        XCTAssertEqual(summary.count, 9)
+        // The rendered list: label, value, detail for each fact, then for From and To the
+        // disclosure's summary and the full address it opens to; the addresses are the titles.
+        XCTAssertEqual(summary.count, 13)
         XCTAssertEqual(labels.count, 4)
-        let amount = summary[7].split(separator: " ").map(String.init)
+        let amount = summary[11].split(separator: " ").map(String.init)
         let facts = SendReviewCopy.facts(
             sender: (summary[1], labels[1]),
             recipient: (nil, labels[2]),
             amount: amount.first ?? "",
             symbol: amount.last ?? ""
         )
-        XCTAssertEqual(facts.flatMap { [$0.label, $0.value, $0.detail] }, summary)
+        XCTAssertEqual(
+            facts.flatMap { fact in
+                [fact.label, fact.value, fact.detail] + (fact.reveal.map { [$0.label, $0.address] } ?? [])
+            },
+            summary
+        )
         XCTAssertEqual(facts.map(\.copy), [nil, labels[2], nil], "only the recipient is copied")
         XCTAssertEqual(labels.first, SendCopy.copyRecipient)
         // A recipient picked from a row reads under that row's name, over its truncated address.
@@ -66,7 +72,7 @@ final class SendReviewCopyTests: XCTestCase {
             symbol: "STRK"
         )
         XCTAssertEqual(named[1].value, "Savings")
-        XCTAssertEqual(named[1].detail, summary[5])
+        XCTAssertEqual(named[1].detail, summary[7])
     }
 
     func testCostBoxFollowsEachFeeState() throws {

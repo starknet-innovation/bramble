@@ -137,7 +137,33 @@ struct SendReviewFacts: View {
                     CopyButton(value: copy, label: SendCopy.copyRecipient)
                 }
             }
+            if let reveal = fact.reveal {
+                AddressReveal(reveal: reveal)
+            }
         }
+    }
+}
+
+/// `details.address-reveal`: a native disclosure that shows the full address in place, selectable,
+/// so the reviewer can check every character without leaving the review.
+private struct AddressReveal: View {
+    @Environment(\.skin) private var skin
+    let reveal: SendReviewCopy.Reveal
+
+    var body: some View {
+        DisclosureGroup {
+            Text(reveal.address)
+                .brambleText(BrambleTypeScale.mono.sized(BrambleMetrics.SendReview.factCodeSize), mono: true)
+                .foregroundStyle(skin.text)
+                .multilineTextAlignment(.trailing)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        } label: {
+            Text(reveal.label)
+                .brambleText(BrambleTypeScale.caption)
+                .foregroundStyle(skin.muted)
+        }
+        .tint(skin.muted)
     }
 }
 
