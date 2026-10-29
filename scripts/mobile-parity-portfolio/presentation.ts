@@ -27,7 +27,7 @@ import {
   utcDayKey,
 } from "../../packages/presentation/wallet-ui/src/sidepanel/shared/timestamp";
 import { HISTORY_ACCOUNT } from "./history";
-import { firstMatch, readGlyph, unescapeHtml } from "./shared";
+import { firstMatch, readGlyph, stripTags, unescapeHtml } from "./shared";
 
 const ACCOUNT_ID = `SN_MAIN:${HISTORY_ACCOUNT}`;
 const PEER = "0x5a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f";
@@ -228,7 +228,7 @@ const copyControl = (html: string) => {
 // A `<dt>label</dt><dd>…</dd>` fact from the row's expansion.
 const fact = (body: string, label: string): string | null => {
   const dd = new RegExp(`<div><dt>${label}</dt><dd>([\\s\\S]*?)</dd></div>`).exec(body)?.[1];
-  return dd === undefined ? null : unescapeHtml(dd.replace(/<[^>]+>/g, "").trim());
+  return dd === undefined ? null : unescapeHtml(stripTags(dd).trim());
 };
 
 // The row as `transactionRow` renders it: a disclosure whose summary carries the heading, the

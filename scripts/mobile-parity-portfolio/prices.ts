@@ -18,7 +18,7 @@ import {
   formatFiat,
   tokenFiatValue,
 } from "../../packages/presentation/wallet-ui/src/sidepanel/shared/fiat";
-import { firstMatch, type ScriptedAnswer, scriptedClock, scriptedFetch } from "./shared";
+import { firstMatch, type ScriptedAnswer, scriptedClock, scriptedFetch, stripTags } from "./shared";
 
 const STRK = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -195,13 +195,12 @@ export const fiatBlock = () => {
         change,
         "usd",
       );
+      const whole = firstMatch(html, /<span class="token-change [a-z]+">(.*?)<\/span><\/span>/);
       return {
         // The badge's whole text, its quiet window tag included (`<span>` nested inside).
         badge:
-          firstMatch(html, /<span class="token-change [a-z]+">(.*?)<\/span><\/span>/)?.replace(
-            /<[^>]*>/g,
-            "",
-          ) ?? firstMatch(html, /<span class="token-change [a-z]+">([^<]*)<\/span>/),
+          (whole === null ? null : stripTags(whole)) ??
+          firstMatch(html, /<span class="token-change [a-z]+">([^<]*)<\/span>/),
         change: change ?? null,
         price: price ?? null,
         up: html.includes('class="token-change up"'),
