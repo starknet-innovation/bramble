@@ -186,6 +186,15 @@ describe("multisig balance hydration", () => {
     expect(cache.multisigBalances).toEqual(usdcOf(MULTISIG_A));
   });
 
+  test("an answer for another account keeps this account's own error", async () => {
+    const cache = emptyRenderCache();
+    cache.multisigBalanceId = MULTISIG_A;
+    cache.multisigBalances = { error: "multisig balances unavailable" };
+    await hydrateMultisig(cache, MULTISIG_A, usdcOf(MULTISIG_B));
+
+    expect(cache.multisigBalances as unknown).toEqual({ error: "multisig balances unavailable" });
+  });
+
   test("an answer for another account, with no own snapshot, stays loading", async () => {
     // The previous account's balances are never relabelled (Sherlock 209), and
     // a racing reply is not a failure either.

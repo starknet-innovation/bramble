@@ -53,6 +53,9 @@ export const createHeroTotalWait = (options: {
   const timers = options.timers ?? platformTimers;
   const waitMs = options.waitMs ?? PRIVATE_TOTAL_WAIT_MS;
   let scope: string | null = null;
+  // Bumped on every scope change, so a callback queued before a switch or a
+  // lock cannot end a later wait, even one for the same account.
+  let generation = 0;
   let over = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const stop = (): void => {
@@ -68,6 +71,7 @@ export const createHeroTotalWait = (options: {
       if (next !== scope) {
         stop();
         scope = next;
+        generation += 1;
         over = false;
       }
       if (next === null) return false;
@@ -75,8 +79,9 @@ export const createHeroTotalWait = (options: {
         stop();
         over = true;
       } else if (!over && timer === null) {
+        const armed = generation;
         timer = timers.set(() => {
-          if (scope !== next) return;
+          if (generation !== armed) return;
           timer = null;
           over = true;
           options.paint();

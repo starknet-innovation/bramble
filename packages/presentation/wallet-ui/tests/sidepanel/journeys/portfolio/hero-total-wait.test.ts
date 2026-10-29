@@ -218,6 +218,34 @@ describe("hero total wait", () => {
     expect(totalOf(paintHero(wait, b, discovering))).toBe("—");
   });
 
+  test("a queued timer cannot end a later wait for the same account", () => {
+    // A -> B -> A, and lock -> unlock on A: the first timer's callback still runs.
+    for (const away of [
+      (_: RenderData) => cacheFor(secondAccount.id).status,
+      (cache: RenderData) => ({ ...cache.status, locked: true }),
+    ]) {
+      const timers = manualTimers();
+      let paints = 0;
+      const wait = createHeroTotalWait({
+        paint: () => {
+          paints += 1;
+        },
+        timers: { ...timers, clear: () => undefined },
+      });
+      const a = cacheFor(account.id);
+      paintHero(wait, a, discovering);
+      timers.advance(1_000);
+      wait.sync(away(a), discovering, true);
+      paintHero(wait, a, discovering);
+
+      timers.advance(PRIVATE_TOTAL_WAIT_MS - 1_000);
+      expect(paints).toBe(0);
+      expect(totalOf(paintHero(wait, a, discovering))).toBe("—");
+      timers.advance(1_000);
+      expect(paints).toBe(1);
+    }
+  });
+
   test("locking ends the wait, and unlocking starts a fresh one", () => {
     const { timers, wait } = setup();
     const cache = cacheFor(account.id);

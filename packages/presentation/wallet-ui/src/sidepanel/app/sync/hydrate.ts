@@ -427,6 +427,9 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
         "balances" in previous &&
         previous.accountId === selectedMultisigId &&
         previous.networkId === status.networkId;
+      // This account's own failed read stays an error; a racing reply for
+      // another account does not turn it back into loading.
+      const sameScope = cache.multisigBalanceId === selectedMultisigId;
       cache.multisigBalanceId = selectedMultisigId;
       if ("balances" in value) {
         // An answer naming another account is a racing reply, not a failure:
@@ -435,7 +438,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
         cache.multisigBalances =
           value.accountId === selectedMultisigId && value.networkId === status.networkId
             ? value
-            : ownPrevious
+            : ownPrevious || (sameScope && "error" in previous)
               ? previous
               : { loading: true };
       } else if (ownPrevious) {
