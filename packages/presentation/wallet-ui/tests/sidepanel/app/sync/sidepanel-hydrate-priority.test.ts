@@ -173,28 +173,37 @@ describe("home hydration priority", () => {
     expect(cache.balances).toEqual({ loading: true });
   });
 
-  test("rejects a balance response scoped to another account", async () => {
-    const cache = emptyRenderCache();
-    await hydrateView({
-      activeView: "tokens",
-      cache,
-      deployment: {},
-      multisig: emptyMultisigClient,
-      paint: () => undefined,
-      selectedMultisigId: null,
-      selectedTokenId: null,
-      status,
-      wallet: {
-        loadBalances: async () => ({
-          accountId: "SN_MAIN:0x999",
-          balances: [],
-          networkId: "SN_MAIN",
-        }),
-        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
-      },
-    } as never);
+  test("drops a balance response scoped to another account", async () => {
+    // A reply racing an account switch is neither shown nor a failure: the
+    // screen keeps what it had for this account (issue 795).
+    const own = { accountId: "SN_MAIN:0x1", asOf: 7, balances: [], networkId: "SN_MAIN" };
+    for (const [before, after] of [
+      [undefined, { loading: true }],
+      [own, own],
+    ] as const) {
+      const cache = emptyRenderCache();
+      if (before) Object.assign(cache, { balances: before });
+      await hydrateView({
+        activeView: "tokens",
+        cache,
+        deployment: {},
+        multisig: emptyMultisigClient,
+        paint: () => undefined,
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadBalances: async () => ({
+            accountId: "SN_MAIN:0x999",
+            balances: [],
+            networkId: "SN_MAIN",
+          }),
+          loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+        },
+      } as never);
 
-    expect(cache.balances).toEqual({ error: "balances unavailable" });
+      expect(cache.balances as unknown).toEqual(after);
+    }
   });
 
   test("hydrates a multisig home from the shared account balance scope", async () => {

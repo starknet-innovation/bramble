@@ -115,7 +115,7 @@ describe("emptyRenderCache (lock-reset single source)", () => {
     expect(empty.multisigClassDeclared).toBeNull();
     expect(empty.multisigsError).toBe(false);
     expect(empty.multisigBalanceId).toBeNull();
-    expect(empty.multisigBalances).toEqual({ error: "multisig balances unavailable" });
+    expect(empty.multisigBalances).toEqual({ loading: true });
   });
 
   test("clears the remaining view-scoped lists and price fields", () => {

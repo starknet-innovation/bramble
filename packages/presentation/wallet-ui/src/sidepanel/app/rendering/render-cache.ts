@@ -35,7 +35,7 @@ export type RenderData = {
   multisigsNetworkId: string | null;
   multisigClassDeclared: boolean | "error" | null;
   multisigBalanceId: string | null;
-  multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
+  multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>> | BalanceLoadingState;
   // `{ loading: true }` until the first read for the current scope lands, so
   // "not read yet" never renders as a failed read (issue 795).
   balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>> | BalanceLoadingState;
@@ -93,7 +93,7 @@ export const updateRenderScope = (
           ...emptyActivityCache(),
           balances: { loading: true },
           multisigBalanceId: null,
-          multisigBalances: { error: "multisig balances unavailable" },
+          multisigBalances: { loading: true },
           deployment: null,
           signability: null,
           multisigClassDeclared: null,
@@ -106,8 +106,8 @@ export const updateRenderScope = (
 };
 
 /**
- * A fresh render cache in the locked/empty state. `balances` starts as
- * loading, not as an error: with no snapshot yet the home screen shows its
+ * A fresh render cache in the locked/empty state. `balances` and
+ * `multisigBalances` start as loading, not as an error: with no snapshot yet the home screen shows its
  * loading shell until real balances hydrate, and only a read that actually
  * failed renders the failed-load panel. Every list starts empty and every
  * optional value null. Used to prime the cache at boot and to reset it on lock.
@@ -120,7 +120,7 @@ export const emptyRenderCache = (): RenderData => ({
   multisigsNetworkId: null,
   multisigClassDeclared: null,
   multisigBalanceId: null,
-  multisigBalances: { error: "multisig balances unavailable" },
+  multisigBalances: { loading: true },
   balances: { loading: true },
   chart: [],
   chartTokenId: null,

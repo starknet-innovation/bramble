@@ -295,10 +295,10 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     if (walletBalanceView) {
       fill(wallet.loadBalances(false, refreshReason === "action"), (value) => {
         if ("balances" in value) {
-          cache.balances =
-            value.accountId !== status.activeAccountId || value.networkId !== status.networkId
-              ? { error: "balances unavailable" }
-              : value;
+          // An answer for another account or network is a reply racing a
+          // switch, not a failure: drop it and keep what this scope shows.
+          if (value.accountId === status.activeAccountId && value.networkId === status.networkId)
+            cache.balances = value;
         } else if ("loading" in cache.balances || "error" in cache.balances) {
           // No snapshot to fall back on: the failure is the answer.
           cache.balances = value;
@@ -423,15 +423,21 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       const previous = cache.multisigBalances;
       const ownPrevious =
         cache.multisigBalanceId === selectedMultisigId &&
+        !("loading" in previous) &&
         "balances" in previous &&
         previous.accountId === selectedMultisigId &&
         previous.networkId === status.networkId;
       cache.multisigBalanceId = selectedMultisigId;
       if ("balances" in value) {
+        // An answer naming another account is a racing reply, not a failure:
+        // keep this account's own balances, else stay loading. Never shown
+        // under this account (Sherlock 209).
         cache.multisigBalances =
-          value.accountId !== selectedMultisigId || value.networkId !== status.networkId
-            ? { error: "multisig balances unavailable" }
-            : value;
+          value.accountId === selectedMultisigId && value.networkId === status.networkId
+            ? value
+            : ownPrevious
+              ? previous
+              : { loading: true };
       } else if (ownPrevious) {
         cache.multisigBalances = { ...previous, stale: true };
       } else {

@@ -298,7 +298,7 @@ export const dashboard = (
   historyUnavailable = false,
   snoozedApprovalIds: readonly string[] = [],
   multisigsError = false,
-  multisigBalances: BalanceState = { error: "multisig balances unavailable" },
+  multisigBalances: BalanceState = { loading: true },
   multisigBalanceId: string | null = null,
   privacy: PrivacyDisclosureState = {
     error: null,
@@ -319,7 +319,7 @@ export const dashboard = (
   const selectedPortfolioBalances =
     selectedMultisigId !== null && multisigBalanceId === selectedMultisigId
       ? multisigBalances
-      : { error: "Multisig balances are loading." };
+      : { loading: true as const };
   const journeyContext: JourneyContext = {
     deployment,
     account,
