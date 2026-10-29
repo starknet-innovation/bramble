@@ -37,7 +37,12 @@ final class AccountsBridgeTests: XCTestCase {
     }
 
     private func rules() throws -> Rules { try load("accounts-parity-rules") }
-    private func fixture() throws -> Families { try load("accounts-parity-families") }
+    /// The derivation vectors, committed one file per network and read here as one set.
+    private func fixture() throws -> Families {
+        let mainnet: Families = try load("accounts-parity-families-mainnet")
+        let sepolia: Families = try load("accounts-parity-families-sepolia")
+        return Families(vectors: mainnet.vectors + sepolia.vectors, mnemonic: mainnet.mnemonic)
+    }
 
     private func directory() -> String {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).path

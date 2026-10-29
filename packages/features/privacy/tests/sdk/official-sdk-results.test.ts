@@ -6,7 +6,6 @@
 
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@bramble/core/errors";
-import { RpcRefusedError } from "@bramble/starknet/provider";
 import {
   isRetryableStrk20ServiceError,
   mapStrk20ProtocolError,
@@ -15,6 +14,7 @@ import {
   strk20RetryAfterMilliseconds,
 } from "@bramble/privacy/official-sdk-errors";
 import { assertNoSdkWarnings } from "@bramble/privacy/official-sdk-results";
+import { RpcRefusedError } from "@bramble/starknet/provider";
 
 const rpcError = (code: number, data: unknown, message = "Transaction execution error") =>
   Object.assign(new Error("RPC: starknet_addInvokeTransaction with params {...}"), {

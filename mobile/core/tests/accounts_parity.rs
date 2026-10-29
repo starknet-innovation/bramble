@@ -15,8 +15,19 @@ use bramble_core::{
 };
 use serde_json::Value;
 
+/// The derivation vectors, committed one file per network and read here as one set.
 fn families() -> Value {
-    serde_json::from_str(include_str!("fixtures/accounts-parity-families.json")).unwrap()
+    let mut whole: Value = serde_json::from_str(include_str!(
+        "fixtures/accounts-parity-families-mainnet.json"
+    ))
+    .unwrap();
+    let sepolia: Value = serde_json::from_str(include_str!(
+        "fixtures/accounts-parity-families-sepolia.json"
+    ))
+    .unwrap();
+    let more = sepolia["vectors"].as_array().unwrap().clone();
+    whole["vectors"].as_array_mut().unwrap().extend(more);
+    whole
 }
 
 fn fixture() -> Value {

@@ -97,7 +97,9 @@ targets:
         buildPhase: resources
       - path: ../core/tests/fixtures/extension-transactions-argent-refusals.json
         buildPhase: resources
-      - path: ../core/tests/fixtures/accounts-parity-families.json
+      - path: ../core/tests/fixtures/accounts-parity-families-mainnet.json
+        buildPhase: resources
+      - path: ../core/tests/fixtures/accounts-parity-families-sepolia.json
         buildPhase: resources
       - path: ../core/tests/fixtures/accounts-parity-rules.json
         buildPhase: resources

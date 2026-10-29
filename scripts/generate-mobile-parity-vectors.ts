@@ -73,7 +73,7 @@ await writeFile(PARITY_FIXTURE_PATH, `${JSON.stringify(fixture, null, 2)}\n`);
 console.log(`wrote ${PARITY_FIXTURE_PATH}`);
 
 const accounts = await computeAccountParity();
-for (const part of ["families", "rules"] as const) {
+for (const part of ["familiesMainnet", "familiesSepolia", "rules"] as const) {
   const path = ACCOUNTS_PARITY_FIXTURE_PATHS[part];
   await writeFile(path, `${JSON.stringify(accounts[part], null, 2)}\n`);
   console.log(`wrote ${path}`);

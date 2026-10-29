@@ -35,9 +35,13 @@ import {
 } from "../packages/presentation/wallet-ui/src/sidepanel/shared/parts";
 import { PARITY_MNEMONIC } from "./mobile-parity";
 
-/** Committed fixtures the Rust and Swift tests read: one for derivation, one for UI rules. */
+/**
+ * Committed fixtures the Rust and Swift tests read: the derivation vectors (one file per network,
+ * each under the 500-line limit) and the UI rules.
+ */
 export const ACCOUNTS_PARITY_FIXTURE_PATHS = {
-  families: "mobile/core/tests/fixtures/accounts-parity-families.json",
+  familiesMainnet: "mobile/core/tests/fixtures/accounts-parity-families-mainnet.json",
+  familiesSepolia: "mobile/core/tests/fixtures/accounts-parity-families-sepolia.json",
   rules: "mobile/core/tests/fixtures/accounts-parity-rules.json",
 } as const;
 
@@ -239,11 +243,15 @@ const recoveryVectors = (accounts: readonly AccountRef[], vectors: readonly Pari
       }),
     );
 
-/** Every account vector set, split into the two committed fixtures (each under 500 lines). */
+/** Every account vector set, split into the three committed fixtures (each under 500 lines). */
 export const computeAccountParity = async () => {
   const { accounts, vectors } = await familyVectors();
   const named = [...NAME_INPUTS, ...vectors.slice(0, SHAPES.length).map((v) => v.address)];
-  const families = { mnemonic: PARITY_MNEMONIC, passphrase: PARITY_PASSPHRASE, vectors };
+  const families = (networkId: (typeof NETWORKS)[number]) => ({
+    mnemonic: PARITY_MNEMONIC,
+    passphrase: PARITY_PASSPHRASE,
+    vectors: vectors.filter((vector) => vector.networkId === networkId),
+  });
   const rules = {
     groups: groupVectors(),
     labels: LABEL_INPUTS.map((value) => ({
@@ -258,5 +266,9 @@ export const computeAccountParity = async () => {
     })),
     recovery: recoveryVectors(accounts, vectors),
   };
-  return { families, rules };
+  return {
+    familiesMainnet: families("SN_MAIN"),
+    familiesSepolia: families("SN_SEPOLIA"),
+    rules,
+  };
 };
