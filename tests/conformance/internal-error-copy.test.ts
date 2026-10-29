@@ -230,7 +230,6 @@ const SCANNED_SENTENCES = new Set([
   "The account deployment fee was not reviewed. Nothing was submitted — deploy the account first.",
   "The recovery fee changed. Review it and try again.",
   "Passphrase must be at least x characters",
-  "Multisig balances are loading.",
   "The transaction was not sent. x",
   "Enter an amount greater than zero.",
   "Review this send first",

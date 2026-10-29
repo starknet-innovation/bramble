@@ -21,11 +21,14 @@ export const networkDataIssue = (
   priceAsOf: number | null,
   hasPrices: boolean,
 ): string[] => [
-  ...("error" in balances
-    ? ["Balances are temporarily unavailable."]
-    : balances.stale
-      ? [`Using saved ${formatSavedDataLabel("balances", balances.asOf ?? null)}.`]
-      : []),
+  // Not read yet is not unavailable: Home shows its loading shell instead (795).
+  ...("loading" in balances
+    ? []
+    : "error" in balances
+      ? ["Balances are temporarily unavailable."]
+      : balances.stale
+        ? [`Using saved ${formatSavedDataLabel("balances", balances.asOf ?? null)}.`]
+        : []),
   ...(priceStale
     ? [
         hasPrices

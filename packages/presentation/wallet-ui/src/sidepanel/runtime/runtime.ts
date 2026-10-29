@@ -47,6 +47,7 @@ import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
 export { emptyStatus } from "./runtime-status";
 /** Shared runtime boundary and loading-state types. */
 export type {
+  BalanceLoadingState,
   BalanceState,
   RuntimeApi,
   RuntimeMessageSender,

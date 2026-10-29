@@ -16,6 +16,7 @@ import {
 import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
 import { bindUnlock } from "../journeys/onboarding/unlock-ui";
 import { resetActivityViewState } from "../journeys/portfolio/activity-view-state";
+import { createHeroTotalWait } from "../journeys/portfolio/hero-total-wait";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
 import type { SendIntent } from "../journeys/send/send-model";
@@ -100,6 +101,7 @@ export const startWalletUi = async (
   const deployment = createDeploymentCache(wallet);
   const signability = createSignabilityCache(wallet);
   const cache: RenderData = emptyRenderCache();
+  const heroWait = createHeroTotalWait({ paint: () => paint() });
   let privacy: ReturnType<typeof createPrivacyController>;
   const ledgerSignMount = hiddenOverlayMount("ledger-sign-overlay");
   const ledgerSign = createLedgerSignRuntime({
@@ -340,6 +342,7 @@ export const startWalletUi = async (
       ledgerAvailable: ledgerConnector.isAvailable?.() ?? true,
       privacy: privacy.disclosure(),
       privacyJourney: privacy.journey(),
+      privateTotalWaitOver: heroWait.sync(status, privacy.disclosure(), cache.deployment),
       selectedMultisigId,
       selectedMultisigIntentId,
       selectedNftId,

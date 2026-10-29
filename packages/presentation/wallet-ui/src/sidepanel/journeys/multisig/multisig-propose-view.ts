@@ -247,7 +247,7 @@ export const multisigProposeFlow = (
     );
   }
   const data = portfolio ?? {
-    balances: { error: "Multisig balances are loading." },
+    balances: { loading: true },
     changes: {},
     currency: preferences?.displayCurrency ?? "usd",
     prices: {},

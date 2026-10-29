@@ -298,7 +298,7 @@ export const dashboard = (
   historyUnavailable = false,
   snoozedApprovalIds: readonly string[] = [],
   multisigsError = false,
-  multisigBalances: BalanceState = { error: "multisig balances unavailable" },
+  multisigBalances: BalanceState = { loading: true },
   multisigBalanceId: string | null = null,
   privacy: PrivacyDisclosureState = {
     error: null,
@@ -311,6 +311,7 @@ export const dashboard = (
   todayKey: number | null = null,
   signability: SignabilityVerdict | null = null,
   relays: readonly RelaySignature[] = [],
+  privateTotalWaitOver = false,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -319,7 +320,7 @@ export const dashboard = (
   const selectedPortfolioBalances =
     selectedMultisigId !== null && multisigBalanceId === selectedMultisigId
       ? multisigBalances
-      : { error: "Multisig balances are loading." };
+      : { loading: true as const };
   const journeyContext: JourneyContext = {
     deployment,
     account,
@@ -465,6 +466,7 @@ export const dashboard = (
               currency,
               privacy,
               signability,
+              privateTotalWaitOver,
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}
