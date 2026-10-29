@@ -1,37 +1,51 @@
 /**
- * What the deploy screen's Cost box says when a sponsored deploy (issue 431) is in
- * play. A sponsored deploy charges the user nothing, so the box names who pays
+ * What the deploy screen shows when a sponsored deploy (issue 431) is in play. A
+ * sponsored deploy charges the user nothing, so the Cost box names who pays
  * instead of showing a fee as theirs. Otherwise the user's own fee is shown,
- * with one line when the sponsor declined or an earlier sponsored attempt may
- * still land, so a self-paid press is always a reviewed one.
+ * exactly as the screen did before sponsorship: a refusal or an attempt that
+ * ended adds nothing to it. While an attempt's hold stands the screen is
+ * deploying: one status sentence, busy, and no Deploy.
  */
-import { SPONSORED_DEPLOY_SPONSOR } from "@bramble/privacy/sponsored-deploy";
+import {
+  DEPLOYMENT_IN_PROGRESS,
+  SPONSORED_DEPLOY_SPONSOR,
+} from "@bramble/privacy/sponsored-deploy";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { DeploySponsorship } from "../runtime/runtime-deploy";
+import { buttonBusy, renderFragment, scopedStatus } from "../shared/dom";
 import { formatFeeEstimate } from "../shared/review-render";
 
 /** The Cost line of a deploy the sponsor pays for. */
 export const SPONSORED_DEPLOY_COST = `Network fee: paid by the ${SPONSORED_DEPLOY_SPONSOR}`;
 
-// Added to the user's own fee: the sponsor declined, an earlier sponsored
-// attempt's hold still stands, or it is over and the deploy may still land.
-const COST_NOTES: Readonly<Record<"held" | "may-land" | "refused", string>> = {
-  held: "A sponsored deployment of this account may already be on its way.",
-  "may-land": "A sponsored deployment may still land. If it does, yours is refused at no cost.",
-  refused: `The ${SPONSORED_DEPLOY_SPONSOR} couldn't cover this deployment.`,
-};
-
 /**
- * The Cost box line for `estimate` under `sponsorship`; an unanswered or
- * absent offer shows the user's own fee, as the screen did before sponsorship.
+ * The Cost box line for `estimate` under `sponsorship`: the sponsor when it
+ * pays, otherwise the user's own fee with nothing added.
  */
 export const deployCostLine = (
   estimate: FeeEstimate,
   sponsorship: DeploySponsorship | undefined,
-): string => {
-  if (sponsorship === "available") return SPONSORED_DEPLOY_COST;
-  const fee = `Maximum network fee: ${formatFeeEstimate(estimate)}`;
-  return sponsorship === undefined || sponsorship === "none"
-    ? fee
-    : `${fee}. ${COST_NOTES[sponsorship]}`;
+): string =>
+  sponsorship === "available"
+    ? SPONSORED_DEPLOY_COST
+    : `Maximum network fee: ${formatFeeEstimate(estimate)}`;
+
+/**
+ * Paints the deploying state over the screen, or takes it off again: the
+ * sentence on the status line, the stage busy, Deploy hidden and the Cost box
+ * empty while held.
+ */
+export const paintDeployHold = (
+  button: HTMLButtonElement,
+  stage: Element | null | undefined,
+  costBox: Element | null | undefined,
+  held: boolean,
+): void => {
+  const control = button;
+  control.hidden = held;
+  buttonBusy(control, held);
+  if (held) stage?.setAttribute("aria-busy", "true");
+  else stage?.removeAttribute("aria-busy");
+  if (held && costBox) renderFragment(costBox, "");
+  scopedStatus(control, held ? DEPLOYMENT_IN_PROGRESS : "");
 };

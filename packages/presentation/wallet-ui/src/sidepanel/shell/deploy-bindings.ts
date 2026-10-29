@@ -1,15 +1,13 @@
 /**
- * The account-deployment screen's binder and the post-deploy watchers, split
- * from `shell-bindings` (which re-exports them) to keep both within the file
- * budget. The fee is quoted when the screen opens; a sponsored deploy (issue 431),
+ * The account-deployment screen's binder, split from `shell-bindings` (which
+ * re-exports it) to keep both within the file budget; the post-deploy watchers
+ * live in `deployment-watch`. The fee is quoted when the screen opens; a sponsored deploy (issue 431),
  * when the background offers one, replaces the user's fee with the sponsor's
  * name rather than showing a fee nobody charges them.
  */
 
-import { SPONSORED_DEPLOY_REFUSED } from "@bramble/privacy/sponsored-deploy";
+import { DEPLOYMENT_IN_PROGRESS } from "@bramble/privacy/sponsored-deploy";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
-import type { WalletStatus } from "../../popup/responses/responses";
-import type { SidepanelWallet } from "../runtime/runtime";
 import { isOutcomeUnknown } from "../runtime/runtime-errors";
 import type { ConfirmationOutcome } from "../shared/confirm-submitted";
 import { buttonBusy, errorDetails, renderFragment, scopedStatus, showToast } from "../shared/dom";
@@ -19,6 +17,7 @@ import {
   paintOutcomeReceipt,
 } from "../shared/outcome-receipt";
 import { reviewCostNote } from "../shared/review-render";
+import { platformTimers } from "../shared/stage-pacer";
 import { deployErrorLine, deployToastText } from "./deploy-errors";
 import {
   type DeployJourney,
@@ -26,100 +25,12 @@ import {
   firstDeployBinding,
   isCurrentDeployJourney,
   leaveDeployScreen,
+  scheduleDeployHold,
+  stopDeployHold,
 } from "./deploy-journey";
 import { awaitDeployOutcome } from "./deploy-receipt-watch";
-import { deployCostLine } from "./deploy-sponsorship";
-import type { DeploymentPollScope, ShellBindingDeps } from "./shell-binding-deps";
-
-const DEPLOY_WATCH_ATTEMPTS = 12;
-const DEPLOY_WATCH_INTERVAL_MS = 5_000;
-
-/**
- * The slice of the shell deps the post-deploy watcher touches: the deployment
- * and status loaders plus the shell re-render. Kept narrower than
- * `ShellBindingDeps` so both this file and the transfer bindings (which have no
- * `setActiveView`) can drive it, and so tests can supply a minimal double.
- */
-export type DeploymentWatchDeps = {
-  readonly render: ShellBindingDeps["render"];
-  readonly wallet: Pick<SidepanelWallet, "loadDeploymentStatus" | "loadStatus">;
-};
-
-/**
- * Captures an active deployment scope and a live predicate for later polling.
- */
-export const deploymentPollScope = (
-  status: Pick<WalletStatus, "activeAccountId" | "networkId">,
-  current: () => Pick<WalletStatus, "activeAccountId" | "networkId">,
-): DeploymentPollScope | null => {
-  const accountId = status.activeAccountId;
-  const networkId = status.networkId;
-  return accountId === null
-    ? null
-    : {
-        accountId,
-        stillCurrent: () => {
-          const latest = current();
-          return latest.activeAccountId === accountId && latest.networkId === networkId;
-        },
-      };
-};
-
-/**
- * Polls deployment status a bounded number of times after a deploy is
- * submitted, re-rendering once the account reports deployed so the home
- * "deploy now" banner clears on its own — the design has no background tx
- * poller, and submitting a deploy triggers no render by itself. Stops silently
- * once the attempt budget is spent (a manual refresh stays the fallback) and
- * treats a failed status load as "not yet deployed". Fire-and-forget: callers
- * `void` it.
- */
-export const watchDeployment = async (
-  deps: DeploymentWatchDeps,
-  scope: DeploymentPollScope,
-  options: { readonly attempts?: number; readonly intervalMs?: number } = {},
-): Promise<void> => {
-  if (await awaitDeployment(deps.wallet, scope, options)) {
-    const status = await deps.wallet.loadStatus();
-    if (scope.stillCurrent() && status.activeAccountId === scope.accountId) {
-      await deps.render(status, "action");
-    }
-  }
-};
-
-/**
- * Waits for a submitted deployment to report deployed, answering whether it
- * did within the attempt budget. THE deployment poll — `watchDeployment` adds a
- * re-render on top, and a caller that must sequence work after deployment (the
- * deploy-then-register journey) needs the answer rather than a repaint. A failed
- * status load counts as "not yet".
- */
-export const awaitDeployment = async (
-  wallet: Pick<SidepanelWallet, "loadDeploymentStatus">,
-  scope: DeploymentPollScope,
-  options: { readonly attempts?: number; readonly intervalMs?: number } = {},
-): Promise<boolean> => {
-  const attempts = options.attempts ?? DEPLOY_WATCH_ATTEMPTS;
-  const intervalMs = options.intervalMs ?? DEPLOY_WATCH_INTERVAL_MS;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (!scope.stillCurrent()) return false;
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, intervalMs);
-    });
-    if (!scope.stillCurrent()) return false;
-    const deployment = await wallet.loadDeploymentStatus().catch(() => null);
-    if (deployment && deployment.accountId !== scope.accountId) {
-      // The background always resolves the active account. A different id
-      // proves the user switched while this poll was in flight, so stop rather
-      // than observing or applying the new account's deployment.
-      return false;
-    }
-    if (deployment?.deployed && scope.stillCurrent()) {
-      return true;
-    }
-  }
-  return false;
-};
+import { deployCostLine, paintDeployHold } from "./deploy-sponsorship";
+import type { ShellBindingDeps } from "./shell-binding-deps";
 
 /**
  * What the deployment receipt says for each of the chain's answers. Exported so
@@ -233,18 +144,74 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     }
   };
 
-  // Asks after the fee is in hand whether the sponsor will pay, once per visit
-  // unless an earlier attempt's state has to be refreshed.
+  const live = (): boolean => isCurrentDeployJourney(app, journey) && journey.stillCurrent();
+  const holdTimer = deps.deployHoldTimers ?? platformTimers;
+
+  // While an earlier sponsored attempt's hold stands the screen is deploying,
+  // and it re-checks on its own: the chain showing the account deployed
+  // repaints it deployed, and the hold ending brings back the plain self-paid
+  // screen, quoted afresh. Leaving, locking or switching stops the re-check.
+  // A read that fails keeps the screen re-checking rather than stranding it.
+  const holdRecheck = (current: () => boolean): void => {
+    const again = (): void => {
+      if (current()) scheduleDeployHold(journey, holdTimer, live, holdRecheck);
+    };
+    void (async () => {
+      const sponsorship = await deps.wallet.deploySponsorship();
+      if (!current()) return;
+      if (sponsorship === "held") {
+        again();
+        return;
+      }
+      const deployment = await deps.wallet.loadDeploymentStatus().catch(() => null);
+      if (!current()) return;
+      if (deployment?.deployed && deployment.accountId === journey.accountId) {
+        const status = await deps.wallet.loadStatus().catch(() => null);
+        if (!current()) return;
+        if (status === null) {
+          again();
+          return;
+        }
+        stopDeployHold(journey);
+        // A repaint that fails leaves this screen up: keep re-checking it.
+        await deps.render(status, "action").catch(() => {
+          if (live()) scheduleDeployHold(journey, holdTimer, live, holdRecheck);
+        });
+        return;
+      }
+      stopDeployHold(journey);
+      journey.sponsorship = "none";
+      journey.quoted = false;
+      if (!target.isConnected) {
+        rebind();
+        return;
+      }
+      paintDeployHold(target, reviewStage, reviewPanelRoot, false);
+      journey.quoted = true;
+      quote(false);
+    })().catch(again);
+  };
+  const enterHold = (): void => {
+    journey.sponsorship = "held";
+    delete journey.fee;
+    if (target.isConnected) paintDeployHold(target, reviewStage, reviewPanelRoot, true);
+    else rebind();
+    scheduleDeployHold(journey, holdTimer, live, holdRecheck);
+  };
+
+  // Asks after the fee is in hand whether the sponsor will pay, once per visit.
   // A press made before the answer lands deploys as the screen showed it then.
-  // "held" is asked again on every fresh quote, so once the hold is over the
-  // screen turns self-paid with the "may still land" line.
   const askSponsorship = (): void => {
-    if (journey.sponsorship !== undefined && journey.sponsorship !== "held") return;
-    journey.sponsorship ??= "none";
+    if (journey.sponsorship !== undefined) return;
+    journey.sponsorship = "none";
     // A wallet double without the sponsored route offers nothing.
     if (typeof deps.wallet.deploySponsorship !== "function") return;
     void deps.wallet.deploySponsorship().then((sponsorship) => {
       if (!isCurrentDeployJourney(app, journey) || journey.pressed || journey.receipt) return;
+      if (sponsorship === "held") {
+        enterHold();
+        return;
+      }
       journey.sponsorship = sponsorship;
       if (!journey.fee) return;
       if (target.isConnected) showFee(journey.fee);
@@ -328,6 +295,9 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   } else if (journey.pressed) {
     buttonBusy(target, true);
     scopedStatus(target, "Submitting deployment…");
+  } else if (journey.sponsorship === "held") {
+    paintDeployHold(target, reviewStage, reviewPanelRoot, true);
+    scheduleDeployHold(journey, holdTimer, live, holdRecheck);
   } else if (journey.fee) {
     showFee(journey.fee);
   } else if (journey.quoteNote !== undefined && reviewPanelRoot) {
@@ -351,6 +321,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         delete journey.receipt;
         // A failed sponsored deploy is never re-offered; the background says so.
         delete journey.sponsorship;
+        stopDeployHold(journey);
         quote(true);
       },
     });
@@ -370,25 +341,36 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     resumeDeployReceipt(deps, journey, reviewStage, successStage);
   };
 
-  // The sponsor pays: nothing is signed and no fee is the user's. A refusal
-  // sent nothing, so the user's own fee comes back with the reason; a lost
-  // reply stays amber, and the background holds the account against a retry.
+  // The sponsor pays: nothing is signed and no fee is the user's. When the
+  // sponsor is not deploying it (nothing was sent), the screen silently becomes
+  // the self-paid one. A lost reply, or a hold already standing, shows the
+  // account deploying until the background's hold resolves.
   const deploySponsored = (): void => {
     void deps.wallet.deployAccountSponsored().then(
       (hash) => {
         journey.pressed = false;
-        showReceipt(hash, true);
+        if (hash !== null) {
+          showReceipt(hash, true);
+          return;
+        }
+        journey.sponsorship = "none";
+        if (!journey.fee) journey.quoted = false;
+        if (rebound()) return;
+        scopedStatus(target, "");
+        buttonBusy(target, false);
+        if (journey.fee) {
+          showFee(journey.fee);
+          return;
+        }
+        journey.quoted = true;
+        quote(false);
       },
       (error: unknown) => {
         journey.pressed = false;
         const message = error instanceof Error ? error.message : "";
-        // A refusal sent nothing, so the screen turns self-paid whatever came
-        // before it; with no fee in hand (an earlier error spent it) it quotes
-        // afresh rather than leaving Deploy on the sponsored route.
-        const declined = message === SPONSORED_DEPLOY_REFUSED;
-        if (declined) {
-          journey.sponsorship = "refused";
-          if (!journey.fee) journey.quoted = false;
+        if (isOutcomeUnknown(error) || message === DEPLOYMENT_IN_PROGRESS) {
+          enterHold();
+          return;
         }
         if (message === ALREADY_DEPLOYED) {
           void deps.wallet.loadStatus().then((status) => deps.render(status, "action"));
@@ -396,31 +378,13 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         if (rebound()) {
           showToast(
             deployToastText(error, "Deployment failed"),
-            isOutcomeUnknown(error) ? "warning" : "error",
+            "error",
             app,
             errorDetails(error, "Deployment failed"),
           );
           return;
         }
-        if (!declined) {
-          failed(error, "Deployment failed", "submit");
-          // A lost reply may have deployed: the offer is the background's to
-          // restate (held, then may-land), never "available" again.
-          if (isOutcomeUnknown(error)) {
-            delete journey.sponsorship;
-            askSponsorship();
-          }
-          return;
-        }
-        showToast(SPONSORED_DEPLOY_REFUSED, "error", target);
-        if (!journey.fee) {
-          journey.quoted = true;
-          quote(false);
-          return;
-        }
-        showFee(journey.fee);
-        scopedStatus(target, "");
-        buttonBusy(target, false);
+        failed(error, "Deployment failed", "submit");
       },
     );
   };
@@ -455,6 +419,11 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
       // Without a quote in hand this press only asked for one.
       (error: unknown) => {
         journey.pressed = false;
+        // A sponsored attempt's hold refused it before anything was signed.
+        if (error instanceof Error && error.message === DEPLOYMENT_IN_PROGRESS) {
+          enterHold();
+          return;
+        }
         if (rebound()) {
           // Amber when the reply was lost: the deployment may be on chain.
           const tone = isOutcomeUnknown(error) ? "warning" : "error";

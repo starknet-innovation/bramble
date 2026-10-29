@@ -5,7 +5,7 @@
  * An entry is made before the relay hears anything and opens a bounded hold
  * ({@link SPONSORED_DEPLOY_HOLD_MS}). During the hold every deploy route — the
  * sponsored one, the self-paid one and each automatic deploy-before-send —
- * refuses with {@link DEPLOYMENT_MAY_BE_ON_ITS_WAY}. The hold ends early when
+ * refuses with {@link DEPLOYMENT_IN_PROGRESS}. The hold ends early when
  * the chain shows the account deployed or the attempt's recorded transaction
  * was rejected or reverted while the chain still shows the account undeployed.
  * The relay's hash is its claim, never proof: "deployed" means the chain shows
@@ -17,8 +17,11 @@
  *
  * The entry outlives its hold as a marker: an account whose sponsored attempt
  * was accepted or lost is never offered sponsorship again. A marker is never
- * evicted; it is deleted only when the account is deployed, or when the
- * attempt sent nothing. An unreadable store (or one holding more than
+ * evicted; it is deleted only when the account is deployed. An attempt the
+ * gateway refused for a reason with a known window (nothing sent) becomes a
+ * refusal record instead: no hold, and no offer for that account until the
+ * window ends ({@link refusalWindowEnd}); it is then deleted. Any other
+ * attempt that sent nothing is deleted. An unreadable store (or one holding more than
  * {@link PENDING_DEPLOYMENTS_LIMIT} entries) loads as empty and marks itself
  * unreadable: no hold, so self-paid deploys and sends go ahead, but no
  * sponsorship either, since an attempt it lost could otherwise be sent again.
@@ -29,6 +32,7 @@
  */
 import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { DEPLOYMENT_IN_PROGRESS } from "@bramble/privacy/sponsored-deploy";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
 import { type ActivityLog, systemClock } from "@bramble/transactions/activity";
 import {
@@ -46,12 +50,32 @@ export const PENDING_DEPLOYMENTS_KEY = "bramble:pending-deployments";
 /** How long a sponsored attempt holds every deploy route of its account. */
 export const SPONSORED_DEPLOY_HOLD_MS = 3 * 60_000;
 
+/** What every deploy route answers during the hold; owned by the client. */
+export { DEPLOYMENT_IN_PROGRESS };
+
+const DAY_MS = 86_400_000;
+
 /**
- * Refusal during the hold. Its ending is the shared outcome-unknown sentence,
- * so the panel shows it amber, never "failed".
+ * The first 00:00 UTC after `now` (epoch milliseconds), when the gateway's
+ * daily sponsorship budget resets. Pure: the caller supplies the clock.
  */
-export const DEPLOYMENT_MAY_BE_ON_ITS_WAY =
-  "A sponsored deployment of this account may already be on its way. Check activity before trying again.";
+export const nextUtcMidnight = (now: number): number => (Math.floor(now / DAY_MS) + 1) * DAY_MS;
+
+/** The gateway's per-address window between sponsored attempts. */
+export const SPONSORED_ATTEMPT_WINDOW_MS = 3_600_000;
+
+/**
+ * When to offer sponsorship again after the gateway refused with `reason` (its
+ * JSON-RPC error message), or null for no record: the daily budget spent
+ * waits for the next 00:00 UTC, an attempt already made this hour waits an
+ * hour, and anything else (a rate limit, an unknown code) is not remembered.
+ * Only how long offers stop depends on it, never whether anything was sent.
+ */
+export const refusalWindowEnd = (reason: string, now: number): number | null => {
+  if (reason === "sponsorship_budget_exhausted") return nextUtcMidnight(now);
+  if (reason === "sponsored_deploy_already_attempted") return now + SPONSORED_ATTEMPT_WINDOW_MS;
+  return null;
+};
 
 /**
  * Most entries kept. Far more accounts than one wallet sponsors; a full store
@@ -64,6 +88,8 @@ type Entry = {
   readonly hash?: string;
   readonly holdUntil: number;
   readonly networkId: StarknetNetworkId;
+  /** Set on a refusal record: no offer before this time (epoch ms). */
+  readonly refusedUntil?: number;
   readonly since: number;
 };
 
@@ -90,6 +116,11 @@ export type PendingDeployments = {
   /** Writes the map; a rejection means the entry may not survive a restart. */
   readonly persist: () => Promise<void>;
   readonly recordHash: (account: PendingAccount, hash: string) => Promise<void>;
+  /**
+   * Turns the account's entry into a refusal record: the sponsor said no and
+   * nothing was sent, so no hold, and no offer before `until`.
+   */
+  readonly recordRefusal: (account: PendingAccount, now: number, until: number) => Promise<void>;
   /** Ends the hold early but keeps the marker. */
   readonly endHold: (account: PendingAccount) => Promise<void>;
   /** Deletes the entry: the account is deployed, or the attempt sent nothing. */
@@ -104,12 +135,13 @@ const isTime = (value: unknown): value is number =>
 
 const isEntry = (value: unknown): value is Entry =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["address", "hash", "holdUntil", "networkId", "since"]) &&
+  hasOnlyKnownKeys(value, ["address", "hash", "holdUntil", "networkId", "refusedUntil", "since"]) &&
   typeof value["address"] === "string" &&
   isNonZeroStarkFieldElement(value["address"]) &&
   isStarknetNetworkId(value["networkId"]) &&
   isTime(value["since"]) &&
   isTime(value["holdUntil"]) &&
+  (value["refusedUntil"] === undefined || isTime(value["refusedUntil"])) &&
   (value["hash"] === undefined ||
     (typeof value["hash"] === "string" && isNonZeroStarkFieldElement(value["hash"])));
 
@@ -160,6 +192,10 @@ export const createPendingDeployments = (store: KeyValueStore): PendingDeploymen
     reserve: (account, now) => {
       const key = keyOf(account);
       if (entries.has(key)) return "exists";
+      // Expired refusal records are the only entries a full store may shed.
+      for (const [stored, entry] of entries) {
+        if (entry.refusedUntil !== undefined && now >= entry.refusedUntil) entries.delete(stored);
+      }
       if (!readable || entries.size >= PENDING_DEPLOYMENTS_LIMIT) return "full";
       entries.set(key, {
         address: canonicalFelt(account.address) ?? account.address,
@@ -172,6 +208,16 @@ export const createPendingDeployments = (store: KeyValueStore): PendingDeploymen
     entry: (account) => entries.get(keyOf(account)),
     persist,
     recordHash: (account, hash) => update(account, { hash }),
+    recordRefusal: (account, now, until) => {
+      entries.set(keyOf(account), {
+        address: canonicalFelt(account.address) ?? account.address,
+        holdUntil: 0,
+        networkId: account.networkId,
+        refusedUntil: until,
+        since: now,
+      });
+      return persist();
+    },
     endHold: (account) => update(account, { holdUntil: 0 }),
     forget: (account) => {
       entries.delete(keyOf(account));
@@ -187,9 +233,10 @@ export const memoryPendingDeployments = (): PendingDeployments =>
 /**
  * What the account's sponsored attempt means now: "none" (no attempt),
  * "deployed" (the chain shows the account deployed), "held" (inside the hold),
- * or "may-land" (the hold is over and the account is not confirmed deployed).
+ * "may-land" (the hold is over and the account is not confirmed deployed), or
+ * "refused" (the sponsor said no within its window; nothing was sent).
  */
-export type SponsoredAttempt = "deployed" | "held" | "may-land" | "none";
+export type SponsoredAttempt = "deployed" | "held" | "may-land" | "none" | "refused";
 
 type AttemptDeps = {
   readonly activity?: Pick<ActivityLog, "list">;
@@ -243,6 +290,12 @@ export const sponsoredAttemptState = async (
   await deps.pendingDeployments.load();
   const entry = deps.pendingDeployments.entry(account);
   if (!entry) return "none";
+  // A refusal sent nothing, so there is nothing on chain to wait for.
+  if (entry.refusedUntil !== undefined) {
+    if (now < entry.refusedUntil) return "refused";
+    await deps.pendingDeployments.forget(account).catch(() => undefined);
+    return "none";
+  }
   const chain = await accountOnChain(deps.runtimeRpc, account, rpcUrls);
   if (chain === "deployed") {
     await deps.pendingDeployments.forget(account).catch(() => undefined);
@@ -257,7 +310,7 @@ export const sponsoredAttemptState = async (
 /**
  * Wraps the four `RuntimeRpc` submissions that can deploy an account — the
  * explicit deploy and the deploy-before-invoke inside transfers, invokes and
- * declarations — so each refuses with {@link DEPLOYMENT_MAY_BE_ON_ITS_WAY}
+ * declarations — so each refuses with {@link DEPLOYMENT_IN_PROGRESS}
  * during the account's hold. Outside a hold nothing is read and everything
  * passes through.
  */
@@ -285,7 +338,7 @@ export const guardDeployments = (
           input.rpcUrls,
           at,
         );
-        if (state === "held") throw new WalletError(DEPLOYMENT_MAY_BE_ON_ITS_WAY);
+        if (state === "held") throw new WalletError(DEPLOYMENT_IN_PROGRESS);
       }
       return submit(input);
     };

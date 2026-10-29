@@ -7,11 +7,10 @@
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@bramble/core/errors";
 import {
-  isSponsorableAccountType,
+  isSponsorableAccountClass,
+  isSponsorableDeployment,
   quoteSponsoredDeploy,
   SPONSORED_DEPLOY_NETWORKS,
-  SPONSORED_DEPLOY_REFUSED,
-  SPONSORED_DEPLOY_UNREACHABLE,
   type SponsoredDeploymentData,
   SponsoredDeployRefusedError,
   SponsoredDeployUnavailableError,
@@ -20,10 +19,21 @@ import {
   submitSponsoredDeploy,
 } from "@bramble/privacy/sponsored-deploy";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import {
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  XVERSE_ARGENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+} from "@bramble/wallet-model/accounts";
 import { hash } from "starknet";
 import { paymasterResponse as response } from "../support/paymaster";
 
-const CLASS_HASH = "0x61dac032f228abef9c6626f995015233097ae253a7f72d68552db02f2971b8f";
+const CLASS_HASH = OPENZEPPELIN_ACCOUNT_CLASS_HASH;
+// OpenZeppelin 0.8.1 and Argent 0.3.1: real account classes the gateway does not sponsor.
+const OLDER_OZ_CLASS = "0x61dac032f228abef9c6626f995015233097ae253a7f72d68552db02f2971b8f";
+const OLDER_ARGENT_CLASS = "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b";
 const PUBLIC_KEY = "0x1f3c942d7f492a37608cde0d77b884a5aa9e11d2919225968557370ddb5a5aa";
 const ADDRESS = hash.calculateContractAddressFromHash(PUBLIC_KEY, CLASS_HASH, [PUBLIC_KEY], 0);
 const config = { url: "https://gateway.test/api/sponsor" };
@@ -52,17 +62,65 @@ const relay =
   };
 
 describe("sponsored deploy configuration", () => {
-  test("is off on every network by default", () => {
-    expect(Object.keys(SPONSORED_DEPLOY_NETWORKS)).toEqual([]);
-    expect(sponsoredDeployConfig("SN_MAIN")).toBeNull();
-    expect(sponsoredDeployConfig("SN_SEPOLIA")).toBeNull();
+  test("asks the wallet gateway's sponsored routes on mainnet and Sepolia only", () => {
+    expect(SPONSORED_DEPLOY_NETWORKS).toEqual({
+      SN_MAIN: { url: "https://wallet.nodes.starknet.org/api/sponsored-deploy/mainnet" },
+      SN_SEPOLIA: { url: "https://wallet.nodes.starknet.org/api/sponsored-deploy/sepolia" },
+    });
+    expect(sponsoredDeployConfig("SN_MAIN")?.url).toEndWith("/sponsored-deploy/mainnet");
+    expect(sponsoredDeployConfig("SN_SEPOLIA")?.url).toEndWith("/sponsored-deploy/sepolia");
+    expect(sponsoredDeployConfig("SN_SEPOLIA", { SN_MAIN: config })).toBeNull();
     expect(sponsoredDeployConfig("SN_SEPOLIA", { SN_SEPOLIA: config })).toEqual(config);
   });
+});
 
-  test("offers only classes whose constructor needs no deploy signature", () => {
-    expect(isSponsorableAccountType("openzeppelin")).toBe(true);
-    expect(isSponsorableAccountType("argent")).toBe(true);
-    expect(isSponsorableAccountType("braavos")).toBe(false);
+describe("sponsorable classes", () => {
+  const data = (classHash: string, calldata: readonly string[]): SponsoredDeploymentData => ({
+    address: "0x1",
+    calldata,
+    class_hash: classHash,
+    salt: PUBLIC_KEY,
+    version: 1,
+  });
+  const ARGENT_CALLDATA = ["0x0", PUBLIC_KEY, "0x1"];
+
+  test("are exactly OpenZeppelin 3.0, Argent 0.4.0 and the Xverse Argent 0.4.0 build", () => {
+    // The gateway's list, by the prefix and suffix it publishes.
+    for (const [classHash, prefix, suffix] of [
+      [OPENZEPPELIN_ACCOUNT_CLASS_HASH, "0x01d1777d", "702381"],
+      [ARGENT_ACCOUNT_CLASS_HASH, "0x03607833", "f45927f"],
+      [XVERSE_ARGENT_CLASS_HASH, "0x0663fc01", "20bd024"],
+    ] as const) {
+      expect(classHash.startsWith(prefix) && classHash.endsWith(suffix)).toBe(true);
+      expect(isSponsorableAccountClass(classHash)).toBe(true);
+    }
+    expect(
+      isSponsorableAccountClass(`0x${"0".repeat(4)}${XVERSE_ARGENT_CLASS_HASH.slice(3)}`),
+    ).toBe(true);
+    for (const other of [OLDER_OZ_CLASS, OLDER_ARGENT_CLASS, BRAAVOS_DEPLOYMENT_CLASS_HASH]) {
+      expect(isSponsorableAccountClass(other)).toBe(false);
+    }
+  });
+
+  test("need the constructor calldata the gateway accepts for that class", () => {
+    expect(isSponsorableDeployment(data(OPENZEPPELIN_ACCOUNT_CLASS_HASH, [PUBLIC_KEY]))).toBe(true);
+    expect(isSponsorableDeployment(data(ARGENT_ACCOUNT_CLASS_HASH, ARGENT_CALLDATA))).toBe(true);
+    expect(isSponsorableDeployment(data(XVERSE_ARGENT_CLASS_HASH, ARGENT_CALLDATA))).toBe(true);
+    const refused: readonly [string, readonly string[]][] = [
+      [OLDER_OZ_CLASS, [PUBLIC_KEY]],
+      [OLDER_ARGENT_CLASS, ARGENT_CALLDATA],
+      [BRAAVOS_DEPLOYMENT_CLASS_HASH, [PUBLIC_KEY]],
+      [OPENZEPPELIN_ACCOUNT_CLASS_HASH, ARGENT_CALLDATA],
+      [OPENZEPPELIN_ACCOUNT_CLASS_HASH, ["0x0"]],
+      [ARGENT_ACCOUNT_CLASS_HASH, [PUBLIC_KEY]],
+      [ARGENT_ACCOUNT_CLASS_HASH, ["0x0", PUBLIC_KEY, "0x0", "0x5"]],
+      [ARGENT_ACCOUNT_CLASS_HASH, ["0x1", PUBLIC_KEY, "0x1"]],
+      [XVERSE_ARGENT_CLASS_HASH, ["0x0", PUBLIC_KEY, "0x0"]],
+      [XVERSE_ARGENT_CLASS_HASH, ["0x0", "0x0", "0x1"]],
+    ];
+    for (const [classHash, calldata] of refused) {
+      expect(isSponsorableDeployment(data(classHash, calldata))).toBe(false);
+    }
   });
 });
 
@@ -71,7 +129,7 @@ describe("sponsored deployment data", () => {
     expect(deployment()).toEqual({
       address: ADDRESS,
       calldata: [PUBLIC_KEY],
-      class_hash: CLASS_HASH,
+      class_hash: "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
       salt: PUBLIC_KEY,
       version: 1,
     });
@@ -92,7 +150,7 @@ describe("sponsored deployment data", () => {
 describe("sponsored deploy quote", () => {
   test("accepts an exact echo under sponsored parameters and freezes its own copy", async () => {
     const requests: Record<string, unknown>[] = [];
-    const echo = { ...deployment(), class_hash: `0x0${CLASS_HASH.slice(2)}`, sigdata: [] };
+    const echo = { ...deployment(), class_hash: `0x${CLASS_HASH.slice(3)}`, sigdata: [] };
     const quote = await quoteSponsoredDeploy({
       config,
       deployment: deployment(),
@@ -146,20 +204,59 @@ describe("sponsored deploy quote", () => {
     });
   }
 
-  test("reads only the relay's own refusal as a refusal", async () => {
-    const stated = async (): Promise<Response> =>
+  test("reads only the relay's own clean JSON-RPC error as a refusal", async () => {
+    const stated = (status: number) => async (): Promise<Response> =>
       new Response(
         JSON.stringify({
-          error: { code: 163, message: "sponsorship limit reached" },
+          error: { code: -32000, message: "sponsorship_budget_exhausted" },
           id: "bramble-strk20",
           jsonrpc: "2.0",
         }),
+        { status },
       );
-    const forbidden = async (): Promise<Response> => new Response("no", { status: 403 });
-    for (const http of [stated, forbidden]) {
+    for (const http of [stated(200), stated(409), stated(429)]) {
       const quoting = quoteSponsoredDeploy({ config, deployment: deployment(), http });
       await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployRefusedError);
-      await expect(quoting).rejects.toThrow(SPONSORED_DEPLOY_REFUSED);
+    }
+  });
+
+  test("carries the relay's error message as the refusal's reason", async () => {
+    const http = async (): Promise<Response> =>
+      new Response(
+        JSON.stringify({
+          error: { code: -32000, message: "sponsorship_budget_exhausted" },
+          id: "bramble-strk20",
+          jsonrpc: "2.0",
+        }),
+        { status: 429 },
+      );
+    for (const sending of [
+      quoteSponsoredDeploy({ config, deployment: deployment(), http }),
+      submitSponsoredDeploy({
+        config,
+        http,
+        isAuthorized: () => true,
+        quote: { deployment: deployment() },
+      }),
+    ]) {
+      const refusal = await sending.then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(refusal).toBeInstanceOf(SponsoredDeployRefusedError);
+      expect((refusal as SponsoredDeployRefusedError).reason).toBe("sponsorship_budget_exhausted");
+    }
+  });
+
+  test("reads the gateway switched off, or any bare 4xx, as unavailable, never this account's no", async () => {
+    const answers = [
+      async (): Promise<Response> => new Response("sponsored_deploy_disabled", { status: 404 }),
+      async (): Promise<Response> => new Response("too_many_requests", { status: 429 }),
+      async (): Promise<Response> => new Response("no", { status: 403 }),
+    ];
+    for (const http of answers) {
+      const quoting = quoteSponsoredDeploy({ config, deployment: deployment(), http });
+      await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployUnavailableError);
     }
   });
 
@@ -178,7 +275,6 @@ describe("sponsored deploy quote", () => {
     for (const http of answers) {
       const quoting = quoteSponsoredDeploy({ config, deployment: deployment(), http });
       await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployUnavailableError);
-      await expect(quoting).rejects.toThrow(SPONSORED_DEPLOY_UNREACHABLE);
     }
   });
 });
@@ -271,7 +367,35 @@ describe("sponsored deploy submission", () => {
     }
   });
 
+  // The gateway's own pre-forward refusals: JSON-RPC errors echoing the id.
+  const gatewayRefusal = (status: number, code: string) =>
+    envelope({ error: { code: -32000, message: code } }, status);
+
+  test("the gateway's 4xx refusals before forwarding are determinate: nothing was sent", async () => {
+    for (const http of [
+      gatewayRefusal(409, "account_already_deployed"),
+      gatewayRefusal(429, "sponsored_deploy_already_attempted"),
+      gatewayRefusal(429, "sponsorship_budget_exhausted"),
+    ]) {
+      await expect(
+        submitSponsoredDeploy({ config, http, isAuthorized: () => true, quote: quote() }),
+      ).rejects.toBeInstanceOf(SponsoredDeployRefusedError);
+    }
+  });
+
   const ambiguous: readonly [string, () => Promise<Response>][] = [
+    [
+      "the gateway's 503 deployment_status_unavailable",
+      gatewayRefusal(503, "deployment_status_unavailable"),
+    ],
+    [
+      "a relay 4xx relayed as a plain body after forwarding",
+      async () => new Response("upstream_rejected", { status: 400 }),
+    ],
+    [
+      "a switched-off gateway's plain 404",
+      async () => new Response("sponsored_deploy_disabled", { status: 404 }),
+    ],
     ["a null error", envelope({ error: null })],
     ["a string error", envelope({ error: "rejected" })],
     ["an error without a code", envelope({ error: { message: "rejected" } })],
@@ -311,7 +435,7 @@ describe("sponsored deploy submission", () => {
         quote: quote(),
       });
       await expect(sending).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
-      await expect(sending).rejects.not.toThrow(SPONSORED_DEPLOY_REFUSED);
+      await expect(sending).rejects.not.toBeInstanceOf(SponsoredDeployRefusedError);
     });
   }
 });
