@@ -14,14 +14,14 @@ import { deriveAccount } from "@bramble/vault/accounts";
 import { DEFAULT_NETWORK, isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
-const packageVersion = "0.11.0";
+const packageVersion = "0.14.0";
 const packageRoot = `node_modules/${packageName}`;
 const packageManifest = `${packageRoot}/package.json`;
 const wasmPackage = `${packageRoot}/krusty_kms_wasm.js`;
 const wasmBinary = `${packageRoot}/krusty_kms_wasm_bg.wasm`;
 const expectedRuntimeDigests: Readonly<Record<string, string>> = {
-  [wasmPackage]: "b76e555eaf4edae057dff57f72c52533716f6bcb4c73418e4513934ce402e63e",
-  [wasmBinary]: "d92e54274127096998f32d556779fe0352f88c1d70ce19da8ba34b71db7b7d0c",
+  [wasmPackage]: "41583537fa163ab2afdfcf240cd7430a138ed3b0b68d0d278400a915b1216c8d",
+  [wasmBinary]: "fc634ff372f32f9873cf83db44ffe4f633ca6ec3ee73707ec3515301870fa15e",
 };
 
 // A published BIP-39 test phrase, never a wallet phrase: it exists so the

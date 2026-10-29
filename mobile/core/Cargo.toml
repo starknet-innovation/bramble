@@ -27,13 +27,13 @@ testing = []
 
 [dependencies]
 # Wallet cryptography. Pinned exactly, and to the same release as the extension's
-# `@starknetfoundation/krusty-kms-wasm` (tests/conformance/mobile-core-pins.test.ts).
+# `@starknetfoundation/krusty-kms-wasm` (tests/conformance/mobile-generated.test.ts).
 # `parallel` (rayon) is only used by proof generation, which this core never runs.
-krusty-kms = { version = "=0.11.0", default-features = false }
-krusty-kms-common = { version = "=0.11.0" }
+krusty-kms = { version = "=0.14.0", default-features = false }
+krusty-kms-common = { version = "=0.14.0" }
 starknet-types-core = { version = "=0.2.4", features = ["hash"] }
 # BIP-39 English word list for the recovery-phrase word assist (already a Krusty dependency).
-bip39 = { version = "=2.2.2", default-features = false, features = ["std"] }
+bip39 = { version = "=3.0.0", default-features = false, features = ["std"] }
 # Bindings generator for the Swift and Kotlin surfaces.
 uniffi = { version = "=0.29.5" }
 # Vault envelope: the extension's EncryptedEnvelope v3 (PBKDF2-SHA-256 -> AES-256-GCM).

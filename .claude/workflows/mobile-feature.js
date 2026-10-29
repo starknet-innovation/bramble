@@ -41,13 +41,13 @@ Ground rules for this task (in addition to AGENTS.md):
   small and additive. Put new logic in new files.
 - Read mobile/SCOPE.md and mobile/README.md first. The mobile architecture is fixed: all key custody and
   protocol logic lives in the Rust core mobile/core (crate bramble-core, UniFFI), built on the published
-  krusty-kms crates pinned at =0.11.0 (same release as the extension's @starknetfoundation/krusty-kms-wasm).
+  krusty-kms crates pinned at =0.14.0 (same release as the extension's @starknetfoundation/krusty-kms-wasm).
   The core is sans-IO: it builds JSON-RPC bodies and judges responses; Swift/Kotlin only move bytes.
 - Private keys, the recovery phrase, viewing keys, and vault keys never cross the FFI boundary except where
   SCOPE.md already allows (phrase at creation and on password-rechecked reveal). Never log secrets.
-- Never add fallback crypto. If krusty-kms 0.11.0 lacks something, say so explicitly and propose the smallest
+- Never add fallback crypto. If krusty-kms 0.14.0 lacks something, say so explicitly and propose the smallest
   honest path (e.g. an upstream krusty-kms change) rather than re-implementing it. Its sources are readable at
-  ~/.cargo/registry/src/*/krusty-kms*-0.11.0/ and in ~/Coding/krusty-kms (tag v0.11.0).
+  ~/.cargo/registry/src/*/krusty-kms*-0.14.0/ and in ~/Coding/krusty-kms (tag v0.14.0).
 - Nothing is restated by hand: design tokens, icons, networks, and presentation rules come from the
   extension's TypeScript via scripts/generate-mobile-assets.ts and parity fixtures (bun run mobile:assets,
   bun run mobile:parity). Reuse the existing SwiftUI components in mobile/ios/Bramble/DesignSystem and match
@@ -163,7 +163,7 @@ const research = await parallel([
     `behaviour. Cite file paths. The mobile app must reproduce this behaviour, so be precise about rules.`,
     { label: 'research:extension', phase: 'Research', schema: FINDINGS }),
   () => agent(
-    `${briefing}\nRESEARCH TASK (read-only, change nothing): inventory what the published krusty-kms 0.11.0 crates ` +
+    `${briefing}\nRESEARCH TASK (read-only, change nothing): inventory what the published krusty-kms 0.14.0 crates ` +
     `(krusty-kms, krusty-kms-common, krusty-kms-crypto, krusty-kms-client, krusty-kms-wallet-api, krusty-kms-sdk) ` +
     `provide for this feature: exact function signatures, types, and whether each pulls networking or async runtimes ` +
     `into a mobile binary. List precisely what is MISSING and would need an upstream krusty change.`,

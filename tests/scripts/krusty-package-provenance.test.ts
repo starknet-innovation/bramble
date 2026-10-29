@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { readWorkflowSources } from "../../scripts/workflow-inventory";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
-const packageVersion = "0.11.0";
+const packageVersion = "0.14.0";
 
 describe("published Krusty package", () => {
   test("is an exact runtime dependency with no source-vendoring script", async () => {
