@@ -266,7 +266,7 @@ lines and `pub use` lines.
     pub type_label: Option<String>,        // knownAccountType; None for an unknown class
     pub authorization_shape: String,       // "stark-pair" | "argent-signer-array"
     pub group_id: Option<String>,
-    pub view_only: bool, pub active: bool }
+    pub active: bool }
 
 #[derive(uniffi::Record)] pub struct AccountGroup { pub id: String, pub name: String,
     pub icon: String, pub account_ids: Vec<String> }

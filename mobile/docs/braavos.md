@@ -9,7 +9,9 @@ Braavos records use the same `TransferPlan`, following `braavos-compatibility.ts
 - **Signature.** A bare `[r, s]` over Krusty's invoke hash, as for OpenZeppelin; invoke estimates
   skip validation and carry no signature.
 - **Account state before estimating or signing** (`send/plan_probe.rs`). The accepted block, then
-  the class at that block, which must be an implementation this wallet signs for
+  the class at that block. A JSON-RPC 24 (or "block not found") re-pins and retries the decision
+  up to three times, for Braavos and Ready alike; a third miss fails closed. The class must be an
+  implementation this wallet signs for
   (`BRAAVOS_SIGNING_CLASS_HASHES`: current or legacy). Then `get_signers` at that block: this
   wallet's key must be the first Stark signer. If a 2FA (secp256r1 or WebAuthn) signer exists,
   `get_deferred_remove_signers` and the block's timestamp are read, and the account is signed for

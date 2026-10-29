@@ -107,7 +107,7 @@ impl WalletCore {
     }
 
     /// `(record id, public key)` of every account record on `network` that may co-sign a
-    /// multisig: Braavos records are left out, as they were while Braavos was view-only. Keys
+    /// multisig: Braavos records are left out, matching the extension's funding list. Keys
     /// come from the vault's records, which `open` re-derived from the phrase, never from an index.
     fn local_public_keys(&self, network: NetworkId) -> Result<Vec<(String, String)>, CoreError> {
         self.with_session(false, |session| {

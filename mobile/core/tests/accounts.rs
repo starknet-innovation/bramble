@@ -1,7 +1,8 @@
-//! Account management through the public core surface: signing by record (and why a shared key
-//! makes view-only a per-record rule), the network switch, adding accounts, labels, groups, the
-//! count → records migration, and fail-closed handling of a tampered vault. The migration chain
-//! across every historical vault file is covered in `migration.rs`.
+//! Account management through the public core surface: signing by record (a shared key at one
+//! index signs every family there; the send plan decides which account may use it), the network
+//! switch, adding accounts, labels, groups, the count → records migration, and fail-closed
+//! handling of a tampered vault. The migration chain across every historical vault file is
+//! covered in `migration.rs`.
 
 mod common;
 

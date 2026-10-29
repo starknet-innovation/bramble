@@ -312,11 +312,11 @@ fn a_locked_wallet_cannot_prepare() {
     );
 }
 
-/// Signing goes through the account record: a view-only (Braavos) record is refused before a plan
-/// exists, even though every family at one index shares the OZ record's key, while OpenZeppelin
-/// and Ready (Argent) records plan; a vault still waiting for discovery has nothing to send from.
+/// Signing goes through the account record. Every family at one index shares a key, so a Braavos
+/// record plans like an OpenZeppelin or Ready record; the plan reads the chain before it signs.
+/// A vault still waiting for discovery has nothing to send from.
 #[test]
-fn braavos_records_cannot_send_or_deploy() {
+fn braavos_records_plan_like_other_families() {
     let (_dir, _clock, core) = common_pending();
     let class = |label: &str| {
         bramble_core::account_classes()
