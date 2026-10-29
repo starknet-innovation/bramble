@@ -5,6 +5,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { WalletError } from "@bramble/core/errors";
+import { RpcRefusedError } from "@bramble/starknet/provider";
 import {
   isRetryableStrk20ServiceError,
   mapStrk20ProtocolError,
@@ -147,6 +149,12 @@ describe("STRK20 stage error mapping", () => {
 
   test("retries only explicit service throttling responses", () => {
     expect(isRetryableStrk20ServiceError(rpcError(-32_005, "rate limit exceeded"))).toBe(true);
+    // What the extension's own transport throws for a -32005 or HTTP 429: a WalletError subclass,
+    // which must still be retried rather than read as a reviewed terminal result.
+    const refused = new RpcRefusedError("refused", "2");
+    expect(isRetryableStrk20ServiceError(refused)).toBe(true);
+    expect(strk20RetryAfterMilliseconds(refused)).toBe(2_000);
+    expect(isRetryableStrk20ServiceError(new WalletError("reviewed"))).toBe(false);
     expect(isRetryableStrk20ServiceError(new Error("Proving service HTTP 429"))).toBe(true);
     expect(isRetryableStrk20ServiceError(rpcError(63, "proof rejected"))).toBe(false);
     expect(isRetryableStrk20ServiceError(new Error("Failed to fetch"))).toBe(false);
