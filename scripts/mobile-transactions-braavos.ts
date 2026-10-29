@@ -65,6 +65,8 @@ type BraavosNode = {
   readonly strong?: number;
   /** `get_deferred_remove_signers`' expiry; 0 means no removal requested. */
   readonly expireAt?: number;
+  /** `get_signers` returns a length that overruns the array. */
+  readonly malformedSigners?: boolean;
 };
 
 /** One Braavos scenario: which class the record names, and the node around it. */
@@ -123,6 +125,10 @@ const braavosReply =
         const request = (params?.["request"] ?? {}) as { readonly entry_point_selector?: string };
         const name = SELECTORS.get(BigInt(request.entry_point_selector ?? "0x0"));
         if (name === "get_signers") {
+          if (node.malformedSigners) {
+            // One claimed stark signer and no value: `parseBraavosSigners` throws.
+            return { result: ["0x2", "0x1"] };
+          }
           const stark = node.stark ?? [publicKey];
           const strong = Array.from({ length: node.strong ?? 0 }, () => [
             "0x7",
@@ -376,6 +382,12 @@ const BRAAVOS_REFUSALS: readonly RefusalSpec[] = [
     BRAAVOS_DEPLOYMENT_CLASS_HASH,
     deployed(),
     deployed({ stark: [FOREIGN] }),
+  ),
+  refusal(
+    "braavosSignerListMalformed",
+    "transfer",
+    BRAAVOS_DEPLOYMENT_CLASS_HASH,
+    deployed({ malformedSigners: true }),
   ),
   refusal(
     "braavosStrongSigner",

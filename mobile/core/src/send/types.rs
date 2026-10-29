@@ -233,6 +233,8 @@ pub enum SendFailureCode {
     BraavosClassUnrecognised,
     /// Braavos: this wallet's key is not the account's first Stark signer.
     BraavosOwnerMismatch,
+    /// Braavos: `get_signers` did not parse as three length-prefixed signer lists.
+    BraavosSignerListMalformed,
     /// Braavos: a 2FA signer is active (its removal, if requested, has not expired).
     BraavosStrongSigner,
 }

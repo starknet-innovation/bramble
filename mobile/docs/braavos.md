@@ -29,8 +29,11 @@ Braavos records use the same `TransferPlan`, following `braavos-compatibility.ts
   hashes at review, two again at confirmation's re-estimate, then two for the deployment.
   Krusty hashes only version 3, so `send/sign.rs` composes the query-version hash itself; a unit
   test pins that composition to Krusty's at version 3, and the parity fixture pins the query hash.
-- **Refusals.** As for Ready ([accounts.md](accounts.md) §2.7a), with the extension's Braavos texts: `BraavosClassUnrecognised`,
-  `BraavosOwnerMismatch`, `BraavosStrongSigner`.
+- **Refusals.** The review step fails with the extension's sentence, before any estimate or
+  signature: `BraavosDeployFirst`, `BraavosNotDeployable`, `BraavosClassUnrecognised`,
+  `BraavosOwnerMismatch`, `BraavosStrongSigner`, and `BraavosSignerListMalformed` when
+  `get_signers` does not parse. A signer change after a clean review is still refused at
+  confirmation. Ready's review stays a fee-failed screen.
 - **Multisig.** Braavos keys are still not offered as Nostr multisig co-signers.
 
 Parity: `scripts/mobile-transactions-braavos.ts` runs the extension's own path for the published

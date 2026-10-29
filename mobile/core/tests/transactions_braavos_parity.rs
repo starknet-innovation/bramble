@@ -135,6 +135,7 @@ fn failure_code(code: &str) -> SendFailureCode {
         "braavosNotDeployable" => SendFailureCode::BraavosNotDeployable,
         "braavosClassUnrecognised" => SendFailureCode::BraavosClassUnrecognised,
         "braavosOwnerMismatch" => SendFailureCode::BraavosOwnerMismatch,
+        "braavosSignerListMalformed" => SendFailureCode::BraavosSignerListMalformed,
         "braavosStrongSigner" => SendFailureCode::BraavosStrongSigner,
         other => panic!("unmapped refusal {other}"),
     }
@@ -144,7 +145,7 @@ fn failure_code(code: &str) -> SendFailureCode {
 fn braavos_accounts_the_extension_refuses_are_refused_before_signing() {
     let (_, refusals) = braavos_fixture();
     let copy = fixture()["copy"]["failures"].clone();
-    assert_eq!(refusals.len(), 8);
+    assert_eq!(refusals.len(), 9);
     for refusal in &refusals {
         let name = refusal["name"].as_str().unwrap();
         let code = refusal["code"].as_str().unwrap();
@@ -156,22 +157,12 @@ fn braavos_accounts_the_extension_refuses_are_refused_before_signing() {
         let step = drive(&plan, step, &review_calls(refusal), &mut node);
         if let Some(text) = refusal["reviewMessage"].as_str() {
             assert_eq!(text, message, "{name}");
-            if code == "braavosDeployFirst" {
-                // The review names the way out rather than showing a failed estimate.
-                let SendStep::Failed { failure } = step else {
-                    panic!("{name}: not refused");
-                };
-                assert_eq!(failure.code, failure_code(code), "{name}");
-            } else {
-                assert_eq!(step, SendStep::Review, "{name}");
-                let review = plan.current_review().unwrap();
-                let failed = if refusal["flow"] == "deployment" {
-                    review.deployment_fee_estimate_failed
-                } else {
-                    review.fee_estimate_failed
-                };
-                assert!(failed && !review.can_confirm, "{name}: {review:?}");
-            }
+            // The review step itself carries the extension's sentence. A fee-failed review
+            // would leave the code unreachable: Confirm is `OutOfOrder` while `can_confirm` is false.
+            let SendStep::Failed { failure } = step else {
+                panic!("{name}: not refused, {step:?}");
+            };
+            assert_eq!(failure.code, failure_code(code), "{name}");
         } else {
             assert_eq!(step, SendStep::Review, "{name}");
             let step = plan.advance(StepReply::Confirm).unwrap();
@@ -188,5 +179,70 @@ fn braavos_accounts_the_extension_refuses_are_refused_before_signing() {
         }
         assert_eq!(plan.signatures_made(), 0, "{name}");
         assert!(core.activity(id).unwrap().is_empty(), "{name}");
+    }
+}
+
+/// A `get_signers` array whose length overruns the result. The extension throws
+/// "Braavos account returned a malformed signer list" (`parseBraavosSigners`); the
+/// `braavosSignerListMalformed` fixture records that traffic, and this drives the same reads
+/// without depending on the capture file.
+#[test]
+fn a_malformed_signer_list_fails_the_review_before_signing() {
+    let classes = bramble_core::account_classes();
+    let class_hash = |label: &str| {
+        classes
+            .iter()
+            .find(|class| class.label == label)
+            .unwrap_or_else(|| panic!("{label}"))
+            .class_hash
+            .clone()
+    };
+    // The record is the deployment class; the live class is an implementation this wallet signs for.
+    let scenario = serde_json::json!({
+        "recordClass": class_hash("braavos 1.0.0"),
+        "networkId": "SN_MAIN",
+        "flow": "transfer",
+    });
+    let (_dir, core, id) = braavos_wallet(&scenario);
+    let plan = plan_for(&core, &scenario, &id);
+    let mut step = plan.advance(StepReply::Start).unwrap();
+    let scripted = [
+        (
+            "starknet_blockHashAndNumber",
+            serde_json::json!({"result": {"block_hash": "0xb7aa05", "block_number": 1}}),
+        ),
+        (
+            "starknet_getClassHashAt",
+            serde_json::json!({"result": class_hash("braavos current")}),
+        ),
+        (
+            "starknet_call",
+            serde_json::json!({"result": ["0x2", "0x1"]}),
+        ),
+    ];
+    let mut next = 0;
+    loop {
+        match &step {
+            SendStep::Rpc { .. } => {
+                let (rpc_id, method, _, _) = rpc_parts(&step);
+                if method == "starknet_chainId" {
+                    let reply = serde_json::json!({"result": chain_id(NetworkId::Mainnet)});
+                    step = plan.advance(rpc_reply(rpc_id, &reply)).unwrap();
+                    continue;
+                }
+                let (expected, reply) = &scripted[next];
+                assert_eq!(&method, expected);
+                next += 1;
+                step = plan.advance(rpc_reply(rpc_id, reply)).unwrap();
+            }
+            SendStep::Failed { failure } => {
+                assert_eq!(next, scripted.len());
+                assert_eq!(failure.code, SendFailureCode::BraavosSignerListMalformed);
+                assert_eq!(plan.signatures_made(), 0);
+                assert!(core.activity(id).unwrap().is_empty());
+                break;
+            }
+            other => panic!("unexpected step {other:?}"),
+        }
     }
 }

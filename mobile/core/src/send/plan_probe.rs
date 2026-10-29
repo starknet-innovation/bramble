@@ -228,7 +228,8 @@ impl PlanState {
                     Some((_, false)) => self.probed(probe, Outcome::Deployed),
                     Some((_, true)) => self
                         .signer_read(Expect::DeferredRemoval(probe), GET_DEFERRED_REMOVE_SIGNERS),
-                    None => self.probed(probe, Outcome::Unreadable),
+                    // A length that overruns the result. An RPC error took the `Err` arm above.
+                    None => self.probed(probe, refused(Code::BraavosSignerListMalformed, None)),
                 },
                 Err(node) => self.probed(probe, Self::read_failed(node)),
             },

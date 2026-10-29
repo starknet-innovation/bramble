@@ -163,6 +163,33 @@
       "submitMessage": "Deployed Braavos account owner does not match the wallet signer"
     },
     {
+      "code": "braavosSignerListMalformed",
+      "flow": "transfer",
+      "name": "braavosSignerListMalformed-transfer-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "malformedSigners": true
+      },
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "malformedSigners": true
+      },
+      "reviewDeployment": [],
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"result\":\"0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x2\",\"0x1\"]}}"
+      ],
+      "reviewMessage": "Braavos account returned a malformed signer list",
+      "reviewedFee": null,
+      "submit": [],
+      "submitMessage": null
+    },
+    {
       "code": "braavosStrongSigner",
       "flow": "transfer",
       "name": "braavosStrongSigner-transfer-review",

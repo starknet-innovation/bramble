@@ -32,6 +32,7 @@ class ReadyFailureTextTest {
                 SendFailureCode.BRAAVOS_NOT_DEPLOYABLE,
                 SendFailureCode.BRAAVOS_CLASS_UNRECOGNISED,
                 SendFailureCode.BRAAVOS_OWNER_MISMATCH,
+                SendFailureCode.BRAAVOS_SIGNER_LIST_MALFORMED,
                 SendFailureCode.BRAAVOS_STRONG_SIGNER,
             )
         for (code in codes) {

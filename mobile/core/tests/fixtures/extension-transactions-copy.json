@@ -164,6 +164,7 @@
       "braavosNotDeployable": "This wallet does not deploy Braavos accounts",
       "braavosClassUnrecognised": "Deployed Braavos account class is not a release this wallet recognizes",
       "braavosOwnerMismatch": "Deployed Braavos account owner does not match the wallet signer",
+      "braavosSignerListMalformed": "Braavos account returned a malformed signer list",
       "braavosStrongSigner": "Deployed Braavos account has an active 2FA signer"
     },
     "screens": {

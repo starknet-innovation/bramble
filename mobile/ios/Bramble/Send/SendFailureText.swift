@@ -89,6 +89,9 @@ enum SendFailureText {
         case .braavosOwnerMismatch:
             SendCopy.failureBraavosOwnerMismatch
 
+        case .braavosSignerListMalformed:
+            SendCopy.failureBraavosSignerListMalformed
+
         case .braavosStrongSigner:
             SendCopy.failureBraavosStrongSigner
 

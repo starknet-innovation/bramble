@@ -125,6 +125,7 @@ object SendCopy {
     const val failureBraavosDeployFirst = "Deploy this account first (Settings → Deploy account)."
     const val failureBraavosNotDeployable = "This wallet does not deploy Braavos accounts"
     const val failureBraavosOwnerMismatch = "Deployed Braavos account owner does not match the wallet signer"
+    const val failureBraavosSignerListMalformed = "Braavos account returned a malformed signer list"
     const val failureBraavosStrongSigner = "Deployed Braavos account has an active 2FA signer"
     const val failureDeploymentStatusUnknown = "Account deployment status is unknown. Check the account on-chain before retrying."
     const val failureDeploymentThenInvokeUnconfirmed = "Account deployment {hash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying."

@@ -125,6 +125,7 @@ enum SendCopy {
     static let failureBraavosDeployFirst = "Deploy this account first (Settings → Deploy account)."
     static let failureBraavosNotDeployable = "This wallet does not deploy Braavos accounts"
     static let failureBraavosOwnerMismatch = "Deployed Braavos account owner does not match the wallet signer"
+    static let failureBraavosSignerListMalformed = "Braavos account returned a malformed signer list"
     static let failureBraavosStrongSigner = "Deployed Braavos account has an active 2FA signer"
     static let failureDeploymentStatusUnknown = "Account deployment status is unknown. Check the account on-chain before retrying."
     static let failureDeploymentThenInvokeUnconfirmed = "Account deployment {hash} completed, but the following transaction could not be confirmed. Check on-chain state before retrying."

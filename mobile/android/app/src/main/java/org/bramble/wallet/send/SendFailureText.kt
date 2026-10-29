@@ -35,6 +35,7 @@ object SendFailureText {
             SendFailureCode.BRAAVOS_NOT_DEPLOYABLE to SendCopy.failureBraavosNotDeployable,
             SendFailureCode.BRAAVOS_CLASS_UNRECOGNISED to SendCopy.failureBraavosClassUnrecognised,
             SendFailureCode.BRAAVOS_OWNER_MISMATCH to SendCopy.failureBraavosOwnerMismatch,
+            SendFailureCode.BRAAVOS_SIGNER_LIST_MALFORMED to SendCopy.failureBraavosSignerListMalformed,
             SendFailureCode.BRAAVOS_STRONG_SIGNER to SendCopy.failureBraavosStrongSigner,
         )
 
