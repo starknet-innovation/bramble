@@ -164,9 +164,9 @@ describe("recovery scan Ready gate", () => {
 
     const row = rowsIn(app)("argent")[0];
     if (!row) throw new Error("missing argent row");
-    expect(row.textContent).toContain(
-      "Deployed on Starknet · private balances off, set up in another wallet",
-    );
+    expect(row.textContent).toContain("Deployed on Starknet");
+    const warning = row.querySelector(".hint-danger");
+    expect(warning?.textContent).toBe("Private balances off · set up in another wallet");
     const checkbox = row.querySelector<HTMLInputElement>("input[type=checkbox]");
     expect(checkbox?.disabled).toBe(false);
     expect(checkbox?.checked).toBe(true);

@@ -116,18 +116,16 @@ const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
   "strong-signer": "2FA active",
 };
 
-// Said before they pick it: another wallet registered this account with the
-// privacy pool, and the pool keeps that key, so private balances stay off here.
-// The row stays selectable — its public funds are reachable.
-const PRIVACY_POOL_COPY = "private balances off, set up in another wallet";
+// Said before they pick it, on its own line in the danger colour: another
+// wallet registered this account with the privacy pool, and the pool keeps
+// that key, so private balances stay off here. The row stays selectable — its
+// public funds are reachable.
+const PRIVACY_POOL_COPY = "Private balances off · set up in another wallet";
 
-const deployedState = (candidate: RecoveryAccountCandidate): string => {
-  const notes = [
-    ...(candidate.restriction ? [RESTRICTION_COPY[candidate.restriction], "view only"] : []),
-    ...(candidate.privacyPool ? [PRIVACY_POOL_COPY] : []),
-  ];
-  return ["Deployed on Starknet", ...notes].join(" · ");
-};
+const deployedState = (candidate: RecoveryAccountCandidate): string =>
+  candidate.restriction
+    ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
+    : "Deployed on Starknet";
 
 const activityState = (candidate: RecoveryAccountCandidate): string => {
   if (candidate.deployed) return deployedState(candidate);
@@ -282,6 +280,12 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     hint.className = "hint";
     hint.textContent = candidateState(candidate, duplicate);
     copy.append(title, address, hint);
+    if (candidate.privacyPool && !duplicate) {
+      const warning = deps.form.ownerDocument.createElement("span");
+      warning.className = "hint hint-danger";
+      warning.textContent = PRIVACY_POOL_COPY;
+      copy.append(warning);
+    }
     label.append(checkbox, copy);
     row.append(label);
     return row;
