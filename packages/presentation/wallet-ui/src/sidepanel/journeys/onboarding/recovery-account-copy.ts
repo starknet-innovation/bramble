@@ -37,9 +37,13 @@ const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
 // Said before they pick it, on its own line in the danger colour: another
 // wallet registered this account with the privacy pool, and the pool keeps
 // that key, so private balances stay off here. The row stays selectable — its
-// public funds are reachable.
+// public funds are reachable. The Ready group names Ready; the check only
+// knows the key is not Bramble's, so other groups say "another wallet".
 /** Row note under a deployed account another wallet registered with the privacy pool. */
-export const PRIVACY_POOL_COPY = "Private balances off · set up in another wallet";
+export const privacyPoolCopy = (candidate: RecoveryAccountCandidate): string =>
+  `Private balances off · privacy previously set up in ${
+    candidate.account.accountContractType === "argent" ? "Ready" : "another wallet"
+  } and cannot be imported to Bramble`;
 
 const deployedState = (candidate: RecoveryAccountCandidate): string =>
   candidate.restriction

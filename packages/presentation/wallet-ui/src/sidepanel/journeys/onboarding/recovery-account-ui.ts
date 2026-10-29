@@ -19,7 +19,7 @@ import {
   candidateName,
   candidateState,
   candidateTitle,
-  PRIVACY_POOL_COPY,
+  privacyPoolCopy,
   selectable,
 } from "./recovery-account-copy";
 import { bindRecoveryAddressFinder } from "./recovery-address-ui";
@@ -187,7 +187,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     if (candidate.privacyPool && !duplicate) {
       const warning = deps.form.ownerDocument.createElement("span");
       warning.className = "hint hint-danger";
-      warning.textContent = PRIVACY_POOL_COPY;
+      warning.textContent = privacyPoolCopy(candidate);
       copy.append(warning);
     }
     label.append(checkbox, copy);
