@@ -4,9 +4,18 @@
  * chain answer and an injectable pending-deployment store.
  */
 import { createPreferencesStore } from "@bramble/settings/preferences";
+import { argentAccountConstructorCalldata } from "@bramble/starknet/account-contracts";
 import { createMemoryStore } from "@bramble/store/kv";
 import { type ActivityLog, memoryActivityLog } from "@bramble/transactions/activity";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
+import {
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  XVERSE_ARGENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
+import {
+  type AccountRef,
+  ARGENT_ACCOUNT_CLASS_HASH,
+  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+} from "@bramble/wallet-model/accounts";
 import { hash } from "starknet";
 import type { DeployAccountDeps } from "../../apps/extension/src/background/accounts/deploy-account-ops";
 import {
@@ -18,29 +27,63 @@ import { createUnlockSession } from "../../apps/extension/src/background/runtime
 import { createWallet, vaultPassphrase } from "./background-wallet-stub";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 
-const CLASS_HASH = "0x61dac032f228abef9c6626f995015233097ae253a7f72d68552db02f2971b8f";
 const PUBLIC_KEY = "0x1f3c942d7f492a37608cde0d77b884a5aa9e11d2919225968557370ddb5a5aa";
-const ADDRESS = hash.calculateContractAddressFromHash(PUBLIC_KEY, CLASS_HASH, [PUBLIC_KEY], 0);
+
+/** OpenZeppelin 0.8.1: a real account class the gateway does not sponsor. */
+export const OLDER_OZ_CLASS_HASH =
+  "0x61dac032f228abef9c6626f995015233097ae253a7f72d68552db02f2971b8f";
+
+/** An undeployed OpenZeppelin account at `classHash` that reproduces its address. */
+export const ozAccountAt = (classHash: string): AccountRef => {
+  const address = hash.calculateContractAddressFromHash(PUBLIC_KEY, classHash, [PUBLIC_KEY], 0);
+  return {
+    accountContractType: "openzeppelin",
+    address,
+    classHash,
+    derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+    id: `SN_SEPOLIA:${address}`,
+    networkId: "SN_SEPOLIA",
+    publicKeyX: PUBLIC_KEY,
+    publicKeyY: "0x2",
+  };
+};
+
+/** An undeployed Argent account (salt = public key, no guardian) at `classHash`. */
+export const argentAccountAt = (classHash: string): AccountRef => {
+  const address = hash.calculateContractAddressFromHash(
+    PUBLIC_KEY,
+    classHash,
+    [...argentAccountConstructorCalldata(PUBLIC_KEY)],
+    0,
+  );
+  return {
+    accountContractType: "argent",
+    address,
+    classHash,
+    deploymentSalt: PUBLIC_KEY,
+    derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+    id: `SN_SEPOLIA:${address}`,
+    networkId: "SN_SEPOLIA",
+    publicKeyX: PUBLIC_KEY,
+    publicKeyY: "0x2",
+  };
+};
+
+/** Undeployed Argent 0.4.0 and Xverse Argent 0.4.0 accounts, both sponsorable. */
+export const argentAccount = argentAccountAt(ARGENT_ACCOUNT_CLASS_HASH);
+export const xverseAccount = argentAccountAt(XVERSE_ARGENT_CLASS_HASH);
 
 // The one relay the suites turn on.
 const SPONSOR_RELAY = { SN_SEPOLIA: { url: "https://gateway.test/sponsor" } };
 
-/** An undeployed OpenZeppelin account whose deployment data reproduces its address. */
-export const ozAccount: AccountRef = {
-  accountContractType: "openzeppelin",
-  address: ADDRESS,
-  classHash: CLASS_HASH,
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: `SN_SEPOLIA:${ADDRESS}`,
-  networkId: "SN_SEPOLIA",
-  publicKeyX: PUBLIC_KEY,
-  publicKeyY: "0x2",
-};
+/** An undeployed OpenZeppelin 3.0 account whose deployment data reproduces its address. */
+export const ozAccount: AccountRef = ozAccountAt(OPENZEPPELIN_ACCOUNT_CLASS_HASH);
 
 /** The same keys as a Braavos account, which the sponsored route refuses. */
 export const braavosAccount: AccountRef = {
   ...ozAccount,
   accountContractType: "braavos",
+  classHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
   deploymentSalt: PUBLIC_KEY,
 };
 
@@ -109,7 +152,11 @@ export const sponsoredHarness = async (input: {
   readonly deployed?: boolean | Error;
   readonly pending?: PendingDeployments;
   readonly relay?: Relay;
-  readonly relayOn?: boolean;
+  /**
+   * "off" names no relay for any network; "bundled" leaves the production
+   * table and transport (`fetch`) in place. Default: the test relay on Sepolia.
+   */
+  readonly relayOn?: "bundled" | "off";
   readonly unlocked?: boolean;
 }) => {
   const account = input.account ?? ozAccount;
@@ -146,12 +193,12 @@ export const sponsoredHarness = async (input: {
     preferencesStore,
     runtimeRpc,
     session,
-    ...(input.relayOn === false
+    ...(input.relayOn === "bundled"
       ? {}
       : {
           sponsoredDeploy: {
             ...(input.relay ? { http: input.relay.http } : {}),
-            networks: SPONSOR_RELAY,
+            networks: input.relayOn === "off" ? {} : SPONSOR_RELAY,
           },
         }),
     wallet: createWallet({ accounts: [account], activeAccountId: () => account.id }),

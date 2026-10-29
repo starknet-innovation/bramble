@@ -144,6 +144,7 @@ const READER_SENTENCES = new Set([
   "Your browser did not grant access to that service host",
   "This account's sponsored deployment was already sent and may still land. Add STRK to deploy it yourself.",
   "This account type can't be deployed with a sponsored fee. Add STRK to deploy it yourself.",
+  "The Starknet Foundation couldn't cover this deployment. Nothing was sent — add STRK to deploy it yourself.",
   "Your browser did not grant access to those service hosts",
 ]);
 

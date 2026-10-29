@@ -12,10 +12,10 @@
  * copy, never the relay's. A relay cannot move the account, change its owner
  * key, or charge the user: nothing the user owns is signed or spent.
  *
- * The relay URL is wallet-configured and off on every network until the
- * gateway's sponsored route ships and its budget and abuse limits are signed
- * off. Everything the relay answers is untrusted; transport and lost-reply
- * classification live in `./sponsored-deploy-rpc`.
+ * The relay URL is wallet-configured and on for mainnet and Sepolia; the
+ * gateway decides whether it sponsors anything. Everything the relay answers
+ * is untrusted; transport and lost-reply classification live in
+ * `./sponsored-deploy-rpc`.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -26,7 +26,11 @@ import {
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
 import type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
-import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import { XVERSE_ARGENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+} from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -79,11 +83,12 @@ export class SponsoredDeployUnavailableError extends WalletError {
 }
 
 /**
- * What the deploy screen may offer, as the background decides it: sponsored
- * ("available"), declined by the sponsor ("refused"), nothing ("none"), or the
- * state of an earlier attempt: "held" while its hold stands, "may-land" once it
- * is over and the account is not confirmed deployed. Advisory display state;
- * the submission re-checks everything it depends on.
+ * What the deploy screen may offer: sponsored ("available"), nothing ("none"),
+ * or the state of an earlier attempt: "held" while its hold stands, "may-land"
+ * once it is over and the account is not confirmed deployed. The background
+ * answers one of those four; "refused" is the screen's own state after a press
+ * the sponsor declined, so the self-paid fee it shows then carries the reason.
+ * Advisory display state; the submission re-checks everything it depends on.
  */
 export type DeploySponsorship = "available" | "held" | "may-land" | "none" | "refused";
 
@@ -96,11 +101,16 @@ export type SponsoredDeployNetworks = Readonly<
 >;
 
 /**
- * Off on mainnet and Sepolia. Turning a network on is a reviewed code change
- * that names the wallet-owned gateway route, made only after the sponsored
- * route exists and SNF has signed off its budget, abuse limits, and terms.
+ * The wallet-owned gateway's sponsored-deploy routes. The gateway is the on/off
+ * switch: while a network is switched off there it answers every call
+ * `404 sponsored_deploy_disabled`, which the wallet reads as "nothing offered"
+ * and deploys self-paid as if sponsorship did not exist. Its budget and abuse
+ * limits live there too. Removing a network here stops the wallet asking.
  */
-export const SPONSORED_DEPLOY_NETWORKS: SponsoredDeployNetworks = {};
+export const SPONSORED_DEPLOY_NETWORKS: SponsoredDeployNetworks = {
+  SN_MAIN: { url: "https://wallet.nodes.starknet.org/api/sponsored-deploy/mainnet" },
+  SN_SEPOLIA: { url: "https://wallet.nodes.starknet.org/api/sponsored-deploy/sepolia" },
+};
 
 /** The relay for `networkId`, or null when sponsorship is off there. */
 export const sponsoredDeployConfig = (
@@ -109,21 +119,56 @@ export const sponsoredDeployConfig = (
 ): SponsoredDeployConfig | null =>
   Object.hasOwn(networks, networkId) ? (networks[networkId] ?? null) : null;
 
-/**
- * Account classes a deployer-zero UDC deploy creates correctly. Their
- * constructors only store the owner key. Braavos is excluded: its constructor
- * validates extended deploy data the account owner attaches to the transaction
- * itself, which a relayed deploy does not carry. An Argent multisig deploys through its
- * own reviewed flow and is not offered here.
- */
-const SPONSORABLE_ACCOUNT_TYPES: ReadonlySet<AccountContractType> = new Set([
-  "argent",
-  "openzeppelin",
-]);
+/** How a sponsorable class's constructor calldata is laid out. */
+type SponsoredConstructor = "argent-0.4" | "openzeppelin";
 
-/** Whether a sponsored deploy can create this account class. */
-export const isSponsorableAccountType = (type: AccountContractType): boolean =>
-  SPONSORABLE_ACCOUNT_TYPES.has(type);
+/**
+ * The exact classes the gateway sponsors, and the constructor calldata each
+ * must carry; the single source for whether a deploy is offered. Their
+ * constructors only store the owner key, so a deployer-zero UDC deploy creates
+ * them correctly. OpenZeppelin AccountUpgradeable 3.0 takes `[public_key]`;
+ * Argent 0.4.0 and its Xverse build take `[0x0, public_key, 0x1]` (a Starknet
+ * signer, no guardian). Any other class, Braavos and Argent multisig included,
+ * deploys self-paid and is never offered sponsorship.
+ */
+const SPONSORED_DEPLOY_CLASSES: readonly {
+  readonly classHash: string;
+  readonly constructor: SponsoredConstructor;
+}[] = [
+  { classHash: OPENZEPPELIN_ACCOUNT_CLASS_HASH, constructor: "openzeppelin" },
+  { classHash: ARGENT_ACCOUNT_CLASS_HASH, constructor: "argent-0.4" },
+  { classHash: XVERSE_ARGENT_CLASS_HASH, constructor: "argent-0.4" },
+];
+
+const hasSponsoredCalldata = (
+  shape: SponsoredConstructor,
+  calldata: readonly string[],
+): boolean => {
+  if (shape === "openzeppelin") {
+    return calldata.length === 1 && isNonZeroStarkFieldElement(calldata[0] ?? "");
+  }
+  return (
+    calldata.length === 3 &&
+    sameFelt(calldata[0] ?? "", "0x0") &&
+    isNonZeroStarkFieldElement(calldata[1] ?? "") &&
+    sameFelt(calldata[2] ?? "", "0x1")
+  );
+};
+
+/** Whether the account's class is one the gateway sponsors. */
+export const isSponsorableAccountClass = (classHash: string): boolean =>
+  SPONSORED_DEPLOY_CLASSES.some((entry) => sameFelt(entry.classHash, classHash));
+
+/**
+ * Whether the gateway sponsors this exact deployment: an accepted class with
+ * that class's constructor calldata. Anything else is deployed self-paid.
+ */
+export const isSponsorableDeployment = (data: SponsoredDeploymentData): boolean =>
+  SPONSORED_DEPLOY_CLASSES.some(
+    (entry) =>
+      sameFelt(entry.classHash, data.class_hash) &&
+      hasSponsoredCalldata(entry.constructor, data.calldata),
+  );
 
 /** SNIP-29 deployment data, every felt canonical 0x-hex. */
 export type SponsoredDeploymentData = {

@@ -5,11 +5,14 @@
  * every deploy route consults, and is never offered again once accepted or
  * lost.
  *
- * Off on every network until a relay is configured (`SPONSORED_DEPLOY_NETWORKS`
- * in `@bramble/privacy/sponsored-deploy`). The offer is made only when the
- * account's class can be deployed this way, the account is not deployed, and
- * its STRK balance is known to fall short of the deploy fee; an unknown balance
- * or fee makes no offer and leaves today's flow as it is. Nothing is signed on
+ * The relay table is `SPONSORED_DEPLOY_NETWORKS` in
+ * `@bramble/privacy/sponsored-deploy`; the gateway behind it is the on/off
+ * switch. The offer is made only when the account's exact class and
+ * constructor are ones the gateway sponsors, the account is not deployed, its
+ * STRK balance is known to fall short of the deploy fee, and the gateway quotes
+ * it. Anything else — an unknown balance or fee, a switched-off or unreachable
+ * gateway, any quote it does not give — makes no offer, and the screen deploys
+ * self-paid as if sponsorship did not exist. Nothing is signed on
  * this route: the deployment data commits to the stored address (see the
  * client), and the user pays nothing, so no fee is ever shown or recorded as
  * theirs.
@@ -17,9 +20,11 @@
 
 import {
   type DeploySponsorship,
-  isSponsorableAccountType,
+  isSponsorableAccountClass,
+  isSponsorableDeployment,
   type PaymasterHttp,
   quoteSponsoredDeploy,
+  SPONSORED_DEPLOY_REFUSED,
   SPONSORED_DEPLOY_UNSUPPORTED,
   type SponsoredDeployConfig,
   type SponsoredDeploymentData,
@@ -39,12 +44,12 @@ import type { StarkHashSigner } from "@bramble/starknet/rpc";
 import { type ActivityLog, systemClock } from "@bramble/transactions/activity";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
+import { recordSubmittedActivityIfAbsent } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { DEPLOY_ACTIVITY_SUMMARY } from "./deployment-ops";
 import {
@@ -100,9 +105,16 @@ const deploymentStatus = (
     .catch(() => "unknown" as const);
 
 const relayFor = (deps: SponsoredDeploymentDeps, account: AccountRef) =>
-  isSponsorableAccountType(account.accountContractType)
+  isSponsorableAccountClass(account.classHash)
     ? sponsoredDeployConfig(account.networkId, deps.sponsoredDeploy?.networks)
     : null;
+
+// The deployment the gateway would sponsor, or null for a class or constructor
+// it does not accept. Throws when the data cannot reproduce the stored address.
+const sponsorableDeployment = (account: AccountRef): SponsoredDeploymentData | null => {
+  const data = sponsoredDeploymentData(accountDeployment(account));
+  return isSponsorableDeployment(data) ? data : null;
+};
 
 const nowOf = (deps: SponsoredDeploymentDeps): number => (deps.now ?? systemClock)();
 
@@ -125,10 +137,13 @@ const freshOfferRelay = async (
 /**
  * Decides what the deploy screen may offer. An earlier attempt answers "held"
  * or "may-land" and is never offered again. Otherwise "none" unless
- * sponsorship is on for the network, the class is sponsorable, the account is
- * confirmed undeployed, and its STRK balance is confirmed short of the fee;
- * then the relay is asked: "available", "refused" only for its explicit no,
- * and "none" when it cannot be reached. Never throws and never sends.
+ * sponsorship is on for the network, the class and constructor are ones the
+ * gateway sponsors, the account is confirmed undeployed, and its STRK balance
+ * is confirmed short of the fee; then the relay is asked, and only its exact
+ * quote answers "available". Every quote failure — the gateway switched off
+ * (`404 sponsored_deploy_disabled`), a refusal, a rate limit, a 5xx, a
+ * transport failure, an unusable answer — is "none": the user never asked for
+ * sponsorship, so its absence is not news. Never throws and never sends.
  */
 export const deploySponsorship = async (
   deps: SponsoredDeploymentDeps,
@@ -147,16 +162,18 @@ export const deploySponsorship = async (
     if (attempt === "held" || attempt === "may-land") return attempt;
     // An unreadable store may be hiding an attempt it lost: never offer then.
     if (attempt === "deployed" || !pending.readable()) return "none";
+    const deployment = sponsorableDeployment(input.account);
+    if (!deployment) return "none";
     const config = await freshOfferRelay(deps, input, rpcUrls);
     if (!config) return "none";
     await quoteSponsoredDeploy({
       config,
-      deployment: sponsoredDeploymentData(accountDeployment(input.account)),
+      deployment,
       ...(deps.sponsoredDeploy?.http ? { http: deps.sponsoredDeploy.http } : {}),
     });
     return "available";
-  } catch (error) {
-    return error instanceof SponsoredDeployRefusedError ? "refused" : "none";
+  } catch {
+    return "none";
   }
 };
 
@@ -172,14 +189,15 @@ const sponsoredRoute = (
   deps: SponsoredDeploymentDeps,
   account: AccountRef,
 ): SponsoredRoute | { readonly error: string } => {
-  if (!isSponsorableAccountType(account.accountContractType)) {
+  if (!isSponsorableAccountClass(account.classHash)) {
     return { error: SPONSORED_DEPLOY_UNSUPPORTED };
   }
   const config = relayFor(deps, account);
   const pending = deps.pendingDeployments;
   if (!config || !pending) return UNAVAILABLE;
   try {
-    return { config, deployment: sponsoredDeploymentData(accountDeployment(account)), pending };
+    const deployment = sponsorableDeployment(account);
+    return deployment ? { config, deployment, pending } : { error: SPONSORED_DEPLOY_UNSUPPORTED };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "deployment unavailable" };
   }
@@ -212,12 +230,17 @@ const reserve = async (
     : { error: SPONSORED_DEPLOY_ALREADY_SENT };
 };
 
-// Whether no Activity row of any account already carries `hash`. An
-// unreadable log cannot show that, so it answers false.
-const isFreshHash = async (activity: ActivityLog, hash: string): Promise<boolean> => {
-  const rows = await activity.list().catch(() => null);
-  return rows !== null && !rows.some((row) => sameFelt(row.hash, hash));
-};
+// A determinate broadcast refusal sent nothing. The gateway refuses an account
+// it finds deployed (`409 account_already_deployed`), so the chain is read
+// again: deployed is shown as deployed, anything else turns self-paid.
+const refusedBroadcast = async (
+  deps: SponsoredDeploymentDeps,
+  account: AccountRef,
+  rpcUrls: readonly string[],
+): Promise<RuntimeResponse> =>
+  (await deploymentStatus(deps, account, rpcUrls)) === "deployed"
+    ? { error: "account already deployed" }
+    : { error: SPONSORED_DEPLOY_REFUSED };
 
 // Sends the reserved deploy. Anything that sent nothing forgets the attempt; a
 // lost reply keeps it, and an accepted deploy keeps it with its hash.
@@ -225,16 +248,25 @@ const send = async (
   deps: SponsoredDeploymentDeps,
   route: SponsoredRoute,
   input: { readonly account: AccountRef; readonly isAuthorized: () => boolean },
+  rpcUrls: readonly string[],
 ): Promise<RuntimeResponse> => {
   const { account } = input;
   const http = deps.sponsoredDeploy?.http ? { http: deps.sponsoredDeploy.http } : {};
-  let transactionHash: string;
+  let quote: Awaited<ReturnType<typeof quoteSponsoredDeploy>>;
   try {
-    const quote = await quoteSponsoredDeploy({
+    quote = await quoteSponsoredDeploy({
       config: route.config,
       deployment: route.deployment,
       ...http,
     });
+  } catch {
+    // A quote never broadcasts. Whatever stopped it — switched off, refused,
+    // unreachable — the sponsor is not covering this press: self-paid, no retry.
+    await route.pending.forget(account).catch(() => undefined);
+    return { error: SPONSORED_DEPLOY_REFUSED };
+  }
+  let transactionHash: string;
+  try {
     ({ transactionHash } = await submitSponsoredDeploy({
       config: route.config,
       isAuthorized: input.isAuthorized,
@@ -246,25 +278,25 @@ const send = async (
       return submissionUnknownResponse(error.message);
     }
     await route.pending.forget(account).catch(() => undefined);
-    return { error: error instanceof Error ? error.message : "sponsored deployment failed" };
+    return error instanceof SponsoredDeployRefusedError
+      ? refusedBroadcast(deps, account, rpcUrls)
+      : { error: error instanceof Error ? error.message : "sponsored deployment failed" };
   }
   // The hash is the relay's claim. One this wallet already holds a row for
-  // would replace that row and shed its fee, so it is not recorded or tied to
-  // the attempt: the hold stays, and the chain decides when it ends.
-  if (!(await isFreshHash(deps.activity, transactionHash))) {
-    return submissionUnknownResponse(INDETERMINATE_RPC_WRITE_MESSAGE);
-  }
+  // would replace that row and shed its fee, so the row is written only if no
+  // row of any account carries the hash, checked and written as one store
+  // mutation. Otherwise — or when the log cannot say — it is not tied to the
+  // attempt: the hold stays, and the chain decides when it ends.
+  const recorded = await recordSubmittedActivityIfAbsent(deps.activity, {
+    accountId: account.id,
+    feePayer: "sponsor",
+    hash: transactionHash,
+    kind: "deploy",
+    networkId: account.networkId,
+    summary: DEPLOY_ACTIVITY_SUMMARY,
+  }).catch(() => false);
+  if (!recorded) return submissionUnknownResponse(INDETERMINATE_RPC_WRITE_MESSAGE);
   await route.pending.recordHash(account, transactionHash).catch(() => undefined);
-  await afterBroadcast(() =>
-    recordSubmittedActivity(deps.activity, {
-      accountId: account.id,
-      feePayer: "sponsor",
-      hash: transactionHash,
-      kind: "deploy",
-      networkId: account.networkId,
-      summary: DEPLOY_ACTIVITY_SUMMARY,
-    }),
-  );
   return { ok: true, transactionHash };
 };
 
@@ -275,9 +307,11 @@ const send = async (
  * attempt was accepted or lost ({@link SPONSORED_DEPLOY_ALREADY_SENT}); when the
  * chain shows it deployed; and when the chain cannot say
  * ({@link DEPLOYMENT_STATUS_UNKNOWN}). The attempt is persisted before the
- * relay hears anything and forgotten only when it sent nothing. A lost reply
- * is answered as submission-unknown, and so is a relay hash Activity already
- * holds. Otherwise the relay's hash is recorded in Activity as a sponsored
+ * relay hears anything and forgotten only when it sent nothing. A quote that
+ * fails for any reason, and a determinate broadcast refusal, answer
+ * {@link SPONSORED_DEPLOY_REFUSED} so the screen turns self-paid — or "account
+ * already deployed" when the chain now shows it. A lost reply is answered as
+ * submission-unknown, and so is a relay hash Activity already holds. Otherwise the relay's hash is recorded in Activity as a sponsored
  * deploy, so no fee is ever attributed to the user. The hash is the relay's
  * claim: whether the account is deployed is read from the chain, never from
  * that hash's receipt.
@@ -296,7 +330,7 @@ export const submitSponsoredAccountDeployment = async (
     .persist()
     .then(() => deploymentStatus(deps, account, rpcUrls))
     .catch(() => null);
-  if (status === "undeployed") return send(deps, route, input);
+  if (status === "undeployed") return send(deps, route, input, rpcUrls);
   await route.pending.forget(account).catch(() => undefined);
   if (status === null) return UNAVAILABLE;
   return status === "deployed"

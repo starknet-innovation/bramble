@@ -2,14 +2,12 @@
  * Sponsored account deployment (#431) in the background: the offer, the
  * submission, and what Activity records. The shared deploy guard has its own
  * suite (`sponsored-deployment-guard.test.ts`). The relay is a fake SNIP-29 paymaster.
- * Off by default, so the production table is never consulted here; each test
- * names the relay it turns on.
+ * Each test names the relay it turns on; the production table is consulted only
+ * under a stubbed `fetch`. Every gateway answer the sponsored route can get is
+ * in `sponsored-deployment-gateway.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  SPONSORED_DEPLOY_REFUSED,
-  SPONSORED_DEPLOY_UNREACHABLE,
-} from "@bramble/privacy/sponsored-deploy";
+import { SPONSORED_DEPLOY_REFUSED } from "@bramble/privacy/sponsored-deploy";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import {
@@ -56,7 +54,7 @@ describe("sponsored deploy offer", () => {
 
   test("is not offered while sponsorship is off, the account can pay, or the read is unknown", async () => {
     const cases = [
-      { relayOn: false },
+      { relayOn: "off" as const },
       { balance: "1000" },
       { deployed: true },
       { deployed: new Error("rpc down") },
@@ -73,7 +71,7 @@ describe("sponsored deploy offer", () => {
     }
   });
 
-  test("with the bundled table (off everywhere), never calls a relay, even over stored attempts", async () => {
+  test("with the bundled table, asks only the wallet gateway, and a switched-off one offers nothing", async () => {
     const pending = memoryPendingDeployments();
     await pending.load();
     pending.reserve(ozAccount, 0);
@@ -83,26 +81,28 @@ describe("sponsored deploy offer", () => {
     const fetched: string[] = [];
     globalThis.fetch = (async (input: string) => {
       fetched.push(input);
-      return new Response("no network in tests", { status: 503 });
+      return new Response("sponsored_deploy_disabled", { status: 404 });
     }) as typeof fetch;
     try {
+      // An earlier attempt is answered from the store and the chain, never the relay.
       for (const now of [0, 10 * 60_000]) {
-        const { deps } = await harness({ pending, relayOn: false });
+        const { deps } = await harness({ pending, relayOn: "bundled" });
         expect(
           await handleDeploySponsorship(
             { ...deps, now: () => now },
             { type: "wallet.deploySponsorship" },
           ),
         ).toMatchObject({ ok: true });
-        const fresh = await harness({ relayOn: false });
-        expect(
-          await handleDeploySponsorship(fresh.deps, { type: "wallet.deploySponsorship" }),
-        ).toEqual({ ok: true, sponsorship: "none" });
       }
+      expect(fetched).toEqual([]);
+      const fresh = await harness({ relayOn: "bundled" });
+      expect(
+        await handleDeploySponsorship(fresh.deps, { type: "wallet.deploySponsorship" }),
+      ).toEqual({ ok: true, sponsorship: "none" });
     } finally {
       globalThis.fetch = realFetch;
     }
-    expect(fetched).toEqual([]);
+    expect(fetched).toEqual(["https://wallet.nodes.starknet.org/api/sponsored-deploy/sepolia"]);
   });
 
   test("an unreachable relay offers nothing rather than claiming the sponsor said no", async () => {
@@ -121,18 +121,18 @@ describe("sponsored deploy offer", () => {
     }
   });
 
-  test("an unreachable relay at submission sends nothing and leaves no attempt behind", async () => {
+  test("an unreachable relay at submission sends nothing, leaves no attempt, and turns self-paid", async () => {
     const http = async (): Promise<Response> => new Response("bad gateway", { status: 502 });
     const { deps, pending } = await harness({ relay: { calls: [], http } });
-    expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_UNREACHABLE });
+    expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_REFUSED });
     expect(pending.entry(ozAccount)).toBeUndefined();
   });
 
-  test("says the sponsor declined, so the screen can fall back to a self-paid deploy", async () => {
+  test("a sponsor's no at the quote offers nothing, so the screen stays self-paid and quiet", async () => {
     const { deps } = await harness({ relay: relay(accepted, false) });
     expect(await handleDeploySponsorship(deps, { type: "wallet.deploySponsorship" })).toEqual({
       ok: true,
-      sponsorship: "refused",
+      sponsorship: "none",
     });
   });
 });
@@ -238,7 +238,7 @@ describe("sponsored deploy submission", () => {
       error:
         "This account type can't be deployed with a sponsored fee. Add STRK to deploy it yourself.",
     });
-    const off = await harness({ relayOn: false });
+    const off = await harness({ relayOn: "off" });
     expect(await submit(off.deps)).toEqual({ error: "sponsored deployment unavailable" });
   });
 
@@ -263,7 +263,7 @@ describe("sponsored deploy submission", () => {
 });
 
 describe("sponsored deploy messages", () => {
-  test("are privileged, and answer off-by-default in production wiring", async () => {
+  test("are privileged, and offer nothing in production wiring while the gateway is off", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
     const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
@@ -282,18 +282,34 @@ describe("sponsored deploy messages", () => {
       },
     );
     const content = { id: "extension-id", url: "https://example.com/app" };
-    for (const type of ["wallet.deploySponsorship", "wallet.deployAccountSponsored"]) {
-      expect(await handler({ type }, content)).toEqual({ error: "privileged sender required" });
+    const realFetch = globalThis.fetch;
+    const fetched: string[] = [];
+    globalThis.fetch = (async (input: string) => {
+      fetched.push(input);
+      return new Response("sponsored_deploy_disabled", { status: 404 });
+    }) as typeof fetch;
+    try {
+      for (const type of ["wallet.deploySponsorship", "wallet.deployAccountSponsored"]) {
+        expect(await handler({ type }, content)).toEqual({ error: "privileged sender required" });
+      }
+      expect(fetched).toEqual([]);
+      expect(await handler({ type: "wallet.deploySponsorship" }, extensionSender)).toMatchObject({
+        ok: true,
+        sponsorship: "none",
+      });
+      // A press that raced the switch-off sends nothing and turns self-paid.
+      expect(await handler({ type: "wallet.deployAccountSponsored" }, extensionSender)).toEqual({
+        error: SPONSORED_DEPLOY_REFUSED,
+      });
+      expect(
+        await handler({ extra: true, type: "wallet.deployAccountSponsored" }, extensionSender),
+      ).toEqual({ error: "invalid sponsored deploy request" });
+    } finally {
+      globalThis.fetch = realFetch;
     }
-    expect(await handler({ type: "wallet.deploySponsorship" }, extensionSender)).toMatchObject({
-      ok: true,
-      sponsorship: "none",
-    });
-    expect(await handler({ type: "wallet.deployAccountSponsored" }, extensionSender)).toEqual({
-      error: "sponsored deployment unavailable",
-    });
-    expect(
-      await handler({ extra: true, type: "wallet.deployAccountSponsored" }, extensionSender),
-    ).toEqual({ error: "invalid sponsored deploy request" });
+    expect(fetched.length).toBeGreaterThan(0);
+    for (const url of fetched) {
+      expect(url).toBe("https://wallet.nodes.starknet.org/api/sponsored-deploy/sepolia");
+    }
   });
 });

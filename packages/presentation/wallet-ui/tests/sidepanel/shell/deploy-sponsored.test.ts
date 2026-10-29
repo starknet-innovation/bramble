@@ -194,15 +194,58 @@ describe("sponsored deploy screen", () => {
     }
   });
 
-  test("keeps the user's own fee when nothing is offered", async () => {
+  test("keeps the user's own fee, with no sponsor message, when nothing is offered", async () => {
+    // "none" is every gateway answer that is not a quote: switched off,
+    // rate-limited, budget spent, unreachable, unusable. The screen is the
+    // self-paid one as it was before sponsorship existed.
     const container = mount();
     const stub = wallet({ sponsored: async () => "0x5ab", sponsorship: "none" });
     bind(container, stub.wallet);
     await tick();
-    expect(container.querySelector("#deploy-review")?.textContent).toContain("Maximum network fee");
+    const cost = (container.querySelector("#deploy-review")?.textContent ?? "").replace(
+      /\s+/g,
+      " ",
+    );
+    expect(cost.trim()).toBe(`Cost ${deployCostLine(quote, undefined)}`);
+    expect(cost).not.toMatch(/sponsor|Foundation|couldn't/i);
+    expect(document.querySelectorAll(".toast").length).toBe(0);
+    expect(container.querySelector('[role="status"]')?.textContent ?? "").toBe("");
     press(container);
     await tick();
     expect(stub.calls).toEqual(["deployAccount:quote", "deployAccount:fee"]);
+  });
+
+  test("a sponsored press the background answers 'already deployed' repaints from a fresh read", async () => {
+    const container = mount();
+    let statusReads = 0;
+    const stub = wallet({
+      sponsored: async () => {
+        throw new Error("account already deployed");
+      },
+      sponsorship: "available",
+    });
+    const repainted: unknown[] = [];
+    bindDeploy({
+      app: container,
+      confirmationDelaysMs: [],
+      render: async (status) => {
+        repainted.push(status);
+      },
+      setActiveView: () => undefined,
+      wallet: {
+        ...stub.wallet,
+        loadStatus: async () => {
+          statusReads += 1;
+          return { networkId: "SN_SEPOLIA" };
+        },
+      } as ShellBindingDeps["wallet"],
+    });
+    await tick();
+    press(container);
+    await tick();
+    expect(statusReads).toBe(1);
+    expect(repainted).toEqual([{ networkId: "SN_SEPOLIA" }]);
+    expect(stub.calls).toEqual(["deployAccount:quote", "deployAccountSponsored"]);
   });
 
   test("a sponsor refusal brings back the user's fee with the reason", async () => {
