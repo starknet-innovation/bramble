@@ -23,4 +23,12 @@ describe("scrollbar gutter", () => {
       .map(([, selector]) => (selector ?? "").trim());
     expect(unguarded).toEqual([]);
   });
+
+  test("full-screen gutters are mirrored, so a classic scrollbar keeps the screen centred", () => {
+    // A right-only gutter gave every screen a wider right margin on Windows (#795).
+    expect(SIDEPANEL_STYLES).toMatch(/html \{[^}]*scrollbar-gutter: stable both-edges/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.onboarding-step \{[^}]*scrollbar-gutter: stable both-edges/s,
+    );
+  });
 });

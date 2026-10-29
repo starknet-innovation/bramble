@@ -32,3 +32,19 @@ test("the side panel does not scroll when its content fits", async ({ extension 
     await expect.poll(() => overflow(page), { message: view }).toBe(0);
   }
 });
+
+test("a screen sits centred whatever scrollbar the platform draws", async ({ extension }) => {
+  // A classic (Windows) scrollbar used to reserve its gutter on the right only,
+  // so the unlock field and button sat off centre (#795).
+  const page = await extension.openExtensionPage("sidepanel.html");
+  await page.setViewportSize({ height: 700, width: 360 });
+  await createWalletFromGeneratedPhrase(page);
+  await page.getByRole("button", { name: "Lock wallet" }).click();
+  const field = page.getByLabel("Password");
+  await expect(field).toBeVisible();
+  const inset = await field.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return { left: box.left, right: window.innerWidth - box.right };
+  });
+  expect(Math.abs(inset.left - inset.right)).toBeLessThanOrEqual(1);
+});

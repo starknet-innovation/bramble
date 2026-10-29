@@ -66,8 +66,11 @@ export const BASE_STYLES = `
      the viewport summons the document scrollbar. Without a reserved gutter the
      scrollbar takes its width from the content box and every element on the
      screen reflows narrower, which reads as the whole UI shifting sideways.
-     The token rows are <details> elements: expanding one is exactly that case. */
-  html { scrollbar-gutter: stable; }
+     The token rows are <details> elements: expanding one is exactly that case.
+     both-edges mirrors the gutter on the left: a classic (Windows) scrollbar
+     otherwise reserves its width on the right alone, and every screen sits off
+     centre with a wider right margin (issue 795). Overlay scrollbars reserve nothing. */
+  html { scrollbar-gutter: stable both-edges; }
   html, body, #app {
     max-width: 100%;
     min-height: 100%;
