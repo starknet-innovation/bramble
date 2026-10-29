@@ -316,6 +316,8 @@ export const BASE_STYLES = `
   .hero-change .hero-change-amt { color: var(--bramble-positive); }
   .hero-change.down .hero-change-amt { color: var(--bramble-danger); }
   .hero-change .hero-change-win { color: var(--bramble-muted); font-weight: 500; }
+  /* Held while the total still reads "—": keeps the line's space only. */
+  .hero-change.is-held { visibility: hidden; }
   /* Shielded-balance qualifier stays quiet beneath the total; network
      freshness now belongs to the persistent header status. */
   .hero-stale {
