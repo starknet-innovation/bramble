@@ -88,6 +88,32 @@ const MAINNET_TOKENS: readonly RegistryToken[] = [
     networkId: "SN_MAIN",
     symbol: "WBTC",
   },
+  {
+    // Lido's wstETH after the Starknet migration; the legacy StarkGate
+    // deployment (0x042b8f04…) is not curated. Symbol, name and decimals read
+    // from the contract and match AVNU's verified list (#795).
+    address: "0x0057912720381af14b0e5c87aa4718ed5e527eab60b3801ebf702ab09139e38b",
+    decimals: 18,
+    name: "Wrapped Staked Ether",
+    networkId: "SN_MAIN",
+    symbol: "WSTETH",
+  },
+  {
+    // Endur's liquid-staked STRK; checked as wstETH above (#795).
+    address: "0x028d709c875c0ceac3dce7065bec5328186dc89fe254527084d1689910954b0a",
+    decimals: 18,
+    name: "Endur xSTRK",
+    networkId: "SN_MAIN",
+    symbol: "XSTRK",
+  },
+  {
+    // Endur's liquid-staked WBTC; checked as wstETH above (#795).
+    address: "0x06a567e68c805323525fe1649adb80b03cddf92c23d2629a6779f54192dffc13",
+    decimals: 8,
+    name: "Endur xWBTC",
+    networkId: "SN_MAIN",
+    symbol: "XWBTC",
+  },
 ];
 
 const REGISTRY: Readonly<Record<StarknetNetworkId, readonly RegistryToken[]>> = {
