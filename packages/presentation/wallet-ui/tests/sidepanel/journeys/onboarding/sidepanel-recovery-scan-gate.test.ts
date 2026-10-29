@@ -12,7 +12,11 @@ import {
   deploymentClasses,
   XVERSE_ARGENT_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
-import { ARGENT_ACCOUNT_CLASS_HASH, type DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  type ArgentXAccountRef,
+  type DerivedAccountRef,
+} from "@bramble/wallet-model/accounts";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -147,6 +151,28 @@ describe("recovery scan Ready gate", () => {
     expect(row.textContent).toContain("Deployed on Starknet · has a guardian · view only");
     const checkbox = row.querySelector<HTMLInputElement>("input[type=checkbox]");
     expect(checkbox?.disabled).toBe(false);
+  });
+
+  test("names the Ready extension ladder so two index-0 Argent rows read as two accounts", async () => {
+    // Index 0 lists Bramble's own-ladder Argent address unused (view only) next
+    // to the Ready extension's deployed one at the same index (issue 505).
+    const { publicKeyY: _own, ...readyKey } = readyIdleAccount;
+    const extension: ArgentXAccountRef = {
+      ...readyKey,
+      accountContractType: "argent",
+      address: "0xreadyext",
+      deploymentSalt: "0x2",
+      derivation: { addressIndex: 0, kind: "argentx-bip44" },
+      id: "SN_MAIN:0xreadyext",
+    };
+    const app = mount([
+      { account: readyIdleAccount, deployed: false, funded: false },
+      { account: extension, deployed: true, funded: false },
+    ]);
+    await reachPicker(app);
+
+    const titles = rowsIn(app)("argent").map((row) => row.querySelector("strong")?.textContent);
+    expect(titles.sort()).toEqual(["Account 0", "Account 0 · Ready extension"]);
   });
 
   test("says private balances are off for an account another wallet registered", async () => {
