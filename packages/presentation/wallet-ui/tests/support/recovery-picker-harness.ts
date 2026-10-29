@@ -62,6 +62,7 @@ type Candidate = {
   account: DerivedAccountRef;
   deployed: boolean;
   funded: boolean;
+  privacyPool?: "other-wallet";
   restriction?: "guardian" | "owner-changed" | "owner-type" | "release" | "strong-signer";
 };
 

@@ -116,12 +116,21 @@ const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
   "strong-signer": "2FA active",
 };
 
+// Said before they pick it: another wallet registered this account with the
+// privacy pool, and the pool keeps that key, so private balances stay off here.
+// The row stays selectable — its public funds are reachable.
+const PRIVACY_POOL_COPY = "private balances off, set up in another wallet";
+
+const deployedState = (candidate: RecoveryAccountCandidate): string => {
+  const notes = [
+    ...(candidate.restriction ? [RESTRICTION_COPY[candidate.restriction], "view only"] : []),
+    ...(candidate.privacyPool ? [PRIVACY_POOL_COPY] : []),
+  ];
+  return ["Deployed on Starknet", ...notes].join(" · ");
+};
+
 const activityState = (candidate: RecoveryAccountCandidate): string => {
-  if (candidate.deployed) {
-    return candidate.restriction
-      ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
-      : "Deployed on Starknet";
-  }
+  if (candidate.deployed) return deployedState(candidate);
   if (candidate.funded) {
     return deployableHere(candidate)
       ? "Funded and ready to deploy"
@@ -152,9 +161,7 @@ const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean)
       ? "Funded and ready to deploy"
       : "Funded, not deployed · view only for now";
   }
-  return candidate.restriction
-    ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
-    : "Deployed on Starknet";
+  return deployedState(candidate);
 };
 
 // Two Argent releases at one index are two accounts. Name the release on any

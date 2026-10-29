@@ -1,6 +1,10 @@
 /**
- * Import never reads the privacy pool. A flaky node cannot block bringing an
- * account in; the registration check happens when a private action is attempted.
+ * No import path blocks on the privacy pool. The paths that write an account
+ * never read it; the two that list candidates (seed discovery, find by
+ * address) read it only to note a deployed account another wallet registered,
+ * and still answer when the pool cannot be read. A flaky node cannot stop
+ * bringing an account in; the registration check happens when a private action
+ * is attempted.
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
@@ -25,7 +29,7 @@ const countingRpc = () => {
     runtimeRpc: makeRuntimeRpc({
       async getStrk20PublicKey() {
         reads.value += 1;
-        return "0x99";
+        throw new Error("node down");
       },
     }),
   };
@@ -42,6 +46,9 @@ const handlerFor = (runtimeRpc: ReturnType<typeof makeRuntimeRpc>, unlocked: boo
     async createLedgerVault() {
       return account;
     },
+    async previewStrk20ViewingPublicKey() {
+      return "0x1";
+    },
   };
   return createMessageHandler(wallet as unknown as WalletStatusReader, testExtension, {
     runtimeRpc,
@@ -49,20 +56,12 @@ const handlerFor = (runtimeRpc: ReturnType<typeof makeRuntimeRpc>, unlocked: boo
   });
 };
 
-describe("import paths do not read the privacy pool", () => {
-  test("seed, raw key, key vault, Ledger, Ready key, and address import", async () => {
+describe("import paths and the privacy pool", () => {
+  test("paths that write an account never read the pool", async () => {
     const { reads, runtimeRpc } = countingRpc();
     const locked = handlerFor(runtimeRpc, false);
     const unlocked = handlerFor(runtimeRpc, true);
     const cases: readonly { readonly message: unknown; readonly unlocked?: boolean }[] = [
-      {
-        message: {
-          manualIndex: 0,
-          mnemonic: MNEMONIC,
-          networkId: "SN_MAIN",
-          type: "wallet.discoverRecoveryAccounts",
-        },
-      },
       {
         message: {
           mnemonic: MNEMONIC,
@@ -132,22 +131,6 @@ describe("import paths do not read the privacy pool", () => {
       {
         message: {
           address: account.address,
-          mnemonic: MNEMONIC,
-          networkId: "SN_MAIN",
-          type: "wallet.findRecoveryAccountByAddress",
-        },
-      },
-      {
-        message: {
-          address: account.address,
-          networkId: "SN_MAIN",
-          type: "wallet.findOwnAccountByAddress",
-        },
-        unlocked: true,
-      },
-      {
-        message: {
-          address: account.address,
           networkId: "SN_MAIN",
           privateKey: PRIVATE_KEY,
           type: "wallet.findKeyAccountByAddress",
@@ -156,11 +139,45 @@ describe("import paths do not read the privacy pool", () => {
       },
     ];
     for (const entry of cases) {
-      const before = reads.value;
       const response = await (entry.unlocked ? unlocked : locked)(entry.message, extensionSender);
       expect(response).not.toEqual({ error: "privileged sender required" });
-      expect(reads.value).toBe(before);
     }
     expect(reads.value).toBe(0);
+  });
+
+  test("candidate listings still answer when the pool cannot be read", async () => {
+    const { reads, runtimeRpc } = countingRpc();
+    const locked = handlerFor(runtimeRpc, false);
+    const unlocked = handlerFor(runtimeRpc, true);
+    const discovery = await locked(
+      {
+        manualIndex: 0,
+        mnemonic: MNEMONIC,
+        networkId: "SN_MAIN",
+        type: "wallet.discoverRecoveryAccounts",
+      },
+      extensionSender,
+    );
+    expect(discovery).toMatchObject({ ok: true });
+    const byAddress = await locked(
+      {
+        address: account.address,
+        mnemonic: MNEMONIC,
+        networkId: "SN_MAIN",
+        type: "wallet.findRecoveryAccountByAddress",
+      },
+      extensionSender,
+    );
+    expect(byAddress).not.toEqual({ error: "privileged sender required" });
+    const own = await unlocked(
+      { address: account.address, networkId: "SN_MAIN", type: "wallet.findOwnAccountByAddress" },
+      extensionSender,
+    );
+    expect(own).not.toEqual({ error: "privileged sender required" });
+    // The stub's candidate is deployed, so discovery tried the pool and carried on.
+    expect(reads.value).toBeGreaterThan(0);
+    const candidates = (discovery as { readonly candidates: readonly { privacyPool?: string }[] })
+      .candidates;
+    expect(candidates.every((candidate) => candidate.privacyPool === undefined)).toBe(true);
   });
 });

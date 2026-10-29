@@ -87,6 +87,8 @@ export const harness = (
     readonly onOwnerRead?: () => void;
     readonly onPreview?: (input: AccountDerivationInput) => void;
     readonly onRestriction?: () => void;
+    /** What the privacy pool reports as the address's viewing public key; `0x0` by default. */
+    readonly poolKey?: string | Error;
     readonly preferencesStore?: ReturnType<typeof createPreferencesStore>;
     readonly restriction?: string | null;
     readonly session?: ReturnType<typeof createUnlockSession>;
@@ -105,6 +107,10 @@ export const harness = (
       seen.previews.push(input);
       options.onPreview?.(input);
       return previewFor(input);
+    },
+    // The viewing public key this wallet would register, for the pool note.
+    async previewStrk20ViewingPublicKey() {
+      return "0x1";
     },
     async readVault(passphrase: string) {
       const vault = await base.readVault(passphrase);
@@ -144,6 +150,11 @@ export const harness = (
         }),
     getArgentSigningRestriction: restriction,
     getBraavosSigningRestriction: restriction,
+    // Never the live pool: answered offline as unregistered unless rigged.
+    async getStrk20PublicKey() {
+      if (options.poolKey instanceof Error) throw options.poolKey;
+      return options.poolKey ?? "0x0";
+    },
   };
   const session = options.session ?? createUnlockSession();
   if (options.session === undefined) session.unlock(vaultPassphrase);

@@ -14,10 +14,11 @@ import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import { handleOnboardingOps } from "../../../apps/extension/src/background/onboarding/onboarding-ops";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
-import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
+import type { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createActiveStateCoordinator } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { walletStub } from "../../support/key-boundary-collaborators";
+import { offlineDiscoveryRpc } from "../../support/recovery-accounts";
 
 const accountFor = (input: AccountDerivationInput): DerivedAccountRef => {
   const accountIndex = input.accountIndex ?? 0;
@@ -58,7 +59,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
           return accountAddress === "0x3";
         },
@@ -149,7 +150,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
           return accountAddress === deployedAddress;
         },
@@ -204,7 +205,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus() {
           return false;
         },
@@ -252,7 +253,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getArgentSigningRestriction({ accountAddress }: { readonly accountAddress: string }) {
           probed.push(accountAddress);
           if (accountAddress === "0x2") return "guardian" as const;
@@ -307,7 +308,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getArgentSigningRestriction({ accountAddress }: { readonly accountAddress: string }) {
           probed.push(["argent", accountAddress]);
           return null;
@@ -378,7 +379,7 @@ describe("recovery discovery", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus() {
           return false;
         },

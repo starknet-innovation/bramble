@@ -14,7 +14,12 @@
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import {
   PRIVACY_OTHER_WALLET_ACTION,
   PRIVACY_REGISTRATION_UNCHECKED,
@@ -102,6 +107,52 @@ const ownPublicKey = async (
   }
 };
 
+/** The network's configured pool, canonical, or null when it has none. */
+export const strk20PoolAddress = (
+  preferences: Pick<WalletPreferences, "strk20Networks">,
+  networkId: StarknetNetworkId,
+): string | null => {
+  const configured = preferences.strk20Networks?.[networkId]?.poolAddress;
+  return configured === undefined ? null : canonicalFelt(configured);
+};
+
+/**
+ * Advisory for the import picker: true when the pool holds a viewing public
+ * key for `address` that is not the one `ownPublicKey` derives. Only a deployed
+ * account can have registered, so callers read for deployed candidates only.
+ * Never blocks: a missing reader, an unreadable pool, or a failed derivation
+ * answers false, and the private-action path re-checks authoritatively.
+ */
+export const strk20RegisteredElsewhere = async (input: {
+  readonly address: string;
+  readonly networkId: StarknetNetworkId;
+  readonly ownPublicKey: (pool: {
+    readonly chainId: string;
+    readonly poolAddress: string;
+  }) => Promise<string>;
+  readonly poolAddress: string | null;
+  readonly readRegistered: RuntimeRpc["getStrk20PublicKey"];
+  readonly rpcUrls: readonly string[];
+}): Promise<boolean> => {
+  const address = canonicalFelt(input.address);
+  if (!input.poolAddress || !address) return false;
+  const chainId = STARKNET_NETWORKS[input.networkId].chainId;
+  const registered = await readPoolKey(
+    input.readRegistered,
+    cacheId(chainId, input.poolAddress, address),
+    address,
+    input.poolAddress,
+    input.rpcUrls,
+  );
+  if (registered === "clear" || registered === "retry") return false;
+  try {
+    const own = await input.ownPublicKey({ chainId, poolAddress: input.poolAddress });
+    return isForeignStrk20Registration(registered, own);
+  } catch {
+    return false;
+  }
+};
+
 /**
  * The private-action block for `account`, or null when privacy may proceed.
  *
@@ -122,8 +173,7 @@ export const strk20RegistrationBlock = async (input: {
   readonly wallet: WalletStatusReader;
 }): Promise<Strk20RegistrationBlock | null> => {
   if (input.account.derivation.kind === "ledger") return null;
-  const configured = input.preferences.strk20Networks?.[input.account.networkId]?.poolAddress;
-  const poolAddress = configured === undefined ? null : canonicalFelt(configured);
+  const poolAddress = strk20PoolAddress(input.preferences, input.account.networkId);
   if (!poolAddress) return null;
   const address = canonicalFelt(input.account.address);
   if (!address) return unchecked();

@@ -6,6 +6,7 @@ import {
   type TokenConfig,
   type WalletPreferencesStore,
 } from "@bramble/settings/preferences";
+import type { AccountDerivationInput } from "@bramble/vault/accounts";
 import {
   ARGENT_ACCOUNT_CLASS_HASH,
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
@@ -40,6 +41,7 @@ import {
   readValidateMnemonicInput,
 } from "../accounts/account-creation-inputs";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { strk20PoolAddress, strk20RegisteredElsewhere } from "../privacy/strk20-registration-owner";
 import { runVaultCreationWithNetwork } from "../runtime/active-network-mutation";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { type ActiveStateCoordinator, networkRpcUrls } from "../runtime/runtime-state";
@@ -57,11 +59,35 @@ type OnboardingOpsDeps = {
   readonly wallet: WalletStatusReader;
 };
 
+// Advisory only: a deployed account another wallet registered with the privacy
+// pool is listed with a note, never refused. Read for deployed candidates only,
+// since an undeployed address cannot have registered.
+const privacyPoolNote = async (
+  deps: OnboardingOpsDeps,
+  derivation: AccountDerivationInput & { readonly networkId: StarknetNetworkId },
+  address: string,
+  poolAddress: string | null,
+  rpcUrls: readonly string[],
+): Promise<{ readonly privacyPool?: "other-wallet" }> => {
+  const previewOwn = deps.wallet.previewStrk20ViewingPublicKey;
+  if (!previewOwn) return {};
+  const elsewhere = await strk20RegisteredElsewhere({
+    address,
+    networkId: derivation.networkId,
+    ownPublicKey: (pool) => previewOwn({ ...derivation, ...pool }),
+    poolAddress,
+    readRegistered: deps.runtimeRpc.getStrk20PublicKey,
+    rpcUrls,
+  });
+  return elsewhere ? { privacyPool: "other-wallet" } : {};
+};
+
 const describeRecoveryAccount = async (
   deps: OnboardingOpsDeps,
   account: RecoverableAccountRef,
   tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
+  privacyPool: () => Promise<{ readonly privacyPool?: "other-wallet" }>,
 ): Promise<RecoveryAccountCandidate> => {
   const activity = await readAccountActivity(deps.runtimeRpc, {
     accountAddress: account.address,
@@ -90,6 +116,7 @@ const describeRecoveryAccount = async (
       deployed: true,
       funded: false,
       ...(restriction ? { restriction } : {}),
+      ...(await privacyPool()),
     };
   }
   return { account, deployed: false, funded: activity.funded };
@@ -165,21 +192,25 @@ const scanRecoveryIndex = async (
   accountIndex: number,
   tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
+  poolAddress: string | null,
 ): Promise<readonly RecoveryAccountCandidate[]> =>
   Promise.all(
     recoveryScanShapes().map(async (shape) => {
-      const account = await deps.wallet.previewAccount?.({
+      const derivation = {
         accountContractType: shape.accountContractType,
         accountIndex,
         ...(shape.classHash === undefined ? {} : { classHash: shape.classHash }),
         ...(shape.derivation === undefined ? {} : { derivation: shape.derivation }),
         mnemonic: input.mnemonic,
         networkId: input.networkId,
-      });
+      };
+      const account = await deps.wallet.previewAccount?.(derivation);
       if (!isRecoverableAccountRef(account)) {
         throw new WalletError("Account discovery is unavailable");
       }
-      return describeRecoveryAccount(deps, account, tokens, rpcUrls);
+      return describeRecoveryAccount(deps, account, tokens, rpcUrls, () =>
+        privacyPoolNote(deps, derivation, account.address, poolAddress, rpcUrls),
+      );
     }),
   );
 
@@ -234,6 +265,7 @@ const runRecoveryDiscovery = async (
   const manual = input.manualIndex;
   const preferences = await deps.preferencesStore.read();
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
+  const poolAddress = strk20PoolAddress(preferences, input.networkId);
   // Probe the recovery activity set, not just the display defaults: an
   // undeployed account funded only in native USDC has no ETH or STRK, so the
   // display-token probe would read it as empty and skip it (issue: USDC-only
@@ -256,7 +288,14 @@ const runRecoveryDiscovery = async (
     // `maxScannedIndexes` far below it and a manual index is refused at input,
     // so this only holds the line if either bound ever moves.
     if (accountIndex === RESERVED_AGENT_ACCOUNT_INDEX) continue;
-    const candidates = await scanRecoveryIndex(deps, input, accountIndex, tokens, rpcUrls);
+    const candidates = await scanRecoveryIndex(
+      deps,
+      input,
+      accountIndex,
+      tokens,
+      rpcUrls,
+      poolAddress,
+    );
     discovered.push(
       ...candidates.filter(
         (candidate) =>

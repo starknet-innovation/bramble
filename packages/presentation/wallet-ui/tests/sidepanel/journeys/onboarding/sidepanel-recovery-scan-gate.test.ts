@@ -149,6 +149,29 @@ describe("recovery scan Ready gate", () => {
     expect(checkbox?.disabled).toBe(false);
   });
 
+  test("says private balances are off for an account another wallet registered", async () => {
+    // The note is advisory: the row says so before the pick, and stays
+    // selectable, since the account's public funds are reachable here.
+    const registered: DerivedAccountRef = {
+      ...readyIdleAccount,
+      address: "0xregistered",
+      id: "SN_MAIN:0xregistered",
+    };
+    const app = mount([
+      { account: registered, deployed: true, funded: false, privacyPool: "other-wallet" },
+    ]);
+    await reachPicker(app);
+
+    const row = rowsIn(app)("argent")[0];
+    if (!row) throw new Error("missing argent row");
+    expect(row.textContent).toContain(
+      "Deployed on Starknet · private balances off, set up in another wallet",
+    );
+    const checkbox = row.querySelector<HTMLInputElement>("input[type=checkbox]");
+    expect(checkbox?.disabled).toBe(false);
+    expect(checkbox?.checked).toBe(true);
+  });
+
   test("lists an inactive Ready candidate but refuses to select it", async () => {
     const app = mount();
     await reachPicker(app);
