@@ -50,7 +50,66 @@ describe("relay claim slots in storage", () => {
   });
 });
 
+const accountScope = (accountIndex: number) => ({
+  ...scope,
+  accountId: `SN_SEPOLIA:0x${(accountIndex + 1000).toString(16)}`,
+});
+
 describe("eviction", () => {
+  test("keeps a settled write when every other row still guards", async () => {
+    // #729: at the cap, that write is the only settled row, so it was the one dropped.
+    const backing = createMemoryStore();
+    const rows = [];
+    for (let index = 0; index < 100; index += 1) {
+      rows.push({ ...accountScope(index), state: "submitting" as const });
+    }
+    await backing.set(KEY, rows);
+    const store = createStrk20MaturityStore(backing);
+    const written = { acceptedBlock: 40, state: "submitted" as const, transactionHash: "0x456" };
+    await store.write(scope, written);
+
+    expect(await store.read(scope)).toEqual(written);
+    expect(await store.read(accountScope(0))).toEqual({ state: "submitting" });
+    expect((await backing.get(KEY)) as readonly unknown[]).toHaveLength(101);
+  });
+
+  test("evicts other scopes' oldest settled rows and keeps the write", async () => {
+    // List order is newest accepted block first, and the write's block is older than all of them.
+    const backing = createMemoryStore();
+    const rows = [];
+    for (let index = 0; index < 90; index += 1) {
+      rows.push({ ...accountScope(index), state: "submitting" as const });
+    }
+    for (let index = 0; index < 15; index += 1) {
+      const accountIndex = index + 90;
+      rows.push({
+        ...accountScope(accountIndex),
+        acceptedBlock: 100 - index,
+        state: "submitted" as const,
+        transactionHash: `0x${(accountIndex + 1).toString(16)}`,
+      });
+    }
+    await backing.set(KEY, rows);
+    const store = createStrk20MaturityStore(backing);
+    const written = { acceptedBlock: 1, state: "submitted" as const, transactionHash: "0x456" };
+    await store.write(scope, written);
+
+    expect(await store.read(scope)).toEqual(written);
+    // Blocks 86-91 are the six oldest other rows. Newer settled rows stay.
+    for (let accountIndex = 99; accountIndex <= 104; accountIndex += 1) {
+      expect(await store.read(accountScope(accountIndex))).toBeNull();
+    }
+    for (let accountIndex = 90; accountIndex <= 98; accountIndex += 1) {
+      expect(await store.read(accountScope(accountIndex))).toEqual({
+        acceptedBlock: 100 - (accountIndex - 90),
+        state: "submitted",
+        transactionHash: `0x${(accountIndex + 1).toString(16)}`,
+      });
+    }
+    expect(await store.read(accountScope(0))).toEqual({ state: "submitting" });
+    expect((await backing.get(KEY)) as readonly unknown[]).toHaveLength(100);
+  });
+
   test("drops the oldest submitted records but never a submitting marker", async () => {
     const backing = createMemoryStore();
     const store = createStrk20MaturityStore(backing);

@@ -159,17 +159,43 @@ const readScope = async (
   };
 };
 
-// Evicts the oldest settled records past MAX_RECORDS: a `submitted` write with
-// an accepted block. Never a record that still guards its scope (a
-// `submitting` marker, a `submitted` write awaiting its receipt, or a
-// `released` floor): dropping one would read as a clean scope and reopen
-// proving while an earlier write may still land or before its state is past.
-const guards = (entry: StoredMaturity): boolean =>
-  entry.state !== "submitted" || entry.acceptedBlock === undefined;
+// A `submitted` write that already has its receipt. Everything else still
+// guards its scope: a `submitting` marker, a `submitted` write awaiting its
+// receipt, or a `released` floor. Dropping a guard would read as a clean
+// scope and reopen proving while an earlier write may still land, or before
+// its state is past.
+const isSettled = (
+  entry: StoredMaturity,
+): entry is StoredMaturity & { readonly state: "submitted"; readonly acceptedBlock: number } =>
+  entry.state === "submitted" && entry.acceptedBlock !== undefined;
 
-const bounded = (entries: readonly StoredMaturity[]): readonly StoredMaturity[] => {
-  let excess = entries.length - MAX_RECORDS;
-  return excess <= 0 ? entries : entries.filter((entry) => guards(entry) || excess-- <= 0);
+// Drops other scopes' settled rows past MAX_RECORDS, oldest acceptedBlock
+// first (earlier in the list on a tie). `protectedIndex` is the row being
+// written and is never dropped (#729): evicting it would read as a clean
+// scope, so the next proof could skip the maturity wait. When that row is
+// the only settled one, it stays and the list may exceed the cap.
+const bounded = (
+  entries: readonly StoredMaturity[],
+  protectedIndex: number | null,
+): readonly StoredMaturity[] => {
+  const excess = entries.length - MAX_RECORDS;
+  if (excess <= 0) {
+    return entries;
+  }
+  const candidates: { readonly acceptedBlock: number; readonly index: number }[] = [];
+  for (const [index, entry] of entries.entries()) {
+    if (isSettled(entry) && index !== protectedIndex) {
+      candidates.push({ acceptedBlock: entry.acceptedBlock, index });
+    }
+  }
+  candidates.sort((left, right) => {
+    if (left.acceptedBlock !== right.acceptedBlock) {
+      return left.acceptedBlock < right.acceptedBlock ? -1 : 1;
+    }
+    return left.index - right.index;
+  });
+  const evict = new Set(candidates.slice(0, excess).map((candidate) => candidate.index));
+  return evict.size === 0 ? entries : entries.filter((_, index) => !evict.has(index));
 };
 
 const writeScope = async (
@@ -179,7 +205,8 @@ const writeScope = async (
 ): Promise<void> => {
   const retained = (await readAll(store)).filter((entry) => !sameScope(entry, scope));
   const next = record ? [...retained, { ...scope, ...record }] : retained;
-  await store.set(STORE_KEY, [...bounded(next)]);
+  // The appended row is this write. Eviction may drop other scopes only.
+  await store.set(STORE_KEY, [...bounded(next, record === null ? null : next.length - 1)]);
 };
 
 const clearIf = async (
