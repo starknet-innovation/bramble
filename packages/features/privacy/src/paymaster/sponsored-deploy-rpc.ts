@@ -12,8 +12,10 @@
  * deadline, an unreadable or oversized body, a 5xx, a non-2xx without that
  * clean error, a malformed error (null, a string, no code or message), an error beside a
  * result — is a lost answer: the relay may already have forwarded the deploy.
- * A quote never broadcasts, so its failures are always determinate, and a bare
- * 4xx there still counts as the sponsor's refusal.
+ * A quote never broadcasts, so its failures are always determinate. It is a
+ * refusal only for that same clean JSON-RPC error: a bare 4xx (the gateway
+ * switched off, `404 sponsored_deploy_disabled`, or a plain rate limit) is not
+ * the sponsor refusing this account, so it reads as unavailable.
  */
 
 import { UNTRUSTED_REQUEST_INIT } from "@bramble/core/http-json";
@@ -49,16 +51,11 @@ const isRpcError = (value: unknown): boolean =>
   typeof value["message"] === "string";
 
 /**
- * Classifies one HTTP answer to a relay call; `broadcast` is true for the call
- * that can put a deploy on the wire.
+ * Classifies one HTTP answer to a relay call. Quote and broadcast share one
+ * rule: only a clean JSON-RPC error is a refusal.
  */
-const classifySponsoredRelayAnswer = (
-  status: number,
-  body: unknown,
-  broadcast: boolean,
-): SponsoredRelayAnswer => {
+const classifySponsoredRelayAnswer = (status: number, body: unknown): SponsoredRelayAnswer => {
   if (status >= 500) return LOST;
-  if (!broadcast && status >= 400) return REFUSED;
   if (
     !isRecord(body) ||
     !hasOnlyKnownKeys(body, ["error", "id", "jsonrpc", "result"]) ||
@@ -94,7 +91,6 @@ export const postSponsoredRelay = async (
   url: string,
   method: string,
   params: unknown,
-  broadcast: boolean,
 ): Promise<SponsoredRelayAnswer> => {
   let response: Response;
   try {
@@ -108,5 +104,5 @@ export const postSponsoredRelay = async (
   } catch {
     return LOST;
   }
-  return classifySponsoredRelayAnswer(response.status, await readBody(response), broadcast);
+  return classifySponsoredRelayAnswer(response.status, await readBody(response));
 };

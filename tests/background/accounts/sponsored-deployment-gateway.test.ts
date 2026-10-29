@@ -145,11 +145,16 @@ describe("which accounts are offered sponsorship", () => {
 });
 
 describe("a quote the gateway does not give offers nothing, quietly", () => {
-  // The last field: whether it is the gateway's own no, which a press then
-  // remembers until 00:00 UTC; anything else leaves no record.
+  // The last field: whether it is the gateway's own no to this account (a
+  // clean JSON-RPC error), which a press then remembers until 00:00 UTC.
+  // Anything else — the gateway switched off included — leaves no record.
   const answers: readonly [string, () => Promise<Response> | Response, boolean][] = [
-    ["switched off (404 sponsored_deploy_disabled)", plain(404, "sponsored_deploy_disabled"), true],
-    ["rate-limited (plain 429)", plain(429, "too_many_requests"), true],
+    [
+      "switched off (404 sponsored_deploy_disabled)",
+      plain(404, "sponsored_deploy_disabled"),
+      false,
+    ],
+    ["rate-limited (plain 429)", plain(429, "too_many_requests"), false],
     [
       "budget spent (429 sponsorship_budget_exhausted)",
       gatewayError(429, "sponsorship_budget_exhausted"),
@@ -333,6 +338,29 @@ describe("after the sponsor says no, no offer until 00:00 UTC", () => {
     expect(await offer(deps, 6 * DAY)).toBe("available");
     expect(sponsor.calls.length).toBe(asked + 1);
     expect(pending.entry(ozAccount)).toBeUndefined();
+  });
+
+  test("the gateway switched off is not a refusal: switching it on offers the same day", async () => {
+    let on = false;
+    const calls: string[] = [];
+    const gateway: Relay = {
+      calls,
+      http: async (url, init) => {
+        if (on) return relay(accepted).http(url, init);
+        calls.push((JSON.parse(String(init?.body)) as { method: string }).method);
+        return plain(404, "sponsored_deploy_disabled")();
+      },
+    };
+    const { deps, pending } = await harness({ relay: gateway });
+    // Off at the offer and at a press: nothing offered, nothing remembered.
+    expect(await offer(deps, T)).toBe("none");
+    expect(await submit(deps, T)).toEqual(SPONSORED_DEPLOY_DECLINED);
+    expect(pending.entry(ozAccount)).toBeUndefined();
+    expect(calls).toEqual(["paymaster_buildTransaction", "paymaster_buildTransaction"]);
+    // Switched on later that day: offered at once.
+    on = true;
+    expect(await offer(deps, T + 3_600_000)).toBe("available");
+    expect(await submit(deps, T + 3_600_000)).toEqual({ ok: true, transactionHash: "0x5ab" });
   });
 
   test("survives a restart, and leaves other accounts offered", async () => {

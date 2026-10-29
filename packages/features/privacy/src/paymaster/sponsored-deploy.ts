@@ -56,9 +56,9 @@ export const SPONSORED_DEPLOY_SPONSOR = "Starknet Foundation";
 export const DEPLOYMENT_IN_PROGRESS = "Deploying your account. This can take a few minutes.";
 
 /**
- * The relay explicitly refused: its own clean JSON-RPC error, or a 4xx on a
- * quote. Nothing was sent. Its message is a diagnostic, never shown: the
- * background turns every refusal into a silent self-paid deploy.
+ * The relay explicitly refused: its own clean JSON-RPC error. Nothing was
+ * sent. Its message is a diagnostic, never shown: the background turns every
+ * refusal into a silent self-paid deploy.
  */
 export class SponsoredDeployRefusedError extends WalletError {
   constructor() {
@@ -282,7 +282,9 @@ export type SponsoredDeployQuote = { readonly deployment: SponsoredDeploymentDat
  * copy only when the relay echoes it exactly under sponsored parameters. Every
  * failure is determinate, since a quote never broadcasts: a
  * {@link SponsoredDeployRefusedError} only for the relay's own clean JSON-RPC
- * error or a 4xx, otherwise a {@link SponsoredDeployUnavailableError}.
+ * error, otherwise a {@link SponsoredDeployUnavailableError} — including a
+ * bare 4xx such as the switched-off gateway's `404 sponsored_deploy_disabled`,
+ * which says nothing about this account.
  */
 export const quoteSponsoredDeploy = async (input: {
   readonly config: SponsoredDeployConfig;
@@ -294,7 +296,6 @@ export const quoteSponsoredDeploy = async (input: {
     input.config.url,
     "paymaster_buildTransaction",
     { parameters: PARAMETERS, transaction: { deployment: input.deployment, type: "deploy" } },
-    false,
   );
   if (answer.kind === "refused") throw new SponsoredDeployRefusedError();
   if (answer.kind === "lost") throw new SponsoredDeployUnavailableError();
@@ -335,7 +336,6 @@ export const submitSponsoredDeploy = async (input: {
     input.config.url,
     BROADCAST_PAYMASTER_METHOD,
     { parameters: PARAMETERS, transaction: { deployment: input.quote.deployment, type: "deploy" } },
-    true,
   );
   if (answer.kind === "refused") throw new SponsoredDeployRefusedError();
   const result = answer.kind === "result" ? answer.result : undefined;

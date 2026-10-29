@@ -204,30 +204,31 @@ describe("sponsored deploy quote", () => {
     });
   }
 
-  test("reads only the relay's own refusal as a refusal", async () => {
-    const stated = async (): Promise<Response> =>
+  test("reads only the relay's own clean JSON-RPC error as a refusal", async () => {
+    const stated = (status: number) => async (): Promise<Response> =>
       new Response(
         JSON.stringify({
-          error: { code: 163, message: "sponsorship limit reached" },
+          error: { code: -32000, message: "sponsorship_budget_exhausted" },
           id: "bramble-strk20",
           jsonrpc: "2.0",
         }),
+        { status },
       );
-    const forbidden = async (): Promise<Response> => new Response("no", { status: 403 });
-    for (const http of [stated, forbidden]) {
+    for (const http of [stated(200), stated(409), stated(429)]) {
       const quoting = quoteSponsoredDeploy({ config, deployment: deployment(), http });
       await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployRefusedError);
     }
   });
 
-  test("reads the gateway switched off, or rate-limited, as a determinate no", async () => {
+  test("reads the gateway switched off, or any bare 4xx, as unavailable, never this account's no", async () => {
     const answers = [
       async (): Promise<Response> => new Response("sponsored_deploy_disabled", { status: 404 }),
       async (): Promise<Response> => new Response("too_many_requests", { status: 429 }),
+      async (): Promise<Response> => new Response("no", { status: 403 }),
     ];
     for (const http of answers) {
       const quoting = quoteSponsoredDeploy({ config, deployment: deployment(), http });
-      await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployRefusedError);
+      await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployUnavailableError);
     }
   });
 
