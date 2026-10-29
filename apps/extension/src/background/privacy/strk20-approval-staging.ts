@@ -27,6 +27,7 @@ import {
   resolveAccount,
   type Strk20ExecuteDeps,
   strk20ErrorMessage,
+  strk20RegistrationBlockFor,
 } from "./strk20-approval-execution";
 import type { Strk20DisclosureRequest } from "./strk20-approval-types";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
@@ -143,6 +144,8 @@ const prepareApprovedStrk20Registration = async (
   if ("error" in resolved) {
     return resolved;
   }
+  const owner = await strk20RegistrationBlockFor(deps, resolved);
+  if (owner) return owner;
   const context = strk20AccountContext(deps, resolved);
   try {
     const registration = approval.request;
@@ -217,6 +220,8 @@ const prepareApprovedStrk20AccountActions = async (
   if ("error" in resolved) {
     return resolved;
   }
+  const owner = await strk20RegistrationBlockFor(deps, resolved);
+  if (owner) return owner;
   const refusal = refusePoisonedStrk20Actions(
     resolved.account,
     resolved.preferences,

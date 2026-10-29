@@ -144,12 +144,36 @@ export type AddDerivedAccountInput = {
  * key is validated and routed to the encrypted vault; it is never persisted in
  * plain preferences or logged.
  */
-export type ImportRawKeyAccountInput = {
+export type ImportRawKeyAccountInput = Omit<PreviewImportedAccountInput, "classHash"> & {
+  /**
+   * The address of an account found by its pasted address (issue 779): the
+   * one account is stored at this address, under this id, instead of the one
+   * its key derives. Only with `classHash` and never with `classHashes`;
+   * the caller has proved the key is the account's live owner just before.
+   */
+  readonly address?: string;
+  /** The class an `address` import records; meaningless, and refused, alone. */
+  readonly classHash?: string;
+  /**
+   * The releases to store, one account each, all signing with the same key.
+   * Absent means the family default. Each must be a class the family was
+   * deployed with; any account already stored refuses the whole import.
+   */
+  readonly classHashes?: readonly string[];
+  readonly vaultPassphrase: string;
+};
+
+/**
+ * Input for deriving a raw-key account's public metadata without writing it.
+ * `classHash` names the release the account was deployed with; absent means the
+ * family default, and a class its family was never deployed with is refused.
+ */
+export type PreviewImportedAccountInput = {
   readonly accountContractType: AccountContractType;
+  readonly classHash?: string;
   readonly deploymentSalt?: string;
   readonly networkId: StarknetNetworkId;
   readonly privateKey: string;
-  readonly vaultPassphrase: string;
 };
 
 /**
@@ -294,6 +318,24 @@ export type WalletVaultService = {
       readonly poolAddress: string;
     },
   ) => Promise<{ readonly address: string; readonly viewingPublicKey: string }>;
+  /**
+   * Public viewing key this wallet would register for an account it already
+   * stores. Returns only the public x-coordinate; the viewing key stays in the
+   * vault. Derivation failures throw.
+   */
+  readonly previewStoredStrk20ViewingPublicKey: (input: {
+    readonly accountId: string;
+    readonly chainId: string;
+    readonly poolAddress: string;
+    readonly vaultPassphrase: string;
+  }) => Promise<string>;
+  /**
+   * Derives a raw key's public account metadata through Krusty without
+   * persisting it or returning the key. An invalid key or class fails closed.
+   */
+  readonly previewImportedAccount: (
+    input: PreviewImportedAccountInput,
+  ) => Promise<ImportedAccountRef>;
   /**
    * Checks a recovery phrase through Krusty only. Returns false for an invalid
    * phrase and never echoes the input; fails closed when KMS is unavailable.

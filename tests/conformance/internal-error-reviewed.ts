@@ -63,6 +63,12 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "Bramble cannot verify this wallet. Close and reopen Bramble.",
   ],
   [
+    "account signer not supported for import",
+    "This account is controlled by a signer Bramble can't use.",
+  ],
+  // Import by address with a private key (issue 779).
+  ["private key does not control this account", "This private key doesn't control that account."],
+  [
     "this account's signer setup cannot be recovered with the recovery phrase",
     "This account's signers can't be recovered with the recovery phrase.",
   ],
@@ -113,11 +119,6 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "Signing on your Ledger didn't finish. Check Activity before trying again.",
   ],
   ["private balances unavailable", "Couldn't load private balances. Try again."],
-  [
-    "account registered for privacy in another wallet",
-    "This account is set up for privacy in another wallet, so it can't be imported.",
-  ],
-  ["privacy registration unavailable", "Couldn't check this account's privacy setup. Try again."],
   ["strk20 services unavailable", "Private balances are unavailable right now. Try again shortly."],
   [
     "strk20 services unavailable: no shadow account anonymizer is configured for this network",

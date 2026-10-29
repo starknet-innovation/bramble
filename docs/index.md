@@ -16,11 +16,15 @@ boundaries, release controls, and security posture.
 - [Start here for engineers](engineering/) is the contributor onboarding entry: a
   reading order plus the import-layer module map and the untrusted-message
   data-flow diagram.
-- [UI Lab](https://effective-adventure-qwr464j.pages.github.io/) hosts deterministic Storybook
-  scenarios for production wallet UI and Chromatic review. Its
+- [UI Lab](https://effective-adventure-qwr464j.pages.github.io/) (access-controlled: repository
+  members only) hosts deterministic Storybook scenarios for production wallet UI and Chromatic
+  review. Its
   [runbook](https://github.com/starknet-innovation/bramble/tree/main/apps/ui-lab) covers local
   setup, testing, static builds, review controls, and safety boundaries.
 - [Architecture and internals](architecture/) explains the runtime and data model.
+- [Gasless fees](gasless-fees/) is the design for paying a public send or dapp invoke
+  in a token other than STRK (issue #752). The wallet path is built in
+  [#784](https://github.com/starknet-innovation/bramble/pull/784). Mainnet is on.
 - [Modular architecture](modular-architecture/) defines the package boundaries, typed invariants,
   target repository, migration sequence, and completion gates for the modular-monolith refactor.
 - [Wallet store architecture](wallet-store/) maps every persistent and session store, account

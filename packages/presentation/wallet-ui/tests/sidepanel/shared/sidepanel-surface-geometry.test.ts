@@ -50,7 +50,12 @@ describe("sidepanel surface geometry", () => {
     const xl = [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
       .filter((match) => (match[2] ?? "").includes(`border-radius: ${RADIUS.xl}`))
       .map((match) => (match[1] ?? "").trim());
-    expect(xl.sort()).toEqual([".onboarding-complete", ".onboarding-wizard"]);
+    // The Ledger overlay's screens take the wizard's card on the full-tab surface.
+    expect(xl.sort()).toEqual([
+      ".onboarding-complete",
+      ".onboarding-surface .ledger-onboard-overlay > *",
+      ".onboarding-wizard",
+    ]);
   });
 
   test("rows inside a grouped card are square cells the card clips", () => {

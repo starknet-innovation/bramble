@@ -160,14 +160,6 @@ describe("recovery candidate restriction (issue 542)", () => {
     expect(isRecoveryAccountCandidate({ ...candidate, restriction: "frozen" })).toBe(false);
     expect(isRecoveryAccountCandidate({ ...candidate, restriction: 1 })).toBe(false);
   });
-
-  test("admit each privacy-pool block and nothing else", () => {
-    for (const privacyPool of ["registered-elsewhere", "unchecked"]) {
-      expect(isRecoveryAccountCandidate({ ...candidate, privacyPool })).toBe(true);
-    }
-    expect(isRecoveryAccountCandidate({ ...candidate, privacyPool: true })).toBe(false);
-    expect(isRecoveryAccountCandidate({ ...candidate, privacyPool: "registered" })).toBe(false);
-  });
 });
 
 describe("recovery scan target", () => {
@@ -214,5 +206,64 @@ describe("recovery scan target", () => {
     expect(recoveryScanTarget([candidateAt(5000, { deployed: true })])).toBe(
       RECOVERY_SCAN_LIMITS.maxScannedIndexes,
     );
+  });
+});
+
+describe("selections and candidates found by address (issue 398)", () => {
+  const pick = {
+    accountContractType: "argent",
+    accountIndex: 3,
+    classHash: ARGENT_ACCOUNT_CLASS_HASH,
+    derivation: "argentx-bip44",
+  } as const;
+
+  test("a selection may carry a canonical address on a family the owner reader matches", () => {
+    expect(isRecoveryAccountSelection({ ...pick, address: "0x7e57" })).toBe(true);
+    expect(
+      isRecoveryAccountSelection({
+        accountContractType: "braavos",
+        accountIndex: 0,
+        address: "0x7e57",
+        classHash: BRAAVOS_BASE_CLASS_HASH,
+      }),
+    ).toBe(true);
+    for (const address of ["0x07e57", "0x0", "0X7E57", 7, ""]) {
+      expect(isRecoveryAccountSelection({ ...pick, address })).toBe(false);
+    }
+    expect(
+      isRecoveryAccountSelection({
+        accountContractType: "openzeppelin",
+        accountIndex: 0,
+        address: "0x7e57",
+      }),
+    ).toBe(false);
+  });
+
+  test("the address is part of the account's identity", () => {
+    expect(recoverySelectionKey({ ...pick, address: "0x7e57" })).not.toBe(
+      recoverySelectionKey(pick),
+    );
+    expect(recoverySelectionKey({ ...pick, address: "0x7e57" })).not.toBe(
+      recoverySelectionKey({ ...pick, address: "0x7e58" }),
+    );
+  });
+
+  test("a candidate marks itself found by address only with `true`", () => {
+    const candidate: RecoveryAccountCandidate = {
+      account: {
+        accountContractType: "openzeppelin",
+        address: "0x1",
+        classHash: "0x1",
+        derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+        id: "SN_MAIN:0x1",
+        networkId: "SN_MAIN",
+        publicKeyX: "0x2",
+        publicKeyY: "0x3",
+      },
+      deployed: true,
+      funded: false,
+    };
+    expect(isRecoveryAccountCandidate({ ...candidate, byAddress: true })).toBe(true);
+    expect(isRecoveryAccountCandidate({ ...candidate, byAddress: false })).toBe(false);
   });
 });

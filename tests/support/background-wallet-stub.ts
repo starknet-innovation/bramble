@@ -127,6 +127,11 @@ export type WalletStubOptions = {
   readonly captureGrant?: (input: OriginGrantInput) => void;
   readonly captureSign?: (input: SignHashInput) => void;
   /**
+   * Public viewing key the stub says this wallet would register. Privacy checks
+   * compare it with the pool. Defaults to `0x1`.
+   */
+  readonly viewingPublicKey?: string;
+  /**
    * Shadow-account scope records the stub vault holds, shared with the suite so
    * it can read what a request recorded. Merged through the vault's own
    * helpers, so the stub keeps the real canonicalization and bounds.
@@ -174,6 +179,12 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     },
     async previewImportedStrk20ViewingPublicKey() {
       return { address: account.address, viewingPublicKey: "0x1" };
+    },
+    async previewImportedAccount() {
+      return account;
+    },
+    async previewStoredStrk20ViewingPublicKey() {
+      return options.viewingPublicKey ?? "0x1";
     },
     async validateMnemonic() {
       return true;

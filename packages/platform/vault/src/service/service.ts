@@ -16,7 +16,7 @@ import {
   withLedgerStrk20ViewingKey,
   withoutLedgerStrk20ViewingKey,
 } from "../accounts/account-secrets";
-import { deriveAccountRef } from "../accounts/accounts";
+import { deriveAccountRef, deriveImportedAccount } from "../accounts/accounts";
 import {
   deriveNetworkAccount,
   findNetworkAccount,
@@ -25,6 +25,7 @@ import {
 import {
   deriveVaultStrk20ViewingKey,
   previewImportedStrk20ViewingPublicKey,
+  previewStoredStrk20ViewingPublicKey,
   previewStrk20ViewingPublicKey,
 } from "../accounts/strk20-viewing-key";
 import { findVaultAccount } from "../accounts/vault-account";
@@ -59,6 +60,7 @@ export type {
   OpenNostrApplicationDataBatchInput,
   OpenNostrApplicationDataInput,
   OriginGrantInput,
+  PreviewImportedAccountInput,
   RecordShadowAccountScopeInput,
   RecoverVaultAccountsInput,
   RevealedSecrets,
@@ -236,6 +238,17 @@ export const createWalletVaultService = ({
     previewStrk20ViewingPublicKey: (input) => previewStrk20ViewingPublicKey(kms, input),
     previewImportedStrk20ViewingPublicKey: (input) =>
       previewImportedStrk20ViewingPublicKey(kms, input),
+    async previewStoredStrk20ViewingPublicKey(input) {
+      const vault = await readVault(input.vaultPassphrase);
+      return previewStoredStrk20ViewingPublicKey(
+        kms,
+        vault,
+        input.accountId,
+        input.chainId,
+        input.poolAddress,
+      );
+    },
+    previewImportedAccount: async (input) => (await deriveImportedAccount(kms, input)).account,
     validateMnemonic: (mnemonic) => kms.validateMnemonic(mnemonic),
     async grantOrigin(input) {
       if (!isWalletOrigin(input.origin)) {

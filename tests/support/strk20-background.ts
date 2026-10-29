@@ -64,6 +64,14 @@ export type Strk20HarnessOptions = {
   readonly now?: () => number;
   readonly preferences?: WalletPreferences;
   /**
+   * Pool `get_public_key` answer. A string is constant; a function is called
+   * on every read so a suite can flip the key between requests. Defaults to
+   * unregistered (`0x0`), which is not cached.
+   */
+  readonly poolPublicKey?: string | (() => Promise<string>);
+  /** Public viewing key the stub wallet would register. Defaults to `0x1`. */
+  readonly ownViewingPublicKey?: string;
+  /**
    * Re-read on every access, for suites that change the trusted set (a contact
    * saved between consent and submission) while a request is in flight. Takes
    * precedence over `preferences`.
@@ -219,7 +227,12 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
     },
   };
   const strk20: Strk20Service = options.strk20 ?? makeStrk20Service(options);
-  const wallet = createWallet(options.accounts ? { accounts: options.accounts } : {});
+  const wallet = createWallet({
+    ...(options.accounts ? { accounts: options.accounts } : {}),
+    ...(options.ownViewingPublicKey === undefined
+      ? {}
+      : { viewingPublicKey: options.ownViewingPublicKey }),
+  });
   return createMessageHandler(wallet, testExtension, {
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.approvals ? { approvals: options.approvals } : {}),
@@ -234,6 +247,10 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
     runtimeRpc: makeRuntimeRpc({
       async getDeploymentStatus() {
         return options.deployed ?? true;
+      },
+      async getStrk20PublicKey() {
+        const key = options.poolPublicKey;
+        return typeof key === "function" ? key() : (key ?? "0x0");
       },
       async getTokenBalances({ tokens }) {
         const balance = options.publicBalance ?? "100000000000000000000";

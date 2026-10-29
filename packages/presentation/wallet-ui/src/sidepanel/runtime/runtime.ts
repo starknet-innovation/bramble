@@ -2,11 +2,9 @@
  * Typed runtime message client for the side panel UI.
  */
 
-import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isNostrPublicKeyResponse, isOkResponse } from "../../popup/responses/multisig-responses";
 import {
-  type ActivityResponse,
   type AllowanceListing,
   allowanceListingFrom,
   type ConnectedSitesResponse,
@@ -14,17 +12,16 @@ import {
   isApprovalDecisionResponse,
   isBalancesResponse,
   isConnectedSitesResponse,
-  isCreateAccountResponse,
   isFeeReviewResponse,
   isPreferencesResponse,
   isPricesResponse,
   isRevealSecretsResponse,
-  isSupportDiagnosticsResponse,
   isTokenChartResponse,
   isTransactionAlertsResponse,
   isTransferResponse,
   isTransferReviewResponse,
   isWalletStatus,
+  type LoadedActivity,
   type PendingApproval,
   type RevealSecretsResponse,
   readDetectedTokens,
@@ -39,6 +36,7 @@ import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
 import { createPrivacyUnlockClient } from "../journeys/privacy/privacy-unlock-runtime";
 import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
+import { createSidePanelNoticeClient } from "../shell/side-panel-notice";
 import { createUpdateClient } from "../shell/update-banner";
 import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
 
@@ -56,10 +54,12 @@ export type {
 } from "./runtime-types";
 
 import { createAccountRuntimeClient } from "./runtime-accounts";
+import { createDeployRuntimeClient } from "./runtime-deploy";
 import { lostReplySend, refusalText, relabelLostReply, responseError } from "./runtime-errors";
 import { createAccountGroupClient } from "./runtime-groups";
 import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
+import { createSettingsRuntimeClient } from "./runtime-settings";
 import { unavailableStatus } from "./runtime-status";
 
 /**
@@ -80,8 +80,10 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createPrivacyRuntimeClient(sendMessage),
     ...createPrivacyUnlockClient(sendMessage),
     ...createUpdateClient(sendMessage),
+    ...createSidePanelNoticeClient(sendMessage),
     ...createShadowAccountsRuntimeClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
+    ...createDeployRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
     ...createLookupRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
@@ -90,17 +92,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return;
       }
       throw responseError(response, "add token failed");
-    },
-    async deployAccount(reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
-      const response = await sendMessage({
-        ...(reviewedFee ? { reviewedFee } : {}),
-        type: "wallet.deployAccount",
-      });
-      if (isFeeReviewResponse(response)) return response.feeReview;
-      if (isTransferResponse(response)) {
-        return response.transactionHash;
-      }
-      throw responseError(response, "deployment failed");
     },
     /**
      * Settles a pending approval. `reviewedFee` is the figure the deciding card
@@ -118,9 +109,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       reviewedFee?: PendingApproval["fee"],
       reviewedAccountId?: string,
       transaction = false,
+      gaslessFee?: NonNullable<PendingApproval["gaslessFees"]>[number],
     ): Promise<void> {
       const ownCode = approved && transaction;
       const response = await sendMessage({
+        ...(approved && gaslessFee ? { gaslessFee } : {}),
         id,
         ...(approved && reviewedAccountId ? { reviewedAccountId } : {}),
         ...(approved && reviewedFee ? { reviewedFee } : {}),
@@ -166,10 +159,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       cached = false,
       refreshHistory = false,
       forceHistory = false,
-    ): Promise<{
-      readonly entries: ActivityResponse["activity"];
-      readonly historyUnavailable: boolean;
-    }> {
+    ): Promise<LoadedActivity> {
       const response = await sendMessage({
         ...(accountId === undefined ? {} : { accountId }),
         ...(cached ? { cached: true } : {}),
@@ -178,11 +168,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         type: "wallet.activity",
       });
       if (!isActivityResponse(response)) {
-        return { entries: [], historyUnavailable: true };
+        return { entries: [], historyUnavailable: true, relays: [] };
       }
       return {
         entries: response.activity,
         historyUnavailable: response.historyUnavailable ?? false,
+        relays: response.relays ?? [],
       };
     },
     /**
@@ -343,120 +334,9 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "wallet unavailable");
     },
-    async saveAddress(
-      label: string,
-      address: string,
-      networkId: string,
-      publicKeyX?: string,
-      nostrPublicKey?: string,
-    ): Promise<void> {
-      const response = await sendMessage({
-        address,
-        label,
-        networkId,
-        ...(nostrPublicKey ? { nostrPublicKey } : {}),
-        ...(publicKeyX ? { publicKeyX } : {}),
-        type: "wallet.saveAddress",
-      });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "address save failed");
-    },
-    async setActiveAccount(accountId: string): Promise<void> {
-      const response = await sendMessage({ accountId, type: "wallet.setActiveAccount" });
-      if (isCreateAccountResponse(response)) {
-        return;
-      }
-      throw responseError(response, "account switch failed");
-    },
-    async importPreferences(preferences: unknown): Promise<void> {
-      const response = await sendMessage({ preferences, type: "wallet.importPreferences" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "backup import failed");
-    },
-    async removeAddress(id: string): Promise<void> {
-      const response = await sendMessage({ id, type: "wallet.removeAddress" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "address removal failed");
-    },
-    async setAccountLabel(accountId: string, label: string): Promise<void> {
-      const response = await sendMessage({ accountId, label, type: "wallet.setAccountLabel" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "label update failed");
-    },
     ...createAccountGroupClient(sendMessage),
-    async setDisplay(input: {
-      readonly approvalSurface?: "popup" | "side-panel";
-      readonly displayCurrency?: "eur" | "gbp" | "usd";
-      readonly productAnalytics?: boolean;
-      readonly reliabilityDiagnostics?: boolean;
-      readonly theme?: "dark" | "light";
-    }): Promise<void> {
-      const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "display update failed");
-    },
-    async loadDiagnostics() {
-      const response = await sendMessage({ type: "wallet.diagnostics" });
-      if (isSupportDiagnosticsResponse(response)) return response.diagnostics;
-      throw responseError(response, "diagnostic export failed");
-    },
-    async setExplorerFallback(networkId: string, enabled: boolean, apiUrl?: string): Promise<void> {
-      const response = await sendMessage({
-        ...(apiUrl === undefined ? {} : { apiUrl }),
-        enabled,
-        networkId,
-        type: "wallet.setExplorerFallback",
-      });
-      if (isPreferencesResponse(response)) return;
-      throw responseError(response, "explorer fallback update failed");
-    },
-    async setRpcOverride(networkId: string, rpcUrl: string): Promise<void> {
-      const response = await sendMessage({ networkId, rpcUrl, type: "wallet.setRpcOverride" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "rpc endpoint update failed");
-    },
-    async setNostrRelayUrl(relayUrl: string): Promise<void> {
-      const response = await sendMessage({ relayUrl, type: "wallet.setNostrRelayUrl" });
-      if (isPreferencesResponse(response)) return;
-      throw responseError(response, "Nostr relay update failed");
-    },
-    async setStrk20NetworkConfig(
-      networkId: string,
-      config: Strk20NetworkConfig | null,
-    ): Promise<void> {
-      const response = await sendMessage({
-        config,
-        networkId,
-        type: "wallet.setStrk20NetworkConfig",
-      });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "privacy service configuration failed");
-    },
-    async setActiveNetwork(networkId: string): Promise<WalletStatus> {
-      const response = await sendMessage({ networkId, type: "wallet.setActiveNetwork" });
-      if (isWalletStatus(response)) {
-        return response;
-      }
-      throw responseError(response, "network switch failed");
-    },
-    /**
-     * Sends under the exact invoke and optional deployment fees displayed by
-     * the review. A missing required ceiling is refused before signing.
-     */
+    ...createSettingsRuntimeClient(sendMessage),
+    /** Sends under the reviewed fees. A missing ceiling is refused before signing. */
     async submitTransfer(
       accountId: string,
       tokenId: string,
@@ -465,10 +345,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       speed: "fast" | "standard" = "standard",
       reviewedFee: TransferReviewResponse["review"]["fee"] = null,
       reviewedDeploymentFee: TransferReviewResponse["review"]["deploymentFee"] = null,
+      gaslessFee?: NonNullable<TransferReviewResponse["review"]["gaslessFees"]>[number],
     ): Promise<string> {
       const response = await sendMessage({
         accountId,
         amount,
+        ...(gaslessFee ? { gaslessFee } : {}),
         recipient,
         ...(reviewedDeploymentFee == null ? {} : { reviewedDeploymentFee }),
         ...(reviewedFee === null ? {} : { reviewedFee }),

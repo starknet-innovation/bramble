@@ -5,7 +5,7 @@
  * the chain executed, and only for rows this wallet submitted: the sender pays
  * a receipt's fee, so on a discovered incoming transfer it is someone else's.
  * A missing or failed read records nothing, and a recorded fee is never read
- * or replaced again.
+ * or replaced again. A sponsored deployment (#431) never gets one.
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
@@ -112,6 +112,20 @@ describe("fee paid", () => {
     expect((await stored(activity))?.feePaid).toEqual(FEE);
   });
 
+  test("is never read for a sponsored deployment, whose fee the sponsor paid", async () => {
+    const sponsored = entry({
+      feePayer: "sponsor",
+      kind: "deploy",
+      summary: "Deploy account contract",
+    });
+    const { activity, deps, feeReads } = await harness([sponsored], "accepted", { "0xabc": FEE });
+    await reconcileScope(deps, SCOPE, NOW, true);
+    expect(feeReads).toEqual([]);
+    const row = await stored(activity);
+    expect(row?.status).toBe("accepted");
+    expect(row?.feePaid).toBeUndefined();
+  });
+
   test("is not read while the transaction is unresolved", async () => {
     const { activity, deps, feeReads } = await harness([entry()], "preconfirmed", {
       "0xabc": FEE,
@@ -192,6 +206,23 @@ describe("fee backfill for rows no longer observed", () => {
     await reconcileScope(deps, SCOPE, NOW, true);
     expect(feeReads).toEqual([["0xabc"]]);
     expect((await stored(activity))?.feePaid).toEqual(FEE);
+  });
+
+  test("does not store the relayer STRK on a row that already names the user's token fee", async () => {
+    const gasless = entry({
+      status: "accepted",
+      summary: "Sent 1 USDC (network fee in USDC)",
+      userFee: {
+        amount: "1200000",
+        token: "USDC",
+        tokenAddress: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+      },
+    });
+    const { activity, deps, feeReads } = await harness([gasless], "accepted", { "0xabc": FEE });
+    await reconcileScope(deps, SCOPE, NOW, true);
+    expect(feeReads).toEqual([]);
+    expect((await stored(activity))?.feePaid).toBeUndefined();
+    expect((await stored(activity))?.userFee).toEqual(gasless.userFee);
   });
 
   test("does not run on fast passes", async () => {

@@ -1,5 +1,6 @@
 {
   "name": "@bramble/wallet-protocol",
+  "description": "The single source of truth for the dapp provider bridge: methods, events, requests, results, runtime decoders, resource budgets and method security metadata.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

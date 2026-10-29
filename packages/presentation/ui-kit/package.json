@@ -1,5 +1,6 @@
 {
   "name": "@bramble/ui-kit",
+  "description": "Design-system primitives: skin, scale, icons, fields, controls, navigation primitives, motion constants and safe markup helpers.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

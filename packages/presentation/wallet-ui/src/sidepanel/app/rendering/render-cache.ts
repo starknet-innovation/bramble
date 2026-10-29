@@ -55,14 +55,19 @@ export type RenderData = {
   status: WalletStatus;
   transactions: LoadedActivity["entries"];
   historyUnavailable: LoadedActivity["historyUnavailable"];
+  relays: LoadedActivity["relays"];
 };
 
 /**
  * Empty account-scoped activity lane used during account/network switches so
  * transactions and degraded-history state never flash under another account.
  */
-const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "transactions"> => ({
+const emptyActivityCache = (): Pick<
+  RenderData,
+  "historyUnavailable" | "relays" | "transactions"
+> => ({
   historyUnavailable: false,
+  relays: [],
   transactions: [],
 });
 

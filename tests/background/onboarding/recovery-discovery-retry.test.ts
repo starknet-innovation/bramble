@@ -37,6 +37,7 @@ const message = {
 const install = () => {
   const funded = new Set<string>();
   let balanceReads = 0;
+  let malformed: string | null = null;
   const deps = {
     activeStateCoordinator: createActiveStateCoordinator(),
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
@@ -50,7 +51,8 @@ const install = () => {
       }: Parameters<typeof defaultRuntimeRpc.getTokenBalances>[0]) {
         balanceReads += 1;
         return tokens.map((token) => {
-          const balance = funded.has(accountAddress) && token.symbol === "STRK" ? "10" : "0";
+          const balance =
+            malformed ?? (funded.has(accountAddress) && token.symbol === "STRK" ? "10" : "0");
           return { ...token, balance, formatted: balance };
         });
       },
@@ -69,7 +71,10 @@ const install = () => {
     }
     throw new Error("scan never completed");
   };
-  return { balanceReads: () => balanceReads, deps, funded, scanToEnd };
+  const malform = (balance: string): void => {
+    malformed = balance;
+  };
+  return { balanceReads: () => balanceReads, deps, funded, malform, scanToEnd };
 };
 
 const openZeppelinAt = (accountIndex: number): string => `0x${(accountIndex * 2 + 1).toString(16)}`;
@@ -112,4 +117,16 @@ describe("retrying a finished recovery scan", () => {
     })) as Page;
     expect(manual).toMatchObject({ complete: true, nextIndex: finished.nextIndex });
   });
+});
+
+describe("an unreadable balance during a recovery scan", () => {
+  for (const balance of ["-1", "1.5", "0x10", "abc"]) {
+    test(`"${balance}" fails the page closed instead of reading as empty`, async () => {
+      const { deps, malform } = install();
+      malform(balance);
+      await expect(handleOnboardingOps(deps, message.type, message)).rejects.toThrow(
+        "Account discovery is unavailable",
+      );
+    });
+  }
 });

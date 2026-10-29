@@ -7,6 +7,7 @@ import { escapeHtml } from "@bramble/core/html";
 import { tokenLogoSvg } from "@bramble/portfolio/token-logos";
 import type { DisplayCurrency } from "@bramble/settings/preferences";
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -108,7 +109,9 @@ const changeBadge = (change: number | undefined): string => {
   }
   const direction = change >= 0 ? "up" : "down";
   const arrow = change >= 0 ? "↑" : "↓";
-  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%<span class="token-change-win"> · 24h price</span></span>`;
+  // A short visible window keeps the figure honest (a 24h price move, not a
+  // balance change); screen readers get the full name in place of it.
+  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%<span class="token-change-win" aria-hidden="true"> · 24h</span><span class="sr-only"> 24h price change</span></span>`;
 };
 
 /**
@@ -119,6 +122,8 @@ export type PrivateBreakdown =
   | { readonly kind: "loading" }
   | { readonly kind: "ready"; readonly balance: string; readonly formatted: string }
   | { readonly kind: "unavailable" }
+  /** Another wallet registered this address; shield and unshield stay off. */
+  | { readonly kind: "other-wallet" }
   /** Registration broadcast, not yet visible to the privacy indexer. */
   | { readonly kind: "pending" }
   | { readonly kind: "unregistered" }
@@ -146,7 +151,9 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
         ? "Discovering…"
         : breakdown.kind === "pending"
           ? "Registration pending…"
-          : "Unavailable";
+          : breakdown.kind === "other-wallet"
+            ? escapeHtml(PRIVACY_OTHER_WALLET)
+            : "Unavailable";
   return `<div class="token-breakdown-row${breakdown.kind === "ready" ? "" : " muted"}">
       <span class="token-breakdown-label">${icon("lock")}Private balance</span>
       <span class="token-breakdown-value">${value}</span>

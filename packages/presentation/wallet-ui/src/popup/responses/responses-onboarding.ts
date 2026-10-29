@@ -5,10 +5,13 @@
  * material into the UI.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import { type AccountRef, isAccountRef } from "@bramble/wallet-model/accounts";
+import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-model/accounts";
+import { isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import {
   isRecoveryAccountCandidate,
   isRecoveryAccountIndex,
+  isRecoverySigningRestriction,
+  type KeyAddressCandidate,
   type RecoveryAccountCandidate,
 } from "@bramble/wallet-model/recovery";
 
@@ -48,6 +51,23 @@ export const isRecoveryDiscoveryResponse = (value: unknown): value is RecoveryDi
   isRecoveryAccountIndex(value["nextIndex"]) &&
   value["ok"] === true;
 
+/** One account found by its pasted address (issue 398). */
+export type AddressLookupResponse = {
+  readonly candidate: RecoveryAccountCandidate;
+  readonly ok: true;
+};
+
+/**
+ * Validates an import-by-address answer: one public candidate, marked as found
+ * by address so its pick carries the address the chain reported.
+ */
+export const isAddressLookupResponse = (value: unknown): value is AddressLookupResponse =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["candidate", "ok"]) &&
+  isRecoveryAccountCandidate(value["candidate"]) &&
+  value["candidate"].byAddress === true &&
+  value["ok"] === true;
+
 /** Successful atomic restoration response. */
 export type RecoveredAccountsResponse = {
   readonly accounts: readonly AccountRef[];
@@ -61,3 +81,89 @@ export const isRecoveredAccountsResponse = (value: unknown): value is RecoveredA
   Array.isArray(value["accounts"]) &&
   value["accounts"].every(isAccountRef) &&
   value["ok"] === true;
+
+/**
+ * One Argent release a raw Ready key controls an address at, as discovery
+ * reports it: public address, id and class, plus the evidence that the address
+ * is in use. A funded-only row lists what it holds, for display only. Never
+ * carries key material.
+ */
+export type ReadyKeyCandidate =
+  | {
+      readonly accountId: string;
+      readonly address: string;
+      readonly classHash: string;
+      readonly deployed: true;
+    }
+  | {
+      readonly accountId: string;
+      readonly address: string;
+      readonly classHash: string;
+      readonly deployed: false;
+      readonly holdings: readonly { readonly formatted: string; readonly symbol: string }[];
+    };
+
+const isShortText = (value: unknown, max: number): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= max;
+
+const isFelt = (value: unknown): value is string =>
+  typeof value === "string" && isNonZeroStarkFieldElement(value);
+
+const isHolding = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["formatted", "symbol"]) &&
+  isShortText(value["formatted"], 80) &&
+  isShortText(value["symbol"], 16);
+
+const isReadyKeyCandidate = (value: unknown): value is ReadyKeyCandidate => {
+  if (!isRecord(value)) return false;
+  const common =
+    isAccountId(value["accountId"]) && isFelt(value["address"]) && isFelt(value["classHash"]);
+  if (value["deployed"] === true) {
+    return common && hasOnlyKnownKeys(value, ["accountId", "address", "classHash", "deployed"]);
+  }
+  return (
+    common &&
+    value["deployed"] === false &&
+    hasOnlyKnownKeys(value, ["accountId", "address", "classHash", "deployed", "holdings"]) &&
+    Array.isArray(value["holdings"]) &&
+    value["holdings"].length > 0 &&
+    value["holdings"].every(isHolding)
+  );
+};
+
+/** Ready-key discovery: the releases the key controls an address in use at. */
+export type ReadyKeyDiscoveryResponse = {
+  readonly candidates: readonly ReadyKeyCandidate[];
+  readonly ok: true;
+};
+
+/** Validates Ready-key discovery before it reaches the picker; at least one row. */
+export const isReadyKeyDiscoveryResponse = (value: unknown): value is ReadyKeyDiscoveryResponse =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["candidates", "ok"]) &&
+  Array.isArray(value["candidates"]) &&
+  value["candidates"].length > 0 &&
+  value["candidates"].every(isReadyKeyCandidate) &&
+  value["ok"] === true;
+
+/**
+ * Validates a private-key import-by-address answer (issue 779): one public
+ * deployed row the picker can show, marked as found by address so its import
+ * carries that address, with at most the scan's advisory restriction.
+ */
+export const isKeyAddressLookupResponse = (
+  value: unknown,
+): value is { readonly candidate: KeyAddressCandidate; readonly ok: true } => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, ["candidate", "ok"]) || value["ok"] !== true) {
+    return false;
+  }
+  const candidate = value["candidate"];
+  if (!isRecord(candidate) || candidate["byAddress"] !== true) return false;
+  const { byAddress: _byAddress, restriction, ...row } = candidate;
+  return (
+    row["deployed"] === true &&
+    isReadyKeyCandidate(row) &&
+    (restriction === undefined || isRecoverySigningRestriction(restriction))
+  );
+};

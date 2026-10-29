@@ -66,6 +66,25 @@ export const previewStrk20ViewingPublicKey = async (
 };
 
 /**
+ * The public viewing key this wallet would register for an account it already
+ * stores, in one pool. The private viewing key stays inside this call; only
+ * the public x-coordinate is returned. Throws on a missing account, a missing
+ * signing key, or any Krusty failure. Ledger accounts are not resolved here:
+ * the privacy blocker refuses them before this is asked, until provisioning
+ * can supply the retained viewing key.
+ */
+export const previewStoredStrk20ViewingPublicKey = async (
+  kms: KmsPort,
+  vault: Vault,
+  accountId: string,
+  chainId: string,
+  poolAddress: string,
+): Promise<string> => {
+  const viewingKey = await deriveVaultStrk20ViewingKey(kms, vault, accountId, chainId, poolAddress);
+  return recoverStarkPublicKey(kms, viewingKey);
+};
+
+/**
  * The address a raw private key would import as, and the public viewing key
  * this wallet would register for it in one pool, both before anything is
  * stored. Neither the private key nor the viewing key leaves this call.

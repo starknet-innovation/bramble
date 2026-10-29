@@ -43,6 +43,7 @@ import {
 } from "@bramble/starknet/multisig-invoke";
 import { createRpcProvider, withRpcFallback } from "@bramble/starknet/provider";
 import {
+  type AccountOwnerInput,
   type ArgentRecoveryInput,
   type BalanceInput,
   type BraavosRecoveryInput,
@@ -52,6 +53,7 @@ import {
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  getAccountOwner,
   getArgentRecoveryState,
   getArgentSigningRestriction,
   getBraavosRecoveryState,
@@ -68,6 +70,7 @@ import {
   type NftOwnerInput,
   type NftOwnershipInput,
   type NftTokenUriInput,
+  rememberDeployedAccounts,
   reviewArgentRecovery,
   reviewBraavosRecovery,
   type SigningRestrictionInput,
@@ -178,6 +181,8 @@ export type RuntimeRpc = {
    * 542). Optional so narrow test doubles keep compiling; the scan treats an
    * absent member or a throw as "no verdict".
    */
+  /** Live class and owner key at an address, for importing it by address (issue 398). */
+  readonly getAccountOwner?: (input: AccountOwnerInput) => ReturnType<typeof getAccountOwner>;
   readonly getArgentSigningRestriction?: (
     input: SigningRestrictionInput,
   ) => ReturnType<typeof getArgentSigningRestriction>;
@@ -209,6 +214,11 @@ export type RuntimeRpc = {
   readonly submitBraavosRecovery?: (
     input: BraavosRecoveryInput,
   ) => ReturnType<typeof submitBraavosRecovery>;
+  /**
+   * Whether the account contract exists. The production wiring reuses a
+   * "deployed" answer per address and endpoint list for a few minutes (never
+   * for a local node); "not deployed" and failures always read the chain.
+   */
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -356,11 +366,12 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   estimateInvokeFee,
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
+  getAccountOwner,
   getArgentSigningRestriction,
   getArgentRecoveryState,
   getBraavosRecoveryState,
   getBraavosSigningRestriction,
-  getDeploymentStatus,
+  getDeploymentStatus: rememberDeployedAccounts(getDeploymentStatus),
   getStrk20PublicKey: ({ address, poolAddress, rpcUrls }) =>
     readStrk20PublicKey(createRpcProvider, rpcUrls, poolAddress, address),
   reviewArgentRecovery,

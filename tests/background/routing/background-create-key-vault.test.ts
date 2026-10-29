@@ -7,7 +7,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { CreateKeyVaultInput } from "@bramble/vault/service";
+import { ARGENT_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/account-families";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
+import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
   account,
@@ -17,7 +20,6 @@ import {
   testExtension,
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
-import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 // Clearly-fake test vector; not a real key.
 const privateKey = "0xfeedface";
@@ -37,7 +39,7 @@ describe("wallet.createKeyVault routing", () => {
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
       testExtension,
-      { runtimeRpc: makeRuntimeRpc(), session },
+      { session },
     );
 
     await expect(handler(validMessage, sender)).resolves.toEqual({ account, ok: true });
@@ -58,7 +60,7 @@ describe("wallet.createKeyVault routing", () => {
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
       testExtension,
-      { runtimeRpc: makeRuntimeRpc(), session },
+      { session },
     );
     const rejected = [
       // No vault passphrase: first-run creation has no session to take it from.
@@ -81,17 +83,41 @@ describe("wallet.createKeyVault routing", () => {
     expect(session.getPassphrase()).toBeNull();
   });
 
-  test("accepts a Ready account with its exact deployment salt", async () => {
+  test("accepts a Ready account with its exact deployment salt and picked release", async () => {
+    const captured: CreateKeyVaultInput[] = [];
+    // A Ready key is only imported at a release the user picked and the chain
+    // still shows in use.
+    const handler = createMessageHandler(
+      createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
+      testExtension,
+      { runtimeRpc: { ...defaultRuntimeRpc, getDeploymentStatus: async () => true } },
+    );
+    await expect(
+      handler(
+        {
+          ...validMessage,
+          accountContractType: "argent",
+          classHashes: [ARGENT_ACCOUNT_CLASS_HASH],
+          deploymentSalt: "0xabc",
+        },
+        sender,
+      ),
+    ).resolves.toEqual({ account, ok: true });
+    expect(captured[0]?.deploymentSalt).toBe("0xabc");
+    expect(captured[0]?.classHashes).toEqual([canonicalFelt(ARGENT_ACCOUNT_CLASS_HASH) ?? ""]);
+  });
+
+  test("refuses a Ready key that names no picked release", async () => {
     const captured: CreateKeyVaultInput[] = [];
     const handler = createMessageHandler(
       createWallet({ captureCreateKeyVault: (input) => captured.push(input) }),
       testExtension,
-      { runtimeRpc: makeRuntimeRpc() },
+      { runtimeRpc: { ...defaultRuntimeRpc, getDeploymentStatus: async () => true } },
     );
     await expect(
-      handler({ ...validMessage, accountContractType: "argent", deploymentSalt: "0xabc" }, sender),
-    ).resolves.toEqual({ account, ok: true });
-    expect(captured[0]?.deploymentSalt).toBe("0xabc");
+      handler({ ...validMessage, accountContractType: "argent" }, sender),
+    ).resolves.toEqual({ error: "invalid create key vault request" });
+    expect(captured).toEqual([]);
   });
 
   test("is privileged: content scripts cannot reach it", async () => {

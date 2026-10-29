@@ -5,8 +5,9 @@ import { onboarding } from "../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../src/sidepanel/journeys/onboarding/onboarding-ui";
 import type { SidepanelWallet } from "../../src/sidepanel/runtime/runtime";
 
-const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
-const PASSPHRASE = "fixture vault passphrase";
+export const MNEMONIC =
+  "habit hope tip crystal because grunt nation idea electric witness alert like";
+export const PASSPHRASE = "fixture vault passphrase";
 
 const status: WalletStatus = {
   accountCount: 0,
@@ -40,7 +41,7 @@ export const readyIdleAccount: DerivedAccountRef = {
 
 export const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-const setValue = (root: ParentNode, selector: string, value: string): void => {
+export const setValue = (root: ParentNode, selector: string, value: string): void => {
   const input = root.querySelector<HTMLInputElement>(selector);
   if (!input) {
     throw new Error(`missing ${selector}`);
@@ -57,12 +58,11 @@ export const click = (root: ParentNode, selector: string): void => {
   button.click();
 };
 
-export type Candidate = {
+type Candidate = {
   account: DerivedAccountRef;
   deployed: boolean;
   funded: boolean;
   restriction?: "guardian" | "owner-changed" | "owner-type" | "release" | "strong-signer";
-  privacyPool?: "registered-elsewhere" | "unchecked";
 };
 
 export const mount = (

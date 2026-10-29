@@ -106,7 +106,7 @@ export const MOTION = {
  */
 export const CONTROL = {
   dockIcon: "24px",
-  dockItem: "44px",
+  dockItem: "52px",
   hit: "40px",
   hitSmall: "40px",
   icon: "18px",

@@ -4,6 +4,7 @@
  * language without introducing new colour semantics.
  */
 import { EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
+import { LEDGER_OVERLAY_LAYERS } from "../core/styles-structure";
 
 const ONBOARDING_TRANSITION = {
   enterMs: 300,
@@ -23,6 +24,8 @@ export const ONBOARDING_STYLES = `
      the field still reads as the calm dark ground; daylight leaves it untinted.
      The tint is one solid colour blended over the image, nothing ramped. */
   body.onboarding-surface {
+    /* Pinned, so the cover doesn't rescale whenever the page grows. */
+    background-attachment: fixed;
     background-blend-mode: multiply;
     background-color: light-dark(
       var(--bramble-panel),
@@ -34,9 +37,16 @@ export const ONBOARDING_STYLES = `
     background-size: cover;
     min-width: 320px;
   }
-  /* The full-tab surface would stretch toasts edge to edge; keep them to the
-     wizard card's column. */
-  .onboarding-surface .toast-stack { margin-inline: auto; max-width: 520px; }
+  /* No dock here, so the panel's toast slot would cover the card's bottom
+     action; top-right stays clear of the card and its back control. */
+  .onboarding-surface .toast-stack {
+    bottom: auto;
+    left: auto;
+    top: ${SPACE.lg};
+    width: min(360px, calc(100vw - ${SPACE.lg} - ${SPACE.lg}));
+    /* Above the Ledger overlay, which here is transparent around its card. */
+    z-index: ${LEDGER_OVERLAY_LAYERS.sign + 1};
+  }
   .onboarding-surface #app { min-height: 100vh; }
   .onboarding-surface .shell {
     --onboarding-canvas-y: clamp(${SPACE.lg}, 3vh, ${SPACE.xxxl});
@@ -77,7 +87,8 @@ export const ONBOARDING_STYLES = `
     overflow-y: auto;
     padding: ${SPACE.xxl} clamp(${SPACE.xl}, 7vw, ${SPACE.xxl});
     position: relative;
-    scrollbar-gutter: stable;
+    /* Mirrored like the document's, so a classic scrollbar keeps the step centred (issue 795). */
+    scrollbar-gutter: stable both-edges;
   }
   .onboarding-wizard > .onboarding-step {
     inset: 0;
@@ -145,9 +156,11 @@ export const ONBOARDING_STYLES = `
   .verify-continue-hit { display: grid; }
   #verify-continue:disabled { pointer-events: none; }
 
+  /* The gate fills the shell through flex: 1 (.gate, .screen). A 100vh
+     min-height here added the shell's own padding on top of the viewport and
+     left the first-run panel permanently scrollable. */
   .onboarding-gate {
     justify-content: center;
-    min-height: 100vh;
     padding: ${SPACE.xl};
   }
   .onboarding-gate .gate-head { max-width: 34ch; }

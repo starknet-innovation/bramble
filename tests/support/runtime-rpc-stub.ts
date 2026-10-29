@@ -27,8 +27,7 @@ export const makeRuntimeRpc = (overrides: Partial<RuntimeRpc> = {}): RuntimeRpc 
     return "0x0";
   },
   async getStrk20PublicKey() {
-    // Benign default: no address is registered with the privacy pool, so no
-    // import is refused unless a suite sets a registration up.
+    // Unregistered. A privacy check treats zero as clear and does not cache it.
     return "0x0";
   },
   async getTokenBalances() {

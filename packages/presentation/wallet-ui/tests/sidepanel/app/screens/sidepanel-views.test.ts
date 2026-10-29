@@ -333,15 +333,14 @@ describe("sidepanel views", () => {
     );
   });
 
-  test("avatars are deterministic Beam characters from the identity palette", () => {
+  test("avatars are deterministic birds from the identity palette", () => {
     // Account identity colour stays within the dedicated local tokens—no
     // gradients, remote imagery, raw colour values, or inset frames.
     const html = dashboard("home", status, [], preferences, { balances: [] });
     expect(html).toContain('class="avatar"');
-    expect(html).toContain('class="avatar-character"');
-    expect(html).toContain('class="avatar-eyes"');
-    expect(html).toContain('class="avatar-mouth"');
-    expect(html).toMatch(/fill="var\(--bramble-account-avatar-\d\)"/);
+    expect(html).toContain('class="avatar-bird"');
+    expect(html).toMatch(/fill="var\(--bramble-account-avatar-ground-\d\)"/);
+    expect(html).toMatch(/fill="var\(--bramble-account-avatar-body-\d\)"/);
     expect(html).toMatch(/var\(--bramble-account-avatar-(?:ink|paper)\)/);
     expect(html).not.toContain('class="avatar-frame"');
     expect(html).not.toContain("linearGradient");

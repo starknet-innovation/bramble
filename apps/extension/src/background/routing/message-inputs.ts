@@ -1,5 +1,5 @@
 /** Pure parsers for untrusted background runtime messages. */
-import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { normalizeWalletOrigin } from "@bramble/core/origin";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import {
@@ -9,7 +9,6 @@ import {
 } from "@bramble/wallet-model/accounts";
 import {
   isHexChainId,
-  isStarkFieldElement,
   isStarknetNetworkId,
   STARK_FIELD_PRIME,
   type StarknetNetworkId,
@@ -20,13 +19,6 @@ import { isStrk20Proof, type Strk20Proof } from "@bramble/wallet-protocol/strk20
 import type { Call } from "starknet";
 
 export { readCreateAccountInput } from "../accounts/account-creation-inputs";
-
-/**
- * Checks a human-entered decimal token amount string (shared by the transfer
- * and swap input readers; parsing/scaling happens later via parseTokenAmount).
- */
-export const isTransferAmount = (value: unknown): value is string =>
-  typeof value === "string" && isDecimalAmountText(value.trim());
 
 const isFeltLikeString = (value: unknown): value is string => {
   if (
@@ -349,68 +341,6 @@ export const readSwitchChainInput = (
 };
 
 /**
- * Parses ERC20 transfer messages from extension pages.
- */
-const readTransferFields = (
-  message: unknown,
-  type: "wallet.reviewTransfer" | "wallet.transfer",
-): {
-  readonly accountId: string;
-  readonly amount: string;
-  readonly recipient: string;
-  /**
-   * The fee the review step displayed, echoed back by the panel on send. The
-   * background turns it into a signing ceiling (MCW-V09-119); absent means the
-   * caller reviewed no fee and the send is bounded only by the node's quote.
-   */
-  readonly reviewedDeploymentFee?: FeeEstimate;
-  readonly reviewedFee?: FeeEstimate;
-  readonly speed: "fast" | "standard";
-  readonly tokenId: string;
-} | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, [
-      "accountId",
-      "amount",
-      "recipient",
-      "reviewedDeploymentFee",
-      "reviewedFee",
-      "speed",
-      "tokenId",
-      "type",
-    ]) ||
-    message["type"] !== type ||
-    !isAccountId(message["accountId"]) ||
-    !isTransferAmount(message["amount"]) ||
-    typeof message["recipient"] !== "string" ||
-    !isStarkFieldElement(message["recipient"]) ||
-    typeof message["tokenId"] !== "string" ||
-    message["tokenId"].length === 0 ||
-    (message["reviewedDeploymentFee"] !== undefined &&
-      !isFeeEstimate(message["reviewedDeploymentFee"])) ||
-    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"])) ||
-    (message["speed"] !== undefined &&
-      message["speed"] !== "fast" &&
-      message["speed"] !== "standard")
-  ) {
-    return null;
-  }
-
-  return {
-    accountId: message["accountId"],
-    amount: message["amount"].trim(),
-    recipient: message["recipient"],
-    ...(isFeeEstimate(message["reviewedDeploymentFee"])
-      ? { reviewedDeploymentFee: message["reviewedDeploymentFee"] }
-      : {}),
-    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
-    speed: message["speed"] === "fast" ? "fast" : "standard",
-    tokenId: message["tokenId"],
-  };
-};
-
-/**
  * Parses dapp typed-data signing requests from the provider bridge.
  */
 export const readSignTypedDataInput = (
@@ -428,18 +358,6 @@ export const readSignTypedDataInput = (
   const origin = normalizeWalletOrigin(message["origin"]);
   return origin ? { origin, typedData: message["typedData"] } : null;
 };
-
-/**
- * Parses side panel transfer requests before touching wallet state.
- */
-export const readTransferInput = (message: unknown): ReturnType<typeof readTransferFields> =>
-  readTransferFields(message, "wallet.transfer");
-
-/**
- * Parses pre-sign transfer review requests from extension pages.
- */
-export const readReviewTransferInput = (message: unknown): ReturnType<typeof readTransferFields> =>
-  readTransferFields(message, "wallet.reviewTransfer");
 
 /**
  * Parses popup unlock messages carrying the vault passphrase: `wallet.unlock`,
@@ -496,3 +414,12 @@ export {
   readSetRpcOverrideInput,
   readSetStrk20NetworkConfigInput,
 } from "../settings/preference-inputs";
+/**
+ * Transfer readers and the shared human-amount grammar. Callers keep importing
+ * them from this module.
+ */
+export {
+  isTransferAmount,
+  readReviewTransferInput,
+  readTransferInput,
+} from "./transfer-message-inputs";
