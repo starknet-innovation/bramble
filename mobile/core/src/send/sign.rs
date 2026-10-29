@@ -250,12 +250,26 @@ mod tests {
                 let query = deploy_query_hash(network, &address, &deployment, &nonce);
                 assert_eq!(
                     query,
-                    deploy_hash_at(QUERY_VERSION_3, network, &address, &deployment, &nonce, &bounds)
+                    deploy_hash_at(
+                        QUERY_VERSION_3,
+                        network,
+                        &address,
+                        &deployment,
+                        &nonce,
+                        &bounds
+                    )
                 );
                 // Dropping the query bit would sign a broadcastable v3 hash at review.
                 assert_ne!(
                     query,
-                    deploy_hash_at(Felt::from(3u8), network, &address, &deployment, &nonce, &bounds)
+                    deploy_hash_at(
+                        Felt::from(3u8),
+                        network,
+                        &address,
+                        &deployment,
+                        &nonce,
+                        &bounds
+                    )
                 );
             }
         }
