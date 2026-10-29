@@ -192,6 +192,7 @@ fn history_cadence_and_lane_authority() {
         account_id: id.clone(),
         amount: None,
         counterparty: None,
+        direction: None,
         failure_notice: None,
         finalized_on_l1: None,
         hash: "0x0abc".into(),
@@ -202,6 +203,7 @@ fn history_cadence_and_lane_authority() {
         submitted_at: 5_000,
         summary: "Send 1 STRK to 0x1234…abcd".into(),
         token: None,
+        token_address: None,
     };
     assert!(t::record_activity(dir.path(), &local));
     assert!(

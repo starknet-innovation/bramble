@@ -3,6 +3,7 @@
 
 pub mod activity;
 pub mod activity_book;
+pub mod activity_rules;
 pub mod appearance;
 pub mod classify;
 pub mod events;

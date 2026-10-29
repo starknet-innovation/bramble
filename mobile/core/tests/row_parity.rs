@@ -12,6 +12,11 @@ fn loose_entry(v: &JsValue) -> ActivityEntry {
         account_id: text(v, "accountId"),
         amount: opt_text(v, "amount"),
         counterparty: opt_text(v, "counterparty"),
+        direction: match opt_text(v, "direction").as_deref() {
+            Some("in") => Some(TransferDirection::In),
+            Some("out") => Some(TransferDirection::Out),
+            _ => None,
+        },
         failure_notice: None,
         finalized_on_l1: None,
         hash: text(v, "hash"),
@@ -33,6 +38,7 @@ fn loose_entry(v: &JsValue) -> ActivityEntry {
         submitted_at: num(v, "submittedAt") as u64,
         summary: text(v, "summary"),
         token: opt_text(v, "token"),
+        token_address: opt_text(v, "tokenAddress"),
     }
 }
 

@@ -23,6 +23,7 @@ use starknet_types_core::felt::Felt;
 use super::observation;
 use crate::felt;
 use crate::files::write_atomic;
+use crate::history::activity_rules::{is_recorded_token_address, parse_direction};
 use crate::send::judge::Observation;
 use crate::send::types::{ActivityKind, TxStatus};
 
@@ -46,6 +47,8 @@ pub(crate) struct Entry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub counterparty: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure_notice: Option<String>,
     #[serde(
         default,
@@ -63,6 +66,8 @@ pub(crate) struct Entry {
     pub summary: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_address: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -129,11 +134,6 @@ pub(crate) fn parse_kind(text: &str) -> Option<ActivityKind> {
     }
 }
 
-/// `isUnresolvedTxStatus`.
-pub(crate) fn unresolved(status: TxStatus) -> bool {
-    matches!(status, TxStatus::Pending | TxStatus::Preconfirmed)
-}
-
 /// `monotonicTxStatus`: terminal failures stick, and progress never moves backwards.
 pub(crate) fn monotonic(current: TxStatus, observed: TxStatus) -> TxStatus {
     let terminal = |s: TxStatus| matches!(s, TxStatus::Rejected | TxStatus::Reverted);
@@ -181,6 +181,11 @@ fn valid(entry: &Entry, scope: &str) -> bool {
         && detail_ok(&entry.amount)
         && detail_ok(&entry.counterparty)
         && detail_ok(&entry.token)
+        && entry
+            .direction
+            .as_deref()
+            .is_none_or(|direction| parse_direction(direction).is_some())
+        && is_recorded_token_address(entry.token_address.as_deref(), entry.token.as_deref())
         && entry
             .failure_notice
             .as_deref()
@@ -300,8 +305,9 @@ pub(crate) fn record(dir: &Path, entry: Entry) -> bool {
     })
 }
 
-/// Folds one status observation into the entry for `hash` (`reconciledOutcome`) and returns the
-/// entry's resulting status, or `None` when no such entry exists.
+/// Folds one status observation into every entry for `hash` (`reconciledOutcome`; a multi-leg
+/// transaction is stored as one row per leg) and returns the first entry's resulting status, or
+/// `None` when no such entry exists.
 pub(crate) fn observe(
     dir: &Path,
     account_id: &str,
@@ -311,10 +317,27 @@ pub(crate) fn observe(
     locked(|| {
         let mut log = load_log(dir);
         let scopes = &mut log.scopes;
-        let entry = scopes
+        let mut result = None;
+        for entry in scopes
             .get_mut(account_id)?
             .iter_mut()
-            .find(|e| felt::parse(&e.hash).as_ref() == Some(hash))?;
+            .filter(|e| felt::parse(&e.hash).as_ref() == Some(hash))
+        {
+            let Some(status) = observe_entry(entry, observation) else {
+                continue;
+            };
+            result.get_or_insert(status);
+        }
+        if result.is_some() && observation != Observation::Unknown {
+            save_log(dir, &log);
+        }
+        result
+    })
+}
+
+// One entry's share of `observe`; `None` when its stored status does not parse.
+fn observe_entry(entry: &mut Entry, observation: Observation) -> Option<TxStatus> {
+    {
         let current = parse_status(&entry.status)?;
         match observation {
             Observation::Unknown => return Some(current),
@@ -336,10 +359,8 @@ pub(crate) fn observe(
                     Some(entry.finalized_on_l1.unwrap_or(false) || finalized_on_l1);
             }
         }
-        let result = parse_status(&entry.status);
-        save_log(dir, &log);
-        result
-    })
+        parse_status(&entry.status)
+    }
 }
 
 /// Drops the still-`pending` entry for `hash` after the node gave a determinate JSON-RPC refusal

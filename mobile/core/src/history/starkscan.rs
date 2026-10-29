@@ -8,6 +8,7 @@
 use super::activity::{is_activity_entry, on_chain_activity_entry, ActivityEntry, DecodedTransfer};
 use super::explorer::account_id_address;
 use super::time::parse_iso_timestamp;
+use crate::js::big::parse_bigint;
 use crate::js::felt::{canonical_felt, is_stark_field_element, same_felt};
 use crate::js::json::{self, JsValue};
 use crate::js::num::{is_safe_integer, js_trim, string_to_number, utf16_len};
@@ -204,29 +205,34 @@ fn parse_page(value: &JsValue) -> Option<Vec<Transfer>> {
     Some(transfers)
 }
 
-// `matchingToken`: the tracked token, or a synthetic "Untracked token" with safe decimals.
+// `matchingToken`: the tracked token, or a synthetic "Untracked token" with safe decimals, and
+// whether the user tracks it. An untracked token is any contract that emitted a Transfer naming
+// the account, so nothing it reports about the other party is trustworthy.
 fn matching_token(
     tokens: &[TokenConfig],
     transfer: &Transfer,
     network: NetworkId,
-) -> Option<TokenConfig> {
+) -> Option<(TokenConfig, bool)> {
     if let Some(token) = tokens
         .iter()
         .find(|t| same_felt(&t.address, &transfer.token_address))
     {
-        return Some(token.clone());
+        return Some((token.clone(), true));
     }
     let decimals = transfer.token_decimals.filter(|d| *d <= 36.0)?;
     let address =
         canonical_felt(&transfer.token_address).unwrap_or_else(|| transfer.token_address.clone());
-    Some(TokenConfig {
-        id: format!("starkscan:{}:{address}", network_code(network)),
-        network,
-        address,
-        symbol: "TOKEN".into(),
-        name: "Untracked token".into(),
-        decimals: decimals as u8,
-    })
+    Some((
+        TokenConfig {
+            id: format!("starkscan:{}:{address}", network_code(network)),
+            network,
+            address,
+            symbol: super::activity_rules::UNTRACKED_TOKEN_SYMBOL.into(),
+            name: "Untracked token".into(),
+            decimals: decimals as u8,
+        },
+        false,
+    ))
 }
 
 fn to_activity(
@@ -238,7 +244,7 @@ fn to_activity(
     if !transfer.erc20 {
         return None;
     }
-    let token = matching_token(tokens, transfer, network)?;
+    let (token, tracked) = matching_token(tokens, transfer, network)?;
     let account = account_id_address(account_id);
     let (counterparty, incoming) = if same_felt(&transfer.from_address, account) {
         (&transfer.to_address, false)
@@ -247,19 +253,34 @@ fn to_activity(
     } else {
         return None;
     };
+    let amount_raw = transfer
+        .amount
+        .clone()
+        .unwrap_or_else(|| transfer.raw_value.clone());
+    // Audit #163: a zero-amount leg (either direction) and an outgoing leg of an untracked token
+    // are free for a third party to fabricate, and exist only to plant a lookalike row. An amount
+    // `BigInt` cannot read counts as zero.
+    if parse_bigint(&amount_raw).is_none_or(|amount| amount.magnitude.is_zero())
+        || (!tracked && !incoming)
+    {
+        return None;
+    }
     let timestamp = parse_iso_timestamp(&transfer.timestamp_iso)
         .filter(|t| is_safe_integer(*t) && *t >= 0.0)?;
     let decoded = DecodedTransfer {
-        amount_raw: transfer
-            .amount
-            .clone()
-            .unwrap_or_else(|| transfer.raw_value.clone()),
+        amount_raw,
         block_number: 0,
         counterparty: canonical_felt(counterparty).unwrap_or_else(|| counterparty.clone()),
         incoming,
         hash: canonical_felt(&transfer.tx_hash).unwrap_or_else(|| transfer.tx_hash.clone()),
     };
-    let entry = on_chain_activity_entry(account_id, &decoded, network, timestamp as u64, &token);
+    let mut entry =
+        on_chain_activity_entry(account_id, &decoded, network, timestamp as u64, &token);
+    // An incoming untracked-token row stays visible, but without a stored counterparty the feed
+    // offers no one-click copy of whatever address the arbitrary contract named as the sender.
+    if !tracked {
+        entry.counterparty = None;
+    }
     is_activity_entry(&entry).then_some(entry)
 }
 

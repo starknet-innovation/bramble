@@ -3,10 +3,15 @@
 //! Summaries are load-bearing in the extension (dedup matches on them), so they are built here,
 //! exactly, and never by the host.
 
+use std::collections::HashSet;
+
 use serde_json::{json, Map, Value};
 
+use super::activity_rules::{
+    activity_token_address, direction_text, is_recorded_token_address, parse_direction,
+};
 use super::explorer::is_account_id_for_network;
-use crate::activity::store::{kind_text, parse_kind, parse_status, status_text, unresolved};
+use crate::activity::store::{kind_text, parse_kind, parse_status, status_text};
 use crate::js::felt::{
     canonical_felt, is_stark_field_element, same_felt, same_felt_value, uint256_felts,
 };
@@ -26,13 +31,25 @@ pub enum FailureNotice {
     Pending,
 }
 
+/// Whether value came into or went out of the account (`ActivityEntry.direction`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum TransferDirection {
+    In,
+    Out,
+}
+
 /// The extension's `ActivityEntry`. Built only by the core (on-chain rows) or validated by it
-/// (`ActivityBook::record_local`).
+/// (`activity::store::record`).
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ActivityEntry {
     pub account_id: String,
     pub amount: Option<String>,
     pub counterparty: Option<String>,
+    /// Recorded where known: from the decoded transfer on discovered rows, `Out` on a send this
+    /// wallet made. The feed reads it before the summary, whose token symbol a third party
+    /// chooses (Sherlock 196). Absent on legacy rows and rows that are not one value movement.
+    #[uniffi(default = None)]
+    pub direction: Option<TransferDirection>,
     pub failure_notice: Option<FailureNotice>,
     pub finalized_on_l1: Option<bool>,
     pub hash: String,
@@ -43,6 +60,9 @@ pub struct ActivityEntry {
     pub submitted_at: u64,
     pub summary: String,
     pub token: Option<String>,
+    /// The canonical address of the token `token` names (issue 643); never without `token`.
+    #[uniffi(default = None)]
+    pub token_address: Option<String>,
 }
 
 fn optional_detail(value: Option<&String>) -> bool {
@@ -58,6 +78,7 @@ pub(crate) fn is_activity_entry(entry: &ActivityEntry) -> bool {
         && optional_detail(entry.amount.as_ref())
         && optional_detail(entry.counterparty.as_ref())
         && optional_detail(entry.token.as_ref())
+        && is_recorded_token_address(entry.token_address.as_deref(), entry.token.as_deref())
         && entry.not_found_count.is_none_or(|n| n <= MAX_SAFE_INTEGER)
 }
 
@@ -69,6 +90,9 @@ pub fn entry_to_json(entry: &ActivityEntry) -> Value {
     }
     if let Some(v) = &entry.counterparty {
         map.insert("counterparty".into(), json!(v));
+    }
+    if let Some(v) = entry.direction {
+        map.insert("direction".into(), json!(direction_text(v)));
     }
     if let Some(v) = entry.failure_notice {
         map.insert(
@@ -95,6 +119,9 @@ pub fn entry_to_json(entry: &ActivityEntry) -> Value {
     if let Some(v) = &entry.token {
         map.insert("token".into(), json!(v));
     }
+    if let Some(v) = &entry.token_address {
+        map.insert("tokenAddress".into(), json!(v));
+    }
     Value::Object(map)
 }
 
@@ -105,10 +132,11 @@ fn safe_count(value: &JsValue) -> Option<u64> {
 
 /// Reads a stored or fixture entry; `None` unless it passes `isActivityEntry`.
 pub fn entry_from_json(value: &JsValue) -> Option<ActivityEntry> {
-    const KEYS: [&str; 13] = [
+    const KEYS: [&str; 15] = [
         "accountId",
         "amount",
         "counterparty",
+        "direction",
         "failureNotice",
         "finalizedOnL1",
         "hash",
@@ -119,6 +147,7 @@ pub fn entry_from_json(value: &JsValue) -> Option<ActivityEntry> {
         "submittedAt",
         "summary",
         "token",
+        "tokenAddress",
     ];
     if !value
         .as_object()?
@@ -137,6 +166,10 @@ pub fn entry_from_json(value: &JsValue) -> Option<ActivityEntry> {
         account_id: text("accountId")?,
         amount: optional_text("amount")?,
         counterparty: optional_text("counterparty")?,
+        direction: match optional_text("direction")? {
+            None => None,
+            Some(text) => Some(parse_direction(&text)?),
+        },
         failure_notice: match value.get("failureNotice") {
             None => None,
             Some(JsValue::String(s)) if s == "pending" => Some(FailureNotice::Pending),
@@ -159,6 +192,7 @@ pub fn entry_from_json(value: &JsValue) -> Option<ActivityEntry> {
         submitted_at: safe_count(value.get("submittedAt")?)?,
         summary: text("summary")?,
         token: optional_text("token")?,
+        token_address: optional_text("tokenAddress")?,
     };
     is_activity_entry(&entry).then_some(entry)
 }
@@ -206,6 +240,11 @@ pub(crate) fn on_chain_activity_entry(
         account_id: account_id.to_string(),
         amount: Some(amount),
         counterparty: Some(decoded.counterparty.clone()),
+        direction: Some(if decoded.incoming {
+            TransferDirection::In
+        } else {
+            TransferDirection::Out
+        }),
         failure_notice: None,
         finalized_on_l1: None,
         hash: decoded.hash.clone(),
@@ -216,6 +255,7 @@ pub(crate) fn on_chain_activity_entry(
         submitted_at: timestamp_ms,
         summary: utf16_slice(&summary, 0, MAX_SUMMARY_LENGTH),
         token: Some(token.symbol.clone()),
+        token_address: activity_token_address(&token.address),
     }
 }
 
@@ -230,58 +270,38 @@ fn tx_key(entry: &ActivityEntry) -> String {
 /// The per-leg key chain rows de-duplicate on (`legKey` without the network prefix).
 pub(crate) fn leg_suffix(entry: &ActivityEntry) -> String {
     format!(
-        "\u{0}{}\u{0}{}\u{0}{}",
+        "\u{0}{}\u{0}{}\u{0}{}\u{0}{}",
         entry.token.as_deref().unwrap_or(""),
+        entry.token_address.as_deref().unwrap_or(""),
         entry.counterparty.as_deref().unwrap_or(""),
         entry.amount.as_deref().unwrap_or("")
     )
 }
 
-/// `mergeActivity`: local rows keep their identity (an unresolved one is promoted to accepted
-/// when the chain saw its transfer); chain-only rows de-duplicate per leg; newest first.
+fn leg_key(entry: &ActivityEntry) -> String {
+    format!("{}{}", tx_key(entry), leg_suffix(entry))
+}
+
+/// `mergeActivity`: every row is keyed per leg, local rows included, so a stored multi-leg
+/// transaction keeps all its legs (Sherlock 204). A transaction the wallet recorded owns every
+/// chain leg with its hash, and a chain leg never changes a local row's status: a reverted
+/// transaction still emits its fee `Transfer`, so only the status re-poll settles a row (#653).
+/// Newest first.
 pub fn merge_activity(local: &[ActivityEntry], on_chain: &[ActivityEntry]) -> Vec<ActivityEntry> {
-    let mut by_key: Vec<(String, ActivityEntry)> = Vec::new();
-    let mut local_keys: Vec<String> = Vec::new();
-    let set =
-        |by_key: &mut Vec<(String, ActivityEntry)>, key: String, entry: ActivityEntry| match by_key
-            .iter_mut()
-            .find(|(k, _)| *k == key)
-        {
-            Some(slot) => slot.1 = entry,
-            None => by_key.push((key, entry)),
-        };
+    let mut keys: HashSet<String> = HashSet::new();
+    let mut local_txs: HashSet<String> = HashSet::new();
+    let mut merged: Vec<ActivityEntry> = Vec::new();
     for entry in local {
-        let key = tx_key(entry);
-        local_keys.push(key.clone());
-        set(&mut by_key, key, entry.clone());
+        if keys.insert(leg_key(entry)) {
+            merged.push(entry.clone());
+            local_txs.insert(tx_key(entry));
+        }
     }
     for entry in on_chain {
-        let tk = tx_key(entry);
-        if local_keys.contains(&tk) {
-            let local_match = by_key
-                .iter()
-                .find(|(k, _)| *k == tk)
-                .map(|(_, e)| e.clone());
-            if let Some(found) = local_match {
-                if unresolved(found.status) && entry.status == TxStatus::Accepted {
-                    set(
-                        &mut by_key,
-                        tk,
-                        ActivityEntry {
-                            status: TxStatus::Accepted,
-                            ..found
-                        },
-                    );
-                }
-            }
-            continue;
-        }
-        let key = format!("{tk}{}", leg_suffix(entry));
-        if !by_key.iter().any(|(k, _)| *k == key) {
-            by_key.push((key, entry.clone()));
+        if !local_txs.contains(&tx_key(entry)) && keys.insert(leg_key(entry)) {
+            merged.push(entry.clone());
         }
     }
-    let mut merged: Vec<ActivityEntry> = by_key.into_iter().map(|(_, e)| e).collect();
     merged.sort_by_key(|e| std::cmp::Reverse(e.submitted_at));
     merged
 }
@@ -309,6 +329,10 @@ pub fn decode_transfer_event(event: &JsValue, account: &str) -> Option<DecodedTr
         (data.get(2), data.get(3))
     };
     let (amount_low, amount_high) = uint256_felts(low, high)?;
+    // Audit #163: zero in either direction is planted (`transfer_from` of 0 needs no allowance).
+    if amount_low == 0 && amount_high == 0 {
+        return None;
+    }
     let from = canonical_felt(raw_from?.as_str()?)?;
     let to = canonical_felt(raw_to?.as_str()?)?;
     if !is_stark_field_element(&from) || !is_stark_field_element(&to) {

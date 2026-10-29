@@ -8,6 +8,7 @@ use std::path::Path;
 use super::store::{load_log, locked, save_log, Entry, SyncRecord};
 use crate::history::activity::{entry_from_json, entry_to_json, merge_activity, ActivityEntry};
 use crate::history::activity_book::ActivityBook;
+use crate::history::activity_rules::without_planted_rows;
 use crate::js::json;
 use crate::WalletCore;
 
@@ -72,6 +73,7 @@ pub(crate) fn merge(
             .get(account_id)
             .map(|entries| entries.iter().filter_map(typed).collect())
             .unwrap_or_default();
+        let local = without_planted_rows(local);
         let mut merged = merge_activity(&local, on_chain);
         merged.truncate(MAX_ENTRIES_PER_SCOPE);
         // Oldest first on disk, as `store::record` appends.

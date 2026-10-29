@@ -9,6 +9,7 @@ fn entry(hash: &str, at: u64) -> Entry {
         account_id: SCOPE.into(),
         amount: Some("1.5".into()),
         counterparty: Some("0x1".into()),
+        direction: None,
         failure_notice: None,
         finalized_on_l1: None,
         hash: hash.into(),
@@ -19,6 +20,7 @@ fn entry(hash: &str, at: u64) -> Entry {
         submitted_at: at,
         summary: "Send 1.5 STRK to 0x1…0x1".into(),
         token: Some("STRK".into()),
+        token_address: None,
     }
 }
 
@@ -201,4 +203,42 @@ fn discard_drops_only_an_unobserved_pending_entry() {
         .map(|e| e.hash)
         .collect();
     assert_eq!(left, vec!["0xcd".to_string()]);
+}
+
+#[test]
+fn an_observation_reaches_every_leg_of_a_transaction() {
+    use crate::history::activity::{ActivityEntry, ActivityKind};
+    let dir = tempfile::tempdir().unwrap();
+    let leg = |token: &str| ActivityEntry {
+        account_id: SCOPE.into(),
+        amount: Some("1".into()),
+        counterparty: Some("0x5".into()),
+        direction: None,
+        failure_notice: None,
+        finalized_on_l1: None,
+        hash: "0xab".into(),
+        kind: ActivityKind::Transfer,
+        network: crate::networks::NetworkId::Sepolia,
+        not_found_count: None,
+        status: TxStatus::Accepted,
+        submitted_at: 1,
+        summary: format!("Received 1 {token} from 0x5"),
+        token: Some(token.into()),
+        token_address: None,
+    };
+    // A swap's two legs share one hash and are stored as two rows.
+    super::super::feed::merge(dir.path(), SCOPE, &[leg("STRK"), leg("ETH")], 1);
+    assert_eq!(list(dir.path(), SCOPE).len(), 2);
+    let settled = Observation::Found {
+        status: TxStatus::Accepted,
+        accepted_finality: true,
+        finalized_on_l1: true,
+    };
+    assert_eq!(
+        observe(dir.path(), SCOPE, &Felt::from(0xabu8), settled),
+        Some(TxStatus::Accepted)
+    );
+    assert!(list(dir.path(), SCOPE)
+        .iter()
+        .all(|e| e.finalized_on_l1 == Some(true)));
 }
