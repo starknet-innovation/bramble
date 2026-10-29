@@ -22,6 +22,7 @@ import {
   guardDeployments,
   nextUtcMidnight,
   type PendingDeployments,
+  SPONSORED_ATTEMPT_WINDOW_MS,
   SPONSORED_DEPLOY_HOLD_MS,
 } from "../../../apps/extension/src/background/accounts/pending-deployments";
 import { SPONSORED_DEPLOY_DECLINED } from "../../../apps/extension/src/background/accounts/sponsored-deployment";
@@ -145,40 +146,45 @@ describe("which accounts are offered sponsorship", () => {
 });
 
 describe("a quote the gateway does not give offers nothing, quietly", () => {
-  // The last field: whether it is the gateway's own no to this account (a
-  // clean JSON-RPC error), which a press then remembers until 00:00 UTC.
-  // Anything else — the gateway switched off included — leaves no record.
-  const answers: readonly [string, () => Promise<Response> | Response, boolean][] = [
+  // The last field: until when a press then stops offers (the clock is 0), or
+  // undefined for no record. Only the budget (00:00 UTC) and an attempt this
+  // hour (one hour) are remembered; any other answer leaves no record.
+  const answers: readonly [string, () => Promise<Response> | Response, number | undefined][] = [
     [
       "switched off (404 sponsored_deploy_disabled)",
       plain(404, "sponsored_deploy_disabled"),
-      false,
+      undefined,
     ],
-    ["rate-limited (plain 429)", plain(429, "too_many_requests"), false],
+    ["rate-limited (plain 429)", plain(429, "too_many_requests"), undefined],
+    ["rate-limited (429 JSON-RPC)", gatewayError(429, "rate_limited"), undefined],
     [
       "budget spent (429 sponsorship_budget_exhausted)",
       gatewayError(429, "sponsorship_budget_exhausted"),
-      true,
+      DAY,
     ],
-    ["already attempted (429)", gatewayError(429, "sponsored_deploy_already_attempted"), true],
-    ["a clean JSON-RPC refusal on a 200", gatewayError(200, "class_not_supported"), true],
-    ["a 5xx", plain(502, "bad gateway"), false],
-    ["a 503 with a JSON-RPC error", gatewayError(503, "deployment_status_unavailable"), false],
+    [
+      "already attempted (429)",
+      gatewayError(429, "sponsored_deploy_already_attempted"),
+      SPONSORED_ATTEMPT_WINDOW_MS,
+    ],
+    ["a clean JSON-RPC refusal on a 200", gatewayError(200, "class_not_supported"), undefined],
+    ["a 5xx", plain(502, "bad gateway"), undefined],
+    ["a 503 with a JSON-RPC error", gatewayError(503, "deployment_status_unavailable"), undefined],
     [
       "a transport failure",
       () => {
         throw new TypeError("fetch failed");
       },
-      false,
+      undefined,
     ],
     [
       "a deadline",
       () => {
         throw new DOMException("deadline", "TimeoutError");
       },
-      false,
+      undefined,
     ],
-    ["a garbled body", plain(200, "{not json"), false],
+    ["a garbled body", plain(200, "{not json"), undefined],
     [
       "an unusable echo",
       () =>
@@ -187,17 +193,17 @@ describe("a quote the gateway does not give offers nothing, quietly", () => {
           jsonrpc: "2.0",
           result: { deployment: {}, type: "deploy" },
         }),
-      false,
+      undefined,
     ],
   ];
-  for (const [name, answer, refusal] of answers) {
+  for (const [name, answer, refusedUntil] of answers) {
     test(`${name}: "none", and a press sends nothing and turns self-paid`, async () => {
       const sponsor = quoteAnswer(answer);
       const { activity, deps, pending } = await harness({ relay: sponsor });
       expect(await offer(deps)).toBe("none");
       expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
       expect(sponsor.calls).toEqual(["paymaster_buildTransaction", "paymaster_buildTransaction"]);
-      expect(pending.entry(ozAccount)?.refusedUntil).toBe(refusal ? DAY : undefined);
+      expect(pending.entry(ozAccount)?.refusedUntil).toBe(refusedUntil);
       expect(await activity.list()).toEqual([]);
       expect(await selfPaid(pending, 0)).toBe(1);
     });
@@ -205,11 +211,18 @@ describe("a quote the gateway does not give offers nothing, quietly", () => {
 });
 
 describe("a broadcast refused before forwarding sent nothing", () => {
-  for (const code of ["sponsored_deploy_already_attempted", "sponsorship_budget_exhausted"]) {
+  const windows: readonly [string, number | undefined][] = [
+    ["sponsored_deploy_already_attempted", SPONSORED_ATTEMPT_WINDOW_MS],
+    ["sponsorship_budget_exhausted", DAY],
+    ["rate_limited", undefined],
+    ["some_future_code", undefined],
+  ];
+  for (const [code, refusedUntil] of windows) {
     test(`429 ${code} turns self-paid at once`, async () => {
       const { activity, deps, pending } = await harness({ relay: relay(gatewayError(429, code)) });
       expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
-      expect(pending.entry(ozAccount)).toMatchObject({ holdUntil: 0, refusedUntil: DAY });
+      expect(pending.entry(ozAccount)?.refusedUntil).toBe(refusedUntil);
+      expect(pending.entry(ozAccount)?.holdUntil ?? 0).toBe(0);
       expect(await activity.list()).toEqual([]);
       expect(await selfPaid(pending, 0)).toBe(1);
     });
@@ -242,7 +255,7 @@ describe("a broadcast refused before forwarding sent nothing", () => {
         }),
       });
       expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
-      expect(pending.entry(ozAccount)?.refusedUntil).toBe(DAY);
+      expect(pending.entry(ozAccount)).toBeUndefined();
     }
   });
 });
@@ -338,6 +351,27 @@ describe("after the sponsor says no, no offer until 00:00 UTC", () => {
     expect(await offer(deps, 6 * DAY)).toBe("available");
     expect(sponsor.calls.length).toBe(asked + 1);
     expect(pending.entry(ozAccount)).toBeUndefined();
+  });
+
+  test("an attempt already made this hour stops offers for an hour, not until midnight", async () => {
+    const sponsor = relay(gatewayError(429, "sponsored_deploy_already_attempted"));
+    const { deps, pending } = await harness({ relay: sponsor });
+    expect(await submit(deps, T)).toEqual(SPONSORED_DEPLOY_DECLINED);
+    expect(pending.entry(ozAccount)?.refusedUntil).toBe(T + SPONSORED_ATTEMPT_WINDOW_MS);
+    const asked = sponsor.calls.length;
+    expect(await offer(deps, T + SPONSORED_ATTEMPT_WINDOW_MS - 1)).toBe("none");
+    expect(sponsor.calls.length).toBe(asked);
+    expect(await offer(deps, T + SPONSORED_ATTEMPT_WINDOW_MS)).toBe("available");
+  });
+
+  test("any other clean refusal is self-paid this time only", async () => {
+    for (const code of ["rate_limited", "account_already_deployed", "not_a_known_code"]) {
+      const sponsor = relay(gatewayError(429, code));
+      const { deps, pending } = await harness({ relay: sponsor });
+      expect(await submit(deps, T)).toEqual(SPONSORED_DEPLOY_DECLINED);
+      expect(pending.entry(ozAccount)).toBeUndefined();
+      expect(await offer(deps, T + 1)).toBe("available");
+    }
   });
 
   test("the gateway switched off is not a refusal: switching it on offers the same day", async () => {

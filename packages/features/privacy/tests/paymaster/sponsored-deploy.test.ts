@@ -220,6 +220,34 @@ describe("sponsored deploy quote", () => {
     }
   });
 
+  test("carries the relay's error message as the refusal's reason", async () => {
+    const http = async (): Promise<Response> =>
+      new Response(
+        JSON.stringify({
+          error: { code: -32000, message: "sponsorship_budget_exhausted" },
+          id: "bramble-strk20",
+          jsonrpc: "2.0",
+        }),
+        { status: 429 },
+      );
+    for (const sending of [
+      quoteSponsoredDeploy({ config, deployment: deployment(), http }),
+      submitSponsoredDeploy({
+        config,
+        http,
+        isAuthorized: () => true,
+        quote: { deployment: deployment() },
+      }),
+    ]) {
+      const refusal = await sending.then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(refusal).toBeInstanceOf(SponsoredDeployRefusedError);
+      expect((refusal as SponsoredDeployRefusedError).reason).toBe("sponsorship_budget_exhausted");
+    }
+  });
+
   test("reads the gateway switched off, or any bare 4xx, as unavailable, never this account's no", async () => {
     const answers = [
       async (): Promise<Response> => new Response("sponsored_deploy_disabled", { status: 404 }),

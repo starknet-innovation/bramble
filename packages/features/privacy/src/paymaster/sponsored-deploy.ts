@@ -58,12 +58,16 @@ export const DEPLOYMENT_IN_PROGRESS = "Deploying your account. This can take a f
 /**
  * The relay explicitly refused: its own clean JSON-RPC error. Nothing was
  * sent. Its message is a diagnostic, never shown: the background turns every
- * refusal into a silent self-paid deploy.
+ * refusal into a silent self-paid deploy. `reason` is the error's message as
+ * the relay sent it, untrusted: it may only be compared with known codes to
+ * decide how long to stop offering, never to decide whether anything was sent.
  */
 export class SponsoredDeployRefusedError extends WalletError {
-  constructor() {
+  readonly reason: string;
+  constructor(reason: string) {
     super("sponsored deploy refused");
     this.name = "SponsoredDeployRefusedError";
+    this.reason = reason;
   }
 }
 
@@ -297,7 +301,7 @@ export const quoteSponsoredDeploy = async (input: {
     "paymaster_buildTransaction",
     { parameters: PARAMETERS, transaction: { deployment: input.deployment, type: "deploy" } },
   );
-  if (answer.kind === "refused") throw new SponsoredDeployRefusedError();
+  if (answer.kind === "refused") throw new SponsoredDeployRefusedError(answer.message);
   if (answer.kind === "lost") throw new SponsoredDeployUnavailableError();
   const result = answer.result;
   if (
@@ -337,7 +341,7 @@ export const submitSponsoredDeploy = async (input: {
     BROADCAST_PAYMASTER_METHOD,
     { parameters: PARAMETERS, transaction: { deployment: input.quote.deployment, type: "deploy" } },
   );
-  if (answer.kind === "refused") throw new SponsoredDeployRefusedError();
+  if (answer.kind === "refused") throw new SponsoredDeployRefusedError(answer.message);
   const result = answer.kind === "result" ? answer.result : undefined;
   // Anything but a stated refusal may have deployed. A result without a usable
   // hash leaves the wallet no handle on it either: status unknown.

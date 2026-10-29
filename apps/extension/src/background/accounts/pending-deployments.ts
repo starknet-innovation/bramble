@@ -18,9 +18,9 @@
  * The entry outlives its hold as a marker: an account whose sponsored attempt
  * was accepted or lost is never offered sponsorship again. A marker is never
  * evicted; it is deleted only when the account is deployed. An attempt the
- * sponsor refused (nothing sent) becomes a refusal record instead: no hold,
- * and no offer for that account until the next 00:00 UTC, when the gateway's
- * daily budget resets ({@link nextUtcMidnight}); it is then deleted. Any other
+ * gateway refused for a reason with a known window (nothing sent) becomes a
+ * refusal record instead: no hold, and no offer for that account until the
+ * window ends ({@link refusalWindowEnd}); it is then deleted. Any other
  * attempt that sent nothing is deleted. An unreadable store (or one holding more than
  * {@link PENDING_DEPLOYMENTS_LIMIT} entries) loads as empty and marks itself
  * unreadable: no hold, so self-paid deploys and sends go ahead, but no
@@ -60,6 +60,22 @@ const DAY_MS = 86_400_000;
  * daily sponsorship budget resets. Pure: the caller supplies the clock.
  */
 export const nextUtcMidnight = (now: number): number => (Math.floor(now / DAY_MS) + 1) * DAY_MS;
+
+/** The gateway's per-address window between sponsored attempts. */
+export const SPONSORED_ATTEMPT_WINDOW_MS = 3_600_000;
+
+/**
+ * When to offer sponsorship again after the gateway refused with `reason` (its
+ * JSON-RPC error message), or null for no record: the daily budget spent
+ * waits for the next 00:00 UTC, an attempt already made this hour waits an
+ * hour, and anything else (a rate limit, an unknown code) is not remembered.
+ * Only how long offers stop depends on it, never whether anything was sent.
+ */
+export const refusalWindowEnd = (reason: string, now: number): number | null => {
+  if (reason === "sponsorship_budget_exhausted") return nextUtcMidnight(now);
+  if (reason === "sponsored_deploy_already_attempted") return now + SPONSORED_ATTEMPT_WINDOW_MS;
+  return null;
+};
 
 /**
  * Most entries kept. Far more accounts than one wallet sponsors; a full store
@@ -102,9 +118,9 @@ export type PendingDeployments = {
   readonly recordHash: (account: PendingAccount, hash: string) => Promise<void>;
   /**
    * Turns the account's entry into a refusal record: the sponsor said no and
-   * nothing was sent, so no hold, and no offer until the next 00:00 UTC.
+   * nothing was sent, so no hold, and no offer before `until`.
    */
-  readonly recordRefusal: (account: PendingAccount, now: number) => Promise<void>;
+  readonly recordRefusal: (account: PendingAccount, now: number, until: number) => Promise<void>;
   /** Ends the hold early but keeps the marker. */
   readonly endHold: (account: PendingAccount) => Promise<void>;
   /** Deletes the entry: the account is deployed, or the attempt sent nothing. */
@@ -192,12 +208,12 @@ export const createPendingDeployments = (store: KeyValueStore): PendingDeploymen
     entry: (account) => entries.get(keyOf(account)),
     persist,
     recordHash: (account, hash) => update(account, { hash }),
-    recordRefusal: (account, now) => {
+    recordRefusal: (account, now, until) => {
       entries.set(keyOf(account), {
         address: canonicalFelt(account.address) ?? account.address,
         holdUntil: 0,
         networkId: account.networkId,
-        refusedUntil: nextUtcMidnight(now),
+        refusedUntil: until,
         since: now,
       });
       return persist();
@@ -218,7 +234,7 @@ export const memoryPendingDeployments = (): PendingDeployments =>
  * What the account's sponsored attempt means now: "none" (no attempt),
  * "deployed" (the chain shows the account deployed), "held" (inside the hold),
  * "may-land" (the hold is over and the account is not confirmed deployed), or
- * "refused" (the sponsor said no today; nothing was sent).
+ * "refused" (the sponsor said no within its window; nothing was sent).
  */
 export type SponsoredAttempt = "deployed" | "held" | "may-land" | "none" | "refused";
 

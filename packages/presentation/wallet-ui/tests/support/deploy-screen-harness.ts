@@ -57,6 +57,7 @@ export const screen = (container: HTMLElement) => ({
 export const deployWallet = (input: {
   readonly activity?: () => unknown;
   readonly deployed?: () => boolean;
+  readonly loadStatus?: () => Promise<unknown>;
   readonly selfPaid?: () => Promise<string>;
   readonly sponsored: () => Promise<string | null>;
   readonly sponsorship: DeploySponsorship | (() => DeploySponsorship);
@@ -85,7 +86,7 @@ export const deployWallet = (input: {
         accountId: DEPLOY_ACCOUNT,
         deployed: input.deployed?.() ?? false,
       }),
-      loadStatus: async () => ({ networkId: "SN_SEPOLIA" }),
+      loadStatus: async () => (input.loadStatus ? input.loadStatus() : { networkId: "SN_SEPOLIA" }),
     } as unknown as ShellBindingDeps["wallet"],
   };
 };

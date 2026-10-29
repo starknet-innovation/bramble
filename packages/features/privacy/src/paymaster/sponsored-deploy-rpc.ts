@@ -35,16 +35,15 @@ const SPONSORED_DEPLOY_RPC_ID = "bramble-strk20";
  */
 export type SponsoredRelayAnswer =
   | { readonly kind: "lost" }
-  | { readonly kind: "refused" }
+  | { readonly kind: "refused"; readonly message: string }
   | { readonly kind: "result"; readonly result: unknown };
 
 const LOST: SponsoredRelayAnswer = { kind: "lost" };
-const REFUSED: SponsoredRelayAnswer = { kind: "refused" };
 
 // A JSON-RPC error object the relay stated for itself: an integer code and a
 // string message, as JSON-RPC 2.0 requires. `null`, a string, or an object
 // missing either is not one.
-const isRpcError = (value: unknown): boolean =>
+const isRpcError = (value: unknown): value is { readonly message: string } =>
   isRecord(value) &&
   typeof value["code"] === "number" &&
   Number.isInteger(value["code"]) &&
@@ -66,7 +65,8 @@ const classifySponsoredRelayAnswer = (status: number, body: unknown): SponsoredR
   }
   const hasResult = Object.hasOwn(body, "result");
   if (Object.hasOwn(body, "error")) {
-    return isRpcError(body["error"]) && !hasResult ? REFUSED : LOST;
+    const error = body["error"];
+    return isRpcError(error) && !hasResult ? { kind: "refused", message: error.message } : LOST;
   }
   return status < 300 && hasResult ? { kind: "result", result: body["result"] } : LOST;
 };

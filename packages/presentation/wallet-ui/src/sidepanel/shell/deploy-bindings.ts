@@ -151,21 +151,35 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   // and it re-checks on its own: the chain showing the account deployed
   // repaints it deployed, and the hold ending brings back the plain self-paid
   // screen, quoted afresh. Leaving, locking or switching stops the re-check.
+  // A read that fails keeps the screen re-checking rather than stranding it.
   const holdRecheck = (current: () => boolean): void => {
-    void deps.wallet.deploySponsorship().then(async (sponsorship) => {
+    const again = (): void => {
+      if (current()) scheduleDeployHold(journey, holdTimer, live, holdRecheck);
+    };
+    void (async () => {
+      const sponsorship = await deps.wallet.deploySponsorship();
       if (!current()) return;
       if (sponsorship === "held") {
-        scheduleDeployHold(journey, holdTimer, live, holdRecheck);
+        again();
         return;
       }
       const deployment = await deps.wallet.loadDeploymentStatus().catch(() => null);
       if (!current()) return;
-      stopDeployHold(journey);
       if (deployment?.deployed && deployment.accountId === journey.accountId) {
-        const status = await deps.wallet.loadStatus();
-        if (live()) await deps.render(status, "action");
+        const status = await deps.wallet.loadStatus().catch(() => null);
+        if (!current()) return;
+        if (status === null) {
+          again();
+          return;
+        }
+        stopDeployHold(journey);
+        // A repaint that fails leaves this screen up: keep re-checking it.
+        await deps.render(status, "action").catch(() => {
+          if (live()) scheduleDeployHold(journey, holdTimer, live, holdRecheck);
+        });
         return;
       }
+      stopDeployHold(journey);
       journey.sponsorship = "none";
       journey.quoted = false;
       if (!target.isConnected) {
@@ -175,7 +189,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
       paintDeployHold(target, reviewStage, reviewPanelRoot, false);
       journey.quoted = true;
       quote(false);
-    });
+    })().catch(again);
   };
   const enterHold = (): void => {
     journey.sponsorship = "held";

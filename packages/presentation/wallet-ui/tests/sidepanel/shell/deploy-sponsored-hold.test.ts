@@ -78,6 +78,40 @@ describe("deploy screen during a sponsored attempt's hold", () => {
     expect(stub.calls.filter((call) => call === "deploySponsorship")).toHaveLength(4);
   });
 
+  test("a failed status read once deployed keeps re-checking until the deployed screen renders", async () => {
+    const timers = manualTimers();
+    const container = mount();
+    const repainted: unknown[] = [];
+    let failures = 1;
+    const stub = wallet({
+      deployed: () => true,
+      loadStatus: async () => {
+        if (failures-- > 0) throw new Error("status unavailable");
+        return { networkId: "SN_SEPOLIA" };
+      },
+      sponsored: async () => "0x5ab",
+      sponsorship: sequence("held", "none"),
+    });
+    bind(container, stub.wallet, {
+      current: () => true,
+      render: async (status) => {
+        repainted.push(status);
+      },
+      timers,
+    });
+    await tick();
+    timers.advance(DEPLOY_HOLD_RECHECK_MS);
+    await tick();
+    // Not stranded: still the deploying screen, with the next re-check queued.
+    expect(repainted).toEqual([]);
+    expectDeploying(container);
+    expect(timers.pending()).toBe(1);
+    timers.advance(DEPLOY_HOLD_RECHECK_MS);
+    await tick();
+    expect(repainted).toEqual([{ networkId: "SN_SEPOLIA" }]);
+    expect(timers.pending()).toBe(0);
+  });
+
   test("moves to the deployed screen when the chain shows the account deployed", async () => {
     const timers = manualTimers();
     const container = mount();

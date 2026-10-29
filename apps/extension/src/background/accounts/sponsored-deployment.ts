@@ -53,6 +53,7 @@ import { DEPLOY_ACTIVITY_SUMMARY } from "./deployment-ops";
 import {
   DEPLOYMENT_IN_PROGRESS,
   type PendingDeployments,
+  refusalWindowEnd,
   sponsoredAttemptState,
 } from "./pending-deployments";
 
@@ -139,7 +140,7 @@ const freshOfferRelay = async (
 /**
  * Decides what the deploy screen may offer. An earlier attempt answers "held"
  * while its hold stands and "none" after it; it is never offered again. An
- * account the sponsor refused answers "none" until the next 00:00 UTC, without
+ * account the sponsor refused answers "none" until its refusal window ends, without
  * asking the relay. Otherwise "none" unless
  * sponsorship is on for the network, the class and constructor are ones the
  * gateway sponsors, the account is confirmed undeployed, and its STRK balance
@@ -164,7 +165,7 @@ export const deploySponsorship = async (
       nowOf(deps),
     );
     if (attempt === "held") return "held";
-    // An earlier attempt (lost, accepted, or refused today) is not offered
+    // An earlier attempt (lost, accepted, refused in its window) is not offered
     // again, and an unreadable store may be hiding one: never offer then.
     if (attempt !== "none" || !pending.readable()) return "none";
     const deployment = sponsorableDeployment(input.account);
@@ -232,16 +233,19 @@ const reserve = async (
     : SPONSORED_DEPLOY_DECLINED;
 };
 
-// The sponsor said no and nothing was sent: no offer to this account until
-// the gateway's budget resets. A record that cannot be written falls back to
-// forgetting the attempt, which still leaves a self-paid deploy.
+// The sponsor said no and nothing was sent. A refusal with a known window
+// (budget spent, an attempt this hour) stops offers to this account until it
+// ends; any other refusal is not remembered. A record that cannot be written
+// falls back to forgetting the attempt, which still leaves a self-paid deploy.
 const declined = async (
   deps: SponsoredDeploymentDeps,
   pending: PendingDeployments,
   account: AccountRef,
+  refusal: SponsoredDeployRefusedError,
 ): Promise<Declined> => {
-  await pending
-    .recordRefusal(account, nowOf(deps))
+  const now = nowOf(deps);
+  const until = refusalWindowEnd(refusal.reason, now);
+  await (until === null ? pending.forget(account) : pending.recordRefusal(account, now, until))
     .catch(() => pending.forget(account))
     .catch(() => undefined);
   return SPONSORED_DEPLOY_DECLINED;
@@ -255,9 +259,10 @@ const refusedBroadcast = async (
   route: SponsoredRoute,
   account: AccountRef,
   rpcUrls: readonly string[],
+  refusal: SponsoredDeployRefusedError,
 ): Promise<RuntimeResponse> => {
   if ((await deploymentStatus(deps, account, rpcUrls)) !== "deployed") {
-    return declined(deps, route.pending, account);
+    return declined(deps, route.pending, account, refusal);
   }
   await route.pending.forget(account).catch(() => undefined);
   return { error: "account already deployed" };
@@ -283,9 +288,9 @@ const send = async (
   } catch (error) {
     // A quote never broadcasts. Whatever stopped it — switched off, refused,
     // unreachable — the sponsor is not covering this press: self-paid, no
-    // retry. Only the gateway's own no is remembered until the budget resets.
+    // retry. Only the gateway's own no can be remembered (see `declined`).
     if (error instanceof SponsoredDeployRefusedError) {
-      return declined(deps, route.pending, account);
+      return declined(deps, route.pending, account, error);
     }
     await route.pending.forget(account).catch(() => undefined);
     return SPONSORED_DEPLOY_DECLINED;
@@ -303,7 +308,7 @@ const send = async (
       return submissionUnknownResponse(error.message);
     }
     if (error instanceof SponsoredDeployRefusedError) {
-      return refusedBroadcast(deps, route, account, rpcUrls);
+      return refusedBroadcast(deps, route, account, rpcUrls, error);
     }
     await route.pending.forget(account).catch(() => undefined);
     return { error: error instanceof Error ? error.message : "sponsored deployment failed" };
@@ -330,9 +335,9 @@ const send = async (
  * Deploys the account through the sponsor. Answers
  * {@link SPONSORED_DEPLOY_DECLINED}, with nothing sent, when the class is not
  * sponsored, the route or store is off, an earlier attempt was accepted, lost
- * or refused today, the attempt cannot be stored, any quote fails, or the
- * gateway refuses the broadcast; a gateway refusal also stops offers to the
- * account until 00:00 UTC. Refuses during an earlier attempt's hold
+ * or refused within its window, the attempt cannot be stored, any quote fails,
+ * or the gateway refuses the broadcast; a budget refusal also stops offers to
+ * the account until 00:00 UTC, an already-attempted one for an hour. Refuses during an earlier attempt's hold
  * ({@link DEPLOYMENT_IN_PROGRESS}), when the chain shows it deployed (also
  * after a broadcast refusal), and when the chain cannot say
  * ({@link DEPLOYMENT_STATUS_UNKNOWN}). The attempt is persisted before the
