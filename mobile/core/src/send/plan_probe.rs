@@ -35,6 +35,9 @@ const GET_DEFERRED_REMOVE_SIGNERS: &str =
 /// The authorization shape this wallet produces for Ready accounts.
 const ARGENT_SIGNER_ARRAY: &str = "argent-signer-array";
 
+/// `atAcceptedBlock`: three attempts, then the miss fails closed.
+const PIN_ATTEMPTS: u8 = 3;
+
 /// Which step of the plan an account-state read belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Probe {
@@ -117,6 +120,7 @@ fn braavos_signers(result: &[Felt]) -> Option<(Option<Felt>, bool)> {
 impl PlanState {
     /// Starts the account-state reads for `probe`.
     pub(crate) fn probe(&mut self, probe: Probe) -> SendStep {
+        self.work.pin_attempts = 0;
         let address = self.account.address;
         if !self.account.is_argent() && !self.account.is_braavos() {
             return self.rpc(
@@ -141,7 +145,45 @@ impl PlanState {
         })
     }
 
+    /// A pinned read that missed the block starts the decision again, up to `PIN_ATTEMPTS`.
+    /// The pin request itself is not retried here: a failure of `starknet_blockHashAndNumber`
+    /// is a node error, not a sibling that has not seen a hash we already chose.
+    fn repin_on_block_miss(
+        &mut self,
+        expect: &Expect,
+        answer: &Option<Answer>,
+    ) -> Option<SendStep> {
+        let probe = match expect {
+            Expect::Class(probe) if self.account.is_argent() || self.account.is_braavos() => *probe,
+            Expect::Owner(probe)
+            | Expect::OwnerType(probe)
+            | Expect::Guardian(probe)
+            | Expect::Signers(probe)
+            | Expect::DeferredRemoval(probe)
+            | Expect::BlockTime(probe) => *probe,
+            _ => return None,
+        };
+        if !judge::block_not_found(answer) {
+            return None;
+        }
+        self.work.pin_attempts = self.work.pin_attempts.saturating_add(1);
+        if self.work.pin_attempts >= PIN_ATTEMPTS {
+            return None;
+        }
+        self.work.owner = None;
+        self.work.expire_at = Felt::ZERO;
+        Some(self.rpc(
+            Expect::Block(probe),
+            RpcPurpose::AcceptedBlock,
+            false,
+            |_, id| rpc_bodies::block_hash_and_number(id),
+        ))
+    }
+
     pub(crate) fn on_probe_reply(&mut self, expect: Expect, answer: Option<Answer>) -> SendStep {
+        if let Some(step) = self.repin_on_block_miss(&expect, &answer) {
+            return step;
+        }
         match expect {
             Expect::Block(probe) => match judge::accepted_block(answer) {
                 Ok(block) => {

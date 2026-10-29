@@ -114,6 +114,15 @@ pub fn class_value(answer: Option<Answer>) -> ClassValue {
     }
 }
 
+/// `isBlockNotFoundError`: the pinned block is missing on this node (JSON-RPC 24, or the
+/// message says so). A load-balanced sibling a block behind answers this; it is not chain state.
+pub fn block_not_found(answer: &Option<Answer>) -> bool {
+    match answer {
+        Some(Answer::Error { code, text }) => *code == Some(24) || text.contains("block not found"),
+        _ => false,
+    }
+}
+
 /// A `starknet_blockHashAndNumber` reply (`acceptedBlockIdentifier`): the non-zero hash of the
 /// latest accepted block. `Err(true)` for a JSON-RPC error, `Err(false)` for anything unusable.
 pub fn accepted_block(answer: Option<Answer>) -> Result<Felt, bool> {

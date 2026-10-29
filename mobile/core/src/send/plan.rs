@@ -191,6 +191,8 @@ pub(crate) struct Work {
     pub deploy_hash: Option<Felt>,
     pub deployment_accepted: bool,
     pub attempts: u32,
+    /// Re-pins used for the account-state read in progress (`atAcceptedBlock`, three tries).
+    pub pin_attempts: u8,
     pub invoke_hash: Option<Felt>,
     pub checkpoint: usize,
 }
