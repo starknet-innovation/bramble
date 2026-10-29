@@ -311,6 +311,7 @@ export const dashboard = (
   todayKey: number | null = null,
   signability: SignabilityVerdict | null = null,
   relays: readonly RelaySignature[] = [],
+  privateTotalWaitOver = false,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -465,6 +466,7 @@ export const dashboard = (
               currency,
               privacy,
               signability,
+              privateTotalWaitOver,
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}

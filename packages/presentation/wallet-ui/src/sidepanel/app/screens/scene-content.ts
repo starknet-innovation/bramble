@@ -25,6 +25,8 @@ export type SceneContentState = {
   readonly ledgerAvailable: boolean;
   readonly privacy: PrivacyDisclosureState;
   readonly privacyJourney: PrivacyJourneyState;
+  /** The hero's capped wait for private discovery has run out (issue 795). */
+  readonly privateTotalWaitOver: boolean;
   readonly selectedMultisigId: string | null;
   readonly selectedMultisigIntentId: string | null;
   readonly selectedNftId: string | null;
@@ -87,5 +89,6 @@ export const sceneContent = (cache: RenderData, state: SceneContentState): strin
     state.todayKey,
     cache.signability,
     cache.relays,
+    state.privateTotalWaitOver,
   );
 };

@@ -38,7 +38,44 @@ import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./hom
 import { readOnlyNotice } from "./recovery-view";
 
 /**
+ * Whether the active account's private discovery has landed: a reading for
+ * this account and network, not loading and not failed.
+ */
+const privateDiscoveryComplete = (
+  status: WalletStatus,
+  account: AccountRef | null,
+  privacy: PrivacyDisclosureState,
+): boolean =>
+  privacy.value !== null &&
+  !privacy.loading &&
+  privacy.error === null &&
+  privacy.value.accountId === account?.id &&
+  privacy.value.networkId === status.networkId;
+
+/**
+ * Whether private discovery that could still add to the Home total is out.
+ * Discovery that can no longer add a private balance is settled: privacy is
+ * off for this account (Ledger, a network without privacy, another wallet's
+ * registration), the account is undeployed, or the read failed. While this is
+ * true the hero holds "—" rather than print a public-only figure that jumps
+ * when the private part lands (issue 795), until the paint loop's capped wait
+ * (`hero-total-wait.ts`) lets the public total through.
+ */
+export const privateTotalPending = (
+  status: WalletStatus,
+  account: AccountRef | null,
+  privacy: PrivacyDisclosureState,
+  deployment: boolean | null,
+): boolean =>
+  !privateDiscoveryComplete(status, account, privacy) &&
+  privacy.error === null &&
+  privacyIneligibleKind(privacy) === null &&
+  deploymentKnownFromPrivacy(deployment, privacy) !== false;
+
+/**
  * Renders the account-scoped Home portfolio without the shared wallet shell.
+ * `privateTotalWaitOver` is the paint loop's verdict that the hero has held
+ * "—" long enough for pending private discovery and may show the public total.
  */
 export const homeScreen = (
   status: WalletStatus,
@@ -52,6 +89,7 @@ export const homeScreen = (
   currency: DisplayCurrency,
   privacy: PrivacyDisclosureState,
   signability: SignabilityVerdict | null = null,
+  privateTotalWaitOver = false,
 ): string => {
   // Read-only until proven otherwise never — the flag is advisory UX; the
   // transaction path enforces. Null (unknown) renders as a normal account.
@@ -75,33 +113,18 @@ export const homeScreen = (
     )?.id ?? null;
   const privateReady = privacy.value?.registration === "registered";
   const balancesComplete =
-    "balances" in balances &&
-    privacy.value !== null &&
-    !privacy.loading &&
-    privacy.error === null &&
-    privacy.value.accountId === account?.id &&
-    privacy.value.networkId === status.networkId;
-  // Discovery that can no longer add a private balance: privacy is off for
-  // this account (Ledger, a network without privacy, another wallet's
-  // registration), the account is undeployed, or the read failed. Until the
-  // balances are complete or settled this way, the hero holds "—" rather than
-  // print a public-only figure that jumps when the private part lands (795).
-  const privateSettled =
-    privacy.error !== null ||
-    privacyIneligibleKind(privacy) !== null ||
-    deploymentKnownFromPrivacy(deployment, privacy) === false;
+    "balances" in balances && privateDiscoveryComplete(status, account, privacy);
+  const totalKnown = account !== null && "balances" in balances && Object.keys(prices).length > 0;
   const showTotal =
-    account !== null &&
-    "balances" in balances &&
-    Object.keys(prices).length > 0 &&
-    (balancesComplete || privateSettled);
+    totalKnown &&
+    (privateTotalWaitOver || !privateTotalPending(status, account, privacy, deployment));
   const total = showTotal ? portfolioTotal(unified, prices) : 0;
   return dockScreen(
     "home",
     `${pendingCallout(pendingCount)}
     <section class="hero" data-live-group>
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
-      ${showTotal ? heroChange(unified, prices, changes, currency) : ""}
+      ${totalKnown ? heroChange(unified, prices, changes, currency, !showTotal) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
       ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
       ${account ? "" : noAccountEmpty(status)}

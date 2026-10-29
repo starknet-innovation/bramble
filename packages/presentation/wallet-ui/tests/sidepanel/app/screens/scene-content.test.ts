@@ -40,6 +40,7 @@ const state: SceneContentState = {
   ledgerAvailable: true,
   privacy: { error: null, loading: false, value: null },
   privacyJourney: { stage: "idle" },
+  privateTotalWaitOver: false,
   selectedMultisigId: null,
   selectedMultisigIntentId: null,
   selectedNftId: null,
