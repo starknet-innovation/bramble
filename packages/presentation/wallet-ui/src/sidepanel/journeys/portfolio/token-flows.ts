@@ -16,6 +16,10 @@ import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import { isDefaultToken, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  PRIVACY_OTHER_WALLET,
+  PRIVACY_OTHER_WALLET_NEXT,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -289,25 +293,30 @@ export const tokenDetailFlow = (
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
         ${
-          privacy.error && deployment !== false
-            ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
+          privacy.blockerKind === "other-wallet"
+            ? `<div class="private-balance-summary muted">
+                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="token-fiat">${escapeHtml(PRIVACY_OTHER_WALLET)} ${escapeHtml(PRIVACY_OTHER_WALLET_NEXT)}</span>
+              </div>`
+            : privacy.error && deployment !== false
+              ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-fiat">Try again</span>
               </button>`
-            : registered
-              ? `<div class="private-balance-summary">
+              : registered
+                ? `<div class="private-balance-summary">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-side">
                   <strong class="token-amount">${escapeHtml(`${compactAmount(privateBalance?.formatted ?? "0")} ${token.symbol}`)}</strong>
                   ${privateFiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(privateFiat, currency))}</span>`}
                 </span>
               </div>`
-              : privacy.value
-                ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
+                : privacy.value
+                  ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-fiat">${registrationPending ? "Registration pending…" : "Register to start shielding"}</span>
               </div>`
-                : ""
+                  : ""
         }
         ${tokenActions(token.id)}
         ${privacyActions(token.id, privacy, deployment)}

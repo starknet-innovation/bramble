@@ -295,7 +295,9 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   const noticeValid =
     value["notice"] === undefined ||
     (value["kind"] === "strk20-unavailable" &&
-      (value["notice"] === "record-limit" || value["notice"] === "request-failed"));
+      (value["notice"] === "other-wallet" ||
+        value["notice"] === "record-limit" ||
+        value["notice"] === "request-failed"));
   return (
     actionReviewValid &&
     noticeValid &&

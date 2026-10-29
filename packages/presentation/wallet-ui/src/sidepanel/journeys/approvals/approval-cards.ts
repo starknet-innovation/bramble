@@ -10,6 +10,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import {
+  PRIVACY_OTHER_WALLET_ACTION,
   PRIVATE_REQUEST_FAILED_NOTICE,
   PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
@@ -312,11 +313,13 @@ const strk20UnavailableCard = (approval: PendingApproval): string => `
   <li class="request-card" data-approval-notice>
     <div class="request-copy">
       <p>${escapeHtml(
-        approval.notice === "record-limit"
-          ? SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE
-          : approval.notice === "request-failed"
-            ? PRIVATE_REQUEST_FAILED_NOTICE
-            : PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
+        approval.notice === "other-wallet"
+          ? PRIVACY_OTHER_WALLET_ACTION
+          : approval.notice === "record-limit"
+            ? SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE
+            : approval.notice === "request-failed"
+              ? PRIVATE_REQUEST_FAILED_NOTICE
+              : PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
       )}</p>
     </div>
     <div class="button-row">${denyButton(approval, "Close")}</div>

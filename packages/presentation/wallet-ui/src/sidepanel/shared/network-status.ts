@@ -5,6 +5,7 @@
  */
 
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { PrivacyDisclosureState } from "../journeys/privacy/privacy-model";
 import type { BalanceState } from "../runtime/runtime";
@@ -45,6 +46,7 @@ export const privacyDataIssue = (
   sharedAccount: boolean,
 ): string | null => {
   if (sharedAccount || activeView !== "home" || account === null) return null;
+  if (privacy.blockerKind === "other-wallet") return PRIVACY_OTHER_WALLET;
   if (privacy.error) return "Private balances are temporarily unavailable.";
   return privacy.loading ||
     privacy.value === null ||

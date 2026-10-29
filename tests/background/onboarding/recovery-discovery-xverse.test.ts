@@ -8,10 +8,11 @@ import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 import { handleOnboardingOps } from "../../../apps/extension/src/background/onboarding/onboarding-ops";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
-import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
+import type { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createActiveStateCoordinator } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { walletStub } from "../../support/key-boundary-collaborators";
+import { offlineDiscoveryRpc } from "../../support/recovery-accounts";
 
 // One fake Xverse address per index, so a test can say which indices are
 // deployed or funded on the fake chain. Every other preview is distinct.
@@ -57,7 +58,7 @@ const discover = async (chain: Chain, manualIndex?: number) => {
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     recoveryDiscovery: createRecoveryDiscoveryCache(),
     runtimeRpc: {
-      ...defaultRuntimeRpc,
+      ...offlineDiscoveryRpc,
       async getArgentSigningRestriction() {
         return null;
       },

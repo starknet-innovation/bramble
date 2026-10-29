@@ -100,6 +100,7 @@ export const homeScreen = (
           deploymentKnownFromPrivacy(deployment, privacy),
           fundedForFees,
           shieldReadOnly,
+          privacy.blockerKind === "other-wallet",
         )}
       </div>
     </section>

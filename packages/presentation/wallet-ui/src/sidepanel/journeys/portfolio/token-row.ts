@@ -7,6 +7,7 @@ import { escapeHtml } from "@bramble/core/html";
 import { tokenLogoSvg } from "@bramble/portfolio/token-logos";
 import type { DisplayCurrency } from "@bramble/settings/preferences";
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -121,6 +122,8 @@ export type PrivateBreakdown =
   | { readonly kind: "loading" }
   | { readonly kind: "ready"; readonly balance: string; readonly formatted: string }
   | { readonly kind: "unavailable" }
+  /** Another wallet registered this address; shield and unshield stay off. */
+  | { readonly kind: "other-wallet" }
   /** Registration broadcast, not yet visible to the privacy indexer. */
   | { readonly kind: "pending" }
   | { readonly kind: "unregistered" }
@@ -148,7 +151,9 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
         ? "Discovering…"
         : breakdown.kind === "pending"
           ? "Registration pending…"
-          : "Unavailable";
+          : breakdown.kind === "other-wallet"
+            ? escapeHtml(PRIVACY_OTHER_WALLET)
+            : "Unavailable";
   return `<div class="token-breakdown-row${breakdown.kind === "ready" ? "" : " muted"}">
       <span class="token-breakdown-label">${icon("lock")}Private balance</span>
       <span class="token-breakdown-value">${value}</span>

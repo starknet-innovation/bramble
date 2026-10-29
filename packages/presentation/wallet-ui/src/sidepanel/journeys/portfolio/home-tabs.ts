@@ -296,6 +296,7 @@ const privateBreakdownFor = (
   deployment: boolean | null,
   fundedForFees: boolean | null,
 ): PrivateBreakdown => {
+  if (privacy.blockerKind === "other-wallet") return { kind: "other-wallet" };
   if (privacyIneligibleKind(privacy)) return { kind: "unavailable" };
   if (deploymentKnownFromPrivacy(deployment, privacy) === false) {
     return { kind: fundedForFees === false ? "needs-funds" : "undeployed" };

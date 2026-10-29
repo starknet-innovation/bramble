@@ -23,10 +23,11 @@ import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import { handleOnboardingOps } from "../../../apps/extension/src/background/onboarding/onboarding-ops";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
-import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
+import type { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createActiveStateCoordinator } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { walletStub } from "../../support/key-boundary-collaborators";
+import { offlineDiscoveryRpc } from "../../support/recovery-accounts";
 
 const ARGENT_031 = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.1");
 
@@ -80,7 +81,7 @@ describe("recovery discovery on the wallet's own ladder", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
           return accountAddress === deployed.address;
         },
@@ -132,7 +133,7 @@ describe("recovery discovery on the wallet's own ladder", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus() {
           return false;
         },

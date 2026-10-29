@@ -89,6 +89,8 @@ const SENSITIVE = new RegExp(
 // Already a sentence a reader can act on; shown as written by decision.
 const READER_SENTENCES = new Set([
   "A 2FA removal is already pending for this account",
+  "Another wallet set up privacy for this account. Use that wallet to shield or unshield.",
+  "Couldn't check this account's privacy setup. Try again.",
   "A sponsored deployment of this account may already be on its way. Check activity before trying again.",
   "Account already exists",
   "Couldn't confirm whether this account is deployed. Check your connection and try again.",
