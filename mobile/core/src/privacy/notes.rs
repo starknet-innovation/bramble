@@ -2,9 +2,11 @@
 //! (`convertIncomingNotes`, `apiCursorToNotesCursor`) folded into the extension's `balancesFrom`
 //! rules, so no note is ever held, only per-token totals.
 //!
-//! Rules, as the extension applies them to the whole note map: at most `balances` distinct tokens
-//! and `discovered_notes` notes; every token in `(0, P)`; every amount in `[0, P)`; every per-token
-//! total below `P`. A note's sender must have a channel key, either in this page's `channels`
+//! Rules, as the extension's `readNoteTotals` applies them to the whole note map: every token in
+//! `(0, P)`; only the requested tokens are totalled, since a third party can open subchannels to
+//! anyone under made-up token felts and those notes must not fail the read; for a requested
+//! token, every amount in `[0, P)`, at most `discovered_notes` nonzero notes (zero-amount notes
+//! cost nothing to plant and are never counted, Sherlock 162), and a total below `P`. A note's sender must have a channel key, either in this page's `channels`
 //! (matched on the exact `sender_addr` text, as the SDK's `Map<string, bigint>` does) or in an
 //! earlier page's cursor (matched numerically). Any violation is `None`: the caller fails
 //! `InvalidResponse` and nothing partial is shown.
@@ -19,7 +21,8 @@ use crate::send::u256::U256;
 #[derive(Debug, Default)]
 pub struct Totals {
     totals: BTreeMap<U256, U256>,
-    notes: usize,
+    /// Nonzero notes counted so far, per requested token.
+    notes: BTreeMap<U256, usize>,
     /// Senders whose channel key an earlier page's cursor carried.
     known_senders: BTreeSet<U256>,
 }
@@ -39,9 +42,15 @@ fn text(value: Option<&Ordered>) -> Option<&str> {
 }
 
 impl Totals {
-    /// Folds one `incoming_state` reply's `channels` and `notes`, then records its cursor's
-    /// channels for later pages. `None` on any rule violation.
-    pub fn fold_page(&mut self, reply: &Ordered, limits: &Limits) -> Option<()> {
+    /// Folds one `incoming_state` reply's `channels` and `notes` into the totals of the
+    /// `requested` tokens, then records its cursor's channels for later pages. `None` on any rule
+    /// violation.
+    pub fn fold_page(
+        &mut self,
+        reply: &Ordered,
+        limits: &Limits,
+        requested: &BTreeSet<U256>,
+    ) -> Option<()> {
         let mut page_senders: Vec<&str> = Vec::new();
         for channel in array(reply.get("channels"))? {
             let sender = text(channel.get("sender_addr"))?;
@@ -59,21 +68,33 @@ impl Totals {
             if !page_senders.contains(&sender_text) && !self.known_senders.contains(&sender) {
                 return None;
             }
-            self.add(token, amount, limits)?;
+            self.add(token, amount, limits, requested)?;
         }
         self.record_cursor(reply.get("cursor")?)
     }
 
-    fn add(&mut self, token: U256, amount: U256, limits: &Limits) -> Option<()> {
-        self.notes += 1;
-        if self.notes > limits.discovered_notes
-            || token == U256::ZERO
-            || token >= FIELD_PRIME
-            || amount >= FIELD_PRIME
-        {
+    fn add(
+        &mut self,
+        token: U256,
+        amount: U256,
+        limits: &Limits,
+        requested: &BTreeSet<U256>,
+    ) -> Option<()> {
+        if token == U256::ZERO || token >= FIELD_PRIME {
             return None;
         }
-        if !self.totals.contains_key(&token) && self.totals.len() >= limits.balances {
+        if !requested.contains(&token) {
+            return Some(());
+        }
+        if amount >= FIELD_PRIME {
+            return None;
+        }
+        if amount == U256::ZERO {
+            return Some(());
+        }
+        let count = self.notes.entry(token).or_insert(0);
+        *count += 1;
+        if *count > limits.discovered_notes {
             return None;
         }
         let total = self.totals.entry(token).or_insert(U256::ZERO);
@@ -183,6 +204,10 @@ mod tests {
 
     const DONE: &str = r#""cursor":{"channel_discovery_complete":true}"#;
 
+    fn requested() -> BTreeSet<U256> {
+        BTreeSet::from([U256::from_u128(10)])
+    }
+
     #[test]
     fn sums_per_token_and_requires_a_channel_key() {
         let mut totals = Totals::default();
@@ -191,13 +216,52 @@ mod tests {
               {{"sender_addr":"0x5","token":"0xa","index":0,"note_id":"0x1","amount":"1000","salt":"7","block_number":1}},
               {{"sender_addr":"0x5","token":"0xa","index":1,"note_id":"0x2","amount":"0x10","salt":"1","block_number":1}}],{DONE}}}"#
         ));
-        totals.fold_page(&reply, &limits()).unwrap();
+        totals.fold_page(&reply, &limits(), &requested()).unwrap();
         assert_eq!(totals.total(&U256::from_u128(10)), U256::from_u128(1016));
         let orphan = page(&format!(
             r#"{{"block_ref":"0x1","channels":[],"subchannels":[],"notes":[
               {{"sender_addr":"0x6","token":"0xa","index":0,"note_id":"0x1","amount":"1","salt":"7","block_number":1}}],{DONE}}}"#
         ));
-        assert!(Totals::default().fold_page(&orphan, &limits()).is_none());
+        assert!(Totals::default()
+            .fold_page(&orphan, &limits(), &requested())
+            .is_none());
+    }
+
+    #[test]
+    fn planted_tokens_and_zero_notes_cannot_fail_the_read() {
+        // Sherlock 162: notes under tokens nobody asked for, and zero-amount notes, are free for a
+        // third party to plant, so neither counts against a limit.
+        let limits = Limits {
+            discovered_notes: 1,
+            ..limits()
+        };
+        let notes: Vec<String> = (0..70)
+            .map(|i| {
+                format!(
+                    r#"{{"sender_addr":"0x5","token":"{:#x}","index":{i},"note_id":"0x1","amount":"1","salt":"7","block_number":1}}"#,
+                    0x100 + i
+                )
+            })
+            .chain((0..3).map(|i| {
+                format!(
+                    r#"{{"sender_addr":"0x5","token":"0xa","index":{i},"note_id":"0x2","amount":"0","salt":"7","block_number":1}}"#
+                )
+            }))
+            .chain(std::iter::once(
+                r#"{"sender_addr":"0x5","token":"0xa","index":9,"note_id":"0x3","amount":"4","salt":"7","block_number":1}"#.to_string(),
+            ))
+            .collect();
+        let reply = page(&format!(
+            r#"{{"block_ref":"0x1","channels":[{{"channel_key":"0x9","sender_addr":"0x5"}}],"subchannels":[],"notes":[{}],{DONE}}}"#,
+            notes.join(",")
+        ));
+        let mut totals = Totals::default();
+        totals.fold_page(&reply, &limits, &requested()).unwrap();
+        assert_eq!(totals.total(&U256::from_u128(10)), U256::from_u128(4));
+        // A second nonzero note of a requested token is over this one-note cap.
+        assert!(Totals::default()
+            .fold_page(&page(&format!(r#"{{"block_ref":"0x1","channels":[{{"channel_key":"0x9","sender_addr":"0x5"}}],"subchannels":[],"notes":[{n},{n}],{DONE}}}"#, n = r#"{"sender_addr":"0x5","token":"0xa","index":0,"note_id":"0x1","amount":"1","salt":"7","block_number":1}"#)), &limits, &requested())
+            .is_none());
     }
 
     #[test]
@@ -206,12 +270,12 @@ mod tests {
         let first = page(
             r#"{"block_ref":"0x1","channels":[],"subchannels":[],"notes":[],"cursor":{"channel_discovery_complete":false,"channels":{"0x05":{"channel_key":"0x9"}}}}"#,
         );
-        totals.fold_page(&first, &limits()).unwrap();
+        totals.fold_page(&first, &limits(), &requested()).unwrap();
         let second = page(&format!(
             r#"{{"block_ref":"0x1","channels":[],"subchannels":[],"notes":[
               {{"sender_addr":"0x5","token":"0xa","index":0,"note_id":"0x1","amount":"3","salt":"7","block_number":1}}],{DONE}}}"#
         ));
-        totals.fold_page(&second, &limits()).unwrap();
+        totals.fold_page(&second, &limits(), &requested()).unwrap();
         assert_eq!(totals.total(&U256::from_u128(10)), U256::from_u128(3));
     }
 

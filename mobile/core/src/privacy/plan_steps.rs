@@ -134,10 +134,11 @@ impl ReadState {
         {
             return self.fail(PrivacyFailure::InvalidResponse);
         }
+        let requested = self.requested_tokens();
         if self
             .discovery
             .totals
-            .fold_page(&reply, self.limits)
+            .fold_page(&reply, self.limits, &requested)
             .is_none()
         {
             return self.fail(PrivacyFailure::InvalidResponse);
@@ -193,6 +194,17 @@ impl ReadState {
             }
             Read::Preflight | Read::Discovery => self.fail(PrivacyFailure::ServiceUnavailable),
         }
+    }
+
+    /// The tracked tokens' keys, as `finish` reads them from the totals.
+    fn requested_tokens(&self) -> std::collections::BTreeSet<crate::send::u256::U256> {
+        self.tokens
+            .iter()
+            .filter_map(|token| felt::parse_non_zero(&token.address))
+            .filter_map(|address| {
+                super::json::js_bigint(&super::json::Ordered::Str(felt::canonical(&address)))
+            })
+            .collect()
     }
 
     fn finish(&mut self, fee: u128) -> PrivacyStep {
