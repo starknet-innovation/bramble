@@ -209,7 +209,8 @@ impl PlanState {
                 self.fail(Code::ReviewedDeploymentFeeRequired, None)
             }
             Outcome::Undeployed if self.account.deployment.is_none() => {
-                self.fail(Code::AccountNotDeployable, None)
+                let code = self.not_deployable();
+                self.fail(code, None)
             }
             Outcome::Undeployed => self.read_nonce(Expect::DeployNonce),
             Outcome::Refused(failure) => self.refuse(failure),
