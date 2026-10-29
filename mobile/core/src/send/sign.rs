@@ -227,4 +227,37 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn deploy_query_hash_is_the_version_3_hash_with_the_query_bit() {
+        let deployment = Deployment {
+            class_hash: Felt::from(0xc1a55u32),
+            salt: Felt::from(0x5a17u32),
+            constructor_calldata: vec![Felt::from(7u8)],
+        };
+        let address = Felt::from(0xaddu32);
+        let zero = Bound {
+            max_amount: 0,
+            max_price_per_unit: 0,
+        };
+        let bounds = Bounds {
+            l1_gas: zero,
+            l2_gas: zero,
+            l1_data_gas: zero,
+        };
+        for network in [NetworkId::Mainnet, NetworkId::Sepolia] {
+            for nonce in [Felt::ZERO, Felt::from(0x2au8)] {
+                let query = deploy_query_hash(network, &address, &deployment, &nonce);
+                assert_eq!(
+                    query,
+                    deploy_hash_at(QUERY_VERSION_3, network, &address, &deployment, &nonce, &bounds)
+                );
+                // Dropping the query bit would sign a broadcastable v3 hash at review.
+                assert_ne!(
+                    query,
+                    deploy_hash_at(Felt::from(3u8), network, &address, &deployment, &nonce, &bounds)
+                );
+            }
+        }
+    }
 }
