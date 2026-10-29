@@ -169,33 +169,28 @@ const isSettled = (
 ): entry is StoredMaturity & { readonly state: "submitted"; readonly acceptedBlock: number } =>
   entry.state === "submitted" && entry.acceptedBlock !== undefined;
 
-// Drops other scopes' settled rows past MAX_RECORDS, oldest acceptedBlock
-// first (earlier in the list on a tie). `protectedIndex` is the row being
-// written and is never dropped (#729): evicting it would read as a clean
-// scope, so the next proof could skip the maturity wait. When that row is
-// the only settled one, it stays and the list may exceed the cap.
+// Drops other scopes' settled rows past MAX_RECORDS, earliest written first.
+// List order is write order (`writeScope` re-appends a scope on every write),
+// so the first settled rows are the stalest. Block numbers are not compared:
+// the store holds every network, and one chain's height says nothing about
+// another's recency. `protectedIndex` is the row being written and is never
+// dropped (#729): evicting it would read as a clean scope, so the next proof
+// could skip the maturity wait. When nothing else is settled, the list may
+// exceed the cap.
 const bounded = (
   entries: readonly StoredMaturity[],
   protectedIndex: number | null,
 ): readonly StoredMaturity[] => {
-  const excess = entries.length - MAX_RECORDS;
-  if (excess <= 0) {
-    return entries;
-  }
-  const candidates: { readonly acceptedBlock: number; readonly index: number }[] = [];
-  for (const [index, entry] of entries.entries()) {
-    if (isSettled(entry) && index !== protectedIndex) {
-      candidates.push({ acceptedBlock: entry.acceptedBlock, index });
-    }
-  }
-  candidates.sort((left, right) => {
-    if (left.acceptedBlock !== right.acceptedBlock) {
-      return left.acceptedBlock < right.acceptedBlock ? -1 : 1;
-    }
-    return left.index - right.index;
-  });
-  const evict = new Set(candidates.slice(0, excess).map((candidate) => candidate.index));
-  return evict.size === 0 ? entries : entries.filter((_, index) => !evict.has(index));
+  let excess = entries.length - MAX_RECORDS;
+  return excess <= 0
+    ? entries
+    : entries.filter((entry, index) => {
+        if (excess <= 0 || !isSettled(entry) || index === protectedIndex) {
+          return true;
+        }
+        excess -= 1;
+        return false;
+      });
 };
 
 const writeScope = async (
