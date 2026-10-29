@@ -299,10 +299,11 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
             value.accountId !== status.activeAccountId || value.networkId !== status.networkId
               ? { error: "balances unavailable" }
               : value;
-        } else if (!("error" in cache.balances)) {
-          cache.balances = { ...cache.balances, stale: true };
-        } else {
+        } else if ("loading" in cache.balances || "error" in cache.balances) {
+          // No snapshot to fall back on: the failure is the answer.
           cache.balances = value;
+        } else {
+          cache.balances = { ...cache.balances, stale: true };
         }
       });
     }

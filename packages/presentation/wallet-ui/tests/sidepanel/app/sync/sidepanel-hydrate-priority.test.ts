@@ -170,7 +170,7 @@ describe("home hydration priority", () => {
     balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
     await run;
     expect(paints).toBe(0);
-    expect(cache.balances).toEqual({ error: "wallet locked" });
+    expect(cache.balances).toEqual({ loading: true });
   });
 
   test("rejects a balance response scoped to another account", async () => {

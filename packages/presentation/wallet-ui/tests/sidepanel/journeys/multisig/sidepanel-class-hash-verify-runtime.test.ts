@@ -133,8 +133,8 @@ describe("emptyRenderCache (lock-reset single source)", () => {
     expect(empty.changes).toEqual({});
     expect(empty.priceAsOf).toBeNull();
     expect(empty.priceStale).toBe(false);
-    // The locked shell: balances carries the explicit "wallet locked" marker.
-    expect(empty.balances).toEqual({ error: "wallet locked" });
+    // Nothing read yet: loading, never a failed-read marker (issue 795).
+    expect(empty.balances).toEqual({ loading: true });
   });
 });
 
@@ -172,7 +172,7 @@ describe("updateRenderScope", () => {
     expect(cache.historyUnavailable).toBe(false);
     expect(cache.multisigClassDeclared).toBeNull();
     expect(cache.deployment).toBeNull();
-    expect(cache.balances).toEqual({ error: "balances unavailable" });
+    expect(cache.balances).toEqual({ loading: true });
 
     expect(updateRenderScope(cache, { ...cache.status, networkId: "SN_SEPOLIA" })).toBe("network");
   });

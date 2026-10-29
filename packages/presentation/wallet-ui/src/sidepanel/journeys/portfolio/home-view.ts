@@ -28,7 +28,11 @@ import { formatFiat, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { dockScreen, noAccountEmpty } from "../../shared/parts";
 import { actionTile, pendingCallout, shieldTile } from "../../shell/wallet-shell";
-import { deploymentKnownFromPrivacy, type PrivacyDisclosureState } from "../privacy/privacy-model";
+import {
+  deploymentKnownFromPrivacy,
+  type PrivacyDisclosureState,
+  privacyIneligibleKind,
+} from "../privacy/privacy-model";
 import { heroChange } from "./hero-change";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
 import { readOnlyNotice } from "./recovery-view";
@@ -77,7 +81,20 @@ export const homeScreen = (
     privacy.error === null &&
     privacy.value.accountId === account?.id &&
     privacy.value.networkId === status.networkId;
-  const showTotal = account !== null && "balances" in balances && Object.keys(prices).length > 0;
+  // Discovery that can no longer add a private balance: privacy is off for
+  // this account (Ledger, a network without privacy, another wallet's
+  // registration), the account is undeployed, or the read failed. Until the
+  // balances are complete or settled this way, the hero holds "—" rather than
+  // print a public-only figure that jumps when the private part lands (795).
+  const privateSettled =
+    privacy.error !== null ||
+    privacyIneligibleKind(privacy) !== null ||
+    deploymentKnownFromPrivacy(deployment, privacy) === false;
+  const showTotal =
+    account !== null &&
+    "balances" in balances &&
+    Object.keys(prices).length > 0 &&
+    (balancesComplete || privateSettled);
   const total = showTotal ? portfolioTotal(unified, prices) : 0;
   return dockScreen(
     "home",

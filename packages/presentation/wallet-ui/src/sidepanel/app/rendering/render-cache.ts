@@ -9,7 +9,7 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
-import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
+import { type BalanceLoadingState, emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
 import type { ConnectedSitesState } from "../screens/support-flows";
 
 // The price snapshot as the runtime client returns it; the cache's price fields
@@ -36,7 +36,9 @@ export type RenderData = {
   multisigClassDeclared: boolean | "error" | null;
   multisigBalanceId: string | null;
   multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
-  balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>>;
+  // `{ loading: true }` until the first read for the current scope lands, so
+  // "not read yet" never renders as a failed read (issue 795).
+  balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>> | BalanceLoadingState;
   chart: readonly number[];
   // The token id the chart belongs to. The chart is one slot shared by every
   // token detail screen, so it is drawn only for the token it was read for
@@ -89,7 +91,7 @@ export const updateRenderScope = (
     ...(changed
       ? {
           ...emptyActivityCache(),
-          balances: { error: "balances unavailable" },
+          balances: { loading: true },
           multisigBalanceId: null,
           multisigBalances: { error: "multisig balances unavailable" },
           deployment: null,
@@ -104,10 +106,11 @@ export const updateRenderScope = (
 };
 
 /**
- * A fresh render cache in the locked/empty state. `balances` carries the
- * "wallet locked" error marker so the home screen renders the locked shell
- * until real balances hydrate; every list starts empty and every optional
- * value null. Used to prime the cache at boot and to reset it on lock.
+ * A fresh render cache in the locked/empty state. `balances` starts as
+ * loading, not as an error: with no snapshot yet the home screen shows its
+ * loading shell until real balances hydrate, and only a read that actually
+ * failed renders the failed-load panel. Every list starts empty and every
+ * optional value null. Used to prime the cache at boot and to reset it on lock.
  */
 export const emptyRenderCache = (): RenderData => ({
   // Not yet read: the screen shows no count and no "none found".
@@ -118,7 +121,7 @@ export const emptyRenderCache = (): RenderData => ({
   multisigClassDeclared: null,
   multisigBalanceId: null,
   multisigBalances: { error: "multisig balances unavailable" },
-  balances: { error: "wallet locked" },
+  balances: { loading: true },
   chart: [],
   chartTokenId: null,
   classHashVerification: null,

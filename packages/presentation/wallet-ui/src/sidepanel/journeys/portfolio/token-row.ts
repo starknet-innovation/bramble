@@ -169,8 +169,12 @@ export const TOKEN_SPLIT_LINE = (publicAmount: string, privateAmount: string): s
 // Shown only when part of the total is private: a public-only row's amount is
 // already its public balance, and a second line saying so is noise. Amounts use
 // the row's own column format; the caller escapes nothing, this does. An
-// unknown public balance has no split to state, so no line (audit M5).
+// unknown public balance has no split to state, so no line (audit M5). While
+// discovery is still out the line is held open with "—", so a split that
+// lands fills it in rather than pushing the list down (issue 795); `loading`
+// is only ever derived for an account that can hold private balances.
 const splitLine = (publicFormatted: string | null, breakdown: PrivateBreakdown): string => {
+  if (breakdown.kind === "loading") return '<p class="token-split" aria-hidden="true">—</p>';
   if (publicFormatted === null || breakdown.kind !== "ready" || BigInt(breakdown.balance) === 0n)
     return "";
   const line = TOKEN_SPLIT_LINE(
