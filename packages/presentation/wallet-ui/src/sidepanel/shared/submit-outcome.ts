@@ -18,7 +18,7 @@ import {
   STRK20_PRIOR_WRITE_STRANDED,
   STRK20_PRIOR_WRITE_UNRESOLVED,
 } from "@bramble/privacy/maturity";
-import { SPONSORED_DEPLOY_REFUSED } from "@bramble/privacy/sponsored-deploy";
+import { DEPLOYMENT_IN_PROGRESS } from "@bramble/privacy/sponsored-deploy";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 import {
   isPrivacyShortfall,
@@ -116,9 +116,9 @@ export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
   "shadow account scope not recorded",
   "shadow sweep batch breaks a batch rule",
   "shadow_account_sweep_unavailable",
-  // A sponsored deploy whose quote failed or whose broadcast the sponsor
-  // refused with a clean JSON-RPC error: nothing was sent (issue 788).
-  SPONSORED_DEPLOY_REFUSED.toLowerCase(),
+  // A deploy route refused while a sponsored attempt's hold stands: nothing
+  // was signed by the refused route (issue 788).
+  DEPLOYMENT_IN_PROGRESS.toLowerCase(),
   // Endpoint refusals raised before the broadcast.
   "the rpc endpoint refused this request (rate limit or gateway rejection). nothing was submitted - wait a moment and try again.",
   WRONG_CHAIN_MESSAGE.toLowerCase(),

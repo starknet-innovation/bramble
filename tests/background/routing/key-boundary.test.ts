@@ -94,7 +94,6 @@ describe("key boundary", () => {
     // Pinned so excusing a new entry from the liveness rule is a deliberate,
     // reviewed edit rather than the quiet way to make this suite green again.
     expect(excused.map((entry) => typeOf(entry.message)).sort()).toEqual([
-      "wallet.deployAccountSponsored",
       "wallet.removeMultisig",
       "wallet.shareArgentMultisigIntent",
       "wallet.status",

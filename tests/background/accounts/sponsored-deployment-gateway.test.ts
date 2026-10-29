@@ -8,10 +8,6 @@
  * ever offered.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  SPONSORED_DEPLOY_REFUSED,
-  SPONSORED_DEPLOY_UNSUPPORTED,
-} from "@bramble/privacy/sponsored-deploy";
 import { createMemoryStore } from "@bramble/store/kv";
 import { createActivityLog } from "@bramble/transactions/activity";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -21,11 +17,14 @@ import {
   handleDeploySponsorship,
 } from "../../../apps/extension/src/background/accounts/deploy-account-ops";
 import {
-  DEPLOYMENT_MAY_BE_ON_ITS_WAY,
+  createPendingDeployments,
+  DEPLOYMENT_IN_PROGRESS,
   guardDeployments,
+  nextUtcMidnight,
   type PendingDeployments,
   SPONSORED_DEPLOY_HOLD_MS,
 } from "../../../apps/extension/src/background/accounts/pending-deployments";
+import { SPONSORED_DEPLOY_DECLINED } from "../../../apps/extension/src/background/accounts/sponsored-deployment";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 import {
@@ -44,7 +43,8 @@ import {
 
 const INSIDE = 60_000;
 const AFTER = SPONSORED_DEPLOY_HOLD_MS + 1;
-const HELD = { error: DEPLOYMENT_MAY_BE_ON_ITS_WAY };
+const HELD = { error: DEPLOYMENT_IN_PROGRESS };
+const DAY = 86_400_000;
 // Argent 0.3.1: a real Argent class the gateway does not sponsor.
 const OLDER_ARGENT_CLASS_HASH =
   "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b";
@@ -138,37 +138,42 @@ describe("which accounts are offered sponsorship", () => {
       const sponsor = relay(accepted);
       const { deps } = await harness({ account, relay: sponsor });
       expect(await offer(deps)).toBe("none");
-      expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_UNSUPPORTED });
+      expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
       expect(sponsor.calls).toEqual([]);
     });
   }
 });
 
 describe("a quote the gateway does not give offers nothing, quietly", () => {
-  const answers: readonly [string, () => Promise<Response> | Response][] = [
-    ["switched off (404 sponsored_deploy_disabled)", plain(404, "sponsored_deploy_disabled")],
-    ["rate-limited (plain 429)", plain(429, "too_many_requests")],
+  // The last field: whether it is the gateway's own no, which a press then
+  // remembers until 00:00 UTC; anything else leaves no record.
+  const answers: readonly [string, () => Promise<Response> | Response, boolean][] = [
+    ["switched off (404 sponsored_deploy_disabled)", plain(404, "sponsored_deploy_disabled"), true],
+    ["rate-limited (plain 429)", plain(429, "too_many_requests"), true],
     [
       "budget spent (429 sponsorship_budget_exhausted)",
       gatewayError(429, "sponsorship_budget_exhausted"),
+      true,
     ],
-    ["already attempted (429)", gatewayError(429, "sponsored_deploy_already_attempted")],
-    ["a clean JSON-RPC refusal on a 200", gatewayError(200, "class_not_supported")],
-    ["a 5xx", plain(502, "bad gateway")],
-    ["a 503 with a JSON-RPC error", gatewayError(503, "deployment_status_unavailable")],
+    ["already attempted (429)", gatewayError(429, "sponsored_deploy_already_attempted"), true],
+    ["a clean JSON-RPC refusal on a 200", gatewayError(200, "class_not_supported"), true],
+    ["a 5xx", plain(502, "bad gateway"), false],
+    ["a 503 with a JSON-RPC error", gatewayError(503, "deployment_status_unavailable"), false],
     [
       "a transport failure",
       () => {
         throw new TypeError("fetch failed");
       },
+      false,
     ],
     [
       "a deadline",
       () => {
         throw new DOMException("deadline", "TimeoutError");
       },
+      false,
     ],
-    ["a garbled body", plain(200, "{not json")],
+    ["a garbled body", plain(200, "{not json"), false],
     [
       "an unusable echo",
       () =>
@@ -177,16 +182,17 @@ describe("a quote the gateway does not give offers nothing, quietly", () => {
           jsonrpc: "2.0",
           result: { deployment: {}, type: "deploy" },
         }),
+      false,
     ],
   ];
-  for (const [name, answer] of answers) {
+  for (const [name, answer, refusal] of answers) {
     test(`${name}: "none", and a press sends nothing and turns self-paid`, async () => {
       const sponsor = quoteAnswer(answer);
       const { activity, deps, pending } = await harness({ relay: sponsor });
       expect(await offer(deps)).toBe("none");
-      expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_REFUSED });
+      expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
       expect(sponsor.calls).toEqual(["paymaster_buildTransaction", "paymaster_buildTransaction"]);
-      expect(pending.entry(ozAccount)).toBeUndefined();
+      expect(pending.entry(ozAccount)?.refusedUntil).toBe(refusal ? DAY : undefined);
       expect(await activity.list()).toEqual([]);
       expect(await selfPaid(pending, 0)).toBe(1);
     });
@@ -197,8 +203,8 @@ describe("a broadcast refused before forwarding sent nothing", () => {
   for (const code of ["sponsored_deploy_already_attempted", "sponsorship_budget_exhausted"]) {
     test(`429 ${code} turns self-paid at once`, async () => {
       const { activity, deps, pending } = await harness({ relay: relay(gatewayError(429, code)) });
-      expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_REFUSED });
-      expect(pending.entry(ozAccount)).toBeUndefined();
+      expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
+      expect(pending.entry(ozAccount)).toMatchObject({ holdUntil: 0, refusedUntil: DAY });
       expect(await activity.list()).toEqual([]);
       expect(await selfPaid(pending, 0)).toBe(1);
     });
@@ -230,8 +236,8 @@ describe("a broadcast refused before forwarding sent nothing", () => {
           return refuse();
         }),
       });
-      expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_REFUSED });
-      expect(pending.entry(ozAccount)).toBeUndefined();
+      expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
+      expect(pending.entry(ozAccount)?.refusedUntil).toBe(DAY);
     }
   });
 });
@@ -261,9 +267,9 @@ describe("a broadcast answer that does not prove nothing was sent holds the acco
       // Inside the hold: nothing re-offered, and both deploy routes refuse.
       expect(await offer(deps, INSIDE)).toBe("held");
       expect(await submit(deps, INSIDE)).toEqual(HELD);
-      expect(await selfPaid(pending, INSIDE)).toBe(DEPLOYMENT_MAY_BE_ON_ITS_WAY);
+      expect(await selfPaid(pending, INSIDE)).toBe(DEPLOYMENT_IN_PROGRESS);
       // Over, with the chain showing it empty: self-paid, never sponsored again.
-      expect(await offer(deps, AFTER)).toBe("may-land");
+      expect(await offer(deps, AFTER)).toBe("none");
       expect(await selfPaid(pending, AFTER)).toBe(1);
       // The chain showing it deployed ends it as deployed.
       chain.deployed = true;
@@ -302,5 +308,71 @@ describe("the sponsored Activity row", () => {
       holdUntil: SPONSORED_DEPLOY_HOLD_MS,
     });
     expect(loser.pending.entry(loserAccount)?.hash).toBeUndefined();
+  });
+});
+
+describe("after the sponsor says no, no offer until 00:00 UTC", () => {
+  const T = 5 * DAY + 10 * 3_600_000; // 10:00 UTC on day 5
+  const budgetSpent = gatewayError(429, "sponsorship_budget_exhausted");
+
+  test("the refused account is not offered again that day, then is after the reset", async () => {
+    const sponsor = relay(budgetSpent);
+    const { deps, pending } = await harness({ relay: sponsor });
+    expect(await offer(deps, T)).toBe("available");
+    expect(await submit(deps, T)).toEqual(SPONSORED_DEPLOY_DECLINED);
+    expect(pending.entry(ozAccount)?.refusedUntil).toBe(6 * DAY);
+    const asked = sponsor.calls.length;
+    for (const now of [T + 3_600_000, 6 * DAY - 1]) {
+      expect(await offer(deps, now)).toBe("none");
+      // A press that raced the screen is declined without asking the relay.
+      expect(await submit(deps, now)).toEqual(SPONSORED_DEPLOY_DECLINED);
+    }
+    expect(sponsor.calls.length).toBe(asked);
+    // Self-paid is never held by a refusal.
+    expect(await selfPaid(pending, T + 1)).toBe(1);
+    expect(await offer(deps, 6 * DAY)).toBe("available");
+    expect(sponsor.calls.length).toBe(asked + 1);
+    expect(pending.entry(ozAccount)).toBeUndefined();
+  });
+
+  test("survives a restart, and leaves other accounts offered", async () => {
+    const storage = createMemoryStore();
+    const first = await harness({
+      pending: createPendingDeployments(storage),
+      relay: relay(budgetSpent),
+    });
+    await submit(first.deps, T);
+    const restarted = createPendingDeployments(storage);
+    const again = await harness({ pending: restarted, relay: relay(accepted) });
+    expect(await offer(again.deps, T + 1)).toBe("none");
+    const other = await harness({
+      account: argentAccount,
+      pending: restarted,
+      relay: relay(accepted),
+    });
+    expect(await offer(other.deps, T + 1)).toBe("available");
+  });
+
+  test("an unreadable store offers nothing and asks no relay", async () => {
+    const sponsor = relay(accepted);
+    const { deps } = await harness({
+      pending: createPendingDeployments({
+        ...createMemoryStore(),
+        get: async () => {
+          throw new Error("storage unavailable");
+        },
+      }),
+      relay: sponsor,
+    });
+    expect(await offer(deps, T)).toBe("none");
+    expect(await submit(deps, T)).toEqual(SPONSORED_DEPLOY_DECLINED);
+    expect(sponsor.calls).toEqual([]);
+  });
+
+  test("names the next 00:00 UTC from the injected clock", () => {
+    expect(nextUtcMidnight(0)).toBe(DAY);
+    expect(nextUtcMidnight(T)).toBe(6 * DAY);
+    expect(nextUtcMidnight(6 * DAY - 1)).toBe(6 * DAY);
+    expect(nextUtcMidnight(6 * DAY)).toBe(7 * DAY);
   });
 });

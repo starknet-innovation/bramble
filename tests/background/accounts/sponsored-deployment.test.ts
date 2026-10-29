@@ -7,7 +7,6 @@
  * in `sponsored-deployment-gateway.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
-import { SPONSORED_DEPLOY_REFUSED } from "@bramble/privacy/sponsored-deploy";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import {
@@ -16,10 +15,13 @@ import {
   handleDeploySponsorship,
 } from "../../../apps/extension/src/background/accounts/deploy-account-ops";
 import {
-  DEPLOYMENT_MAY_BE_ON_ITS_WAY,
+  DEPLOYMENT_IN_PROGRESS,
   memoryPendingDeployments,
 } from "../../../apps/extension/src/background/accounts/pending-deployments";
-import { DEPLOYMENT_STATUS_UNKNOWN } from "../../../apps/extension/src/background/accounts/sponsored-deployment";
+import {
+  DEPLOYMENT_STATUS_UNKNOWN,
+  SPONSORED_DEPLOY_DECLINED,
+} from "../../../apps/extension/src/background/accounts/sponsored-deployment";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
@@ -124,7 +126,7 @@ describe("sponsored deploy offer", () => {
   test("an unreachable relay at submission sends nothing, leaves no attempt, and turns self-paid", async () => {
     const http = async (): Promise<Response> => new Response("bad gateway", { status: 502 });
     const { deps, pending } = await harness({ relay: { calls: [], http } });
-    expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_REFUSED });
+    expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
     expect(pending.entry(ozAccount)).toBeUndefined();
   });
 
@@ -157,11 +159,11 @@ describe("sponsored deploy submission", () => {
   test("a sponsor refusal sends nothing, records nothing, and allows the self-paid path", async () => {
     const sponsor = relay(accepted, false);
     const { activity, deps } = await harness({ relay: sponsor });
-    expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_REFUSED });
+    expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
     expect(sponsor.calls).toEqual(["paymaster_buildTransaction"]);
     expect(await activity.list()).toEqual([]);
     // Not held: a refusal is determinate, so asking again is safe.
-    expect(await submit(deps)).toEqual({ error: SPONSORED_DEPLOY_REFUSED });
+    expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
   });
 
   test("a lost reply is status unknown and holds the account against a blind retry", async () => {
@@ -170,7 +172,7 @@ describe("sponsored deploy submission", () => {
     const first = await submit(deps);
     expect(first).toMatchObject({ submissionUnknown: true });
     expect(await activity.list()).toEqual([]);
-    expect(await submit(deps)).toEqual({ error: DEPLOYMENT_MAY_BE_ON_ITS_WAY });
+    expect(await submit(deps)).toEqual({ error: DEPLOYMENT_IN_PROGRESS });
     expect(sponsor.calls).toEqual(["paymaster_buildTransaction", "paymaster_executeTransaction"]);
   });
 
@@ -198,7 +200,7 @@ describe("sponsored deploy submission", () => {
       expect(await submit(deps)).toMatchObject({ submissionUnknown: true });
       expect(pending.entry(ozAccount)).toBeDefined();
       expect(await activity.list()).toEqual([]);
-      expect(await submit(deps)).toEqual({ error: DEPLOYMENT_MAY_BE_ON_ITS_WAY });
+      expect(await submit(deps)).toEqual({ error: DEPLOYMENT_IN_PROGRESS });
     });
   }
 
@@ -206,7 +208,7 @@ describe("sponsored deploy submission", () => {
     const sponsor = relay(accepted);
     const { chain, deps, pending } = await harness({ relay: sponsor });
     await submit(deps);
-    expect(await submit(deps)).toEqual({ error: DEPLOYMENT_MAY_BE_ON_ITS_WAY });
+    expect(await submit(deps)).toEqual({ error: DEPLOYMENT_IN_PROGRESS });
     chain.deployed = true;
     expect(await submit(deps)).toEqual({ error: "account already deployed" });
     expect(pending.entry(ozAccount)).toBeUndefined();
@@ -229,17 +231,13 @@ describe("sponsored deploy submission", () => {
     expect(pending.entry(ozAccount)).toBeUndefined();
   });
 
-  test("refuses an unsupported class and a network with sponsorship off", async () => {
-    const braavos = await harness({
-      account: braavosAccount,
-      relay: relay(accepted),
-    });
-    expect(await submit(braavos.deps)).toEqual({
-      error:
-        "This account type can't be deployed with a sponsored fee. Add STRK to deploy it yourself.",
-    });
+  test("declines, sending nothing, an unsupported class and a network with sponsorship off", async () => {
+    const sponsor = relay(accepted);
+    const braavos = await harness({ account: braavosAccount, relay: sponsor });
+    expect(await submit(braavos.deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
+    expect(sponsor.calls).toEqual([]);
     const off = await harness({ relayOn: "off" });
-    expect(await submit(off.deps)).toEqual({ error: "sponsored deployment unavailable" });
+    expect(await submit(off.deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
   });
 
   test("refuses an account whose stored address its deployment data cannot reproduce", async () => {
@@ -299,7 +297,7 @@ describe("sponsored deploy messages", () => {
       });
       // A press that raced the switch-off sends nothing and turns self-paid.
       expect(await handler({ type: "wallet.deployAccountSponsored" }, extensionSender)).toEqual({
-        error: SPONSORED_DEPLOY_REFUSED,
+        ...SPONSORED_DEPLOY_DECLINED,
       });
       expect(
         await handler({ extra: true, type: "wallet.deployAccountSponsored" }, extensionSender),

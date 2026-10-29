@@ -24,8 +24,6 @@ import {
   isSponsorableDeployment,
   type PaymasterHttp,
   quoteSponsoredDeploy,
-  SPONSORED_DEPLOY_REFUSED,
-  SPONSORED_DEPLOY_UNSUPPORTED,
   type SponsoredDeployConfig,
   type SponsoredDeploymentData,
   type SponsoredDeployNetworks,
@@ -53,7 +51,7 @@ import { recordSubmittedActivityIfAbsent } from "../transactions/activity-record
 import { readStrkBalance } from "../transactions/fee-guard";
 import { DEPLOY_ACTIVITY_SUMMARY } from "./deployment-ops";
 import {
-  DEPLOYMENT_MAY_BE_ON_ITS_WAY,
+  DEPLOYMENT_IN_PROGRESS,
   type PendingDeployments,
   sponsoredAttemptState,
 } from "./pending-deployments";
@@ -81,11 +79,15 @@ export type SponsoredDeploymentDeps = {
 export const DEPLOYMENT_STATUS_UNKNOWN =
   "Couldn't confirm whether this account is deployed. Check your connection and try again.";
 
-/** A sponsored attempt was already accepted or lost; it is never repeated. */
-export const SPONSORED_DEPLOY_ALREADY_SENT =
-  "This account's sponsored deployment was already sent and may still land. Add STRK to deploy it yourself.";
+/**
+ * The sponsor is not deploying this account and nothing was sent: the class
+ * is not one it sponsors, the route or store is off, an earlier attempt rules
+ * it out, or the gateway refused or could not quote. Not an error: the screen
+ * silently becomes the self-paid one.
+ */
+export const SPONSORED_DEPLOY_DECLINED = { ok: true, sponsored: false } as const;
 
-const UNAVAILABLE = { error: "sponsored deployment unavailable" } as const;
+type Declined = typeof SPONSORED_DEPLOY_DECLINED;
 
 const rpcUrlsFor = async (
   deps: SponsoredDeploymentDeps,
@@ -136,7 +138,9 @@ const freshOfferRelay = async (
 
 /**
  * Decides what the deploy screen may offer. An earlier attempt answers "held"
- * or "may-land" and is never offered again. Otherwise "none" unless
+ * while its hold stands and "none" after it; it is never offered again. An
+ * account the sponsor refused answers "none" until the next 00:00 UTC, without
+ * asking the relay. Otherwise "none" unless
  * sponsorship is on for the network, the class and constructor are ones the
  * gateway sponsors, the account is confirmed undeployed, and its STRK balance
  * is confirmed short of the fee; then the relay is asked, and only its exact
@@ -159,9 +163,10 @@ export const deploySponsorship = async (
       rpcUrls,
       nowOf(deps),
     );
-    if (attempt === "held" || attempt === "may-land") return attempt;
-    // An unreadable store may be hiding an attempt it lost: never offer then.
-    if (attempt === "deployed" || !pending.readable()) return "none";
+    if (attempt === "held") return "held";
+    // An earlier attempt (lost, accepted, or refused today) is not offered
+    // again, and an unreadable store may be hiding one: never offer then.
+    if (attempt !== "none" || !pending.readable()) return "none";
     const deployment = sponsorableDeployment(input.account);
     if (!deployment) return "none";
     const config = await freshOfferRelay(deps, input, rpcUrls);
@@ -188,16 +193,13 @@ type SponsoredRoute = {
 const sponsoredRoute = (
   deps: SponsoredDeploymentDeps,
   account: AccountRef,
-): SponsoredRoute | { readonly error: string } => {
-  if (!isSponsorableAccountClass(account.classHash)) {
-    return { error: SPONSORED_DEPLOY_UNSUPPORTED };
-  }
+): SponsoredRoute | Declined | { readonly error: string } => {
   const config = relayFor(deps, account);
   const pending = deps.pendingDeployments;
-  if (!config || !pending) return UNAVAILABLE;
+  if (!config || !pending) return SPONSORED_DEPLOY_DECLINED;
   try {
     const deployment = sponsorableDeployment(account);
-    return deployment ? { config, deployment, pending } : { error: SPONSORED_DEPLOY_UNSUPPORTED };
+    return deployment ? { config, deployment, pending } : SPONSORED_DEPLOY_DECLINED;
   } catch (error) {
     return { error: error instanceof Error ? error.message : "deployment unavailable" };
   }
@@ -211,12 +213,12 @@ const reserve = async (
   pending: PendingDeployments,
   account: AccountRef,
   rpcUrls: readonly string[],
-): Promise<{ readonly error: string } | null> => {
+): Promise<Declined | { readonly error: string } | null> => {
   const now = nowOf(deps);
   await pending.load();
   const reserved = pending.reserve(account, now);
   if (reserved === "reserved") return null;
-  if (reserved === "full") return UNAVAILABLE;
+  if (reserved === "full") return SPONSORED_DEPLOY_DECLINED;
   const state = await sponsoredAttemptState(
     { ...deps, pendingDeployments: pending },
     account,
@@ -224,10 +226,25 @@ const reserve = async (
     now,
   );
   if (state === "deployed") return { error: "account already deployed" };
-  if (state === "held") return { error: DEPLOYMENT_MAY_BE_ON_ITS_WAY };
+  if (state === "held") return { error: DEPLOYMENT_IN_PROGRESS };
   return state === "none" && pending.reserve(account, now) === "reserved"
     ? null
-    : { error: SPONSORED_DEPLOY_ALREADY_SENT };
+    : SPONSORED_DEPLOY_DECLINED;
+};
+
+// The sponsor said no and nothing was sent: no offer to this account until
+// the gateway's budget resets. A record that cannot be written falls back to
+// forgetting the attempt, which still leaves a self-paid deploy.
+const declined = async (
+  deps: SponsoredDeploymentDeps,
+  pending: PendingDeployments,
+  account: AccountRef,
+): Promise<Declined> => {
+  await pending
+    .recordRefusal(account, nowOf(deps))
+    .catch(() => pending.forget(account))
+    .catch(() => undefined);
+  return SPONSORED_DEPLOY_DECLINED;
 };
 
 // A determinate broadcast refusal sent nothing. The gateway refuses an account
@@ -235,12 +252,16 @@ const reserve = async (
 // again: deployed is shown as deployed, anything else turns self-paid.
 const refusedBroadcast = async (
   deps: SponsoredDeploymentDeps,
+  route: SponsoredRoute,
   account: AccountRef,
   rpcUrls: readonly string[],
-): Promise<RuntimeResponse> =>
-  (await deploymentStatus(deps, account, rpcUrls)) === "deployed"
-    ? { error: "account already deployed" }
-    : { error: SPONSORED_DEPLOY_REFUSED };
+): Promise<RuntimeResponse> => {
+  if ((await deploymentStatus(deps, account, rpcUrls)) !== "deployed") {
+    return declined(deps, route.pending, account);
+  }
+  await route.pending.forget(account).catch(() => undefined);
+  return { error: "account already deployed" };
+};
 
 // Sends the reserved deploy. Anything that sent nothing forgets the attempt; a
 // lost reply keeps it, and an accepted deploy keeps it with its hash.
@@ -259,11 +280,15 @@ const send = async (
       deployment: route.deployment,
       ...http,
     });
-  } catch {
+  } catch (error) {
     // A quote never broadcasts. Whatever stopped it — switched off, refused,
-    // unreachable — the sponsor is not covering this press: self-paid, no retry.
+    // unreachable — the sponsor is not covering this press: self-paid, no
+    // retry. Only the gateway's own no is remembered until the budget resets.
+    if (error instanceof SponsoredDeployRefusedError) {
+      return declined(deps, route.pending, account);
+    }
     await route.pending.forget(account).catch(() => undefined);
-    return { error: SPONSORED_DEPLOY_REFUSED };
+    return SPONSORED_DEPLOY_DECLINED;
   }
   let transactionHash: string;
   try {
@@ -277,10 +302,11 @@ const send = async (
     if (error instanceof IndeterminateRpcWriteError) {
       return submissionUnknownResponse(error.message);
     }
+    if (error instanceof SponsoredDeployRefusedError) {
+      return refusedBroadcast(deps, route, account, rpcUrls);
+    }
     await route.pending.forget(account).catch(() => undefined);
-    return error instanceof SponsoredDeployRefusedError
-      ? refusedBroadcast(deps, account, rpcUrls)
-      : { error: error instanceof Error ? error.message : "sponsored deployment failed" };
+    return { error: error instanceof Error ? error.message : "sponsored deployment failed" };
   }
   // The hash is the relay's claim. One this wallet already holds a row for
   // would replace that row and shed its fee, so the row is written only if no
@@ -301,18 +327,19 @@ const send = async (
 };
 
 /**
- * Deploys the account through the sponsor. Refuses with no request when the
- * class is unsupported or the route or store is off; during an earlier
- * attempt's hold ({@link DEPLOYMENT_MAY_BE_ON_ITS_WAY}); after an earlier
- * attempt was accepted or lost ({@link SPONSORED_DEPLOY_ALREADY_SENT}); when the
- * chain shows it deployed; and when the chain cannot say
+ * Deploys the account through the sponsor. Answers
+ * {@link SPONSORED_DEPLOY_DECLINED}, with nothing sent, when the class is not
+ * sponsored, the route or store is off, an earlier attempt was accepted, lost
+ * or refused today, the attempt cannot be stored, any quote fails, or the
+ * gateway refuses the broadcast; a gateway refusal also stops offers to the
+ * account until 00:00 UTC. Refuses during an earlier attempt's hold
+ * ({@link DEPLOYMENT_IN_PROGRESS}), when the chain shows it deployed (also
+ * after a broadcast refusal), and when the chain cannot say
  * ({@link DEPLOYMENT_STATUS_UNKNOWN}). The attempt is persisted before the
- * relay hears anything and forgotten only when it sent nothing. A quote that
- * fails for any reason, and a determinate broadcast refusal, answer
- * {@link SPONSORED_DEPLOY_REFUSED} so the screen turns self-paid — or "account
- * already deployed" when the chain now shows it. A lost reply is answered as
- * submission-unknown, and so is a relay hash Activity already holds. Otherwise the relay's hash is recorded in Activity as a sponsored
- * deploy, so no fee is ever attributed to the user. The hash is the relay's
+ * relay hears anything. A lost reply is answered as submission-unknown, and so
+ * is a relay hash Activity already holds. Otherwise the relay's hash is
+ * recorded in Activity as a sponsored deploy, so no fee is ever attributed to
+ * the user. The hash is the relay's
  * claim: whether the account is deployed is read from the chain, never from
  * that hash's receipt.
  */
@@ -322,7 +349,7 @@ export const submitSponsoredAccountDeployment = async (
 ): Promise<RuntimeResponse> => {
   const { account } = input;
   const route = sponsoredRoute(deps, account);
-  if ("error" in route) return route;
+  if (!("config" in route)) return route;
   const rpcUrls = await rpcUrlsFor(deps, account);
   const refused = await reserve(deps, route.pending, account, rpcUrls);
   if (refused) return refused;
@@ -332,7 +359,7 @@ export const submitSponsoredAccountDeployment = async (
     .catch(() => null);
   if (status === "undeployed") return send(deps, route, input, rpcUrls);
   await route.pending.forget(account).catch(() => undefined);
-  if (status === null) return UNAVAILABLE;
+  if (status === null) return SPONSORED_DEPLOY_DECLINED;
   return status === "deployed"
     ? { error: "account already deployed" }
     : { error: DEPLOYMENT_STATUS_UNKNOWN };

@@ -5,7 +5,7 @@
  * file-size budget.
  */
 
-import { isRecord } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { DeploySponsorship } from "@bramble/privacy/sponsored-deploy";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isFeeReviewResponse, isTransferResponse } from "../../popup/responses/responses";
@@ -14,7 +14,7 @@ import { responseError } from "./runtime-errors";
 /** The background's deploy-screen offer, single-sourced with the background. */
 export type { DeploySponsorship };
 
-const SPONSORSHIPS: readonly unknown[] = ["available", "held", "may-land", "none", "refused"];
+const SPONSORSHIPS: readonly unknown[] = ["available", "held", "none"];
 
 const isSponsorship = (value: unknown): value is DeploySponsorship => SPONSORSHIPS.includes(value);
 
@@ -48,11 +48,21 @@ export const createDeployRuntimeClient = (sendMessage: (message: unknown) => Pro
   },
   /**
    * Deploys the active account with the sponsor paying the fee; returns the
-   * transaction hash. A lost reply rejects as outcome-unknown, never as failed.
+   * transaction hash, or null when the sponsor is not deploying it and nothing
+   * was sent (the screen then deploys self-paid, silently). A lost reply
+   * rejects as outcome-unknown, never as failed.
    */
-  async deployAccountSponsored(): Promise<string> {
+  async deployAccountSponsored(): Promise<string | null> {
     const response = await sendMessage({ type: "wallet.deployAccountSponsored" });
     if (isTransferResponse(response)) return response.transactionHash;
+    if (
+      isRecord(response) &&
+      hasOnlyKnownKeys(response, ["ok", "sponsored"]) &&
+      response["ok"] === true &&
+      response["sponsored"] === false
+    ) {
+      return null;
+    }
     throw responseError(response, "deployment failed");
   },
 });

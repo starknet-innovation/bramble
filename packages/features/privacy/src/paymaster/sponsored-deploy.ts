@@ -48,49 +48,44 @@ export type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
 /** Who pays a sponsored deployment's network fee, as the review names them. */
 export const SPONSORED_DEPLOY_SPONSOR = "Starknet Foundation";
 
-/** The sponsor declined, or its relay could not quote. Nothing was sent. */
-export const SPONSORED_DEPLOY_REFUSED =
-  "The Starknet Foundation couldn't cover this deployment. Nothing was sent — add STRK to deploy it yourself.";
-
-/** The account's class is not one a sponsored deploy can create. */
-export const SPONSORED_DEPLOY_UNSUPPORTED =
-  "This account type can't be deployed with a sponsored fee. Add STRK to deploy it yourself.";
-
-/** The relay could not be reached or answered unusably. Nothing was sent. */
-export const SPONSORED_DEPLOY_UNREACHABLE =
-  "Couldn't reach the sponsor. Nothing was sent — try again.";
+/**
+ * What every deploy route answers while a sponsored attempt's hold stands, and
+ * what the deploy screen shows meanwhile: the sponsored deployment may be
+ * landing. The route that answers it sent nothing.
+ */
+export const DEPLOYMENT_IN_PROGRESS = "Deploying your account. This can take a few minutes.";
 
 /**
  * The relay explicitly refused: its own clean JSON-RPC error, or a 4xx on a
- * quote. Nothing was sent.
+ * quote. Nothing was sent. Its message is a diagnostic, never shown: the
+ * background turns every refusal into a silent self-paid deploy.
  */
 export class SponsoredDeployRefusedError extends WalletError {
   constructor() {
-    super(SPONSORED_DEPLOY_REFUSED);
+    super("sponsored deploy refused");
     this.name = "SponsoredDeployRefusedError";
   }
 }
 
 /**
  * A quote that failed without an explicit refusal: transport failure, deadline,
- * 5xx, or an unusable answer. Nothing was sent; the sponsor never said no.
+ * 5xx, or an unusable answer. Nothing was sent; the sponsor never said no. A
+ * diagnostic, never shown, like {@link SponsoredDeployRefusedError}.
  */
 export class SponsoredDeployUnavailableError extends WalletError {
   constructor() {
-    super(SPONSORED_DEPLOY_UNREACHABLE);
+    super("sponsored deploy unavailable");
     this.name = "SponsoredDeployUnavailableError";
   }
 }
 
 /**
  * What the deploy screen may offer: sponsored ("available"), nothing ("none"),
- * or the state of an earlier attempt: "held" while its hold stands, "may-land"
- * once it is over and the account is not confirmed deployed. The background
- * answers one of those four; "refused" is the screen's own state after a press
- * the sponsor declined, so the self-paid fee it shows then carries the reason.
- * Advisory display state; the submission re-checks everything it depends on.
+ * or "held" while an earlier attempt's hold stands and the account may be
+ * deploying. Advisory display state; the submission re-checks everything it
+ * depends on.
  */
-export type DeploySponsorship = "available" | "held" | "may-land" | "none" | "refused";
+export type DeploySponsorship = "available" | "held" | "none";
 
 /** One network's sponsored-deploy relay. */
 export type SponsoredDeployConfig = { readonly url: string };

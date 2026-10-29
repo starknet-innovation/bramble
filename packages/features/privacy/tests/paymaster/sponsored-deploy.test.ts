@@ -11,8 +11,6 @@ import {
   isSponsorableDeployment,
   quoteSponsoredDeploy,
   SPONSORED_DEPLOY_NETWORKS,
-  SPONSORED_DEPLOY_REFUSED,
-  SPONSORED_DEPLOY_UNREACHABLE,
   type SponsoredDeploymentData,
   SponsoredDeployRefusedError,
   SponsoredDeployUnavailableError,
@@ -219,7 +217,6 @@ describe("sponsored deploy quote", () => {
     for (const http of [stated, forbidden]) {
       const quoting = quoteSponsoredDeploy({ config, deployment: deployment(), http });
       await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployRefusedError);
-      await expect(quoting).rejects.toThrow(SPONSORED_DEPLOY_REFUSED);
     }
   });
 
@@ -249,7 +246,6 @@ describe("sponsored deploy quote", () => {
     for (const http of answers) {
       const quoting = quoteSponsoredDeploy({ config, deployment: deployment(), http });
       await expect(quoting).rejects.toBeInstanceOf(SponsoredDeployUnavailableError);
-      await expect(quoting).rejects.toThrow(SPONSORED_DEPLOY_UNREACHABLE);
     }
   });
 });
@@ -410,7 +406,7 @@ describe("sponsored deploy submission", () => {
         quote: quote(),
       });
       await expect(sending).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
-      await expect(sending).rejects.not.toThrow(SPONSORED_DEPLOY_REFUSED);
+      await expect(sending).rejects.not.toBeInstanceOf(SponsoredDeployRefusedError);
     });
   }
 });
