@@ -321,8 +321,18 @@ impl PlanState {
     /// Signs under the plan's session generation and returns the account's signature array
     /// (`serializeAccountSignature`). The public key must be the account's.
     pub(super) fn sign(&mut self, core: &WalletCore, hash: &Felt) -> Result<Vec<Felt>, Code> {
+        self.sign_renewing(core, hash, true)
+    }
+
+    /// `sign`, renewing the idle window only when `renew` (a review's signature does not).
+    pub(super) fn sign_renewing(
+        &mut self,
+        core: &WalletCore,
+        hash: &Felt,
+        renew: bool,
+    ) -> Result<Vec<Felt>, Code> {
         let signature = core
-            .plan_sign(self.generation, &self.account.account_id, hash)
+            .plan_sign(self.generation, &self.account.account_id, hash, renew)
             .map_err(|error| match error {
                 CoreError::Locked | CoreError::NoWallet => Code::Locked,
                 _ => Code::SigningFailed,

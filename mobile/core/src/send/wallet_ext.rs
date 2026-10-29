@@ -124,14 +124,16 @@ impl WalletCore {
     /// record still passes the signing gate. `Err(CoreError::Locked)` when the wallet was locked,
     /// idle-locked, or re-unlocked since the plan was prepared (every lock and every new session
     /// advances `lock_epoch`, both under the session mutex held here). The key is derived from
-    /// the record's index, used, and wiped inside this call. Renews.
+    /// the record's index, used, and wiped inside this call. Renews the idle window only when
+    /// `renew`: a review's signature (Braavos's deployment estimate) is passive, as reads are.
     pub(crate) fn plan_sign(
         &self,
         generation: u64,
         account_id: &str,
         hash: &Felt,
+        renew: bool,
     ) -> Result<kms::Signature, CoreError> {
-        self.with_session(true, |session| {
+        self.with_session(renew, |session| {
             if self.lock_epoch.load(Ordering::SeqCst) != generation {
                 return Err(CoreError::Locked);
             }

@@ -179,8 +179,9 @@ may sign is therefore decided on chain by the plan, never by a per-record flag:
 - **Residual risk (narrowed by the merge):** sends and deployments are now hashed inside the core
   over a request the core built (`TransferPlan`), bound to the record's address, so the host no
   longer chooses what a transfer signature commits to. `sign_hash_for_account` still signs a
-  host-supplied hash for any record; a host holding the record at index `i` could ask it to sign
-  a hash for another family's account at index `i` (same key). No UI path calls it; it
+  host-supplied hash for an OZ or Ready record (a Braavos record signs only inside a send plan,
+  after its on-chain checks); a host holding the record at index `i` could ask it to sign a
+  hash for another family's account at index `i` (same key). No UI path calls it; it
   stays for parity tests and is the candidate for removal once nothing needs a raw hash.
 
 ### 2.7a Ready (Argent) accounts send as the extension does

@@ -61,13 +61,12 @@ fn every_record_signs_through_one_gate_with_its_index_key() {
         .sign_hash_for_account(ozr.id.clone(), "0x1".into())
         .unwrap();
     assert_eq!(signed.public_key, ozr.public_key);
-    // Braavos passes the same gate; what it may sign is decided on chain by the plan
-    // (`transactions_braavos_parity.rs`).
-    assert_eq!(
-        core.sign_hash_for_account(braavos0.id.clone(), "0x1".into())
-            .unwrap(),
-        signed
-    );
+    // Braavos signs only inside a send plan, after its live class and signers are checked
+    // (`transactions_braavos_parity.rs`); a raw hash would skip those checks.
+    assert!(matches!(
+        core.sign_hash_for_account(braavos0.id.clone(), "0x1".into()),
+        Err(CoreError::InvalidInput { .. })
+    ));
     assert!(matches!(
         core.sign_hash_for_account("SN_SEPOLIA:0x1".into(), "0x1".into()),
         Err(CoreError::InvalidInput { .. })

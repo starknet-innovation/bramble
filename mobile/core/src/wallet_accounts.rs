@@ -302,10 +302,12 @@ impl WalletCore {
         })
     }
 
-    /// Signs a hash for one stored account, through the same gate as every transfer
-    /// (`signing_record`): refuses a vault still waiting for discovery and an unknown id. The key is derived from the record's index, used, and
-    /// wiped inside this call. Renews. See `docs/accounts.md` §2.7 for what this can and cannot
-    /// guarantee.
+    /// Signs a host-supplied hash for one stored account, through the same gate as every transfer
+    /// (`signing_record`): refuses a vault still waiting for discovery and an unknown id. A
+    /// Braavos record is refused too: its signatures are made only by a send plan, after the
+    /// account's live class and signers are checked, and a raw hash would skip those checks. The
+    /// key is derived from the record's index, used, and wiped inside this call. Renews. See
+    /// `docs/accounts.md` §2.7 for what this can and cannot guarantee.
     pub fn sign_hash_for_account(
         &self,
         account_id: String,
@@ -314,6 +316,9 @@ impl WalletCore {
         self.with_session(true, |session| {
             let payload = &session.payload;
             let record = signing_record(payload, &account_id)?;
+            if record.family() == AccountFamily::Braavos {
+                return Err(invalid("a Braavos account signs only through a send plan"));
+            }
             let signature = sign_for(payload, record, &message_hash)?;
             Ok(StarkSignature {
                 public_key: signature.public_key,

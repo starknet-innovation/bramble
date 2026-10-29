@@ -26,11 +26,12 @@ impl PlanState {
         &mut self,
         core: &WalletCore,
         hash: &Felt,
+        renew: bool,
     ) -> Result<Vec<Felt>, Code> {
         let params =
             sign::braavos_deploy_params(self.account.network, catalog().braavos_implementation);
-        let aux = self.sign(core, &sign::braavos_params_hash(&params))?;
-        let mut signature = self.sign(core, hash)?;
+        let aux = self.sign_renewing(core, &sign::braavos_params_hash(&params), renew)?;
+        let mut signature = self.sign_renewing(core, hash, renew)?;
         signature.extend(params);
         signature.extend(aux);
         Ok(signature)
@@ -49,7 +50,9 @@ impl PlanState {
                     deployment,
                     &nonce,
                 );
-                match self.braavos_deploy_signature(core, &hash) {
+                // The review's estimate is passive; the confirmed re-estimate renews.
+                let renew = expect != Expect::ReviewDeployEstimate;
+                match self.braavos_deploy_signature(core, &hash, renew) {
                     Ok(signature) => (signature, false),
                     Err(code) => return self.fail(code, None),
                 }
@@ -107,7 +110,7 @@ impl PlanState {
             Err(refusal) => return self.fail(refusal_code(refusal), None),
         };
         let signed = if self.account.is_braavos() {
-            self.braavos_deploy_signature(core, &hash)
+            self.braavos_deploy_signature(core, &hash, true)
         } else {
             self.sign(core, &hash)
         };
