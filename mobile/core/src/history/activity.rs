@@ -3,13 +3,17 @@
 //! Summaries are load-bearing in the extension (dedup matches on them), so they are built here,
 //! exactly, and never by the host.
 
+use std::collections::HashSet;
+
 use serde_json::{json, Map, Value};
 
+use super::activity_rules::{
+    activity_token_address, direction_text, is_recorded_token_address, parse_direction,
+};
 use super::explorer::is_account_id_for_network;
 use crate::activity::store::{kind_text, parse_kind, parse_status, status_text};
 use crate::js::felt::{
-    canonical_felt, is_non_zero_felt, is_stark_field_element, same_felt, same_felt_value,
-    uint256_felts,
+    canonical_felt, is_stark_field_element, same_felt, same_felt_value, uint256_felts,
 };
 use crate::js::json::JsValue;
 use crate::js::num::{is_safe_integer, utf16_len, utf16_slice};
@@ -27,8 +31,6 @@ pub enum FailureNotice {
     Pending,
 }
 
-/// The extension's `ActivityEntry`. Built only by the core (on-chain rows) or validated by it
-/// (`ActivityBook::record_local`).
 /// Whether value came into or went out of the account (`ActivityEntry.direction`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum TransferDirection {
@@ -36,6 +38,8 @@ pub enum TransferDirection {
     Out,
 }
 
+/// The extension's `ActivityEntry`. Built only by the core (on-chain rows) or validated by it
+/// (`activity::store::record`).
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct ActivityEntry {
     pub account_id: String,
@@ -59,79 +63,6 @@ pub struct ActivityEntry {
     /// The canonical address of the token `token` names (issue 643); never without `token`.
     #[uniffi(default = None)]
     pub token_address: Option<String>,
-}
-
-/// `isRecordedTokenAddress`: absent, or one canonical non-zero field element beside a symbol.
-pub(crate) fn is_recorded_token_address(address: Option<&str>, token: Option<&str>) -> bool {
-    address.is_none_or(|address| {
-        token.is_some()
-            && is_non_zero_felt(address)
-            && canonical_felt(address).as_deref() == Some(address)
-    })
-}
-
-/// `activityToken`: the token's canonical address when it is a non-zero field element.
-pub(crate) fn activity_token_address(address: &str) -> Option<String> {
-    canonical_felt(address).filter(|address| is_non_zero_felt(address))
-}
-
-/// `isZeroAmountLabel`: `/^0(?:\.0*)?$/`, a formatted amount of zero.
-fn is_zero_amount_label(amount: &str) -> bool {
-    match amount.strip_prefix('0') {
-        Some(rest) => {
-            rest.is_empty()
-                || rest
-                    .strip_prefix('.')
-                    .is_some_and(|z| z.chars().all(|c| c == '0'))
-        }
-        None => false,
-    }
-}
-
-/// The symbol the explorer lane gives a token the wallet does not track.
-pub(crate) const UNTRACKED_TOKEN_SYMBOL: &str = "TOKEN";
-
-/// `withoutPlantedRows` (audit #163): the planted-row rule applied to rows stored before it
-/// existed, which reach the merge as local rows and would otherwise be kept. A zero-amount
-/// transfer and an outgoing untracked-token transfer are dropped; an incoming untracked-token
-/// transfer loses its counterparty. The extension spares `origin: "wallet"` rows; mobile records
-/// no origin, but its own sends are of a bundled token and never zero, so the rule cannot reach
-/// them.
-pub(crate) fn without_planted_rows(entries: Vec<ActivityEntry>) -> Vec<ActivityEntry> {
-    entries
-        .into_iter()
-        .filter_map(|mut entry| {
-            if entry.kind != ActivityKind::Transfer {
-                return Some(entry);
-            }
-            if entry.amount.as_deref().is_some_and(is_zero_amount_label) {
-                return None;
-            }
-            if entry.token.as_deref() != Some(UNTRACKED_TOKEN_SYMBOL) {
-                return Some(entry);
-            }
-            if entry.summary.starts_with("Sent ") {
-                return None;
-            }
-            entry.counterparty = None;
-            Some(entry)
-        })
-        .collect()
-}
-
-pub(crate) fn direction_text(direction: TransferDirection) -> &'static str {
-    match direction {
-        TransferDirection::In => "in",
-        TransferDirection::Out => "out",
-    }
-}
-
-pub(crate) fn parse_direction(text: &str) -> Option<TransferDirection> {
-    match text {
-        "in" => Some(TransferDirection::In),
-        "out" => Some(TransferDirection::Out),
-        _ => None,
-    }
 }
 
 fn optional_detail(value: Option<&String>) -> bool {
@@ -357,26 +288,20 @@ fn leg_key(entry: &ActivityEntry) -> String {
 /// transaction still emits its fee `Transfer`, so only the status re-poll settles a row (#653).
 /// Newest first.
 pub fn merge_activity(local: &[ActivityEntry], on_chain: &[ActivityEntry]) -> Vec<ActivityEntry> {
-    let mut by_key: Vec<(String, ActivityEntry)> = Vec::new();
-    let mut local_txs: Vec<String> = Vec::new();
+    let mut keys: HashSet<String> = HashSet::new();
+    let mut local_txs: HashSet<String> = HashSet::new();
+    let mut merged: Vec<ActivityEntry> = Vec::new();
     for entry in local {
-        let key = leg_key(entry);
-        if by_key.iter().any(|(k, _)| *k == key) {
-            continue;
+        if keys.insert(leg_key(entry)) {
+            merged.push(entry.clone());
+            local_txs.insert(tx_key(entry));
         }
-        by_key.push((key, entry.clone()));
-        local_txs.push(tx_key(entry));
     }
     for entry in on_chain {
-        if local_txs.contains(&tx_key(entry)) {
-            continue;
-        }
-        let key = leg_key(entry);
-        if !by_key.iter().any(|(k, _)| *k == key) {
-            by_key.push((key, entry.clone()));
+        if !local_txs.contains(&tx_key(entry)) && keys.insert(leg_key(entry)) {
+            merged.push(entry.clone());
         }
     }
-    let mut merged: Vec<ActivityEntry> = by_key.into_iter().map(|(_, e)| e).collect();
     merged.sort_by_key(|e| std::cmp::Reverse(e.submitted_at));
     merged
 }
@@ -437,53 +362,6 @@ pub fn decode_transfer_event(event: &JsValue, account: &str) -> Option<DecodedTr
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn planted_rows_are_dropped_or_stripped_as_the_extension_does() {
-        let row = |amount: &str, token: &str, summary: &str| ActivityEntry {
-            account_id: "SN_MAIN:0x1".into(),
-            amount: Some(amount.into()),
-            counterparty: Some("0x5".into()),
-            direction: None,
-            failure_notice: None,
-            finalized_on_l1: None,
-            hash: "0xabc".into(),
-            kind: ActivityKind::Transfer,
-            network: NetworkId::Mainnet,
-            not_found_count: None,
-            status: TxStatus::Accepted,
-            submitted_at: 1,
-            summary: summary.into(),
-            token: Some(token.into()),
-            token_address: None,
-        };
-        for zero in ["0", "0.", "0.000"] {
-            assert!(without_planted_rows(vec![row(zero, "STRK", "Received")]).is_empty());
-        }
-        for kept in ["0.01", "00", "10", "0.0001"] {
-            assert_eq!(
-                without_planted_rows(vec![row(kept, "STRK", "Received")]).len(),
-                1
-            );
-        }
-        assert!(without_planted_rows(vec![row("1", "TOKEN", "Sent 1 TOKEN to 0x5")]).is_empty());
-        let incoming = without_planted_rows(vec![row("1", "TOKEN", "Received 1 TOKEN")]);
-        assert_eq!(incoming[0].counterparty, None);
-        let tracked = without_planted_rows(vec![row("1", "STRK", "Sent 1 STRK to 0x5")]);
-        assert_eq!(tracked[0].counterparty.as_deref(), Some("0x5"));
-    }
-
-    #[test]
-    fn token_addresses_must_be_canonical_field_elements() {
-        let above_p = format!("0x{}", "f".repeat(64));
-        assert!(!is_recorded_token_address(Some(&above_p), Some("X")));
-        assert!(!is_recorded_token_address(Some("0x0"), Some("X")));
-        assert!(!is_recorded_token_address(Some("0x07"), Some("X")));
-        assert!(!is_recorded_token_address(Some("0x7"), None));
-        assert!(is_recorded_token_address(Some("0x7"), Some("X")));
-        assert_eq!(activity_token_address("-5"), None);
-        assert_eq!(activity_token_address("0x07").as_deref(), Some("0x7"));
-    }
 
     #[test]
     fn transfer_key_is_starknet_keccak() {

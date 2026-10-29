@@ -15,12 +15,8 @@ use std::sync::Mutex;
 
 use serde_json::{json, Value};
 
-use super::activity::{
-    decode_transfer_event, is_activity_entry, on_chain_activity_entry, ActivityEntry,
-    DecodedTransfer, TRANSFER_EVENT_KEY,
-};
+use super::activity::{decode_transfer_event, ActivityEntry, DecodedTransfer, TRANSFER_EVENT_KEY};
 use super::explorer::{account_id_address, is_account_id_for_network};
-use super::starkscan::MAX_HISTORY_ENTRIES;
 use crate::js::felt::{canonical_felt, is_non_zero_felt};
 use crate::js::json::JsValue;
 use crate::js::num::is_safe_integer;
@@ -28,6 +24,8 @@ use crate::networks::NetworkId;
 use crate::portfolio::model::TokenConfig;
 use crate::portfolio::wire::{classify, rpc_call, Reply, RpcReply, RpcRequest};
 use crate::CoreError;
+
+mod dating;
 
 const MAX_EVENT_PAGES: usize = 3;
 const EVENT_CHUNK_SIZE: u64 = 100;
@@ -58,13 +56,10 @@ enum Phase {
         token: usize,
         /// A legacy token is read with the selector alone, so it has one filter.
         legacy: bool,
-        /// The token's transfers from its finished filters, kept only if every read succeeds.
-        kept: Vec<(DecodedTransfer, usize)>,
         filter: usize,
         recent: bool,
         page: usize,
         continuation: Option<JsValue>,
-        buffer: Vec<(DecodedTransfer, usize)>,
     },
     Timestamps {
         blocks: Vec<u64>,
@@ -80,6 +75,10 @@ struct Scan {
     latest: u64,
     from_block: u64,
     collected: Vec<(DecodedTransfer, usize)>,
+    /// The token's rows from finished filters (kept only if all its reads succeed) and the
+    /// current filter's pages; outside `Phase` so cloning it stays cheap.
+    kept: Vec<(DecodedTransfer, usize)>,
+    buffer: Vec<(DecodedTransfer, usize)>,
     ranked: Vec<(DecodedTransfer, usize)>,
     outstanding: Vec<(u64, u64)>,
     next_id: u64,
@@ -101,6 +100,8 @@ fn fresh_scan() -> Scan {
         latest: 0,
         from_block: 0,
         collected: Vec::new(),
+        kept: Vec::new(),
+        buffer: Vec::new(),
         ranked: Vec::new(),
         outstanding: Vec::new(),
         next_id: 1,
@@ -120,75 +121,12 @@ impl HistoryScan {
 
     // The first scannable token at or after `from`, or the timestamp phase when none is left.
     fn next_token(&self, scan: &mut Scan, from: usize) {
+        scan.kept.clear();
+        scan.buffer.clear();
         match (from..self.tokens.len()).find(|i| self.scannable(*i)) {
             Some(token) => scan.phase = Phase::Probe { token },
             None => self.rank(scan),
         }
-    }
-
-    // `rankRecentTransfers` then the distinct blocks, in rank order.
-    fn rank(&self, scan: &mut Scan) {
-        let mut ranked: Vec<(DecodedTransfer, usize)> = Vec::new();
-        for (transfer, token) in std::mem::take(&mut scan.collected) {
-            let same_leg = |(t, i): &(DecodedTransfer, usize)| {
-                t.hash == transfer.hash
-                    && self.tokens[*i].address == self.tokens[token].address
-                    && t.counterparty == transfer.counterparty
-                    && t.amount_raw == transfer.amount_raw
-            };
-            if !ranked.iter().any(same_leg) {
-                ranked.push((transfer, token));
-            }
-        }
-        ranked.sort_by_key(|r| std::cmp::Reverse(r.0.block_number));
-        ranked.truncate(MAX_HISTORY_ENTRIES);
-        let mut blocks: Vec<u64> = Vec::new();
-        for (transfer, _) in &ranked {
-            if !blocks.contains(&transfer.block_number) {
-                blocks.push(transfer.block_number);
-            }
-        }
-        scan.ranked = ranked;
-        scan.phase = Phase::Timestamps {
-            blocks,
-            next: 0,
-            times: Vec::new(),
-        };
-        self.finish_if_dated(scan);
-    }
-
-    fn finish_if_dated(&self, scan: &mut Scan) {
-        let Phase::Timestamps { blocks, times, .. } = &scan.phase else {
-            return;
-        };
-        if times.len() < blocks.len() {
-            return;
-        }
-        let mut entries = Vec::new();
-        for (transfer, token) in &scan.ranked {
-            let Some(Some(seconds)) = times
-                .iter()
-                .find(|(b, _)| *b == transfer.block_number)
-                .map(|(_, s)| *s)
-            else {
-                continue;
-            };
-            let ms = seconds * 1000.0;
-            if !is_safe_integer(ms) || ms < 0.0 {
-                continue;
-            }
-            let entry = on_chain_activity_entry(
-                &self.account_id,
-                transfer,
-                self.network,
-                ms as u64,
-                &self.tokens[*token],
-            );
-            if is_activity_entry(&entry) {
-                entries.push(entry);
-            }
-        }
-        scan.phase = Phase::Done(entries);
     }
 
     fn probe_call(&self, id: u64, scan: &Scan, token: usize) -> RpcRequest {
@@ -205,8 +143,7 @@ impl HistoryScan {
         )
     }
 
-    // The probe's verdict: `Some(legacy)`, or `None` for an answer that is not an events page
-    // (the extension's probe throws a non-transport error there, which skips the token).
+    // `Some(legacy)`, or `None` for a non-page answer (the extension then skips the token).
     fn probed_layout(result: &JsValue) -> Option<bool> {
         let first = match result.get("events") {
             None | Some(JsValue::Null) => None,
@@ -265,12 +202,10 @@ impl HistoryScan {
         let Phase::Events {
             token,
             legacy,
-            kept,
             filter,
             recent,
             page,
             continuation,
-            buffer,
         } = &mut scan.phase
         else {
             return Err(());
@@ -286,7 +221,7 @@ impl HistoryScan {
                         return Err(());
                     }
                     if let Some(decoded) = decode_transfer_event(event, &self.account) {
-                        buffer.push((decoded, *token));
+                        scan.buffer.push((decoded, *token));
                     }
                 }
             }
@@ -306,25 +241,24 @@ impl HistoryScan {
                 *recent = true;
                 *page = 0;
                 *continuation = None;
-                buffer.clear();
+                scan.buffer.clear();
                 return Ok(());
             }
         }
         let (token, legacy, filter) = (*token, *legacy, *filter);
-        let mut kept = std::mem::take(kept);
-        kept.append(buffer);
+        let mut page_rows = std::mem::take(&mut scan.buffer);
+        scan.kept.append(&mut page_rows);
         if !legacy && filter == 0 {
             scan.phase = Phase::Events {
                 token,
                 legacy,
-                kept,
                 filter: 1,
                 recent: false,
                 page: 0,
                 continuation: None,
-                buffer: Vec::new(),
             };
         } else {
+            let kept = std::mem::take(&mut scan.kept);
             scan.collected.extend(kept);
             self.next_token(scan, token + 1);
         }
@@ -442,13 +376,13 @@ impl HistoryScan {
                         scan.phase = Phase::Events {
                             token,
                             legacy,
-                            kept: Vec::new(),
                             filter: 0,
                             recent: false,
                             page: 0,
                             continuation: None,
-                            buffer: Vec::new(),
                         };
+                        scan.kept.clear();
+                        scan.buffer.clear();
                     }
                     None => self.next_token(&mut scan, token + 1),
                 },

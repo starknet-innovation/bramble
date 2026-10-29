@@ -227,7 +227,7 @@ fn matching_token(
             id: format!("starkscan:{}:{address}", network_code(network)),
             network,
             address,
-            symbol: super::activity::UNTRACKED_TOKEN_SYMBOL.into(),
+            symbol: super::activity_rules::UNTRACKED_TOKEN_SYMBOL.into(),
             name: "Untracked token".into(),
             decimals: decimals as u8,
         },

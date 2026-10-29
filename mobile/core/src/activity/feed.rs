@@ -6,10 +6,9 @@
 use std::path::Path;
 
 use super::store::{load_log, locked, save_log, Entry, SyncRecord};
-use crate::history::activity::{
-    entry_from_json, entry_to_json, merge_activity, without_planted_rows, ActivityEntry,
-};
+use crate::history::activity::{entry_from_json, entry_to_json, merge_activity, ActivityEntry};
 use crate::history::activity_book::ActivityBook;
+use crate::history::activity_rules::without_planted_rows;
 use crate::js::json;
 use crate::WalletCore;
 

@@ -18,6 +18,8 @@ use super::types::{
 };
 use crate::activity::store::{self, Entry};
 use crate::felt;
+use crate::history::activity::TransferDirection;
+use crate::history::activity_rules::direction_text;
 use crate::wallet::WalletCore;
 use crate::CoreError;
 
@@ -362,7 +364,9 @@ impl PlanState {
                 amount,
                 counterparty,
                 // A public send this wallet made moves value out (`wallet-ops.ts`).
-                direction: token.as_ref().map(|_| "out".into()),
+                direction: token
+                    .as_ref()
+                    .map(|_| direction_text(TransferDirection::Out).into()),
                 failure_notice: None,
                 finalized_on_l1: None,
                 hash: felt::canonical(hash),
