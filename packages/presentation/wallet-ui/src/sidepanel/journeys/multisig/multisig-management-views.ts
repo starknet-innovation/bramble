@@ -158,7 +158,7 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
       ${account ? "" : noAccountEmpty(status)}
       <div class="multisig-setup-options" role="group" aria-label="Multisig setup">
         ${setupOption("multisig-deploy", "users", "Create a multisig account", "Set participants, fund, and deploy.")}
-        ${setupOption("multisig-watch", "search", "Add multisig account", "Enter its address.")}
+        ${setupOption("multisig-watch", "search", "Add an existing multisig", "Enter its address.")}
       </div>
     </section>`,
   );
