@@ -300,7 +300,12 @@ export const captureRepaintFocus = (root: Element | null = null): RepaintFocus =
   return {
     activeDraft: activeDraftMemo(doc),
     groupNameDraft: groupNameDraftMemo(doc),
-    scrollTop: doc.scrollingElement?.scrollTop ?? doc.documentElement.scrollTop,
+    // The onboarding surface scrolls body, not the viewport, so read whichever
+    // element actually moved; only one of them is ever non-zero.
+    scrollTop: Math.max(
+      doc.scrollingElement?.scrollTop ?? doc.documentElement.scrollTop,
+      doc.body.scrollTop,
+    ),
     selectors: focusMemo(doc),
   };
 };
