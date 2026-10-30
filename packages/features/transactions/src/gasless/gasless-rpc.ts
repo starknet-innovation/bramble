@@ -6,8 +6,12 @@
  *
  * Trust boundary: the URL is the wallet's own route, never a dapp field.
  * Responses are untrusted. An execute is a determinate refusal only for an
- * allowlisted pre-forward code with no transaction result beside it.
- * Everything else on execute throws `IndeterminateRpcWriteError`.
+ * allowlisted pre-forward code in the gateway's own `{"error": code}` body
+ * with an error status. The gateway writes those before it forwards and
+ * passes a relay's 2xx reply through unchanged, so a 2xx body, or a code
+ * inside a JSON-RPC `error`, may come from a relay that already holds the
+ * signed authorization. Everything else on execute throws
+ * `IndeterminateRpcWriteError`.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -50,8 +54,12 @@ const PRE_FORWARD_EXECUTE_CODES: ReadonlySet<GaslessGatewayCode> = new Set([
   "screening_unavailable",
 ]);
 
-const executeAnswer = (code: GaslessGatewayCode, clean: boolean): Classified =>
-  clean && PRE_FORWARD_EXECUTE_CODES.has(code) ? { kind: "refused", code } : { kind: "lost" };
+// The gateway's own refusals carry an error status. A 2xx body is the relay's
+// reply passed through, whatever shape it takes.
+const executeAnswer = (code: GaslessGatewayCode, status: number): Classified =>
+  status >= 400 && PRE_FORWARD_EXECUTE_CODES.has(code)
+    ? { kind: "refused", code }
+    : { kind: "lost" };
 
 const pause = (ms: number): Promise<void> =>
   new Promise((resolve) => {
@@ -100,7 +108,7 @@ const statusClass = (
     return executes ? { kind: "lost" } : { kind: "refused", code: code ?? "unrecognised" };
   }
   if (code !== null) {
-    return executes ? executeAnswer(code, true) : { kind: "refused", code };
+    return executes ? executeAnswer(code, status) : { kind: "refused", code };
   }
   if (status >= 400) {
     return executes ? { kind: "lost" } : { kind: "refused", code: "unrecognised" };
@@ -118,12 +126,9 @@ const resultClass = (body: unknown, executes: boolean): Classified => {
     return executes ? { kind: "lost" } : { kind: "refused", code: "unrecognised" };
   }
   if (body["error"] !== undefined) {
-    if (!executes) {
-      return { kind: "refused", code: relayCode(body["error"]) };
-    }
-    // A result beside the error means the envelope does not prove the relay
-    // stopped before forwarding.
-    return executeAnswer(relayCode(body["error"]), !Object.hasOwn(body, "result"));
+    // On execute a JSON-RPC error is the relay's answer passed through, so even
+    // a pre-forward code there cannot prove the relay was never asked.
+    return executes ? { kind: "lost" } : { kind: "refused", code: relayCode(body["error"]) };
   }
   if (!Object.hasOwn(body, "result")) {
     return executes ? { kind: "lost" } : { kind: "refused", code: "unrecognised" };
