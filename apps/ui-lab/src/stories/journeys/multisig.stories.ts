@@ -149,12 +149,15 @@ export const DeployApproval: LabStory = {
     );
     await expect(body?.querySelector(".flow-header [data-nav-back]")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-deploy-back]")).not.toBeInTheDocument();
-    await expect(body?.querySelector(".multisig-deployment-target")).toBeVisible();
-    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent(
-      "Maximum network fee: 0.252237 STRK",
+    // The automatic quote has settled, yet Approval holds: only the user's
+    // own check paints the review and moves on (QA #807).
+    await expect(body?.querySelector("#multisig-deploy-form")).toHaveAttribute(
+      "data-deployment-stage",
+      "approval",
     );
+    await expect(body?.querySelector(".multisig-deployment-target")).not.toBeInTheDocument();
     await expect(body?.querySelector<HTMLButtonElement>('button[type="submit"]')).toHaveTextContent(
-      "Deploy multisig",
+      "Check fee and address",
     );
   },
 };

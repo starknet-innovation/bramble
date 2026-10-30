@@ -137,7 +137,7 @@ const prepareDeploymentApproval = async (context: FrameContext): Promise<void> =
   if (!continueButton) throw new Error("Missing production multisig approval action");
   continueButton.click();
   // The approval stage quotes the deployment itself (debounced); wait for that
-  // quote so the checkpoint shows the merged stage: controls beside the review.
+  // quote so the checkpoint shows Approval holding after it settles.
   await new Promise<void>((resolve) => setTimeout(resolve, 450));
   await nextTurn();
 };
@@ -428,7 +428,7 @@ const checkpoints: readonly ScenarioCheckpoint[] = [
     ...checkpoint(
       "deploy-approval",
       "Set approval policy",
-      "The threshold, deployment signer, and salt are chosen beside the quoted address and fee, so one Deploy action carries the reviewed deployment.",
+      "Threshold, deployment signer, and advanced salt form one focused decision after the signer set is complete.",
       { selectedMultisigId: null, view: "multisig-deploy" },
       { class: "declared", step: "approval", threshold: 2 },
     ),

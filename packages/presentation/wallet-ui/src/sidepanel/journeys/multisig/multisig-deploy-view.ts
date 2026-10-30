@@ -134,6 +134,32 @@ export const deploymentReviewMarkup = (review: ArgentMultisigDeploymentReview): 
       </div>
     </details>`;
 
+/**
+ * Renders the receipt for a submitted deployment: the escaped address and
+ * transaction hash, the way into the saved account, and an explorer link when
+ * the network has one. Submitted is not confirmed; the copy says so.
+ */
+export const deploymentSubmittedMarkup = (
+  result: {
+    readonly address: string;
+    readonly multisig: ArgentMultisigView;
+    readonly transactionHash: string;
+  },
+  explorer: string | null,
+): string => `<section class="multisig-deployment-success" role="status" aria-live="polite">
+                <span class="multisig-deployment-success-mark">${icon("check")}</span>
+                <div><p class="context-label">Submitted to Starknet</p><h2>Multisig deployment is in progress</h2></div>
+                <p>Account saved. Deployment is confirming.</p>
+                <dl class="request-detail">
+                  <div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(result.address))}</code>${copyButton(result.address, "Copy multisig address")}</dd></div>
+                  <div><dt>Transaction</dt><dd><code>${escapeHtml(accountLabel(result.transactionHash))}</code>${copyButton(result.transactionHash, "Copy deployment transaction hash")}</dd></div>
+                </dl>
+                <div class="multisig-deployment-success-actions">
+                  ${button({ attributes: { "data-open-deployed-multisig": result.multisig.record.id }, label: "Go to deployed account" })}
+                  ${explorer ? `<a class="button secondary" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer">View transaction</a>` : ""}
+                </div>
+              </section>`;
+
 const deploymentSignerCopy = (
   account: AccountRef,
   preferences: WalletPreferences | null,

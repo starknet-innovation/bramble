@@ -1,6 +1,4 @@
 /** Linear exact-review binding for stable Argent multisig creation. */
-import { escapeHtml } from "@bramble/core/html";
-import { button as buttonMarkup } from "@bramble/ui-kit/controls";
 import {
   explorerTransactionUrl,
   isNonZeroStarkFieldElement,
@@ -18,8 +16,7 @@ import {
   renderFragment,
   showToast,
 } from "../../shared/dom";
-import { icon } from "../../shared/icons";
-import { accountLabel, copyButton } from "../../shared/parts";
+import { accountLabel } from "../../shared/parts";
 import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import type { SendIntent } from "../send/send-model";
 import {
@@ -29,9 +26,20 @@ import {
   EXPIRED_DEPLOYMENT_REVIEW,
 } from "./multisig-deploy-errors";
 import { bindDeploymentFunding } from "./multisig-deploy-funding-ui";
+import {
+  holdQuote,
+  sameDeploymentSetup,
+  takeFundingReturn,
+  takeHeldQuote,
+  trackFundingReturn,
+} from "./multisig-deploy-resume";
 import { bindDeploymentSignerPicker } from "./multisig-deploy-signer-ui";
 import { type DeploymentStage, setDeploymentStage } from "./multisig-deploy-stage";
-import { deploymentFundingStage, deploymentReviewMarkup } from "./multisig-deploy-view";
+import {
+  deploymentFundingStage,
+  deploymentReviewMarkup,
+  deploymentSubmittedMarkup,
+} from "./multisig-deploy-view";
 import {
   bindMultisigParticipantPicker,
   type MultisigParticipant,
@@ -77,10 +85,14 @@ const deploymentSetup = (form: HTMLFormElement): ArgentMultisigDeploymentSetup =
     threshold: Number(data.get("threshold")),
   };
 };
-const sameSetup = (
-  left: ArgentMultisigDeploymentSetup,
-  right: ArgentMultisigDeploymentSetup,
-): boolean => JSON.stringify(left) === JSON.stringify(right);
+// The form's setup, or undefined while a field cannot be read.
+const readableSetup = (form: HTMLFormElement): ArgentMultisigDeploymentSetup | undefined => {
+  try {
+    return deploymentSetup(form);
+  } catch {
+    return undefined;
+  }
+};
 
 const mountLocalFundingControls = (form: HTMLFormElement, reviewRoot: HTMLElement): void => {
   const stage = reviewRoot.querySelector(".multisig-funding-stage");
@@ -266,18 +278,47 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   };
   const QUOTE_DEBOUNCE_MS = 350;
   let quoteTimer: ReturnType<typeof setTimeout> | null = null;
-  // Runs one quote, painting it beside the fields it read; stage ends only here.
+  const fundingDeps = { openFunding: trackFundingReturn(deps.openFunding) };
+  // Paints a review the user asked for and moves to the stage it decides:
+  // Fund when the address is short of the fee, Deploy otherwise.
+  const applyReview = (
+    target: HTMLFormElement,
+    input: ArgentMultisigDeploymentSetup,
+    next: ArgentMultisigDeploymentReview,
+  ): void => {
+    const fundingRequired = next.feeAffordability === "insufficient";
+    if (!fundingRequired) reviews.set(target, { input, review: next });
+    setDeployLabel();
+    if (reviewRoot) {
+      renderFragment(
+        reviewRoot,
+        fundingRequired ? deploymentFundingStage(next) : deploymentReviewMarkup(next),
+      );
+      bindCopyButtons(reviewRoot);
+      if (fundingRequired) {
+        mountLocalFundingControls(target, reviewRoot);
+        bindDeploymentFunding(fundingDeps, target, next);
+      }
+    }
+    setDeploymentStage(target, fundingRequired ? "fund" : "deploy");
+    if (button) button.hidden = fundingRequired;
+    deps.setResult("multisig-deploy-result", "");
+    releaseButton();
+  };
+  // Runs one quote. Only an explicit one (the user's press, or the return
+  // from a funding send) paints a review and leaves Approval; an automatic
+  // one is held for that press, so it can never skip the user past Approval.
   const runQuote = (input: ArgentMultisigDeploymentSetup, explicit = false): void => {
     if (!form) return;
     const generation = (reviewGenerations.get(form) ?? 0) + 1;
     reviewGenerations.set(form, generation);
     const isCurrent = (): boolean => {
-      if (reviewGenerations.get(form) !== generation) return false;
-      try {
-        return sameSetup(deploymentSetup(form), input);
-      } catch {
-        return false;
-      }
+      const current = readableSetup(form);
+      return (
+        reviewGenerations.get(form) === generation &&
+        current !== undefined &&
+        sameDeploymentSetup(current, input)
+      );
     };
     // Busy throughout: a second press cannot deploy an unread review. Leaving
     // busy re-applies the class and signer gate, so a quote never enables it.
@@ -287,22 +328,11 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       .reviewDeployment(input)
       .then((next) => {
         if (!isCurrent()) return;
-        const fundingRequired = next.feeAffordability === "insufficient";
-        if (!fundingRequired) reviews.set(form, { input, review: next });
-        setDeployLabel();
-        if (reviewRoot) {
-          renderFragment(
-            reviewRoot,
-            fundingRequired ? deploymentFundingStage(next) : deploymentReviewMarkup(next),
-          );
-          bindCopyButtons(reviewRoot);
-          if (fundingRequired) {
-            mountLocalFundingControls(form, reviewRoot);
-            bindDeploymentFunding(deps, form, next);
-          }
+        if (explicit) {
+          applyReview(form, input, next);
+          return;
         }
-        setDeploymentStage(form, fundingRequired ? "fund" : "deploy");
-        if (button) button.hidden = fundingRequired;
+        holdQuote(form, { generation, input, review: next });
         deps.setResult("multisig-deploy-result", "");
         releaseButton();
       })
@@ -328,8 +358,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     quoteTimer = setTimeout(() => {
       quoteTimer = null;
       if (!form.isConnected) return;
-      const stage = form.dataset["deploymentStage"];
-      if (stage !== "approval" && stage !== "deploy") return;
+      if (form.dataset["deploymentStage"] !== "approval") return;
       try {
         runQuote(deploymentSetup(form));
       } catch {
@@ -384,6 +413,12 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     setDeployLabel();
     scheduleQuote();
   });
+  // Back from a "Fund from this wallet" send: check the same saved setup
+  // again and land on Fund (or Deploy, once funded) instead of Approval.
+  const restored = form ? readableSetup(form) : undefined;
+  const ready =
+    form?.dataset["classReady"] === "true" && form.dataset["deploymentStage"] === "approval";
+  if (restored && takeFundingReturn(restored, ready)) runQuote(restored, true);
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     let input: ArgentMultisigDeploymentSetup;
@@ -395,7 +430,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       return;
     }
     const stored = reviews.get(form);
-    const reviewed = stored && sameSetup(stored.input, input) ? stored.review : undefined;
+    const reviewed = stored && sameDeploymentSetup(stored.input, input) ? stored.review : undefined;
     if (stored && !reviewed) {
       reviews.delete(form);
       if (reviewRoot) renderFragment(reviewRoot, "");
@@ -403,6 +438,12 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (quoteTimer !== null) {
       clearTimeout(quoteTimer);
       quoteTimer = null;
+    }
+    // The user's own check: a quote held from Approval answers it at once.
+    const held = takeHeldQuote(form, reviewGenerations.get(form), input);
+    if (!reviewed && held && form.dataset["deploymentStage"] === "approval") {
+      applyReview(form, input, held);
+      return;
     }
     buttonBusy(button, true);
     if (reviewed) {
@@ -413,22 +454,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
           const explorer = explorerTransactionUrl(reviewed.networkId, result.transactionHash);
           setDeploymentStage(form, "submitted", () => {
             if (reviewRoot) {
-              renderFragment(
-                reviewRoot,
-                `<section class="multisig-deployment-success" role="status" aria-live="polite">
-                <span class="multisig-deployment-success-mark">${icon("check")}</span>
-                <div><p class="context-label">Submitted to Starknet</p><h2>Multisig deployment is in progress</h2></div>
-                <p>Account saved. Deployment is confirming.</p>
-                <dl class="request-detail">
-                  <div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(result.address))}</code>${copyButton(result.address, "Copy multisig address")}</dd></div>
-                  <div><dt>Transaction</dt><dd><code>${escapeHtml(accountLabel(result.transactionHash))}</code>${copyButton(result.transactionHash, "Copy deployment transaction hash")}</dd></div>
-                </dl>
-                <div class="multisig-deployment-success-actions">
-                  ${buttonMarkup({ attributes: { "data-open-deployed-multisig": result.multisig.record.id }, label: "Go to deployed account" })}
-                  ${explorer ? `<a class="button secondary" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer">View transaction</a>` : ""}
-                </div>
-              </section>`,
-              );
+              renderFragment(reviewRoot, deploymentSubmittedMarkup(result, explorer));
               bindCopyButtons(reviewRoot);
               reviewRoot
                 .querySelector<HTMLButtonElement>("[data-open-deployed-multisig]")
