@@ -184,6 +184,12 @@ const markerFor = <T>(text: string, markers: readonly (readonly [RegExp, T])[]):
  * Identifies an explicit upstream throttling response that is safe to retry
  * during proof preparation, before any transaction can be broadcast. RPC
  * envelopes are read structurally so starknet.js request bodies stay ignored.
+ *
+ * A `WalletError` is terminal: it is a reviewed result from an inner boundary,
+ * and retrying it would re-enter a larger operation after that retry was spent.
+ * `RpcRefusedError` is the exception. It is a `WalletError`, but it is the
+ * transport's HTTP 429 (or a gateway refusal before any node accepted the
+ * request), which is the throttling this retry exists for.
  */
 export const isRetryableStrk20ServiceError = (error: unknown): boolean => {
   // The transport's typed refusal (a rate limit or gateway rejection before any
