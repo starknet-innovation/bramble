@@ -84,7 +84,7 @@ export const deploymentFundingStage = (
       </div>
       <span class="multisig-funding-token" aria-label="STRK">STRK</span>
     </div>
-    <p class="hint">Send at least ${deploymentFundingMinimumText(review)} to this saved address. You can close this screen and resume safely.</p>
+    <p class="hint">Send at least ${deploymentFundingMinimumText(review)} to this address. You can close this screen and resume later.</p>
     <div class="multisig-funding-address">
       <div class="qr-card">${qrSvg(review.address, "Multisig funding address")}</div>
       <div class="address-line">

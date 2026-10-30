@@ -222,7 +222,9 @@ export const DeployFunding: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
-    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent("saved address");
+    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent(
+      "to this address. You can close this screen and resume later.",
+    );
     await expect(body?.querySelector(".multisig-funding-stage .qr-card")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-fund-local]")).toHaveTextContent(
       "Fund from this wallet",
@@ -260,7 +262,7 @@ export const HomeDeploymentRequired: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector('[data-view="multisig-deploy"]')).toHaveTextContent("Deploy");
     await expect(body?.querySelector(".multisig-action-note")).toHaveTextContent(
-      "Resume setup to verify and deploy this saved address",
+      "Deployment required. Complete setup before sending.",
     );
     await expect(body?.querySelector('[data-view="multisig-propose"]')).not.toBeInTheDocument();
   },

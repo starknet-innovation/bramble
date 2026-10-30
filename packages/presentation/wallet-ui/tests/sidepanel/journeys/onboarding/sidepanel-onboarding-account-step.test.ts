@@ -16,6 +16,7 @@ import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "../../../../src/sidepanel/journ
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
+import { friendlyAccountName } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
@@ -136,7 +137,13 @@ describe("new-wallet account step", () => {
     const row = app.querySelector<HTMLElement>("#account-preview");
     expect(row?.tagName).toBe("DIV");
     expect(row?.querySelector("button, a, input, [aria-pressed]")).toBeNull();
-    expect(row?.textContent).toContain("Primary Bramble account");
+    // It carries the name the account will have after setup (the nickname
+    // derived from its address), not a fixed label Home never shows.
+    const created = accountFor("openzeppelin");
+    expect(row?.querySelector("[data-preview-label]")?.textContent).toBe(
+      friendlyAccountName(created.address),
+    );
+    expect(row?.textContent).not.toContain("Primary");
     // The final action is outcome-named and enabled by the preview alone.
     const submit = app.querySelector<HTMLButtonElement>("#create-wallet-button");
     expect(submit?.textContent).toContain("Finish setup");

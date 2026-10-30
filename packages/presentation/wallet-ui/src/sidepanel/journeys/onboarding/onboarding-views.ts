@@ -390,7 +390,7 @@ const accountStep = (): string => `
       <div class="onboarding-account" id="account-preview">
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
-          <strong data-preview-label>Primary Bramble account</strong>
+          <strong data-preview-label></strong>
           <span data-preview-address>Deriving account…</span>
         </span>
         <span class="onboarding-account-check" aria-hidden="true">${icon("check")}</span>
