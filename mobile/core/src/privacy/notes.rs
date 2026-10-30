@@ -6,7 +6,8 @@
 //! `(0, P)`; only the requested tokens are totalled, since a third party can open subchannels to
 //! anyone under made-up token felts and those notes must not fail the read; for a requested
 //! token, every amount in `[0, P)`, at most `discovered_notes` nonzero notes (zero-amount notes
-//! cost nothing to plant and are never counted, Sherlock 162), and a total below `P`. A note's sender must have a channel key, either in this page's `channels`
+//! cost nothing to plant and are never counted, Sherlock 162), and a total below `P`. A note's
+//! sender must have a channel key, either in this page's `channels`
 //! (matched on the exact `sender_addr` text, as the SDK's `Map<string, bigint>` does) or in an
 //! earlier page's cursor (matched numerically). Any violation is `None`: the caller fails
 //! `InvalidResponse` and nothing partial is shown.

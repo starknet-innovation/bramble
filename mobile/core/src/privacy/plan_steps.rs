@@ -7,16 +7,45 @@
 //!   read stops after `MAX_DISCOVERY_PAGES` (deviation 3);
 //! - the pool fee is retried on `-32005` or matching text.
 
+use std::collections::BTreeSet;
+
 use super::bodies::{self, INCOMING_PATH, PREFLIGHT_PATH};
+use super::config::Limits;
 use super::judge::{self, FeeAnswer};
 use super::notes::cursor_complete;
 use super::plan::{Read, ReadState, Stage, MAX_DISCOVERY_PAGES};
 use super::types::{
     PrivacyFailure, PrivacyPurpose, PrivacyRegistration, PrivacyState, PrivacyStep, PrivateBalance,
 };
+use crate::networks::TokenInfo;
 use crate::send::judge::{answer, chain, ChainAnswer};
+use crate::send::u256::U256;
 use crate::wallet::WalletCore;
 use crate::{felt, networks, rpc};
+
+/// The extension's `readRequestedTokens`, then the `balancesFrom` length cap.
+///
+/// `None` when `tokens` is longer than `limits.tokens` or `limits.balances`, an address is zero
+/// or not a canonical non-zero felt (the same rule the catalog loader uses, so a bad entry is
+/// refused rather than dropped), or an address repeats. The set is the numeric key `finish`
+/// reads back for each token.
+pub(crate) fn requested_token_keys(
+    tokens: &[TokenInfo],
+    limits: &Limits,
+) -> Option<BTreeSet<U256>> {
+    if tokens.len() > limits.tokens || tokens.len() > limits.balances {
+        return None;
+    }
+    let mut keys = BTreeSet::new();
+    for token in tokens {
+        let address = felt::parse_non_zero(&token.address)?;
+        let key = super::json::js_bigint(&super::json::Ordered::Str(felt::canonical(&address)))?;
+        if !keys.insert(key) {
+            return None;
+        }
+    }
+    Some(keys)
+}
 
 pub(crate) fn purpose(read: Read) -> PrivacyPurpose {
     match read {
@@ -134,11 +163,13 @@ impl ReadState {
         {
             return self.fail(PrivacyFailure::InvalidResponse);
         }
-        let requested = self.requested_tokens();
+        let Some(requested) = self.requested.as_ref() else {
+            return self.fail(PrivacyFailure::NotConfigured);
+        };
         if self
             .discovery
             .totals
-            .fold_page(&reply, self.limits, &requested)
+            .fold_page(&reply, self.limits, requested)
             .is_none()
         {
             return self.fail(PrivacyFailure::InvalidResponse);
@@ -196,17 +227,6 @@ impl ReadState {
         }
     }
 
-    /// The tracked tokens' keys, as `finish` reads them from the totals.
-    fn requested_tokens(&self) -> std::collections::BTreeSet<crate::send::u256::U256> {
-        self.tokens
-            .iter()
-            .filter_map(|token| felt::parse_non_zero(&token.address))
-            .filter_map(|address| {
-                super::json::js_bigint(&super::json::Ordered::Str(felt::canonical(&address)))
-            })
-            .collect()
-    }
-
     fn finish(&mut self, fee: u128) -> PrivacyStep {
         let balances = if self.registered {
             let mut balances = Vec::with_capacity(self.tokens.len());
@@ -254,9 +274,31 @@ impl ReadState {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::super::bodies::BlockRef;
+    use super::super::config::Limits;
     use super::super::plan::MAX_DISCOVERY_PAGES;
     use super::*;
+    use crate::networks::{self, NetworkId, TokenInfo};
+    use crate::send::u256::U256;
+
+    fn token(address: &str) -> TokenInfo {
+        TokenInfo {
+            address: address.to_owned(),
+            decimals: 18,
+            name: "Token".into(),
+            symbol: "T".into(),
+        }
+    }
+
+    fn limits(tokens: usize, balances: usize) -> Limits {
+        Limits {
+            tokens,
+            balances,
+            ..super::super::config::routing().limits.clone()
+        }
+    }
 
     #[test]
     fn purposes_are_stable() {
@@ -264,5 +306,36 @@ mod tests {
         assert_eq!(MAX_DISCOVERY_PAGES, 256);
         // The block type is shared with the body writer, so the echo is the value first seen.
         assert_ne!(BlockRef::Number(1), BlockRef::Text("1".into()));
+    }
+
+    #[test]
+    fn a_requested_token_list_the_extension_rejects_is_refused() {
+        let wide = limits(64, 64);
+        let accepted = requested_token_keys(&[token("0x1"), token("0xa")], &wide).unwrap();
+        assert_eq!(
+            accepted,
+            BTreeSet::from([U256::from_u128(1), U256::from_u128(10)])
+        );
+        // Length is the list's, against both caps: `readRequestedTokens` uses `tokens`,
+        // `balancesFrom` uses `balances`.
+        let three = [token("0x1"), token("0x2"), token("0x3")];
+        assert!(requested_token_keys(&three, &limits(2, 64)).is_none());
+        assert!(requested_token_keys(&three, &limits(64, 2)).is_none());
+        assert!(requested_token_keys(&[token("0x0")], &wide).is_none());
+        assert!(requested_token_keys(&[token("not-a-token")], &wide).is_none());
+        // Non-canonical spelling used to be dropped and the read continued until `finish`.
+        assert!(requested_token_keys(&[token("0x1"), token("0x01")], &wide).is_none());
+        assert!(requested_token_keys(&[token("0x1"), token("0x1")], &wide).is_none());
+    }
+
+    #[test]
+    fn the_bundled_catalog_is_a_list_the_extension_would_accept() {
+        let limits = super::super::config::routing().limits.clone();
+        for network in [NetworkId::Mainnet, NetworkId::Sepolia] {
+            let tokens = &networks::info(network).tokens;
+            let keys = requested_token_keys(tokens, &limits).expect("bundled tokens");
+            assert_eq!(keys.len(), tokens.len());
+            assert!(!tokens.is_empty());
+        }
     }
 }
