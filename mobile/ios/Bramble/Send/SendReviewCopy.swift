@@ -15,6 +15,15 @@ enum SendReviewCopy {
         let detail: String
         /// The full value the row's copy control copies; nil when the row has none.
         let copy: String?
+        /// The disclosure that reveals the full address in place (`fullAddressReveal`), so the
+        /// reviewer can check it against the source they were given; nil for the amount.
+        let reveal: Reveal?
+    }
+
+    /// `details.address-reveal`: its summary line and the full address it opens to.
+    struct Reveal: Equatable {
+        let label: String
+        let address: String
     }
 
     /// The Cost box (`reviewFeeSection`): the fee lines, total first, or the failed estimate with
@@ -52,14 +61,17 @@ enum SendReviewCopy {
                 label: SendCopy.fromRowLabel,
                 value: sender.name.isEmpty ? senderShort : sender.name,
                 detail: senderShort,
-                copy: nil
+                copy: nil,
+                reveal: sender.address.isEmpty ? nil : Reveal(label: SendCopy.showFullSender, address: sender.address)
             ),
             Fact(
                 kind: .recipient,
                 label: SendCopy.toRowLabel,
                 value: recipient.label ?? recipientShort,
                 detail: recipientShort,
-                copy: recipient.address
+                copy: recipient.address,
+                reveal: recipient.address.isEmpty
+                    ? nil : Reveal(label: SendCopy.showFullRecipient, address: recipient.address)
             ),
             // Mobile has no fiat estimate in Send, so the amount always says so.
             Fact(
@@ -67,7 +79,8 @@ enum SendReviewCopy {
                 label: SendCopy.amountRowLabel,
                 value: "\(amount) \(symbol)",
                 detail: SendCopy.fiatUnavailable,
-                copy: nil
+                copy: nil,
+                reveal: nil
             )
         ]
     }

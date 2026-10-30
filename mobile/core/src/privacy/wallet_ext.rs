@@ -71,13 +71,16 @@ impl WalletCore {
             .map_err(|_| PrivacyError::UnknownAccount)?;
         let route = config::route_for(network).ok_or(PrivacyError::NotConfigured)?;
         let address = felt::parse_non_zero(&address).ok_or(PrivacyError::UnknownAccount)?;
+        let limits = &config::routing().limits;
+        let tokens = &networks::info(network).tokens;
         let state = ReadState {
             network,
             account_id,
             address,
             route,
-            limits: &config::routing().limits,
-            tokens: &networks::info(network).tokens,
+            limits,
+            tokens,
+            requested: super::plan_steps::requested_token_keys(tokens, limits),
             generation,
             stage: Stage::Fresh,
             next_id: 0,

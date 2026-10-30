@@ -118,7 +118,7 @@ final class PortfolioStoreTests: XCTestCase {
         XCTAssertEqual(store.priceView?.prices.count, 2, "a currency switch never blanks a priced row")
     }
 
-    func testSepoliaServesCachedMainnetPricesAndNeverFetches() async throws {
+    func testSepoliaIsNeverPricedAndNeverFetches() async throws {
         let transport = StubTransport(scenario: "ready")
         let store = try store("ready", transport: transport)
         try await store.load(account: account(.mainnet), network: network(.mainnet))
@@ -128,7 +128,9 @@ final class PortfolioStoreTests: XCTestCase {
         XCTAssertEqual(after, before, "off mainnet never fetches")
         XCTAssertEqual(store.priceView?.stale, false)
         XCTAssertNil(store.priceView?.asOfMs)
-        XCTAssertNotNil(store.hero.totalText, "Sepolia STRK/ETH share mainnet addresses")
+        // Off mainnet there is no fiat by design (Sherlock 185): STRK/ETH share mainnet addresses,
+        // so a mainnet price would otherwise value testnet tokens.
+        XCTAssertNil(store.hero.totalText, "Sepolia is never priced")
     }
 
     func testDegradedStoriesUseTheExtensionCopy() async throws {

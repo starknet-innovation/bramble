@@ -34,7 +34,9 @@ final class ReadyTransferBridgeTests: XCTestCase {
         try core.importWallet(password: testPassword, phrase: publicPhrase, passphrase: nil)
         let label: String = try fixtureValue(scenario, "recordClass")
         let classHash = try XCTUnwrap(accountClasses().first { $0.label == label }).classHash
-        let selection = RecoverySelection(family: .argent, accountIndex: 0, classHash: classHash)
+        // The capture signs as `deriveAccount` derives by default: this wallet's ladder, not
+        // Ready's ETH-seeded one that recovery defaults to (issue 505).
+        let selection = RecoverySelection(family: .argent, accountIndex: 0, classHash: classHash, ladder: .account)
         let record = try XCTUnwrap(
             try core.restoreRecoveredAccounts(network: network(scenario), selections: [selection]).first
         )

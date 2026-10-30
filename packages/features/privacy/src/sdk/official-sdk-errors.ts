@@ -6,7 +6,7 @@ import { WalletError } from "@bramble/core/errors";
 import { isRecord } from "@bramble/core/json";
 import { friendlyNetworkError } from "@bramble/core/network-error";
 import { redactEndpoints } from "@bramble/core/service-url";
-import { isTransportRpcError } from "@bramble/starknet/provider";
+import { isTransportRpcError, RpcRefusedError } from "@bramble/starknet/provider";
 import {
   STRK20_INSUFFICIENT_BALANCE,
   STRK20_NOT_REGISTERED,
@@ -98,6 +98,10 @@ const retryAfterHeader = (headers: unknown): unknown => {
 };
 
 const retryAfterValue = (value: unknown): unknown => {
+  // The transport's refusal carries the endpoint's Retry-After as a typed field.
+  if (value instanceof RpcRefusedError) {
+    return value.retryAfter ?? undefined;
+  }
   if (isRecord(value)) {
     const direct = retryAfterField(value);
     if (direct !== undefined) {
@@ -180,8 +184,20 @@ const markerFor = <T>(text: string, markers: readonly (readonly [RegExp, T])[]):
  * Identifies an explicit upstream throttling response that is safe to retry
  * during proof preparation, before any transaction can be broadcast. RPC
  * envelopes are read structurally so starknet.js request bodies stay ignored.
+ *
+ * A `WalletError` is terminal: it is a reviewed result from an inner boundary,
+ * and retrying it would re-enter a larger operation after that retry was spent.
+ * `RpcRefusedError` is the exception. It is a `WalletError`, but it is the
+ * transport's HTTP 429 (or a gateway refusal before any node accepted the
+ * request), which is the throttling this retry exists for.
  */
 export const isRetryableStrk20ServiceError = (error: unknown): boolean => {
+  // The transport's typed refusal (a rate limit or gateway rejection before any
+  // node accepted the request) is a WalletError, but it is exactly the
+  // throttling this retry exists for; reads only, under the attempt budget.
+  if (error instanceof RpcRefusedError) {
+    return true;
+  }
   // WalletError is already a reviewed terminal result from an inner boundary.
   // Retrying it here would re-enter a larger operation after its own bounded
   // service retry has already been exhausted.

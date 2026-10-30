@@ -11,13 +11,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import org.bramble.core.TransferReview
@@ -73,11 +81,11 @@ private fun ReviewFactsList(
 ) {
     val skin = LocalSkin.current
     Column(Modifier.fillMaxWidth().background(skin.panel, panelShape).padding(horizontal = BrambleSpace.lg)) {
-        Fact(SendCopy.fromRowLabel) {
+        Fact(SendCopy.fromRowLabel, SendCopy.showFullSender to model.account.address) {
             FactValue(model.account.displayName, model.account.shortAddress)
         }
         Hairline()
-        Fact(SendCopy.toRowLabel) {
+        Fact(SendCopy.toRowLabel, SendCopy.showFullRecipient to review.recipient) {
             FactValue(
                 model.recipientLabel ?: review.recipientShort,
                 review.recipientShort.takeIf {
@@ -110,20 +118,30 @@ private fun ReviewFactsList(
     }
 }
 
-/** One fact: its label on the left, its [value] (and any control) on the right. */
+/**
+ * One fact: its label on the left, its [value] (and any control) on the right, and under the row
+ * the [reveal] disclosure (its summary line and the full address), which needs the panel's whole
+ * width: a full address is wider than a phone, and inside the value column it would crowd out
+ * the label.
+ */
 @Composable
 private fun Fact(
     label: String,
+    reveal: Pair<String, String>? = null,
     value: @Composable RowScope.() -> Unit,
 ) {
     val skin = LocalSkin.current
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = BrambleSize.rowCompact).padding(vertical = BrambleSpace.sm),
-        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, color = skin.muted, style = textStyle(BrambleTypeScale.label), modifier = Modifier.weight(1f))
-        value()
+    Column(Modifier.fillMaxWidth().padding(vertical = BrambleSpace.sm)) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = BrambleSize.rowCompact),
+            horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = skin.muted, style = textStyle(BrambleTypeScale.label), modifier = Modifier.weight(1f))
+            value()
+        }
+        // An empty address has nothing to check character by character (iOS omits the disclosure).
+        reveal?.takeIf { it.second.isNotEmpty() }?.let { (summary, address) -> AddressReveal(summary, address) }
     }
 }
 
@@ -143,6 +161,47 @@ private fun FactValue(
             style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold),
         )
         address?.let { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption, mono = true)) }
+    }
+}
+
+/**
+ * `details.address-reveal`: a disclosure that shows the full address in place, selectable, so the
+ * reviewer can check every character against the source they were given.
+ */
+@Composable
+private fun AddressReveal(
+    label: String,
+    address: String,
+) {
+    val skin = LocalSkin.current
+    // Losing the open state on a configuration change is acceptable; saved state is banned.
+    var open by remember { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap),
+    ) {
+        Text(
+            label,
+            color = skin.muted,
+            style = textStyle(BrambleTypeScale.caption),
+            modifier =
+                Modifier
+                    .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+                    .toggleable(value = open, role = Role.Button, onValueChange = { open = it }),
+        )
+        if (open) {
+            // The full width of the panel, wrapping, so every character stays on screen.
+            SelectionContainer(Modifier.fillMaxWidth()) {
+                Text(
+                    address,
+                    color = skin.text,
+                    textAlign = TextAlign.End,
+                    style = textStyle(BrambleTypeScale.caption, mono = true),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
     }
 }
 

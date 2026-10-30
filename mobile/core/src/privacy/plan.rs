@@ -5,6 +5,7 @@
 //!
 //! Reply handling for each read lives in `plan_steps`.
 
+use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
 use starknet_types_core::felt::Felt;
@@ -15,6 +16,7 @@ use super::json::Ordered;
 use super::notes::Totals;
 use super::types::{PrivacyError, PrivacyFailure, PrivacyReply, PrivacyStep};
 use crate::networks::{NetworkId, TokenInfo};
+use crate::send::u256::U256;
 use crate::wallet::WalletCore;
 
 /// Mobile-only bound on discovery pages (the SDK has none).
@@ -54,6 +56,10 @@ pub(crate) struct ReadState {
     pub route: Route,
     pub limits: &'static Limits,
     pub tokens: &'static [TokenInfo],
+    /// Keys of `tokens`, checked once when the plan is prepared. `None` when that list is longer
+    /// than the extension allows, or has a zero, unparseable, or repeated address: the read fails
+    /// `NotConfigured` before any request.
+    pub requested: Option<BTreeSet<U256>>,
     pub generation: u64,
     pub stage: Stage,
     pub next_id: u64,
@@ -171,8 +177,12 @@ impl ReadState {
         }
     }
 
-    /// Starts a read at its first attempt.
+    /// Starts a read at its first attempt. A tracked token list the extension would reject never
+    /// starts: no chain probe, and no viewing key in a request body.
     pub(crate) fn begin(&mut self, core: &WalletCore, read: Read, now_ms: u64) -> PrivacyStep {
+        if self.requested.is_none() {
+            return self.fail(PrivacyFailure::NotConfigured);
+        }
         self.attempt = 1;
         self.start_attempt(core, read, now_ms)
     }

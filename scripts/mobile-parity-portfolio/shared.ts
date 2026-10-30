@@ -46,6 +46,19 @@ export const unescapeHtml = (value: string): string =>
     .replaceAll("&#39;", "'")
     .replaceAll("&amp;", "&");
 
+/**
+ * The text of rendered markup with every tag removed. Repeated until nothing changes, so a tag
+ * split around another (`<scr<b>ipt>`) cannot survive one pass as a new tag.
+ */
+export const stripTags = (html: string): string => {
+  let text = html;
+  for (let previous = ""; previous !== text; ) {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, "");
+  }
+  return text;
+};
+
 /** First capture of a pattern in rendered markup, unescaped, or null. */
 export const firstMatch = (html: string, pattern: RegExp): string | null => {
   const match = pattern.exec(html);

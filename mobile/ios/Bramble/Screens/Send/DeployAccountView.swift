@@ -54,6 +54,12 @@ struct DeployAccountView: View {
                 text: model.status,
                 tone: model.stage == .failed || model.stage == .estimateFailed ? .danger : .muted
             )
+            if model.stage != .alreadyDeployed {
+                // Deploying by hand is optional: the first send deploys too (issue 662).
+                Text(SendCopy.deployNote)
+                    .brambleText(BrambleTypeScale.caption)
+                    .foregroundStyle(skin.muted)
+            }
             action(model)
         }
     }

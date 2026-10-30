@@ -29,6 +29,7 @@ final class AccountsBridgeTests: XCTestCase {
 
         let vectors: [Family]
         let mnemonic: String
+        let passphrase: String
     }
 
     private func load<T: Decodable>(_ name: String) throws -> T {
@@ -37,7 +38,19 @@ final class AccountsBridgeTests: XCTestCase {
     }
 
     private func rules() throws -> Rules { try load("accounts-parity-rules") }
-    private func fixture() throws -> Families { try load("accounts-parity-families") }
+    /// The derivation vectors, committed one file per network and read here as one set.
+    private func fixture() throws -> Families {
+        let mainnet: Families = try load("accounts-parity-families-mainnet")
+        let sepolia: Families = try load("accounts-parity-families-sepolia")
+        // The merge below keeps the mainnet file's phrase, so the two files must agree on it.
+        XCTAssertEqual(mainnet.mnemonic, sepolia.mnemonic)
+        XCTAssertEqual(mainnet.passphrase, sepolia.passphrase)
+        return Families(
+            vectors: mainnet.vectors + sepolia.vectors,
+            mnemonic: mainnet.mnemonic,
+            passphrase: mainnet.passphrase
+        )
+    }
 
     private func directory() -> String {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).path

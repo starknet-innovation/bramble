@@ -40,19 +40,24 @@ final class DeployFlowModelTests: XCTestCase {
     }
 
     func testTheScreenReadsTheExtensionsWords() throws {
-        // Title, network, the Account / Address / Network rows, the button, then the receipt.
+        // Title, network, the Account / Address / Network rows, the note that the first send also
+        // deploys (issue 662), the button, the receipt, then the failure's actions.
         let undeployed = try screen("undeployed")
-        XCTAssertEqual(undeployed.count, 12)
+        XCTAssertEqual(undeployed.count, 15)
         XCTAssertEqual(
-            [undeployed[0], undeployed[2], undeployed[4], undeployed[6], undeployed[8]],
+            [undeployed[0], undeployed[2], undeployed[4], undeployed[6], undeployed[8], undeployed[9]],
             [
                 SendCopy.deployTitle, SendCopy.deployAccountRow, SendCopy.deployAddressRow,
-                SendCopy.deployNetworkRow, SendCopy.deployButton
+                SendCopy.deployNetworkRow, SendCopy.deployNote, SendCopy.deployButton
             ]
         )
         XCTAssertEqual(
-            Array(undeployed.suffix(3)),
+            Array(undeployed[10...12]),
             [SendCopy.transactionLabel, SendCopy.viewActivity, SendCopy.back]
+        )
+        XCTAssertEqual(
+            Array(undeployed[13...14]),
+            [SendCopy.tryAgain, SendCopy.viewActivity]
         )
         XCTAssertEqual(try screen("deployed")[8], SendCopy.alreadyDeployed)
         XCTAssertEqual(SettingsHubView.deployRow.section, SendCopy.settingsThisAccount)

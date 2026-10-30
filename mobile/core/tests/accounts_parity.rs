@@ -15,8 +15,35 @@ use bramble_core::{
 };
 use serde_json::Value;
 
+/// The derivation vectors, committed one file per network and read here as one set.
+/// The phrase comes from the mainnet file; `split_family_fixtures_agree_on_the_phrase` checks
+/// the sepolia file carries the same mnemonic and passphrase.
 fn families() -> Value {
-    serde_json::from_str(include_str!("fixtures/accounts-parity-families.json")).unwrap()
+    let mut whole: Value = serde_json::from_str(include_str!(
+        "fixtures/accounts-parity-families-mainnet.json"
+    ))
+    .unwrap();
+    let sepolia: Value = serde_json::from_str(include_str!(
+        "fixtures/accounts-parity-families-sepolia.json"
+    ))
+    .unwrap();
+    let more = sepolia["vectors"].as_array().unwrap().clone();
+    whole["vectors"].as_array_mut().unwrap().extend(more);
+    whole
+}
+
+#[test]
+fn split_family_fixtures_agree_on_the_phrase() {
+    let mainnet: Value = serde_json::from_str(include_str!(
+        "fixtures/accounts-parity-families-mainnet.json"
+    ))
+    .unwrap();
+    let sepolia: Value = serde_json::from_str(include_str!(
+        "fixtures/accounts-parity-families-sepolia.json"
+    ))
+    .unwrap();
+    assert_eq!(mainnet["mnemonic"], sepolia["mnemonic"]);
+    assert_eq!(mainnet["passphrase"], sepolia["passphrase"]);
 }
 
 fn fixture() -> Value {
