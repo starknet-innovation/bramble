@@ -74,8 +74,22 @@ export type ReviewFeeState = {
 // figure the user must hold or add is rounded up to that step instead, so the
 // amount shown is never less than the amount needed.
 const FRI_SHOWN_STEP = 10n ** 12n;
-const friAtLeast = (raw: bigint): string =>
-  formatFri(`0x${(((raw + FRI_SHOWN_STEP - 1n) / FRI_SHOWN_STEP) * FRI_SHOWN_STEP).toString(16)}`);
+
+/**
+ * Rounds a FRI amount up to the precision {@link formatFri} shows, in exact
+ * base units. Pure; a caller that prefills or states an amount the user must
+ * hold or add uses this so the figure is never below what is needed.
+ */
+export const friShownAtLeast = (raw: bigint): bigint =>
+  ((raw + FRI_SHOWN_STEP - 1n) / FRI_SHOWN_STEP) * FRI_SHOWN_STEP;
+
+/**
+ * The one wording for a STRK amount the user must hold or add: rounded up
+ * by {@link friShownAtLeast}, then formatted as STRK. Escapes nothing;
+ * callers place it in a text sink.
+ */
+export const friAtLeast = (raw: bigint): string =>
+  formatFri(`0x${friShownAtLeast(raw).toString(16)}`);
 
 // A shield short of STRK names what it needs and what to add (issue 665) in
 // place of the generic notice. "Up to", because the network share is the most

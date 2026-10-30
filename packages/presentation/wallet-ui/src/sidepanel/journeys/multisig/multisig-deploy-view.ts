@@ -28,6 +28,8 @@ import {
 import { qrSvg } from "../../shared/qr";
 import {
   formatFeeEstimate,
+  friAtLeast,
+  friShownAtLeast,
   reviewCostNote,
   reviewOutcome,
   reviewPanel,
@@ -45,6 +47,31 @@ export const MULTISIG_CREATION_STEPS = [
 ] as const;
 
 /**
+ * The least STRK the predicted address must hold before deployment, in exact
+ * FRI: the reviewed fee rounded up to the precision the Fund step prints.
+ * Null when the fee is not a readable FRI amount, so nothing is prefilled
+ * from a figure the wallet cannot state exactly.
+ */
+export const deploymentFundingMinimum = (review: ArgentMultisigDeploymentReview): bigint | null => {
+  if (review.fee.unit !== "FRI") return null;
+  try {
+    const fee = BigInt(review.fee.overallFee);
+    return fee < 0n ? null : friShownAtLeast(fee);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The funding minimum as the Fund step and its recovery toast print it. One
+ * formatter for both, so the same figure never reads two ways.
+ */
+export const deploymentFundingMinimumText = (review: ArgentMultisigDeploymentReview): string => {
+  const minimum = deploymentFundingMinimum(review);
+  return minimum === null ? formatFeeEstimate(review.fee) : friAtLeast(minimum);
+};
+
+/**
  * Renders escaped external funding controls from a fresh deployment review.
  * Local controls are cloned from trusted production markup by the binder.
  */
@@ -57,7 +84,7 @@ export const deploymentFundingStage = (
       </div>
       <span class="multisig-funding-token" aria-label="STRK">STRK</span>
     </div>
-    <p class="hint">Send at least ${formatFeeEstimate(review.fee)} to this saved address. You can close this screen and resume safely.</p>
+    <p class="hint">Send at least ${deploymentFundingMinimumText(review)} to this saved address. You can close this screen and resume safely.</p>
     <div class="multisig-funding-address">
       <div class="qr-card">${qrSvg(review.address, "Multisig funding address")}</div>
       <div class="address-line">
