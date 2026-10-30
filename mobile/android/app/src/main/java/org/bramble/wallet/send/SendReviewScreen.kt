@@ -81,22 +81,17 @@ private fun ReviewFactsList(
 ) {
     val skin = LocalSkin.current
     Column(Modifier.fillMaxWidth().background(skin.panel, panelShape).padding(horizontal = BrambleSpace.lg)) {
-        Fact(SendCopy.fromRowLabel) {
-            FactValue(
-                model.account.displayName,
-                model.account.shortAddress,
-                SendCopy.showFullSender to model.account.address,
-            )
+        Fact(SendCopy.fromRowLabel, SendCopy.showFullSender to model.account.address) {
+            FactValue(model.account.displayName, model.account.shortAddress)
         }
         Hairline()
-        Fact(SendCopy.toRowLabel) {
+        Fact(SendCopy.toRowLabel, SendCopy.showFullRecipient to review.recipient) {
             FactValue(
                 model.recipientLabel ?: review.recipientShort,
                 review.recipientShort.takeIf {
                     model.recipientLabel !=
                         null
                 },
-                SendCopy.showFullRecipient to review.recipient,
             )
             CopyButton(store, review.recipient, SendCopy.copyRecipient)
         }
@@ -123,32 +118,38 @@ private fun ReviewFactsList(
     }
 }
 
-/** One fact: its label on the left, its [value] (and any control) on the right. */
+/**
+ * One fact: its label on the left, its [value] (and any control) on the right, and under the row
+ * the [reveal] disclosure (its summary line and the full address), which needs the panel's whole
+ * width: a full address is wider than a phone, and inside the value column it would crowd out
+ * the label.
+ */
 @Composable
 private fun Fact(
     label: String,
+    reveal: Pair<String, String>? = null,
     value: @Composable RowScope.() -> Unit,
 ) {
     val skin = LocalSkin.current
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = BrambleSize.rowCompact).padding(vertical = BrambleSpace.sm),
-        horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, color = skin.muted, style = textStyle(BrambleTypeScale.label), modifier = Modifier.weight(1f))
-        value()
+    Column(Modifier.fillMaxWidth().padding(vertical = BrambleSpace.sm)) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = BrambleSize.rowCompact),
+            horizontalArrangement = Arrangement.spacedBy(BrambleSpace.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = skin.muted, style = textStyle(BrambleTypeScale.label), modifier = Modifier.weight(1f))
+            value()
+        }
+        // An empty address has nothing to check character by character (iOS omits the disclosure).
+        reveal?.takeIf { it.second.isNotEmpty() }?.let { (summary, address) -> AddressReveal(summary, address) }
     }
 }
 
-/**
- * A fact's name over its truncated address (in code), right-aligned, and the disclosure that
- * reveals the full address in place (`reveal`: its summary line and the address).
- */
+/** A fact's name over its truncated address (in code), right-aligned. */
 @Composable
 private fun FactValue(
     name: String,
     address: String?,
-    reveal: Pair<String, String>,
 ) {
     val skin = LocalSkin.current
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap)) {
@@ -160,10 +161,6 @@ private fun FactValue(
             style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold),
         )
         address?.let { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption, mono = true)) }
-        // An empty address has nothing to check character by character (iOS omits the disclosure).
-        if (reveal.second.isNotEmpty()) {
-            AddressReveal(reveal.first, reveal.second)
-        }
     }
 }
 
@@ -179,23 +176,31 @@ private fun AddressReveal(
     val skin = LocalSkin.current
     // Losing the open state on a configuration change is acceptable; saved state is banned.
     var open by remember { mutableStateOf(false) }
-    Text(
-        label,
-        color = skin.muted,
-        style = textStyle(BrambleTypeScale.caption),
-        modifier =
-            Modifier
-                .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
-                .toggleable(value = open, role = Role.Button, onValueChange = { open = it }),
-    )
-    if (open) {
-        SelectionContainer {
-            Text(
-                address,
-                color = skin.text,
-                textAlign = TextAlign.End,
-                style = textStyle(BrambleTypeScale.caption, mono = true),
-            )
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(BrambleLayout.rowTextGap),
+    ) {
+        Text(
+            label,
+            color = skin.muted,
+            style = textStyle(BrambleTypeScale.caption),
+            modifier =
+                Modifier
+                    .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+                    .toggleable(value = open, role = Role.Button, onValueChange = { open = it }),
+        )
+        if (open) {
+            // The full width of the panel, wrapping, so every character stays on screen.
+            SelectionContainer(Modifier.fillMaxWidth()) {
+                Text(
+                    address,
+                    color = skin.text,
+                    textAlign = TextAlign.End,
+                    style = textStyle(BrambleTypeScale.caption, mono = true),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }

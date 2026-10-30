@@ -91,14 +91,21 @@ struct SendReviewFacts: View {
         let metrics = BrambleMetrics.SendReview.self
         VStack(spacing: 0) {
             ForEach(Array(facts.enumerated()), id: \.offset) { index, fact in
-                HStack(spacing: metrics.factGap) {
-                    Text(fact.label)
-                        .brambleText(BrambleTypeScale.label.sized(metrics.factLabelSize))
-                        .foregroundStyle(skin.muted)
-                    Spacer(minLength: 0)
-                    value(fact)
+                VStack(alignment: .trailing, spacing: BrambleMetrics.Send.rowCopyGap) {
+                    HStack(spacing: metrics.factGap) {
+                        Text(fact.label)
+                            .brambleText(BrambleTypeScale.label.sized(metrics.factLabelSize))
+                            .foregroundStyle(skin.muted)
+                        Spacer(minLength: 0)
+                        value(fact)
+                    }
+                    .frame(minHeight: metrics.factHeight)
+                    // Under the row, across its whole width: a full address is wider than a phone,
+                    // and beside the label it would crowd the label out.
+                    if let reveal = fact.reveal {
+                        AddressReveal(reveal: reveal)
+                    }
                 }
-                .frame(minHeight: metrics.factHeight)
                 .overlay(alignment: .top) {
                     if index > 0 { Rectangle().fill(skin.hairline).frame(height: 1).accessibilityHidden(true) }
                 }
@@ -137,9 +144,6 @@ struct SendReviewFacts: View {
                     CopyButton(value: copy, label: SendCopy.copyRecipient)
                 }
             }
-            if let reveal = fact.reveal {
-                AddressReveal(reveal: reveal)
-            }
         }
     }
 }
@@ -158,6 +162,7 @@ private struct AddressReveal: View {
                 .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         } label: {
             Text(reveal.label)
                 .brambleText(BrambleTypeScale.caption)
