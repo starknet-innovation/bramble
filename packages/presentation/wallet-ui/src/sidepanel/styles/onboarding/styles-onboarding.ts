@@ -17,25 +17,26 @@ const ONBOARDING_TRANSITION = {
  * Full-page onboarding and compact toolbar-handoff styles.
  */
 export const ONBOARDING_STYLES = `
-  /* The full-page setup field is the brand landscape the website's download
-     section already uses (apps/extension/public/brand, copied by the build).
-     It sits behind the solid wizard card, never behind text. The midnight skin
-     multiplies it down to the same uniform dark tint the website applies, so
-     the field still reads as the calm dark ground; daylight leaves it untinted.
-     The tint is one solid colour blended over the image, nothing ramped. */
-  body.onboarding-surface {
-    /* Pinned, so the cover doesn't rescale whenever the page grows. */
+  /* Landscape on the non-scrolling root, so it covers the gutter and stays
+     put as a step grows. The body keeps the mirrored gutter and scrolls. */
+  html:has(body.onboarding-surface) {
     background-attachment: fixed;
     background-blend-mode: multiply;
-    background-color: light-dark(
-      var(--bramble-panel),
-      color-mix(in srgb, var(--bramble-bg) 55%, var(--bramble-text))
-    );
+    background-color: light-dark(var(--bramble-panel), color-mix(in srgb, var(--bramble-bg) 55%, var(--bramble-text)));
     background-image: url("brand/onboarding-landscape.webp");
     background-position: center;
     background-repeat: no-repeat;
     background-size: cover;
+    height: 100%;
+    overflow: hidden;
+    scrollbar-gutter: auto;
+  }
+  body.onboarding-surface {
+    background: transparent;
+    height: 100%;
     min-width: 320px;
+    overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
   }
   /* No dock here, so the panel's toast slot would cover the card's bottom
      action; top-right stays clear of the card and its back control. */
