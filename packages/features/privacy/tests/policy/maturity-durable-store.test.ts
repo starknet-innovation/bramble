@@ -50,7 +50,102 @@ describe("relay claim slots in storage", () => {
   });
 });
 
+const accountScope = (accountIndex: number) => ({
+  ...scope,
+  accountId: `SN_SEPOLIA:0x${(accountIndex + 1000).toString(16)}`,
+});
+
 describe("eviction", () => {
+  test("keeps a settled write when every other row still guards", async () => {
+    // #729: at the cap, that write is the only settled row, so it was the one dropped.
+    const backing = createMemoryStore();
+    const rows = [];
+    for (let index = 0; index < 100; index += 1) {
+      rows.push({ ...accountScope(index), state: "submitting" as const });
+    }
+    await backing.set(KEY, rows);
+    const store = createStrk20MaturityStore(backing);
+    const written = { acceptedBlock: 40, state: "submitted" as const, transactionHash: "0x456" };
+    await store.write(scope, written);
+
+    expect(await store.read(scope)).toEqual(written);
+    expect(await store.read(accountScope(0))).toEqual({ state: "submitting" });
+    expect((await backing.get(KEY)) as readonly unknown[]).toHaveLength(101);
+  });
+
+  test("evicts other scopes' earliest-written settled rows and keeps the write", async () => {
+    // Written order, not block height: the write's block is older than all of them.
+    const backing = createMemoryStore();
+    const rows = [];
+    for (let index = 0; index < 90; index += 1) {
+      rows.push({ ...accountScope(index), state: "submitting" as const });
+    }
+    for (let index = 0; index < 15; index += 1) {
+      const accountIndex = index + 90;
+      rows.push({
+        ...accountScope(accountIndex),
+        acceptedBlock: 100 - index,
+        state: "submitted" as const,
+        transactionHash: `0x${(accountIndex + 1).toString(16)}`,
+      });
+    }
+    await backing.set(KEY, rows);
+    const store = createStrk20MaturityStore(backing);
+    const written = { acceptedBlock: 1, state: "submitted" as const, transactionHash: "0x456" };
+    await store.write(scope, written);
+
+    expect(await store.read(scope)).toEqual(written);
+    // The first six settled rows written go; later ones stay.
+    for (let accountIndex = 90; accountIndex <= 95; accountIndex += 1) {
+      expect(await store.read(accountScope(accountIndex))).toBeNull();
+    }
+    for (let accountIndex = 96; accountIndex <= 104; accountIndex += 1) {
+      expect(await store.read(accountScope(accountIndex))).toEqual({
+        acceptedBlock: 100 - (accountIndex - 90),
+        state: "submitted",
+        transactionHash: `0x${(accountIndex + 1).toString(16)}`,
+      });
+    }
+    expect(await store.read(accountScope(0))).toEqual({ state: "submitting" });
+    expect((await backing.get(KEY)) as readonly unknown[]).toHaveLength(100);
+  });
+
+  test("keeps another network's just-settled row over an older one at a higher block", async () => {
+    // Mainnet heights run above Sepolia's, so comparing blocks would drop the newest row.
+    const mainnet = (accountIndex: number) => ({
+      accountId: `SN_MAIN:0x${(accountIndex + 1000).toString(16)}`,
+      networkId: "SN_MAIN" as const,
+      poolAddress: "0x123",
+    });
+    const backing = createMemoryStore();
+    const rows = [];
+    for (let index = 0; index < 99; index += 1) {
+      rows.push({
+        ...mainnet(index),
+        acceptedBlock: 2_000_000 + index,
+        state: "submitted" as const,
+        transactionHash: `0x${(index + 1).toString(16)}`,
+      });
+    }
+    const sepolia = {
+      acceptedBlock: 900_000,
+      state: "submitted" as const,
+      transactionHash: "0xabc",
+    };
+    rows.push({ ...accountScope(0), ...sepolia });
+    await backing.set(KEY, rows);
+    const store = createStrk20MaturityStore(backing);
+    await store.write(mainnet(500), {
+      acceptedBlock: 2_100_000,
+      state: "submitted",
+      transactionHash: "0x999",
+    });
+
+    expect(await store.read(accountScope(0))).toEqual(sepolia);
+    expect(await store.read(mainnet(0))).toBeNull();
+    expect((await backing.get(KEY)) as readonly unknown[]).toHaveLength(100);
+  });
+
   test("drops the oldest submitted records but never a submitting marker", async () => {
     const backing = createMemoryStore();
     const store = createStrk20MaturityStore(backing);
