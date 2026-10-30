@@ -113,6 +113,25 @@ describe("mobile core parity", () => {
     expect(await readFile(SEND_COPY_KOTLIN_PATH, "utf8")).toBe(rendered.kotlin);
   });
 
+  test("a review screen that gains a line is refused", async () => {
+    const { copy } = JSON.parse(
+      await readFile("mobile/core/tests/fixtures/extension-transactions-copy.json", "utf8"),
+    ) as { readonly copy: Record<string, unknown> };
+    const screens = copy["screens"] as Record<string, unknown>;
+    const review = screens["review"] as Record<string, unknown>;
+    const summary = review["summary"] as readonly string[];
+    // One inserted line shifts every later position. The shifted strings are still strings, so
+    // only the position guard can catch them.
+    const shifted = {
+      ...copy,
+      screens: {
+        ...screens,
+        review: { ...review, summary: ["Inserted line", ...summary] },
+      },
+    };
+    expect(() => renderSendCopy(shifted)).toThrow(/shifted screen position/);
+  });
+
   test("the Rust core pins the same Krusty release as the extension", async () => {
     const cargo = await readFile("mobile/core/Cargo.toml", "utf8");
     const npmPin = EXPECTED_DEPENDENCIES["@starknetfoundation/krusty-kms-wasm"];

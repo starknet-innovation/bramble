@@ -55,6 +55,10 @@ final class DeployFlowModelTests: XCTestCase {
             Array(undeployed[10...12]),
             [SendCopy.transactionLabel, SendCopy.viewActivity, SendCopy.back]
         )
+        XCTAssertEqual(
+            Array(undeployed[13...14]),
+            [SendCopy.tryAgain, SendCopy.viewActivity]
+        )
         XCTAssertEqual(try screen("deployed")[8], SendCopy.alreadyDeployed)
         XCTAssertEqual(SettingsHubView.deployRow.section, SendCopy.settingsThisAccount)
         XCTAssertEqual(SettingsHubView.deployRow.title, SendCopy.settingsDeployRow)
