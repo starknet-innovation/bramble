@@ -27,7 +27,13 @@ import {
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { tokenDropdown } from "../../shared/token-dropdown";
 import { starknetNetworkGlyph, tokenGlyph } from "../portfolio/token-row";
-import { type SendAsset, type SendIntent, sendAssets, sendBalanceLine } from "./send-model";
+import {
+  intentAmountText,
+  type SendAsset,
+  type SendIntent,
+  sendAssets,
+  sendBalanceLine,
+} from "./send-model";
 import { recipientStage } from "./send-recipient-view";
 import {
   TRANSFER_FAILURE_TITLE,
@@ -326,7 +332,7 @@ export const sendFlow = (
         <form id="transfer-form" data-signer="${signer}" ${senderAttributes(account, preferences)} data-send-network="${escapeHtml(status.networkId)}" data-send-network-label="${escapeHtml(status.network)}" data-send-available="${canSend}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-send-complete-to="${scopedIntent?.completeTo ?? ""}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
-          <input name="amount" type="hidden" value="" />
+          <input name="amount" type="hidden" value="${escapeHtml(intentAmountText(scopedIntent, asset?.decimals))}" />
           <input name="fiatEstimate" type="hidden" value="" />
           <input name="recipient" type="hidden" value="${escapeHtml(scopedIntent?.recipient ?? "")}" />
           <input name="recipientLabel" type="hidden" value="${escapeHtml(scopedIntent?.recipientLabel ?? "")}" />

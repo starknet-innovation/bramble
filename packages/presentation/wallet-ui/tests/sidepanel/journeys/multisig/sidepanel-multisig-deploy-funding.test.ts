@@ -1,10 +1,12 @@
 /**
- * The Fund step of multisig creation (QA #807): the minimum it names.
+ * The Fund step of multisig creation (QA #807): the minimum it names, the
+ * amount "Fund from this wallet" hands to Send.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { deploymentFailureToast } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-errors";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
+import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
@@ -48,5 +50,27 @@ describe("the multisig Fund step", () => {
     expect(deploymentFailureToast("Resources bounds exceed balance (0).", review)).toContain(
       "with at least 0.099245 STRK,",
     );
+  });
+
+  test("hands Send the minimum it names, in exact FRI", async () => {
+    const { fixture, review, signer } = await unfundedFixture();
+    let intent: SendIntent | undefined;
+    const app = mount(
+      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
+      await testClient({ reviewDeployment: async () => review }),
+      fixture.status,
+      {
+        openFunding: async (next) => {
+          intent = next;
+        },
+      },
+    );
+    app.querySelector<HTMLFormElement>("#multisig-deploy-form")?.requestSubmit();
+    await flush();
+    app.querySelector<HTMLButtonElement>("[data-multisig-fund-local]")?.click();
+    await flush();
+
+    expect(intent?.amount).toBe("99245000000000000");
+    expect(intent?.recipient).toBe(review.address);
   });
 });
