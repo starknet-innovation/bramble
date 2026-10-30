@@ -24,6 +24,28 @@ describe("knownTokensForNetwork", () => {
     expect(tokens.map((token) => token.symbol)).toContain("WBTC");
   });
 
+  test("curates the liquid-staked tokens a holder expects to see (#795)", () => {
+    const tokens = knownTokensForNetwork("SN_MAIN");
+    const bySymbol = (symbol: string) => tokens.find((token) => token.symbol === symbol);
+    expect(bySymbol("WSTETH")).toMatchObject({
+      address: "0x0057912720381af14b0e5c87aa4718ed5e527eab60b3801ebf702ab09139e38b",
+      decimals: 18,
+    });
+    expect(bySymbol("XSTRK")).toMatchObject({
+      address: "0x028d709c875c0ceac3dce7065bec5328186dc89fe254527084d1689910954b0a",
+      decimals: 18,
+    });
+    expect(bySymbol("XWBTC")).toMatchObject({
+      address: "0x06a567e68c805323525fe1649adb80b03cddf92c23d2629a6779f54192dffc13",
+      decimals: 8,
+    });
+    // Each curated entry passes its own spam check, so none reads as a spoof of
+    // its base token (xSTRK of STRK, xWBTC of WBTC).
+    for (const token of tokens) {
+      expect(tokenSpamReasons(token)).toEqual([]);
+    }
+  });
+
   test("has no curated tokens on test networks yet", () => {
     expect(knownTokensForNetwork("SN_SEPOLIA")).toEqual([]);
     expect(knownTokensForNetwork("SN_DEVNET")).toEqual([]);

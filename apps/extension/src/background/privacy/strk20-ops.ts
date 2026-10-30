@@ -38,6 +38,7 @@ import {
   type ResolvedAccount,
   resolveAccount,
   strk20ErrorMessage,
+  strk20RegistrationBlockFor,
 } from "./strk20-approval-execution";
 import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import { holdStrk20Notice, MISSING_ANONYMIZER_REFUSAL } from "./strk20-notice";
@@ -74,6 +75,26 @@ export type Strk20OpsDeps = {
   readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
   readonly waiters: SignatureWaiters;
+};
+
+// Holds a site's private request when this account cannot use the pool, so the
+// site is not answered at once. A foreign registration names itself; a failed
+// check is the ordinary retry notice.
+const registrationHold = async (
+  deps: Strk20OpsDeps,
+  origin: string,
+  admission: ApprovalReservation,
+  resolved: ResolvedAccount,
+): Promise<RuntimeResponse | null> => {
+  const block = await strk20RegistrationBlockFor(deps, resolved);
+  if (!block) return null;
+  return holdStrk20Notice(
+    deps,
+    origin,
+    block.error,
+    block.privacyBlocker === "other-wallet" ? "other-wallet" : "request-failed",
+    admission,
+  );
 };
 
 const gateOrigin = (
@@ -127,6 +148,8 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
         admission,
       );
     }
+    const registration = await registrationHold(deps, input.origin, admission, resolved);
+    if (registration) return registration;
     const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
     const token = resolved.preferences.tokens.find(
       (candidate) => candidate.networkId === resolved.account.networkId,
@@ -194,6 +217,8 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
     if ("error" in resolved) {
       return resolved;
     }
+    const registration = await registrationHold(deps, input.origin, admission, resolved);
+    if (registration) return registration;
     return queueStrk20Disclosure(deps, resolved, {
       admission,
       holdFailures: false,
@@ -256,6 +281,8 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
     if ("error" in resolved) {
       return resolved;
     }
+    const registration = await registrationHold(deps, input.origin, admission, resolved);
+    if (registration) return registration;
     const early = batchPrecheck(deps, resolved, input.origin, input.actions, admission);
     if (early) {
       return early;
@@ -299,6 +326,8 @@ const queueStrk20Invoke = async (
   if ("error" in resolved) {
     return resolved;
   }
+  const registration = await registrationHold(deps, input.origin, admission, resolved);
+  if (registration) return registration;
   const early = batchPrecheck(deps, resolved, input.origin, input.actions, admission);
   if (early) {
     return early;
@@ -397,6 +426,8 @@ const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, messa
     if ("error" in resolved) {
       return resolved;
     }
+    const registration = await registrationHold(deps, input.origin, admission, resolved);
+    if (registration) return registration;
     const anonymizer = configuredAnonymizer(resolved);
     if (anonymizer === undefined) {
       return holdStrk20Notice(deps, input.origin, MISSING_ANONYMIZER_REFUSAL, undefined, admission);

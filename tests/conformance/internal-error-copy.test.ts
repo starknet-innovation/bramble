@@ -89,8 +89,10 @@ const SENSITIVE = new RegExp(
 // Already a sentence a reader can act on; shown as written by decision.
 const READER_SENTENCES = new Set([
   "A 2FA removal is already pending for this account",
-  "A sponsored deployment of this account may already be on its way. Check activity before trying again.",
+  "Another wallet set up privacy for this account. Use that wallet to shield or unshield.",
+  "Couldn't check this account's privacy setup. Try again.",
   "Account already exists",
+  "Deploying your account. This can take a few minutes.",
   "Couldn't confirm whether this account is deployed. Check your connection and try again.",
   "Account deployment status is unknown. Check the account on-chain before retrying.",
   "Account is already deployed",
@@ -140,8 +142,6 @@ const READER_SENTENCES = new Set([
   "Wallet already exists",
   "Your browser did not grant access to that explorer host",
   "Your browser did not grant access to that service host",
-  "This account's sponsored deployment was already sent and may still land. Add STRK to deploy it yourself.",
-  "This account type can't be deployed with a sponsored fee. Add STRK to deploy it yourself.",
   "Your browser did not grant access to those service hosts",
 ]);
 
@@ -230,7 +230,6 @@ const SCANNED_SENTENCES = new Set([
   "The account deployment fee was not reviewed. Nothing was submitted — deploy the account first.",
   "The recovery fee changed. Review it and try again.",
   "Passphrase must be at least x characters",
-  "Multisig balances are loading.",
   "The transaction was not sent. x",
   "Enter an amount greater than zero.",
   "Review this send first",

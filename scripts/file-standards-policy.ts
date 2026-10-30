@@ -102,6 +102,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Active-account context split from strk20-wallet-ops; the vault passphrase
   // only transits into the protected signer wiring, never logged or stored.
   "apps/extension/src/background/privacy/strk20-op-context.ts",
+  // Compares a pool public key with the public x-coordinate the vault would
+  // register. The vault credential only transits into that preview; the
+  // viewing key stays in the vault and nothing here is logged or stored.
+  "apps/extension/src/background/privacy/strk20-registration-owner.ts",
   "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
   "apps/extension/src/background/runtime/runtime-state.ts",
   "apps/extension/src/background/runtime/runtime-types.ts",

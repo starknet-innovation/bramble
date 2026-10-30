@@ -16,6 +16,7 @@ import {
 } from "@bramble/wallet-model/account-families";
 import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { ADDRESS_IMPORT_REFUSALS, RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
+import { clearStrk20PoolKeyCache } from "../../../apps/extension/src/background/privacy/strk20-registration-owner";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
   argentOwner,
@@ -105,6 +106,21 @@ describe("finding an account by its address", () => {
     await expect(handler(findMessage(), sender)).resolves.toMatchObject({
       candidate: { restriction: "guardian" },
     });
+  });
+
+  test("notes an account another wallet registered with the privacy pool, as the scan does", async () => {
+    const owner = argentOwner(keyFor("argent", "argentx-bip44", 0));
+    await expect(
+      harness(owner, { poolKey: "0x99" }).handler(findMessage(), sender),
+    ).resolves.toMatchObject({ candidate: { privacyPool: "other-wallet" }, ok: true });
+    // Own key, unregistered, or an unreadable pool: found, unlabelled.
+    for (const poolKey of ["0x1", "0x0", new Error("node down")]) {
+      clearStrk20PoolKeyCache();
+      const response = (await harness(owner, { poolKey }).handler(findMessage(), sender)) as {
+        readonly candidate: { readonly privacyPool?: string };
+      };
+      expect(response.candidate.privacyPool).toBeUndefined();
+    }
   });
 
   test("searches exactly the recovery scan's bound, on both Argent ladders", async () => {

@@ -94,13 +94,18 @@ const SIGNING_RESTRICTIONS: readonly RecoverySigningRestriction[] = [
  * transaction path re-checks authoritatively either way. `byAddress` marks an
  * account found by its pasted address (issue 398): its address is the one the
  * chain reported, not the one its coordinate derives, so a pick of it must
- * carry that address.
+ * carry that address. `privacyPool: "other-wallet"` is the scan's advisory
+ * note that another wallet registered this deployed account with the privacy
+ * pool, so private balances will be off for it here; absent means not
+ * registered, registered under this wallet's key, or the pool did not answer.
+ * It never blocks the import — the private-action path re-checks.
  */
 export type RecoveryAccountCandidate = {
   readonly account: RecoverableAccountRef;
   readonly byAddress?: true;
   readonly deployed: boolean;
   readonly funded: boolean;
+  readonly privacyPool?: "other-wallet";
   readonly restriction?: RecoverySigningRestriction;
 };
 
@@ -264,11 +269,19 @@ export const isRecoverySigningRestriction = (value: unknown): value is RecoveryS
 /** Validates one public discovery result before caching or rendering it. */
 export const isRecoveryAccountCandidate = (value: unknown): value is RecoveryAccountCandidate =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["account", "byAddress", "deployed", "funded", "restriction"]) &&
+  hasOnlyKnownKeys(value, [
+    "account",
+    "byAddress",
+    "deployed",
+    "funded",
+    "privacyPool",
+    "restriction",
+  ]) &&
   isRecoverableAccountRef(value["account"]) &&
   (value["byAddress"] === undefined || value["byAddress"] === true) &&
   typeof value["deployed"] === "boolean" &&
   typeof value["funded"] === "boolean" &&
+  (value["privacyPool"] === undefined || value["privacyPool"] === "other-wallet") &&
   (value["restriction"] === undefined || isRecoverySigningRestriction(value["restriction"]));
 
 /**

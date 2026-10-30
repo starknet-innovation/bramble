@@ -12,10 +12,10 @@
  * copy, never the relay's. A relay cannot move the account, change its owner
  * key, or charge the user: nothing the user owns is signed or spent.
  *
- * The relay URL is wallet-configured and off on every network until the
- * gateway's sponsored route ships and its budget and abuse limits are signed
- * off. Everything the relay answers is untrusted; transport and lost-reply
- * classification live in `./sponsored-deploy-rpc`.
+ * The relay URL is wallet-configured and on for mainnet and Sepolia; the
+ * gateway decides whether it sponsors anything. Everything the relay answers
+ * is untrusted; transport and lost-reply classification live in
+ * `./sponsored-deploy-rpc`.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -26,7 +26,11 @@ import {
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
 import type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
-import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import { XVERSE_ARGENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+} from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -44,48 +48,48 @@ export type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
 /** Who pays a sponsored deployment's network fee, as the review names them. */
 export const SPONSORED_DEPLOY_SPONSOR = "Starknet Foundation";
 
-/** The sponsor declined, or its relay could not quote. Nothing was sent. */
-export const SPONSORED_DEPLOY_REFUSED =
-  "The Starknet Foundation couldn't cover this deployment. Nothing was sent — add STRK to deploy it yourself.";
-
-/** The account's class is not one a sponsored deploy can create. */
-export const SPONSORED_DEPLOY_UNSUPPORTED =
-  "This account type can't be deployed with a sponsored fee. Add STRK to deploy it yourself.";
-
-/** The relay could not be reached or answered unusably. Nothing was sent. */
-export const SPONSORED_DEPLOY_UNREACHABLE =
-  "Couldn't reach the sponsor. Nothing was sent — try again.";
+/**
+ * What every deploy route answers while a sponsored attempt's hold stands, and
+ * what the deploy screen shows meanwhile: the sponsored deployment may be
+ * landing. The route that answers it sent nothing.
+ */
+export const DEPLOYMENT_IN_PROGRESS = "Deploying your account. This can take a few minutes.";
 
 /**
- * The relay explicitly refused: its own clean JSON-RPC error, or a 4xx on a
- * quote. Nothing was sent.
+ * The relay explicitly refused: its own clean JSON-RPC error. Nothing was
+ * sent. Its message is a diagnostic, never shown: the background turns every
+ * refusal into a silent self-paid deploy. `reason` is the error's message as
+ * the relay sent it, untrusted: it may only be compared with known codes to
+ * decide how long to stop offering, never to decide whether anything was sent.
  */
 export class SponsoredDeployRefusedError extends WalletError {
-  constructor() {
-    super(SPONSORED_DEPLOY_REFUSED);
+  readonly reason: string;
+  constructor(reason: string) {
+    super("sponsored deploy refused");
     this.name = "SponsoredDeployRefusedError";
+    this.reason = reason;
   }
 }
 
 /**
  * A quote that failed without an explicit refusal: transport failure, deadline,
- * 5xx, or an unusable answer. Nothing was sent; the sponsor never said no.
+ * 5xx, or an unusable answer. Nothing was sent; the sponsor never said no. A
+ * diagnostic, never shown, like {@link SponsoredDeployRefusedError}.
  */
 export class SponsoredDeployUnavailableError extends WalletError {
   constructor() {
-    super(SPONSORED_DEPLOY_UNREACHABLE);
+    super("sponsored deploy unavailable");
     this.name = "SponsoredDeployUnavailableError";
   }
 }
 
 /**
- * What the deploy screen may offer, as the background decides it: sponsored
- * ("available"), declined by the sponsor ("refused"), nothing ("none"), or the
- * state of an earlier attempt: "held" while its hold stands, "may-land" once it
- * is over and the account is not confirmed deployed. Advisory display state;
- * the submission re-checks everything it depends on.
+ * What the deploy screen may offer: sponsored ("available"), nothing ("none"),
+ * or "held" while an earlier attempt's hold stands and the account may be
+ * deploying. Advisory display state; the submission re-checks everything it
+ * depends on.
  */
-export type DeploySponsorship = "available" | "held" | "may-land" | "none" | "refused";
+export type DeploySponsorship = "available" | "held" | "none";
 
 /** One network's sponsored-deploy relay. */
 export type SponsoredDeployConfig = { readonly url: string };
@@ -96,11 +100,16 @@ export type SponsoredDeployNetworks = Readonly<
 >;
 
 /**
- * Off on mainnet and Sepolia. Turning a network on is a reviewed code change
- * that names the wallet-owned gateway route, made only after the sponsored
- * route exists and SNF has signed off its budget, abuse limits, and terms.
+ * The wallet-owned gateway's sponsored-deploy routes. The gateway is the on/off
+ * switch: while a network is switched off there it answers every call
+ * `404 sponsored_deploy_disabled`, which the wallet reads as "nothing offered"
+ * and deploys self-paid as if sponsorship did not exist. Its budget and abuse
+ * limits live there too. Removing a network here stops the wallet asking.
  */
-export const SPONSORED_DEPLOY_NETWORKS: SponsoredDeployNetworks = {};
+export const SPONSORED_DEPLOY_NETWORKS: SponsoredDeployNetworks = {
+  SN_MAIN: { url: "https://wallet.nodes.starknet.org/api/sponsored-deploy/mainnet" },
+  SN_SEPOLIA: { url: "https://wallet.nodes.starknet.org/api/sponsored-deploy/sepolia" },
+};
 
 /** The relay for `networkId`, or null when sponsorship is off there. */
 export const sponsoredDeployConfig = (
@@ -109,21 +118,56 @@ export const sponsoredDeployConfig = (
 ): SponsoredDeployConfig | null =>
   Object.hasOwn(networks, networkId) ? (networks[networkId] ?? null) : null;
 
-/**
- * Account classes a deployer-zero UDC deploy creates correctly. Their
- * constructors only store the owner key. Braavos is excluded: its constructor
- * validates extended deploy data the account owner attaches to the transaction
- * itself, which a relayed deploy does not carry. An Argent multisig deploys through its
- * own reviewed flow and is not offered here.
- */
-const SPONSORABLE_ACCOUNT_TYPES: ReadonlySet<AccountContractType> = new Set([
-  "argent",
-  "openzeppelin",
-]);
+/** How a sponsorable class's constructor calldata is laid out. */
+type SponsoredConstructor = "argent-0.4" | "openzeppelin";
 
-/** Whether a sponsored deploy can create this account class. */
-export const isSponsorableAccountType = (type: AccountContractType): boolean =>
-  SPONSORABLE_ACCOUNT_TYPES.has(type);
+/**
+ * The exact classes the gateway sponsors, and the constructor calldata each
+ * must carry; the single source for whether a deploy is offered. Their
+ * constructors only store the owner key, so a deployer-zero UDC deploy creates
+ * them correctly. OpenZeppelin AccountUpgradeable 3.0 takes `[public_key]`;
+ * Argent 0.4.0 and its Xverse build take `[0x0, public_key, 0x1]` (a Starknet
+ * signer, no guardian). Any other class, Braavos and Argent multisig included,
+ * deploys self-paid and is never offered sponsorship.
+ */
+const SPONSORED_DEPLOY_CLASSES: readonly {
+  readonly classHash: string;
+  readonly constructor: SponsoredConstructor;
+}[] = [
+  { classHash: OPENZEPPELIN_ACCOUNT_CLASS_HASH, constructor: "openzeppelin" },
+  { classHash: ARGENT_ACCOUNT_CLASS_HASH, constructor: "argent-0.4" },
+  { classHash: XVERSE_ARGENT_CLASS_HASH, constructor: "argent-0.4" },
+];
+
+const hasSponsoredCalldata = (
+  shape: SponsoredConstructor,
+  calldata: readonly string[],
+): boolean => {
+  if (shape === "openzeppelin") {
+    return calldata.length === 1 && isNonZeroStarkFieldElement(calldata[0] ?? "");
+  }
+  return (
+    calldata.length === 3 &&
+    sameFelt(calldata[0] ?? "", "0x0") &&
+    isNonZeroStarkFieldElement(calldata[1] ?? "") &&
+    sameFelt(calldata[2] ?? "", "0x1")
+  );
+};
+
+/** Whether the account's class is one the gateway sponsors. */
+export const isSponsorableAccountClass = (classHash: string): boolean =>
+  SPONSORED_DEPLOY_CLASSES.some((entry) => sameFelt(entry.classHash, classHash));
+
+/**
+ * Whether the gateway sponsors this exact deployment: an accepted class with
+ * that class's constructor calldata. Anything else is deployed self-paid.
+ */
+export const isSponsorableDeployment = (data: SponsoredDeploymentData): boolean =>
+  SPONSORED_DEPLOY_CLASSES.some(
+    (entry) =>
+      sameFelt(entry.classHash, data.class_hash) &&
+      hasSponsoredCalldata(entry.constructor, data.calldata),
+  );
 
 /** SNIP-29 deployment data, every felt canonical 0x-hex. */
 export type SponsoredDeploymentData = {
@@ -242,7 +286,9 @@ export type SponsoredDeployQuote = { readonly deployment: SponsoredDeploymentDat
  * copy only when the relay echoes it exactly under sponsored parameters. Every
  * failure is determinate, since a quote never broadcasts: a
  * {@link SponsoredDeployRefusedError} only for the relay's own clean JSON-RPC
- * error or a 4xx, otherwise a {@link SponsoredDeployUnavailableError}.
+ * error, otherwise a {@link SponsoredDeployUnavailableError} — including a
+ * bare 4xx such as the switched-off gateway's `404 sponsored_deploy_disabled`,
+ * which says nothing about this account.
  */
 export const quoteSponsoredDeploy = async (input: {
   readonly config: SponsoredDeployConfig;
@@ -254,9 +300,8 @@ export const quoteSponsoredDeploy = async (input: {
     input.config.url,
     "paymaster_buildTransaction",
     { parameters: PARAMETERS, transaction: { deployment: input.deployment, type: "deploy" } },
-    false,
   );
-  if (answer.kind === "refused") throw new SponsoredDeployRefusedError();
+  if (answer.kind === "refused") throw new SponsoredDeployRefusedError(answer.message);
   if (answer.kind === "lost") throw new SponsoredDeployUnavailableError();
   const result = answer.result;
   if (
@@ -295,9 +340,8 @@ export const submitSponsoredDeploy = async (input: {
     input.config.url,
     BROADCAST_PAYMASTER_METHOD,
     { parameters: PARAMETERS, transaction: { deployment: input.quote.deployment, type: "deploy" } },
-    true,
   );
-  if (answer.kind === "refused") throw new SponsoredDeployRefusedError();
+  if (answer.kind === "refused") throw new SponsoredDeployRefusedError(answer.message);
   const result = answer.kind === "result" ? answer.result : undefined;
   // Anything but a stated refusal may have deployed. A result without a usable
   // hash leaves the wallet no handle on it either: status unknown.

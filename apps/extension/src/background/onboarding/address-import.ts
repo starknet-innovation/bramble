@@ -18,8 +18,13 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   isRecoverableAccountRef,
   type RecoverableAccountRef,
+  recoveryLadderIndex,
 } from "@bramble/wallet-model/accounts";
-import { type StarknetNetworkId, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import {
   ADDRESS_IMPORT_REFUSALS,
   RECOVERY_SCAN_LIMITS,
@@ -30,7 +35,9 @@ import {
   selectionDerivation,
 } from "@bramble/wallet-model/recovery";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { strk20PoolAddress, strk20RegisteredElsewhere } from "../privacy/strk20-registration-owner";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
+import { networkRpcUrls } from "../runtime/runtime-state";
 import {
   advisoryRestriction,
   canonicalAddress,
@@ -143,6 +150,7 @@ export const findAccountByAddress = async (
   if ("error" in matched) return matched;
   const account = { ...matched, address, id: `${matched.networkId}:${address}` };
   const restriction = await advisoryRestriction(deps, account, input.networkId);
+  const elsewhere = await privacyRegisteredElsewhere(deps, input, account);
   if (!stillAuthorized()) return { error: "wallet locked" };
   return {
     candidate: {
@@ -151,9 +159,40 @@ export const findAccountByAddress = async (
       deployed: true,
       funded: false,
       ...(restriction ? { restriction } : {}),
+      ...(elsewhere ? { privacyPool: "other-wallet" } : {}),
     },
     ok: true,
   };
+};
+
+// Advisory note for the picker (never a refusal): another wallet registered
+// this account with the privacy pool. The viewing public key is re-derived at
+// the matched coordinate; only the public x-coordinate leaves the vault.
+const privacyRegisteredElsewhere = async (
+  deps: AddressImportDeps,
+  input: { readonly mnemonic: string; readonly networkId: StarknetNetworkId },
+  account: RecoverableAccountRef,
+): Promise<boolean> => {
+  const previewOwn = deps.wallet.previewStrk20ViewingPublicKey;
+  if (!previewOwn) return false;
+  const preferences = await deps.preferencesStore.read();
+  return strk20RegisteredElsewhere({
+    address: account.address,
+    networkId: input.networkId,
+    ownPublicKey: (pool) =>
+      previewOwn({
+        accountContractType: account.accountContractType,
+        accountIndex: recoveryLadderIndex(account),
+        classHash: account.classHash,
+        derivation: account.derivation.kind,
+        mnemonic: input.mnemonic,
+        networkId: input.networkId,
+        ...pool,
+      }),
+    poolAddress: strk20PoolAddress(preferences, input.networkId),
+    readRegistered: deps.runtimeRpc.getStrk20PublicKey,
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences),
+  });
 };
 
 /**

@@ -48,7 +48,7 @@ export const visibleHomeBalances = (
   state: BalanceState,
   preferences: WalletPreferences | null,
 ): readonly TokenBalance[] => {
-  if ("error" in state) {
+  if (!("balances" in state)) {
     return [];
   }
   const trackedById = new Map<string, TokenConfig>(
@@ -296,6 +296,7 @@ const privateBreakdownFor = (
   deployment: boolean | null,
   fundedForFees: boolean | null,
 ): PrivateBreakdown => {
+  if (privacy.blockerKind === "other-wallet") return { kind: "other-wallet" };
   if (privacyIneligibleKind(privacy)) return { kind: "unavailable" };
   if (deploymentKnownFromPrivacy(deployment, privacy) === false) {
     return { kind: fundedForFees === false ? "needs-funds" : "undeployed" };
@@ -331,23 +332,27 @@ const tokensPanel = (
   fundedForFees: boolean | null = true,
 ): string => {
   const visible = visibleHomeBalances(state, preferences);
-  const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
+  const hiddenCount = "balances" in state ? state.balances.length - visible.length : 0;
   const publicById = new Map(visible.map((token) => [token.id, token]));
   const unified = unifiedHomeBalances(state, privacy, preferences);
+  // Nothing read yet is not a failure: the list stays empty and busy until the
+  // first read lands, and only a read that failed shows the retry panel (795).
   const body =
-    "error" in state
-      ? tokensErrorPanel(state.error)
-      : unified.length === 0
-        ? emptyState("No tracked balances yet. Add or scan for tokens to see them here.")
-        : `<ul class="token-list">${unified
-            .map((token) =>
-              unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
-                private: privateBreakdownFor(privacy, token.id, deployment, fundedForFees),
-                // A public balance never read is unknown, not zero (audit M5).
-                publicFormatted: publicById.get(token.id)?.formatted || null,
-              }),
-            )
-            .join("")}</ul>`;
+    "loading" in state
+      ? '<ul class="token-list" aria-busy="true"></ul>'
+      : "error" in state
+        ? tokensErrorPanel(state.error)
+        : unified.length === 0
+          ? emptyState("No tracked balances yet. Add or scan for tokens to see them here.")
+          : `<ul class="token-list">${unified
+              .map((token) =>
+                unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
+                  private: privateBreakdownFor(privacy, token.id, deployment, fundedForFees),
+                  // A public balance never read is unknown, not zero (audit M5).
+                  publicFormatted: publicById.get(token.id)?.formatted || null,
+                }),
+              )
+              .join("")}</ul>`;
   return `${body}
     ${
       privacy.error

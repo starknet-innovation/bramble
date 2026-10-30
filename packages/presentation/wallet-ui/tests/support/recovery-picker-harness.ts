@@ -1,5 +1,5 @@
 /** Shared fixtures for driving the first-run recovery account picker. */
-import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import type { DerivedAccountRef, RecoverableAccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../src/popup/responses/responses";
 import { onboarding } from "../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../src/sidepanel/journeys/onboarding/onboarding-ui";
@@ -59,9 +59,10 @@ export const click = (root: ParentNode, selector: string): void => {
 };
 
 type Candidate = {
-  account: DerivedAccountRef;
+  account: RecoverableAccountRef;
   deployed: boolean;
   funded: boolean;
+  privacyPool?: "other-wallet";
   restriction?: "guardian" | "owner-changed" | "owner-type" | "release" | "strong-signer";
 };
 

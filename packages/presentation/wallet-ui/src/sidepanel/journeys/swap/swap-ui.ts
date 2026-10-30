@@ -100,9 +100,7 @@ const tradableTokens = (deps: SwapUiDeps): readonly TokenConfig[] =>
 
 const balanceFor = (deps: SwapUiDeps, tokenId: string | null): TokenBalance | null => {
   const state = deps.balances();
-  return "error" in state
-    ? null
-    : (state.balances.find((balance) => balance.id === tokenId) ?? null);
+  return state.balances?.find((balance) => balance.id === tokenId) ?? null;
 };
 
 const healSelection = (deps: SwapUiDeps): void => {

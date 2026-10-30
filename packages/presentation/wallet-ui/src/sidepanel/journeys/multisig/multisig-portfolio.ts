@@ -30,10 +30,11 @@ export type MultisigPortfolioData = {
 
 /**
  * Honest loading state used until the selected multisig's own balance request
- * returns. It renders no cached signer assets.
+ * returns. It renders no cached signer assets, and reads as loading rather
+ * than as a failed read (issue 795).
  */
 export const EMPTY_MULTISIG_PORTFOLIO: MultisigPortfolioData = {
-  balances: { error: "Multisig balances are loading." },
+  balances: { loading: true },
   changes: {},
   currency: "usd",
   prices: {},
@@ -54,6 +55,8 @@ const portfolioHero = (
 };
 
 const tokenPanel = (preferences: WalletPreferences | null, data: MultisigPortfolioData): string => {
+  // Not read yet is not a failure: an empty, busy list until the read lands.
+  if ("loading" in data.balances) return '<ul class="token-list" aria-busy="true"></ul>';
   if ("error" in data.balances) {
     return `<div class="panel-error">
       ${emptyState("Multisig balances are unavailable right now.")}

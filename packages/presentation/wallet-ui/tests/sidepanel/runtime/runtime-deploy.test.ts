@@ -1,8 +1,9 @@
 /**
  * The side panel's deployment client (issue 431). The sponsorship offer is advisory
  * and never throws: anything but a well-formed answer reads as "none", so the
- * screen keeps the user's own fee. A sponsored deploy returns the hash, and a
- * refusal or lost reply rejects with the background's own sentence.
+ * screen keeps the user's own fee. A sponsored deploy returns the hash, null
+ * when the sponsor is not deploying it, and a refusal or lost reply rejects
+ * with the background's own sentence.
  */
 import { describe, expect, test } from "bun:test";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
@@ -21,7 +22,7 @@ const client = (reply: () => Promise<unknown>) => {
 
 describe("deploy sponsorship offer", () => {
   test("reads the background's answer", async () => {
-    for (const sponsorship of ["available", "held", "may-land", "none", "refused"] as const) {
+    for (const sponsorship of ["available", "held", "none"] as const) {
       const { deploy, sent } = client(async () => ({ ok: true, sponsorship }));
       expect(await deploy.deploySponsorship()).toBe(sponsorship);
       expect(sent).toEqual([{ type: "wallet.deploySponsorship" }]);
@@ -31,6 +32,8 @@ describe("deploy sponsorship offer", () => {
   test("reads anything else as nothing offered, and never throws", async () => {
     const replies = [
       async () => ({ ok: true, sponsorship: "free" }),
+      async () => ({ ok: true, sponsorship: "may-land" }),
+      async () => ({ ok: true, sponsorship: "refused" }),
       async () => ({ sponsorship: "available" }),
       async () => ({ error: "wallet locked" }),
       async () => null,
@@ -49,6 +52,19 @@ describe("sponsored deploy request", () => {
     const { deploy, sent } = client(async () => ({ ok: true, transactionHash: "0x5ab" }));
     expect(await deploy.deployAccountSponsored()).toBe("0x5ab");
     expect(sent).toEqual([{ type: "wallet.deployAccountSponsored" }]);
+  });
+
+  test("answers null when the sponsor is not deploying it and nothing was sent", async () => {
+    expect(
+      await client(async () => ({ ok: true, sponsored: false })).deploy.deployAccountSponsored(),
+    ).toBeNull();
+    for (const reply of [
+      { ok: true, sponsored: true },
+      { ok: false, sponsored: false },
+      { extra: 1, ok: true, sponsored: false },
+    ]) {
+      await expect(client(async () => reply).deploy.deployAccountSponsored()).rejects.toThrow();
+    }
   });
 
   test("rejects with the refusal, and a lost reply as outcome-unknown", async () => {

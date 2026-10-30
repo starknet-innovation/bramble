@@ -135,6 +135,13 @@ export const walletStub = {
   async previewAccount() {
     return account;
   },
+  // Public viewing keys only: the point-of-use check compares them with the pool.
+  async previewImportedStrk20ViewingPublicKey() {
+    return { address: account.address, viewingPublicKey: "0x1" };
+  },
+  async previewStrk20ViewingPublicKey() {
+    return "0x1";
+  },
   async previewImportedAccount() {
     return account;
   },

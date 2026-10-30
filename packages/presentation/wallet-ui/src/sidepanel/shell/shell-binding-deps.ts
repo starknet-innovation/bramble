@@ -7,6 +7,7 @@ import type { WalletStatus } from "../../popup/responses/responses";
 import type { WalletView } from "../app/screens/views";
 import type { RefreshReason } from "../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../runtime/runtime";
+import type { StageTimers } from "../shared/stage-pacer";
 
 /**
  * Services and state setters the shell bindings close over. State lives in the
@@ -24,6 +25,8 @@ export type ShellBindingDeps = {
    */
   readonly render: (status: WalletStatus, reason?: RefreshReason) => Promise<void>;
   readonly setActiveView: (view: WalletView) => void;
+  /** The deploy screen's hold re-check timer; tests inject one to drive time. */
+  readonly deployHoldTimers?: StageTimers;
   /** Overrides the confirmation checkpoints; tests pass a single zero delay. */
   readonly confirmationDelaysMs?: readonly number[];
 };

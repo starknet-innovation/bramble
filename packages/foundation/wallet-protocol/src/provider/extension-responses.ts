@@ -15,10 +15,11 @@ import type { ProviderInvokeCall } from "../transactions/invoke";
  * Why a site's private request is held on a close-only notice rather than
  * reaching a card: the shadow-account record table cannot take its scope
  * (`record-limit`), or preparing the reviewed request failed before a card
- * could be built (`request-failed`). Either answer, given at once, would tell
- * the site something about the user's setup, so it waits for Close.
+ * could be built (`request-failed`), or another wallet registered the account
+ * with the privacy pool (`other-wallet`). Any of those, given at once, would
+ * tell the site something about the user's setup, so it waits for Close.
  */
-export type Strk20NoticeReason = "record-limit" | "request-failed";
+export type Strk20NoticeReason = "other-wallet" | "record-limit" | "request-failed";
 
 /**
  * Every approval kind that may cross the background-to-UI boundary.

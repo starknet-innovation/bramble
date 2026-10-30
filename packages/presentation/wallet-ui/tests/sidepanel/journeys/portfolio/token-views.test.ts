@@ -7,6 +7,7 @@ import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferenc
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { BalancesResponse, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
+import type { PrivacyDisclosureState } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const SPOOF = "0x00abc0000000000000000000000000000000000000000000000000000000abc";
@@ -82,10 +83,57 @@ const balances: BalancesResponse["balances"] = [
   },
 ];
 const prices = { [ETH]: 2000, [SPOOF]: 1 };
+// Private discovery has settled (nothing shielded), so Home may print its
+// total rather than hold "—" for the private part (issue 795).
+const settledPrivacy: PrivacyDisclosureState = {
+  error: null,
+  loading: false,
+  value: {
+    accountId: account.id,
+    balances: [],
+    networkId: "SN_MAIN",
+    poolFeeFri: "0x1",
+    relayConfigured: true,
+    registration: "unregistered",
+  },
+};
 
 describe("token views", () => {
   test("home shows fiat totals, hides spam, and links to the tokens flow", () => {
-    const html = dashboard("home", status, [], preferences, { balances }, null, [], [], prices);
+    const html = dashboard(
+      "home",
+      status,
+      [],
+      preferences,
+      { balances },
+      null,
+      [],
+      [],
+      prices,
+      // Every argument up to the privacy state keeps its default.
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      settledPrivacy,
+    );
 
     expect(html).toContain('class="hero-total"');
     expect(html).toContain('data-live-value="2000">$2,000.00</p>');

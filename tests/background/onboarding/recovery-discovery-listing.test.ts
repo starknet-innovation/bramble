@@ -22,10 +22,11 @@ import { canonicalFelt } from "@bramble/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@bramble/wallet-model/recovery";
 import { handleOnboardingOps } from "../../../apps/extension/src/background/onboarding/onboarding-ops";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
-import { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
+import type { defaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createActiveStateCoordinator } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { walletStub } from "../../support/key-boundary-collaborators";
+import { offlineDiscoveryRpc } from "../../support/recovery-accounts";
 
 describe("recovery discovery listing", () => {
   test("lists an older release or class only once it exists on chain", async () => {
@@ -64,7 +65,7 @@ describe("recovery discovery listing", () => {
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       recoveryDiscovery: createRecoveryDiscoveryCache(),
       runtimeRpc: {
-        ...defaultRuntimeRpc,
+        ...offlineDiscoveryRpc,
         async getDeploymentStatus({ accountAddress }: { readonly accountAddress: string }) {
           return accountAddress === braavosBase.address;
         },

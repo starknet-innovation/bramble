@@ -23,6 +23,7 @@ import {
   type ValueBucket,
 } from "@bramble/transactions/send-routes";
 import { STRK_TOKEN_ADDRESS, STRK_TOKEN_DECIMALS, sameFelt } from "@bramble/wallet-model/networks";
+import { PRIVACY_OTHER_WALLET_ACTION } from "@bramble/wallet-protocol/privacy-blocker";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { formatFri } from "../../shared/parts";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
@@ -182,6 +183,12 @@ const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
  * wallet managed to read it.
  */
 export const resolveTransferRoute = (context: TransferRouteContext): SendRouteResolution => {
+  if (
+    context.privacy.blockerKind === "other-wallet" &&
+    (context.fields.source !== "public" || context.fields.destination === "private")
+  ) {
+    return { blocked: { pending: false, reason: PRIVACY_OTHER_WALLET_ACTION } };
+  }
   if (context.privacy.error && context.fields.source !== "public") {
     return { blocked: { pending: false, reason: "Private balances are unavailable right now" } };
   }

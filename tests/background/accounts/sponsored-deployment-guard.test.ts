@@ -16,7 +16,7 @@ import {
 } from "../../../apps/extension/src/background/accounts/deploy-account-ops";
 import {
   createPendingDeployments,
-  DEPLOYMENT_MAY_BE_ON_ITS_WAY,
+  DEPLOYMENT_IN_PROGRESS,
   guardDeployments,
   memoryPendingDeployments,
   PENDING_DEPLOYMENTS_KEY,
@@ -24,7 +24,7 @@ import {
   type PendingDeployments,
   SPONSORED_DEPLOY_HOLD_MS,
 } from "../../../apps/extension/src/background/accounts/pending-deployments";
-import { SPONSORED_DEPLOY_ALREADY_SENT } from "../../../apps/extension/src/background/accounts/sponsored-deployment";
+import { SPONSORED_DEPLOY_DECLINED } from "../../../apps/extension/src/background/accounts/sponsored-deployment";
 import { routerContext } from "../../../apps/extension/src/background/routing/message-context";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
@@ -39,7 +39,7 @@ import {
   relay,
 } from "../../support/sponsored-deploy-harness";
 
-const HELD = { error: DEPLOYMENT_MAY_BE_ON_ITS_WAY };
+const HELD = { error: DEPLOYMENT_IN_PROGRESS };
 const INSIDE = 60_000;
 const AFTER = SPONSORED_DEPLOY_HOLD_MS + 1;
 const rpcInput = { account: ozAccount, rpcUrls: ["https://rpc.test"] } as never;
@@ -90,7 +90,7 @@ describe("sponsored attempt hold", () => {
     const { deps, pending } = await harness({ relay: relay(lost) });
     expect(await submit(deps, 0)).toMatchObject({ submissionUnknown: true });
     const inside = guardedTransfers(pending, INSIDE);
-    await expect(inside.send()).rejects.toThrow(DEPLOYMENT_MAY_BE_ON_ITS_WAY);
+    await expect(inside.send()).rejects.toThrow(DEPLOYMENT_IN_PROGRESS);
     const after = guardedTransfers(pending, AFTER);
     await after.send();
     expect([inside.sent, after.sent]).toEqual([[], ["transfer"]]);
@@ -120,14 +120,14 @@ describe("sponsored attempt hold", () => {
     expect(reads).toBe(0);
   });
 
-  test("tells the screen: held during the hold, may-land after, never offered again", async () => {
+  test("tells the screen: held during the hold, then nothing, and is never offered again", async () => {
     const sponsor = relay(lost);
     const { deps } = await harness({ relay: sponsor });
     await submit(deps, 0);
     expect(await offer(deps, INSIDE)).toBe("held");
-    expect(await offer(deps, AFTER)).toBe("may-land");
+    expect(await offer(deps, AFTER)).toBe("none");
     expect(await submit(deps, INSIDE)).toEqual(HELD);
-    expect(await submit(deps, AFTER)).toEqual({ error: SPONSORED_DEPLOY_ALREADY_SENT });
+    expect(await submit(deps, AFTER)).toEqual(SPONSORED_DEPLOY_DECLINED);
     expect(sponsor.calls).toEqual(["paymaster_buildTransaction", "paymaster_executeTransaction"]);
   });
 
@@ -173,7 +173,7 @@ describe("sponsored attempt hold", () => {
     const sponsor = relay(accepted);
     const after = await harness({ pending: createPendingDeployments(unreadable), relay: sponsor });
     expect(await offer(after.deps, INSIDE)).toBe("none");
-    expect(await submit(after.deps, INSIDE)).toEqual({ error: "sponsored deployment unavailable" });
+    expect(await submit(after.deps, INSIDE)).toEqual(SPONSORED_DEPLOY_DECLINED);
     expect(sponsor.calls).toEqual([]);
     const transfers = guardedTransfers(after.pending, INSIDE);
     await transfers.send();
@@ -191,8 +191,8 @@ describe("sponsored attempt hold", () => {
       expect(pending.reserve(other, AFTER)).toBe("reserved");
     }
     expect(pending.reserve({ address: "0xfffff", networkId: "SN_SEPOLIA" }, AFTER)).toBe("full");
-    expect(await offer(deps, AFTER)).toBe("may-land");
-    expect(await submit(deps, AFTER)).toEqual({ error: SPONSORED_DEPLOY_ALREADY_SENT });
+    expect(await offer(deps, AFTER)).toBe("none");
+    expect(await submit(deps, AFTER)).toEqual(SPONSORED_DEPLOY_DECLINED);
   });
 
   test("ends early when the chain shows the account deployed", async () => {
@@ -216,7 +216,7 @@ describe("sponsored attempt hold", () => {
       const transfers = guardedTransfers(pending, INSIDE, false, activity);
       await transfers.send();
       expect(transfers.sent).toEqual(["transfer"]);
-      expect(await offer(deps, INSIDE)).toBe("may-land");
+      expect(await offer(deps, INSIDE)).toBe("none");
     }
   });
 
@@ -301,7 +301,7 @@ describe("sponsored attempt hold", () => {
     };
     const sponsor = relay(accepted);
     const { deps } = await harness({ pending: createPendingDeployments(failing), relay: sponsor });
-    expect(await submit(deps)).toEqual({ error: "sponsored deployment unavailable" });
+    expect(await submit(deps)).toEqual(SPONSORED_DEPLOY_DECLINED);
     expect(sponsor.calls).toEqual([]);
   });
 
@@ -410,7 +410,7 @@ describe("every deploy route honours the hold", () => {
       ctx.runtimeRpc.submitErc20Transfer,
       ctx.runtimeRpc.submitInvokeTransaction,
     ]) {
-      await expect(submitter(rpcInput)).rejects.toThrow(DEPLOYMENT_MAY_BE_ON_ITS_WAY);
+      await expect(submitter(rpcInput)).rejects.toThrow(DEPLOYMENT_IN_PROGRESS);
     }
     expect(called).toEqual([]);
   });
