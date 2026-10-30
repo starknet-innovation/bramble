@@ -8,7 +8,7 @@ export const CHROME_STORE_LISTING =
 export const CHROME_STORE_ROOT = "https://chromewebstore.google.com/";
 
 /** Public source and support destination for Bramble. */
-export const REPOSITORY_URL = "https://github.com/starknet-innovation/mc-wallet";
+export const REPOSITORY_URL = "https://github.com/starknet-innovation/bramble";
 
 /** Accepts only an HTTPS Chrome Web Store URL and otherwise fails to the store root. */
 export const resolveChromeStoreUrl = (configuredUrl: string | undefined): string => {

@@ -10,6 +10,10 @@ import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
+import {
+  PRIVACY_OTHER_WALLET,
+  PRIVACY_OTHER_WALLET_NEXT,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
@@ -300,6 +304,11 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
     body: "Switch to a network with a privacy pool.",
     title: "Not available on this network",
   },
+  "other-wallet": {
+    action: "",
+    body: PRIVACY_OTHER_WALLET_NEXT,
+    title: PRIVACY_OTHER_WALLET,
+  },
   pending: {
     action: button({
       attributes: { "data-view": "activity" },
@@ -330,12 +339,18 @@ const blocked = (
     poolFeeFri === undefined
       ? ""
       : `<p class="hint">Registration needs ${escapeHtml(formatFri(poolFeeFri))} for the pool fee, plus a network fee.</p>`;
+  // The other-wallet screen is the two approved lines. The action refusal is a
+  // different sentence and is not repeated under them.
+  const reason =
+    journey.blocker.kind === "other-wallet"
+      ? ""
+      : `<p class="hint">${escapeHtml(journey.blocker.message)}</p>`;
   return `
   <section class="privacy-outcome privacy-blocked" role="status" aria-live="polite" data-privacy-blocker="${journey.blocker.kind}">
     <span class="privacy-outcome-mark" aria-hidden="true">${icon("shield")}</span>
     <h2>${escapeHtml(copy.title)}</h2>
     <p>${escapeHtml(copy.body)}</p>
-    <p class="hint">${escapeHtml(journey.blocker.message)}</p>
+    ${reason}
     ${requirement}
     <div class="privacy-actions">
       ${copy.action}

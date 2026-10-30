@@ -12,14 +12,25 @@ import {
 import { type MultisigStore, memoryMultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import { memoryOriginHistory, type OriginHistoryStore } from "@bramble/permissions/origin-history";
+import type { PhishingFeedHealth } from "@bramble/permissions/phishing-feed";
 import { type PriceService, unavailablePriceService } from "@bramble/portfolio/prices";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type ActivityLog, memoryActivityLog, systemClock } from "@bramble/transactions/activity";
 import { type AllowanceStore, memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import { type SwapService, unavailableSwapService } from "@bramble/transactions/avnu";
+import {
+  memoryRelaySignatureLog,
+  type RelaySignatureLog,
+} from "@bramble/transactions/relay-signatures";
+import {
+  guardDeployments,
+  memoryPendingDeployments,
+  type PendingDeployments,
+} from "../accounts/pending-deployments";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "../approvals/approvals";
+import type { SidePanelNotice } from "../approvals/side-panel-notice-ops";
 import {
   createSignatureWaiters,
   releaseWaitersOnApprovalDrop,
@@ -86,15 +97,20 @@ export type RouterContext = {
   readonly nostrRelayTransport?: NostrRelayTransport;
   readonly now: () => number;
   readonly originHistory: OriginHistoryStore;
+  readonly phishingFeedHealth?: () => PhishingFeedHealth;
   readonly preferencesStore: WalletPreferencesStore;
   readonly prices: PriceService;
   readonly recoveryDiscovery: RecoveryDiscoveryCache;
+  /** Accounts whose deploy may be in flight; every deploy route consults it. */
+  readonly pendingDeployments: PendingDeployments;
+  readonly relaySignatures: RelaySignatureLog;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
   readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
+  readonly sidePanelLearning?: SidePanelNotice;
   readonly updates: UpdateReady;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
@@ -123,9 +139,15 @@ export type MessageHandlerOptions = {
   readonly now?: () => number;
   readonly originGuard?: OriginGuard;
   readonly originHistory?: OriginHistoryStore;
+  /** Durable pending-deployment store; defaults to an in-memory one. */
+  readonly pendingDeployments?: PendingDeployments;
+  /** How current the live phishing list is, for support diagnostics; absent reports none. */
+  readonly phishingFeedHealth?: () => PhishingFeedHealth;
   readonly preferencesStore?: WalletPreferencesStore;
   readonly prices?: PriceService;
   readonly recoveryDiscovery?: RecoveryDiscoveryCache;
+  /** Signed OutsideExecution messages for Activity; in memory when absent. */
+  readonly relaySignatures?: RelaySignatureLog;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
@@ -137,6 +159,8 @@ export type MessageHandlerOptions = {
    */
   readonly strk20Jobs?: Strk20JobRegistry;
   readonly strk20Preparations?: Strk20WalletPreparationStore;
+  /** The one-time "opens as a popup" notice (#690); absent, it is never due. */
+  readonly sidePanelLearning?: SidePanelNotice;
   readonly updates?: UpdateReady;
   /**
    * Held-response registry the router parks deferred sign requests in. The
@@ -192,6 +216,10 @@ const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): Watc
 const balanceSnapshotsFor = (provided: BalanceSnapshotStore | undefined): BalanceSnapshotStore =>
   provided ?? memoryBalanceSnapshotStore();
 
+const phishingFeedHealthFor = (
+  health: (() => PhishingFeedHealth) | undefined,
+): Pick<RouterContext, "phishingFeedHealth"> => (health ? { phishingFeedHealth: health } : {});
+
 const nftSnapshotsFor = (
   provided: NftSnapshotStore | undefined,
 ): Pick<RouterContext, "nftSnapshots"> | Record<string, never> =>
@@ -216,6 +244,29 @@ const waitersFor = (provided: SignatureWaiters | undefined): SignatureWaiters =>
 // Inert when no browser runtime is wired (tests, tooling): never restarts.
 const updatesFor = (updates: UpdateReady | undefined): UpdateReady => updates ?? inertUpdateReady;
 
+// The activity log, the pending-deployment store, and the RPC wrapped so every
+// deploy-capable submission refuses during a sponsored attempt's hold (issue 431).
+const deployGuardedRuntime = (
+  options: MessageHandlerOptions,
+): Pick<RouterContext, "activity" | "pendingDeployments" | "runtimeRpc"> => {
+  const activity = options.activity ?? memoryActivityLog();
+  const pendingDeployments = options.pendingDeployments ?? memoryPendingDeployments();
+  const runtimeRpc = guardDeployments(options.runtimeRpc ?? defaultRuntimeRpc, {
+    activity,
+    now: options.now ?? systemClock,
+    pendingDeployments,
+  });
+  return { activity, pendingDeployments, runtimeRpc };
+};
+
+const sidePanelLearningFor = (
+  learner: SidePanelNotice | undefined,
+): Pick<RouterContext, "sidePanelLearning"> => (learner ? { sidePanelLearning: learner } : {});
+
+// An unwired relay log keeps records for this worker's lifetime only.
+const relaySignaturesFor = (log: RelaySignatureLog | undefined): RelaySignatureLog =>
+  log ?? memoryRelaySignatureLog();
+
 /**
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
@@ -238,9 +289,10 @@ export const routerContext = (
   const waiters = waitersFor(options.waiters);
   const now = options.now ?? systemClock;
   releaseWaitersOnApprovalDrop(approvals, waiters, notifyApprovalsChanged);
+  const { activity, pendingDeployments, runtimeRpc } = deployGuardedRuntime(options);
   return {
     activeStateCoordinator: activeStateCoordinatorFor(options.activeStateCoordinator),
-    activity: options.activity ?? memoryActivityLog(),
+    activity,
     allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
     approvals,
     balanceSnapshots: balanceSnapshotsFor(options.balanceSnapshots),
@@ -254,15 +306,19 @@ export const routerContext = (
     ...nostrRelayTransportFor(options.nostrRelayTransport),
     now,
     originHistory: options.originHistory ?? memoryOriginHistory(),
+    pendingDeployments,
+    ...phishingFeedHealthFor(options.phishingFeedHealth),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
     recoveryDiscovery: recoveryDiscoveryFor(options.recoveryDiscovery),
-    runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
+    relaySignatures: relaySignaturesFor(options.relaySignatures),
+    runtimeRpc,
     session,
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     strk20Jobs: strk20JobsFor(options.strk20Jobs, now),
     strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
+    ...sidePanelLearningFor(options.sidePanelLearning),
     updates: updatesFor(options.updates),
     waiters,
     wallet,

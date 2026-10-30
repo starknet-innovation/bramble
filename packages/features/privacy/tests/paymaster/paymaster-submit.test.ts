@@ -291,6 +291,22 @@ describe("STRK20 paymaster submission boundary", () => {
       async () => {
         throw new DOMException("The user aborted a request.", "AbortError");
       },
+      // An error that is not a JSON-RPC error object, or one beside a result,
+      // does not say the relay stopped.
+      ...[
+        { error: null },
+        { error: "failed" },
+        { error: { code: -32_000 } },
+        { error: { message: "failed" } },
+        { error: { code: 1.5, message: "failed" } },
+        { error: { code: -32_000, message: 7 } },
+        { error: { code: -32_000, message: "failed" }, result: { transaction_hash: "0x1" } },
+      ].map(
+        (fields) => async () =>
+          new Response(JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0", ...fields }), {
+            status: 200,
+          }),
+      ),
     ];
     for (const http of lost) {
       const rejected = await submitWith(http);
@@ -355,6 +371,25 @@ describe("STRK20 paymaster submission boundary", () => {
       expect(rejected).not.toBeInstanceOf(IndeterminateRpcWriteError);
       expect((rejected as Error).message).toBe(STRK20_SUBMISSION_UNAVAILABLE);
     }
+    // The broadcast's stricter error check does not reach a quote.
+    const malformed = await buildStrk20PaymasterPlan({
+      accountAddress: "0x1",
+      approveCalls: [],
+      chainId,
+      config,
+      feeBound: { amount: 5n, kind: "exact" as const },
+      http: async () =>
+        new Response(JSON.stringify({ error: null, id: "bramble-strk20", jsonrpc: "2.0" }), {
+          status: 200,
+        }),
+      nowSeconds: 2,
+      poolAddress: "0x2",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(malformed).toBeInstanceOf(WalletError);
+    expect(malformed).not.toBeInstanceOf(IndeterminateRpcWriteError);
   });
 
   test("never exposes proof material echoed by the relay", async () => {

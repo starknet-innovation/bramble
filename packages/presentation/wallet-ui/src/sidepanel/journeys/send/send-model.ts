@@ -28,6 +28,12 @@ import { compactAmount } from "../portfolio/token-row";
  */
 export type SendIntent = {
   readonly accountId: string;
+  /**
+   * Amount to prefill, in the token's exact base units (decimal digits). The
+   * user can still edit it and must still review and confirm; omitted, the
+   * amount opens empty.
+   */
+  readonly amount?: string;
   /** Shared account selected when a setup-owned funding send completes. */
   readonly completeMultisigId?: string;
   /** Continues a shortcut-owned funding send into its saved deployment setup. */
@@ -170,6 +176,20 @@ export const balanceShortcut = (
     return "";
   }
 };
+
+/**
+ * The amount field's opening text for a shortcut: its base-unit `amount`
+ * formatted exactly for the opening asset's decimals. Anything that is not a
+ * positive base-unit integer, or an asset whose decimals the token boundaries
+ * do not admit, opens empty, as an intent without an amount does.
+ */
+export const intentAmountText = (
+  intent: SendIntent | null,
+  decimals: number | undefined,
+): string =>
+  intent?.amount !== undefined && /^[0-9]{1,78}$/.test(intent.amount) && isSafeDecimals(decimals)
+    ? balanceShortcut(intent.amount, decimals, "max")
+    : "";
 
 /**
  * Short balance copy shared by recipient/account and token rows.

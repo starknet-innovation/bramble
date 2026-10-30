@@ -5,6 +5,7 @@
  */
 
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { PrivacyDisclosureState } from "../journeys/privacy/privacy-model";
 import type { BalanceState } from "../runtime/runtime";
@@ -20,11 +21,14 @@ export const networkDataIssue = (
   priceAsOf: number | null,
   hasPrices: boolean,
 ): string[] => [
-  ...("error" in balances
-    ? ["Balances are temporarily unavailable."]
-    : balances.stale
-      ? [`Using saved ${formatSavedDataLabel("balances", balances.asOf ?? null)}.`]
-      : []),
+  // Not read yet is not unavailable: Home shows its loading shell instead (795).
+  ...("loading" in balances
+    ? []
+    : "error" in balances
+      ? ["Balances are temporarily unavailable."]
+      : balances.stale
+        ? [`Using saved ${formatSavedDataLabel("balances", balances.asOf ?? null)}.`]
+        : []),
   ...(priceStale
     ? [
         hasPrices
@@ -45,6 +49,7 @@ export const privacyDataIssue = (
   sharedAccount: boolean,
 ): string | null => {
   if (sharedAccount || activeView !== "home" || account === null) return null;
+  if (privacy.blockerKind === "other-wallet") return PRIVACY_OTHER_WALLET;
   if (privacy.error) return "Private balances are temporarily unavailable.";
   return privacy.loading ||
     privacy.value === null ||

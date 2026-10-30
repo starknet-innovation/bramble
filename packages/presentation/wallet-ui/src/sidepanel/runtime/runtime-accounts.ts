@@ -4,10 +4,30 @@ import type { AccountContractType, AccountRef } from "@bramble/wallet-model/acco
 import type { RecoveryAccountSelection } from "@bramble/wallet-model/recovery";
 import { isCreateAccountResponse } from "../../popup/responses/responses";
 import {
+  isAddressLookupResponse,
+  isKeyAddressLookupResponse,
+  isReadyKeyDiscoveryResponse,
   isRecoveredAccountsResponse,
   isRecoveryDiscoveryResponse,
+  type ReadyKeyCandidate,
 } from "../../popup/responses/responses-onboarding";
 import { responseError } from "./runtime-errors";
+
+/**
+ * What a Ready-key import names: the releases ticked in the picker, or the one
+ * account found by its pasted address with the class its lookup recorded
+ * (issue 779). The background re-proves either before writing.
+ */
+export type ReadyKeyPick =
+  | readonly string[]
+  | { readonly address: string; readonly classHash: string };
+
+const pickFields = (pick: ReadyKeyPick | undefined) => {
+  if (pick === undefined) return {};
+  return "address" in pick
+    ? { address: pick.address, classHash: pick.classHash }
+    : { classHashes: pick };
+};
 
 const isMatchingAccountResponse = (
   response: unknown,
@@ -62,9 +82,11 @@ export const createAccountRuntimeClient = (
     vaultPassphrase: string,
     accountContractType: AccountContractType,
     deploymentSalt?: string,
+    pick?: ReadyKeyPick,
   ): Promise<string> {
     const response = await sendMessage({
       accountContractType,
+      ...pickFields(pick),
       ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
       networkId,
       privateKey,
@@ -81,9 +103,11 @@ export const createAccountRuntimeClient = (
     privateKey: string,
     accountContractType: AccountContractType,
     deploymentSalt?: string,
+    pick?: ReadyKeyPick,
   ): Promise<string> {
     const response = await sendMessage({
       accountContractType,
+      ...pickFields(pick),
       ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
       networkId,
       privateKey,
@@ -94,6 +118,46 @@ export const createAccountRuntimeClient = (
     }
     throw responseError(response, "import account failed");
   },
+  /**
+   * Lists the Argent releases a raw Ready key controls an address in use at,
+   * before the user picks which to import. The key travels only in this
+   * privileged request; the answer is public addresses and classes.
+   */
+  async discoverReadyKeyAccounts(
+    networkId: string,
+    privateKey: string,
+    deploymentSalt?: string,
+  ): Promise<readonly ReadyKeyCandidate[]> {
+    const response = await sendMessage({
+      ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
+      networkId,
+      privateKey,
+      type: "wallet.discoverReadyKeyAccounts",
+    });
+    if (isReadyKeyDiscoveryResponse(response)) return response.candidates;
+    throw responseError(response, "ready account check unavailable");
+  },
+  /**
+   * Finds the Ready account a raw key controls at a pasted address (issue
+   * 779), when release discovery finds none. Read-only: the background proves
+   * the key is the account's live owner; the answer is one public row.
+   */
+  async findKeyAccountByAddress(
+    networkId: string,
+    privateKey: string,
+    deploymentSalt: string | undefined,
+    address: string,
+  ) {
+    const response = await sendMessage({
+      address,
+      ...(deploymentSalt === undefined ? {} : { deploymentSalt }),
+      networkId,
+      privateKey,
+      type: "wallet.findKeyAccountByAddress",
+    });
+    if (isKeyAddressLookupResponse(response)) return response.candidate;
+    throw responseError(response, "account lookup unavailable");
+  },
   async discoverRecoveryAccounts(mnemonic: string, networkId: string, manualIndex?: number) {
     const response = await sendMessage({
       ...(manualIndex === undefined ? {} : { manualIndex }),
@@ -103,6 +167,31 @@ export const createAccountRuntimeClient = (
     });
     if (isRecoveryDiscoveryResponse(response)) return response;
     throw responseError(response, "account discovery unavailable");
+  },
+  /**
+   * Finds the account at a pasted address among the keys of a phrase the panel
+   * holds (issue 398). Read-only: the background reads the chain and derives
+   * public keys only, and nothing is stored until a restore or import commits.
+   */
+  async findRecoveryAccountByAddress(mnemonic: string, networkId: string, address: string) {
+    const response = await sendMessage({
+      address,
+      mnemonic,
+      networkId,
+      type: "wallet.findRecoveryAccountByAddress",
+    });
+    if (isAddressLookupResponse(response)) return response.candidate;
+    throw responseError(response, "account lookup unavailable");
+  },
+  /** As {@link findRecoveryAccountByAddress}, against the wallet's OWN phrase inside the vault boundary. */
+  async findOwnAccountByAddress(networkId: string, address: string) {
+    const response = await sendMessage({
+      address,
+      networkId,
+      type: "wallet.findOwnAccountByAddress",
+    });
+    if (isAddressLookupResponse(response)) return response.candidate;
+    throw responseError(response, "account lookup unavailable");
   },
   async previewAccount(
     mnemonic: string,

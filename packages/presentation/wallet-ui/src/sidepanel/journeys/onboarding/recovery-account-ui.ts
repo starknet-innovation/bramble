@@ -1,19 +1,9 @@
 /** Bounded account discovery and confirmation for phrase recovery, per family. */
 
-import {
-  accountClassEntry,
-  BRAAVOS_DEPLOYMENT_CLASS_HASH,
-} from "@bramble/wallet-model/account-families";
-import {
-  type AccountContractType,
-  ARGENT_ACCOUNT_CLASS_HASH,
-  recoveryLadderIndex,
-} from "@bramble/wallet-model/accounts";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { type AccountContractType, recoveryLadderIndex } from "@bramble/wallet-model/accounts";
 import type {
   RecoveryAccountCandidate,
   RecoveryAccountSelection,
-  RecoverySigningRestriction,
 } from "@bramble/wallet-model/recovery";
 import {
   isRecoveryAccountIndex,
@@ -25,6 +15,14 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountLabel, accountsDetectedText } from "../../shared/parts";
+import {
+  candidateName,
+  candidateState,
+  candidateTitle,
+  privacyPoolCopy,
+  selectable,
+} from "./recovery-account-copy";
+import { bindRecoveryAddressFinder } from "./recovery-address-ui";
 
 /** One bounded discovery page as the runtime returns it. */
 type DiscoveryResult = Awaited<ReturnType<SidepanelWallet["discoverRecoveryAccounts"]>>;
@@ -36,6 +34,12 @@ type RecoveryAccountUiDeps = {
    * and the picker calls `wallet.discoverRecoveryAccounts` with `mnemonic`.
    */
   readonly discover?: (manualIndex?: number) => Promise<DiscoveryResult>;
+  /**
+   * Injected address lookup, like `discover`: the own-phrase rescan has no
+   * phrase in the panel. Absent, the picker asks
+   * `wallet.findRecoveryAccountByAddress` with `mnemonic`.
+   */
+  readonly findByAddress?: (address: string) => Promise<RecoveryAccountCandidate>;
   /** Accounts already in the vault; scan candidates matching them are shown but locked. */
   readonly existingIds?: () => ReadonlySet<string>;
   readonly form: HTMLFormElement;
@@ -81,86 +85,10 @@ const selectionFor = (candidate: RecoveryAccountCandidate): RecoveryAccountSelec
   ...(candidate.account.accountContractType === "argent"
     ? { derivation: candidate.account.derivation.kind }
     : {}),
+  // An account found by its address keeps it: no derivation reproduces it, and
+  // the background re-proves the owner key before writing it (issue 398).
+  ...(candidate.byAddress ? { address: candidate.account.address } : {}),
 });
-
-// Only the class this wallet itself deploys can be brought on chain from here.
-// A funded Argent 0.3.x address is a real counterfactual account, but deployment
-// accepts only the pinned Argent release, so "ready to deploy" would promise a
-// transaction that is refused.
-const deployableHere = (candidate: RecoveryAccountCandidate): boolean =>
-  candidate.account.accountContractType === "openzeppelin" ||
-  (candidate.account.accountContractType === "argent" &&
-    sameFelt(candidate.account.classHash, ARGENT_ACCOUNT_CLASS_HASH)) ||
-  (candidate.account.accountContractType === "braavos" &&
-    sameFelt(candidate.account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH));
-
-// The scan's advisory verdict, in the reader's terms: why this account is
-// watch-only here, said before they pick it rather than after a send fails.
-const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
-  guardian: "has a guardian",
-  "owner-changed": "owner key changed",
-  "owner-type": "unsupported signer",
-  release: "unsupported release",
-  "strong-signer": "2FA active",
-};
-
-const activityState = (candidate: RecoveryAccountCandidate): string => {
-  if (candidate.deployed) {
-    return candidate.restriction
-      ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
-      : "Deployed on Starknet";
-  }
-  if (candidate.funded) {
-    return deployableHere(candidate)
-      ? "Funded and ready to deploy"
-      : "Funded on Starknet — Bramble cannot deploy this Argent release";
-  }
-  return candidate.account.accountContractType === "argent"
-    ? "No on-chain activity found — Bramble only imports existing Ready accounts"
-    : "No on-chain activity found";
-};
-
-// A deployed Braavos account is usable exactly when its advisory verdict says
-// so (stark key only, no strong signer); an undeployed one stays view-only,
-// since Bramble cannot deploy Braavos accounts yet.
-const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
-  if (duplicate) return "Already in this wallet";
-  if (candidate.account.accountContractType !== "braavos") return activityState(candidate);
-  if (!candidate.deployed) {
-    // The modern deployment class deploys from here like any other account;
-    // an older base-class counterfactual still cannot.
-    return deployableHere(candidate)
-      ? "Funded and ready to deploy"
-      : "Funded, not deployed · view only for now";
-  }
-  return candidate.restriction
-    ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
-    : "Deployed on Starknet";
-};
-
-// Two Argent releases at one index are two accounts. Name the release on any
-// but the one Bramble creates, so rows that share an index can be told apart.
-const candidateTitle = (candidate: RecoveryAccountCandidate): string => {
-  const { account } = candidate;
-  const title = `Account ${recoveryLadderIndex(account)}`;
-  if (
-    account.accountContractType !== "argent" ||
-    sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)
-  ) {
-    return title;
-  }
-  const release = accountClassEntry(account.classHash)?.label.replace(/^argent /, "");
-  return release ? `${title} · Argent ${release}` : title;
-};
-
-// Bramble creates only Bramble accounts: any other candidate with no on-chain
-// history would be a brand-new deployment in a family Bramble does not create,
-// so it is listed but not selectable. Deployed or funded (counterfactual)
-// accounts in those families stay importable.
-const selectable = (candidate: RecoveryAccountCandidate): boolean =>
-  candidate.account.accountContractType === "openzeppelin" ||
-  candidate.deployed ||
-  candidate.funded;
 
 /** Binds and runs the recovery account picker without retaining the phrase. */
 export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAccountUi => {
@@ -173,6 +101,16 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const manual = deps.form.querySelector<HTMLInputElement>('input[name="recoveryManualIndex"]');
   const manualSearch = deps.form.querySelector<HTMLButtonElement>("#recovery-manual-search");
   let candidates: readonly RecoveryAccountCandidate[] = [];
+  // The scan's own page, and accounts found by pasted address, which no page
+  // contains. The picker lists both.
+  let scanned: readonly RecoveryAccountCandidate[] = [];
+  const foundByAddress = new Map<string, RecoveryAccountCandidate>();
+  const withFound = (): readonly RecoveryAccountCandidate[] => [
+    ...scanned,
+    ...[...foundByAddress.values()].filter(
+      (found) => !scanned.some((candidate) => candidate.account.id === found.account.id),
+    ),
+  ];
   let complete = false;
   let scanStatus = "";
   let generation = 0;
@@ -246,6 +184,12 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     hint.className = "hint";
     hint.textContent = candidateState(candidate, duplicate);
     copy.append(title, address, hint);
+    if (candidate.privacyPool && !duplicate) {
+      const warning = deps.form.ownerDocument.createElement("span");
+      warning.className = "hint hint-danger";
+      warning.textContent = privacyPoolCopy(candidate);
+      copy.append(warning);
+    }
     label.append(checkbox, copy);
     row.append(label);
     return row;
@@ -265,17 +209,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
         .sort(
           (left, right) => recoveryLadderIndex(left.account) - recoveryLadderIndex(right.account),
         );
-      // Discovery omits unused addresses a type this wallet never creates (e.g.
-      // Braavos), so a finished search still needs a line or the group opens
-      // onto nothing. Mid-search the list stays empty: more may yet be found.
-      if (rows.length === 0 && complete) {
-        const empty = deps.form.ownerDocument.createElement("li");
-        empty.className = "empty";
-        empty.textContent = "No accounts with on-chain activity.";
-        listElement.replaceChildren(empty);
-      } else {
-        listElement.replaceChildren(...rows.map(candidateRow));
-      }
+      listElement.replaceChildren(...rows.map(candidateRow));
       const detected = rows.filter((candidate) => candidate.deployed || candidate.funded).length;
       const detectedSlot = group.querySelector<HTMLElement>("[data-detected]");
       if (detectedSlot) {
@@ -298,7 +232,8 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       }
       seen.add(key);
     }
-    candidates = next.candidates;
+    scanned = next.candidates;
+    candidates = withFound();
     complete = next.complete;
     renderCandidates();
     scanStatus = complete
@@ -357,6 +292,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const stop = (): void => {
     generation += 1;
     restartOnIdle = false;
+    addressFinder.reset();
   };
 
   // Drops every candidate and pick, and makes any scan still in flight discard
@@ -364,6 +300,9 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   const reset = (): void => {
     generation += 1;
     candidates = [];
+    scanned = [];
+    foundByAddress.clear();
+    addressFinder.reset();
     complete = false;
     scanStatus = "";
     selected.clear();
@@ -371,6 +310,39 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     if (result) result.textContent = "";
     renderCandidates();
   };
+
+  // A match is listed, its group opened, and picked unless it is already in
+  // the wallet; the returned line reports it under the finder.
+  const addFound = (candidate: RecoveryAccountCandidate): string => {
+    const key = selectionKey(selectionFor(candidate));
+    // The pasted address already says which account; the ladder stays on the row.
+    const title = candidateName(candidate);
+    const duplicate = deps.existingIds?.().has(candidate.account.id) ?? false;
+    foundByAddress.set(key, candidate);
+    candidates = withFound();
+    if (!duplicate && selectable(candidate)) trySelect(key);
+    const group = groupFor(candidate.account.accountContractType);
+    if (group) group.open = true;
+    renderCandidates();
+    renderStatus();
+    if (duplicate) return `${title} is already in this wallet.`;
+    return candidate.restriction
+      ? `Found ${title}. It's view only until you recover it.`
+      : `Found ${title}.`;
+  };
+  const addressFinder = bindRecoveryAddressFinder({
+    lookup: (address) =>
+      deps.findByAddress !== undefined
+        ? deps.findByAddress(address)
+        : deps.wallet.findRecoveryAccountByAddress(
+            deps.mnemonic?.() ?? "",
+            deps.networkId(),
+            address,
+          ),
+    networkId: deps.networkId,
+    onFound: addFound,
+    root: deps.form.querySelector<HTMLElement>('[data-recovery-address="recovery"]'),
+  });
 
   retry?.addEventListener("click", () => void scan());
   deps.form

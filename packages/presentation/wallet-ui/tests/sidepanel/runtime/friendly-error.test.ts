@@ -4,6 +4,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
+import {
+  ADDRESS_IMPORT_REFUSALS,
+  KEY_ADDRESS_IMPORT_REFUSALS,
+} from "@bramble/wallet-model/recovery";
 
 import { friendlyError } from "../../../src/sidepanel/runtime/friendly-error";
 
@@ -48,6 +52,44 @@ describe("friendlyError", () => {
   test("points a phrase-less wallet's add-account refusal at import", () => {
     expect(friendlyError("No recovery phrase stored for this wallet").message).toBe(
       "This wallet was set up without a recovery phrase. Import an existing account instead.",
+    );
+  });
+
+  // The refusals ready-key-accounts.ts throws: no account found, and a chain
+  // that could not be read, which must never read as "no account".
+  test("says a Ready key's account wasn't found instead of importing an empty one", () => {
+    expect(friendlyError("No Ready account found for this key").message).toBe(
+      "Couldn't find a Ready account for this key on this network.",
+    );
+    expect(friendlyError("Ready account check unavailable").message).toBe(
+      "Couldn't check this key's Ready accounts. Try again.",
+    );
+  });
+
+  // The private-key import by address (issue 779) names the key, and sends a
+  // Bramble account to the account type that imports it; the other refusals
+  // are #398's own.
+  test("says a private key doesn't control a pasted account, in its own words", () => {
+    expect(friendlyError(KEY_ADDRESS_IMPORT_REFUSALS.noMatch).message).toBe(
+      "This private key doesn't control that account.",
+    );
+    expect(friendlyError(KEY_ADDRESS_IMPORT_REFUSALS.brambleAccount).message).toBe(
+      "This is a Bramble account. Choose Bramble Account to import it.",
+    );
+    expect(friendlyError(KEY_ADDRESS_IMPORT_REFUSALS.braavosAccount).message).toBe(
+      "Bramble can't import a Braavos account from a private key yet.",
+    );
+    expect(friendlyError(ADDRESS_IMPORT_REFUSALS.noMatch).message).toBe(
+      "This recovery phrase doesn't control that account.",
+    );
+  });
+
+  // The guardian refusal points at the in-wallet escape that removes it.
+  test("points a guardian refusal at Recover account", () => {
+    expect(
+      friendlyError("Deployed Argent account guardian is not supported by this wallet").message,
+    ).toBe(
+      "This account has a guardian, a second approver this wallet can't provide. Remove it with Recover account on Home, or use the account in Ready.",
     );
   });
 

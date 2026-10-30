@@ -147,7 +147,15 @@ describe("private balance reads track privately held curated tokens", () => {
     const preferences = await store().read();
     const tracked = preferences.tokens.filter((token) => token.networkId === "SN_MAIN");
     const extra = untrackedCuratedTokens(preferences, "SN_MAIN");
-    expect(extra.map((token) => token.symbol)).toEqual(["USDC.e", "USDT", "DAI", "WBTC"]);
+    expect(extra.map((token) => token.symbol)).toEqual([
+      "USDC.e",
+      "USDT",
+      "DAI",
+      "WBTC",
+      "WSTETH",
+      "XSTRK",
+      "XWBTC",
+    ]);
     expect(privateReadTokens(tracked, extra, 64)).toEqual(
       [...tracked, ...extra].map((token) => token.address),
     );

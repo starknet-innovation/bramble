@@ -16,6 +16,7 @@ import {
 import { bindOnboarding } from "../journeys/onboarding/onboarding-ui";
 import { bindUnlock } from "../journeys/onboarding/unlock-ui";
 import { resetActivityViewState } from "../journeys/portfolio/activity-view-state";
+import { createHeroTotalWait } from "../journeys/portfolio/hero-total-wait";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
 import type { SendIntent } from "../journeys/send/send-model";
@@ -31,6 +32,7 @@ import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
 import { bindCopyButtons, hiddenOverlayMount, showToast } from "../shared/dom";
 import { closeAfterGuardedClear } from "../shared/guarded-copy";
+import { networkChangeAnnouncer } from "../shared/network-change";
 import { isParkedCollectibleView } from "../shared/parts";
 import { utcDayKey } from "../shared/timestamp";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
@@ -42,6 +44,7 @@ import {
   bindPickers,
   deploymentPollScope,
 } from "../shell/shell-bindings";
+import { startSidePanelNotice, startSidePanelVisibility } from "../shell/side-panel-notice";
 import { startUpdateBanner } from "../shell/update-banner";
 import type { NavDirection } from "./navigation/nav-direction";
 import { popView, pushView, type ViewHistory } from "./navigation/nav-history";
@@ -94,9 +97,11 @@ export const startWalletUi = async (
   let sendIntent: SendIntent | null = null;
   let hasPaintedScope = false;
   const renderScene = createSceneRenderer(app, () => bindAll());
+  const announceNetwork = networkChangeAnnouncer(app);
   const deployment = createDeploymentCache(wallet);
   const signability = createSignabilityCache(wallet);
   const cache: RenderData = emptyRenderCache();
+  const heroWait = createHeroTotalWait({ paint: () => paint() });
   let privacy: ReturnType<typeof createPrivacyController>;
   const ledgerSignMount = hiddenOverlayMount("ledger-sign-overlay");
   const ledgerSign = createLedgerSignRuntime({
@@ -285,6 +290,7 @@ export const startWalletUi = async (
   const paint = (): void => {
     const { status } = cache;
     lastNetworkId = status.networkId;
+    announceNetwork(status.networkId);
     if (activeView !== "send") {
       sendIntent = null;
     }
@@ -336,6 +342,7 @@ export const startWalletUi = async (
       ledgerAvailable: ledgerConnector.isAvailable?.() ?? true,
       privacy: privacy.disclosure(),
       privacyJourney: privacy.journey(),
+      privateTotalWaitOver: heroWait.sync(status, privacy.disclosure(), cache.deployment),
       selectedMultisigId,
       selectedMultisigIntentId,
       selectedNftId,
@@ -378,6 +385,10 @@ export const startWalletUi = async (
     const generation = ++renderGeneration;
     const isCurrent = (): boolean => generation === renderGeneration;
     const scopeChanged = updateRenderScope(cache, status);
+    // Announced here, not only from paint(): a network switch in an unlocked
+    // wallet defers its paint until the new network's data loads, and a
+    // network-scoped form (the Ready-key picker) must drop its list now.
+    announceNetwork(status.networkId);
     if (scopeChanged && hasPaintedScope) {
       scopeAnnouncer.textContent = scopeChangeAnnouncement(scopeChanged);
     }
@@ -472,5 +483,7 @@ export const startWalletUi = async (
   applyTheme();
   startRefreshLifecycle({ mutationRuntime, render, runtime, wallet });
   startUpdateBanner({ doc: document, wallet });
+  void startSidePanelNotice({ doc: document, notice: wallet });
+  startSidePanelVisibility({ doc: document, report: () => wallet.reportSidePanelVisible() });
   void render(await wallet.loadStatus()).catch(() => undefined);
 };

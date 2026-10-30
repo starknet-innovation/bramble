@@ -12,6 +12,7 @@ import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
+import { addressFinderFields } from "./address-finder-view";
 import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 
 /**
@@ -315,6 +316,7 @@ const importKeyStep = (): string => `
       </div>
       ${networkConsequence()}
       <p id="import-key-result" role="status"></p>
+      ${addressFinderFields("key", { hidden: true })}
     </div>
     <div class="onboarding-step-cta">
       ${button({
@@ -353,7 +355,7 @@ export const recoveryScanFields = (): string => `
         <div class="disclosure-body">
           <ul class="allowance-list" aria-label="Recovered Braavos accounts"></ul>
         </div>
-      </details>
+      </details>${addressFinderFields("recovery")}
       <details class="disclosure">
         <summary>Advanced manual index</summary>
         <div class="disclosure-body onboarding-fields">
@@ -388,7 +390,7 @@ const accountStep = (): string => `
       <div class="onboarding-account" id="account-preview">
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
-          <strong data-preview-label>Primary Bramble account</strong>
+          <strong data-preview-label></strong>
           <span data-preview-address>Deriving account…</span>
         </span>
         <span class="onboarding-account-check" aria-hidden="true">${icon("check")}</span>

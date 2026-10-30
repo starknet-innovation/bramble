@@ -3,8 +3,14 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import {
+  isTransportRpcError,
+  RpcTransportError,
+  withRpcFallback,
+} from "@bramble/starknet/provider";
 import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   STARK_FIELD_PRIME,
@@ -170,6 +176,9 @@ export const balancesFrom = (
 const poolFeeUnavailable = (reason: string): WalletError =>
   new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: could not read the pool fee (${reason})`);
 
+// Fee reads stay on the first configured endpoint. The public-key read below
+// is the one that walks every endpoint; folding failover into this helper
+// would change a fee failure into a different node's answer.
 const readPoolCall = async (
   providerFor: (nodeUrl: string) => RpcProvider,
   rpcUrls: readonly string[],
@@ -266,6 +275,94 @@ const registrationUnreadable = (reason: string): WalletError =>
   new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: could not read pool registration (${reason})`);
 
 /**
+ * A node that did not answer `get_public_key`. Extends {@link RpcTransportError}
+ * so {@link withRpcFallback} moves to the next endpoint. A JSON-RPC rate limit
+ * carries a numeric code, which that helper would otherwise treat as a semantic
+ * answer and not fail over.
+ */
+class PoolEndpointError extends RpcTransportError {
+  public constructor(readonly rateLimited: boolean) {
+    super("RPC endpoint did not answer get_public_key");
+    this.name = "PoolEndpointError";
+  }
+}
+
+const registrationFailure = (error: unknown): WalletError => {
+  if (
+    (error instanceof PoolEndpointError && error.rateLimited) ||
+    isRetryableStrk20ServiceError(error)
+  ) {
+    return registrationUnreadable("rate limited; retry shortly");
+  }
+  return registrationUnreadable("the node did not answer get_public_key");
+};
+
+/**
+ * Reads the public viewing key an address registered with the pool
+ * (`get_public_key`), canonical, or `0x0` when it never registered. The pool
+ * writes it once, so a non-zero answer is permanent for that pool.
+ *
+ * Walks every configured endpoint. A node that does not answer — including a
+ * rate limit the same-node retry has already exhausted — is failed over.
+ * A malformed answer is not: that is the pool's response, not downtime. An
+ * unreachable or malformed response throws rather than guessing.
+ */
+export const readStrk20PublicKey = async (
+  providerFor: (nodeUrl: string) => RpcProvider,
+  rpcUrls: readonly string[],
+  poolAddress: string,
+  address: string,
+  pauseForServiceRetry: ServiceRetryPause = defaultServiceRetryPause,
+): Promise<string> => {
+  if (!isNonZeroStarkFieldElement(address)) {
+    throw registrationUnreadable("the address is not a field element");
+  }
+  if (rpcUrls.length === 0) {
+    throw registrationUnreadable("no RPC endpoint is configured");
+  }
+  let response: readonly string[];
+  try {
+    response = await withRpcFallback(
+      rpcUrls,
+      async (provider) => {
+        try {
+          return await retryStrk20ServiceRead(
+            () =>
+              provider.callContract({
+                calldata: [address],
+                contractAddress: poolAddress,
+                entrypoint: "get_public_key",
+              }),
+            pauseForServiceRetry,
+          );
+        } catch (error) {
+          if (isTransportRpcError(error)) {
+            throw error;
+          }
+          // Numeric-code rate limits are not transport errors, but this node
+          // still did not produce a key. Fail over instead of stopping.
+          if (isRetryableStrk20ServiceError(error)) {
+            throw new PoolEndpointError(true);
+          }
+          throw error;
+        }
+      },
+      providerFor,
+    );
+  } catch (error) {
+    throw registrationFailure(error);
+  }
+  const felt = response.length === 1 ? response[0] : undefined;
+  if (felt === undefined) {
+    throw registrationUnreadable("the pool returned an unexpected result shape");
+  }
+  if (!isStarkFieldElement(felt)) {
+    throw registrationUnreadable("the pool returned an out-of-field public key");
+  }
+  return canonicalFelt(felt) as string;
+};
+
+/**
  * Reads whether an address has a viewing key registered with the pool
  * (`get_public_key`, zero when unregistered).
  *
@@ -284,28 +381,10 @@ export const readStrk20Registered = async (
   poolAddress: string,
   address: string,
   pauseForServiceRetry: ServiceRetryPause = defaultServiceRetryPause,
-): Promise<boolean> => {
-  if (!isNonZeroStarkFieldElement(address)) {
-    throw registrationUnreadable("the address is not a field element");
-  }
-  const response = await readPoolCall(
-    providerFor,
-    rpcUrls,
-    poolAddress,
-    "get_public_key",
-    [address],
-    pauseForServiceRetry,
-    registrationUnreadable,
-  );
-  const felt = response.length === 1 ? response[0] : undefined;
-  if (felt === undefined) {
-    throw registrationUnreadable("the pool returned an unexpected result shape");
-  }
-  if (!isStarkFieldElement(felt)) {
-    throw registrationUnreadable("the pool returned an out-of-field public key");
-  }
-  return BigInt(felt) !== 0n;
-};
+): Promise<boolean> =>
+  BigInt(
+    await readStrk20PublicKey(providerFor, rpcUrls, poolAddress, address, pauseForServiceRetry),
+  ) !== 0n;
 
 /**
  * The pool fee to approve on the relay route: none.

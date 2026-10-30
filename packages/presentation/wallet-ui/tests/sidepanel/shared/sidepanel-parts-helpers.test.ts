@@ -73,15 +73,12 @@ describe("accountAvatar", () => {
     expect(accountAvatar("0x1234")).toBe(accountAvatar("0x001234"));
   });
 
-  test("gives representative addresses distinct Beam characters", () => {
+  test("gives representative addresses distinct birds", () => {
     const avatars = ["0x1", "0x2", "0x3", "0x4", "0x100", "0x200"].map(accountAvatar);
     expect(new Set(avatars).size).toBe(avatars.length);
     for (const avatar of avatars) {
-      expect(avatar).toContain('class="avatar-character"');
-      expect(avatar).toContain('class="avatar-head"');
-      expect(avatar).toContain('class="avatar-eyes"');
-      expect(avatar).toContain('class="avatar-mouth"');
-      expect(avatar).toMatch(/fill="var\(--bramble-account-avatar-\d\)"/);
+      expect(avatar).toContain('class="avatar-bird"');
+      expect(avatar).toMatch(/fill="var\(--bramble-account-avatar-ground-\d\)"/);
       expect(avatar).not.toContain('class="avatar-frame"');
     }
   });

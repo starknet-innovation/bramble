@@ -15,26 +15,31 @@
  * and every failure degrades to a retryable state rather than a guess.
  */
 
+import type { PriceService } from "@bramble/portfolio/prices";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { UndeployedBraavosError } from "@bramble/starknet/deployment";
 import type { StarkHashSigner } from "@bramble/starknet/provider";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { gaslessStrkAffordability } from "@bramble/transactions/gasless-request";
 import { isDeployableBraavos } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import { resolveReviewFee } from "../accounts/wallet-ops";
+import { isPoolShapedBatch } from "../privacy/strk20-account-context";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import { readStrkBalance } from "../transactions/fee-guard";
+import { reviewGaslessOffers } from "../transactions/gasless-review";
 import type { InvokeFeeReview } from "./approvals";
 
 /**
  * Dependencies needed to estimate the fee for a queued dapp invoke.
  */
 export type InvokeFeeReviewDeps = {
+  readonly prices?: PriceService;
   readonly runtimeRpc: RuntimeRpc;
 };
 
@@ -104,6 +109,55 @@ const DEPLOY_FIRST_INVOKE_FEE: InvokeFeeReview = {
   requiresDeployment: true,
 };
 
+const gaslessOffersFor = async (
+  deps: InvokeFeeReviewDeps,
+  input: {
+    readonly account: InvokeFeeReviewTarget["account"];
+    readonly calls: InvokeFeeReviewTarget["calls"];
+    readonly fee: InvokeFeeReview["fee"];
+    readonly feeAffordability: InvokeFeeReview["feeAffordability"];
+    readonly preferences: InvokeFeeReviewTarget["preferences"];
+    readonly proof?: InvokeFeeReviewTarget["proof"];
+  },
+): Promise<NonNullable<InvokeFeeReview["gaslessFees"]>> => {
+  const prices = deps.prices;
+  // A proof is not representable on the gasless relay. Pool batches are the
+  // same refusal: they belong on the STRK20 lane.
+  if (
+    prices === undefined ||
+    input.proof !== undefined ||
+    isPoolShapedBatch(input.calls, input.preferences, input.account.networkId)
+  ) {
+    return [];
+  }
+  return reviewGaslessOffers({
+    account: input.account,
+    calls: [...input.calls],
+    preferences: input.preferences,
+    prices,
+    runtimeRpc: deps.runtimeRpc,
+    strkAffordability: input.feeAffordability,
+    strkFee: input.fee,
+  }).catch(() => []);
+};
+
+const reviewedGaslessFees = async (
+  deps: InvokeFeeReviewDeps,
+  review: InvokeFeeReviewTarget,
+  balance: string | null,
+  fee: FeeEstimate | null,
+): Promise<{ readonly gaslessFees: NonNullable<InvokeFeeReview["gaslessFees"]> } | undefined> => {
+  const gaslessFees = await gaslessOffersFor(deps, {
+    account: review.account,
+    calls: review.calls,
+    fee,
+    feeAffordability: gaslessStrkAffordability(review.calls, balance, fee),
+    preferences: review.preferences,
+    ...(review.proof ? { proof: review.proof } : {}),
+  });
+  return gaslessFees.length > 0 ? { gaslessFees } : undefined;
+};
+
 /**
  * Estimates the fee for a queued dapp invoke, mirroring the Send review's shape
  * (deployment status → estimate → `resolveReviewFee`) so both journeys classify
@@ -147,15 +201,17 @@ export const estimateInvokeApprovalFee = async (
   // Fee-affordability guard (issue 191): compare the estimate against the
   // account's STRK balance via the shared predicate. Warn-only and fail-open —
   // an unreadable balance yields "unknown" and never blocks the approval.
-  const feeAffordability = resolveFeeAffordability({
-    balance: fee === null ? null : await readStrkBalance(deps, account, preferences),
-    fee,
-  });
+  const balance = fee === null ? null : await readStrkBalance(deps, account, preferences);
+  const feeAffordability = resolveFeeAffordability({ balance, fee });
+  // STRK the calls spend counts toward the shortfall the offer uses. The card's
+  // own verdict stays fee-only. Proofs and pool batches are omitted inside the helper.
+  const gasless = await reviewedGaslessFees(deps, review, balance, fee);
   return {
     fee,
     feeAffordability,
     feeEstimateFailed,
     feeEstimatePending: false,
+    ...gasless,
     requiresDeployment: !deployed,
   };
 };

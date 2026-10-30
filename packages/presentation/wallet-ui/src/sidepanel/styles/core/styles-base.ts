@@ -49,7 +49,7 @@ export const BASE_STYLES = `
     --bramble-warning-soft: color-mix(in srgb, var(--bramble-warning) 14%, var(--bramble-panel));
     --bramble-shadow: var(--bramble-elev-lg);
     --bramble-shadow-sm: var(--bramble-elev-sm);
-    /* Floating-dock footprint from the panel's bottom edge — the pill (a 44px
+    /* Floating-dock footprint from the panel's bottom edge — the pill (a 52px
        root plus its padding) and the gap beneath it — one source of truth for
        the dock-screen scroll clearance and the toast stack offset. */
     --bramble-dock-h: calc(${CONTROL.dockItem} + ${DOCK_PADDING} * 2 + ${DOCK_OFFSET});
@@ -66,8 +66,11 @@ export const BASE_STYLES = `
      the viewport summons the document scrollbar. Without a reserved gutter the
      scrollbar takes its width from the content box and every element on the
      screen reflows narrower, which reads as the whole UI shifting sideways.
-     The token rows are <details> elements: expanding one is exactly that case. */
-  html { scrollbar-gutter: stable; }
+     The token rows are <details> elements: expanding one is exactly that case.
+     both-edges mirrors the gutter on the left: a classic (Windows) scrollbar
+     otherwise reserves its width on the right alone, and every screen sits off
+     centre with a wider right margin (issue 795). Overlay scrollbars reserve nothing. */
+  html { scrollbar-gutter: stable both-edges; }
   html, body, #app {
     max-width: 100%;
     min-height: 100%;
@@ -91,6 +94,24 @@ export const BASE_STYLES = `
   }
   body.popup-surface #app { min-height: 600px; }
   h1, h2, h3, p, ul { margin: 0; }
+  /* Visually hidden, still read aloud. The box is pinned to its containing
+     block's top corner rather than left at its static position: the scope
+     announcer is appended after #app, whose full height already fills the
+     panel, so there its 1px box made the document 1px taller than the
+     viewport and Windows drew a permanent scrollbar. */
+  .sr-only {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    left: 0;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    text-wrap: nowrap;
+    top: 0;
+    width: 1px;
+  }
   ul { list-style: none; padding: 0; }
   h1 { font-size: ${TYPE.display.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.display.line}; }
   h2 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.01em; line-height: ${TYPE.title.line}; }
@@ -295,6 +316,8 @@ export const BASE_STYLES = `
   .hero-change .hero-change-amt { color: var(--bramble-positive); }
   .hero-change.down .hero-change-amt { color: var(--bramble-danger); }
   .hero-change .hero-change-win { color: var(--bramble-muted); font-weight: 500; }
+  /* Held while the total still reads "—": keeps the line's space only. */
+  .hero-change.is-held { visibility: hidden; }
   /* Shielded-balance qualifier stays quiet beneath the total; network
      freshness now belongs to the persistent header status. */
   .hero-stale {
@@ -313,14 +336,6 @@ export const BASE_STYLES = `
     color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; max-width: 32ch; text-align: center;
   }
   .read-only-notice #recover-account { margin-top: ${SPACE.xxs}; }
-
-  /* The 24h figures are price moves, not changes in balance; one quiet caption
-     under either hero says so, and each row carries its own window label. */
-  .hero-note {
-    color: var(--bramble-muted);
-    font-size: ${TYPE.caption.size};
-    font-weight: 500;
-  }
 
   /* The frequent money actions are equal rounded-square tools. Their common
      shape makes the row instantly scannable; distinctive glyph silhouettes,

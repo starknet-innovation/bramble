@@ -102,6 +102,26 @@ describe("a relay broadcast whose answer the gateway lost", () => {
     expect(broadcasts()).toBe(1);
   });
 
+  test("an error that is not a JSON-RPC error object holds the scope", async () => {
+    // `null` beside a 200 does not say the relay stopped; it may have forwarded.
+    const { broadcasts, maturityStore, service } = relayService(
+      () =>
+        new Response(JSON.stringify({ error: null, id: "bramble-strk20", jsonrpc: "2.0" }), {
+          status: 200,
+        }),
+    );
+
+    await expect(
+      service.submitActions({ ...relayContext, actions: [...actions], plan }),
+    ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
+    expect(await maturityStore.read(scope)).toEqual({
+      route: "relay",
+      state: "submitting",
+      writeOnceSlots: [RELAY_WRITE_ONCE_SLOT],
+    });
+    expect(broadcasts()).toBe(1);
+  });
+
   test("a 4xx refusal hands the scope back", async () => {
     const { maturityStore, service } = relayService(
       () => new Response(JSON.stringify({ error: "upstream_rejected" }), { status: 400 }),

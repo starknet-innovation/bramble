@@ -7,7 +7,6 @@
 
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
 import { applyOutcomeHash } from "../../shared/outcome-hash";
-import { reviewFeeBlocked } from "../../shared/review-render";
 import { knownRecipientLabel } from "./recipient-rows";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
@@ -30,7 +29,7 @@ import {
 import { reviewRisksHtml, reviewSummaryHtml, successReceiptHtml } from "./transfer-review-markup";
 import { routeReviewFeeHtml } from "./transfer-review-routes";
 import { transferRoute } from "./transfer-route";
-import type { TransferReview } from "./transfer-submit";
+import { confirmBlocked, type TransferReview } from "./transfer-submit";
 
 const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | null): void => {
   if (!fields) {
@@ -280,7 +279,7 @@ export const applyTransferUi = (
   buttonBusy(form.querySelector<HTMLButtonElement>("#send-review-button"), reviewing);
   buttonBusy(confirmButton, state.stage === "authorizing");
   if (confirmButton && state.stage === "review") {
-    confirmButton.disabled = state.review != null && reviewFeeBlocked(state.review);
+    confirmButton.disabled = state.review != null && confirmBlocked(state.review);
   }
   setText(
     form,

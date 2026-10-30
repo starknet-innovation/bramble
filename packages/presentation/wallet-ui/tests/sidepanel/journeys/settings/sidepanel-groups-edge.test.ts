@@ -293,6 +293,23 @@ describe("group control focus restoration", () => {
     expect(document.documentElement.scrollTop).toBe(184);
   });
 
+  test("keeps a body-scrolled onboarding surface in place across repaint", () => {
+    // Onboarding makes body the scroller (html is overflow: hidden), so the
+    // viewport scrollingElement reads 0 while body holds the real offset.
+    const app = paintApp("<p>onboarding</p>");
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 96;
+    const focus = captureRepaintFocus();
+
+    paintApp("<p>onboarding</p>");
+    document.body.scrollTop = 0;
+    restoreRepaintFocus(app, focus);
+
+    expect(focus.scrollTop).toBe(96);
+    expect(document.body.scrollTop).toBe(96);
+    document.body.scrollTop = 0;
+  });
+
   test("keeps a non-secret transaction draft but never carries a passphrase across repaint", () => {
     const app = paintApp(
       '<input name="amount" value="0"><input name="vaultPassphrase" type="password" value="">',
