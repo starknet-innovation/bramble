@@ -117,7 +117,7 @@ export const multisigPortfolio = (input: {
         : input.deployed === false
           ? input.record.deployment
             ? '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Continue the saved setup before sending.</p>'
-            : '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Resume setup to verify and deploy this saved address.</p>'
+            : '<p class="hint multisig-action-note"><strong>Deployment required.</strong> Complete setup before sending.</p>'
           : input.authorityMessage
             ? `<p class="hint multisig-action-note">${escapeHtml(input.authorityMessage)}</p>`
             : !input.authorityAvailable

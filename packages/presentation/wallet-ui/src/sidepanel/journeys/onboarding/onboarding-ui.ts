@@ -6,6 +6,7 @@ import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { friendlyAccountName } from "../../shared/parts";
 import {
   BACKUP_VERIFY_COPY,
   backupVerifyPositions,
@@ -409,8 +410,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           previewAddress.title = account.address;
         }
         if (previewLabel) {
-          previewLabel.textContent =
-            contractType === "argent" ? "Primary Ready account" : "Primary Bramble account";
+          // The name the account gets once created: a new wallet has no
+          // label, so it shows the address-derived nickname, as Home will.
+          previewLabel.textContent = friendlyAccountName(account.address);
         }
         if (passphraseResult) {
           passphraseResult.textContent = "";
