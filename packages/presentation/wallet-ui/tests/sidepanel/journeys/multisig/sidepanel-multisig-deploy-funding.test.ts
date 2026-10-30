@@ -47,7 +47,7 @@ describe("the multisig Fund step", () => {
     await flush();
 
     expect(app.querySelector(".multisig-funding-stage")?.textContent).toContain(
-      "Send at least 0.099245 STRK",
+      "Send at least 0.099245 STRK to this address. You can close this screen and resume later.",
     );
     expect(deploymentFailureToast("Resources bounds exceed balance (0).", review)).toContain(
       "with at least 0.099245 STRK,",

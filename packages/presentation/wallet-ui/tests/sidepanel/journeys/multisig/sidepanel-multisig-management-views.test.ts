@@ -121,6 +121,10 @@ describe("Argent multisig management views", () => {
 
     const setup = multisigAddFlow(fixture.status, account);
     expect(setup).toContain("Create a multisig");
+    // The second choice adds a multisig by its address; it names the noun,
+    // not "shared address", which reads like the address book.
+    expect(setup).toContain("<strong>Add multisig account</strong><span>Enter its address.</span>");
+    expect(setup).not.toContain("shared address");
     expect(setup).toContain('class="multisig-setup-options"');
     expect(multisigAddFlow(fixture.status, null)).toContain("No account on");
     expect(multisigSignersFlow(fixture.status, account, null)).toContain("no longer watched");

@@ -310,7 +310,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       "multisig-home",
     );
     expect(home).toContain('data-view="multisig-deploy"');
-    expect(home).toContain("Resume setup to verify and deploy this saved address");
+    expect(home).toContain("<strong>Deployment required.</strong> Complete setup before sending.");
     expect(home).not.toContain('data-view="multisig-propose"');
 
     const deployment = multisigDeployFlow(fixture.status, signer, true, null, undeployed);
