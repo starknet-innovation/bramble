@@ -18,13 +18,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import org.bramble.core.TransferReview
@@ -159,7 +160,10 @@ private fun FactValue(
             style = textStyle(BrambleTypeScale.body, BrambleWeight.semibold),
         )
         address?.let { Text(it, color = skin.muted, style = textStyle(BrambleTypeScale.caption, mono = true)) }
-        AddressReveal(reveal.first, reveal.second)
+        // An empty address has nothing to check character by character (iOS omits the disclosure).
+        if (reveal.second.isNotEmpty()) {
+            AddressReveal(reveal.first, reveal.second)
+        }
     }
 }
 
@@ -173,12 +177,16 @@ private fun AddressReveal(
     address: String,
 ) {
     val skin = LocalSkin.current
-    var open by rememberSaveable { mutableStateOf(false) }
+    // Losing the open state on a configuration change is acceptable; saved state is banned.
+    var open by remember { mutableStateOf(false) }
     Text(
         label,
         color = skin.muted,
         style = textStyle(BrambleTypeScale.caption),
-        modifier = Modifier.toggleable(value = open, role = Role.Button, onValueChange = { open = it }),
+        modifier =
+            Modifier
+                .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+                .toggleable(value = open, role = Role.Button, onValueChange = { open = it }),
     )
     if (open) {
         SelectionContainer {
