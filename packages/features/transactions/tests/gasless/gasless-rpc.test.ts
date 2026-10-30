@@ -1,8 +1,9 @@
 /**
  * Gasless HTTP classification. A 503 screening_unavailable is retried and is
- * not a lost broadcast. On execute, only an allowlist of pre-forward codes is
- * a determinate refusal. Every other execute answer is indeterminate. A quote
- * never broadcasts, so its refusals stay determinate.
+ * not a lost broadcast. On execute, only an allowlisted pre-forward code in
+ * the gateway's own body is a determinate refusal; the same code inside a
+ * relay's JSON-RPC error is indeterminate. Every other execute answer is
+ * indeterminate. A quote never broadcasts, so its refusals stay determinate.
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -215,7 +216,67 @@ describe("postGasless", () => {
     }
   });
 
-  test("an allowlisted relay error without a result is a determinate refusal", async () => {
+  test("a pre-forward code inside a relay error on execute is indeterminate", async () => {
+    // The gateway passes a relay's 2xx reply through unchanged, so this shape
+    // can come from a relay that already holds the signature.
+    for (const code of [
+      "address_not_allowed",
+      "gasless_disabled",
+      "invalid_gasless_request",
+      "screening_denied",
+      "screening_unavailable",
+    ]) {
+      const http = async () =>
+        json(200, {
+          error: { code: -32000, data: code, message: "rejected" },
+          id: GASLESS_RPC_ID,
+          jsonrpc: "2.0",
+        });
+      const error = await postGasless(
+        http,
+        url,
+        "paymaster_executeTransaction",
+        {},
+        {
+          executes: true,
+        },
+      ).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(IndeterminateRpcWriteError);
+      if (error instanceof Error) {
+        expect(error.message).not.toContain("Nothing was submitted");
+      }
+    }
+  });
+
+  test.each([
+    "address_not_allowed",
+    "gasless_disabled",
+    "invalid_gasless_request",
+    "screening_denied",
+    "screening_unavailable",
+  ])("a 2xx gateway-shaped %s on execute is indeterminate", async (code) => {
+    // A relay's 2xx reply reaches the wallet unchanged, so the shape alone
+    // does not show the gateway stopped before forwarding.
+    let calls = 0;
+    const http = async () => {
+      calls += 1;
+      return gateway(200, code);
+    };
+    const error = await postGasless(
+      http,
+      url,
+      "paymaster_executeTransaction",
+      {},
+      {
+        executes: true,
+      },
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(IndeterminateRpcWriteError);
+    expect(error).not.toBeInstanceOf(GaslessRefusal);
+    expect(calls).toBe(1);
+  });
+
+  test("the same relay error on a quote stays a determinate refusal", async () => {
     const http = async () =>
       json(200, {
         error: { code: -32000, data: "invalid_gasless_request", message: "rejected" },
@@ -225,11 +286,9 @@ describe("postGasless", () => {
     const error = await postGasless(
       http,
       url,
-      "paymaster_executeTransaction",
+      "paymaster_buildTransaction",
       {},
-      {
-        executes: true,
-      },
+      { executes: false },
     ).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(GaslessRefusal);
     if (error instanceof GaslessRefusal) {
