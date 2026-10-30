@@ -1,0 +1,12 @@
+{
+  "cipher": "AES-256-GCM",
+  "commit": "lyYIFUpA/i8uHjwmgZe+Wg==",
+  "data": "ZSsFVhgvPmZ0ngrpyunsp5rUd04vXUjhtNxGGsTQTDB87kIVtbmJMVHcNgUeu31Pgcq3ML5tOKPpMK080sDH9zW3Fr+zEkqCsbGp/5+zHPJkhBdEbXkgEcNAUolVHNbdJH7KJAjL9LkoshGKyZA/K7PuAbblCGpYb5ofCpCzrkoVGI2UI9Q80/Z6Q5YWNrT8/mQjtWuPjARE1EQEPQrqslTw",
+  "iterations": 600000,
+  "iv": "lAy4IAUBKNL+3R7y",
+  "kdf": "PBKDF2-SHA-256",
+  "lineage": "e23266d126608a8c59aa8346418756d6",
+  "salt": "Tpk/+Tj6+m+iP94q7ZeoWA==",
+  "scope": "bramble.mobile.vault.v1",
+  "version": 3
+}

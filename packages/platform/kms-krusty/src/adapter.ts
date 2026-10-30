@@ -111,18 +111,35 @@ const requireNonZeroFieldElementField = (value: unknown, field: string): string 
   return fieldValue;
 };
 
+// The wasm-bindgen `web` init only checks for a finished instance on entry, so two calls that
+// overlap both instantiate the module, and the one that finishes last replaces the instance under
+// every object the other made: their getters and FinalizationRegistry frees then run against the
+// wrong heap, which traps and corrupts its allocator. Keyed on the init function itself, so every
+// KMS built from one module, or from a copy of its exports, shares one instance.
+const moduleInits = new WeakMap<Callable, Promise<unknown>>();
+const initOnce = (init: Callable): Promise<unknown> => {
+  let ready = moduleInits.get(init);
+  if (!ready) {
+    ready = Promise.resolve(init());
+    moduleInits.set(init, ready);
+  }
+  return ready;
+};
+
 const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
 const isMnemonicWordCount = (value: number): boolean =>
   Number.isSafeInteger(value) && MNEMONIC_WORD_COUNTS.some((count) => count === value);
 
 /**
  * Wraps an unknown WASM module and validates required Krusty exports.
+ *
+ * The module's init runs once however many KMS are built from it, including while an earlier
+ * init is still pending; a failed init fails every KMS built from that module.
  */
 export const createKrustyKms = (moduleValue: unknown): KmsPort => {
   const module = asRecord(moduleValue);
   const init = ownValue(module, "default");
-  const ready =
-    typeof init === "function" ? Promise.resolve((init as Callable)()) : Promise.resolve();
+  const ready = typeof init === "function" ? initOnce(init as Callable) : Promise.resolve();
 
   const deriveOzAccountAddress = requireFunction(module, "deriveOzAccountAddress");
   const deriveNostrPublicKey = requireFunction(module, "deriveNostrPublicKey");

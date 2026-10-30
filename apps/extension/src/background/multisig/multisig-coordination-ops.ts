@@ -30,11 +30,15 @@ import {
   nativeNostrRelayTransport,
 } from "./nostr-relay";
 
-const MULTISIG_NOSTR_IDENTIFIER = "bramble.multisig";
-const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
-// NIP-59 backdates gift wraps by up to two days. The extra day preserves a
-// safe overlap while cutting subsequent relay scans from 30 days to three.
-const NOSTR_INCREMENTAL_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
+/** Application-data identifier every multisig gift wrap carries; mirrored by the mobile core. */
+export const MULTISIG_NOSTR_IDENTIFIER = "bramble.multisig";
+/** First-sync relay lookback; mirrored by the mobile core. */
+export const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
+/**
+ * Overlap kept behind the last checkpoint. NIP-59 backdates gift wraps by up to two days; the
+ * extra day preserves a safe overlap while cutting later relay scans from 30 days to three.
+ */
+export const NOSTR_INCREMENTAL_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
 
 /** One custom relay replaces the reviewed defaults; it never expands the broadcast set. */
 export const coordinationRelayUrls = (preferences: WalletPreferences): readonly string[] =>

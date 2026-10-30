@@ -1,0 +1,8 @@
+[bindings.kotlin]
+package_name = "org.bramble.core"
+cdylib_name = "bramble_core"
+
+[bindings.swift]
+module_name = "BrambleCore"
+ffi_module_name = "bramble_coreFFI"
+ffi_module_filename = "bramble_coreFFI"

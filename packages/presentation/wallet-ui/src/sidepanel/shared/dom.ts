@@ -77,8 +77,12 @@ export const scopedStatus = (element: Element, message: string): boolean => {
  */
 export type ToastTone = "error" | "success" | "warning";
 
-const SUCCESS_TOAST_MS = 3200;
-const ERROR_TOAST_MS = 8000;
+/** How long a success toast stays up. Exported for the mobile asset generator. */
+export const SUCCESS_TOAST_MS = 3200;
+/** How long an error toast stays up. Exported for the mobile asset generator. */
+export const ERROR_TOAST_MS = 8000;
+/** How long a copy control shows its check glyph after a copy. Exported for mobile parity. */
+export const COPY_CONFIRM_MS = 1400;
 
 const documentFor = (context?: Document | Element | null): Document =>
   context ? ("defaultView" in context ? context : context.ownerDocument) : document;
@@ -313,7 +317,7 @@ const confirmCopyGlyph = (button: HTMLButtonElement): void => {
       check.outerHTML = icon("copy");
     }
     button.classList.remove("copy-confirm");
-  }, 1400);
+  }, COPY_CONFIRM_MS);
 };
 
 // Controls already wired to the clipboard. Sub-regions re-bind their own root

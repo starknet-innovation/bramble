@@ -22,7 +22,11 @@ import {
   UNVERIFIED_HEALTH,
 } from "./store/store-errors";
 
-export { type EncryptedEnvelope, isEncryptedEnvelope } from "./store/envelope-shape";
+export {
+  type EncryptedEnvelope,
+  isEncryptedEnvelope,
+  KDF_ITERATIONS,
+} from "./store/envelope-shape";
 export {
   COMMIT_STATE_MISSING,
   type EncryptedStoreHealth,

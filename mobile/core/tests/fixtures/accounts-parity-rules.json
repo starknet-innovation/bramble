@@ -1,0 +1,497 @@
+{
+  "groups": [
+    {
+      "id": "long-term",
+      "name": "Long term",
+      "storedName": "Long term"
+    },
+    {
+      "id": "long-term-2",
+      "name": "Long term",
+      "storedName": "Long term"
+    },
+    {
+      "id": "long-term-3",
+      "name": "long-term",
+      "storedName": "long-term"
+    },
+    {
+      "id": "operations",
+      "name": "  Operations  ",
+      "storedName": "Operations"
+    },
+    {
+      "id": "ops-defi",
+      "name": "Ops & DeFi!!",
+      "storedName": "Ops & DeFi!!"
+    },
+    {
+      "id": "group",
+      "name": "🔥🔥",
+      "storedName": "🔥🔥"
+    },
+    {
+      "id": "n-code-name",
+      "name": "Ünïcode Name",
+      "storedName": "Ünïcode Name"
+    },
+    {
+      "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "storedName": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "id": null,
+      "name": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+      "storedName": null
+    },
+    {
+      "id": null,
+      "name": "",
+      "storedName": null
+    },
+    {
+      "id": null,
+      "name": "   ",
+      "storedName": null
+    },
+    {
+      "id": "dash",
+      "name": "-dash-",
+      "storedName": "-dash-"
+    }
+  ],
+  "labels": [
+    {
+      "stored": "Savings",
+      "valid": true,
+      "value": "Savings"
+    },
+    {
+      "stored": "Savings",
+      "valid": true,
+      "value": "  Savings  "
+    },
+    {
+      "stored": null,
+      "valid": false,
+      "value": ""
+    },
+    {
+      "stored": null,
+      "valid": false,
+      "value": "   "
+    },
+    {
+      "stored": "Trading",
+      "valid": true,
+      "value": " Trading﻿"
+    },
+    {
+      "stored": "line",
+      "valid": true,
+      "value": " line "
+    },
+    {
+      "stored": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "valid": true,
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "stored": null,
+      "valid": false,
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "stored": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "valid": true,
+      "value": " bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "
+    },
+    {
+      "stored": "🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥",
+      "valid": true,
+      "value": "🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"
+    },
+    {
+      "stored": null,
+      "valid": false,
+      "value": "🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"
+    },
+    {
+      "stored": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+      "valid": true,
+      "value": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    },
+    {
+      "stored": "tab\tinside",
+      "valid": true,
+      "value": "tab\tinside"
+    }
+  ],
+  "names": [
+    {
+      "address": "0x0",
+      "name": "Amber Otter",
+      "short": "0x0…0x0"
+    },
+    {
+      "address": "0x1",
+      "name": "Bold Otter",
+      "short": "0x1…0x1"
+    },
+    {
+      "address": "0x1e",
+      "name": "Amber Otter",
+      "short": "0x1e…0x1e"
+    },
+    {
+      "address": "0x83",
+      "name": "Keen Falcon",
+      "short": "0x83…0x83"
+    },
+    {
+      "address": "0xf5a",
+      "name": "Amber Otter",
+      "short": "0xf5a…xf5a"
+    },
+    {
+      "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "name": "Bold Ladybird",
+      "short": "0x2083…98d9"
+    },
+    {
+      "address": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "name": "Eager Marten",
+      "short": "0x7fff…ffff"
+    },
+    {
+      "address": "0XABC",
+      "name": "Rapid Gecko",
+      "short": "0XABC…XABC"
+    },
+    {
+      "address": "1234567",
+      "name": "Eager Bison",
+      "short": "123456…4567"
+    },
+    {
+      "address": "  0x1f  ",
+      "name": "Bold Otter",
+      "short": "  0x1f…1f  "
+    },
+    {
+      "address": "",
+      "name": "Amber Otter",
+      "short": "…"
+    },
+    {
+      "address": "-45",
+      "name": "Amber Otter",
+      "short": "-45…-45"
+    },
+    {
+      "address": "0b101",
+      "name": "Clever Otter",
+      "short": "0b101…b101"
+    },
+    {
+      "address": "0o777",
+      "name": "Bold Heron",
+      "short": "0o777…o777"
+    },
+    {
+      "address": "not an address",
+      "name": "Amber Otter",
+      "short": "not an…ress"
+    },
+    {
+      "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "name": "Bold Ladybird",
+      "short": "0x2083…98d9"
+    },
+    {
+      "address": "0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510",
+      "name": "Masterful Yak",
+      "short": "0x7be1…4510"
+    },
+    {
+      "address": "0x51910d5a27528707ccccd6f7ffbc41373940a94602a586b58f47667207b5f90",
+      "name": "Masterful Egret",
+      "short": "0x5191…5f90"
+    },
+    {
+      "address": "0x248c1db5d2ff93271e98cdc477c51877874b775e639a24a66c29ce6a0aba945",
+      "name": "Quiet Cheese",
+      "short": "0x248c…a945"
+    },
+    {
+      "address": "0x742ccb3791bbbf6bd471cb06c1136a4c45d12b3f75eab8e01939009d13f0e4a",
+      "name": "Amber Egret",
+      "short": "0x742c…0e4a"
+    },
+    {
+      "address": "0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475",
+      "name": "Mighty Cheese",
+      "short": "0x34fd…0475"
+    },
+    {
+      "address": "0x1ea35fce4ae60319c833a36f6f159ecdcc9c0b5a3de31d923c045c67c94980c",
+      "name": "Gentle Zebra",
+      "short": "0x1ea3…980c"
+    }
+  ],
+  "recovery": [
+    {
+      "accountContractType": "openzeppelin",
+      "accountIndex": 3,
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "deployed": false,
+      "derivation": "starknet-bip44",
+      "funded": false,
+      "hint": "No on-chain activity found",
+      "key": "openzeppelin:starknet-bip44:default:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "openzeppelin",
+      "accountIndex": 3,
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "deployed": false,
+      "derivation": "starknet-bip44",
+      "funded": true,
+      "hint": "Funded and ready to deploy",
+      "key": "openzeppelin:starknet-bip44:default:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "openzeppelin",
+      "accountIndex": 3,
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "deployed": true,
+      "derivation": "starknet-bip44",
+      "funded": false,
+      "hint": "Deployed on Starknet",
+      "key": "openzeppelin:starknet-bip44:default:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "deployed": false,
+      "derivation": "starknet-bip44",
+      "funded": false,
+      "hint": "No on-chain activity found — Bramble only imports existing Ready accounts",
+      "key": "argent:starknet-bip44:0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f:3",
+      "selectable": false,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "deployed": false,
+      "derivation": "starknet-bip44",
+      "funded": true,
+      "hint": "Funded and ready to deploy",
+      "key": "argent:starknet-bip44:0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "deployed": true,
+      "derivation": "starknet-bip44",
+      "funded": false,
+      "hint": "Deployed on Starknet",
+      "key": "argent:starknet-bip44:0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
+      "deployed": false,
+      "derivation": "argentx-bip44",
+      "funded": false,
+      "hint": "No on-chain activity found — Bramble only imports existing Ready accounts",
+      "key": "argent:argentx-bip44:0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b:3",
+      "selectable": false,
+      "title": "Account 3 · Argent 0.3.1"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
+      "deployed": false,
+      "derivation": "argentx-bip44",
+      "funded": true,
+      "hint": "Funded on Starknet — Bramble cannot deploy this Argent release",
+      "key": "argent:argentx-bip44:0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b:3",
+      "selectable": true,
+      "title": "Account 3 · Argent 0.3.1"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
+      "deployed": true,
+      "derivation": "argentx-bip44",
+      "funded": false,
+      "hint": "Deployed on Starknet",
+      "key": "argent:argentx-bip44:0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b:3",
+      "selectable": true,
+      "title": "Account 3 · Argent 0.3.1"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
+      "deployed": false,
+      "derivation": "argentx-bip44",
+      "funded": false,
+      "hint": "No on-chain activity found — Bramble only imports existing Ready accounts",
+      "key": "argent:argentx-bip44:0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003:3",
+      "selectable": false,
+      "title": "Account 3 · Argent 0.3.0"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
+      "deployed": false,
+      "derivation": "argentx-bip44",
+      "funded": true,
+      "hint": "Funded on Starknet — Bramble cannot deploy this Argent release",
+      "key": "argent:argentx-bip44:0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003:3",
+      "selectable": true,
+      "title": "Account 3 · Argent 0.3.0"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
+      "deployed": true,
+      "derivation": "argentx-bip44",
+      "funded": false,
+      "hint": "Deployed on Starknet",
+      "key": "argent:argentx-bip44:0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003:3",
+      "selectable": true,
+      "title": "Account 3 · Argent 0.3.0"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "deployed": false,
+      "derivation": "argentx-bip44",
+      "funded": false,
+      "hint": "No on-chain activity found — Bramble only imports existing Ready accounts",
+      "key": "argent:argentx-bip44:0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f:3",
+      "selectable": false,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "deployed": false,
+      "derivation": "argentx-bip44",
+      "funded": true,
+      "hint": "Funded and ready to deploy",
+      "key": "argent:argentx-bip44:0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "deployed": true,
+      "derivation": "argentx-bip44",
+      "funded": false,
+      "hint": "Deployed on Starknet",
+      "key": "argent:argentx-bip44:0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "braavos",
+      "accountIndex": 3,
+      "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "deployed": false,
+      "derivation": "starknet-bip44",
+      "funded": false,
+      "hint": "Funded and ready to deploy",
+      "key": "braavos:starknet-bip44:0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201:3",
+      "selectable": false,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "braavos",
+      "accountIndex": 3,
+      "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "deployed": false,
+      "derivation": "starknet-bip44",
+      "funded": true,
+      "hint": "Funded and ready to deploy",
+      "key": "braavos:starknet-bip44:0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "braavos",
+      "accountIndex": 3,
+      "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "deployed": true,
+      "derivation": "starknet-bip44",
+      "funded": false,
+      "hint": "Deployed on Starknet",
+      "key": "braavos:starknet-bip44:0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "braavos",
+      "accountIndex": 3,
+      "classHash": "0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6",
+      "deployed": false,
+      "derivation": "starknet-bip44",
+      "funded": false,
+      "hint": "Funded, not deployed · view only for now",
+      "key": "braavos:starknet-bip44:0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6:3",
+      "selectable": false,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "braavos",
+      "accountIndex": 3,
+      "classHash": "0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6",
+      "deployed": false,
+      "derivation": "starknet-bip44",
+      "funded": true,
+      "hint": "Funded, not deployed · view only for now",
+      "key": "braavos:starknet-bip44:0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6:3",
+      "selectable": true,
+      "title": "Account 3"
+    },
+    {
+      "accountContractType": "braavos",
+      "accountIndex": 3,
+      "classHash": "0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6",
+      "deployed": true,
+      "derivation": "starknet-bip44",
+      "funded": false,
+      "hint": "Deployed on Starknet",
+      "key": "braavos:starknet-bip44:0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6:3",
+      "selectable": true,
+      "title": "Account 3"
+    }
+  ]
+}
