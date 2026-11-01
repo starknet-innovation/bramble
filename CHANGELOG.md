@@ -11,7 +11,65 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
-## [0.10.7] - Unreleased
+## [0.10.8] - 2026-10-30
+
+Import accounts the recovery phrase can't find, pay network fees in other
+tokens on Mainnet, a smoother Home and multisig setup, and fixes from user and
+QA reports.
+
+### Added
+- Import an account by its address when the recovery phrase can't derive it,
+  for example a Ready account with a guardian or a Braavos account with a
+  rotated key. Bramble imports it only when the account's live owner key matches
+  a key the phrase derives (#781). A Ready account found from a private key can
+  be imported the same way (#792).
+- Restore a Ready account from its private key at the release it was deployed
+  with (#777).
+- Recover Xverse accounts, and deploy a funded Xverse account (#763, #780).
+- Pay the network fee in another token on Mainnet (#784).
+- Account deployment can be sponsored through the wallet gateway. When it
+  isn't offered, you pay the fee as before (#768, #806).
+- Activity lists outside executions signed for a relay, with their on-chain
+  outcome (#766).
+- wstETH, xSTRK and xWBTC are curated, so held balances show up (#801).
+- Shield says how much STRK it needs and how much to add (#665, #786).
+
+### Changed
+- Home fills in while balances load instead of flashing errors (#795, #805).
+- Each account is drawn as a bird (#746). The 24h caption and per-row window
+  label are gone from the portfolio (#745).
+- Private actions are turned off for an account another wallet registered for
+  private balances (#755).
+- Multisig setup stays on Approval until you check the fee and address,
+  "Fund from this wallet" fills in the minimum, the minimum is rounded up, and
+  titles wrap instead of being cut off (#807, #810, #811).
+- Onboarding previews the account under the name it will get (#811), with UX
+  polish for full-tab setup and Ledger (#731). Braavos accounts are listed like
+  Ready's, and are found during first-run Ledger setup (#733).
+- The wallet remembers deployed accounts instead of re-reading them (#741).
+
+### Fixed
+- Approvals open in a popup where the side panel can't show, such as Arc or an
+  expired gesture (#690, #707, #787). The wheel scrolls a long request down to
+  Approve (#747).
+- The side panel no longer scrolls when its content fits, screens stay centred
+  on Windows, and the onboarding background reaches the window edges (#759,
+  #765, #800, #808).
+- The live phishing blocklist loads again (#772, #773, #774).
+- A wallet without a recovery phrase can add a regular account (#740, #762).
+- Dock labels fit inside their capsule (#785).
+
+### Security
+- A gasless send counts as refused only when the wallet gateway itself refuses
+  it, so a relay's reply can't make the wallet report "Nothing was submitted"
+  for a request that may still execute (#812).
+- The privacy maturity store keeps a just-settled write when full, and evicts
+  in write order across networks (#729, #802). A malformed relay error on a
+  private broadcast is treated as a lost answer (#798).
+- Patched node-forge 1.4.2, and high/critical dev-tooling advisories cleared
+  (#495, #767, #769, #790).
+
+## [0.10.7] - 2026-10-19
 
 Private sends that recover from a lost relay reply without a browser restart,
 the remaining Low findings from the v0.10.6 release audit, and fixes from user
