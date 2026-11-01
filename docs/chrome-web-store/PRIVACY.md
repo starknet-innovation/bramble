@@ -32,8 +32,10 @@ Starkscan activity lookup that discloses an account address is used only after e
 history source is unavailable. This outage rescue is enabled by default for the bundled RPCs and
 can be disabled per network; it defaults off when the user configures a custom RPC unless they
 explicitly enable it. AVNU receives the asset and amount details needed for a user-requested swap.
-CoinGecko receives public asset identifiers needed for prices. The phishing feed supplies a public
-denylist; Bramble does not send the current site to that feed.
+CoinGecko receives public asset identifiers needed for prices. The phishing feed is MetaMask's
+public eth-phishing-detect denylist, downloaded in full from `raw.githubusercontent.com` about every
+six hours without cookies; sites are checked against it on the device, and Bramble does not send the
+current site to that feed.
 
 When the user explicitly shares or checks for an Argent multisig handoff, Bramble connects to the
 reviewed public Nostr relays `relay.primal.net` and `nos.lol`, or to one custom relay the user chose
@@ -111,6 +113,6 @@ Chrome requires an accurate public policy even when sensitive data is stored onl
 
 Any material handling change will be disclosed in the extension and listing before collection and
 will update this policy's effective date. Non-sensitive questions may be opened at
-<https://github.com/starknet-innovation/mc-wallet/issues>. Sensitive or security reports must use
+<https://github.com/starknet-innovation/bramble/issues>. Sensitive or security reports must use
 GitHub private vulnerability reporting from the repository's Security tab and must never include a
 recovery phrase or private key.

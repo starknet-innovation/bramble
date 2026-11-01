@@ -52,8 +52,6 @@ export const openPoolRoute = async (
     active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
     tokenId: input.tokenId,
   });
-  if ("error" in context) {
-    return { error: context.error };
-  }
+  if ("error" in context) return context;
   return refusePoisonedPoolRecipient(context, recipient) ?? { context, recipient };
 };

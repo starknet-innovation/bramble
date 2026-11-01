@@ -30,12 +30,25 @@ export const PHISHING_FEED_STORE_KEY = "bramble:phishing-feed";
 export const PHISHING_CACHE_VERSION = 2;
 
 /**
- * Upper bound on domains held in memory and persisted. Kept within the chunked
- * budget below: at the worst-case entry size (a 253-character name) a chunk
- * holds at least ~590 domains, so this cap needs at most ~170 chunks, under
- * {@link MAX_CHUNKS}.
+ * Upper bound on domains held in memory and persisted. eth-phishing-detect
+ * listed about 110,000 domains in October 2026, past the old 100,000 cap, so
+ * this leaves room for growth. Kept within the chunked budget below: at the
+ * worst-case entry size (a 253-character name) a chunk holds at least ~590
+ * domains, so this cap needs at most 253 chunks, under {@link MAX_CHUNKS}.
  */
-export const MAX_PHISHING_DOMAINS = 100_000;
+export const MAX_PHISHING_DOMAINS = 150_000;
+
+/**
+ * Upper bound on the list's stored size, each domain counted as its JSON string
+ * (its characters, two quotes and a separator). `storage.local` holds 10 MB for
+ * the whole extension, the vault included, so whatever an upstream list grows
+ * to, the feed may take at most 4 MiB of it. October 2026's list (about 110,000
+ * domains) is about 2.6 MiB.
+ */
+export const MAX_PHISHING_DOMAIN_CHARS = 4 * 1024 * 1024;
+
+/** One domain's charge against {@link MAX_PHISHING_DOMAIN_CHARS}. */
+export const phishingDomainChars = (domain: string): number => domain.length + 3;
 
 // RFC 1035 bound on a DNS name. Also bounds the per-entry storage cost so the
 // byte-budgeted chunking below can always place an entry.

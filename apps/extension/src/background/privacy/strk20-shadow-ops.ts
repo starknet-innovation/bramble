@@ -55,9 +55,8 @@ const withContext = async (
 ): Promise<RuntimeResponse> => {
   const active = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   const context = await resolvePrivacyContext(deps, { active });
-  if ("error" in context || active.error !== undefined) {
-    return "error" in context ? { error: context.error } : { error: fallback };
-  }
+  if ("error" in context) return context;
+  if (active.error !== undefined) return { error: fallback };
   try {
     return await run(context, active.vaultPassphrase);
   } catch (error) {

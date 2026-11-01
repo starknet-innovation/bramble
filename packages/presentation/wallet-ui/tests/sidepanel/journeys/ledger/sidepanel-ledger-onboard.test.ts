@@ -35,9 +35,11 @@ describe("Ledger onboard controller", () => {
     if (final?.kind === "picker") {
       expect(final.candidates[0]?.deployed).toBe(false);
       expect(final.candidates[0]?.balance).toBe("0 STRK");
-      // Both contract families derive from the same device keys.
+      // First run reads both paths: Bramble and Argent accounts from Bramble's
+      // keys, Ready (Argent) and Braavos accounts from Ready's.
       expect(pickerIndexes(final, "openzeppelin")).toEqual([0, 1]);
-      expect(pickerIndexes(final, "argent")).toEqual([0, 1]);
+      expect(pickerIndexes(final, "argent")).toEqual([0, 1, 0, 1]);
+      expect(pickerIndexes(final, "braavos")).toEqual([0, 1]);
     }
   });
 
@@ -177,6 +179,47 @@ describe("Ledger onboard controller", () => {
     expect(pickerIndexes(h.views.at(-1))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     // "Show more" reconnected the already-granted device silently.
     expect(reconnects).toBe(1);
+  });
+
+  test('"Show more" while a page is still being described is queued, not dropped', async () => {
+    // The device read finishes before the on-chain lookups do; a click in that
+    // window used to hit the busy guard and vanish after the button showed it.
+    const pending: (() => void)[] = [];
+    const starts: number[] = [];
+    const h = onboardHarness({
+      describe: () =>
+        new Promise((resolve) => {
+          pending.push(() => resolve({ balance: "0 STRK", deployed: false, funded: false }));
+        }),
+      enumerate: (_client, startIndex) => {
+        starts.push(startIndex);
+        return Promise.resolve(
+          [0, 1].map((offset) => ({
+            accountIndex: startIndex + offset,
+            publicKeyX: candidateAccount(startIndex + offset).publicKeyX,
+          })),
+        );
+      },
+    });
+    const controller = createLedgerOnboardController(h.deps);
+    const loadingMore = (): boolean | undefined => {
+      const view = h.views.at(-1);
+      return view?.kind === "picker" ? view.loadingMore : undefined;
+    };
+    controller.connect();
+    await tick();
+    controller.loadMore();
+    expect(starts).toEqual([0]);
+    expect(loadingMore()).toBe(true);
+
+    for (const resolve of pending.splice(0)) resolve();
+    await tick();
+    // The queued page is read as soon as the first settles; still busy until it lands.
+    expect(starts).toEqual([0, 2]);
+    for (const resolve of pending.splice(0)) resolve();
+    await tick();
+    expect(pickerIndexes(h.views.at(-1))).toEqual([0, 1, 2, 3]);
+    expect(loadingMore()).toBe(false);
   });
 
   test("toggle selects indexes and addSelected adds exactly those, then refreshes", async () => {

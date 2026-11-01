@@ -12,6 +12,7 @@ import { iconButton, iconLink } from "@bramble/ui-kit/controls";
 import { dockNavigation } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { explorerAccountUrl } from "@bramble/wallet-model/networks";
+import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { type IconName, icon } from "../shared/icons";
 import { networkDisplayName } from "../shared/network-label";
@@ -186,11 +187,18 @@ export const shieldTile = (
   deployment: boolean | null = null,
   fundedForFees: boolean | null = true,
   readOnly = false,
+  otherWallet = false,
 ): string => {
   const needsDeploy = deployment === false;
   const needsFunds = needsDeploy && fundedForFees === false;
   const body = `<span class="tile-icon">${icon("shield")}</span>
       <span class="tile-label">Shield</span>`;
+  // Another wallet registered this account. The tile still opens the privacy
+  // screen, which states why shield and unshield are off, and does not offer
+  // to activate.
+  if (otherWallet && tokenId !== null) {
+    return `<button class="action-tile" data-privacy-open="${escapeHtml(tokenId)}" type="button" aria-label="${escapeHtml(PRIVACY_OTHER_WALLET)}">${body}</button>`;
+  }
   // A read-only account cannot sign the activation or the shield, so the tile
   // is a true disabled control, not a link into a flow that fails at the end.
   if (readOnly) {

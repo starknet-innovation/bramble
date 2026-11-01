@@ -62,7 +62,7 @@ concurrency:
 jobs:
   deploy:
     # Forks carry the workflow file but must not try (and fail) to deploy.
-    if: github.repository == 'starknet-innovation/mc-wallet'
+    if: github.repository == 'starknet-innovation/bramble'
     runs-on: ubuntu-latest
     environment:
       name: bramble-production

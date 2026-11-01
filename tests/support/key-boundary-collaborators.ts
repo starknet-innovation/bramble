@@ -22,7 +22,7 @@ import {
   type ShadowAccountScopeRef,
   withShadowAccountScope,
 } from "@bramble/vault/shadow-account-scopes";
-import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ARGENT_ACCOUNT_CLASS_HASH, type LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { ec, RpcProvider } from "starknet";
@@ -133,6 +133,16 @@ export const walletStub = {
     return [account];
   },
   async previewAccount() {
+    return account;
+  },
+  // Public viewing keys only: the point-of-use check compares them with the pool.
+  async previewImportedStrk20ViewingPublicKey() {
+    return { address: account.address, viewingPublicKey: "0x1" };
+  },
+  async previewStrk20ViewingPublicKey() {
+    return "0x1";
+  },
+  async previewImportedAccount() {
     return account;
   },
   async recoverAccounts() {
@@ -378,6 +388,16 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
     },
     async getDeploymentStatus({ accountAddress }) {
       return sameFelt(accountAddress, account.address) && state.accountDeployed;
+    },
+    // Import by address: the chain reports the fixture key as the owner, so a
+    // lookup reaches a live candidate rather than a refusal.
+    async getAccountOwner() {
+      return {
+        classHash: ARGENT_ACCOUNT_CLASS_HASH,
+        family: "argent" as const,
+        kind: "owner" as const,
+        ownerPublicKey: account.publicKeyX,
+      };
     },
     async submitAccountDeployment() {
       Object.assign(state, { accountDeployed: true });

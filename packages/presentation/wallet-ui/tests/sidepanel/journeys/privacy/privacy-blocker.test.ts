@@ -8,7 +8,15 @@ import { privacyBlockerFor } from "../../../../src/sidepanel/journeys/privacy/pr
 
 describe("privacyBlockerFor", () => {
   test("keeps every typed action even when its copy changes", () => {
-    for (const kind of ["deploy", "fund", "ledger", "network", "pending", "service"] as const) {
+    for (const kind of [
+      "deploy",
+      "fund",
+      "ledger",
+      "network",
+      "other-wallet",
+      "pending",
+      "service",
+    ] as const) {
       expect(privacyBlockerFor(new PrivacyBlockerError(kind, "Reworded explanation"))).toEqual({
         kind,
         message: "Reworded explanation",

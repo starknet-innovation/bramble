@@ -17,6 +17,7 @@ import {
  * Public same-origin gateway exposed to released wallet builds.
  */
 export const STRK20_GATEWAY_BASE = "https://wallet.nodes.starknet.org/api/strk20";
+
 /**
  * Canonical Starknet Mainnet privacy-pool address.
  */

@@ -1,5 +1,6 @@
 {
   "name": "@bramble/multisig",
+  "description": "Argent multisig: pinned configuration reads, deployment construction, exact-hash signing-intent validation, signature collection and public repository persistence.",
   "version": "0.0.0",
   "private": true,
   "type": "module",

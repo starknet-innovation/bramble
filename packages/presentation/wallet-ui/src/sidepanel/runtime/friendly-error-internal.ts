@@ -144,6 +144,11 @@ export const INTERNAL_ERROR_COPY: readonly (readonly [string, string])[] = [
   // the deployed-account checks already tell the reader.
   ["invalid argent account class hash", UNRECOGNIZED_RELEASE.ready],
   ["invalid braavos account class hash", UNRECOGNIZED_RELEASE.braavos],
+  // Already the sentence a reader needs when another fee token cannot be used.
+  [
+    "paying the network fee in another token is unavailable.",
+    "Paying the network fee in another token is unavailable.",
+  ],
   // Already the sentence a reader needs; listed so the coverage check can tell
   // "reviewed and kept" from "never looked at" (it was past the scan's old
   // length limit).

@@ -149,12 +149,15 @@ export const DeployApproval: LabStory = {
     );
     await expect(body?.querySelector(".flow-header [data-nav-back]")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-deploy-back]")).not.toBeInTheDocument();
-    await expect(body?.querySelector(".multisig-deployment-target")).toBeVisible();
-    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent(
-      "Maximum network fee: 0.252237 STRK",
+    // The automatic quote has settled, yet Approval holds: only the user's
+    // own check paints the review and moves on (QA #807).
+    await expect(body?.querySelector("#multisig-deploy-form")).toHaveAttribute(
+      "data-deployment-stage",
+      "approval",
     );
+    await expect(body?.querySelector(".multisig-deployment-target")).not.toBeInTheDocument();
     await expect(body?.querySelector<HTMLButtonElement>('button[type="submit"]')).toHaveTextContent(
-      "Deploy multisig",
+      "Check fee and address",
     );
   },
 };
@@ -219,7 +222,9 @@ export const DeployFunding: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
-    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent("saved address");
+    await expect(body?.querySelector("#multisig-deploy-review")).toHaveTextContent(
+      "to this address. You can close this screen and resume later.",
+    );
     await expect(body?.querySelector(".multisig-funding-stage .qr-card")).toBeVisible();
     await expect(body?.querySelector("[data-multisig-fund-local]")).toHaveTextContent(
       "Fund from this wallet",
@@ -257,7 +262,7 @@ export const HomeDeploymentRequired: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector('[data-view="multisig-deploy"]')).toHaveTextContent("Deploy");
     await expect(body?.querySelector(".multisig-action-note")).toHaveTextContent(
-      "Resume setup to verify and deploy this saved address",
+      "Deployment required. Complete setup before sending.",
     );
     await expect(body?.querySelector('[data-view="multisig-propose"]')).not.toBeInTheDocument();
   },

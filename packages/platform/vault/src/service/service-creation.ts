@@ -9,8 +9,12 @@
  */
 
 import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";
-import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
-import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import { type DerivedAccountRef, NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  type StarknetNetworkId,
+} from "@bramble/wallet-model/networks";
 import {
   deriveAccount,
   deriveImportedAccount,
@@ -22,7 +26,7 @@ import {
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import { CURRENT_SCHEMA_VERSION, isVaultV12, type Vault } from "../schema/schema";
-import type { WalletVaultService } from "./service-types";
+import type { ImportRawKeyAccountInput, WalletVaultService } from "./service-types";
 import { requireVaultCapacity } from "./vault-capacity";
 
 /**
@@ -45,6 +49,59 @@ export const writeVault = async (
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase, beforeCommit);
+};
+
+// The address an address import stores (issue 779), canonical; undefined for
+// a derived import. A class without an address, or an address with a release
+// list, is refused: neither says which one account to store.
+const pastedAddress = (input: Omit<ImportRawKeyAccountInput, "vaultPassphrase">) => {
+  if (input.address === undefined && input.classHash === undefined) return undefined;
+  const address = input.address === undefined ? null : canonicalFelt(input.address);
+  if (
+    address === null ||
+    !isNonZeroStarkFieldElement(address) ||
+    input.classHash === undefined ||
+    input.classHashes !== undefined
+  ) {
+    throw new RefusedBeforeWrite("Invalid account address");
+  }
+  return address;
+};
+
+// Derives one account per picked release (the family default when none is
+// named) from a single raw key, refusing any id already stored or picked twice
+// before anything is written. Every account signs with the same key. An
+// address import derives its key at the recorded class and keeps the address.
+const deriveRawKeyAccounts = async (
+  kms: KmsPort,
+  input: Omit<ImportRawKeyAccountInput, "vaultPassphrase">,
+  stored: Vault["accounts"],
+): Promise<readonly Awaited<ReturnType<typeof deriveImportedAccount>>[]> => {
+  const derived: Awaited<ReturnType<typeof deriveImportedAccount>>[] = [];
+  const address = pastedAddress(input);
+  const classes = address === undefined ? (input.classHashes ?? [undefined]) : [input.classHash];
+  for (const classHash of classes) {
+    const keyed = await deriveImportedAccount(kms, {
+      accountContractType: input.accountContractType,
+      ...(classHash === undefined ? {} : { classHash }),
+      ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+      networkId: input.networkId,
+      privateKey: input.privateKey,
+    });
+    const result =
+      address === undefined
+        ? keyed
+        : {
+            ...keyed,
+            account: { ...keyed.account, address, id: `${keyed.account.networkId}:${address}` },
+          };
+    const id = result.account.id;
+    if (stored.some((account) => account.id === id) || derived.some((d) => d.account.id === id)) {
+      throw new RefusedBeforeWrite("Account already exists");
+    }
+    derived.push(result);
+  }
+  return derived;
 };
 
 type VaultCreationDeps = {
@@ -102,7 +159,7 @@ export const vaultCreationMethods = ({
   async addDerivedAccount(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
     if (!vault.mnemonic) {
-      throw new RefusedBeforeWrite("No recovery phrase stored for this wallet");
+      throw new RefusedBeforeWrite(NO_RECOVERY_PHRASE_REFUSAL);
     }
     const { account, privateKey } = await deriveNextFreeAccount(kms, vault, {
       accountContractType: input.accountContractType,
@@ -155,28 +212,26 @@ export const vaultCreationMethods = ({
   },
   async importRawKeyAccount(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
-    const { account, privateKey } = await deriveImportedAccount(kms, {
-      accountContractType: input.accountContractType,
-      ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
-      networkId: input.networkId,
-      privateKey: input.privateKey,
-    });
-    if (vault.accounts.some((stored) => stored.id === account.id)) {
-      throw new RefusedBeforeWrite("Account already exists");
-    }
+    const derived = await deriveRawKeyAccounts(kms, input, vault.accounts);
+    const [first] = derived;
+    if (!first) throw new RefusedBeforeWrite("No account to import");
 
+    // Every picked release lands in one write: none is stored without the rest.
     await writeVault(
       encryptedStore,
       {
         ...vault,
-        accounts: [...vault.accounts, account],
-        activeAccountId: account.id,
-        signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
+        accounts: [...vault.accounts, ...derived.map(({ account }) => account)],
+        activeAccountId: first.account.id,
+        signingKeys: [
+          ...vault.signingKeys,
+          ...derived.map(({ account, privateKey }) => ({ accountId: account.id, privateKey })),
+        ],
       },
       input.vaultPassphrase,
     );
 
-    return account;
+    return first.account;
   },
   async addLedgerAccount(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
@@ -207,31 +262,32 @@ export const vaultCreationMethods = ({
     if (vault.accounts.length > 0 || vault.mnemonic !== null) {
       throw new RefusedBeforeWrite("Wallet already exists");
     }
-    const { account, privateKey } = await deriveImportedAccount(kms, {
-      accountContractType: input.accountContractType,
-      ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
-      networkId: input.networkId,
-      privateKey: input.privateKey,
-    });
+    const derived = await deriveRawKeyAccounts(kms, input, []);
+    const [first] = derived;
+    if (!first) throw new RefusedBeforeWrite("No account to import");
 
-    // No recovery phrase exists to retain: the vault stays mnemonic-less.
+    // No recovery phrase exists to retain: the vault stays mnemonic-less. The
+    // vault is created holding every picked release at once.
     await writeVault(
       encryptedStore,
       {
-        accounts: [account],
+        accounts: derived.map(({ account }) => account),
         accountSecrets: [],
         shadowAccountScopes: [],
-        activeAccountId: account.id,
+        activeAccountId: first.account.id,
         importedSeeds: [],
         mnemonic: null,
         originGrants: [],
         schemaVersion: CURRENT_SCHEMA_VERSION,
-        signingKeys: [{ accountId: account.id, privateKey }],
+        signingKeys: derived.map(({ account, privateKey }) => ({
+          accountId: account.id,
+          privateKey,
+        })),
       },
       input.vaultPassphrase,
     );
 
-    return account;
+    return first.account;
   },
   async createLedgerVault(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);

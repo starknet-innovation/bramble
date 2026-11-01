@@ -3,7 +3,43 @@ import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 
 /** Closed vocabulary of actionable privacy refusals; unknown failures remain service errors. */
-export type PrivacyBlockerKind = "deploy" | "fund" | "ledger" | "network" | "pending" | "service";
+export type PrivacyBlockerKind =
+  | "deploy"
+  | "fund"
+  | "ledger"
+  | "network"
+  | "other-wallet"
+  | "pending"
+  | "service";
+
+/**
+ * Privacy-screen statement when another wallet registered this address with
+ * the pool. The pool keeps the first viewing key, so this wallet cannot shield
+ * or unshield here. Approved copy.
+ */
+export const PRIVACY_OTHER_WALLET =
+  "Private balances are off for this account. Another wallet set up its privacy.";
+
+/**
+ * The second privacy-screen line for {@link PRIVACY_OTHER_WALLET}. Approved copy.
+ */
+export const PRIVACY_OTHER_WALLET_NEXT =
+  "Use that wallet to unshield. The funds will then show here.";
+
+/**
+ * Refusal for a private action on an account another wallet registered.
+ * Raised before a proof or a fee is produced. Approved copy.
+ */
+export const PRIVACY_OTHER_WALLET_ACTION =
+  "Another wallet set up privacy for this account. Use that wallet to shield or unshield.";
+
+/**
+ * Retry line when the pool key or this wallet's viewing public key could not
+ * be read. The account is not marked as another wallet's; the next attempt
+ * checks again. Public actions are unaffected.
+ */
+export const PRIVACY_REGISTRATION_UNCHECKED =
+  "Couldn't check this account's privacy setup. Try again.";
 
 /** Registration is an invoke and requires an existing account contract. */
 export const PRIVACY_DEPLOY_REQUIRED = "Deploy this account before enabling private balances";
@@ -85,6 +121,7 @@ export const readPrivacyBlockerError = (value: unknown): PrivacyBlockerError | n
     kind !== "fund" &&
     kind !== "ledger" &&
     kind !== "network" &&
+    kind !== "other-wallet" &&
     kind !== "pending" &&
     kind !== "service"
   )

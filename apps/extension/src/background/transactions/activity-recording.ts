@@ -28,6 +28,20 @@ export const recordSubmittedActivity = async (
 };
 
 /**
+ * Records an accepted broadcast only when no Activity row of any account
+ * already carries its hash, checked and written as one store mutation, so two
+ * overlapping recordings of one hash leave exactly one row and never replace a
+ * row (or the fee it holds) that another path wrote. Resolves true when it
+ * wrote the row, false when a row already held the hash; rejects when the log
+ * cannot be read or written, which callers must treat as "cannot say". Sets
+ * `origin: "wallet"` like {@link recordSubmittedActivity}.
+ */
+export const recordSubmittedActivityIfAbsent = (
+  activity: ActivityLog,
+  entry: SubmittedActivity,
+): Promise<boolean> => activity.recordIfAbsent({ ...entry, origin: "wallet" });
+
+/**
  * Runs the bookkeeping that follows a broadcast — allowance rows, the activity
  * line, and the values they are built from — so that nothing in it can replace
  * the reply. Once a transaction hash exists the caller must answer with that

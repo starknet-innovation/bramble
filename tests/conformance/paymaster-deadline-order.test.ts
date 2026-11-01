@@ -11,7 +11,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { PAYMASTER_UPSTREAM_TIMEOUT_MS } from "../../apps/terminal/api/_lib/upstream-deadlines";
-import { PAYMASTER_TIMEOUT_MS } from "../../packages/features/privacy/src/paymaster/paymaster-rpc";
+import { PAYMASTER_TIMEOUT_MS } from "../../packages/features/transactions/src/routing/paymaster-http";
 
 const MARGIN_MS = 2_000;
 

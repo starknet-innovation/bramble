@@ -15,7 +15,7 @@ named below all agree, and a `bun run check` guard fails if they drift. The pack
 bytes depend on that exact release, so the archive submitted to AMO must be the one CI
 built for the source revision; a zip built elsewhere with a different Bun does not
 reproduce, which is the pin mismatch recorded in
-[#352](https://github.com/starknet-innovation/mc-wallet/issues/352).
+[#352](https://github.com/starknet-innovation/bramble/issues/352).
 
 - **Bun 1.3.3** (<https://bun.sh>)
 - **Node.js 24** with the **npm** it ships (`bun run vendor:privacy` runs `npm ci`)

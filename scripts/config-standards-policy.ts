@@ -133,7 +133,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "build:firefox": "bun run --filter @bramble/extension build:firefox",
   check:
     "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
-  "check:audit": "bun audit --audit-level=high --ignore=GHSA-86w9-cpqp-85rv",
+  "check:audit": "bun audit --audit-level=high",
   // Warns only, never fails: wording is a judgement call. See docs/COPY_STYLE.md.
   "check:copy": "bun run scripts/check-copy.ts",
   "check:coverage": "bun run scripts/check-coverage.ts",
@@ -163,6 +163,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
   "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
+  "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
   "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
 };

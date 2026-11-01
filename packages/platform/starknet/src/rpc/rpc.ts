@@ -23,6 +23,14 @@ export {
  * Re-exported advisory signability probe for recovery candidates (issue 542).
  */
 /**
+ * Re-exported owner read for importing an account by address (issue 398).
+ */
+export {
+  type AccountOwnerInput,
+  type AccountOwnerReading,
+  getAccountOwner,
+} from "../transactions/account-owner";
+/**
  * Re-exported phrase-driven Ready (Argent) guardian removal.
  */
 export {
@@ -70,6 +78,10 @@ export {
   getDeploymentStatus,
   submitAccountDeployment,
 } from "../transactions/deployment";
+/**
+ * Re-exported deployment-status memo for the background RPC wiring.
+ */
+export { rememberDeployedAccounts } from "../transactions/deployment-status-cache";
 /**
  * Re-exported amount helpers and balance reads so callers keep one RPC import path.
  */

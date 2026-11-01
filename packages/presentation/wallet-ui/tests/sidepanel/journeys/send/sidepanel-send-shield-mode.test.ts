@@ -113,7 +113,11 @@ const typeAmount = (app: HTMLElement, value: string): void => {
 const text = (app: HTMLElement, selector: string): string =>
   app.querySelector(selector)?.textContent?.trim() ?? "";
 
-const open = (intent: SendIntent, walletOverrides: Record<string, unknown> = {}) => {
+const open = (
+  intent: SendIntent,
+  walletOverrides: Record<string, unknown> = {},
+  blockShieldStrkShort?: boolean,
+) => {
   const mounted = mount({
     async executePrivacyPreparation() {
       return "0xfeed";
@@ -132,6 +136,7 @@ const open = (intent: SendIntent, walletOverrides: Record<string, unknown> = {})
     privacy: () => registered,
     publicBalances: () => [publicBalance, strkBalance],
     senderAddress: () => account.address,
+    ...(blockShieldStrkShort === undefined ? {} : { blockShieldStrkShort }),
   });
   return mounted;
 };
@@ -231,13 +236,14 @@ describe("a shield shortcut", () => {
     expect(text(app, "#send-review-button")).toBe("Review send");
   });
 
-  test("warns in review when the public STRK cannot cover the pool and network fees", async () => {
+  test("says in review how much STRK the shield needs and how much to add", async () => {
     const { app } = open(shieldIntent, {
       async preparePrivacyDeposit() {
         return {
           id: `sha256:${"d".repeat(64)}`,
           kind: "deposit",
-          // The 50 STRK balance covers the network fee but not the pool fee too.
+          // The 50 STRK balance does not cover the pool fee and the network fee
+          // at its 75 STRK signing ceiling (issue 665).
           networkFee: { overallFee: "50000000000000000000", unit: "FRI" },
           payloadDigest: `sha256:${"d".repeat(64)}`,
           poolAddress: "0xabc",
@@ -255,8 +261,54 @@ describe("a shield shortcut", () => {
 
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("review");
     expect(app.textContent).toContain(
-      "This account's STRK balance is less than this transaction needs",
+      "This shield needs up to 75.000001 STRK in fees. Add 25.000001 STRK, then review again.",
     );
+    // One notice, not the generic one as well.
+    expect(app.textContent).not.toContain("This account's STRK balance is less than");
+    // Warn-only today: the owner has not chosen to block Confirm on a shortfall.
+    expect(app.querySelector<HTMLButtonElement>("#send-confirm-button")?.disabled).toBe(false);
+  });
+
+  test("with blocking on, a STRK-short shield cannot be confirmed or executed", async () => {
+    let executions = 0;
+    let deposits = 0;
+    const { app } = open(
+      shieldIntent,
+      {
+        async executePrivacyPreparation() {
+          executions += 1;
+          return "0xfeed";
+        },
+        async preparePrivacyDeposit() {
+          deposits += 1;
+          return {
+            id: `sha256:${"e".repeat(64)}`,
+            kind: "deposit",
+            networkFee: { overallFee: "50000000000000000000", unit: "FRI" },
+            payloadDigest: `sha256:${"e".repeat(64)}`,
+            poolAddress: "0xabc",
+            poolFeeFri: "0x3e8",
+            route: "public-account",
+            summaries: ["Shield 1 ETH"],
+            symbol: "ETH",
+            tokenId: publicBalance.id,
+          };
+        },
+      },
+      true,
+    );
+    typeAmount(app, "1");
+    submit(app);
+    await flush();
+    expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("review");
+    expect(app.textContent).toContain("Add 25.000001 STRK, then review again.");
+    expect(app.querySelector<HTMLButtonElement>("#send-confirm-button")?.disabled).toBe(true);
+
+    // Even a forced submit reviews again rather than executing the shield.
+    submit(app);
+    await flush();
+    expect(executions).toBe(0);
+    expect(deposits).toBe(2);
   });
 
   test("fails a shield closed when its fee could not be estimated", async () => {

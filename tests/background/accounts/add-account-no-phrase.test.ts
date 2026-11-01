@@ -17,6 +17,8 @@ import { createWalletVaultService } from "@bramble/vault/service";
 import { createWalletReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { friendlyError } from "../../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error";
+import { isPhraselessAddRefusal } from "../../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-shared";
 import {
   extensionSender as sender,
   testExtension,
@@ -88,5 +90,34 @@ describe("wallet.addAccount without a recovery phrase", () => {
         vaultPassphrase,
       }),
     ).rejects.toThrow("No recovery phrase stored for this wallet");
+  });
+
+  // The panel routes a phrase-less wallet's "Regular account" choice to import
+  // only when it recognises this refusal (#740). Both sources must keep matching
+  // it, or the choice falls back to an error page.
+  test("sends a refusal the panel routes to import, from the handler and the vault", async () => {
+    const { handler, service } = await ledgerWallet();
+    const response = await handler(
+      { accountContractType: "openzeppelin", networkId: "SN_MAIN", type: "wallet.addAccount" },
+      sender,
+    );
+    const handlerRefusal = (response as { readonly error: string }).error;
+    const vaultRefusal = await service
+      .addDerivedAccount({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        vaultPassphrase,
+      })
+      .then(
+        () => "",
+        (error: unknown) => (error as Error).message,
+      );
+
+    for (const refusal of [handlerRefusal, vaultRefusal]) {
+      expect(isPhraselessAddRefusal(refusal)).toBe(true);
+      expect(friendlyError(refusal).message).toBe(
+        "This wallet was set up without a recovery phrase. Import an existing account instead.",
+      );
+    }
   });
 });

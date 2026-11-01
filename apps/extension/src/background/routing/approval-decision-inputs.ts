@@ -8,6 +8,7 @@
 import { isUuid } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
+import { type GaslessFeeOffer, isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import { isAccountId } from "@bramble/wallet-model/accounts";
 
 /**
@@ -28,16 +29,18 @@ import { isAccountId } from "@bramble/wallet-model/accounts";
 export const readApprovalIdInput = (
   message: unknown,
 ): {
+  readonly gaslessFee?: GaslessFeeOffer;
   readonly id: string;
   readonly reviewedAccountId?: string;
   readonly reviewedFee?: FeeEstimate;
 } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["id", "reviewedAccountId", "reviewedFee", "type"]) ||
+    !hasOnlyKnownKeys(message, ["gaslessFee", "id", "reviewedAccountId", "reviewedFee", "type"]) ||
     (message["type"] !== "wallet.approveOrigin" && message["type"] !== "wallet.denyOrigin") ||
     typeof message["id"] !== "string" ||
     !isUuid(message["id"]) ||
+    (message["gaslessFee"] !== undefined && !isGaslessFeeOffer(message["gaslessFee"])) ||
     (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"])) ||
     (message["reviewedAccountId"] !== undefined && !isAccountId(message["reviewedAccountId"]))
   ) {
@@ -48,6 +51,7 @@ export const readApprovalIdInput = (
     ...(isAccountId(message["reviewedAccountId"])
       ? { reviewedAccountId: message["reviewedAccountId"] }
       : {}),
+    ...(isGaslessFeeOffer(message["gaslessFee"]) ? { gaslessFee: message["gaslessFee"] } : {}),
     ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
   };
 };

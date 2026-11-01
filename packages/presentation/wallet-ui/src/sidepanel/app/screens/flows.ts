@@ -15,6 +15,7 @@ import type {
   TokenBalance,
   WalletStatus,
 } from "../../../popup/responses/responses";
+import { addressFinderFields } from "../../journeys/onboarding/address-finder-view";
 import { recoveryScanFields, recoveryWordInputs } from "../../journeys/onboarding/onboarding-views";
 import { allowancesFlow } from "../../journeys/portfolio/allowance-views";
 import type { PrivacyDisclosureState } from "../../journeys/privacy/privacy-model";
@@ -275,6 +276,7 @@ export const importKeyFlow = (status: WalletStatus): string =>
           placeholder: "0x…",
           spellcheck: false,
         })}
+        ${addressFinderFields("key", { hidden: true })}
         ${button({
           icon: "wallet",
           label: "Import account",

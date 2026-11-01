@@ -28,6 +28,7 @@ import {
   type NftTokenMetadata,
   resolveNftMetadataUri,
 } from "@bramble/portfolio/nft-token-metadata";
+import { readStrk20PublicKey } from "@bramble/privacy/official-sdk-values";
 import type { Strk20Service } from "@bramble/privacy/service";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import {
@@ -40,8 +41,9 @@ import {
   type SubmitPreparedArgentMultisigInvokeV3Input,
   submitPreparedArgentMultisigInvokeV3,
 } from "@bramble/starknet/multisig-invoke";
-import { withRpcFallback } from "@bramble/starknet/provider";
+import { createRpcProvider, withRpcFallback } from "@bramble/starknet/provider";
 import {
+  type AccountOwnerInput,
   type ArgentRecoveryInput,
   type BalanceInput,
   type BraavosRecoveryInput,
@@ -51,6 +53,7 @@ import {
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  getAccountOwner,
   getArgentRecoveryState,
   getArgentSigningRestriction,
   getBraavosRecoveryState,
@@ -67,6 +70,7 @@ import {
   type NftOwnerInput,
   type NftOwnershipInput,
   type NftTokenUriInput,
+  rememberDeployedAccounts,
   reviewArgentRecovery,
   reviewBraavosRecovery,
   type SigningRestrictionInput,
@@ -177,6 +181,8 @@ export type RuntimeRpc = {
    * 542). Optional so narrow test doubles keep compiling; the scan treats an
    * absent member or a throw as "no verdict".
    */
+  /** Live class and owner key at an address, for importing it by address (issue 398). */
+  readonly getAccountOwner?: (input: AccountOwnerInput) => ReturnType<typeof getAccountOwner>;
   readonly getArgentSigningRestriction?: (
     input: SigningRestrictionInput,
   ) => ReturnType<typeof getArgentSigningRestriction>;
@@ -208,9 +214,24 @@ export type RuntimeRpc = {
   readonly submitBraavosRecovery?: (
     input: BraavosRecoveryInput,
   ) => ReturnType<typeof submitBraavosRecovery>;
+  /**
+   * Whether the account contract exists. The production wiring reuses a
+   * "deployed" answer per address and endpoint list for a few minutes (never
+   * for a local node); "not deployed" and failures always read the chain.
+   */
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
+  /**
+   * Reads the public viewing key an address registered with a privacy pool,
+   * `0x0` when none. Optional so existing RPC stubs stay valid; throws when the
+   * pool cannot be read.
+   */
+  readonly getStrk20PublicKey?: (input: {
+    readonly address: string;
+    readonly poolAddress: string;
+    readonly rpcUrls: readonly string[];
+  }) => Promise<string>;
   readonly getNftOwner: (input: NftOwnerInput) => ReturnType<typeof getNftOwner>;
   /**
    * Identifies and proves ERC721/ERC1155 holdings. Optional so existing narrow
@@ -345,11 +366,14 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   estimateInvokeFee,
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
+  getAccountOwner,
   getArgentSigningRestriction,
   getArgentRecoveryState,
   getBraavosRecoveryState,
   getBraavosSigningRestriction,
-  getDeploymentStatus,
+  getDeploymentStatus: rememberDeployedAccounts(getDeploymentStatus),
+  getStrk20PublicKey: ({ address, poolAddress, rpcUrls }) =>
+    readStrk20PublicKey(createRpcProvider, rpcUrls, poolAddress, address),
   reviewArgentRecovery,
   reviewBraavosRecovery,
   submitArgentRecovery,

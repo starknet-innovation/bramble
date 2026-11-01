@@ -4,6 +4,7 @@
 
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
 import { type ActivityEntry, isActivityEntry } from "@bramble/transactions/activity";
+import { isRelaySignature, type RelaySignature } from "@bramble/transactions/relay-signatures";
 import {
   isHexChainId,
   isStarkFieldElement,
@@ -366,6 +367,8 @@ export type ActivityResponse = {
   readonly activity: readonly ActivityEntry[];
   readonly historyUnavailable?: boolean;
   readonly ok: true;
+  /** OutsideExecution messages signed on this device for relay (issue 299). */
+  readonly relays?: readonly RelaySignature[];
 };
 
 /**
@@ -374,11 +377,23 @@ export type ActivityResponse = {
 export const isActivityResponse = (value: unknown): value is ActivityResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["activity", "historyUnavailable", "ok"]) &&
+  hasOnlyKnownKeys(value, ["activity", "historyUnavailable", "ok", "relays"]) &&
   value["ok"] === true &&
   Array.isArray(value["activity"]) &&
   value["activity"].every(isActivityEntry) &&
-  (value["historyUnavailable"] === undefined || typeof value["historyUnavailable"] === "boolean");
+  (value["historyUnavailable"] === undefined || typeof value["historyUnavailable"] === "boolean") &&
+  (value["relays"] === undefined ||
+    (Array.isArray(value["relays"]) && value["relays"].every(isRelaySignature)));
+
+/**
+ * The activity a panel loads: the feed, whether chain history was reachable,
+ * and the messages signed for relay, listed beside the feed.
+ */
+export type LoadedActivity = {
+  readonly entries: ActivityResponse["activity"];
+  readonly historyUnavailable: boolean;
+  readonly relays: readonly RelaySignature[];
+};
 
 /**
  * Tracked allowances response accepted from the background boundary. `notices`

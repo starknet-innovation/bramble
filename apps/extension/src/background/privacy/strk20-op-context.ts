@@ -30,6 +30,7 @@ import {
 } from "../transactions/trusted-recipients";
 import { strk20AccountContext } from "./strk20-account-context";
 import type { Strk20JobRegistry } from "./strk20-preparation-jobs";
+import { strk20RegistrationBlock } from "./strk20-registration-owner";
 import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations";
 
 /**
@@ -230,11 +231,24 @@ export const resolvePrivacyContext = async (
     };
   }
   if (active.account.derivation.kind === "ledger") {
+    // TODO: Ledger provisioning retains a viewing key (`ledger-strk20-typed-data-v1`
+    // in account-secrets.ts). Once that ships, compare the pool key with the
+    // public key of that retained key instead of refusing every Ledger account
+    // here. This blocker stays first so a pool read never reclassifies one.
     return {
       error: "Private balances are not available for Ledger accounts",
       privacyBlocker: "ledger",
     };
   }
+  const registration = await strk20RegistrationBlock({
+    account: active.account,
+    passphrase: active.vaultPassphrase,
+    preferences,
+    readRegistered: deps.runtimeRpc.getStrk20PublicKey,
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[active.networkId], preferences),
+    wallet: deps.wallet,
+  });
+  if (registration) return registration;
   const token = tokenId
     ? preferences.tokens.find(
         (stored) => stored.id === tokenId && stored.networkId === active.networkId,
