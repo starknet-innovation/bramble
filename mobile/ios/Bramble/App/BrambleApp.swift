@@ -114,6 +114,14 @@ struct RootView: View {
                     WalletShell()
                 }
             }
+            // A route change tears down the screen whose field held the keyboard (Remove wallet's
+            // passphrase, a lock mid-typing). Without this the keyboard outlives its field, unseen,
+            // and swallows taps on the next screen's foot actions.
+            .onChange(of: store.route) {
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+                )
+            }
             // Errors, plus the few confirmations raised through `store.notify`; other success is
             // shown in place by each screen. Stacked above the screen's foot action when it marks
             // one, else at the dock offset.
