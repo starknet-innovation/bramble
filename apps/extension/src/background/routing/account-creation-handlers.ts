@@ -139,13 +139,21 @@ const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) =>
   if (!createKeyVault) {
     return { error: "wallet unavailable" };
   }
+  // The Ready proof reads the chain at the pasted key's addresses. With a vault
+  // already present the write is refused anyway, so those reads never leave.
+  if (input.accountContractType === "argent" && (await ctx.wallet.status()).hasVault) {
+    throw new WalletError("Wallet already exists");
+  }
   const pick = await provedReadyPick(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
-    // A vault that already exists, or one created while the proof read the
-    // chain, is not this request's to write into. Refused before the network
-    // preference or the session is touched, on every path: the no-session
-    // branch does not undo a network it already stored.
-    if ((await ctx.wallet.status()).hasVault) {
+    // The proof read the chain for a wallet that did not exist yet; one
+    // created meanwhile (or queued ahead of this task) was never this
+    // request's to write into. Without a session, the network write that
+    // follows is undone only on the service's own refusal, and a wrong
+    // passphrase fails decryption instead, so an existing vault is refused
+    // here. Both before the network preference or the session is touched.
+    const unguarded = pick.address !== undefined || !ctx.session.peekPassphrase();
+    if (unguarded && (await ctx.wallet.status()).hasVault) {
       throw new WalletError("Wallet already exists");
     }
     const account = await runVaultCreationWithNetwork(

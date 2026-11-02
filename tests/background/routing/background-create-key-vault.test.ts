@@ -187,6 +187,26 @@ describe("wallet.createKeyVault routing", () => {
     expect(session.getPassphrase()).toBeNull();
   });
 
+  test("a locked vault is refused before a wrong passphrase can switch the network", async () => {
+    // A wrong passphrase fails decryption rather than refusing, so nothing
+    // after the network write would undo it.
+    const preferencesStore = await sepolia();
+    let writes = 0;
+    const wallet = {
+      ...createWallet({ hasVault: true }),
+      async createKeyVault(): Promise<never> {
+        writes += 1;
+        throw new Error("decryption failed");
+      },
+    };
+    const handler = createMessageHandler(wallet, testExtension, { preferencesStore });
+    await expect(handler(validMessage, sender)).resolves.toEqual({
+      error: "Wallet already exists",
+    });
+    expect(writes).toBe(0);
+    expect((await preferencesStore.read()).activeNetworkId).toBe("SN_SEPOLIA");
+  });
+
   test("an existing vault refuses a Ready release import before the network changes", async () => {
     const preferencesStore = await sepolia();
     const captured: CreateKeyVaultInput[] = [];

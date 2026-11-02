@@ -216,11 +216,7 @@ export const walletStub = {
     return {
       accountCount: 1,
       activeAccountId: account.id,
-      // First-run key-vault creation refuses when a vault is already reported.
-      // The scan's createKeyVault entry has to reach the write, so this stub
-      // reports none. Ready-key reads then take the first-run path; the
-      // harness still unlocks, and the chain read is unchanged.
-      hasVault: false,
+      hasVault: true,
       locked: false,
       ready: true,
     };
