@@ -99,8 +99,7 @@ final class OnboardingFlowTests: XCTestCase {
     /// restored (a selection is the only gate).
     private func discoverAndRestore(_ app: XCUIApplication, expecting account: String) {
         XCTAssertTrue(app.staticTexts["Find your accounts"].waitForExistence(timeout: 20))
-        let done = app.staticTexts["Search complete. Checked 20 indices across every account type."]
-        XCTAssertTrue(done.waitForExistence(timeout: 180), "discovery completes against Mainnet")
+        XCTAssertTrue(UITest.searchComplete(app).waitForExistence(timeout: 180), "discovery completes against Mainnet")
         let group = app.buttons["Bramble accounts"]
         if (group.value as? String) != "Expanded" { tap(group) }
         let row = app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", short(account))).firstMatch
