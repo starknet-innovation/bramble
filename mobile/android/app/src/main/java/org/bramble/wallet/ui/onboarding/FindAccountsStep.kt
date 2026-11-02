@@ -50,17 +50,16 @@ private val FAMILIES =
         AccountFamily.BRAAVOS to "Braavos accounts",
     )
 
-private const val FIND_ACCOUNTS_LEDE =
-    "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. " +
-        "Accounts with on-chain activity are selected automatically."
+private const val FIND_ACCOUNTS_LEDE = "Accounts with on-chain activity are selected automatically."
 
 /**
  * `data-onboarding-step="recovery-accounts"` (`recovery-account-ui.ts`), twin of the iOS
- * `FindAccountsStep`: the first 20 indices searched for Bramble, Ready and Braavos accounts (the
- * core derives and judges; [RecoveryScanDriver] only moves bytes), active ones selected, an
- * advanced manual index, and one atomic restore. The selection alone gates it, as the extension's
- * `refreshGate` since its Mainnet acknowledgement was deleted. No "Back to passphrase": the vault is
- * already sealed with recovery pending, so a lock or kill resumes here (`Route.DISCOVERY`).
+ * `FindAccountsStep`: Bramble, Ready and Braavos accounts searched to the gap limit past the last
+ * active index (the core derives and judges; [RecoveryScanDriver] only moves bytes), active ones
+ * selected, an advanced manual index, and one atomic restore. The selection alone gates it, as
+ * the extension's `refreshGate` since its Mainnet acknowledgement was deleted. No "Back to
+ * passphrase": the vault is already sealed with recovery pending, so a lock or kill resumes here
+ * (`Route.DISCOVERY`).
  */
 @Composable
 fun FindAccountsStep(

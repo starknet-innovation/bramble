@@ -122,9 +122,8 @@ feedback moves to the shared `CopyButton` (§2.8).
 The "Review discovered accounts" and "Confirm recovered accounts" names in the brief are ui-lab
 checkpoint labels. The rendered step is `recovery-accounts`:
 
-- Back button "Back to passphrase". Title "Find your accounts". Lede "Bramble checks the first 20
-  account indices for Bramble, Ready, and Braavos accounts. Accounts with on-chain activity are
-  selected automatically."
+- Back button "Back to passphrase". Title "Find your accounts". Lede "Accounts with on-chain
+  activity are selected automatically."
 - Status line: "Ready to search." → "Searching every account type…" → "Checked N of T indices…",
   where T is the gap-limit target (`recoveryScanTarget`: 20 past the last index with activity, at
   least 20, at most 200)
