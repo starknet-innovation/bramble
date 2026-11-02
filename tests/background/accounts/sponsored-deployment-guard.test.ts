@@ -264,10 +264,10 @@ describe("sponsored attempt hold", () => {
     const scope = { accountId: ozAccount.id, networkId: "SN_SEPOLIA" } as const;
     await activity.record({ ...scope, hash: "0x5ab", kind: "transfer", summary: "Sent 1 STRK" });
     await activity.updateStatuses({ "0x5ab": { status: "rejected" } }, scope);
+    // The transfer's hash is not the deploy's, so the reply does not name it.
     expect(await submit(deps, 0)).toEqual({
       error: INDETERMINATE_RPC_WRITE_MESSAGE,
       submissionUnknown: true,
-      transactionHash: "0x5ab",
     });
     const [row] = await activity.list();
     expect(row).toMatchObject({ hash: "0x5ab", kind: "transfer", summary: "Sent 1 STRK" });
