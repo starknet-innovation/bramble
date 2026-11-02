@@ -79,7 +79,9 @@ final class ZZProbeTests: XCTestCase {
 ```
 
 Run `xcodegen generate` (it picks up new files), then
-`TEST_RUNNER_PROBE_OUT=<scratchpad> xcodebuild … -only-testing:BrambleUITests/ZZProbeTests test`.
+`TEST_RUNNER_PROBE_OUT=<scratchpad> xcodebuild … -resultBundlePath <scratchpad>/probe.xcresult
+-only-testing:BrambleUITests/ZZProbeTests test`. On a fresh install `openWallet` types the
+published phrase, so delete `probe.xcresult` afterwards.
 Read the PNG and the tree, then delete the probe and regenerate. For a fresh-install start, run
 `xcrun simctl uninstall "$D" org.bramble.wallet` first. Imports and test assertions can fail under
 a newer Xcode than CI's while the app still works: read `probe.png` before blaming the app.
@@ -165,7 +167,8 @@ adb logcat -d -s 'PROBE:*'          # the Compose semantics tree: text, descript
 - Never set the `*_ACK` variables or `*_MAINNET_MNEMONIC`, and never tap "Confirm and send" outside
   the offline fixtures.
 - Delete every `.xcresult` from a run that typed a phrase. XCUITest records typed text in it.
-- Screenshots and probes go in the scratchpad, never in the repo.
+- Screenshots and result bundles go in the scratchpad. Probe sources must sit in the test
+  targets, so `mobile/.gitignore` ignores `ZZProbe*`. Delete them after use anyway.
 
 ## Before calling it done
 

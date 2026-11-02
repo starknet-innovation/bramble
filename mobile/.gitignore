@@ -1,2 +1,4 @@
 # Pinned lint tools downloaded and SHA-256 verified by mobile/scripts/lint-tools.sh.
 /.tools/
+# Throwaway probe tests from .claude/skills/bramble-mobile-verify, never committed.
+ZZProbe*

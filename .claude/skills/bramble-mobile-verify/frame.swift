@@ -11,6 +11,10 @@ func find(_ key: String, in node: Any) -> Any? {
 }
 
 let args = CommandLine.arguments
+guard args.count == 4 else {
+    FileHandle.standardError.write(Data("usage: swift frame.swift \"<device type>\" <shot.png> <out.png>\n".utf8))
+    exit(2)
+}
 let profile = "/Library/Developer/CoreSimulator/Profiles/DeviceTypes/\(args[1]).simdevicetype/Contents/Resources"
 let plist = NSDictionary(contentsOfFile: "\(profile)/profile.plist") as! [String: Any]
 let caps = NSDictionary(contentsOfFile: "\(profile)/capabilities.plist") as! [String: Any]
@@ -29,7 +33,8 @@ let ctx = CGContext(data: nil, width: Int(outline.width * scale), height: Int(ou
                     bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
 ctx.scaleBy(x: scale, y: scale)
 ctx.drawPDFPage(frame)
-// ponytail: centres the screen in the outline; right for phones, check by eye on an asymmetric one.
+// Centres the screen in the outline. That fits phones; an asymmetric outline (the Duo's hinge)
+// can sit a couple of points off, so check it by eye.
 ctx.draw(shot, in: CGRect(origin: CGPoint(x: (outline.width - screen.width) / 2,
                                           y: (outline.height - screen.height) / 2), size: screen))
 try NSBitmapImageRep(cgImage: ctx.makeImage()!).representation(using: .png, properties: [:])!

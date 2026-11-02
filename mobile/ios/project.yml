@@ -6,7 +6,8 @@ options:
   deploymentTarget:
     iOS: "17.0"
   # Off: with sources outside mobile/ios, XcodeGen 2.44.1 puts a `mobile` group under two parents,
-  # which Xcode 27 refuses to open ("is a member of more than one group").
+  # which Xcode 27 refuses to open ("is a member of more than one group"). The navigator is flatter
+  # for everyone as a result, on every Xcode; the build is unchanged.
   createIntermediateGroups: false
 settings:
   base:
