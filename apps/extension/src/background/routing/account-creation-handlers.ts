@@ -141,11 +141,11 @@ const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) =>
   }
   const pick = await provedReadyPick(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
-    // The proof read the chain for a wallet that did not exist yet; one
-    // created meanwhile (or queued ahead of this task) was never this
-    // request's to write into. Refused inside the coordinator, before the
-    // network preference or the session is touched.
-    if (pick.address !== undefined && (await ctx.wallet.status()).hasVault) {
+    // A vault that already exists, or one created while the proof read the
+    // chain, is not this request's to write into. Refused before the network
+    // preference or the session is touched, on every path: the no-session
+    // branch does not undo a network it already stored.
+    if ((await ctx.wallet.status()).hasVault) {
       throw new WalletError("Wallet already exists");
     }
     const account = await runVaultCreationWithNetwork(

@@ -124,6 +124,12 @@ export type WalletStubOptions = {
   readonly captureSetActiveAccount?: (input: SetActiveAccountInput) => void;
   readonly captureCreate?: (input: CreateVaultAccountInput) => void;
   readonly captureCreateKeyVault?: (input: CreateKeyVaultInput) => void;
+  /**
+   * Whether `status()` reports a vault. A function is re-read on every call,
+   * so a suite can show a vault appearing between two reads. Defaults to true.
+   * First-run `wallet.createKeyVault` refuses when a vault is present.
+   */
+  readonly hasVault?: boolean | (() => boolean);
   readonly captureGrant?: (input: OriginGrantInput) => void;
   readonly captureSign?: (input: SignHashInput) => void;
   /**
@@ -253,7 +259,9 @@ export const createWallet = (options: WalletStubOptions = {}) => {
       };
     },
     async status() {
-      return status;
+      const reported = options.hasVault;
+      if (reported === undefined) return status;
+      return { ...status, hasVault: typeof reported === "function" ? reported() : reported };
     },
   };
 };
