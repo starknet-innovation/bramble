@@ -317,7 +317,8 @@ const send = async (
   // would replace that row and shed its fee, so the row is written only if no
   // row of any account carries the hash, checked and written as one store
   // mutation. Otherwise — or when the log cannot say — it is not tied to the
-  // attempt: the hold stays, and the chain decides when it ends.
+  // attempt: the hold stays, and the chain decides when it ends. The reply
+  // still names the hash this call already holds.
   const recorded = await recordSubmittedActivityIfAbsent(deps.activity, {
     accountId: account.id,
     feePayer: "sponsor",
@@ -326,7 +327,9 @@ const send = async (
     networkId: account.networkId,
     summary: DEPLOY_ACTIVITY_SUMMARY,
   }).catch(() => false);
-  if (!recorded) return submissionUnknownResponse(INDETERMINATE_RPC_WRITE_MESSAGE);
+  if (!recorded) {
+    return submissionUnknownResponse(INDETERMINATE_RPC_WRITE_MESSAGE, transactionHash);
+  }
   await route.pending.recordHash(account, transactionHash).catch(() => undefined);
   return { ok: true, transactionHash };
 };
@@ -341,8 +344,9 @@ const send = async (
  * ({@link DEPLOYMENT_IN_PROGRESS}), when the chain shows it deployed (also
  * after a broadcast refusal), and when the chain cannot say
  * ({@link DEPLOYMENT_STATUS_UNKNOWN}). The attempt is persisted before the
- * relay hears anything. A lost reply is answered as submission-unknown, and so
- * is a relay hash Activity already holds. Otherwise the relay's hash is
+ * relay hears anything. A lost reply is answered as submission-unknown. So is
+ * a relay hash Activity already holds or cannot record, and that reply carries
+ * the relay hash; the hold stays without it. Otherwise the relay's hash is
  * recorded in Activity as a sponsored deploy, so no fee is ever attributed to
  * the user. The hash is the relay's
  * claim: whether the account is deployed is read from the chain, never from
