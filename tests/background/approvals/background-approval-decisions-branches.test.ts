@@ -14,15 +14,24 @@ import {
   type ApprovalDecisionDeps,
   handleApprovalDecision,
 } from "../../../apps/extension/src/background/approvals/approval-decisions";
+import { pendingGaslessRefusal } from "../../../apps/extension/src/background/approvals/approval-fee-refusal";
 import {
   type ApprovalQueue,
   createApprovalQueue,
   type PendingApproval,
 } from "../../../apps/extension/src/background/approvals/approvals";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { FEE_REVIEW_REQUIRED } from "../../../apps/extension/src/background/transactions/fee-review";
 
 const ORIGIN = "https://dapp.example";
 const REVIEWED_FEE = { overallFee: "1", unit: "FRI" as const };
+const GASLESS_OFFER = {
+  amount: "1000",
+  decimals: 6,
+  label: "USDC",
+  tokenAddress: "0x1",
+} as const;
+const MOVED_FEE = { error: "the fee changed since this request was reviewed" };
 const uuid = () => crypto.randomUUID();
 const CONTEXT = {
   accountId: "SN_MAIN:0x1",
@@ -111,6 +120,17 @@ describe("handleApprovalDecision invalid input / not-found", () => {
     const deps = baseDeps(doubleQueue(null, null));
     await expect(
       handleApprovalDecision(deps, "wallet.approveOrigin", approve(uuid())),
+    ).resolves.toEqual({ error: "approval not found" });
+  });
+
+  test("a gasless approve of an unknown id is approval-not-found", async () => {
+    const deps = baseDeps(doubleQueue(null, null));
+    await expect(
+      handleApprovalDecision(deps, "wallet.approveOrigin", {
+        gaslessFee: GASLESS_OFFER,
+        id: uuid(),
+        type: "wallet.approveOrigin",
+      }),
     ).resolves.toEqual({ error: "approval not found" });
   });
 
@@ -312,5 +332,29 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
         type: "wallet.approveOrigin",
       }),
     ).resolves.toEqual({ error: "wallet locked" });
+  });
+});
+
+describe("pendingGaslessRefusal", () => {
+  const pending = (
+    kind: PendingApproval["kind"],
+    extra: Partial<PendingApproval> = {},
+  ): PendingApproval => ({ id: uuid(), kind, origin: ORIGIN, ...extra });
+
+  test("a missing approval is not a fee-review failure", () => {
+    expect(pendingGaslessRefusal(null, GASLESS_OFFER)).toBeNull();
+  });
+
+  test("a non-invoke approval still requires a fee review, and an invoke binds its offer", () => {
+    expect(pendingGaslessRefusal(pending("connect"), GASLESS_OFFER)).toEqual(FEE_REVIEW_REQUIRED);
+    expect(
+      pendingGaslessRefusal(pending("invoke", { gaslessFees: [GASLESS_OFFER] }), GASLESS_OFFER),
+    ).toBeNull();
+    expect(
+      pendingGaslessRefusal(pending("invoke", { gaslessFees: [GASLESS_OFFER] }), {
+        ...GASLESS_OFFER,
+        amount: "2",
+      }),
+    ).toEqual(MOVED_FEE);
   });
 });
