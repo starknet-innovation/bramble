@@ -8,18 +8,29 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join, resolve } from "node:path";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { Account, ec, hash, RpcProvider, uint256 } from "starknet";
+import { Account, constants, ec, hash, RpcProvider, uint256 } from "starknet";
 import { envSeed } from "./dataset-env";
+import { sepoliaSecret } from "./sepolia-seeds";
 
 export { envSeed };
 
 const { grindKey, getStarkKey } = ec.starkCurve;
 
-export const NODE = "https://mainnet.nodes.starknet.org/rpc/v0_10";
+// Which chain the dataset scripts act on: BRAMBLE_DATASET_NETWORK=sepolia opts
+// in to the Sepolia set (issue 821); unset means mainnet, anything else throws.
+const NETWORK_ENV = process.env["BRAMBLE_DATASET_NETWORK"] ?? "mainnet";
+if (NETWORK_ENV !== "mainnet" && NETWORK_ENV !== "sepolia") {
+  throw new Error(`BRAMBLE_DATASET_NETWORK must be mainnet or sepolia, not ${NETWORK_ENV}`);
+}
+export const NETWORK: "mainnet" | "sepolia" = NETWORK_ENV;
+
+export const NODE = `https://${NETWORK}.nodes.starknet.org/rpc/v0_10`;
+export const CHAIN_ID =
+  NETWORK === "sepolia" ? constants.StarknetChainId.SN_SEPOLIA : constants.StarknetChainId.SN_MAIN;
 // The committed dataset ledger, read and rewritten in place by the matrix
 // stages: one JSON file per fixture group (the id before its first "/"), so
 // each stays under the repository's 500-line file cap as the matrix grows.
-const MANIFEST_DIR = resolve(import.meta.dir, "manifest");
+const MANIFEST_DIR = resolve(import.meta.dir, "manifest", NETWORK);
 
 export const CLASSES = {
   argent040: "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
@@ -39,9 +50,13 @@ export const TOKENS = {
     decimals: 18,
   },
   // Circle-native USDC (what users hold since the bridged->native migration),
-  // NOT the legacy StarkGate-bridged 0x053c9125… token.
+  // NOT the legacy StarkGate-bridged token (0x053c9125… mainnet, 0x053b40a6…
+  // Sepolia).
   USDC: {
-    address: "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
+    address:
+      NETWORK === "sepolia"
+        ? "0x0512feac6339ff7889822cb5aa2a86c848e9d392bb0e3e237c008674feed8343"
+        : "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
     decimals: 6,
   },
 } as const;
@@ -70,6 +85,16 @@ export function braavosKeypair(mnemonic: string, index: number): Keypair {
   return { priv, pub: getStarkKey(priv) };
 }
 
+/** Bramble (Krusty semantics): BIP-39 seed directly, account axis. */
+export function brambleKeypair(mnemonic: string, account: number): Keypair {
+  const node = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive(
+    `m/44'/9004'/${account}'/0/0`,
+  );
+  if (!node.privateKey) throw new Error("derivation failed");
+  const priv = `0x${grindKey(node.privateKey)}`;
+  return { priv, pub: getStarkKey(priv) };
+}
+
 export const argentAddress = (pub: string, cls: string): string =>
   "0x" +
   BigInt(
@@ -81,13 +106,25 @@ export const argentAddress = (pub: string, cls: string): string =>
 export const argentConstructor = (pub: string, cls: string): string[] =>
   cls === CLASSES.argent040 ? ["0x0", pub, "0x1"] : [pub, "0x0"];
 
+/**
+ * The account that funds and deploys fixtures: an OZ 3.0.0 account at
+ * m/44'/9004'/0'/0/0. On mainnet it is the original deployer (its own seed,
+ * salt = pubkey). On Sepolia it is TA-01 on the S-BRM seed with salt
+ * 0, the shape Bramble's own OZ import finds, so the bank imports as TA-01.
+ */
+export function deployerKeys(): Keypair & { readonly salt: string; readonly address: string } {
+  const sepolia = NETWORK === "sepolia";
+  const { priv, pub } = brambleKeypair(
+    sepolia ? sepoliaSecret("S-BRM") : envSeed("BRAMBLE_DATASET_SEED_DEPLOYER"),
+    0,
+  );
+  const salt = sepolia ? "0x0" : pub;
+  const address = `0x${BigInt(hash.calculateContractAddressFromHash(salt, CLASSES.oz300, [pub], 0)).toString(16)}`;
+  return { priv, pub, salt, address };
+}
+
 export function deployerAccount(): Account {
-  const seed = envSeed("BRAMBLE_DATASET_SEED_DEPLOYER");
-  const node = HDKey.fromMasterSeed(mnemonicToSeedSync(seed)).derive("m/44'/9004'/0'/0/0");
-  if (!node.privateKey) throw new Error("derivation failed");
-  const priv = `0x${grindKey(node.privateKey)}`;
-  const pub = getStarkKey(priv);
-  const address = `0x${BigInt(hash.calculateContractAddressFromHash(pub, CLASSES.oz300, [pub], 0)).toString(16)}`;
+  const { priv, address } = deployerKeys();
   return new Account({ provider, address, signer: priv, cairoVersion: "1" });
 }
 

@@ -8,12 +8,13 @@
 import { createECDH } from "node:crypto";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { Account, constants, ec, hash, num, Signer, uint256 } from "starknet";
+import { Account, ec, hash, num, Signer, uint256 } from "starknet";
 import { envLines } from "./dataset-env";
 import {
   argentAddress,
   argentConstructor,
   braavosKeypair,
+  CHAIN_ID,
   CLASSES,
   classAt,
   deployerAccount,
@@ -32,7 +33,6 @@ import {
 const { grindKey, getStarkKey, poseidonHashMany } = ec.starkCurve;
 
 const IMPL = "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
-const CHAIN_ID = constants.StarknetChainId.SN_MAIN;
 const UDC = "0x041a78e741e5af2fec34b695679bc6891742439f7afb8484ecd7766661ad02bf";
 const STRK_FLOAT = 2n * 10n ** 18n;
 

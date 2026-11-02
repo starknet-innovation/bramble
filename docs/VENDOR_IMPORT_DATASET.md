@@ -183,7 +183,7 @@ key, custom-salt and UDC-unique D4 shapes, a funded custom-salt counterfactual
 (D5), a 25th-word fixture (`passphrase/0`, since removed: neither vendor
 exposes a BIP-39 passphrase), a Bramble-axis control, the cross-vendor account,
 and the nine app-made ground-truth accounts. Ledger of record:
-`tools/vendor-dataset/manifest/` (one file per fixture group). Two Braavos tooling facts worth keeping:
+`tools/vendor-dataset/manifest/mainnet/` (one file per fixture group). Two Braavos tooling facts worth keeping:
 fee estimation must run with validation on (the constructor parses the
 signature, so SKIP_VALIDATE's empty signature reverts), and the deploy
 signature carries the full `AdditionalDeploymentParams` struct poseidon-signed
