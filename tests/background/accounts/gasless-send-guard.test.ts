@@ -142,6 +142,9 @@ describe("held gasless send", () => {
     expect(gaslessFeeSummary("Sent 1.5 ETH", { amount: "1000", decimals: 6, token: "USDC" })).toBe(
       "Sent 1.5 ETH (network fee 0.001 USDC)",
     );
+    expect(gaslessFeeSummary("Sent 1.5 ETH", { amount: "nope", decimals: 6, token: "USDC" })).toBe(
+      "Sent 1.5 ETH (network fee USDC)",
+    );
   });
 });
 
