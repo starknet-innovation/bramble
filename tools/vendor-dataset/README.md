@@ -16,8 +16,13 @@ extension.
   Sepolia seed's scope-doc id (`S-BRM`, …) to its variable.
 - The Sepolia deployer is TA-01, Bramble's account 0 on `S-BRM` with salt 0. Print its address with
   `BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/deployer-address.ts`,
-  fund it from the faucet, then run `deploy-deployer.ts` the same way. App-made
-  and Ledger seeds stay in the password manager.
+  fund it from the faucet, then run `deploy-deployer.ts` the same way.
+- `matrix-stage-sepolia.ts` builds the scripted TA fixtures from those seeds
+  and keys (one `sepolia-stage-*.ts` file per seed group, sharing
+  `sepolia-fixtures.ts`). It is idempotent; pass a TA id to run one fixture:
+  `BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/matrix-stage-sepolia.ts TA-08`.
+  The S-RDY guardian fixtures (TA-12, TA-13) run only once the app-made seed is
+  in the seed file as `BRAMBLE_DATASET_SEED_S_RDY`.
 - `manifest/<network>/` is the dataset ledger, with one file per fixture group. It records
   every account's provenance, expected import outcome and transaction log
   (addresses and transaction hashes only, no key material). The matrix stages

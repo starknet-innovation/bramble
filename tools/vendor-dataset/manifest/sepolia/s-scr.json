@@ -1,0 +1,249 @@
+{
+  "s-scr/TA-15": {
+    "id": "s-scr/TA-15",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 5,
+    "address": "0x561ed08d54f03194ecdf2911d789f7581ce7b25f42518186dd9aaa4a0662d05",
+    "pubkey": "0x1819948fc060673ece0d8942a7b0e89e125e5e896f0432f2e72bb20f80f46c",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "simulated smart account: guardian from deploy, salt not the pubkey",
+    "detectability": "D4",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "salt": "0x15a175",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "funded STRK 0x296db4399f021c5a3dcace1892f8917ebeb736e5fe17a33de472053461ee540",
+      "deployed 0x38d1d997a1f4f11e4d5581a29c7a3c1b69daec999dd0772dd0f6ebb63bc4480"
+    ]
+  },
+  "s-scr/TA-16": {
+    "id": "s-scr/TA-16",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 0,
+    "address": "0x61249778efbdc5c014fda9252b2ecf5e082909ea1b2579c65d0507ff008e6cc",
+    "pubkey": "0x2e654d0b3732f2a8f4d89c830bc01094137d511cb2560f29a957ba171cb1fc6",
+    "classAtDeploy": "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
+    "expected": "Argent 0.3.1, never upgraded",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x2e654d0b3732f2a8f4d89c830bc01094137d511cb2560f29a957ba171cb1fc6",
+      "liveClass": "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b"
+    },
+    "log": [
+      "funded STRK 0x1207807d1ba5285353439467558b3cb4ae3b6c05bc6c9dfdd36a6eabf4ef0dd",
+      "deployed 0xb32ec1d293488789e1aaa3625547d05149ffa01160dc9eb4d7e96fdfc888cc"
+    ]
+  },
+  "s-scr/TA-17": {
+    "id": "s-scr/TA-17",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 1,
+    "address": "0x647510a9568d8f1939f5dbfdf1e4c4c687c14db04839e10c0919e9523e73ac2",
+    "pubkey": "0x720469f4c9d7e0941e944fb91dc62031173b57d4e881eec0f4da499b6fdc20c",
+    "classAtDeploy": "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
+    "expected": "address from the 0.3.0 shape; live class 0.4.0",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x720469f4c9d7e0941e944fb91dc62031173b57d4e881eec0f4da499b6fdc20c",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "upgradedTo": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "funded STRK 0x7bf6259c0fb140ca3da8f959a04dcaa0b86afa72817fcd69386493f5cd6e954",
+      "deployed 0x28984c06db400f868157267156148dc49c02c5d40268e4806b6764a88d9e0f4",
+      "upgrade 0x771429ac599b0c8bd02c7ec6cef91a1cba07de9cedc6f20f1cefd2c519abf87"
+    ]
+  },
+  "s-scr/TA-18": {
+    "id": "s-scr/TA-18",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 2,
+    "address": "0x17de1aebde1b700487e5347c734905837757ced197a1ddc3acef82c10ba577b",
+    "pubkey": "0x1d0315eca008d2377faf24a924efdbd514127288c146039fce33ab1d1ac4734",
+    "classAtDeploy": null,
+    "expected": "Argent 0.3.1 funded counterfactual",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "STRK",
+      "salt": "0x1d0315eca008d2377faf24a924efdbd514127288c146039fce33ab1d1ac4734",
+      "shapeClass": "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b"
+    },
+    "log": ["funded STRK 0xe5ddbc9a9e606f5387685d76af3fefe39ec0c8e60e76be9bf3b6fa41934df5"]
+  },
+  "s-scr/TA-19": {
+    "id": "s-scr/TA-19",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "bramble-account",
+    "index": 0,
+    "address": "0xb3ef2d4cb2e01879da853d7c0ae2dbed848ad899a72949dfda2a2ba96d22e3",
+    "pubkey": "0x77bbb994aa492033da3c2ee22da32c070cb2a8b9eab8dd762dec92c7ebcd1e9",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "Argent 0.4.0 on Bramble's own ladder (account 0)",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x77bbb994aa492033da3c2ee22da32c070cb2a8b9eab8dd762dec92c7ebcd1e9",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "funded STRK 0x7b5e2dc24d95cd8edc50dff4a7c9ec9a85c2919f39b9db69f37a79ce49225e4",
+      "deployed 0x68862a5df30e53be11363da4d3f5fed0a2dc6ed9b248ee71718e3cd00c75ea"
+    ]
+  },
+  "s-scr/TA-20": {
+    "id": "s-scr/TA-20",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 3,
+    "address": "0x15d6064df3fe52e5e4dcbd558e6e28e60ff7e092534b45d71dfaf5e5082540b",
+    "pubkey": "0x38c6af5a9af4a65c611b0448bfdf60bffd5de268c14f901cc28f1fc1ad07f2e",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "owner changed to K-ROT-A: found at the seed's address, not signable by it",
+    "detectability": "D5",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "salt": "0x38c6af5a9af4a65c611b0448bfdf60bffd5de268c14f901cc28f1fc1ad07f2e",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "owner": "0x39891cd57fdab5337e220e528886fe9d45465f25c7dd5b431e2c788dc391c97"
+    },
+    "log": [
+      "funded STRK 0x4f6b942e65ca6cf2835875b31aae15618be3802086144cf7dada83f474efe22",
+      "deployed 0x6c6940a17a0f5236a3152efb8cbe572157547ecda5e45a6799941a1b647d967",
+      "change_owner 0x90a53e5029c95ab5da68efc23a8681099fe912acee78dfcb8e157097f44982"
+    ]
+  },
+  "s-scr/TA-21": {
+    "id": "s-scr/TA-21",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 6,
+    "address": "0x6b102f3455244ca3e4babcf7c2703ae4ec5dfd98196f4d4d767379dc45d4dd7",
+    "pubkey": "0x59a4582046b3f8e2e938ea33b3c7b783fc8904ee2dee18d7e5d28cd1f0898a1",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "custom salt: seed-owned key at an address the seed cannot recompute",
+    "detectability": "D4",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x5a17",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "funded STRK 0x29beab9f85818be085f8d7ae033b4890042638680f96c98d05fa8b99c9ba1bc",
+      "deployed 0x515b51c4521e5894c3d9c5fff6f335e529cc05f54ffe4afd65218ff98501b34"
+    ]
+  },
+  "s-scr/TA-22": {
+    "id": "s-scr/TA-22",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 7,
+    "address": "0x3b93fff8c46a253ab8513096bb0f9730b1672291c5d566e5690276877f1449e",
+    "pubkey": "0x35c61dfb964222f4ee222fc2b189aae32485f52f6e9c4bd40ef442f7ad3b9c",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "deployed via the UDC with unique = 1: the bank's address folds into it",
+    "detectability": "D4",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "deployedBy": "UDC unique=1",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": ["udc-deployed 0xa64900ef064b0902905cb0c70765d2da0224c0797978291a0bbef71d3a91a5"]
+  },
+  "s-scr/TA-23": {
+    "id": "s-scr/TA-23",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 8,
+    "address": "0x7ea7c193d89d8ee541b9e8a99be196a6e0b90c6ee2e2c19353fe139cf022105",
+    "pubkey": "0x423a0daac2aac8995de3f74fd0a0c01832622756b8f4f81ab9a462bbd433c3b",
+    "classAtDeploy": null,
+    "expected": "custom-salt counterfactual, funded: invisible from the seed",
+    "detectability": "D5",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "STRK",
+      "salt": "0x5eed",
+      "shapeClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": ["funded STRK 0x2422c0dec174df5903c09ecf1c486d3f8b76996cf8ef4be061b1b85747b95b2"]
+  },
+  "s-scr/TA-24": {
+    "id": "s-scr/TA-24",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 250,
+    "address": "0x2eda771515dfaab7210520ac16a700b8d3f76ab9d8156a31eda14a192980d15",
+    "pubkey": "0x4f5586a7c2311dbc70f87d944b03223658657e43b9e84c0dc1352a2f6180a54",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "index 250: beyond the owner-search cap",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x4f5586a7c2311dbc70f87d944b03223658657e43b9e84c0dc1352a2f6180a54",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "funded STRK 0x47316b6819401aca27bc40c06429d66054f16147c389774ff8420c3f11d7b2d",
+      "deployed 0xb89e5949dd448845713fe7a1408526face481287af846b5b3a8790f062124e"
+    ]
+  },
+  "s-scr/TA-26": {
+    "id": "s-scr/TA-26",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "bramble-account",
+    "index": 1,
+    "address": "0x6c86fcf74efadeccc0174821073176bb77a9729a5792ae35cc67a182e0e9159",
+    "pubkey": "0x730ac43b68229a790b8fa057c16917df95366400c25f59f87a9894caba6238f",
+    "classAtDeploy": "0x0663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+    "expected": "Xverse class on Bramble's ladder (account 1), standing in for the Xverse app",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x730ac43b68229a790b8fa057c16917df95366400c25f59f87a9894caba6238f",
+      "liveClass": "0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024"
+    },
+    "log": [
+      "funded STRK 0x57eb6d1be3ed6c4296e1df1f01ff4f82979775717b456e6ddad1fa9161b9004",
+      "deployed 0x1faeac31f7897e605141afd2766fba6d6b84f1b95fb4ea6a5f2f686ed52da1b"
+    ]
+  },
+  "s-scr/TA-30": {
+    "id": "s-scr/TA-30",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "braavos-direct",
+    "index": 4,
+    "address": "0x5b95ba17c37ba9d65c2e62b1e293d77988cfdd502312753f48dbbbe1d36f8a",
+    "pubkey": "0x189155a787200b3270c331a75a5d7bd5b8be6d2363e0c68e115ead11462951e",
+    "classAtDeploy": null,
+    "expected": "Braavos base-class counterfactual: Bramble refuses to deploy it",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "STRK",
+      "salt": "0x189155a787200b3270c331a75a5d7bd5b8be6d2363e0c68e115ead11462951e",
+      "shapeClass": "0x013bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6"
+    },
+    "log": ["funded STRK 0x3a7b17a684d6071448252ac3f7aa728bc8ee3e3d13f6e59bd17041fb6c0e5ce"]
+  }
+}

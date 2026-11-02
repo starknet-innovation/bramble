@@ -36,9 +36,17 @@ export const CLASSES = {
   argent040: "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
   argent031: "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
   argent030: "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003",
+  xverse040: "0x0663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
   braavosDeploy: "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+  // The implementation the current Braavos app deploys behind braavosDeploy.
+  braavosImpl: "0x03957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+  braavosBase: "0x013bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6",
+  multisig020: "0x07aeca3456816e3b833506d7cc5c1313d371fbdb0ae95ee70af72a4ddbf42594",
   oz300: "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
 } as const;
+
+// The Universal Deployer Contract, at the same address on mainnet and Sepolia.
+export const UDC = "0x041a78e741e5af2fec34b695679bc6891742439f7afb8484ecd7766661ad02bf";
 
 export const TOKENS = {
   STRK: {
@@ -95,16 +103,12 @@ export function brambleKeypair(mnemonic: string, account: number): Keypair {
   return { priv, pub: getStarkKey(priv) };
 }
 
-export const argentAddress = (pub: string, cls: string): string =>
-  "0x" +
-  BigInt(
-    cls === CLASSES.argent040
-      ? hash.calculateContractAddressFromHash(pub, cls, ["0x0", pub, "0x1"], 0)
-      : hash.calculateContractAddressFromHash(pub, cls, [pub, "0x0"], 0),
-  ).toString(16);
-
 export const argentConstructor = (pub: string, cls: string): string[] =>
-  cls === CLASSES.argent040 ? ["0x0", pub, "0x1"] : [pub, "0x0"];
+  cls === CLASSES.argent040 || cls === CLASSES.xverse040 ? ["0x0", pub, "0x1"] : [pub, "0x0"];
+
+/** Argent-family address at salt = pubkey, the shape Ready and Xverse self-deploy. */
+export const argentAddress = (pub: string, cls: string): string =>
+  `0x${BigInt(hash.calculateContractAddressFromHash(pub, cls, argentConstructor(pub, cls), 0)).toString(16)}`;
 
 /**
  * The account that funds and deploys fixtures: an OZ 3.0.0 account at
@@ -162,8 +166,13 @@ export async function transfer(
 
 export type ManifestEntry = {
   readonly id: string;
-  readonly seed: string; // env var name, never words
-  readonly vendorDerivation: "ready-double" | "braavos-direct";
+  readonly seed: string; // seed-file variable name, never words
+  readonly vendorDerivation:
+    | "ready-double"
+    | "braavos-direct"
+    | "bramble-account"
+    | "key"
+    | "multisig";
   readonly index: number;
   readonly address: string;
   readonly pubkey: string;
