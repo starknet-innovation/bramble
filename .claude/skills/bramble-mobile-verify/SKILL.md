@@ -104,9 +104,59 @@ gives every node's `text`, `content-desc` and `bounds`. Tap the centre of a node
 before every tap: never reuse coordinates from another screen or another AVD.
 - A cold boot can put "System UI isn't responding" over the app even after `boot_completed`.
   If the dump shows it, tap its "Wait" button, then `am start` again.
-- `monkey` does not launch this app; use `am start`. The app has no launch-time fixtures, so
-driving it by hand reads live public data. The offline `FixtureNode` exists only in
-`connectedDebugAndroidTest`.
+- `monkey` does not launch this app; use `am start`.
+- The app has no launch-time fixtures, so driving it by hand reads live public data.
+
+**Driving it offline.** The fixture node lives only in the instrumented tests. Use a throwaway
+test on the same helpers (`Robot.kt`, `FixtureNode.kt`):
+
+```kotlin
+// mobile/android/app/src/androidTest/java/org/bramble/wallet/ZZProbeTest.kt — delete after use
+package org.bramble.wallet
+
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToLog
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TestName
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class ZZProbeTest {
+    @get:Rule val rule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule val name = TestName()
+
+    @Test
+    fun probe() {
+        val r = Robot(rule, name.methodName)
+        r.waitForButton("Create a new wallet")
+        openPublicWalletOn(FixtureNode(deployed = true))
+        r.waitForHome()
+        // …drive further with r.tap / r.tapDescribed / r.waitForText…
+        r.snapshot("probe")
+        rule.onRoot(useUnmergedTree = true).printToLog("PROBE")
+    }
+}
+```
+
+```bash
+adb logcat -c
+./gradlew -q :app:connectedDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=org.bramble.wallet.ZZProbeTest
+find app/build/outputs/connected_android_test_additional_output -name '*probe*.png'
+adb logcat -d -s 'PROBE:*'          # the Compose semantics tree: text, descriptions, bounds
+```
+
+- `openPublicWalletOn` imports the published phrase straight into the store, without the UI.
+- `FixtureNode` answers chain RPC only, and refuses writes (`node.writes`). Prices and other
+  portfolio data still go live through `portfolio/BoundedHttp.kt`.
+- The orchestrator clears app data after each test, so the probe's screen is gone once the test
+  ends. Capture everything inside it.
+- Run `build-core-android.sh` after every pull or rebase. Stale bindings fail in `main`
+  sources, such as "Argument type mismatch", not in your probe.
 
 ## Rules
 
