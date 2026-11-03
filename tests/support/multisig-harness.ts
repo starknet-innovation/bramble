@@ -29,6 +29,7 @@ import type { RuntimeSender } from "../../apps/extension/src/background/routing/
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { testExtension } from "./background-wallet-stub";
+import { multisigStrk20WalletMethods } from "./multisig-strk20-wallet";
 
 const HARNESS_PRIVATE_A = "0x123";
 const HARNESS_PRIVATE_B = "0x456";
@@ -187,6 +188,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
   };
   let activeAccountId = harnessAccountA.id;
   const wallet = {
+    ...multisigStrk20WalletMethods(),
     async addDerivedAccount() {
       return harnessAccountA;
     },

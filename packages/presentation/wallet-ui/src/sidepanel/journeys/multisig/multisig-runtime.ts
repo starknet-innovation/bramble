@@ -12,6 +12,7 @@ import {
   isArgentMultisigDeployResponse,
   isArgentMultisigIntentResponse,
   isMultisigSignerResponse,
+  isMultisigStrk20KeyResponse,
   isNostrShareResponse,
   isNostrSyncResponse,
   isOkResponse,
@@ -251,6 +252,50 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         "sign Ready multisig intent failed",
       );
     },
+    async strk20KeyStatus(multisigId: string): Promise<"absent" | "conflict" | "held"> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.argentMultisigStrk20KeyStatus",
+      });
+      if (!isMultisigStrk20KeyResponse(response) || response.state === "created") {
+        throw responseError(response, "Couldn't update this multisig's key.");
+      }
+      return response.state;
+    },
+    async createStrk20Key(multisigId: string): Promise<"created" | "held"> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.createArgentMultisigStrk20Key",
+      });
+      if (
+        !isMultisigStrk20KeyResponse(response) ||
+        (response.state !== "created" && response.state !== "held")
+      ) {
+        throw responseError(response, "Couldn't update this multisig's key.");
+      }
+      return response.state;
+    },
+    async shareStrk20Key(
+      multisigId: string,
+    ): Promise<{ readonly recipients: number; readonly totalRecipients: number }> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.shareArgentMultisigStrk20Key",
+      });
+      if (!isNostrShareResponse(response)) {
+        throw responseError(response, "secure co-signer share failed");
+      }
+      return { recipients: response.recipients, totalRecipients: response.totalRecipients };
+    },
+    async forgetStrk20Key(multisigId: string): Promise<void> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.forgetArgentMultisigStrk20Key",
+      });
+      if (!isOkResponse(response)) {
+        throw responseError(response, "Couldn't update this multisig's key.");
+      }
+    },
     async shareIntent(
       intentId: string,
     ): Promise<{ readonly recipients: number; readonly totalRecipients: number }> {
@@ -267,6 +312,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       readonly imported: number;
       readonly intentIds: readonly string[];
       readonly received: number;
+      readonly strk20Key: "conflict" | "held" | "none" | "stored";
     }> {
       invalidateRefreshes();
       const response = await sendMessage({ multisigId, type: "wallet.syncArgentMultisigIntents" });
@@ -277,6 +323,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         imported: response.imported,
         intentIds: response.intentIds,
         received: response.received,
+        strk20Key: response.strk20Key,
       };
     },
     async submitIntent(intentId: string) {

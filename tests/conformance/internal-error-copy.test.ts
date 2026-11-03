@@ -102,6 +102,8 @@ const READER_SENTENCES = new Set([
   "Amount exceeds the multisig account balance",
   "Built-in tokens can't be removed",
   "Could not confirm the public balance required by this transaction",
+  "Create a key before sharing it.",
+  "This multisig's signers aren't available yet.",
   "Could not read NFT metadata URI",
   "Could not read NFT owner",
   "Could not read NFT ownership",

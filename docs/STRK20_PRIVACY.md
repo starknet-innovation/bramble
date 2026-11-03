@@ -154,7 +154,8 @@ device.
    accounts derive it lazily through Krusty from the selected account's encrypted signing key. The
    derivation matches the pinned SDK reference: deterministic Stark ECDSA over the canonical
    `chainId:poolAddress`, Poseidon of `(r,s)`, and the privacy pool's lower-half curve-order fold.
-   Software-derived keys are never persisted. A Ledger account may resolve only an exact
+   Software-derived keys are never persisted. An Argent multisig does not derive one; its shared key is
+   created once and retained, as described under Argent multisig. A Ledger account may resolve only an exact
    account/chain/pool-scoped key retained in encrypted vault `accountSecrets`; if none exists it
    fails closed. The typed-data hardware ceremony that provisions such a key is deliberately not
    implemented until its domain, message, reduction, confirmation UI, and test vectors are
@@ -277,6 +278,43 @@ lane, which requires `approve` calls followed by exactly one `apply_actions` on 
 it is never converted into an ordinary public invoke. Any other proof-bearing batch, such as a SNIP-36
 application proof, is submitted as an ordinary invoke with `proof` and `proof_facts` attached, under the
 same fee review and reviewed-fee ceiling.
+
+## Argent multisig
+
+An Argent multisig has no single signing key, so it cannot derive a viewing key the way a
+software account does. One co-owner creates the key. Bramble asks Krusty for a throwaway phrase,
+derives the viewing key for this chain and pool, and discards the phrase. The key is stored in
+the encrypted vault (schema v13), bound to that multisig, chain, and pool
+(`multisig-strk20-shared-v1`). It is not the creator's personal viewing key. A second create does
+not rotate it: the pool commitment is the public key of this scalar, and a replacement would
+desynchronize co-owners.
+
+The key is shared on the multisig Nostr channel. Each co-owner gets their own gift wrap,
+addressed to the Nostr key on their saved signer card. The application identifier is
+`bramble.multisig.strk20-viewing-key`, not the intent identifier, so an intent parser never reads
+the key. The payload is the key, the multisig, the chain, and the pool. Krusty encrypts the wrap.
+Nothing in a browser message, the multisig record, preferences, or activity contains the key.
+The private-balance section says that anyone with the viewing key can see all of this multisig's
+private activity.
+
+A wrap is stored only when the sender is a saved contact whose Stark key is in the multisig's
+signer set, and only for the pool configured on that network. The first key wins. The same key
+offered again is a no-op. A different key is not stored; the vault keeps a conflict mark with no
+copy of the foreign key, and the section says this wallet kept its own. Dropping the key removes
+it from this wallet only. Co-owners who already have it still can see private activity. The
+conflict wrap is left uncheckpointed so a later sync can accept it after the drop, while it is
+still inside the relay lookback.
+
+Registration, deposit, private transfer, and withdraw are not available for a multisig yet. The
+frozen V3 intent can carry `proofFacts`, and its hash matches starknet.js when those facts are
+present. A public intent omits the field and keeps the previous hash. Submission of a
+proof-bearing intent is refused: the proof bytes are not frozen (they are not part of the hash,
+and a proof can be larger than a Nostr gift wrap), and the threshold signature for the pool's
+CallSet hash is not collected. `Strk20CallSetSigner` already returns whatever signature array its
+callback produces, and `serializeArgentMultisigSignature` is the aggregate the pinned multisig
+submit path broadcasts. Wiring those into two signing rounds, and refreshing a proof that expires
+while co-owners sign, remains. Until that lands, a multisig dapp request that carries a private
+proof stays refused (pull request 825).
 
 ## Failure and trust boundaries
 

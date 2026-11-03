@@ -198,6 +198,11 @@ export const submitPreparedArgentMultisigInvokeV3 = async (
   if (!isPreparedArgentMultisigInvokeV3(prepared)) {
     throw new WalletError("Invalid prepared Argent multisig transaction");
   }
+  // The hash commits to proof facts, but the proof bytes are not frozen yet
+  // and a threshold signature for them is not collected here.
+  if (prepared.proofFacts !== undefined && prepared.proofFacts.length > 0) {
+    throw new WalletError("Argent multisig private proofs are not submitted yet");
+  }
   const signature = serializeArgentMultisigSignature(signatures, config);
   try {
     return await withRpcWrite(

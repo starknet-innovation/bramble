@@ -2,6 +2,7 @@
 
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
+import { STRK20_LIMITS } from "@bramble/wallet-protocol/strk20";
 import type { EDataAvailabilityMode } from "starknet";
 import type { ArgentMultisigConfig } from "../accounts/account-contracts";
 
@@ -22,6 +23,7 @@ export const ARGENT_MULTISIG_INVOKE_LIMITS = {
   calls: 16,
   calldataFelts: 256,
   executeCalldataFelts: 561,
+  proofFacts: STRK20_LIMITS.proofFacts,
   totalCalldataFelts: 512,
   transactionDataFelts: 64,
 } as const;
@@ -71,6 +73,12 @@ export type PreparedArgentMultisigInvokeV3 = {
   readonly nonce: string;
   readonly nonceDataAvailabilityMode: EDataAvailabilityMode;
   readonly paymasterData: readonly string[];
+  /**
+   * SNIP-36 proof facts committed by starknet.js when present. Omitted for a
+   * public transaction. The proof bytes are not stored: they are not part of
+   * the hash and do not fit a Nostr gift wrap.
+   */
+  readonly proofFacts?: readonly string[];
   readonly resourceBounds: PreparedResourceBounds;
   readonly senderAddress: string;
   readonly tip: string;

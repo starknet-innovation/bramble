@@ -286,6 +286,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "save a co-signer wallet card before sharing securely",
     "Save a co-signer's wallet card before sharing securely.",
   ],
+  [
+    "this multisig's signers aren't available yet.",
+    "This multisig's signers aren't available yet.",
+  ],
   ["invalid private key", "Couldn't import that account. Check what you pasted and try again."],
   ["insufficient private balance", "Insufficient private balance"],
   [

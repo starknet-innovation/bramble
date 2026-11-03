@@ -152,7 +152,9 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     importedSeeds: [],
     mnemonic: null,
     originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
-    schemaVersion: 12,
+    schemaVersion: 13,
+    multisigStrk20KeyConflicts: [],
+    multisigStrk20ViewingKeys: [],
     shadowAccountScopes: scopes.value,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });

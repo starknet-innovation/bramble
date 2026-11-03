@@ -96,6 +96,7 @@ describe("key boundary", () => {
     expect(excused.map((entry) => typeOf(entry.message)).sort()).toEqual([
       "wallet.removeMultisig",
       "wallet.shareArgentMultisigIntent",
+      "wallet.shareArgentMultisigStrk20Key",
       "wallet.status",
       "wallet.syncArgentMultisigIntents",
       "wallet.unlock",

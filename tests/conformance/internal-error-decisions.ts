@@ -21,6 +21,8 @@ export const SECURITY_FACTS: ReadonlySet<string> = new Set([
   "Invalid Argent multisig signer public key",
   "Invalid Argent multisig transaction hash",
   "Invalid Ledger STRK20 viewing key",
+  "Invalid multisig STRK20 key",
+  "Multisig STRK20 key limit reached",
   "Invalid Ledger STRK20 viewing-key scope",
   "Invalid STRK20 approval",
   "Invalid STRK20 network configuration",
@@ -65,6 +67,7 @@ export const PRIVATE_FACTS: ReadonlySet<string> = new Set([
   "strk20 private submission unavailable",
   "strk20 private submission unavailable: no private relay is configured for this network",
   "strk20 private submission unavailable: x",
+  "Argent multisig private proofs are not submitted yet",
 ]);
 
 // Shadow-account facts (issue 443), pending reviewed copy that keeps each one.
@@ -104,6 +107,7 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Couldn't remove that token",
   "Couldn't update that collectible",
   "Couldn't update that folder",
+  "Couldn't update this multisig's key.",
   "Currency update failed",
   "Deployment review failed",
   "Diagnostic preference failed",

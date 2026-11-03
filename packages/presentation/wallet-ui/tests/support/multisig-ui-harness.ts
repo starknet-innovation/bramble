@@ -69,8 +69,12 @@ export const makeMultisigUiClient = async (
     }),
     reviewDeployment: async () => fixture.deploymentReview,
     shareIntent: async () => ({ recipients: 1, totalRecipients: 1 }),
+    strk20KeyStatus: async () => "absent",
+    createStrk20Key: async () => "created",
+    shareStrk20Key: async () => ({ recipients: 1, totalRecipients: 1 }),
+    forgetStrk20Key: async () => undefined,
     signIntent: async () => ({ intent: fixture.intent }),
-    syncIntents: async () => ({ imported: 0, intentIds: [], received: 0 }),
+    syncIntents: async () => ({ imported: 0, intentIds: [], received: 0, strk20Key: "none" }),
     submitIntent: async () => ({ intent: fixture.readyIntent, transactionHash: "0x456" }),
     ...overrides,
   };

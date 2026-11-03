@@ -32,10 +32,11 @@ import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import { migrateVault } from "../schema/migrations";
-import { isVaultV12, type Vault } from "../schema/schema";
+import { isVaultV13, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { createGrantCache } from "./grant-cache";
+import { multisigStrk20KeyMethods } from "./multisig-strk20-key";
 import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
@@ -232,6 +233,7 @@ export const createWalletVaultService = ({
     generateMnemonic() {
       return kms.generateMnemonic();
     },
+    ...multisigStrk20KeyMethods(kms, encryptedStore, readVaultSnapshot),
     ...nostrWalletMethods(kms, readVault),
     ...shadowAccountScopeMethods(encryptedStore, readVaultSnapshot),
     previewAccount: (input) => deriveAccountRef(kms, input),
@@ -358,11 +360,17 @@ export const createWalletVaultService = ({
       serialized(async () => {
         requirePassphrase(vaultPassphrase);
         const vault = migrateVault(await encryptedStore.readUnverified(vaultPassphrase));
-        invariant(isVaultV12(vault), "Unsupported vault schema");
-        // A rollback can restore a revoked site connection or a removed Ledger
-        // viewing key; the user cannot tell which, so recovery drops them all.
+        invariant(isVaultV13(vault), "Unsupported vault schema");
+        // A rollback can restore a revoked site connection or a removed viewing
+        // key; the user cannot tell which, so recovery drops them all.
         await encryptedStore.replaceUnverified(
-          { ...vault, accountSecrets: [], originGrants: [] },
+          {
+            ...vault,
+            accountSecrets: [],
+            multisigStrk20KeyConflicts: [],
+            multisigStrk20ViewingKeys: [],
+            originGrants: [],
+          },
           vaultPassphrase,
         );
       }),
@@ -410,8 +418,11 @@ export const createWalletVaultService = ({
     createKeyVault: (input) => serialized(() => service.createKeyVault(input)),
     createLedgerVault: (input) => serialized(() => service.createLedgerVault(input)),
     ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
+    acceptMultisigStrk20Key: (input) => serialized(() => service.acceptMultisigStrk20Key(input)),
+    createMultisigStrk20Key: (input) => serialized(() => service.createMultisigStrk20Key(input)),
     forgetLedgerStrk20ViewingKey: (input) =>
       serialized(() => service.forgetLedgerStrk20ViewingKey(input)),
+    forgetMultisigStrk20Key: (input) => serialized(() => service.forgetMultisigStrk20Key(input)),
     importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),

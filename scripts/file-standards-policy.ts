@@ -224,6 +224,12 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Explicit user-triggered coordination keeps the vault credential inside the
   // privileged worker while Krusty opens or wraps payloads; it is never stored.
   "apps/extension/src/background/multisig/multisig-coordination-ops.ts",
+  // Gift-wrap publication. The passphrase transits into Krusty; the payload
+  // is not inspected or logged here.
+  "apps/extension/src/background/multisig/multisig-nostr-publish.ts",
+  // Multisig STRK20 viewing-key share (#826). The key is wrapped for each
+  // co-owner and is never placed on a response.
+  "apps/extension/src/background/multisig/multisig-strk20-key-ops.ts",
   "apps/extension/src/background/multisig/multisig-tx-ops.ts",
   "packages/platform/vault/src/accounts/account-secrets.ts",
   "packages/platform/vault/src/encrypted-store.ts",
@@ -246,6 +252,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // the phrase key signs here and nothing is logged or persisted.
   "packages/platform/starknet/src/transactions/argent-recovery.ts",
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
+  // Multisig STRK20 viewing keys (#826): generated in the vault, stored only
+  // here, and wrapped for co-owners. The key never enters a message or the UI.
+  "packages/platform/vault/src/accounts/multisig-strk20-key.ts",
+  "packages/platform/vault/src/service/multisig-strk20-key.ts",
   "packages/platform/vault/src/accounts/network-account.ts",
   "packages/platform/vault/src/service/reveal.ts",
   "packages/platform/vault/src/service/service-creation.ts",

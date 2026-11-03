@@ -433,11 +433,16 @@ export const isNostrSyncResponse = (
   readonly intentIds: readonly string[];
   readonly ok: true;
   readonly received: number;
+  readonly strk20Key: "conflict" | "held" | "none" | "stored";
 } =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["imported", "intentIds", "ok", "received"]) &&
+  hasOnlyKnownKeys(value, ["imported", "intentIds", "ok", "received", "strk20Key"]) &&
   value["ok"] === true &&
+  (value["strk20Key"] === "none" ||
+    value["strk20Key"] === "stored" ||
+    value["strk20Key"] === "held" ||
+    value["strk20Key"] === "conflict") &&
   Number.isSafeInteger(value["imported"]) &&
   Number(value["imported"]) >= 0 &&
   Array.isArray(value["intentIds"]) &&
@@ -452,3 +457,22 @@ export const isNostrSyncResponse = (
  */
 export const isOkResponse = (value: unknown): value is { readonly ok: true } =>
   isRecord(value) && isJson(value) && hasOnlyKnownKeys(value, ["ok"]) && value["ok"] === true;
+
+/**
+ * Status or create result for a multisig's shared private-balance key.
+ * The key itself is never part of the response.
+ */
+export const isMultisigStrk20KeyResponse = (
+  value: unknown,
+): value is {
+  readonly ok: true;
+  readonly state: "absent" | "conflict" | "created" | "held";
+} =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["ok", "state"]) &&
+  value["ok"] === true &&
+  (value["state"] === "absent" ||
+    value["state"] === "held" ||
+    value["state"] === "conflict" ||
+    value["state"] === "created");

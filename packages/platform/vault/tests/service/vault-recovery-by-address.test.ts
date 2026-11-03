@@ -8,7 +8,7 @@ import { createMemoryStore } from "@bramble/store/kv";
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { createEncryptedStore } from "@bramble/vault/encrypted-store";
 import type { KmsPort } from "@bramble/vault/kms-port";
-import { isVaultV12 } from "@bramble/vault/schema";
+import { isVaultV13 } from "@bramble/vault/schema";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { ARGENT_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 
@@ -61,7 +61,7 @@ describe("vault recovery of an account found by its address", () => {
       publicKeyX: "0xabc3",
     });
     const vault = await service.readVault(vaultPassphrase);
-    expect(isVaultV12(vault)).toBe(true);
+    expect(isVaultV13(vault)).toBe(true);
     expect(vault.signingKeys).toEqual([{ accountId: `SN_MAIN:${PROVED}`, privateKey: "0x12344" }]);
   });
 

@@ -12,4 +12,9 @@ export type NostrCoordinationResponse =
       readonly intentIds: readonly string[];
       readonly ok: true;
       readonly received: number;
+      readonly strk20Key: "conflict" | "held" | "none" | "stored";
+    }
+  | {
+      readonly ok: true;
+      readonly state: "absent" | "conflict" | "created" | "held";
     };

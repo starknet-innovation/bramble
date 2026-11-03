@@ -208,4 +208,11 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "this intent is too large for secure relay sharing. copy the intent package instead",
     "This transaction is too large to share securely. Copy the package instead.",
   ],
+  // The raw sentence is already what the reader should see.
+  ["couldn't update this multisig's key.", "Couldn't update this multisig's key."],
+  ["create a key before sharing it.", "Create a key before sharing it."],
+  [
+    "this multisig's signers aren't available yet.",
+    "This multisig's signers aren't available yet.",
+  ],
 ];
