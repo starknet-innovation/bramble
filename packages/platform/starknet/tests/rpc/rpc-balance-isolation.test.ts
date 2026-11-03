@@ -95,7 +95,10 @@ describe("getTokenBalances with isolateTokenFailures", () => {
         )(nodeUrl),
     );
     expect(recovered.map((balance) => balance.symbol)).toEqual(["ETH", "STRK"]);
-    expect(failover.some((entry) => entry.startsWith("https://up.example"))).toBe(true);
+    const upCalls = new Set(
+      TOKENS.slice(0, 2).map((token) => `https://up.example:${token.address}`),
+    );
+    expect(failover.some((entry) => upCalls.has(entry))).toBe(true);
   });
 
   test("a transport fault on one token fails over even when the others read", async () => {
