@@ -1,12 +1,11 @@
 /**
- * Price, chart, number and fiat parity blocks: the extension's real `createPriceService` driven
+ * Price, chart and fiat parity blocks: the extension's real `createPriceService` driven
  * through scripted CoinGecko answers and a scripted clock, the real `formatFiat` /
  * `compactAmount` / `tokenFiatValue`, and the real Home hero and token-row renderers.
  */
-import { HTTP_BODY_LIMITS, HTTP_REQUEST_TIMEOUT_MS } from "@bramble/core/http-json";
-import { createPriceService, PRICE_CHART_POINT_LIMIT } from "@bramble/portfolio/prices";
+import { HTTP_BODY_LIMITS } from "@bramble/core/http-json";
+import { createPriceService } from "@bramble/portfolio/prices";
 import type { DisplayCurrency } from "@bramble/settings/preferences";
-import { RPC_BODY_LIMIT_BYTES, RPC_REQUEST_TIMEOUT_MS } from "@bramble/starknet/rpc-transport";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { homeScreen } from "../../packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/home-view";
@@ -28,60 +27,6 @@ const UNPRICED = "0x000000000000000000000000000000000000000000000000000000000000
 const entry = (usd: number, change?: number): string =>
   `{"usd":${usd},"eur":${usd * 0.9},"gbp":${usd * 0.8}${change === undefined ? "" : `,"usd_24h_change":${change}`}}`;
 const body = (address: string, value: string): string => `{"${address}":${value}}`;
-
-/** Bounds the core restates, each pinned to the TypeScript constant. */
-export const limitsBlock = () => ({
-  chartPoints: PRICE_CHART_POINT_LIMIT,
-  httpTimeout: HTTP_REQUEST_TIMEOUT_MS,
-  price: HTTP_BODY_LIMITS.price,
-  rpcBody: RPC_BODY_LIMIT_BYTES,
-  rpcTimeout: RPC_REQUEST_TIMEOUT_MS,
-  starkscan: HTTP_BODY_LIMITS.starkscan,
-});
-
-const show = (value: number): string => String(value);
-
-/** JavaScript number semantics the core reproduces. */
-export const numbersBlock = () => ({
-  fixed: [
-    0, 0.125, 1.005, 2.675, 0.005, -0.001, 1e21, 123.456, 99.995, 5e-7, 1.45, 8.345, 1234.5678,
-  ].map((value) => ({ out: value.toFixed(2), value })),
-  locale: [
-    0.01, 0.125, 1.005, 2.675, 999.995, 1234567.895, 1e21, 1.23e25, 0.015, 10.005,
-    5030.000845459129, 7.1e-3,
-  ].map((value) => ({
-    out: value.toLocaleString("en-US", {
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 2,
-      useGrouping: true,
-    }),
-    value,
-  })),
-  number: [
-    "12.5",
-    " 12 ",
-    "",
-    ".5",
-    "5.",
-    "0x10",
-    "1e3",
-    "-Infinity",
-    "Infinity",
-    "1,000",
-    "abc",
-    "0b11",
-    "-0x1",
-    "1e",
-    "+.5",
-    "0.1e-2",
-  ].map((input) => ({ input, out: show(Number(input)) })),
-  string: [0.1 + 0.2, 1e21, 123.45, 5e-7, 1e-6, -0, 1.5e300, 100, 33.33, 0.01, 2 ** 53].map(
-    (value) => ({
-      out: String(value),
-      value,
-    }),
-  ),
-});
 
 const CURRENCIES: readonly DisplayCurrency[] = ["usd", "eur", "gbp"];
 

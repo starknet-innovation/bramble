@@ -18,7 +18,7 @@ describe("mobile account parity", () => {
       keyof typeof ACCOUNTS_PARITY_FIXTURE_PATHS,
       unknown
     >;
-    for (const part of ["familiesMainnet", "familiesSepolia", "rules"] as const) {
+    for (const part of ["familiesMainnet", "familiesSepolia", "recovery", "rules"] as const) {
       const fixture = JSON.parse(
         await readFile(ACCOUNTS_PARITY_FIXTURE_PATHS[part], "utf8"),
       ) as unknown;

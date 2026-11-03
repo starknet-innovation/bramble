@@ -37,11 +37,13 @@ import { PARITY_MNEMONIC } from "./mobile-parity";
 
 /**
  * Committed fixtures the Rust and Swift tests read: the derivation vectors (one file per network,
- * each under the 500-line limit) and the UI rules.
+ * each under the 500-line limit), the UI rules, and the discovery rows (their own file, so each
+ * stays under the limit).
  */
 export const ACCOUNTS_PARITY_FIXTURE_PATHS = {
   familiesMainnet: "mobile/core/tests/fixtures/accounts-parity-families-mainnet.json",
   familiesSepolia: "mobile/core/tests/fixtures/accounts-parity-families-sepolia.json",
+  recovery: "mobile/core/tests/fixtures/accounts-parity-recovery.json",
   rules: "mobile/core/tests/fixtures/accounts-parity-rules.json",
 } as const;
 
@@ -264,11 +266,11 @@ export const computeAccountParity = async () => {
       name: accountDisplayName({ address, id: `SN_MAIN:${address}` } as AccountRef, null),
       short: accountLabel(address),
     })),
-    recovery: recoveryVectors(accounts, vectors),
   };
   return {
     familiesMainnet: families("SN_MAIN"),
     familiesSepolia: families("SN_SEPOLIA"),
+    recovery: { recovery: recoveryVectors(accounts, vectors) },
     rules,
   };
 };

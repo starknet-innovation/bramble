@@ -44,7 +44,8 @@ const attributes = (html: string, name: string): string[] =>
 // its literals; they are read from that source so a wording change there still fails the drift gate.
 const BINDING_SOURCE = "packages/presentation/wallet-ui/src/sidepanel/shell/deploy-bindings.ts";
 // The paid deploy's fee line moved beside the sponsorship choice that replaces it when sponsored.
-const DEPLOY_FEE_SOURCE = "packages/presentation/wallet-ui/src/sidepanel/shell/deploy-sponsorship.ts";
+const DEPLOY_FEE_SOURCE =
+  "packages/presentation/wallet-ui/src/sidepanel/shell/deploy-sponsorship.ts";
 
 // The details step's zero-amount gate is likewise a literal inside the Send binding.
 const SEND_BINDING_SOURCE =

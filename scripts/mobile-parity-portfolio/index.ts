@@ -8,8 +8,9 @@
 
 import { chartsBlock } from "./charts";
 import { activityBlock, eventsBlock, starkscanBlock } from "./history";
+import { limitsBlock, numbersBlock } from "./numbers";
 import { ACTIVITY_NOW, appearanceBlock, statusBlock } from "./presentation";
-import { fiatBlock, limitsBlock, numbersBlock, pricesBlock } from "./prices";
+import { fiatBlock, pricesBlock } from "./prices";
 import { balancesBlock, tokenMetaBlock, tokensBlock } from "./tokens";
 
 /** Repository-relative path of the committed portfolio/activity parity fixture. */
