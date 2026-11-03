@@ -122,7 +122,8 @@ feedback moves to the shared `CopyButton` (§2.8).
 The "Review discovered accounts" and "Confirm recovered accounts" names in the brief are ui-lab
 checkpoint labels. The rendered step is `recovery-accounts`:
 
-- Back button "Back to passphrase". Title "Find your accounts". Lede "Accounts with on-chain
+- Back button "Back to passphrase" (extension only: mobile has none, because the vault is already
+  sealed with recovery pending). Title "Find your accounts". Lede "Accounts with on-chain
   activity are selected automatically."
 - Status line: "Ready to search." → "Searching every account type…" → "Checked N of T indices…",
   where T is the gap-limit target (`recoveryScanTarget`: 20 past the last index with activity, at
