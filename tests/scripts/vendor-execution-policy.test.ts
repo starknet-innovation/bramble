@@ -196,6 +196,7 @@ describe("repository vendoring steps", () => {
     expect(await vendorScriptPaths()).toEqual([
       "scripts/vendor-argent-contracts.ts",
       "scripts/vendor-privacy-sdk.ts",
+      "scripts/vendor-qsb.ts",
     ]);
   });
 

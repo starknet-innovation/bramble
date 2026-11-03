@@ -128,3 +128,21 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Unlock failed",
   "Wallet request preference failed",
 ]);
+
+// The QSB runtime spike's refusals (apps/extension/src/background/qsb). No
+// wallet message reaches that runtime yet, so none can reach the panel; each
+// names the check that stopped it, so each is shown as written should one
+// ever surface.
+export const QSB_RUNTIME_DIAGNOSTICS: ReadonlySet<string> = new Set([
+  "QSB RIPEMD-160 provider is not wired in this build",
+  "QSB hash input is not lowercase hex",
+  "QSB interpreter failed to load",
+  "QSB pipeline failed to start",
+  "QSB public probe failed",
+  "QSB public probe returned an unexpected shape",
+  "QSB runtime cannot read a packaged file",
+  "QSB runtime cannot resolve the extension package URL",
+  "QSB source integrity check failed",
+  "QSB source manifest does not list exactly the pinned sources",
+  "QSB source manifest is not JSON",
+]);

@@ -31,6 +31,7 @@ const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.1.0
 const VENDOR_STEPS = [
   { command: "bun run vendor:argent", failure: "must verify the pinned Argent account contracts" },
   { command: "bun run vendor:privacy", failure: "must vendor the pinned privacy SDK" },
+  { command: "bun run vendor:qsb", failure: "must vendor the pinned QSB pipeline sources" },
 ] as const;
 
 // Applies to any workflow that vendors a pinned source, selected by content.

@@ -39,6 +39,7 @@ export const artifactPolicyFailures = (
   const buildKrustyCheck = buildScript.indexOf('await run(["bun", "run", "check:krusty"]);');
   const buildArgentCheck = buildScript.indexOf('await run(["bun", "run", "check:argent"]);');
   const buildPrivacyCheck = buildScript.indexOf('await run(["bun", "run", "check:privacy"]);');
+  const buildQsbCheck = buildScript.indexOf('await run(["bun", "run", "check:qsb"]);');
   const buildDistClear = buildScript.indexOf("await rm(outdir");
   // `await rm(outdir` now sits inside `emit()`, so its source position no
   // longer implies when it RUNS. The call site is pinned separately: without
@@ -50,16 +51,19 @@ export const artifactPolicyFailures = (
     buildKrustyCheck === -1 ||
     buildArgentCheck === -1 ||
     buildPrivacyCheck === -1 ||
+    buildQsbCheck === -1 ||
     buildDistClear === -1 ||
     buildExtensionCheck > buildDistClear ||
     buildKrustyCheck > buildDistClear ||
     buildArgentCheck > buildDistClear ||
     buildPrivacyCheck > buildDistClear ||
+    buildQsbCheck > buildDistClear ||
     buildEmitCall === -1 ||
     buildExtensionCheck > buildEmitCall ||
     buildKrustyCheck > buildEmitCall ||
     buildArgentCheck > buildEmitCall ||
-    buildPrivacyCheck > buildEmitCall
+    buildPrivacyCheck > buildEmitCall ||
+    buildQsbCheck > buildEmitCall
   ) {
     failures.push(
       "apps/extension/build.ts must check manifest and pinned runtimes before building",

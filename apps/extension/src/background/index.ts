@@ -443,7 +443,6 @@ const broadcastEvent = (event: WalletEventMessage): void => {
 const refreshPendingApprovals = (): void => {
   showPendingApprovals(extensionApi, approvals.list().length);
 };
-
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {
   const events = walletEventBroadcasts(message, response);
   for (const event of events) {
@@ -465,7 +464,6 @@ setApprovalNotifier(() => {
   refreshPendingApprovals();
   approvalKeepAlive.sync();
 });
-
 runtime?.onInstalled.addListener((details) => {
   void openOnboardingOnInstall(extensionApi, details.reason);
 });
@@ -496,3 +494,6 @@ runtime?.onMessage.addListener((message, sender, sendResponse) => {
   );
   return true;
 });
+
+/** QSB spike: lazy Pyodide runtime, reachable from no message (exported for the E2E probe only). */
+export { qsbRuntime } from "./qsb/packaged-qsb-runtime";

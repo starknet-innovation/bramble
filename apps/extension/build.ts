@@ -26,6 +26,33 @@ const buildTargets = requestedTargets(Bun.argv);
 const krustyModule = "/dependencies/krusty-kms/krusty_kms_wasm.js";
 const privacySdkModule = "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 const krustyPackage = "node_modules/@starknetfoundation/krusty-kms-wasm";
+// The worker imports Pyodide's loader and its Emscripten module statically (a
+// module service worker can neither `import()` nor `importScripts`), so both
+// stay external and ship verbatim. These are exactly the files the worker
+// loads; `check:qsb` pins each one, and the source maps, type declarations,
+// CommonJS entry and REPL pages in the package never ship.
+const pyodideModules = [
+  "/dependencies/pyodide/pyodide.mjs",
+  "/dependencies/pyodide/pyodide.asm.js",
+];
+const pyodidePackage = "node_modules/pyodide";
+const PYODIDE_RUNTIME_FILES = [
+  "pyodide-lock.json",
+  "pyodide.asm.js",
+  "pyodide.asm.wasm",
+  "pyodide.mjs",
+  "python_stdlib.zip",
+] as const;
+// The pinned qsb-app `public/qsb` files, licence included; `check:qsb` pins each.
+const qsbCheckout = "vendor/qsb/public/qsb";
+const QSB_PACKAGED_FILES = [
+  "LICENSE",
+  "bitcoin_tx.py",
+  "bridge.py",
+  "manifest.json",
+  "qsb_pipeline.py",
+  "secp256k1.py",
+] as const;
 const LEDGER_BUFFER_MODULES =
   /[\\/]node_modules[\\/]@ledgerhq[\\/](?:hw-app-starknet|hw-transport|hw-transport-web-ble|hw-transport-webhid|hw-transport-webusb)[\\/].*\.js$/;
 const LEDGER_BLE_RAW_DISCONNECT_LOG = 'console.log("onDisconnect!", e);';
@@ -98,6 +125,7 @@ await run(["bun", "run", "check:extension"]);
 await run(["bun", "run", "check:krusty"]);
 await run(["bun", "run", "check:argent"]);
 await run(["bun", "run", "check:privacy"]);
+await run(["bun", "run", "check:qsb"]);
 /**
  * Writes one target's complete output directory: its bundles, its manifest, and
  * its static assets. Every path below is derived from `target`, so two
@@ -119,7 +147,7 @@ const emit = async (target: BuildTarget): Promise<void> => {
     await Bun.build({
       define: buildStamp,
       entrypoints: [join(extensionRoot, "src/background/index.ts")],
-      external: [krustyModule, privacySdkModule],
+      external: [krustyModule, privacySdkModule, ...pyodideModules],
       format: "esm",
       minify: true,
       outdir: join(outdir, "background"),
@@ -230,6 +258,14 @@ const emit = async (target: BuildTarget): Promise<void> => {
     join(krustyPackage, "krusty_kms_wasm_bg.wasm"),
     join(krustyOutdir, "krusty_kms_wasm_bg.wasm"),
   );
+  await mkdir(join(outdir, "dependencies/pyodide"), { recursive: true });
+  for (const file of PYODIDE_RUNTIME_FILES) {
+    await cp(join(pyodidePackage, file), join(outdir, "dependencies/pyodide", file));
+  }
+  await mkdir(join(outdir, "vendor/qsb"), { recursive: true });
+  for (const file of QSB_PACKAGED_FILES) {
+    await cp(join(qsbCheckout, file), join(outdir, "vendor/qsb", file));
+  }
   await mkdir(join(outdir, "vendor/starknet-privacy/sdk"), { recursive: true });
   await cp(
     "vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js",

@@ -12,6 +12,7 @@ test-results/
 .dev-profile/
 output/
 vendor/argent-contracts/
+vendor/qsb/
 vendor/starknet-privacy/
 *.log
 .env

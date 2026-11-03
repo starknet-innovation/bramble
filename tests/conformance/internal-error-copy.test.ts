@@ -28,6 +28,7 @@ import {
 } from "../../packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal";
 import {
   PRIVATE_FACTS,
+  QSB_RUNTIME_DIAGNOSTICS,
   SECURITY_FACTS,
   SHADOW_PENDING_COPY,
   UI_FALLBACKS,
@@ -265,6 +266,7 @@ const REVIEWED_AS_WRITTEN = [
   PRIVATE_FACTS,
   SHADOW_PENDING_COPY,
   UI_FALLBACKS,
+  QSB_RUNTIME_DIAGNOSTICS,
   new Set(SWAP_SAFETY_REFUSALS),
 ];
 
