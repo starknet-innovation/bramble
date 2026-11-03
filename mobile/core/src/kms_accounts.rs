@@ -7,13 +7,13 @@
 //! The signing key is derived per call into a zeroizing `SecretFelt`, turned into its public key,
 //! and dropped here; nothing secret is returned.
 
-use krusty_kms::{
-    AccountClass, ArgentAccount, ArgentConstructorLayout, BraavosAccount, SaltPolicy,
-};
+use krusty_kms::{AccountClass, ArgentConstructorLayout, BraavosAccount, SaltPolicy};
 use krusty_kms_common::ChainId;
 use starknet_types_core::felt::Felt;
 
-use crate::account_catalog::{catalog, class_entry, deployment_classes, AccountFamily};
+use crate::account_catalog::{
+    argent_preset, catalog, class_entry, deployment_classes, AccountFamily,
+};
 use crate::kms::{self, kms_error};
 use crate::CoreError;
 
@@ -97,8 +97,9 @@ pub(crate) fn family_address(
             let salt = *salt.unwrap_or(public_key);
             let (preset, krusty_shape): (Box<dyn AccountClass>, &str) =
                 if family == AccountFamily::Argent {
-                    let argent = ArgentAccount::try_with_class_hash(class_hash)
-                        .map_err(kms_error("class hash"))?;
+                    let argent = argent_preset(class_hash).ok_or_else(|| CoreError::Kms {
+                        operation: "class hash".into(),
+                    })?;
                     let shape = match argent.constructor_layout() {
                         ArgentConstructorLayout::OwnerGuardianFelts => "owner-guardian",
                         ArgentConstructorLayout::SignerWithOptionalGuardian => {

@@ -61,30 +61,33 @@ pub(crate) struct Shape {
     pub class_hash: Option<Felt>,
 }
 
-/// `recoveryScanShapes` (issue 505): OZ on this wallet's ladder; Argent at the release it creates
-/// on the same ladder, for accounts this wallet made; every Argent release on Ready's ladder; and
-/// every Braavos class on Braavos's. Ready takes no BIP-39 passphrase, so a phrase opened with one
-/// has no Ready accounts and `with_ready` drops those shapes rather than failing the scan.
+/// `recoveryScanShapes` (issues 505, 734): OZ on this wallet's ladder; every Argent release on the
+/// same ladder (accounts this wallet made, and Xverse's, which derive there); every Argent release
+/// but Xverse's on Ready's ladder; and every Braavos class on Braavos's. Ready takes no BIP-39
+/// passphrase, so a phrase opened with one has no Ready accounts and `with_ready` drops those
+/// shapes rather than failing the scan.
 pub(crate) fn scan_shapes(with_ready: bool) -> Vec<Shape> {
-    let mut shapes = vec![
-        Shape {
-            family: AccountFamily::OpenZeppelin,
-            ladder: Ladder::Account,
-            class_hash: None,
-        },
-        Shape {
+    let mut shapes = vec![Shape {
+        family: AccountFamily::OpenZeppelin,
+        ladder: Ladder::Account,
+        class_hash: None,
+    }];
+    shapes.extend(
+        deployment_classes(AccountFamily::Argent).map(|entry| Shape {
             family: AccountFamily::Argent,
             ladder: Ladder::Account,
-            class_hash: Some(catalog().argent_default),
-        },
-    ];
+            class_hash: Some(entry.class_hash),
+        }),
+    );
     if with_ready {
         shapes.extend(
-            deployment_classes(AccountFamily::Argent).map(|entry| Shape {
-                family: AccountFamily::Argent,
-                ladder: Ladder::ArgentX,
-                class_hash: Some(entry.class_hash),
-            }),
+            deployment_classes(AccountFamily::Argent)
+                .filter(|entry| entry.class_hash != catalog().argent_xverse)
+                .map(|entry| Shape {
+                    family: AccountFamily::Argent,
+                    ladder: Ladder::ArgentX,
+                    class_hash: Some(entry.class_hash),
+                }),
         );
     }
     shapes.extend(
@@ -109,20 +112,29 @@ pub(crate) struct Found {
     pub funded: bool,
 }
 
-/// Whether this wallet would itself create an account at this class (`isCreatableCandidate`,
-/// on its own ladder): its own OZ account, or Argent at the release it deploys. A vendor
-/// coordinate with no history is never offered, so it can never mint an account here.
+/// Whether the scan lists this coordinate with no history (`isCreatableCandidate`, on each
+/// family's own ladder): this wallet's OZ account, Argent at the release it deploys, or Braavos at
+/// the class the current Braavos app deploys (issue 718). The Braavos row is listed view only:
+/// `selectable` still requires history, so nothing here mints a vendor account.
 pub(crate) fn is_creatable(family: AccountFamily, path: Ladder, class_hash: &Felt) -> bool {
-    path == Ladder::Account && deployable_here(family, class_hash)
+    match family {
+        AccountFamily::OpenZeppelin => path == Ladder::Account,
+        AccountFamily::Argent => path == Ladder::Account && *class_hash == catalog().argent_default,
+        AccountFamily::Braavos => {
+            path == Ladder::Address && *class_hash == catalog().braavos_deployment
+        }
+    }
 }
 
 /// Whether this wallet can deploy an account of this class (the UI's `deployableHere`), on any
-/// ladder: a funded Ready account at the release Bramble deploys, or a Braavos one at the modern
-/// deployment class, is ready to deploy.
+/// ladder: a funded Ready account at the release Bramble deploys or at Xverse's build of it, or a
+/// Braavos one at the modern deployment class, is ready to deploy.
 fn deployable_here(family: AccountFamily, class_hash: &Felt) -> bool {
     match family {
         AccountFamily::OpenZeppelin => true,
-        AccountFamily::Argent => *class_hash == catalog().argent_default,
+        AccountFamily::Argent => {
+            *class_hash == catalog().argent_default || *class_hash == catalog().argent_xverse
+        }
         AccountFamily::Braavos => *class_hash == catalog().braavos_deployment,
     }
 }
@@ -136,7 +148,8 @@ pub(crate) fn keep(found: &Found, manual: bool) -> bool {
             && (found.account_index == 0 || manual))
 }
 
-fn title(found: &Found) -> String {
+/// `candidateName`: `Account N`, with the Argent release when it is not the one Bramble creates.
+fn name(found: &Found) -> String {
     let title = format!("Account {}", found.account_index);
     if found.family != AccountFamily::Argent || found.class_hash == catalog().argent_default {
         return title;
@@ -150,10 +163,19 @@ fn title(found: &Found) -> String {
     }
 }
 
+/// `candidateTitle`: the name plus the key ladder, so rows sharing an index are told apart.
+fn title(found: &Found) -> String {
+    if found.ladder == Ladder::ArgentX {
+        format!("{} · Ready extension", name(found))
+    } else {
+        name(found)
+    }
+}
+
 fn hint(found: &Found) -> String {
-    // `candidateState`: the modern deployment class deploys from here like any other account;
-    // an older base-class counterfactual still cannot.
-    if found.family == AccountFamily::Braavos && !found.deployed {
+    // `candidateState`: a funded, undeployed Braavos account deploys from here at the modern
+    // deployment class; an older base-class counterfactual still cannot.
+    if found.family == AccountFamily::Braavos && !found.deployed && found.funded {
         return if deployable_here(found.family, &found.class_hash) {
             "Funded and ready to deploy"
         } else {
@@ -161,6 +183,7 @@ fn hint(found: &Found) -> String {
         }
         .into();
     }
+    // `activityState`.
     let text = if found.deployed {
         "Deployed on Starknet"
     } else if found.funded {
@@ -171,6 +194,8 @@ fn hint(found: &Found) -> String {
         }
     } else if found.family == AccountFamily::Argent {
         "No on-chain activity found — Bramble only imports existing Ready accounts"
+    } else if found.family == AccountFamily::Braavos {
+        "No on-chain activity found — Bramble only imports existing Braavos accounts"
     } else {
         "No on-chain activity found"
     };
@@ -336,16 +361,24 @@ mod tests {
     fn keep_rule_matches_onboarding_ops() {
         let oz = catalog().open_zeppelin_class;
         let argent = catalog().argent_default;
-        let braavos = deployment_classes(AccountFamily::Braavos)
-            .next()
-            .unwrap()
-            .class_hash;
+        let braavos = catalog().braavos_deployment;
+        let braavos_base = deployment_classes(AccountFamily::Braavos)
+            .map(|entry| entry.class_hash)
+            .find(|hash| *hash != braavos)
+            .unwrap();
         assert!(keep(&found(AccountFamily::OpenZeppelin, oz, 0), false));
         assert!(!keep(&found(AccountFamily::OpenZeppelin, oz, 3), false));
         assert!(keep(&found(AccountFamily::OpenZeppelin, oz, 3), true));
         assert!(keep(&found(AccountFamily::Argent, argent, 0), false));
-        assert!(!keep(&found(AccountFamily::Braavos, braavos, 0), true));
-        let mut funded = found(AccountFamily::Braavos, braavos, 7);
+        // Braavos lists index 0 at the class its app deploys (issue 718); older classes only
+        // once used. Xverse's build is never listed unused.
+        assert!(keep(&found(AccountFamily::Braavos, braavos, 0), false));
+        assert!(!keep(&found(AccountFamily::Braavos, braavos_base, 0), true));
+        assert!(!keep(
+            &found(AccountFamily::Argent, catalog().argent_xverse, 0),
+            true
+        ));
+        let mut funded = found(AccountFamily::Braavos, braavos_base, 7);
         funded.funded = true;
         assert!(keep(&funded, false));
         // Ready's ladder never offers an account this wallet would create.
@@ -359,23 +392,30 @@ mod tests {
         let argent = deployment_classes(AccountFamily::Argent).count();
         let braavos = deployment_classes(AccountFamily::Braavos).count();
         let shapes = scan_shapes(true);
-        assert_eq!(shapes.len(), 2 + argent + braavos);
+        // OZ; every Argent release on this wallet's ladder; all but Xverse's on Ready's; Braavos.
+        let ready = argent - 1;
+        assert_eq!(shapes.len(), 1 + argent + ready + braavos);
         assert_eq!(
             (shapes[0].family, shapes[0].ladder),
             (AccountFamily::OpenZeppelin, Ladder::Account)
         );
-        assert_eq!(
-            (shapes[1].ladder, shapes[1].class_hash),
-            (Ladder::Account, Some(catalog().argent_default))
-        );
-        assert!(shapes[2..2 + argent]
+        let own = &shapes[1..1 + argent];
+        assert!(own
             .iter()
-            .all(|s| s.ladder == Ladder::ArgentX));
-        assert!(shapes[2 + argent..]
+            .all(|s| s.family == AccountFamily::Argent && s.ladder == Ladder::Account));
+        assert!(own
+            .iter()
+            .any(|s| s.class_hash == Some(catalog().argent_xverse)));
+        let vendor = &shapes[1 + argent..1 + argent + ready];
+        assert!(vendor.iter().all(|s| s.ladder == Ladder::ArgentX));
+        assert!(vendor
+            .iter()
+            .all(|s| s.class_hash != Some(catalog().argent_xverse)));
+        assert!(shapes[1 + argent + ready..]
             .iter()
             .all(|s| s.ladder == Ladder::Address));
         // A passphrase-protected phrase has no Ready accounts.
-        assert_eq!(scan_shapes(false).len(), 2 + braavos);
+        assert_eq!(scan_shapes(false).len(), 1 + argent + braavos);
     }
 
     #[test]

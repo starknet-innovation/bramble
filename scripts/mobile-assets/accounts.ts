@@ -11,6 +11,7 @@ import {
   BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
   BRAAVOS_SIGNING_CLASS_HASHES,
+  XVERSE_ARGENT_CLASS_HASH,
 } from "@bramble/wallet-model/account-families";
 import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import { RECOVERY_SCAN_LIMITS, RESERVED_AGENT_ACCOUNT_INDEX } from "@bramble/wallet-model/recovery";
@@ -36,6 +37,7 @@ export const renderAccountsCatalog = (): string => {
   const catalog = {
     generatedBy: HEADER,
     argentDefaultClassHash: ARGENT_ACCOUNT_CLASS_HASH,
+    xverseArgentClassHash: XVERSE_ARGENT_CLASS_HASH,
     braavos: {
       deploymentClassHash: BRAAVOS_DEPLOYMENT_CLASS_HASH,
       implementationClassHash: BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,

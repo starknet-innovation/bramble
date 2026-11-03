@@ -8,6 +8,7 @@
 
 use std::sync::OnceLock;
 
+use krusty_kms::{ArgentAccount, ArgentConstructorLayout};
 use serde::Deserialize;
 use starknet_types_core::felt::Felt;
 
@@ -140,6 +141,7 @@ struct RawCatalog {
     open_zeppelin: RawOpenZeppelin,
     recovery_limits: RecoveryLimits,
     reserved_agent_index: u32,
+    xverse_argent_class_hash: String,
 }
 
 /// One class with its hash parsed.
@@ -154,6 +156,9 @@ pub(crate) struct ClassEntry {
 pub(crate) struct Catalog {
     pub classes: Vec<ClassEntry>,
     pub argent_default: Felt,
+    /// `XVERSE_ARGENT_CLASS_HASH`: the Argent 0.4 build Xverse deploys at. Scanned on this
+    /// wallet's own ladder only, and deployable like `argent_default`, never created.
+    pub argent_xverse: Felt,
     /// `BRAAVOS_DEPLOYMENT_CLASS_HASH`: the one Braavos class this wallet deploys.
     pub braavos_deployment: Felt,
     /// `BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH`: what a Braavos deployment installs.
@@ -212,6 +217,7 @@ fn load() -> Catalog {
     Catalog {
         classes,
         argent_default: class_felt(&raw.argent_default_class_hash),
+        argent_xverse: class_felt(&raw.xverse_argent_class_hash),
         braavos_deployment: class_felt(&raw.braavos.deployment_class_hash),
         braavos_implementation: class_felt(&raw.braavos.implementation_class_hash),
         braavos_signing: raw
@@ -262,6 +268,27 @@ pub(crate) fn class_entry(class_hash: &Felt) -> Option<&'static ClassEntry> {
         .classes
         .iter()
         .find(|entry| entry.class_hash == *class_hash)
+}
+
+/// The Argent preset Krusty derives and deploys a class with: Krusty's own when it lists the
+/// class; otherwise, for `argent_xverse` alone, the constructor layout the extension's reviewed
+/// table gives (`with_class_hash_and_layout`). Krusty still builds the calldata and the address
+/// either way. Any other class Krusty does not list is refused, so a new class needs review here.
+pub(crate) fn argent_preset(class_hash: Felt) -> Option<ArgentAccount> {
+    if let Ok(account) = ArgentAccount::try_with_class_hash(class_hash) {
+        return Some(account);
+    }
+    if class_hash != catalog().argent_xverse {
+        return None;
+    }
+    let layout = match class_entry(&class_hash)?.constructor_shape.as_str() {
+        "owner-guardian" => ArgentConstructorLayout::OwnerGuardianFelts,
+        "signer-owner-guardian-option" => ArgentConstructorLayout::SignerWithOptionalGuardian,
+        _ => return None,
+    };
+    Some(ArgentAccount::with_class_hash_and_layout(
+        class_hash, layout,
+    ))
 }
 
 /// `knownAccountType` for a stored class.
@@ -331,9 +358,17 @@ mod tests {
     #[test]
     fn krusty_constructors_agree_with_the_extension_table() {
         let key = Felt::from(42u64);
+        let unlisted: Vec<Felt> = deployment_classes(AccountFamily::Argent)
+            .map(|entry| entry.class_hash)
+            .filter(|hash| ArgentAccount::layout_for_class_hash(hash).is_none())
+            .collect();
+        // Only Xverse's build goes through the reviewed-table layout; a new unlisted class
+        // must be reviewed into `argent_preset` before it derives anything.
+        assert_eq!(unlisted, vec![catalog().argent_xverse]);
         for entry in deployment_classes(AccountFamily::Argent) {
-            let layout = ArgentAccount::layout_for_class_hash(&entry.class_hash)
-                .expect("krusty knows every Argent deployment class");
+            let layout = argent_preset(entry.class_hash)
+                .expect("every Argent deployment class has a preset")
+                .constructor_layout();
             let expected = match entry.constructor_shape.as_str() {
                 "owner-guardian" => ArgentConstructorLayout::OwnerGuardianFelts,
                 "signer-owner-guardian-option" => {
@@ -367,7 +402,7 @@ mod tests {
     fn families_and_labels() {
         assert_eq!(account_family_name(AccountFamily::OpenZeppelin), "Bramble");
         assert_eq!(account_family_name(AccountFamily::Argent), "Ready");
-        assert_eq!(deployment_classes(AccountFamily::Argent).count(), 3);
+        assert_eq!(deployment_classes(AccountFamily::Argent).count(), 4);
         assert_eq!(deployment_classes(AccountFamily::Braavos).count(), 2);
         assert_eq!(
             type_label(AccountFamily::Argent, &catalog().argent_default).as_deref(),

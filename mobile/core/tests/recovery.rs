@@ -22,8 +22,8 @@ fn a_quiet_wallet_offers_only_the_creatable_index_zero_accounts() {
     let first = core.recovery_scan_next(NetworkId::Sepolia, None).unwrap();
     assert_eq!(
         first.requests.len(),
-        4 * 7,
-        "four indices, seven shapes each"
+        4 * 10,
+        "four indices, ten shapes each"
     );
     assert_eq!(first.status, "Searching every account type…");
     let step = Node::default().run_scan(&core, NetworkId::Sepolia);
@@ -40,8 +40,12 @@ fn a_quiet_wallet_offers_only_the_creatable_index_zero_accounts() {
         .collect();
     assert_eq!(
         rows,
-        [(AccountFamily::OpenZeppelin, 0), (AccountFamily::Argent, 0)],
-        "OZ and Argent 0.4.0 at index 0 only"
+        [
+            (AccountFamily::OpenZeppelin, 0),
+            (AccountFamily::Argent, 0),
+            (AccountFamily::Braavos, 0)
+        ],
+        "OZ, Argent 0.4.0 and Braavos 1.0.0 at index 0 only (issue 718)"
     );
     assert!(step.candidates[0].selectable && !step.candidates[0].auto_select);
     assert!(
@@ -49,6 +53,15 @@ fn a_quiet_wallet_offers_only_the_creatable_index_zero_accounts() {
         "an unused Ready account is listed, not selectable"
     );
     assert_eq!(step.candidates[1].title, "Account 0");
+    let braavos = &step.candidates[2];
+    assert!(
+        !braavos.selectable,
+        "an unused Braavos account is listed, not selectable"
+    );
+    assert_eq!(
+        braavos.hint,
+        "No on-chain activity found — Bramble only imports existing Braavos accounts"
+    );
 }
 
 #[test]
@@ -64,18 +77,19 @@ fn activity_is_found_and_auto_selected_across_families() {
             .unwrap()
             .to_string()
     };
-    // Each index: OZ and argent 0.4.0 on this wallet's ladder, then argent 0.3.1, 0.3.0, 0.4.0 on
-    // Ready's, then braavos 1.0.0 and base on Braavos's (issue 505).
+    // Each index: OZ, then argent 0.3.1, 0.3.0, 0.4.0 and Xverse's 0.4.0 on this wallet's ladder,
+    // then argent 0.3.1, 0.3.0, 0.4.0 on Ready's, then braavos 1.0.0 and base on Braavos's
+    // (issues 505, 734).
     let mut node = Node::default();
-    node.deployed.insert(address_of(7 + 2)); // Ready argent 0.3.1 at index 1
-    node.funded.insert(address_of(7 * 3 + 6)); // braavos base at index 3
+    node.deployed.insert(address_of(10 + 5)); // Ready argent 0.3.1 at index 1
+    node.funded.insert(address_of(10 * 3 + 9)); // braavos base at index 3
     let step = node.run_scan(&core, NetworkId::Sepolia);
     let argent = step
         .candidates
         .iter()
         .find(|c| c.account_index == 1)
         .expect("deployed Argent 0.3.1 is kept");
-    assert_eq!(argent.title, "Account 1 · Argent 0.3.1");
+    assert_eq!(argent.title, "Account 1 · Argent 0.3.1 · Ready extension");
     assert_eq!(argent.hint, "Deployed on Starknet");
     assert!(argent.auto_select && argent.selectable);
     assert_eq!(
@@ -86,7 +100,7 @@ fn activity_is_found_and_auto_selected_across_families() {
     let braavos = step
         .candidates
         .iter()
-        .find(|c| c.family == AccountFamily::Braavos)
+        .find(|c| c.family == AccountFamily::Braavos && c.account_index == 3)
         .expect("funded Braavos is kept");
     assert_eq!(braavos.hint, "Funded, not deployed · view only for now");
     assert!(braavos.funded && !braavos.deployed && braavos.auto_select);
@@ -107,7 +121,7 @@ fn an_unexpected_error_pauses_and_the_batch_is_retried() {
     // Nothing advanced: the retry re-issues indices 0-3 with fresh ids.
     let retry = core.recovery_scan_next(NetworkId::Sepolia, None).unwrap();
     assert_eq!(retry.checked, 0);
-    assert_eq!(retry.requests.len(), 28);
+    assert_eq!(retry.requests.len(), 40);
     assert!(retry.requests[0].id > step.requests.last().unwrap().id);
     let done = Node::default().run_batch(&core, NetworkId::Sepolia, None);
     assert_eq!(done.checked, 4);
