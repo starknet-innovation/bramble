@@ -21,6 +21,11 @@ enum UITest {
         static let accountSearch: TimeInterval = 90
     }
 
+    /// How many swipes `clearTabBar` spends lifting a row out from under the tab bar.
+    private enum TabBar {
+        static let maxScrolls = 3
+    }
+
     /// The leading-edge swipe: normalized start and end x, the row it runs along, and the press.
     private enum EdgeSwipe {
         static let startX: CGFloat = 0.01
@@ -83,7 +88,26 @@ enum UITest {
 
     static func tap(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         wait(element, file: file, line: line)
+        guard clearTabBar(element, file: file, line: line) else { return }
         element.tap()
+    }
+
+    /// The floating tab bar covers the bottom of a scrolled screen, and XCUITest still calls a row
+    /// under it hittable, so a tap at the row's centre lands on a tab. Scroll the row clear first,
+    /// whether the bar covers part of it or all of it. The tabs themselves sit inside the bar and
+    /// are left alone, as are screens without it. Returns false, after failing the test, when the
+    /// row is still covered, so the caller never taps the tab underneath.
+    private static func clearTabBar(_ element: XCUIElement, file: StaticString, line: UInt) -> Bool {
+        let app = XCUIApplication()
+        let dock = app.otherElements["wallet-dock"]
+        guard dock.exists else { return true }
+        for scroll in 0...TabBar.maxScrolls {
+            let bar = dock.frame, row = element.frame
+            if row.maxY <= bar.minY || bar.contains(row) { return true }
+            if scroll < TabBar.maxScrolls { app.swipeUp() }
+        }
+        XCTFail("\(element) is still under the tab bar after \(TabBar.maxScrolls) scrolls", file: file, line: line)
+        return false
     }
 
     static func type(_ text: String, into field: XCUIElement) {
@@ -212,7 +236,7 @@ enum UITest {
     /// restores: a selection is the only gate. `shot` captures the review before the restore.
     static func restorePrimaryAccount(_ app: XCUIApplication, shot: (() -> Void)? = nil) {
         wait(app.staticTexts["Find your accounts"])
-        wait(app.staticTexts["Search complete. Checked 20 indices across every account type."], Timeout.accountSearch)
+        wait(searchComplete(app), Timeout.accountSearch)
         let group = app.buttons["Bramble accounts"]
         if (group.value as? String) != "Expanded" { tap(group) }
         let row = app.buttons[primaryCandidate]
@@ -263,6 +287,12 @@ enum UITest {
         restorePrimaryAccount(app)
         tap(app.buttons["Open Bramble"])
         waitForWallet(app)
+    }
+
+    /// "Find your accounts" finished. The count it names is the gap limit past the last active
+    /// index, so it depends on the wallet; the core's own tests pin the number.
+    static func searchComplete(_ app: XCUIApplication) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Search complete.")).firstMatch
     }
 
     /// Any element whose accessibility label contains `text`.

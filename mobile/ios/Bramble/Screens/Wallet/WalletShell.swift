@@ -239,6 +239,9 @@ struct Dock: View {
         }
         .padding(dock.padding)
         .background(skin.panel, in: Capsule())
+        // Lets UI tests find the dock itself rather than any button labelled "Home".
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("wallet-dock")
         .elevation(BrambleElevation.dock)
         // Chrome stops growing at accessibility sizes; content does not (design-mobile.md 4.2).
         .dynamicTypeSize(...DynamicTypeSize.accessibility3)

@@ -53,7 +53,7 @@ final class SwipeBackTests: XCTestCase {
         UITest.tap(app.buttons["Continue"])
         UITest.setPassphrase(app)
         UITest.tap(app.buttons["Find your accounts"])
-        UITest.wait(app.staticTexts["Search complete. Checked 20 indices across every account type."], 90)
+        UITest.wait(UITest.searchComplete(app), 90)
         assertSwipeStays(app, on: "Find your accounts")
         UITest.restorePrimaryAccount(app)
         assertSwipeStays(app, on: "You’re all set")

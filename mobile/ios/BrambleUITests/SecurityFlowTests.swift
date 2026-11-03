@@ -62,7 +62,7 @@ final class SecurityFlowTests: XCTestCase {
         if fresh.exists { return app }
         XCTAssertTrue(locked.exists, "Bramble opened on neither first run nor unlock")
         // A leftover wallet may have Face ID on: dismiss its automatic prompt if one appears.
-        let cancel = springboard.buttons["Cancel"]
+        let cancel = springboard.buttons["Cancel"].firstMatch
         if cancel.waitForExistence(timeout: 3) { cancel.tap() }
         let unlock = app.buttons["Unlock"]
         UITest.type(UITest.passphrase, into: locked)
@@ -157,7 +157,7 @@ final class SecurityFlowTests: XCTestCase {
         UITest.tap(app.buttons["Lock wallet"].firstMatch)
         XCTAssertTrue(app.staticTexts["Welcome back"].waitForExistence(timeout: 5))
         face(matching: false)
-        let cancel = springboard.buttons["Cancel"]
+        let cancel = springboard.buttons["Cancel"].firstMatch
         if cancel.waitForExistence(timeout: 5) { cancel.tap() }
         XCTAssertTrue(app.buttons["Unlock with Face ID"].waitForExistence(timeout: 5), "the slot is kept")
         snapshot(app, "unlock-after-no-match")

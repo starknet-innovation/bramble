@@ -28,6 +28,24 @@ If one fails, stop and say which tool is missing. Android needs `~/.zprofile`'s 
 | A flow, repeatably | `-only-testing:BrambleUITests/<Class>` · `connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=<fqcn>` |
 | See a screen | build, install, launch, screenshot (below) |
 
+**The full iOS UI suite takes about 36 minutes on one simulator.** While iterating, run only the
+classes your change touches with `-only-testing:BrambleUITests/<Class>`. Each takes 1 to 8
+minutes; add `test-without-building` when only the run needs repeating. Run the whole scheme once,
+before pushing:
+
+- **One simulator, about 36 minutes.** Reliable. Use it when the result has to be trusted.
+- **Four parallel clones, about 23 minutes.** Add `-parallel-testing-enabled YES
+  -parallel-testing-worker-count 4`. In both clone runs measured here, one clone could not
+  launch the runner ("Busy", "Application failed preflight checks"). Its tests then move to the
+  other clones, but
+  `xcodebuild` still prints `** TEST FAILED **` and exits 65. Judge the run by its
+  `Test case '…' passed|failed` lines, not by the exit code. Under that load, timing-sensitive
+  tests (Face ID enrolment, app launch) fail more often. Rerun a failed class alone before
+  blaming the change.
+
+More simulators do not help on one Mac: CPU is the limit, and every class slowed by 20–75%
+(most by 35–50%).
+
 ## iOS
 
 ```bash
@@ -104,8 +122,11 @@ adb emu kill                                                  # when done
 gives every node's `text`, `content-desc` and `bounds`. Tap the centre of a node's bounds with
 `adb shell input tap X Y`, and type with `adb shell input text` (write each space as `%s`). Dump
 before every tap: never reuse coordinates from another screen or another AVD.
-- A cold boot can put "System UI isn't responding" over the app even after `boot_completed`.
-  If the dump shows it, tap its "Wait" button, then `am start` again.
+- A headless cold boot can leave "System UI isn't responding" holding focus even after
+  `boot_completed`. Instrumented tests then fail with `RootViewWithoutFocusException` or an empty
+  clipboard, which looks like an app bug. After boot, run
+  `adb shell settings put global hide_error_dialogs 1` and `adb shell input keyevent KEYCODE_ENTER`.
+  Then check that `adb shell dumpsys window | grep mCurrentFocus` names no "Not Responding" window.
 - `monkey` does not launch this app; use `am start`.
 - The app has no launch-time fixtures, so driving it by hand reads live public data.
 

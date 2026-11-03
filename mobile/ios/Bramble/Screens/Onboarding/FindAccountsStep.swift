@@ -1,8 +1,9 @@
 import BrambleCore
 import SwiftUI
 
-/// `data-onboarding-step="recovery-accounts"`: the first 20 indices searched for Bramble, Ready,
-/// and Braavos accounts, active ones selected, an advanced manual index, and one atomic restore.
+/// `data-onboarding-step="recovery-accounts"`: Bramble, Ready and Braavos accounts searched to the
+/// gap limit past the last active index, active ones selected, an advanced manual index, and one
+/// atomic restore.
 /// Restore needs only a selection (`refreshGate`): the extension dropped the Mainnet
 /// acknowledgement that used to gate it.
 ///
@@ -19,8 +20,7 @@ struct FindAccountsStep: View {
     @State private var restoring = false
     @State private var opened: Set<AccountFamily> = []
 
-    private static let lede = "Bramble checks the first 20 account indices for Bramble, Ready, and Braavos accounts. "
-        + "Accounts with on-chain activity are selected automatically."
+    private static let lede = "Accounts with on-chain activity are selected automatically."
 
     var body: some View {
         OnboardingStep(icon: .wallet, title: "Find your accounts", lede: Self.lede) {
