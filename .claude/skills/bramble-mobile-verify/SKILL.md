@@ -28,6 +28,24 @@ If one fails, stop and say which tool is missing. Android needs `~/.zprofile`'s 
 | A flow, repeatably | `-only-testing:BrambleUITests/<Class>` · `connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=<fqcn>` |
 | See a screen | build, install, launch, screenshot (below) |
 
+**The full iOS UI suite takes about 36 minutes on one simulator.** While iterating, run only the
+classes your change touches with `-only-testing:BrambleUITests/<Class>`. Each takes 1 to 8
+minutes; add `test-without-building` when only the run needs repeating. Run the whole scheme once,
+before pushing:
+
+- **One simulator, about 36 minutes.** Reliable. Use it when the result has to be trusted.
+- **Four parallel clones, about 23 minutes.** Add `-parallel-testing-enabled YES
+  -parallel-testing-worker-count 4`. In both clone runs measured here, one clone could not
+  launch the runner ("Busy", "Application failed preflight checks"). Its tests then move to the
+  other clones, but
+  `xcodebuild` still prints `** TEST FAILED **` and exits 65. Judge the run by its
+  `Test case '…' passed|failed` lines, not by the exit code. Under that load, timing-sensitive
+  tests (Face ID enrolment, app launch) fail more often. Rerun a failed class alone before
+  blaming the change.
+
+More simulators do not help on one Mac: CPU is the limit, and every class slowed by 20–75%
+(most by 35–50%).
+
 ## iOS
 
 ```bash
