@@ -145,6 +145,7 @@ export const encryptedMultisigGrantStore = (store: EncryptedStore): MultisigOrig
       throw new WalletError("Invalid multisig grant");
     }
     const current = await readEncrypted(store, input.credential);
+    if (!input.isAuthorized()) throw new WalletError("wallet locked");
     const rest = current.grants.filter((grant) => grant.origin !== input.origin);
     const existing = current.grants.find((grant) => grant.origin === input.origin);
     const multisigIds = [...new Set([...(existing?.multisigIds ?? []), input.multisigId])];
@@ -152,9 +153,16 @@ export const encryptedMultisigGrantStore = (store: EncryptedStore): MultisigOrig
       grants: [...rest, { multisigIds, origin: input.origin }],
       schemaVersion: 1,
     };
+    // Re-checked after encryption, right before the commit starts. A lock during
+    // the storage writes themselves is rolled back to the pre-grant snapshot,
+    // the same window the vault origin grant closes (Sherlock 255).
     await store.write(next, input.credential, () => {
       if (!input.isAuthorized()) throw new WalletError("wallet locked");
     });
+    if (!input.isAuthorized()) {
+      await store.write(current, input.credential);
+      throw new WalletError("wallet locked");
+    }
   },
   async idsFor(origin, credential) {
     const ledger = await readEncrypted(store, credential);

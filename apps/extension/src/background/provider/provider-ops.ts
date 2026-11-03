@@ -30,6 +30,7 @@ import {
   PENDING_INVOKE_FEE,
 } from "../approvals/invoke-fee-review";
 import { gaslessFeeSummary } from "../transactions/gasless-review";
+import { grantedDappAccounts } from "./dapp-account";
 import { type InvokeExecuteDeps, submitHeldInvoke } from "./held-invoke-submit";
 import {
   maybeQueueMultisigInvoke,
@@ -220,9 +221,7 @@ type ProviderOpsHandler = (
 
 const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) => {
   const input = readGetPermissionsInput(message);
-  if (!input) {
-    return { error: "invalid permissions request" };
-  }
+  if (!input) return { error: "invalid permissions request" };
   if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
@@ -233,7 +232,7 @@ const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) =
   // a timer, so it must not extend the unlock lifetime.
   const passphrase = deps.session.peekPassphrase();
   const authorized = captureSessionAuthorization(deps.session);
-  const granted = passphrase ? await deps.wallet.getGrantedAccounts(input.origin, passphrase) : [];
+  const granted = passphrase ? await grantedDappAccounts(deps, input.origin, passphrase) : [];
   // A lock that lands during the read answers what a locked wallet answers,
   // never an error only that race produces: a polling page would otherwise
   // learn when each lock happened (Sherlock 148).

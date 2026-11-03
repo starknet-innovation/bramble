@@ -42,12 +42,13 @@ const SIGNER: AccountRef = {
   publicKeyY: "0xdef",
 };
 
-const multisig = (threshold: number) => ({
+const multisig = (threshold: number, member = false) => ({
   accountContractType: "argent-multisig" as const,
   address: "0x123",
   classHash: ARGENT_MULTISIG_CONTRACT.classHash,
   currentConfig: normalizeArgentMultisigConfig({
-    signerPublicKeys: threshold === 1 ? ["0xabc"] : ["0x123", "0x456"],
+    signerPublicKeys:
+      threshold === 1 ? ["0xabc"] : member ? ["0xabc", "0x456"] : ["0x123", "0x456"],
     threshold,
   }),
   id: "SN_MAIN:0x123",
@@ -95,17 +96,38 @@ const fakeProvider = (): RpcProvider =>
     },
   }) as RpcProvider;
 
-const harness = async (threshold: number) => {
+const harness = async (
+  threshold: number,
+  options: {
+    readonly classHash?: string;
+    readonly fee?: string;
+    readonly member?: boolean;
+    readonly onList?: () => void;
+    readonly onSign?: () => void;
+  } = {},
+) => {
   const preferences = createPreferencesStore({ store: createMemoryStore() });
   await preferences.setActiveNetwork("SN_MAIN");
-  const record = multisig(threshold);
+  const record = multisig(threshold, options.member === true);
   await preferences.setSelectedMultisig({ multisigId: record.id });
-  const multisigs = memoryMultisigStore();
-  expect(await multisigs.upsertMultisig(record)).toBe("stored");
+  const stored = memoryMultisigStore();
+  expect(await stored.upsertMultisig(record)).toBe("stored");
+  const multisigs = {
+    ...stored,
+    listMultisigs: async () => {
+      const records = await stored.listMultisigs();
+      options.onList?.();
+      return records;
+    },
+  };
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const handler = createMessageHandler(
-    createWallet({ accounts: [SIGNER], activeAccountId: () => SIGNER.id }),
+    createWallet({
+      accounts: [SIGNER],
+      activeAccountId: () => SIGNER.id,
+      ...(options.onSign ? { captureSign: options.onSign } : {}),
+    }),
     testExtension,
     {
       multisigGrants: memoryMultisigGrantStore(),
@@ -114,10 +136,10 @@ const harness = async (threshold: number) => {
       runtimeRpc: {
         ...makeRuntimeRpc({
           async estimateMultisigDappFee() {
-            return { overallFee: "10", unit: "FRI" };
+            return { overallFee: options.fee ?? "999999999999999999", unit: "FRI" };
           },
           async getClassHashAt() {
-            return ARGENT_MULTISIG_CONTRACT.classHash;
+            return options.classHash ?? ARGENT_MULTISIG_CONTRACT.classHash;
           },
           async submitMultisigDappInvoke() {
             return { transactionHash: "0x7cd" };
@@ -148,7 +170,7 @@ const harness = async (threshold: number) => {
       session,
     },
   );
-  return { handler, multisigs, record };
+  return { handler, multisigs, preferences, record, session };
 };
 
 describe("multisig dapp accounts", () => {
@@ -159,6 +181,9 @@ describe("multisig dapp accounts", () => {
     await expect(
       handler({ origin: grantedOrigin, type: "wallet.getGrantedAccounts" }, contentSender),
     ).resolves.toEqual({ accounts: [account], ok: true });
+    await expect(
+      handler({ origin: grantedOrigin, type: "wallet.getPermissions" }, contentSender),
+    ).resolves.toEqual({ ok: true, permissions: ["accounts"] });
   });
 
   test("connecting a selected multisig gives the site that address", async () => {
@@ -277,5 +302,123 @@ describe("multisig dapp accounts", () => {
     const intents = await multisigs.listIntents();
     expect(intents).toHaveLength(1);
     expect(intents[0]).toMatchObject({ accountId: record.id, state: "collecting" });
+  });
+
+  test("a multisig-only connection is visible to wallet_getPermissions", async () => {
+    const { handler, record } = await harness(1);
+    const origin = "https://only-multisig.example";
+    const sender = { id: "extension-id", url: `${origin}/app` };
+    await expect(handler({ origin, type: "wallet.getPermissions" }, sender)).resolves.toEqual({
+      ok: true,
+      permissions: [],
+    });
+    const held = handler({ origin, type: "wallet.requestAccounts" }, sender);
+    const id = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await held;
+    await expect(handler({ origin, type: "wallet.getPermissions" }, sender)).resolves.toEqual({
+      ok: true,
+      permissions: ["accounts"],
+    });
+  });
+
+  test("a lock after the grant read does not queue the multisig invoke", async () => {
+    let lists = 0;
+    let lock = (): void => undefined;
+    const { handler, record, session } = await harness(1, {
+      onList: () => lock(),
+    });
+    const connect = handler(
+      { origin: grantedOrigin, type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+    lock = () => {
+      lists += 1;
+      if (lists >= 2) session.lock();
+    };
+    await expect(
+      handler(
+        { calls: invokeCalls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" },
+        contentSender,
+      ),
+    ).resolves.toEqual({ error: "wallet locked" });
+    await expect(handler({ type: "wallet.pendingApprovals" }, extensionSender)).resolves.toEqual({
+      ok: true,
+      pending: [],
+    });
+  });
+
+  test("a saved proposal is refused when its frozen fee exceeds the reviewed ceiling", async () => {
+    let signed = false;
+    const { handler, multisigs, record } = await harness(2, {
+      fee: "1",
+      member: true,
+      onSign: () => {
+        signed = true;
+      },
+    });
+    const connect = handler(
+      { origin: grantedOrigin, type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+    const held = handler(
+      { calls: invokeCalls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({
+      error:
+        "The network fee for this transaction rose above the amount you reviewed. Nothing was submitted — review it again.",
+    });
+    expect(signed).toBe(false);
+    expect(await multisigs.listIntents()).toHaveLength(0);
+  });
+
+  test("a saved proposal is refused when the live class is no longer the pinned account", async () => {
+    let signed = false;
+    const { handler, multisigs, record } = await harness(2, {
+      classHash: "0x1",
+      member: true,
+      onSign: () => {
+        signed = true;
+      },
+    });
+    const connect = handler(
+      { origin: grantedOrigin, type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+    const held = handler(
+      { calls: invokeCalls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "This multisig isn't the pinned account." });
+    expect(signed).toBe(false);
+    expect(await multisigs.listIntents()).toHaveLength(0);
   });
 });

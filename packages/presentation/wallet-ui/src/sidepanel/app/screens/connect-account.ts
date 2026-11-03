@@ -3,46 +3,85 @@
  * account to the site. Selecting a single-signer account clears that presentation.
  */
 
-export const connectAccountHandler =
-  (deps: {
-    readonly activeAccountId: () => string | null;
-    readonly remember: (id: string | null) => void;
-    readonly render: () => void;
-    readonly showMultisig: () => void;
-    readonly switchAccount: (id: string) => Promise<void>;
-  }) =>
-  (id: string, kind: "account" | "multisig"): void =>
-    chooseConnectAccount({
-      activeAccountId: deps.activeAccountId(),
-      id,
-      kind,
-      remember: deps.remember,
-      render: deps.render,
-      showMultisig: deps.showMultisig,
-      switchAccount: deps.switchAccount,
-    });
-
-const chooseConnectAccount = (input: {
-  readonly activeAccountId: string | null;
-  readonly id: string;
-  readonly kind: "account" | "multisig";
-  readonly remember: (id: string | null) => void;
+type ConnectChoiceDeps = {
+  readonly activeAccountId: () => string | null;
+  /** Resolves true only after the presented account has been stored. */
+  readonly remember: (id: string | null) => Promise<boolean>;
   readonly render: () => void;
   readonly showMultisig: () => void;
   readonly switchAccount: (id: string) => Promise<void>;
-}): void => {
+};
+
+/**
+ * Writes the presented account, then reports whether the panel may show it.
+ * A failed write leaves the previous selection in place.
+ */
+const storeChoice =
+  (deps: {
+    readonly assign: (id: string | null) => void;
+    readonly notify: () => void;
+    readonly write: (id: string | null) => Promise<void>;
+  }) =>
+  async (id: string | null): Promise<boolean> => {
+    try {
+      await deps.write(id);
+    } catch {
+      deps.notify();
+      return false;
+    }
+    deps.assign(id);
+    return true;
+  };
+
+/** Presents the chosen account, then repaints only after that choice is stored. */
+export const connectAccountHandler =
+  (deps: ConnectChoiceDeps) =>
+  (id: string, kind: "account" | "multisig"): void =>
+    chooseConnectAccount({ ...deps, id, kind });
+
+/**
+ * Connection-card handler. The choice is painted only after `write` resolves,
+ * so Connect cannot approve an account the background has not stored.
+ */
+export const bindConnectChoice = (deps: {
+  readonly accountId: () => string | null;
+  readonly apply: (id: string | null) => void;
+  readonly notify: () => void;
+  readonly render: () => void;
+  readonly showMultisig: () => void;
+  readonly switchAccount: (id: string) => Promise<void>;
+  readonly write: (id: string | null) => Promise<void>;
+}): ReturnType<typeof connectAccountHandler> =>
+  connectAccountHandler({
+    activeAccountId: deps.accountId,
+    remember: storeChoice({ assign: deps.apply, notify: deps.notify, write: deps.write }),
+    render: deps.render,
+    showMultisig: deps.showMultisig,
+    switchAccount: deps.switchAccount,
+  });
+
+const finishConnectChoice = (
+  input: ConnectChoiceDeps & { readonly id: string; readonly kind: "account" | "multisig" },
+): void => {
   if (input.kind === "multisig") {
-    input.remember(input.id);
     input.showMultisig();
     input.render();
     return;
   }
-  input.remember(null);
-  if (input.id !== input.activeAccountId) {
+  if (input.id !== input.activeAccountId()) {
     void input.switchAccount(input.id).then(input.render);
     return;
   }
   input.render();
+};
+
+const chooseConnectAccount = (
+  input: ConnectChoiceDeps & { readonly id: string; readonly kind: "account" | "multisig" },
+): void => {
+  const presented = input.kind === "multisig" ? input.id : null;
+  void input.remember(presented).then((saved) => {
+    if (saved) finishConnectChoice(input);
+  });
 };
 
 type MultisigSelection = { hydrated: boolean; id: string | null };

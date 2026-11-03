@@ -12,8 +12,10 @@ import type {
   MultisigStore,
 } from "@bramble/multisig/repository";
 import { argentMultisigIntentId } from "@bramble/multisig/repository";
-import { argentSignerGuid } from "@bramble/starknet/account-contracts";
-import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { exceedsReviewedFee, type FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { preparedArgentMultisigFee } from "@bramble/starknet/multisig-invoke";
+import { REVIEWED_FEE_EXCEEDED, REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
 import { activityOrigin } from "@bramble/transactions/activity";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import {
@@ -48,6 +50,7 @@ import {
   multisigRecordById,
 } from "./dapp-account";
 import type { InvokeExecuteDeps } from "./held-invoke-submit";
+import { MULTISIG_CLASS } from "./multisig-dapp-sign";
 import { invokeFailureResponse } from "./provider-invoke-failure";
 /** Error a site receives when a higher-threshold invoke was saved, not sent. */
 export const MULTISIG_PROPOSAL_SAVED = "Multisig proposal saved. It was not submitted.";
@@ -85,6 +88,7 @@ const queueMultisigDappInvoke = async (
   input: {
     readonly calls: readonly Call[];
     readonly credential: string;
+    readonly isAuthorized: () => boolean;
     readonly origin: string;
     readonly proof?: unknown;
   },
@@ -101,9 +105,11 @@ const queueMultisigDappInvoke = async (
   const refusal = refuseOnAccountSelfCall(input.calls, record.address);
   if (refusal) return refusal;
   const threshold = record.currentConfig?.threshold;
+  const context = await createApprovalContext(record, { calls: input.calls });
+  if (!input.isAuthorized()) return { error: "wallet locked" };
   const approval = deps.approvals.requestInvoke({
     calls: input.calls,
-    context: await createApprovalContext(record, { calls: input.calls }),
+    context,
     fee: PENDING_INVOKE_FEE,
     flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
     ...(threshold !== undefined && threshold > 1 ? { multisigThreshold: threshold } : {}),
@@ -179,7 +185,11 @@ export const maybeQueueMultisigInvoke = async (
   if (!deps.multisigStore) return { error: "Argent multisig not found" };
   const record = await multisigRecordById(deps.multisigStore, presented.id);
   if (!record) return { error: "Argent multisig not found" };
-  return queueMultisigDappInvoke(deps, record, { ...input, credential });
+  return queueMultisigDappInvoke(deps, record, {
+    ...input,
+    credential,
+    isAuthorized: authorized.isCurrent,
+  });
 };
 
 /**
@@ -310,7 +320,15 @@ const executeMultisigDappInvoke = async (
     if (!member) return { error: "This wallet doesn't hold a signer for this multisig." };
     return submitThresholdOne(deps, input, member, preferences, authorized.isCurrent);
   }
-  return saveProposal(deps, input, member, report.calls, authorized.isCurrent, preferences);
+  return saveProposal(
+    deps,
+    input,
+    member,
+    report.calls,
+    authorized.isCurrent,
+    preferences,
+    input.reviewedFee,
+  );
 };
 
 const submitThresholdOne = async (
@@ -373,10 +391,31 @@ const submitThresholdOne = async (
   }
 };
 
+const preparedProposalRefusal = async (
+  deps: { readonly runtimeRpc: Pick<RuntimeRpc, "getClassHashAt"> },
+  record: ArgentMultisigRecord,
+  prepared: Parameters<typeof preparedArgentMultisigFee>[0],
+  reviewedFee: FeeEstimate | undefined,
+  rpcUrls: readonly string[],
+): Promise<RuntimeResponse | null> => {
+  const live = await deps.runtimeRpc.getClassHashAt?.({ address: record.address, rpcUrls });
+  if (!live || !sameFelt(live, ARGENT_MULTISIG_CONTRACT.classHash)) {
+    return { error: MULTISIG_CLASS };
+  }
+  if (!reviewedFee) return { error: REVIEWED_FEE_REQUIRED };
+  let quoted: FeeEstimate;
+  try {
+    quoted = preparedArgentMultisigFee(prepared);
+  } catch {
+    return { error: "This transaction could not be saved for the signers." };
+  }
+  return exceedsReviewedFee(reviewedFee, quoted) ? { error: REVIEWED_FEE_EXCEEDED } : null;
+};
+
 const saveProposal = async (
   deps: AccountHashSignerDeps & {
     readonly multisigStore: Pick<MultisigStore, "upsertIntent">;
-    readonly runtimeRpc: Pick<RuntimeRpc, "multisig">;
+    readonly runtimeRpc: Pick<RuntimeRpc, "getClassHashAt" | "multisig">;
   },
   input: {
     readonly calls: readonly Call[];
@@ -387,10 +426,12 @@ const saveProposal = async (
   reviewedCalls: readonly { readonly summary: string }[],
   isAuthorized: () => boolean,
   preferences: Awaited<ReturnType<InvokeExecuteDeps["preferencesStore"]["read"]>>,
+  reviewedFee: FeeEstimate | undefined,
 ): Promise<RuntimeResponse> => {
   const prepare = deps.runtimeRpc.multisig?.prepareInvoke;
   const config = input.record.currentConfig;
   if (!prepare || !config) return { error: "This multisig's signers aren't available yet." };
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.record.networkId], preferences);
   const prepared = await prepare({
     account: input.record,
     calls: input.calls.map((call) => ({
@@ -399,10 +440,14 @@ const saveProposal = async (
       entrypoint: call.entrypoint,
     })),
     config,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[input.record.networkId], preferences),
+    rpcUrls,
   });
   const id = argentMultisigIntentId(input.record.id, prepared.transactionHash);
   if (!id) return { error: "This transaction could not be saved for the signers." };
+  const blocked = await preparedProposalRefusal(deps, input.record, prepared, reviewedFee, rpcUrls);
+  if (blocked || !isAuthorized()) {
+    return blocked ?? { error: "wallet locked" };
+  }
   const signed = member
     ? [await accountHashSigner(deps, member, input.credential)(prepared.transactionHash)]
     : [];

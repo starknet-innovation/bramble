@@ -29,7 +29,8 @@ import {
 const MULTISIG_SIGNER_MISSING = "This wallet doesn't hold a signer for this multisig.";
 const MULTISIG_THRESHOLD = "This multisig needs more than one signer.";
 const MULTISIG_SIGNERS_UNAVAILABLE = "This multisig's signers aren't available yet.";
-const MULTISIG_CLASS = "This multisig isn't the pinned account.";
+/** Refusal when the live class is not the pinned Argent multisig. */
+export const MULTISIG_CLASS = "This multisig isn't the pinned account.";
 
 /**
  * Refuses a sign request that this wallet cannot finish. Null means a

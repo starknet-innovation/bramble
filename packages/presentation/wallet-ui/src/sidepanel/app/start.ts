@@ -30,7 +30,7 @@ import { presetSwapPair } from "../journeys/swap/swap-ui";
 import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
-import { bindCopyButtons, hiddenOverlayMount, showToast } from "../shared/dom";
+import { bindCopyButtons, hiddenOverlayMount, showNoticeToast, showToast } from "../shared/dom";
 import { closeAfterGuardedClear } from "../shared/guarded-copy";
 import { networkChangeAnnouncer } from "../shared/network-change";
 import { isParkedCollectibleView } from "../shared/parts";
@@ -56,7 +56,7 @@ import {
 } from "./rendering/scene-renderer";
 import { sceneDirection, sceneFor } from "./rendering/scene-transition";
 import { bindClusterScreens } from "./screens/cluster-ui";
-import { adoptStoredMultisig, connectAccountHandler } from "./screens/connect-account";
+import { adoptStoredMultisig, bindConnectChoice } from "./screens/connect-account";
 import { sceneContent } from "./screens/scene-content";
 import type { WalletView } from "./screens/views";
 import { createDeploymentCache } from "./sync/deployment-cache";
@@ -83,9 +83,12 @@ export const startWalletUi = async (
   const selectedNftId: string | null = null;
   const selection = { hydrated: false, id: null as string | null };
   let selectedMultisigId: string | null = null;
-  const rememberMultisig = (id: string | null): void => {
+  const showSelection = (id: string | null): void => {
     selection.hydrated = true;
     selectedMultisigId = selection.id = id;
+  };
+  const rememberMultisig = (id: string | null): void => {
+    showSelection(id);
     void wallet.setSelectedMultisig(id).catch(() => undefined);
   };
   let selectedMultisigIntentId: string | null = null;
@@ -156,9 +159,7 @@ export const startWalletUi = async (
       deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),
       render,
       setActiveView: (view: WalletView) => {
-        if (isParkedCollectibleView(view)) {
-          return;
-        }
+        if (isParkedCollectibleView(view)) return;
         activeView = view;
         if (view === "home") rememberMultisig(null);
       },
@@ -229,12 +230,14 @@ export const startWalletUi = async (
     bindAddressBook({ app, render, wallet });
     bindApprovals({
       app,
-      onConnectAccount: connectAccountHandler({
-        activeAccountId: () => cache.status.activeAccountId,
-        remember: rememberMultisig,
+      onConnectAccount: bindConnectChoice({
+        accountId: () => cache.status.activeAccountId,
+        apply: showSelection,
+        notify: () => showNoticeToast("Couldn't switch accounts.", app),
         render: renderLatest,
         showMultisig: () => (activeView = "multisig-home"),
-        switchAccount: (accountId) => wallet.setActiveAccount(accountId),
+        switchAccount: (id) => wallet.setActiveAccount(id),
+        write: (id) => wallet.setSelectedMultisig(id),
       }),
       render,
       snoozeApproval: (id) => {
@@ -417,9 +420,7 @@ export const startWalletUi = async (
       wallet.loadPendingApprovals(),
       status.hasVault ? wallet.loadPreferences().catch(() => null) : Promise.resolve(null),
     ]);
-    if (!isCurrent()) {
-      return;
-    }
+    if (!isCurrent()) return;
     cache.pending = pending;
     cache.preferences = nextPreferences;
     const adopted = adoptStoredMultisig(selection, status.networkId, nextPreferences, activeView);
