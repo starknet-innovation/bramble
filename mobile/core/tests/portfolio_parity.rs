@@ -186,6 +186,12 @@ fn fiat_amounts_hero_and_rows() {
             c
         );
         assert_eq!(
+            row.change.as_ref().map(|b| b.spoken.clone()),
+            opt_text(c, "spoken"),
+            "{:?}",
+            c
+        );
+        assert_eq!(
             row.change.is_some_and(|b| b.up),
             is_true(at(c, "up")),
             "{:?}",

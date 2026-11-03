@@ -110,6 +110,10 @@ const heroOf = (
     changes,
     currency,
     { error: null, loading: false, value: null },
+    null,
+    // The settled hero: mobile has no private balances to wait for, so the
+    // extension's capped "—" hold for a pending private total (issue 795) is over.
+    true,
   );
   return {
     amount: firstMatch(html, /<span class="hero-change-amt">([^<]*)<\/span>/),
@@ -195,7 +199,9 @@ export const fiatBlock = () => {
         change,
         "usd",
       );
-      const whole = firstMatch(html, /<span class="token-change [a-z]+">(.*?)<\/span><\/span>/);
+      // Visible text only: the screen-reader name ("24h price change") stands in for the window tag.
+      const visible = html.replace(/<span class="sr-only">[^<]*<\/span>/g, "");
+      const whole = firstMatch(visible, /<span class="token-change [a-z]+">(.*?)<\/span><\/span>/);
       return {
         // The badge's whole text, its quiet window tag included (`<span>` nested inside).
         badge:
@@ -203,6 +209,12 @@ export const fiatBlock = () => {
           firstMatch(html, /<span class="token-change [a-z]+">([^<]*)<\/span>/),
         change: change ?? null,
         price: price ?? null,
+        // What a screen reader hears: the hidden window tag gives way to its full name.
+        spoken: (() => {
+          const heard = html.replace(/<span[^>]*aria-hidden="true"[^>]*>[^<]*<\/span>/g, "");
+          const all = firstMatch(heard, /<span class="token-change [a-z]+">(.*?)<\/span><\/span>/);
+          return all === null ? null : stripTags(all);
+        })(),
         up: html.includes('class="token-change up"'),
         value: firstMatch(html, /<span class="token-amount"[^>]*>([^<]*)<\/span>/),
       };

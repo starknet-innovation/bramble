@@ -170,6 +170,7 @@ struct PortfolioTokenRow: View {
                         .brambleText(BrambleTypeScale.caption.sized(tokenRow.fiatSize), weight: BrambleWeight.semibold)
                         .monospacedDigit()
                         .foregroundStyle(change.up ? skin.positive : skin.danger)
+                        .accessibilityLabel(change.spoken)
                 }
             }
         }

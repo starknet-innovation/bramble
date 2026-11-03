@@ -133,6 +133,7 @@ private fun PortfolioTokenRow(
             fiat.change?.let {
                 Text(
                     it.text,
+                    Modifier.semantics { contentDescription = it.spoken },
                     color = if (it.up) skin.positive else skin.danger,
                     style = textStyle(BrambleTypeScale.caption, BrambleWeight.semibold),
                 )

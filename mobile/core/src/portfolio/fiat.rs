@@ -217,11 +217,13 @@ pub fn portfolio_hero(
     }
 }
 
-/// `changeBadge`: `↑|↓ <|change|.toFixed(2)>%`, `up` when the change is ≥ 0.
+/// `changeBadge`: `↑|↓ <|change|.toFixed(2)>% · 24h`, `up` when the change is ≥ 0. `spoken` is
+/// the screen-reader name, where the extension swaps the window tag for "24h price change".
 #[derive(Debug, Clone, PartialEq, uniffi::Record)]
 pub struct ChangeBadge {
     pub up: bool,
     pub text: String,
+    pub spoken: String,
 }
 
 /// The right-hand side of a token row: fiat value (`None` renders "—") and the change badge.
@@ -236,18 +238,20 @@ pub struct TokenRowFiat {
 pub fn token_row_fiat(balance: TokenBalance, prices: PriceView) -> TokenRowFiat {
     let address = &balance.token.address;
     let value = token_fiat_value(&balance.formatted, prices.price(address));
-    let change = prices
-        .change(address)
-        .filter(|c| c.is_finite())
-        .map(|c| ChangeBadge {
+    let change = prices.change(address).filter(|c| c.is_finite()).map(|c| {
+        let figure = format!(
+            "{} {}%",
+            if c >= 0.0 { "↑" } else { "↓" },
+            to_fixed(c.abs(), 2)
+        );
+        ChangeBadge {
             up: c >= 0.0,
-            // The extension tags each row's figure as a price move (`token-change-win`).
-            text: format!(
-                "{} {}% · 24h price",
-                if c >= 0.0 { "↑" } else { "↓" },
-                to_fixed(c.abs(), 2)
-            ),
-        });
+            // A short visible window keeps the figure honest (a 24h price move, not a balance
+            // change); screen readers get the full name in its place, as in the extension.
+            text: format!("{figure} · 24h"),
+            spoken: format!("{figure} 24h price change"),
+        }
+    });
     TokenRowFiat {
         value_text: value.map(|v| format_fiat(v, prices.currency)),
         change,
