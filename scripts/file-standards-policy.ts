@@ -234,6 +234,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Imported-seed validators split from schema.ts on the size budget; they name
   // the retained phrase field only to validate it inside the vault.
   "packages/platform/vault/src/schema/schema-seeds.ts",
+  // QSB account records: declares and validates each dedicated phrase beside
+  // its disclosure journal inside the encrypted vault. Validators only; no
+  // phrase is derived from, returned, logged, or persisted elsewhere here.
+  "packages/platform/vault/src/qsb/qsb-account.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
   // Split from accounts.ts by the size budget: same boundary, same rules — the

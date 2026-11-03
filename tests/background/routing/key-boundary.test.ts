@@ -25,6 +25,7 @@ import {
   SECRET_MNEMONIC,
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
+  SECRET_QSB_MNEMONIC,
   SECRET_VIEWING_KEY,
 } from "../../support/key-boundary-fixtures";
 import { makeKeyBoundaryHarness } from "../../support/key-boundary-harness";
@@ -209,6 +210,9 @@ describe("key boundary", () => {
       expect(serialized).not.toContain("signingKeys");
       expect(serialized).not.toContain("accountSecrets");
       expect(serialized).not.toContain(SECRET_VIEWING_KEY);
+      // QSB phrases have no sanctioned reveal at all, not even revealSecrets.
+      expect(serialized).not.toContain(SECRET_QSB_MNEMONIC);
+      expect(serialized).not.toContain("qsbAccounts");
       if (messageType !== "wallet.revealSecrets") {
         expect(serialized).not.toContain(SECRET_PRIVATE_KEY);
       }

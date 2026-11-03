@@ -25,7 +25,7 @@ import {
 } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV12, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV13, type Vault } from "../schema/schema";
 import type { ImportRawKeyAccountInput, WalletVaultService } from "./service-types";
 import { requireVaultCapacity } from "./vault-capacity";
 
@@ -45,7 +45,7 @@ export const writeVault = async (
   beforeCommit?: () => void,
 ): Promise<void> => {
   requireVaultCapacity(vault);
-  if (!isVaultV12(vault)) {
+  if (!isVaultV13(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase, beforeCommit);
@@ -258,8 +258,9 @@ export const vaultCreationMethods = ({
   },
   async createKeyVault(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
-    // A phrase-less imported-key vault can only be created over a fresh store.
-    if (vault.accounts.length > 0 || vault.mnemonic !== null) {
+    // A phrase-less imported-key vault can only be created over a fresh store,
+    // so no retained QSB journal can be overwritten by it either.
+    if (vault.accounts.length > 0 || vault.mnemonic !== null || vault.qsbAccounts.length > 0) {
       throw new RefusedBeforeWrite("Wallet already exists");
     }
     const derived = await deriveRawKeyAccounts(kms, input, []);
@@ -278,6 +279,7 @@ export const vaultCreationMethods = ({
         importedSeeds: [],
         mnemonic: null,
         originGrants: [],
+        qsbAccounts: [],
         schemaVersion: CURRENT_SCHEMA_VERSION,
         signingKeys: derived.map(({ account, privateKey }) => ({
           accountId: account.id,
@@ -291,8 +293,9 @@ export const vaultCreationMethods = ({
   },
   async createLedgerVault(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
-    // A mnemonic-less Ledger vault can only be created over a fresh store.
-    if (vault.accounts.length > 0 || vault.mnemonic !== null) {
+    // A mnemonic-less Ledger vault can only be created over a fresh store, so no
+    // retained QSB journal can be overwritten by it either.
+    if (vault.accounts.length > 0 || vault.mnemonic !== null || vault.qsbAccounts.length > 0) {
       throw new RefusedBeforeWrite("Wallet already exists");
     }
     const account = await deriveLedgerAccount(kms, {
@@ -315,6 +318,7 @@ export const vaultCreationMethods = ({
         importedSeeds: [],
         mnemonic: null,
         originGrants: [],
+        qsbAccounts: [],
         schemaVersion: CURRENT_SCHEMA_VERSION,
         signingKeys: [],
       },

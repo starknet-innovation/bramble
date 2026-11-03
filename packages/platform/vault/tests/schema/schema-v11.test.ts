@@ -39,7 +39,7 @@ const vaultOf = (account: Record<string, unknown>, schemaVersion: number) => ({
 
 describe("schema v11 (one step below current)", () => {
   test("sits one step below the current version", () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(12);
+    expect(CURRENT_SCHEMA_VERSION).toBe(13);
   });
 
   test("admits a Ready-scheme account that v10 refuses", () => {
@@ -69,6 +69,11 @@ describe("migration v10 -> v11", () => {
     const v10 = vaultOf(argent, 10);
     expect(isVaultV10(v10)).toBe(true);
     const migrated: unknown = migrateVault(v10);
-    expect(migrated).toEqual({ ...v10, schemaVersion: 12, shadowAccountScopes: [] });
+    expect(migrated).toEqual({
+      ...v10,
+      qsbAccounts: [],
+      schemaVersion: 13,
+      shadowAccountScopes: [],
+    });
   });
 });

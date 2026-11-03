@@ -12,6 +12,7 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   argentMultisigAddress,
 } from "@bramble/starknet/account-contracts";
+import type { QsbAccountRecord } from "@bramble/vault/qsb-account";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
 import { type TokenConfig, withTokenId } from "@bramble/wallet-model/preferences";
@@ -38,6 +39,23 @@ export const SECRET_PASSPHRASE = "correct horse battery staple";
  */
 export const SECRET_MNEMONIC =
   "habit hope tip crystal because grunt nation idea electric witness alert like";
+
+/**
+ * Dedicated QSB phrase held by the stub vault's QSB account. No message
+ * reveals a QSB phrase, so no runtime response may ever carry it.
+ */
+export const SECRET_QSB_MNEMONIC = `${"zoo ".repeat(23)}vote`;
+
+/** The stub vault's QSB account: a confirmed writer with an empty journal. */
+export const qsbAccount: QsbAccountRecord = {
+  backupConfirmed: true,
+  id: "qsb-1",
+  mnemonic: SECRET_QSB_MNEMONIC,
+  network: "bitcoin-mainnet",
+  nextV: 0,
+  seedContext: { provenance: "generated-here", source: "bip39" },
+  vaults: [],
+};
 
 const ACCOUNT_CLASS_HASH = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const ACCOUNT_PUBLIC_KEY_X = `0x${ec.starkCurve.getStarkKey(SECRET_PRIVATE_KEY).replace(/^0x/, "")}`;

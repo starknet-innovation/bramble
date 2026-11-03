@@ -73,7 +73,7 @@ describe("schema v10 (two steps below current)", () => {
   test("sits two steps below the current version", () => {
     // v11 added the Ready-scheme derivation kind on top of this file's shapes,
     // and v12 the shadow-account scope records.
-    expect(CURRENT_SCHEMA_VERSION).toBe(12);
+    expect(CURRENT_SCHEMA_VERSION).toBe(13);
   });
 
   test("admits Argent at every release an account could have been deployed with", () => {
@@ -124,7 +124,12 @@ describe("migration v9 -> v10", () => {
   test("rewrites nothing but the version stamp", () => {
     const v9 = vaultOf(argentAt(ARGENT_ACCOUNT_CLASS_HASH), 9);
     const migrated: unknown = migrateVault(v9);
-    expect(migrated).toEqual({ ...v9, schemaVersion: 12, shadowAccountScopes: [] });
+    expect(migrated).toEqual({
+      ...v9,
+      qsbAccounts: [],
+      schemaVersion: 13,
+      shadowAccountScopes: [],
+    });
   });
 
   test("refuses a v9 vault claiming a record only v10 can hold", () => {

@@ -2,10 +2,11 @@
  * Schema v12: encrypted shadow-account scope records (#443, PR 5).
  *
  * Old data: a v11 vault migrates to an empty collection and nothing else
- * changes. Current data: well-formed, canonical records bound to a retained
- * account on its own chain validate. Invalid data: every malformed, dangling,
- * duplicated, unsorted, or over-bound record makes the whole vault fail
- * closed, like any other corrupt vault content.
+ * changes (then on to v13, which adds only the empty QSB collection). v12
+ * data: well-formed, canonical records bound to a retained account on its own
+ * chain validate. Invalid data: every malformed, dangling, duplicated,
+ * unsorted, or over-bound record makes the whole vault fail closed, like any
+ * other corrupt vault content.
  */
 import { describe, expect, test } from "bun:test";
 import { migrateVault, VAULT_MIGRATIONS } from "@bramble/vault/migrations";
@@ -55,16 +56,26 @@ const v12 = (shadowAccountScopes: readonly unknown[]) => ({
   shadowAccountScopes,
 });
 
-describe("schema v12 (current)", () => {
-  test("is the current version, reached by exactly one adjacent step", () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(12);
-    const step = VAULT_MIGRATIONS.at(-1);
-    expect(step).toMatchObject({ fromVersion: 11, toVersion: 12 });
+// What migrateVault returns for a v12 vault: the same record, one step on.
+const asCurrent = (vault: ReturnType<typeof v12>) => ({
+  ...vault,
+  qsbAccounts: [],
+  schemaVersion: CURRENT_SCHEMA_VERSION,
+});
+
+describe("schema v12", () => {
+  test("is reached by exactly one adjacent step, and left by exactly one", () => {
+    expect(VAULT_MIGRATIONS.find((step) => step.toVersion === 12)).toMatchObject({
+      fromVersion: 11,
+    });
+    expect(VAULT_MIGRATIONS.find((step) => step.fromVersion === 12)).toMatchObject({
+      toVersion: 13,
+    });
   });
 
   test("old: a v11 vault migrates to an empty scope collection and nothing else", () => {
     expect(isVaultV11(v11)).toBe(true);
-    expect(migrateVault(v11) as unknown).toEqual(v12([]));
+    expect(migrateVault(v11) as unknown).toEqual(asCurrent(v12([])));
     // Deterministic: migrating twice from the same input gives the same vault.
     expect(migrateVault(structuredClone(v11))).toEqual(migrateVault(v11));
     // A v11 vault cannot already hold the v12 collection.
@@ -75,7 +86,7 @@ describe("schema v12 (current)", () => {
     expect(isVaultV12(v12([]))).toBe(true);
     expect(isVaultV12(v12([scope]))).toBe(true);
     expect(isVaultV12(v12([scope, { ...scope, label: "Other", nonces: [] }]))).toBe(true);
-    expect(migrateVault(v12([scope])) as unknown).toEqual(v12([scope]));
+    expect(migrateVault(v12([scope])) as unknown).toEqual(asCurrent(v12([scope])));
   });
 
   test("current: a v12 vault without the collection is refused", () => {

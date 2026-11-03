@@ -23,6 +23,7 @@ import {
   isVaultV10,
   isVaultV11,
   isVaultV12,
+  isVaultV13,
   type Vault,
   type VaultV4,
   type VaultV5,
@@ -216,6 +217,20 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 12,
   },
+  {
+    fromVersion: 12,
+    // v13 adds Quantum Safe Bitcoin accounts, each a dedicated phrase with its
+    // disclosure journal. No v12 vault held any, so the only deterministic
+    // migration is an empty collection: no journal is invented, and no
+    // Starknet phrase is ever reinterpreted as a QSB one.
+    migrate(value) {
+      if (!isVaultV12(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, qsbAccounts: [], schemaVersion: 13 };
+    },
+    toVersion: 13,
+  },
 ];
 
 const requiredAccountId = (value: string): string => {
@@ -299,7 +314,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV12(value)) {
+  if (isVaultV13(value)) {
     return value;
   }
 
@@ -317,7 +332,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV12(migrated)) {
+  if (!isVaultV13(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

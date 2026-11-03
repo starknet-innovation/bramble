@@ -32,7 +32,7 @@ import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import { migrateVault } from "../schema/migrations";
-import { isVaultV12, type Vault } from "../schema/schema";
+import { isVaultV13, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { createGrantCache } from "./grant-cache";
@@ -358,7 +358,7 @@ export const createWalletVaultService = ({
       serialized(async () => {
         requirePassphrase(vaultPassphrase);
         const vault = migrateVault(await encryptedStore.readUnverified(vaultPassphrase));
-        invariant(isVaultV12(vault), "Unsupported vault schema");
+        invariant(isVaultV13(vault), "Unsupported vault schema");
         // A rollback can restore a revoked site connection or a removed Ledger
         // viewing key; the user cannot tell which, so recovery drops them all.
         await encryptedStore.replaceUnverified(
