@@ -328,6 +328,7 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
         return { error: "wallet locked" };
       }
       if (messageType === "wallet.unlockUnverified") {
+        await ctx.multisigGrants.clear();
         await acceptUnverifiedVault(ctx.wallet, input.vaultPassphrase);
       }
       await ctx.wallet.readVault(input.vaultPassphrase);

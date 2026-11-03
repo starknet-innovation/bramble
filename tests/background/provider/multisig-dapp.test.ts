@@ -4,19 +4,7 @@
  * grants stay on the vault path.
  */
 import { describe, expect, test } from "bun:test";
-import { memoryMultisigStore } from "@bramble/multisig/repository";
-import { createPreferencesStore } from "@bramble/settings/preferences";
-import {
-  ARGENT_MULTISIG_CONTRACT,
-  normalizeArgentMultisigConfig,
-} from "@bramble/starknet/account-contracts";
-import { prepareArgentMultisigInvokeV3WithProvider } from "@bramble/starknet/multisig-invoke";
-import { createMemoryStore } from "@bramble/store/kv";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
-import { RpcProvider } from "starknet";
 import { MULTISIG_PROPOSAL_SAVED } from "../../../apps/extension/src/background/provider/multisig-dapp-invoke";
-import { memoryMultisigGrantStore } from "../../../apps/extension/src/background/provider/multisig-grants";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
@@ -29,149 +17,7 @@ import {
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
 import { latestApprovalId, reviewedApprovalFee, waitForPendingApprovals } from "../../support/held";
-import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
-
-const SIGNER: AccountRef = {
-  accountContractType: "openzeppelin",
-  address: "0x99",
-  classHash: "0x1",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_MAIN:0x99",
-  networkId: "SN_MAIN",
-  publicKeyX: "0xabc",
-  publicKeyY: "0xdef",
-};
-
-const multisig = (threshold: number, member = false) => ({
-  accountContractType: "argent-multisig" as const,
-  address: "0x123",
-  classHash: ARGENT_MULTISIG_CONTRACT.classHash,
-  currentConfig: normalizeArgentMultisigConfig({
-    signerPublicKeys:
-      threshold === 1 ? ["0xabc"] : member ? ["0xabc", "0x456"] : ["0x123", "0x456"],
-    threshold,
-  }),
-  id: "SN_MAIN:0x123",
-  networkId: "SN_MAIN" as const,
-});
-
-const typedData = {
-  domain: { chainId: "SN_MAIN", name: "Bramble Test", revision: "1", version: "1" },
-  message: { content: "hello" },
-  primaryType: "Message",
-  types: {
-    Message: [{ name: "content", type: "felt" }],
-    StarknetDomain: [
-      { name: "name", type: "shortstring" },
-      { name: "chainId", type: "shortstring" },
-      { name: "version", type: "shortstring" },
-      { name: "revision", type: "shortstring" },
-    ],
-  },
-};
-
-const invokeCalls = [{ calldata: ["0x3"], contractAddress: "0x2", entrypoint: "transfer" }];
-
-const fakeProvider = (): RpcProvider =>
-  Object.assign(Object.create(RpcProvider.prototype), {
-    channel: { id: "test" },
-    async getChainId() {
-      return STARKNET_NETWORKS.SN_MAIN.chainId;
-    },
-    async getEstimateFeeBulk() {
-      return [
-        {
-          overall_fee: 21n,
-          resourceBounds: {
-            l1_data_gas: { max_amount: 1n, max_price_per_unit: 2n },
-            l1_gas: { max_amount: 3n, max_price_per_unit: 4n },
-            l2_gas: { max_amount: 5n, max_price_per_unit: 6n },
-          },
-          unit: "FRI",
-        },
-      ];
-    },
-    async getNonceForAddress() {
-      return "0x7";
-    },
-  }) as RpcProvider;
-
-const harness = async (
-  threshold: number,
-  options: {
-    readonly classHash?: string;
-    readonly fee?: string;
-    readonly member?: boolean;
-    readonly onList?: () => void;
-    readonly onSign?: () => void;
-  } = {},
-) => {
-  const preferences = createPreferencesStore({ store: createMemoryStore() });
-  await preferences.setActiveNetwork("SN_MAIN");
-  const record = multisig(threshold, options.member === true);
-  await preferences.setSelectedMultisig({ multisigId: record.id });
-  const stored = memoryMultisigStore();
-  expect(await stored.upsertMultisig(record)).toBe("stored");
-  const multisigs = {
-    ...stored,
-    listMultisigs: async () => {
-      const records = await stored.listMultisigs();
-      options.onList?.();
-      return records;
-    },
-  };
-  const session = createUnlockSession();
-  session.unlock(vaultPassphrase);
-  const handler = createMessageHandler(
-    createWallet({
-      accounts: [SIGNER],
-      activeAccountId: () => SIGNER.id,
-      ...(options.onSign ? { captureSign: options.onSign } : {}),
-    }),
-    testExtension,
-    {
-      multisigGrants: memoryMultisigGrantStore(),
-      multisigStore: multisigs,
-      preferencesStore: preferences,
-      runtimeRpc: {
-        ...makeRuntimeRpc({
-          async estimateMultisigDappFee() {
-            return { overallFee: options.fee ?? "999999999999999999", unit: "FRI" };
-          },
-          async getClassHashAt() {
-            return options.classHash ?? ARGENT_MULTISIG_CONTRACT.classHash;
-          },
-          async submitMultisigDappInvoke() {
-            return { transactionHash: "0x7cd" };
-          },
-        }),
-        multisig: {
-          async getConfig() {
-            throw new Error("unused");
-          },
-          async getNonce() {
-            return "0x1";
-          },
-          async isClassDeclared() {
-            return true;
-          },
-          prepareInvoke: () =>
-            prepareArgentMultisigInvokeV3WithProvider(
-              fakeProvider(),
-              record,
-              invokeCalls,
-              record.currentConfig,
-            ),
-          async submitPreparedInvoke() {
-            return "0x1";
-          },
-        },
-      },
-      session,
-    },
-  );
-  return { handler, multisigs, preferences, record, session };
-};
+import { harness, invokeCalls, multisig, typedData } from "./multisig-dapp-harness";
 
 describe("multisig dapp accounts", () => {
   test("a single-signer grant is unchanged when no multisig is selected", async () => {
@@ -420,5 +266,96 @@ describe("multisig dapp accounts", () => {
     await expect(held).resolves.toEqual({ error: "This multisig isn't the pinned account." });
     expect(signed).toBe(false);
     expect(await multisigs.listIntents()).toHaveLength(0);
+  });
+
+  test("a proposal is not submitted when the threshold drops before approval", async () => {
+    let signed = false;
+    const { handler, multisigs, record } = await harness(2, {
+      member: true,
+      onSign: () => {
+        signed = true;
+      },
+    });
+    const connect = handler(
+      { origin: grantedOrigin, type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+    const held = handler(
+      { calls: invokeCalls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const next = multisig(1).currentConfig;
+    if (!record.currentConfig || !next) throw new Error("missing multisig config");
+    expect(await multisigs.updateCurrentConfig(record.id, record.currentConfig, next)).toBe(
+      "stored",
+    );
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({
+      error: "This multisig changed since this request was reviewed.",
+    });
+    expect(signed).toBe(false);
+    expect(await multisigs.listIntents()).toHaveLength(0);
+  });
+
+  test("a revoked multisig grant stops an invoke that was already reviewed", async () => {
+    let armed = false;
+    let reads = 0;
+    let revoke: (origin: string) => Promise<void> = async () => undefined;
+    const { grants, handler, record } = await harness(1, {
+      onGrantRead: async () => {
+        if (!armed) return;
+        reads += 1;
+        if (reads === 1) await revoke(grantedOrigin);
+      },
+    });
+    revoke = (origin) => grants.revoke(origin, vaultPassphrase);
+    const connect = handler(
+      { origin: grantedOrigin, type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+    const held = handler(
+      { calls: invokeCalls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+    armed = true;
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "origin not connected" });
+  });
+
+  test("a multisig-only connection can ask to switch chain, until the grant is revoked", async () => {
+    const { grants, handler, record } = await harness(1);
+    const origin = "https://only-multisig.example";
+    const sender = { id: "extension-id", url: `${origin}/app` };
+    const connect = handler({ origin, type: "wallet.requestAccounts" }, sender);
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+    const held = handler(
+      { chainId: "0x534e5f5345504f4c4941", origin, type: "wallet.switchChain" },
+      sender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    await grants.revoke(origin, vaultPassphrase);
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "origin not connected" });
   });
 });

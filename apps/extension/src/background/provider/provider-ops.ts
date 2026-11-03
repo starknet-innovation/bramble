@@ -358,6 +358,7 @@ type ReviewedInvokeApproval = {
   readonly origin: string;
   readonly payload: ApprovalPayload;
   readonly reviewedFee?: FeeEstimate;
+  readonly reviewedThreshold?: number;
 };
 /**
  * Executes a user-approved invoke. `reviewedFee` is the ceiling the card showed.

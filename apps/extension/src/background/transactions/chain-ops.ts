@@ -326,7 +326,7 @@ const handleGetChainId: ChainOpsHandler = async (deps, message, sender) => {
 };
 
 const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extension, session, waiters, wallet } = deps;
+  const { approvals, extension, session, waiters } = deps;
   const input = readSwitchChainInput(message);
   if (!input) {
     return { error: "invalid switch chain request" };
@@ -345,7 +345,7 @@ const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
   }
   const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
-  const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
+  const granted = passphrase ? await grantedDappAccounts(deps, input.origin, passphrase) : [];
   // Only an origin that already holds a connection grant may ask to switch the
   // network — and even then it may only ask: the switch never happens without
   // an explicit user approval. A locked or unconnected site is refused, and a
@@ -402,10 +402,23 @@ const heldAccountOn = (
   )?.id;
 };
 
+// A partial approval stub omits the preferences store. Production always has
+// one, so a multisig grant is visible; the stub still rechecks the vault grant.
+const grantedForSwitch = (
+  deps: Pick<ChainOpsDeps, "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet">,
+  origin: string,
+  passphrase: string,
+) =>
+  deps.preferencesStore
+    ? grantedDappAccounts(deps, origin, passphrase)
+    : deps.wallet.getGrantedAccounts(origin, passphrase);
+
 // Queues the reconnect prompt only when the account the switch landed on is
 // really outside the origin's grant, never for a dapp still connected after it.
 const promptWhenLandedOutsideGrant = async (
-  deps: Pick<ChainOpsDeps, "wallet"> & { readonly approvals?: Pick<ApprovalQueue, "request"> },
+  deps: Pick<ChainOpsDeps, "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet"> & {
+    readonly approvals?: Pick<ApprovalQueue, "request">;
+  },
   origin: string,
   passphrase: string,
   connected: readonly unknown[],
@@ -413,7 +426,7 @@ const promptWhenLandedOutsideGrant = async (
   if (!deps.approvals) {
     return;
   }
-  const landed = await deps.wallet.getGrantedAccounts(origin, passphrase);
+  const landed = await grantedForSwitch(deps, origin, passphrase);
   if (landed.length === 0) {
     promptReconnectForStaleGrant(deps.approvals, connected, origin);
   }
@@ -429,7 +442,10 @@ const promptWhenLandedOutsideGrant = async (
  * reconnect (connect) prompt is queued instead, which names the account to share.
  */
 export const executeSwitchChainApproval = async (
-  deps: Pick<ChainOpsDeps, "activeStateCoordinator" | "preferencesStore" | "wallet"> & {
+  deps: Pick<
+    ChainOpsDeps,
+    "activeStateCoordinator" | "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet"
+  > & {
     /** Queue for the reconnect prompt; unset (partial test stubs) queues nothing. */
     readonly approvals?: Pick<ApprovalQueue, "request">;
     /**
@@ -452,7 +468,7 @@ export const executeSwitchChainApproval = async (
     // validator skips it and this is the only place the grant is re-checked.
     // Read it BEFORE switching: a revoked or disconnected origin is refused
     // rather than having the approved card switch the network on its behalf.
-    const connected = await wallet.getGrantedAccounts(input.origin, passphrase);
+    const connected = await grantedForSwitch(deps, input.origin, passphrase);
     if (connected.length === 0) {
       return { error: "origin not connected" };
     }

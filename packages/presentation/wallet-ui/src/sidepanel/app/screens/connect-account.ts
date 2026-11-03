@@ -93,14 +93,18 @@ type MultisigSelection = { hydrated: boolean; id: string | null };
 export const adoptStoredMultisig = (
   selection: MultisigSelection,
   networkId: string,
-  preferences: { readonly selectedMultisigId?: string } | null,
+  preferences: { readonly selectedMultisigId?: string } | null | undefined,
   activeView: string,
-): { readonly id: string | null; readonly view: string } => {
+): { readonly hydrated: boolean; readonly id: string | null; readonly view: string } => {
+  if (preferences === undefined) {
+    return { hydrated: selection.hydrated, id: selection.id, view: activeView };
+  }
   const stored = preferences?.selectedMultisigId;
   if (selection.hydrated || selection.id !== null || !stored?.startsWith(`${networkId}:`)) {
-    return { id: selection.id, view: activeView };
+    return { hydrated: true, id: selection.id, view: activeView };
   }
   return {
+    hydrated: true,
     id: stored,
     view: activeView === "home" ? "multisig-home" : activeView,
   };

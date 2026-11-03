@@ -423,8 +423,9 @@ export const startWalletUi = async (
     if (!isCurrent()) return;
     cache.pending = pending;
     cache.preferences = nextPreferences;
-    const adopted = adoptStoredMultisig(selection, status.networkId, nextPreferences, activeView);
-    selection.hydrated = true;
+    const loaded = status.hasVault && nextPreferences === null ? undefined : nextPreferences;
+    const adopted = adoptStoredMultisig(selection, status.networkId, loaded, activeView);
+    selection.hydrated = adopted.hydrated;
     selectedMultisigId = selection.id = adopted.id;
     activeView = adopted.view as WalletView;
     if (!status.hasVault || status.locked) {

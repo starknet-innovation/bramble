@@ -18,6 +18,7 @@ import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { ApprovalPayload } from "../approvals/approvals";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { PassiveUnlockSession } from "../runtime/session";
 import { executeReviewedGasless } from "../transactions/gasless-review";
@@ -38,6 +39,7 @@ export type InvokeExecuteDeps = {
    * Watched shared accounts, read into the trusted set for the execution-time
    * lookalike check (Sherlock 140). Omitted, that check skips them.
    */
+  readonly multisigGrants?: MultisigOriginGrantStore;
   readonly multisigStore?: Pick<MultisigStore, "listMultisigs" | "upsertIntent">;
   readonly preferencesStore: WalletPreferencesStore;
   /** Fiat prices for a gasless fee the user chose. Absent in narrow test doubles. */

@@ -236,4 +236,8 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   ],
   ["invalid multisig grant", "Couldn't connect this multisig."],
   ["argent multisig threshold is above 1", "This multisig needs more than one signer."],
+  [
+    "this multisig changed since this request was reviewed.",
+    "This multisig changed since this request was reviewed.",
+  ],
 ];

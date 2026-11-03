@@ -2,7 +2,10 @@
  * A connection-card choice is shown only after the presented account is stored.
  */
 import { describe, expect, test } from "bun:test";
-import { connectAccountHandler } from "../../../src/sidepanel/app/screens/connect-account";
+import {
+  adoptStoredMultisig,
+  connectAccountHandler,
+} from "../../../src/sidepanel/app/screens/connect-account";
 
 const deferred = () => {
   let settle: (saved: boolean) => void = () => undefined;
@@ -47,5 +50,20 @@ describe("connect account choice", () => {
     handler("SN_MAIN:0x2", "multisig");
     await Promise.resolve();
     expect(rendered).toBe(false);
+  });
+});
+
+describe("stored multisig hydration", () => {
+  test("retries after a failed preference read", () => {
+    const selection = { hydrated: false, id: null as string | null };
+    const missed = adoptStoredMultisig(selection, "SN_MAIN", undefined, "home");
+    expect(missed).toEqual({ hydrated: false, id: null, view: "home" });
+    const adopted = adoptStoredMultisig(
+      { hydrated: missed.hydrated, id: missed.id },
+      "SN_MAIN",
+      { selectedMultisigId: "SN_MAIN:0x123" },
+      "home",
+    );
+    expect(adopted).toEqual({ hydrated: true, id: "SN_MAIN:0x123", view: "multisig-home" });
   });
 });

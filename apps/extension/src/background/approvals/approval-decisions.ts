@@ -37,6 +37,7 @@ import { type ApplyResult, type ApproveDecision, reject, settleExecutor } from "
 import { settleClaimError, validateClaimContext } from "./approval-claim-context";
 import type { ApprovalDecisionDeps } from "./approval-decision-deps";
 import { pendingFeeRefusal, pendingGaslessRefusal } from "./approval-fee-refusal";
+import { heldInvoke, invokeExecutionDeps } from "./approval-invoke-execution";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
 import { applyWatchAssetApproval, WATCH_ASSET_TRACKED_RESPONSE } from "./approval-watch-asset";
@@ -92,22 +93,8 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
     return reject({ error: "the fee changed since this request was reviewed" });
   }
   const result = await executeInvokeApproval(
-    {
-      activity: deps.activity,
-      allowanceStore: deps.allowanceStore,
-      preferencesStore: deps.preferencesStore,
-      runtimeRpc: deps.runtimeRpc,
-      session: deps.session,
-      wallet: deps.wallet,
-      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
-      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
-    },
-    {
-      ...(approval.context === undefined ? {} : { context: approval.context }),
-      origin: approval.origin,
-      payload,
-      reviewedFee,
-    },
+    invokeExecutionDeps(deps),
+    heldInvoke(approval, payload, reviewedFee),
   );
   if ("error" in result && result.error === MULTISIG_PROPOSAL_SAVED) {
     return {
@@ -225,6 +212,8 @@ const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => 
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,
+      ...(deps.multisigGrants ? { multisigGrants: deps.multisigGrants } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     { networkId: payload.networkId, origin: approval.origin },
   );

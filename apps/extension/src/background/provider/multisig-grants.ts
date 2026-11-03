@@ -68,6 +68,21 @@ const parseDocument = (value: unknown): GrantDocument | null => {
   return value as GrantDocument;
 };
 
+const requireAuthorized = (isAuthorized: () => boolean): void => {
+  if (!isAuthorized()) throw new WalletError("wallet locked");
+};
+
+const withGrantedId = (
+  current: GrantDocument,
+  origin: string,
+  multisigId: string,
+): GrantDocument => {
+  const rest = current.grants.filter((grant) => grant.origin !== origin);
+  const existing = current.grants.find((grant) => grant.origin === origin);
+  const multisigIds = [...new Set([...(existing?.multisigIds ?? []), multisigId])];
+  return { grants: [...rest, { multisigIds, origin }], schemaVersion: 1 };
+};
+
 const byOrigin = (left: ConnectedSite, right: ConnectedSite): number =>
   left.origin < right.origin ? -1 : left.origin > right.origin ? 1 : 0;
 
@@ -132,55 +147,56 @@ const readEncrypted = async (store: EncryptedStore, credential: string): Promise
  * Encrypts the ledger with the vault unlock secret. `clearKeys` drops the
  * derived key and must run on lock beside the vault store.
  */
-export const encryptedMultisigGrantStore = (store: EncryptedStore): MultisigOriginGrantStore => ({
-  async clear() {
-    await store.remove();
-  },
-  clearKeys() {
-    store.clearKeys();
-  },
-  async grant(input) {
-    if (!input.isAuthorized()) throw new WalletError("wallet locked");
-    if (!isWalletOrigin(input.origin) || !isAccountId(input.multisigId)) {
-      throw new WalletError("Invalid multisig grant");
-    }
-    const current = await readEncrypted(store, input.credential);
-    if (!input.isAuthorized()) throw new WalletError("wallet locked");
-    const rest = current.grants.filter((grant) => grant.origin !== input.origin);
-    const existing = current.grants.find((grant) => grant.origin === input.origin);
-    const multisigIds = [...new Set([...(existing?.multisigIds ?? []), input.multisigId])];
-    const next: GrantDocument = {
-      grants: [...rest, { multisigIds, origin: input.origin }],
-      schemaVersion: 1,
-    };
-    // Re-checked after encryption, right before the commit starts. A lock during
-    // the storage writes themselves is rolled back to the pre-grant snapshot,
-    // the same window the vault origin grant closes (Sherlock 255).
-    await store.write(next, input.credential, () => {
-      if (!input.isAuthorized()) throw new WalletError("wallet locked");
-    });
-    if (!input.isAuthorized()) {
-      await store.write(current, input.credential);
-      throw new WalletError("wallet locked");
-    }
-  },
-  async idsFor(origin, credential) {
-    const ledger = await readEncrypted(store, credential);
-    return ledger.grants.find((grant) => grant.origin === origin)?.multisigIds ?? [];
-  },
-  async revoke(origin, credential) {
-    const current = await readEncrypted(store, credential);
-    const grants = current.grants.filter((grant) => grant.origin !== origin);
-    if (grants.length === current.grants.length) return;
-    await store.write({ grants, schemaVersion: 1 }, credential);
-  },
-  async sites(credential) {
-    const ledger = await readEncrypted(store, credential);
-    return ledger.grants
-      .map((grant) => ({ accountCount: grant.multisigIds.length, origin: grant.origin }))
-      .sort(byOrigin);
-  },
-});
+export const encryptedMultisigGrantStore = (store: EncryptedStore): MultisigOriginGrantStore => {
+  let pending: Promise<unknown> = Promise.resolve();
+  const serialize = <T>(run: () => Promise<T>): Promise<T> => {
+    const next = pending.then(run, run);
+    pending = next.catch(() => undefined);
+    return next;
+  };
+  return {
+    clear: () => serialize(() => store.remove()),
+    clearKeys() {
+      store.clearKeys();
+    },
+    grant: (input) =>
+      serialize(async () => {
+        requireAuthorized(input.isAuthorized);
+        if (!isWalletOrigin(input.origin) || !isAccountId(input.multisigId)) {
+          throw new WalletError("Invalid multisig grant");
+        }
+        const current = await readEncrypted(store, input.credential);
+        requireAuthorized(input.isAuthorized);
+        const next = withGrantedId(current, input.origin, input.multisigId);
+        // Re-checked after encryption, right before the commit starts. A lock during
+        // the storage writes themselves is rolled back to the pre-grant snapshot,
+        // the same window the vault origin grant closes (Sherlock 255).
+        await store.write(next, input.credential, () => {
+          requireAuthorized(input.isAuthorized);
+        });
+        if (input.isAuthorized()) return;
+        await store.write(current, input.credential);
+        throw new WalletError("wallet locked");
+      }),
+    async idsFor(origin, credential) {
+      const ledger = await readEncrypted(store, credential);
+      return ledger.grants.find((grant) => grant.origin === origin)?.multisigIds ?? [];
+    },
+    revoke: (origin, credential) =>
+      serialize(async () => {
+        const current = await readEncrypted(store, credential);
+        const grants = current.grants.filter((grant) => grant.origin !== origin);
+        if (grants.length === current.grants.length) return;
+        await store.write({ grants, schemaVersion: 1 }, credential);
+      }),
+    async sites(credential) {
+      const ledger = await readEncrypted(store, credential);
+      return ledger.grants
+        .map((grant) => ({ accountCount: grant.multisigIds.length, origin: grant.origin }))
+        .sort(byOrigin);
+    },
+  };
+};
 
 /**
  * Merges single-signer and multisig connected-site rows. An origin present in

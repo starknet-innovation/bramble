@@ -55,6 +55,7 @@ import { invokeFailureResponse } from "./provider-invoke-failure";
 /** Error a site receives when a higher-threshold invoke was saved, not sent. */
 export const MULTISIG_PROPOSAL_SAVED = "Multisig proposal saved. It was not submitted.";
 const PROOF_REFUSAL = "This multisig can't submit a private proof.";
+const THRESHOLD_CHANGED = "This multisig changed since this request was reviewed.";
 
 type QueueDeps = {
   readonly activity: Pick<InvokeExecuteDeps["activity"], "list">;
@@ -205,6 +206,7 @@ export const maybeExecuteMultisigInvoke = async (
     readonly context?: { readonly accountId: string };
     readonly origin: string;
     readonly reviewedFee?: FeeEstimate;
+    readonly reviewedThreshold?: number;
   },
   calls: readonly Call[],
 ): Promise<RuntimeResponse | null> => {
@@ -213,6 +215,14 @@ export const maybeExecuteMultisigInvoke = async (
   if (!record) return null;
   const credential = deps.session.peekPassphrase();
   if (!credential) return { error: "wallet locked" };
+  const authorized = captureSessionAuthorization(deps.session);
+  const granted = deps.multisigGrants
+    ? await deps.multisigGrants.idsFor(approval.origin, credential)
+    : [];
+  if (!deps.multisigGrants || !authorized.isCurrent()) {
+    return { error: deps.multisigGrants ? "wallet locked" : "origin not connected" };
+  }
+  if (!granted.includes(record.id)) return { error: "origin not connected" };
   const vault = await deps.wallet.readVault(credential);
   return executeMultisigDappInvoke(
     { ...deps, multisigStore: deps.multisigStore },
@@ -223,6 +233,9 @@ export const maybeExecuteMultisigInvoke = async (
       origin: approval.origin,
       record,
       ...(approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {}),
+      ...(approval.reviewedThreshold === undefined
+        ? {}
+        : { reviewedThreshold: approval.reviewedThreshold }),
     },
   );
 };
@@ -294,12 +307,16 @@ const executeMultisigDappInvoke = async (
     readonly origin: string;
     readonly record: ArgentMultisigRecord;
     readonly reviewedFee?: FeeEstimate;
+    readonly reviewedThreshold?: number;
   },
 ): Promise<RuntimeResponse> => {
   if (!input.record.currentConfig) {
     return { error: "This multisig's signers aren't available yet." };
   }
   const config = input.record.currentConfig;
+  if ((input.reviewedThreshold ?? 1) !== config.threshold) {
+    return { error: THRESHOLD_CHANGED };
+  }
   const preferences = await withTrustedRecipients(
     deps,
     await deps.preferencesStore.read(),
