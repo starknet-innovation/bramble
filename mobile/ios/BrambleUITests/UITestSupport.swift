@@ -88,24 +88,26 @@ enum UITest {
 
     static func tap(_ element: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         wait(element, file: file, line: line)
-        clearTabBar(element, file: file, line: line)
+        guard clearTabBar(element, file: file, line: line) else { return }
         element.tap()
     }
 
     /// The floating tab bar covers the bottom of a scrolled screen, and XCUITest still calls a row
     /// under it hittable, so a tap at the row's centre lands on a tab. Scroll the row clear first,
     /// whether the bar covers part of it or all of it. The tabs themselves sit inside the bar and
-    /// are left alone, as are screens without it.
-    private static func clearTabBar(_ element: XCUIElement, file: StaticString, line: UInt) {
+    /// are left alone, as are screens without it. Returns false, after failing the test, when the
+    /// row is still covered, so the caller never taps the tab underneath.
+    private static func clearTabBar(_ element: XCUIElement, file: StaticString, line: UInt) -> Bool {
         let app = XCUIApplication()
         let dock = app.otherElements["wallet-dock"]
-        guard dock.exists else { return }
-        for _ in 0..<TabBar.maxScrolls {
+        guard dock.exists else { return true }
+        for scroll in 0...TabBar.maxScrolls {
             let bar = dock.frame, row = element.frame
-            guard row.maxY > bar.minY, !bar.contains(row) else { return }
-            app.swipeUp()
+            if row.maxY <= bar.minY || bar.contains(row) { return true }
+            if scroll < TabBar.maxScrolls { app.swipeUp() }
         }
         XCTFail("\(element) is still under the tab bar after \(TabBar.maxScrolls) scrolls", file: file, line: line)
+        return false
     }
 
     static func type(_ text: String, into field: XCUIElement) {
