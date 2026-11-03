@@ -6,7 +6,11 @@
  */
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
 import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
-import { ledgerAccountIndexOfPath, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import {
+  type LedgerEip2645Application,
+  ledgerAccountIndexOfPath,
+  ledgerAccountPath,
+} from "@bramble/wallet-model/ledger-path";
 import type {
   LedgerOnboardControllerDeps,
   LedgerOnboardView,
@@ -39,12 +43,16 @@ export const enumerateClient = (appMajor: number): LedgerDeviceClient => ({
   signHash: () => Promise.reject(new Error("unused")),
 });
 
+// Ready's scheme reads a different device key per index, so an account read
+// there has its own address (an "a" marks it) and stores its own path.
 export const candidateAccount = (
   index: number,
   accountContractType: AccountContractType = "openzeppelin",
+  application: LedgerEip2645Application = "LedgerW",
 ): LedgerAccountRef => {
   const prefix =
-    accountContractType === "argent" ? "e" : accountContractType === "braavos" ? "b" : "";
+    (application === "argentx" ? "a" : "") +
+    (accountContractType === "argent" ? "e" : accountContractType === "braavos" ? "b" : "");
   const address = `0x${prefix}${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`;
   return {
     // A Ledger account is this wallet's own OpenZeppelin (no deployment salt),
@@ -57,9 +65,9 @@ export const candidateAccount = (
     classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     derivation: {
       accountIndex: index,
-      eip2645application: "LedgerW",
+      eip2645application: application,
       kind: "ledger",
-      path: ledgerAccountPath(index),
+      path: ledgerAccountPath(index, application),
     },
     id: `SN_MAIN:${address}`,
     networkId: "SN_MAIN",
@@ -107,9 +115,11 @@ export const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> =
       created.push(account.derivation.accountIndex);
       return Promise.resolve();
     },
-    derive: (entries, accountContractType) =>
+    derive: (entries, accountContractType, application) =>
       Promise.resolve(
-        entries.map((entry) => candidateAccount(entry.accountIndex, accountContractType)),
+        entries.map((entry) =>
+          candidateAccount(entry.accountIndex, accountContractType, application),
+        ),
       ),
     // Inactive by default ("0" balance, undeployed) so nothing is auto-selected
     // and each test's selection stays deliberate; auto-selection has its own test.

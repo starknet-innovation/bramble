@@ -10,6 +10,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import {
+  PRIVACY_OTHER_WALLET_ACTION,
   PRIVATE_REQUEST_FAILED_NOTICE,
   PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
@@ -173,7 +174,18 @@ const connectCard = (
 // retry button targets this approval by data attribute. A failed or absent fee
 // estimate disables Approve exactly as Send does: without a displayed amount
 // there is no fee ceiling for the user's consent to bind.
-const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
+const gaslessChoiceAllowed = (approval: PendingApproval, status: WalletStatus): boolean =>
+  approval.gaslessFees !== undefined &&
+  !status.locked &&
+  !paysLookalike(approval) &&
+  approval.deployFirst !== true &&
+  approval.feeEstimatePending !== true &&
+  approval.feeEstimateFailed !== true &&
+  approval.fee != null;
+
+const invokeCard = (approval: PendingApproval, status: WalletStatus): string => {
+  const offerGasless = gaslessChoiceAllowed(approval, status);
+  return `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Transaction request")}
@@ -191,9 +203,21 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
           feeAffordability: approval.feeAffordability ?? "unknown",
           feeEstimateFailed: approval.feeEstimateFailed === true,
           feeEstimatePending: approval.feeEstimatePending === true,
+          ...(offerGasless && approval.gaslessFees ? { gaslessFees: approval.gaslessFees } : {}),
           requiresDeployment: approval.requiresDeployment === true,
         },
         { "data-approval-retry-fee": approval.id },
+        {
+          ...(offerGasless
+            ? {
+                gaslessAttributes: {
+                  "data-approval-action": "approve",
+                  "data-approval-id": approval.id,
+                  "data-approval-kind": approval.kind,
+                },
+              }
+            : {}),
+        },
       ) ||
       reviewCostNote(
         "The network fee is unavailable. Approval remains disabled until a fee can be reviewed.",
@@ -211,6 +235,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       approval.fee ?? undefined,
     )}
   </li>`;
+};
 
 // summaries[0] names the message; any further entries are the decoded calls an
 // OutsideExecution authorizes, listed with its risk flags (audit 144).
@@ -288,11 +313,13 @@ const strk20UnavailableCard = (approval: PendingApproval): string => `
   <li class="request-card" data-approval-notice>
     <div class="request-copy">
       <p>${escapeHtml(
-        approval.notice === "record-limit"
-          ? SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE
-          : approval.notice === "request-failed"
-            ? PRIVATE_REQUEST_FAILED_NOTICE
-            : PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
+        approval.notice === "other-wallet"
+          ? PRIVACY_OTHER_WALLET_ACTION
+          : approval.notice === "record-limit"
+            ? SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE
+            : approval.notice === "request-failed"
+              ? PRIVATE_REQUEST_FAILED_NOTICE
+              : PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
       )}</p>
     </div>
     <div class="button-row">${denyButton(approval, "Close")}</div>

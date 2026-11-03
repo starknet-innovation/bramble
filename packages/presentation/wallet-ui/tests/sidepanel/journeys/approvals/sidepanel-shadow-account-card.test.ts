@@ -11,6 +11,7 @@ import {
   SHADOW_INVOKE_SETTLES_NOTHING,
 } from "@bramble/privacy/shadow-account-copy";
 import {
+  PRIVACY_OTHER_WALLET_ACTION,
   PRIVATE_REQUEST_FAILED_NOTICE,
   PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
@@ -95,6 +96,7 @@ describe("shadow account approval card", () => {
   // written, or whose review could not be prepared: each gets its own line
   // (approved copy), never the not-set-up line, which would be false.
   for (const [notice, line] of [
+    ["other-wallet", PRIVACY_OTHER_WALLET_ACTION],
     ["record-limit", SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE],
     ["request-failed", PRIVATE_REQUEST_FAILED_NOTICE],
   ] as const) {

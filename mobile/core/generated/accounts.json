@@ -79,6 +79,16 @@
       "implementation": true,
       "label": "argent 0.4.0",
       "typeLabel": "Ready Account (Argent)"
+    },
+    {
+      "authorizationShape": "argent-signer-array",
+      "classHash": "0x0663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+      "constructorShape": "signer-owner-guardian-option",
+      "family": "argent",
+      "deployment": true,
+      "implementation": true,
+      "label": "argent 0.4.0 (Xverse)",
+      "typeLabel": "Ready Account (Argent 0.4.0 (Xverse))"
     }
   ],
   "copyFeedback": {

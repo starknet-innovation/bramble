@@ -29,10 +29,22 @@ export const defaultSkin: Skin = {
   tokens: {
     "--bramble-accent": "#3545cd",
     "--bramble-accent-text": "#ffffff",
-    "--bramble-account-avatar-0": "#6842a8",
-    "--bramble-account-avatar-1": "#e27a35",
-    "--bramble-account-avatar-2": "#e9b83f",
-    "--bramble-account-avatar-3": "#9f356f",
+    // Account birds draw on their own ground, so both skins share one palette:
+    // dark bodies on pale grounds, bright accents on the bodies. Contrast and
+    // colour-blind separation are both tested in skin-contrast.test.ts.
+    "--bramble-account-avatar-accent-0": "#f5c64b",
+    "--bramble-account-avatar-accent-1": "#fbb05d",
+    "--bramble-account-avatar-accent-2": "#fdaecf",
+    "--bramble-account-avatar-accent-3": "#80e1e3",
+    "--bramble-account-avatar-body-0": "#6842a8",
+    "--bramble-account-avatar-body-1": "#9f3570",
+    "--bramble-account-avatar-body-2": "#1c626e",
+    "--bramble-account-avatar-body-3": "#343dc7",
+    "--bramble-account-avatar-body-4": "#3f662a",
+    "--bramble-account-avatar-ground-0": "#faeac5",
+    "--bramble-account-avatar-ground-1": "#f1c9df",
+    "--bramble-account-avatar-ground-2": "#d2efda",
+    "--bramble-account-avatar-ground-3": "#dbd7fd",
     "--bramble-account-avatar-ink": "#0e0f16",
     "--bramble-account-avatar-paper": "#ffffff",
     "--bramble-bg": "#f8f9fb",

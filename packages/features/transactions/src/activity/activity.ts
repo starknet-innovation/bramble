@@ -57,6 +57,18 @@ const MAX_SYNC_SCOPES = 50;
  */
 export const systemClock = (): number => Date.now();
 
+/** A row as a caller records it; the log sets status, time and outcomes. */
+export type NewActivityEntry = Omit<
+  ActivityEntry,
+  | "failureNotice"
+  | "feePaid"
+  | "finalizedOnL1"
+  | "notFoundCount"
+  | "seenOnChain"
+  | "status"
+  | "submittedAt"
+>;
+
 /**
  * Activity log surface used by background message handling.
  */
@@ -70,18 +82,15 @@ export type ActivityLog = {
     syncedAt: number,
     unavailable: boolean,
   ) => Promise<void>;
-  readonly record: (
-    entry: Omit<
-      ActivityEntry,
-      | "failureNotice"
-      | "feePaid"
-      | "finalizedOnL1"
-      | "notFoundCount"
-      | "seenOnChain"
-      | "status"
-      | "submittedAt"
-    >,
-  ) => Promise<void>;
+  readonly record: (entry: NewActivityEntry) => Promise<void>;
+  /**
+   * Records `entry` only when no row of any account already carries its hash;
+   * the check and the write are one serialized mutation, so overlapping calls
+   * for one hash write it once. True when it wrote the row, false when a row
+   * already held the hash (that row is left untouched). Rejects when the log
+   * cannot be read or written.
+   */
+  readonly recordIfAbsent: (entry: NewActivityEntry) => Promise<boolean>;
   /**
    * Atomically returns the entries carrying an undelivered failure notice and
    * marks them delivered, so a notice surfaces exactly once even if two panels
@@ -160,12 +169,15 @@ const outcomeForHash = (
   Object.entries(outcomes).find(([candidate]) => sameFelt(candidate, hash))?.[1];
 
 // A recorded fee is final: a later read never replaces it, so an outcome's fee
-// lands only on an entry that has none.
+// lands only on an entry that has none. A sponsored row never takes one: its
+// receipt fee was the sponsor's, never the account's.
 const recordedFee = (
   entry: ActivityEntry,
   outcome: ActivityOutcome,
 ): Pick<ActivityEntry, "feePaid"> =>
-  entry.feePaid === undefined && outcome.feePaid !== undefined ? { feePaid: outcome.feePaid } : {};
+  entry.feePayer !== "sponsor" && entry.feePaid === undefined && outcome.feePaid !== undefined
+    ? { feePaid: outcome.feePaid }
+    : {};
 
 // Merges one reconciled outcome into a stored entry. Absent optional fields are
 // dropped rather than written as `undefined`, so the persisted record stays
@@ -226,6 +238,18 @@ const drainFailureNotices = (
   };
 };
 
+// A recorded row: pending, stamped now, its summary clamped.
+const newEntry = (entry: NewActivityEntry, submittedAt: number): ActivityEntry => ({
+  ...entry,
+  status: "pending",
+  submittedAt,
+  summary: clampActivitySummary(entry.summary),
+});
+
+// Whether any row, of any account, carries `hash`.
+const holdsHash = (entries: readonly ActivityEntry[], hash: string): boolean =>
+  entries.some((entry) => sameFelt(entry.hash, hash));
+
 /**
  * Creates the persistent activity log.
  */
@@ -249,17 +273,21 @@ export const createActivityLog = ({
         return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
       },
       async record(entry) {
-        const next: ActivityEntry = {
-          ...entry,
-          status: "pending",
-          submittedAt: now(),
-          summary: clampActivitySummary(entry.summary),
-        };
+        const next = newEntry(entry, now());
         if (!isActivityEntry(next)) {
           return;
         }
         const entries = await readEntries(store);
         await writeEntries(store, entriesAfterRecord(entries, next), next);
+      },
+      async recordIfAbsent(entry) {
+        const next = newEntry(entry, now());
+        const entries = await readEntries(store);
+        if (!isActivityEntry(next) || holdsHash(entries, next.hash)) {
+          return false;
+        }
+        await writeEntries(store, entriesAfterRecord(entries, next), next);
+        return true;
       },
       async markHistorySynced(scope, syncedAt, unavailable) {
         const next = { ...scope, syncedAt, unavailable };
@@ -318,13 +346,13 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
       return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
     },
     async record(entry) {
-      const next: ActivityEntry = {
-        ...entry,
-        status: "pending",
-        submittedAt: now(),
-        summary: clampActivitySummary(entry.summary),
-      };
+      entries.splice(0, entries.length, ...entriesAfterRecord(entries, newEntry(entry, now())));
+    },
+    async recordIfAbsent(entry) {
+      const next = newEntry(entry, now());
+      if (holdsHash(entries, next.hash)) return false;
       entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
+      return true;
     },
     async markHistorySynced(scope, syncedAt, unavailable) {
       historySyncs.set(scopeKey(scope), { syncedAt, unavailable });

@@ -1,17 +1,35 @@
 /**
  * Binding for the raw-private-key import form on the account flow. Isolated
  * because it reads secret key material from the form: the private key is passed
- * straight to the privileged background import request (which routes it to the
+ * straight to the privileged background requests (which route it to the
  * encrypted vault) and is never logged, echoed, or stored in preferences.
+ *
+ * A "Ready Account" key first lists the Argent releases it controls an address
+ * in use at, and imports only the ones the user ticks (issue 776). When it is
+ * not listed, the user can paste its address instead (issue 779).
  */
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { onNetworkChange } from "../../shared/network-change";
+import { bindReadyKeyAddressFinder } from "../onboarding/ready-key-address-finder";
+import { mountReadyKeyPicker } from "../onboarding/ready-key-picker";
+import {
+  type ReadyKeyInputs,
+  readyKeyPick,
+  readyKeySession,
+} from "../onboarding/ready-key-session";
 import type { SettingsUiDeps } from "./settings-ui";
+
+const IMPORT_LABEL = "Import account";
+const IMPORT_PICKED_LABEL = "Import selected";
 
 /**
  * Binds the "Import private key" form: on submit, sends the pasted key to the
- * background import flow, then resets the form and re-renders on success. Invalid keys, duplicates,
- * and a locked wallet surface as a status message without adding an account.
+ * background import flow, then resets the form and re-renders on success. A
+ * Ready key takes two submits: one to list its accounts, one to import the
+ * ticked ones, and only while the key, salt, and network are still the ones
+ * the list was built for. Invalid keys, duplicates, and a locked wallet surface as a
+ * status message without adding an account.
  */
 export const bindImportKey = (deps: SettingsUiDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#import-key-form");
@@ -21,6 +39,56 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     'select[name="accountContractType"]',
   );
   const deploymentSaltInput = form?.querySelector<HTMLInputElement>('input[name="deploymentSalt"]');
+  const rawKeyInput = form?.querySelector<HTMLTextAreaElement>('textarea[name="rawKey"]');
+  const inputs = (): ReadyKeyInputs => ({
+    key: rawKeyInput?.value.trim() ?? "",
+    networkId: deps.networkId(),
+    salt:
+      accountContractSelect?.value === "argent"
+        ? deploymentSaltInput?.value.trim() || undefined
+        : undefined,
+  });
+  const session = readyKeySession(inputs);
+
+  const setLabel = (label: string): void => {
+    submitButton?.lastChild?.replaceWith(label);
+  };
+  const refreshGate = (): void => {
+    const picked = session.picked();
+    if (submitButton && picked) submitButton.disabled = picked.length === 0;
+  };
+  // The picker goes above the finder, or above the button without one.
+  const pickerSpot = (): Element | null =>
+    form?.querySelector('[data-recovery-address="key"]') ?? submitButton ?? result ?? null;
+  const finder = bindReadyKeyAddressFinder({
+    form: form ?? null,
+    mount: (candidate) => {
+      const before = pickerSpot();
+      return before
+        ? mountReadyKeyPicker(
+            before,
+            [candidate],
+            deps.existingAccountIds?.() ?? new Set(),
+            refreshGate,
+          )
+        : null;
+    },
+    networkId: deps.networkId,
+    onFound: () => {
+      setLabel(IMPORT_PICKED_LABEL);
+      refreshGate();
+    },
+    session,
+    wallet: deps.wallet,
+  });
+  // A changed key, salt, or account type makes the listed accounts stale, and
+  // drops any list or address lookup still on its way.
+  const dropPicker = (): void => {
+    session.invalidate();
+    finder.withdraw();
+    setLabel(IMPORT_LABEL);
+    buttonBusy(submitButton, false);
+  };
 
   const syncDeploymentSalt = (): void => {
     if (!deploymentSaltInput) return;
@@ -29,8 +97,27 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
     deploymentSaltInput.disabled = !acceptsSalt;
   };
 
-  accountContractSelect?.addEventListener("change", syncDeploymentSalt);
+  accountContractSelect?.addEventListener("change", () => {
+    syncDeploymentSalt();
+    dropPicker();
+  });
   syncDeploymentSalt();
+  // A list is for one network: a switch drops it and any answer still coming.
+  onNetworkChange(deps.app, form ?? null, dropPicker);
+  rawKeyInput?.addEventListener("input", dropPicker);
+  deploymentSaltInput?.addEventListener("input", dropPicker);
+
+  const fail = (error: unknown): void => {
+    showToast(errorDetails(error, "Import failed"), "error", form);
+    if (result) result.textContent = errorLine(error, "Import failed");
+    buttonBusy(submitButton, false);
+    refreshGate();
+  };
+  // A discovery that found no account still leaves the address finder.
+  const discoveryFailed = (error: unknown): void => {
+    fail(error);
+    finder.offer({ error });
+  };
 
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -51,28 +138,70 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
         : undefined;
 
     buttonBusy(submitButton, true);
+    // No list, or one built for other inputs (the network can change under
+    // it): list the accounts for the inputs as they are now.
+    if (accountContractType === "argent" && !session.matches()) {
+      setLabel(IMPORT_LABEL);
+      void session
+        .discover(
+          (snapshot) =>
+            deps.wallet.discoverReadyKeyAccounts(snapshot.networkId, snapshot.key, snapshot.salt),
+          (candidates) => {
+            const before = pickerSpot();
+            return before
+              ? mountReadyKeyPicker(
+                  before,
+                  candidates,
+                  deps.existingAccountIds?.() ?? new Set(),
+                  refreshGate,
+                )
+              : null;
+          },
+        )
+        .then((outcome) => {
+          if (outcome === "superseded") return;
+          if (outcome === "changed") {
+            dropPicker();
+            return;
+          }
+          if (result) result.textContent = "";
+          finder.offer("listed");
+          buttonBusy(submitButton, false);
+          setLabel(IMPORT_PICKED_LABEL);
+          refreshGate();
+        }, discoveryFailed);
+      return;
+    }
+    // A Ready import sends exactly the key, salt, and network its picker was
+    // built from, with the ticks made there; nothing is re-read from the form.
+    const selection = accountContractType === "argent" ? session.selection() : null;
+    const picked = selection?.classHashes;
+    const pick = selection === null ? null : readyKeyPick(selection);
+    if (accountContractType === "argent" && (picked === undefined || pick === null)) {
+      buttonBusy(submitButton, false);
+      refreshGate();
+      return;
+    }
+    const sent = selection?.inputs ?? {
+      key: privateKey,
+      networkId: deps.networkId(),
+      salt: deploymentSalt,
+    };
     void deps.wallet
-      .importAccount(deps.networkId(), privateKey, accountContractType, deploymentSalt)
-      .then(
-        async () => {
-          // The paint loop skips the repaint when the flow's markup is
-          // unchanged, so the form must not rely on it to leave the busy state
-          // or drop an earlier attempt's error.
-          form.reset();
-          buttonBusy(submitButton, false);
-          if (result) {
-            result.textContent = "";
-          }
-          showToast("Account imported", "success", form);
-          await deps.render(await deps.refresh());
-        },
-        (error: unknown) => {
-          showToast(errorDetails(error, "Import failed"), "error", form);
-          if (result) {
-            result.textContent = errorLine(error, "Import failed");
-          }
-          buttonBusy(submitButton, false);
-        },
-      );
+      .importAccount(sent.networkId, sent.key, accountContractType, sent.salt, pick ?? undefined)
+      .then(async () => {
+        // The paint loop skips the repaint when the flow's markup is
+        // unchanged, so the form must not rely on it to leave the busy state
+        // or drop an earlier attempt's error.
+        form.reset();
+        dropPicker();
+        buttonBusy(submitButton, false);
+        if (result) {
+          result.textContent = "";
+        }
+        const count = picked?.length ?? 1;
+        showToast(count > 1 ? `${count} accounts imported` : "Account imported", "success", form);
+        await deps.render(await deps.refresh());
+      }, fail);
   });
 };

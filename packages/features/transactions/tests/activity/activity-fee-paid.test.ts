@@ -1,10 +1,16 @@
 /**
  * The optional `feePaid` field on stored activity rows (GitHub 463). Rows from
  * before it existed still load, a well-formed fee loads with them, and a
- * malformed one fails the row's validation rather than reaching the feed.
+ * malformed one fails the row's validation rather than reaching the feed. A
+ * row marked `feePayer: "sponsor"` (#431) never takes a receipt fee.
  */
 import { describe, expect, test } from "bun:test";
-import { type ActivityEntry, isActivityEntry } from "@bramble/transactions/activity";
+import { createMemoryStore } from "@bramble/store/kv";
+import {
+  type ActivityEntry,
+  createActivityLog,
+  isActivityEntry,
+} from "@bramble/transactions/activity";
 
 const row: ActivityEntry = {
   accountId: "SN_MAIN:0x1",
@@ -16,6 +22,31 @@ const row: ActivityEntry = {
   submittedAt: 1_700_000_000_000,
   summary: "Sent 1 STRK",
 };
+
+describe("userFee", () => {
+  test("records the token the user signed and still loads without it", () => {
+    expect(isActivityEntry(row)).toBe(true);
+    expect(
+      isActivityEntry({
+        ...row,
+        userFee: {
+          amount: "1200000",
+          token: "USDC",
+          tokenAddress: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a receipt-shaped fee stored as the user's token fee", () => {
+    expect(
+      isActivityEntry({
+        ...row,
+        userFee: { amount: "0x1", token: "USDC", tokenAddress: "0x1" },
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("feePaid", () => {
   test("is optional, so rows stored before it existed still load", () => {
@@ -38,5 +69,30 @@ describe("feePaid", () => {
     ]) {
       expect(isActivityEntry({ ...row, feePaid })).toBe(false);
     }
+  });
+});
+
+describe("feePayer", () => {
+  test("loads only the sponsor marker, so legacy rows still mean the account paid", () => {
+    expect(isActivityEntry({ ...row, feePayer: "sponsor" })).toBe(true);
+    for (const feePayer of ["account", "Sponsor", null, true]) {
+      expect(isActivityEntry({ ...row, feePayer })).toBe(false);
+    }
+  });
+
+  test("a sponsored row never takes the receipt fee, which was the sponsor's", async () => {
+    const log = createActivityLog({ now: () => 1, store: createMemoryStore() });
+    const scope = { accountId: row.accountId, networkId: row.networkId };
+    await log.record({ ...row, feePayer: "sponsor", hash: "0x1", kind: "deploy" });
+    await log.record({ ...row, hash: "0x2", kind: "deploy" });
+    const fee = { amount: "0xabc", unit: "FRI" } as const;
+    const updated = await log.updateStatuses(
+      { "0x1": { feePaid: fee, status: "accepted" }, "0x2": { feePaid: fee, status: "accepted" } },
+      scope,
+    );
+    const byHash = new Map(updated.map((entry) => [entry.hash, entry]));
+    expect(byHash.get("0x1")?.feePaid).toBeUndefined();
+    expect(byHash.get("0x1")?.feePayer).toBe("sponsor");
+    expect(byHash.get("0x2")?.feePaid).toEqual(fee);
   });
 });

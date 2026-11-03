@@ -230,6 +230,11 @@
       "short": "0x742c…0e4a"
     },
     {
+      "address": "0x5336ff3c2fa3bf75ebd8ca8e0cfe1d414b276746368b29d7d157f224b5cd0a8",
+      "name": "Lucky Jackal",
+      "short": "0x5336…d0a8"
+    },
+    {
       "address": "0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475",
       "name": "Mighty Cheese",
       "short": "0x34fd…0475"
@@ -323,7 +328,7 @@
       "hint": "No on-chain activity found — Bramble only imports existing Ready accounts",
       "key": "argent:argentx-bip44:0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b:3",
       "selectable": false,
-      "title": "Account 3 · Argent 0.3.1"
+      "title": "Account 3 · Argent 0.3.1 · Ready extension"
     },
     {
       "accountContractType": "argent",
@@ -335,7 +340,7 @@
       "hint": "Funded on Starknet — Bramble cannot deploy this Argent release",
       "key": "argent:argentx-bip44:0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b:3",
       "selectable": true,
-      "title": "Account 3 · Argent 0.3.1"
+      "title": "Account 3 · Argent 0.3.1 · Ready extension"
     },
     {
       "accountContractType": "argent",
@@ -347,7 +352,7 @@
       "hint": "Deployed on Starknet",
       "key": "argent:argentx-bip44:0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b:3",
       "selectable": true,
-      "title": "Account 3 · Argent 0.3.1"
+      "title": "Account 3 · Argent 0.3.1 · Ready extension"
     },
     {
       "accountContractType": "argent",
@@ -359,7 +364,7 @@
       "hint": "No on-chain activity found — Bramble only imports existing Ready accounts",
       "key": "argent:argentx-bip44:0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003:3",
       "selectable": false,
-      "title": "Account 3 · Argent 0.3.0"
+      "title": "Account 3 · Argent 0.3.0 · Ready extension"
     },
     {
       "accountContractType": "argent",
@@ -371,7 +376,7 @@
       "hint": "Funded on Starknet — Bramble cannot deploy this Argent release",
       "key": "argent:argentx-bip44:0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003:3",
       "selectable": true,
-      "title": "Account 3 · Argent 0.3.0"
+      "title": "Account 3 · Argent 0.3.0 · Ready extension"
     },
     {
       "accountContractType": "argent",
@@ -383,7 +388,7 @@
       "hint": "Deployed on Starknet",
       "key": "argent:argentx-bip44:0x1a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003:3",
       "selectable": true,
-      "title": "Account 3 · Argent 0.3.0"
+      "title": "Account 3 · Argent 0.3.0 · Ready extension"
     },
     {
       "accountContractType": "argent",
@@ -395,7 +400,7 @@
       "hint": "No on-chain activity found — Bramble only imports existing Ready accounts",
       "key": "argent:argentx-bip44:0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f:3",
       "selectable": false,
-      "title": "Account 3"
+      "title": "Account 3 · Ready extension"
     },
     {
       "accountContractType": "argent",
@@ -407,7 +412,7 @@
       "hint": "Funded and ready to deploy",
       "key": "argent:argentx-bip44:0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f:3",
       "selectable": true,
-      "title": "Account 3"
+      "title": "Account 3 · Ready extension"
     },
     {
       "accountContractType": "argent",
@@ -419,7 +424,43 @@
       "hint": "Deployed on Starknet",
       "key": "argent:argentx-bip44:0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f:3",
       "selectable": true,
-      "title": "Account 3"
+      "title": "Account 3 · Ready extension"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+      "deployed": false,
+      "derivation": "argentx-bip44",
+      "funded": false,
+      "hint": "No on-chain activity found — Bramble only imports existing Ready accounts",
+      "key": "argent:argentx-bip44:0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024:3",
+      "selectable": false,
+      "title": "Account 3 · Argent 0.4.0 (Xverse) · Ready extension"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+      "deployed": false,
+      "derivation": "argentx-bip44",
+      "funded": true,
+      "hint": "Funded and ready to deploy",
+      "key": "argent:argentx-bip44:0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024:3",
+      "selectable": true,
+      "title": "Account 3 · Argent 0.4.0 (Xverse) · Ready extension"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "classHash": "0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+      "deployed": true,
+      "derivation": "argentx-bip44",
+      "funded": false,
+      "hint": "Deployed on Starknet",
+      "key": "argent:argentx-bip44:0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024:3",
+      "selectable": true,
+      "title": "Account 3 · Argent 0.4.0 (Xverse) · Ready extension"
     },
     {
       "accountContractType": "braavos",
@@ -428,7 +469,7 @@
       "deployed": false,
       "derivation": "starknet-bip44",
       "funded": false,
-      "hint": "Funded and ready to deploy",
+      "hint": "No on-chain activity found — Bramble only imports existing Braavos accounts",
       "key": "braavos:starknet-bip44:0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201:3",
       "selectable": false,
       "title": "Account 3"
@@ -464,7 +505,7 @@
       "deployed": false,
       "derivation": "starknet-bip44",
       "funded": false,
-      "hint": "Funded, not deployed · view only for now",
+      "hint": "No on-chain activity found — Bramble only imports existing Braavos accounts",
       "key": "braavos:starknet-bip44:0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6:3",
       "selectable": false,
       "title": "Account 3"

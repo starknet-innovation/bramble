@@ -92,8 +92,8 @@ enum BrambleMetrics {
     }
     enum Dock {
         static let gap: CGFloat = 12
-        static let height: CGFloat = 72
-        static let item: CGFloat = 44
+        static let height: CGFloat = 80
+        static let item: CGFloat = 52
         static let offset: CGFloat = 16
         static let padding: EdgeInsets = EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6)
     }
@@ -393,7 +393,7 @@ enum BrambleMetrics {
         static let iconSize: CGFloat = 30
         static let padding: EdgeInsets = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
         static let radius: CGFloat = 14
-        static let stackBottom: CGFloat = 84
+        static let stackBottom: CGFloat = 92
         static let stackGap: CGFloat = 8
         static let stackInset: CGFloat = 16
         static let weight: Int = 600

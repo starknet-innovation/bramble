@@ -331,6 +331,18 @@ describe("privacy journey templates", () => {
 
     const ledger = blocked("ledger", "Private balances are not available for Ledger accounts");
     expect(ledger).toContain("Not available for Ledger accounts");
+
+    const otherWallet = blocked(
+      "other-wallet",
+      "Another wallet set up privacy for this account. Use that wallet to shield or unshield.",
+    );
+    expect(otherWallet).toContain(
+      "Private balances are off for this account. Another wallet set up its privacy.",
+    );
+    expect(otherWallet).toContain("Use that wallet to unshield. The funds will then show here.");
+    expect(otherWallet).toContain('data-privacy-blocker="other-wallet"');
+    expect(otherWallet).not.toContain("Use that wallet to shield or unshield.");
+    expect(otherWallet).not.toContain('id="privacy-retry"');
   });
 
   test("an untracked token still renders the registration checkpoint", () => {

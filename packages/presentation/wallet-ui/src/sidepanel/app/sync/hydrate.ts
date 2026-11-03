@@ -190,6 +190,7 @@ const hydrateCachedView = async (
       ),
       (value) => {
         cache.transactions = value.entries;
+        cache.relays = value.relays;
       },
     );
   }
@@ -294,14 +295,15 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     if (walletBalanceView) {
       fill(wallet.loadBalances(false, refreshReason === "action"), (value) => {
         if ("balances" in value) {
-          cache.balances =
-            value.accountId !== status.activeAccountId || value.networkId !== status.networkId
-              ? { error: "balances unavailable" }
-              : value;
-        } else if (!("error" in cache.balances)) {
-          cache.balances = { ...cache.balances, stale: true };
-        } else {
+          // An answer for another account or network is a reply racing a
+          // switch, not a failure: drop it and keep what this scope shows.
+          if (value.accountId === status.activeAccountId && value.networkId === status.networkId)
+            cache.balances = value;
+        } else if ("loading" in cache.balances || "error" in cache.balances) {
+          // No snapshot to fall back on: the failure is the answer.
           cache.balances = value;
+        } else {
+          cache.balances = { ...cache.balances, stale: true };
         }
       });
     }
@@ -350,6 +352,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       (value) => {
         cache.transactions = value.entries;
         cache.historyUnavailable = value.historyUnavailable;
+        cache.relays = value.relays;
       },
       activeView !== "activity",
     );
@@ -420,15 +423,24 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       const previous = cache.multisigBalances;
       const ownPrevious =
         cache.multisigBalanceId === selectedMultisigId &&
+        !("loading" in previous) &&
         "balances" in previous &&
         previous.accountId === selectedMultisigId &&
         previous.networkId === status.networkId;
+      // This account's own failed read stays an error; a racing reply for
+      // another account does not turn it back into loading.
+      const sameScope = cache.multisigBalanceId === selectedMultisigId;
       cache.multisigBalanceId = selectedMultisigId;
       if ("balances" in value) {
+        // An answer naming another account is a racing reply, not a failure:
+        // keep this account's own balances, else stay loading. Never shown
+        // under this account (Sherlock 209).
         cache.multisigBalances =
-          value.accountId !== selectedMultisigId || value.networkId !== status.networkId
-            ? { error: "multisig balances unavailable" }
-            : value;
+          value.accountId === selectedMultisigId && value.networkId === status.networkId
+            ? value
+            : ownPrevious || (sameScope && "error" in previous)
+              ? previous
+              : { loading: true };
       } else if (ownPrevious) {
         cache.multisigBalances = { ...previous, stale: true };
       } else {

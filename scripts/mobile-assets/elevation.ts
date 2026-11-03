@@ -42,6 +42,8 @@ const ELEVATION_IGNORED: Readonly<Record<string, string>> = {
   "button, a.icon-button": "controls are flat (`box-shadow: none`); nothing to mirror",
   ".drawer-network-menu":
     "not ported yet: mobile switches network from Settings, and its drawer has no network menu",
+  ".onboarding-surface .ledger-onboard-overlay > *":
+    "not ported yet: mobile has no Ledger onboarding (the import choice reads Coming to Bramble mobile)",
   ".token-dropdown-panel":
     "mobile picks a token on its own screen, the platform idiom, not in a floating panel",
 };

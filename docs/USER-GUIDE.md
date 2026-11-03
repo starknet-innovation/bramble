@@ -22,11 +22,11 @@ it, start with the [engineering onboarding](../engineering/) instead.
 
 Bramble is a Manifest V3 browser extension. Download a published extension
 archive from the
-[GitHub Releases page](https://github.com/starknet-innovation/mc-wallet/releases),
+[GitHub Releases page](https://github.com/starknet-innovation/bramble/releases),
 verify it against the accompanying `.sha256` file, extract it, then open
 `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and
 select the extracted directory. Contributors can instead build `dist/` locally;
-see the [README](https://github.com/starknet-innovation/mc-wallet#quick-start).
+see the [README](https://github.com/starknet-innovation/bramble#quick-start).
 
 ### First run
 
@@ -260,5 +260,5 @@ keys.
 ### Reporting a security issue
 
 Please report vulnerabilities privately — see the
-[security policy](https://github.com/starknet-innovation/mc-wallet/blob/main/SECURITY.md).
+[security policy](https://github.com/starknet-innovation/bramble/blob/main/SECURITY.md).
 Do not open a public issue for a security problem.

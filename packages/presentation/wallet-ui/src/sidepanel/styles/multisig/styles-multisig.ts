@@ -19,19 +19,10 @@ export const MULTISIG_STYLES = `
     grid-column: 2;
   }
   .flow-header:has(+ [id^="wallet-screen-multisig-"]) > .pill { justify-self: start; }
-  .flow-header:has(+ [id^="wallet-screen-multisig-"]) .flow-title h1,
-  .flow-header:has(+ [id^="wallet-screen-multisig-"]) .flow-title p {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
+  /* Titles and setup choices wrap rather than truncate: at the default side
+     panel width "Create a multisig account" does not fit one line, and a cut
+     title hides what the screen or choice is. */
   .multisig-setup-options { display: grid; gap: ${SPACE.md}; }
-  .multisig-setup-option .add-account-option-copy strong,
-  .multisig-setup-option .add-account-option-copy span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
   .multisig-deploy-section,
   #multisig-deploy-form,
   #multisig-deploy-form > label,
@@ -232,12 +223,8 @@ export const MULTISIG_STYLES = `
     inset: 0 0 auto ${SPACE.lg};
     position: absolute;
   }
-  .multisig-selected-signer .option-copy strong,
-  .multisig-selected-signer .option-sub {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
+  /* The signer's name and its source-and-key line wrap: truncated, the row read
+     "Bramble account · Key 0…" and lost the key it exists to show. */
   .multisig-selected-signer .icon-button:disabled { opacity: 0; pointer-events: none; }
   .multisig-signer-set > .multisig-signer-sources {
     background: transparent;

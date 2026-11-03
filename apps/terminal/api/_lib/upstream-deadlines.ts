@@ -6,7 +6,7 @@
 /**
  * How long the STRK20 gateway waits for each upstream before answering 504
  * `upstream_timeout`. The wallet's own paymaster deadline must end first
- * (`PAYMASTER_TIMEOUT_MS` in `packages/features/privacy`, pinned by a
+ * (`PAYMASTER_TIMEOUT_MS` in `packages/features/transactions`, pinned by a
  * conformance test), so a slow relay surfaces in the wallet as its own
  * deadline expiry rather than as a gateway status.
  */

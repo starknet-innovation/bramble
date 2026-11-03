@@ -7,6 +7,7 @@
  */
 
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import type { DeferredStrk20Approval } from "../privacy/strk20-approval-staging";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PendingApproval } from "./approvals";
@@ -29,6 +30,8 @@ export type ApplyResult =
  * because it describes the CARD, not the queue entry.
  */
 export type ApproveDecision = {
+  /** Set when the user chose a token other than STRK for the network fee. */
+  readonly gaslessFee?: GaslessFeeOffer;
   readonly reviewedAccountId?: string;
   readonly reviewedFee?: FeeEstimate;
 };

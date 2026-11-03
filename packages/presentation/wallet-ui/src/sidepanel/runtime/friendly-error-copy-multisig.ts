@@ -169,7 +169,6 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   ["switch to the multisig network first", "Switch to this multisig's network first."],
   ["multisig balances unavailable", MULTISIG_BALANCES],
   ["multisig balance snapshot unavailable", MULTISIG_BALANCES],
-  ["multisig balances are loading.", "Multisig balances are loading."],
   ["add ready multisig failed", "Couldn't add that multisig. Try again."],
   ["remove ready multisig failed", "Couldn't remove that multisig. Try again."],
   ["remove ready multisig intent failed", "Couldn't delete that transaction. Try again."],

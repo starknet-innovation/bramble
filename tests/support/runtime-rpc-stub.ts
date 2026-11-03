@@ -26,6 +26,10 @@ export const makeRuntimeRpc = (overrides: Partial<RuntimeRpc> = {}): RuntimeRpc 
   async getNftOwner() {
     return "0x0";
   },
+  async getStrk20PublicKey() {
+    // Unregistered. A privacy check treats zero as clear and does not cache it.
+    return "0x0";
+  },
   async getTokenBalances() {
     return [];
   },

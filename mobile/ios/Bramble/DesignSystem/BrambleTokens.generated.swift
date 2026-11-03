@@ -8,10 +8,19 @@ struct BrambleSkin: Equatable {
     let name: String
     let accent: Color
     let accentText: Color
-    let accountAvatar0: Color
-    let accountAvatar1: Color
-    let accountAvatar2: Color
-    let accountAvatar3: Color
+    let accountAvatarAccent0: Color
+    let accountAvatarAccent1: Color
+    let accountAvatarAccent2: Color
+    let accountAvatarAccent3: Color
+    let accountAvatarBody0: Color
+    let accountAvatarBody1: Color
+    let accountAvatarBody2: Color
+    let accountAvatarBody3: Color
+    let accountAvatarBody4: Color
+    let accountAvatarGround0: Color
+    let accountAvatarGround1: Color
+    let accountAvatarGround2: Color
+    let accountAvatarGround3: Color
     let accountAvatarInk: Color
     let accountAvatarPaper: Color
     let bg: Color
@@ -51,10 +60,19 @@ extension BrambleSkin {
         name: "daylight",
         accent: Color(argb: 0xFF3545CD),
         accentText: Color(argb: 0xFFFFFFFF),
-        accountAvatar0: Color(argb: 0xFF6842A8),
-        accountAvatar1: Color(argb: 0xFFE27A35),
-        accountAvatar2: Color(argb: 0xFFE9B83F),
-        accountAvatar3: Color(argb: 0xFF9F356F),
+        accountAvatarAccent0: Color(argb: 0xFFF5C64B),
+        accountAvatarAccent1: Color(argb: 0xFFFBB05D),
+        accountAvatarAccent2: Color(argb: 0xFFFDAECF),
+        accountAvatarAccent3: Color(argb: 0xFF80E1E3),
+        accountAvatarBody0: Color(argb: 0xFF6842A8),
+        accountAvatarBody1: Color(argb: 0xFF9F3570),
+        accountAvatarBody2: Color(argb: 0xFF1C626E),
+        accountAvatarBody3: Color(argb: 0xFF343DC7),
+        accountAvatarBody4: Color(argb: 0xFF3F662A),
+        accountAvatarGround0: Color(argb: 0xFFFAEAC5),
+        accountAvatarGround1: Color(argb: 0xFFF1C9DF),
+        accountAvatarGround2: Color(argb: 0xFFD2EFDA),
+        accountAvatarGround3: Color(argb: 0xFFDBD7FD),
         accountAvatarInk: Color(argb: 0xFF0E0F16),
         accountAvatarPaper: Color(argb: 0xFFFFFFFF),
         bg: Color(argb: 0xFFF8F9FB),
@@ -93,10 +111,19 @@ extension BrambleSkin {
         name: "midnight",
         accent: Color(argb: 0xFFF5F5F5),
         accentText: Color(argb: 0xFF171717),
-        accountAvatar0: Color(argb: 0xFF6842A8),
-        accountAvatar1: Color(argb: 0xFFE27A35),
-        accountAvatar2: Color(argb: 0xFFE9B83F),
-        accountAvatar3: Color(argb: 0xFF9F356F),
+        accountAvatarAccent0: Color(argb: 0xFFF5C64B),
+        accountAvatarAccent1: Color(argb: 0xFFFBB05D),
+        accountAvatarAccent2: Color(argb: 0xFFFDAECF),
+        accountAvatarAccent3: Color(argb: 0xFF80E1E3),
+        accountAvatarBody0: Color(argb: 0xFF6842A8),
+        accountAvatarBody1: Color(argb: 0xFF9F3570),
+        accountAvatarBody2: Color(argb: 0xFF1C626E),
+        accountAvatarBody3: Color(argb: 0xFF343DC7),
+        accountAvatarBody4: Color(argb: 0xFF3F662A),
+        accountAvatarGround0: Color(argb: 0xFFFAEAC5),
+        accountAvatarGround1: Color(argb: 0xFFF1C9DF),
+        accountAvatarGround2: Color(argb: 0xFFD2EFDA),
+        accountAvatarGround3: Color(argb: 0xFFDBD7FD),
         accountAvatarInk: Color(argb: 0xFF171717),
         accountAvatarPaper: Color(argb: 0xFFFAFAFA),
         bg: Color(argb: 0xFF0A0A0A),
@@ -154,7 +181,7 @@ enum BrambleRadius {
 
 enum BrambleControl {
     static let dockIcon: CGFloat = 24
-    static let dockItem: CGFloat = 44
+    static let dockItem: CGFloat = 52
     static let hit: CGFloat = 40
     static let hitSmall: CGFloat = 40
     static let icon: CGFloat = 18

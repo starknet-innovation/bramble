@@ -267,6 +267,8 @@ describe("readImportAccountInput", () => {
     expect(
       readImportAccountInput({
         accountContractType: "argent",
+        // A Ready key names the releases the user picked (issue 776).
+        classHashes: ["0x0abc"],
         deploymentSalt: " 0x0777 ",
         networkId: "SN_MAIN",
         privateKey: importedKey,
@@ -274,6 +276,7 @@ describe("readImportAccountInput", () => {
       }),
     ).toEqual({
       accountContractType: "argent",
+      classHashes: ["0xabc"],
       deploymentSalt: "0x777",
       networkId: "SN_MAIN",
       privateKey: importedKey,

@@ -47,6 +47,9 @@ const deps = (options: Options = {}): WalletOpsDeps => {
         return [];
       },
       async record() {},
+      async recordIfAbsent() {
+        return true;
+      },
       async takeFailureNotices() {
         return [];
       },

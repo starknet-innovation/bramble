@@ -346,5 +346,5 @@ first formal external audit.
 
 Physical Ledger confirmation across the full supported device and transport
 matrix is deliberately not claimed by v0.9.0. It is tracked in
-[#224](https://github.com/starknet-innovation/mc-wallet/issues/224) for v0.9.1,
+[#224](https://github.com/starknet-innovation/bramble/issues/224) for v0.9.1,
 after this release can be loaded on the target hardware.

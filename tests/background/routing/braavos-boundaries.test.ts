@@ -161,6 +161,7 @@ describe("Braavos message boundaries", () => {
     expect(
       readImportAccountInput({
         ...argent,
+        classHashes: ["0x1234"],
         networkId: "SN_MAIN",
         privateKey: "0x1234",
         type: "wallet.importAccount",

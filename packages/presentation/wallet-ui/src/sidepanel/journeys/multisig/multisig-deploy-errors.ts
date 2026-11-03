@@ -1,8 +1,8 @@
 /** User-facing recovery copy for Argent multisig deployment failures. */
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { accountLabel } from "../../shared/parts";
-import { formatFeeEstimate } from "../../shared/review-render";
 import { FEE_FUNDING_SHORTFALL } from "../../shell/deploy-errors";
+import { deploymentFundingMinimumText } from "./multisig-deploy-view";
 
 /**
  * Background error emitted when a one-time deployment review is stale.
@@ -32,7 +32,7 @@ export const deploymentFailureToast = (
     return "The fee review expired. Review the deployment again before confirming.";
   }
   if (FEE_FUNDING_SHORTFALL.test(raw)) {
-    return `Fund ${accountLabel(review.address)} with at least ${formatFeeEstimate(review.fee)}, then review the deployment again.`;
+    return `Fund ${accountLabel(review.address)} with at least ${deploymentFundingMinimumText(review)}, then review the deployment again.`;
   }
   return raw;
 };

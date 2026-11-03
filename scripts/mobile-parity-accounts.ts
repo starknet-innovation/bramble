@@ -28,7 +28,7 @@ import {
   candidateState,
   candidateTitle,
   selectable,
-} from "../packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-account-ui";
+} from "../packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-account-copy";
 import {
   accountDisplayName,
   accountLabel,
