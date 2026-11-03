@@ -378,7 +378,11 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       if (!isStrk20Panel(response)) {
         throw responseError(response, "Couldn't prepare this private action.");
       }
-      return { authorizations: response.authorizations, balances: response.balances };
+      return {
+        authorizations: response.authorizations,
+        balances: response.balances,
+        relays: response.relays,
+      };
     },
     async forgetStrk20Key(multisigId: string): Promise<void> {
       const response = await sendMessage({

@@ -330,6 +330,37 @@ export const withMultisigStrk20Fragment = (
 };
 
 /**
+ * Adds one verified relay fragment over `messageHash`. Returns null when the
+ * signer is already present, is not a member, or the fragment does not verify.
+ * The proof bytes on the record are left untouched.
+ */
+export const withMultisigStrk20RelayFragment = (
+  record: MultisigStrk20RelayRequest,
+  fragment: StarkSignature,
+): MultisigStrk20RelayRequest | null => {
+  const hash = record.messageHash;
+  if (
+    hash === undefined ||
+    record.state !== "collecting" ||
+    record.fragments.some((existing) => existing.publicKey === fragment.publicKey) ||
+    !record.signerPublicKeys.includes(fragment.publicKey) ||
+    !verifyStarkSignature({
+      hash,
+      publicKeyX: fragment.publicKey,
+      signature: { r: fragment.r, s: fragment.s },
+    })
+  ) {
+    return null;
+  }
+  const fragments = sortedFragments([...record.fragments, fragment]);
+  return {
+    ...record,
+    fragments,
+    state: fragments.length === record.threshold ? "ready" : "collecting",
+  };
+};
+
+/**
  * True for a local proof bound to an intent id. The facts are the ones frozen
  * into that intent's hash; this check only bounds the bytes.
  */

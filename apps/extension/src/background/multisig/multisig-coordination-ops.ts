@@ -28,12 +28,12 @@ import {
   isCoordinationSigner,
   publishForRecipients,
 } from "./multisig-nostr-publish";
-import { importSharedStrk20Authorization } from "./multisig-strk20-actions";
 import {
   handleMultisigStrk20KeyOps,
   importSharedStrk20Key,
   type Strk20KeyImport,
 } from "./multisig-strk20-key-ops";
+import { importSharedStrk20Authorization } from "./multisig-strk20-relay";
 import { handleMultisigTxOps } from "./multisig-tx-ops";
 import { type NostrRelayTransport, nativeNostrRelayTransport } from "./nostr-relay";
 
@@ -206,6 +206,7 @@ const importSharedIntent = async (
     contacts,
     records,
     vaultPassphrase,
+    isAuthorized,
   );
   if (authorization) return authorization;
   const input = trustedSharedIntent(opened, contacts, records);
@@ -315,8 +316,7 @@ const importGiftWraps = async (
   }
   const opened = await openGiftWraps(events, vaultPassphrase, isAuthorized, open, openMany);
   if (!opened) return null;
-  // A receipt only for a wrap this sync finished with: imported, a no-op, or
-  // refused for good. A wrap refused for a passing reason is opened again.
+  // A receipt only for a wrap this sync finished with. A passing refusal is opened again.
   return recordOpenedWraps(deps, events, opened, contacts, records, vaultPassphrase, isAuthorized);
 };
 

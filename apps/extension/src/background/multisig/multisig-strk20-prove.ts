@@ -13,6 +13,7 @@ import type {
   MultisigStrk20ActionRequest,
   MultisigStrk20RelayRequest,
 } from "@bramble/privacy/multisig-strk20";
+import { multisigStrk20Summary } from "@bramble/privacy/multisig-strk20-review";
 import {
   canonicalStrk20PoolFee,
   prepareStrk20AccountActions,
@@ -30,13 +31,6 @@ import { reviewArgentMultisigCalls } from "./multisig-call-review";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import { configSnapshot } from "./multisig-ops";
 import { MULTISIG_STRK20_WAITING, type MultisigStrk20Session } from "./multisig-strk20-session";
-
-const summaryFor = (request: MultisigStrk20ActionRequest): string => {
-  if (request.kind === "register") return "Register this multisig's private balance";
-  if (request.kind === "deposit") return "Deposit into this multisig's private balance";
-  if (request.kind === "withdraw") return "Withdraw from this multisig's private balance";
-  return "Transfer from this multisig's private balance";
-};
 
 const contextWithScalar = (
   session: MultisigStrk20Session,
@@ -136,15 +130,29 @@ const freezeIntent = async (
     prepared,
     signatures: [],
     state: "collecting",
-    summary: summaryFor(request),
+    summary: multisigStrk20Summary(request.kind),
   };
   const stored = await deps.multisigStore.upsertIntent(intent, session.isAuthorized);
+  if (stored === "unauthorized") return { error: "wallet locked" };
   if (stored !== "stored") return { error: `Argent multisig intent ${stored}` };
-  const saved = await session.store.putProof({
-    intentId: id,
-    proof: { ...proof, proof_facts: [...prepared.proofFacts] },
-    request,
-  });
+  const liveIntents = (await deps.multisigStore.listIntents())
+    .filter(
+      (candidate) =>
+        candidate.state === "collecting" ||
+        candidate.state === "ready" ||
+        candidate.state === "submitted",
+    )
+    .map((candidate) => candidate.id);
+  const saved = await session.store.putProof(
+    {
+      intentId: id,
+      proof: { ...proof, proof_facts: [...prepared.proofFacts] },
+      request,
+    },
+    liveIntents,
+    session.isAuthorized,
+  );
+  if (saved === "unauthorized") return { error: "wallet locked" };
   if (saved !== "stored") return { error: "Invalid Argent multisig private proof" };
   return { feeReview: preparedArgentMultisigFee(prepared), intent, ok: true };
 };
@@ -194,6 +202,18 @@ const canonicalWithdraw = (fee: {
   type: "withdraw",
 });
 
+const relayStored = (
+  stored: string,
+  id: string,
+  state: MultisigStrk20RelayRequest["state"],
+): RuntimeResponse =>
+  stored === "stored"
+    ? { id, ok: true, phase: state === "collecting" ? "authorization" : "relay" }
+    : {
+        error:
+          stored === "unauthorized" ? "wallet locked" : "Invalid Argent multisig private proof",
+      };
+
 const freezeRelay = async (
   deps: MultisigOpsDeps,
   session: MultisigStrk20Session,
@@ -223,14 +243,13 @@ const freezeRelay = async (
     request,
     signerPublicKeys: session.config.signerPublicKeys,
     state: messageHash ? "collecting" : "ready",
-    summary: summaryFor(request),
+    summary: multisigStrk20Summary(request.kind),
     threshold: session.config.threshold,
     ...(typed ? { typedData: typed } : {}),
   };
   const locallySigned = await signRelayFragment(deps, session, relay, messageHash);
-  const stored = await session.store.upsertRelay(locallySigned);
-  if (stored !== "stored") return { error: "Invalid Argent multisig private proof" };
-  return { id: relay.id, ok: true, phase: "relay" };
+  const stored = await session.store.upsertRelay(locallySigned, session.isAuthorized);
+  return relayStored(stored, relay.id, locallySigned.state);
 };
 
 const proveRelay = async (

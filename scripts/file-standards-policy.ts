@@ -217,11 +217,17 @@ export const SECRET_MATERIAL_FILES = new Set([
   // shared scalar is redacted before it reaches this module and is only
   // substituted while recomputing the digest.
   "packages/features/privacy/src/multisig/records.ts",
+  // Relay invites carry the same public Stark fragments as CallSet records.
+  // The proof never enters this module.
+  "packages/features/privacy/src/multisig/relay-invite.ts",
   // Multisig STRK20 prove path. Holds the vault credential only long enough
   // to read the shared scalar and to sign a fragment, and returns neither.
   "apps/extension/src/background/multisig/multisig-strk20-session.ts",
   "apps/extension/src/background/multisig/multisig-strk20-prove.ts",
   "apps/extension/src/background/multisig/multisig-strk20-actions.ts",
+  // Relay fragment collection. The vault credential only transits into the
+  // hash signer. Proof bytes stay on this device and are never wrapped.
+  "apps/extension/src/background/multisig/multisig-strk20-relay.ts",
   // Argent multisig stores public signer identifiers and verified public
   // signature fragments only. Private signing remains behind Krusty and the
   // privileged background accountHashSigner boundary.

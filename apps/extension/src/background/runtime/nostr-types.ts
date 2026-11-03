@@ -1,3 +1,14 @@
+/**
+ * Public outcomes returned by explicit Nostr coordination actions.
+ */
+type Strk20PanelCard = {
+  readonly id: string;
+  readonly lines: readonly string[];
+  readonly offer: "send" | "share" | "sign";
+  readonly refresh: boolean;
+  readonly summary: string;
+};
+
 /** Public outcomes returned by explicit Nostr coordination actions. */
 export type NostrCoordinationResponse =
   | { readonly nostrPublicKey: string; readonly ok: true }
@@ -25,15 +36,7 @@ export type NostrCoordinationResponse =
     }
   | { readonly ok: true; readonly transactionHash: string }
   | {
-      readonly authorizations: readonly {
-        readonly amount: string;
-        readonly id: string;
-        readonly kind: "deposit" | "register" | "transfer" | "withdraw";
-        readonly recipient?: string;
-        readonly summary: string;
-        readonly symbol: string;
-        readonly youSigned: boolean;
-      }[];
+      readonly authorizations: readonly Strk20PanelCard[];
       readonly balances: readonly {
         readonly balance: string;
         readonly formatted: string;
@@ -42,4 +45,5 @@ export type NostrCoordinationResponse =
         readonly tokenId: string;
       }[];
       readonly ok: true;
+      readonly relays: readonly Strk20PanelCard[];
     };

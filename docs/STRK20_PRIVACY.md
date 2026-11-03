@@ -298,8 +298,10 @@ The private-balance section says that anyone with the viewing key can see all of
 private activity. Register, deposit, transfer, and withdraw use the tokens a single-signer
 private balance already tracks, including a curated token the pool reports as privately held.
 Deposit spends that token's public balance. Transfer and withdraw spend its private balance.
-A co-owner who receives a CallSet authorization reviews the action, token, amount, and recipient
-on this screen and signs it there.
+A co-owner who receives a CallSet authorization reviews the entrypoints and the restored
+calls — the facts the digest covers — and signs or shares that fragment from the card. A label
+the sender wrote is not shown. A ready authorization stays on the card so the fragment can be
+returned. The card is loaded again when the panel opens.
 
 A wrap is stored only when the sender is a saved contact whose Stark key is in the chain's
 current signer set, and only for the pool configured on that network. Deployment signers are not
@@ -319,8 +321,15 @@ threshold aggregate. Co-owners who did not generate the proof can sign the hash,
 device that holds the bytes can broadcast it.
 
 Private transfer and withdraw use the relay. The second round is the paymaster's typed-data
-digest when the quote includes public calls. A quote with no public calls has already been
-authorized by the CallSet aggregate inside the proof, and the relay request is ready to send.
+digest when the quote includes public calls. Co-owners exchange fragments of that digest. The
+wrap carries the typed data and the fragments, not the proof. The device that holds the proof
+sends only once the threshold is met, and only after the maturity journal has claimed the write.
+A quote with no public calls has already been authorized by the CallSet aggregate inside the
+proof, and the relay request is ready to send. A reloaded panel still lists a relay that has
+not been sent. Submitting a proof-bearing account intent checks that its `apply_actions` call
+targets the pool configured now. A proof for an intent that is still collecting, ready, or
+submitted is not dropped to make room for a newer one. An authorization or relay-fragment write
+is abandoned if the wallet locks before it commits.
 
 Both rounds use the multisig's Nostr channel. The CallSet authorization is a separate gift wrap
 (`bramble.multisig.strk20-authorization`). Its calldata has the shared scalar replaced before it

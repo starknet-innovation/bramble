@@ -21,6 +21,19 @@ const RECIPIENT = "0x123";
 beforeAll(registerDom);
 afterAll(unregisterDom);
 
+const card = (
+  id: string,
+  offer: "send" | "share" | "sign",
+  lines: readonly string[],
+  refresh = false,
+) => ({
+  id,
+  lines,
+  offer,
+  refresh,
+  summary: "compile_actions",
+});
+
 describe("incoming multisig CallSet review", () => {
   test("refuses a panel reply that is not a reviewable authorization", () => {
     expect(isStrk20Panel({ authorizations: [{ id: "auth-1" }], balances: [], ok: true })).toBe(
@@ -31,44 +44,43 @@ describe("incoming multisig CallSet review", () => {
         authorizations: [],
         balances: [{ balance: "0x1", formatted: "1", symbol: "USDC", token: "0x2", tokenId: "id" }],
         ok: true,
+        relays: [],
       }),
     ).toBe(true);
+    expect(
+      isStrk20Panel({
+        authorizations: [],
+        balances: [],
+        ok: true,
+      }),
+    ).toBe(false);
   });
 
-  test("shows the action, token, amount, and recipient, and signs that request", () => {
+  test("shows the hashed calls, and signs or shares that card", () => {
     const list = document.createElement("div");
     const signed: string[] = [];
+    const shared: string[] = [];
     showMultisigStrk20Authorizations(
       list,
-      [
-        {
-          amount: "1.5",
-          id: "auth-1",
-          kind: "transfer",
-          recipient: RECIPIENT,
-          summary: "Transfer from this multisig's private balance",
-          symbol: "USDC",
-          youSigned: false,
-        },
-        {
-          amount: "",
-          id: "auth-2",
-          kind: "register",
-          summary: "Register this multisig's private balance",
-          symbol: "",
-          youSigned: true,
-        },
-      ],
-      (id) => signed.push(id),
+      [card("auth-1", "sign", ["USDC", "0x16e360", RECIPIENT]), card("auth-2", "share", [])],
+      {
+        onRefresh: () => undefined,
+        onSend: () => undefined,
+        onShare: (id) => shared.push(id),
+        onSign: (id) => signed.push(id),
+      },
     );
     const cards = [...list.querySelectorAll("article")];
-    expect(cards[0]?.textContent).toContain("Transfer from this multisig's private balance");
-    expect(cards[0]?.textContent).toContain("1.5 USDC");
-    expect(cards[0]?.textContent).toContain(`To ${RECIPIENT}`);
+    expect(cards[0]?.textContent).toContain("compile_actions");
+    expect(cards[0]?.textContent).toContain("USDC");
+    expect(cards[0]?.textContent).toContain("0x16e360");
+    expect(cards[0]?.textContent).toContain(RECIPIENT);
+    expect(cards[0]?.textContent).not.toContain("Transfer from this multisig's private balance");
     cards[0]?.querySelector("button")?.click();
     expect(signed).toEqual(["auth-1"]);
-    expect(cards[1]?.textContent).toContain("You signed. Waiting for co-owners.");
-    expect(cards[1]?.querySelector("button")).toBeNull();
+    expect(cards[1]?.querySelector("button")?.textContent).toBe("Share");
+    cards[1]?.querySelector("button")?.click();
+    expect(shared).toEqual(["auth-2"]);
   });
 
   test("prepares a transfer of the tracked token the co-owner picked", async () => {
@@ -93,17 +105,7 @@ describe("incoming multisig CallSet review", () => {
       },
       strk20KeyStatus: async () => "held",
       strk20Panel: async () => ({
-        authorizations: [
-          {
-            amount: "1.5",
-            id: "auth-1",
-            kind: "transfer" as const,
-            recipient: RECIPIENT,
-            summary: "Transfer from this multisig's private balance",
-            symbol: "USDC",
-            youSigned: false,
-          },
-        ],
+        authorizations: [card("auth-1", "sign", ["USDC", "0x16e360", RECIPIENT])],
         balances: [
           {
             balance: "0x16e360",
@@ -113,6 +115,7 @@ describe("incoming multisig CallSet review", () => {
             tokenId: usdc.id,
           },
         ],
+        relays: [],
       }),
     });
     const app = mountMultisigUi(html, client, fixture.status, {
@@ -151,5 +154,53 @@ describe("incoming multisig CallSet review", () => {
       tokenId: usdc.id,
     });
     expect(option?.textContent).toContain("1.5");
+  });
+
+  test("a signed CallSet offers Share, and a reloaded relay can be sent", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    let signed = false;
+    const shared: string[] = [];
+    const sent: string[] = [];
+    const html = multisigStrk20KeyPanel("SN_MAIN", defaultWalletPreferences(), {
+      balances: { balances: [] },
+      changes: {},
+      currency: "usd",
+      prices: {},
+    });
+    const client = await makeMultisigUiClient({
+      shareStrk20Authorization: async (id) => {
+        shared.push(id);
+        return { recipients: 1, totalRecipients: 1 };
+      },
+      signStrk20Authorization: async () => {
+        signed = true;
+        return { id: "auth-1", phase: "authorization" as const };
+      },
+      strk20KeyStatus: async () => "held",
+      strk20Panel: async () => ({
+        authorizations: [card("auth-1", signed ? "share" : "sign", ["0x10"])],
+        balances: [],
+        relays: [card("relay-1", "send", ["USDC"], true)],
+      }),
+      submitStrk20Relay: async (id) => {
+        sent.push(id);
+        return { transactionHash: "0xabc" };
+      },
+    });
+    const app = mountMultisigUi(html, client, fixture.status, {
+      selectedMultisigId: () => fixture.record.id,
+    });
+    await flushMultisigUi();
+    expect(app.querySelector("[data-ms-strk20-send]")?.textContent).toBe("Send");
+    expect(app.querySelector("[data-ms-strk20-refresh]")?.textContent).toBe("Refresh");
+    app.querySelector<HTMLButtonElement>("[data-ms-strk20-send]")?.click();
+    await flushMultisigUi();
+    expect(sent).toEqual(["relay-1"]);
+    app.querySelector<HTMLButtonElement>("[data-ms-strk20-sign]")?.click();
+    await flushMultisigUi();
+    expect(app.querySelector("[data-ms-strk20-share]")?.textContent).toBe("Share");
+    app.querySelector<HTMLButtonElement>("[data-ms-strk20-share]")?.click();
+    await flushMultisigUi();
+    expect(shared).toEqual(["auth-1"]);
   });
 });

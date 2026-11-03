@@ -5,34 +5,27 @@
 
 import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import { staleArgentMultisigIntent } from "@bramble/multisig/repository";
 import {
   strk20ProofBaseBlock,
   strk20ProofSubmittable,
 } from "@bramble/privacy/multisig-proof-window";
 import {
-  isMultisigStrk20Authorization,
   MULTISIG_STRK20_AUTHORIZATION_IDENTIFIER,
   type MultisigStrk20ActionRequest,
   multisigStrk20CallSetAggregate,
   withMultisigStrk20Fragment,
 } from "@bramble/privacy/multisig-strk20";
-import {
-  describeMultisigStrk20Request,
-  resolveMultisigStrk20Amount,
-} from "@bramble/privacy/multisig-strk20-token";
+import { resolveMultisigStrk20Amount } from "@bramble/privacy/multisig-strk20-token";
 import { submitStrk20PaymasterPlan } from "@bramble/privacy/paymaster";
+import { relayClaimSlots } from "@bramble/privacy/relay-claim-slots";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
-import type { NostrApplicationData } from "@bramble/vault/kms-port";
 import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
-  STARKNET_NETWORKS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
-import type { AddressBookEntry } from "@bramble/wallet-model/preferences";
 import { type TypedData, typedData } from "starknet";
 import { signerForContext } from "../accounts/wallet-ops";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -40,10 +33,14 @@ import type { MultisigOpsDeps } from "./multisig-deps";
 import {
   coordinationRecipients,
   coordinationRelayUrls,
-  isCoordinationSigner,
   publishForRecipients,
 } from "./multisig-nostr-publish";
 import { proveMultisigStrk20 } from "./multisig-strk20-prove";
+import {
+  multisigStrk20PanelCards,
+  shareCollectedStrk20Relay,
+  signCollectedStrk20Relay,
+} from "./multisig-strk20-relay";
 import {
   MULTISIG_STRK20_PROOF_EXPIRED,
   type MultisigStrk20Session,
@@ -172,12 +169,15 @@ const signCollected = async (deps: MultisigOpsDeps, message: unknown): Promise<R
   const session = await openMultisigStrk20Session(deps, accountId);
   if ("error" in session) return session;
   const authorization = await session.store.getAuthorization(id, await session.readScalar());
-  if (authorization?.state !== "collecting") {
-    return {
-      error: authorization
-        ? "Argent multisig intent is not collecting signatures"
-        : "Argent multisig intent not found",
-    };
+  if (!authorization) {
+    return (
+      (await signCollectedStrk20Relay(deps, session, id)) ?? {
+        error: "Argent multisig intent not found",
+      }
+    );
+  }
+  if (authorization.state !== "collecting") {
+    return { error: "Argent multisig intent is not collecting signatures" };
   }
   const member = session.config.signerPublicKeys.find((key) =>
     sameFelt(key, session.context.active.account.publicKeyX),
@@ -189,7 +189,12 @@ const signCollected = async (deps: MultisigOpsDeps, message: unknown): Promise<R
   })(authorization.hash);
   const next = withMultisigStrk20Fragment(authorization, { ...signed, publicKey: member });
   if (!next) return { error: "signature is not valid for this exact Argent multisig intent" };
-  const stored = await session.store.upsertAuthorization(next, await session.readScalar());
+  const stored = await session.store.upsertAuthorization(
+    next,
+    await session.readScalar(),
+    session.isAuthorized,
+  );
+  if (stored === "unauthorized") return { error: "wallet locked" };
   return stored === "stored"
     ? { id: next.id, ok: true, phase: next.state === "ready" ? "fresh" : "authorization" }
     : { error: "Invalid Argent multisig private proof" };
@@ -205,7 +210,13 @@ const shareCollected = async (
   const session = await openMultisigStrk20Session(deps, accountId);
   if ("error" in session) return session;
   const authorization = await session.store.getAuthorization(id, await session.readScalar());
-  if (!authorization) return { error: "Argent multisig intent not found" };
+  if (!authorization) {
+    return (
+      (await shareCollectedStrk20Relay(deps, session, id)) ?? {
+        error: "Argent multisig intent not found",
+      }
+    );
+  }
   if (!deps.wallet.nostrPublicKey || !deps.wallet.wrapNostrApplicationData) {
     return { error: "Secure co-signer coordination is unavailable for this wallet" };
   }
@@ -277,45 +288,57 @@ const submitRelay = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   if (!strk20ProofSubmittable({ baseBlock: base, ...window })) {
     return { error: MULTISIG_STRK20_PROOF_EXPIRED };
   }
-  if (!session.privacyConfig.paymaster) return { error: "strk20 private submission unavailable" };
+  const paymaster = session.privacyConfig.paymaster;
+  if (!paymaster || !session.strk20.submitAcceptedRelay) {
+    return { error: "strk20 private submission unavailable" };
+  }
+  const relaySlots = relayClaimSlots([...relay.call.calldata]);
+  if (!relaySlots) return { error: "Invalid Argent multisig private proof" };
   const aggregate = relay.messageHash === undefined ? null : relay.fragments;
-  const sent = await submitStrk20PaymasterPlan({
-    accountAddress: relay.accountAddress,
-    call: {
-      calldata: [...relay.call.calldata],
-      contractAddress: relay.call.contractAddress,
-      entrypoint: relay.call.entrypoint,
-    },
-    config: session.privacyConfig.paymaster,
-    isAuthorized: session.isAuthorized,
-    nowSeconds: Math.floor(deps.now() / 1000),
-    plan: {
-      ...(relay.authorization ? { authorization: relay.authorization } : {}),
-      feeAction: relay.feeAction,
-      mode: "private-relay",
-      ...(relay.typedData ? { typedData: relay.typedData } : {}),
-    },
-    proof: relay.proof,
-    signTypedData: async (value) => {
-      if (!relay.messageHash || !aggregate)
-        throw new WalletError("Invalid Argent multisig private proof");
-      const again = canonicalFelt(
-        typedData.getMessageHash(value as TypedData, relay.accountAddress),
-      );
-      if (!again || !sameFelt(again, relay.messageHash)) {
-        throw new WalletError(
-          "Argent multisig private proof does not match the signed transaction",
-        );
-      }
-      return [
-        ...multisigStrk20CallSetAggregate(aggregate, {
-          signerPublicKeys: relay.signerPublicKeys,
-          threshold: relay.threshold,
-        }),
-      ];
-    },
+  const sent = await session.strk20.submitAcceptedRelay({
+    ...session.readContext(),
+    broadcast: () =>
+      submitStrk20PaymasterPlan({
+        accountAddress: relay.accountAddress,
+        call: {
+          calldata: [...relay.call.calldata],
+          contractAddress: relay.call.contractAddress,
+          entrypoint: relay.call.entrypoint,
+        },
+        config: paymaster,
+        isAuthorized: session.isAuthorized,
+        nowSeconds: Math.floor(deps.now() / 1000),
+        plan: {
+          ...(relay.authorization ? { authorization: relay.authorization } : {}),
+          feeAction: relay.feeAction,
+          mode: "private-relay",
+          ...(relay.typedData ? { typedData: relay.typedData } : {}),
+        },
+        proof: relay.proof,
+        signTypedData: async (value) => {
+          if (!relay.messageHash || !aggregate)
+            throw new WalletError("Invalid Argent multisig private proof");
+          const again = canonicalFelt(
+            typedData.getMessageHash(value as TypedData, relay.accountAddress),
+          );
+          if (!again || !sameFelt(again, relay.messageHash)) {
+            throw new WalletError(
+              "Argent multisig private proof does not match the signed transaction",
+            );
+          }
+          return [
+            ...multisigStrk20CallSetAggregate(aggregate, {
+              signerPublicKeys: relay.signerPublicKeys,
+              threshold: relay.threshold,
+            }),
+          ];
+        },
+      }),
+    relaySlots: [...relaySlots],
   });
-  await session.store.upsertRelay({ ...relay, state: "submitted" });
+  // The paymaster already accepted this write. Keep the mark if the session
+  // lapses afterwards; rolling it back would offer Send again.
+  await session.store.upsertRelay({ ...relay, state: "submitted" }, () => true);
   return { ok: true, transactionHash: sent.transactionHash };
 };
 
@@ -326,28 +349,18 @@ const panel = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeRe
   if ("error" in session) {
     return session.error === "wallet locked"
       ? session
-      : { authorizations: [], balances: [], ok: true };
+      : { authorizations: [], balances: [], ok: true, relays: [] };
   }
   const scalar = await session.readScalar();
-  const stored = await session.store.listAuthorizations(multisigId, scalar);
   const balances = (await readMultisigStrk20PrivateBalances(deps, session)) ?? [];
   const preferences = await deps.preferencesStore.read();
-  const mine = session.context.active.account.publicKeyX;
-  const authorizations = stored
-    .filter((row) => row.state === "collecting")
-    .map((row) => {
-      const described = describeMultisigStrk20Request(row.request, preferences.tokens);
-      return {
-        amount: described.amount,
-        id: row.id,
-        kind: row.request.kind,
-        ...(described.recipient ? { recipient: described.recipient } : {}),
-        summary: row.summary,
-        symbol: described.symbol,
-        youSigned: row.fragments.some((fragment) => sameFelt(fragment.publicKey, mine)),
-      };
-    });
-  return { authorizations, balances, ok: true };
+  const cards = await multisigStrk20PanelCards(
+    session,
+    scalar,
+    preferences.tokens,
+    session.context.active.account.publicKeyX,
+  );
+  return { ...cards, balances, ok: true };
 };
 
 const HANDLERS = {
@@ -371,71 +384,4 @@ export const handleMultisigStrk20Actions = async (
     ? HANDLERS[messageType as keyof typeof HANDLERS]
     : undefined;
   return handler ? handler(deps, message) : null;
-};
-
-const isFinal = (
-  value: Record<string, unknown> | { readonly final: true },
-): value is { readonly final: true } => "final" in value && value.final === true;
-
-const authorizationBody = (content: string): Record<string, unknown> | { readonly final: true } => {
-  try {
-    const parsed: unknown = JSON.parse(content);
-    if (!isRecord(parsed) || parsed["kind"] !== "call-set" || parsed["version"] !== 1) {
-      return { final: true };
-    }
-    return isRecord(parsed["authorization"]) &&
-      typeof parsed["authorization"]["accountId"] === "string"
-      ? parsed["authorization"]
-      : { final: true };
-  } catch {
-    return { final: true };
-  }
-};
-
-const signerGuids = (value: unknown): readonly string[] | null => {
-  if (!Array.isArray(value)) return [];
-  try {
-    return value
-      .filter((key): key is string => typeof key === "string")
-      .map((key) => argentSignerGuid(key));
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Stores a co-owner's CallSet authorization. Returns null when the wrap is
- * some other application. A missing scalar is left for a later sync.
- */
-export const importSharedStrk20Authorization = async (
-  deps: MultisigOpsDeps,
-  opened: NostrApplicationData,
-  contacts: readonly AddressBookEntry[],
-  records: readonly ArgentMultisigRecord[],
-  passphrase: string,
-): Promise<{ readonly final: boolean } | null> => {
-  if (opened.identifier !== MULTISIG_STRK20_AUTHORIZATION_IDENTIFIER) return null;
-  const body = authorizationBody(opened.content);
-  if (isFinal(body)) return body;
-  const record = records.find((candidate) => candidate.id === body["accountId"]);
-  const store = deps.strk20MultisigStore;
-  const pack = deps.wallet.packageMultisigStrk20Key;
-  if (!record || !store || !pack) return { final: false };
-  const guids = signerGuids(body["signerPublicKeys"]);
-  if (!guids) return { final: true };
-  if (!isCoordinationSigner(contacts, opened.senderPublicKey, record.networkId, guids)) {
-    return { final: true };
-  }
-  const preferences = await deps.preferencesStore.read();
-  const pool = canonicalFelt(preferences.strk20Networks?.[record.networkId]?.poolAddress ?? "");
-  if (!pool) return { final: false };
-  const scalar = await pack({
-    chainId: STARKNET_NETWORKS[record.networkId].chainId,
-    multisigId: record.id,
-    poolAddress: pool,
-    vaultPassphrase: passphrase,
-  });
-  if (!scalar || !isMultisigStrk20Authorization(body, scalar)) return { final: !scalar };
-  const stored = await store.upsertAuthorization(body, scalar);
-  return { final: stored === "stored" || stored === "conflict" };
 };

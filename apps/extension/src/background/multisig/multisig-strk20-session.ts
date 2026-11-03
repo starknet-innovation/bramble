@@ -14,10 +14,12 @@ import {
   withMultisigStrk20Fragment,
 } from "@bramble/privacy/multisig-strk20";
 import { redactStrk20Calldata } from "@bramble/privacy/multisig-strk20-redaction";
+import { multisigStrk20Summary } from "@bramble/privacy/multisig-strk20-review";
 import type { MultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import type { Strk20AccountContext } from "@bramble/privacy/service";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { withRpcFallback } from "@bramble/starknet/provider";
+import { readMultisigStrk20KeyPackage } from "@bramble/vault/multisig-strk20-key";
 import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import { signerForContext } from "../accounts/wallet-ops";
@@ -26,13 +28,6 @@ import { captureSessionAuthorization } from "../runtime/session";
 import { type ArgentMultisigContext, contextFor } from "./multisig-context";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import { currentConfigFor } from "./multisig-ops";
-
-const actionSummary = (kind: MultisigStrk20ActionRequest["kind"]): string => {
-  if (kind === "register") return "Register this multisig's private balance";
-  if (kind === "deposit") return "Deposit into this multisig's private balance";
-  if (kind === "withdraw") return "Withdraw from this multisig's private balance";
-  return "Transfer from this multisig's private balance";
-};
 
 /** Thrown when co-owners still have to authorize the pool CallSet. */
 export const MULTISIG_STRK20_WAITING = "Waiting for co-owners to authorize this private action.";
@@ -65,6 +60,13 @@ export type MultisigStrk20Session = {
   readonly waitingId: () => string | null;
   /** Account view the privacy service reads. It is not a vault account. */
   readonly privacyAccount: Strk20AccountContext["account"];
+};
+
+const requireStoredAuthorization = (stored: string): void => {
+  if (stored === "stored") return;
+  throw new WalletError(
+    stored === "unauthorized" ? "wallet locked" : "Invalid Argent multisig private proof",
+  );
 };
 
 const redactedCalls = (
@@ -111,12 +113,13 @@ export const openMultisigStrk20Session = async (
   }
   const pack = deps.wallet.packageMultisigStrk20Key;
   if (!pack) return { error: "Secure co-signer coordination is unavailable for this wallet" };
-  const scalar = await pack({
+  const packed = await pack({
     chainId: STARKNET_NETWORKS[resolved.record.networkId].chainId,
     multisigId,
     poolAddress,
     vaultPassphrase: resolved.active.vaultPassphrase,
   });
+  const scalar = packed ? readMultisigStrk20KeyPackage(packed)?.key : undefined;
   if (!scalar) return { error: "Create a key before sharing it." };
   const config = await currentConfigFor(deps, resolved);
   let pending: string | null = null;
@@ -206,7 +209,7 @@ export const openMultisigStrk20Session = async (
       request,
       signerPublicKeys: authority.signerPublicKeys,
       state: "collecting",
-      summary: actionSummary(request.kind),
+      summary: multisigStrk20Summary(request.kind),
       threshold: authority.threshold,
     };
     const member = authority.signerPublicKeys.find((publicKey) =>
@@ -222,8 +225,8 @@ export const openMultisigStrk20Session = async (
       const added = withMultisigStrk20Fragment(base, { ...signed, publicKey: member });
       if (added) next = added;
     }
-    const stored = await records.upsertAuthorization(next, key);
-    if (stored !== "stored") throw new WalletError("Invalid Argent multisig private proof");
+    const stored = await records.upsertAuthorization(next, key, authorized.isCurrent);
+    requireStoredAuthorization(stored);
     if (next.state !== "ready") {
       pending = next.id;
       throw new WalletError(MULTISIG_STRK20_WAITING);

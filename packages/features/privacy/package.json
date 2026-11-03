@@ -12,6 +12,8 @@
     "./maturity": "./src/policy/maturity.ts",
     "./multisig-proof-window": "./src/multisig/proof-window.ts",
     "./multisig-strk20": "./src/multisig/records.ts",
+    "./multisig-strk20-review": "./src/multisig/call-review.ts",
+    "./multisig-strk20-relay-invite": "./src/multisig/relay-invite.ts",
     "./multisig-strk20-redaction": "./src/multisig/redaction.ts",
     "./multisig-strk20-store": "./src/multisig/store.ts",
     "./multisig-strk20-token": "./src/multisig/token-amount.ts",

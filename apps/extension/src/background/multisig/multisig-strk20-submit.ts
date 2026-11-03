@@ -12,7 +12,7 @@ import {
   strk20ProofBaseBlock,
   strk20ProofSubmittable,
 } from "@bramble/privacy/multisig-proof-window";
-import { canonicalFelt, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import { canonicalFelt, type StarknetNetworkId, sameFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import { MULTISIG_STRK20_PROOF_EXPIRED, readMultisigStrk20Window } from "./multisig-strk20-session";
@@ -33,7 +33,14 @@ const freshProof = async (
   const preferences = await deps.preferencesStore.read();
   const pool = canonicalFelt(preferences.strk20Networks?.[input.networkId]?.poolAddress ?? "");
   const base = strk20ProofBaseBlock(proofRecord.proof.proof_facts);
-  if (!pool || base === null) throw new WalletError("Invalid Argent multisig private proof");
+  const targetsPool =
+    pool !== null &&
+    input.intent.prepared.calls.some(
+      (call) => call.entrypoint === "apply_actions" && sameFelt(call.contractAddress, pool),
+    );
+  if (!pool || base === null || !targetsPool) {
+    throw new WalletError("Invalid Argent multisig private proof");
+  }
   const window = await readMultisigStrk20Window(input.rpcUrls, pool);
   if (!strk20ProofSubmittable({ baseBlock: base, ...window })) {
     await deps.multisigStore.upsertIntent(

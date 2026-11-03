@@ -100,7 +100,7 @@ describe("multisig STRK20 CallSet aggregate", () => {
       request: { kind: "register" },
       signerPublicKeys: [publicKey],
       state: "collecting",
-      summary: "Register this multisig",
+      summary: "Register this multisig's private balance",
       threshold: 1,
     };
     const withFragment = withMultisigStrk20Fragment(authorization, fragment);
@@ -147,7 +147,7 @@ describe("multisig STRK20 CallSet aggregate", () => {
       request: { kind: "register" },
       signerPublicKeys: ["0xabc"],
       state: "collecting",
-      summary: "Register this multisig",
+      summary: "Register this multisig's private balance",
       threshold: 1,
     };
     expect(await store.upsertAuthorization(record, SCALAR)).toBe("stored");

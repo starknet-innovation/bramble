@@ -6,7 +6,7 @@
 import { failureTone } from "../../runtime/runtime-errors";
 import { buttonBusy, errorLine, showToast } from "../../shared/dom";
 import { sendBalanceLabel } from "../send/send-model";
-import type { Strk20PanelAuthorization } from "./multisig-strk20-panel";
+import type { Strk20PanelCard } from "./multisig-strk20-panel";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 const STATUS_ID = "multisig-strk20-key-status";
@@ -17,14 +17,34 @@ const line = (owner: Document, text: string): HTMLParagraphElement => {
   return paragraph;
 };
 
+const control = (
+  owner: Document,
+  label: string,
+  id: string,
+  name: string,
+  onClick: (id: string) => void,
+): HTMLButtonElement => {
+  const button = owner.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.dataset[name] = id;
+  button.addEventListener("click", () => onClick(id));
+  return button;
+};
+
 /**
- * Fills the authorization list. Each card names the action, the amount, and
- * the recipient, then offers Sign unless this wallet already signed.
+ * Fills the authorization list from facts the digest covers. Sign, Share,
+ * Send, and Refresh stay on the card, including after it is ready.
  */
 export const showMultisigStrk20Authorizations = (
   list: HTMLElement,
-  reviews: readonly Strk20PanelAuthorization[],
-  onSign: (id: string) => void,
+  reviews: readonly Strk20PanelCard[],
+  handlers: {
+    readonly onRefresh: (id: string) => void;
+    readonly onSend: (id: string) => void;
+    readonly onShare: (id: string) => void;
+    readonly onSign: (id: string) => void;
+  },
 ): void => {
   const owner = list.ownerDocument;
   list.replaceChildren();
@@ -34,19 +54,16 @@ export const showMultisigStrk20Authorizations = (
     const title = owner.createElement("strong");
     title.textContent = review.summary;
     card.append(title);
-    if (review.amount) {
-      card.append(line(owner, review.symbol ? `${review.amount} ${review.symbol}` : review.amount));
-    }
-    if (review.recipient) card.append(line(owner, `To ${review.recipient}`));
-    if (review.youSigned) {
-      card.append(line(owner, "You signed. Waiting for co-owners."));
+    for (const text of review.lines) card.append(line(owner, text));
+    if (review.offer === "sign") {
+      card.append(control(owner, "Sign", review.id, "msStrk20Sign", handlers.onSign));
+    } else if (review.offer === "share") {
+      card.append(control(owner, "Share", review.id, "msStrk20Share", handlers.onShare));
     } else {
-      const sign = owner.createElement("button");
-      sign.type = "button";
-      sign.textContent = "Sign";
-      sign.dataset["msStrk20Sign"] = review.id;
-      sign.addEventListener("click", () => onSign(review.id));
-      card.append(sign);
+      card.append(control(owner, "Send", review.id, "msStrk20Send", handlers.onSend));
+    }
+    if (review.refresh) {
+      card.append(control(owner, "Refresh", review.id, "msStrk20Refresh", handlers.onRefresh));
     }
     list.append(card);
   }
@@ -136,21 +153,53 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
         if (pendingKind) applyTokenLabels(pendingKind === "deposit" ? "public" : "private");
         showMultisigStrk20Authorizations(
           authorizations,
-          state.authorizations,
-          (authorizationId) => {
-            void deps.multisig.signStrk20Authorization(authorizationId).then(
-              (result) => {
-                setStatus(
-                  panel,
-                  result.phase === "authorization"
-                    ? "You signed. Waiting for co-owners."
-                    : "You signed.",
-                );
-                reloadAuthorizations();
-              },
-              (error: unknown) =>
-                setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
-            );
+          [...state.authorizations, ...state.relays],
+          {
+            onRefresh: (authorizationId) => {
+              void deps.multisig.refreshStrk20(authorizationId).then(
+                (result) => {
+                  lastId = result.id;
+                  setStatus(
+                    panel,
+                    result.phase === "authorization"
+                      ? "Waiting for co-owners."
+                      : "Sign the transaction.",
+                  );
+                  reloadAuthorizations();
+                },
+                (error: unknown) =>
+                  setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+              );
+            },
+            onSend: (authorizationId) => {
+              void deps.multisig.submitStrk20Relay(authorizationId).then(
+                (result) => setStatus(panel, `Sent ${result.transactionHash}.`),
+                (error: unknown) =>
+                  setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+              );
+            },
+            onShare: (authorizationId) => {
+              void deps.multisig.shareStrk20Authorization(authorizationId).then(
+                (result) => setStatus(panel, `Shared with ${result.recipients} co-signers.`),
+                (error: unknown) =>
+                  setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+              );
+            },
+            onSign: (authorizationId) => {
+              void deps.multisig.signStrk20Authorization(authorizationId).then(
+                (result) => {
+                  setStatus(
+                    panel,
+                    result.phase === "authorization"
+                      ? "You signed. Waiting for co-owners."
+                      : "You signed.",
+                  );
+                  reloadAuthorizations();
+                },
+                (error: unknown) =>
+                  setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+              );
+            },
           },
         );
       },
@@ -182,14 +231,6 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
       .then(
         (result) => {
           lastId = result.id;
-          const share = panel.querySelector<HTMLButtonElement>('[data-ms-strk20-action="share"]');
-          const refresh = panel.querySelector<HTMLButtonElement>(
-            '[data-ms-strk20-action="refresh"]',
-          );
-          const send = panel.querySelector<HTMLButtonElement>('[data-ms-strk20-action="send"]');
-          if (share) share.hidden = result.phase !== "authorization";
-          if (refresh) refresh.hidden = result.phase === "authorization";
-          if (send) send.hidden = result.phase !== "relay";
           setStatus(
             panel,
             result.phase === "authorization"
@@ -198,6 +239,7 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
                 ? "Sign the transaction."
                 : "Send it when the owners are ready.",
           );
+          reloadAuthorizations();
         },
         (error: unknown) => {
           setStatus(panel, errorLine(error, "Couldn't prepare this private action."));

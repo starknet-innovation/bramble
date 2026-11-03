@@ -1,19 +1,18 @@
 /**
  * Validates the private-balance panel reply before the multisig screen renders
- * it. A malformed authorization is refused rather than offered for signing.
+ * it. A malformed card is refused rather than offered for signing.
  */
 
 /**
- * One incoming pool authorization a co-owner can review.
+ * One CallSet or relay the screen can sign, share, or send. The lines are the
+ * facts the background derived from the hashed calls or typed data.
  */
-export type Strk20PanelAuthorization = {
-  readonly amount: string;
+export type Strk20PanelCard = {
   readonly id: string;
-  readonly kind: "deposit" | "register" | "transfer" | "withdraw";
-  readonly recipient?: string;
+  readonly lines: readonly string[];
+  readonly offer: "send" | "share" | "sign";
+  readonly refresh: boolean;
   readonly summary: string;
-  readonly symbol: string;
-  readonly youSigned: boolean;
 };
 
 /**
@@ -28,30 +27,30 @@ type Strk20PanelBalance = {
 };
 
 /**
- * The panel reply: collecting authorizations and private balances.
+ * The panel reply: CallSet cards, relay cards, and private balances.
  */
 export type Strk20PanelState = {
-  readonly authorizations: readonly Strk20PanelAuthorization[];
+  readonly authorizations: readonly Strk20PanelCard[];
   readonly balances: readonly Strk20PanelBalance[];
+  readonly relays: readonly Strk20PanelCard[];
 };
 
-const isKind = (value: unknown): value is Strk20PanelAuthorization["kind"] =>
-  value === "deposit" || value === "register" || value === "transfer" || value === "withdraw";
+const isOffer = (value: unknown): value is Strk20PanelCard["offer"] =>
+  value === "send" || value === "share" || value === "sign";
 
 const isText = (value: unknown): value is string => typeof value === "string";
 
-const isAuthorization = (value: unknown): value is Strk20PanelAuthorization => {
+const isCard = (value: unknown): value is Strk20PanelCard => {
   if (typeof value !== "object" || value === null) return false;
   const row = value as Record<string, unknown>;
   return (
-    isText(row["amount"]) &&
     isText(row["id"]) &&
     row["id"].length > 0 &&
-    isKind(row["kind"]) &&
-    (row["recipient"] === undefined || isText(row["recipient"])) &&
-    isText(row["summary"]) &&
-    isText(row["symbol"]) &&
-    typeof row["youSigned"] === "boolean"
+    Array.isArray(row["lines"]) &&
+    row["lines"].every(isText) &&
+    isOffer(row["offer"]) &&
+    typeof row["refresh"] === "boolean" &&
+    isText(row["summary"])
   );
 };
 
@@ -79,12 +78,15 @@ export const isStrk20Panel = (
     readonly authorizations?: unknown;
     readonly balances?: unknown;
     readonly ok?: unknown;
+    readonly relays?: unknown;
   };
   return (
     record.ok === true &&
     Array.isArray(record.authorizations) &&
-    record.authorizations.every(isAuthorization) &&
+    record.authorizations.every(isCard) &&
     Array.isArray(record.balances) &&
-    record.balances.every(isBalance)
+    record.balances.every(isBalance) &&
+    Array.isArray(record.relays) &&
+    record.relays.every(isCard)
   );
 };

@@ -201,17 +201,20 @@ export type Strk20Service = {
    * any quote exists. Absent implementations leave the fee unknown.
    */
   readonly poolFee?: (input: Strk20AccountContext) => Promise<string>;
+  /**
+   * Claims the relay maturity journal, then runs `broadcast` once. A later
+   * call while that claim is still open throws instead of sending again.
+   */
+  readonly submitAcceptedRelay?: (
+    input: Strk20AccountContext & {
+      readonly broadcast: () => Promise<{ readonly transactionHash: string }>;
+      readonly relaySlots: readonly string[];
+    },
+  ) => Promise<{ readonly transactionHash: string }>;
   readonly quoteActions: (
     input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
   ) => Promise<Strk20SubmissionPlan>;
-  /**
-   * Lists the shadow accounts of one origin-bound scope at the requested
-   * nonces through the configured anonymizer's `get_shadow_accounts` view,
-   * including undeployed ones (which may already hold funds). Derives the
-   * partial commitment from the viewing key, then sends it to the RPC node:
-   * the read links these addresses at the provider, so callers run it only on
-   * the user's request. Absent implementations fail closed at the caller.
-   */
+  /** Shadow accounts for one origin. Absent implementations fail closed. */
   readonly shadowAccounts?: (
     input: Strk20AccountContext & {
       readonly dappName: string;

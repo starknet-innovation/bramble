@@ -200,6 +200,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "argent multisig intent already has its threshold signatures",
     "This transaction already has every signature it needs.",
   ],
+  [
+    "argent multisig intent is not collecting signatures",
+    "This transaction isn't waiting for a signature.",
+  ],
   ["this argent multisig signer already signed the intent", "This signer has already signed."],
   [
     "signature is not valid for this exact argent multisig intent",

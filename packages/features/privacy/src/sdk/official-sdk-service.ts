@@ -15,10 +15,12 @@ import { num, typedData } from "starknet";
 import { submitStrk20PaymasterPlan } from "../paymaster/paymaster";
 import { quoteStrk20RelayPlan } from "../paymaster/relay-quote";
 import type { Strk20FeeReference } from "../policy/fee-policy";
-import type {
-  Strk20MaturityScope,
-  Strk20MaturityStore,
-  Strk20SubmissionRoute,
+import {
+  memoryStrk20MaturityStore,
+  STRK20_PRIOR_WRITE_UNRESOLVED,
+  type Strk20MaturityScope,
+  type Strk20MaturityStore,
+  type Strk20SubmissionRoute,
 } from "../policy/maturity";
 import { reportStrk20Phase } from "../policy/phases";
 import { relayClaimSlots } from "../policy/relay-claim-slots";
@@ -102,9 +104,10 @@ export const createOfficialStrk20Service = ({
 }: OfficialServiceOptions): Strk20Service => {
   const budgets: Strk20WaitBudgets = { ...STRK20_WAIT_BUDGETS, ...waitBudgets };
   const waits: Strk20Waits = { budgets, ...(waitScheduler ? { schedule: waitScheduler } : {}) };
+  const journal = maturityStore ?? memoryStrk20MaturityStore();
   const maturity = createStrk20MaturityRuntime({
     maturityBudgetMs: budgets.maturity,
-    ...(maturityStore ? { store: maturityStore } : {}),
+    store: journal,
     ...(pauseForMaturity ? { pause: pauseForMaturity } : {}),
     ...(waitScheduler ? { schedule: waitScheduler } : {}),
     ...(waitForAccepted ? { waitForAccepted } : {}),
@@ -173,6 +176,24 @@ export const createOfficialStrk20Service = ({
     async releasePendingWrite(input) {
       const config = requireStrk20Config(input);
       return maturity.releasePendingWrite(maturityScope(input, config.poolAddress));
+    },
+    async submitAcceptedRelay(input) {
+      const config = requireStrk20Config(input);
+      const scope = maturityScope(input, config.poolAddress);
+      return submission(
+        input,
+        "relay",
+        async () => {
+          // Inside the scope queue, so a second send cannot pass this read
+          // before the first claim is durable.
+          if ((await journal.read(scope))?.state === "submitting") {
+            throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+          }
+          return undefined;
+        },
+        async () => input.broadcast(),
+        () => input.relaySlots,
+      );
     },
     async prepareRegistration(input) {
       const config = requireStrk20Config(input);
