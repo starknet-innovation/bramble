@@ -5,8 +5,8 @@
  * records, never the phrase (or its optional extension), `K`, or any preimage. It is
  * privacy-sensitive wallet metadata, and nothing inside it is trusted.
  *
- * Export is built field by field from a valid account record, so no field the
- * format does not name can reach the file. Import parses strictly (duplicate
+ * Export is built field by field from an account's bound journal, so no field
+ * the format does not name can reach the file. Import parses strictly (duplicate
  * members, unknown members, invalid UTF-8, trailing data, and non-integral
  * numbers are refused) and validates every structural rule of the format,
  * including that each disclosure's transaction parses and spends its funding
@@ -25,8 +25,8 @@ import {
   parseStrictJsonBytes,
   type StrictJsonRefusal,
 } from "@bramble/core/strict-json";
+import type { QsbJournalBinding } from "./qsb-journal-record";
 import {
-  isQsbAccountRecord,
   isQsbHighWaterMark,
   isQsbJournalOrder,
   isQsbVaultRecord,
@@ -35,11 +35,10 @@ import {
   QSB_MAX_TRANSACTION_BYTES,
   QSB_NETWORK,
   QSB_PROFILE,
-  type QsbAccountRecord,
   type QsbDisclosure,
   type QsbVaultRecord,
   type QsbVaultState,
-} from "./qsb-account";
+} from "./qsb-vault-record";
 
 /** The manifest `format` tag. */
 export const QSB_MANIFEST_FORMAT = "qsb-secret-manifest";
@@ -151,21 +150,22 @@ const toManifestVault = (vault: QsbVaultRecord): QsbManifestVault => ({
 });
 
 /**
- * Builds the version-1 manifest for one valid account: every vault record it
- * keeps (so every active and every retry-retained exposed set), its mark, and
- * its `seed_source` — and nothing else. Returns null for an invalid record
- * rather than exporting a history no importer could trust.
+ * Builds the version-1 manifest for one account from its bound journal: every
+ * vault record the journal keeps (so every active and every retry-retained
+ * exposed set), its mark, and the account's `seed_source` — and nothing else.
+ * Returns null for an unbound journal rather than exporting a history no
+ * importer could trust; a missing journal is never exported as an empty one.
  */
-export const exportQsbManifest = (account: QsbAccountRecord): QsbManifestV1 | null =>
-  isQsbAccountRecord(account)
+export const exportQsbManifest = (binding: QsbJournalBinding): QsbManifestV1 | null =>
+  binding.status === "bound"
     ? {
         format: QSB_MANIFEST_FORMAT,
         version: QSB_MANIFEST_VERSION,
         profile: QSB_PROFILE,
-        seed_source: account.seedContext.source,
+        seed_source: binding.account.seedContext.source,
         network: QSB_NETWORK,
-        next_v: account.nextV,
-        vaults: account.vaults.map(toManifestVault),
+        next_v: binding.journal.nextV,
+        vaults: binding.journal.vaults.map(toManifestVault),
       }
     : null;
 

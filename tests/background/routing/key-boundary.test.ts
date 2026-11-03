@@ -22,6 +22,7 @@ import { viewingKeyDerivations } from "../../support/key-boundary-collaborators"
 import {
   contentSender,
   extensionSender,
+  qsbAccount,
   SECRET_MNEMONIC,
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
@@ -213,6 +214,7 @@ describe("key boundary", () => {
       // QSB phrases have no sanctioned reveal at all, not even revealSecrets.
       expect(serialized).not.toContain(SECRET_QSB_MNEMONIC);
       expect(serialized).not.toContain("qsbAccounts");
+      expect(serialized).not.toContain(qsbAccount.journalId);
       if (messageType !== "wallet.revealSecrets") {
         expect(serialized).not.toContain(SECRET_PRIVATE_KEY);
       }

@@ -45,6 +45,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | --- | --- | --- | --- | --- |
 | `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v10; account ids unique; strict cross-references; capacity below | fail closed |
 | `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
+| `bramble:qsb-journal:<journalId>` | `storage.local`, AES-GCM, same vault passphrase, commit records like the vault's | one QSB account's disclosure journal: allocation high-water mark and vault records (no phrase, no preimage) | journal schema v1; header bound to `accountId` and the random 256-bit `journalId`; 64 records and 256 KiB per journal; 8 accounts | fail closed for that account: not a writer, every allocation and disclosure refused, never recreated empty |
 | `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage | rollback refused; a missing primary record is restored from the local mirror |
 | `bramble:vault:commit:<lineage>` mirror (primary vault only) | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
 | `bramble:vault:legacy` | `storage.local`, plain | marker that this install has committed a version-3 envelope | one per install | any version-2 envelope after it is a rollback |
@@ -89,7 +90,7 @@ until extension removal, while session data is cleared when an extension is upda
 **Vault capacity.** The vault validators apply the provider JSON budget (`JSON_BUDGETS.provider`,
 1 MiB with strings charged at six bytes per character) on read as on write, so that budget is the
 vault's one capacity. It is shared by accounts, signing keys, imported phrases, retained secrets and
-connected sites and QSB journals, so it is not an account count: a vault of derived accounts alone holds about 243
+connected sites and QSB account phrases, so it is not an account count: a vault of derived accounts alone holds about 243
 (pinned in `vault-capacity.test.ts`). STRK20 shadow-account scope records may use at most half of it
 (`SHADOW_ACCOUNT_SCOPES_BUDGET`), so they can never leave the rest of the vault unwritable. `writeVault` refuses the first vault past it with
 `Vault storage limit reached` before any storage is touched. Every storage area validates writes
@@ -97,6 +98,23 @@ against `JSON_BUDGETS.storage`, which is derived to admit the base64 envelope of
 budget admits, so storage never refuses a vault its validators accepted; the store still checks the
 envelope before writing the pending commit record, so a value storage refuses leaves no half-commit
 (Sherlock 261).
+
+**QSB disclosure journals.** A QSB account's vault record holds only account-level data (phrase,
+provenance, backup flag, `journalId`); its journal lives under its own key with its own budget, chosen
+over compacting retired records inside the vault, because full-size QSB records (scripts up to
+10,000 bytes) would fit only about a dozen times in the vault's budget. Each journal is capped at
+`QSB_JOURNAL_MAX_BYTES` (256 KiB of plaintext) and `MAX_QSB_VAULTS_PER_ACCOUNT` (64) records, and its
+key alone gets the matching at-rest budget (`JSON_BUDGETS.qsbJournalStorage`). The manifest requests no
+`unlimitedStorage`, so `storage.local` has Chrome's 10 MiB quota; eight full journals take about
+2.8 MB at rest, so they can never crowd out the vault and its migration copy (about 1.4 MB each at
+most). Hitting a limit refuses the write; nothing is evicted. Because the phrase and the journal no
+longer change in one write, creation writes the empty journal first and the vault account naming it
+second; a journal left without an account is an orphan that nothing reads. An account whose journal is
+missing, unreadable, invalid, or bound to another account or journal id fails closed, and nothing
+recreates an empty journal over a lost one. Journal writes run in the vault's mutation queue and are
+durable before any commitment or preimage they authorize is released. No wallet-reset flow exists; if
+one is added it should leave `bramble:qsb-journal:*` keys in place, since they hold the only disclosure
+history, and a new wallet never binds them because its accounts draw fresh journal ids.
 
 ## Account identity and first-class behavior
 

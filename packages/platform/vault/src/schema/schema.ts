@@ -65,7 +65,7 @@ export type {
  * Current vault schema version accepted by validators and writers.
  *
  * Version 13 adds Quantum Safe Bitcoin accounts: a dedicated phrase per account
- * and its disclosure journal, held together so they change in one write.
+ * and the id of its disclosure journal, which lives in its own encrypted key.
  * Version 12 keeps an encrypted record of the shadow-account scopes each account
  * used (#443), so stuck shadow-account funds stay recoverable. Version 11 admits
  * accounts derived with Ready's ETH-seeded scheme. Version 10 admits Braavos accounts, and Argent accounts at any release they
@@ -83,9 +83,10 @@ export const CURRENT_SCHEMA_VERSION = 13;
 
 /**
  * Current encrypted vault schema. Version 13 adds the QSB accounts: each one's
- * dedicated phrase and disclosure journal (see `../qsb/qsb-account`). Both are
- * vault-internal; the phrase must never leave this boundary, and the journal
- * reveals which Bitcoin vaults someone holds.
+ * dedicated phrase, provenance, backup flag, and `journalId` (see
+ * `../qsb/qsb-account`). The journal itself is a separate encrypted record
+ * with its own budget (`../qsb/qsb-journal-store`). The phrase must never
+ * leave this boundary.
  */
 export type VaultV13 = Omit<VaultV12, "schemaVersion"> & {
   readonly qsbAccounts: readonly QsbAccountRecord[];

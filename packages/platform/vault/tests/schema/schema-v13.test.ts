@@ -1,22 +1,22 @@
 /**
- * Schema v13: Quantum Safe Bitcoin accounts, each a dedicated phrase with its
- * disclosure journal, inside the encrypted vault.
+ * Schema v13: Quantum Safe Bitcoin accounts in the encrypted vault, each a
+ * dedicated phrase and the id of its separately stored disclosure journal.
  *
  * Old data: a v12 vault migrates to an empty QSB collection and nothing else
- * changes; no journal is invented. Current data: valid accounts with dedicated
- * phrases validate. Invalid data: any malformed, duplicated, shared-phrase, or
- * over-bound account makes the whole vault fail closed, like any other corrupt
- * vault content.
+ * changes; no account or journal is invented. Current data: valid accounts
+ * with dedicated phrases and distinct journal ids validate. Invalid data: any
+ * malformed, duplicated, shared-phrase, journal-carrying, or over-bound
+ * account makes the whole vault fail closed, like any other corrupt content.
  */
 import { describe, expect, test } from "bun:test";
-import { isJson } from "@bramble/core/json";
+import { isJsonWithinBudget, JSON_BUDGETS } from "@bramble/core/json";
 import { migrateVault, VAULT_MIGRATIONS } from "@bramble/vault/migrations";
-import { hasValidQsbAccounts, MAX_QSB_ACCOUNTS } from "@bramble/vault/qsb-account";
+import { MAX_QSB_ACCOUNTS } from "@bramble/vault/qsb-account";
 import { CURRENT_SCHEMA_VERSION, emptyVault, isVaultV12, isVaultV13 } from "@bramble/vault/schema";
 import {
   allocatedVault,
-  exposedVault,
   importedAccount,
+  JOURNAL_ID_A,
   PHRASE_A,
   PHRASE_B,
   PHRASE_C,
@@ -60,8 +60,8 @@ const v13 = (qsbAccounts: readonly unknown[]) => ({
   schemaVersion: 13,
 });
 
-const writer = writerAccount([allocatedVault(0), exposedVault(2)], 4);
-const imported = { ...importedAccount([{ ...exposedVault(0), state: "unknown" as const }]) };
+const writer = writerAccount();
+const imported = importedAccount();
 
 describe("schema v13 (current)", () => {
   test("is the current version, reached by exactly one adjacent step", () => {
@@ -92,10 +92,13 @@ describe("schema v13 (current)", () => {
   });
 
   const invalid: readonly (readonly [string, readonly unknown[], Record<string, unknown>?])[] = [
-    ["a malformed account", [{ ...writer, nextV: -1 }]],
-    ["an imported account holding an exposed set", [importedAccount([exposedVault(0)])]],
-    ["an unconfirmed backup with a vault", [{ ...writer, backupConfirmed: false }]],
+    ["a malformed account", [{ ...writer, journalId: "00" }]],
+    [
+      "an account keeping its journal in the vault",
+      [{ ...writer, nextV: 1, vaults: [allocatedVault(0)] }],
+    ],
     ["two accounts with one id", [writer, { ...imported, id: writer.id }]],
+    ["two accounts with one journal", [writer, { ...imported, journalId: JOURNAL_ID_A }]],
     ["two accounts with one phrase", [writer, { ...imported, mnemonic: PHRASE_A }]],
     ["a QSB phrase that is the founding phrase", [writer], { mnemonic: PHRASE_A }],
     [
@@ -113,29 +116,26 @@ describe("schema v13 (current)", () => {
     });
   }
 
+  // Distinct accounts: each its own id, journal id, and 24-word spelling.
+  const many = Array.from({ length: MAX_QSB_ACCOUNTS + 1 }, (_, index) => ({
+    ...importedAccount(),
+    id: `qsb-${index + 1}`,
+    journalId: `${index.toString(16).padStart(2, "0")}${JOURNAL_ID_A.slice(2)}`,
+    mnemonic: ([PHRASE_A, PHRASE_B, PHRASE_C][index % 3] ?? PHRASE_A)
+      .split(" ")
+      .map((word, position) => (position === index ? "zoo" : word))
+      .join(" "),
+  }));
+
   test("invalid: one account past the bound is refused, never truncated", () => {
-    const phrases = [PHRASE_A, PHRASE_B, PHRASE_C];
-    const many = Array.from({ length: MAX_QSB_ACCOUNTS + 1 }, (_, index) => ({
-      ...importedAccount(),
-      id: `qsb-${index + 1}`,
-      mnemonic: (phrases[index % 3] ?? PHRASE_A)
-        .split(" ")
-        .map((word, position) => (position === index ? "zoo" : word))
-        .join(" "),
-    }));
     expect(isVaultV13(v13(many.slice(0, MAX_QSB_ACCOUNTS)))).toBe(true);
     expect(isVaultV13(v13(many))).toBe(false);
   });
 
-  test("invalid: a vault past the shared JSON budget fails on read as on write", () => {
-    // QSB records count against the same capacity as everything else in the
-    // vault, so a vault the write path would refuse is not readable either.
-    // Each exposed record here carries a 6,301-byte script.
-    const heavy = writerAccount(Array.from({ length: 64 }, (_, v) => exposedVault(v)));
-    expect(hasValidQsbAccounts([heavy], [])).toBe(true);
-    expect(isJson(v13([heavy]))).toBe(false);
-    expect(isVaultV13(v13([heavy]))).toBe(false);
-    const light = writerAccount(Array.from({ length: 4 }, (_, v) => exposedVault(v)));
-    expect(isVaultV13(v13([light]))).toBe(true);
+  test("a full QSB collection is account-level only and stays small in the vault", () => {
+    // Journals live under their own keys, so every QSB account the vault can
+    // hold fits in a sixteenth of its budget, whatever their journals hold.
+    const sixteenth = { ...JSON_BUDGETS.provider, maxBytes: JSON_BUDGETS.provider.maxBytes / 16 };
+    expect(isJsonWithinBudget(many.slice(0, MAX_QSB_ACCOUNTS), sixteenth)).toBe(true);
   });
 });

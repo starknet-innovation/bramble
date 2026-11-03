@@ -1,7 +1,9 @@
 /**
- * Merging an imported QSB journal into a read-only QSB account (BIP "QSB
- * Wallet Secret Management", "Backup, restoration, and multiple devices").
- * Pure: no clock, randomness, storage, or network, and no input is mutated.
+ * Merging an imported QSB journal into a read-only QSB account's own journal
+ * (BIP "QSB Wallet Secret Management", "Backup, restoration, and multiple
+ * devices"). Pure: no clock, randomness, storage, or network, and no input is
+ * mutated. The result is a journal for the account's journal key, written
+ * under the same ordering contract as every other transition.
  *
  * The rules are the BIP's. Exposed or retired information is never weakened;
  * different roots, scripts, funding, or disclosures for one index make that
@@ -10,20 +12,20 @@
  * a union past the journal bound is refused whole.
  */
 import {
-  isQsbHighWaterMark,
-  isQsbJournalOrder,
-  isQsbVaultRecord,
-  MAX_QSB_VAULTS_PER_ACCOUNT,
-  type QsbAccountRecord,
-  type QsbVaultRecord,
-  type QsbVaultState,
-} from "./qsb-account";
-import {
-  checkedQsbAccount,
+  checkedQsbJournal,
   type QsbJournalResult,
   sameQsbDisclosure,
   sameQsbFunding,
 } from "./qsb-journal";
+import type { QsbJournalBinding } from "./qsb-journal-record";
+import {
+  isQsbHighWaterMark,
+  isQsbJournalOrder,
+  isQsbVaultRecord,
+  MAX_QSB_VAULTS_PER_ACCOUNT,
+  type QsbVaultRecord,
+  type QsbVaultState,
+} from "./qsb-vault-record";
 
 /**
  * A journal read from a recovery manifest: its high-water mark and records,
@@ -105,29 +107,34 @@ const mergedVaults = (
 };
 
 /**
- * Merges an imported journal into an imported (read-only) account. Refuses a
- * merge into a `generated-here` account (`writer-journal`): its journal is the
- * one authoritative writer's, and another history for its phrase means a
- * second copy existed, which a merge cannot make safe. Refuses a malformed
- * journal (`invalid-request`) and a union past the bound (`journal-full`).
+ * Merges an imported journal into an imported (read-only) account's bound
+ * journal. Refuses an unbound journal (`journal-unavailable`): a lost journal
+ * is never rebuilt from a manifest. Refuses a merge into a `generated-here`
+ * account (`writer-journal`): its journal is the one authoritative writer's,
+ * and another history for its phrase means a second copy existed, which a
+ * merge cannot make safe. Refuses a malformed journal (`invalid-request`) and
+ * a union past the record bound or byte cap (`journal-full`).
  */
 export const mergeImportedQsbJournal = (
-  account: QsbAccountRecord,
+  binding: QsbJournalBinding,
   imported: ImportedQsbJournal,
 ): QsbJournalResult => {
-  if (account.seedContext.provenance !== "imported") {
+  if (binding.status !== "bound") {
+    return { ok: false, refusal: "journal-unavailable" };
+  }
+  if (binding.account.seedContext.provenance !== "imported") {
     return { ok: false, refusal: "writer-journal" };
   }
   if (!isImportedJournal(imported)) {
     return { ok: false, refusal: "invalid-request" };
   }
-  const vaults = mergedVaults(account.vaults, imported.vaults);
+  const vaults = mergedVaults(binding.journal.vaults, imported.vaults);
   if (vaults.length > MAX_QSB_VAULTS_PER_ACCOUNT) {
     return { ok: false, refusal: "journal-full" };
   }
-  return checkedQsbAccount({
-    ...account,
-    nextV: Math.max(account.nextV, imported.nextV),
+  return checkedQsbJournal(binding.account, {
+    ...binding.journal,
+    nextV: Math.max(binding.journal.nextV, imported.nextV),
     vaults,
   });
 };

@@ -259,7 +259,7 @@ export const vaultCreationMethods = ({
   async createKeyVault(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
     // A phrase-less imported-key vault can only be created over a fresh store,
-    // so no retained QSB journal can be overwritten by it either.
+    // so no QSB account (the only record naming its journal) is overwritten.
     if (vault.accounts.length > 0 || vault.mnemonic !== null || vault.qsbAccounts.length > 0) {
       throw new RefusedBeforeWrite("Wallet already exists");
     }
@@ -293,8 +293,8 @@ export const vaultCreationMethods = ({
   },
   async createLedgerVault(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
-    // A mnemonic-less Ledger vault can only be created over a fresh store, so no
-    // retained QSB journal can be overwritten by it either.
+    // A mnemonic-less Ledger vault can only be created over a fresh store, so
+    // no QSB account (the only record naming its journal) is overwritten.
     if (vault.accounts.length > 0 || vault.mnemonic !== null || vault.qsbAccounts.length > 0) {
       throw new RefusedBeforeWrite("Wallet already exists");
     }

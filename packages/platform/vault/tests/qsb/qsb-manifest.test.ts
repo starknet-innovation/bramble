@@ -7,7 +7,7 @@
  * inconsistent manifest data" and "unknown profiles" custody events.
  */
 import { describe, expect, test } from "bun:test";
-import { MAX_QSB_VAULTS_PER_ACCOUNT, type QsbAccountRecord } from "@bramble/vault/qsb-account";
+import { type BoundQsbJournal, bindQsbJournal } from "@bramble/vault/qsb-journal-record";
 import {
   exportQsbManifest,
   importQsbManifest,
@@ -15,8 +15,10 @@ import {
   type QsbManifestRefusal,
 } from "@bramble/vault/qsb-manifest";
 import { mergeImportedQsbJournal } from "@bramble/vault/qsb-merge";
+import { MAX_QSB_VAULTS_PER_ACCOUNT } from "@bramble/vault/qsb-vault-record";
 import {
   allocatedVault,
+  bound,
   DISCLOSURE,
   exposedVault,
   FUNDING,
@@ -29,13 +31,14 @@ import {
   writerAccount,
 } from "./qsb-fixtures";
 
-const writer = writerAccount(
+const writer = bound(
+  writerAccount(),
   [allocatedVault(0), fundedVault(2), exposedVault(3), { ...fundedVault(5), state: "retired" }],
   7,
 );
 
-const manifestText = (account: QsbAccountRecord = writer): string =>
-  JSON.stringify(exportQsbManifest(account));
+const manifestText = (binding: BoundQsbJournal = writer): string =>
+  JSON.stringify(exportQsbManifest(binding));
 
 const refusalOf = (input: string | Uint8Array): QsbManifestRefusal | null => {
   const result = importQsbManifest(input);
@@ -58,6 +61,7 @@ describe("exportQsbManifest", () => {
     expect(text).not.toContain(PHRASE_A);
     expect(text).not.toContain("mnemonic");
     expect(text).not.toContain("backupConfirmed");
+    expect(text).not.toContain(writerAccount().journalId);
     const value = manifest();
     expect(Object.keys(value).sort()).toEqual(
       ["format", "network", "next_v", "profile", "seed_source", "vaults", "version"].sort(),
@@ -81,8 +85,10 @@ describe("exportQsbManifest", () => {
     });
   });
 
-  test("exports nothing for an invalid record", () => {
-    expect(exportQsbManifest({ ...writer, nextV: 3 })).toBeNull();
+  test("exports nothing for a lost journal, never an empty history", () => {
+    for (const read of [{ status: "missing" as const }, { status: "unreadable" as const }]) {
+      expect(exportQsbManifest(bindQsbJournal(writerAccount(), read))).toBeNull();
+    }
   });
 });
 
@@ -101,7 +107,7 @@ describe("importQsbManifest", () => {
     expect(result.manifest.vaults[2]).toEqual({ ...exposedVault(3), state: "unknown" });
     // Bytes read the same, and the result merges into a read-only account.
     expect(importQsbManifest(new TextEncoder().encode(manifestText()))).toEqual(result);
-    expect(mergeImportedQsbJournal(importedAccount(), result.manifest).ok).toBe(true);
+    expect(mergeImportedQsbJournal(bound(importedAccount()), result.manifest).ok).toBe(true);
   });
 
   test("ignores member order and whitespace", () => {

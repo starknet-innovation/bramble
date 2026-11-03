@@ -1,8 +1,9 @@
 /**
- * The vault service never loses a QSB journal: fresh-store creation paths
- * refuse a vault that already holds one, ordinary mutations carry it through
- * untouched, and a Starknet phrase that is a QSB account's dedicated phrase is
- * refused before anything is written.
+ * The vault service never loses a QSB account: fresh-store creation paths
+ * refuse a vault that already holds one (its phrase and the id naming its
+ * journal), ordinary mutations carry it through untouched, and a Starknet
+ * phrase that is a QSB account's dedicated phrase is refused before anything
+ * is written.
  */
 import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@bramble/store/kv";
@@ -10,20 +11,20 @@ import { fakeKms } from "@bramble/testkit/fake-kms";
 import { createEncryptedStore } from "@bramble/vault/encrypted-store";
 import { emptyVault } from "@bramble/vault/schema";
 import { createWalletVaultService } from "@bramble/vault/service";
-import { exposedVault, PHRASE_A, writerAccount } from "./qsb-fixtures";
+import { PHRASE_A, writerAccount } from "./qsb-fixtures";
 
 const vaultKey = "bramble:vault";
 const vaultPassphrase = "correct horse battery staple";
 const STARKNET_PHRASE =
   "habit hope tip crystal because grunt nation idea electric witness alert like";
-const journal = writerAccount([exposedVault(0)]);
+const qsbAccount = writerAccount();
 
 // A vault holding only a QSB account, written straight to the encrypted store
-// as a later QSB writer would.
+// as a later QSB writer would (its journal lives under its own key).
 const serviceOverQsbVault = async () => {
   const store = createMemoryStore();
   await createEncryptedStore(store, vaultKey).write(
-    { ...emptyVault(), qsbAccounts: [journal] },
+    { ...emptyVault(), qsbAccounts: [qsbAccount] },
     vaultPassphrase,
   );
   return createWalletVaultService({
@@ -33,8 +34,8 @@ const serviceOverQsbVault = async () => {
   });
 };
 
-describe("QSB journals in the vault service", () => {
-  test("fresh-store creation refuses a vault that holds a QSB journal", async () => {
+describe("QSB accounts in the vault service", () => {
+  test("fresh-store creation refuses a vault that holds a QSB account", async () => {
     const service = await serviceOverQsbVault();
     await expect(
       service.createLedgerVault({
@@ -53,10 +54,10 @@ describe("QSB journals in the vault service", () => {
         vaultPassphrase,
       }),
     ).rejects.toThrow("Wallet already exists");
-    expect((await service.readVault(vaultPassphrase)).qsbAccounts).toEqual([journal]);
+    expect((await service.readVault(vaultPassphrase)).qsbAccounts).toEqual([qsbAccount]);
   });
 
-  test("an ordinary mutation carries the journal through untouched", async () => {
+  test("an ordinary mutation carries the QSB account through untouched", async () => {
     const service = await serviceOverQsbVault();
     await service.createAccount({
       accountContractType: "openzeppelin",
@@ -65,7 +66,7 @@ describe("QSB journals in the vault service", () => {
     });
     const vault = await service.readVault(vaultPassphrase);
     expect(vault.accounts).toHaveLength(1);
-    expect(vault.qsbAccounts).toEqual([journal]);
+    expect(vault.qsbAccounts).toEqual([qsbAccount]);
   });
 
   test("a Starknet phrase that is a QSB account's dedicated phrase is refused", async () => {

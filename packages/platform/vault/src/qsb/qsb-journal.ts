@@ -1,37 +1,47 @@
 /**
  * Pure transitions of the QSB disclosure journal (BIP "QSB Wallet Secret
  * Management", profile QSB-HORS-v1, sections "Allocation" and "Disclosure
- * lifecycle"). Each takes an account record and returns either the next
- * record or a typed refusal; none reads a clock, randomness, storage, or the
- * network, and none mutates its input.
+ * lifecycle"). Each takes an account's journal binding and returns either the
+ * next journal or a typed refusal; none reads a clock, randomness, storage, or
+ * the network, and none mutates its input. An unbound journal (missing,
+ * unreadable, invalid, or mismatched) refuses every transition.
  *
- * Ordering is the caller's contract: a transition only computes the next
- * journal. The background must durably write the returned record (in the same
- * encrypted-vault write as the phrase) before it publishes an allocated
- * commitment or releases any preimage, and must serialize transitions so two
- * requests can never both pass an unused-state check. When a transition
- * changes nothing (an exact retry, a repeated retire) it returns the same
- * account reference, so the caller can skip the write.
+ * Ordering is the caller's contract. The background must serialize journal
+ * mutations with vault mutations under the vault's existing mutation queue,
+ * so two requests can never both pass an unused-state check; and it must
+ * durably write the returned journal before it publishes an allocated
+ * commitment or releases any preimage. When a transition changes nothing (an
+ * exact retry, a repeated retire) it returns the same journal reference, so
+ * the caller can skip the write.
  */
 import { isLowercaseHexBytes } from "@bramble/core/hex";
+import { QSB_JOURNAL_MAX_BYTES } from "@bramble/core/json";
+import type { QsbAccountRecord } from "./qsb-account";
 import {
-  isQsbAccountRecord,
-  isQsbVaultRecord,
+  type BoundQsbJournal,
+  bindQsbJournal,
   isQsbWriter,
+  type QsbJournal,
+  type QsbJournalBinding,
+  qsbJournalBytes,
+} from "./qsb-journal-record";
+import {
+  isQsbVaultRecord,
   MAX_QSB_VAULTS_PER_ACCOUNT,
   QSB_VAULT_INDEX_LIMIT,
-  type QsbAccountRecord,
   type QsbDisclosure,
   type QsbFunding,
   type QsbVaultRecord,
-} from "./qsb-account";
+} from "./qsb-vault-record";
 
 /**
  * Why a journal transition was refused. A code, not copy:
  * - `allocation-exhausted`: `nextV` reached 2^31; it never wraps;
  * - `invalid-request`: a malformed root, script, funding, or disclosure, or a
- *   result that would not be a valid record;
- * - `journal-full`: the account already keeps its bound of vault records;
+ *   result that would not be a valid journal;
+ * - `journal-full`: the record bound or the journal byte cap is reached;
+ * - `journal-unavailable`: the account's journal is missing, unreadable,
+ *   invalid, or bound elsewhere, so nothing may change;
  * - `not-writer`: an imported phrase, or a backup not yet confirmed;
  * - `record-mismatch`: the request differs from what is already committed
  *   (another script or funding, or an exposure that is not an exact retry);
@@ -45,6 +55,7 @@ export type QsbJournalRefusal =
   | "allocation-exhausted"
   | "invalid-request"
   | "journal-full"
+  | "journal-unavailable"
   | "not-writer"
   | "record-mismatch"
   | "stale-index"
@@ -52,31 +63,41 @@ export type QsbJournalRefusal =
   | "unknown-vault"
   | "writer-journal";
 
-/** The next account record, or the reason the transition was refused. */
+/** The next journal, or the reason the transition was refused. */
 export type QsbJournalResult =
-  | { readonly account: QsbAccountRecord; readonly ok: true }
+  | { readonly journal: QsbJournal; readonly ok: true }
   | { readonly ok: false; readonly refusal: QsbJournalRefusal };
 
 const refused = (refusal: QsbJournalRefusal): QsbJournalResult => ({ ok: false, refusal });
 
-const unchanged = (account: QsbAccountRecord): QsbJournalResult => ({ account, ok: true });
+const unchanged = (journal: QsbJournal): QsbJournalResult => ({ journal, ok: true });
 
 /**
- * Wraps a changed account as a result after re-validating it whole, so no
- * transition can hand back what the vault validator would later refuse to
- * read; an invalid account is `invalid-request`.
+ * Wraps a changed journal as a result after re-validating it against its
+ * account, so no transition can hand back what the binding would later
+ * refuse: past the byte cap it is `journal-full`, otherwise invalid is
+ * `invalid-request`.
  */
-export const checkedQsbAccount = (account: QsbAccountRecord): QsbJournalResult =>
-  isQsbAccountRecord(account) ? { account, ok: true } : refused("invalid-request");
+export const checkedQsbJournal = (
+  account: QsbAccountRecord,
+  journal: QsbJournal,
+): QsbJournalResult => {
+  if (qsbJournalBytes(journal) > QSB_JOURNAL_MAX_BYTES) {
+    return refused("journal-full");
+  }
+  return bindQsbJournal(account, { status: "present", value: journal }).status === "bound"
+    ? { journal, ok: true }
+    : refused("invalid-request");
+};
 
-const vaultAt = (account: QsbAccountRecord, v: number): QsbVaultRecord | undefined =>
-  account.vaults.find((vault) => vault.v === v);
+const vaultAt = (journal: QsbJournal, v: number): QsbVaultRecord | undefined =>
+  journal.vaults.find((vault) => vault.v === v);
 
-const withVault = (account: QsbAccountRecord, next: QsbVaultRecord): QsbJournalResult =>
+const withVault = (binding: BoundQsbJournal, next: QsbVaultRecord): QsbJournalResult =>
   isQsbVaultRecord(next)
-    ? checkedQsbAccount({
-        ...account,
-        vaults: account.vaults.map((vault) => (vault.v === next.v ? next : vault)),
+    ? checkedQsbJournal(binding.account, {
+        ...binding.journal,
+        vaults: binding.journal.vaults.map((vault) => (vault.v === next.v ? next : vault)),
       })
     : refused("invalid-request");
 
@@ -124,6 +145,12 @@ export const sameQsbVaultRecord = (left: QsbVaultRecord, right: QsbVaultRecord):
   left.state === right.state &&
   sameQsbDisclosure(left.disclosure, right.disclosure);
 
+// The bound journal of a writer, or the refusal that stops a writer-only step.
+const writerJournal = (binding: QsbJournalBinding): BoundQsbJournal | QsbJournalRefusal => {
+  if (binding.status !== "bound") return "journal-unavailable";
+  return isQsbWriter(binding) ? binding : "not-writer";
+};
+
 /**
  * Reserves the current `nextV` for a new deposit and advances the mark, with
  * the commitment root Krusty derived for exactly that index. Only a writer may
@@ -131,14 +158,16 @@ export const sameQsbVaultRecord = (left: QsbVaultRecord, right: QsbVaultRecord):
  * refused; at 2^31 allocation fails rather than wraps; a full journal refuses.
  */
 export const allocateQsbVault = (
-  account: QsbAccountRecord,
+  binding: QsbJournalBinding,
   request: { readonly root: string; readonly v: number },
 ): QsbJournalResult => {
-  if (!isQsbWriter(account)) return refused("not-writer");
-  if (account.nextV >= QSB_VAULT_INDEX_LIMIT) return refused("allocation-exhausted");
-  if (request.v !== account.nextV) return refused("stale-index");
+  const bound = writerJournal(binding);
+  if (typeof bound === "string") return refused(bound);
+  const { journal } = bound;
+  if (journal.nextV >= QSB_VAULT_INDEX_LIMIT) return refused("allocation-exhausted");
+  if (request.v !== journal.nextV) return refused("stale-index");
   if (!isLowercaseHexBytes(request.root, 32, 32)) return refused("invalid-request");
-  if (account.vaults.length >= MAX_QSB_VAULTS_PER_ACCOUNT) return refused("journal-full");
+  if (journal.vaults.length >= MAX_QSB_VAULTS_PER_ACCOUNT) return refused("journal-full");
   const vault: QsbVaultRecord = {
     disclosure: null,
     funding: null,
@@ -148,10 +177,10 @@ export const allocateQsbVault = (
     state: "allocated",
     v: request.v,
   };
-  return checkedQsbAccount({
-    ...account,
-    nextV: account.nextV + 1,
-    vaults: [...account.vaults, vault],
+  return checkedQsbJournal(bound.account, {
+    ...journal,
+    nextV: journal.nextV + 1,
+    vaults: [...journal.vaults, vault],
   });
 };
 
@@ -162,19 +191,20 @@ export const allocateQsbVault = (
  * same script again is a no-op, any other is `record-mismatch`.
  */
 export const associateQsbScript = (
-  account: QsbAccountRecord,
+  binding: QsbJournalBinding,
   request: { readonly scriptHash: string; readonly scriptPubKey: string; readonly v: number },
 ): QsbJournalResult => {
-  if (!isQsbWriter(account)) return refused("not-writer");
-  const vault = vaultAt(account, request.v);
+  const bound = writerJournal(binding);
+  if (typeof bound === "string") return refused(bound);
+  const vault = vaultAt(bound.journal, request.v);
   if (vault === undefined) return refused("unknown-vault");
   if (vault.state !== "allocated") return refused("state-conflict");
   if (vault.scriptPubKey !== null) {
     return vault.scriptPubKey === request.scriptPubKey && vault.scriptHash === request.scriptHash
-      ? unchanged(account)
+      ? unchanged(bound.journal)
       : refused("record-mismatch");
   }
-  return withVault(account, {
+  return withVault(bound, {
     ...vault,
     scriptHash: request.scriptHash,
     scriptPubKey: request.scriptPubKey,
@@ -184,23 +214,24 @@ export const associateQsbScript = (
 /**
  * Records the deposit output that funded a vault's script, after the
  * background has checked it against the actual funding transaction. Funding is
- * metadata: it never changes the disclosure state, so any account may record
- * it, but only once — the same output again is a no-op, another is
+ * metadata: it never changes the disclosure state, so any bound account may
+ * record it, but only once — the same output again is a no-op, another is
  * `record-mismatch` (a key set is never funded twice).
  */
 export const recordQsbFunding = (
-  account: QsbAccountRecord,
+  binding: QsbJournalBinding,
   request: { readonly funding: QsbFunding; readonly v: number },
 ): QsbJournalResult => {
-  const vault = vaultAt(account, request.v);
+  if (binding.status !== "bound") return refused("journal-unavailable");
+  const vault = vaultAt(binding.journal, request.v);
   if (vault === undefined) return refused("unknown-vault");
   if (vault.scriptPubKey === null) return refused("state-conflict");
   if (vault.funding !== null) {
     return sameQsbFunding(vault.funding, request.funding)
-      ? unchanged(account)
+      ? unchanged(binding.journal)
       : refused("record-mismatch");
   }
-  return withVault(account, { ...vault, funding: request.funding });
+  return withVault(binding, { ...vault, funding: request.funding });
 };
 
 /**
@@ -208,42 +239,45 @@ export const recordQsbFunding = (
  * record the background built from the parsed transaction: from `allocated`,
  * its root, script, and recorded funding must match what is committed; from
  * `exposed`, only an exact retry of the whole record is accepted, and returns
- * the account unchanged. Anything else — another transaction, another index
+ * the journal unchanged. Anything else — another transaction, another index
  * order, a retired or unknown key set — is refused. Writer-only. The returned
- * record must be durable before any preimage is released. An accepted retry
+ * journal must be durable before any preimage is released. An accepted retry
  * only says the journal permits it; a new session still needs a fresh user
  * authorization, which the background enforces.
  */
 export const recordQsbExposure = (
-  account: QsbAccountRecord,
+  binding: QsbJournalBinding,
   proposed: QsbVaultRecord,
 ): QsbJournalResult => {
-  if (!isQsbWriter(account)) return refused("not-writer");
+  const bound = writerJournal(binding);
+  if (typeof bound === "string") return refused(bound);
   if (!isQsbVaultRecord(proposed) || proposed.state !== "exposed") {
     return refused("invalid-request");
   }
-  const vault = vaultAt(account, proposed.v);
+  const vault = vaultAt(bound.journal, proposed.v);
   if (vault === undefined) return refused("unknown-vault");
   if (vault.state === "exposed") {
-    return sameQsbVaultRecord(vault, proposed) ? unchanged(account) : refused("record-mismatch");
+    return sameQsbVaultRecord(vault, proposed)
+      ? unchanged(bound.journal)
+      : refused("record-mismatch");
   }
   if (vault.state !== "allocated") return refused("state-conflict");
-  return sameCommitments(vault, proposed)
-    ? withVault(account, proposed)
-    : refused("record-mismatch");
+  return sameCommitments(vault, proposed) ? withVault(bound, proposed) : refused("record-mismatch");
 };
 
 /**
  * Retires a key set for good: no further disclosure, ever, and every recorded
- * script, funding, and disclosure is kept. Allowed from any state, by any
- * account, because it only ever restricts; retiring a retired set is a no-op.
+ * script, funding, and disclosure is kept. Allowed from any state, on any
+ * bound journal, because it only ever restricts; retiring a retired set is a
+ * no-op.
  */
-export const retireQsbVault = (account: QsbAccountRecord, v: number): QsbJournalResult => {
-  const vault = vaultAt(account, v);
+export const retireQsbVault = (binding: QsbJournalBinding, v: number): QsbJournalResult => {
+  if (binding.status !== "bound") return refused("journal-unavailable");
+  const vault = vaultAt(binding.journal, v);
   if (vault === undefined) return refused("unknown-vault");
   return vault.state === "retired"
-    ? unchanged(account)
-    : withVault(account, { ...vault, state: "retired" });
+    ? unchanged(binding.journal)
+    : withVault(binding, { ...vault, state: "retired" });
 };
 
 /**
@@ -252,10 +286,11 @@ export const retireQsbVault = (account: QsbAccountRecord, v: number): QsbJournal
  * which this layer cannot establish. A retired set stays retired
  * (`state-conflict`); an unknown one is a no-op.
  */
-export const markQsbVaultUnknown = (account: QsbAccountRecord, v: number): QsbJournalResult => {
-  const vault = vaultAt(account, v);
+export const markQsbVaultUnknown = (binding: QsbJournalBinding, v: number): QsbJournalResult => {
+  if (binding.status !== "bound") return refused("journal-unavailable");
+  const vault = vaultAt(binding.journal, v);
   if (vault === undefined) return refused("unknown-vault");
-  if (vault.state === "unknown") return unchanged(account);
+  if (vault.state === "unknown") return unchanged(binding.journal);
   if (vault.state === "retired") return refused("state-conflict");
-  return withVault(account, { ...vault, state: "unknown" });
+  return withVault(binding, { ...vault, state: "unknown" });
 };

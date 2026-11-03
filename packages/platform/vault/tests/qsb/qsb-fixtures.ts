@@ -6,12 +6,14 @@
  * it. Nothing here is a short stub, so a length or ordering bug cannot hide.
  */
 import { createHash } from "node:crypto";
-import type {
-  QsbAccountRecord,
-  QsbDisclosure,
-  QsbFunding,
-  QsbVaultRecord,
-} from "@bramble/vault/qsb-account";
+import type { QsbAccountRecord } from "@bramble/vault/qsb-account";
+import {
+  type BoundQsbJournal,
+  bindQsbJournal,
+  QSB_JOURNAL_SCHEMA_VERSION,
+  type QsbJournal,
+} from "@bramble/vault/qsb-journal-record";
+import type { QsbDisclosure, QsbFunding, QsbVaultRecord } from "@bramble/vault/qsb-vault-record";
 
 /** BIP-39 English test vector (entropy 0x00 * 32). */
 export const PHRASE_A = `${"abandon ".repeat(23)}art`;
@@ -135,27 +137,56 @@ export const exposedVault = (v: number): QsbVaultRecord => ({
   state: "exposed",
 });
 
-/** A writer: generated here, backup confirmed. */
-export const writerAccount = (
-  vaults: readonly QsbVaultRecord[] = [],
-  nextV = vaults.length === 0 ? 0 : (vaults.at(-1)?.v ?? 0) + 1,
-): QsbAccountRecord => ({
+/** Journal ids: 32 random-looking bytes each, as the background would draw. */
+export const JOURNAL_ID_A = tagged("journal a");
+/** A second journal id. */
+export const JOURNAL_ID_B = tagged("journal b");
+
+/** A writer's vault record: generated here, backup confirmed. */
+export const writerAccount = (): QsbAccountRecord => ({
   backupConfirmed: true,
   id: "qsb-1",
+  journalId: JOURNAL_ID_A,
   mnemonic: PHRASE_A,
   network: "bitcoin-mainnet",
-  nextV,
   seedContext: { provenance: "generated-here", source: "bip39" },
+});
+
+/** A read-only account's vault record, holding an imported phrase. */
+export const importedAccount = (): QsbAccountRecord => ({
+  backupConfirmed: true,
+  id: "qsb-2",
+  journalId: JOURNAL_ID_B,
+  mnemonic: PHRASE_B,
+  network: "bitcoin-mainnet",
+  seedContext: { provenance: "imported", source: "bip39" },
+});
+
+/** One account's journal; `nextV` defaults to one past the last record. */
+export const journalFor = (
+  account: QsbAccountRecord,
+  vaults: readonly QsbVaultRecord[] = [],
+  nextV = vaults.length === 0 ? 0 : (vaults.at(-1)?.v ?? 0) + 1,
+): QsbJournal => ({
+  accountId: account.id,
+  journalId: account.journalId,
+  network: "bitcoin-mainnet",
+  nextV,
+  profile: "QSB-HORS-v1",
+  schemaVersion: QSB_JOURNAL_SCHEMA_VERSION,
   vaults,
 });
 
-/** A read-only account holding an imported phrase. */
-export const importedAccount = (
+/** The account bound to its journal; throws if the pair is not bindable. */
+export const bound = (
+  account: QsbAccountRecord,
   vaults: readonly QsbVaultRecord[] = [],
-  nextV = vaults.length === 0 ? 0 : (vaults.at(-1)?.v ?? 0) + 1,
-): QsbAccountRecord => ({
-  ...writerAccount(vaults, nextV),
-  id: "qsb-2",
-  mnemonic: PHRASE_B,
-  seedContext: { provenance: "imported", source: "bip39" },
-});
+  nextV?: number,
+): BoundQsbJournal => {
+  const binding = bindQsbJournal(account, {
+    status: "present",
+    value: journalFor(account, vaults, nextV),
+  });
+  if (binding.status !== "bound") throw new Error(`unbound fixture: ${binding.reason}`);
+  return binding;
+};

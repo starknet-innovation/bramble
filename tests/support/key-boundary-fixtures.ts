@@ -46,15 +46,17 @@ export const SECRET_MNEMONIC =
  */
 export const SECRET_QSB_MNEMONIC = `${"zoo ".repeat(23)}vote`;
 
-/** The stub vault's QSB account: a confirmed writer with an empty journal. */
+/**
+ * The stub vault's QSB account: a confirmed writer. Its journal id is an
+ * internal storage handle that stays out of messages like any vault data.
+ */
 export const qsbAccount: QsbAccountRecord = {
   backupConfirmed: true,
   id: "qsb-1",
+  journalId: "5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8",
   mnemonic: SECRET_QSB_MNEMONIC,
   network: "bitcoin-mainnet",
-  nextV: 0,
   seedContext: { provenance: "generated-here", source: "bip39" },
-  vaults: [],
 };
 
 const ACCOUNT_CLASS_HASH = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";

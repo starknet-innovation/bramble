@@ -38,6 +38,18 @@ const PROVIDER_BUDGET = {
 const PROVIDER_CIPHERTEXT_CHARACTERS = Math.ceil((PROVIDER_BUDGET.maxBytes + 16) / 3) * 4;
 
 /**
+ * Largest QSB disclosure journal, as exact serialized plaintext bytes (every
+ * field of a valid journal is ASCII, so this is its UTF-8 size). One journal
+ * per QSB account lives under its own `storage.local` key; eight of them at
+ * this size take about 2.8 MB at rest, about a quarter of Chrome's 10 MiB quota, so
+ * full journals can never crowd out the vault and its migration copy. The
+ * journal validator and the journal key's at-rest budget both derive from it.
+ */
+export const QSB_JOURNAL_MAX_BYTES = 256 * 1024;
+
+const QSB_JOURNAL_CIPHERTEXT_CHARACTERS = Math.ceil((QSB_JOURNAL_MAX_BYTES + 16) / 3) * 4;
+
+/**
  * Single-sourced hostile-input budgets. General extension messages remain
  * small; typed data is tighter because hashing is CPU-intensive; contract
  * classes get a deliberate larger envelope without becoming unbounded; storage
@@ -65,6 +77,16 @@ export const JSON_BUDGETS = {
     ...PROVIDER_BUDGET,
     maxBytes: 2 + PROVIDER_CIPHERTEXT_CHARACTERS * 6 + 16 * 1024,
     maxStringLength: PROVIDER_CIPHERTEXT_CHARACTERS,
+  },
+  /**
+   * The at-rest budget of one QSB journal key: the encrypted envelope of a
+   * journal of at most {@link QSB_JOURNAL_MAX_BYTES}, derived as `storage` is,
+   * and nothing larger.
+   */
+  qsbJournalStorage: {
+    ...PROVIDER_BUDGET,
+    maxBytes: 2 + QSB_JOURNAL_CIPHERTEXT_CHARACTERS * 6 + 16 * 1024,
+    maxStringLength: QSB_JOURNAL_CIPHERTEXT_CHARACTERS,
   },
   strk20Proof: {
     maxArrayLength: 4_096,
