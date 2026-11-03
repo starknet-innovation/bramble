@@ -5,8 +5,10 @@
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
-import { textField } from "@bramble/ui-kit/fields";
+import { selectField, textField } from "@bramble/ui-kit/fields";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import { sendAssets, sendBalanceLabel } from "../send/send-model";
+import { EMPTY_MULTISIG_PORTFOLIO, type MultisigPortfolioData } from "./multisig-portfolio";
 
 /**
  * Renders the private-balance section when this network has a pool configured.
@@ -15,8 +17,11 @@ import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 export const multisigStrk20KeyPanel = (
   networkId: StarknetNetworkId,
   preferences: WalletPreferences | null,
+  portfolio: MultisigPortfolioData = EMPTY_MULTISIG_PORTFOLIO,
 ): string => {
   if (!preferences?.strk20Networks?.[networkId]?.poolAddress) return "";
+  const balances = "balances" in portfolio.balances ? portfolio.balances.balances : [];
+  const assets = sendAssets(networkId, preferences, balances, portfolio.prices, portfolio.changes);
   return `<section class="review-panel" data-ms-strk20-key-panel aria-label="Private balances">
     <p><strong>Private balances</strong></p>
     <p class="hint">Anyone with the viewing key can see all of this multisig's private activity.</p>
@@ -84,7 +89,20 @@ export const multisigStrk20KeyPanel = (
         size: "small",
       })}
     </div>
+    <div data-ms-strk20-authorizations></div>
     <form data-ms-strk20-form hidden>
+      ${selectField({
+        label: "Token",
+        name: "tokenId",
+        options: assets.map((asset) => ({
+          attributes: { "data-public-balance": asset.formatted, "data-symbol": asset.symbol },
+          label: asset.formatted
+            ? `${asset.symbol} · ${sendBalanceLabel(asset.formatted)}`
+            : asset.symbol,
+          value: asset.id,
+        })),
+        ...(assets[0] ? { selected: assets[0].id } : {}),
+      })}
       ${textField({ autocomplete: "off", inputmode: "decimal", label: "Amount", name: "amount" })}
       ${textField({ autocomplete: "off", label: "To", name: "recipient" })}
       ${button({ label: "Continue", type: "submit", variant: "secondary" })}

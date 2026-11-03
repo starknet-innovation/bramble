@@ -32,6 +32,11 @@ export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   {
+    live: async (ids) => ({ multisigId: ids.multisigId }),
+    message: { multisigId: "", type: "wallet.argentMultisigStrk20Panel" },
+    sender: extensionSender,
+  },
+  {
     message: { kind: "register", multisigId: "", type: "wallet.prepareArgentMultisigStrk20" },
     negative: "the key-boundary harness has no STRK20 prover, so preparation refuses",
     sender: extensionSender,

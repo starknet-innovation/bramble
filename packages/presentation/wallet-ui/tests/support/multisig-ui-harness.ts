@@ -74,6 +74,7 @@ export const makeMultisigUiClient = async (
     shareStrk20Key: async () => ({ recipients: 1, totalRecipients: 1 }),
     forgetStrk20Key: async () => undefined,
     prepareStrk20: async () => ({ id: "auth", phase: "authorization" as const }),
+    strk20Panel: async () => ({ authorizations: [], balances: [] }),
     shareStrk20Authorization: async () => ({ recipients: 1, totalRecipients: 1 }),
     signStrk20Authorization: async () => ({ id: "auth", phase: "fresh" }),
     refreshStrk20: async () => ({ id: "auth", phase: "fresh" }),

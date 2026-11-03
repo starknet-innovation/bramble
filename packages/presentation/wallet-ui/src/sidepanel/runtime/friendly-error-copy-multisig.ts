@@ -215,16 +215,16 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "this multisig's signers aren't available yet.",
     "This multisig's signers aren't available yet.",
   ],
-  [
-    "argent multisig private proof is missing",
-    "Argent multisig private proof is missing",
-  ],
+  ["argent multisig private proof is missing", "Argent multisig private proof is missing"],
   ["couldn't prepare this private action.", "Couldn't prepare this private action."],
   ["invalid argent multisig private proof", "Invalid Argent multisig private proof"],
-  [
-    "this authorization is too large to share.",
-    "This authorization is too large to share.",
-  ],
+  ["this authorization is too large to share.", "This authorization is too large to share."],
   ["invalid multisig private action", "invalid multisig private action"],
   ["strk20 private submission unavailable", "strk20 private submission unavailable"],
+  ["that token isn't tracked on this network.", "That token isn't tracked on this network."],
+  ["amount exceeds this multisig's balance.", "Amount exceeds this multisig's balance."],
+  [
+    "amount exceeds this multisig's private balance.",
+    "Amount exceeds this multisig's private balance.",
+  ],
 ];

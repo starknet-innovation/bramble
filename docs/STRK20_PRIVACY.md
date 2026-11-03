@@ -295,7 +295,11 @@ addressed to the Nostr key on their saved signer card. The application identifie
 the key. The payload is the key, the multisig, the chain, and the pool. Krusty encrypts the wrap.
 Nothing in a browser message, the multisig record, preferences, or activity contains the key.
 The private-balance section says that anyone with the viewing key can see all of this multisig's
-private activity.
+private activity. Register, deposit, transfer, and withdraw use the tokens a single-signer
+private balance already tracks, including a curated token the pool reports as privately held.
+Deposit spends that token's public balance. Transfer and withdraw spend its private balance.
+A co-owner who receives a CallSet authorization reviews the action, token, amount, and recipient
+on this screen and signs it there.
 
 A wrap is stored only when the sender is a saved contact whose Stark key is in the multisig's
 signer set, and only for the pool configured on that network. The first key wins. The same key

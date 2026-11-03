@@ -23,6 +23,7 @@ import {
 import { isBalancesResponse } from "../../../popup/responses/responses";
 import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
 import { lostReplySend, refusalText, responseError } from "../../runtime/runtime-errors";
+import { isStrk20Panel, type Strk20PanelState } from "./multisig-strk20-panel";
 
 const isRecordPhase = (
   value: unknown,
@@ -320,6 +321,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       readonly kind: "deposit" | "register" | "transfer" | "withdraw";
       readonly multisigId: string;
       readonly recipient?: string;
+      readonly tokenId?: string;
     }): Promise<{
       readonly id: string;
       readonly phase: "authorization" | "fresh" | "intent" | "relay";
@@ -367,6 +369,16 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "Couldn't prepare this private action.");
       }
       return { transactionHash: response.transactionHash };
+    },
+    async strk20Panel(multisigId: string): Promise<Strk20PanelState> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.argentMultisigStrk20Panel",
+      });
+      if (!isStrk20Panel(response)) {
+        throw responseError(response, "Couldn't prepare this private action.");
+      }
+      return { authorizations: response.authorizations, balances: response.balances };
     },
     async forgetStrk20Key(multisigId: string): Promise<void> {
       const response = await sendMessage({

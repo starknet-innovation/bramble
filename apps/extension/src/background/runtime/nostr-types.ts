@@ -23,4 +23,23 @@ export type NostrCoordinationResponse =
       readonly ok: true;
       readonly phase: "authorization" | "fresh" | "relay";
     }
-  | { readonly ok: true; readonly transactionHash: string };
+  | { readonly ok: true; readonly transactionHash: string }
+  | {
+      readonly authorizations: readonly {
+        readonly amount: string;
+        readonly id: string;
+        readonly kind: "deposit" | "register" | "transfer" | "withdraw";
+        readonly recipient?: string;
+        readonly summary: string;
+        readonly symbol: string;
+        readonly youSigned: boolean;
+      }[];
+      readonly balances: readonly {
+        readonly balance: string;
+        readonly formatted: string;
+        readonly symbol: string;
+        readonly token: string;
+        readonly tokenId: string;
+      }[];
+      readonly ok: true;
+    };

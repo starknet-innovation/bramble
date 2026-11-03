@@ -18,20 +18,22 @@ import {
   multisigStrk20CallSetAggregate,
   withMultisigStrk20Fragment,
 } from "@bramble/privacy/multisig-strk20";
+import {
+  describeMultisigStrk20Request,
+  resolveMultisigStrk20Amount,
+} from "@bramble/privacy/multisig-strk20-token";
 import { submitStrk20PaymasterPlan } from "@bramble/privacy/paymaster";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
-import { parseTokenAmount } from "@bramble/starknet/rpc";
 import type { NostrApplicationData } from "@bramble/vault/kms-port";
 import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   STARKNET_NETWORKS,
-  STRK_TOKEN_ADDRESS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { AddressBookEntry } from "@bramble/wallet-model/preferences";
-import { num, type TypedData, typedData } from "starknet";
+import { type TypedData, typedData } from "starknet";
 import { signerForContext } from "../accounts/wallet-ops";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { MultisigOpsDeps } from "./multisig-deps";
@@ -44,9 +46,14 @@ import {
 import { proveMultisigStrk20 } from "./multisig-strk20-prove";
 import {
   MULTISIG_STRK20_PROOF_EXPIRED,
+  type MultisigStrk20Session,
   openMultisigStrk20Session,
   readMultisigStrk20Window,
 } from "./multisig-strk20-session";
+import {
+  multisigStrk20Unaffordable,
+  readMultisigStrk20PrivateBalances,
+} from "./multisig-strk20-token";
 import { nativeNostrRelayTransport } from "./nostr-relay";
 
 const PREPARE = "wallet.prepareArgentMultisigStrk20";
@@ -54,6 +61,7 @@ const SIGN = "wallet.signArgentMultisigStrk20Authorization";
 const SHARE = "wallet.shareArgentMultisigStrk20Authorization";
 const REFRESH = "wallet.refreshArgentMultisigStrk20";
 const SUBMIT = "wallet.submitArgentMultisigStrk20Relay";
+const PANEL = "wallet.argentMultisigStrk20Panel";
 
 const readId = (message: unknown, type: string, key: "id" | "multisigId"): string | null =>
   isRecord(message) &&
@@ -67,18 +75,16 @@ const readId = (message: unknown, type: string, key: "id" | "multisigId"): strin
 
 const INVALID_ACTION = { error: "invalid multisig private action" } as const;
 
-const rawUnits = (amount: unknown): string | { readonly error: string } => {
-  if (typeof amount !== "string") return INVALID_ACTION;
-  try {
-    return num.toHex(parseTokenAmount(amount, 18));
-  } catch (error) {
-    return { error: error instanceof WalletError ? error.message : INVALID_ACTION.error };
-  }
-};
-
 const counterparty = (recipient: unknown): string | { readonly error: string } => {
   const to = canonicalFelt(String(recipient ?? ""));
   return to !== null && isNonZeroStarkFieldElement(to) ? to : INVALID_ACTION;
+};
+
+type PaidDraft = {
+  readonly amount: string;
+  readonly kind: "deposit" | "transfer" | "withdraw";
+  readonly recipient?: string;
+  readonly tokenId: string;
 };
 
 const paidRequest = (
@@ -86,41 +92,63 @@ const paidRequest = (
   kind: "deposit" | "transfer" | "withdraw",
   amount: unknown,
   recipient: unknown,
-  tokenText: unknown,
-):
-  | { readonly id: string; readonly request: MultisigStrk20ActionRequest }
-  | { readonly error: string } => {
-  const raw = rawUnits(amount);
-  if (typeof raw !== "string") return raw;
-  const token = canonicalFelt(typeof tokenText === "string" ? tokenText : STRK_TOKEN_ADDRESS);
-  if (!token) return INVALID_ACTION;
+  tokenId: unknown,
+): { readonly draft: PaidDraft; readonly id: string } | { readonly error: string } => {
+  if (typeof amount !== "string" || typeof tokenId !== "string" || tokenId.length === 0) {
+    return INVALID_ACTION;
+  }
   if (kind === "deposit" && recipient === undefined) {
-    return { id, request: { amount: raw, kind, token } };
+    return { draft: { amount, kind, tokenId }, id };
   }
   const to = counterparty(recipient);
   if (typeof to !== "string") return to;
-  return { id, request: { amount: raw, kind, recipient: to, token } };
+  return { draft: { amount, kind, recipient: to, tokenId }, id };
 };
 
-const requestFrom = (
-  message: unknown,
-):
-  | { readonly id: string; readonly request: MultisigStrk20ActionRequest }
-  | { readonly error: string }
-  | null => {
+const requestFrom = (message: unknown) => {
   if (!isRecord(message) || message["type"] !== PREPARE || !isAccountId(message["multisigId"])) {
     return null;
   }
   const kind = message["kind"];
-  if (kind === "register") return { id: message["multisigId"], request: { kind } };
+  if (kind === "register") {
+    const request: MultisigStrk20ActionRequest = { kind: "register" };
+    return { id: message["multisigId"], request };
+  }
   if (kind !== "deposit" && kind !== "transfer" && kind !== "withdraw") return INVALID_ACTION;
   return paidRequest(
     message["multisigId"],
     kind,
     message["amount"],
     message["recipient"],
-    message["token"],
+    message["tokenId"],
   );
+};
+
+const actionFor = async (
+  deps: MultisigOpsDeps,
+  session: MultisigStrk20Session,
+  draft: PaidDraft,
+): Promise<{ readonly error: string } | { readonly request: MultisigStrk20ActionRequest }> => {
+  const preferences = await deps.preferencesStore.read();
+  const resolved = resolveMultisigStrk20Amount(
+    preferences.tokens,
+    session.context.record.networkId,
+    draft.tokenId,
+    draft.amount,
+  );
+  if ("error" in resolved) return resolved;
+  const token = preferences.tokens.find((candidate) => candidate.id === draft.tokenId);
+  if (!token) return { error: "That token isn't tracked on this network." };
+  const refusal = await multisigStrk20Unaffordable(deps, session, draft.kind, token, resolved.raw);
+  if (refusal) return refusal;
+  return {
+    request: {
+      amount: resolved.raw,
+      kind: draft.kind,
+      token: resolved.token,
+      ...(draft.recipient ? { recipient: draft.recipient } : {}),
+    },
+  };
 };
 
 const prepare = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
@@ -129,7 +157,12 @@ const prepare = async (deps: MultisigOpsDeps, message: unknown): Promise<Runtime
   if ("error" in parsed) return parsed;
   const session = await openMultisigStrk20Session(deps, parsed.id);
   if ("error" in session) return session;
-  return proveMultisigStrk20(deps, session, parsed.request, session.readScalar);
+  if ("request" in parsed) {
+    return proveMultisigStrk20(deps, session, parsed.request, session.readScalar);
+  }
+  const action = await actionFor(deps, session, parsed.draft);
+  if ("error" in action) return action;
+  return proveMultisigStrk20(deps, session, action.request, session.readScalar);
 };
 
 const signCollected = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
@@ -234,7 +267,9 @@ const submitRelay = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   if ("error" in session) return session;
   const relay = await session.store.getRelay(id);
   if (!relay || relay.state === "collecting") {
-    return { error: relay ? "Argent multisig intent is not ready" : "Argent multisig intent not found" };
+    return {
+      error: relay ? "Argent multisig intent is not ready" : "Argent multisig intent not found",
+    };
   }
   const base = strk20ProofBaseBlock(relay.proof.proof_facts);
   if (base === null) return { error: "Invalid Argent multisig private proof" };
@@ -284,7 +319,39 @@ const submitRelay = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   return { ok: true, transactionHash: sent.transactionHash };
 };
 
+const panel = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
+  const multisigId = readId(message, PANEL, "multisigId");
+  if (!multisigId) return { error: "invalid multisig private action" };
+  const session = await openMultisigStrk20Session(deps, multisigId);
+  if ("error" in session) {
+    return session.error === "wallet locked"
+      ? session
+      : { authorizations: [], balances: [], ok: true };
+  }
+  const scalar = await session.readScalar();
+  const stored = await session.store.listAuthorizations(multisigId, scalar);
+  const balances = (await readMultisigStrk20PrivateBalances(deps, session)) ?? [];
+  const preferences = await deps.preferencesStore.read();
+  const mine = session.context.active.account.publicKeyX;
+  const authorizations = stored
+    .filter((row) => row.state === "collecting")
+    .map((row) => {
+      const described = describeMultisigStrk20Request(row.request, preferences.tokens);
+      return {
+        amount: described.amount,
+        id: row.id,
+        kind: row.request.kind,
+        ...(described.recipient ? { recipient: described.recipient } : {}),
+        summary: row.summary,
+        symbol: described.symbol,
+        youSigned: row.fragments.some((fragment) => sameFelt(fragment.publicKey, mine)),
+      };
+    });
+  return { authorizations, balances, ok: true };
+};
+
 const HANDLERS = {
+  [PANEL]: panel,
   [PREPARE]: prepare,
   [REFRESH]: refresh,
   [SHARE]: shareCollected,

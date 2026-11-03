@@ -409,7 +409,7 @@ export const multisigDetailFlow = (
       flowHeader(multisigDisplayName(record), status, configLabel(view)) +
       flowScreen(
         screen,
-        `<section class="section multisig-review-flow">${authorityWarning}${intentList(record, view, intents, status, preferences, selectedIntentId)}${multisigStrk20KeyPanel(record.networkId, preferences)}</section><p id="multisig-detail-result" role="status"></p>`,
+        `<section class="section multisig-review-flow">${authorityWarning}${intentList(record, view, intents, status, preferences, selectedIntentId)}${multisigStrk20KeyPanel(record.networkId, preferences, portfolio)}</section><p id="multisig-detail-result" role="status"></p>`,
       )
     );
   }
@@ -428,7 +428,7 @@ export const multisigDetailFlow = (
         preferences,
         record,
         signerKnown: options.length > 0,
-        strk20KeyPanel: multisigStrk20KeyPanel(record.networkId, preferences),
+        strk20KeyPanel: multisigStrk20KeyPanel(record.networkId, preferences, portfolio),
       })}
       <p id="multisig-detail-result" role="status"></p>`,
   );

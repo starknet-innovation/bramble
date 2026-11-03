@@ -52,6 +52,11 @@ export type MultisigStrk20Session = {
   /** Records which action the next CallSet authorization belongs to. */
   readonly prepareRequest: (request: MultisigStrk20ActionRequest) => void;
   readonly privacyConfig: Strk20NetworkConfig;
+  /**
+   * Account context for a private-balance read. The scalar stays inside this
+   * session; callers must not persist or return it.
+   */
+  readonly readContext: () => Strk20AccountContext;
   /** Shared scalar for the privacy service. Callers must not persist or return it. */
   readonly readScalar: () => Promise<string>;
   readonly signCallSet: (messageHash: string, calls: readonly Call[]) => Promise<string[]>;
@@ -155,6 +160,18 @@ export const openMultisigStrk20Session = async (
       networkId: resolved.record.networkId,
     } as Strk20AccountContext["account"],
     privacyConfig,
+    readContext: (): Strk20AccountContext => ({
+      account: {
+        address: resolved.record.address,
+        id: resolved.record.id,
+        networkId: resolved.record.networkId,
+      } as Strk20AccountContext["account"],
+      config: privacyConfig,
+      isAuthorized: authorized.isCurrent,
+      rpcUrls: resolved.rpcUrls,
+      signHash: () => Promise.reject(new WalletError("Invalid Argent multisig private proof")),
+      viewingKey: async () => scalar,
+    }),
     prepareRequest: (next: MultisigStrk20ActionRequest): void => {
       request = next;
     },

@@ -73,7 +73,10 @@ export const PRIVATE_FACTS: ReadonlySet<string> = new Set([
   "This authorization is too large to share.",
   "This private transaction expired. Refresh it.",
   "Waiting for co-owners to authorize this private action.",
+  "Amount exceeds this multisig's balance.",
+  "Amount exceeds this multisig's private balance.",
   "invalid multisig private action",
+  "That token isn't tracked on this network.",
 ]);
 
 // Shadow-account facts (issue 443), pending reviewed copy that keeps each one.

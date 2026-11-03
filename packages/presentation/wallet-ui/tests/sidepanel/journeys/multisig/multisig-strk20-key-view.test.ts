@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { TokenBalance } from "@bramble/starknet/rpc";
 import { multisigStrk20KeyPanel } from "../../../../src/sidepanel/journeys/multisig/multisig-strk20-key-view";
 
 describe("multisig private balances", () => {
@@ -23,6 +24,28 @@ describe("multisig private balances", () => {
     expect(html).toContain("Send");
     expect(html).toContain("Refresh");
     expect(html).toContain("hidden");
+    expect(html).toContain("USDC");
+    expect(html).toContain("STRK");
+    expect(html).toContain("data-ms-strk20-authorizations");
+  });
+
+  test("offers a tracked token with this multisig's public balance", () => {
+    const preferences = defaultWalletPreferences();
+    const usdc = preferences.tokens.find(
+      (token) => token.symbol === "USDC" && token.networkId === "SN_MAIN",
+    );
+    if (!usdc) throw new Error("USDC is tracked on mainnet");
+    const balance: TokenBalance = { ...usdc, balance: "1500000", formatted: "1.5" };
+    const html = multisigStrk20KeyPanel("SN_MAIN", preferences, {
+      balances: { balances: [balance] },
+      changes: {},
+      currency: "usd",
+      prices: {},
+    });
+    expect(html).toContain(`value="${usdc.id}"`);
+    expect(html).toContain('data-symbol="USDC"');
+    expect(html).toContain('data-public-balance="1.5"');
+    expect(html).toContain("USDC · 1.5");
   });
 
   test("is absent when private balances are not configured", () => {
