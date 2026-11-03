@@ -38,7 +38,7 @@ export type InvokeExecuteDeps = {
    * Watched shared accounts, read into the trusted set for the execution-time
    * lookalike check (Sherlock 140). Omitted, that check skips them.
    */
-  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs" | "upsertIntent">;
   readonly preferencesStore: WalletPreferencesStore;
   /** Fiat prices for a gasless fee the user chose. Absent in narrow test doubles. */
   readonly prices?: PriceService;

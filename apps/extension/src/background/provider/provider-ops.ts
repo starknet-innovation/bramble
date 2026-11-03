@@ -1,5 +1,6 @@
 /** Dapp provider operations validate origin and phishing policy on every request. */
 
+import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { PriceService } from "@bramble/portfolio/prices";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
@@ -30,6 +31,12 @@ import {
 } from "../approvals/invoke-fee-review";
 import { gaslessFeeSummary } from "../transactions/gasless-review";
 import { type InvokeExecuteDeps, submitHeldInvoke } from "./held-invoke-submit";
+import {
+  maybeQueueMultisigInvoke,
+  maybeRetryMultisigFee,
+  withMultisigInvoke,
+} from "./multisig-dapp-invoke";
+import type { MultisigOriginGrantStore } from "./multisig-grants";
 import { type ResolvedOriginAccount, resolveOriginAccount } from "./provider-grant";
 import { invokeFailureResponse } from "./provider-invoke-failure";
 
@@ -82,6 +89,8 @@ export type ProviderOpsDeps = {
    * invoke estimation does not call it; Ledger submission fails closed without it.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: MultisigStore;
   readonly preferencesStore: WalletPreferencesStore;
   /** Fiat prices for a gasless fee offer. Absent in narrow test doubles. */
   readonly prices?: PriceService;
@@ -266,6 +275,12 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   // deduplicates, so an origin already holding its full share of the queue is
   // getting this request refused at admission whatever the calls turn out to be.
   requireApprovalAdmission(deps.approvals, input.origin);
+  const multisigQueued = await maybeQueueMultisigInvoke(deps, input);
+  if (multisigQueued) {
+    return "approval" in multisigQueued
+      ? deps.waiters.register(multisigQueued.approval.id)
+      : multisigQueued;
+  }
   const resolved = await resolveOriginAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
@@ -288,6 +303,8 @@ const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
   if (approval?.kind !== "invoke" || !payload?.calls) {
     return { error: "approval not found" };
   }
+  const multisigFee = await maybeRetryMultisigFee(deps, approval, payload.calls);
+  if (multisigFee) return multisigFee;
   const resolved = await resolveOriginAccount(deps, approval.origin, approval.context);
   if ("error" in resolved) {
     return resolved;
@@ -336,6 +353,13 @@ export const handleProviderOps = async (
   return handler ? handler(deps, message, sender) : null;
 };
 
+type ReviewedInvokeApproval = {
+  readonly context?: ApprovalContext;
+  readonly gaslessFee?: GaslessFeeOffer;
+  readonly origin: string;
+  readonly payload: ApprovalPayload;
+  readonly reviewedFee?: FeeEstimate;
+};
 /**
  * Executes a user-approved invoke. `reviewedFee` is the ceiling the card showed.
  * A locked wallet or a revoked grant fails closed. Returns an error response
@@ -343,19 +367,16 @@ export const handleProviderOps = async (
  */
 export const executeInvokeApproval = async (
   deps: InvokeExecuteDeps,
-  approval: {
-    readonly context?: ApprovalContext;
-    readonly gaslessFee?: GaslessFeeOffer;
-    readonly origin: string;
-    readonly payload: ApprovalPayload;
-    readonly reviewedFee?: FeeEstimate;
-  },
+  approval: ReviewedInvokeApproval,
+): Promise<RuntimeResponse> =>
+  withMultisigInvoke(deps, approval, (calls) => executeSignerInvoke(deps, approval, calls));
+
+const executeSignerInvoke = async (
+  deps: InvokeExecuteDeps,
+  approval: ReviewedInvokeApproval,
+  calls: readonly Call[],
 ): Promise<RuntimeResponse> => {
   const { activity, allowanceStore, runtimeRpc } = deps;
-  const calls = approval.payload.calls;
-  if (!calls) {
-    return { error: "approval not found" };
-  }
   const resolved = await resolveOriginAccount(deps, approval.origin, approval.context);
   if ("error" in resolved) {
     return resolved;

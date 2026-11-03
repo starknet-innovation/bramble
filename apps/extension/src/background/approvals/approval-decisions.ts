@@ -25,6 +25,7 @@ import {
   type Strk20DisclosureApprovalKind,
 } from "../privacy/strk20-approval-types";
 import { executeAddChainApproval } from "../provider/add-chain-ops";
+import { MULTISIG_PROPOSAL_SAVED } from "../provider/multisig-dapp-invoke";
 import { executeInvokeApproval } from "../provider/provider-ops";
 import { readApprovalIdInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -41,6 +42,7 @@ import { approvalSession } from "./approval-session";
 import { applyWatchAssetApproval, WATCH_ASSET_TRACKED_RESPONSE } from "./approval-watch-asset";
 import type { ApprovalClaim, ApprovalKind, PendingApproval } from "./approvals";
 import { applyGaslessInvoke } from "./gasless-approval";
+import { grantPresentedMultisig } from "./multisig-connect";
 import { DROPPED_APPROVAL_RESPONSE } from "./signature-waiters";
 
 /**
@@ -107,6 +109,13 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
       reviewedFee,
     },
   );
+  if ("error" in result && result.error === MULTISIG_PROPOSAL_SAVED) {
+    return {
+      respond: (listPending) => ({ ok: true, pending: listPending() }),
+      settle: result,
+      status: "settle",
+    };
+  }
   return settleExecutor(result);
 };
 
@@ -190,8 +199,10 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigGrants ? { multisigGrants: deps.multisigGrants } : {}),
       ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
       ...(deps.relaySignatures ? { relaySignatures: deps.relaySignatures } : {}),
+      runtimeRpc: deps.runtimeRpc,
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -274,6 +285,14 @@ const applyConnect: ApproveApplier = async (deps, { approval }, decision) => {
     if (!passphrase || !authorized.isCurrent()) {
       return reject({ error: "wallet locked" });
     }
+    const presented = await grantPresentedMultisig(
+      deps,
+      approval.origin,
+      decision.reviewedAccountId,
+      passphrase,
+      authorized.isCurrent,
+    );
+    if (presented) return presented;
     // The grant goes to the account the card named, never to whichever account
     // happens to be active when the click lands: the user can switch accounts
     // in the panel while a prompt is open, and a grant that followed the switch

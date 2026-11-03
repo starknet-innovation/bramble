@@ -20,6 +20,7 @@ import { handleTokenOps } from "../portfolio/token-ops";
 import { handleStrk20Ops } from "../privacy/strk20-ops";
 import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
 import { handleAddChainOps } from "../provider/add-chain-ops";
+import { grantedDappAccounts } from "../provider/dapp-account";
 import { handleProviderOps } from "../provider/provider-ops";
 import {
   accountForNetwork,
@@ -182,7 +183,7 @@ const handleGetGrantedAccounts: RouterHandler = async (ctx, messageType, message
     // site cannot use `mc_accounts` as a lock-state oracle.
     return { accounts: [], ok: true };
   }
-  const accounts = await ctx.wallet.getGrantedAccounts(input.origin, vaultPassphrase);
+  const accounts = await grantedDappAccounts(ctx, input.origin, vaultPassphrase);
   if (!input.vaultPassphrase && !authorized.isCurrent()) return { accounts: [], ok: true };
   return { accounts, ok: true };
 };
@@ -220,7 +221,7 @@ const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, s
   const passphrase = ctx.session.peekPassphrase();
   const authorized = captureSessionAuthorization(ctx.session);
   if (passphrase) {
-    const accounts = await ctx.wallet.getGrantedAccounts(input.origin, passphrase);
+    const accounts = await grantedDappAccounts(ctx, input.origin, passphrase);
     if (accounts.length > 0) {
       // Record the origin only once it is actually connecting, so the enricher
       // still reports "first time seen" for a new site's approval.

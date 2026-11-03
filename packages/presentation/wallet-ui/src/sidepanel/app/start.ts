@@ -56,6 +56,7 @@ import {
 } from "./rendering/scene-renderer";
 import { sceneDirection, sceneFor } from "./rendering/scene-transition";
 import { bindClusterScreens } from "./screens/cluster-ui";
+import { adoptStoredMultisig, connectAccountHandler } from "./screens/connect-account";
 import { sceneContent } from "./screens/scene-content";
 import type { WalletView } from "./screens/views";
 import { createDeploymentCache } from "./sync/deployment-cache";
@@ -80,7 +81,13 @@ export const startWalletUi = async (
   const swapClient = createSwapClient(mutationRuntime);
   let activeView: WalletView = "home";
   const selectedNftId: string | null = null;
+  const selection = { hydrated: false, id: null as string | null };
   let selectedMultisigId: string | null = null;
+  const rememberMultisig = (id: string | null): void => {
+    selection.hydrated = true;
+    selectedMultisigId = selection.id = id;
+    void wallet.setSelectedMultisig(id).catch(() => undefined);
+  };
   let selectedMultisigIntentId: string | null = null;
   let lastNetworkId = "SN_MAIN";
   let lastScene = "";
@@ -141,8 +148,7 @@ export const startWalletUi = async (
     bindOnboarding({ app, now, render, wallet });
     bindLedgerFirstRun({ app, startLedgerSetup: ledgerOnboard.startLedgerSetup });
     bindUnlock({ app, render, wallet }, () => {
-      activeView = "home";
-      selectedMultisigId = null;
+      activeView = selectedMultisigId ? "multisig-home" : "home";
       viewHistory = [];
     });
     const shellDeps = {
@@ -154,7 +160,7 @@ export const startWalletUi = async (
           return;
         }
         activeView = view;
-        if (view === "home") selectedMultisigId = null;
+        if (view === "home") rememberMultisig(null);
       },
       wallet,
     };
@@ -175,7 +181,7 @@ export const startWalletUi = async (
       networkId: () => lastNetworkId,
       render,
       selectPortfolio: (id: string | null) => {
-        selectedMultisigId = id;
+        rememberMultisig(id);
         activeView = id ? "multisig-home" : "home";
         viewHistory = [];
         forcedDirection = "swap";
@@ -223,6 +229,13 @@ export const startWalletUi = async (
     bindAddressBook({ app, render, wallet });
     bindApprovals({
       app,
+      onConnectAccount: connectAccountHandler({
+        activeAccountId: () => cache.status.activeAccountId,
+        remember: rememberMultisig,
+        render: renderLatest,
+        showMultisig: () => (activeView = "multisig-home"),
+        switchAccount: (accountId) => wallet.setActiveAccount(accountId),
+      }),
       render,
       snoozeApproval: (id) => {
         snoozedApprovalIds = [...snoozedApprovalIds, id];
@@ -256,22 +269,22 @@ export const startWalletUi = async (
       app,
       multisig,
       openDetail: (id, destination = "multisig-home") => {
-        selectedMultisigId = id;
+        rememberMultisig(id);
         selectedMultisigIntentId = null;
         navigate(destination);
       },
       openIntent: (accountId, intentId) => {
-        selectedMultisigId = accountId;
+        rememberMultisig(accountId);
         selectedMultisigIntentId = intentId;
         navigate("multisig-detail");
       },
       openList: () => {
-        selectedMultisigId = null;
+        rememberMultisig(null);
         navigate("multisigs");
       },
       openFunding: async (intent) => {
         await wallet.setActiveAccount(intent.accountId);
-        selectedMultisigId = intent.completeMultisigId ?? selectedMultisigId;
+        rememberMultisig(intent.completeMultisigId ?? selectedMultisigId);
         sendIntent = intent;
         navigate("send");
       },
@@ -385,9 +398,6 @@ export const startWalletUi = async (
     const generation = ++renderGeneration;
     const isCurrent = (): boolean => generation === renderGeneration;
     const scopeChanged = updateRenderScope(cache, status);
-    // Announced here, not only from paint(): a network switch in an unlocked
-    // wallet defers its paint until the new network's data loads, and a
-    // network-scoped form (the Ready-key picker) must drop its list now.
     announceNetwork(status.networkId);
     if (scopeChanged && hasPaintedScope) {
       scopeAnnouncer.textContent = scopeChangeAnnouncement(scopeChanged);
@@ -399,13 +409,10 @@ export const startWalletUi = async (
       resetActivityViewState();
     }
     if (scopeChanged === "network" && selectedMultisigId !== null) {
-      selectedMultisigId = null;
+      rememberMultisig(null);
       activeView = "home";
       viewHistory = [];
     }
-    // Preferences are display settings, not vault material — the background
-    // serves them without an unlock — so they are read whenever a vault exists.
-    // The lock screen then follows the chosen theme instead of the dark default.
     const [pending, nextPreferences] = await Promise.all([
       wallet.loadPendingApprovals(),
       status.hasVault ? wallet.loadPreferences().catch(() => null) : Promise.resolve(null),
@@ -415,6 +422,10 @@ export const startWalletUi = async (
     }
     cache.pending = pending;
     cache.preferences = nextPreferences;
+    const adopted = adoptStoredMultisig(selection, status.networkId, nextPreferences, activeView);
+    selection.hydrated = true;
+    selectedMultisigId = selection.id = adopted.id;
+    activeView = adopted.view as WalletView;
     if (!status.hasVault || status.locked) {
       privacy.reset();
       ledgerSign.dismiss();
@@ -448,9 +459,6 @@ export const startWalletUi = async (
       paint,
     });
   };
-  // Navigation renders fire and forget. A failed status read or a render that
-  // throws must not become an unhandled rejection; the refresh lifecycle's
-  // next tick renders again (Sherlock 239).
   const renderLatest = (): void => {
     void wallet
       .loadStatus()

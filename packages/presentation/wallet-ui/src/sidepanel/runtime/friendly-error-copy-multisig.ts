@@ -208,4 +208,32 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "this intent is too large for secure relay sharing. copy the intent package instead",
     "This transaction is too large to share securely. Copy the package instead.",
   ],
+
+  // A connected site talking to a multisig. These sentences are already the
+  // words the reader should see; the table records that decision.
+  [
+    "multisig proposal saved. it was not submitted.",
+    "Multisig proposal saved. It was not submitted.",
+  ],
+  ["this multisig can't submit a private proof.", "This multisig can't submit a private proof."],
+  [
+    "this transaction could not be saved for the signers.",
+    "This transaction could not be saved for the signers.",
+  ],
+  ["this multisig isn't the pinned account.", "This multisig isn't the pinned account."],
+  ["this multisig needs more than one signer.", "This multisig needs more than one signer."],
+  [
+    "this multisig's signers aren't available yet.",
+    "This multisig's signers aren't available yet.",
+  ],
+  [
+    "this wallet doesn't hold a signer for this multisig.",
+    "This wallet doesn't hold a signer for this multisig.",
+  ],
+  [
+    "the network fee was not reviewed. nothing was submitted — review the transaction again.",
+    "The network fee was not reviewed. Nothing was submitted — review the transaction again.",
+  ],
+  ["invalid multisig grant", "Couldn't connect this multisig."],
+  ["argent multisig threshold is above 1", "This multisig needs more than one signer."],
 ];

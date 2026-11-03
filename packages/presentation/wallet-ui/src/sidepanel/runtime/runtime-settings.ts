@@ -47,6 +47,11 @@ export const createSettingsRuntimeClient = (
     }
     throw responseError(response, "address save failed");
   },
+  async setSelectedMultisig(multisigId: string | null): Promise<void> {
+    const response = await sendMessage({ multisigId, type: "wallet.setSelectedMultisig" });
+    if (isPreferencesResponse(response)) return;
+    throw responseError(response, "account switch failed");
+  },
   async setActiveAccount(accountId: string): Promise<void> {
     const response = await sendMessage({ accountId, type: "wallet.setActiveAccount" });
     if (isCreateAccountResponse(response)) {

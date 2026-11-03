@@ -5,6 +5,7 @@
  */
 import { connectedSitesFromVault } from "@bramble/vault/origin-grants";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { type MultisigOriginGrantStore, mergeConnectedSites } from "../provider/multisig-grants";
 import { readRevokeOriginInput, readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
@@ -13,6 +14,7 @@ import { captureSessionAuthorization, type UnlockSession } from "../runtime/sess
  * Dependencies shared by the connected-sites handlers.
  */
 export type OriginOpsDeps = {
+  readonly multisigGrants?: MultisigOriginGrantStore;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
 };
@@ -26,7 +28,8 @@ const connectedSites = async (deps: OriginOpsDeps): Promise<RuntimeResponse> => 
   }
   const vault = await deps.wallet.readVault(passphrase);
   if (!authorized.isCurrent()) return { error: "wallet locked" };
-  return { ok: true, sites: connectedSitesFromVault(vault) };
+  const extra = (await deps.multisigGrants?.sites(passphrase)) ?? [];
+  return { ok: true, sites: mergeConnectedSites(connectedSitesFromVault(vault), extra) };
 };
 
 /**
@@ -61,7 +64,9 @@ export const handleOriginOps = async (
       origin: input.origin,
       vaultPassphrase: passphrase,
     });
-    return { ok: true, sites };
+    await deps.multisigGrants?.revoke(input.origin, passphrase);
+    const extra = (await deps.multisigGrants?.sites(passphrase)) ?? [];
+    return { ok: true, sites: mergeConnectedSites(sites, extra) };
   }
 
   return null;

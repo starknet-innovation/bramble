@@ -54,6 +54,15 @@ type GrantResolverDeps = {
   readonly wallet: WalletStatusReader;
 };
 
+// A presented multisig owns the origin for this request, so the vault account
+// must not sign or estimate in its place.
+const presentedMultisigBlocksSingleSigner = (
+  preferences: { readonly activeNetworkId: string; readonly selectedMultisigId?: string },
+  expected: ApprovalContext | undefined,
+): boolean =>
+  preferences.selectedMultisigId?.startsWith(`${preferences.activeNetworkId}:`) === true &&
+  (expected === undefined || expected.accountId === preferences.selectedMultisigId);
+
 /**
  * Resolves the account an origin's grant currently maps to on the active
  * network, or an error response the caller returns directly. A locked wallet
@@ -76,6 +85,9 @@ export const resolveOriginAccount = async (
   }
   const preferences = await deps.preferencesStore.read();
   if (!authorized.isCurrent()) return { error: "wallet locked" };
+  if (presentedMultisigBlocksSingleSigner(preferences, expected)) {
+    return { error: "origin not connected" };
+  }
   if (expected && preferences.activeNetworkId !== expected.networkId) {
     return { error: "approval context changed" };
   }

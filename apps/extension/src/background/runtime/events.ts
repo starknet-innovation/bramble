@@ -93,6 +93,7 @@ const BROADCAST_FACTORIES: Readonly<Record<string, BroadcastFactory>> = {
   "wallet.setAccountHidden": () => [accountsChanged],
   "wallet.setActiveAccount": createAccountBroadcast,
   "wallet.setActiveNetwork": (response) => withNetwork(networkChangedForId(response["networkId"])),
+  "wallet.setSelectedMultisig": () => [accountsChanged],
   "wallet.switchChain": switchChainBroadcast,
   "wallet.unlock": unlockBroadcast,
   "wallet.unlockUnverified": unlockBroadcast,
