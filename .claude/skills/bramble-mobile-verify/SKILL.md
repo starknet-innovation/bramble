@@ -104,8 +104,11 @@ adb emu kill                                                  # when done
 gives every node's `text`, `content-desc` and `bounds`. Tap the centre of a node's bounds with
 `adb shell input tap X Y`, and type with `adb shell input text` (write each space as `%s`). Dump
 before every tap: never reuse coordinates from another screen or another AVD.
-- A cold boot can put "System UI isn't responding" over the app even after `boot_completed`.
-  If the dump shows it, tap its "Wait" button, then `am start` again.
+- A headless cold boot can leave "System UI isn't responding" holding focus even after
+  `boot_completed`. Instrumented tests then fail with `RootViewWithoutFocusException` or an empty
+  clipboard, which looks like an app bug. After boot, run
+  `adb shell settings put global hide_error_dialogs 1` and `adb shell input keyevent KEYCODE_ENTER`.
+  Then check that `adb shell dumpsys window | grep mCurrentFocus` names no "Not Responding" window.
 - `monkey` does not launch this app; use `am start`.
 - The app has no launch-time fixtures, so driving it by hand reads live public data.
 
