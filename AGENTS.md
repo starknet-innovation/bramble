@@ -28,7 +28,8 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
 
 - The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
   via `BRAMBLE_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
-  flag is set.
+  flag is set. Live mainnet CI is `.github/workflows/mainnet-e2e.yml`
+  (`docs/MAINNET_E2E_CI.md`), not this suite and not pull-request CI.
 - Krusty KMS is installed as an exact, lockfile-pinned npm package by `bun install`.
   `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,

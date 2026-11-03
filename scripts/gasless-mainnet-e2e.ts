@@ -3,7 +3,9 @@
  * Uses the wallet's quote, ceiling, typed-data check, and submit. Signs with
  * the configured account key. Prints the transaction hash and explorer links,
  * and the reason each curated token was skipped. Skips with exit 0 when no
- * account is configured.
+ * account is configured. Generic CI is refused; the Mainnet E2E workflow is
+ * the only opt-in, and it passes the hot wallet with GASLESS_E2E_ADDRESS and
+ * GASLESS_E2E_PRIVATE_KEY rather than an sncast file.
  */
 
 import { RpcProvider } from "starknet";
@@ -30,6 +32,7 @@ import {
 import { type LoadedMainnetAccount, loadProcessAccount } from "./gasless-mainnet-account";
 import { payWithToken, recordingHttp } from "./gasless-mainnet-attempt";
 import { displayRpcUrl, selectMainnetRpc } from "./gasless-mainnet-rpc";
+import { assertLiveMainnetAllowed } from "./mainnet-e2e-guard";
 
 const PIN = "0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f";
 
@@ -153,6 +156,12 @@ const runGaslessMainnet = async (account: LoadedMainnetAccount): Promise<void> =
 };
 
 const main = async (): Promise<number> => {
+  try {
+    assertLiveMainnetAllowed(process.env);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "The live-mainnet suite is local-only");
+    return 1;
+  }
   const loaded = await loadProcessAccount();
   if (loaded.kind === "skip") {
     console.log(loaded.message);

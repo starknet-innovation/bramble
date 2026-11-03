@@ -3,7 +3,27 @@
  * unrelated to any funded account.
  */
 import { describe, expect, test } from "bun:test";
+import {
+  MAINNET_E2E_CI_OPT_IN,
+  MAINNET_E2E_ENVIRONMENT,
+  MAINNET_E2E_REF,
+  MAINNET_E2E_REPOSITORY,
+  MAINNET_E2E_WORKFLOW_NAME,
+  mainnetE2eWorkflowRef,
+} from "../../scripts/mainnet-e2e-guard";
 import { readStrk20MainnetEnvironment } from "./strk20-mainnet-env";
+
+const ciOptIn = (): Record<string, string> => ({
+  BRAMBLE_MAINNET_E2E_CI: MAINNET_E2E_CI_OPT_IN,
+  BRAMBLE_MAINNET_E2E_ENVIRONMENT: MAINNET_E2E_ENVIRONMENT,
+  CI: "true",
+  GITHUB_ACTIONS: "true",
+  GITHUB_EVENT_NAME: "workflow_dispatch",
+  GITHUB_REF: MAINNET_E2E_REF,
+  GITHUB_REPOSITORY: MAINNET_E2E_REPOSITORY,
+  GITHUB_WORKFLOW: MAINNET_E2E_WORKFLOW_NAME,
+  GITHUB_WORKFLOW_REF: mainnetE2eWorkflowRef(),
+});
 
 const valid = (): Record<string, string> => ({
   BRAMBLE_STRK20_E2E_ACCOUNT_ADDRESS: "0x123",
@@ -62,6 +82,28 @@ describe("STRK20 live-mainnet environment", () => {
         BRAMBLE_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK: "yes",
       }),
     ).toThrow("resume after a confirmed deposit");
+  });
+
+  test("accepts the Mainnet E2E CI opt-in and still enforces the deposit cap", () => {
+    expect(readStrk20MainnetEnvironment({ ...valid(), ...ciOptIn() })).toEqual(
+      readStrk20MainnetEnvironment(valid()),
+    );
+    expect(() =>
+      readStrk20MainnetEnvironment({
+        ...valid(),
+        ...ciOptIn(),
+        BRAMBLE_STRK20_E2E_DEPOSIT_STRK: "1.000000000000000001",
+      }),
+    ).toThrow("hard 1 STRK safety cap");
+    const refused: Record<string, string> = { ...valid(), ...ciOptIn() };
+    refused["BRAMBLE_STRK20_E2E_PRIVATE_KEY"] = "0xsecret";
+    delete refused["GITHUB_ACTIONS"];
+    try {
+      readStrk20MainnetEnvironment(refused);
+    } catch (error) {
+      expect(String(error)).toContain("only honored inside GitHub Actions");
+      expect(String(error)).not.toContain("0xsecret");
+    }
   });
 
   test("rejects CI, invalid secrets, and deposits over the hard cap", () => {

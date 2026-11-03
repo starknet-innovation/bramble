@@ -4,8 +4,12 @@
 wallet's gasless path: the shipped mainnet route, the 7/2 price ceiling, the
 pinned forwarder, SNIP-9 v2 / SNIP-12 revision 1 signing, and
 `paymaster_executeTransaction`. Mainnet is on by Adrien's decision on
-Oct 28, 2026. Sepolia stays off. It is not part of `bun run check` or CI.
-With no account configured it prints a skip message and exits 0.
+Oct 28, 2026. Sepolia stays off. It is not part of `bun run check` or
+pull-request CI. The scheduled mainnet workflow runs it from
+`GASLESS_E2E_ADDRESS` and `GASLESS_E2E_PRIVATE_KEY` when the hot wallet is
+configured; see [MAINNET_E2E_CI.md](MAINNET_E2E_CI.md). Locally, with no
+account configured, it prints a skip message and exits 0. Generic `CI`
+without that workflow's opt-in refuses to run.
 
 The call is a 1-base-unit transfer of the fee token back to the same account.
 The paymaster fee is a second transfer of that token to the pinned forwarder
