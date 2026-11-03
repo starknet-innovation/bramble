@@ -89,6 +89,7 @@ const BROADCAST_FACTORIES: Readonly<Record<string, BroadcastFactory>> = {
   "wallet.importPreferences": importPreferencesBroadcast,
   "wallet.importSeedAccounts": createAccountBroadcast,
   "wallet.lock": () => [accountsChanged],
+  "wallet.removeMultisig": () => [accountsChanged],
   "wallet.revokeOrigin": () => [accountsChanged],
   "wallet.setAccountHidden": () => [accountsChanged],
   "wallet.setActiveAccount": createAccountBroadcast,

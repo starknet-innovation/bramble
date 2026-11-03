@@ -117,6 +117,30 @@ describe("multisig dapp accounts", () => {
     ).resolves.toEqual({ error: "This multisig needs more than one signer." });
   });
 
+  test("a proposal card reviews the frozen preparation fee, not the ordinary estimate", async () => {
+    const { handler, multisigs, record } = await harness(2, { fee: "1" });
+    const connect = handler(
+      { origin: grantedOrigin, type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+    const held = handler(
+      { calls: invokeCalls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+    expect(reviewedFee).toEqual({ overallFee: "44", unit: "FRI" });
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: MULTISIG_PROPOSAL_SAVED });
+    expect(await multisigs.listIntents()).toHaveLength(1);
+  });
+
   test("a higher threshold saves the site transaction for the other signers", async () => {
     const { handler, multisigs, record } = await harness(2);
     const connect = handler(
@@ -206,11 +230,11 @@ describe("multisig dapp accounts", () => {
   test("a saved proposal is refused when its frozen fee exceeds the reviewed ceiling", async () => {
     let signed = false;
     const { handler, multisigs, record } = await harness(2, {
-      fee: "1",
       member: true,
       onSign: () => {
         signed = true;
       },
+      risenPreparedFee: true,
     });
     const connect = handler(
       { origin: grantedOrigin, type: "wallet.requestAccounts" },

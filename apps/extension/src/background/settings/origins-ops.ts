@@ -29,6 +29,7 @@ const connectedSites = async (deps: OriginOpsDeps): Promise<RuntimeResponse> => 
   const vault = await deps.wallet.readVault(passphrase);
   if (!authorized.isCurrent()) return { error: "wallet locked" };
   const extra = (await deps.multisigGrants?.sites(passphrase)) ?? [];
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   return { ok: true, sites: mergeConnectedSites(connectedSitesFromVault(vault), extra) };
 };
 

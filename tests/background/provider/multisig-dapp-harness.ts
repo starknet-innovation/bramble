@@ -64,7 +64,7 @@ export const typedData = {
 
 export const invokeCalls = [{ calldata: ["0x3"], contractAddress: "0x2", entrypoint: "transfer" }];
 
-const fakeProvider = (): RpcProvider =>
+const fakeProvider = (priceScale = 1n): RpcProvider =>
   Object.assign(Object.create(RpcProvider.prototype), {
     channel: { id: "test" },
     async getChainId() {
@@ -75,9 +75,9 @@ const fakeProvider = (): RpcProvider =>
         {
           overall_fee: 21n,
           resourceBounds: {
-            l1_data_gas: { max_amount: 1n, max_price_per_unit: 2n },
-            l1_gas: { max_amount: 3n, max_price_per_unit: 4n },
-            l2_gas: { max_amount: 5n, max_price_per_unit: 6n },
+            l1_data_gas: { max_amount: 1n, max_price_per_unit: 2n * priceScale },
+            l1_gas: { max_amount: 3n, max_price_per_unit: 4n * priceScale },
+            l2_gas: { max_amount: 5n, max_price_per_unit: 6n * priceScale },
           },
           unit: "FRI",
         },
@@ -101,6 +101,8 @@ export const harness = async (
     readonly onList?: () => void;
     readonly onSign?: () => void;
     readonly relaySignatures?: RelaySignatureLog;
+    /** Second preparation uses a 64x L1 price, as a fee that rose after review. */
+    readonly risenPreparedFee?: boolean;
     readonly signerConfig?:
       | "throw"
       | {
@@ -126,6 +128,7 @@ export const harness = async (
   };
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
+  let prepares = 0;
   const grants = memoryMultisigGrantStore();
   const readIds = grants.idsFor.bind(grants);
   const multisigGrants = {
@@ -181,13 +184,16 @@ export const harness = async (
           async isClassDeclared() {
             return true;
           },
-          prepareInvoke: () =>
-            prepareArgentMultisigInvokeV3WithProvider(
-              fakeProvider(),
+          prepareInvoke: () => {
+            const scale = options.risenPreparedFee && prepares > 0 ? 64n : 1n;
+            prepares += 1;
+            return prepareArgentMultisigInvokeV3WithProvider(
+              fakeProvider(scale),
               record,
               invokeCalls,
               record.currentConfig,
-            ),
+            );
+          },
           async submitPreparedInvoke() {
             return "0x1";
           },

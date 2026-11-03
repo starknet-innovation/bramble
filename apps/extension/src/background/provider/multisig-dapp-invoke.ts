@@ -17,7 +17,6 @@ import { exceedsReviewedFee, type FeeEstimate } from "@bramble/starknet/fee-boun
 import { preparedArgentMultisigFee } from "@bramble/starknet/multisig-invoke";
 import { REVIEWED_FEE_EXCEEDED, REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
 import { activityOrigin } from "@bramble/transactions/activity";
-import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
@@ -31,7 +30,7 @@ import { createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue, PendingApproval } from "../approvals/approvals";
-import { FAILED_INVOKE_FEE, PENDING_INVOKE_FEE } from "../approvals/invoke-fee-review";
+import { PENDING_INVOKE_FEE } from "../approvals/invoke-fee-review";
 import type { AccountHashSignerDeps } from "../ledger/account-hash-signer";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
@@ -40,7 +39,6 @@ import { networkRpcUrls, vaultAccountAddresses } from "../runtime/runtime-state"
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
 import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
-import { readStrkBalance } from "../transactions/fee-guard";
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import {
   type GrantDeps,
@@ -50,6 +48,7 @@ import {
   multisigRecordById,
 } from "./dapp-account";
 import type { InvokeExecuteDeps } from "./held-invoke-submit";
+import { priceMultisigInvoke } from "./multisig-dapp-price";
 import { MULTISIG_CLASS } from "./multisig-dapp-sign";
 import { invokeFailureResponse } from "./provider-invoke-failure";
 /** Error a site receives when a higher-threshold invoke was saved, not sent. */
@@ -130,35 +129,6 @@ const queueMultisigDappInvoke = async (
     });
   }
   return { approval };
-};
-
-const priceMultisigInvoke = async (
-  deps: QueueDeps,
-  record: ArgentMultisigRecord,
-  calls: readonly Call[],
-  preferences: Awaited<ReturnType<QueueDeps["preferencesStore"]["read"]>>,
-) => {
-  const config = record.currentConfig;
-  const estimate = deps.runtimeRpc.estimateMultisigDappFee;
-  if (!config || !estimate) return FAILED_INVOKE_FEE;
-  try {
-    const fee = await estimate({
-      account: record,
-      calls,
-      config,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
-    });
-    const balance = await readStrkBalance(deps, record, preferences);
-    return {
-      fee,
-      feeAffordability: resolveFeeAffordability({ balance, fee }),
-      feeEstimateFailed: false,
-      feeEstimatePending: false,
-      requiresDeployment: false,
-    };
-  } catch {
-    return FAILED_INVOKE_FEE;
-  }
 };
 
 const activitySummary = (origin: string, calls: readonly Call[]): string =>
