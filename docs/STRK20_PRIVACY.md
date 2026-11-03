@@ -301,13 +301,15 @@ Deposit spends that token's public balance. Transfer and withdraw spend its priv
 A co-owner who receives a CallSet authorization reviews the action, token, amount, and recipient
 on this screen and signs it there.
 
-A wrap is stored only when the sender is a saved contact whose Stark key is in the multisig's
-signer set, and only for the pool configured on that network. The first key wins. The same key
-offered again is a no-op. A different key is not stored; the vault keeps a conflict mark with no
-copy of the foreign key, and the section says this wallet kept its own. Dropping the key removes
-it from this wallet only. Co-owners who already have it still can see private activity. The
-conflict wrap is left uncheckpointed so a later sync can accept it after the drop, while it is
-still inside the relay lookback.
+A wrap is stored only when the sender is a saved contact whose Stark key is in the chain's
+current signer set, and only for the pool configured on that network. Deployment signers are not
+treated as current. A signer set that cannot be read is left for a later sync. The first key wins.
+The same key offered again is a no-op. A different key is not stored; the vault keeps a conflict
+mark with no copy of the foreign key, and the section says this wallet kept its own. Dropping the
+key removes it from this wallet only. Removing the multisig removes the key and any conflict mark
+with it. Co-owners who already have it still can see private activity. A conflict wrap, and a wrap
+refused because the key collection or the vault is full, stays uncheckpointed. The next sync still
+reaches back to that wrap, so dropping a key can accept it while the wrap remains on the relay.
 
 Registration and deposit freeze an ordinary V3 intent. The hash includes `proofFacts` when a
 proof is attached, and matches starknet.js. The proof bytes are stored beside that intent, on

@@ -23,7 +23,9 @@ import type { VaultRecovery } from "@bramble/wallet-model/vault-recovery";
 import type { AccountDerivationInput } from "../accounts/accounts";
 import type {
   MultisigStrk20KeyAccept,
+  MultisigStrk20KeyAuthorization,
   MultisigStrk20KeyOffer,
+  MultisigStrk20KeyRemoval,
   MultisigStrk20KeyRequest,
   MultisigStrk20KeyState,
 } from "../accounts/multisig-strk20-key";
@@ -288,17 +290,24 @@ export type WalletVaultService = {
    * already stored is kept, and the result is `conflict`.
    */
   readonly acceptMultisigStrk20Key: (
-    input: MultisigStrk20KeyOffer,
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyOffer,
   ) => Promise<MultisigStrk20KeyAccept>;
   /**
    * Creates the multisig's viewing key when this wallet does not hold one.
-   * A second call does not rotate it.
+   * A second call does not rotate it. A lock before the commit starts stores nothing.
    */
   readonly createMultisigStrk20Key: (
-    input: MultisigStrk20KeyRequest,
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyRequest,
   ) => Promise<"created" | "held">;
   /** Forgets this wallet's copy of the key. Co-owners are unaffected. */
-  readonly forgetMultisigStrk20Key: (input: MultisigStrk20KeyRequest) => Promise<boolean>;
+  readonly forgetMultisigStrk20Key: (
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyRequest,
+  ) => Promise<boolean>;
+  /**
+   * Forgets every key and conflict mark for one multisig in one write.
+   * A lock before the commit starts leaves them stored.
+   */
+  readonly forgetMultisigStrk20Keys: (input: MultisigStrk20KeyRemoval) => Promise<boolean>;
   /** Whether this wallet holds the key. The key itself is not returned. */
   readonly multisigStrk20KeyStatus: (
     input: MultisigStrk20KeyRequest,

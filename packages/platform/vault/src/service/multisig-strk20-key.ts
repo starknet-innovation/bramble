@@ -5,15 +5,19 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 import { canonicalFelt, isStarkPrivateKey } from "@bramble/wallet-model/networks";
 import {
   acceptMultisigStrk20Key,
   canonicalMultisigStrk20Scope,
   forgetMultisigStrk20Key,
+  forgetMultisigStrk20Keys,
   MULTISIG_STRK20_VIEWING_KEY_SCHEME,
   type MultisigStrk20KeyAccept,
+  type MultisigStrk20KeyAuthorization,
   type MultisigStrk20KeyLedger,
   type MultisigStrk20KeyOffer,
+  type MultisigStrk20KeyRemoval,
   type MultisigStrk20KeyRequest,
   type MultisigStrk20KeyState,
   multisigStrk20KeyPackageContent,
@@ -25,9 +29,29 @@ import type { KmsPort } from "../kms-port";
 import type { Vault } from "../schema/schema";
 import { writeVault } from "./service-creation";
 import type { WalletVaultService } from "./service-types";
+import { VAULT_FULL } from "./vault-capacity";
 
 const INVALID = "Invalid multisig STRK20 key";
-const LIMIT = "Multisig STRK20 key limit reached";
+
+/** Thrown when another multisig key would exceed the 32-key collection. */
+export const MULTISIG_STRK20_KEY_LIMIT = "Multisig STRK20 key limit reached";
+
+const commitGuard = (isAuthorized: () => boolean): (() => void) => {
+  const check = (): void => {
+    if (!isAuthorized()) throw new WalletError("wallet locked");
+  };
+  check();
+  return check;
+};
+
+/**
+ * True for a key-collection or vault-budget refusal. The wrap can succeed
+ * after another key is dropped or the vault has room, so sync must not
+ * checkpoint it.
+ */
+export const isMultisigStrk20CapacityRefusal = (error: unknown): boolean =>
+  error instanceof WalletError &&
+  (error.message === MULTISIG_STRK20_KEY_LIMIT || error.message === VAULT_FULL);
 
 const ledgerOf = (vault: Vault): MultisigStrk20KeyLedger => ({
   conflicts: vault.multisigStrk20KeyConflicts,
@@ -68,10 +92,14 @@ export const multisigStrk20KeyMethods = (
   | "acceptMultisigStrk20Key"
   | "createMultisigStrk20Key"
   | "forgetMultisigStrk20Key"
+  | "forgetMultisigStrk20Keys"
   | "multisigStrk20KeyStatus"
   | "packageMultisigStrk20Key"
 > => ({
-  async acceptMultisigStrk20Key(input: MultisigStrk20KeyOffer): Promise<MultisigStrk20KeyAccept> {
+  async acceptMultisigStrk20Key(
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyOffer,
+  ): Promise<MultisigStrk20KeyAccept> {
+    const guard = commitGuard(input.isAuthorized);
     const scope = scopeOf(input);
     const key = canonicalFelt(input.key);
     if (!scope || !key || !isStarkPrivateKey(key)) throw new WalletError(INVALID);
@@ -81,7 +109,7 @@ export const multisigStrk20KeyMethods = (
       scheme: MULTISIG_STRK20_VIEWING_KEY_SCHEME,
       viewingKey: key,
     });
-    if (!next) throw new WalletError(LIMIT);
+    if (!next) throw new WalletError(MULTISIG_STRK20_KEY_LIMIT);
     if (next.result !== "held") {
       await writeVault(
         encryptedStore,
@@ -91,11 +119,15 @@ export const multisigStrk20KeyMethods = (
           multisigStrk20ViewingKeys: next.ledger.keys,
         },
         input.vaultPassphrase,
+        guard,
       );
     }
     return next.result;
   },
-  async createMultisigStrk20Key(input: MultisigStrk20KeyRequest): Promise<"created" | "held"> {
+  async createMultisigStrk20Key(
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyRequest,
+  ): Promise<"created" | "held"> {
+    const guard = commitGuard(input.isAuthorized);
     const scope = scopeOf(input);
     if (!scope) throw new WalletError(INVALID);
     const vault = await readVaultSnapshot(input.vaultPassphrase);
@@ -106,7 +138,7 @@ export const multisigStrk20KeyMethods = (
       scheme: MULTISIG_STRK20_VIEWING_KEY_SCHEME,
       viewingKey,
     });
-    if (next?.result !== "stored") throw new WalletError(LIMIT);
+    if (next?.result !== "stored") throw new WalletError(MULTISIG_STRK20_KEY_LIMIT);
     await writeVault(
       encryptedStore,
       {
@@ -115,10 +147,14 @@ export const multisigStrk20KeyMethods = (
         multisigStrk20ViewingKeys: next.ledger.keys,
       },
       input.vaultPassphrase,
+      guard,
     );
     return "created";
   },
-  async forgetMultisigStrk20Key(input: MultisigStrk20KeyRequest): Promise<boolean> {
+  async forgetMultisigStrk20Key(
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyRequest,
+  ): Promise<boolean> {
+    const guard = commitGuard(input.isAuthorized);
     const scope = scopeOf(input);
     if (!scope) throw new WalletError(INVALID);
     const vault = await readVaultSnapshot(input.vaultPassphrase);
@@ -133,6 +169,26 @@ export const multisigStrk20KeyMethods = (
         multisigStrk20ViewingKeys: next.ledger.keys,
       },
       input.vaultPassphrase,
+      guard,
+    );
+    return true;
+  },
+  async forgetMultisigStrk20Keys(input: MultisigStrk20KeyRemoval): Promise<boolean> {
+    const guard = commitGuard(input.isAuthorized);
+    if (!isAccountId(input.multisigId)) throw new WalletError(INVALID);
+    const vault = await readVaultSnapshot(input.vaultPassphrase);
+    const next = forgetMultisigStrk20Keys(ledgerOf(vault), input.multisigId);
+    if (!next) throw new WalletError(INVALID);
+    if (!next.removed) return false;
+    await writeVault(
+      encryptedStore,
+      {
+        ...vault,
+        multisigStrk20KeyConflicts: next.ledger.conflicts,
+        multisigStrk20ViewingKeys: next.ledger.keys,
+      },
+      input.vaultPassphrase,
+      guard,
     );
     return true;
   },

@@ -4,9 +4,10 @@
  * them. Messages report whether this wallet holds the key, never the key.
  */
 
+import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
-import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { NostrApplicationData } from "@bramble/vault/kms-port";
 import {
   MULTISIG_STRK20_KEY_IDENTIFIER,
@@ -16,9 +17,10 @@ import { isAccountId } from "@bramble/wallet-model/accounts";
 import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { isNostrPublicKey } from "@bramble/wallet-model/nostr";
 import type { AddressBookEntry } from "@bramble/wallet-model/preferences";
+import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import type { MultisigOpsDeps } from "./multisig-deps";
+import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import {
   coordinationRecipients,
   coordinationRelayUrls,
@@ -47,10 +49,26 @@ const readMultisigId = (message: unknown, type: string): string | null =>
     ? message["multisigId"]
     : null;
 
-const signerGuidsFor = (record: ArgentMultisigRecord): readonly string[] | null => {
-  const keys = record.currentConfig?.signerPublicKeys ?? record.deployment?.signerPublicKeys;
-  return keys && keys.length > 0 ? keys.map((key) => argentSignerGuid(key)) : null;
+const chainSignerGuids = async (
+  deps: MultisigOpsDeps,
+  record: ArgentMultisigRecord,
+  preferences: WalletPreferences,
+): Promise<readonly string[] | null> => {
+  try {
+    const config = await multisigRpc(deps).getConfig({
+      address: record.address,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
+    });
+    return config.signerGuids.length > 0 ? config.signerGuids : null;
+  } catch {
+    return null;
+  }
 };
+
+const locked = (error: unknown): RuntimeResponse | null =>
+  error instanceof WalletError && error.message === "wallet locked"
+    ? { error: "wallet locked" }
+    : null;
 
 const scopeFor = async (
   deps: MultisigOpsDeps,
@@ -110,7 +128,7 @@ export const importSharedStrk20Key = async (
   const preferences = await deps.preferencesStore.read();
   const configured = preferences.strk20Networks?.[record.networkId]?.poolAddress;
   const poolAddress = configured ? canonicalFelt(configured) : null;
-  const signers = signerGuidsFor(record);
+  const signers = await chainSignerGuids(deps, record, preferences);
   if (!poolAddress || poolAddress !== parsed.poolAddress || !signers) {
     return { final: false };
   }
@@ -119,6 +137,7 @@ export const importSharedStrk20Key = async (
   }
   const result = await accept({
     chainId: parsed.chainId,
+    isAuthorized,
     key: parsed.key,
     multisigId: parsed.multisigId,
     poolAddress: parsed.poolAddress,
@@ -153,17 +172,26 @@ const create = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeR
   if ("error" in scope) return scope;
   const session = unlocked(deps);
   if ("error" in session) return session;
+  const authorized = captureSessionAuthorization(deps.session);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   const createKey = deps.wallet.createMultisigStrk20Key;
   if (!createKey) {
     return { error: "Secure co-signer coordination is unavailable for this wallet" };
   }
-  const state = await createKey({
-    chainId: scope.chainId,
-    multisigId,
-    poolAddress: scope.poolAddress,
-    vaultPassphrase: session.passphrase,
-  });
-  return { ok: true, state };
+  try {
+    const state = await createKey({
+      chainId: scope.chainId,
+      isAuthorized: authorized.isCurrent,
+      multisigId,
+      poolAddress: scope.poolAddress,
+      vaultPassphrase: session.passphrase,
+    });
+    return { ok: true, state };
+  } catch (error) {
+    const refusal = locked(error);
+    if (refusal) return refusal;
+    throw error;
+  }
 };
 
 const share = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
@@ -174,7 +202,8 @@ const share = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeRe
   }
   const scope = await scopeFor(deps, multisigId);
   if ("error" in scope) return scope;
-  const guids = signerGuidsFor(scope.record);
+  const preferences = await deps.preferencesStore.read();
+  const guids = await chainSignerGuids(deps, scope.record, preferences);
   if (!guids) return { error: "This multisig's signers aren't available yet." };
   const session = unlocked(deps);
   if ("error" in session) return session;
@@ -189,7 +218,6 @@ const share = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeRe
     vaultPassphrase: session.passphrase,
   });
   if (!content) return { error: "Create a key before sharing it." };
-  const preferences = await deps.preferencesStore.read();
   const ownPublicKey = await deps.wallet.nostrPublicKey(session.passphrase);
   const recipients = coordinationRecipients(
     preferences.addressBook,
@@ -246,17 +274,52 @@ const forget = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeR
   if ("error" in scope) return scope;
   const session = unlocked(deps);
   if ("error" in session) return session;
+  const authorized = captureSessionAuthorization(deps.session);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   const forgetKey = deps.wallet.forgetMultisigStrk20Key;
   if (!forgetKey) {
     return { error: "Secure co-signer coordination is unavailable for this wallet" };
   }
-  await forgetKey({
-    chainId: scope.chainId,
-    multisigId,
-    poolAddress: scope.poolAddress,
-    vaultPassphrase: session.passphrase,
-  });
+  try {
+    await forgetKey({
+      chainId: scope.chainId,
+      isAuthorized: authorized.isCurrent,
+      multisigId,
+      poolAddress: scope.poolAddress,
+      vaultPassphrase: session.passphrase,
+    });
+  } catch (error) {
+    const refusal = locked(error);
+    if (refusal) return refusal;
+    throw error;
+  }
   return { ok: true };
+};
+
+/**
+ * Drops every viewing key and conflict mark for a multisig that was just
+ * removed. A lock before the commit starts leaves them stored.
+ */
+export const forgetStrk20KeysForRemovedMultisig = async (
+  deps: MultisigOpsDeps,
+  multisigId: string,
+  isAuthorized: () => boolean,
+): Promise<"locked" | "removed"> => {
+  const session = unlocked(deps);
+  const forgetKeys = deps.wallet.forgetMultisigStrk20Keys;
+  if ("error" in session || !isAuthorized()) return "locked";
+  if (!forgetKeys) return "removed";
+  try {
+    await forgetKeys({
+      isAuthorized,
+      multisigId,
+      vaultPassphrase: session.passphrase,
+    });
+  } catch (error) {
+    if (error instanceof WalletError && error.message === "wallet locked") return "locked";
+    throw error;
+  }
+  return isAuthorized() ? "removed" : "locked";
 };
 
 /**

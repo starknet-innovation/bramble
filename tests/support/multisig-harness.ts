@@ -151,6 +151,8 @@ export type MultisigHarnessOptions = {
   >;
   readonly nonce?: string;
   readonly nostrCoordinationStore?: NostrCoordinationStore;
+  /** Caps the in-memory viewing-key collection so a test can fill it. */
+  readonly strk20KeyCapacity?: number;
   readonly now?: () => number;
   readonly onSigned?: () => void;
   readonly submitAccountDeployment?: () => Promise<string>;
@@ -188,7 +190,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
   };
   let activeAccountId = harnessAccountA.id;
   const wallet = {
-    ...multisigStrk20WalletMethods(),
+    ...multisigStrk20WalletMethods(options.strk20KeyCapacity),
     async addDerivedAccount() {
       return harnessAccountA;
     },

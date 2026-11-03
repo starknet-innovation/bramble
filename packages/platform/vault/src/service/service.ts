@@ -37,6 +37,12 @@ import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { createGrantCache } from "./grant-cache";
 import { multisigStrk20KeyMethods } from "./multisig-strk20-key";
+
+export {
+  isMultisigStrk20CapacityRefusal,
+  MULTISIG_STRK20_KEY_LIMIT,
+} from "./multisig-strk20-key";
+
 import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
@@ -423,6 +429,7 @@ export const createWalletVaultService = ({
     forgetLedgerStrk20ViewingKey: (input) =>
       serialized(() => service.forgetLedgerStrk20ViewingKey(input)),
     forgetMultisigStrk20Key: (input) => serialized(() => service.forgetMultisigStrk20Key(input)),
+    forgetMultisigStrk20Keys: (input) => serialized(() => service.forgetMultisigStrk20Keys(input)),
     importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),

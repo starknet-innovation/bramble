@@ -74,6 +74,20 @@ export type MultisigStrk20KeyRequest = MultisigStrk20KeyScope & {
   readonly vaultPassphrase: string;
 };
 
+/**
+ * The unlock session a key write must still be inside when its commit starts.
+ * A lock during generation or encryption abandons the write.
+ */
+export type MultisigStrk20KeyAuthorization = {
+  readonly isAuthorized: () => boolean;
+};
+
+/** Drops every key and conflict mark for one multisig, whatever the pool. */
+export type MultisigStrk20KeyRemoval = MultisigStrk20KeyAuthorization & {
+  readonly multisigId: string;
+  readonly vaultPassphrase: string;
+};
+
 /** An offered viewing key, still inside the vault boundary. */
 export type MultisigStrk20KeyOffer = MultisigStrk20KeyRequest & {
   readonly key: string;
@@ -274,6 +288,23 @@ export const acceptMultisigStrk20Key = (
   if (ledger.keys.length === MAX_MULTISIG_STRK20_VIEWING_KEYS) return null;
   const keys = [...ledger.keys, incoming].sort(byScope);
   return { ledger: { conflicts: ledger.conflicts, keys }, result: "stored" };
+};
+
+/**
+ * Drops every key and conflict mark for one multisig. Other multisigs are left
+ * alone. Returns null when the id is not an account id.
+ */
+export const forgetMultisigStrk20Keys = (
+  ledger: MultisigStrk20KeyLedger,
+  multisigId: string,
+): { readonly ledger: MultisigStrk20KeyLedger; readonly removed: boolean } | null => {
+  if (!isAccountId(multisigId)) return null;
+  const keys = ledger.keys.filter((key) => key.multisigId !== multisigId);
+  const conflicts = ledger.conflicts.filter((conflict) => conflict.multisigId !== multisigId);
+  return {
+    ledger: { conflicts, keys },
+    removed: keys.length !== ledger.keys.length || conflicts.length !== ledger.conflicts.length,
+  };
 };
 
 /**

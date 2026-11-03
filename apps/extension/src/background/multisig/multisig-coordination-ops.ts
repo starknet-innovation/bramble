@@ -6,6 +6,7 @@ import type {
   ArgentMultisigSigningIntent,
 } from "@bramble/multisig/repository";
 import type { NostrApplicationData } from "@bramble/vault/kms-port";
+import { isMultisigStrk20CapacityRefusal } from "@bramble/vault/service";
 import {
   isNostrApplicationData,
   isNostrPublicKey,
@@ -40,8 +41,6 @@ export { coordinationRelayUrls } from "./multisig-nostr-publish";
 
 const MULTISIG_NOSTR_IDENTIFIER = "bramble.multisig";
 const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
-// NIP-59 backdates gift wraps by up to two days. The extra day preserves a
-// safe overlap while cutting subsequent relay scans from 30 days to three.
 const NOSTR_INCREMENTAL_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
 
 const readIntentId = (message: unknown): string | null =>
@@ -148,6 +147,11 @@ const recentGiftWraps = async (
   }
 };
 
+const retryableSyncedAt = (nowSeconds: number, oldestRetryableAt: number | null): number =>
+  oldestRetryableAt === null
+    ? nowSeconds
+    : Math.min(nowSeconds, oldestRetryableAt + NOSTR_INCREMENTAL_LOOKBACK_SECONDS);
+
 const nostrSyncSince = (nowSeconds: number, syncedAt: number | undefined): number =>
   Math.max(
     0,
@@ -156,11 +160,6 @@ const nostrSyncSince = (nowSeconds: number, syncedAt: number | undefined): numbe
       : nowSeconds - NOSTR_SYNC_LOOKBACK_SECONDS,
   );
 
-// Import refusals that depend only on the package and the account's settled
-// history, so retrying the same wrap can never succeed. Any other refusal
-// (another active network, an RPC or storage failure, a full intent store) is
-// left without a receipt and retried while the wrap stays inside the
-// incremental lookback (Sherlock 129).
 const FINAL_IMPORT_REFUSALS: ReadonlySet<string> = new Set([
   "Argent multisig intent conflict",
   "Argent multisig intent invalid",
@@ -171,11 +170,17 @@ const FINAL_IMPORT_REFUSALS: ReadonlySet<string> = new Set([
   "invalid Argent multisig intent package",
 ]);
 
-/** What one opened wrap did, and whether it may be skipped by later syncs. */
 type SharedIntentImport = {
   readonly final: boolean;
   readonly intentId?: string;
   readonly strk20Key?: Strk20KeyImport["strk20Key"];
+};
+
+type OpenedWraps = {
+  readonly intentIds: string[];
+  readonly oldestRetryableAt: number | null;
+  readonly strk20Key: "conflict" | "held" | "none" | "stored";
+  readonly verifiedEventIds: string[];
 };
 
 const importSharedIntent = async (
@@ -234,7 +239,8 @@ const importSharedIntentSafely = async (
   try {
     return await importSharedIntent(...args);
   } catch (error) {
-    return { final: error instanceof WalletError };
+    if (error instanceof WalletError && error.message === "wallet locked") throw error;
+    return { final: error instanceof WalletError && !isMultisigStrk20CapacityRefusal(error) };
   }
 };
 
@@ -263,13 +269,10 @@ const recordOpenedWraps = async (
   records: readonly ArgentMultisigRecord[],
   vaultPassphrase: string,
   isAuthorized: () => boolean,
-): Promise<{
-  readonly intentIds: string[];
-  readonly strk20Key: "conflict" | "held" | "none" | "stored";
-  readonly verifiedEventIds: string[];
-} | null> => {
+): Promise<OpenedWraps | null> => {
   const imported = new Set<string>();
   const verifiedEventIds = new Set<string>();
+  let oldestRetryableAt: number | null = null;
   let strk20Key: "conflict" | "held" | "none" | "stored" = "none";
   for (const index of events.keys()) {
     if (!isAuthorized()) return null;
@@ -283,9 +286,18 @@ const recordOpenedWraps = async (
       vaultPassphrase,
       isAuthorized,
     );
-    strk20Key = noteWrap(imported, verifiedEventIds, strk20Key, result, events[index]);
+    const event = events[index];
+    if (!result.final && event) {
+      oldestRetryableAt = Math.min(oldestRetryableAt ?? event.created_at, event.created_at);
+    }
+    strk20Key = noteWrap(imported, verifiedEventIds, strk20Key, result, event);
   }
-  return { intentIds: [...imported], strk20Key, verifiedEventIds: [...verifiedEventIds] };
+  return {
+    intentIds: [...imported],
+    oldestRetryableAt,
+    strk20Key,
+    verifiedEventIds: [...verifiedEventIds],
+  };
 };
 
 const importGiftWraps = async (
@@ -297,12 +309,10 @@ const importGiftWraps = async (
   isAuthorized: () => boolean,
   open: NonNullable<MultisigOpsDeps["wallet"]["openNostrApplicationData"]>,
   openMany: MultisigOpsDeps["wallet"]["openNostrApplicationDataBatch"],
-): Promise<{
-  readonly intentIds: readonly string[];
-  readonly strk20Key: "conflict" | "held" | "none" | "stored";
-  readonly verifiedEventIds: readonly string[];
-} | null> => {
-  if (events.length === 0) return { intentIds: [], strk20Key: "none", verifiedEventIds: [] };
+): Promise<OpenedWraps | null> => {
+  if (events.length === 0) {
+    return { intentIds: [], oldestRetryableAt: null, strk20Key: "none", verifiedEventIds: [] };
+  }
   const opened = await openGiftWraps(events, vaultPassphrase, isAuthorized, open, openMany);
   if (!opened) return null;
   // A receipt only for a wrap this sync finished with: imported, a no-op, or
@@ -373,8 +383,41 @@ const shareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   return { ok: true, ...published };
 };
 
+const openUnseenWraps = async (
+  deps: MultisigOpsDeps,
+  events: readonly NostrEvent[],
+  record: ArgentMultisigRecord,
+  contacts: readonly AddressBookEntry[],
+  vaultPassphrase: string,
+  isAuthorized: () => boolean,
+  open: NonNullable<MultisigOpsDeps["wallet"]["openNostrApplicationData"]>,
+): Promise<OpenedWraps | { readonly error: string }> => {
+  try {
+    const imported = await importGiftWraps(
+      deps,
+      events,
+      contacts,
+      [record],
+      vaultPassphrase,
+      isAuthorized,
+      open,
+      deps.wallet.openNostrApplicationDataBatch,
+    );
+    if (imported) return imported;
+    return isAuthorized()
+      ? { error: "Secure co-signer updates could not be verified. Try again shortly" }
+      : { error: "wallet locked" };
+  } catch (error) {
+    if (error instanceof WalletError && error.message === "wallet locked") {
+      return { error: "wallet locked" };
+    }
+    throw error;
+  }
+};
+
 const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<RuntimeResponse> => {
-  if (!deps.wallet.nostrPublicKey || !deps.wallet.openNostrApplicationData) {
+  const open = deps.wallet.openNostrApplicationData;
+  if (!deps.wallet.nostrPublicKey || !open) {
     return { error: "Secure co-signer coordination is unavailable for this wallet" };
   }
   const record = (await deps.multisigStore.listMultisigs()).find(
@@ -382,7 +425,6 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
   );
   if (!record) return { error: "Argent multisig not found" };
   const nostrPublicKeyFor = deps.wallet.nostrPublicKey;
-  const open = deps.wallet.openNostrApplicationData;
   const passphrase = deps.session.getPassphrase();
   const authorized = captureSessionAuthorization(deps.session);
   if (!passphrase || !authorized.isCurrent()) return { error: "wallet locked" };
@@ -402,29 +444,23 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
   if (!events) {
     return { error: "Secure co-signer updates are unavailable. Try again shortly" };
   }
-  const unseenEvents = events.filter((event) => !seenEventIds.has(event.id));
-  const imported = await importGiftWraps(
+  const imported = await openUnseenWraps(
     deps,
-    unseenEvents,
+    events.filter((event) => !seenEventIds.has(event.id)),
+    record,
     preferences.addressBook,
-    [record],
     passphrase,
     authorized.isCurrent,
     open,
-    deps.wallet.openNostrApplicationDataBatch,
   );
-  if (imported === null) {
-    return authorized.isCurrent()
-      ? { error: "Secure co-signer updates could not be verified. Try again shortly" }
-      : { error: "wallet locked" };
-  }
+  if ("error" in imported) return imported;
   await deps.nostrCoordinationStore
     .recordSync(
       {
         accountId: record.id,
         eventIds: imported.verifiedEventIds,
         relayUrls,
-        syncedAt: nowSeconds,
+        syncedAt: retryableSyncedAt(nowSeconds, imported.oldestRetryableAt),
       },
       authorized.isCurrent,
     )

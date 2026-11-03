@@ -15,7 +15,9 @@ import type { AccountDerivationInput } from "@bramble/vault/accounts";
 import type { NostrApplicationData } from "@bramble/vault/kms-port";
 import type {
   MultisigStrk20KeyAccept,
+  MultisigStrk20KeyAuthorization,
   MultisigStrk20KeyOffer,
+  MultisigStrk20KeyRemoval,
   MultisigStrk20KeyRequest,
   MultisigStrk20KeyState,
 } from "@bramble/vault/multisig-strk20-key";
@@ -58,14 +60,18 @@ export type WalletStatusReader = {
   readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
   /** Stores a co-owner's multisig viewing key. Optional only for partial test stubs. */
   readonly acceptMultisigStrk20Key?: (
-    input: MultisigStrk20KeyOffer,
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyOffer,
   ) => Promise<MultisigStrk20KeyAccept>;
   /** Creates the multisig viewing key when absent. Optional only for partial test stubs. */
   readonly createMultisigStrk20Key?: (
-    input: MultisigStrk20KeyRequest,
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyRequest,
   ) => Promise<"created" | "held">;
   /** Forgets this wallet's copy of a multisig viewing key. Optional for partial stubs. */
-  readonly forgetMultisigStrk20Key?: (input: MultisigStrk20KeyRequest) => Promise<boolean>;
+  readonly forgetMultisigStrk20Key?: (
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyRequest,
+  ) => Promise<boolean>;
+  /** Forgets every key and conflict mark for one multisig. Optional for partial stubs. */
+  readonly forgetMultisigStrk20Keys?: (input: MultisigStrk20KeyRemoval) => Promise<boolean>;
   /** Reports whether the multisig viewing key is held. The key is not returned. */
   readonly multisigStrk20KeyStatus?: (
     input: MultisigStrk20KeyRequest,
@@ -202,6 +208,9 @@ export const createWalletReader = (
     },
     async forgetMultisigStrk20Key(input) {
       return (await required()).forgetMultisigStrk20Key(input);
+    },
+    async forgetMultisigStrk20Keys(input) {
+      return (await required()).forgetMultisigStrk20Keys(input);
     },
     async multisigStrk20KeyStatus(input) {
       return (await required()).multisigStrk20KeyStatus(input);

@@ -35,7 +35,7 @@ describe("multisig STRK20 viewing key service", () => {
       vaultPassphrase,
     });
     const multisigId = "SN_MAIN:0xabc";
-    const input = { chainId, multisigId, poolAddress, vaultPassphrase };
+    const input = { chainId, isAuthorized: () => true, multisigId, poolAddress, vaultPassphrase };
     expect(await watching.multisigStrk20KeyStatus(input)).toBe("absent");
     expect(await watching.createMultisigStrk20Key(input)).toBe("created");
     expect(await watching.createMultisigStrk20Key(input)).toBe("held");
@@ -73,10 +73,75 @@ describe("multisig STRK20 viewing key service", () => {
     await expect(
       service.createMultisigStrk20Key({
         chainId: STARKNET_NETWORKS.SN_SEPOLIA.chainId,
+        isAuthorized: () => true,
         multisigId: "SN_MAIN:0xabc",
         poolAddress,
         vaultPassphrase,
       }),
     ).rejects.toThrow("Invalid multisig STRK20 key");
+  });
+
+  test("a lock before the commit starts stores nothing", async () => {
+    const service = makeService();
+    await service.createAccount({
+      accountContractType: "openzeppelin",
+      mnemonic,
+      vaultPassphrase,
+    });
+    const multisigId = "SN_MAIN:0xabc";
+    let checks = 0;
+    const isAuthorized = (): boolean => {
+      checks += 1;
+      return checks < 2;
+    };
+    const read = { chainId, multisigId, poolAddress, vaultPassphrase };
+    const input = { ...read, isAuthorized };
+    await expect(service.createMultisigStrk20Key(input)).rejects.toThrow("wallet locked");
+    expect(await service.multisigStrk20KeyStatus(read)).toBe("absent");
+    await service.createMultisigStrk20Key({ ...read, isAuthorized: () => true });
+    checks = 0;
+    await expect(service.forgetMultisigStrk20Key(input)).rejects.toThrow("wallet locked");
+    expect(await service.multisigStrk20KeyStatus(read)).toBe("held");
+    checks = 0;
+    await expect(service.acceptMultisigStrk20Key({ ...input, key: "0x111" })).rejects.toThrow(
+      "wallet locked",
+    );
+    expect((await service.readVault(vaultPassphrase)).multisigStrk20KeyConflicts).toEqual([]);
+  });
+
+  test("removing a multisig drops its key and conflict mark together", async () => {
+    const service = makeService();
+    await service.createAccount({
+      accountContractType: "openzeppelin",
+      mnemonic,
+      vaultPassphrase,
+    });
+    const kept = {
+      chainId,
+      isAuthorized: () => true,
+      multisigId: "SN_MAIN:0xabc",
+      poolAddress,
+      vaultPassphrase,
+    };
+    const removed = { ...kept, multisigId: "SN_MAIN:0xdef", poolAddress: "0x456" };
+    await service.createMultisigStrk20Key(kept);
+    await service.createMultisigStrk20Key(removed);
+    await service.acceptMultisigStrk20Key({ ...removed, key: "0x111" });
+    expect(await service.multisigStrk20KeyStatus(removed)).toBe("conflict");
+    let checks = 0;
+    await expect(
+      service.forgetMultisigStrk20Keys({
+        ...removed,
+        isAuthorized: () => {
+          checks += 1;
+          return checks < 2;
+        },
+      }),
+    ).rejects.toThrow("wallet locked");
+    expect(await service.multisigStrk20KeyStatus(removed)).toBe("conflict");
+    expect(await service.forgetMultisigStrk20Keys(removed)).toBe(true);
+    expect(await service.multisigStrk20KeyStatus(removed)).toBe("absent");
+    expect(await service.multisigStrk20KeyStatus(kept)).toBe("held");
+    expect(await service.forgetMultisigStrk20Keys(removed)).toBe(false);
   });
 });

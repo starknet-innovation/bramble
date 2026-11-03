@@ -107,6 +107,7 @@ export const walletStub = {
   },
   createMultisigStrk20Key: async () => "created" as const,
   forgetMultisigStrk20Key: async () => false,
+  forgetMultisigStrk20Keys: async () => false,
   multisigStrk20KeyStatus: async () => "absent" as const,
   packageMultisigStrk20Key: async () => null,
   async addLedgerAccount(): Promise<LedgerAccountRef> {
