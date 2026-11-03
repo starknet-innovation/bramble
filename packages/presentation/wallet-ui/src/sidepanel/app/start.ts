@@ -57,6 +57,7 @@ import {
 import { sceneDirection, sceneFor } from "./rendering/scene-transition";
 import { bindClusterScreens } from "./screens/cluster-ui";
 import { adoptStoredMultisig, bindConnectChoice } from "./screens/connect-account";
+import { multisigNav, persistChoice } from "./screens/multisig-nav";
 import { sceneContent } from "./screens/scene-content";
 import type { WalletView } from "./screens/views";
 import { createDeploymentCache } from "./sync/deployment-cache";
@@ -87,10 +88,11 @@ export const startWalletUi = async (
     selection.hydrated = true;
     selectedMultisigId = selection.id = id;
   };
-  const rememberMultisig = (id: string | null): void => {
-    showSelection(id);
-    void wallet.setSelectedMultisig(id).catch(() => undefined);
-  };
+  const rememberMultisig = persistChoice({
+    assign: showSelection,
+    notify: () => showNoticeToast("Couldn't switch accounts.", app),
+    write: (id) => wallet.setSelectedMultisig(id),
+  });
   let selectedMultisigIntentId: string | null = null;
   let lastNetworkId = "SN_MAIN";
   let lastScene = "";
@@ -160,8 +162,15 @@ export const startWalletUi = async (
       render,
       setActiveView: (view: WalletView) => {
         if (isParkedCollectibleView(view)) return;
-        activeView = view;
-        if (view === "home") rememberMultisig(null);
+        if (view !== "home") {
+          activeView = view;
+          return;
+        }
+        void rememberMultisig(null).then((saved) => {
+          if (!saved) return;
+          activeView = view;
+          paint();
+        });
       },
       wallet,
     };
@@ -182,11 +191,13 @@ export const startWalletUi = async (
       networkId: () => lastNetworkId,
       render,
       selectPortfolio: (id: string | null) => {
-        rememberMultisig(id);
-        activeView = id ? "multisig-home" : "home";
-        viewHistory = [];
-        forcedDirection = "swap";
-        paint();
+        void rememberMultisig(id).then((saved) => {
+          if (!saved) return;
+          activeView = id ? "multisig-home" : "home";
+          viewHistory = [];
+          forcedDirection = "swap";
+          paint();
+        });
       },
       setDrawerOpen: (open) => {
         drawerOpen = open;
@@ -271,26 +282,18 @@ export const startWalletUi = async (
     bindMultisigs({
       app,
       multisig,
-      openDetail: (id, destination = "multisig-home") => {
-        rememberMultisig(id);
-        selectedMultisigIntentId = null;
-        navigate(destination);
-      },
-      openIntent: (accountId, intentId) => {
-        rememberMultisig(accountId);
-        selectedMultisigIntentId = intentId;
-        navigate("multisig-detail");
-      },
-      openList: () => {
-        rememberMultisig(null);
-        navigate("multisigs");
-      },
-      openFunding: async (intent) => {
-        await wallet.setActiveAccount(intent.accountId);
-        rememberMultisig(intent.completeMultisigId ?? selectedMultisigId);
-        sendIntent = intent;
-        navigate("send");
-      },
+      ...multisigNav({
+        currentId: () => selectedMultisigId,
+        navigate,
+        remember: rememberMultisig,
+        setActiveAccount: (id) => wallet.setActiveAccount(id),
+        setIntent: (intent) => {
+          sendIntent = intent;
+        },
+        setIntentId: (id) => {
+          selectedMultisigIntentId = id;
+        },
+      }),
       render,
       selectedMultisigId: () => selectedMultisigId,
       wallet,
@@ -412,9 +415,10 @@ export const startWalletUi = async (
       resetActivityViewState();
     }
     if (scopeChanged === "network" && selectedMultisigId !== null) {
-      rememberMultisig(null);
-      activeView = "home";
-      viewHistory = [];
+      if (await rememberMultisig(null)) {
+        activeView = "home";
+        viewHistory = [];
+      }
     }
     const [pending, nextPreferences] = await Promise.all([
       wallet.loadPendingApprovals(),
@@ -468,12 +472,8 @@ export const startWalletUi = async (
       .catch(() => undefined);
   };
   const navigate = (view: WalletView): void => {
-    if (isParkedCollectibleView(view)) {
-      return;
-    }
-    if (view !== activeView) {
-      viewHistory = pushView(viewHistory, activeView);
-    }
+    if (isParkedCollectibleView(view)) return;
+    if (view !== activeView) viewHistory = pushView(viewHistory, activeView);
     activeView = view;
     if (view !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;

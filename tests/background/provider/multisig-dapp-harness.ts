@@ -6,10 +6,14 @@ import { memoryMultisigStore } from "@bramble/multisig/repository";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import {
   ARGENT_MULTISIG_CONTRACT,
+  argentSignerGuid,
   normalizeArgentMultisigConfig,
 } from "@bramble/starknet/account-contracts";
 import { prepareArgentMultisigInvokeV3WithProvider } from "@bramble/starknet/multisig-invoke";
 import { createMemoryStore } from "@bramble/store/kv";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { RpcProvider } from "starknet";
@@ -87,12 +91,23 @@ const fakeProvider = (): RpcProvider =>
 export const harness = async (
   threshold: number,
   options: {
+    readonly activity?: ActivityLog;
+    readonly allowanceStore?: AllowanceStore;
     readonly classHash?: string;
     readonly fee?: string;
+    readonly grantAccountIds?: readonly string[];
     readonly member?: boolean;
     readonly onGrantRead?: () => Promise<void> | void;
     readonly onList?: () => void;
     readonly onSign?: () => void;
+    readonly relaySignatures?: RelaySignatureLog;
+    readonly signerConfig?:
+      | "throw"
+      | {
+          readonly classHash: string;
+          readonly signerGuids: readonly string[];
+          readonly threshold: number;
+        };
   } = {},
 ) => {
   const preferences = createPreferencesStore({ store: createMemoryStore() });
@@ -125,13 +140,17 @@ export const harness = async (
     createWallet({
       accounts: [SIGNER],
       activeAccountId: () => SIGNER.id,
+      ...(options.grantAccountIds ? { grantAccountIds: options.grantAccountIds } : {}),
       ...(options.onSign ? { captureSign: options.onSign } : {}),
     }),
     testExtension,
     {
+      ...(options.activity ? { activity: options.activity } : {}),
+      ...(options.allowanceStore ? { allowanceStore: options.allowanceStore } : {}),
       multisigGrants,
       multisigStore: multisigs,
       preferencesStore: preferences,
+      ...(options.relaySignatures ? { relaySignatures: options.relaySignatures } : {}),
       runtimeRpc: {
         ...makeRuntimeRpc({
           async estimateMultisigDappFee() {
@@ -146,7 +165,15 @@ export const harness = async (
         }),
         multisig: {
           async getConfig() {
-            throw new Error("unused");
+            if (options.signerConfig === "throw") throw new Error("config unavailable");
+            const stored = record.currentConfig;
+            return (
+              options.signerConfig ?? {
+                classHash: record.classHash,
+                signerGuids: (stored?.signerPublicKeys ?? []).map((key) => argentSignerGuid(key)),
+                threshold: stored?.threshold ?? 0,
+              }
+            );
           },
           async getNonce() {
             return "0x1";

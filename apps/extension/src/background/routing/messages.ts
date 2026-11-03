@@ -298,18 +298,21 @@ const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
     : { error: "invalid diagnostics request" };
 };
 
-// `wallet.unlockUnverified` is the recovery screen's "Unlock anyway": it first
-// accepts a vault the store cannot verify (the service drops every site
-// connection and retained Ledger viewing key while doing so), then unlocks it
-// exactly like `wallet.unlock`. The service refuses a vault that verifies, so
-// this cannot be used to skip the freshness check on a healthy wallet.
+// `wallet.unlockUnverified` is the recovery screen's "Unlock anyway". The
+// passphrase and recovery state are checked before any multisig connection is
+// dropped, and those connections are dropped before the vault is accepted, so
+// a mistyped passphrase leaves them in place. The service refuses a vault that
+// verifies, so this cannot skip the freshness check on a healthy wallet.
 const acceptUnverifiedVault = async (
   wallet: WalletStatusReader,
+  grants: { readonly clear: () => Promise<void> },
   vaultPassphrase: string,
 ): Promise<void> => {
-  if (!wallet.recoverUnverifiedVault) {
+  if (!wallet.recoverUnverifiedVault || !wallet.assertRecoverableVault) {
     throw new WalletError("wallet unavailable");
   }
+  await wallet.assertRecoverableVault(vaultPassphrase);
+  await grants.clear();
   await wallet.recoverUnverifiedVault(vaultPassphrase);
 };
 
@@ -328,8 +331,7 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
         return { error: "wallet locked" };
       }
       if (messageType === "wallet.unlockUnverified") {
-        await ctx.multisigGrants.clear();
-        await acceptUnverifiedVault(ctx.wallet, input.vaultPassphrase);
+        await acceptUnverifiedVault(ctx.wallet, ctx.multisigGrants, input.vaultPassphrase);
       }
       await ctx.wallet.readVault(input.vaultPassphrase);
       if (ctx.session.generation() !== generation) {

@@ -63,6 +63,28 @@ export const grantedDappAccounts = async (
   return deps.wallet.getGrantedAccounts(origin, credential);
 };
 
+/** Refusal when a presented multisig is asked for an operation it cannot serve. */
+export const MULTISIG_REQUEST_UNAVAILABLE = "This multisig can't make this request.";
+
+/**
+ * The vault account a dapp operation may use. A presented multisig is refused:
+ * the operation has no multisig lane, and the vault grant behind that
+ * presentation is not served in its place. Nothing granted that matches
+ * `accept` is `origin not connected`.
+ */
+export const presentedVaultAccount = async (
+  deps: GrantDeps,
+  origin: string,
+  credential: string,
+  accept: (account: GrantedDappAccount) => boolean,
+): Promise<AccountRef | { readonly error: string }> => {
+  const granted = await grantedDappAccounts(deps, origin, credential);
+  const account = granted.find(accept);
+  if (!account) return { error: "origin not connected" };
+  if (isGrantedMultisig(account)) return { error: MULTISIG_REQUEST_UNAVAILABLE };
+  return account;
+};
+
 /**
  * A vault account on this network whose key is one of the multisig's signers.
  */

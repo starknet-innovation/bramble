@@ -39,7 +39,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls, vaultAccountAddresses } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import {
@@ -401,7 +401,7 @@ const submitThresholdOne = async (
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[input.record.networkId], preferences),
       signHash: accountHashSigner(deps, member, input.credential),
     });
-    await recordPending(result.transactionHash);
+    await afterBroadcast(() => recordPending(result.transactionHash));
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
     return invokeFailureResponse(error, false, signedHash, recordPending, async () => undefined);

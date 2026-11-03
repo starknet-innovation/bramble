@@ -120,7 +120,7 @@ export const executeSignApproval = async (
     | "session"
     | "wallet"
   > & {
-    readonly runtimeRpc?: Pick<RuntimeRpc, "getClassHashAt">;
+    readonly runtimeRpc?: Pick<RuntimeRpc, "getClassHashAt" | "multisig">;
     /** Signed OutsideExecution messages, recorded for Activity (issue 299). */
     readonly relaySignatures?: Pick<RelaySignatureLog, "record">;
     /** Overrides endpoint construction. Unset, each endpoint builds its own client. */
@@ -162,6 +162,7 @@ export const executeSignApproval = async (
     input.typedData,
     passphrase,
     networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+    input.origin,
   );
   if (multisigSigned) return multisigSigned;
   if (isGrantedMultisig(account)) return { error: "Argent multisig not found" };

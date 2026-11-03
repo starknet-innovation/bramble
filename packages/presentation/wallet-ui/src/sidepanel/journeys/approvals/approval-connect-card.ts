@@ -82,8 +82,10 @@ export const connectCard = (
   const presentedId = picker?.selectedMultisigId ?? status.activeAccountId;
   const selected = presentedId ? choices.find((choice) => choice.id === presentedId) : undefined;
   const accountId = selected?.id ?? null;
+  // One visible vault account keeps the identity row. A multisig is named even
+  // when it is the only account left after hidden vault accounts are removed.
   const identity =
-    choices.length > 1 && selected
+    selected && (choices.length > 1 || selected.kind === "multisig")
       ? `<div class="request-account-choices">${connectChoiceList(choices, selected.id)}</div><dl class="request-detail"><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`
       : connectIdentity(status, preferences);
   return `

@@ -100,8 +100,17 @@ describe("wallet.unlockUnverified", () => {
 
   test("refuses a wrong passphrase and leaves the vault awaiting recovery", async () => {
     const { local, open, sync } = await install();
+    const grants = encryptedMultisigGrantStore(
+      createEncryptedStore(createMemoryStore(), "bramble:multisig-origin-grants"),
+    );
+    await grants.grant({
+      credential: vaultPassphrase,
+      isAuthorized: () => true,
+      multisigId: "SN_MAIN:0x123",
+      origin,
+    });
     await dropRecords(local, sync);
-    const { handler } = open();
+    const { handler } = open(grants);
 
     await expect(
       handler(
@@ -114,17 +123,28 @@ describe("wallet.unlockUnverified", () => {
       locked: true,
       recovery: "unverified",
     });
+    expect(await grants.idsFor(origin, vaultPassphrase)).toEqual(["SN_MAIN:0x123"]);
   });
 
   test("refuses a vault that verifies and keeps its site connections", async () => {
     const { open } = await install();
-    const { handler, service } = open();
+    const grants = encryptedMultisigGrantStore(
+      createEncryptedStore(createMemoryStore(), "bramble:multisig-origin-grants"),
+    );
+    await grants.grant({
+      credential: vaultPassphrase,
+      isAuthorized: () => true,
+      multisigId: "SN_MAIN:0x123",
+      origin,
+    });
+    const { handler, service } = open(grants);
 
     await expect(
       handler({ type: "wallet.unlockUnverified", vaultPassphrase }, sender),
     ).resolves.toEqual({ error: "Encrypted store is not awaiting recovery" });
 
     expect((await service.readVault(vaultPassphrase)).originGrants).not.toEqual([]);
+    expect(await grants.idsFor(origin, vaultPassphrase)).toEqual(["SN_MAIN:0x123"]);
   });
 
   test("drops a multisig connection when an unverified vault is accepted", async () => {

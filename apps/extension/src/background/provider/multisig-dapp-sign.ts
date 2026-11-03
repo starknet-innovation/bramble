@@ -5,20 +5,24 @@
  * refused before a card is queued.
  */
 
+import type { ArgentMultisigConfig } from "@bramble/multisig/chain";
 import type { ArgentMultisigRecord, MultisigStore } from "@bramble/multisig/repository";
 import {
   ARGENT_MULTISIG_CONTRACT,
   serializeArgentMultisigSignature,
 } from "@bramble/starknet/account-contracts";
 import { typedDataHashForChain } from "@bramble/starknet/typed-data";
+import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import type { DappMultisigAccount } from "@bramble/wallet-protocol/results";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { AccountHashSignerDeps } from "../ledger/account-hash-signer";
 import { accountHashSigner } from "../ledger/account-hash-signer";
+import { matchesArgentPublicConfig } from "../multisig/multisig-config-reconcile";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { recordRelaySignature } from "../transactions/relay-record";
 import {
   type GrantedDappAccount,
   isGrantedMultisig,
@@ -31,6 +35,32 @@ const MULTISIG_THRESHOLD = "This multisig needs more than one signer.";
 const MULTISIG_SIGNERS_UNAVAILABLE = "This multisig's signers aren't available yet.";
 /** Refusal when the live class is not the pinned Argent multisig. */
 export const MULTISIG_CLASS = "This multisig isn't the pinned account.";
+const MULTISIG_CHANGED = "This multisig changed since this request was reviewed.";
+
+type SignRpc = Pick<RuntimeRpc, "getClassHashAt"> & {
+  readonly multisig?: Pick<NonNullable<RuntimeRpc["multisig"]>, "getConfig">;
+};
+
+/**
+ * Refuses a signature when the live signer set no longer matches the watched
+ * record. A missing read fails closed: a stale config must not be signed.
+ */
+const freshSignerConfig = async (
+  rpc: SignRpc,
+  address: string,
+  stored: NonNullable<ArgentMultisigRecord["currentConfig"]>,
+  rpcUrls: readonly string[],
+): Promise<{ readonly error: string } | null> => {
+  const read = rpc.multisig?.getConfig;
+  if (!read) return { error: MULTISIG_SIGNERS_UNAVAILABLE };
+  let chain: ArgentMultisigConfig;
+  try {
+    chain = await read({ address, rpcUrls });
+  } catch {
+    return { error: MULTISIG_SIGNERS_UNAVAILABLE };
+  }
+  return matchesArgentPublicConfig(stored, chain) ? null : { error: MULTISIG_CHANGED };
+};
 
 /**
  * Refuses a sign request that this wallet cannot finish. Null means a
@@ -79,10 +109,11 @@ export const signMultisigIfGranted = async (
   typedData: unknown,
   credential: string,
   rpcUrls: readonly string[],
+  origin: string,
 ): Promise<RuntimeResponse | null> => {
   if (!isGrantedMultisig(account)) return null;
   return (
-    (await executeMultisigTypedData(deps, account, typedData, credential, rpcUrls)) ?? {
+    (await executeMultisigTypedData(deps, account, typedData, credential, rpcUrls, origin)) ?? {
       error: "Argent multisig not found",
     }
   );
@@ -94,13 +125,16 @@ export const signMultisigIfGranted = async (
 export const executeMultisigTypedData = async (
   deps: AccountHashSignerDeps & {
     readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
-    readonly runtimeRpc?: Pick<RuntimeRpc, "getClassHashAt">;
+    /** Signed OutsideExecution messages, recorded for Activity. */
+    readonly relaySignatures?: Pick<RelaySignatureLog, "record">;
+    readonly runtimeRpc?: SignRpc;
     readonly wallet: Pick<WalletStatusReader, "readVault">;
   },
   account: GrantedDappAccount,
   typedData: unknown,
   credential: string,
   rpcUrls: readonly string[],
+  origin: string,
 ): Promise<RuntimeResponse | null> => {
   if (!isGrantedMultisig(account)) return null;
   const vault = await deps.wallet.readVault(credential);
@@ -118,22 +152,33 @@ export const executeMultisigTypedData = async (
     rpcUrls,
   );
   if ("error" in signed) return signed;
+  // A relay authorization is listed in Activity as signed. Recording can
+  // neither fail nor delay the signature the contract already accepted.
+  void recordRelaySignature(deps.relaySignatures, {
+    account,
+    messageHash: signed.messageHash,
+    origin,
+    typedData,
+  });
   return { ok: true, signature: [...signed.felts] };
 };
 
 /**
  * Signs typed data as a one-signer multisig aggregate. The live class must
- * still be the pinned Argent multisig.
+ * still be the pinned Argent multisig, and the live signer set must still
+ * match the watched record.
  */
 const signGrantedMultisig = async (
-  deps: AccountHashSignerDeps & { readonly runtimeRpc: Pick<RuntimeRpc, "getClassHashAt"> },
+  deps: AccountHashSignerDeps & { readonly runtimeRpc: SignRpc },
   account: DappMultisigAccount,
   record: ArgentMultisigRecord,
   typedData: unknown,
   credential: string,
   accounts: readonly AccountRef[],
   rpcUrls: readonly string[],
-): Promise<{ readonly error: string } | { readonly felts: readonly string[] }> => {
+): Promise<
+  { readonly error: string } | { readonly felts: readonly string[]; readonly messageHash: string }
+> => {
   const blocked = refuseUnsignedMultisig(record, accounts);
   if (blocked && "error" in blocked) return blocked;
   const config = record.currentConfig;
@@ -144,6 +189,8 @@ const signGrantedMultisig = async (
   if (!live || !sameFelt(live, ARGENT_MULTISIG_CONTRACT.classHash)) {
     return { error: MULTISIG_CLASS };
   }
+  const changed = await freshSignerConfig(deps.runtimeRpc, account.address, config, rpcUrls);
+  if (changed) return changed;
   let messageHash: string;
   try {
     messageHash = typedDataHashForChain(
@@ -155,5 +202,5 @@ const signGrantedMultisig = async (
     return { error: "invalid typed data" };
   }
   const signed = await accountHashSigner(deps, member, credential)(messageHash);
-  return { felts: serializeArgentMultisigSignature([signed], config) };
+  return { felts: serializeArgentMultisigSignature([signed], config), messageHash };
 };

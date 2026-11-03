@@ -16,7 +16,7 @@ type ConnectChoiceDeps = {
  * Writes the presented account, then reports whether the panel may show it.
  * A failed write leaves the previous selection in place.
  */
-const storeChoice =
+export const persistChoice =
   (deps: {
     readonly assign: (id: string | null) => void;
     readonly notify: () => void;
@@ -54,7 +54,7 @@ export const bindConnectChoice = (deps: {
 }): ReturnType<typeof connectAccountHandler> =>
   connectAccountHandler({
     activeAccountId: deps.accountId,
-    remember: storeChoice({ assign: deps.apply, notify: deps.notify, write: deps.write }),
+    remember: persistChoice({ assign: deps.apply, notify: deps.notify, write: deps.write }),
     render: deps.render,
     showMultisig: deps.showMultisig,
     switchAccount: deps.switchAccount,

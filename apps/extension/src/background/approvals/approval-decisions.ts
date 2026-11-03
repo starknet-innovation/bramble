@@ -254,6 +254,8 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }, decisio
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigGrants ? { multisigGrants: deps.multisigGrants } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),

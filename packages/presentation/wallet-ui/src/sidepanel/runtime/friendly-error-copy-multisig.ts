@@ -216,6 +216,7 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "Multisig proposal saved. It was not submitted.",
   ],
   ["this multisig can't submit a private proof.", "This multisig can't submit a private proof."],
+  ["this multisig can't make this request.", "This multisig can't make this request."],
   [
     "this transaction could not be saved for the signers.",
     "This transaction could not be saved for the signers.",
