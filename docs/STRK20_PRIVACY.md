@@ -305,16 +305,30 @@ it from this wallet only. Co-owners who already have it still can see private ac
 conflict wrap is left uncheckpointed so a later sync can accept it after the drop, while it is
 still inside the relay lookback.
 
-Registration, deposit, private transfer, and withdraw are not available for a multisig yet. The
-frozen V3 intent can carry `proofFacts`, and its hash matches starknet.js when those facts are
-present. A public intent omits the field and keeps the previous hash. Submission of a
-proof-bearing intent is refused: the proof bytes are not frozen (they are not part of the hash,
-and a proof can be larger than a Nostr gift wrap), and the threshold signature for the pool's
-CallSet hash is not collected. `Strk20CallSetSigner` already returns whatever signature array its
-callback produces, and `serializeArgentMultisigSignature` is the aggregate the pinned multisig
-submit path broadcasts. Wiring those into two signing rounds, and refreshing a proof that expires
-while co-owners sign, remains. Until that lands, a multisig dapp request that carries a private
-proof stays refused (pull request 825).
+Registration and deposit freeze an ordinary V3 intent. The hash includes `proofFacts` when a
+proof is attached, and matches starknet.js. The proof bytes are stored beside that intent, on
+this device only: they are not part of the hash and do not fit a Nostr gift wrap. A public intent
+omits `proofFacts` and keeps the previous hash. Submission sends the local proof with the
+threshold aggregate. Co-owners who did not generate the proof can sign the hash, and only the
+device that holds the bytes can broadcast it.
+
+Private transfer and withdraw use the relay. The second round is the paymaster's typed-data
+digest when the quote includes public calls. A quote with no public calls has already been
+authorized by the CallSet aggregate inside the proof, and the relay request is ready to send.
+
+Both rounds use the multisig's Nostr channel. The CallSet authorization is a separate gift wrap
+(`bramble.multisig.strk20-authorization`). Its calldata has the shared scalar replaced before it
+is stored or wrapped; each co-owner puts their own copy back to recompute the digest. The signer
+callback returns `serializeArgentMultisigSignature`. A single signer still returns one Stark
+pair. `Strk20CallSetSigner` does not wrap either result.
+
+The pool accepts a proof only while `base_block < current_block <= base_block + proof_validity_blocks`.
+If co-signing outlasts that window, refresh marks the frozen intent stale, drops the local proof,
+and proves again. Collected signatures on the old hash no longer apply.
+
+A multisig dapp request that carries a private proof is still refused on pull request 825, which
+is not in this branch. That refusal can be lifted, after both land, only for a proof whose facts
+are committed in the frozen hash and whose account signature is the Argent aggregate.
 
 ## Failure and trust boundaries
 

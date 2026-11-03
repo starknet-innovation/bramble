@@ -14,6 +14,7 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import { memoryOriginHistory, type OriginHistoryStore } from "@bramble/permissions/origin-history";
 import type { PhishingFeedHealth } from "@bramble/permissions/phishing-feed";
 import { type PriceService, unavailablePriceService } from "@bramble/portfolio/prices";
+import type { MultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type ActivityLog, memoryActivityLog, systemClock } from "@bramble/transactions/activity";
 import { type AllowanceStore, memoryAllowanceStore } from "@bramble/transactions/allowance-store";
@@ -109,6 +110,7 @@ export type RouterContext = {
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
   readonly strk20Jobs: Strk20JobRegistry;
+  readonly strk20MultisigStore?: MultisigStrk20Store;
   readonly strk20Preparations: Strk20WalletPreparationStore;
   readonly sidePanelLearning?: SidePanelNotice;
   readonly updates: UpdateReady;
@@ -158,6 +160,7 @@ export type MessageHandlerOptions = {
    * jobs but relies on the panel's polls alone to hold the worker open.
    */
   readonly strk20Jobs?: Strk20JobRegistry;
+  readonly strk20MultisigStore?: MultisigStrk20Store;
   readonly strk20Preparations?: Strk20WalletPreparationStore;
   /** The one-time "opens as a popup" notice (#690); absent, it is never due. */
   readonly sidePanelLearning?: SidePanelNotice;
@@ -317,6 +320,7 @@ export const routerContext = (
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     strk20Jobs: strk20JobsFor(options.strk20Jobs, now),
+    ...(options.strk20MultisigStore ? { strk20MultisigStore: options.strk20MultisigStore } : {}),
     strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
     ...sidePanelLearningFor(options.sidePanelLearning),
     updates: updatesFor(options.updates),

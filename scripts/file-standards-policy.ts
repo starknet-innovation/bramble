@@ -213,6 +213,15 @@ export const SECRET_MATERIAL_FILES = new Set([
   // The field is public; private signing stays in Krusty via signHash.
   "packages/features/transactions/src/gasless/gasless-submit.ts",
   "packages/features/privacy/src/service.ts",
+  // Multisig STRK20 CallSet records. Fragments are public Stark pairs. The
+  // shared scalar is redacted before it reaches this module and is only
+  // substituted while recomputing the digest.
+  "packages/features/privacy/src/multisig/records.ts",
+  // Multisig STRK20 prove path. Holds the vault credential only long enough
+  // to read the shared scalar and to sign a fragment, and returns neither.
+  "apps/extension/src/background/multisig/multisig-strk20-session.ts",
+  "apps/extension/src/background/multisig/multisig-strk20-prove.ts",
+  "apps/extension/src/background/multisig/multisig-strk20-actions.ts",
   // Argent multisig stores public signer identifiers and verified public
   // signature fragments only. Private signing remains behind Krusty and the
   // privileged background accountHashSigner boundary.

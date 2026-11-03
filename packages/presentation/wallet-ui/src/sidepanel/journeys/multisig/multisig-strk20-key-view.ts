@@ -5,6 +5,7 @@
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 
 /**
@@ -40,6 +41,49 @@ export const multisigStrk20KeyPanel = (
         variant: "secondary",
       })}
     </div>
+    <div class="action-row">
+      ${button({
+        attributes: { "data-ms-strk20-action": "register", hidden: true },
+        label: "Register",
+        size: "small",
+        variant: "secondary",
+      })}
+      ${button({
+        attributes: { "data-ms-strk20-action": "deposit", hidden: true },
+        label: "Deposit",
+        size: "small",
+        variant: "secondary",
+      })}
+      ${button({
+        attributes: { "data-ms-strk20-action": "transfer", hidden: true },
+        label: "Transfer",
+        size: "small",
+        variant: "secondary",
+      })}
+      ${button({
+        attributes: { "data-ms-strk20-action": "withdraw", hidden: true },
+        label: "Withdraw",
+        size: "small",
+        variant: "secondary",
+      })}
+      ${button({
+        attributes: { "data-ms-strk20-action": "share", hidden: true },
+        label: "Share",
+        size: "small",
+        variant: "secondary",
+      })}
+      ${button({
+        attributes: { "data-ms-strk20-action": "refresh", hidden: true },
+        label: "Refresh",
+        size: "small",
+        variant: "secondary",
+      })}
+    </div>
+    <form data-ms-strk20-form hidden>
+      ${textField({ autocomplete: "off", inputmode: "decimal", label: "Amount", name: "amount" })}
+      ${textField({ autocomplete: "off", label: "To", name: "recipient" })}
+      ${button({ label: "Continue", type: "submit", variant: "secondary" })}
+    </form>
     <p id="multisig-strk20-key-status" role="status"></p>
   </section>`;
 };

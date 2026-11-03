@@ -307,7 +307,7 @@ describe("prepared Argent multisig V3 invoke", () => {
     expect(seen.submissions).toHaveLength(0);
   });
 
-  test("commits proof facts in the starknet.js hash and refuses to submit them", async () => {
+  test("commits proof facts in the starknet.js hash and submits the matching proof", async () => {
     const seen: Seen = { estimates: [], submissions: [] };
     const provider = fakeProvider(seen);
     const prepared = await prepareArgentMultisigInvokeV3WithProvider(
@@ -367,11 +367,12 @@ describe("prepared Argent multisig V3 invoke", () => {
         { ...prepared, transactionHash: prepared.transactionHash },
       ),
     ).toBe(false);
+    const signed = { ...withFacts, transactionHash: committed };
     await expect(
       submitPreparedArgentMultisigInvokeV3(
         {
           config: CONFIG,
-          prepared: { ...withFacts, transactionHash: committed },
+          prepared: signed,
           rpcUrls: ["https://one.invalid"],
           signatures: [
             { publicKey: "0x456", r: "0x3", s: "0x4" },
@@ -380,7 +381,28 @@ describe("prepared Argent multisig V3 invoke", () => {
         },
         () => provider,
       ),
-    ).rejects.toThrow("Argent multisig private proofs are not submitted yet");
-    expect(seen.submissions).toHaveLength(0);
+    ).rejects.toThrow("Argent multisig private proof is missing");
+    const proof = { data: "proof", output: ["0x1"], proof_facts: [...proofFacts] };
+    seen.transactionHash = committed;
+    await expect(
+      submitPreparedArgentMultisigInvokeV3(
+        {
+          config: CONFIG,
+          prepared: signed,
+          proof,
+          rpcUrls: ["https://one.invalid"],
+          signatures: [
+            { publicKey: "0x456", r: "0x3", s: "0x4" },
+            { publicKey: "0x123", r: "0x1", s: "0x2" },
+          ],
+        },
+        () => provider,
+      ),
+    ).resolves.toBe(committed);
+    expect(seen.submissions).toEqual([
+      expect.objectContaining({
+        invocation: expect.objectContaining({ proof: "proof", proofFacts: [...proofFacts] }),
+      }),
+    ]);
   });
 });

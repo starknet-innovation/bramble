@@ -24,6 +24,34 @@ import { isBalancesResponse } from "../../../popup/responses/responses";
 import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
 import { lostReplySend, refusalText, responseError } from "../../runtime/runtime-errors";
 
+const isRecordPhase = (
+  value: unknown,
+): value is {
+  readonly id: string;
+  readonly ok: true;
+  readonly phase: "authorization" | "fresh" | "relay";
+} => {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as {
+    readonly id?: unknown;
+    readonly ok?: unknown;
+    readonly phase?: unknown;
+  };
+  return (
+    record.ok === true &&
+    typeof record.id === "string" &&
+    (record.phase === "authorization" || record.phase === "fresh" || record.phase === "relay")
+  );
+};
+
+const isTransactionHash = (
+  value: unknown,
+): value is { readonly ok: true; readonly transactionHash: string } => {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as { readonly ok?: unknown; readonly transactionHash?: unknown };
+  return record.ok === true && typeof record.transactionHash === "string";
+};
+
 /**
  * Address and active network required to sync an existing Argent multisig.
  */
@@ -286,6 +314,59 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "secure co-signer share failed");
       }
       return { recipients: response.recipients, totalRecipients: response.totalRecipients };
+    },
+    async prepareStrk20(input: {
+      readonly amount?: string;
+      readonly kind: "deposit" | "register" | "transfer" | "withdraw";
+      readonly multisigId: string;
+      readonly recipient?: string;
+    }): Promise<{
+      readonly id: string;
+      readonly phase: "authorization" | "fresh" | "intent" | "relay";
+    }> {
+      const response = await sendMessage({ ...input, type: "wallet.prepareArgentMultisigStrk20" });
+      if (isRecordPhase(response)) return { id: response.id, phase: response.phase };
+      if (isArgentMultisigIntentResponse(response)) {
+        return { id: response.intent.id, phase: "intent" };
+      }
+      throw responseError(response, "Couldn't prepare this private action.");
+    },
+    async shareStrk20Authorization(
+      id: string,
+    ): Promise<{ readonly recipients: number; readonly totalRecipients: number }> {
+      const response = await sendMessage({
+        id,
+        type: "wallet.shareArgentMultisigStrk20Authorization",
+      });
+      if (!isNostrShareResponse(response)) {
+        throw responseError(response, "secure co-signer share failed");
+      }
+      return { recipients: response.recipients, totalRecipients: response.totalRecipients };
+    },
+    async signStrk20Authorization(
+      id: string,
+    ): Promise<{ readonly id: string; readonly phase: string }> {
+      const response = await sendMessage({
+        id,
+        type: "wallet.signArgentMultisigStrk20Authorization",
+      });
+      if (!isRecordPhase(response))
+        throw responseError(response, "Couldn't prepare this private action.");
+      return { id: response.id, phase: response.phase };
+    },
+    async refreshStrk20(id: string): Promise<{ readonly id: string; readonly phase: string }> {
+      const response = await sendMessage({ id, type: "wallet.refreshArgentMultisigStrk20" });
+      if (isRecordPhase(response)) return response;
+      if (isArgentMultisigIntentResponse(response))
+        return { id: response.intent.id, phase: "intent" };
+      throw responseError(response, "Couldn't prepare this private action.");
+    },
+    async submitStrk20Relay(id: string): Promise<{ readonly transactionHash: string }> {
+      const response = await sendMessage({ id, type: "wallet.submitArgentMultisigStrk20Relay" });
+      if (!isTransactionHash(response)) {
+        throw responseError(response, "Couldn't prepare this private action.");
+      }
+      return { transactionHash: response.transactionHash };
     },
     async forgetStrk20Key(multisigId: string): Promise<void> {
       const response = await sendMessage({

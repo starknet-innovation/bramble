@@ -27,6 +27,7 @@ import {
   isCoordinationSigner,
   publishForRecipients,
 } from "./multisig-nostr-publish";
+import { importSharedStrk20Authorization } from "./multisig-strk20-actions";
 import {
   handleMultisigStrk20KeyOps,
   importSharedStrk20Key,
@@ -194,6 +195,14 @@ const importSharedIntent = async (
     isAuthorized,
   );
   if (key) return key;
+  const authorization = await importSharedStrk20Authorization(
+    deps,
+    opened,
+    contacts,
+    records,
+    vaultPassphrase,
+  );
+  if (authorization) return authorization;
   const input = trustedSharedIntent(opened, contacts, records);
   if (!input) return { final: true };
   const incoming = input.package.intent;

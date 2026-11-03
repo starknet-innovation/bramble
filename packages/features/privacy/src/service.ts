@@ -83,14 +83,11 @@ export type Strk20AccountContext = {
   readonly config: Strk20NetworkConfig | null;
   /** Live unlock authorization checked at the final public-account write. */
   readonly isAuthorized: () => boolean;
-  /**
-   * Progress sink for the phases of a long operation (maturity, discovery,
-   * proving, broadcast). Set only by a tracked background job; absent on every
-   * request-path call, where reporting is a no-op. Receives fixed labels from
-   * `./policy/phases` and nothing derived from the account or its notes.
-   */
+  /** Phase labels for a tracked job. Absent on the request path. */
   readonly onPhase?: Strk20PhaseSink;
   readonly rpcUrls: readonly string[];
+  /** Multisig pool aggregate. Absent, `signHash` still returns one Stark pair. */
+  readonly signCallSet?: (messageHash: string, calls: readonly Call[]) => Promise<string[]>;
   readonly signHash: (messageHash: string) => Promise<StarkSignature>;
   readonly viewingKey: () => Promise<string>;
 };

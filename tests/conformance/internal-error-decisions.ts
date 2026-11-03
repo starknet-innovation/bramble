@@ -67,7 +67,13 @@ export const PRIVATE_FACTS: ReadonlySet<string> = new Set([
   "strk20 private submission unavailable",
   "strk20 private submission unavailable: no private relay is configured for this network",
   "strk20 private submission unavailable: x",
-  "Argent multisig private proofs are not submitted yet",
+  "Argent multisig private proof does not match the signed transaction",
+  "Argent multisig private proof is missing",
+  "Invalid Argent multisig private proof",
+  "This authorization is too large to share.",
+  "This private transaction expired. Refresh it.",
+  "Waiting for co-owners to authorize this private action.",
+  "invalid multisig private action",
 ]);
 
 // Shadow-account facts (issue 443), pending reviewed copy that keeps each one.
@@ -107,6 +113,7 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Couldn't remove that token",
   "Couldn't update that collectible",
   "Couldn't update that folder",
+  "Couldn't prepare this private action.",
   "Couldn't update this multisig's key.",
   "Currency update failed",
   "Deployment review failed",

@@ -35,6 +35,10 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
     if (create) create.hidden = state !== "absent";
     if (share) share.hidden = state === "absent";
     if (drop) drop.hidden = state === "absent";
+    for (const action of panel.querySelectorAll<HTMLButtonElement>("[data-ms-strk20-action]")) {
+      const name = action.dataset["msStrk20Action"];
+      action.hidden = state !== "held" || name === "share" || name === "refresh";
+    }
     if (!dropArmed) {
       setStatus(
         panel,
@@ -53,6 +57,90 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
       setStatus(panel, "Couldn't update this multisig's key.");
     });
   }
+
+  const form = panel.querySelector<HTMLFormElement>("[data-ms-strk20-form]");
+  let pendingKind: "deposit" | "transfer" | "withdraw" | null = null;
+  let lastId: string | null = null;
+  const run = (
+    kind: "deposit" | "register" | "transfer" | "withdraw",
+    amount?: string,
+    recipient?: string,
+  ) => {
+    const id = deps.selectedMultisigId();
+    if (!id) return;
+    void deps.multisig
+      .prepareStrk20({
+        kind,
+        multisigId: id,
+        ...(amount ? { amount } : {}),
+        ...(recipient ? { recipient } : {}),
+      })
+      .then(
+        (result) => {
+          lastId = result.id;
+          const share = panel.querySelector<HTMLButtonElement>('[data-ms-strk20-action="share"]');
+          const refresh = panel.querySelector<HTMLButtonElement>(
+            '[data-ms-strk20-action="refresh"]',
+          );
+          if (share) share.hidden = result.phase !== "authorization";
+          if (refresh) refresh.hidden = result.phase === "authorization";
+          setStatus(
+            panel,
+            result.phase === "authorization"
+              ? "Waiting for co-owners."
+              : result.phase === "intent"
+                ? "Sign the transaction."
+                : "Send it when the owners are ready.",
+          );
+        },
+        (error: unknown) => {
+          setStatus(panel, errorLine(error, "Couldn't prepare this private action."));
+        },
+      );
+  };
+  for (const action of panel.querySelectorAll<HTMLButtonElement>("[data-ms-strk20-action]")) {
+    action.addEventListener("click", () => {
+      const kind = action.dataset["msStrk20Action"];
+      if (kind === "share" && lastId) {
+        void deps.multisig.shareStrk20Authorization(lastId).then(
+          (result) => setStatus(panel, `Shared with ${result.recipients} co-signers.`),
+          (error: unknown) =>
+            setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+        );
+        return;
+      }
+      if (kind === "refresh" && lastId) {
+        void deps.multisig.refreshStrk20(lastId).then(
+          (result) => {
+            lastId = result.id;
+            setStatus(
+              panel,
+              result.phase === "authorization" ? "Waiting for co-owners." : "Sign the transaction.",
+            );
+          },
+          (error: unknown) =>
+            setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+        );
+        return;
+      }
+      if (kind === "register") {
+        if (form) form.hidden = true;
+        run("register");
+        return;
+      }
+      if (kind !== "deposit" && kind !== "transfer" && kind !== "withdraw") return;
+      pendingKind = kind;
+      if (form) form.hidden = false;
+    });
+  }
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!pendingKind || !form) return;
+    const data = new FormData(form);
+    const amount = String(data.get("amount") ?? "").trim();
+    const recipient = String(data.get("recipient") ?? "").trim();
+    run(pendingKind, amount, recipient || undefined);
+  });
 
   for (const button of buttons) {
     button.addEventListener("click", () => {

@@ -17,4 +17,10 @@ export type NostrCoordinationResponse =
   | {
       readonly ok: true;
       readonly state: "absent" | "conflict" | "created" | "held";
-    };
+    }
+  | {
+      readonly id: string;
+      readonly ok: true;
+      readonly phase: "authorization" | "fresh" | "relay";
+    }
+  | { readonly ok: true; readonly transactionHash: string };

@@ -3,6 +3,7 @@
  */
 import type { NostrCoordinationStore } from "@bramble/multisig/coordination";
 import type { MultisigStore } from "@bramble/multisig/repository";
+import type { MultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import type { ArgentMultisigDeploymentReviews } from "./multisig-deployment-reviews";
 import type { NostrRelayTransport } from "./nostr-relay";
@@ -14,6 +15,8 @@ export type MultisigOpsDeps = WalletOpsDeps & {
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
   readonly nostrCoordinationStore: NostrCoordinationStore;
+  /** Local CallSet authorizations, proof bytes, and relay requests. */
+  readonly strk20MultisigStore?: MultisigStrk20Store;
   /** Injectable encrypted-event transport; production reuses short-lived native WebSockets. */
   readonly nostrRelayTransport?: NostrRelayTransport;
   readonly now: () => number;

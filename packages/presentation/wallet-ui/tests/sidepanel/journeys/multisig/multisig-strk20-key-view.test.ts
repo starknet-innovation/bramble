@@ -16,6 +16,10 @@ describe("multisig private balances", () => {
     expect(html).toContain("Create key");
     expect(html).toContain("Share key");
     expect(html).toContain("Drop key");
+    expect(html).toContain("Register");
+    expect(html).toContain("Deposit");
+    expect(html).toContain("Transfer");
+    expect(html).toContain("Withdraw");
     expect(html).toContain("hidden");
   });
 

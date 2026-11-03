@@ -2,7 +2,7 @@
 
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarkSignature } from "@bramble/wallet-model/signing";
-import { STRK20_LIMITS } from "@bramble/wallet-protocol/strk20";
+import { STRK20_LIMITS, type Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { EDataAvailabilityMode } from "starknet";
 import type { ArgentMultisigConfig } from "../accounts/account-contracts";
 
@@ -93,6 +93,11 @@ export type PrepareArgentMultisigInvokeV3Input = {
   readonly account: ArgentMultisigAccountInput;
   readonly calls: readonly ArgentMultisigCall[];
   readonly config: ArgentMultisigConfig;
+  /**
+   * Proof whose facts are frozen into the hash. The bytes are not stored on
+   * the prepared transaction; the caller keeps them beside the intent.
+   */
+  readonly proof?: Strk20Proof;
   readonly rpcUrls: readonly string[];
 };
 
@@ -104,6 +109,11 @@ export type SubmitPreparedArgentMultisigInvokeV3Input = {
   /** Live authorization captured by the privileged caller. */
   readonly isAuthorized?: () => boolean;
   readonly prepared: PreparedArgentMultisigInvokeV3;
+  /**
+   * Proof bytes for a transaction whose hash commits to `prepared.proofFacts`.
+   * Required exactly when those facts are present, and refused otherwise.
+   */
+  readonly proof?: Strk20Proof;
   readonly rpcUrls: readonly string[];
   readonly signatures: readonly StarkSignature[];
 };
