@@ -20,6 +20,8 @@ describe("multisig private balances", () => {
     expect(html).toContain("Deposit");
     expect(html).toContain("Transfer");
     expect(html).toContain("Withdraw");
+    expect(html).toContain("Send");
+    expect(html).toContain("Refresh");
     expect(html).toContain("hidden");
   });
 

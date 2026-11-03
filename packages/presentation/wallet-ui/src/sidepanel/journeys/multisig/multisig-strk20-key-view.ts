@@ -78,6 +78,11 @@ export const multisigStrk20KeyPanel = (
         size: "small",
         variant: "secondary",
       })}
+      ${button({
+        attributes: { "data-ms-strk20-action": "send", hidden: true },
+        label: "Send",
+        size: "small",
+      })}
     </div>
     <form data-ms-strk20-form hidden>
       ${textField({ autocomplete: "off", inputmode: "decimal", label: "Amount", name: "amount" })}

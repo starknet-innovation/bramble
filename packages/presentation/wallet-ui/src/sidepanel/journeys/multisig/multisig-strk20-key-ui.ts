@@ -37,7 +37,7 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
     if (drop) drop.hidden = state === "absent";
     for (const action of panel.querySelectorAll<HTMLButtonElement>("[data-ms-strk20-action]")) {
       const name = action.dataset["msStrk20Action"];
-      action.hidden = state !== "held" || name === "share" || name === "refresh";
+      action.hidden = state !== "held" || name === "share" || name === "refresh" || name === "send";
     }
     if (!dropArmed) {
       setStatus(
@@ -82,8 +82,10 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
           const refresh = panel.querySelector<HTMLButtonElement>(
             '[data-ms-strk20-action="refresh"]',
           );
+          const send = panel.querySelector<HTMLButtonElement>('[data-ms-strk20-action="send"]');
           if (share) share.hidden = result.phase !== "authorization";
           if (refresh) refresh.hidden = result.phase === "authorization";
+          if (send) send.hidden = result.phase !== "relay";
           setStatus(
             panel,
             result.phase === "authorization"
@@ -104,6 +106,14 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
       if (kind === "share" && lastId) {
         void deps.multisig.shareStrk20Authorization(lastId).then(
           (result) => setStatus(panel, `Shared with ${result.recipients} co-signers.`),
+          (error: unknown) =>
+            setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
+        );
+        return;
+      }
+      if (kind === "send" && lastId) {
+        void deps.multisig.submitStrk20Relay(lastId).then(
+          (result) => setStatus(panel, `Sent ${result.transactionHash}.`),
           (error: unknown) =>
             setStatus(panel, errorLine(error, "Couldn't prepare this private action.")),
         );
