@@ -14,6 +14,7 @@ mod account_names;
 mod account_store;
 mod activity;
 mod argent_multisig;
+mod avatar;
 mod backup;
 mod biometric;
 mod class_declared;
@@ -64,6 +65,7 @@ pub use account_names::{
     is_account_label,
 };
 pub use argent_multisig::{ArgentMultisigConfig, ArgentMultisigPrediction};
+pub use avatar::{AccountAvatar, AvatarPaint, AvatarPart, AvatarShape};
 pub use biometric::BiometricDomain;
 pub use class_declared::ClassDeclaredRead;
 pub use clock::HostClock;
@@ -106,7 +108,7 @@ pub use send::{
     confirmation_checkpoints_ms, deployment_status_request, judge_deployment_status,
     parse_token_amount, validate_recipient,
 };
-pub use ui::{AccountAvatar, PassphraseLevel, PassphraseStrength};
+pub use ui::{PassphraseLevel, PassphraseStrength};
 pub use wallet::{
     AccountInfo, RecoveryPhrase, SecurityStatus, StarkSignature, WalletCore, WalletStatus,
 };
@@ -234,10 +236,10 @@ pub fn rpc_parse_balance(body: String, id: u64) -> Result<String, CoreError> {
     rpc::parse_balance_of(&body, id)
 }
 
-/// Avatar geometry for an account address, identical to the extension's `accountAvatar`.
+/// The account bird for an address: tones, facing and parts, as the extension's `accountAvatar`.
 #[uniffi::export]
 pub fn account_avatar(address: String) -> AccountAvatar {
-    ui::account_avatar(&address)
+    avatar::account_avatar(&address)
 }
 
 /// Vault-passphrase meter reading, identical to the extension's `estimatePassphraseStrength`.
@@ -299,9 +301,10 @@ mod tests {
 #[cfg(any(test, feature = "testing"))]
 #[doc(hidden)]
 pub mod testing {
+    pub use crate::avatar::account_avatar;
     pub use crate::privacy::testing as privacy;
     pub use crate::security::{delay_ms, BASE_DELAY_MS, FREE_ATTEMPTS, MAX_DELAY_MS};
-    pub use crate::ui::{account_avatar, passphrase_strength};
+    pub use crate::ui::passphrase_strength;
     pub use crate::vault::{KDF_ITERATIONS, MIN_PASSWORD_LENGTH};
     pub use crate::wallet::IDLE_LOCK_MS;
 

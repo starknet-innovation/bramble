@@ -1,16 +1,16 @@
 //! The avatar and passphrase-meter ports must agree with the extension's TypeScript on every
-//! fixture case. The avatar is compared as markup: this test draws the struct into the exact SVG
-//! template `account-avatar.ts` uses, so any geometry or formatting drift fails here.
+//! fixture case. The avatar is compared as markup: this test draws the core's parts into the exact
+//! SVG template `account-avatar.ts` uses, so any part, number or ordering drift fails here.
 
 use bramble_core::testing::{account_avatar, passphrase_strength};
-use bramble_core::{AccountAvatar, PassphraseLevel};
+use bramble_core::{AccountAvatar, AvatarPaint, AvatarPart, AvatarShape, PassphraseLevel};
 use serde_json::Value;
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!("fixtures/extension-parity.json")).unwrap()
 }
 
-/// JavaScript's number-to-string for the small values the avatar uses (`-0` prints as `0`).
+/// JavaScript's number-to-string for the values the avatar uses (`-0` prints as `0`).
 fn js(value: f64) -> String {
     if value == 0.0 {
         "0".into()
@@ -21,47 +21,101 @@ fn js(value: f64) -> String {
     }
 }
 
+fn paint(a: &AccountAvatar, paint: AvatarPaint) -> String {
+    let name = match paint {
+        AvatarPaint::Ground => format!("ground-{}", a.ground_tone),
+        AvatarPaint::Body => format!("body-{}", a.body_tone),
+        AvatarPaint::Accent => format!("accent-{}", a.accent_tone),
+        AvatarPaint::Ink => "ink".into(),
+        AvatarPaint::Paper => "paper".into(),
+    };
+    format!("var(--bramble-account-avatar-{name})")
+}
+
+/// One part as `account-avatar.ts` writes it. The legs are the template's only stroke that also
+/// says `fill="none"`; the eye's brow stroke does not.
+fn element(a: &AccountAvatar, part: &AvatarPart, legs: bool) -> String {
+    let fill = paint(a, part.paint);
+    let opacity = if part.opacity < 1.0 {
+        format!(r#" fill-opacity="{}""#, js(part.opacity))
+    } else {
+        String::new()
+    };
+    match &part.shape {
+        AvatarShape::Fill { d } => format!(r#"<path d="{d}" fill="{fill}"{opacity} />"#),
+        AvatarShape::Stroke { d, width } => format!(
+            r#"<path d="{d}"{} stroke="{fill}" stroke-width="{}" stroke-linecap="round" />"#,
+            if legs { r#" fill="none""# } else { "" },
+            js(*width)
+        ),
+        AvatarShape::Ellipse {
+            cx,
+            cy,
+            rx,
+            ry,
+            rotate,
+        } => format!(
+            r#"<ellipse cx="{}" cy="{}" rx="{}" ry="{}"{} fill="{fill}"{opacity} />"#,
+            js(*cx),
+            js(*cy),
+            js(*rx),
+            js(*ry),
+            if *rotate == 0.0 {
+                String::new()
+            } else {
+                format!(
+                    r#" transform="rotate({} {} {})""#,
+                    js(*rotate),
+                    js(*cx),
+                    js(*cy)
+                )
+            }
+        ),
+        AvatarShape::Circle { cx, cy, r } => format!(
+            r#"<circle cx="{}" cy="{}" r="{}" fill="{fill}"{opacity} />"#,
+            js(*cx),
+            js(*cy),
+            js(*r)
+        ),
+    }
+}
+
 fn svg(a: &AccountAvatar) -> String {
-    let ink = if a.face_ink_is_paper {
-        "var(--bramble-account-avatar-paper)"
-    } else {
-        "var(--bramble-account-avatar-ink)"
-    };
-    let mouth = if a.mouth_open {
-        format!(
-            r#"<path class="avatar-mouth" d="M15 {}c2 1 4 1 6 0" fill="none" />"#,
-            js(19.0 + a.mouth_spread)
-        )
-    } else {
-        format!(
-            r#"<path class="avatar-mouth" d="M13 {}a1 .75 0 0 0 10 0" stroke="none" />"#,
-            js(19.0 + a.mouth_spread)
-        )
-    };
+    // The eye's markup is one template expression, so its elements sit side by side; the parts
+    // before it (up to the beak, the last filled path) are one template line each.
+    let split = a
+        .parts
+        .iter()
+        .rposition(|p| matches!(p.shape, AvatarShape::Fill { .. }))
+        .unwrap()
+        + 1;
+    let body: Vec<String> = a.parts[..split]
+        .iter()
+        .enumerate()
+        .map(|(i, p)| element(a, p, i == 0))
+        .collect();
+    let eye: String = a.parts[split..]
+        .iter()
+        .map(|p| element(a, p, false))
+        .collect();
     format!(
         concat!(
-            r#"<svg class="avatar" viewBox="0 0 36 36" aria-hidden="true" preserveAspectRatio="xMidYMid slice"> "#,
-            r#"<rect width="36" height="36" fill="var(--bramble-account-avatar-{bg})" /> "#,
-            r#"<rect class="avatar-head" width="36" height="36" rx="{rx}" transform="translate({wx} {wy}) rotate({wr} 18 18) scale({ws})" fill="var(--bramble-account-avatar-{wt})" /> "#,
-            r#"<g class="avatar-character" transform="translate({fx} {fy}) rotate({fr} 18 18)" fill="{ink}" stroke="{ink}" stroke-linecap="round"> "#,
-            r#"{mouth} <g class="avatar-eyes" stroke="none"> "#,
-            r#"<rect x="{le}" y="14" width="1.5" height="2" rx="1" /> "#,
-            r#"<rect x="{re}" y="14" width="1.5" height="2" rx="1" /> </g> </g> </svg>"#,
+            r#"<svg class="avatar" viewBox="0 0 36 36" aria-hidden="true"> "#,
+            r#"<rect width="36" height="36" fill="{ground}" /> "#,
+            r#"<g class="avatar-bird" transform="{flip}translate(18 18) scale({scale}) translate({ox} {oy})"> "#,
+            r#"{body} {eye} </g> </svg>"#,
         ),
-        bg = a.background_tone,
-        rx = js(a.wrapper_corner_radius),
-        wx = js(a.wrapper_translate_x),
-        wy = js(a.wrapper_translate_y),
-        wr = js(a.wrapper_rotate),
-        ws = js(a.wrapper_scale),
-        wt = a.wrapper_tone,
-        fx = js(a.face_translate_x),
-        fy = js(a.face_translate_y),
-        fr = js(a.face_rotate),
-        ink = ink,
-        mouth = mouth,
-        le = js(14.0 - a.eye_spread),
-        re = js(20.0 + a.eye_spread),
+        ground = paint(a, AvatarPaint::Ground),
+        flip = if a.mirrored {
+            "translate(36 0) scale(-1 1) "
+        } else {
+            ""
+        },
+        scale = js(a.scale),
+        ox = js(-a.origin_x),
+        oy = js(-a.origin_y),
+        body = body.join(" "),
+        eye = eye,
     )
 }
 

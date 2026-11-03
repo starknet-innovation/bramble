@@ -33,7 +33,16 @@ private enum ARGBLayout {
 }
 
 extension BrambleSkin {
-    var avatars: [Color] { [accountAvatar0, accountAvatar1, accountAvatar2, accountAvatar3] }
+    /// The account bird's palettes, indexed by the core's avatar tones.
+    var avatarGrounds: [Color] {
+        [accountAvatarGround0, accountAvatarGround1, accountAvatarGround2, accountAvatarGround3]
+    }
+    var avatarBodies: [Color] {
+        [accountAvatarBody0, accountAvatarBody1, accountAvatarBody2, accountAvatarBody3, accountAvatarBody4]
+    }
+    var avatarAccents: [Color] {
+        [accountAvatarAccent0, accountAvatarAccent1, accountAvatarAccent2, accountAvatarAccent3]
+    }
 }
 
 struct BrambleTypeStyle {
