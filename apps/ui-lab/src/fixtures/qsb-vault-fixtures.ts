@@ -1,5 +1,5 @@
 /**
- * Quantum-safe Bitcoin vault fixtures for the UI Lab: the public BIP-173
+ * QSB vault and deposit fixtures for the UI Lab: the public BIP-173
  * P2WPKH example address, the genesis coinbase txid, one vault per row state,
  * a quote, a fixture client that answers the journey's account and vault
  * calls from a script, and the browser's coordinator grant. Nothing here is a

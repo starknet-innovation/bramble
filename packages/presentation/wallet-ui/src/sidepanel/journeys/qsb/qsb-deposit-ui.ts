@@ -1,5 +1,5 @@
 /**
- * Deposit into one unfunded Quantum-safe Bitcoin vault: an amount in BTC
+ * Deposit into one unfunded QSB vault: an amount in BTC
  * (parsed to satoshis without floating point, at least the minimum deposit and
  * at most the confirmed balance), a quote, a review of every cost with the
  * three facts the user accepts, then the submission and its outcome.
@@ -27,6 +27,7 @@ import { buttonBusy, errorLine, renderFragment } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
 import { isQsbAccessNeeded, type QsbAccess, withQsbAccess } from "./qsb-access";
 import { type QsbDepositStep, qsbQuoteRows } from "./qsb-deposit-view";
+import { qsbWriteFailure } from "./qsb-model";
 import {
   btcText,
   checkQsbDepositAmount,
@@ -38,8 +39,7 @@ import {
   QSB_SUBMISSION_COPY,
   qsbDepositable,
   qsbDepositLink,
-  qsbVaultTitle,
-  qsbVaultWriteFailure,
+  qsbDepositTitle,
 } from "./qsb-vault-model";
 import type { QsbDepositResult, QsbVaultWallet } from "./qsb-vault-runtime";
 import type { QsbVaultWrites } from "./qsb-vault-writes";
@@ -215,7 +215,7 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
       (error: unknown) => {
         if (attempt !== generation) return;
         if (isOutcomeUnknown(error)) {
-          const line = qsbVaultWriteFailure(error, "wallet request failed");
+          const line = qsbWriteFailure(error, "wallet request failed");
           outcome(QSB_DEPOSIT_UNKNOWN_TITLE, line, null, false);
           return;
         }
@@ -318,7 +318,7 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
   }
 
   const target = deps.target();
-  text("#qsb-deposit-vault", target === null ? "" : qsbVaultTitle(target.accountId, target.v));
+  text("#qsb-deposit-vault", target === null ? "" : qsbDepositTitle(target.accountId, target.v));
   const running = target === null ? null : writes.pendingDeposit(target.accountId, target.v);
   if (running) attach(running, { kind: "attached" });
   else load();

@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin vault client against stubbed background replies:
+ * The QSB vault client against stubbed background replies:
  * each of the five messages is sent with exactly the contract's fields, every
  * reply is validated strictly (keys, types, satoshi ranges, the index, the
  * txid, the fee rate, the bech32 address, and each write's own rule), and a

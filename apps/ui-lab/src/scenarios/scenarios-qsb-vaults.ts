@@ -1,9 +1,9 @@
 /**
- * Quantum-safe Bitcoin account checkpoints: one account's owner address,
- * balance and vaults in every row state, the service out of reach, the
- * accounts that cannot make vaults, a resend, and New vault from its confirm
- * step through creating to the new vault or a refusal. Production templates
- * and bindings run against a fixture client with inert timers.
+ * QSB vault checkpoints: one QSB vault's owner address, balance and deposits
+ * in every row state, the service out of reach, the QSB vaults that cannot
+ * take new deposits, a resend, and New deposit from its confirm step through
+ * creating to the new deposit or a refusal. Production templates and bindings
+ * run against a fixture client with inert timers.
  */
 
 import { QSB_VAULT_REFUSALS } from "@bramble/wallet-model/qsb-vaults";
@@ -74,34 +74,34 @@ const createVault = (context: FrameContext): void => {
   clickQsb(context, "#qsb-vault-create");
 };
 
-/** The account family: address, balance, vaults, Resend and New vault. */
+/** The QSB vault family: address, balance, deposits, Resend and New deposit. */
 export const qsbVaultsScenario: WalletScenario = {
   checkpoints: [
     accountCheckpoint(
       "qsb-account",
-      "Account · every vault state",
-      "The owner address with its copy and one line on what to do with it, the confirmed balance, and one row per vault: Unfunded (Deposit), Deposit waiting (Resend), Deposit sent and Funded (each linked to mempool.space), Withdrawn, and Unavailable.",
+      "QSB vault · every deposit state",
+      "The owner address with its copy and one line on what to do with it, the confirmed balance, and one row per deposit: Unfunded (Fund), Waiting to send (Resend), Sent and Funded (each linked to mempool.space), Withdrawn, and Unavailable.",
       { actions: "deposit, resend, new vault", vaults: 6 },
       {},
     ),
     accountCheckpoint(
       "qsb-account-empty",
-      "Account · no vaults",
-      "An account with funds and no vaults yet: the empty line and New vault.",
+      "QSB vault · no deposits",
+      "A QSB vault with funds and no deposits yet: the empty line and New deposit.",
       { vaults: 0 },
       { reading: async () => labReading([]) },
     ),
     accountCheckpoint(
       "qsb-account-offline",
-      "Account · service out of reach",
-      "The coordinator could not be reached: the balance gives way to one line and Try again; the address and vaults still show.",
+      "QSB vault · service out of reach",
+      "The QSB service could not be reached: the balance gives way to one line and Try again; the address and deposits still show.",
       { funds: null },
       { reading: async () => ({ ...labReading(EVERY_VAULT.slice(0, 3)), funds: null }) },
     ),
     accountCheckpoint(
       "qsb-account-access",
-      "Account · access not granted",
-      "Until the coordinator origin is granted, one line and Allow access stand where the balance would be; the address and vaults still show, and New vault, Deposit and Resend ask for the grant in their own click.",
+      "QSB vault · access not granted",
+      "Until the QSB service's origin is granted, one line and Allow access stand where the balance would be; the address and deposits still show, and New deposit, Fund and Resend ask for the grant in their own click.",
       { access: "not granted", funds: null },
       {
         access: { answer: false, granted: false },
@@ -110,8 +110,8 @@ export const qsbVaultsScenario: WalletScenario = {
     ),
     accountCheckpoint(
       "qsb-account-access-denied",
-      "Account · access denied",
-      "New vault asked for the grant in its click and the browser was told no: nothing was sent, and the line says why.",
+      "QSB vault · access denied",
+      "Create deposit asked for the grant in its click and the browser was told no: nothing was sent, and the line says why.",
       { access: "denied", sent: "nothing" },
       {
         access: { answer: false, granted: false },
@@ -122,15 +122,15 @@ export const qsbVaultsScenario: WalletScenario = {
     ),
     accountCheckpoint(
       "qsb-account-error",
-      "Account · read failed",
-      "A refused first read shows its reviewed line and Try again in place of the account.",
+      "QSB vault · read failed",
+      "A refused first read shows its reviewed line and Try again in place of the QSB vault.",
       { refusal: "runtime unavailable" },
       { reading: () => Promise.reject(new Error(QSB_VAULT_REFUSALS.runtimeUnavailable)) },
     ),
     accountCheckpoint(
       "qsb-account-read-only",
-      "Account · imported phrase",
-      "A read-only account keeps its address, balance and vaults, with one line instead of New vault and no Deposit.",
+      "QSB vault · imported phrase",
+      "A read-only QSB vault keeps its address, balance and deposits, with one line instead of New deposit and no Fund.",
       { writer: false },
       {
         accounts: [QSB_LAB_ACCOUNTS.readOnly],
@@ -141,8 +141,8 @@ export const qsbVaultsScenario: WalletScenario = {
     ),
     accountCheckpoint(
       "qsb-account-backup-needed",
-      "Account · backup needed",
-      "A phrase not yet backed up cannot make vaults; the line says what unlocks it.",
+      "QSB vault · backup needed",
+      "A phrase not yet backed up cannot take new deposits; the line says what unlocks it.",
       { writer: false },
       { accounts: [QSB_LAB_ACCOUNTS.backupNeeded], reading: async () => labReading([]) },
       undefined,
@@ -150,7 +150,7 @@ export const qsbVaultsScenario: WalletScenario = {
     ),
     accountCheckpoint(
       "qsb-account-resent",
-      "Account · resent",
+      "QSB vault · resent",
       "Resend on a waiting deposit sends its same signed bytes once; the row and one status line report the outcome.",
       { submission: "submitted" },
       {
@@ -161,15 +161,15 @@ export const qsbVaultsScenario: WalletScenario = {
     ),
     accountCheckpoint(
       "qsb-vault-confirm",
-      "New vault · confirm",
-      "One confirm step states what a new vault is before the background signs in and registers it.",
+      "New deposit · confirm",
+      "One confirm step states what a new deposit is before the background signs in and registers it.",
       { step: "confirm" },
       { reading: async () => labReading([deposited(0, "confirmed")]) },
       openNewVault,
     ),
     accountCheckpoint(
       "qsb-vault-creating",
-      "New vault · creating",
+      "New deposit · creating",
       "Sign-in and registration take a few seconds; a second tap, a repaint or coming back only reattaches to this one creation.",
       { creation: "in flight" },
       { reading: async () => labReading([deposited(0, "confirmed")]) },
@@ -177,8 +177,8 @@ export const qsbVaultsScenario: WalletScenario = {
     ),
     accountCheckpoint(
       "qsb-vault-created",
-      "New vault · created",
-      "Back on the account with the new vault, unfunded and ready for its one deposit.",
+      "New deposit · created",
+      "Back on the QSB vault with the new deposit, unfunded and ready to be funded once.",
       { created: "Vault 2" },
       {
         create: async () => unfunded(1),
@@ -188,8 +188,8 @@ export const qsbVaultsScenario: WalletScenario = {
     ),
     accountCheckpoint(
       "qsb-vault-refused",
-      "New vault · refused",
-      "A refused creation lands back on the account with its reviewed line.",
+      "New deposit · refused",
+      "A refused creation lands back on the QSB vault with its reviewed line.",
       { refusal: "vault limit" },
       {
         create: () => Promise.reject(new Error(QSB_VAULT_REFUSALS.vaultLimit)),
@@ -198,10 +198,9 @@ export const qsbVaultsScenario: WalletScenario = {
       createVault,
     ),
   ],
-  description:
-    "One quantum-safe Bitcoin account: its owner address, balance and vaults, Resend, and New vault.",
+  description: "One QSB vault: its owner address, balance and deposits, Resend, and New deposit.",
   id: "qsb-vaults",
   surface: "sidepanel",
-  title: "Quantum-safe Bitcoin account",
+  title: "QSB vault",
   views: ["qsb-account"],
 };

@@ -1,5 +1,5 @@
 /**
- * Quantum-safe Bitcoin accounts in the built extension, end to end through the
+ * QSB vaults (QSB accounts) in the built extension, end to end through the
  * real background: Krusty generates the 24-word phrase, each account's journal
  * is written to its own encrypted key, and the panel shows the phrase only
  * after the wallet password is typed again. A generated account becomes ready
@@ -20,7 +20,7 @@ const QSB_IMPORT_PHRASE =
 const openQsbAccounts = async (sidepanel: Page): Promise<void> => {
   await sidepanel.locator("#account-trigger").click();
   await sidepanel.locator('.account-drawer [data-view="qsb-accounts"]').click();
-  await expect(sidepanel.locator("#qsb-accounts-list")).not.toContainText("Loading accounts");
+  await expect(sidepanel.locator("#qsb-accounts-list")).not.toContainText("Loading QSB vaults");
 };
 
 const accountRow = (sidepanel: Page, id: string) =>
@@ -37,15 +37,13 @@ const retypeCheckWords = async (sidepanel: Page, words: readonly string[]): Prom
   }
 };
 
-test("creates, backs up and imports quantum-safe Bitcoin accounts", async ({ extension }) => {
+test("creates, backs up and imports QSB vaults", async ({ extension }) => {
   test.setTimeout(60_000);
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
 
   await openQsbAccounts(sidepanel);
-  await expect(sidepanel.locator("#qsb-accounts-list")).toContainText(
-    "No quantum-safe Bitcoin accounts yet.",
-  );
+  await expect(sidepanel.locator("#qsb-accounts-list")).toContainText("No QSB vaults yet.");
 
   // Create: the account exists before its phrase is shown, and the phrase is
   // shown only against the re-typed password.
@@ -70,7 +68,7 @@ test("creates, backs up and imports quantum-safe Bitcoin accounts", async ({ ext
   expect(words.every((word) => /^[a-z]+$/.test(word))).toBe(true);
   expect(words.join(" ")).not.toBe(IMPORT_MNEMONIC);
 
-  await sidepanel.getByRole("button", { name: "Show recovery phrase", exact: true }).click();
+  await sidepanel.getByRole("button", { name: "Show QSB vault phrase", exact: true }).click();
   await sidepanel.getByRole("button", { name: "I saved my phrase" }).click();
   // The grid is emptied before the words are asked for.
   await expect(phraseInputs.first()).toHaveValue("");
@@ -85,7 +83,7 @@ test("creates, backs up and imports quantum-safe Bitcoin accounts", async ({ ext
   const importForm = sidepanel.locator("#qsb-import-form");
   await importForm.locator('input[name="import-word-0"]').fill(QSB_IMPORT_PHRASE);
   await importForm.getByRole("button", { name: "Import phrase" }).click();
-  await expect(sidepanel.locator("#qsb-import-done")).toHaveText("Imported as Account 2.");
+  await expect(sidepanel.locator("#qsb-import-done")).toHaveText("Imported as QSB vault 2.");
   await importForm.getByRole("button", { name: "Done" }).click();
   await expect(accountRow(sidepanel, "qsb-2")).toContainText("Read-only");
 

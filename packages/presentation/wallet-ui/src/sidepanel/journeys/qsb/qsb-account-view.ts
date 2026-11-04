@@ -1,7 +1,7 @@
 /**
- * Templates for one Quantum-safe Bitcoin account: the static screen shell,
- * then the regions its binding fills once `wallet.qsbVaults` answers — the
- * confirmed balance and one row per vault. Pure: every dynamic value is
+ * Templates for one QSB vault: the static screen shell, then the regions its
+ * binding fills once `wallet.qsbVaults` answers — the confirmed balance and
+ * one row per deposit (the contract's vault). Pure: every dynamic value is
  * escaped here or comes from a validated view, and the only link is built by
  * `qsbDepositLink` from a validated txid.
  */
@@ -12,7 +12,7 @@ import type { QsbOwnerFunds, QsbVaultView } from "@bramble/wallet-model/qsb-vaul
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountLabel, flowHeader, flowScreen } from "../../shared/parts";
-import { QSB_TITLE } from "./qsb-model";
+import { QSB_NAME } from "./qsb-model";
 import {
   btcText,
   QSB_ACCESS_LINE,
@@ -25,22 +25,24 @@ import {
   QSB_VAULTS_EMPTY,
   QSB_VAULTS_LOADING,
   qsbDepositable,
+  qsbDepositLabel,
   qsbDepositLink,
   qsbVaultDisplay,
-  qsbVaultLabel,
   qsbVaultStatusText,
 } from "./qsb-vault-model";
 
 /** The steps the account screen moves between; see {@link bindQsbAccount}. */
 export type QsbAccountStep = "confirm" | "creating" | "detail" | "loading" | "unavailable";
 
-/** Renders the account screen shell, every step but loading hidden. */
+/**
+ * Renders the QSB vault screen shell, every step but loading hidden. Its
+ * title reads "QSB vault" until the binding names the one open.
+ */
 export const qsbAccountFlow = (status: WalletStatus): string =>
-  flowHeader(QSB_TITLE, status) +
+  flowHeader(QSB_NAME, status) +
   flowScreen(
     "qsb-account",
     `<div id="qsb-account" class="stack">
-      <p class="eyebrow" id="qsb-account-label"></p>
       <section class="section" data-qsb-account-step="loading">${emptyState(QSB_VAULTS_LOADING, "status")}</section>
       <section class="section" data-qsb-account-step="unavailable" hidden>
         <p class="review-flag" id="qsb-account-error" role="alert"></p>
@@ -57,7 +59,7 @@ export const qsbAccountFlow = (status: WalletStatus): string =>
         </section>
         <section class="section" id="qsb-balance"></section>
         <section class="section">
-          <p class="eyebrow">Vaults</p>
+          <p class="eyebrow">Deposits</p>
           <div id="qsb-vaults"></div>
           <p id="qsb-vault-result" role="status"></p>
           <div class="stack" id="qsb-vault-action"></div>
@@ -65,9 +67,9 @@ export const qsbAccountFlow = (status: WalletStatus): string =>
         </section>
       </div>
       <section class="section" data-qsb-account-step="confirm" hidden>
-        <h2>New vault</h2>
+        <h2>New deposit</h2>
         <p>${escapeHtml(QSB_VAULT_CONFIRM)}</p>
-        ${button({ attributes: { id: "qsb-vault-create" }, label: "Create vault" })}
+        ${button({ attributes: { id: "qsb-vault-create" }, label: "Create deposit" })}
         ${button({ attributes: { id: "qsb-vault-cancel" }, label: "Cancel", variant: "ghost" })}
       </section>
       <section class="section" data-qsb-account-step="creating" hidden>${emptyState(QSB_VAULT_CREATING, "status")}</section>
@@ -100,17 +102,17 @@ export type QsbVaultRowOptions = {
 };
 
 const vaultAction = (vault: QsbVaultView, options: QsbVaultRowOptions): string => {
-  const label = qsbVaultLabel(vault.v);
+  const label = qsbDepositLabel(vault.v);
   const busy = options.busy(vault.v);
   if (options.writer && qsbDepositable(vault)) {
     return button({
       attributes: {
-        "aria-label": `Deposit into ${label}`,
+        "aria-label": `Fund ${label.toLowerCase()}`,
         "data-busy": busy,
         "data-qsb-deposit": String(vault.v),
       },
       disabled: busy,
-      label: "Deposit",
+      label: "Fund",
       size: "small",
       variant: "secondary",
     });
@@ -118,7 +120,7 @@ const vaultAction = (vault: QsbVaultView, options: QsbVaultRowOptions): string =
   if (qsbVaultDisplay(vault) === "waiting") {
     return button({
       attributes: {
-        "aria-label": `Resend the deposit into ${label}`,
+        "aria-label": `Resend ${label.toLowerCase()}`,
         "data-busy": busy,
         "data-qsb-resend": String(vault.v),
       },
@@ -136,7 +138,7 @@ const vaultRow = (vault: QsbVaultView, options: QsbVaultRowOptions): string => {
   const txid = vault.deposit.txid;
   return `<li class="allowance-row" data-qsb-vault="${vault.v}">
     <span class="allowance-copy">
-      <strong>${escapeHtml(qsbVaultLabel(vault.v))}</strong>
+      <strong>${escapeHtml(qsbDepositLabel(vault.v))}</strong>
       <span class="hint">${escapeHtml(qsbVaultStatusText(vault))}</span>
       ${vault.deposit.amountSat === null ? "" : `<span class="hint">${escapeHtml(btcText(vault.deposit.amountSat))}</span>`}
       ${
@@ -158,14 +160,14 @@ export const qsbVaultRows = (
     ? emptyState(QSB_VAULTS_EMPTY)
     : `<ul class="allowance-list">${vaults.map((vault) => vaultRow(vault, options)).join("")}</ul>`;
 
-/** Below the list: New vault for a writer, otherwise the line saying why not. */
+/** Below the list: New deposit for a writer, otherwise the line saying why not. */
 export const qsbVaultActionMarkup = (noVaultLine: string | null, busy: boolean): string =>
   noVaultLine === null
     ? button({
         attributes: { id: "qsb-vault-new" },
         disabled: busy,
         icon: "plus",
-        label: "New vault",
+        label: "New deposit",
         variant: "secondary",
       })
     : `<p class="hint">${escapeHtml(noVaultLine)}</p>`;

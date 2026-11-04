@@ -10,7 +10,7 @@ import {
 const meta: LabMeta = {
   ...LAB_META,
   args: { checkpointId: "qsb-account", scenarioId: "qsb-vaults" },
-  title: "Wallet journeys/13 Quantum-safe Bitcoin vaults",
+  title: "Wallet journeys/13 QSB deposits",
 };
 
 export default meta;
@@ -18,47 +18,58 @@ export default meta;
 const account = (name: string, id: string) => checkpointStory(name, "qsb-vaults", id);
 const deposit = (name: string, id: string) => checkpointStory(name, "qsb-deposit", id);
 
-export const Account = account("Account · every vault state", "qsb-account");
-export const AccountEmpty = account("Account · no vaults", "qsb-account-empty");
-export const AccountOffline = account("Account · service out of reach", "qsb-account-offline");
-export const AccountAccess = account("Account · access not granted", "qsb-account-access");
-export const AccountAccessDenied = account("Account · access denied", "qsb-account-access-denied");
-export const AccountError = account("Account · read failed", "qsb-account-error");
-export const AccountReadOnly = account("Account · imported phrase", "qsb-account-read-only");
-export const AccountBackupNeeded = account("Account · backup needed", "qsb-account-backup-needed");
-export const AccountResent = account("Account · resent", "qsb-account-resent");
-export const VaultConfirm = account("New vault · confirm", "qsb-vault-confirm");
-export const VaultCreating = account("New vault · creating", "qsb-vault-creating");
-export const VaultCreated = account("New vault · created", "qsb-vault-created");
-export const VaultRefused = account("New vault · refused", "qsb-vault-refused");
+export const Account = account("QSB vault · every deposit state", "qsb-account");
+export const AccountEmpty = account("QSB vault · no deposits", "qsb-account-empty");
+export const AccountOffline = account("QSB vault · service out of reach", "qsb-account-offline");
+export const AccountAccess = account("QSB vault · access not granted", "qsb-account-access");
+export const AccountAccessDenied = account(
+  "QSB vault · access denied",
+  "qsb-account-access-denied",
+);
+export const AccountError = account("QSB vault · read failed", "qsb-account-error");
+export const AccountReadOnly = account("QSB vault · imported phrase", "qsb-account-read-only");
+export const AccountBackupNeeded = account(
+  "QSB vault · backup needed",
+  "qsb-account-backup-needed",
+);
+export const AccountResent = account("QSB vault · resent", "qsb-account-resent");
+export const VaultConfirm = account("New deposit · confirm", "qsb-vault-confirm");
+export const VaultCreating = account("New deposit · creating", "qsb-vault-creating");
+export const VaultCreated = account("New deposit · created", "qsb-vault-created");
+export const VaultRefused = account("New deposit · refused", "qsb-vault-refused");
 
-export const DepositAmount = deposit("Deposit · amount", "qsb-deposit-amount");
+export const DepositAmount = deposit("Fund · amount", "qsb-deposit-amount");
 export const DepositAmountRefused = deposit(
-  "Deposit · over the balance",
+  "Fund · over the balance",
   "qsb-deposit-amount-refused",
 );
-export const DepositReview = deposit("Deposit · review", "qsb-deposit-review");
-export const DepositAccepted = deposit("Deposit · costs accepted", "qsb-deposit-accepted");
-export const DepositSending = deposit("Deposit · sending", "qsb-deposit-sending");
-export const DepositSent = deposit("Deposit · sent", "qsb-deposit-sent");
-export const DepositUncertain = deposit("Deposit · not confirmed yet", "qsb-deposit-uncertain");
-export const DepositRejected = deposit("Deposit · refused", "qsb-deposit-rejected");
-export const DepositQuoteChanged = deposit("Deposit · cost changed", "qsb-deposit-quote-changed");
-export const DepositUnknown = deposit("Deposit · status unknown", "qsb-deposit-unknown");
-export const DepositOffline = deposit("Deposit · service out of reach", "qsb-deposit-offline");
-export const DepositResent = deposit("Deposit · resent", "qsb-deposit-resend");
-export const DepositAccess = deposit("Deposit · access not granted", "qsb-deposit-access");
+export const DepositReview = deposit("Fund · review", "qsb-deposit-review");
+export const DepositAccepted = deposit("Fund · costs accepted", "qsb-deposit-accepted");
+export const DepositSending = deposit("Fund · sending", "qsb-deposit-sending");
+export const DepositSent = deposit("Fund · sent", "qsb-deposit-sent");
+export const DepositUncertain = deposit("Fund · not confirmed yet", "qsb-deposit-uncertain");
+export const DepositRejected = deposit("Fund · refused", "qsb-deposit-rejected");
+export const DepositQuoteChanged = deposit("Fund · cost changed", "qsb-deposit-quote-changed");
+export const DepositUnknown = deposit("Fund · status unknown", "qsb-deposit-unknown");
+export const DepositOffline = deposit("Fund · service out of reach", "qsb-deposit-offline");
+export const DepositResent = deposit("Fund · resent", "qsb-deposit-resend");
+export const DepositAccess = deposit("Fund · access not granted", "qsb-deposit-access");
 
 // The narrowest side panel: the full address, every amount and the review's
 // rows must stay inside the panel and readable.
-export const AccountNarrow = narrowSidepanelStory("Account · 320px", "qsb-vaults", "qsb-account", [
-  (document) => assertValueFits(document, "#qsb-address"),
-  (document) => assertValueFits(document, "#qsb-balance .receipt-row dd"),
-  (document) => assertInsidePanel(document, "[data-qsb-vault]"),
-  (document) => assertInsidePanel(document, "[data-qsb-tx]"),
-]);
+export const AccountNarrow = narrowSidepanelStory(
+  "QSB vault · 320px",
+  "qsb-vaults",
+  "qsb-account",
+  [
+    (document) => assertValueFits(document, "#qsb-address"),
+    (document) => assertValueFits(document, "#qsb-balance .receipt-row dd"),
+    (document) => assertInsidePanel(document, "[data-qsb-vault]"),
+    (document) => assertInsidePanel(document, "[data-qsb-tx]"),
+  ],
+);
 export const AccountAccessNarrow = narrowSidepanelStory(
-  "Account · access not granted · 320px",
+  "QSB vault · access not granted · 320px",
   "qsb-vaults",
   "qsb-account-access",
   [
@@ -67,7 +78,7 @@ export const AccountAccessNarrow = narrowSidepanelStory(
   ],
 );
 export const DepositAccessNarrow = narrowSidepanelStory(
-  "Deposit · access not granted · 320px",
+  "Fund · access not granted · 320px",
   "qsb-deposit",
   "qsb-deposit-access",
   [
@@ -76,24 +87,24 @@ export const DepositAccessNarrow = narrowSidepanelStory(
   ],
 );
 export const VaultConfirmNarrow = narrowSidepanelStory(
-  "New vault · 320px",
+  "New deposit · 320px",
   "qsb-vaults",
   "qsb-vault-confirm",
 );
 export const DepositAmountNarrow = narrowSidepanelStory(
-  "Deposit amount · 320px",
+  "Fund amount · 320px",
   "qsb-deposit",
   "qsb-deposit-amount-refused",
   [(document) => assertValueFits(document, "#qsb-amount-available")],
 );
 export const DepositReviewNarrow = narrowSidepanelStory(
-  "Deposit review · 320px",
+  "Fund review · 320px",
   "qsb-deposit",
   "qsb-deposit-accepted",
   [(document) => assertValueFits(document, "#qsb-deposit-quote .receipt-row dd")],
 );
 export const DepositSentNarrow = narrowSidepanelStory(
-  "Deposit sent · 320px",
+  "Fund sent · 320px",
   "qsb-deposit",
   "qsb-deposit-sent",
   [(document) => assertInsidePanel(document, "#qsb-outcome-tx")],

@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin client against stubbed background replies: each of
+ * The QSB client against stubbed background replies: each of
  * the five messages is sent with exactly the contract's fields, every reply is
  * validated strictly (keys, ids, enums, the writer rule, the 24-word phrase),
  * and a refusal or a lost reply rejects the way the panel can tell apart.

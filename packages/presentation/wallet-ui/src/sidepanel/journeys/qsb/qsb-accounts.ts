@@ -1,6 +1,6 @@
 /**
- * The Quantum-safe Bitcoin accounts screen, reached from the account drawer: a
- * static shell, then one row per account once `wallet.qsbAccounts` answers.
+ * The QSB vaults screen, reached from the account drawer: a static shell, then
+ * one row per QSB vault (a QSB account) once `wallet.qsbAccounts` answers.
  * Each row states what the account can do now and opens the account's
  * address, balance and vaults; a phrase not yet backed up also carries Back up.
  *
@@ -17,7 +17,6 @@ import { errorLine, renderFragment } from "../../shared/dom";
 import { flowHeader, flowScreen } from "../../shared/parts";
 import {
   QSB_EMPTY,
-  QSB_HISTORY_UNAVAILABLE_HINT,
   QSB_LOADING,
   QSB_STATE_LABEL,
   QSB_TITLE,
@@ -32,13 +31,12 @@ export const qsbAccountsFlow = (status: WalletStatus): string =>
   flowScreen(
     "qsb-accounts",
     `<section class="section">
-      <div class="menu-list" role="group" aria-label="Add a quantum-safe Bitcoin account">
-        ${menuRow({ attributes: { id: "qsb-create" }, icon: "plus", label: "Create account" })}
+      <div class="menu-list" role="group" aria-label="Add a QSB vault">
+        ${menuRow({ attributes: { id: "qsb-create" }, icon: "plus", label: "Create QSB vault" })}
         ${menuRow({ attributes: { "data-view": "qsb-import" }, icon: "book", label: "Import phrase" })}
       </div>
     </section>
     <section class="section">
-      <p class="eyebrow">Accounts</p>
       <div id="qsb-accounts-list">${emptyState(QSB_LOADING, "status")}</div>
     </section>`,
   );
@@ -51,10 +49,7 @@ const accountRow = (account: QsbAccountView): string => {
       attributes: { "data-qsb-open": account.id },
       icon: "lockKeyhole",
       label: name,
-      supportingText:
-        state === "history-unavailable"
-          ? `${QSB_STATE_LABEL[state]} · ${QSB_HISTORY_UNAVAILABLE_HINT}`
-          : QSB_STATE_LABEL[state],
+      supportingText: QSB_STATE_LABEL[state],
     })}
     ${
       state === "backup-needed"

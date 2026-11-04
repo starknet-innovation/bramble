@@ -1,7 +1,7 @@
 /**
- * Templates for a deposit into one Quantum-safe Bitcoin vault: the static
- * screen shell with every step, and the review's cost rows built from a
- * validated quote. Pure: every dynamic value is escaped here.
+ * Templates for funding one deposit of a QSB vault: the static screen shell
+ * with every step, and the review's cost rows built from a validated quote.
+ * Pure: every dynamic value is escaped here.
  */
 import { escapeHtml } from "@bramble/core/html";
 import { emptyState, receipt, receiptRows } from "@bramble/ui-kit/content";
@@ -10,11 +10,9 @@ import { checkboxField, textField } from "@bramble/ui-kit/fields";
 import type { QsbDepositQuote } from "@bramble/wallet-model/qsb-vaults";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { flowHeader, flowScreen } from "../../shared/parts";
-import { QSB_TITLE } from "./qsb-model";
 import {
   btcText,
   QSB_ALLOW_ACCESS,
-  QSB_DEPOSIT_FACTS,
   QSB_DEPOSIT_SENDING,
   QSB_TX_LINK_LABEL,
   QSB_VAULTS_LOADING,
@@ -31,7 +29,7 @@ export type QsbDepositStep =
 
 /** Renders the deposit screen shell, every step but loading hidden. */
 export const qsbDepositFlow = (status: WalletStatus): string =>
-  flowHeader("Deposit", status, QSB_TITLE) +
+  flowHeader("Fund deposit", status) +
   flowScreen(
     "qsb-deposit",
     `<div id="qsb-deposit" class="stack">
@@ -41,7 +39,7 @@ export const qsbDepositFlow = (status: WalletStatus): string =>
         <p class="review-flag" id="qsb-deposit-error" role="alert"></p>
         ${button({ attributes: { hidden: true, id: "qsb-deposit-allow" }, icon: "lockKeyholeOpen", label: QSB_ALLOW_ACCESS })}
         ${button({ attributes: { id: "qsb-deposit-retry" }, label: "Try again", variant: "secondary" })}
-        ${button({ attributes: { "data-qsb-deposit-leave": true }, label: "View account", variant: "ghost" })}
+        ${button({ attributes: { "data-qsb-deposit-leave": true }, label: "View QSB vault", variant: "ghost" })}
       </section>
       <section class="section" data-qsb-deposit-step="amount" hidden>
         <form id="qsb-amount-form" class="stack" novalidate>
@@ -62,12 +60,9 @@ export const qsbDepositFlow = (status: WalletStatus): string =>
       <section class="section" data-qsb-deposit-step="review" hidden>
         <form id="qsb-review-form" class="stack" novalidate>
           ${receipt([], { id: "qsb-deposit-quote" })}
-          <div class="review-panel">
-            ${QSB_DEPOSIT_FACTS.map((fact) => `<p>${escapeHtml(fact)}</p>`).join("")}
-          </div>
           ${checkboxField({ name: "qsbAccept", text: "I accept these costs" })}
           <p id="qsb-review-result" role="status"></p>
-          ${button({ disabled: true, label: "Deposit", type: "submit" })}
+          ${button({ disabled: true, label: "Fund", type: "submit" })}
           ${button({ attributes: { id: "qsb-review-back" }, label: "Change amount", variant: "ghost" })}
         </form>
       </section>
@@ -83,23 +78,18 @@ export const qsbDepositFlow = (status: WalletStatus): string =>
   );
 
 /**
- * The review's cost rows for a validated quote: what goes into the vault, the
- * network fee and its rate, the change back to the owner address (or none),
- * and the estimated fee of the later withdrawal at today's rate.
+ * The review's cost rows for a validated quote: what goes into the deposit,
+ * the network fee and its rate, and the change back to the owner address (or
+ * none). The quote's withdrawal-fee estimate is validated but not shown.
  */
 export const qsbQuoteRows = (quote: QsbDepositQuote): string =>
   receiptRows([
-    { label: "Deposit", value: btcText(quote.amountSat), valueStyle: "code" },
+    { label: "Amount", value: btcText(quote.amountSat), valueStyle: "code" },
     { label: "Network fee", value: btcText(quote.feeSat), valueStyle: "code" },
     { label: "Fee rate", value: `${quote.feeRate} sat/vB`, valueStyle: "code" },
     {
       label: "Change to you",
       value: quote.changeSat === 0 ? "None" : btcText(quote.changeSat),
       valueStyle: quote.changeSat === 0 ? "text" : "code",
-    },
-    {
-      label: "Withdrawal fee, est.",
-      value: btcText(quote.withdrawalFeeSat),
-      valueStyle: "code",
     },
   ]);

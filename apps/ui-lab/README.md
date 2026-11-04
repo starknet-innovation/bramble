@@ -77,7 +77,7 @@ and its tests drive.
 
 ## Journey coverage
 
-The lab has 242 deterministic checkpoints across 16 scenario families:
+The lab has 268 deterministic checkpoints across 18 scenario families:
 
 | Family | Review surface |
 | --- | --- |
@@ -96,7 +96,9 @@ The lab has 242 deterministic checkpoints across 16 scenario families:
 | NFT loading and send | Metadata loading, gallery, hidden/watch management, recipient-first review, blocking, submission, and a reverted transfer. |
 | Argent multisig | Empty/setup, deployment availability, shared portfolio, collecting/ready/stale intents, signer-authority drift, exact review, and sync recovery. |
 | Settings and security | Focused appearance, request, network/endpoint, account/import, connected-site, backup/export/restore, and security boundaries. |
-| Quantum-safe Bitcoin | The accounts list in each state, creation into backup, passphrase re-entry, the masked phrase, the three-word check and its mismatch, and read-only phrase import. |
+| QSB vaults | The QSB vaults list in each state, creation into backup, passphrase re-entry, the masked phrase, the three-word check and its mismatch, and read-only phrase import. |
+| QSB vault | One QSB vault's address and balance, every deposit state, the service out of reach, coordinator access not granted or denied, the QSB vaults that cannot take new deposits, Resend, and New deposit from confirm to created or refused. |
+| QSB fund deposit | The amount and its refusals, the review before and after the costs are accepted, sending, every outcome, a changed quote, a lost reply, and access not granted. |
 
 The `ProductionViewCoverage` interaction test derives its assertion from the production
 `WALLET_VIEWS` constant. A new production view fails the UI Lab suite until at least one scenario

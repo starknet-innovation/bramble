@@ -1,7 +1,10 @@
 /**
- * Pure model and copy for the Quantum-safe Bitcoin screens: what a validated
- * account view shows, which words the backup asks for, and every sentence the
- * screens print. No DOM, clock, or runtime access; nothing here sees a phrase.
+ * Pure model and copy for the QSB vault screens: what a validated account
+ * view shows, which words the backup asks for, and every sentence the screens
+ * print. No DOM, clock, or runtime access; nothing here sees a phrase.
+ *
+ * The UI calls a QSB account a "QSB vault" and each of its one-deposit
+ * vaults a "deposit"; the code keeps the contract's account and vault nouns.
  */
 import {
   QSB_BACKUP_CHECK_WORDS,
@@ -13,8 +16,12 @@ import { errorLine } from "../../shared/dom";
 import { backupVerifyPositions } from "../onboarding/backup-verify";
 import type { QsbBackupWord } from "./qsb-runtime";
 
-/** The account type's name: the drawer row, the screen title, the tiles. */
-export const QSB_TITLE = "Quantum-safe Bitcoin";
+/** The account type's name: the add tile, the backup subtitle, one account's screen. */
+export const QSB_NAME = "QSB vault";
+/** The accounts list's title, and the drawer row that opens it. */
+export const QSB_TITLE = "QSB vaults";
+/** What the 24 words are called on the QSB screens, where others say "recovery phrase". */
+export const QSB_PHRASE_NAME = "QSB vault phrase";
 
 /** Where the add-account and import choosers enter the journey. */
 export type QsbRoute = "create" | "import";
@@ -22,7 +29,7 @@ export type QsbRoute = "create" | "import";
 /**
  * What one account row says, most urgent first: a phrase not yet backed up,
  * then a history Bramble cannot read (it then releases no key), then whether
- * it may create vaults (`ready`) or only read them (`read-only`).
+ * it may take new deposits (`ready`) or only read them (`read-only`).
  */
 export type QsbAccountState = "backup-needed" | "history-unavailable" | "read-only" | "ready";
 
@@ -45,11 +52,8 @@ export const QSB_STATE_LABEL: Readonly<Record<QsbAccountState, string>> = {
   ready: "Ready",
 };
 
-/** The one state whose consequence the label alone does not carry. */
-export const QSB_HISTORY_UNAVAILABLE_HINT = "Bramble won't release any of its keys.";
-
-/** `Account <n>` for a validated `qsb-<n>` id. */
-export const qsbAccountLabel = (id: string): string => `Account ${id.slice("qsb-".length)}`;
+/** `QSB vault <n>` for a validated `qsb-<n>` id. */
+export const qsbAccountLabel = (id: string): string => `${QSB_NAME} ${id.slice("qsb-".length)}`;
 
 /**
  * The 1-based phrase positions the backup asks for: one per band of the
@@ -86,28 +90,28 @@ export const qsbBackupWords = (
 };
 
 /** Shown while the list loads from the vault. */
-export const QSB_LOADING = "Loading accounts…";
+export const QSB_LOADING = "Loading QSB vaults…";
 /** The list's empty state. */
-export const QSB_EMPTY = "No quantum-safe Bitcoin accounts yet.";
+export const QSB_EMPTY = "No QSB vaults yet.";
 /** While the background creates an account. */
-export const QSB_CREATING = "Creating account…";
+export const QSB_CREATING = "Creating QSB vault…";
 /** Under the phrase, where Bramble hands it over. A warning: no contractions. */
 export const QSB_PHRASE_WARNING =
-  "Anyone with these words controls your Bitcoin vaults. Bramble cannot recover them for you.";
+  "Anyone with these words controls this QSB vault's bitcoin. Bramble cannot recover them for you.";
 /** The import screen's consequence, stated before the user commits. */
-export const QSB_IMPORT_READ_ONLY = "An imported phrase can't create new vaults here.";
+export const QSB_IMPORT_READ_ONLY = "An imported phrase can't take new deposits here.";
 /** After an import, naming the row it added. */
 export const qsbImported = (id: string): string => `Imported as ${qsbAccountLabel(id)}.`;
 
-// A create, import, or backup confirmation whose reply was lost may still
-// have run; the list says whether it did.
-const QSB_OUTCOME_UNKNOWN =
-  "Bramble couldn't confirm this finished. Check your accounts before trying again.";
+// Any QSB write whose reply was lost (a create, an import, a backup check, a
+// new deposit, a funding or a resend) may still have run; refreshing the
+// screen it came from says whether it did. One sentence for all of them.
+const QSB_OUTCOME_UNKNOWN = "Bramble couldn't confirm this finished. Refresh before trying again.";
 
 /**
- * The status line for a rejected QSB write: the outcome-unknown sentence when
- * the write may have run, otherwise the refusal's reviewed copy (or the
- * caller's fallback diagnostic).
+ * The status line for every rejected QSB write: the outcome-unknown sentence
+ * when the write may have run, otherwise the refusal's reviewed copy (or the
+ * caller's fallback diagnostic's).
  */
 export const qsbWriteFailure = (error: unknown, fallback: string): string =>
   isOutcomeUnknown(error) ? QSB_OUTCOME_UNKNOWN : errorLine(error, fallback);

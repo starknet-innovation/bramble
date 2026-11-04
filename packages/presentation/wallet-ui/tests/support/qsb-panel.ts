@@ -1,5 +1,5 @@
 /**
- * A side-panel stand-in for the Quantum-safe Bitcoin journey tests: navigation
+ * A side-panel stand-in for the QSB journey tests: navigation
  * paints the view's real production markup and binds it, as the panel's paint
  * loop does; Back pops to the screen before. Timers are manual, so a test
  * decides when the account screen's poll fires; the document's visibility and

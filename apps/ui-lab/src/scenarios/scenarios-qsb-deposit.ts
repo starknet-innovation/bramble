@@ -1,6 +1,6 @@
 /**
- * Quantum-safe Bitcoin deposit checkpoints: the amount and its refusals, the
- * review before and after the costs are accepted, the deposit in flight, and
+ * QSB Fund deposit checkpoints: the amount and its refusals, the review
+ * before and after the costs are accepted, the funding in flight, and
  * every outcome (sent, not confirmed yet, refused, a changed quote, a lost
  * reply), plus a vault whose service is out of reach. Production templates
  * and bindings run against a fixture client; nothing is signed or sent.
@@ -86,63 +86,63 @@ export const qsbDepositScenario: WalletScenario = {
   checkpoints: [
     depositCheckpoint(
       "qsb-deposit-amount",
-      "Deposit · amount",
+      "Fund · amount",
       "The amount in BTC, beside the confirmed balance it is checked against.",
       { balance: "0.0025 BTC" },
       (context) => depositTo(context, {}, "amount", ""),
     ),
     depositCheckpoint(
       "qsb-deposit-amount-refused",
-      "Deposit · over the balance",
+      "Fund · over the balance",
       "An amount over the confirmed balance is refused before any quote, in the same words the background uses.",
       { quote: "not asked" },
       (context) => depositTo(context, {}, "amount", "0.01"),
     ),
     depositCheckpoint(
       "qsb-deposit-review",
-      "Deposit · review",
-      "Every cost from the quote — amount, network fee and rate, change back to the owner address, the later withdrawal fee — and the three facts. Deposit waits for the costs to be accepted.",
+      "Fund · review",
+      "Every cost from the quote: amount, network fee and rate, and change back to the owner address. Fund waits for the costs to be accepted.",
       { accepted: false, depositEnabled: false },
       (context) => depositTo(context, {}, "review"),
     ),
     depositCheckpoint(
       "qsb-deposit-accepted",
-      "Deposit · costs accepted",
-      "Ticking the costs enables Deposit; a new quote clears the tick.",
+      "Fund · costs accepted",
+      "Ticking the costs enables Fund; a new quote clears the tick.",
       { accepted: true, depositEnabled: true },
       (context) => depositTo(context, {}, "accepted"),
     ),
     depositCheckpoint(
       "qsb-deposit-sending",
-      "Deposit · sending",
+      "Fund · sending",
       "The deposit is built, signed and submitted at the quote's own fee; a second tap or coming back only reattaches to it.",
       { submission: "in flight" },
       (context) => depositTo(context, { deposit: never }, "sent"),
     ),
     depositCheckpoint(
       "qsb-deposit-sent",
-      "Deposit · sent",
+      "Fund · sent",
       "MARA has the deposit; its txid links to mempool.space.",
       { submission: "submitted" },
       (context) => depositTo(context, { deposit: async () => outcome(0, "submitted") }, "sent"),
     ),
     depositCheckpoint(
       "qsb-deposit-uncertain",
-      "Deposit · not confirmed yet",
+      "Fund · not confirmed yet",
       "The service did not confirm it has the deposit; Resend sends the same transaction again.",
       { submission: "uncertain" },
       (context) => depositTo(context, { deposit: async () => outcome(0, "uncertain") }, "sent"),
     ),
     depositCheckpoint(
       "qsb-deposit-rejected",
-      "Deposit · refused",
-      "MARA refused the deposit; the vault is unfunded again and can take a new one.",
+      "Fund · refused",
+      "MARA refused the deposit; it is unfunded again and can be funded again.",
       { submission: "rejected" },
       (context) => depositTo(context, { deposit: async () => outcome(0, "rejected") }, "sent"),
     ),
     depositCheckpoint(
       "qsb-deposit-quote-changed",
-      "Deposit · cost changed",
+      "Fund · cost changed",
       "The cost moved after the review: the screen quotes again and asks again, with the tick cleared.",
       { refusal: "quote changed" },
       async (context) => {
@@ -162,7 +162,7 @@ export const qsbDepositScenario: WalletScenario = {
     ),
     depositCheckpoint(
       "qsb-deposit-unknown",
-      "Deposit · status unknown",
+      "Fund · status unknown",
       "The reply was lost: the screen says the outcome is unknown and offers no second send.",
       { submission: "unknown" },
       (context) =>
@@ -174,7 +174,7 @@ export const qsbDepositScenario: WalletScenario = {
     ),
     depositCheckpoint(
       "qsb-deposit-offline",
-      "Deposit · service out of reach",
+      "Fund · service out of reach",
       "Without the confirmed balance no amount can be checked, so the screen says why and offers Try again.",
       { funds: null },
       (context) =>
@@ -187,7 +187,7 @@ export const qsbDepositScenario: WalletScenario = {
     ),
     depositCheckpoint(
       "qsb-deposit-access",
-      "Deposit · access not granted",
+      "Fund · access not granted",
       "Without the coordinator grant the balance is unknown, so Allow access stands in place of the amount and asks in its own click.",
       { access: "not granted" },
       (context) =>
@@ -203,7 +203,7 @@ export const qsbDepositScenario: WalletScenario = {
     ),
     depositCheckpoint(
       "qsb-deposit-resend",
-      "Deposit · resent",
+      "Fund · resent",
       "Resend from the not-confirmed outcome sends once and reports the new outcome.",
       { submission: "submitted" },
       async (context) => {
@@ -220,10 +220,9 @@ export const qsbDepositScenario: WalletScenario = {
       },
     ),
   ],
-  description:
-    "A deposit into one quantum-safe Bitcoin vault: amount, review, submission and every outcome.",
+  description: "Funding one deposit of a QSB vault: amount, review, submission and every outcome.",
   id: "qsb-deposit",
   surface: "sidepanel",
-  title: "Quantum-safe Bitcoin deposit",
+  title: "QSB fund deposit",
   views: ["qsb-deposit"],
 };

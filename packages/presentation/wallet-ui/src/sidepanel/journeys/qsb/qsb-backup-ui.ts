@@ -1,5 +1,5 @@
 /**
- * Back up a Quantum-safe Bitcoin phrase: re-enter the vault passphrase, see
+ * Back up a QSB vault phrase: re-enter the wallet passphrase, see
  * the 24 words masked until asked, retype three of them, and let the
  * background check them. The same screen shows a new account being created
  * first, so creation goes straight into its backup.
@@ -29,6 +29,8 @@ import { recoveryWordInputs } from "../onboarding/onboarding-views";
 import { fillRecoveryWords, recoveryWordsFrom } from "../onboarding/recovery-word-state";
 import {
   QSB_CREATING,
+  QSB_NAME,
+  QSB_PHRASE_NAME,
   QSB_PHRASE_WARNING,
   QSB_TITLE,
   qsbAccountLabel,
@@ -67,7 +69,7 @@ const verifyFields = (): string =>
 
 /** Renders every step, all but one hidden; {@link bindQsbBackup} moves between them. */
 export const qsbBackupFlow = (status: WalletStatus): string =>
-  flowHeader("Back up your phrase", status, QSB_TITLE) +
+  flowHeader("Back up your phrase", status, QSB_NAME) +
   flowScreen(
     "qsb-backup",
     `<div id="qsb-backup" class="stack">
@@ -75,13 +77,15 @@ export const qsbBackupFlow = (status: WalletStatus): string =>
       <section class="section" data-qsb-step="creating" hidden>${emptyState(QSB_CREATING, "status")}</section>
       <section class="section" data-qsb-step="unavailable" hidden>
         <p class="review-flag" id="qsb-backup-error" role="alert"></p>
-        ${button({ attributes: { "data-view": "qsb-accounts" }, label: "View accounts", variant: "secondary" })}
+        ${button({ attributes: { "data-view": "qsb-accounts" }, label: `View ${QSB_TITLE}`, variant: "secondary" })}
       </section>
       <section class="section" data-qsb-step="passphrase" hidden>
         <form id="qsb-reveal-form" class="stack">
           ${textField({
             autocomplete: "current-password",
-            label: "Vault passphrase",
+            // The QSB screens' own word for it; the rest of the wallet says
+            // "Vault passphrase". The field's name is unchanged.
+            label: "Wallet passphrase",
             minlength: MIN_VAULT_PASSPHRASE_LENGTH,
             name: "vaultPassphrase",
             required: true,
@@ -97,13 +101,13 @@ export const qsbBackupFlow = (status: WalletStatus): string =>
           <div class="recovery-grid is-masked" data-recovery-grid="generated" aria-hidden="true" inert>${recoveryWordInputs("generated")}</div>
           <div class="button-row">
             ${button({
-              attributes: { "aria-label": "Show recovery phrase", id: "phrase-toggle" },
+              attributes: { "aria-label": `Show ${QSB_PHRASE_NAME}`, id: "phrase-toggle" },
               icon: "book",
               label: "Show",
               variant: "secondary",
             })}
             ${button({
-              attributes: { "aria-label": "Copy recovery phrase", id: "generated-copy-phrase" },
+              attributes: { "aria-label": `Copy ${QSB_PHRASE_NAME}`, id: "generated-copy-phrase" },
               disabled: true,
               icon: "copy",
               label: "Copy",
@@ -183,7 +187,9 @@ export const bindQsbBackup = (deps: QsbBackupDeps): QsbBackupSession => {
     const words = recoveryWordsFrom(cells, QSB_PHRASE_WORDS);
     return words.every((word) => word.length > 0) ? words.join(" ") : "";
   };
-  const generated = phraseForm ? bindGeneratedPhrase(phraseForm, readPhrase) : null;
+  const generated = phraseForm
+    ? bindGeneratedPhrase(phraseForm, readPhrase, QSB_PHRASE_NAME)
+    : null;
   const clearPhrase = (): void => {
     if (phraseForm) fillRecoveryWords(phraseForm, cells, [], "generated");
     generated?.reset();

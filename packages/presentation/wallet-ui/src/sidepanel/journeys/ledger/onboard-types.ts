@@ -110,7 +110,7 @@ export type LedgerOnboardControllerDeps = {
   readonly openImportSeed: () => void;
   readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
-  /** Creates a Quantum-safe Bitcoin account, or opens its phrase import. */
+  /** Creates a QSB vault (a QSB account), or opens its phrase import. */
   readonly openQsb: (route: QsbRoute) => void;
   readonly refresh: () => Promise<void>;
   readonly render: (view: LedgerOnboardView | null) => void;

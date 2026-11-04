@@ -1,5 +1,5 @@
 /**
- * Runtime access to the Quantum-safe Bitcoin coordinator. Its origin is not a
+ * Runtime access to the QSB coordinator. Its origin is not a
  * manifest host permission (adding one would disable the wallet on update,
  * issue 772); the user grants it at runtime under the manifest's optional
  * all-HTTPS pattern, as with a custom endpoint, and the background refuses

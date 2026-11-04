@@ -1,5 +1,5 @@
 /**
- * Quantum-safe Bitcoin vaults in the built extension, end to end through the
+ * QSB vaults and their deposits in the built extension, end to end through the
  * real background: Krusty derives the owner key and the commitments, the
  * pinned Pyodide pipeline builds the vault script in the service worker, the
  * journal and the pending deposit live in their own encrypted keys, and every
@@ -279,7 +279,7 @@ const fundedJourney = async (extension: LoadedExtension): Promise<void> => {
   );
 };
 
-test("creates, funds and confirms a quantum-safe Bitcoin vault", async () => {
+test("creates, funds and confirms a QSB deposit", async () => {
   test.setTimeout(240_000);
   await withCoordinatorGranted(fundedJourney);
 });

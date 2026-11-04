@@ -1,5 +1,5 @@
 /**
- * Import a Quantum-safe Bitcoin phrase: 24 words through the shared recovery
+ * Import a QSB vault phrase: 24 words through the shared recovery
  * grid and BIP39 word assist, then `wallet.importQsbAccount`. An imported
  * phrase stays read-only for life, which the screen says before the user
  * commits. Word membership is advisory only; the background validates the
@@ -24,12 +24,12 @@ import {
   recoveryWordsFrom,
   setRecoveryWordCount,
 } from "../onboarding/recovery-word-state";
-import { QSB_IMPORT_READ_ONLY, QSB_TITLE, qsbImported, qsbWriteFailure } from "./qsb-model";
+import { QSB_IMPORT_READ_ONLY, qsbImported, qsbWriteFailure } from "./qsb-model";
 import type { QsbWallet } from "./qsb-runtime";
 
 /** Renders the entry and done steps; {@link bindQsbImport} moves between them. */
 export const qsbImportFlow = (status: WalletStatus): string =>
-  flowHeader("Import a vault phrase", status, QSB_TITLE) +
+  flowHeader("Import a QSB vault phrase", status) +
   flowScreen(
     "qsb-import",
     `<section class="section">

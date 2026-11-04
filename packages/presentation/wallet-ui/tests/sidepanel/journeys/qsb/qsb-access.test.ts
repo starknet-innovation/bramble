@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin coordinator grant under happy-dom. Granted, the
+ * The QSB coordinator grant under happy-dom. Granted, the
  * screens read as before; missing, the account's balance gives way to Allow
  * access, and New vault, Deposit, Resend, Review and the deposit itself ask
  * for the grant in their own click (synchronously, so the browser sees the
@@ -27,8 +27,8 @@ beforeEach(() => {
   document.body.replaceChildren();
 });
 
-const ACCESS_LINE = "Bramble needs access to the quantum-safe Bitcoin service.";
-const ACCESS_NEEDED = "Allow Bramble to reach the quantum-safe Bitcoin service to continue.";
+const ACCESS_LINE = "Bramble needs access to the QSB service.";
+const ACCESS_NEEDED = "Allow Bramble to reach the QSB service to continue.";
 
 type Panel = ReturnType<typeof qsbPanel>;
 

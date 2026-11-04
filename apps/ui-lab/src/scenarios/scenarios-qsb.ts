@@ -1,5 +1,5 @@
 /**
- * Quantum-safe Bitcoin checkpoints: the accounts list in every row state,
+ * QSB vault checkpoints: the QSB vaults list in every row state,
  * creation going straight into the backup, each backup step (passphrase,
  * masked and shown phrase, the three-word check, a mismatch, done), and the
  * phrase import with its refusal and result. Production templates and
@@ -151,15 +151,15 @@ const backupCheckpoint = (
   state,
 });
 
-/** The Quantum-safe Bitcoin family: list, create, backup, and import. */
+/** The QSB vault family: list, create, backup, and import. */
 export const qsbScenario: WalletScenario = {
   checkpoints: [
     {
       content: () => walletDashboard({ view: "qsb-accounts" }),
       id: "qsb-accounts",
-      label: "Accounts",
+      label: "QSB vaults",
       narrative:
-        "Each account states what it can do now: a phrase to back up, ready, read-only, or a history Bramble cannot read. Every row opens its account; only the missing backup also carries Back up.",
+        "Each QSB vault states what it can do now: a phrase to back up, ready, read-only, or a history Bramble cannot read. Every row opens its QSB vault; only the missing backup also carries Back up.",
       prepare: async (context) => {
         journeyFor(context, {}).bind(context.app);
         await nextTurn();
@@ -169,7 +169,7 @@ export const qsbScenario: WalletScenario = {
     {
       content: () => walletDashboard({ view: "qsb-accounts" }),
       id: "qsb-accounts-empty",
-      label: "No accounts",
+      label: "No QSB vaults",
       narrative: "An empty list opens with what is absent; create and import sit above it.",
       prepare: async (context) => {
         journeyFor(context, { list: [] }).bind(context.app);
@@ -182,7 +182,7 @@ export const qsbScenario: WalletScenario = {
       id: "qsb-create",
       label: "Creating",
       narrative:
-        "The add-account tile creates the account and opens its backup at once; the screen holds while the background generates the phrase.",
+        "Create QSB vault makes it and opens its backup at once; the screen holds while the background generates the phrase.",
       prepare: (context) => {
         const journey = journeyFor(context, {});
         journey.open("create");
@@ -209,7 +209,7 @@ export const qsbScenario: WalletScenario = {
     backupCheckpoint(
       "passphrase",
       "Backup · passphrase",
-      "The vault passphrase is entered every time; an unlocked session is not enough.",
+      "The wallet passphrase is entered every time; an unlocked session is not enough.",
       { reauthentication: true },
     ),
     backupCheckpoint(
@@ -272,9 +272,9 @@ export const qsbScenario: WalletScenario = {
     },
   ],
   description:
-    "Quantum-safe Bitcoin accounts: the list, creation into backup, the three-word check, and read-only phrase import.",
+    "QSB vaults: the list, creation into backup, the three-word check, and read-only phrase import.",
   id: "qsb",
   surface: "sidepanel",
-  title: "Quantum-safe Bitcoin",
+  title: "QSB vaults",
   views: ["qsb-accounts", "qsb-backup", "qsb-import"],
 };

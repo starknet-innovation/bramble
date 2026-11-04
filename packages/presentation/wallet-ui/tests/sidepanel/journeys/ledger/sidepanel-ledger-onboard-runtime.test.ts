@@ -352,7 +352,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(h.mount.hidden).toBe(true);
     expect(h.multisigs()).toBe(1);
 
-    // The Quantum-safe Bitcoin tiles dismiss into the QSB journey: create
+    // The QSB tiles dismiss into the QSB journey: create
     // from the first stage, the phrase import from inside Import.
     h.runtime.startAddAccount();
     click(h.mount, '[data-add-kind="qsb-create"]');

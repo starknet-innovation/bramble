@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin model: which state each valid account view shows,
+ * The QSB model: which state each valid account view shows,
  * which words a backup asks for (always the contract's count, at distinct
  * positions, never chosen by the phrase), the exact words sent for the check,
  * and the line a failed write shows.
@@ -31,7 +31,7 @@ const view = (overrides: Partial<QsbAccountView>): QsbAccountView => ({
   ...overrides,
 });
 
-const UNKNOWN = "Bramble couldn't confirm this finished. Check your accounts before trying again.";
+const UNKNOWN = "Bramble couldn't confirm this finished. Refresh before trying again.";
 
 describe("qsbAccountState", () => {
   test("names each state, most urgent first", () => {
@@ -51,9 +51,9 @@ describe("qsbAccountState", () => {
   });
 
   test("labels an account by its number", () => {
-    expect(qsbAccountLabel("qsb-1")).toBe("Account 1");
-    expect(qsbAccountLabel("qsb-9999")).toBe("Account 9999");
-    expect(qsbImported("qsb-3")).toBe("Imported as Account 3.");
+    expect(qsbAccountLabel("qsb-1")).toBe("QSB vault 1");
+    expect(qsbAccountLabel("qsb-9999")).toBe("QSB vault 9999");
+    expect(qsbImported("qsb-3")).toBe("Imported as QSB vault 3.");
   });
 });
 
@@ -111,10 +111,10 @@ describe("qsbWriteFailure", () => {
       "Those words don't match your phrase. Check them and try again.",
     );
     expect(qsbWriteFailure(new Error(QSB_ACCOUNT_REFUSALS.notDedicated), "x")).toBe(
-      "This is your Starknet recovery phrase. Bitcoin vaults need a phrase of their own.",
+      "This is your Starknet recovery phrase. A QSB vault needs a phrase of its own.",
     );
     expect(qsbWriteFailure(null, QSB_ACCOUNT_REFUSALS.creationFailed)).toBe(
-      "Couldn't create the account. Try again.",
+      "Couldn't create the QSB vault. Try again.",
     );
   });
 });

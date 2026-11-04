@@ -1,5 +1,5 @@
 /**
- * One Quantum-safe Bitcoin account, opened from the accounts list: its owner
+ * One QSB account, opened from the accounts list: its owner
  * address with a guarded copy, its confirmed balance, its vaults with their
  * deposit state, New vault for a writer, and Resend for a deposit that is
  * still waiting. It reads `wallet.qsbAccounts` and `wallet.qsbVaults` when it
@@ -30,14 +30,9 @@ import {
   qsbVaultActionMarkup,
   qsbVaultRows,
 } from "./qsb-account-view";
-import { qsbAccountLabel } from "./qsb-model";
+import { qsbAccountLabel, qsbWriteFailure } from "./qsb-model";
 import type { QsbWallet } from "./qsb-runtime";
-import {
-  qsbDepositInFlight,
-  qsbNoVaultLine,
-  qsbSubmissionLine,
-  qsbVaultWriteFailure,
-} from "./qsb-vault-model";
+import { qsbDepositInFlight, qsbNoVaultLine, qsbSubmissionLine } from "./qsb-vault-model";
 import { createQsbVaultPoll } from "./qsb-vault-poll";
 import {
   isQsbVaultIndex,
@@ -51,6 +46,8 @@ import type { QsbVaultWrites } from "./qsb-vault-writes";
 export type QsbAccountDeps = {
   readonly access: QsbAccess;
   readonly accountId: () => string | null;
+  /** The screen's title, renamed "QSB vault <n>" for the one open; skipped when absent. */
+  readonly heading: HTMLElement | null;
   readonly openDeposit: (accountId: string, v: number) => void;
   readonly root: HTMLElement;
   readonly timers: StageTimers;
@@ -221,7 +218,7 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
         }),
       (error: unknown) =>
         settle(() => {
-          notice = qsbVaultWriteFailure(error, "wallet request failed");
+          notice = qsbWriteFailure(error, "wallet request failed");
           paint();
         }),
     );
@@ -243,7 +240,7 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
       (error: unknown) => {
         attached.delete(key);
         if (attempt !== generation) return;
-        notice = qsbVaultWriteFailure(error, "wallet request failed");
+        notice = qsbWriteFailure(error, "wallet request failed");
         paint();
       },
     );
@@ -359,9 +356,9 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     );
   };
 
-  const label = find<HTMLElement>("#qsb-account-label");
   const id = deps.accountId();
-  if (label) label.textContent = id === null ? "" : qsbAccountLabel(id);
+  const heading = deps.heading;
+  if (heading && id !== null) heading.textContent = qsbAccountLabel(id);
   bindCopyButtons(root);
   refresh?.addEventListener("click", () => {
     notice = "";

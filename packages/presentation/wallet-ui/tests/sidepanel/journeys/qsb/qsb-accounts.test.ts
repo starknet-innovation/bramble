@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin accounts screen under happy-dom: it is reachable
+ * The QSB accounts screen under happy-dom: it is reachable
  * from the account drawer, lists each account with its state (backup needed,
  * ready, read-only, history unavailable), opens an account from its row,
  * offers Back up only where a backup is missing, and shows a failed read as
@@ -66,16 +66,16 @@ const rowText = (app: HTMLElement, id: string): string => {
   return parts.join(" ");
 };
 
-describe("Quantum-safe Bitcoin accounts", () => {
+describe("QSB accounts", () => {
   test("the drawer links to the screen, which has its own title and route label", () => {
     const html = dashboard("home", qsbStatus, [], preferences, { balances: [] });
     const foot = html.slice(html.indexOf("drawer-foot"));
     expect(foot).toContain('data-view="qsb-accounts"');
-    expect(foot).toContain("Quantum-safe Bitcoin");
+    expect(foot).toContain("QSB vaults");
     const screen = dashboard("qsb-accounts", qsbStatus, [], preferences, { balances: [] });
     expect(screen).toContain('id="wallet-screen-qsb-accounts"');
-    expect(screen).toContain("<h1>Quantum-safe Bitcoin</h1>");
-    expect(walletViewLabel("qsb-accounts")).toBe("Quantum-safe Bitcoin");
+    expect(screen).toContain("<h1>QSB vaults</h1>");
+    expect(walletViewLabel("qsb-accounts")).toBe("QSB vaults");
   });
 
   test("shows loading until the list answers, then one row per state", async () => {
@@ -87,15 +87,13 @@ describe("Quantum-safe Bitcoin accounts", () => {
         QSB_VIEWS.historyUnavailable,
       ],
     });
-    expect(list.textContent).toContain("Loading accounts…");
+    expect(list.textContent).toContain("Loading QSB vaults…");
     await flush();
     expect(calls.list).toHaveLength(1);
-    expect(rowText(app, "qsb-1")).toBe("Account 1 Backup needed Back up");
-    expect(rowText(app, "qsb-2")).toBe("Account 2 Ready");
-    expect(rowText(app, "qsb-3")).toBe("Account 3 Read-only");
-    expect(rowText(app, "qsb-4")).toBe(
-      "Account 4 History unavailable · Bramble won't release any of its keys.",
-    );
+    expect(rowText(app, "qsb-1")).toBe("QSB vault 1 Backup needed Back up");
+    expect(rowText(app, "qsb-2")).toBe("QSB vault 2 Ready");
+    expect(rowText(app, "qsb-3")).toBe("QSB vault 3 Read-only");
+    expect(rowText(app, "qsb-4")).toBe("QSB vault 4 History unavailable");
   });
 
   test("every row opens its account; Back up stays a separate control", async () => {
@@ -119,7 +117,7 @@ describe("Quantum-safe Bitcoin accounts", () => {
     await flush();
     const controls = app.querySelectorAll<HTMLButtonElement>("[data-qsb-back-up]");
     expect(controls).toHaveLength(1);
-    expect(controls[0]?.getAttribute("aria-label")).toBe("Back up Account 1");
+    expect(controls[0]?.getAttribute("aria-label")).toBe("Back up QSB vault 1");
     controls[0]?.click();
     expect(opened).toEqual(["qsb-1"]);
   });
@@ -135,14 +133,14 @@ describe("Quantum-safe Bitcoin accounts", () => {
   test("an empty wallet says so", async () => {
     const { list } = mount({ resolve: [] });
     await flush();
-    expect(list.textContent).toBe("No quantum-safe Bitcoin accounts yet.");
+    expect(list.textContent).toBe("No QSB vaults yet.");
   });
 
   test("a failed read shows the refusal's reviewed sentence, not the raw diagnostic", async () => {
     const { list } = mount({ reject: new Error(QSB_ACCOUNT_REFUSALS.journalUnavailable) });
     await flush();
     expect(list.querySelector('[role="alert"]')?.textContent).toBe(
-      "Bramble can't read this account's history, so it won't release any of its keys.",
+      "Bramble can't read this QSB vault's history right now.",
     );
     const unrecognised = mount({ reject: new Error("wallet unavailable") });
     await flush();
@@ -157,6 +155,6 @@ describe("Quantum-safe Bitcoin accounts", () => {
     expect(html.match(/data-qsb-open=/g)).toHaveLength(2);
     expect(html).toContain('<span class="hint">Backup needed</span>');
     expect(html).toContain('<span class="hint">Ready</span>');
-    expect(qsbAccountRows([])).toContain("No quantum-safe Bitcoin accounts yet.");
+    expect(qsbAccountRows([])).toContain("No QSB vaults yet.");
   });
 });

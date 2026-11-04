@@ -1,5 +1,5 @@
 /**
- * One Quantum-safe Bitcoin account under happy-dom, through the journey: a
+ * One QSB account under happy-dom, through the journey: a
  * list row opens it; it shows the validated owner address behind a guarded
  * copy, the confirmed balance or a retry when the service is out of reach,
  * every vault state with its one action, New vault only for a writer (once,
@@ -66,25 +66,31 @@ const opened = async (
   return panel;
 };
 
-describe("a Quantum-safe Bitcoin account", () => {
+describe("a QSB account", () => {
   test("a list row opens it, with the address, the balance and every vault state", async () => {
     const panel = await opened({ vaults: { resolve: reading(EVERY_VAULT) } });
     const app = panel.app();
     expect(panel.visited).toEqual(["qsb-account"]);
     expect(step(app)).toBe("detail");
-    expect(app.querySelector("#qsb-account-label")?.textContent).toBe("Account 2");
+    expect(app.querySelector(".flow-title h1")?.textContent).toBe("QSB vault 2");
     expect(app.querySelector("#qsb-address")?.textContent).toBe(QSB_ADDRESS);
     expect(text(app.querySelector("#qsb-address-copy")?.closest(".section"))).toContain(
-      "Send bitcoin here before you deposit.",
+      "Send bitcoin here before you fund a deposit.",
     );
     expect(text(app.querySelector("#qsb-balance"))).toBe("Confirmed balance 0.00250000 BTC");
-    expect(text(row(app, 0))).toBe("Vault 1 Unfunded Deposit");
-    expect(text(row(app, 1))).toBe("Vault 2 Deposit waiting 0.00100000 BTC Resend");
-    expect(text(row(app, 2))).toBe("Vault 3 Deposit sent 0.00100000 BTC 4a5e1e…a33b");
-    expect(text(row(app, 3))).toBe("Vault 4 Funded · 3 confirmations 0.00100000 BTC 4a5e1e…a33b");
-    expect(text(row(app, 4))).toBe("Vault 5 Withdrawn 0.00100000 BTC 4a5e1e…a33b");
-    expect(text(row(app, 5))).toBe("Vault 6 Unavailable");
-    expect(app.querySelector("#qsb-vault-new")?.textContent).toBe("New vault");
+    expect(text(row(app, 0))).toBe("Deposit 1 Unfunded Fund");
+    expect(text(row(app, 1))).toBe("Deposit 2 Waiting to send 0.00100000 BTC Resend");
+    expect(text(row(app, 2))).toBe("Deposit 3 Sent 0.00100000 BTC 4a5e1e…a33b");
+    expect(text(row(app, 3))).toBe("Deposit 4 Funded · 3 confirmations 0.00100000 BTC 4a5e1e…a33b");
+    expect(text(row(app, 4))).toBe("Deposit 5 Withdrawn 0.00100000 BTC 4a5e1e…a33b");
+    expect(text(row(app, 5))).toBe("Deposit 6 Unavailable");
+    expect(app.querySelector("#qsb-vault-new")?.textContent).toBe("New deposit");
+    expect(app.querySelector('[data-qsb-deposit="0"]')?.getAttribute("aria-label")).toBe(
+      "Fund deposit 1",
+    );
+    expect(app.querySelector('[data-qsb-resend="1"]')?.getAttribute("aria-label")).toBe(
+      "Resend deposit 2",
+    );
     expect(panel.calls.vaults).toEqual(["qsb-2"]);
   });
 
@@ -127,9 +133,9 @@ describe("a Quantum-safe Bitcoin account", () => {
 
   test("an account that cannot make vaults gets a line instead, and no Deposit", async () => {
     for (const [account, line] of [
-      [QSB_VIEWS.readOnly, "An imported phrase can't create new vaults here."],
-      [QSB_VIEWS.backupNeeded, "Back up this account's phrase to make vaults."],
-      [QSB_VIEWS.historyUnavailable, "Bramble won't release any of its keys."],
+      [QSB_VIEWS.readOnly, "An imported phrase can't take new deposits here."],
+      [QSB_VIEWS.backupNeeded, "Back up this QSB vault's phrase to take new deposits."],
+      [QSB_VIEWS.historyUnavailable, "Bramble can't read this QSB vault's history right now."],
     ] as const) {
       const panel = await opened({ vaults: { resolve: reading(EVERY_VAULT) } }, account);
       const app = panel.app();
@@ -141,13 +147,13 @@ describe("a Quantum-safe Bitcoin account", () => {
 
   test("an empty account says so", async () => {
     const panel = await opened({ vaults: { resolve: reading([]) } });
-    expect(text(panel.app().querySelector("#qsb-vaults"))).toBe("No vaults yet.");
+    expect(text(panel.app().querySelector("#qsb-vaults"))).toBe("No deposits yet.");
   });
 
   test("a service out of reach shows a line and a retry; the vaults still show", async () => {
     const panel = await opened({ vaults: { resolve: { ...reading(EVERY_VAULT), funds: null } } });
     const balance = panel.app().querySelector("#qsb-balance");
-    expect(text(balance)).toBe("Can't reach the quantum-safe Bitcoin service. Try again");
+    expect(text(balance)).toBe("Can't reach the QSB service. Try again");
     expect(row(panel.app(), 0)).not.toBe(null);
     balance?.querySelector<HTMLButtonElement>("[data-qsb-retry]")?.click();
     await flush();
@@ -161,7 +167,7 @@ describe("a Quantum-safe Bitcoin account", () => {
     const app = panel.app();
     expect(step(app)).toBe("unavailable");
     expect(app.querySelector("#qsb-account-error")?.textContent).toBe(
-      "Couldn't build the vault. Try again.",
+      "Couldn't prepare the deposit. Try again.",
     );
     panel.script.vaults = { resolve: reading() };
     app.querySelector<HTMLButtonElement>("#qsb-account-retry")?.click();
@@ -183,7 +189,7 @@ describe("a Quantum-safe Bitcoin account", () => {
     expect(step(app)).toBe("detail");
     expect(app.querySelector("#qsb-address")?.textContent).toBe(QSB_ADDRESS);
     expect(app.querySelector("#qsb-vault-result")?.textContent).toBe(
-      "Couldn't reach the quantum-safe Bitcoin service. Try again.",
+      "Couldn't reach the QSB service. Try again.",
     );
     expect(app.querySelector<HTMLButtonElement>("#qsb-account-refresh")?.disabled).toBe(false);
   });
@@ -197,7 +203,7 @@ describe("a Quantum-safe Bitcoin account", () => {
     await flush();
     expect(step(panel.app())).toBe("unavailable");
     expect(panel.app().querySelector("#qsb-account-error")?.textContent).toBe(
-      "That account isn't in this wallet.",
+      "That QSB vault isn't in this wallet.",
     );
     expect(panel.app().querySelector<HTMLButtonElement>("#qsb-account-retry")?.hidden).toBe(true);
   });
@@ -214,12 +220,12 @@ describe("New vault", () => {
     app.querySelector<HTMLButtonElement>("#qsb-vault-new")?.click();
     expect(step(app)).toBe("confirm");
     expect(text(app.querySelector('[data-qsb-account-step="confirm"]'))).toBe(
-      "New vault Bramble registers a new vault with the quantum-safe Bitcoin service. It takes one deposit. Create vault Cancel",
+      "New deposit Bramble sets up a new deposit with the QSB service. It can be funded once. Create deposit Cancel",
     );
     app.querySelector<HTMLButtonElement>("#qsb-vault-create")?.click();
     app.querySelector<HTMLButtonElement>("#qsb-vault-create")?.click();
     expect(step(app)).toBe("creating");
-    expect(text(app.querySelector('[data-qsb-account-step="creating"]'))).toBe("Creating vault…");
+    expect(text(app.querySelector('[data-qsb-account-step="creating"]'))).toBe("Creating deposit…");
     // Leaving and coming back reattaches to the same creation.
     panel.paint("qsb-accounts");
     await flush();
@@ -230,7 +236,7 @@ describe("New vault", () => {
     created.resolve(unfundedVault(1));
     await flush();
     expect(step(panel.app())).toBe("detail");
-    expect(text(row(panel.app(), 1))).toBe("Vault 2 Unfunded Deposit");
+    expect(text(row(panel.app(), 1))).toBe("Deposit 2 Unfunded Fund");
   });
 
   test("Cancel creates nothing", async () => {
@@ -252,7 +258,7 @@ describe("New vault", () => {
     await flush();
     expect(step(refused.app())).toBe("detail");
     expect(refused.app().querySelector("#qsb-vault-result")?.textContent).toBe(
-      "This account already holds as many vaults as it can.",
+      "This QSB vault already holds as many deposits as it can.",
     );
     const lost = await opened({
       createVault: { reject: new SubmissionUnknownError("lost", null) },
@@ -262,7 +268,7 @@ describe("New vault", () => {
     lost.app().querySelector<HTMLButtonElement>("#qsb-vault-create")?.click();
     await flush();
     expect(lost.app().querySelector("#qsb-vault-result")?.textContent).toBe(
-      "Bramble couldn't confirm this finished. Refresh the account before trying again.",
+      "Bramble couldn't confirm this finished. Refresh before trying again.",
     );
   });
 });
@@ -284,9 +290,9 @@ describe("Resend", () => {
     resent.resolve(depositResult(0, "submitted"));
     await flush();
     expect(panel.app().querySelector("#qsb-vault-result")?.textContent).toBe(
-      "Deposit sent. The vault shows as funded once it's mined.",
+      "Deposit sent. The deposit shows as funded once it's mined.",
     );
-    expect(text(row(panel.app(), 0))).toBe("Vault 1 Deposit sent 0.00100000 BTC 4a5e1e…a33b");
+    expect(text(row(panel.app(), 0))).toBe("Deposit 1 Sent 0.00100000 BTC 4a5e1e…a33b");
   });
 });
 

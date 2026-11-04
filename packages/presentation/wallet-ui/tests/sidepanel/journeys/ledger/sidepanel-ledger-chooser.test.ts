@@ -153,7 +153,7 @@ describe("add-account chooser routing", () => {
     expect(h.seedImports()).toBe(1);
   });
 
-  test("the Quantum-safe Bitcoin tiles dismiss into the QSB journey without touching the wallet", () => {
+  test("the QSB tiles dismiss into the QSB journey without touching the wallet", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();

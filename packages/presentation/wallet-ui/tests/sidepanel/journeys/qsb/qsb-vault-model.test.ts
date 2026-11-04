@@ -1,5 +1,5 @@
 /**
- * The pure Quantum-safe Bitcoin vault model: BTC text from exact satoshi
+ * The pure QSB vault model: BTC text from exact satoshi
  * arithmetic, typed BTC parsed to satoshis without floating point, the deposit
  * amount check, each vault state's label, the explorer link built only from a
  * validated txid, and the copy that reuses the background's reviewed
@@ -12,6 +12,7 @@ import {
   QSB_VAULT_REFUSALS,
 } from "@bramble/wallet-model/qsb-vaults";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import { qsbWriteFailure } from "../../../../src/sidepanel/journeys/qsb/qsb-model";
 import {
   btcText,
   checkQsbDepositAmount,
@@ -20,12 +21,11 @@ import {
   parseBtcAmount,
   QSB_AMOUNT_LINE,
   qsbDepositInFlight,
+  qsbDepositLabel,
   qsbDepositLink,
   qsbNoVaultLine,
   qsbVaultDisplay,
-  qsbVaultLabel,
   qsbVaultStatusText,
-  qsbVaultWriteFailure,
 } from "../../../../src/sidepanel/journeys/qsb/qsb-vault-model";
 import { friendlyError } from "../../../../src/sidepanel/runtime/friendly-error";
 import { QSB_VIEWS } from "../../../support/qsb-harness";
@@ -104,8 +104,8 @@ describe("vault rows", () => {
   test("each state has one label", () => {
     expect(EVERY_VAULT.map(qsbVaultStatusText)).toEqual([
       "Unfunded",
-      "Deposit waiting",
-      "Deposit sent",
+      "Waiting to send",
+      "Sent",
       "Funded · 3 confirmations",
       "Withdrawn",
       "Unavailable",
@@ -126,8 +126,8 @@ describe("vault rows", () => {
   });
 
   test("vaults count from 1", () => {
-    expect(qsbVaultLabel(0)).toBe("Vault 1");
-    expect(qsbVaultLabel(41)).toBe("Vault 42");
+    expect(qsbDepositLabel(0)).toBe("Deposit 1");
+    expect(qsbDepositLabel(41)).toBe("Deposit 42");
   });
 
   test("polling continues only while a deposit is waiting or sent", () => {
@@ -155,27 +155,27 @@ describe("vault rows", () => {
   test("an account that cannot make vaults says why", () => {
     expect(qsbNoVaultLine(QSB_VIEWS.ready)).toBe(null);
     expect(qsbNoVaultLine(QSB_VIEWS.backupNeeded)).toBe(
-      "Back up this account's phrase to make vaults.",
+      "Back up this QSB vault's phrase to take new deposits.",
     );
     expect(qsbNoVaultLine(QSB_VIEWS.readOnly)).toBe(
-      "An imported phrase can't create new vaults here.",
+      "An imported phrase can't take new deposits here.",
     );
     expect(qsbNoVaultLine(QSB_VIEWS.historyUnavailable)).toBe(
-      "Bramble won't release any of its keys.",
+      "Bramble can't read this QSB vault's history right now.",
     );
   });
 });
 
 describe("write failures", () => {
   test("a lost reply is never a failure; a refusal keeps its reviewed copy", () => {
-    expect(
-      qsbVaultWriteFailure(new SubmissionUnknownError("x", null), "wallet request failed"),
-    ).toBe("Bramble couldn't confirm this finished. Refresh the account before trying again.");
-    expect(qsbVaultWriteFailure(new Error("wallet request failed"), "wallet request failed")).toBe(
-      "Bramble couldn't confirm this finished. Refresh the account before trying again.",
+    expect(qsbWriteFailure(new SubmissionUnknownError("x", null), "wallet request failed")).toBe(
+      "Bramble couldn't confirm this finished. Refresh before trying again.",
     );
-    expect(qsbVaultWriteFailure(new Error(QSB_VAULT_REFUSALS.vaultLimit), "x")).toBe(
-      "This account already holds as many vaults as it can.",
+    expect(qsbWriteFailure(new Error("wallet request failed"), "wallet request failed")).toBe(
+      "Bramble couldn't confirm this finished. Refresh before trying again.",
+    );
+    expect(qsbWriteFailure(new Error(QSB_VAULT_REFUSALS.vaultLimit), "x")).toBe(
+      "This QSB vault already holds as many deposits as it can.",
     );
     expect(isQsbQuoteChanged(new Error(QSB_VAULT_REFUSALS.quoteChanged))).toBe(true);
     expect(isQsbQuoteChanged(new Error(QSB_VAULT_REFUSALS.insufficientFunds))).toBe(false);

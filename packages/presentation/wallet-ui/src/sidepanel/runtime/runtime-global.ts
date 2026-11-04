@@ -6,7 +6,7 @@ import type { RuntimeApi } from "./runtime";
 
 /**
  * Exact-origin host-permission check and prompt: a custom HTTP service is
- * requested when the user saves it, the quantum-safe Bitcoin coordinator when
+ * requested when the user saves it, the QSB coordinator when
  * the user first needs it. `request` must run inside a user gesture.
  */
 export type HostPermissionApi = {

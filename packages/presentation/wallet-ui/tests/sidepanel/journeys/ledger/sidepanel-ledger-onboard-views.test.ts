@@ -45,7 +45,8 @@ describe("onboarding views", () => {
     expect(html).toContain('data-add-kind="multisig"');
     expect(html).toContain('data-add-kind="qsb-create"');
     expect(html).toContain('data-add-kind="import"');
-    expect(html).toContain("Quantum-safe Bitcoin account");
+    expect(html).toContain("QSB vault");
+    expect(html).toContain("Create a QSB vault with its own 24-word phrase.");
     expect(html).toContain("Regular account");
     expect(html).toContain("Ledger account");
     expect(html).toContain("Multisig account");
@@ -65,10 +66,11 @@ describe("onboarding views", () => {
     expect(html).not.toContain("aria-pressed");
   });
 
-  test("importing an existing account offers a rescan, the phrase, a key, a Ready Ledger, and a Bitcoin vault phrase", () => {
+  test("importing an existing account offers a rescan, the phrase, a key, a Ready Ledger, and a QSB vault phrase", () => {
     const html = importAccountChooser();
     expect(html).toContain('data-add-kind="qsb-import"');
-    expect(html).toContain("Quantum-safe Bitcoin phrase");
+    expect(html).toContain("QSB vault phrase");
+    expect(html).toContain("Import a QSB vault phrase, read-only.");
 
     // The wallet's own accounts: one scan of the phrase it already holds, which
     // is the only route here that imports without asking the reader to type one.

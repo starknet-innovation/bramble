@@ -3,13 +3,13 @@ import { checkpointStory, LAB_META, type LabMeta } from "../../runtime/story-hel
 const meta: LabMeta = {
   ...LAB_META,
   args: { checkpointId: "qsb-accounts", scenarioId: "qsb" },
-  title: "Wallet journeys/12 Quantum-safe Bitcoin",
+  title: "Wallet journeys/12 QSB vaults",
 };
 
 export default meta;
 
-export const Accounts = checkpointStory("Accounts", "qsb", "qsb-accounts");
-export const NoAccounts = checkpointStory("No accounts", "qsb", "qsb-accounts-empty");
+export const Accounts = checkpointStory("QSB vaults", "qsb", "qsb-accounts");
+export const NoAccounts = checkpointStory("No QSB vaults", "qsb", "qsb-accounts-empty");
 export const Creating = checkpointStory("Creating", "qsb", "qsb-create");
 export const CreationRefused = checkpointStory("Creation refused", "qsb", "qsb-create-refused");
 export const BackupPassphrase = checkpointStory(

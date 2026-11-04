@@ -1,5 +1,5 @@
 /**
- * Fixtures for the Quantum-safe Bitcoin vault tests: the public BIP-173
+ * Fixtures for the QSB vault tests: the public BIP-173
  * P2WPKH example address, a public txid, one vault view per row state, a
  * reading, a quote and the deposit results, all in the exact shapes the
  * background sends. Nothing here is a wallet's own address.

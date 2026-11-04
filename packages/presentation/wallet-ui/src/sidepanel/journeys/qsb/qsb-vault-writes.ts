@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin vault writes the journey allows in flight: one
+ * The QSB vault writes the journey allows in flight: one
  * vault creation per account, and one deposit or resend per vault. A second
  * request while one runs gets the same promise back, so a double tap, a
  * repaint or leaving and coming back can never send a second write; the

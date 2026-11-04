@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin phrase import under happy-dom: all 24 cells show,
+ * The QSB phrase import under happy-dom: all 24 cells show,
  * the submit waits for every word, word membership stays advisory, the phrase
  * is sent once as typed, a refusal keeps the words, and a success or a wipe
  * empties every cell.
@@ -64,13 +64,13 @@ const fill = (cells: readonly HTMLInputElement[], words: readonly string[]): voi
   });
 };
 
-describe("Quantum-safe Bitcoin phrase import", () => {
+describe("QSB phrase import", () => {
   test("shows 24 cells and states the read-only consequence before the user commits", () => {
     const h = mount({});
     expect(h.cells).toHaveLength(24);
     expect(h.cells.every((cell) => !cell.hidden)).toBe(true);
     expect(h.app.querySelector('[role="note"]')?.textContent).toBe(
-      "An imported phrase can't create new vaults here.",
+      "An imported phrase can't take new deposits here.",
     );
     expect(h.app.querySelector("#phrase-length-toggle")).toBeNull();
     expect(h.submit()?.disabled).toBe(true);
@@ -105,7 +105,7 @@ describe("Quantum-safe Bitcoin phrase import", () => {
     await flush();
     expect(h.calls.import).toEqual([TEST_PHRASE]);
     expect(h.step()).toBe("done");
-    expect(h.form.querySelector("#qsb-import-done")?.textContent).toBe("Imported as Account 3.");
+    expect(h.form.querySelector("#qsb-import-done")?.textContent).toBe("Imported as QSB vault 3.");
     expect(h.cells.every((cell) => cell.value === "")).toBe(true);
     h.form.querySelector<HTMLButtonElement>("#qsb-import-finish")?.click();
     expect(h.done()).toBe(1);
@@ -115,7 +115,7 @@ describe("Quantum-safe Bitcoin phrase import", () => {
     for (const [refusal, shown] of [
       [
         QSB_ACCOUNT_REFUSALS.notDedicated,
-        "This is your Starknet recovery phrase. Bitcoin vaults need a phrase of their own.",
+        "This is your Starknet recovery phrase. A QSB vault needs a phrase of its own.",
       ],
       [QSB_ACCOUNT_REFUSALS.duplicatePhrase, "This phrase is already in this wallet."],
       [QSB_ACCOUNT_REFUSALS.invalidPhrase, "That isn't a valid 24-word phrase. Check each word."],
@@ -136,9 +136,7 @@ describe("Quantum-safe Bitcoin phrase import", () => {
     typeInto(h.cells[0], TEST_PHRASE);
     submitForm(h.form);
     await flush();
-    expect(h.result()).toBe(
-      "Bramble couldn't confirm this finished. Check your accounts before trying again.",
-    );
+    expect(h.result()).toBe("Bramble couldn't confirm this finished. Refresh before trying again.");
   });
 
   test("wipe empties every cell, and an answer after it is dropped", async () => {

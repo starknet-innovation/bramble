@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin backup flow under happy-dom: the vault passphrase
+ * The QSB backup flow under happy-dom: the vault passphrase
  * is sent once and leaves its field as it is sent, the phrase arrives masked
  * with the shared reveal and guarded copy, "I saved my phrase" empties it
  * before three words are asked at clock-chosen positions, the background's
@@ -103,12 +103,17 @@ const reveal = async (harness: ReturnType<typeof mount>): Promise<void> => {
   await flush();
 };
 
-describe("Quantum-safe Bitcoin backup", () => {
+describe("QSB backup", () => {
   test("starts at the passphrase, naming the account", () => {
     const h = mount({});
     expect(h.step()).toBe("passphrase");
-    expect(h.root.querySelector("#qsb-backup-account")?.textContent).toBe("Account 1");
+    expect(h.root.querySelector("#qsb-backup-account")?.textContent).toBe("QSB vault 1");
     expect(h.app.querySelector("h1")?.textContent).toBe("Back up your phrase");
+    expect(h.app.querySelector(".flow-title p")?.textContent).toBe("QSB vault");
+    // The QSB screens' word for the password; the rest of the wallet keeps its own.
+    expect(passphraseField(h.root).closest("label")?.querySelector("span")?.textContent).toBe(
+      "Wallet passphrase",
+    );
   });
 
   test("sends the passphrase once and empties its field as it is sent", async () => {
@@ -133,11 +138,21 @@ describe("Quantum-safe Bitcoin backup", () => {
     expect(button(h.root, "#generated-copy-phrase").disabled).toBe(true);
     expect(button(h.root, "#generated-continue").disabled).toBe(true);
     expect(h.root.textContent).toContain(
-      "Anyone with these words controls your Bitcoin vaults. Bramble cannot recover them for you.",
+      "Anyone with these words controls this QSB vault's bitcoin. Bramble cannot recover them for you.",
+    );
+
+    expect(button(h.root, "#phrase-toggle").getAttribute("aria-label")).toBe(
+      "Show QSB vault phrase",
+    );
+    expect(button(h.root, "#generated-copy-phrase").getAttribute("aria-label")).toBe(
+      "Copy QSB vault phrase",
     );
 
     button(h.root, "#phrase-toggle").click();
     expect(grid?.classList.contains("is-masked")).toBe(false);
+    expect(button(h.root, "#phrase-toggle").getAttribute("aria-label")).toBe(
+      "Hide QSB vault phrase",
+    );
     expect(button(h.root, "#generated-copy-phrase").disabled).toBe(false);
     expect(button(h.root, "#generated-continue").disabled).toBe(false);
   });
@@ -242,7 +257,7 @@ describe("Quantum-safe Bitcoin backup", () => {
     await flush();
     const result = h.root.querySelector("#qsb-verify-result");
     expect(result?.textContent).toBe(
-      "Bramble couldn't confirm this finished. Check your accounts before trying again.",
+      "Bramble couldn't confirm this finished. Refresh before trying again.",
     );
     // Not styled as a wrong word: the check may already have gone through.
     expect(result?.classList.contains("is-invalid")).toBe(false);
@@ -306,24 +321,24 @@ describe("Quantum-safe Bitcoin backup", () => {
   test("a creation in flight shows progress, then the new account's passphrase", () => {
     const h = mount({}, { kind: "creating" });
     expect(h.step()).toBe("creating");
-    expect(h.root.textContent).toContain("Creating account…");
+    expect(h.root.textContent).toContain("Creating QSB vault…");
     h.retarget({ id: "qsb-5", kind: "account" });
     expect(h.step()).toBe("passphrase");
-    expect(h.root.querySelector("#qsb-backup-account")?.textContent).toBe("Account 5");
+    expect(h.root.querySelector("#qsb-backup-account")?.textContent).toBe("QSB vault 5");
   });
 
   test("a failed creation or a missing account shows why, with a way to the list", () => {
-    const failed = mount({}, { kind: "failed", line: "Couldn't create the account. Try again." });
+    const failed = mount({}, { kind: "failed", line: "Couldn't create the QSB vault. Try again." });
     expect(failed.step()).toBe("unavailable");
     expect(failed.root.querySelector("#qsb-backup-error")?.textContent).toBe(
-      "Couldn't create the account. Try again.",
+      "Couldn't create the QSB vault. Try again.",
     );
     expect(failed.root.querySelector('[data-view="qsb-accounts"]')?.textContent).toBe(
-      "View accounts",
+      "View QSB vaults",
     );
     const none = mount({}, { kind: "none" });
     expect(none.root.querySelector("#qsb-backup-error")?.textContent).toBe(
-      "That account isn't in this wallet.",
+      "That QSB vault isn't in this wallet.",
     );
     expect(none.calls.reveal).toEqual([]);
   });

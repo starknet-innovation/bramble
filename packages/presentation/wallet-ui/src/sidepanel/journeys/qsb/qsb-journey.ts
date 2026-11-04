@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin journey: which account the backup and account
+ * The QSB journey: which account the backup and account
  * screens are for, which vault the deposit screen is for, the one account
  * creation allowed in flight, the vault writes allowed in flight (one
  * creation per account, one deposit or resend per vault), and the binding of
@@ -128,6 +128,7 @@ export const createQsbJourney = (deps: QsbJourneyDeps): QsbJourney => {
       return bindQsbAccount({
         access,
         accountId: () => account,
+        heading: app.querySelector<HTMLElement>(".flow-title h1"),
         openDeposit,
         root: detail,
         timers,

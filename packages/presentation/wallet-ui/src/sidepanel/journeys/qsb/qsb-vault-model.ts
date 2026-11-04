@@ -1,11 +1,14 @@
 /**
- * Pure model and copy for the Quantum-safe Bitcoin vault screens: what a
- * validated vault view shows, BTC amounts as exact satoshi text, the deposit
- * amount check, the explorer link, and every sentence the account and deposit
- * screens print. No DOM, clock, or runtime access.
+ * Pure model and copy for a QSB vault's deposits: what a validated vault view
+ * shows, BTC amounts as exact satoshi text, the funding amount check, the
+ * explorer link, and every sentence the QSB vault and Fund deposit screens
+ * print. No DOM, clock, or runtime access.
+ *
+ * The contract's one-deposit "vault" is a "deposit" on screen, and the account
+ * holding them a "QSB vault"; the code keeps the contract's nouns.
  */
 import { isDecimalAmountText } from "@bramble/core/json";
-import type { QsbAccountView } from "@bramble/wallet-model/qsb";
+import { QSB_ACCOUNT_REFUSALS, type QsbAccountView } from "@bramble/wallet-model/qsb";
 import {
   QSB_MAX_SAT,
   QSB_MIN_DEPOSIT_SAT,
@@ -14,14 +17,7 @@ import {
   type QsbVaultView,
 } from "@bramble/wallet-model/qsb-vaults";
 import { friendlyError } from "../../runtime/friendly-error";
-import { isOutcomeUnknown } from "../../runtime/runtime-errors";
-import { errorLine } from "../../shared/dom";
-import {
-  QSB_HISTORY_UNAVAILABLE_HINT,
-  QSB_IMPORT_READ_ONLY,
-  qsbAccountLabel,
-  qsbAccountState,
-} from "./qsb-model";
+import { QSB_IMPORT_READ_ONLY, qsbAccountLabel, qsbAccountState } from "./qsb-model";
 import { isQsbTxid } from "./qsb-vault-runtime";
 
 const SAT_PER_BTC = 100_000_000n;
@@ -78,12 +74,12 @@ export const QSB_AMOUNT_LINE: Readonly<Record<Exclude<QsbAmountCheck["kind"], "o
   tooSmall: friendlyError(QSB_VAULT_REFUSALS.amountTooSmall).message,
 };
 
-/** `Vault <n>`, counting from 1, for vault index `v`. The one vault name every screen uses. */
-export const qsbVaultLabel = (v: number): string => `Vault ${v + 1}`;
+/** `Deposit <n>`, counting from 1, for vault index `v`. The one name every screen uses. */
+export const qsbDepositLabel = (v: number): string => `Deposit ${v + 1}`;
 
-/** `Account <n> · Vault <m>`: the deposit screen's eyebrow. */
-export const qsbVaultTitle = (accountId: string, v: number): string =>
-  `${qsbAccountLabel(accountId)} · ${qsbVaultLabel(v)}`;
+/** `QSB vault <n> · Deposit <m>`: the Fund deposit screen's eyebrow. */
+export const qsbDepositTitle = (accountId: string, v: number): string =>
+  `${qsbAccountLabel(accountId)} · ${qsbDepositLabel(v)}`;
 
 /**
  * What one vault row says. `unfunded`: allocated with nothing signed.
@@ -126,10 +122,10 @@ export const qsbVaultDisplay = (vault: QsbVaultView): QsbVaultDisplay => {
 /** Each row state's label. */
 const QSB_VAULT_LABEL: Readonly<Record<QsbVaultDisplay, string>> = {
   funded: "Funded",
-  sent: "Deposit sent",
+  sent: "Sent",
   unavailable: "Unavailable",
   unfunded: "Unfunded",
-  waiting: "Deposit waiting",
+  waiting: "Waiting to send",
   withdrawn: "Withdrawn",
 };
 
@@ -170,15 +166,17 @@ export const qsbDepositLink = (vault: QsbVaultView): string | null => {
 export const QSB_TX_LINK_LABEL = "View this transaction on mempool.space";
 
 /**
- * The line that replaces New vault on an account that cannot make vaults,
- * or null for a writer.
+ * The line that replaces New deposit on a QSB vault that cannot take one, or
+ * null for a writer. Each says what is true of that QSB vault: a backup
+ * unlocks it, an import never does, and an unreadable history is the
+ * background's own refusal.
  */
 export const qsbNoVaultLine = (account: QsbAccountView): string | null => {
   switch (qsbAccountState(account)) {
     case "backup-needed":
-      return "Back up this account's phrase to make vaults.";
+      return "Back up this QSB vault's phrase to take new deposits.";
     case "history-unavailable":
-      return QSB_HISTORY_UNAVAILABLE_HINT;
+      return friendlyError(QSB_ACCOUNT_REFUSALS.journalUnavailable).message;
     case "read-only":
       return QSB_IMPORT_READ_ONLY;
     case "ready":
@@ -187,41 +185,34 @@ export const qsbNoVaultLine = (account: QsbAccountView): string | null => {
 };
 
 /** Under the owner address. */
-export const QSB_ADDRESS_HINT = "Send bitcoin here before you deposit.";
+export const QSB_ADDRESS_HINT = "Send bitcoin here before you fund a deposit.";
 /** In place of the balance when the coordinator could not be reached. */
-export const QSB_FUNDS_UNAVAILABLE = "Can't reach the quantum-safe Bitcoin service.";
+export const QSB_FUNDS_UNAVAILABLE = "Can't reach the QSB service.";
 /** In place of the balance while the coordinator origin is not granted, beside Allow access. */
-export const QSB_ACCESS_LINE = "Bramble needs access to the quantum-safe Bitcoin service.";
+export const QSB_ACCESS_LINE = "Bramble needs access to the QSB service.";
 /** The control that asks the browser for the coordinator origin. */
 export const QSB_ALLOW_ACCESS = "Allow access";
-/** While an account's vaults load. */
-export const QSB_VAULTS_LOADING = "Loading vaults…";
-/** An account with no vaults yet. */
-export const QSB_VAULTS_EMPTY = "No vaults yet.";
-/** The New vault confirm step's one fact. */
+/** While a QSB vault's deposits load. */
+export const QSB_VAULTS_LOADING = "Loading deposits…";
+/** A QSB vault with no deposits yet. */
+export const QSB_VAULTS_EMPTY = "No deposits yet.";
+/** The New deposit confirm step's one fact. */
 export const QSB_VAULT_CONFIRM =
-  "Bramble registers a new vault with the quantum-safe Bitcoin service. It takes one deposit.";
-/** While the background signs in and registers the vault. */
-export const QSB_VAULT_CREATING = "Creating vault…";
-/** While a deposit or resend is in flight. */
-export const QSB_DEPOSIT_SENDING = "Sending deposit…";
-
-/** The three facts the deposit review states before the cost is accepted. Warnings: no contractions. */
-export const QSB_DEPOSIT_FACTS: readonly string[] = [
-  "A vault takes one deposit.",
-  "The deposit goes through the quantum-safe Bitcoin service to MARA Slipstream.",
-  "The quantum-safe Bitcoin service is not a production release.",
-];
+  "Bramble sets up a new deposit with the QSB service. It can be funded once.";
+/** While the background signs in and registers the deposit. */
+export const QSB_VAULT_CREATING = "Creating deposit…";
+/** While a funding or a resend is in flight. */
+export const QSB_DEPOSIT_SENDING = "Sending…";
 
 /** Each submission outcome's heading and line, on the deposit screen and after a resend. */
 export const QSB_SUBMISSION_COPY: Readonly<
   Record<QsbSubmission, { readonly line: string; readonly title: string }>
 > = {
   rejected: {
-    line: "MARA refused it. The vault can take a new deposit.",
+    line: "MARA refused it. The deposit can be funded again.",
     title: "Deposit refused",
   },
-  submitted: { line: "The vault shows as funded once it's mined.", title: "Deposit sent" },
+  submitted: { line: "The deposit shows as funded once it's mined.", title: "Deposit sent" },
   uncertain: { line: "Resend sends the same transaction again.", title: "Not confirmed yet" },
 };
 
@@ -231,19 +222,6 @@ export const qsbSubmissionLine = (submission: QsbSubmission): string =>
 
 /** A deposit whose reply was lost: its heading. */
 export const QSB_DEPOSIT_UNKNOWN_TITLE = "Deposit status unknown";
-
-// A vault write whose reply was lost may still have run; the account says
-// whether it did.
-const QSB_VAULT_OUTCOME_UNKNOWN =
-  "Bramble couldn't confirm this finished. Refresh the account before trying again.";
-
-/**
- * The line for a rejected vault write (create, deposit, resend): the
- * outcome-unknown sentence when the write may have run, otherwise the
- * refusal's reviewed copy (or the caller's fallback diagnostic's).
- */
-export const qsbVaultWriteFailure = (error: unknown, fallback: string): string =>
-  isOutcomeUnknown(error) ? QSB_VAULT_OUTCOME_UNKNOWN : errorLine(error, fallback);
 
 /** Whether a rejected deposit was refused only because its cost moved since the quote. */
 export const isQsbQuoteChanged = (error: unknown): boolean =>

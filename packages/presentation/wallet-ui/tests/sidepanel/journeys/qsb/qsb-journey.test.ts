@@ -1,5 +1,5 @@
 /**
- * The Quantum-safe Bitcoin journey: creation runs once however often it is
+ * The QSB journey: creation runs once however often it is
  * asked and lands in the new account's backup, a refused creation shows why,
  * the list's Back up opens that account, a row opens the account and its
  * Deposit the deposit screen, and binding the next screen wipes the one
@@ -67,7 +67,7 @@ const panel = (script: QsbScript) => {
 const backupStep = (app: HTMLElement | null): string | null =>
   app ? shownStep(app, "data-qsb-step") : null;
 
-describe("the Quantum-safe Bitcoin journey", () => {
+describe("the QSB journey", () => {
   test("create goes straight into the new account's backup", async () => {
     const p = panel({ create: { resolve: { ...QSB_VIEWS.backupNeeded, id: "qsb-6" } } });
     p.journey.open("create");
@@ -75,7 +75,7 @@ describe("the Quantum-safe Bitcoin journey", () => {
     expect(backupStep(p.app())).toBe("creating");
     await flush();
     expect(backupStep(p.app())).toBe("passphrase");
-    expect(p.app()?.querySelector("#qsb-backup-account")?.textContent).toBe("Account 6");
+    expect(p.app()?.querySelector("#qsb-backup-account")?.textContent).toBe("QSB vault 6");
   });
 
   test("a second create while one is in flight never makes a second account", () => {
@@ -93,7 +93,7 @@ describe("the Quantum-safe Bitcoin journey", () => {
     await flush();
     expect(backupStep(p.app())).toBe("unavailable");
     expect(p.app()?.querySelector("#qsb-backup-error")?.textContent).toBe(
-      "This wallet already holds as many quantum-safe Bitcoin accounts as it can.",
+      "This wallet already holds as many QSB vaults as it can.",
     );
   });
 
@@ -103,7 +103,7 @@ describe("the Quantum-safe Bitcoin journey", () => {
     await flush();
     app.querySelector<HTMLButtonElement>('[data-qsb-back-up="qsb-1"]')?.click();
     expect(p.visited).toEqual(["qsb-backup"]);
-    expect(p.app()?.querySelector("#qsb-backup-account")?.textContent).toBe("Account 1");
+    expect(p.app()?.querySelector("#qsb-backup-account")?.textContent).toBe("QSB vault 1");
     p.paint("qsb-accounts").querySelector<HTMLButtonElement>("#qsb-create")?.click();
     expect(p.calls.create).toHaveLength(1);
   });
@@ -122,7 +122,9 @@ describe("the Quantum-safe Bitcoin journey", () => {
     p.app()?.querySelector<HTMLButtonElement>('[data-qsb-deposit="0"]')?.click();
     await flush();
     expect(p.visited).toEqual(["qsb-account", "qsb-deposit"]);
-    expect(p.app()?.querySelector("#qsb-deposit-vault")?.textContent).toBe("Account 2 · Vault 1");
+    expect(p.app()?.querySelector("#qsb-deposit-vault")?.textContent).toBe(
+      "QSB vault 2 · Deposit 1",
+    );
   });
 
   test("open('import') opens the import screen; Done goes back", async () => {

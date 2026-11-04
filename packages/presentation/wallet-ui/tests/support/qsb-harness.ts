@@ -1,5 +1,5 @@
 /**
- * Shared fixtures for the Quantum-safe Bitcoin screen tests: an unlocked
+ * Shared fixtures for the QSB screen tests: an unlocked
  * status, the public BIP39 test phrase, account views in each state, a
  * scriptable QSB client that records what it was sent, and a mount helper
  * that renders a production template into `#app`.

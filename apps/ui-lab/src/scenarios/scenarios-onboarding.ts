@@ -316,7 +316,7 @@ export const ledgerOnboardingScenario: WalletScenario = {
       id: "method",
       label: "Choose account method",
       narrative:
-        "Standard, Ledger, shared, Quantum-safe Bitcoin, and import routes are explicit; one click on a tile routes immediately.",
+        "Standard, Ledger, shared, QSB vault, and import routes are explicit; one click on a tile routes immediately.",
       state: { choices: 5, secretBoundary: "visible" },
     },
     {

@@ -1,5 +1,5 @@
 /**
- * Keeps a Quantum-safe Bitcoin account screen fresh while one of its deposits
+ * Keeps a QSB account screen fresh while one of its deposits
  * is on its way (waiting or sent): it re-reads the vaults about once a minute
  * while the panel is visible, and stops when nothing is in flight, when the
  * panel is hidden, and for good when the screen is left.

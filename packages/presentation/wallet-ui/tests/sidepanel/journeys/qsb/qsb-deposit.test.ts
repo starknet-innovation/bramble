@@ -1,7 +1,7 @@
 /**
- * A deposit into one unfunded Quantum-safe Bitcoin vault under happy-dom,
+ * A deposit into one unfunded QSB vault under happy-dom,
  * through the journey: the amount is checked in satoshis before any quote,
- * the review states every cost and the three facts and keeps Deposit
+ * the review states every cost the user pays and keeps Fund
  * disabled until the costs are accepted, the deposit sends the quote's own
  * fee exactly once however often it is asked, and each outcome (sent, not
  * confirmed, refused, a changed quote, a lost reply) lands where it should.
@@ -91,7 +91,7 @@ describe("the deposit amount", () => {
     const panel = await depositScreen({});
     expect(panel.visited).toEqual(["qsb-account", "qsb-deposit"]);
     expect(step(panel)).toBe("amount");
-    expect(text(panel, "#qsb-deposit-vault")).toBe("Account 2 · Vault 1");
+    expect(text(panel, "#qsb-deposit-vault")).toBe("QSB vault 2 · Deposit 1");
     expect(text(panel, "#qsb-amount-available")).toBe("Confirmed balance: 0.00250000 BTC");
     expect(document.activeElement?.getAttribute("name")).toBe("qsbAmount");
   });
@@ -124,16 +124,14 @@ describe("the deposit amount", () => {
     pending.paint("qsb-deposit");
     await flush();
     expect(step(pending)).toBe("unavailable");
-    expect(text(pending, "#qsb-deposit-error")).toBe("This vault can't take a deposit.");
+    expect(text(pending, "#qsb-deposit-error")).toBe("This deposit can't be funded.");
     expect(find<HTMLButtonElement>(pending, "#qsb-deposit-retry")?.hidden).toBe(true);
 
     pending.script.vaults = { resolve: { ...reading([unfundedVault(0)]), funds: null } };
     pending.paint("qsb-deposit");
     await flush();
     // The same line the account shows, beside its own Try again.
-    expect(text(pending, "#qsb-deposit-error")).toBe(
-      "Can't reach the quantum-safe Bitcoin service.",
-    );
+    expect(text(pending, "#qsb-deposit-error")).toBe("Can't reach the QSB service.");
     expect(find<HTMLButtonElement>(pending, "#qsb-deposit-retry")?.hidden).toBe(false);
     pending.script.vaults = { resolve: reading([unfundedVault(0)]) };
     find<HTMLButtonElement>(pending, "#qsb-deposit-retry")?.click();
@@ -143,18 +141,22 @@ describe("the deposit amount", () => {
 });
 
 describe("the deposit review", () => {
-  test("quotes the amount in satoshis and states every cost and the three facts", async () => {
+  test("quotes the amount in satoshis and states every cost the user pays", async () => {
     const panel = await reviewed({});
     expect(panel.calls.quote).toEqual([["qsb-2", 0, 100_000]]);
     expect(step(panel)).toBe("review");
     expect(text(panel, "#qsb-deposit-quote")).toBe(
-      "Deposit 0.00100000 BTC Network fee 0.00000564 BTC Fee rate 2.5 sat/vB " +
-        "Change to you 0.00149436 BTC Withdrawal fee, est. 0.00001200 BTC",
+      "Amount 0.00100000 BTC Network fee 0.00000564 BTC Fee rate 2.5 sat/vB " +
+        "Change to you 0.00149436 BTC",
     );
-    expect(text(panel, '[data-qsb-deposit-step="review"] .review-panel')).toBe(
-      "A vault takes one deposit. " +
-        "The deposit goes through the quantum-safe Bitcoin service to MARA Slipstream. " +
-        "The quantum-safe Bitcoin service is not a production release.",
+    // The withdrawal-fee estimate is validated in the reply but never shown,
+    // and the review carries no statements beyond its costs.
+    expect(text(panel, '[data-qsb-deposit-step="review"]')).not.toContain("Withdrawal");
+    expect(text(panel, '[data-qsb-deposit-step="review"]')).not.toContain("0.00001200");
+    expect(find(panel, '[data-qsb-deposit-step="review"] .review-panel')).toBe(null);
+    expect(text(panel, '[data-qsb-deposit-step="review"]')).toBe(
+      "Amount 0.00100000 BTC Network fee 0.00000564 BTC Fee rate 2.5 sat/vB " +
+        "Change to you 0.00149436 BTC I accept these costs Fund Change amount",
     );
   });
 
@@ -190,7 +192,7 @@ describe("submitting a deposit", () => {
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     expect(step(panel)).toBe("sending");
-    expect(text(panel, '[data-qsb-deposit-step="sending"]')).toBe("Sending deposit…");
+    expect(text(panel, '[data-qsb-deposit-step="sending"]')).toBe("Sending…");
     // Leaving and coming back reattaches to the same deposit.
     panel.paint("qsb-account");
     await flush();
@@ -202,7 +204,7 @@ describe("submitting a deposit", () => {
     await flush();
     expect(step(panel)).toBe("outcome");
     expect(text(panel, "#qsb-outcome-title")).toBe("Deposit sent");
-    expect(text(panel, "#qsb-outcome-line")).toBe("The vault shows as funded once it's mined.");
+    expect(text(panel, "#qsb-outcome-line")).toBe("The deposit shows as funded once it's mined.");
     const link = find<HTMLAnchorElement>(panel, "#qsb-outcome-tx");
     expect(link?.hidden).toBe(false);
     expect(link?.getAttribute("href")).toBe(`https://mempool.space/tx/${QSB_TXID}`);
@@ -236,7 +238,7 @@ describe("submitting a deposit", () => {
     await flush();
     expect(text(panel, "#qsb-outcome-title")).toBe("Deposit refused");
     expect(text(panel, "#qsb-outcome-line")).toBe(
-      "MARA refused it. The vault can take a new deposit.",
+      "MARA refused it. The deposit can be funded again.",
     );
     find<HTMLButtonElement>(
       panel,
@@ -298,7 +300,7 @@ describe("submitting a deposit", () => {
     expect(step(panel)).toBe("outcome");
     expect(text(panel, "#qsb-outcome-title")).toBe("Deposit status unknown");
     expect(text(panel, "#qsb-outcome-line")).toBe(
-      "Bramble couldn't confirm this finished. Refresh the account before trying again.",
+      "Bramble couldn't confirm this finished. Refresh before trying again.",
     );
     expect(find<HTMLButtonElement>(panel, "#qsb-outcome-resend")?.hidden).toBe(true);
     expect(find<HTMLAnchorElement>(panel, "#qsb-outcome-tx")?.hidden).toBe(true);
