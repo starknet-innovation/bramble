@@ -92,6 +92,11 @@ export const applyWatchNftApproval = async (
   if (!approval.nft) {
     return reject({ error: "approval not found" });
   }
+  // The panel offers only Close while the preview is off; a stale card
+  // approved after it was turned off is refused the same way.
+  if (!(await deps.preferencesStore.read()).collectiblesPreview) {
+    return reject({ error: "collectibles preview is off" });
+  }
   const { contract, networkId, tokenId } = approval.nft;
   const watched = await watchOwnedNft(deps, { contract, networkId, tokenId });
   return "error" in watched ? reject(watched) : tracked;

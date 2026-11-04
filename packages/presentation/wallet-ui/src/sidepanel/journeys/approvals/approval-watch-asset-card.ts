@@ -46,30 +46,46 @@ const watchAssetTrackedCard = (
     <div class="button-row">${denyButton(approval, "Close")}</div>
   </li>`;
 
+// Collectibles are a preview; with it off the card can only be closed, which
+// answers the site as a decline. The site cannot tell this from a decline.
+const PREVIEW_OFF_NOTICE =
+  "Collectibles are a preview. Turn on Collectibles preview in Advanced endpoints to watch one.";
+
 // A site asked to watch a collectible (ahead of the Starknet wallet API). The
 // wallet re-proves ownership on approve, so the card promises only that check.
 const watchNftCard = (
   approval: PendingApproval,
   nft: NonNullable<PendingApproval["nft"]>,
+  preview: boolean,
 ): string => `
-  <li class="request-card">
+  <li class="request-card"${preview ? "" : " data-approval-notice"}>
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Watch collectible request")}
       <dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(nft.contract)}</code>${inlineCopyButton(nft.contract, "Copy contract address")}</dd></div><div><dt>Token ID</dt><dd><code>${escapeHtml(nft.tokenId)}</code></dd></div><div><dt>Network</dt><dd>${escapeHtml(STARKNET_NETWORKS[nft.networkId].name)}</dd></div></dl>
-      ${reviewOutcome("Show this collectible in Collectibles once Bramble confirms this account owns it.")}
+      ${
+        preview
+          ? reviewOutcome(
+              "Show this collectible in Collectibles once Bramble confirms this account owns it.",
+            )
+          : `<p>${escapeHtml(PREVIEW_OFF_NOTICE)}</p>`
+      }
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${
+      preview
+        ? `${reviewPanel(approval.insights ?? [])}
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(approval, "Watch collectible", false)}
+    ${decisionRow(approval, "Watch collectible", false)}`
+        : `<div class="button-row">${denyButton(approval, "Close")}</div>`
+    }
   </li>`;
 
 /**
  * Renders a watch-asset request: an add-token card, a close-only notice when
  * the wallet already tracks the token, or a watch-collectible card.
  */
-export const watchAssetCard = (approval: PendingApproval): string => {
+export const watchAssetCard = (approval: PendingApproval, preview = false): string => {
   if (approval.nft) {
-    return watchNftCard(approval, approval.nft);
+    return watchNftCard(approval, approval.nft, preview);
   }
   const token = approval.token;
   if (!token) {

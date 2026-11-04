@@ -1,8 +1,9 @@
 /**
  * A site's wallet_watchAsset for a collectible (ERC721/ERC1155, ahead of the
- * Starknet wallet API): refused as an unusable asset while the collectibles
- * preview is off; with it on, a card is queued without reading the chain, and
- * approving watches the NFT only after ownership is re-proved on-chain.
+ * Starknet wallet API): a card is always queued without reading the chain, so
+ * the site learns nothing before the user acts; approve is refused while the
+ * collectibles preview is off, and otherwise watches the NFT only after
+ * ownership is re-proved on-chain.
  */
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
@@ -82,19 +83,25 @@ const watch = (tokenId = "7", type = "ERC721") => ({
 });
 
 describe("watch-collectible approval lifecycle", () => {
-  test("is refused as an unusable asset while the preview is off", async () => {
-    const { handler, ownerReads } = await makeHandler({ owner: account.address, preview: false });
-    // A queued card would hold this answer until the user acts; race it so a
-    // regression fails here instead of hanging.
-    const held = new Promise((resolve) => setTimeout(() => resolve("held for a card"), 200));
-    await expect(Promise.race([handler(watch(), contentSender), held])).resolves.toEqual({
-      error: "invalid watch asset metadata",
+  test("waits for the user even while the preview is off, and approve is refused", async () => {
+    const { handler, ownerReads, preferencesStore } = await makeHandler({
+      owner: account.address,
+      preview: false,
     });
-    const pending = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
-      readonly pending: readonly unknown[];
-    };
-    expect(pending.pending).toEqual([]);
+    // An immediate answer would tell the site the preference (audit M1).
+    const held = handler(watch(), contentSender);
+    const early = await Promise.race([
+      held.then(() => "answered"),
+      new Promise((resolve) => setTimeout(() => resolve("waiting"), 100)),
+    ]);
+    expect(early).toBe("waiting");
+    const id = await latestApprovalId(handler, extensionSender);
+    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
+      error: "collectibles preview is off",
+    });
+    await expect(held).resolves.toEqual({ error: "collectibles preview is off" });
     expect(ownerReads).toEqual([]);
+    expect((await preferencesStore.read()).nfts ?? []).toEqual([]);
   });
 
   test("queues one card per collectible without reading the chain", async () => {

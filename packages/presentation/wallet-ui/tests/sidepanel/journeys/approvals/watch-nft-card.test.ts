@@ -5,6 +5,7 @@
  * approves.
  */
 import { describe, expect, test } from "bun:test";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { isPendingApprovalsResponse } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
@@ -46,8 +47,19 @@ describe("watch-collectible card", () => {
     expect(accepts({ ...tokenCard, token })).toBe(true);
   });
 
+  test("with the preview off it is a close-only notice", () => {
+    const html = approvalCard(card as never, status, null);
+    expect(html).toContain("Turn on Collectibles preview");
+    expect(html).toContain("data-approval-notice");
+    expect(html).not.toContain('data-approval-action="approve"');
+    expect(html).toContain(CONTRACT);
+  });
+
   test("shows the full contract, token id and network, and promises the ownership check", () => {
-    const html = approvalCard(card as never, status);
+    const html = approvalCard(card as never, status, {
+      ...defaultWalletPreferences(),
+      collectiblesPreview: true,
+    });
     expect(html).toContain("Watch collectible request");
     expect(html).toContain(CONTRACT);
     expect(html).toContain(">42<");

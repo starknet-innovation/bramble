@@ -12,9 +12,10 @@ import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue, PendingApproval } from "../approvals/approvals";
 
 /**
- * Queues one collectible watch card for the active network, or returns null
- * when the collectibles preview is off: the gallery is parked, so the request
- * is answered as an unusable asset, the same answer a malformed one gets.
+ * Queues one collectible watch card for the active network. The card is queued
+ * whether or not the collectibles preview is on, so a site cannot tell the
+ * preference from how fast it is answered (audit M1): with the preview off the
+ * panel shows a close-only notice, and approve is refused.
  */
 export const trackWatchNft = async (
   deps: {
@@ -26,7 +27,6 @@ export const trackWatchNft = async (
   const contract = canonicalAddress(input.nft.address);
   if (!contract) return null;
   const preferences = await deps.preferencesStore.read();
-  if (!preferences.collectiblesPreview) return null;
   const nft = {
     contract,
     networkId: preferences.activeNetworkId,
