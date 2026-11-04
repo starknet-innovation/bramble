@@ -5,86 +5,28 @@
  * the invariants are the ones a fake can pin exactly: no Python runs before
  * every source matches the manifest, the manifest names exactly the four
  * sources, nothing in the adapter calls a secret-drawing bridge method, and a
- * failed boot is not cached.
+ * failed boot is not cached. The commitments setup has its own suite
+ * (`qsb-vault-setup.test.ts`).
  */
 import { describe, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
 import {
   createQsbRuntime,
   QSB_MANIFEST,
   QSB_SOURCES,
-  type QsbInterpreter,
-  type QsbRuntimeDeps,
-  refuseRipemd160,
 } from "../../../apps/extension/src/background/qsb/qsb-runtime";
 import { QSB_PUBLIC_PROBE_ANSWERS } from "../../../scripts/qsb-known-answers";
+import {
+  runtimeDeps as deps,
+  digest,
+  type FakePython,
+  fakePython,
+  manifestFor,
+  pinnedManifest,
+  registeredFunction,
+  sourceBytes,
+} from "../../support/qsb-runtime-harness";
 
 const encoder = new TextEncoder();
-const sourceBytes = Object.fromEntries(
-  QSB_SOURCES.map((source) => [source, encoder.encode(`# ${source}\n`)]),
-) as Readonly<Record<string, Uint8Array>>;
-const digest = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
-const manifestFor = (entries: Readonly<Record<string, unknown>>): Uint8Array =>
-  encoder.encode(JSON.stringify(entries));
-const pinnedManifest = manifestFor(
-  Object.fromEntries(
-    QSB_SOURCES.map((source) => [source, digest(sourceBytes[source] ?? new Uint8Array())]),
-  ),
-);
-
-type FakePython = {
-  readonly python: QsbInterpreter;
-  readonly ran: string[];
-  readonly registered: Map<string, object>;
-  readonly written: string[];
-};
-
-const fakePython = (
-  probeOutput: unknown = JSON.stringify(QSB_PUBLIC_PROBE_ANSWERS),
-): FakePython => {
-  const ran: string[] = [];
-  const registered = new Map<string, object>();
-  const written: string[] = [];
-  return {
-    python: {
-      FS: { writeFile: (path) => void written.push(path) },
-      registerJsModule: (name, module) => void registered.set(name, module),
-      runPythonAsync: async (code) => {
-        ran.push(code);
-        return ran.length === 1 ? undefined : probeOutput;
-      },
-    },
-    ran,
-    registered,
-    written,
-  };
-};
-
-const deps = (
-  overrides: Partial<QsbRuntimeDeps> & { readonly files?: Readonly<Record<string, Uint8Array>> },
-  fake: FakePython = fakePython(),
-): { readonly deps: QsbRuntimeDeps; readonly loads: () => number } => {
-  let loads = 0;
-  const files = overrides.files ?? { ...sourceBytes, [QSB_MANIFEST]: pinnedManifest };
-  return {
-    deps: {
-      loadInterpreter: async () => {
-        loads += 1;
-        return fake.python;
-      },
-      readFile: async (file) => {
-        const bytes = files[file];
-        if (bytes === undefined) {
-          throw new Error(`missing ${file}`);
-        }
-        return bytes;
-      },
-      ripemd160: refuseRipemd160,
-      ...overrides,
-    },
-    loads: () => loads,
-  };
-};
 
 describe("QSB runtime integrity", () => {
   test("refuses a source whose digest differs from the manifest, before loading Python", async () => {
@@ -133,7 +75,7 @@ describe("QSB runtime boot", () => {
     const { deps: wired } = deps({}, fake);
     expect(await createQsbRuntime(wired).publicProbe()).toEqual(QSB_PUBLIC_PROBE_ANSWERS);
     expect(fake.written).toEqual([...QSB_SOURCES]);
-    expect([...fake.registered.keys()]).toEqual(["qsb_hash"]);
+    expect([...fake.registered.keys()]).toEqual(["qsb_hash", "qsb_request"]);
     expect(fake.ran[0]).toContain("import bridge");
     expect(fake.ran[0]?.indexOf("import secp256k1")).toBeLessThan(
       fake.ran[0]?.indexOf("import bridge") ?? -1,
@@ -189,8 +131,9 @@ describe("QSB runtime boot", () => {
       "not json",
       JSON.stringify({ ...QSB_PUBLIC_PROBE_ANSWERS, sha256dEmpty: "00" }),
       JSON.stringify({ ...QSB_PUBLIC_PROBE_ANSWERS, validSmallR: [0] }),
+      JSON.stringify({ ...QSB_PUBLIC_PROBE_ANSWERS, hash160Empty: "00".repeat(32) }),
     ]) {
-      const { deps: wired } = deps({}, fakePython(output));
+      const { deps: wired } = deps({}, fakePython({ probe: output }));
       await expect(createQsbRuntime(wired).publicProbe()).rejects.toThrow(
         "QSB public probe returned an unexpected shape",
       );
@@ -199,13 +142,8 @@ describe("QSB runtime boot", () => {
 });
 
 describe("QSB HASH160 bridge", () => {
-  const ripemdOf = (fake: FakePython): ((hex: string) => string) => {
-    const module = fake.registered.get("qsb_hash") as { readonly ripemd?: unknown } | undefined;
-    if (typeof module?.ripemd !== "function") {
-      throw new Error("qsb_hash.ripemd was not registered");
-    }
-    return module.ripemd as (hex: string) => string;
-  };
+  const ripemdOf = (fake: FakePython): ((hex: string) => unknown) =>
+    registeredFunction(fake, "qsb_hash", "ripemd") as (hex: string) => unknown;
 
   test("passes bytes to the injected provider and returns its digest as hex", async () => {
     const fake = fakePython();
@@ -223,12 +161,17 @@ describe("QSB HASH160 bridge", () => {
     expect(ripemdOf(fake)("00ff")).toBe("ab".repeat(20));
     expect(seen).toEqual(["00ff"]);
     expect(() => ripemdOf(fake)("0g")).toThrow("QSB hash input is not lowercase hex");
+    expect(() => ripemdOf(fake)("00F")).toThrow("QSB hash input is not lowercase hex");
   });
 
-  test("an unwired provider refuses instead of hashing", async () => {
+  test("the worker's provider is RIPEMD-160: the published vectors, through the bridge", async () => {
     const fake = fakePython();
     const { deps: wired } = deps({}, fake);
     await createQsbRuntime(wired).publicProbe();
-    expect(() => ripemdOf(fake)("00")).toThrow("QSB RIPEMD-160 provider is not wired");
+    // Dobbertin, Bosselaers and Preneel's test vectors for "" and "abc".
+    expect(ripemdOf(fake)("")).toBe("9c1185a5c5e9fc54612808977ee8f548b2258d31");
+    expect(ripemdOf(fake)("616263")).toBe("8eb208f7e05d987a9b044a8e98c6b087f15a0bfc");
+    // HASH160 of the empty string, as setup computes it for every HORS slot.
+    expect(ripemdOf(fake)(digest(new Uint8Array()))).toBe(QSB_PUBLIC_PROBE_ANSWERS.hash160Empty);
   });
 });

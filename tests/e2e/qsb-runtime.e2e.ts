@@ -1,7 +1,8 @@
 /**
  * QSB runtime spike: the pinned QSB pipeline loads and runs inside Bramble's
- * MV3 module service worker, every file read from the extension package, and
- * what that costs.
+ * MV3 module service worker, every file read from the extension package —
+ * the public probe, and the commitments-only setup of the QSB BIP test vault
+ * to its known script hash — and what that costs.
  *
  * Each test loads a copy of `dist/` whose manifest names a small wrapper as the
  * worker. The wrapper imports the real `background/index.js` — the whole wallet
@@ -16,11 +17,16 @@
  * as annotations: they depend on the machine, and on whether a visible
  * extension page keeps the worker's renderer process at foreground priority.
  */
+import { createHash } from "node:crypto";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Worker } from "@playwright/test";
-import { QSB_PUBLIC_PROBE_ANSWERS } from "../../scripts/qsb-known-answers";
+import {
+  QSB_PUBLIC_PROBE_ANSWERS,
+  QSB_TEST_VAULT_COMMITMENTS,
+  QSB_TEST_VAULT_SETUP,
+} from "../../scripts/qsb-known-answers";
 import { distPath, type LoadedExtension, launchExtension } from "./extension-fixture";
 import { expect, test } from "./fixtures";
 
@@ -57,6 +63,15 @@ type ProbeRun = {
   readonly fetched: readonly string[];
   readonly ms: number;
   readonly result: unknown;
+};
+
+// A run of the commitments setup: the vault's three public fields.
+type VaultRun = ProbeRun & {
+  readonly result: {
+    readonly publicStateJson: string;
+    readonly scriptHash: string;
+    readonly scriptHex: string;
+  };
 };
 
 const composeProbeExtension = async (
@@ -123,32 +138,69 @@ const networkSettled = async (worker: Worker): Promise<void> => {
 };
 
 /**
- * Calls the probe once and returns its duration and the fetches made while it
- * ran. Measured inside the worker, so the CDP round trip is not counted.
+ * Calls the runtime once — the probe, or the setup of `commitments` — and
+ * returns its duration and the fetches made while it ran. Measured inside the
+ * worker, so the CDP round trip is not counted.
  */
-const timedProbe = async (worker: Worker): Promise<ProbeRun> => {
+const timedCall = async (
+  worker: Worker,
+  commitments: readonly (readonly string[])[] | null,
+): Promise<ProbeRun> => {
   await probeReady(worker);
   await networkSettled(worker);
-  return worker.evaluate(async () => {
+  return worker.evaluate(async (vault) => {
     const probe = (
       self as unknown as {
         readonly qsbProbe: {
           readonly evaluatedAt: number;
           readonly fetched: string[];
-          readonly runtime: { readonly publicProbe: () => Promise<unknown> };
+          readonly runtime: {
+            readonly publicProbe: () => Promise<unknown>;
+            readonly setupFromCommitments: (
+              commitments: readonly (readonly string[])[],
+            ) => Promise<unknown>;
+          };
         };
       }
     ).qsbProbe;
     const before = probe.fetched.length;
     const started = performance.now();
-    const result = await probe.runtime.publicProbe();
+    const result =
+      vault === null
+        ? await probe.runtime.publicProbe()
+        : await probe.runtime.setupFromCommitments(vault);
     return {
       evaluatedAt: probe.evaluatedAt,
       fetched: probe.fetched.slice(before),
       ms: performance.now() - started,
       result,
     };
+  }, commitments);
+};
+
+const timedProbe = (worker: Worker): Promise<ProbeRun> => timedCall(worker, null);
+
+const timedSetup = async (worker: Worker): Promise<VaultRun> =>
+  (await timedCall(worker, QSB_TEST_VAULT_COMMITMENTS)) as VaultRun;
+
+// The test vault's known answers: script hash, script length, public state.
+const expectTestVault = (run: VaultRun): void => {
+  expect(Object.keys(run.result).sort()).toEqual(["publicStateJson", "scriptHash", "scriptHex"]);
+  expect(run.result.scriptHash).toBe(QSB_TEST_VAULT_SETUP.scriptHash);
+  expect(run.result.scriptHex).toHaveLength(QSB_TEST_VAULT_SETUP.scriptBytes * 2);
+  expect(createHash("sha256").update(run.result.publicStateJson).digest("hex")).toBe(
+    QSB_TEST_VAULT_SETUP.publicStateSha256,
+  );
+};
+
+const collectWorkerErrors = (extension: LoadedExtension): string[] => {
+  const errors: string[] = [];
+  extension.serviceWorker.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      errors.push(message.text());
+    }
   });
+  return errors;
 };
 
 const extensionPage = async (extension: LoadedExtension, path: string) => {
@@ -171,12 +223,7 @@ const median = (values: readonly number[]): number => {
 test("the pinned pipeline loads and runs in the wallet worker from packaged files only", async () => {
   test.setTimeout(120_000);
   await withProbeExtension(async (extension) => {
-    const workerErrors: string[] = [];
-    extension.serviceWorker.on("console", (message) => {
-      if (message.type() === "error" || message.type() === "warning") {
-        workerErrors.push(message.text());
-      }
-    });
+    const workerErrors = collectWorkerErrors(extension);
     // The install-time onboarding tab: the visible extension page a user would
     // have open (the side panel, in practice) when starting a QSB operation.
     await extensionPage(extension, "onboarding.html");
@@ -198,6 +245,33 @@ test("the pinned pipeline loads and runs in the wallet worker from packaged file
     report("worker module graph evaluated (fresh profile)", cold.evaluatedAt);
     report("cold Pyodide load + integrity check + pipeline import + probe", cold.ms);
     report("warm probe", warm.ms);
+  });
+});
+
+test("the worker sets up the BIP test vault from its commitments to the known script hash", async () => {
+  test.setTimeout(120_000);
+  await withProbeExtension(async (extension) => {
+    const workerErrors = collectWorkerErrors(extension);
+    await extensionPage(extension, "onboarding.html");
+
+    // Cold: the setup is this worker's first QSB call, so it boots Pyodide too.
+    const cold = await timedSetup(extension.serviceWorker);
+    const warm = await timedSetup(extension.serviceWorker);
+
+    expectTestVault(cold);
+    expectTestVault(warm);
+    expect(warm.result).toEqual(cold.result);
+    const origin = `chrome-extension://${extension.extensionId}/`;
+    expect(cold.fetched.filter((url) => !url.startsWith(origin))).toEqual([]);
+    for (const file of PACKAGED_FILES) {
+      expect(cold.fetched).toContain(`${origin}${file}`);
+    }
+    // The warm call reads nothing: the verified interpreter serves it.
+    expect(warm.fetched).toEqual([]);
+    expect(workerErrors).toEqual([]);
+
+    report("cold setupFromCommitments (Pyodide load + integrity check + setup)", cold.ms);
+    report("warm setupFromCommitments", warm.ms);
   });
 });
 

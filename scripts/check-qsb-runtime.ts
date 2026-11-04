@@ -1,8 +1,8 @@
 /**
  * Verifies the QSB runtime the background ships before it enters the wallet:
  * the exact published Pyodide package and the commit-pinned qsb-app pipeline
- * sources, then runs the public-only known-answer probe through the real
- * adapter on those same bytes.
+ * sources, then runs the public-only known-answer probe and the commitments
+ * setup of the QSB BIP test vault through the real adapter on those same bytes.
  *
  * Provenance runs through the shared `vendor-pin-policy` helpers, and the
  * pinned qsb-app commit is read back out of `scripts/vendor-qsb.ts` rather than
@@ -15,16 +15,19 @@
  */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { ripemd160 } from "@noble/hashes/legacy.js";
 import {
   createQsbRuntime,
   QSB_MANIFEST,
   QSB_SOURCES,
-  type QsbInterpreter,
-  refuseRipemd160,
 } from "../apps/extension/src/background/qsb/qsb-runtime";
-import { QSB_PUBLIC_PROBE_ANSWERS } from "./qsb-known-answers";
+import { QSB_MAX_JSON_TEXT } from "../apps/extension/src/background/qsb/qsb-vault-setup";
+import {
+  QSB_PUBLIC_PROBE_ANSWERS,
+  QSB_TEST_VAULT_COMMITMENTS,
+  QSB_TEST_VAULT_SETUP,
+} from "./qsb-known-answers";
+import { loadPinnedPyodide } from "./qsb-pyodide";
 import {
   dynamicExecutionFailures,
   npmRunTargets,
@@ -139,44 +142,40 @@ for (const source of QSB_SOURCES) {
     failures.push(`${QSB_MANIFEST} does not pin the reviewed digest of ${source}`);
   }
 }
+// The adapter refuses a public state longer than the bridge itself would read
+// back, so the two limits must be one number.
+const bridgeSource = await readFile(`${shippedDirectory}/bridge.py`, "utf8");
+if (!bridgeSource.includes(`\nMAX_JSON_TEXT = ${QSB_MAX_JSON_TEXT}\n`)) {
+  failures.push(`bridge.py must keep MAX_JSON_TEXT at the adapter's ${QSB_MAX_JSON_TEXT}`);
+}
 
 if (failures.length > 0) {
   throw new Error(failures.join("; "));
 }
 
 // The bytes above establish what ships; this establishes that they run. Same
-// adapter, same files, same refusing RIPEMD-160 provider as the worker. The
-// loader is imported by path — the very `pyodide.mjs` digest-checked above, not
-// whatever the package's export map resolves — and narrowed like the worker's
-// own type shim, since the package's declarations need Emscripten's globals.
-const pyodideLoader = (await import(pathToFileURL(resolve(pyodideRoot, "pyodide.mjs")).href)) as {
-  readonly loadPyodide?: unknown;
-};
-if (typeof pyodideLoader.loadPyodide !== "function") {
-  throw new Error("Pyodide runtime no longer exports loadPyodide");
-}
-const loadPyodide = pyodideLoader.loadPyodide as (options: {
-  readonly indexURL: string;
-  readonly jsglobals: object;
-  readonly stderr: (line: string) => void;
-  readonly stdout: (line: string) => void;
-}) => Promise<QsbInterpreter>;
+// adapter, same files, same RIPEMD-160 provider as the worker, and the very
+// `pyodide.mjs` digest-checked above (./qsb-pyodide imports it by path).
 const runtime = createQsbRuntime({
-  loadInterpreter: () =>
-    loadPyodide({
-      indexURL: `${resolve(pyodideRoot)}/`,
-      jsglobals: Object.create(null),
-      stderr: () => undefined,
-      stdout: () => undefined,
-    }),
+  loadInterpreter: () => loadPinnedPyodide(pyodideRoot),
   readFile: async (file) => new Uint8Array(await readFile(`${shippedDirectory}/${file}`)),
-  ripemd160: refuseRipemd160,
+  ripemd160,
 });
 const probe = await runtime.publicProbe();
 if (
+  probe.hash160Empty !== QSB_PUBLIC_PROBE_ANSWERS.hash160Empty ||
   probe.push20 !== QSB_PUBLIC_PROBE_ANSWERS.push20 ||
   probe.sha256dEmpty !== QSB_PUBLIC_PROBE_ANSWERS.sha256dEmpty ||
   probe.validSmallR.join(",") !== QSB_PUBLIC_PROBE_ANSWERS.validSmallR.join(",")
 ) {
   throw new Error("QSB public probe does not match its known answers");
+}
+const vault = await runtime.setupFromCommitments(QSB_TEST_VAULT_COMMITMENTS);
+if (
+  vault.scriptHash !== QSB_TEST_VAULT_SETUP.scriptHash ||
+  vault.scriptHex.length !== QSB_TEST_VAULT_SETUP.scriptBytes * 2 ||
+  createHash("sha256").update(vault.publicStateJson).digest("hex") !==
+    QSB_TEST_VAULT_SETUP.publicStateSha256
+) {
+  throw new Error("QSB commitments setup does not match the test vault's known answers");
 }

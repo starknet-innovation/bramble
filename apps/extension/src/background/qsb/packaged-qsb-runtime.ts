@@ -11,14 +11,19 @@
  * `python_stdlib.zip`, `pyodide-lock.json`) is fetched from `indexURL`, which is
  * the packaged `dependencies/pyodide/` directory — never a CDN.
  *
+ * HASH160 needs RIPEMD-160, which Pyodide's `hashlib` lacks; it is the pinned
+ * `@noble/hashes` implementation qsb-app wires, bundled into this worker. Only
+ * its legacy-hash module and the helpers that module imports are bundled.
+ *
  * Nothing here runs until a caller asks: the runtime is lazy, and no wallet
  * message, page, or account reaches it.
  */
 import "/dependencies/pyodide/pyodide.asm.js";
+import { ripemd160 } from "@noble/hashes/legacy.js";
 import { loadPyodide } from "/dependencies/pyodide/pyodide.mjs";
 import { resolveExtensionApi } from "../../extension-api";
 import type { BackgroundBrowser } from "../runtime/background-browser";
-import { createQsbRuntime, type QsbRuntime, refuseRipemd160 } from "./qsb-runtime";
+import { createQsbRuntime, type QsbRuntime } from "./qsb-runtime";
 
 const runtime = resolveExtensionApi<BackgroundBrowser>()?.runtime;
 
@@ -54,5 +59,5 @@ export const qsbRuntime: QsbRuntime = createQsbRuntime({
     }
     return new Uint8Array(await response.arrayBuffer());
   },
-  ripemd160: refuseRipemd160,
+  ripemd160,
 });

@@ -78,6 +78,7 @@
     "@bramble/wallet-ui": "workspace:*",
     "@bramble/wallet-model": "workspace:*",
     "@bramble/wallet-protocol": "workspace:*",
+    "@noble/hashes": "2.4.0",
     "@starknetfoundation/krusty-kms-wasm": "0.15.0",
     "pyodide": "0.29.3",
     "starknet": "10.8.0"
