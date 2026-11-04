@@ -197,6 +197,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["display update failed", SAVE_FAILED],
   ["label update failed", SAVE_FAILED],
   ["rpc endpoint update failed", SAVE_FAILED],
+  ["indexer endpoint update failed", SAVE_FAILED],
   ["explorer fallback update failed", SAVE_FAILED],
   ["privacy service configuration failed", SAVE_FAILED],
   ["token visibility update failed", SAVE_FAILED],
