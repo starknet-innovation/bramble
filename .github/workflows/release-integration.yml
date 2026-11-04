@@ -65,6 +65,20 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+      - name: Vendor QSB pipeline sources
+        run: |
+          set -o pipefail
+          if ! bun run vendor:qsb; then
+            {
+              echo "### Release integration: \`vendor:qsb\` FAILED"
+              echo ""
+              echo "This step needs network access to the pinned qsb-app"
+              echo "commit. Every shipped file is digest-checked before it"
+              echo "can enter the extension package."
+              echo "See scripts/vendor-qsb.ts."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
       - name: Build extension
         run: bun run build
       - name: Package extension

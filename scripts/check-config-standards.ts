@@ -8,6 +8,7 @@ import {
   BIOME_COMPLEXITY_RULE_KEYS,
   DEPENDENCY_FIELDS,
   EXPECTED_ARCHITECTURE_SECTIONS,
+  EXPECTED_CI_COMMANDS,
   EXPECTED_CONTRIBUTING_RULES,
   EXPECTED_CONTRIBUTING_SECTIONS,
   EXPECTED_DEPENDENCIES,
@@ -23,6 +24,7 @@ import {
   REQUIRED_BIOME_NURSERY_RULES,
   REQUIRED_COMPILER_OPTIONS,
   SEMVER,
+  VENDOR_PIN_SCRIPTS,
 } from "./config-standards-policy";
 import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
 import { vendorPinFailures } from "./vendor-pin-policy";
@@ -55,7 +57,6 @@ const tsconfigJson = await readJson("tsconfig.json");
 const buildScript = await readFile("apps/extension/build.ts", "utf8");
 const ciWorkflow = await readFile(".github/workflows/ci.yml", "utf8");
 const packageScript = await readFile("scripts/package-extension.ts", "utf8");
-const vendorPrivacyScript = await readFile("scripts/vendor-privacy-sdk.ts", "utf8");
 failures.push(...(await workflowSecurityFailures()));
 
 if (
@@ -447,39 +448,17 @@ if (
   }
 }
 
-failures.push(
-  ...vendorPinFailures(
-    vendorPrivacyScript,
-    "scripts/vendor-privacy-sdk.ts",
-    "PRIVACY_SDK_REVISION",
-  ),
-);
+for (const { constant, script } of VENDOR_PIN_SCRIPTS) {
+  failures.push(...vendorPinFailures(await readFile(script, "utf8"), script, constant));
+}
 
 if (EXPECTED_RUNTIME_FILES.join("\n") !== PINNED_RUNTIME_FILES.join("\n")) {
   failures.push("scripts/extension-runtime-files.ts must keep the pinned runtime file set");
 }
 
-const ciCommands = [
-  "bun install --frozen-lockfile",
-  "bun run test:e2e:install",
-  "bun run check:files",
-  "bun run vendor:argent",
-  "bun run vendor:privacy",
-  "bun run check",
-  "bun run check:coverage",
-  "bun run build",
-  "bun run test:e2e",
-  "bun run package:extension",
-  // The Gecko artifact is built, packaged and validated in the same job. Its
-  // linter wraps the validator addons.mozilla.org runs at submission, so an
-  // add-on that would be rejected there fails here instead — which is how the
-  // wrong-browser artifact reached AMO once already.
-  "bun run package:extension:firefox",
-  "bun run check:firefox",
-];
 const ciLines = ciWorkflow.split("\n").map((line) => line.trim());
 let previousCiCommand = -1;
-for (const command of ciCommands) {
+for (const command of EXPECTED_CI_COMMANDS) {
   const index = ciLines.indexOf(`- run: ${command}`);
   if (index === -1 || index <= previousCiCommand) {
     failures.push(`.github/workflows/ci.yml must run ${command} in order`);

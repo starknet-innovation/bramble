@@ -272,6 +272,7 @@ jobs:
       - run: bun run check:files
       - run: bun run vendor:argent
       - run: bun run vendor:privacy
+      - run: bun run vendor:qsb
       - run: bun run check
       # Enforce the global unit-test coverage floor (scripts/check-coverage.ts).
       # Kept out of the aggregate `check` so the offline gate stays fast; a

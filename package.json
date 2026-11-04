@@ -13,7 +13,7 @@
     "build": "bun run --filter @bramble/extension build",
     "build:firefox": "bun run --filter @bramble/extension build:firefox",
     "build:all": "bun run --filter @bramble/extension build:all",
-    "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
+    "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:qsb && bun run test && bun run check:workspaces",
     "check:audit": "bun audit --audit-level=high",
     "check:copy": "bun run scripts/check-copy.ts",
     "check:coverage": "bun run scripts/check-coverage.ts",
@@ -27,6 +27,7 @@
     "check:lint": "biome check .",
     "check:argent": "bun run scripts/check-argent-contracts.ts",
     "check:privacy": "bun run scripts/check-privacy-sdk.ts",
+    "check:qsb": "bun run scripts/check-qsb-runtime.ts",
     "check:release-version": "bun run scripts/release-version.ts",
     "check:types": "tsc --noEmit",
     "check:workspaces": "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @bramble/extension check && bun run --filter @bramble/terminal check && bun run --filter @bramble/ui-lab check:static && bun run --filter @bramble/website check",
@@ -43,7 +44,8 @@
     "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
     "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
     "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
-    "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts"
+    "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
+    "vendor:qsb": "bun run scripts/vendor-qsb.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
@@ -77,6 +79,7 @@
     "@bramble/wallet-model": "workspace:*",
     "@bramble/wallet-protocol": "workspace:*",
     "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+    "pyodide": "0.29.3",
     "starknet": "10.8.0"
   },
   "overrides": {
