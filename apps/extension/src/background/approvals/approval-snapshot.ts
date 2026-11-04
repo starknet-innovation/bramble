@@ -25,6 +25,7 @@ export type {
   ApprovalRiskFlag,
   DeclarationReview,
   PendingApproval,
+  WatchAssetNft,
   WatchAssetToken,
 } from "@bramble/wallet-protocol/extension-responses";
 
@@ -137,6 +138,7 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
     ? {}
     : { reviewAssets: approval.reviewAssets.map((asset) => ({ ...asset })) }),
   ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
+  ...(approval.nft === undefined ? {} : { nft: { ...approval.nft } }),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
   ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
   ...(approval.typedData === undefined

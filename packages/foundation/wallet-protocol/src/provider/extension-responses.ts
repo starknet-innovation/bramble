@@ -85,6 +85,19 @@ export type WatchAssetToken = {
 };
 
 /**
+ * A collectible a site asked the wallet to watch (wallet_watchAsset with an
+ * ERC721 or ERC1155 asset, ahead of the Starknet wallet API). The standard is
+ * the site's claim; the wallet detects the real one when it re-proves
+ * ownership on approve.
+ */
+export type WatchAssetNft = {
+  readonly contract: string;
+  readonly networkId: StarknetNetworkId;
+  readonly standard: "ERC721" | "ERC1155";
+  readonly tokenId: string;
+};
+
+/**
  * Trusted token identity referenced by a decoded approval summary. The
  * background supplies the address alongside the symbol so presentation can
  * show the bundled mark without inferring token identity from display copy.
@@ -160,6 +173,8 @@ export type PendingApproval = {
   readonly requiresDeployment?: boolean;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
+  /** A watch-asset card for a collectible carries this instead of `token`. */
+  readonly nft?: WatchAssetNft;
   readonly typedData?: unknown;
 };
 

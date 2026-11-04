@@ -38,7 +38,11 @@ import type { ApprovalDecisionDeps } from "./approval-decision-deps";
 import { pendingFeeRefusal, pendingGaslessRefusal } from "./approval-fee-refusal";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
-import { applyWatchAssetApproval, WATCH_ASSET_TRACKED_RESPONSE } from "./approval-watch-asset";
+import {
+  applyWatchAssetApproval,
+  applyWatchNftApproval,
+  WATCH_ASSET_TRACKED_RESPONSE,
+} from "./approval-watch-asset";
 import type { ApprovalClaim, ApprovalKind, PendingApproval } from "./approvals";
 import { applyGaslessInvoke } from "./gasless-approval";
 import { DROPPED_APPROVAL_RESPONSE } from "./signature-waiters";
@@ -61,7 +65,9 @@ type ApproveApplier = (
 ) => Promise<ApplyResult>;
 
 const applyWatchAsset: ApproveApplier = (deps, { approval }) =>
-  applyWatchAssetApproval(deps.preferencesStore, approval);
+  approval.nft
+    ? applyWatchNftApproval(deps, approval)
+    : applyWatchAssetApproval(deps.preferencesStore, approval);
 
 const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision) => {
   if (!payload) {

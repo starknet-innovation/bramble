@@ -5,6 +5,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-registry";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { PendingApproval } from "../../../popup/responses/responses";
 import { accountLabel, inlineCopyButton } from "../../shared/parts";
 import { reviewConstraints, reviewOutcome, reviewPanel } from "../../shared/review-render";
@@ -45,11 +46,31 @@ const watchAssetTrackedCard = (
     <div class="button-row">${denyButton(approval, "Close")}</div>
   </li>`;
 
+// A site asked to watch a collectible (ahead of the Starknet wallet API). The
+// wallet re-proves ownership on approve, so the card promises only that check.
+const watchNftCard = (
+  approval: PendingApproval,
+  nft: NonNullable<PendingApproval["nft"]>,
+): string => `
+  <li class="request-card">
+    <div class="request-copy">
+      ${requestIdentity(approval.origin, "Watch collectible request")}
+      <dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(nft.contract)}</code>${inlineCopyButton(nft.contract, "Copy contract address")}</dd></div><div><dt>Token ID</dt><dd><code>${escapeHtml(nft.tokenId)}</code></dd></div><div><dt>Network</dt><dd>${escapeHtml(STARKNET_NETWORKS[nft.networkId].name)}</dd></div></dl>
+      ${reviewOutcome("Show this collectible in Collectibles once Bramble confirms this account owns it.")}
+    </div>
+    ${reviewPanel(approval.insights ?? [])}
+    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
+    ${decisionRow(approval, "Watch collectible", false)}
+  </li>`;
+
 /**
- * Renders a watch-asset request: an add-token card, or a close-only notice
- * when the wallet already tracks the token.
+ * Renders a watch-asset request: an add-token card, a close-only notice when
+ * the wallet already tracks the token, or a watch-collectible card.
  */
 export const watchAssetCard = (approval: PendingApproval): string => {
+  if (approval.nft) {
+    return watchNftCard(approval, approval.nft);
+  }
   const token = approval.token;
   if (!token) {
     return "";

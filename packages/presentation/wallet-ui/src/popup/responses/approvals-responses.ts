@@ -33,6 +33,7 @@ import {
   type ConnectedSite,
   type DeclarationReview,
   type PendingApproval,
+  type WatchAssetNft,
   type WatchAssetToken,
 } from "@bramble/wallet-protocol/extension-responses";
 import { readProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
@@ -73,6 +74,18 @@ const isWatchAssetToken = (value: unknown): value is WatchAssetToken =>
   isTokenName(value["name"]) &&
   isStarknetNetworkId(value["networkId"]) &&
   isTokenSymbol(value["symbol"]);
+
+// A collectible watch card: contract, decimal u256 token id, network, and the
+// standard the site claimed.
+const isWatchAssetNft = (value: unknown): value is WatchAssetNft =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["contract", "networkId", "standard", "tokenId"]) &&
+  typeof value["contract"] === "string" &&
+  isStarkFieldElement(value["contract"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  (value["standard"] === "ERC721" || value["standard"] === "ERC1155") &&
+  typeof value["tokenId"] === "string" &&
+  /^(?:0|[1-9]\d{0,77})$/u.test(value["tokenId"]);
 
 const isApprovalReviewAsset = (value: unknown): boolean =>
   isRecord(value) &&
@@ -198,6 +211,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "id",
       "insights",
       "kind",
+      "nft",
       "notice",
       "origin",
       "relayFeeAction",
@@ -252,11 +266,19 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   ) {
     return false;
   }
+  // A watch-asset card names exactly one token or one collectible; only a
+  // token card can be an already-tracked notice.
   const tokenValid =
     value["kind"] === "watch-asset"
-      ? isWatchAssetToken(value["token"]) &&
-        (value["alreadyTracked"] === undefined || value["alreadyTracked"] === true)
-      : value["token"] === undefined && value["alreadyTracked"] === undefined;
+      ? value["nft"] === undefined
+        ? isWatchAssetToken(value["token"]) &&
+          (value["alreadyTracked"] === undefined || value["alreadyTracked"] === true)
+        : isWatchAssetNft(value["nft"]) &&
+          value["token"] === undefined &&
+          value["alreadyTracked"] === undefined
+      : value["token"] === undefined &&
+        value["nft"] === undefined &&
+        value["alreadyTracked"] === undefined;
   // The fee review travels only on invoke prompts and must be internally
   // consistent, mirroring `resolveReviewFee`: an undeployed account has no
   // estimate and no failure; a failed estimate carries no amount. Inconsistent

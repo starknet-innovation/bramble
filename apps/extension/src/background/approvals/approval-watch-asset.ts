@@ -10,6 +10,7 @@ import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { withTokenId } from "@bramble/wallet-model/preferences";
+import { watchOwnedNft } from "../portfolio/nft-ops";
 import { type ApplyResult, reject } from "./approval-applier";
 import type { PendingApproval } from "./approvals";
 
@@ -76,4 +77,22 @@ export const applyWatchAssetApproval = async (
     await preferencesStore.setTokenHidden({ hidden: true, tokenId });
   }
   return tracked;
+};
+
+/**
+ * Applies an approved collectible watch card: the NFT is watched only when the
+ * active account is re-proved to own it on the card's network, and the site
+ * gets the same answer a token card gives. A refusal reaches the site and the
+ * panel as is.
+ */
+export const applyWatchNftApproval = async (
+  deps: Parameters<typeof watchOwnedNft>[0],
+  approval: PendingApproval,
+): Promise<ApplyResult> => {
+  if (!approval.nft) {
+    return reject({ error: "approval not found" });
+  }
+  const { contract, networkId, tokenId } = approval.nft;
+  const watched = await watchOwnedNft(deps, { contract, networkId, tokenId });
+  return "error" in watched ? reject(watched) : tracked;
 };
