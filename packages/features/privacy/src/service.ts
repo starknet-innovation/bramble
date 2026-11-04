@@ -172,10 +172,6 @@ export type Strk20ShadowAccountInfo = {
   readonly nonce: string;
 };
 
-/**
- * Injectable official-SDK adapter. Implementations must validate every SDK and
- * service response, target the configured pool, and fail closed.
- */
 /** Deposit-only batch; `activate` (#789) also registers, self-credit only. */
 export type Strk20AccountActionsInput = Strk20AccountContext & {
   readonly actions: readonly Strk20Action[];
@@ -184,6 +180,10 @@ export type Strk20AccountActionsInput = Strk20AccountContext & {
   readonly poolFeeFri: string;
 };
 
+/**
+ * Injectable official-SDK adapter. Implementations must validate every SDK and
+ * service response, target the configured pool, and fail closed.
+ */
 export type Strk20Service = {
   readonly privateBalances: (input: Strk20BalancesInput) => Promise<readonly Strk20BalanceEntry[]>;
   readonly prepare: (input: Strk20PrepareInput) => Promise<Strk20CallAndProof>;
