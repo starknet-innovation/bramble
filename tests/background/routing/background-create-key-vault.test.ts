@@ -255,4 +255,47 @@ describe("wallet.createKeyVault routing", () => {
     expect(captured).toEqual([]);
     expect((await preferencesStore.read()).activeNetworkId).toBe("SN_SEPOLIA");
   });
+
+  test("an unlocked session does not let a wrong passphrase switch the network", async () => {
+    // Unlocked under the existing vault's passphrase, the request carries
+    // another one: decryption would fail, the network would switch and the
+    // session would lock.
+    const preferencesStore = await sepolia();
+    const session = createUnlockSession();
+    session.unlock("an-existing-vault-passphrase");
+    let writes = 0;
+    const wallet = {
+      ...createWallet({ hasVault: true }),
+      async createKeyVault(): Promise<never> {
+        writes += 1;
+        throw new Error("decryption failed");
+      },
+    };
+    const handler = createMessageHandler(wallet, testExtension, { preferencesStore, session });
+    await expect(handler(validMessage, sender)).resolves.toEqual({
+      error: "Wallet already exists",
+    });
+    expect(writes).toBe(0);
+    expect((await preferencesStore.read()).activeNetworkId).toBe("SN_SEPOLIA");
+    expect(session.getPassphrase()).toBe("an-existing-vault-passphrase");
+  });
+
+  test("an existing vault refuses a Ready key before any chain read", async () => {
+    // The pasted key's addresses are never sent to a node once the write is
+    // bound to refuse.
+    let reads = 0;
+    const handler = createMessageHandler(createWallet({ hasVault: true }), testExtension, {
+      runtimeRpc: {
+        ...defaultRuntimeRpc,
+        async getDeploymentStatus() {
+          reads += 1;
+          return true;
+        },
+      },
+    });
+    await expect(handler(readyMessage, sender)).resolves.toEqual({
+      error: "Wallet already exists",
+    });
+    expect(reads).toBe(0);
+  });
 });
