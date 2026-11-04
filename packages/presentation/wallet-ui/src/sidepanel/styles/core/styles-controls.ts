@@ -234,6 +234,7 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   }
   input.mono { font-family: var(--bramble-font-mono); font-size: ${TYPE.mono.size}; }
   .hint { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .hint.hint-danger { color: var(--bramble-danger); }
   .lede { color: var(--bramble-muted); }
   [role="status"] { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; min-height: 16px; overflow-wrap: anywhere; }
 

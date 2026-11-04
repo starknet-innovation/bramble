@@ -11,6 +11,7 @@
  *  300ms   incoming step settles from 28px with focus restored
  * ─────────────────────────────────────────────────────────
  */
+import { settleViewTransition } from "../../app/rendering/stage-transition";
 import { prefersReducedMotion } from "../../shared/motion";
 
 /**
@@ -108,6 +109,6 @@ export const createOnboardingStepTransition = (
       return;
     }
     activeTransition = transition;
-    void transition.finished.then(finish, finish);
+    settleViewTransition(transition, finish);
   };
 };

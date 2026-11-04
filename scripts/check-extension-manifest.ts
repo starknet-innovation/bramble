@@ -231,10 +231,8 @@ if (import.meta.main) {
     // signed.
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
-    // Maintained web3 phishing feed (issue #34): the default source for the live
-    // malicious-origin blocklist. Configurable per deployment via the feed's
-    // `source` option; pinned here so the manifest stays an explicit allowlist.
-    "https://metamask.github.io/*",
+    // No entry for the live phishing feed: it is read through CORS, and a new
+    // host here would be a privilege increase on update (issue 772).
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*",
   ];

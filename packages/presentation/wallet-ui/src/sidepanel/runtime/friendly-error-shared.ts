@@ -4,6 +4,8 @@
  * the reader cannot diagnose gets the same sentence wherever it comes from.
  */
 
+import { NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
+
 /** Shared ending for a change that did not persist. */
 export const SAVE_FAILED = "Couldn't save that change. Try again.";
 
@@ -16,6 +18,13 @@ export const SUBMISSION_UNKNOWN = (what: string): string =>
 
 /** Shared ending for an account that was not added (add, create, or import). */
 export const ADD_ACCOUNT_FAILED = "Couldn't add that account. Try again.";
+
+/**
+ * True for the refusal `wallet.addAccount` returns when the vault was set up
+ * from a Ledger or a pasted key and so holds no phrase to derive from.
+ */
+export const isPhraselessAddRefusal = (raw: string): boolean =>
+  raw.trim().toLowerCase() === NO_RECOVERY_PHRASE_REFUSAL.toLowerCase();
 
 /** Shared ending for a recovery phrase the wallet could not import. */
 export const SEED_IMPORT_FAILED =

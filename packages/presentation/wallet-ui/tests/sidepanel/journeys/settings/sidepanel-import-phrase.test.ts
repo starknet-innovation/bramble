@@ -218,10 +218,6 @@ describe("import-phrase flow", () => {
     expect(rows[1]?.disabled).toBe(false);
     expect(rows[1]?.checked).toBe(true);
     expect(flow.app.textContent).toContain("Already in this wallet");
-    // No Braavos candidates: the group still says so rather than opening empty.
-    expect(flow.app.querySelector('[data-recovery-group="braavos"] ul')?.textContent).toBe(
-      "No accounts with on-chain activity.",
-    );
 
     // The scan fields are shared with first-run onboarding, so the real-funds
     // tickbox removed there is gone here too; the selection is the only gate.

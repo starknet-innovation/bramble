@@ -6,6 +6,7 @@ import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { friendlyAccountName } from "../../shared/parts";
 import {
   BACKUP_VERIFY_COPY,
   backupVerifyPositions,
@@ -16,7 +17,7 @@ import { bindBackupVerification } from "./backup-verify-bind";
 import { bindGeneratedPhrase } from "./generated-phrase-ui";
 import { bindKeyImport } from "./import-key-ui";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
-import { applyPassphraseMeter } from "./passphrase-meter";
+import { applyPassphraseMeter, bindEnterToContinue } from "./passphrase-meter";
 import { bindPassphraseReveal } from "./passphrase-reveal";
 import { bindRecoveryAccountUi } from "./recovery-account-ui";
 import { bindRecoveryImportControls } from "./recovery-import-bind";
@@ -248,6 +249,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     .querySelector('[id="add-existing-button"]')
     ?.addEventListener("click", () => showStep("method"));
   const keyImport = bindKeyImport({
+    app: deps.app,
     form,
     networkId: selectedNetworkId,
     onEnter: () => {
@@ -355,6 +357,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   passphraseInput?.addEventListener("input", refreshPassword);
   confirmationInput?.addEventListener("input", refreshPassword);
+  // Enter takes the step's Continue, never the form's submit, which belongs to
+  // "Finish setup".
+  bindEnterToContinue([passphraseInput, confirmationInput], passwordContinue);
   passwordContinue?.addEventListener("click", () => {
     if (!passwordOk()) {
       refreshPassword();
@@ -405,8 +410,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           previewAddress.title = account.address;
         }
         if (previewLabel) {
-          previewLabel.textContent =
-            contractType === "argent" ? "Primary Ready account" : "Primary Bramble account";
+          // The name the account gets once created: a new wallet has no
+          // label, so it shows the address-derived nickname, as Home will.
+          previewLabel.textContent = friendlyAccountName(account.address);
         }
         if (passphraseResult) {
           passphraseResult.textContent = "";

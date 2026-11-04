@@ -69,10 +69,9 @@ export type { ApprovalClaim, ApprovalQueue, ApprovalQueueOptions } from "./appro
 
 type ApprovalEntry = ApprovalRequest & { readonly feeRevision: number; readonly queuedAt: number };
 
-// An invoke entry with a fresh fee review applied. The review replaces the
-// deploy-first state rather than inheriting it from the previous one.
+// A fresh fee review replaces deploy-first and any previous gasless offers.
 const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): ApprovalEntry => {
-  const { deployFirst: _stale, ...current } = approval;
+  const { deployFirst: _stale, gaslessFees: _previous, ...current } = approval;
   return {
     ...current,
     ...(review.deployFirst === true ? { deployFirst: true } : {}),
@@ -80,6 +79,9 @@ const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): 
     feeAffordability: review.feeAffordability,
     feeEstimateFailed: review.feeEstimateFailed,
     feeEstimatePending: review.feeEstimatePending,
+    ...(review.gaslessFees === undefined
+      ? {}
+      : { gaslessFees: review.gaslessFees.map((fee) => ({ ...fee })) }),
     requiresDeployment: review.requiresDeployment,
   };
 };

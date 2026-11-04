@@ -28,6 +28,7 @@ export const bindFindAccounts = (deps: SettingsUiDeps): void => {
     // Injected discovery: this screen has no typed phrase, so the picker asks
     // the background to rescan the wallet's own accounts instead.
     discover: (manualIndex) => deps.wallet.discoverOwnAccounts(deps.networkId(), manualIndex),
+    findByAddress: (address) => deps.wallet.findOwnAccountByAddress(deps.networkId(), address),
     existingIds: () => deps.existingAccountIds?.() ?? new Set<string>(),
     form,
     networkId: deps.networkId,

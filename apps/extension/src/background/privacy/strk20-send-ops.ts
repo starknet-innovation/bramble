@@ -63,9 +63,7 @@ const recipientStatus = async (
     active: await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore),
     tokenId: input.tokenId,
   });
-  if ("error" in context) {
-    return { error: context.error };
-  }
+  if ("error" in context) return context;
   try {
     const registration = await readStrk20RegistrationStatus(
       strk20ServiceForRuntime(deps.runtimeRpc),

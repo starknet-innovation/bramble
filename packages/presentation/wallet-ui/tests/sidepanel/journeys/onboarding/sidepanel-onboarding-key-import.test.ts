@@ -10,6 +10,7 @@ import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import { bindOnboarding } from "../../../../src/sidepanel/journeys/onboarding/onboarding-ui";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
+import { networkChangeAnnouncer } from "../../../../src/sidepanel/shared/network-change";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
@@ -55,12 +56,26 @@ const activeStep = (root: ParentNode): string | undefined =>
     (step) => !step.hidden,
   )?.dataset["onboardingStep"];
 
-const mount = (options?: { readonly createKeyVault?: () => Promise<string> }) => {
+// The key's 0.3.1 address, deployed: the one row a Ready key lists here.
+const ARGENT_031 = "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b";
+const DEPLOYED_031 = {
+  accountId: "SN_MAIN:0xa031",
+  address: "0xa031",
+  classHash: ARGENT_031,
+  deployed: true,
+} as const;
+
+const mount = (options?: {
+  readonly createKeyVault?: () => Promise<string>;
+  readonly discover?: () => Promise<readonly (typeof DEPLOYED_031)[]>;
+}) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
   const created: Array<readonly [string, string, string, string, string | undefined]> = [];
+  const picked: Array<readonly string[] | undefined> = [];
+  const discovered: Array<readonly [string, string, string | undefined]> = [];
   let renders = 0;
   const wallet = {
     createKeyVault(
@@ -69,9 +84,15 @@ const mount = (options?: { readonly createKeyVault?: () => Promise<string> }) =>
       vaultPassphrase: string,
       accountContractType: string,
       deploymentSalt?: string,
+      classHashes?: readonly string[],
     ) {
       created.push([networkId, privateKey, vaultPassphrase, accountContractType, deploymentSalt]);
+      picked.push(classHashes);
       return options?.createKeyVault?.() ?? Promise.resolve("SN_MAIN:0x1");
+    },
+    discoverReadyKeyAccounts(networkId: string, privateKey: string, deploymentSalt?: string) {
+      discovered.push([networkId, privateKey, deploymentSalt]);
+      return options?.discover?.() ?? Promise.resolve([DEPLOYED_031]);
     },
     loadStatus: () => Promise.resolve({ ...status, accountCount: 1, hasVault: true }),
   } as unknown as SidepanelWallet;
@@ -82,7 +103,7 @@ const mount = (options?: { readonly createKeyVault?: () => Promise<string> }) =>
     },
     wallet,
   });
-  return { app, created, renders: () => renders };
+  return { app, created, discovered, picked, renders: () => renders };
 };
 
 describe("onboarding private-key import", () => {
@@ -142,14 +163,110 @@ describe("onboarding private-key import", () => {
     setValue(flow.app, 'select[name="importKeyContractType"]', "argent");
     setValue(flow.app, 'textarea[name="importKeyRaw"]', RAW_KEY);
     setValue(flow.app, 'input[name="importKeySalt"]', "0x777");
+    // A Ready key lists its accounts first; the deployed one starts ticked.
     click(flow.app, "#import-key-continue");
+    await tick();
+    expect(flow.discovered).toEqual([["SN_MAIN", RAW_KEY, "0x777"]]);
+    expect(activeStep(flow.app)).toBe("import-key");
+    expect(flow.app.querySelector("[data-ready-key-picker]")).not.toBeNull();
+    click(flow.app, "#import-key-continue");
+    expect(activeStep(flow.app)).toBe("password");
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
     click(flow.app, "#password-continue-button");
     await tick();
 
     expect(flow.created).toEqual([["SN_MAIN", RAW_KEY, PASSPHRASE, "argent", "0x777"]]);
+    expect(flow.picked).toEqual([[ARGENT_031]]);
     expect(flow.renders()).toBe(0);
     expect(flow.app.querySelector("#import-key-result")?.textContent).toBe("Wallet already exists");
+  });
+
+  const readyKeyListed = async (flow: ReturnType<typeof mount>): Promise<void> => {
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#key-method-button");
+    setValue(flow.app, 'select[name="importKeyContractType"]', "argent");
+    setValue(flow.app, 'textarea[name="importKeyRaw"]', RAW_KEY);
+    click(flow.app, "#import-key-continue");
+    await tick();
+  };
+
+  for (const [input, selector] of [
+    ["key", 'textarea[name="importKeyRaw"]'],
+    ["salt", 'input[name="importKeySalt"]'],
+  ] as const) {
+    test(`a ${input} edited during the check drops the late answer`, async () => {
+      let resolve: (rows: readonly (typeof DEPLOYED_031)[]) => void = () => undefined;
+      const flow = mount({
+        discover: () =>
+          new Promise((res) => {
+            resolve = res;
+          }),
+      });
+      click(flow.app, "#add-existing-button");
+      click(flow.app, "#key-method-button");
+      setValue(flow.app, 'select[name="importKeyContractType"]', "argent");
+      setValue(flow.app, 'textarea[name="importKeyRaw"]', RAW_KEY);
+      click(flow.app, "#import-key-continue");
+      setValue(flow.app, selector, "0xbeef");
+      resolve([DEPLOYED_031]);
+      await tick();
+      expect(flow.app.querySelector("[data-ready-key-picker]")).toBeNull();
+      expect(flow.app.querySelector<HTMLButtonElement>("#import-key-continue")?.disabled).toBe(
+        false,
+      );
+      expect(activeStep(flow.app)).toBe("import-key");
+    });
+  }
+
+  test("a network change drops a listed picker and an answer still coming", async () => {
+    const flow = mount();
+    await readyKeyListed(flow);
+    expect(flow.app.querySelectorAll("[data-ready-key-picker]").length).toBe(1);
+    const announce = networkChangeAnnouncer(flow.app);
+    announce("SN_MAIN");
+    announce("SN_SEPOLIA");
+    // Counted, not matched as a node: a failed match on a DOM node prints it.
+    expect(flow.app.querySelectorAll("[data-ready-key-picker]").length).toBe(0);
+
+    let resolve: (rows: readonly (typeof DEPLOYED_031)[]) => void = () => undefined;
+    const pending = mount({
+      discover: () =>
+        new Promise((res) => {
+          resolve = res;
+        }),
+    });
+    const announcePending = networkChangeAnnouncer(pending.app);
+    announcePending("SN_MAIN");
+    click(pending.app, "#add-existing-button");
+    click(pending.app, "#key-method-button");
+    setValue(pending.app, 'select[name="importKeyContractType"]', "argent");
+    setValue(pending.app, 'textarea[name="importKeyRaw"]', RAW_KEY);
+    click(pending.app, "#import-key-continue");
+    announcePending("SN_SEPOLIA");
+    announcePending("SN_MAIN");
+    resolve([DEPLOYED_031]);
+    await tick();
+    expect(pending.app.querySelectorAll("[data-ready-key-picker]").length).toBe(0);
+    expect(pending.app.querySelector<HTMLButtonElement>("#import-key-continue")?.disabled).toBe(
+      false,
+    );
+  });
+
+  test("a key changed after listing is refused at creation and listed again", async () => {
+    const flow = mount();
+    await readyKeyListed(flow);
+    click(flow.app, "#import-key-continue");
+    expect(activeStep(flow.app)).toBe("password");
+    // Changed without an input event, so only the snapshot check can see it.
+    const raw = flow.app.querySelector<HTMLTextAreaElement>('textarea[name="importKeyRaw"]');
+    if (raw) raw.value = "0xbeef";
+    setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#password-continue-button");
+    await tick();
+    expect(flow.created).toEqual([]);
+    expect(activeStep(flow.app)).toBe("import-key");
+    expect(flow.app.querySelector("[data-ready-key-picker]")).toBeNull();
   });
 });

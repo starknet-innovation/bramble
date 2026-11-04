@@ -136,7 +136,7 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.nav-item\[aria-selected="true"\] \{ background: var\(--bramble-accent-soft\); color: var\(--bramble-accent\); \}/,
     );
-    expect(SIDEPANEL_STYLES).toContain("--bramble-dock-h: calc(44px + 6px * 2 + 16px)");
+    expect(SIDEPANEL_STYLES).toContain("--bramble-dock-h: calc(52px + 6px * 2 + 16px)");
     expect(SIDEPANEL_STYLES).toMatch(/\.screen:not\(\.flow\) \{[^}]*var\(--bramble-dock-h\)/s);
     expect(SIDEPANEL_STYLES).toMatch(/\.toast-stack \{[^}]*var\(--bramble-dock-h\)/s);
   });
@@ -166,6 +166,8 @@ describe("sidepanel styles", () => {
 
   test("short screens suppress overscroll and activity puts state on the icon", () => {
     expect(SIDEPANEL_STYLES).toMatch(/body \{[^}]*overscroll-behavior-y: none;/s);
+    // The document scrolls the approval takeover; a contained list would trap the wheel.
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.request-list \{[^}]*overscroll-behavior/s);
     expect(SIDEPANEL_STYLES).toMatch(/\.activity-head h1 \{[^}]*font-size: 22px;/s);
     expect(SIDEPANEL_STYLES).toContain(
       ".tx-kind-icon.accepted { color: var(--bramble-positive); }",
@@ -432,11 +434,12 @@ describe("sidepanel styles", () => {
   });
 
   test("the labelled dock carries state on the root capsule, never on the glyph", () => {
-    // Roots are 44px-tall capsules: muted ink at rest, text ink on hover, and
+    // Roots are 52px-tall capsules: muted ink at rest, text ink on hover, and
     // the selected root on the accent's soft tint. Each root shows a visible
     // caption under the glyph; the glyph wrapper itself never gains a surface.
+    // 7px above and below, 12px either side: the label never touches the edge.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item \{[^}]*color: var\(--bramble-muted\)[^}]*height: 44px[^}]*min-width: 44px/s,
+      /button\.nav-item \{[^}]*color: var\(--bramble-muted\)[^}]*height: 52px[^}]*min-width: 52px[^}]*padding: 0 12px/s,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*box-shadow/);
     expect(SIDEPANEL_STYLES).toMatch(/\.nav-label \{[^}]*font-size: 12px/s);

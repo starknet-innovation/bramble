@@ -28,6 +28,12 @@ export type TransferReviewResponse = {
      */
     readonly feeAffordability: "insufficient" | "ok" | "unknown";
     readonly feeEstimateFailed: boolean;
+    readonly gaslessFees?: readonly {
+      readonly amount: string;
+      readonly decimals: number;
+      readonly label: string;
+      readonly tokenAddress: string;
+    }[];
     readonly flags: readonly RiskFlag[];
     readonly requiresDeployment: boolean;
     /**

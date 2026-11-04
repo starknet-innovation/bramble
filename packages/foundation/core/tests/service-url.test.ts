@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   isBoundedServiceUrlList,
+  isLoopbackServiceUrl,
   isServiceUrl,
   isWebSocketServiceUrl,
   normalizeHostname,
@@ -44,6 +45,15 @@ describe("service URLs", () => {
     expect(normalizeHostname("example.com.")).toBe("example.com");
     expect(normalizeHostname("sub.example.com.")).toBe("sub.example.com");
     expect(normalizeHostname("127.0.0.1")).toBe("127.0.0.1");
+  });
+
+  test("recognizes an endpoint on this machine, on either scheme", () => {
+    expect(isLoopbackServiceUrl("http://127.0.0.1:5050/rpc")).toBe(true);
+    expect(isLoopbackServiceUrl("http://localhost:5050/rpc")).toBe(true);
+    expect(isLoopbackServiceUrl("https://LOCALHOST./rpc")).toBe(true);
+    expect(isLoopbackServiceUrl("https://rpc.example/localhost")).toBe(false);
+    expect(isLoopbackServiceUrl("https://127.0.0.1.example")).toBe(false);
+    expect(isLoopbackServiceUrl("not a url")).toBe(false);
   });
 
   test("bounds the number of entries in a dapp endpoint list (Sherlock audit 153)", () => {

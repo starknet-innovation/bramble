@@ -5,6 +5,7 @@ import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   argentAccountAddress,
+  argentAccountConstructorCalldata,
   argentMultisigAddress,
 } from "@bramble/starknet/account-contracts";
 import {
@@ -13,12 +14,13 @@ import {
   requireLiveAuthorizableClass,
   submitAccountDeployment,
 } from "@bramble/starknet/deployment";
+import { XVERSE_ARGENT_CLASS_HASH } from "@bramble/wallet-model/account-families";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 
 // Argent 0.3.0: recognized by the catalog, but it expects a bare (r, s).
 const ARGENT_0_3_0 = "0x01a736d6ed154502257f02b1ccdf4d9d1089f80811cd6acad48e6b6a9d1f2003";
 
-import type { Account, RpcProvider } from "starknet";
+import { type Account, hash, type RpcProvider } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const RPC_URLS = ["https://rpc.example"];
@@ -167,6 +169,96 @@ test("settles ordinary Argent deployment bounds with validated query signing", a
   expect(signedBounds).toMatchObject({ resourceBounds: expect.any(Object) });
 });
 
+const deployedAs = (liveClassHash: string): RpcProvider =>
+  ({
+    callContract: async ({ entrypoint }: { readonly entrypoint: string }) =>
+      entrypoint === "get_owner" ? [PUBLIC_KEY] : ["0x0"],
+    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
+    getClassHashAt: async () => liveClassHash,
+  }) as unknown as RpcProvider;
+
+// Issue 734: Xverse's build is Argent 0.4.0 under another class hash, so the
+// same constructor at that class reproduces the Xverse address exactly.
+const xverseConstructor = argentAccountConstructorCalldata(PUBLIC_KEY);
+const xverseAddress = hash.calculateContractAddressFromHash(
+  PUBLIC_KEY,
+  XVERSE_ARGENT_CLASS_HASH,
+  [...xverseConstructor],
+  0,
+);
+const xverse: DerivedAccountRef = {
+  ...account,
+  address: xverseAddress,
+  classHash: XVERSE_ARGENT_CLASS_HASH,
+  id: `SN_MAIN:${xverseAddress}`,
+};
+
+test("deploys a funded Xverse account at Xverse's class, signed in Argent 0.4 format", async () => {
+  const { calls, provider } = makeQueryProvider();
+  let deployed:
+    | {
+        readonly classHash?: string;
+        readonly constructorCalldata?: readonly string[];
+        readonly contractAddress?: string;
+      }
+    | undefined;
+  await expect(
+    submitAccountDeployment(
+      {
+        account: xverse,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
+        rpcUrls: RPC_URLS,
+        signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+      },
+      () => provider,
+      (_provider, _stored, guardedSignHash) =>
+        ({
+          async deployAccount(payload: typeof deployed) {
+            deployed = payload;
+            await guardedSignHash("0x123");
+            return { transaction_hash: "0x123" };
+          },
+        }) as unknown as Account,
+    ),
+  ).resolves.toEqual({ transactionHash: "0x123" });
+  // The production query signing encodes the Starknet signer the 0.4 way.
+  const request = requestFor(calls);
+  expect(request).toContain(`"signature":["1","0","${PUBLIC_KEY}","0x1","0x1"]`);
+  expect(BigInt(deployed?.classHash ?? 0)).toBe(BigInt(XVERSE_ARGENT_CLASS_HASH));
+  expect(BigInt(deployed?.contractAddress ?? 0)).toBe(BigInt(xverseAddress));
+  expect(deployed?.constructorCalldata?.map((value) => BigInt(value))).toEqual(
+    xverseConstructor.map((value) => BigInt(value)),
+  );
+});
+
+test("a deployed Xverse account passes the live-class checks; another class does not", async () => {
+  expect(await isCompatibleAccountDeployed(deployedAs(XVERSE_ARGENT_CLASS_HASH), xverse)).toBe(
+    true,
+  );
+  await expect(
+    requireLiveAuthorizableClass(deployedAs(XVERSE_ARGENT_CLASS_HASH), xverse),
+  ).resolves.toBeUndefined();
+  await expect(requireLiveAuthorizableClass(deployedAs(ARGENT_0_3_0), xverse)).rejects.toThrow(
+    "expects an authorization format this wallet does not produce",
+  );
+});
+
+test("still refuses to deploy any other Argent release", async () => {
+  const { provider } = makeQueryProvider();
+  const old = { ...account, classHash: ARGENT_0_3_0 };
+  await expect(
+    submitAccountDeployment(
+      {
+        account: old,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
+        rpcUrls: RPC_URLS,
+        signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+      },
+      () => provider,
+    ),
+  ).rejects.toThrow("does not match the pinned release");
+});
+
 test("Argent deployment estimate and submission reject a different live class", async () => {
   let signed = 0;
   const input = {
@@ -190,13 +282,6 @@ test("Argent deployment estimate and submission reject a different live class", 
 
 // A provider reporting `liveClassHash` at the address, whose signer state
 // matches this wallet: owner is our key, plain Starknet signer, no guardian.
-const deployedAs = (liveClassHash: string): RpcProvider =>
-  ({
-    callContract: async ({ entrypoint }: { readonly entrypoint: string }) =>
-      entrypoint === "get_owner" ? [PUBLIC_KEY] : ["0x0"],
-    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
-    getClassHashAt: async () => liveClassHash,
-  }) as unknown as RpcProvider;
 
 test("accepts an account that upgraded to a class it can authorize for", async () => {
   // The address is fixed by the class the account was DEPLOYED with; the class

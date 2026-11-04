@@ -91,10 +91,22 @@ final class ContrastTests: XCTestCase {
             check(skin.bg, on: skin.danger, textMinimum, "badge ink on danger", skin)
             check(skin.accent, on: skin.accentSoft, textMinimum, "accent on accent-soft", skin)
             check(skin.danger, on: skin.dangerSoft, textMinimum, "danger on danger-soft", skin)
-            check(skin.accountAvatarPaper, on: skin.accountAvatar0, nonText, "avatar paper on tone 0", skin)
-            check(skin.accountAvatarPaper, on: skin.accountAvatar3, nonText, "avatar paper on tone 3", skin)
-            check(skin.accountAvatarInk, on: skin.accountAvatar1, nonText, "avatar ink on tone 1", skin)
-            check(skin.accountAvatarInk, on: skin.accountAvatar2, nonText, "avatar ink on tone 2", skin)
+        }
+    }
+
+    /// Any ground, body and accent can meet in one bird (`skin-contrast.test.ts`): the body against
+    /// its ground, the wing, crest, tail and beak against the body, and the paper eye on the body.
+    func testEveryAccountBirdPairing() {
+        for skin in skins {
+            for (bodyIndex, body) in skin.avatarBodies.enumerated() {
+                for (groundIndex, ground) in skin.avatarGrounds.enumerated() {
+                    check(body, on: ground, nonText, "bird body \(bodyIndex) on ground \(groundIndex)", skin)
+                }
+                for (accentIndex, accent) in skin.avatarAccents.enumerated() {
+                    check(accent, on: body, nonText, "bird accent \(accentIndex) on body \(bodyIndex)", skin)
+                }
+                check(skin.accountAvatarPaper, on: body, nonText, "bird eye on body \(bodyIndex)", skin)
+            }
         }
     }
 

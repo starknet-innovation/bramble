@@ -365,9 +365,7 @@ export const executePreparation = async (
     active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
     tokenId: preparation.token.id,
   });
-  if ("error" in context) {
-    return { error: context.error };
-  }
+  if ("error" in context) return context;
   if (!(await preparationStillMatches(preparation, context))) {
     return { error: "Privacy preparation changed" };
   }

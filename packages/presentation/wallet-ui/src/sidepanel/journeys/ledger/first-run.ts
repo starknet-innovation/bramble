@@ -10,7 +10,7 @@
 import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { showToast } from "../../shared/dom";
-import { applyPassphraseMeter } from "../onboarding/passphrase-meter";
+import { applyPassphraseMeter, bindEnterToContinue } from "../onboarding/passphrase-meter";
 import { bindPassphraseReveal } from "../onboarding/passphrase-reveal";
 
 /**
@@ -73,6 +73,7 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
 
   passphraseInput?.addEventListener("input", refreshGate);
   confirmationInput?.addEventListener("input", refreshGate);
+  bindEnterToContinue([passphraseInput, confirmationInput], button);
   bindPassphraseReveal(form);
   refreshGate();
 

@@ -50,8 +50,17 @@ data class BrambleShadowStyle(
     val alpha: Float,
 )
 
-/** The skin's four account-avatar tones, indexed by the core's avatar tone numbers. */
-val BrambleSkin.avatars: List<Color> get() = listOf(accountAvatar0, accountAvatar1, accountAvatar2, accountAvatar3)
+/** The account bird's ground palette, indexed by the core's avatar tones. */
+val BrambleSkin.avatarGrounds: List<Color>
+    get() = listOf(accountAvatarGround0, accountAvatarGround1, accountAvatarGround2, accountAvatarGround3)
+
+/** The account bird's body palette, indexed by the core's avatar tones. */
+val BrambleSkin.avatarBodies: List<Color>
+    get() = listOf(accountAvatarBody0, accountAvatarBody1, accountAvatarBody2, accountAvatarBody3, accountAvatarBody4)
+
+/** The account bird's accent palette, indexed by the core's avatar tones. */
+val BrambleSkin.avatarAccents: List<Color>
+    get() = listOf(accountAvatarAccent0, accountAvatarAccent1, accountAvatarAccent2, accountAvatarAccent3)
 
 /**
  * The extension's `ThemeChoice`: dark (midnight) by default, or light (daylight). There is no

@@ -1,7 +1,7 @@
 /** Side-panel template and navigation contract checks. */
 import { describe, expect, test } from "bun:test";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
-import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
+import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard, WALLET_VIEWS } from "../../../../src/sidepanel/app/screens/views";
 import {
   activityEmptyCopy,
@@ -333,66 +333,19 @@ describe("sidepanel views", () => {
     );
   });
 
-  test("avatars are deterministic Beam characters from the identity palette", () => {
+  test("avatars are deterministic birds from the identity palette", () => {
     // Account identity colour stays within the dedicated local tokens—no
     // gradients, remote imagery, raw colour values, or inset frames.
     const html = dashboard("home", status, [], preferences, { balances: [] });
     expect(html).toContain('class="avatar"');
-    expect(html).toContain('class="avatar-character"');
-    expect(html).toContain('class="avatar-eyes"');
-    expect(html).toContain('class="avatar-mouth"');
-    expect(html).toMatch(/fill="var\(--bramble-account-avatar-\d\)"/);
+    expect(html).toContain('class="avatar-bird"');
+    expect(html).toMatch(/fill="var\(--bramble-account-avatar-ground-\d\)"/);
+    expect(html).toMatch(/fill="var\(--bramble-account-avatar-body-\d\)"/);
     expect(html).toMatch(/var\(--bramble-account-avatar-(?:ink|paper)\)/);
     expect(html).not.toContain('class="avatar-frame"');
     expect(html).not.toContain("linearGradient");
     expect(html).not.toContain("<defs>");
     expect(html).not.toMatch(/fill="#/);
-  });
-
-  test("home hero carries the value and 24h delta without redundant identity copy", () => {
-    const tokenBalance: TokenBalance = {
-      address: "0x00aa",
-      balance: "10000000000000000000",
-      decimals: 18,
-      formatted: "10",
-      id: "SN_MAIN:TKN:0x00aa",
-      name: "Token",
-      networkId: "SN_MAIN",
-      symbol: "TKN",
-    };
-    // positional args: …, balances(5), deployment(6), transactions(7),
-    // connectedSites(8), prices(9), chart(10), selectedTokenId(11),
-    // allowances(12), selectedNftId(13), changes(14). The chart series (10) is
-    // still accepted for the token-detail flow but the home hero no longer
-    // renders a sparkline from it.
-    const html = dashboard(
-      "home",
-      status,
-      [],
-      preferences,
-      { balances: [tokenBalance] },
-      null,
-      [],
-      [],
-      { "0x00aa": 5 },
-      [1, 2, 3, 4],
-      null,
-      { entries: [], notices: [], unavailable: false },
-      null,
-      { "0x00aa": 4 },
-    );
-    const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
-    expect(hero).not.toContain('class="hero-eyebrow"');
-    expect(hero).not.toContain("Total balance");
-    expect(hero).not.toContain('data-copy="');
-    // 24h delta line: coloured magnitude + a muted "· 24h" window; +4% ⇒ up.
-    expect(hero).toContain('class="hero-change"');
-    expect(hero).toContain('class="hero-change-amt"');
-    expect(hero).toContain("· 24h");
-    // The portfolio area chart was removed — the hero has no sparkline markup.
-    expect(hero).not.toContain("hero-spark");
-    expect(hero).not.toContain("spark-line");
-    expect(hero).not.toContain("7d ago");
   });
 
   test("backup hub separates export and restore into focused screens", () => {

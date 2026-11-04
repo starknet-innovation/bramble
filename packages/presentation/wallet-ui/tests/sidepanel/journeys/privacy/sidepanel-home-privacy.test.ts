@@ -236,7 +236,10 @@ describe("unified portfolio scope", () => {
     expect(hero).not.toContain("private balances are still refreshing");
     expect(html).toContain('class="account-net degraded"');
     expect(html).toContain("Private balances are still refreshing.");
-    expect(hero).toContain("$2,500.00");
+    // The hero holds "—" rather than print a public-only total that jumps
+    // when the private part lands (issue 795).
+    expect(hero).not.toContain("$2,500.00");
+    expect(hero).toContain('data-live-value="unknown">—</p>');
     expect(hero).toContain('data-total-complete="false"');
     expect(html).toContain("Discovering…");
   });

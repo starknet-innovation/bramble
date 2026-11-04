@@ -48,14 +48,16 @@ export type PrivacyBlocker = {
 };
 
 /**
- * A network without a pool, or a Ledger account, cannot register. Those
- * answers stay ahead of a deployment offer: paying to deploy would not make
- * privacy available.
+ * A network without a pool, a Ledger account, or an account another wallet
+ * registered cannot become private here. Those answers stay ahead of a
+ * deployment offer: paying to deploy would not make privacy available.
  */
 export const privacyIneligibleKind = (
   privacy: PrivacyDisclosureState,
-): "ledger" | "network" | null =>
-  privacy.blockerKind === "ledger" || privacy.blockerKind === "network"
+): "ledger" | "network" | "other-wallet" | null =>
+  privacy.blockerKind === "ledger" ||
+  privacy.blockerKind === "network" ||
+  privacy.blockerKind === "other-wallet"
     ? privacy.blockerKind
     : null;
 

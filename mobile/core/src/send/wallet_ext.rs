@@ -10,7 +10,7 @@ use std::sync::Arc;
 use starknet_types_core::felt::Felt;
 
 use super::calls;
-use krusty_kms::{calculate_contract_address, AccountClass, ArgentAccount};
+use krusty_kms::{calculate_contract_address, AccountClass};
 
 use super::plan::{Account, Authorization, Deployment, Kind, Transfer, TransferPlan};
 use super::types::{SendError, TransferRequest};
@@ -42,8 +42,9 @@ enum Use {
 
 /// The DEPLOY_ACCOUNT a record's address commits to (`accountDeployment`), or `None` when this
 /// wallet does not deploy the record's class. OpenZeppelin: salt 0 and `[public_key]`. Ready:
-/// only the pinned Argent 0.4.0 class, with the record's salt and Krusty's constructor calldata
-/// for that class (`[0, public_key, 1]`: a Starknet signer and no guardian). Braavos: only the
+/// the pinned Argent 0.4.0 class or Xverse's build of it (`DEPLOYABLE_ARGENT_CLASSES`), with the
+/// record's salt and Krusty's constructor calldata (`[0, public_key, 1]`: a Starknet signer and no
+/// guardian). Braavos: only the
 /// modern deployment class, with the public key as salt and sole constructor argument (an older
 /// base-class counterfactual is refused, since its deployment authorization is not established).
 /// Every way, the parameters must reproduce the stored address, or nothing is deployed.
@@ -51,8 +52,11 @@ fn deployment(record: &StoredAccount, address: &Felt, public_key: &Felt) -> Opti
     let class_hash = record.class_felt();
     let (salt, constructor_calldata) = match record.family() {
         AccountFamily::OpenZeppelin => (Felt::ZERO, vec![*public_key]),
-        AccountFamily::Argent if class_hash == account_catalog::catalog().argent_default => {
-            let argent = ArgentAccount::try_with_class_hash(class_hash).ok()?;
+        AccountFamily::Argent
+            if class_hash == account_catalog::catalog().argent_default
+                || class_hash == account_catalog::catalog().argent_xverse =>
+        {
+            let argent = account_catalog::argent_preset(class_hash)?;
             (
                 record.salt_felt()?,
                 argent.build_constructor_calldata(public_key),

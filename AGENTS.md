@@ -80,6 +80,9 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
   colors.
 - Exported APIs need doc comments explaining trust boundaries and failure behavior (checked).
 - New dependencies: pinned exact, justified in the PR, used immediately. Prefer zero.
+- Audit records under `docs/security-audit/` are history. Never alter, reword, downgrade, or
+  delete an existing finding, its severity, or an accepted-advisory row. Record a fix by updating
+  only the finding's status and linking what shipped; record new evidence as a new entry.
 - Never expose an STRK20 viewing key. Software-account viewing keys remain derived on demand and
   unpersisted. A Ledger viewing key may be retained only in encrypted v4 `accountSecrets` through
   the background-only vault service, bound to its exact account, chain, pool, and derivation scheme;
@@ -113,6 +116,7 @@ Anything a user reads is governed by `docs/COPY_STYLE.md`. **Read its "Every wor
 section before adding or editing a user-facing string** — it is eight rules, each one a habit a
 copy review had to delete from this wallet, and the standing feedback is that the extension uses
 too many words for people to read any of them.
+For any UI, UX or copy change, start with the `bramble-ui-ux` skill (`.claude/skills/bramble-ui-ux/SKILL.md`).
 
 - The short version: say the subject once per screen, keep the user's verb on the control, state
   a consequence rather than collecting a tick, do not narrate the wallet's internals, do not

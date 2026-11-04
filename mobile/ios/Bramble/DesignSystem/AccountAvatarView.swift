@@ -1,58 +1,28 @@
 import BrambleCore
 import SwiftUI
 
-/// The extension's Beam avatar, drawn from the geometry the Rust core computes
-/// (`account_avatar`, parity-tested against `account-avatar.ts`).
+/// The account bird, painted from the parts the Rust core decides (`account_avatar`,
+/// parity-tested against `account-avatar.ts`). Swift only paints; every part and number is the
+/// core's. Decorative: the account name next to it carries the meaning.
 struct AccountAvatarView: View {
     @Environment(\.skin) private var skin
     let address: String
     var size: CGFloat = BrambleSize.avatar
 
     var body: some View {
-        let spec = accountAvatar(address: address)
-        let ink = spec.faceInkIsPaper ? skin.accountAvatarPaper : skin.accountAvatarInk
+        let bird = accountAvatar(address: address)
         Canvas { context, canvasSize in
-            let unit = canvasSize.width / AvatarGeometry.canvas
+            let unit = canvasSize.width / AvatarCanvas.side
             context.scaleBy(x: unit, y: unit)
-            context.fill(
-                Path(AvatarGeometry.canvasRect),
-                with: .color(skin.avatars[Int(spec.backgroundTone)])
-            )
+            context.fill(Path(AvatarCanvas.rect), with: .color(colour(.ground, of: bird)))
 
-            var head = context
-            head.translateBy(x: spec.wrapperTranslateX, y: spec.wrapperTranslateY)
-            head.rotate(degrees: spec.wrapperRotate, aroundCentre: AvatarGeometry.centre)
-            head.scaleBy(x: spec.wrapperScale, y: spec.wrapperScale)
-            head.fill(
-                Path(
-                    roundedRect: AvatarGeometry.canvasRect,
-                    cornerRadius: min(spec.wrapperCornerRadius, AvatarGeometry.maxWrapperCornerRadius)
-                ),
-                with: .color(skin.avatars[Int(spec.wrapperTone)])
-            )
-
-            var face = context
-            face.translateBy(x: spec.faceTranslateX, y: spec.faceTranslateY)
-            face.rotate(degrees: spec.faceRotate, aroundCentre: AvatarGeometry.centre)
-            let mouthY = AvatarGeometry.mouthBaselineY + spec.mouthSpread
-            if spec.mouthOpen {
-                Self.strokeOpenMouth(in: &face, mouthY: mouthY, ink: ink)
-            } else {
-                Self.fillClosedMouth(in: &face, mouthY: mouthY, ink: ink)
-            }
-            for eyeX in [AvatarGeometry.leftEyeX - spec.eyeSpread, AvatarGeometry.rightEyeX + spec.eyeSpread] {
-                face.fill(
-                    Path(
-                        roundedRect: CGRect(
-                            x: eyeX,
-                            y: AvatarGeometry.eyeY,
-                            width: AvatarGeometry.eyeWidth,
-                            height: AvatarGeometry.eyeHeight
-                        ),
-                        cornerRadius: AvatarGeometry.eyeCornerRadius
-                    ),
-                    with: .color(ink)
-                )
+            var drawing = context
+            if bird.mirrored { drawing.concatenate(AvatarCanvas.mirror) }
+            drawing.translateBy(x: AvatarCanvas.centre, y: AvatarCanvas.centre)
+            drawing.scaleBy(x: bird.scale, y: bird.scale)
+            drawing.translateBy(x: -bird.originX, y: -bird.originY)
+            for part in bird.parts {
+                paint(part, colour: colour(part.paint, of: bird).opacity(part.opacity), in: &drawing)
             }
         }
         .frame(width: size, height: size)
@@ -60,87 +30,134 @@ struct AccountAvatarView: View {
         .accessibilityHidden(true)
     }
 
-    /// The open mouth: a one-unit round-capped curve from 15 to 21 that dips one unit below `mouthY`.
-    nonisolated private static func strokeOpenMouth(in face: inout GraphicsContext, mouthY: Double, ink: Color) {
-        let controlY = mouthY + AvatarGeometry.openMouthDip
-        var mouth = Path()
-        mouth.move(to: CGPoint(x: AvatarGeometry.openMouthStartX, y: mouthY))
-        mouth.addCurve(
-            to: CGPoint(x: AvatarGeometry.openMouthEndX, y: mouthY),
-            control1: CGPoint(x: AvatarGeometry.openMouthControl1X, y: controlY),
-            control2: CGPoint(x: AvatarGeometry.openMouthControl2X, y: controlY)
-        )
-        face.stroke(
-            mouth,
-            with: .color(ink),
-            style: StrokeStyle(lineWidth: AvatarGeometry.openMouthLineWidth, lineCap: .round)
-        )
+    private func colour(_ paint: AvatarPaint, of bird: AccountAvatar) -> Color {
+        switch paint {
+        case .ground:
+            skin.avatarGrounds[Int(bird.groundTone)]
+
+        case .body:
+            skin.avatarBodies[Int(bird.bodyTone)]
+
+        case .accent:
+            skin.avatarAccents[Int(bird.accentTone)]
+
+        case .ink:
+            skin.accountAvatarInk
+
+        case .paper:
+            skin.accountAvatarPaper
+        }
     }
 
-    /// `M13 y a1 .75 0 0 0 10 0`: the radii scale up to span 13…23, so the mouth is the lower half
-    /// of a 10 × 7.5 ellipse, filled.
-    nonisolated private static func fillClosedMouth(in face: inout GraphicsContext, mouthY: Double, ink: Color) {
-        let ellipse = Path(
-            ellipseIn: CGRect(
-                x: AvatarGeometry.closedMouthX,
-                y: mouthY - AvatarGeometry.closedMouthHalfHeight,
-                width: AvatarGeometry.closedMouthWidth,
-                height: AvatarGeometry.closedMouthHeight
+    private func paint(_ part: AvatarPart, colour: Color, in context: inout GraphicsContext) {
+        switch part.shape {
+        case let .fill(data):
+            context.fill(AvatarPath.parse(data), with: .color(colour))
+
+        case let .stroke(data, width):
+            context.stroke(
+                AvatarPath.parse(data),
+                with: .color(colour),
+                style: StrokeStyle(lineWidth: width, lineCap: .round)
             )
-        )
-        let lowerHalf = Path(
-            CGRect(
-                x: AvatarGeometry.closedMouthX,
-                y: mouthY,
-                width: AvatarGeometry.closedMouthWidth,
-                height: AvatarGeometry.closedMouthClipHeight
+
+        case let .ellipse(centreX, centreY, radiusX, radiusY, rotate):
+            let oval = Path(ellipseIn: AvatarCanvas.box(centreX, centreY, radiusX, radiusY))
+            let turn = CGAffineTransform(translationX: centreX, y: centreY)
+                .rotated(by: Angle.degrees(rotate).radians)
+                .translatedBy(x: -centreX, y: -centreY)
+            context.fill(oval.applying(turn), with: .color(colour))
+
+        case let .circle(centreX, centreY, radius):
+            context.fill(
+                Path(ellipseIn: AvatarCanvas.box(centreX, centreY, radius, radius)),
+                with: .color(colour)
             )
-        )
-        face.fill(ellipse.intersection(lowerHalf), with: .color(ink))
+        }
     }
 }
 
-/// The Beam avatar's fixed geometry, in units of its 36 × 36 SVG canvas (`account-avatar.ts`).
-private enum AvatarGeometry {
-    /// Side of the square SVG canvas; the view scales one canvas unit to `width / canvas` points.
-    static let canvas: CGFloat = 36
-    /// The canvas, as a rect at the origin.
-    static let canvasRect = CGRect(x: 0, y: 0, width: canvas, height: canvas)
-    /// Centre of the canvas on both axes: the pivot of the SVG `rotate(a 18 18)`.
+/// The 36-unit square every bird is drawn on (`viewBox="0 0 36 36"`).
+private enum AvatarCanvas {
+    static let side: CGFloat = 36
     static let centre: CGFloat = 18
-    /// The wrapper's corner radius is capped at half the canvas (a circle).
-    static let maxWrapperCornerRadius: Double = 18
-    /// Mouth baseline before the address-derived `mouthSpread` is added.
-    static let mouthBaselineY: Double = 19
-    static let openMouthStartX: CGFloat = 15
-    static let openMouthEndX: CGFloat = 21
-    static let openMouthControl1X: CGFloat = 17
-    static let openMouthControl2X: CGFloat = 19
-    /// How far the open mouth's curve controls sit below the baseline.
-    static let openMouthDip: Double = 1
-    static let openMouthLineWidth: CGFloat = 1
-    static let closedMouthX: CGFloat = 13
-    static let closedMouthWidth: CGFloat = 10
-    /// Full height of the ellipse whose lower half is the closed mouth.
-    static let closedMouthHeight: CGFloat = 7.5
-    /// Half of `closedMouthHeight`: the ellipse is centred on the baseline.
-    static let closedMouthHalfHeight: Double = 3.75
-    /// Height of the clip rect below the baseline that keeps only the ellipse's lower half.
-    static let closedMouthClipHeight: CGFloat = 4
-    /// Eye x positions before the address-derived `eyeSpread` moves them apart.
-    static let leftEyeX: Double = 14
-    static let rightEyeX: Double = 20
-    static let eyeY: CGFloat = 14
-    static let eyeWidth: CGFloat = 1.5
-    static let eyeHeight: CGFloat = 2
-    static let eyeCornerRadius: CGFloat = 0.75
+    static let rect = CGRect(x: 0, y: 0, width: side, height: side)
+    /// SVG `translate(36 0) scale(-1 1)`: the bird faces the other way.
+    static let mirror = CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: side, ty: 0)
+
+    /// The rect an ellipse of these radii fills, about its centre.
+    static func box(_ centreX: Double, _ centreY: Double, _ radiusX: Double, _ radiusY: Double) -> CGRect {
+        CGRect(origin: CGPoint(x: centreX, y: centreY), size: .zero).insetBy(dx: -radiusX, dy: -radiusY)
+    }
 }
 
-private extension GraphicsContext {
-    /// SVG `rotate(a cx cy)` with cx = cy.
-    mutating func rotate(degrees: Double, aroundCentre centre: CGFloat) {
-        translateBy(x: centre, y: centre)
-        rotate(by: .degrees(degrees))
-        translateBy(x: -centre, y: -centre)
+/// The SVG path subset the core emits (absolute `M`, `L`, `Q`, `V`, `Z`; checked by the core's
+/// `paths_use_only_the_commands_the_apps_draw`). Anything else is skipped rather than guessed.
+enum AvatarPath {
+    /// Numbers each command takes: a point (`M`, `L`), one coordinate (`V`), a control and a point (`Q`).
+    private enum Arity {
+        static let point = 2
+        static let coordinate = 1
+        static let quad = 4
+    }
+
+    static func parse(_ data: String) -> Path {
+        var path = Path()
+        var command: Character = "M"
+        var numbers: [Double] = []
+        var current = CGPoint.zero
+        for token in tokens(data) {
+            if let value = Double(token) {
+                numbers.append(value)
+            } else if let letter = token.first {
+                command = letter
+                numbers = []
+                if letter == "Z" { path.closeSubpath() }
+                continue
+            }
+            switch (command, numbers.count) {
+            case ("M", Arity.point):
+                current = CGPoint(x: numbers[0], y: numbers[1])
+                path.move(to: current)
+                command = "L"
+
+            case ("L", Arity.point):
+                current = CGPoint(x: numbers[0], y: numbers[1])
+                path.addLine(to: current)
+
+            case ("V", Arity.coordinate):
+                current = CGPoint(x: current.x, y: numbers[0])
+                path.addLine(to: current)
+
+            case ("Q", Arity.quad):
+                current = CGPoint(x: numbers[Arity.point], y: numbers[Arity.point + 1])
+                path.addQuadCurve(to: current, control: CGPoint(x: numbers[0], y: numbers[1]))
+
+            default:
+                continue
+            }
+            numbers = []
+        }
+        return path
+    }
+
+    /// Splits `M9 19.5 L2.5 15` into `M`, `9`, `19.5`, `L`, `2.5`, `15`.
+    private static func tokens(_ data: String) -> [String] {
+        var tokens: [String] = []
+        var number = ""
+        for character in data {
+            if character.isLetter {
+                if !number.isEmpty { tokens.append(number) }
+                number = ""
+                tokens.append(String(character))
+            } else if character == " " {
+                if !number.isEmpty { tokens.append(number) }
+                number = ""
+            } else {
+                number.append(character)
+            }
+        }
+        if !number.isEmpty { tokens.append(number) }
+        return tokens
     }
 }

@@ -26,16 +26,20 @@ const token: TokenBalance = {
 describe("balanceRow", () => {
   test("shows fiat and a green up change for a positive move", () => {
     const html = balanceRow(token, 2000, 1.53, "usd");
-    expect(html).toContain('class="token-change up">↑ 1.53%');
-    expect(html).toContain('class="token-change-win"> · 24h price</span>');
+    expect(html).toContain('class="token-change up">↑ 1.53%<span class="token-change-win"');
     expect(html).toContain("$1,684.00");
     expect(html).toContain(">0.84</p>");
   });
 
   test("shows a red down change for a negative move", () => {
     const html = balanceRow(token, 2000, -4.2, "usd");
-    expect(html).toContain('class="token-change down">↓ 4.20%');
-    expect(html).toContain('class="token-change-win"> · 24h price</span>');
+    expect(html).toContain('class="token-change down">↓ 4.20%<span class="token-change-win"');
+  });
+
+  test("names the window: a short visible 24h, and the full name for screen readers", () => {
+    const html = balanceRow(token, 2000, 1.53, "usd");
+    expect(html).toContain('<span class="token-change-win" aria-hidden="true"> · 24h</span>');
+    expect(html).toContain('<span class="sr-only"> 24h price change</span>');
   });
 
   test("omits the change badge when no change is known", () => {

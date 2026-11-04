@@ -63,6 +63,18 @@
       "requestedClassHash": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
     },
     {
+      "accountContractType": "argent",
+      "accountIndex": 0,
+      "address": "0x5336ff3c2fa3bf75ebd8ca8e0cfe1d414b276746368b29d7d157f224b5cd0a8",
+      "classHash": "0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+      "deploymentSalt": "0x17f5e981239c0fdb714f27b79bfae0b96ae385e0806f1f938dd38b518a17840",
+      "derivation": "argentx-bip44",
+      "networkId": "SN_SEPOLIA",
+      "passphrase": null,
+      "publicKeyX": "0x17f5e981239c0fdb714f27b79bfae0b96ae385e0806f1f938dd38b518a17840",
+      "requestedClassHash": "0x0663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024"
+    },
+    {
       "accountContractType": "braavos",
       "accountIndex": 0,
       "address": "0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475",
@@ -147,6 +159,18 @@
       "requestedClassHash": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
     },
     {
+      "accountContractType": "argent",
+      "accountIndex": 3,
+      "address": "0x7fa77aa031af7fb308288c687f7d274826036fd075fb5ecd9124f54d76faec3",
+      "classHash": "0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+      "deploymentSalt": "0x712c08a6f2ddbf5921701fc4e4067a9b468af6f1b78a2b76ebd2a01394d7d3a",
+      "derivation": "argentx-bip44",
+      "networkId": "SN_SEPOLIA",
+      "passphrase": null,
+      "publicKeyX": "0x712c08a6f2ddbf5921701fc4e4067a9b468af6f1b78a2b76ebd2a01394d7d3a",
+      "requestedClassHash": "0x0663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024"
+    },
+    {
       "accountContractType": "braavos",
       "accountIndex": 3,
       "address": "0x67c2b8a1144465da3d1a3c257315cd1f6b4161d1ce2f7f101f1617dd87e2d2a",
@@ -229,6 +253,18 @@
       "passphrase": null,
       "publicKeyX": "0x621efc6489e83728ca958e2846205c34dfed9eda3d3d466dc56dbfa1e96060d",
       "requestedClassHash": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    {
+      "accountContractType": "argent",
+      "accountIndex": 19,
+      "address": "0x5d1c1cccec0f7d68cfadedc179a8393dc713b133eba4c761fbb9187a0c52dc5",
+      "classHash": "0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+      "deploymentSalt": "0x621efc6489e83728ca958e2846205c34dfed9eda3d3d466dc56dbfa1e96060d",
+      "derivation": "argentx-bip44",
+      "networkId": "SN_SEPOLIA",
+      "passphrase": null,
+      "publicKeyX": "0x621efc6489e83728ca958e2846205c34dfed9eda3d3d466dc56dbfa1e96060d",
+      "requestedClassHash": "0x0663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024"
     },
     {
       "accountContractType": "braavos",

@@ -87,7 +87,7 @@ export const settingsScreen = (
     <section class="section">
       <div class="menu-list">
         ${menuLink({
-          href: "https://github.com/starknet-innovation/mc-wallet#readme",
+          href: "https://github.com/starknet-innovation/bramble#readme",
           icon: "book",
           label: "Help & docs",
           target: "_blank",

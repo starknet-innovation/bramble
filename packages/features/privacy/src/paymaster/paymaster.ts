@@ -11,6 +11,8 @@ import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
+import { isPaymasterAuthorizationLive } from "@bramble/transactions/outside-execution-window";
+import type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -25,9 +27,9 @@ import type { Strk20PaymasterConfig } from "../config";
 import type { Strk20FeeBound } from "../policy/fee-policy";
 import { STRK20_SUBMISSION_UNAVAILABLE, type Strk20PrivateRelayPlan } from "../service";
 import { reviewedFeeCeiling, withinFeeBound } from "./fee-bound";
-import { BROADCAST_PAYMASTER_METHOD, type PaymasterHttp, rpc } from "./paymaster-rpc";
+import { BROADCAST_PAYMASTER_METHOD, rpc } from "./paymaster-rpc";
 
-import { bindPaymasterTypedData, isPaymasterAuthorizationLive } from "./paymaster-typed-data";
+import { bindPaymasterTypedData } from "./paymaster-typed-data";
 
 type PaymasterCall = {
   readonly calldata: readonly string[];

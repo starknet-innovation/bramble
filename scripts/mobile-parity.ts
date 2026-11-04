@@ -81,6 +81,9 @@ const AVATAR_ADDRESSES = [
   "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
   "0xabcdef",
   "0x123456789",
+  // Built from its mixed-radix reads to reach the parts no address above draws: body shape 2,
+  // tail 1 and crest 3 (with tones 1/4/2, beak 2, eye 1, facing left).
+  "0xa7b9",
   "not an address",
 ] as const;
 

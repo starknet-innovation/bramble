@@ -7,13 +7,13 @@
 //! The signing key is derived per call into a zeroizing `SecretFelt`, turned into its public key,
 //! and dropped here; nothing secret is returned.
 
-use krusty_kms::{
-    AccountClass, ArgentAccount, ArgentConstructorLayout, BraavosAccount, SaltPolicy,
-};
+use krusty_kms::{AccountClass, ArgentConstructorLayout, BraavosAccount, SaltPolicy};
 use krusty_kms_common::ChainId;
 use starknet_types_core::felt::Felt;
 
-use crate::account_catalog::{catalog, class_entry, deployment_classes, AccountFamily};
+use crate::account_catalog::{
+    argent_preset, catalog, class_entry, deployment_classes, AccountFamily,
+};
 use crate::kms::{self, kms_error};
 use crate::CoreError;
 
@@ -97,8 +97,9 @@ pub(crate) fn family_address(
             let salt = *salt.unwrap_or(public_key);
             let (preset, krusty_shape): (Box<dyn AccountClass>, &str) =
                 if family == AccountFamily::Argent {
-                    let argent = ArgentAccount::try_with_class_hash(class_hash)
-                        .map_err(kms_error("class hash"))?;
+                    let argent = argent_preset(class_hash).ok_or_else(|| CoreError::Kms {
+                        operation: "class hash".into(),
+                    })?;
                     let shape = match argent.constructor_layout() {
                         ArgentConstructorLayout::OwnerGuardianFelts => "owner-guardian",
                         ArgentConstructorLayout::SignerWithOptionalGuardian => {
@@ -137,6 +138,37 @@ pub(crate) fn family_address(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `deployment.ts`: a funded Xverse account deploys with Argent 0.4.0's calldata at its own
+    /// class, and those parameters land on the address the scan derived, the check the deploy
+    /// path (`wallet_ext::deployment`) makes before it deploys anything.
+    #[test]
+    fn xverse_deploys_with_argent_0_4_calldata_at_its_own_address() {
+        let key = Felt::from(0x1234_5678_u64);
+        let xverse = catalog().argent_xverse;
+        let calldata = argent_preset(xverse)
+            .unwrap()
+            .build_constructor_calldata(&key);
+        assert_eq!(
+            calldata,
+            argent_preset(catalog().argent_default)
+                .unwrap()
+                .build_constructor_calldata(&key)
+        );
+        assert_eq!(calldata, vec![Felt::ZERO, key, Felt::ONE]);
+        let derived = family_address(
+            AccountFamily::Argent,
+            Some(&xverse),
+            None,
+            &key,
+            ChainId::Mainnet,
+        )
+        .unwrap();
+        let salt = derived.deployment_salt.unwrap();
+        let deployed =
+            krusty_kms::calculate_contract_address(&salt, &xverse, &calldata, &Felt::ZERO).unwrap();
+        assert_eq!(deployed, derived.address);
+    }
 
     #[test]
     fn class_rules_follow_the_extension() {

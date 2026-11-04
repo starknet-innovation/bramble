@@ -232,6 +232,29 @@ describe("cached hydration resilience", () => {
     });
   });
 
+  test("a failed read with no snapshot replaces loading with the real error", async () => {
+    // Issue 795: loading is only "not read yet". A read that actually failed
+    // must still reach the screen as a failure, never stay a quiet spinner.
+    const cache = emptyRenderCache();
+    expect(cache.balances).toEqual({ loading: true });
+    await hydrateView({
+      activeView: "tokens",
+      cache,
+      deployment: {},
+      multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
+      paint: () => undefined,
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        loadBalances: async () => ({ error: "RPC unavailable" }),
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+      },
+    } as never);
+
+    expect(cache.balances).toEqual({ error: "RPC unavailable" });
+  });
+
   test("does not re-read confirmed signer authority on ambient multisig home refreshes", async () => {
     const multisigId = "SN_MAIN:0x7123";
     const cache = emptyRenderCache();

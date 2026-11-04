@@ -29,7 +29,8 @@ export type StageTimers = {
   readonly set: (task: () => void, ms: number) => ReturnType<typeof setTimeout>;
 };
 
-const platformTimers: StageTimers = {
+/** The platform timers, the default for every {@link StageTimers} seam. */
+export const platformTimers: StageTimers = {
   clear: (handle) => clearTimeout(handle),
   set: (task, ms) => setTimeout(task, ms),
 };

@@ -44,6 +44,7 @@ import {
   refusePoisonedStrk20Actions,
   type Strk20TrustedPreferences,
 } from "./strk20-recipient-policy";
+import { type Strk20RegistrationBlock, strk20RegistrationBlock } from "./strk20-registration-owner";
 import { bindStrk20ActionsToOrigin, strk20ShadowAccountCommitment } from "./strk20-shadow-account";
 import {
   disclosureScopeRecording,
@@ -91,6 +92,23 @@ export type ResolvedAccount = {
  */
 export const strk20ErrorMessage = (error: unknown): string =>
   error instanceof WalletError ? error.message : "strk20 request failed";
+
+/**
+ * Pool-registration block for an account a private route already resolved.
+ * Null means privacy may proceed. The vault credential stays inside this call.
+ */
+export const strk20RegistrationBlockFor = (
+  deps: Pick<Strk20ExecuteDeps, "runtimeRpc" | "wallet">,
+  resolved: Pick<ResolvedAccount, "account" | "passphrase" | "preferences" | "rpcUrls">,
+): Promise<Strk20RegistrationBlock | null> =>
+  strk20RegistrationBlock({
+    account: resolved.account,
+    passphrase: resolved.passphrase,
+    preferences: resolved.preferences,
+    readRegistered: deps.runtimeRpc.getStrk20PublicKey,
+    rpcUrls: resolved.rpcUrls,
+    wallet: deps.wallet,
+  });
 
 /**
  * Resolves the origin's active-network account, or an error response the caller
@@ -270,6 +288,8 @@ export const executeStrk20DisclosureApproval = async (
   if ("error" in resolved) {
     return resolved;
   }
+  const owner = await strk20RegistrationBlockFor(deps, resolved);
+  if (owner) return owner;
   const context = strk20AccountContext(deps, resolved);
   try {
     if (approval.request.type === "register") {
@@ -312,6 +332,8 @@ export const executeStrk20InvokeApproval = async (
   if ("error" in resolved) {
     return resolved;
   }
+  const owner = await strk20RegistrationBlockFor(deps, resolved);
+  if (owner) return owner;
   const moved = reviewedAnonymizerRefusal(
     resolved.preferences.strk20Networks?.[resolved.account.networkId]
       ?.shadowAccountAnonymizerAddress,

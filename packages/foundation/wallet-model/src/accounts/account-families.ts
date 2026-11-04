@@ -38,6 +38,18 @@ export const ARGENT_ACCOUNT_CLASS_HASH =
   "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f";
 
 /**
+ * The Argent 0.4 build Xverse deploys its Starknet accounts at since
+ * 2025-06-30 (xverse-core `argentXContractClassHashV0_4_0`). It is declared on
+ * Mainnet with Argent's ABI and the 0.4.0 constructor `(owner: Signer,
+ * guardian: Option<Signer>)`, but is not in Argent's own deployment list. Xverse
+ * derives keys on this wallet's own ladder (`m/44'/9004'/{i}'/0/0`) with salt =
+ * public key and no guardian, so its accounts are scanned there, never on
+ * Ready's ladder (issue 734).
+ */
+export const XVERSE_ARGENT_CLASS_HASH =
+  "0x0663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024";
+
+/**
  * Wallet families whose accounts this wallet can derive addresses for. OpenZeppelin
  * is absent on purpose: its class hash is resolved from Krusty per network at
  * runtime, and restating it here would create the second copy that resolution
@@ -49,6 +61,8 @@ export type AccountFamily = "argent" | "braavos";
  * What a class hash can be used for.
  *
  * `deployment` fixes an address, so it is the set to derive candidates from.
+ * It means "an account may have been deployed with this class", not "this
+ * wallet deploys it": deploying is gated separately in `transactions/deployment.ts`.
  * `implementation` is what an upgraded account runs, so it is the set a
  * deployed account may legitimately be found running. A class can be both.
  */
@@ -215,6 +229,14 @@ export const ACCOUNT_CLASSES: readonly AccountClassEntry[] = [
     constructorShape: "signer-owner-guardian-option",
     family: "argent",
     label: "argent 0.4.0",
+    roles: ["deployment", "implementation"],
+  },
+  {
+    authorizationShape: "argent-signer-array",
+    classHash: XVERSE_ARGENT_CLASS_HASH,
+    constructorShape: "signer-owner-guardian-option",
+    family: "argent",
+    label: "argent 0.4.0 (Xverse)",
     roles: ["deployment", "implementation"],
   },
 ];

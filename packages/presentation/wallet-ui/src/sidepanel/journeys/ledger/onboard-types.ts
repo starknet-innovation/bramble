@@ -48,12 +48,13 @@ export type LedgerOnboardAddKind =
 /**
  * The onboarding device-prompt view the binder renders: the add-account
  * chooser, the connect gesture, the silent read, the multi-select account
- * picker (with the currently-selected ids and the path scheme it was read at),
+ * picker (with the currently-selected ids and its layout: Ready's scheme alone
+ * is a flat list, anything read at Bramble's scheme is grouped by family),
  * or a typed error.
  */
 export type LedgerOnboardView =
   | { readonly kind: "chooser" }
-  | { readonly kind: "import-chooser" }
+  | { readonly kind: "import-chooser"; readonly phraselessNote?: string }
   | { readonly kind: "connect" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
   | { readonly kind: "reading" }
@@ -61,6 +62,8 @@ export type LedgerOnboardView =
       readonly kind: "picker";
       readonly application: LedgerEip2645Application;
       readonly candidates: readonly LedgerCandidate[];
+      /** A further page is being read or is queued behind the current one. */
+      readonly loadingMore?: boolean;
       readonly message?: string;
       readonly selected: readonly string[];
     }

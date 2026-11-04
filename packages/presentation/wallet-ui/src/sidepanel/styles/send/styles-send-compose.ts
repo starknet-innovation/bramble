@@ -18,15 +18,6 @@ import {
  * Send composition stylesheet fragment consumed after the shared Send layer.
  */
 export const SEND_COMPOSE_STYLES = `
-  .sr-only {
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    height: 1px;
-    overflow: hidden;
-    position: absolute;
-    text-wrap: nowrap;
-    width: 1px;
-  }
   .send-flow-header .flow-title { text-align: center; }
   .send-flow-header .flow-title h1 {
     font-size: ${TYPE.display.size};

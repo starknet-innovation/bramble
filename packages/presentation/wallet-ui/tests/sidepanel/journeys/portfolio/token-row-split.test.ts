@@ -69,8 +69,19 @@ describe("unifiedBalanceRow split line", () => {
     expect(html).toContain("Private balance");
   });
 
+  test("pending discovery holds the split line open without stating a split", () => {
+    // Issue 795: the line is reserved so a split that lands fills it in rather
+    // than pushing the list down; it states nothing until then.
+    const html = unifiedBalanceRow(token, undefined, undefined, "usd", {
+      private: { kind: "loading" },
+      publicFormatted: "1234.5",
+    });
+    expect(summary(html)).toContain('<p class="token-split" aria-hidden="true">—</p>');
+    expect(html).not.toContain("public ·");
+  });
+
   test("no split line while the private balance is unknown", () => {
-    for (const kind of ["loading", "unavailable", "pending", "unregistered"] as const) {
+    for (const kind of ["unavailable", "pending", "unregistered"] as const) {
       const html = unifiedBalanceRow(token, undefined, undefined, "usd", {
         private: { kind },
         publicFormatted: "1234.5",

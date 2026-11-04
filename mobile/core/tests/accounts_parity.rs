@@ -50,6 +50,10 @@ fn fixture() -> Value {
     serde_json::from_str(include_str!("fixtures/accounts-parity-rules.json")).unwrap()
 }
 
+fn recovery_fixture() -> Value {
+    serde_json::from_str(include_str!("fixtures/accounts-parity-recovery.json")).unwrap()
+}
+
 fn family(value: &Value) -> AccountFamily {
     match value.as_str().unwrap() {
         "openzeppelin" => AccountFamily::OpenZeppelin,
@@ -195,7 +199,7 @@ fn group_ids_follow_create_group() {
 
 #[test]
 fn discovery_rows_are_worded_like_the_extension() {
-    let fixture = fixture();
+    let fixture = recovery_fixture();
     let vectors = fixture["recovery"].as_array().unwrap();
     assert!(!vectors.is_empty());
     for case in vectors {

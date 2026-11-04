@@ -44,7 +44,7 @@ const render = (data: MultisigPortfolioData): string =>
     signerKnown: true,
   });
 
-describe("multisig portfolio hero caption", () => {
+describe("multisig portfolio hero change line", () => {
   test("names the 24h figure a price move when a balance is priced", () => {
     const html = render({
       balances: { balances: [balance] },
@@ -54,15 +54,12 @@ describe("multisig portfolio hero caption", () => {
     });
 
     expect(html).toContain("Portfolio price · 4.00% · 24h");
-    expect(html).toContain('class="hero-note"');
-    expect(html).toContain(
-      "Price change over 24h at your current balances; sends and receives aren't included.",
-    );
+    expect(html).not.toContain("hero-note");
   });
 
-  test("omits the caption when no balance is priced", () => {
+  test("omits the change line when no balance is priced", () => {
     // Prices exist but match no balance, so portfolioDelta is null and the gate
-    // must suppress the caption; removing the gate renders it here.
+    // must suppress the line; removing the gate renders it here.
     const html = render({
       balances: { balances: [balance] },
       changes: {},

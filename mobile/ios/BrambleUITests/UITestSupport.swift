@@ -95,12 +95,13 @@ enum UITest {
     /// The floating tab bar covers the bottom of a scrolled screen, and XCUITest still calls a row
     /// under it hittable, so a tap at the row's centre lands on a tab. Scroll the row clear first,
     /// whether the bar covers part of it or all of it. The tabs themselves sit inside the bar and
-    /// are left alone, as are screens without it. Returns false, after failing the test, when the
-    /// row is still covered, so the caller never taps the tab underneath.
+    /// are left alone, as are screens without it and sheets over it (the bar is still in the tree
+    /// there but not hittable, so it covers nothing). Returns false, after failing the test, when
+    /// the row is still covered, so the caller never taps the tab underneath.
     private static func clearTabBar(_ element: XCUIElement, file: StaticString, line: UInt) -> Bool {
         let app = XCUIApplication()
         let dock = app.otherElements["wallet-dock"]
-        guard dock.exists else { return true }
+        guard dock.exists, dock.isHittable else { return true }
         for scroll in 0...TabBar.maxScrolls {
             let bar = dock.frame, row = element.frame
             if row.maxY <= bar.minY || bar.contains(row) { return true }

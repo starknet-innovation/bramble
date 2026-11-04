@@ -6,6 +6,7 @@ import type { OriginGuard } from "@bramble/permissions/blocklist";
 import type { ApprovalSurfacePreference } from "@bramble/settings/preferences";
 import { isSenderOrigin, type RuntimeSender, senderOrigins } from "../routing/senders";
 import { readApprovalSurfaceRequest } from "./approval-surface-request";
+import type { RescueAttempt, SurfaceRescue } from "./approval-surface-rescue";
 
 /**
  * Minimal browser UI boundaries used to configure and open approval UI.
@@ -20,7 +21,7 @@ import { readApprovalSurfaceRequest } from "./approval-surface-request";
 export type ApprovalSurfaceBrowser = {
   readonly action?: {
     readonly onClicked?: {
-      readonly addListener: (listener: () => void) => void;
+      readonly addListener: (listener: (tab?: { readonly windowId?: number }) => void) => void;
     };
     readonly openPopup?: (options?: { readonly windowId?: number }) => Promise<void>;
     readonly setBadgeText?: (details: { readonly text: string }) => Promise<void>;
@@ -62,9 +63,10 @@ const BADGE_LIMIT = 9;
  * documents that case exactly. So a dapp-triggered approval cannot raise the
  * sidebar itself. It queues, this badge appears, and the user's click on the
  * toolbar button is the real gesture that opens the panel through
- * {@link bindToolbarActivation}. The popup surface has no such limit at this
- * build's minimum Firefox, which is above the 149 that freed
- * `action.openPopup` from needing a gesture.
+ * {@link bindToolbarActivation}. The popup surface is freed from that limit
+ * only from Firefox 149, which made `action.openPopup` work without a
+ * gesture; this build's minimum Firefox is lower, so there a dapp-triggered
+ * popup can be refused too, and this badge is what remains.
  *
  * Browser failures are swallowed for the same reason every other call in this
  * module swallows them: the queued approval, not its announcement, is what the
@@ -112,11 +114,15 @@ export const bindToolbarActivation = (
 
 /**
  * Keeps toolbar activation aligned with the user's approval-surface choice.
+ * `nativePanelClick` is false while the side panel is still being learned
+ * (./side-panel-learning): the toolbar click then reaches `action.onClicked`
+ * instead of Chromium's built-in panel behavior.
  * Browser API failures are returned to the caller but never mutate wallet data.
  */
 export const configureApprovalSurface = async (
   browser: ApprovalSurfaceBrowser | undefined,
   preference: ApprovalSurfacePreference,
+  nativePanelClick = true,
 ): Promise<void> => {
   const jobs: Promise<void>[] = [];
   if (browser?.action?.setPopup) {
@@ -125,7 +131,7 @@ export const configureApprovalSurface = async (
   if (browser?.sidePanel?.setPanelBehavior) {
     jobs.push(
       browser.sidePanel.setPanelBehavior({
-        openPanelOnActionClick: preference === "side-panel",
+        openPanelOnActionClick: preference === "side-panel" && nativePanelClick,
       }),
     );
   }
@@ -172,25 +178,28 @@ const isGatedSender = (sender: RuntimeSender | undefined, guard: OriginGuard): b
 };
 
 /**
- * Raises the user's chosen surface for one tab. Browser failures fall back to
- * the side panel and are otherwise swallowed, because the queued approval — not
- * this call — is what the user ultimately acts on.
+ * Raises the user's chosen surface for one tab. A refused popup falls back to
+ * the side panel, and a refused side panel to the rescue when one is wired
+ * (./approval-surface-rescue, #707). Failures are otherwise swallowed, because
+ * the queued approval — not this call — is what the user ultimately acts on.
  */
 const raiseSurface = (
   browser: ApprovalSurfaceBrowser,
   preference: ApprovalSurfacePreference,
   tabId: number,
   windowId: number | undefined,
+  rescue: RescueAttempt | undefined,
 ): void => {
+  const panel = (): Promise<void> => openPanel(browser, tabId).catch(() => rescue?.());
   if (preference === "popup" && browser.action?.openPopup) {
     const options = typeof windowId === "number" ? { windowId } : undefined;
     void browser.action
       .openPopup(options)
-      .catch(() => openPanel(browser, tabId))
+      .catch(panel)
       .catch(() => undefined);
     return;
   }
-  void openPanel(browser, tabId).catch(() => undefined);
+  void panel().catch(() => undefined);
 };
 
 /**
@@ -204,6 +213,8 @@ export type ApprovalSurfaceDeps = {
   readonly guard: OriginGuard;
   readonly now: () => number;
   readonly preference: () => ApprovalSurfacePreference;
+  /** Runs when the side panel open is refused (#707); absent, nothing more opens. */
+  readonly rescue?: SurfaceRescue;
 };
 
 /**
@@ -227,6 +238,7 @@ export const createApprovalSurfaceOpener = ({
   guard,
   now,
   preference,
+  rescue,
 }: ApprovalSurfaceDeps): ((message: unknown, sender: RuntimeSender | undefined) => void) => {
   // Last accepted opening per tab. Entries that have aged past the cooldown are
   // dropped on every call, so this stays bounded by recently active tabs.
@@ -259,6 +271,9 @@ export const createApprovalSurfaceOpener = ({
     ) {
       return;
     }
-    raiseSurface(browser, preference(), request.tabId, sender?.tab?.windowId);
+    const windowId = sender?.tab?.windowId;
+    // Prepared now, before the request can queue its approval.
+    const attempt = rescue?.({ origin: request.origin, windowId });
+    raiseSurface(browser, preference(), request.tabId, windowId, attempt);
   };
 };

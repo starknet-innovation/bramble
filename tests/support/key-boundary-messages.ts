@@ -14,6 +14,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { DEPLOY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-deploy-messages";
 import {
   account,
   contentSender,
@@ -111,7 +112,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.deploymentData" },
     sender: contentSender,
   },
-  { message: { type: "wallet.deployAccount" }, sender: extensionSender },
+  ...DEPLOY_KEY_BOUNDARY_MESSAGES,
   { message: { type: "wallet.pendingApprovals" }, sender: extensionSender },
   {
     live: async (ids) => ({ id: await ids.invokeApprovalId() }),

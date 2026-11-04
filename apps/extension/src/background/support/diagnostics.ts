@@ -1,5 +1,6 @@
 /** Sanitized, local-only support diagnostics for trusted extension pages. */
 
+import type { PhishingFeedHealth } from "@bramble/permissions/phishing-feed";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   type ExplorerDiagnosticRow,
@@ -24,6 +25,12 @@ type SupportDiagnostics = {
   readonly locked: boolean;
   readonly networkId: string;
   /**
+   * How current the live phishing list is: domain count, age in whole hours,
+   * failed fetches since the last success, whether the cache write failed, and
+   * whether it is stale. Null when the feed is not running.
+   */
+  readonly phishingFeed: PhishingFeedHealth | null;
+  /**
    * Tracked privacy jobs by kind, phase, and outcome class with average
    * duration — where a shield, activation, or private send spent its time and
    * how it ended. Fixed labels only; no account, note, amount, or error text.
@@ -46,6 +53,7 @@ export const supportDiagnosticsResponse = async (
   wallet: WalletStatusReader,
   session: UnlockSession,
   preferencesStore: WalletPreferencesStore,
+  phishingFeedHealth?: () => PhishingFeedHealth,
 ): Promise<SupportDiagnosticsResponse> => {
   const [status, preferences] = await Promise.all([
     statusResponse(wallet, session, preferencesStore),
@@ -59,6 +67,7 @@ export const supportDiagnosticsResponse = async (
       hasVault: status.hasVault,
       locked: status.locked,
       networkId: status.networkId,
+      phishingFeed: phishingFeedHealth?.() ?? null,
       privacy: privacyDiagnosticsSnapshot(),
       ready: status.ready,
       rpc: rpcDiagnosticsSnapshot(),
