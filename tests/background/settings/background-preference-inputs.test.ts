@@ -20,6 +20,7 @@ describe("readSetDisplayInput", () => {
         reliabilityDiagnostics: true,
         theme: "dark",
         type: "wallet.setDisplay",
+        vipNotice: false,
       }),
     ).toEqual({
       approvalSurface: "popup",
@@ -27,6 +28,7 @@ describe("readSetDisplayInput", () => {
       productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
+      vipNotice: false,
     });
   });
 
@@ -48,6 +50,7 @@ describe("readSetDisplayInput", () => {
       readSetDisplayInput({ reliabilityDiagnostics: "yes", type: "wallet.setDisplay" }),
     ).toBeNull();
     expect(readSetDisplayInput({ productAnalytics: "yes", type: "wallet.setDisplay" })).toBeNull();
+    expect(readSetDisplayInput({ type: "wallet.setDisplay", vipNotice: "off" })).toBeNull();
   });
 });
 

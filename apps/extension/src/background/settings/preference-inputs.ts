@@ -190,6 +190,7 @@ type DisplayPreferenceInput = {
   readonly productAnalytics?: boolean;
   readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
+  readonly vipNotice?: boolean;
 };
 
 const hasValidDisplayValues = (
@@ -216,6 +217,9 @@ const hasValidDisplayValues = (
   ) {
     return false;
   }
+  if (message["vipNotice"] !== undefined && typeof message["vipNotice"] !== "boolean") {
+    return false;
+  }
   return (
     message["theme"] === undefined || message["theme"] === "dark" || message["theme"] === "light"
   );
@@ -234,6 +238,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
       "reliabilityDiagnostics",
       "theme",
       "type",
+      "vipNotice",
     ])
   ) {
     return null;
@@ -249,12 +254,14 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
   const productAnalytics = message["productAnalytics"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
+  const vipNotice = message["vipNotice"];
   return {
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
     ...(productAnalytics === undefined ? {} : { productAnalytics }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),
+    ...(vipNotice === undefined ? {} : { vipNotice }),
   };
 };
 

@@ -76,6 +76,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "strk20ProverUrl",
   "theme",
   "tokens",
+  "vipNotice",
 ];
 
 // Optional-section guards, each pure, keeping the main guard a single `&&` chain.
@@ -102,6 +103,7 @@ const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
+  (value["vipNotice"] === undefined || typeof value["vipNotice"] === "boolean") &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
 const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
   hasValidIdKeyedEntries(value) && hasValidDisplayEntries(value);

@@ -81,6 +81,7 @@ export const createSettingsRuntimeClient = (
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: "dark" | "light";
+    readonly vipNotice?: boolean;
   }): Promise<void> {
     const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
     if (isPreferencesResponse(response)) {

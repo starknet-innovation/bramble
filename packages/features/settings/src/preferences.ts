@@ -102,17 +102,24 @@ const isValidDisplayInput = (
   if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
     return false;
   }
-  if (input.productAnalytics !== undefined && typeof input.productAnalytics !== "boolean") {
-    return false;
-  }
-  if (
-    input.reliabilityDiagnostics !== undefined &&
-    typeof input.reliabilityDiagnostics !== "boolean"
-  ) {
-    return false;
-  }
+  const flags = [input.productAnalytics, input.reliabilityDiagnostics, input.vipNotice];
+  if (flags.some((flag) => flag !== undefined && typeof flag !== "boolean")) return false;
   return input.theme === undefined || isThemeChoice(input.theme);
 };
+
+/** The fields a display update sets: only those the caller passed. */
+const displayUpdate = (
+  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
+): Partial<WalletPreferences> => ({
+  ...(input.approvalSurface === undefined ? {} : { approvalSurface: input.approvalSurface }),
+  ...(input.displayCurrency === undefined ? {} : { displayCurrency: input.displayCurrency }),
+  ...(input.productAnalytics === undefined ? {} : { productAnalytics: input.productAnalytics }),
+  ...(input.reliabilityDiagnostics === undefined
+    ? {}
+    : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
+  ...(input.theme === undefined ? {} : { theme: input.theme }),
+  ...(input.vipNotice === undefined ? {} : { vipNotice: input.vipNotice }),
+});
 
 /**
  * Creates default non-secret wallet preferences.
@@ -360,22 +367,7 @@ export const createPreferencesStore = ({
           throw new WalletError("Invalid display preference");
         }
         const preferences = await read();
-        const next = {
-          ...preferences,
-          ...(input.approvalSurface === undefined
-            ? {}
-            : { approvalSurface: input.approvalSurface }),
-          ...(input.displayCurrency === undefined
-            ? {}
-            : { displayCurrency: input.displayCurrency }),
-          ...(input.productAnalytics === undefined
-            ? {}
-            : { productAnalytics: input.productAnalytics }),
-          ...(input.reliabilityDiagnostics === undefined
-            ? {}
-            : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
-          ...(input.theme === undefined ? {} : { theme: input.theme }),
-        };
+        const next = { ...preferences, ...displayUpdate(input) };
         await writePreferences(store, next);
         return next;
       },
