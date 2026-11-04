@@ -92,6 +92,30 @@ const depositRegistration = async (
     : { error: "The recipient has not activated private balances" };
 };
 
+// The review lines for a shield. A first shield that registers in the same
+// transaction (#789) says so in its headline and states the registration's
+// public link, exactly as a registration on its own does.
+const depositSummaries = (input: {
+  readonly activate: boolean;
+  readonly feeLine: string;
+  readonly recipient: string;
+  readonly toSelf: boolean;
+  readonly value: string;
+}): string[] => [
+  input.activate
+    ? `Activate private balances and shield ${input.value}`
+    : input.toSelf
+      ? `Shield ${input.value}`
+      : `Shield ${input.value} into ${input.recipient}'s private balance`,
+  ...(input.activate
+    ? ["Registration is public and links this wallet address to its viewing key"]
+    : []),
+  input.feeLine,
+  input.toSelf
+    ? "The deposit is public; the resulting balance can be spent privately"
+    : "The deposit is public: your address and the amount are on chain, and only the recipient stays hidden",
+];
+
 // What the frozen route adds to a shield's preparation, and its review line.
 // The sponsored route sends the user nothing to estimate: the relay submits,
 // and the pool-fee approval is dropped because the relay pays.
@@ -220,20 +244,13 @@ const depositPreparationWork = async (
       poolAddress: config.poolAddress,
       recipient,
       ...(activate ? { activates: true as const } : {}),
-      summaries: [
-        activate
-          ? `Activate private balances and shield ${input.amount} ${context.token.symbol}`
-          : toSelf
-            ? `Shield ${input.amount} ${context.token.symbol}`
-            : `Shield ${input.amount} ${context.token.symbol} into ${recipient}'s private balance`,
-        ...(activate
-          ? ["Registration is public and links this wallet address to its viewing key"]
-          : []),
+      summaries: depositSummaries({
+        activate,
         feeLine,
-        toSelf
-          ? "The deposit is public; the resulting balance can be spent privately"
-          : "The deposit is public: your address and the amount are on chain, and only the recipient stays hidden",
-      ],
+        recipient,
+        toSelf,
+        value: `${input.amount} ${context.token.symbol}`,
+      }),
       token: context.token,
     };
     const approvalContext = await createApprovalContext(
