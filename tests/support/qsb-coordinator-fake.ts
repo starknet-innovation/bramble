@@ -313,7 +313,7 @@ export const fakeQsbFetch =
  */
 export const fakeQsbRuntime = (): {
   calls: number;
-  readonly setupFromCommitments: (commitments: QsbHorsCommitments) => Promise<QsbVaultSetup>;
+  setupFromCommitments: (commitments: QsbHorsCommitments) => Promise<QsbVaultSetup>;
 } => {
   const runtime = {
     calls: 0,

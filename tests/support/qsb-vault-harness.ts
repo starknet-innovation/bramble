@@ -89,12 +89,13 @@ export const qsbVaultHarness = async (
     QSB_HARNESS_PASSPHRASE,
   );
   const kms = (options.kms ?? ((base) => base))(await realKrusty());
+  let journals = 0;
   const service = createWalletVaultService({
     encryptedStore: createEncryptedStore(backend, "bramble:vault"),
     kms,
     migrationStore: createEncryptedStore(backend, "bramble:vault-migration"),
     qsb: {
-      drawJournalId: () => sha256("qsb vault harness journal"),
+      drawJournalId: () => sha256(`qsb vault harness journal ${(journals += 1)}`),
       journals: createQsbJournalStores((key) => createEncryptedStore(backend, key)),
     },
   });

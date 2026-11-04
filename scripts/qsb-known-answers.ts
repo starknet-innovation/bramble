@@ -34,9 +34,14 @@ export const QSB_PUBLIC_PROBE_ANSWERS: QsbPublicProbe = {
 /**
  * What the pinned bridge's `setup_from_commitments` returns for
  * {@link QSB_TEST_VAULT_COMMITMENTS}: the script's SHA-256 (what Esplora
- * indexes), its length, and the SHA-256 of the exact public-state text.
+ * indexes), its length, and the SHA-256 of the exact public-state text; and
+ * that public state's configuration fingerprint (`publicStateHash`), which
+ * qsb-app's own `src/lib/provenance.ts` `vaultConfiguration`, run under Bun on
+ * this very text, returned. Bramble's port must agree with it to the bit:
+ * the coordinator refuses any other value as `vault_invalid`.
  */
 export const QSB_TEST_VAULT_SETUP = {
+  publicStateHash: "216903c57c692d3ec8c2b3234cfae0f639b8a06b828ca1b7bd6ebcfc4b3e7bfd",
   publicStateSha256: "6831e479674073f7585cf90abe9c091756071f57d13f2c0365e95da323489a70",
   scriptBytes: 9_923,
   scriptHash: "d2c4ec1c74e6d5b69f3f33cd1c0dc35457921ba1176de81d6eee539bfd767e09",
