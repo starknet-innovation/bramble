@@ -37,6 +37,8 @@ export const RECOVERY_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
       type: "wallet.createKeyVault",
       vaultPassphrase: SECRET_PASSPHRASE,
     },
+    negative:
+      "this harness already holds a vault, so first-run creation refuses before the key reaches the service (the live path is in background-create-key-vault.test.ts)",
     sender: extensionSender,
   },
   {

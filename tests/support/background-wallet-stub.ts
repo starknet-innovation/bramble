@@ -7,7 +7,7 @@
  * notions of what the origin may see.
  */
 
-import { WalletError } from "@bramble/core/errors";
+import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";
 import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
 import type { Vault } from "@bramble/vault/schema";
 import type {
@@ -124,6 +124,13 @@ export type WalletStubOptions = {
   readonly captureSetActiveAccount?: (input: SetActiveAccountInput) => void;
   readonly captureCreate?: (input: CreateVaultAccountInput) => void;
   readonly captureCreateKeyVault?: (input: CreateKeyVaultInput) => void;
+  /**
+   * Whether `status()` reports a vault. A function is re-read on every call,
+   * so a suite can show a vault appearing between two reads. Defaults to true.
+   * `createKeyVault` refuses before writing while a vault is reported, as the
+   * vault service does.
+   */
+  readonly hasVault?: boolean | (() => boolean);
   readonly captureGrant?: (input: OriginGrantInput) => void;
   readonly captureSign?: (input: SignHashInput) => void;
   /**
@@ -156,12 +163,18 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     shadowAccountScopes: scopes.value,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });
+  const reportsVault = (): boolean => {
+    const reported = options.hasVault;
+    if (reported === undefined) return status.hasVault;
+    return typeof reported === "function" ? reported() : reported;
+  };
   return {
     async createAccount(input: CreateVaultAccountInput) {
       options.captureCreate?.(input);
       return account;
     },
     async createKeyVault(input: CreateKeyVaultInput) {
+      if (reportsVault()) throw new RefusedBeforeWrite("Wallet already exists");
       options.captureCreateKeyVault?.(input);
       return account;
     },
@@ -253,7 +266,7 @@ export const createWallet = (options: WalletStubOptions = {}) => {
       };
     },
     async status() {
-      return status;
+      return { ...status, hasVault: reportsVault() };
     },
   };
 };
