@@ -30,6 +30,8 @@ import { multisigScenario } from "./scenarios-multisig";
 import { ledgerOnboardingScenario, onboardingScenario } from "./scenarios-onboarding";
 import { privacyScenario } from "./scenarios-privacy";
 import { qsbScenario } from "./scenarios-qsb";
+import { qsbDepositScenario } from "./scenarios-qsb-deposit";
+import { qsbVaultsScenario } from "./scenarios-qsb-vaults";
 import { settingsScenario } from "./scenarios-settings";
 import { ledgerScenario, sendScenario } from "./scenarios-signing";
 import { swapScenario } from "./scenarios-swap";
@@ -417,6 +419,8 @@ export const walletScenarios: readonly WalletScenario[] = [
   multisigScenario,
   settingsScenario,
   qsbScenario,
+  qsbVaultsScenario,
+  qsbDepositScenario,
 ];
 
 export const walletScenario = (id: string): WalletScenario =>

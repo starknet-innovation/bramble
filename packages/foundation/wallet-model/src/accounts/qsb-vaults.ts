@@ -26,6 +26,18 @@
  *   same signed bytes again, never new ones.
  */
 
+/**
+ * The QSB coordinator's origin: qsb-app's deployment, exactly as its sign-in
+ * challenge names it. Bramble reaches it only once the user grants this
+ * origin at runtime, under the manifest's optional all-HTTPS host pattern, so
+ * shipping QSB adds no host permission on update; the UI asks for it, the
+ * background checks it before every request.
+ */
+export const QSB_COORDINATOR_ORIGIN = "https://d1pjwwq89sze3g.cloudfront.net";
+
+/** The one host-permission pattern the UI requests and the background checks. */
+export const QSB_COORDINATOR_PERMISSION = `${QSB_COORDINATOR_ORIGIN}/*`;
+
 /** Smallest deposit, in satoshis: below it a withdrawal's fee eats the vault. */
 export const QSB_MIN_DEPOSIT_SAT = 10_000;
 
@@ -98,6 +110,7 @@ export type QsbSubmission = "rejected" | "submitted" | "uncertain";
  * both sides.
  */
 export const QSB_VAULT_REFUSALS = {
+  accessNeeded: "qsb coordinator access not granted",
   amountTooSmall: "qsb deposit amount is too small",
   coordinatorDisabled: "qsb deposits are switched off",
   coordinatorUnavailable: "qsb coordinator unavailable",

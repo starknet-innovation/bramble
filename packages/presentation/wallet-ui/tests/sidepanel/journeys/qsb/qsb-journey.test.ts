@@ -1,13 +1,12 @@
 /**
  * The Quantum-safe Bitcoin journey: creation runs once however often it is
  * asked and lands in the new account's backup, a refused creation shows why,
- * the list's Back up opens that account, and binding the next screen wipes
- * the one before it, which is how leaving a screen clears its fields.
+ * the list's Back up opens that account, a row opens the account and its
+ * Deposit the deposit screen, and binding the next screen wipes the one
+ * before it, which is how leaving a screen clears its fields.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
-import { EMPTY_ALLOWANCE_LISTING } from "../../../../src/popup/responses/responses";
-import { simpleFlowScreen } from "../../../../src/sidepanel/app/screens/flows";
 import type { WalletView } from "../../../../src/sidepanel/app/screens/views";
 import { createQsbJourney } from "../../../../src/sidepanel/journeys/qsb/qsb-journey";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -16,39 +15,20 @@ import {
   mountApp,
   QSB_VIEWS,
   type QsbScript,
-  qsbStatus,
   scriptedQsbWallet,
   shownStep,
   submitForm,
   TEST_PHRASE,
   typeInto,
 } from "../../../support/qsb-harness";
+import { qsbScreen } from "../../../support/qsb-panel";
+import { reading, unfundedVault } from "../../../support/qsb-vault-fixtures";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
 beforeEach(() => {
   document.body.replaceChildren();
 });
-
-const screen = (view: WalletView): string => {
-  const markup = simpleFlowScreen(view, {
-    account: null,
-    allowances: EMPTY_ALLOWANCE_LISTING,
-    balances: [],
-    changes: {},
-    classHashVerification: null,
-    connectedSites: [],
-    currency: "usd",
-    deployment: null,
-    expandedGroupId: null,
-    preferences: null,
-    prices: {},
-    privacy: { error: null, loading: false, value: null },
-    status: qsbStatus,
-  });
-  if (markup === null) throw new Error(`${view} has no flow screen`);
-  return markup;
-};
 
 // A panel stand-in: navigation paints the view's real markup and binds it,
 // as the side panel's paint loop does.
@@ -63,7 +43,7 @@ const panel = (script: QsbScript) => {
     },
     navigate: (view) => {
       visited.push(view);
-      app = mountApp(screen(view));
+      app = mountApp(qsbScreen(view));
       journey.bind(app);
     },
     now: () => 0,
@@ -75,7 +55,7 @@ const panel = (script: QsbScript) => {
     calls,
     journey,
     paint: (view: WalletView) => {
-      app = mountApp(screen(view));
+      app = mountApp(qsbScreen(view));
       journey.bind(app);
       return app;
     },
@@ -125,6 +105,23 @@ describe("the Quantum-safe Bitcoin journey", () => {
     expect(p.app()?.querySelector("#qsb-backup-account")?.textContent).toBe("Account 1");
     p.paint("qsb-accounts").querySelector<HTMLButtonElement>("#qsb-create")?.click();
     expect(p.calls.create).toHaveLength(1);
+  });
+
+  test("a row opens the account, and its Deposit the deposit screen", async () => {
+    const p = panel({
+      list: { resolve: [QSB_VIEWS.ready] },
+      vaults: { resolve: reading([unfundedVault(0)]) },
+    });
+    p.paint("qsb-accounts").querySelector<HTMLButtonElement>('[data-qsb-open="qsb-2"]');
+    await flush();
+    p.app()?.querySelector<HTMLButtonElement>('[data-qsb-open="qsb-2"]')?.click();
+    await flush();
+    expect(p.visited).toEqual(["qsb-account"]);
+    expect(p.calls.vaults).toEqual(["qsb-2"]);
+    p.app()?.querySelector<HTMLButtonElement>('[data-qsb-deposit="0"]')?.click();
+    await flush();
+    expect(p.visited).toEqual(["qsb-account", "qsb-deposit"]);
+    expect(p.app()?.querySelector("#qsb-deposit-vault")?.textContent).toBe("Account 2 · Vault 1");
   });
 
   test("open('import') opens the import screen; Done goes back", async () => {

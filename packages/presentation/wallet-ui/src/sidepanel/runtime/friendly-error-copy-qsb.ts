@@ -31,6 +31,10 @@ export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
   ],
   [QSB_ACCOUNT_REFUSALS.unknownAccount, "That account isn't in this wallet."],
   // Vaults and deposits.
+  [
+    QSB_VAULT_REFUSALS.accessNeeded,
+    "Allow Bramble to reach the quantum-safe Bitcoin service to continue.",
+  ],
   [QSB_VAULT_REFUSALS.amountTooSmall, "Deposit at least 0.0001 BTC."],
   [QSB_VAULT_REFUSALS.coordinatorDisabled, "Quantum-safe deposits are switched off right now."],
   [
