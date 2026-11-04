@@ -95,7 +95,10 @@ export const qsbVaultHarness = async (
     kms,
     migrationStore: createEncryptedStore(backend, "bramble:vault-migration"),
     qsb: {
-      drawJournalId: () => sha256(`qsb vault harness journal ${(journals += 1)}`),
+      drawJournalId: () => {
+        journals += 1;
+        return sha256(`qsb vault harness journal ${journals}`);
+      },
       journals: createQsbJournalStores((key) => createEncryptedStore(backend, key)),
     },
   });

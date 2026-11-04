@@ -17,7 +17,7 @@
  */
 import { createHash } from "node:crypto";
 import type { QsbHttpFetch } from "@bramble/qsb/client";
-import { isoInstant } from "@bramble/qsb/instant";
+
 import { Address, NETWORK, OutScript, Transaction } from "@scure/btc-signer";
 import type {
   QsbHorsCommitments,
@@ -110,7 +110,7 @@ const list = (state: FakeCoordinatorState) => ({
 const challenge = (state: FakeCoordinatorState, body: Record<string, unknown>, now: number) => {
   const address = String(body["address"]);
   const id = `00000000-0000-4000-8000-${String(state.signedIn.size + 1).padStart(12, "0")}`;
-  const expires = isoInstant((Math.floor(now / 1_000) + 300) * 1_000);
+  const expires = new Date((Math.floor(now / 1_000) + 300) * 1_000).toISOString();
   const message = `QSB Vault sign-in\nOrigin: ${ORIGIN}\nAddress: ${address}\nNetwork: bitcoin-mainnet\nNonce: ${id}\nExpires: ${expires}\nThis signature authorizes this session only. It does not authorize a Bitcoin transaction.`;
   state.signedIn.set(id, { id, message });
   return { body: { id, message }, status: 200 };
