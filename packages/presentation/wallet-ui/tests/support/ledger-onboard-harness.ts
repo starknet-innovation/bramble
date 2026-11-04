@@ -92,6 +92,7 @@ export const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> =
   let imports = 0;
   let seedImports = 0;
   let multisigs = 0;
+  const qsbRoutes: string[] = [];
   // request() hands back an OWNED session; its close bumps a counter so tests
   // assert the enumeration transport is released on every outcome.
   const connector: LedgerConnector = {
@@ -146,6 +147,9 @@ export const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> =
     openMultisig: () => {
       multisigs += 1;
     },
+    openQsb: (route) => {
+      qsbRoutes.push(route);
+    },
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
@@ -162,6 +166,7 @@ export const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> =
     imports: () => imports,
     seedImports: () => seedImports,
     multisigs: () => multisigs,
+    qsbRoutes,
     refreshed: () => refreshed,
     views,
   };

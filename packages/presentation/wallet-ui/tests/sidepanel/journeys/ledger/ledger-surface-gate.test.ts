@@ -45,6 +45,7 @@ const mountEntry = (surface: "popup" | "side-panel") => {
     openFindAccounts: () => undefined,
     openImportSeed: () => undefined,
     openMultisig: () => undefined,
+    openQsb: () => undefined,
     refresh: () => Promise.resolve(),
     wallet: {
       setDisplay: (value: { readonly approvalSurface?: string }) => {

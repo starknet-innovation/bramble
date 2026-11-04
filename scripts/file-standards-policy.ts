@@ -182,6 +182,18 @@ export const SECRET_MATERIAL_FILES = new Set([
   // neither persists it nor renders it.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/unlock-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
+  // Quantum-safe Bitcoin client: the reveal request carries the freshly typed
+  // vault passphrase and its reply the phrase; the import request carries the
+  // typed phrase. Validated and passed through, never kept, logged, or stored.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-runtime.ts",
+  // QSB backup screen: reads the vault passphrase once at submit and empties
+  // the field as it is sent; the revealed phrase lives only in the grid cells,
+  // which are emptied before the check words and whenever the screen is left.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-backup-ui.ts",
+  // QSB phrase import: the typed phrase lives only in the grid cells and goes
+  // once into the privileged import request; the cells are emptied on success
+  // and whenever the screen is left. Nothing is stored or logged.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-import-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
   // Privileged UI message client: credentials transit directly to the
   // background and are never retained or rendered here.

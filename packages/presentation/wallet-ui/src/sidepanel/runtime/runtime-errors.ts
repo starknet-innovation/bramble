@@ -139,6 +139,7 @@ export const READ_ONLY_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.preferences",
   "wallet.previewAccount",
   "wallet.prices",
+  "wallet.qsbAccounts",
   "wallet.resolveMultisigSigner",
   "wallet.resolveStarkName",
   "wallet.reviewArgentMultisigDeployment",
@@ -146,6 +147,8 @@ export const READ_ONLY_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.reviewBraavosRecovery",
   "wallet.reviewNftTransfer",
   "wallet.reviewTransfer",
+  // Re-authenticates, then reads one QSB phrase: it changes nothing.
+  "wallet.revealQsbPhrase",
   "wallet.sidePanelNotice",
   "wallet.status",
   "wallet.strk20PreparationStatus",

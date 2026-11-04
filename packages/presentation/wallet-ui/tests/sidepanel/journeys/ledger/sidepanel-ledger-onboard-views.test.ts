@@ -38,12 +38,14 @@ const candidateAccount = (
 });
 
 describe("onboarding views", () => {
-  test("the chooser offers exactly the four ways to make an account", () => {
+  test("the chooser offers exactly the five ways to make an account", () => {
     const html = addAccountChooser();
     expect(html).toContain('data-add-kind="regular"');
     expect(html).toContain('data-add-kind="ledger"');
     expect(html).toContain('data-add-kind="multisig"');
+    expect(html).toContain('data-add-kind="qsb-create"');
     expect(html).toContain('data-add-kind="import"');
+    expect(html).toContain("Quantum-safe Bitcoin account");
     expect(html).toContain("Regular account");
     expect(html).toContain("Ledger account");
     expect(html).toContain("Multisig account");
@@ -54,7 +56,7 @@ describe("onboarding views", () => {
     // Contract choice is gone: every creation route is the Bramble account.
     expect(html).not.toContain("argent ");
     expect(html).not.toContain("openzeppelin");
-    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(4);
+    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(5);
     expect(html.indexOf('data-add-kind="regular"')).toBeLessThan(
       html.indexOf('data-add-kind="import"'),
     );
@@ -63,8 +65,10 @@ describe("onboarding views", () => {
     expect(html).not.toContain("aria-pressed");
   });
 
-  test("importing an existing account offers a rescan, the phrase, a key, and a Ready Ledger", () => {
+  test("importing an existing account offers a rescan, the phrase, a key, a Ready Ledger, and a Bitcoin vault phrase", () => {
     const html = importAccountChooser();
+    expect(html).toContain('data-add-kind="qsb-import"');
+    expect(html).toContain("Quantum-safe Bitcoin phrase");
 
     // The wallet's own accounts: one scan of the phrase it already holds, which
     // is the only route here that imports without asking the reader to type one.
@@ -76,7 +80,7 @@ describe("onboarding views", () => {
     // it is read from is the wallet's business, not the reader's.
     expect(html).toContain("Ready (Argent X)");
     expect(html).not.toContain("derivation path");
-    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(4);
+    expect((html.match(/data-add-kind="/g) ?? []).length).toBe(5);
   });
 
   test("connect, reading, and error device states render their controls", () => {
@@ -374,7 +378,9 @@ describe("onboarding views", () => {
     expect(chooser).toContain('data-add-kind="regular"');
     expect(chooser).toContain('data-add-kind="multisig"');
     expect(chooser).toContain('data-add-kind="import"');
-    expect((chooser.match(/data-add-kind="/g) ?? []).length).toBe(3);
+    // A Bitcoin vault phrase needs no device, so its routes stay.
+    expect(chooser).toContain('data-add-kind="qsb-create"');
+    expect((chooser.match(/data-add-kind="/g) ?? []).length).toBe(4);
 
     const importChooser = importAccountChooser(false);
     expect(importChooser).not.toContain('data-add-kind="restore-ready-ledger"');
@@ -382,7 +388,8 @@ describe("onboarding views", () => {
     expect(importChooser).toContain('data-add-kind="find-accounts"');
     expect(importChooser).toContain('data-add-kind="import-phrase"');
     expect(importChooser).toContain('data-add-kind="import-key"');
-    expect((importChooser.match(/data-add-kind="/g) ?? []).length).toBe(3);
+    expect(importChooser).toContain('data-add-kind="qsb-import"');
+    expect((importChooser.match(/data-add-kind="/g) ?? []).length).toBe(4);
   });
 
   // Issue 740: the note says why a phrase-less wallet landed here, and the
