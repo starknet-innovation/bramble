@@ -407,7 +407,9 @@ const handleDiscoverNfts = async (
       const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
       const candidates = await indexer.listOwnedNfts({
         address: owner,
-        indexerUrl: preferences.nftIndexerUrl ?? null,
+        // The gallery preview is the only surface that asks for discovery, so
+        // with it off a saved indexer stays unused and no address leaves.
+        indexerUrl: preferences.collectiblesPreview ? (preferences.nftIndexerUrl ?? null) : null,
         networkId: context.networkId,
       });
       const watched = watchedCandidates(preferences, context.networkId, owner);

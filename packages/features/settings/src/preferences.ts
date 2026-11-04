@@ -102,17 +102,25 @@ const isValidDisplayInput = (
   if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
     return false;
   }
-  if (input.productAnalytics !== undefined && typeof input.productAnalytics !== "boolean") {
-    return false;
-  }
-  if (
-    input.reliabilityDiagnostics !== undefined &&
-    typeof input.reliabilityDiagnostics !== "boolean"
-  ) {
+  if (DISPLAY_FLAGS.some((flag) => input[flag] !== undefined && typeof input[flag] !== "boolean")) {
     return false;
   }
   return input.theme === undefined || isThemeChoice(input.theme);
 };
+
+/** The on/off display preferences; each is written only when the input names it. */
+const DISPLAY_FLAGS = [
+  "collectiblesPreview",
+  "productAnalytics",
+  "reliabilityDiagnostics",
+] as const;
+
+const displayFlags = (
+  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
+): Partial<Record<(typeof DISPLAY_FLAGS)[number], boolean>> =>
+  Object.fromEntries(
+    DISPLAY_FLAGS.flatMap((flag) => (input[flag] === undefined ? [] : [[flag, input[flag]]])),
+  );
 
 /**
  * Creates default non-secret wallet preferences.
@@ -368,12 +376,7 @@ export const createPreferencesStore = ({
           ...(input.displayCurrency === undefined
             ? {}
             : { displayCurrency: input.displayCurrency }),
-          ...(input.productAnalytics === undefined
-            ? {}
-            : { productAnalytics: input.productAnalytics }),
-          ...(input.reliabilityDiagnostics === undefined
-            ? {}
-            : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
+          ...displayFlags(input),
           ...(input.theme === undefined ? {} : { theme: input.theme }),
         };
         await writePreferences(store, next);
