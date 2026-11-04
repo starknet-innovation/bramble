@@ -30,6 +30,7 @@ import {
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
+import { activityRecordFacts, counterpartyFact } from "./activity-detail";
 import { type ActivityContact, activityRowAttributes } from "./activity-filter";
 import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
@@ -147,7 +148,8 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * the full recorded summary (prefixed by the verb when the summary does not
  * already start with it) — the row never announces less than the record says.
  * The transaction hash, its Starkscan link and its copy control, and a
- * recorded counterparty with its own copy control, sit in the expanded body:
+ * recorded counterparty in full with its own copy control, sit in the expanded
+ * body, followed by the fee, network and token contract the record holds:
  * a `<summary>` is one control with its own accessible name, so links and
  * buttons inside it may never reach assistive tech (mc-wallet issue 476).
  * Without `pricing` the fiat delta is simply absent.
@@ -208,11 +210,12 @@ export const transactionRow = (
           }${inlineCopyButton(entry.hash, "Copy transaction hash")}</dd></div>
           ${
             row.counterparty
-              ? `<div><dt>${escapeHtml(capitalise(row.counterparty.role))}</dt><dd><code title="${escapeHtml(row.counterparty.address)}">${escapeHtml(accountLabel(row.counterparty.address))}</code>${inlineCopyButton(row.counterparty.address, `Copy ${row.counterparty.role} address`)}</dd></div>`
+              ? counterpartyFact(capitalise(row.counterparty.role), row.counterparty.address)
               : row.detail && row.detail !== figure
                 ? `<div><dt>Detail</dt><dd>${escapeHtml(row.detail)}</dd></div>`
                 : ""
           }
+          ${activityRecordFacts(entry, pricing?.tokens)}
           ${when === "" ? "" : `<div><dt>Submitted</dt><dd>${escapeHtml(when)}</dd></div>`}
           ${hint ? `<div><dt>Status</dt><dd>${escapeHtml(hint)}</dd></div>` : ""}
         </dl>
