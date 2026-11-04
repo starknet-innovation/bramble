@@ -1,8 +1,9 @@
 /**
  * The Quantum-safe Bitcoin accounts screen under happy-dom: it is reachable
  * from the account drawer, lists each account with its state (backup needed,
- * ready, read-only, history unavailable), offers Back up only where a backup
- * is missing, and shows a failed read as its reviewed line.
+ * ready, read-only, history unavailable), opens an account from its row,
+ * offers Back up only where a backup is missing, and shows a failed read as
+ * its reviewed line.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { preferences } from "@bramble/testkit/sidepanel";
@@ -34,6 +35,7 @@ const mount = (list: Scripted<readonly (typeof QSB_VIEWS)[keyof typeof QSB_VIEWS
   const app = mountApp(qsbAccountsFlow(qsbStatus));
   const { calls, wallet } = scriptedQsbWallet({ list });
   const opened: string[] = [];
+  const shown: string[] = [];
   let created = 0;
   const listNode = app.querySelector<HTMLElement>("#qsb-accounts-list");
   if (!listNode) throw new Error("missing list");
@@ -42,15 +44,27 @@ const mount = (list: Scripted<readonly (typeof QSB_VIEWS)[keyof typeof QSB_VIEWS
       created += 1;
     },
     list: listNode,
+    openAccount: (id) => shown.push(id),
     openBackup: (id) => opened.push(id),
     root: app,
     wallet,
   });
-  return { app, calls, created: () => created, list: listNode, opened };
+  return { app, calls, created: () => created, list: listNode, opened, shown };
 };
 
-const rowText = (app: HTMLElement, id: string): string =>
-  app.querySelector(`[data-qsb-account="${id}"]`)?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+// Each text node of the row, in order: the row's own markup puts no spaces
+// between a name and its state.
+const rowText = (app: HTMLElement, id: string): string => {
+  const row = app.querySelector(`[data-qsb-account="${id}"]`);
+  if (!row) return "";
+  const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  const parts: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.textContent?.trim();
+    if (text) parts.push(text);
+  }
+  return parts.join(" ");
+};
 
 describe("Quantum-safe Bitcoin accounts", () => {
   test("the drawer links to the screen, which has its own title and route label", () => {
@@ -80,8 +94,24 @@ describe("Quantum-safe Bitcoin accounts", () => {
     expect(rowText(app, "qsb-2")).toBe("Account 2 Ready");
     expect(rowText(app, "qsb-3")).toBe("Account 3 Read-only");
     expect(rowText(app, "qsb-4")).toBe(
-      "Account 4 History unavailable Bramble won't release any of its keys.",
+      "Account 4 History unavailable · Bramble won't release any of its keys.",
     );
+  });
+
+  test("every row opens its account; Back up stays a separate control", async () => {
+    const { app, opened, shown } = mount({ resolve: [QSB_VIEWS.ready, QSB_VIEWS.backupNeeded] });
+    await flush();
+    const rows = app.querySelectorAll<HTMLButtonElement>("[data-qsb-open]");
+    expect(Array.from(rows, (row) => row.dataset["qsbOpen"])).toEqual(["qsb-2", "qsb-1"]);
+    rows[1]?.click();
+    expect(shown).toEqual(["qsb-1"]);
+    expect(opened).toEqual([]);
+    // The Back up control sits beside the row, never inside it.
+    const backUp = app.querySelector<HTMLButtonElement>('[data-qsb-back-up="qsb-1"]');
+    expect(backUp?.closest("[data-qsb-open]")).toBe(null);
+    backUp?.click();
+    expect(opened).toEqual(["qsb-1"]);
+    expect(shown).toEqual(["qsb-1"]);
   });
 
   test("only an account without a backup offers Back up, which opens that account", async () => {
@@ -124,6 +154,7 @@ describe("Quantum-safe Bitcoin accounts", () => {
   test("the rows template escapes and states each account once", () => {
     const html = qsbAccountRows([QSB_VIEWS.backupNeeded, QSB_VIEWS.ready]);
     expect(html.match(/data-qsb-account=/g)).toHaveLength(2);
+    expect(html.match(/data-qsb-open=/g)).toHaveLength(2);
     expect(html).toContain('<span class="hint">Backup needed</span>');
     expect(html).toContain('<span class="hint">Ready</span>');
     expect(qsbAccountRows([])).toContain("No quantum-safe Bitcoin accounts yet.");

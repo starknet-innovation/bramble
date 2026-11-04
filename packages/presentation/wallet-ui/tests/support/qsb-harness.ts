@@ -6,8 +6,14 @@
  */
 import { account } from "@bramble/testkit/sidepanel";
 import type { QsbAccountView } from "@bramble/wallet-model/qsb";
+import type { QsbDepositQuote, QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
 import type { WalletStatus } from "../../src/popup/responses/responses";
-import type { QsbBackupWord, QsbWallet } from "../../src/sidepanel/journeys/qsb/qsb-runtime";
+import type { QsbJourneyWallet } from "../../src/sidepanel/journeys/qsb/qsb-journey";
+import type { QsbBackupWord } from "../../src/sidepanel/journeys/qsb/qsb-runtime";
+import type {
+  QsbDepositResult,
+  QsbVaultsReading,
+} from "../../src/sidepanel/journeys/qsb/qsb-vault-runtime";
 
 /** An unlocked one-account wallet on Mainnet. */
 export const qsbStatus: WalletStatus = {
@@ -57,11 +63,36 @@ export const QSB_VIEWS = {
   },
 } as const satisfies Record<string, QsbAccountView>;
 
-/** One scripted answer: resolve with a value, or reject with an error. */
-export type Scripted<T> = { readonly resolve: T } | { readonly reject: unknown };
+/**
+ * One scripted answer: resolve with a value, reject with an error, or settle
+ * with a promise the test controls (see {@link deferred}).
+ */
+export type Scripted<T> =
+  | { readonly resolve: T }
+  | { readonly reject: unknown }
+  | { readonly wait: Promise<T> };
 
 const settle = <T>(answer: Scripted<T>): Promise<T> =>
-  "resolve" in answer ? Promise.resolve(answer.resolve) : Promise.reject(answer.reject);
+  "resolve" in answer
+    ? Promise.resolve(answer.resolve)
+    : "wait" in answer
+      ? answer.wait
+      : Promise.reject(answer.reject);
+
+/** A promise and the two hands that settle it, for an answer a test releases later. */
+export const deferred = <T>(): {
+  readonly promise: Promise<T>;
+  readonly reject: (error: unknown) => void;
+  readonly resolve: (value: T) => void;
+} => {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (error: unknown) => void = () => undefined;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, reject, resolve };
+};
 
 /** Answers for each QSB method; unset ones never settle, like a busy worker. */
 export type QsbScript = {
@@ -70,6 +101,11 @@ export type QsbScript = {
   import?: Scripted<QsbAccountView>;
   list?: Scripted<readonly QsbAccountView[]>;
   reveal?: Scripted<string>;
+  vaults?: Scripted<QsbVaultsReading>;
+  createVault?: Scripted<QsbVaultView>;
+  quote?: Scripted<QsbDepositQuote>;
+  deposit?: Scripted<QsbDepositResult>;
+  resend?: Scripted<QsbDepositResult>;
 };
 
 /** Everything the scripted client was asked, in order. */
@@ -79,6 +115,11 @@ export type QsbCalls = {
   readonly import: string[];
   readonly list: number[];
   readonly reveal: (readonly [string, string])[];
+  readonly vaults: string[];
+  readonly createVault: string[];
+  readonly quote: (readonly [string, number, number])[];
+  readonly deposit: (readonly [string, number, number, number])[];
+  readonly resend: (readonly [string, number])[];
 };
 
 const pending = <T>(): Promise<T> => new Promise<T>(() => undefined);
@@ -89,9 +130,42 @@ const pending = <T>(): Promise<T> => new Promise<T>(() => undefined);
  */
 export const scriptedQsbWallet = (
   script: QsbScript,
-): { readonly calls: QsbCalls; readonly wallet: QsbWallet } => {
-  const calls: QsbCalls = { confirm: [], create: [], import: [], list: [], reveal: [] };
-  const wallet: QsbWallet = {
+): { readonly calls: QsbCalls; readonly wallet: QsbJourneyWallet } => {
+  const calls: QsbCalls = {
+    confirm: [],
+    create: [],
+    createVault: [],
+    deposit: [],
+    import: [],
+    list: [],
+    quote: [],
+    resend: [],
+    reveal: [],
+    vaults: [],
+  };
+  const answer = <T>(scripted: Scripted<T> | undefined): Promise<T> =>
+    scripted ? settle(scripted) : pending();
+  const wallet: QsbJourneyWallet = {
+    createQsbVault: (id) => {
+      calls.createVault.push(id);
+      return answer(script.createVault);
+    },
+    depositQsbVault: (id, v, amountSat, feeSat) => {
+      calls.deposit.push([id, v, amountSat, feeSat]);
+      return answer(script.deposit);
+    },
+    loadQsbVaults: (id) => {
+      calls.vaults.push(id);
+      return answer(script.vaults);
+    },
+    quoteQsbDeposit: (id, v, amountSat) => {
+      calls.quote.push([id, v, amountSat]);
+      return answer(script.quote);
+    },
+    resendQsbDeposit: (id, v) => {
+      calls.resend.push([id, v]);
+      return answer(script.resend);
+    },
     confirmQsbBackup: (id, words) => {
       calls.confirm.push([id, words]);
       return script.confirm ? settle(script.confirm) : pending();

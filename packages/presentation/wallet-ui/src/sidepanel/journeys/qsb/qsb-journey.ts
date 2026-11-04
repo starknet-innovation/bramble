@@ -1,21 +1,32 @@
 /**
- * The Quantum-safe Bitcoin journey: which account the backup screen is for,
- * the one account creation allowed in flight, and the binding of whichever QSB
- * screen is mounted. Created once by the side panel; it holds account ids and
- * a status sentence, never secret material.
+ * The Quantum-safe Bitcoin journey: which account the backup and account
+ * screens are for, which vault the deposit screen is for, the one account
+ * creation allowed in flight, the vault writes allowed in flight (one
+ * creation per account, one deposit or resend per vault), and the binding of
+ * whichever QSB screen is mounted. Created once by the side panel; it holds
+ * account ids, vault indices and a status sentence, never secret material.
  *
  * Every paint replaces the panel's DOM and then calls `bind`, which first
- * wipes the screen bound before it. That is what empties the backup and import
- * fields when the user leaves, when a request takes the panel over, or when
+ * wipes the screen bound before it. That is what empties the backup, import
+ * and deposit fields, stops the account screen's poll, and drops replies still
+ * in flight when the user leaves, when a request takes the panel over, or when
  * the wallet locks.
  */
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
 import type { WalletView } from "../../shared/parts";
+import { platformTimers, type StageTimers } from "../../shared/stage-pacer";
+import { bindQsbAccount } from "./qsb-account-ui";
 import { bindQsbAccounts } from "./qsb-accounts";
 import { bindQsbBackup, type QsbBackupTarget } from "./qsb-backup-ui";
+import { bindQsbDeposit, type QsbDepositTarget } from "./qsb-deposit-ui";
 import { bindQsbImport } from "./qsb-import-ui";
 import { type QsbRoute, qsbWriteFailure } from "./qsb-model";
 import type { QsbWallet } from "./qsb-runtime";
+import type { QsbVaultWallet } from "./qsb-vault-runtime";
+import { createQsbVaultWrites } from "./qsb-vault-writes";
+
+/** The QSB account and vault clients the journey drives. */
+export type QsbJourneyWallet = QsbWallet & QsbVaultWallet;
 
 /** What the journey drives: navigation, the clock behind the check words, the client. */
 export type QsbJourneyDeps = {
@@ -24,7 +35,9 @@ export type QsbJourneyDeps = {
   readonly navigate: (view: WalletView) => void;
   /** Varies the check-word positions between backups; absent asks the same three. */
   readonly now: (() => number) | null;
-  readonly wallet: QsbWallet;
+  /** Schedules the account screen's poll; the platform timers when absent. */
+  readonly timers?: StageTimers;
+  readonly wallet: QsbJourneyWallet;
 };
 
 /** The journey the side panel holds. */
@@ -33,25 +46,42 @@ export type QsbJourney = {
   readonly bind: (app: Element | null) => void;
   /** Creates an account and opens its backup, or opens the import screen. */
   readonly open: (route: QsbRoute) => void;
+  /** Opens one account's address, balance and vaults. */
+  readonly openAccount: (accountId: string) => void;
   /** Opens the backup of an existing account. */
   readonly openBackup: (accountId: string) => void;
+  /** Opens the deposit into vault `v` of an account; the account screen's Deposit does this. */
+  readonly openDeposit: (accountId: string, v: number) => void;
 };
 
 type Session = { readonly refresh?: () => void; readonly wipe: () => void };
 
 /**
  * Creates the journey. A second create while one is in flight only reopens
- * its progress, so a double tap can never make two accounts.
+ * its progress, so a double tap can never make two accounts; vault writes are
+ * guarded the same way by {@link createQsbVaultWrites}.
  */
 export const createQsbJourney = (deps: QsbJourneyDeps): QsbJourney => {
   const { wallet } = deps;
+  const timers = deps.timers ?? platformTimers;
+  const writes = createQsbVaultWrites(wallet);
   let target: QsbBackupTarget = { kind: "none" };
+  let account: string | null = null;
+  let deposit: QsbDepositTarget | null = null;
   let session: Session | null = null;
   let creating = false;
 
   const openBackup = (accountId: string): void => {
     target = { id: accountId, kind: "account" };
     deps.navigate("qsb-backup");
+  };
+  const openAccount = (accountId: string): void => {
+    account = accountId;
+    deps.navigate("qsb-account");
+  };
+  const openDeposit = (accountId: string, v: number): void => {
+    deposit = { accountId, v };
+    deps.navigate("qsb-deposit");
   };
 
   // Settles only the creation the backup screen is still waiting on: if the
@@ -68,7 +98,7 @@ export const createQsbJourney = (deps: QsbJourneyDeps): QsbJourney => {
     if (!creating) {
       creating = true;
       void wallet.createQsbAccount().then(
-        (account) => settle({ id: account.id, kind: "account" }),
+        (created) => settle({ id: created.id, kind: "account" }),
         (error: unknown) =>
           settle({
             kind: "failed",
@@ -79,32 +109,55 @@ export const createQsbJourney = (deps: QsbJourneyDeps): QsbJourney => {
     deps.navigate("qsb-backup");
   };
 
-  const bind = (app: Element | null): void => {
-    session?.wipe();
-    session = null;
-    const list = app?.querySelector<HTMLElement>("#qsb-accounts-list");
-    if (app && list) {
-      bindQsbAccounts({ create, list, openBackup, root: app, wallet });
-      return;
+  const bindScreen = (app: Element): Session | null => {
+    const list = app.querySelector<HTMLElement>("#qsb-accounts-list");
+    if (list) {
+      bindQsbAccounts({ create, list, openAccount, openBackup, root: app, wallet });
+      return null;
     }
-    const backup = app?.querySelector<HTMLElement>("#qsb-backup");
+    const detail = app.querySelector<HTMLElement>("#qsb-account");
+    if (detail) {
+      return bindQsbAccount({
+        accountId: () => account,
+        openDeposit,
+        root: detail,
+        timers,
+        wallet,
+        writes,
+      });
+    }
+    const depositRoot = app.querySelector<HTMLElement>("#qsb-deposit");
+    if (depositRoot) {
+      return bindQsbDeposit({
+        back: deps.back,
+        root: depositRoot,
+        target: () => deposit,
+        wallet,
+        writes,
+      });
+    }
+    const backup = app.querySelector<HTMLElement>("#qsb-backup");
     if (backup) {
-      session = bindQsbBackup({
+      return bindQsbBackup({
         done: deps.back,
         now: deps.now,
         root: backup,
         target: () => target,
         wallet,
       });
-      return;
     }
-    const form = app?.querySelector<HTMLFormElement>("#qsb-import-form");
-    if (form) session = bindQsbImport({ done: deps.back, form, wallet });
+    const form = app.querySelector<HTMLFormElement>("#qsb-import-form");
+    return form ? bindQsbImport({ done: deps.back, form, wallet }) : null;
   };
 
   return {
-    bind,
+    bind: (app) => {
+      session?.wipe();
+      session = app ? bindScreen(app) : null;
+    },
     open: (route) => (route === "create" ? create() : deps.navigate("qsb-import")),
+    openAccount,
     openBackup,
+    openDeposit,
   };
 };

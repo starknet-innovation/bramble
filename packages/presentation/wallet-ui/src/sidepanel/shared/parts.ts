@@ -69,8 +69,10 @@ export const WALLET_VIEWS = [
   "nft-send",
   "reveal",
   "qsb-accounts",
+  "qsb-account",
   "qsb-backup",
   "qsb-import",
+  "qsb-deposit",
 ] as const;
 
 /**
@@ -136,8 +138,10 @@ const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   receive: "Receive",
   requests: "Wallet requests",
   "request-settings": "Request display",
+  "qsb-account": "Quantum-safe Bitcoin account",
   "qsb-accounts": "Quantum-safe Bitcoin",
   "qsb-backup": "Bitcoin vault phrase backup",
+  "qsb-deposit": "Bitcoin vault deposit",
   "qsb-import": "Bitcoin vault phrase import",
   reveal: "Recovery secrets",
   send: "Send",
@@ -168,9 +172,7 @@ export const DOCK_VIEWS: readonly WalletView[] = ["home", "activity", "settings"
 export const isWalletView = (value: unknown): value is WalletView =>
   typeof value === "string" && WALLET_VIEWS.some((view) => view === value);
 
-/**
- * Truncates a Starknet address for display.
- */
+/** Truncates a Starknet address for display. */
 export const accountLabel = (address: string): string => shortAddress(address);
 
 /**
@@ -358,9 +360,7 @@ export const hardwareBadge = (account: AccountRef): string =>
     ? pill("Hardware", { icon: "shield", tone: "hardware" })
     : "";
 
-/**
- * Renders an icon button that copies a value to the clipboard.
- */
+/** Renders an icon button that copies a value to the clipboard. */
 export const copyButton = (value: string, label: string): string =>
   iconButton({
     attributes: { "data-copy": value },

@@ -99,5 +99,11 @@ export const JOURNEY_STYLES = `
   .nft-send-art .icon { height: 26px; width: 26px; }
   #nft-send-form[data-stage="reviewing"] #nft-review-panel,
   #nft-send-form[data-stage="submitting"] #nft-review-panel { opacity: 0.62; }
+  /* A Quantum-safe Bitcoin account's address, balance and vaults are separate
+     sections: they sit apart as a screen's sections do. */
+  #qsb-account > [data-qsb-account-step="detail"] { gap: ${SPACE.lg}; }
+  /* Quantum-safe Bitcoin status lines take no row until they say something. */
+  #qsb-vault-result:empty, #qsb-amount-result:empty, #qsb-review-result:empty { display: none; }
+  #qsb-amount-result.is-invalid, #qsb-review-result.is-invalid { color: var(--bramble-danger); }
 
 `;
