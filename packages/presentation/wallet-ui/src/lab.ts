@@ -36,6 +36,8 @@ export { bindShadowAccounts } from "./sidepanel/journeys/privacy/shadow-accounts
 export * from "./sidepanel/journeys/send/send-model";
 export * from "./sidepanel/journeys/send/send-views";
 export * from "./sidepanel/journeys/send/transfer-ui";
+export type { StakingState } from "./sidepanel/journeys/staking/staking-client";
+export { bindStaking } from "./sidepanel/journeys/staking/staking-ui";
 export * from "./sidepanel/journeys/swap/swap-client";
 export * from "./sidepanel/journeys/swap/swap-ui";
 export * from "./sidepanel/runtime/runtime";

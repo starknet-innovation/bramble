@@ -8,10 +8,9 @@ import type { PinnedContractRead } from "@bramble/starknet/pinned-block";
 import type { StakingNetworkTable } from "@bramble/transactions/staking-networks";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 
-export const STAKING_CONTRACT = "0x5a1";
+const STAKING_CONTRACT = "0x5a1";
 export const STAKER = "0x5a2";
 export const STAKING_POOL = "0x5a3";
-export const OTHER_STAKER = "0x5a4";
 export const VALIDATOR_ID = "test-validator";
 
 /** Mutable chain state; tests change it between requests. */

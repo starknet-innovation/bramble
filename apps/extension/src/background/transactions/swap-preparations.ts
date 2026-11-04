@@ -40,7 +40,7 @@ export type SwapPreparation = {
 /**
  * Public review subset returned to the extension side panel.
  */
-export type SwapPreparationReview = {
+type SwapPreparationReview = {
   readonly flags: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly minBuyAmount: string;

@@ -35,7 +35,7 @@ export type StakingRowView = {
 /**
  * The whole staking screen for the active account and network.
  */
-export type StakingOverview = {
+type StakingOverview = {
   /** Seconds an unstake waits, read from the staking contract. */
   readonly exitWindowSeconds: number;
   readonly rows: readonly StakingRowView[];

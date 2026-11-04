@@ -376,6 +376,11 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       },
     );
   }
+  if (activeView === "staking" && refreshReason !== "ambient") {
+    fill(wallet.loadStaking(), (value) => {
+      cache.staking = value;
+    });
+  }
   if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;

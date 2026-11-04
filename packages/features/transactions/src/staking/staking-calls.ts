@@ -94,45 +94,61 @@ const poolCall = (pool: string, entrypoint: string, calldata: readonly string[])
   entrypoint,
 });
 
+type Built = readonly Call[] | { readonly refusal: string };
+
+const PENDING_EXIT = { refusal: "Withdraw or cancel your unstake first." } as const;
+
+const buildStake = (input: StakingBuildInput): Built => {
+  if (!input.pool.accepting) return { refusal: "This validator is leaving staking." };
+  if (!validAmount(input.amount)) return { refusal: "Enter an amount to stake." };
+  // Adding while an exit is pending is allowed by the pool (checked by a
+  // Mainnet simulation, 2026-11-04); the pending exit is unchanged.
+  return stakeCalls(input, input.amount);
+};
+
+const buildClaim = (input: StakingBuildInput): Built =>
+  input.member === "none" || input.member.unclaimedRewards === 0n
+    ? { refusal: "No rewards to claim." }
+    : [poolCall(input.pool.pool, "claim_rewards", [input.account])];
+
+const buildUnstake = (input: StakingBuildInput, state: StakingPositionState): Built => {
+  if (state === "exit-pending" || state === "withdrawable") return PENDING_EXIT;
+  if (state !== "staked" || input.member === "none")
+    return { refusal: "Nothing staked to unstake." };
+  if (!validAmount(input.amount)) return { refusal: "Enter an amount to unstake." };
+  if (input.amount > input.member.amount) return { refusal: "That's more than you have staked." };
+  return [poolCall(input.pool.pool, "exit_delegation_pool_intent", [u128(input.amount)])];
+};
+
+const buildCancel = (input: StakingBuildInput, state: StakingPositionState): Built =>
+  state === "exit-pending" || state === "withdrawable"
+    ? [poolCall(input.pool.pool, "exit_delegation_pool_intent", ["0x0"])]
+    : { refusal: "No unstake to cancel." };
+
+const buildWithdraw = (input: StakingBuildInput, state: StakingPositionState): Built => {
+  if (state === "withdrawable") {
+    return [poolCall(input.pool.pool, "exit_delegation_pool_action", [input.account])];
+  }
+  return { refusal: state === "exit-pending" ? "Not withdrawable yet." : "Nothing to withdraw." };
+};
+
 /**
  * Builds the calls for one action, or returns the reason it is not allowed in
  * the account's current state. Never throws for a state refusal.
  */
-export const buildStakingCalls = (
-  input: StakingBuildInput,
-): readonly Call[] | { readonly refusal: string } => {
+export const buildStakingCalls = (input: StakingBuildInput): Built => {
   const state = stakingPositionState(input.member, input.nowSeconds);
-  const member = input.member === "none" ? null : input.member;
   switch (input.action) {
     case "stake":
-      if (!input.pool.accepting) return { refusal: "This validator is leaving staking." };
-      if (!validAmount(input.amount)) return { refusal: "Enter an amount to stake." };
-      // Adding while an exit is pending is allowed by the pool (checked by a
-      // Mainnet simulation, 2026-11-04); the pending exit is unchanged.
-      return stakeCalls(input, input.amount);
+      return buildStake(input);
     case "claim":
-      if (!member || member.unclaimedRewards === 0n) return { refusal: "No rewards to claim." };
-      return [poolCall(input.pool.pool, "claim_rewards", [input.account])];
+      return buildClaim(input);
     case "unstake":
-      if (state === "exit-pending" || state === "withdrawable") {
-        return { refusal: "Withdraw or cancel your unstake first." };
-      }
-      if (state !== "staked" || !member) return { refusal: "Nothing staked to unstake." };
-      if (!validAmount(input.amount)) return { refusal: "Enter an amount to unstake." };
-      if (input.amount > member.amount) return { refusal: "That's more than you have staked." };
-      return [poolCall(input.pool.pool, "exit_delegation_pool_intent", [u128(input.amount)])];
+      return buildUnstake(input, state);
     case "cancel-unstake":
-      if (state !== "exit-pending" && state !== "withdrawable") {
-        return { refusal: "No unstake to cancel." };
-      }
-      return [poolCall(input.pool.pool, "exit_delegation_pool_intent", ["0x0"])];
+      return buildCancel(input, state);
     case "withdraw":
-      if (state !== "withdrawable") {
-        return {
-          refusal: state === "exit-pending" ? "Not withdrawable yet." : "Nothing to withdraw.",
-        };
-      }
-      return [poolCall(input.pool.pool, "exit_delegation_pool_action", [input.account])];
+      return buildWithdraw(input, state);
   }
 };
 

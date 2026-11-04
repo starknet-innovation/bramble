@@ -34,10 +34,10 @@ import { captureSessionAuthorization, createUnlockSession } from "../runtime/ses
 import { handleUpdateOps } from "../runtime/update-ready";
 import { handleOriginOps } from "../settings/origins-ops";
 import { handlePreferenceOps } from "../settings/preference-ops";
+import { handleStakingOps } from "../staking/staking-ops";
 import { supportDiagnosticsResponse } from "../support/diagnostics";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
-import { handleStakingOps } from "../staking/staking-ops";
 import { handleSwapOps } from "../transactions/swap-ops";
 import { handleAccountCreationOps, type RouterHandler } from "./account-creation-handlers";
 import { type MessageHandlerOptions, type RouterContext, routerContext } from "./message-context";

@@ -5,7 +5,6 @@
  * stays a dispatch table.
  */
 
-import type { StakingNetworkTable } from "@bramble/transactions/staking-networks";
 import {
   memoryNostrCoordinationStore,
   type NostrCoordinationStore,
@@ -23,6 +22,7 @@ import {
   memoryRelaySignatureLog,
   type RelaySignatureLog,
 } from "@bramble/transactions/relay-signatures";
+import type { StakingNetworkTable } from "@bramble/transactions/staking-networks";
 import {
   guardDeployments,
   memoryPendingDeployments,

@@ -80,6 +80,7 @@ const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
   "wallet.discoverNfts": "wallet.discoverNfts",
   "wallet.loadActivity": "wallet.activity",
   "wallet.loadAllowances": "wallet.allowances",
+  "wallet.loadStaking": "wallet.stakingOverview",
   "wallet.loadBalances": "wallet.getBalances",
   "wallet.loadClassHashVerification": "wallet.verifyClassHash",
   "wallet.loadPrices": "wallet.prices",

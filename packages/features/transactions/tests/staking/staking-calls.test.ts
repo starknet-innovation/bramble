@@ -1,3 +1,7 @@
+/**
+ * Staking call builders: exact-amount approvals, and each action allowed only
+ * in the position state the pool accepts it in.
+ */
 import { describe, expect, test } from "bun:test";
 import {
   buildStakingCalls,

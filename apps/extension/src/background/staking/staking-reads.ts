@@ -90,7 +90,7 @@ export type StakingChainFacts = {
 };
 
 /**
- * Reads the active-token list and the exit window. Null when either answer is
+ * Reads the active-token list and the exit wait (seconds). Null when either answer is
  * malformed, so the caller shows staking as unavailable rather than guessing.
  */
 export const readStakingChainFacts = async (

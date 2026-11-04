@@ -67,6 +67,7 @@ import { privacyFlow } from "../../journeys/privacy/privacy-views";
 import type { SendIntent } from "../../journeys/send/send-model";
 import { revealFlow } from "../../journeys/settings/reveal-ui";
 import { settingsScreen } from "../../journeys/settings/settings-views";
+import { STAKING_LOADING, type StakingState } from "../../journeys/staking/staking-client";
 import type { BalanceState } from "../../runtime/runtime";
 import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
@@ -312,6 +313,7 @@ export const dashboard = (
   signability: SignabilityVerdict | null = null,
   relays: readonly RelaySignature[] = [],
   privateTotalWaitOver = false,
+  staking: StakingState = STAKING_LOADING,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -363,6 +365,7 @@ export const dashboard = (
   const simpleFlow = simpleFlowScreen(activeView, {
     account,
     allowances,
+    staking,
     balances: trackedBalances,
     changes,
     classHashVerification,

@@ -6,6 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import { button, segmentedControl } from "@bramble/ui-kit/controls";
 import { selectField, textField } from "@bramble/ui-kit/fields";
 import { menuLink } from "@bramble/ui-kit/navigation";
@@ -57,6 +58,7 @@ export const settingsScreen = (
       <div class="menu-list" role="group" aria-label="Access and permissions">
         ${walletMenuRow("connected-sites", "Connected sites", "link")}
         ${walletMenuRow("allowances", "Token allowances", "coins")}
+        ${stakingNetwork(status.networkId) ? walletMenuRow("staking", "Staking", "lockKeyhole") : ""}
         ${walletMenuRow("shadow-accounts", SHADOW_ACCOUNTS_TITLE, "shield")}
         ${walletMenuRow(
           "request-settings",

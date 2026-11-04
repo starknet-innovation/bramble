@@ -10,6 +10,7 @@ import { bindTokenCatalog } from "../../journeys/portfolio/token-catalog-ui";
 import { bindTokens } from "../../journeys/portfolio/tokens-ui";
 import { bindShadowAccounts } from "../../journeys/privacy/shadow-accounts-ui";
 import { bindConnectedSites } from "../../journeys/settings/origins-ui";
+import { bindStaking } from "../../journeys/staking/staking-ui";
 import type { SwapClient } from "../../journeys/swap/swap-client";
 import { bindSwap } from "../../journeys/swap/swap-ui";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -93,5 +94,6 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
     wallet,
   });
   bindAllowances({ app, render, wallet });
+  bindStaking({ app, render, wallet });
   bindShadowAccounts({ app, wallet });
 };

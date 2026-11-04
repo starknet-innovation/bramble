@@ -10,7 +10,18 @@ import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
  */
 export const JOURNEY_STYLES = `
   #deploy-review { display: grid; gap: ${SPACE.sm}; width: 100%; }
-  .allowance-review {
+  /* Staking rows reuse the allowance group; actions and amount fields sit
+     under the position lines, full width, so nothing crowds the row. */
+  .staking-actions { display: flex; flex-wrap: wrap; gap: ${SPACE.sm}; margin-top: ${SPACE.xs}; }
+  .staking-form {
+    align-items: center;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin-top: ${SPACE.xs};
+  }
+  .staking-form input { min-width: 0; }
+  .allowance-review, .staking-review {
     color: var(--bramble-text);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};

@@ -1,3 +1,7 @@
+/**
+ * Staking decoders pinned to live Mainnet answers, and the pool verification
+ * rule that every staking call depends on.
+ */
 import { describe, expect, test } from "bun:test";
 import {
   decodeActiveTokens,

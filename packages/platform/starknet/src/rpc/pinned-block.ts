@@ -15,7 +15,7 @@
 import { WalletError } from "@bramble/core/errors";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
-import { isBlockNotFoundError, withRpcFallback } from "./provider";
+import { createRpcProvider, isBlockNotFoundError, withRpcFallback } from "./provider";
 
 /**
  * One accepted block, used as the pin for a group of reads.
@@ -28,10 +28,9 @@ export type PinnedReadBlock = {
 // Reads the latest accepted block, rejecting a malformed answer. Private: the
 // pin is only ever taken through `withPinnedBlock`, so no caller can pin a block
 // once and then read at it without the re-pinning that skew requires.
-const latestAcceptedBlock = async (
-  provider: RpcProvider,
-  invalidMessage: string,
-): Promise<PinnedReadBlock> => {
+const INVALID_ACCEPTED_BLOCK = "Invalid accepted block response";
+
+const latestAcceptedBlock = async (provider: RpcProvider): Promise<PinnedReadBlock> => {
   const latest = await provider.getBlockLatestAccepted();
   const blockHash = canonicalFelt(latest.block_hash);
   if (
@@ -40,7 +39,7 @@ const latestAcceptedBlock = async (
     !Number.isSafeInteger(latest.block_number) ||
     latest.block_number < 0
   ) {
-    throw new WalletError(invalidMessage);
+    throw new WalletError(INVALID_ACCEPTED_BLOCK);
   }
   return { blockHash, blockNumber: latest.block_number };
 };
@@ -50,17 +49,15 @@ const PINNED_READ_ATTEMPTS = 3;
 /**
  * Runs a read pinned to one accepted block, re-pinning when the answering node
  * does not know that block. Bounded; a persistent miss fails closed with the
- * node's own error rather than a wallet-invented one. A malformed head answer
- * throws `invalidMessage`.
+ * node's own error rather than a wallet-invented one.
  */
 export const withPinnedBlock = async <T>(
   provider: RpcProvider,
   read: (block: PinnedReadBlock) => Promise<T>,
-  invalidMessage = "Invalid accepted block response",
 ): Promise<T> => {
   let lastError: unknown;
   for (let attempt = 0; attempt < PINNED_READ_ATTEMPTS; attempt += 1) {
-    const block = await latestAcceptedBlock(provider, invalidMessage);
+    const block = await latestAcceptedBlock(provider);
     try {
       return await read(block);
     } catch (error) {
@@ -86,20 +83,24 @@ export type PinnedContractRead = (
  * Runs a group of contract reads at one accepted block, with endpoint failover
  * (a transport fault moves to the next endpoint and re-pins there). The answers
  * are raw felts: callers decode and validate them, since every one is an
- * untrusted RPC response.
+ * untrusted RPC response. `makeProvider` is injectable for tests.
  */
 export const readAtPinnedBlock = <T>(
   rpcUrls: readonly string[],
   run: (read: PinnedContractRead) => Promise<T>,
+  makeProvider: (nodeUrl: string) => RpcProvider = createRpcProvider,
 ): Promise<T> =>
-  withRpcFallback(rpcUrls, (provider) =>
-    withPinnedBlock(provider, (block) =>
-      run(async (contractAddress, entrypoint, calldata) => {
-        const answer = await provider.callContract(
-          { calldata: [...calldata], contractAddress, entrypoint },
-          block.blockHash,
-        );
-        return [...answer];
-      }),
-    ),
+  withRpcFallback(
+    rpcUrls,
+    (provider) =>
+      withPinnedBlock(provider, (block) =>
+        run(async (contractAddress, entrypoint, calldata) => {
+          const answer = await provider.callContract(
+            { calldata: [...calldata], contractAddress, entrypoint },
+            block.blockHash,
+          );
+          return [...answer];
+        }),
+      ),
+    makeProvider,
   );
