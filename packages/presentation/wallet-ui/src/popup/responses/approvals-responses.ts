@@ -87,6 +87,24 @@ const isWatchAssetNft = (value: unknown): value is WatchAssetNft =>
   typeof value["tokenId"] === "string" &&
   /^(?:0|[1-9]\d{0,77})$/u.test(value["tokenId"]);
 
+// A watch-asset card names exactly one token or one collectible; only a token
+// card can be an already-tracked notice. Every other kind carries neither.
+const hasValidWatchTarget = (value: Record<string, unknown>): boolean => {
+  if (value["kind"] !== "watch-asset") {
+    return (
+      value["token"] === undefined &&
+      value["nft"] === undefined &&
+      value["alreadyTracked"] === undefined
+    );
+  }
+  return value["nft"] === undefined
+    ? isWatchAssetToken(value["token"]) &&
+        (value["alreadyTracked"] === undefined || value["alreadyTracked"] === true)
+    : isWatchAssetNft(value["nft"]) &&
+        value["token"] === undefined &&
+        value["alreadyTracked"] === undefined;
+};
+
 const isApprovalReviewAsset = (value: unknown): boolean =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["address", "symbol"]) &&
@@ -266,19 +284,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   ) {
     return false;
   }
-  // A watch-asset card names exactly one token or one collectible; only a
-  // token card can be an already-tracked notice.
-  const tokenValid =
-    value["kind"] === "watch-asset"
-      ? value["nft"] === undefined
-        ? isWatchAssetToken(value["token"]) &&
-          (value["alreadyTracked"] === undefined || value["alreadyTracked"] === true)
-        : isWatchAssetNft(value["nft"]) &&
-          value["token"] === undefined &&
-          value["alreadyTracked"] === undefined
-      : value["token"] === undefined &&
-        value["nft"] === undefined &&
-        value["alreadyTracked"] === undefined;
+  const tokenValid = hasValidWatchTarget(value);
   // The fee review travels only on invoke prompts and must be internally
   // consistent, mirroring `resolveReviewFee`: an undeployed account has no
   // estimate and no failure; a failed estimate carries no amount. Inconsistent
