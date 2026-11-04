@@ -99,6 +99,9 @@ export const CreateReview = ({
             </div>
           ))}
         </dl>
+        <p className="create-review__note">
+          Upgradeable contract: your account owns it and can change its code later.
+        </p>
       </>
     )}
     <a className="studio-source-link" href={TOKEN_PRESET_SOURCE_URL} rel="noreferrer" target="_blank">

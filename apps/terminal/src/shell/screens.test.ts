@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOKEN_CREATE_ENABLED } from "../protocols/constants";
+import { TOKEN_CREATE_NETWORKS } from "../protocols/constants";
 import { SCREEN_TABS, screenFromHash, screenTabs } from "./screens";
 
 describe("screenFromHash", () => {
@@ -26,8 +26,8 @@ describe("Create gate", () => {
     expect(screenFromHash("#create", tabs)).toBe("create");
   });
 
-  it("ships with the gate off", () => {
-    expect(SCREEN_TABS.map((tab) => tab.id)).not.toContain("create");
-    expect(TOKEN_CREATE_ENABLED).toBe(false);
+  it("ships on Sepolia only, so the tab is shown", () => {
+    expect(TOKEN_CREATE_NETWORKS).toEqual(["SN_SEPOLIA"]);
+    expect(SCREEN_TABS.map((tab) => tab.id)).toContain("create");
   });
 });

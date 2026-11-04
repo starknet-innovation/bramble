@@ -132,18 +132,31 @@ describe("Create", () => {
     expect((screen.getByRole("button", { name: "Review create" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  test("Mainnet adds the real-fees warning to the request", async () => {
+  test("Mainnet is off: review is blocked and nothing reaches the wallet", async () => {
     wallet.value.chainId = "0x534e5f4d41494e";
     renderCreate();
-    fireEvent.click(screen.getByRole("tab", { name: "ERC-1155" }));
+    fill("Name", "Bramble Test");
+    fill("Symbol", "BRT");
+    fill("Supply", "1");
+    expect(screen.getByText("Unsupported network")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Review create" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(wallet.requestTransaction).not.toHaveBeenCalled();
+  });
+
+  test("the review says every standard's contract is upgradeable by its owner", async () => {
+    renderCreate();
+    const note = "Upgradeable contract: your account owns it and can change its code later.";
+    fill("Name", "Bramble Test");
+    fill("Symbol", "BRT");
+    fill("Supply", "1");
+    expect(await screen.findByText(note)).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "ERC-721" }));
     fill("Base URI", "ipfs://bafy/");
-    fill("Token ids", "1 2");
-    fill("Amounts", "5 6");
-    fireEvent.click(await screen.findByRole("button", { name: "Review create" }));
-    await waitFor(() => expect(wallet.requestTransaction).toHaveBeenCalled());
-    const request = wallet.requestTransaction.mock.calls[0]?.[0];
-    expect(request.warning).toBe("This is a Mainnet transaction with real network fees.");
-    expect(request.title).toBe("Create ERC-1155 collection");
+    fill("Token ids", "1");
+    expect(await screen.findByText(note)).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "ERC-1155" }));
+    fill("Amounts", "1");
+    expect(await screen.findByText(note)).toBeTruthy();
   });
 
   test("a rejected wallet review is an error and nothing is confirmed", async () => {

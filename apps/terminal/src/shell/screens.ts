@@ -1,4 +1,4 @@
-import { TOKEN_CREATE_ENABLED } from "../protocols/constants";
+import { TOKEN_CREATE_NETWORKS } from "../protocols/constants";
 /**
  * The four top-level screens and their nav metadata. Shared by the shell and
  * the App router so tab ids stay in sync.
@@ -42,7 +42,7 @@ export const screenTabs = (gates: { readonly create: boolean }): readonly Screen
 /**
  * Ordered nav tabs, matching the mockup's top-nav order.
  */
-export const SCREEN_TABS: readonly ScreenTab[] = screenTabs({ create: TOKEN_CREATE_ENABLED });
+export const SCREEN_TABS: readonly ScreenTab[] = screenTabs({ create: TOKEN_CREATE_NETWORKS.length > 0 });
 
 /**
  * Resolves a same-page Terminal hash to a known screen, falling back to the

@@ -1,6 +1,6 @@
 import { Hammer, ShieldCheck } from "lucide-react";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
-import { confirmTokenDeployment, createNetworkFor } from "../../create/create-runtime";
+import { confirmTokenDeployment, createNetworkFor, createNetworkNames } from "../../create/create-runtime";
 import { buildTokenDeployment, type TokenDeployment } from "../../create/token-create";
 import { TOKEN_PRESETS, type TokenStandard } from "../../create/token-presets";
 import { userErrorMessage } from "../../protocols/support/user-error";
@@ -101,7 +101,7 @@ export default function CreateToken({ makeSalt = randomSalt }: CreateTokenProps)
     let transactionHash: string | undefined;
     try {
       if (!isConnected || address === null) throw new Error("Connect a wallet first.");
-      if (network === null) throw new Error("Switch your wallet to Starknet Mainnet or Sepolia.");
+      if (network === null) throw new Error(`Switch your wallet to ${createNetworkNames()}.`);
       const deployment = buildTokenDeployment(draftFor(standard, fields, recipient), address, salt);
       const preset = TOKEN_PRESETS[standard];
       setOperation({ chainId, message: "Review in your wallet…", tone: "busy" });
