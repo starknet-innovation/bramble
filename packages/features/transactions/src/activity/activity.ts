@@ -40,6 +40,7 @@ export {
   isUnresolvedActivityStatus,
   MAX_ACTIVITY_TIMESTAMP_MS,
   monotonicActivityStatus,
+  type SubmittedPrice,
 } from "./activity-entry";
 
 /**

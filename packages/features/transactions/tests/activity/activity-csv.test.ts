@@ -33,7 +33,7 @@ describe("activityToCsv", () => {
     const csv = activityToCsv(await log.list());
     const [header, row] = csv.split("\n");
     expect(header).toBe(
-      "datetimeUtc,networkId,accountAddress,kind,status,amount,token,counterparty,transactionHash,explorerUrl,summary",
+      "datetimeUtc,networkId,accountAddress,kind,status,amount,token,counterparty,transactionHash,explorerUrl,valueAtSubmission,valueCurrency,summary",
     );
     expect(row).toContain('"Calls ""swap"", then transfer"');
     expect(row).toContain('"0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde"');
@@ -64,7 +64,29 @@ describe("activityToCsv", () => {
     expect(cells?.[7]).toBe('"0x777abbcc"');
     expect(cells?.[8]).toBe('"0xdef"');
     expect(cells?.[9]).toBe('"https://starkscan.co/tx/0xdef"');
-    expect(cells?.[10]).toBe('"Sent 1.5 ETH to 0x777abbcc"');
+    expect(cells?.[10]).toBe('""');
+    expect(cells?.[11]).toBe('""');
+    expect(cells?.[12]).toBe('"Sent 1.5 ETH to 0x777abbcc"');
+  });
+
+  test("exports the value at the price captured on submission, and only that", async () => {
+    const log = createActivityLog({ now: () => 1_700_000_000_000, store: createMemoryStore() });
+    await log.record({
+      accountId: ACCOUNT_ID,
+      amount: "1.5",
+      direction: "out",
+      hash: "0xdef",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      submittedPrice: { currency: "eur", pricedAt: 1_699_999_990_000, unitPrice: 2000.004 },
+      summary: "Send 1.5 ETH",
+      token: "ETH",
+    });
+
+    const [, row] = activityToCsv(await log.list()).split("\n");
+    const cells = row?.split(",");
+    expect(cells?.[10]).toBe('"3000.01"');
+    expect(cells?.[11]).toBe('"EUR"');
   });
 
   test("rebuilds a transfer summary with the full counterparty and one verb", () => {
@@ -151,6 +173,8 @@ describe("activityToCsv", () => {
     expect(cells?.[6]).toBe('""');
     expect(cells?.[7]).toBe('""');
     expect(cells?.[9]).toBe('"https://starkscan.co/tx/0x1"');
-    expect(cells?.[10]).toBe('"Deploy account contract"');
+    expect(cells?.[10]).toBe('""');
+    expect(cells?.[11]).toBe('""');
+    expect(cells?.[12]).toBe('"Deploy account contract"');
   });
 });

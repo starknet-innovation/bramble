@@ -1,7 +1,8 @@
 /**
  * An expanded Activity row shows what the record holds about the
  * transaction (mc-wallet issue 480): the full counterparty, the fee the
- * account paid, the network, and the token contract. Facts the record lacks
+ * account paid, the network, the token contract, and a send's value at the
+ * price captured when it was submitted. Facts the record lacks
  * are left out rather than estimated.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -72,6 +73,27 @@ describe("the expanded Activity row", () => {
 
     // No fee estimate and no fiat value at today's price stand in for them.
     expect(Object.keys(shown)).toEqual(["Transaction", "Recipient", "Network", "Submitted"]);
+  });
+
+  test("shows the value at the price captured on submission", () => {
+    const html = transactionRow({
+      ...sent,
+      amount: "2.5",
+      submittedPrice: { currency: "eur", pricedAt: 1752501890000, unitPrice: 0.12 },
+    });
+
+    expect(facts(html)["Value at submission"]).toBe("€0.30");
+  });
+
+  test("shows no value when no price was captured or the amount is not a number", () => {
+    const priced = { currency: "usd" as const, pricedAt: 1752501890000, unitPrice: 0.12 };
+
+    expect(facts(transactionRow(sent))["Value at submission"]).toBeUndefined();
+    expect(
+      facts(transactionRow({ ...sent, amount: "all", submittedPrice: priced }))[
+        "Value at submission"
+      ],
+    ).toBeUndefined();
   });
 });
 
