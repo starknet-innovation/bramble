@@ -15,7 +15,7 @@ const SEPOLIA_SECRETS = {
   "S-SCR": "BRAMBLE_DATASET_SEED_S_SCR",
   // Braavos ladder, script-deployed: TA-27…TA-29.
   "S-BRV": "BRAMBLE_DATASET_SEED_S_BRV",
-  // Made in the Ready app (step 3); TA-12/13 run only once it is present.
+  // Made in the Ready app (step 3): TA-09…TA-13, run only once it is present.
   "S-RDY": "BRAMBLE_DATASET_SEED_S_RDY",
   // 15/18/21-word phrases on Bramble's ladder: TA-42…TA-44.
   "S-W15": "BRAMBLE_DATASET_SEED_S_W15",
