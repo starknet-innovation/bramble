@@ -280,6 +280,7 @@ export const settingsScenario: WalletScenario = {
   title: "Settings and security",
   views: [
     "settings",
+    "staking",
     "appearance",
     "request-settings",
     "privacy-unlock",
