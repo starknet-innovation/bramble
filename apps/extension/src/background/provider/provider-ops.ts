@@ -5,7 +5,11 @@ import type { PriceService } from "@bramble/portfolio/prices";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/rpc";
-import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
+import {
+  type ActivityLog,
+  activityDappOrigin,
+  activityOrigin,
+} from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
 import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
@@ -393,6 +397,7 @@ export const executeInvokeApproval = async (
     userFee?: { readonly amount: string; readonly token: string; readonly tokenAddress: string },
   ) => ({
     accountId: account.id,
+    ...activityDappOrigin(approval.origin),
     hash,
     kind: "invoke" as const,
     networkId: account.networkId,

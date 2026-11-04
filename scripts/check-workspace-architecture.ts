@@ -66,7 +66,8 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/store",
     "@bramble/wallet-model",
   ],
-  "@bramble/permissions": ["@bramble/core", "@bramble/store"],
+  // The app directory validates listed contracts with the shared felt helpers (issue 749).
+  "@bramble/permissions": ["@bramble/core", "@bramble/store", "@bramble/wallet-model"],
   "@bramble/privacy": [
     "@bramble/core",
     "@bramble/starknet",
@@ -122,6 +123,8 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/core",
     "@bramble/ledger-protocol",
     "@bramble/multisig",
+    // The app directory screen and the Activity listed mark (issue 749).
+    "@bramble/permissions",
     "@bramble/portfolio",
     "@bramble/privacy",
     "@bramble/settings",

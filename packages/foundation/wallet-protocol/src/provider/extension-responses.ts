@@ -149,6 +149,12 @@ export type PendingApproval = {
   readonly insights?: readonly string[];
   readonly kind: ApprovalKind;
   /**
+   * The app directory name of the requesting origin (mc-wallet issue 749),
+   * matched exactly by the background from the validated sender. Absent for
+   * an unlisted, delisted or blocked origin.
+   */
+  readonly listing?: string;
+  /**
    * `strk20-unavailable` only: why the private request is held on a notice.
    * Absent means the network has no private services for it. Wallet-chosen,
    * never site text; the panel maps it to a fixed line.

@@ -77,6 +77,15 @@ export type ActivityEntry = {
    */
   readonly direction?: "in" | "out";
   /**
+   * The site that asked for this transaction (mc-wallet issue 749), taken by
+   * the background from the validated sender of a dapp request it executed.
+   * Never parsed out of `summary`, which embeds the origin as truncated text,
+   * and never set on a wallet-built, discovered or legacy row. It stores the
+   * origin, not a verdict: whether the site is a listed app is decided when the
+   * row is shown, so a later delisting also clears past rows.
+   */
+  readonly dappOrigin?: string;
+  /**
    * Set to `"pending"` when reconciliation observes a failure the user has
    * already moved past, and flipped to `"delivered"` once the side panel has
    * shown it. Absent means there is nothing to tell the user.
@@ -213,6 +222,31 @@ export const activityOrigin = (origin: string): string =>
     ? origin
     : `…${origin.slice(-(MAX_ACTIVITY_ORIGIN_LENGTH - 1))}`;
 
+// The longest site origin a row keeps. Longer is not a browser origin anyone
+// visits, and the row stays recordable without it (see activityDappOrigin).
+const MAX_DAPP_ORIGIN_LENGTH = 256;
+
+const isDappOrigin = (value: unknown): value is string => {
+  if (typeof value !== "string" || value.length === 0 || value.length > MAX_DAPP_ORIGIN_LENGTH) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return (url.protocol === "https:" || url.protocol === "http:") && url.origin === value;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The `dappOrigin` field for a row a dapp request produced, or nothing when
+ * the sender's origin is not a plain http(s) origin the row can hold. Writers
+ * spread this rather than setting the field, so an odd origin costs the row its
+ * site, never the row itself (the log drops a row that fails validation).
+ */
+export const activityDappOrigin = (origin: string): Pick<ActivityEntry, "dappOrigin"> =>
+  isDappOrigin(origin) ? { dappOrigin: origin } : {};
+
 const isActivityStatus = (value: unknown): value is ActivityStatus =>
   value === "accepted" ||
   value === "pending" ||
@@ -272,6 +306,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "accountId",
     "amount",
     "counterparty",
+    "dappOrigin",
     "direction",
     "failureNotice",
     "feePaid",
@@ -305,6 +340,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   value["summary"].length <= MAX_ACTIVITY_SUMMARY_LENGTH &&
   isOptionalDetail(value["amount"]) &&
   isOptionalDetail(value["counterparty"]) &&
+  (value["dappOrigin"] === undefined || isDappOrigin(value["dappOrigin"])) &&
   (value["direction"] === undefined ||
     value["direction"] === "in" ||
     value["direction"] === "out") &&
