@@ -197,6 +197,8 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "qsb backup words do not match",
     "Those words don't match your phrase. Check them and try again.",
   ],
+  // QSB coordinator sign-in: a refused challenge never says why.
+  ["qsb sign-in refused", "Couldn't sign in to the quantum-safe Bitcoin service."],
   [
     "argent multisig intent nonce is no longer current",
     "This transaction is out of date. Create a new one.",
