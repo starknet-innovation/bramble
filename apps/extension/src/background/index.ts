@@ -24,7 +24,6 @@ import { createRelaySignatureLog } from "@bramble/transactions/relay-signatures"
 import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@bramble/vault/store-migration";
-import type { WalletEventMessage } from "@bramble/wallet-protocol/events";
 import * as krustyModule from "/dependencies/krusty-kms/krusty_kms_wasm.js";
 import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import {
@@ -60,7 +59,9 @@ import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-preparations";
 import { createMessageHandler } from "./routing/messages";
+import { extensionIdentityOf } from "./routing/senders";
 import type { BackgroundBrowser } from "./runtime/background-browser";
+import { createWalletEventBroadcast } from "./runtime/event-broadcast";
 import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
 import { schedulePhishingFeedRefresh } from "./runtime/phishing-feed-alarm";
 import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
@@ -75,7 +76,6 @@ import { startTransactionMonitor } from "./transactions/tx-monitor";
 
 const extensionApi = resolveExtensionApi<BackgroundBrowser>();
 const runtime = extensionApi?.runtime;
-const tabs = extensionApi?.tabs;
 declare const __MC_BUILD_BRANCH__: string | undefined;
 let productAnalyticsEnabled = false;
 // The request surface: the user's choice, and the side-panel learning that
@@ -349,19 +349,8 @@ const strk20Preparations = createStrk20WalletPreparationStore({
   ...workerKeepAlive,
   now: systemClock,
 });
-// This extension's own identity. The origin MUST come from the runtime: on
-// Firefox `runtime.id` is the add-on id while pages are served from
-// `moz-extension://<per-install uuid>`, so an origin built from the id matches
-// nothing. An unreadable origin stays empty, which fails the gate closed.
-const extensionOrigin = (): string => {
-  try {
-    const url = runtime?.getURL?.("");
-    return url === undefined ? "" : new URL(url).origin;
-  } catch {
-    return "";
-  }
-};
-const extension = { id: runtime?.id ?? "", origin: extensionOrigin() };
+// This extension's own identity; the origin comes from the runtime, never the id.
+const extension = extensionIdentityOf(runtime);
 // Applies a downloaded update as soon as nothing is in progress (mc-wallet 708).
 const updateReady = createUpdateReady({
   isBusy: () =>
@@ -419,23 +408,7 @@ if (activityLog) {
   });
 }
 
-let broadcastQueue: Promise<void> = Promise.resolve();
-const broadcastEvent = (event: WalletEventMessage): void => {
-  broadcastQueue = broadcastQueue.then(async () => {
-    await runtime?.sendMessage?.(event).catch(() => undefined);
-    const openTabs = await tabs?.query({}).catch(() => []);
-    await Promise.all(
-      (openTabs ?? []).map((tab) =>
-        typeof tab.id === "number"
-          ? tabs?.sendMessage(tab.id, event).then(
-              () => undefined,
-              () => undefined,
-            )
-          : undefined,
-      ),
-    );
-  });
-};
+const broadcastEvent = createWalletEventBroadcast(extensionApi);
 
 // On Firefox a dapp-triggered approval cannot raise the wallet, so the toolbar
 // mark is the only sign something waits; it tracks the queue on every path,
