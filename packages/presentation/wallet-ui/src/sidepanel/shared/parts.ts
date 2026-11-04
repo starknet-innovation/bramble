@@ -68,6 +68,9 @@ export const WALLET_VIEWS = [
   "nft-detail",
   "nft-send",
   "reveal",
+  "qsb-accounts",
+  "qsb-backup",
+  "qsb-import",
 ] as const;
 
 /**
@@ -133,6 +136,9 @@ const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   receive: "Receive",
   requests: "Wallet requests",
   "request-settings": "Request display",
+  "qsb-accounts": "Quantum-safe Bitcoin",
+  "qsb-backup": "Bitcoin vault phrase backup",
+  "qsb-import": "Bitcoin vault phrase import",
   reveal: "Recovery secrets",
   send: "Send",
   settings: "Settings",

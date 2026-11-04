@@ -15,6 +15,7 @@ import type {
   LedgerPubKeyEntry,
 } from "@bramble/wallet-model/accounts";
 import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
+import type { QsbRoute } from "../qsb/qsb-model";
 
 /**
  * One enumerated candidate for the picker: the derived keyless account plus its
@@ -42,6 +43,8 @@ export type LedgerOnboardAddKind =
   | "import-phrase"
   | "ledger"
   | "multisig"
+  | "qsb-create"
+  | "qsb-import"
   | "regular"
   | "restore-ready-ledger";
 
@@ -107,6 +110,8 @@ export type LedgerOnboardControllerDeps = {
   readonly openImportSeed: () => void;
   readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
+  /** Creates a Quantum-safe Bitcoin account, or opens its phrase import. */
+  readonly openQsb: (route: QsbRoute) => void;
   readonly refresh: () => Promise<void>;
   readonly render: (view: LedgerOnboardView | null) => void;
 };

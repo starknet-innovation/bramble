@@ -52,6 +52,9 @@ const poolNoticeAction = (ctx: {
   return ctx.deployment === false ? "deploy-first" : "register";
 };
 
+import { qsbAccountsFlow } from "../../journeys/qsb/qsb-accounts";
+import { qsbBackupFlow } from "../../journeys/qsb/qsb-backup-ui";
+import { qsbImportFlow } from "../../journeys/qsb/qsb-import-ui";
 import type { SendIntent } from "../../journeys/send/send-model";
 import { sendFlow } from "../../journeys/send/send-views";
 import { advancedNetworkFlow, networkFlow } from "../../journeys/settings/network-views";
@@ -412,6 +415,12 @@ export const simpleFlowScreen = (
       return backupExportFlow(ctx.status);
     case "backup-restore":
       return backupRestoreFlow(ctx.status);
+    case "qsb-accounts":
+      return qsbAccountsFlow(ctx.status);
+    case "qsb-backup":
+      return qsbBackupFlow(ctx.status);
+    case "qsb-import":
+      return qsbImportFlow(ctx.status);
     default:
       return null;
   }

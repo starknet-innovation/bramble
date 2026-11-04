@@ -25,6 +25,7 @@ import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ArgentMultisigView } from "../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../popup/responses/responses";
+import { QSB_TITLE } from "../journeys/qsb/qsb-model";
 import { icon } from "../shared/icons";
 import { networkDisplayName } from "../shared/network-label";
 import { accountAvatar, accountDisplayName, accountLabel, hardwareBadge } from "../shared/parts";
@@ -206,6 +207,11 @@ export const accountDrawer = (
           icon: "plus",
           label: "Add account",
           variant: "secondary",
+        })}
+        ${menuRow({
+          attributes: { "data-view": "qsb-accounts" },
+          icon: "lockKeyhole",
+          label: QSB_TITLE,
         })}
         ${menuRow({
           attributes: { "data-view": "account" },

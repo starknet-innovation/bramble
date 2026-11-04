@@ -29,6 +29,7 @@ import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-mode
 import type { RenderData } from "../../app/rendering/render-cache";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { errorDetails, isPopupSurface, renderFragment, showToast } from "../../shared/dom";
+import type { QsbRoute } from "../qsb/qsb-model";
 import { createLedgerOnboardRuntime } from "./onboard-runtime";
 import { ledgerSurfaceNotice, ledgerSurfaceSwitched } from "./onboard-views";
 import type { LedgerConnector } from "./sign-session";
@@ -64,6 +65,7 @@ export const createLedgerOnboardEntry = (deps: {
   readonly openImportSeed: () => void;
   readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
+  readonly openQsb: (route: QsbRoute) => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: SidepanelWallet;
 }): LedgerOnboardEntry => {
@@ -76,6 +78,7 @@ export const createLedgerOnboardEntry = (deps: {
     openImportSeed,
     openFindAccounts,
     openMultisig,
+    openQsb,
     refresh,
     wallet,
   } = deps;
@@ -130,6 +133,7 @@ export const createLedgerOnboardEntry = (deps: {
     openImportSeed,
     openFindAccounts,
     openMultisig,
+    openQsb,
     refresh,
     wallet,
   });

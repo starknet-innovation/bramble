@@ -33,6 +33,8 @@ export * from "./sidepanel/journeys/portfolio/token-row";
 export * from "./sidepanel/journeys/privacy/privacy-model";
 export * from "./sidepanel/journeys/privacy/privacy-runtime";
 export { bindShadowAccounts } from "./sidepanel/journeys/privacy/shadow-accounts-ui";
+/** The Quantum-safe Bitcoin journey, bound by the lab against a fixture client. */
+export { createQsbJourney } from "./sidepanel/journeys/qsb/qsb-journey";
 export * from "./sidepanel/journeys/send/send-model";
 export * from "./sidepanel/journeys/send/send-views";
 export * from "./sidepanel/journeys/send/transfer-ui";
