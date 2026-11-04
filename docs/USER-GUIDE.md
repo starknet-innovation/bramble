@@ -155,15 +155,19 @@ out.
 
 ### NFT gallery (collectibles)
 
-> **Currently hidden.** The Collectibles tab, gallery, and NFT indexer setting
-> are not shown in this release while the feature is being finished, and the
-> wallet fetches no collectible data. An indexer URL saved in an earlier release
-> stays stored but unused. The description below covers the
-> parked journey.
+> **Preview.** The gallery is still being finished, so it is off by default and
+> the wallet fetches no collectible data. To try it, turn on **Collectibles
+> preview** in Settings → Network → Advanced endpoints: **Collectibles** then
+> appears in the portfolio menu, the NFT indexer field appears, and a site can
+> ask you to watch a collectible. An indexer URL saved in an earlier release
+> stays unused until the preview is on.
 
 Add an ERC-721 or ERC-1155 collectible by contract address and token ID. Bramble proves that the active account owns it on-chain before saving it, then
 reads the name, image, description, and attributes from the token's `token_uri`
 / `uri`. Automatic discovery is also ownership-checked before an item appears.
+When a site asks you to watch a collectible, the request shows the contract,
+token ID and network; approving it runs the same ownership check before the
+collectible is saved.
 
 ### Multisig
 

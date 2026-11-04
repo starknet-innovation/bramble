@@ -469,7 +469,7 @@ directly and adopted when it is at least the tracked figure. Collection approval
 reviewed as their own kinds: an ERC721 `approve` carries a token id, so a "revoke" would approve
 item 0. The store `bramble:allowances` sits outside the vault.
 
-## NFT gallery (parked: tab, menu entry, and indexer setting hidden; home loads no NFT data)
+## NFT gallery (parked; reachable only through the opt-in collectibles preview)
 
 The gallery merges auto-discovered collectibles with watched `nfts` preferences (contract, token
 id, network, optional label, spam flag).
@@ -480,8 +480,14 @@ review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-
 exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
 While parked, no view hydrates NFT data: neither watched-NFT metadata nor indexer discovery runs,
-and a saved `nftIndexerUrl` is unused and unsettable. Restore the entry points, `bindNfts`, indexer
-setter, and gallery-only hydration together; then remove the parked-view guard/test and cover no-unprompted egress on restored routes.
+and a saved `nftIndexerUrl` is unused (the background passes no indexer URL while the preview is off).
+The `collectiblesPreview` preference (Settings → Advanced endpoints) lifts the park for people who
+opt in: the portfolio menu links the gallery, gallery screens (not home) load both NFT lanes, the
+indexer field returns, and a site's ERC721/ERC1155 `wallet_watchAsset` queues a watch-collectible card
+whose approval re-proves ownership before watching. `PREVIEW_GATED_ENTRY_POINTS` in the parked-view
+conformance test lists the only files allowed to render a route in. The Bramble indexer slot
+(`DEFAULT_NFT_INDEXER_URL`) is unset until an SNF-run endpoint exists; Settings offers it as a
+one-step opt-in when it is. Un-parking for everyone removes the preview gate and that test.
 Ownership proofs stay untrusted-first whenever it does: concurrent refreshes for the same account
 share the in-flight request, account switches remain isolated, and the first visible watched
 images are fetched eagerly so the gallery is warm when opened.
