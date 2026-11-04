@@ -41,6 +41,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/permissions",
     "@bramble/portfolio",
     "@bramble/privacy",
+    "@bramble/qsb",
     "@bramble/settings",
     "@bramble/starknet",
     "@bramble/store",
@@ -76,6 +77,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/wallet-protocol",
   ],
   "@bramble/portfolio": ["@bramble/core", "@bramble/store", "@bramble/wallet-model"],
+  "@bramble/qsb": ["@bramble/core", "@bramble/wallet-model"],
   "@bramble/starknet": ["@bramble/core", "@bramble/wallet-model", "@bramble/wallet-protocol"],
   "@bramble/settings": [
     "@bramble/core",
@@ -142,6 +144,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/permissions",
     "@bramble/privacy",
     "@bramble/portfolio",
+    "@bramble/qsb",
     "@bramble/starknet",
     "@bramble/store",
     "@bramble/settings",

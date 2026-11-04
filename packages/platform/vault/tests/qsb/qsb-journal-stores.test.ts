@@ -80,6 +80,22 @@ describe("the open journal stores", () => {
     );
   });
 
+  test("open each account's pending deposits under their own key, beside its journal", () => {
+    const { cleared, factory, keys } = recordingFactory();
+    const stores = createQsbJournalStores(factory);
+    const deposits = stores.forDeposits(JOURNAL_ID_A);
+    expect(deposits).not.toBeNull();
+    expect(stores.forDeposits(JOURNAL_ID_A)).toBe(deposits);
+    expect(stores.forJournal(JOURNAL_ID_A)).not.toBe(deposits);
+    expect(stores.forDeposits(JOURNAL_ID_A.toUpperCase())).toBeNull();
+    expect(keys).toEqual([
+      `bramble:qsb-deposit:${JOURNAL_ID_A}`,
+      `bramble:qsb-journal:${JOURNAL_ID_A}`,
+    ]);
+    stores.clearKeys();
+    expect(cleared.sort()).toEqual([...keys].sort());
+  });
+
   test("keep nothing for an id whose store the factory could not build", () => {
     let fail = true;
     const { factory, keys } = recordingFactory();
@@ -130,6 +146,40 @@ describe("the journals' commit records in storage.sync", () => {
     expect(sizes.reduce((total, size) => total + size, 0)).toBeLessThanOrEqual(1_828);
     expect(Math.max(...sizes)).toBeLessThan(SYNC_QUOTA.itemBytes);
     expect(sizes.reduce((total, size) => total + size, 0)).toBeLessThan(SYNC_QUOTA.bytes / 50);
+    expect(sizes.length).toBeLessThan(SYNC_QUOTA.items);
+  });
+});
+
+describe("the pending-deposit records' commit records in storage.sync", () => {
+  test("eight accounts' journals and pending deposits, and the vault, stay far inside every quota", async () => {
+    const local = createMemoryStore();
+    const sync = createMemoryStore();
+    const largest = new Map<string, number>();
+    const measuredSync = {
+      ...sync,
+      async set(key: string, value: Json) {
+        largest.set(
+          key,
+          Math.max(largest.get(key) ?? 0, key.length + JSON.stringify(value).length),
+        );
+        await sync.set(key, value);
+      },
+    };
+    const wired = (key: string) => createEncryptedStore(local, key, measuredSync, undefined, true);
+    const stores = createQsbJournalStores(wired);
+    await wired("bramble:vault").write({ vault: true }, "correct horse battery staple");
+    for (let index = 0; index < MAX_QSB_ACCOUNTS; index += 1) {
+      const journalId = createHash("sha256").update(`deposit budget ${index}`).digest("hex");
+      for (const store of [stores.forJournal(journalId), stores.forDeposits(journalId)]) {
+        await store?.write({ index }, "correct horse battery staple");
+        await store?.write({ index, again: true }, "correct horse battery staple");
+      }
+    }
+    const sizes = [...largest.values()];
+    expect(sizes).toHaveLength(2 * MAX_QSB_ACCOUNTS + 1);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(211);
+    expect(sizes.reduce((total, size) => total + size, 0)).toBeLessThanOrEqual(3_516);
+    expect(sizes.reduce((total, size) => total + size, 0)).toBeLessThan(SYNC_QUOTA.bytes / 25);
     expect(sizes.length).toBeLessThan(SYNC_QUOTA.items);
   });
 });

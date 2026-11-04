@@ -1,0 +1,34 @@
+{
+  "name": "@bramble/qsb",
+  "description": "Quantum Safe Bitcoin vault deposits: the coordinator protocol (sign-in challenge, strict response parsing, refusal mapping, the fetch-boundary client), the vault configuration fingerprint, and the deposit's fee math, coin selection, PSBT build, post-sign verification and reuse scan.",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./challenge": "./src/coordinator/challenge.ts",
+    "./client": "./src/coordinator/client.ts",
+    "./coins": "./src/deposit/coins.ts",
+    "./configuration": "./src/vault/configuration.ts",
+    "./fees": "./src/deposit/fees.ts",
+    "./instant": "./src/coordinator/instant.ts",
+    "./origin": "./src/coordinator/origin.ts",
+    "./psbt": "./src/deposit/psbt.ts",
+    "./registration": "./src/vault/registration.ts",
+    "./responses": "./src/coordinator/responses.ts",
+    "./reuse": "./src/vault/reuse.ts",
+    "./sessions": "./src/coordinator/sessions.ts",
+    "./transactions": "./src/deposit/transactions.ts",
+    "./vault-responses": "./src/coordinator/vault-responses.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@bramble/core": "workspace:*",
+    "@bramble/wallet-model": "workspace:*",
+    "@noble/hashes": "2.4.0",
+    "@scure/btc-signer": "2.4.1"
+  }
+}

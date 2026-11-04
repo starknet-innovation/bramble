@@ -59,6 +59,8 @@ import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-preparations";
+import { qsbRuntime } from "./qsb/packaged-qsb-runtime";
+import { createQsbVaultWiring } from "./qsb/qsb-vault-wiring";
 import { createMessageHandler } from "./routing/messages";
 import { extensionIdentityOf } from "./routing/senders";
 import type { BackgroundBrowser } from "./runtime/background-browser";
@@ -145,6 +147,13 @@ const vaultStores = (() => {
     return null;
   }
 })();
+// QSB vaults: the coordinator through the untrusted-fetch boundary, tokens in
+// memory only and dropped with the other key caches on lock.
+const qsbVaults = createQsbVaultWiring({
+  fetch: untrustedFetch,
+  now: systemClock,
+  runtime: qsbRuntime,
+});
 const session = createBackgroundUnlockSession({
   alarms: extensionApi?.alarms,
   sessionStore,
@@ -152,6 +161,7 @@ const session = createBackgroundUnlockSession({
     for (const store of [vaultStores?.primary, vaultStores?.staging, vaultStores?.journals]) {
       store?.clearKeys();
     }
+    qsbVaults.clearSessions();
     // Declared below; this runs only when the session locks, long after.
     void wallet.then((service) => service?.clearGrantCache());
   },
@@ -377,6 +387,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   ...(activityLog ? { activity: activityLog } : {}),
   ...(originHistory ? { originHistory } : {}),
   prices: priceService,
+  qsbVaults,
   recoveryDiscovery,
   relaySignatures: createRelaySignatureLog({ now: systemClock, store: createBrowserLocalStore() }),
   swap: swapService,
@@ -469,5 +480,5 @@ runtime?.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-/** QSB spike: lazy Pyodide runtime, reachable from no message (exported for the E2E probe only). */
-export { qsbRuntime } from "./qsb/packaged-qsb-runtime";
+/** The lazy QSB runtime the vault messages build scripts with (also exported for the E2E probe). */
+export { qsbRuntime };

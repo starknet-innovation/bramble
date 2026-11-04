@@ -14,6 +14,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { qsbVaultConfiguration } from "@bramble/qsb/configuration";
 import { createQsbRuntime } from "../../../apps/extension/src/background/qsb/qsb-runtime";
 import {
   QSB_MAX_JSON_TEXT,
@@ -257,6 +258,10 @@ describe.skipIf(!existsSync(`${shipped}/manifest.json`))(
       expect(vault.scriptHash).toBe(QSB_TEST_VAULT_SETUP.scriptHash);
       expect(vault.scriptHex).toHaveLength(QSB_TEST_VAULT_SETUP.scriptBytes * 2);
       expect(digest(vault.publicStateJson)).toBe(QSB_TEST_VAULT_SETUP.publicStateSha256);
+      // The configuration fingerprint qsb-app's own provenance.ts computes.
+      expect(qsbVaultConfiguration({ ...vault, network: "mainnet" }).publicStateHash).toBe(
+        QSB_TEST_VAULT_SETUP.publicStateHash,
+      );
     }, 60_000);
   },
 );

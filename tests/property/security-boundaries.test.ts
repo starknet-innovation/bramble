@@ -142,6 +142,11 @@ describe("vault migration property boundary", () => {
 });
 
 const validModule = (overrides: Record<string, unknown> = {}) => ({
+  // The QSB and Bitcoin exports the adapter requires; never called here.
+  deriveBitcoinP2wpkhKeypair: () => ({}),
+  deriveQsbCommitments: () => ({}),
+  signBip322Simple: () => "",
+  signBitcoinPsbtInputs: () => "",
   deriveArgentLegacyKeypair: () => ({ private_key: "0x321", public_key_x: "0xcba" }),
   deriveNostrPublicKey: () => ({ public_key: "11".repeat(32) }),
   deriveOzAccountAddress: () => "0xabc",

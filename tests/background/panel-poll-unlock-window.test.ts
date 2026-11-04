@@ -91,13 +91,16 @@ const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
 // the panel lifecycle (status, then the queued failure notices that
 // journeys/approvals/tx-alerts-ui.ts drains behind it), the three-second
 // disclosure poll journeys/privacy/privacy-pending-poll.ts runs while a
-// registration settles, and the private-recipient check the Send form re-sends
-// on every repaint that rebinds it (journeys/send/transfer-ui.ts `route()`).
+// registration settles, the private-recipient check the Send form re-sends
+// on every repaint that rebinds it (journeys/send/transfer-ui.ts `route()`),
+// and the QSB vault list, which the panel re-reads every minute while a
+// deposit is pending or submitted.
 const POLLED_OUTSIDE_HYDRATION: readonly string[] = [
   "wallet.status",
   "wallet.transactionAlerts",
   "wallet.strk20State",
   "wallet.strk20RecipientStatus",
+  "wallet.qsbVaults",
 ];
 
 const AMBIENT_MESSAGES: readonly string[] = [
@@ -117,6 +120,7 @@ const USER_INITIATED: readonly string[] = [
   "wallet.detectTokens",
   "wallet.strk20PrepareRegistration",
   "wallet.reviewTransfer",
+  "wallet.quoteQsbDeposit",
 ];
 
 const CATALOG = [

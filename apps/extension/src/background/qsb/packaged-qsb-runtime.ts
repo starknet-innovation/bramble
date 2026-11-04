@@ -15,8 +15,8 @@
  * `@noble/hashes` implementation qsb-app wires, bundled into this worker. Only
  * its legacy-hash module and the helpers that module imports are bundled.
  *
- * Nothing here runs until a caller asks: the runtime is lazy, and no wallet
- * message, page, or account reaches it.
+ * Nothing here runs until a caller asks: the runtime is lazy, and only the QSB
+ * vault flows reach it, with commitments Krusty derived.
  */
 import "/dependencies/pyodide/pyodide.asm.js";
 import { ripemd160 } from "@noble/hashes/legacy.js";
@@ -39,8 +39,9 @@ const packagedUrl = (path: string): string => {
 const ignorePythonOutput = (): void => undefined;
 
 /**
- * The worker's QSB runtime (spike). Lazy and unreachable from every extension
- * message; `scripts/check-qsb-runtime.ts` pins the packaged files it reads.
+ * The worker's QSB runtime. Lazy: it boots on the first QSB vault message that
+ * builds a script, and only `setupFromCommitments` is reachable from one;
+ * `scripts/check-qsb-runtime.ts` pins the packaged files it reads.
  */
 export const qsbRuntime: QsbRuntime = createQsbRuntime({
   loadInterpreter: () =>

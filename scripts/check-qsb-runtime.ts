@@ -15,6 +15,7 @@
  */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { qsbVaultConfiguration } from "@bramble/qsb/configuration";
 import { ripemd160 } from "@noble/hashes/legacy.js";
 import {
   createQsbRuntime,
@@ -175,7 +176,9 @@ if (
   vault.scriptHash !== QSB_TEST_VAULT_SETUP.scriptHash ||
   vault.scriptHex.length !== QSB_TEST_VAULT_SETUP.scriptBytes * 2 ||
   createHash("sha256").update(vault.publicStateJson).digest("hex") !==
-    QSB_TEST_VAULT_SETUP.publicStateSha256
+    QSB_TEST_VAULT_SETUP.publicStateSha256 ||
+  qsbVaultConfiguration({ ...vault, network: "mainnet" }).publicStateHash !==
+    QSB_TEST_VAULT_SETUP.publicStateHash
 ) {
   throw new Error("QSB commitments setup does not match the test vault's known answers");
 }

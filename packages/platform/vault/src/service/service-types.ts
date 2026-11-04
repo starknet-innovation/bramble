@@ -25,6 +25,7 @@ import type { ShadowAccountScopeRef } from "../accounts/shadow-account-scopes";
 import type { NostrApplicationData } from "../kms-port";
 import type { Vault } from "../schema/schema";
 import type { QsbAccountService } from "./qsb-account-types";
+import type { QsbVaultAccessService } from "./qsb-vault-types";
 import type { RecoverVaultAccountsInput } from "./recovery";
 
 /** The QSB account surface, re-exported from its behaviour split. */
@@ -36,6 +37,17 @@ export type {
   QsbBackupWord,
   RevealQsbPhraseInput,
 } from "./qsb-account-types";
+
+/** The QSB vault session surface, re-exported from its behaviour split. */
+export type {
+  QsbJournalChange,
+  QsbJournalChangeResult,
+  QsbJournalState,
+  QsbOwner,
+  QsbVaultAccess,
+  QsbVaultAccessInput,
+  QsbVaultAccessService,
+} from "./qsb-vault-types";
 
 /** Atomic recovery input re-exported for privileged runtime boundaries. */
 export type { RecoverVaultAccountsInput } from "./recovery";
@@ -268,164 +280,169 @@ export type RevealedSecrets = {
 /**
  * Privileged encrypted-vault wallet service surface, QSB accounts included.
  */
-export type WalletVaultService = QsbAccountService & {
-  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<DerivedAccountRef>;
-  readonly addLedgerAccount: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
-  readonly createAccount: (input: CreateVaultAccountInput) => Promise<DerivedAccountRef>;
-  readonly createKeyVault: (input: CreateKeyVaultInput) => Promise<ImportedAccountRef>;
-  readonly createLedgerVault: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
-  readonly deriveLedgerAccounts: (
-    input: DeriveLedgerAccountsInput,
-  ) => Promise<readonly LedgerAccountRef[]>;
-  /**
-   * Resolves a domain-separated STRK20 viewing key inside the encrypted vault
-   * boundary. Software accounts derive lazily; Ledger accounts require an
-   * exact retained chain/pool-scoped key.
-   */
-  readonly deriveStrk20ViewingKey: (input: {
-    readonly accountId: string;
-    readonly chainId: string;
-    readonly poolAddress: string;
-    readonly vaultPassphrase: string;
-  }) => Promise<string>;
-  /** Derives the wallet-level public Nostr identity without exposing its secret. */
-  readonly nostrPublicKey: (vaultPassphrase: string) => Promise<string>;
-  /** Opens and authenticates one NIP-59 application event inside Krusty. */
-  readonly openNostrApplicationData: (
-    input: OpenNostrApplicationDataInput,
-  ) => Promise<NostrApplicationData>;
-  /** Opens a bounded batch once; malformed events become null and authorization aborts the batch. */
-  readonly openNostrApplicationDataBatch: (
-    input: OpenNostrApplicationDataBatchInput,
-  ) => Promise<readonly (NostrApplicationData | null)[]>;
-  readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
-  /** Removes one retained Ledger viewing-key scope without returning its value. */
-  readonly forgetLedgerStrk20ViewingKey: (
-    input: ForgetLedgerStrk20ViewingKeyInput,
-  ) => Promise<boolean>;
-  readonly generateMnemonic: () => Promise<string>;
-  readonly importRawKeyAccount: (input: ImportRawKeyAccountInput) => Promise<ImportedAccountRef>;
-  /**
-   * Derives public account metadata through Krusty without persisting a vault or
-   * returning key material. Invalid derivation input fails closed.
-   */
-  readonly previewAccount: (input: AccountDerivationInput) => Promise<RecoverableAccountRef>;
-  /**
-   * Public viewing key this wallet would register for a phrase account in one
-   * privacy pool. Returns only the public x-coordinate; derivation failures
-   * throw.
-   */
-  readonly previewStrk20ViewingPublicKey: (
-    input: AccountDerivationInput & { readonly chainId: string; readonly poolAddress: string },
-  ) => Promise<string>;
-  /**
-   * Address a raw private key would import as, and the public viewing key this
-   * wallet would register for it in one privacy pool. Stores nothing and
-   * returns no key material; an invalid key throws.
-   */
-  readonly previewImportedStrk20ViewingPublicKey: (
-    input: Omit<ImportRawKeyAccountInput, "vaultPassphrase"> & {
+export type WalletVaultService = QsbAccountService &
+  QsbVaultAccessService & {
+    readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<DerivedAccountRef>;
+    readonly addLedgerAccount: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
+    readonly createAccount: (input: CreateVaultAccountInput) => Promise<DerivedAccountRef>;
+    readonly createKeyVault: (input: CreateKeyVaultInput) => Promise<ImportedAccountRef>;
+    readonly createLedgerVault: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
+    readonly deriveLedgerAccounts: (
+      input: DeriveLedgerAccountsInput,
+    ) => Promise<readonly LedgerAccountRef[]>;
+    /**
+     * Resolves a domain-separated STRK20 viewing key inside the encrypted vault
+     * boundary. Software accounts derive lazily; Ledger accounts require an
+     * exact retained chain/pool-scoped key.
+     */
+    readonly deriveStrk20ViewingKey: (input: {
+      readonly accountId: string;
       readonly chainId: string;
       readonly poolAddress: string;
-    },
-  ) => Promise<{ readonly address: string; readonly viewingPublicKey: string }>;
-  /**
-   * Public viewing key this wallet would register for an account it already
-   * stores. Returns only the public x-coordinate; the viewing key stays in the
-   * vault. Derivation failures throw.
-   */
-  readonly previewStoredStrk20ViewingPublicKey: (input: {
-    readonly accountId: string;
-    readonly chainId: string;
-    readonly poolAddress: string;
-    readonly vaultPassphrase: string;
-  }) => Promise<string>;
-  /**
-   * Derives a raw key's public account metadata through Krusty without
-   * persisting it or returning the key. An invalid key or class fails closed.
-   */
-  readonly previewImportedAccount: (
-    input: PreviewImportedAccountInput,
-  ) => Promise<ImportedAccountRef>;
-  /**
-   * Checks a recovery phrase through Krusty only. Returns false for an invalid
-   * phrase and never echoes the input; fails closed when KMS is unavailable.
-   */
-  readonly validateMnemonic: (mnemonic: string) => Promise<boolean>;
-  /** Creates one recipient-specific NIP-59 event inside Krusty. */
-  readonly wrapNostrApplicationData: (input: WrapNostrApplicationDataInput) => Promise<string>;
-  /** Wraps a bounded recipient batch once; individual Krusty failures become null. */
-  readonly wrapNostrApplicationDataBatch: (
-    input: WrapNostrApplicationDataBatchInput,
-  ) => Promise<readonly (string | null)[]>;
-  readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
-  /**
-   * The wallet's active account when the origin's grant covers it, per
-   * `grantedAccountIdsFor` — so at most one account, never the whole grant.
-   * Empty when the origin holds no grant, no account is active, or the grant
-   * does not cover the active one: a stored grant alone never exposes an
-   * account the user has switched away from. Rejects an invalid origin.
-   */
-  readonly getGrantedAccounts: (
-    origin: string,
-    vaultPassphrase: string,
-  ) => Promise<readonly AccountRef[]>;
-  readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
-  /**
-   * Drops the in-memory grant projection `getGrantedAccounts` answers from.
-   * Called when the wallet locks, beside the derived-key caches; the next
-   * read after unlock repopulates it.
-   */
-  readonly clearGrantCache: () => void;
-  /**
-   * Accepts a vault whose status reports `unverified` or `rollback` after the
-   * user consented to a possibly older copy: decrypts it with the passphrase,
-   * removes every origin grant and retained Ledger viewing key a rollback could
-   * have restored, and writes it back under fresh freshness records. Throws for
-   * any other vault, and for a wrong passphrase.
-   */
-  readonly recoverUnverifiedVault: (vaultPassphrase: string) => Promise<void>;
-  /** Restores a confirmed bounded set in one encrypted-vault commit. */
-  /**
-   * Imports selected accounts from another recovery phrase into the unlocked
-   * vault, retaining the phrase as an imported seed. Fails closed on invalid
-   * phrases, duplicate selections, or accounts already present.
-   */
-  readonly importSeedAccounts: (
-    input: RecoverVaultAccountsInput,
-  ) => Promise<readonly RecoverableAccountRef[]>;
-  readonly recoverAccounts: (
-    input: RecoverVaultAccountsInput,
-  ) => Promise<readonly RecoverableAccountRef[]>;
-  readonly revokeOrigin: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
-  readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
-  readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
-  readonly status: () => Promise<WalletStatus>;
-  /**
-   * Persists a validated Ledger viewing key only inside encrypted account
-   * secrets. This is intentionally absent from extension message surfaces.
-   */
-  readonly storeLedgerStrk20ViewingKey: (input: StoreLedgerStrk20ViewingKeyInput) => Promise<void>;
-  /**
-   * Records, inside the encrypted vault only, that an account used a
-   * shadow-account scope and which exact nonces (#443). Merges into an existing
-   * record; refuses rather than evicts at the bound. Background-only.
-   */
-  readonly recordShadowAccountScope: (input: RecordShadowAccountScopeInput) => Promise<void>;
-  /**
-   * Whether {@link recordShadowAccountScope} would accept `input` now: false
-   * when a scope, nonce or byte bound would refuse it, or the vault would no
-   * longer fit its capacity, without writing anything.
-   * Lets a request be refused before the user is asked to approve it; the
-   * record itself still re-checks and fails closed. Throws on a malformed
-   * scope. Background-only.
-   */
-  readonly canRecordShadowAccountScope: (input: RecordShadowAccountScopeInput) => Promise<boolean>;
-  /** Lists one account's recorded scopes on one chain and pool. Background-only. */
-  readonly listShadowAccountScopes: (
-    input: ListShadowAccountScopesInput,
-  ) => Promise<readonly ShadowAccountScopeRef[]>;
-};
+      readonly vaultPassphrase: string;
+    }) => Promise<string>;
+    /** Derives the wallet-level public Nostr identity without exposing its secret. */
+    readonly nostrPublicKey: (vaultPassphrase: string) => Promise<string>;
+    /** Opens and authenticates one NIP-59 application event inside Krusty. */
+    readonly openNostrApplicationData: (
+      input: OpenNostrApplicationDataInput,
+    ) => Promise<NostrApplicationData>;
+    /** Opens a bounded batch once; malformed events become null and authorization aborts the batch. */
+    readonly openNostrApplicationDataBatch: (
+      input: OpenNostrApplicationDataBatchInput,
+    ) => Promise<readonly (NostrApplicationData | null)[]>;
+    readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
+    /** Removes one retained Ledger viewing-key scope without returning its value. */
+    readonly forgetLedgerStrk20ViewingKey: (
+      input: ForgetLedgerStrk20ViewingKeyInput,
+    ) => Promise<boolean>;
+    readonly generateMnemonic: () => Promise<string>;
+    readonly importRawKeyAccount: (input: ImportRawKeyAccountInput) => Promise<ImportedAccountRef>;
+    /**
+     * Derives public account metadata through Krusty without persisting a vault or
+     * returning key material. Invalid derivation input fails closed.
+     */
+    readonly previewAccount: (input: AccountDerivationInput) => Promise<RecoverableAccountRef>;
+    /**
+     * Public viewing key this wallet would register for a phrase account in one
+     * privacy pool. Returns only the public x-coordinate; derivation failures
+     * throw.
+     */
+    readonly previewStrk20ViewingPublicKey: (
+      input: AccountDerivationInput & { readonly chainId: string; readonly poolAddress: string },
+    ) => Promise<string>;
+    /**
+     * Address a raw private key would import as, and the public viewing key this
+     * wallet would register for it in one privacy pool. Stores nothing and
+     * returns no key material; an invalid key throws.
+     */
+    readonly previewImportedStrk20ViewingPublicKey: (
+      input: Omit<ImportRawKeyAccountInput, "vaultPassphrase"> & {
+        readonly chainId: string;
+        readonly poolAddress: string;
+      },
+    ) => Promise<{ readonly address: string; readonly viewingPublicKey: string }>;
+    /**
+     * Public viewing key this wallet would register for an account it already
+     * stores. Returns only the public x-coordinate; the viewing key stays in the
+     * vault. Derivation failures throw.
+     */
+    readonly previewStoredStrk20ViewingPublicKey: (input: {
+      readonly accountId: string;
+      readonly chainId: string;
+      readonly poolAddress: string;
+      readonly vaultPassphrase: string;
+    }) => Promise<string>;
+    /**
+     * Derives a raw key's public account metadata through Krusty without
+     * persisting it or returning the key. An invalid key or class fails closed.
+     */
+    readonly previewImportedAccount: (
+      input: PreviewImportedAccountInput,
+    ) => Promise<ImportedAccountRef>;
+    /**
+     * Checks a recovery phrase through Krusty only. Returns false for an invalid
+     * phrase and never echoes the input; fails closed when KMS is unavailable.
+     */
+    readonly validateMnemonic: (mnemonic: string) => Promise<boolean>;
+    /** Creates one recipient-specific NIP-59 event inside Krusty. */
+    readonly wrapNostrApplicationData: (input: WrapNostrApplicationDataInput) => Promise<string>;
+    /** Wraps a bounded recipient batch once; individual Krusty failures become null. */
+    readonly wrapNostrApplicationDataBatch: (
+      input: WrapNostrApplicationDataBatchInput,
+    ) => Promise<readonly (string | null)[]>;
+    readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
+    /**
+     * The wallet's active account when the origin's grant covers it, per
+     * `grantedAccountIdsFor` — so at most one account, never the whole grant.
+     * Empty when the origin holds no grant, no account is active, or the grant
+     * does not cover the active one: a stored grant alone never exposes an
+     * account the user has switched away from. Rejects an invalid origin.
+     */
+    readonly getGrantedAccounts: (
+      origin: string,
+      vaultPassphrase: string,
+    ) => Promise<readonly AccountRef[]>;
+    readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+    /**
+     * Drops the in-memory grant projection `getGrantedAccounts` answers from.
+     * Called when the wallet locks, beside the derived-key caches; the next
+     * read after unlock repopulates it.
+     */
+    readonly clearGrantCache: () => void;
+    /**
+     * Accepts a vault whose status reports `unverified` or `rollback` after the
+     * user consented to a possibly older copy: decrypts it with the passphrase,
+     * removes every origin grant and retained Ledger viewing key a rollback could
+     * have restored, and writes it back under fresh freshness records. Throws for
+     * any other vault, and for a wrong passphrase.
+     */
+    readonly recoverUnverifiedVault: (vaultPassphrase: string) => Promise<void>;
+    /** Restores a confirmed bounded set in one encrypted-vault commit. */
+    /**
+     * Imports selected accounts from another recovery phrase into the unlocked
+     * vault, retaining the phrase as an imported seed. Fails closed on invalid
+     * phrases, duplicate selections, or accounts already present.
+     */
+    readonly importSeedAccounts: (
+      input: RecoverVaultAccountsInput,
+    ) => Promise<readonly RecoverableAccountRef[]>;
+    readonly recoverAccounts: (
+      input: RecoverVaultAccountsInput,
+    ) => Promise<readonly RecoverableAccountRef[]>;
+    readonly revokeOrigin: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
+    readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
+    readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
+    readonly status: () => Promise<WalletStatus>;
+    /**
+     * Persists a validated Ledger viewing key only inside encrypted account
+     * secrets. This is intentionally absent from extension message surfaces.
+     */
+    readonly storeLedgerStrk20ViewingKey: (
+      input: StoreLedgerStrk20ViewingKeyInput,
+    ) => Promise<void>;
+    /**
+     * Records, inside the encrypted vault only, that an account used a
+     * shadow-account scope and which exact nonces (#443). Merges into an existing
+     * record; refuses rather than evicts at the bound. Background-only.
+     */
+    readonly recordShadowAccountScope: (input: RecordShadowAccountScopeInput) => Promise<void>;
+    /**
+     * Whether {@link recordShadowAccountScope} would accept `input` now: false
+     * when a scope, nonce or byte bound would refuse it, or the vault would no
+     * longer fit its capacity, without writing anything.
+     * Lets a request be refused before the user is asked to approve it; the
+     * record itself still re-checks and fails closed. Throws on a malformed
+     * scope. Background-only.
+     */
+    readonly canRecordShadowAccountScope: (
+      input: RecordShadowAccountScopeInput,
+    ) => Promise<boolean>;
+    /** Lists one account's recorded scopes on one chain and pool. Background-only. */
+    readonly listShadowAccountScopes: (
+      input: ListShadowAccountScopesInput,
+    ) => Promise<readonly ShadowAccountScopeRef[]>;
+  };
 
 /** One shadow-account scope to record, with the nonces used under it. */
 export type RecordShadowAccountScopeInput = ShadowAccountScopeRef & {

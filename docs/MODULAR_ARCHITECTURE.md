@@ -324,6 +324,10 @@ Each feature owns its domain-specific types, use cases, repository contract and 
 - `privacy`: STRK20 schemas, official SDK adapter, note-discovery/proving service, registration,
   recipient policy, preparation, and proof-boundary submission.
 - `settings`: account groups, public preferences, network overrides, and their validated stores.
+- `qsb`: Quantum Safe Bitcoin vault deposits without a key: the QSB coordinator protocol (sign-in
+  challenge check, strict response parsing, the fetch-boundary client, in-memory session tokens), the
+  vault configuration fingerprint, and the deposit's fee math, coin selection, PSBT build, post-sign
+  verification and reuse scan. Krusty signs, through the vault service; the background composes it.
 
 Feature packages do not import presentation code or Chrome APIs. Cross-feature calls use an
 existing lower-level contract or a narrow function passed by the application; they do not create a

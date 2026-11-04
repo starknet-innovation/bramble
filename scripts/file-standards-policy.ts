@@ -119,6 +119,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // reveal, the re-entered) vault credential straight to the vault service and
   // return its views; the revealed phrase only transits to the extension page.
   "apps/extension/src/background/qsb/qsb-account-ops.ts",
+  // QSB vault handlers: hand the session's vault credential (peeked for the
+  // polled listing, renewed for user actions) straight to the vault service's
+  // QSB session; replies are public vault data only. Never logged or kept.
+  "apps/extension/src/background/qsb/qsb-vault-ops.ts",
   "apps/extension/src/background/runtime/session.ts",
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",
@@ -133,6 +137,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/accounts/wallet-reader.ts",
   "apps/extension/src/background/ledger/ledger-inputs.ts",
   "packages/platform/kms-krusty/src/adapter.ts",
+  // Krusty's QSB and Bitcoin calls, split from adapter.ts: checks the private
+  // key and the signatures crossing the Krusty boundary and frees Krusty's
+  // copy; nothing is logged, persisted, or returned past the vault service.
+  "packages/platform/kms-krusty/src/bitcoin.ts",
   "packages/foundation/wallet-model/src/accounts/signing.ts",
   // Pure length policy only; carries no passphrase value across a boundary.
   "packages/foundation/wallet-model/src/preferences/passphrase.ts",
@@ -235,6 +243,14 @@ export const SECRET_MATERIAL_FILES = new Set([
   // The field is public; private signing stays in Krusty via signHash.
   "packages/features/transactions/src/gasless/gasless-submit.ts",
   "packages/features/privacy/src/service.ts",
+  // QSB coordinator sign-in: matches the coordinator's fixed session-only text,
+  // which names a signature, and posts the public BIP-322 proof as the
+  // `signature` field; no key is read, held, logged or persisted here.
+  "packages/features/qsb/src/coordinator/challenge.ts",
+  "packages/features/qsb/src/coordinator/client.ts",
+  // Checks the public partial signatures Krusty added to a deposit PSBT and
+  // moves them into the witness; it never signs and holds no key.
+  "packages/features/qsb/src/deposit/psbt.ts",
   // Argent multisig stores public signer identifiers and verified public
   // signature fragments only. Private signing remains behind Krusty and the
   // privileged background accountHashSigner boundary.
@@ -271,6 +287,17 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Their type surface, split by behaviour: names the phrase and credential
   // fields of the inputs and the reveal's result; types only.
   "packages/platform/vault/src/service/qsb-account-types.ts",
+  // QSB vault session: derives the owner key from the account's phrase through
+  // Krusty for each use and signs with it, inside the vault service; returns
+  // public data only and never keeps, logs or persists the key or the phrase.
+  "packages/platform/vault/src/service/qsb-vault-access.ts",
+  // Its type surface: names the session's credential input and the public
+  // signatures it returns; types only.
+  "packages/platform/vault/src/service/qsb-vault-types.ts",
+  // QSB pending deposits: reads and writes one account's encrypted record of
+  // signed public transactions under the caller's vault passphrase, like the
+  // journal store; the credential is never logged or returned.
+  "packages/platform/vault/src/qsb/qsb-deposit-store.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
   // Split from accounts.ts by the size budget: same boundary, same rules — the

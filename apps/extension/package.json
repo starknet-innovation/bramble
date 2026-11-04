@@ -21,6 +21,7 @@
     "@bramble/permissions": "workspace:*",
     "@bramble/portfolio": "workspace:*",
     "@bramble/privacy": "workspace:*",
+    "@bramble/qsb": "workspace:*",
     "@bramble/settings": "workspace:*",
     "@bramble/starknet": "workspace:*",
     "@bramble/store": "workspace:*",

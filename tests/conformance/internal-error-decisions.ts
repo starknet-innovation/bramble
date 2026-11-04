@@ -130,10 +130,24 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
 ]);
 
 // The QSB runtime's refusals (apps/extension/src/background/qsb), its
-// commitments setup included. No wallet message reaches that runtime yet, so
-// none can reach the panel; each names the check that stopped it, so each is
-// shown as written should one ever surface.
+// commitments setup included, and the Krusty adapter's and the instant
+// formatter's QSB and Bitcoin refusals. The QSB vault messages reach them, but
+// every vault flow answers with the contract's own refusals (failClosed in
+// qsb-vault-refusals.ts), so none can reach the panel; each names the check
+// that stopped it, so each is shown as written should one ever surface.
 export const QSB_RUNTIME_DIAGNOSTICS: ReadonlySet<string> = new Set([
+  "Invalid BIP-322 signing input",
+  "Invalid Bitcoin derivation input",
+  "Invalid PSBT signing input",
+  "Invalid QSB derivation input",
+  "Krusty KMS returned a QSB root that does not bind its commitments",
+  "Krusty KMS returned an invalid BIP-322 proof",
+  "Krusty KMS returned an invalid Bitcoin P2WPKH keypair",
+  "Krusty KMS returned an invalid PSBT",
+  "Krusty KMS returned invalid QSB commitments: x",
+  "Krusty KMS returned repeated QSB commitments",
+  "QSB instant is not an integer",
+  "QSB instant is out of range",
   "QSB commitment is not 20 bytes of lowercase hex",
   "QSB commitment repeats",
   "QSB commitments are not 2 rounds of 150",

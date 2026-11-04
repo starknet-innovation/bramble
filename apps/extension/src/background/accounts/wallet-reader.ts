@@ -67,6 +67,8 @@ export type WalletStatusReader = {
   readonly importQsbAccount?: WalletVaultService["importQsbAccount"];
   readonly qsbAccounts?: WalletVaultService["qsbAccounts"];
   readonly revealQsbPhrase?: WalletVaultService["revealQsbPhrase"];
+  /** One serialized QSB vault session (`QsbVaultAccessService`); optional for partial stubs. */
+  readonly withQsbVaultAccount?: WalletVaultService["withQsbVaultAccount"];
   /** Derives Ledger picker candidates; optional only for partial test stubs. */
   readonly deriveLedgerAccounts?: (
     input: DeriveLedgerAccountsInput,
@@ -295,6 +297,9 @@ export const createWalletReader = (
     },
     async wrapNostrApplicationData(input) {
       return (await required()).wrapNostrApplicationData(input);
+    },
+    async withQsbVaultAccount(input, task) {
+      return (await required()).withQsbVaultAccount(input, task);
     },
     async wrapNostrApplicationDataBatch(input) {
       return (await required()).wrapNostrApplicationDataBatch(input);

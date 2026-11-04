@@ -32,6 +32,7 @@ import {
 import { handledWalletMessages } from "../../support/key-boundary-handled";
 import { makeKeyBoundaryHarness } from "../../support/key-boundary-harness";
 import { KEY_BOUNDARY_MESSAGES } from "../../support/key-boundary-messages";
+import { SECRET_QSB_OWNER_KEY } from "../../support/key-boundary-qsb-vaults";
 import {
   KEY_BOUNDARY_QSB_JOURNAL_IDS,
   QSB_IMPORT_MNEMONIC,
@@ -103,6 +104,8 @@ describe("key boundary", () => {
     // reviewed edit rather than the quiet way to make this suite green again.
     expect(excused.map((entry) => typeOf(entry.message)).sort()).toEqual([
       "wallet.confirmQsbBackup",
+      "wallet.depositQsbVault",
+      "wallet.qsbVaults",
       "wallet.removeMultisig",
       "wallet.revealQsbPhrase",
       "wallet.shareArgentMultisigIntent",
@@ -230,6 +233,13 @@ describe("key boundary", () => {
       expect(serialized).not.toContain(QSB_IMPORT_MNEMONIC);
       expect(serialized).not.toContain("qsbAccounts");
       expect(serialized).not.toContain("journalId");
+      // Nor the QSB owner key, a coordinator session, or the signed bytes'
+      // container: a vault reply is public views only.
+      expect(serialized).not.toContain(SECRET_QSB_OWNER_KEY);
+      expect(serialized).not.toContain("rawTxHex");
+      for (const token of harness.qsbTokens()) {
+        expect(serialized).not.toContain(token);
+      }
       for (const journalId of KEY_BOUNDARY_QSB_JOURNAL_IDS) {
         expect(serialized).not.toContain(journalId);
       }
@@ -240,6 +250,8 @@ describe("key boundary", () => {
         expect(serialized).not.toContain(SECRET_MNEMONIC);
       }
     }
+    // The token grep was armed: the vault entries really signed in.
+    expect(harness.qsbTokens().length).toBeGreaterThan(0);
   });
 
   test("mnemonic generation reveals only to extension pages", async () => {
