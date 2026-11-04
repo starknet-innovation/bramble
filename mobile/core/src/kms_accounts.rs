@@ -139,6 +139,37 @@ pub(crate) fn family_address(
 mod tests {
     use super::*;
 
+    /// `deployment.ts`: a funded Xverse account deploys with Argent 0.4.0's calldata at its own
+    /// class, and those parameters land on the address the scan derived, the check the deploy
+    /// path (`wallet_ext::deployment`) makes before it deploys anything.
+    #[test]
+    fn xverse_deploys_with_argent_0_4_calldata_at_its_own_address() {
+        let key = Felt::from(0x1234_5678_u64);
+        let xverse = catalog().argent_xverse;
+        let calldata = argent_preset(xverse)
+            .unwrap()
+            .build_constructor_calldata(&key);
+        assert_eq!(
+            calldata,
+            argent_preset(catalog().argent_default)
+                .unwrap()
+                .build_constructor_calldata(&key)
+        );
+        assert_eq!(calldata, vec![Felt::ZERO, key, Felt::ONE]);
+        let derived = family_address(
+            AccountFamily::Argent,
+            Some(&xverse),
+            None,
+            &key,
+            ChainId::Mainnet,
+        )
+        .unwrap();
+        let salt = derived.deployment_salt.unwrap();
+        let deployed =
+            krusty_kms::calculate_contract_address(&salt, &xverse, &calldata, &Felt::ZERO).unwrap();
+        assert_eq!(deployed, derived.address);
+    }
+
     #[test]
     fn class_rules_follow_the_extension() {
         let argent = catalog().argent_default;
