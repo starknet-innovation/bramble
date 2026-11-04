@@ -7,15 +7,31 @@
  * `manifest.json` SHA-256 before Python can see it — the same refusal qsb-app's
  * own runtime (`src/lib/qsb-runtime.ts`) applies. Wallet randomness and secret
  * material belong to Krusty KMS, so this adapter exposes no bridge call that
- * draws or holds HORS secrets (`generate`, `setup`, `adopt`); it runs one
- * deterministic, public-only probe over fixed inputs.
+ * draws or holds HORS secrets (`generate`, `setup`, `adopt`): it runs a
+ * deterministic public-only probe, and `setup_from_commitments`, which builds a
+ * vault script from public commitments alone.
+ *
+ * Caller data never becomes Python source. A request reaches Python only
+ * through the registered `qsb_request` module, whose one function hands over
+ * the JSON text of the call in progress; every Python string this adapter runs
+ * is a constant. Calls run one at a time, so a request can only ever be read
+ * by the call that set it.
  *
  * Fails closed: an unreadable or mismatched source, a manifest that names any
- * file other than the four sources, an interpreter that fails to load, or a
- * probe result of the wrong shape each reject with a fixed message (the raw
- * Python traceback stays in `cause`). A failed start is forgotten, so the next
- * call boots a fresh interpreter instead of reusing a half-started one.
+ * file other than the four sources, an interpreter that fails to load, a
+ * malformed request, or a reply of the wrong shape each reject with a fixed
+ * message (a raw Python traceback stays in `cause`). A failed start is
+ * forgotten, so the next call boots a fresh interpreter instead of reusing a
+ * half-started one.
  */
+import { bytesToHex, hexToBytes, isLowercaseHexBytes } from "@bramble/core/hex";
+import { isRecord } from "@bramble/core/json";
+import {
+  type QsbHorsCommitments,
+  type QsbVaultSetup,
+  readQsbCommitmentRequest,
+  readQsbVaultSetup,
+} from "./qsb-vault-setup";
 
 /**
  * The pipeline sources, in the order qsb-app writes them into the interpreter.
@@ -40,7 +56,8 @@ type QsbPackagedFile = QsbSource | typeof QSB_MANIFEST;
 
 /**
  * The slice of a loaded Pyodide interpreter the adapter drives. Narrow on
- * purpose: no `pyimport`, no package loading, nothing that reaches the network.
+ * purpose: no `pyimport`, no globals, no package loading, nothing that reaches
+ * the network.
  */
 export type QsbInterpreter = {
   readonly FS: { readonly writeFile: (path: string, data: Uint8Array) => void };
@@ -65,11 +82,14 @@ export type QsbRuntimeDeps = {
 };
 
 /**
- * The public-only known-answer computation: SHA-256d of the empty string, the
- * pipeline's valid small-r x-coordinates (the field arithmetic behind Config
- * A's public dummy signatures), and the script push of twenty zero bytes.
+ * The public-only known-answer computation: SHA-256d of the empty string,
+ * HASH160 of the empty string through the rebound RIPEMD-160 (the hash setup
+ * runs for every HORS slot), the pipeline's valid small-r x-coordinates (the
+ * field arithmetic behind Config A's public dummy signatures), and the script
+ * push of twenty zero bytes.
  */
 export type QsbPublicProbe = {
+  readonly hash160Empty: string;
   readonly push20: string;
   readonly sha256dEmpty: string;
   readonly validSmallR: readonly number[];
@@ -79,18 +99,14 @@ export type QsbPublicProbe = {
 export type QsbRuntime = {
   /** Runs the public-only probe; boots and verifies the interpreter first if needed. */
   readonly publicProbe: () => Promise<QsbPublicProbe>;
+  /**
+   * Builds the Config A vault for one vault's HORS commitments with the pinned
+   * bridge. The commitments are checked before anything boots, and the reply
+   * is checked against them (see `./qsb-vault-setup`); either refusal rejects
+   * with a fixed message.
+   */
+  readonly setupFromCommitments: (commitments: QsbHorsCommitments) => Promise<QsbVaultSetup>;
 };
-
-/**
- * The HASH160 provider for a build that has not chosen one: every call
- * refuses, so no pipeline path can silently hash with something else.
- */
-export const refuseRipemd160 = (): Uint8Array => {
-  throw new Error("QSB RIPEMD-160 provider is not wired in this build");
-};
-
-const HEX_DIGEST = /^[0-9a-f]{64}$/;
-const EVEN_HEX = /^(?:[0-9a-f]{2})*$/;
 
 // qsb-app's startup, verbatim: rebind the pipeline's RIPEMD-160 (and the
 // HASH160 built on it) to the JavaScript module before anything imports
@@ -107,32 +123,61 @@ const STARTUP = [
 ].join("\n");
 
 // Fixed public inputs only: no bridge method, no `os.urandom`, no file writes.
+// `bitcoin_tx.hash160` is the binding setup calls, so the probe shows the
+// rebinding reached it.
 const PUBLIC_PROBE = [
   "import json",
   "import bitcoin_tx",
   "import secp256k1",
   "json.dumps({",
+  "    'hash160Empty': bitcoin_tx.hash160(b'').hex(),",
   "    'push20': bitcoin_tx.push_data(bytes(20)).hex(),",
   "    'sha256dEmpty': secp256k1.sha256d(b'').hex(),",
   "    'validSmallR': bitcoin_tx._valid_small_r_values(),",
   "})",
 ].join("\n");
 
-const toHex = (bytes: Uint8Array): string =>
-  Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+// The request is read from `qsb_request`, never written into this source.
+const SETUP_FROM_COMMITMENTS = [
+  "import bridge",
+  "import qsb_request",
+  "bridge.setup_from_commitments(qsb_request.commitments_json())",
+].join("\n");
 
-const fromHex = (hex: string): Uint8Array => {
-  if (!EVEN_HEX.test(hex)) {
-    throw new Error("QSB hash input is not lowercase hex");
-  }
-  return Uint8Array.from(hex.match(/../g) ?? [], (pair) => Number.parseInt(pair, 16));
+// The one way a request reaches Python: `commitments_json` hands the pending
+// JSON text over once and refuses when no call has set one.
+type QsbRequestChannel = {
+  readonly module: object;
+  readonly hold: (json: string) => void;
+  readonly release: () => void;
+};
+
+const requestChannel = (): QsbRequestChannel => {
+  let pending: string | undefined;
+  return {
+    hold: (json) => {
+      pending = json;
+    },
+    module: {
+      commitments_json: (): string => {
+        const json = pending;
+        pending = undefined;
+        if (json === undefined) {
+          throw new Error("QSB runtime has no request in progress");
+        }
+        return json;
+      },
+    },
+    release: () => {
+      pending = undefined;
+    },
+  };
 };
 
 const sha256Hex = async (bytes: Uint8Array): Promise<string> =>
-  toHex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes as BufferSource)));
+  bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes as BufferSource)));
 
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+const isSha256Hex = (value: unknown): value is string => isLowercaseHexBytes(value, 32, 32);
 
 /**
  * Parses the pinned manifest into one digest per source. Refuses anything that
@@ -152,7 +197,7 @@ const manifestDigests = (bytes: Uint8Array): ReadonlyMap<QsbSource, string> => {
   const digests = new Map<QsbSource, string>();
   for (const source of QSB_SOURCES) {
     const digest = parsed[source];
-    if (typeof digest !== "string" || !HEX_DIGEST.test(digest)) {
+    if (!isSha256Hex(digest)) {
       throw new Error("QSB source manifest does not list exactly the pinned sources");
     }
     digests.set(source, digest);
@@ -179,7 +224,17 @@ const verifiedSources = async (
   return sources;
 };
 
-const boot = async (deps: QsbRuntimeDeps): Promise<QsbInterpreter> => {
+const hashModule = (ripemd160: QsbRuntimeDeps["ripemd160"]): object => ({
+  ripemd: (hex: string): string => {
+    const bytes = hexToBytes(hex);
+    if (bytes === null) {
+      throw new Error("QSB hash input is not lowercase hex");
+    }
+    return bytesToHex(ripemd160(bytes));
+  },
+});
+
+const boot = async (deps: QsbRuntimeDeps, request: object): Promise<QsbInterpreter> => {
   const sources = await verifiedSources(deps.readFile);
   let python: QsbInterpreter;
   try {
@@ -190,15 +245,28 @@ const boot = async (deps: QsbRuntimeDeps): Promise<QsbInterpreter> => {
   for (const [source, bytes] of sources) {
     python.FS.writeFile(source, bytes);
   }
-  python.registerJsModule("qsb_hash", {
-    ripemd: (hex: string): string => toHex(deps.ripemd160(fromHex(hex))),
-  });
+  python.registerJsModule("qsb_hash", hashModule(deps.ripemd160));
+  python.registerJsModule("qsb_request", request);
   try {
     await python.runPythonAsync(STARTUP);
   } catch (error) {
     throw new Error("QSB pipeline failed to start", { cause: error });
   }
   return python;
+};
+
+// Runs one constant Python string; a Python exception becomes `failure`'s
+// fixed message, with the traceback kept only as its cause.
+const runPython = async (
+  python: QsbInterpreter,
+  code: string,
+  failure: (cause: unknown) => Error,
+): Promise<unknown> => {
+  try {
+    return await python.runPythonAsync(code);
+  } catch (error) {
+    throw failure(error);
+  }
 };
 
 const isSmallR = (value: unknown): value is number =>
@@ -213,16 +281,16 @@ const probeResult = (raw: unknown): QsbPublicProbe => {
   }
   if (
     !isRecord(parsed) ||
-    typeof parsed["push20"] !== "string" ||
-    !EVEN_HEX.test(parsed["push20"]) ||
-    typeof parsed["sha256dEmpty"] !== "string" ||
-    !HEX_DIGEST.test(parsed["sha256dEmpty"]) ||
+    !isLowercaseHexBytes(parsed["hash160Empty"], 20, 20) ||
+    !isLowercaseHexBytes(parsed["push20"], 1, 32) ||
+    !isSha256Hex(parsed["sha256dEmpty"]) ||
     !Array.isArray(parsed["validSmallR"]) ||
     !parsed["validSmallR"].every(isSmallR)
   ) {
     throw new Error("QSB public probe returned an unexpected shape");
   }
   return {
+    hash160Empty: parsed["hash160Empty"],
     push20: parsed["push20"],
     sha256dEmpty: parsed["sha256dEmpty"],
     validSmallR: [...parsed["validSmallR"]],
@@ -232,27 +300,51 @@ const probeResult = (raw: unknown): QsbPublicProbe => {
 /**
  * Creates the lazy QSB runtime. Nothing loads until the first call; one
  * interpreter then serves every call for the life of the worker, and a worker
- * restart (idle termination, update) starts cold again.
+ * restart (idle termination, update) starts cold again. Calls queue: each runs
+ * its Python only after the previous call has finished, failed or not.
  */
 export const createQsbRuntime = (deps: QsbRuntimeDeps): QsbRuntime => {
+  const request = requestChannel();
   let started: Promise<QsbInterpreter> | undefined;
   const interpreter = (): Promise<QsbInterpreter> => {
-    started ??= boot(deps).catch((error: unknown) => {
+    started ??= boot(deps, request.module).catch((error: unknown) => {
       started = undefined;
       throw error;
     });
     return started;
   };
+  let queue: Promise<unknown> = Promise.resolve();
+  const exclusive = <T>(task: (python: QsbInterpreter) => Promise<T>): Promise<T> => {
+    const run = queue.then(async () => task(await interpreter()));
+    queue = run.catch(() => undefined);
+    return run;
+  };
   return {
-    publicProbe: async () => {
-      const python = await interpreter();
-      let raw: unknown;
-      try {
-        raw = await python.runPythonAsync(PUBLIC_PROBE);
-      } catch (error) {
-        throw new Error("QSB public probe failed", { cause: error });
-      }
-      return probeResult(raw);
+    publicProbe: () =>
+      exclusive(async (python) =>
+        probeResult(
+          await runPython(
+            python,
+            PUBLIC_PROBE,
+            (cause) => new Error("QSB public probe failed", { cause }),
+          ),
+        ),
+      ),
+    setupFromCommitments: async (commitments) => {
+      const checked = readQsbCommitmentRequest(commitments);
+      const raw = await exclusive(async (python) => {
+        request.hold(checked.json);
+        try {
+          return await runPython(
+            python,
+            SETUP_FROM_COMMITMENTS,
+            (cause) => new Error("QSB commitments setup failed", { cause }),
+          );
+        } finally {
+          request.release();
+        }
+      });
+      return readQsbVaultSetup(raw, checked);
     },
   };
 };

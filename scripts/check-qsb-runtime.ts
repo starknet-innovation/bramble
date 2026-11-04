@@ -1,8 +1,8 @@
 /**
  * Verifies the QSB runtime the background ships before it enters the wallet:
  * the exact published Pyodide package and the commit-pinned qsb-app pipeline
- * sources, then runs the public-only known-answer probe through the real
- * adapter on those same bytes.
+ * sources, then runs the public-only known-answer probe and the commitments
+ * setup of the QSB BIP test vault through the real adapter on those same bytes.
  *
  * Provenance runs through the shared `vendor-pin-policy` helpers, and the
  * pinned qsb-app commit is read back out of `scripts/vendor-qsb.ts` rather than
@@ -15,16 +15,19 @@
  */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { ripemd160 } from "@noble/hashes/legacy.js";
 import {
   createQsbRuntime,
   QSB_MANIFEST,
   QSB_SOURCES,
-  type QsbInterpreter,
-  refuseRipemd160,
 } from "../apps/extension/src/background/qsb/qsb-runtime";
-import { QSB_PUBLIC_PROBE_ANSWERS } from "./qsb-known-answers";
+import { QSB_MAX_JSON_TEXT } from "../apps/extension/src/background/qsb/qsb-vault-setup";
+import {
+  QSB_PUBLIC_PROBE_ANSWERS,
+  QSB_TEST_VAULT_COMMITMENTS,
+  QSB_TEST_VAULT_SETUP,
+} from "./qsb-known-answers";
+import { loadPinnedPyodide } from "./qsb-pyodide";
 import {
   dynamicExecutionFailures,
   npmRunTargets,
@@ -56,8 +59,8 @@ const sparsePattern = "/public/qsb/";
 const qsbDigests: Readonly<Record<string, string>> = {
   LICENSE: "8d2562b24636fb569997da918899eed12e95b573eef1207bf60be6bf7bd836ff",
   "bitcoin_tx.py": "c7e52af90bd0d9fce9834fce26dcd67aee0d7751ee228d9730873c4d12659a5c",
-  "bridge.py": "21f073bf940e8fc8ab3d19e8ff92a4e3f61b525fdac1514e5249e351f0e0dcfd",
-  [QSB_MANIFEST]: "f1cab3a8871f9918dda011c0723eb0d2993d255ab722c3e78439f183110f1d65",
+  "bridge.py": "2a786a36a988e298b4fbb6132f37a50d7610fb14fb382143518c7ad3ec6d6d96",
+  [QSB_MANIFEST]: "e73a049b7c02350d03d3b5409036e9d9aaf384f09500446eb497c361e1f3c60f",
   "qsb_pipeline.py": "05334c08fa012a77ccba2887e05d78f90a8b81c0e34b786931b423f7f11255d8",
   "secp256k1.py": "d2cebd1410b75cad606806cf02d7bee3e24724d5fcb7a53a07f598fcbc8afece",
 };
@@ -139,44 +142,40 @@ for (const source of QSB_SOURCES) {
     failures.push(`${QSB_MANIFEST} does not pin the reviewed digest of ${source}`);
   }
 }
+// The adapter refuses a public state longer than the bridge itself would read
+// back, so the two limits must be one number.
+const bridgeSource = await readFile(`${shippedDirectory}/bridge.py`, "utf8");
+if (!bridgeSource.includes(`\nMAX_JSON_TEXT = ${QSB_MAX_JSON_TEXT}\n`)) {
+  failures.push(`bridge.py must keep MAX_JSON_TEXT at the adapter's ${QSB_MAX_JSON_TEXT}`);
+}
 
 if (failures.length > 0) {
   throw new Error(failures.join("; "));
 }
 
 // The bytes above establish what ships; this establishes that they run. Same
-// adapter, same files, same refusing RIPEMD-160 provider as the worker. The
-// loader is imported by path — the very `pyodide.mjs` digest-checked above, not
-// whatever the package's export map resolves — and narrowed like the worker's
-// own type shim, since the package's declarations need Emscripten's globals.
-const pyodideLoader = (await import(pathToFileURL(resolve(pyodideRoot, "pyodide.mjs")).href)) as {
-  readonly loadPyodide?: unknown;
-};
-if (typeof pyodideLoader.loadPyodide !== "function") {
-  throw new Error("Pyodide runtime no longer exports loadPyodide");
-}
-const loadPyodide = pyodideLoader.loadPyodide as (options: {
-  readonly indexURL: string;
-  readonly jsglobals: object;
-  readonly stderr: (line: string) => void;
-  readonly stdout: (line: string) => void;
-}) => Promise<QsbInterpreter>;
+// adapter, same files, same RIPEMD-160 provider as the worker, and the very
+// `pyodide.mjs` digest-checked above (./qsb-pyodide imports it by path).
 const runtime = createQsbRuntime({
-  loadInterpreter: () =>
-    loadPyodide({
-      indexURL: `${resolve(pyodideRoot)}/`,
-      jsglobals: Object.create(null),
-      stderr: () => undefined,
-      stdout: () => undefined,
-    }),
+  loadInterpreter: () => loadPinnedPyodide(pyodideRoot),
   readFile: async (file) => new Uint8Array(await readFile(`${shippedDirectory}/${file}`)),
-  ripemd160: refuseRipemd160,
+  ripemd160,
 });
 const probe = await runtime.publicProbe();
 if (
+  probe.hash160Empty !== QSB_PUBLIC_PROBE_ANSWERS.hash160Empty ||
   probe.push20 !== QSB_PUBLIC_PROBE_ANSWERS.push20 ||
   probe.sha256dEmpty !== QSB_PUBLIC_PROBE_ANSWERS.sha256dEmpty ||
   probe.validSmallR.join(",") !== QSB_PUBLIC_PROBE_ANSWERS.validSmallR.join(",")
 ) {
   throw new Error("QSB public probe does not match its known answers");
+}
+const vault = await runtime.setupFromCommitments(QSB_TEST_VAULT_COMMITMENTS);
+if (
+  vault.scriptHash !== QSB_TEST_VAULT_SETUP.scriptHash ||
+  vault.scriptHex.length !== QSB_TEST_VAULT_SETUP.scriptBytes * 2 ||
+  createHash("sha256").update(vault.publicStateJson).digest("hex") !==
+    QSB_TEST_VAULT_SETUP.publicStateSha256
+) {
+  throw new Error("QSB commitments setup does not match the test vault's known answers");
 }

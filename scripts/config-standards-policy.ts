@@ -54,6 +54,13 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/wallet-ui": "workspace:*",
   "@bramble/wallet-model": "workspace:*",
   "@bramble/wallet-protocol": "workspace:*",
+  // RIPEMD-160 for the QSB pipeline's HASH160, which Pyodide's OpenSSL-less
+  // `hashlib` cannot provide. Only `ripemd160` from `@noble/hashes/legacy.js`
+  // is imported (by the worker and by check:qsb), the function qsb-app wires.
+  // MIT, dependency-free, no install scripts, already resolved in bun.lock, and
+  // the exact release @scure/btc-signer 2.4.1 requires, so a later deposit
+  // slice adds no second noble to the bundle.
+  "@noble/hashes": "2.4.0",
   "@starknetfoundation/krusty-kms-wasm": "0.15.0",
   // The QSB pipeline's Python runtime, the exact release qsb-app pins. Its
   // shipped files are digest-pinned by scripts/check-qsb-runtime.ts.

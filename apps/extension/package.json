@@ -30,6 +30,7 @@
     "@bramble/wallet-model": "workspace:*",
     "@bramble/wallet-protocol": "workspace:*",
     "@bramble/wallet-ui": "workspace:*",
+    "@noble/hashes": "2.4.0",
     "buffer": "6.0.3",
     "starknet": "10.8.0"
   }
