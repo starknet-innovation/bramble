@@ -24,6 +24,7 @@ import { emptyVault } from "@bramble/vault/schema";
 import { createWalletVaultService } from "@bramble/vault/service";
 import type { WalletVaultService } from "@bramble/vault/service-types";
 import { createWalletReader } from "../../apps/extension/src/background/accounts/wallet-reader";
+import { createQsbAccountLocks } from "../../apps/extension/src/background/qsb/qsb-vault-locks";
 import type { QsbVaultDeps } from "../../apps/extension/src/background/qsb/qsb-vault-session";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
@@ -61,6 +62,8 @@ export type QsbVaultHarness = {
   readonly state: FakeCoordinatorState;
   /** Storage writes (`write <key>`) and coordinator calls (`call <route>`), in order. */
   readonly events: string[];
+  /** Grants or revokes the coordinator's origin (granted at first). */
+  readonly grant: (granted: boolean) => void;
 };
 
 const realKrusty = async (): Promise<KmsPort> => ({
@@ -121,7 +124,9 @@ export const qsbVaultHarness = async (
   let drawn = 0;
   const runtime = fakeQsbRuntime();
   const fake = fakeQsbFetch(state, clock);
+  let granted = true;
   const deps: QsbVaultDeps = {
+    coordinatorAccess: async () => granted,
     coordinator: createQsbCoordinator({
       fetch: async (url, init) => {
         events.push(`call ${init.method ?? "GET"} ${new URL(url).pathname}`);
@@ -132,6 +137,7 @@ export const qsbVaultHarness = async (
       drawn += 1;
       return `11111111-2222-4333-8444-${String(drawn).padStart(12, "0")}`;
     },
+    locks: createQsbAccountLocks(),
     now: clock,
     runtime,
     sessions: createQsbSessions({ now: clock }),
@@ -155,6 +161,9 @@ export const qsbVaultHarness = async (
     backend,
     deps,
     events,
+    grant: (value) => {
+      granted = value;
+    },
     owner,
     runtime,
     send: (message) => handler(message, extensionSender),

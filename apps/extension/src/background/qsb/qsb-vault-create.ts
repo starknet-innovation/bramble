@@ -1,10 +1,14 @@
 /**
  * `wallet.createQsbVault`: allocate a QSB account's next vault, build its
  * script from Krusty's commitments, and register it with the coordinator.
- * Runs whole inside one vault session, so inside the vault's mutation queue.
+ * Runs under the account's QSB lock, over one vault session whose every
+ * local step (each read, each durable write, each derivation) takes its own
+ * short slot of the vault's queue and re-validates what it depends on; the
+ * coordinator and the runtime are called between slots, never inside one.
  *
  * The order is the safety (BIP "QSB Wallet Secret Management", Allocation):
- * only a writer may create; `v = nextV` is allocated durably with Krusty's
+ * only once the user has granted the coordinator's origin, and only a
+ * writer may create; `v = nextV` is allocated durably with Krusty's
  * root before any commitment or script leaves the background; the script is
  * rebuilt and associated durably next; then, on a fresh vault list, the reuse
  * scan; then the registration. A registration that failed for a retryable
@@ -27,7 +31,7 @@ import type { QsbVaultRecord } from "@bramble/vault/qsb-vault-record";
 import type { QsbJournalState, QsbVaultAccess } from "@bramble/vault/service-types";
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
 import type { QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
-import { requireOwnerAllowed } from "./qsb-vault-gates";
+import { requireCoordinatorAccess, requireOwnerAllowed } from "./qsb-vault-gates";
 import {
   coordinatorRefusal,
   failClosed,
@@ -164,6 +168,7 @@ const finish = async (
  */
 export const createQsbVault = (deps: QsbVaultDeps, access: QsbVaultAccess): Promise<QsbVaultView> =>
   failClosed("runtimeUnavailable", async () => {
+    await requireCoordinatorAccess(deps);
     const journal = await writerJournal(access);
     const owner = await qsbOwnerOf(access);
     const session = qsbAccessSession(deps, access, owner);

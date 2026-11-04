@@ -1,5 +1,6 @@
 /**
- * The coordinator's configuration gates (qsb-app `sdk/client.ts`
+ * The QSB gates: the user's grant of the coordinator's origin, then the
+ * coordinator's configuration gates (qsb-app `sdk/client.ts`
  * `assertServerNetwork`, `assertOwnerAllowed`, `assertOperations`): checked
  * before a vault is registered, before a deposit is prepared and again just
  * before it is submitted. A deployment that serves another network, has
@@ -11,6 +12,18 @@
 import { QSB_COORDINATOR_NETWORK } from "@bramble/qsb/origin";
 import type { QsbConfig } from "@bramble/qsb/responses";
 import { qsbRefusal } from "./qsb-vault-refusals";
+import type { QsbVaultDeps } from "./qsb-vault-session";
+
+/**
+ * Refuses with `accessNeeded` unless the user has granted the coordinator's
+ * origin. Every action checks it first, before anything is allocated, kept or
+ * sent; the listing reads the answer and degrades instead.
+ */
+export const requireCoordinatorAccess = async (
+  deps: Pick<QsbVaultDeps, "coordinatorAccess">,
+): Promise<void> => {
+  if (!(await deps.coordinatorAccess())) throw qsbRefusal("accessNeeded");
+};
 
 /** Refuses a deployment that is not mainnet or will not serve this owner. */
 export const requireOwnerAllowed = (config: QsbConfig): void => {

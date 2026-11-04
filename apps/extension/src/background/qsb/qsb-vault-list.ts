@@ -1,25 +1,26 @@
 /**
  * `wallet.qsbVaults`: the account's owner address, its confirmed funds and
- * every vault, matched to the coordinator's records by script hash. The
- * panel polls it, so it holds the vault's mutation queue only for its local
- * reads and writes, never across the network: one session reads the journal,
- * the pending deposits and the owner; the coordinator is asked outside any
- * session (signing in through a short one of its own if it must); and a last
- * session records what the chain now confirms.
+ * every vault, matched to the coordinator's records by script hash. Like
+ * every QSB flow it takes the vault's mutation queue only for its local
+ * reads and writes, one short slot each, never across the network: it reads
+ * the journal, the pending deposits and the owner, asks the coordinator
+ * (signing in if it must), then records what the chain now confirms, each
+ * record re-validated against the journal as it is then.
  *
  * A deposit is recorded as the vault's funding only once the coordinator's
  * `/funding` reports it confirmed, its transaction hashes to its txid and its
  * output 0 pays this vault's script exactly its amount; the pending bytes of
- * that txid are then dropped. If the coordinator cannot be reached, or
- * answers anything malformed, the reply is the address and the local vaults
- * with `funds` and every `registered` null, rather than a failure.
+ * that txid are then dropped. If the user has not granted the coordinator's
+ * origin (then it is not asked at all), it cannot be reached, or it answers
+ * anything malformed, the reply is the address and the local vaults with
+ * `funds` and every `registered` null, rather than a failure.
  */
 
 import { isVaultFunding } from "@bramble/qsb/transactions";
 import type { QsbFundingStatus, QsbPublicVault } from "@bramble/qsb/vault-responses";
 import type { QsbPendingDeposit } from "@bramble/vault/qsb-deposit-store";
 import type { QsbFunding, QsbVaultRecord } from "@bramble/vault/qsb-vault-record";
-import type { QsbJournalState, QsbOwner, QsbVaultAccess } from "@bramble/vault/service-types";
+import type { QsbJournalState, QsbVaultAccess } from "@bramble/vault/service-types";
 import {
   QSB_MAX_SAT,
   type QsbOwnerFunds,
@@ -29,13 +30,10 @@ import { failClosed, journalUnavailable } from "./qsb-vault-refusals";
 import {
   type QsbCoordinatorSession,
   type QsbVaultDeps,
-  qsbCoordinatorSession,
+  qsbAccessSession,
   qsbOwnerOf,
 } from "./qsb-vault-session";
 import { qsbVaultView } from "./qsb-vault-view";
-
-/** Opens one short vault session over the account being listed. */
-export type QsbVaultOpener = <T>(task: (access: QsbVaultAccess) => Promise<T>) => Promise<T>;
 
 /** The `wallet.qsbVaults` reply, without `ok`. */
 export type QsbVaultsListing = {
@@ -154,30 +152,22 @@ const viewsOf = (local: Local, remote: Remote | null): readonly QsbVaultView[] =
     ),
   );
 
-// Signs in through a short session of its own, outside the listing's reads.
-const signerOf = (owner: QsbOwner, open: QsbVaultOpener) => ({
-  address: owner.address,
-  signSignIn: (message: string) => open((access) => access.signSignIn(message)),
-});
-
-/** Lists the account `open` opens sessions over. */
+/** Lists the account the session `access` is over. */
 export const listQsbVaults = (
   deps: QsbVaultDeps,
-  open: QsbVaultOpener,
+  access: QsbVaultAccess,
 ): Promise<QsbVaultsListing> =>
   failClosed("coordinatorUnavailable", async () => {
-    const { accountId, local, owner } = await open(async (access) => ({
-      accountId: access.accountId,
-      local: await readLocal(access),
-      owner: await qsbOwnerOf(access),
-    }));
-    const session = qsbCoordinatorSession(deps, accountId, signerOf(owner, open));
-    const remote = await readRemote(deps, session, local).catch(() => null);
+    const local = await readLocal(access);
+    const owner = await qsbOwnerOf(access);
+    const session = qsbAccessSession(deps, access, owner);
+    // Without the user's grant the coordinator is not asked at all.
+    const remote = (await deps.coordinatorAccess())
+      ? await readRemote(deps, session, local).catch(() => null)
+      : null;
     const settled =
       remote && remote.confirmations.length > 0
-        ? await open((access) => recordConfirmations(access, remote.confirmations)).catch(
-            () => local,
-          )
+        ? await recordConfirmations(access, remote.confirmations).catch(() => local)
         : local;
     return {
       address: owner.address,

@@ -51,6 +51,26 @@ const writerHarness = async (options: Parameters<typeof qsbServiceHarness>[0] = 
   return harness;
 };
 
+// Allocates vaults 0..count-1 and gives each a script, so each can take a deposit.
+const depositableVaults = async (
+  harness: Awaited<ReturnType<typeof writerHarness>>,
+  count: number,
+): Promise<void> => {
+  for (let v = 0; v < count; v += 1) {
+    await within(harness, async (access) => {
+      const { root } = await access.commitments(v);
+      await access.commit({ kind: "allocate", root, v });
+      await access.commit({
+        kind: "associate",
+        scriptHash: v.toString(16).padStart(2, "0").repeat(32),
+        scriptPubKey: "51".repeat(100),
+        v,
+      });
+    });
+  }
+  harness.writes.splice(0);
+};
+
 const within = <T>(
   harness: Awaited<ReturnType<typeof writerHarness>>,
   task: (access: QsbVaultAccess) => Promise<T>,
@@ -139,6 +159,7 @@ describe("the journal and Krusty", () => {
 describe("pending deposits", () => {
   test("are kept in their own key, bound to the account, and released by txid only", async () => {
     const harness = await writerHarness();
+    await depositableVaults(harness, 3);
     expect(await within(harness, (access) => access.pendingDeposits())).toEqual([]);
     await within(harness, (access) => access.holdDeposit(deposit(2)));
     expect(envelopes(harness.writes)).toEqual([depositKey]);
@@ -160,6 +181,7 @@ describe("pending deposits", () => {
 
   test("refuse a deposit past the cap, and fail closed on a foreign or unreadable record", async () => {
     const harness = await writerHarness();
+    await depositableVaults(harness, QSB_MAX_PENDING_DEPOSITS + 1);
     for (let v = 0; v < QSB_MAX_PENDING_DEPOSITS; v += 1) {
       await within(harness, (access) => access.holdDeposit(deposit(v)));
     }
@@ -171,6 +193,37 @@ describe("pending deposits", () => {
     expect(await within(harness, (access) => access.pendingDeposits())).toBeNull();
     await expect(within(harness, (access) => access.holdDeposit(deposit(0)))).rejects.toThrow(
       QSB_ACCOUNT_REFUSALS.journalUnavailable,
+    );
+  });
+
+  test("each keep re-checks its vault and what is already kept for it", async () => {
+    const harness = await writerHarness();
+    await depositableVaults(harness, 1);
+    // No vault 1 at all, so nothing may be kept for it.
+    await expect(within(harness, (access) => access.holdDeposit(deposit(1)))).rejects.toThrow(
+      QSB_VAULT_REFUSALS.notDepositable,
+    );
+    await within(harness, (access) => access.holdDeposit(deposit(0)));
+    // The same bytes again change nothing; other bytes for the vault are refused.
+    harness.writes.length = 0;
+    await within(harness, (access) => access.holdDeposit(deposit(0)));
+    expect(envelopes(harness.writes)).toEqual([]);
+    await expect(
+      within(harness, (access) =>
+        access.holdDeposit({ ...deposit(0), rawTxHex: "03".repeat(100) }),
+      ),
+    ).rejects.toThrow(QSB_VAULT_REFUSALS.depositPending);
+    // Once its funding is recorded the vault takes no deposit.
+    await within(harness, (access) => access.releaseDeposit(0, "ab".repeat(32)));
+    await within(harness, (access) =>
+      access.commit({
+        funding: { txid: "ab".repeat(32), valueSat: 50_000, vout: 0 },
+        kind: "fund",
+        v: 0,
+      }),
+    );
+    await expect(within(harness, (access) => access.holdDeposit(deposit(0)))).rejects.toThrow(
+      QSB_VAULT_REFUSALS.notDepositable,
     );
   });
 
@@ -203,22 +256,50 @@ describe("pending deposits", () => {
 });
 
 describe("the mutation queue", () => {
-  test("a vault write waits for a running session", async () => {
+  test("a session holds no slot between its calls: other vault work runs while it waits", async () => {
     const harness = await writerHarness();
     const order: string[] = [];
     let release = (): void => undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const session = within(harness, async () => {
-      order.push("session start");
+    const session = within(harness, async (access) => {
+      await access.owner();
+      order.push("session read");
       await gate;
-      order.push("session end");
+      order.push("session resumes");
+      await access.journal();
     });
-    const listing = harness.service.qsbAccounts(PASSPHRASE).then(() => order.push("listing"));
     await Bun.sleep(5);
+    await harness.service.qsbAccounts(PASSPHRASE);
+    order.push("listing");
+    await harness.service.readVault(PASSPHRASE);
+    order.push("vault read");
     release();
-    await Promise.all([session, listing]);
-    expect(order).toEqual(["session start", "session end", "listing"]);
+    await session;
+    expect(order).toEqual(["session read", "listing", "vault read", "session resumes"]);
+  });
+
+  test("each session call waits its turn behind queued vault work", async () => {
+    const harness = await writerHarness();
+    const order: string[] = [];
+    const listing = harness.service.qsbAccounts(PASSPHRASE).then(() => order.push("listing"));
+    const journal = within(harness, (access) => access.journal()).then(() => order.push("journal"));
+    await Promise.all([listing, journal]);
+    expect(order).toEqual(["listing", "journal"]);
+  });
+
+  test("a slot re-reads the account: one removed since the session opened is refused", async () => {
+    const harness = await writerHarness();
+    await expect(
+      within(harness, async (access) => {
+        const vault = await harness.service.readVault(PASSPHRASE);
+        await createEncryptedStore(harness.backend, "bramble:vault").write(
+          { ...vault, qsbAccounts: [] },
+          PASSPHRASE,
+        );
+        return access.owner();
+      }),
+    ).rejects.toThrow(QSB_ACCOUNT_REFUSALS.unknownAccount);
   });
 });

@@ -1,7 +1,10 @@
 /**
  * `wallet.quoteQsbDeposit`, `wallet.depositQsbVault` and
- * `wallet.resendQsbDeposit`, each run whole inside one vault session (qsb-app
- * `sdk/client.ts` `submitDeposit`, `sendDeposit`, `resubmitDeposit`).
+ * `wallet.resendQsbDeposit` (qsb-app `sdk/client.ts` `submitDeposit`,
+ * `sendDeposit`, `resubmitDeposit`), each under the account's QSB lock and
+ * over one vault session whose local steps take short queue slots of their
+ * own; keeping the signed bytes re-checks, in its slot, that the vault can
+ * still take them and no other bytes are kept for it.
  *
  * A deposit is prepared (./qsb-vault-prepare), refused as `quoteChanged`
  * unless its fee is exactly the one the user accepted, signed by Krusty on
@@ -26,7 +29,7 @@ import type {
   QsbSubmission,
   QsbVaultView,
 } from "@bramble/wallet-model/qsb-vaults";
-import { requireDepositsOpen } from "./qsb-vault-gates";
+import { requireCoordinatorAccess, requireDepositsOpen } from "./qsb-vault-gates";
 import {
   depositableRecord,
   depositableServerVault,
@@ -46,10 +49,12 @@ export type QsbSubmissionReply = {
   readonly vault: QsbVaultView;
 };
 
+// Every action's context, refused with `accessNeeded` before anything else.
 const contextOf = async (
   deps: QsbVaultDeps,
   access: QsbVaultAccess,
 ): Promise<QsbDepositContext> => {
+  await requireCoordinatorAccess(deps);
   const owner = await qsbOwnerOf(access);
   return { access, deps, owner, session: qsbAccessSession(deps, access, owner) };
 };

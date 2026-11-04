@@ -141,13 +141,22 @@ stays under 7 MB of its 10 MiB.
 **QSB vault messages.** Five more extension-page-only messages, `wallet.qsbVaults`,
 `wallet.createQsbVault`, `wallet.quoteQsbDeposit`, `wallet.depositQsbVault` and
 `wallet.resendQsbDeposit`, reach the journal and the pending deposits only through the vault service's
-QSB session (`packages/platform/vault/src/service/qsb-vault-access.ts`), which runs each task in the
-mutation queue, derives the BIP-84 owner key `m/84'/0'/0'/0/0` through Krusty for each use, and hands
-out public data only. Creation allocates the vault and records its script durably before anything that
-names a commitment or the script is sent; a deposit's bytes are durable before they are submitted; a
+QSB session (`packages/platform/vault/src/service/qsb-vault-access.ts`). A session holds no slot of the
+mutation queue: each of its calls (a read, one durable write, one Krusty derivation or signature) takes
+one short slot and re-reads and re-validates the account, journal and pending deposits it depends on, so
+no coordinator request or Pyodide run ever holds the queue. One account's flows are serialized end to end
+by the background's per-account QSB lock instead. The coordinator's origin is not a required host
+permission (that would be a privilege increase on update): the user grants `QSB_COORDINATOR_PERMISSION`
+at runtime under the optional HTTPS pattern, and the background asks `permissions.contains` before any
+coordinator request. Without the grant, create, quote, deposit and resend refuse with `accessNeeded`
+before anything is allocated, kept or sent, and the listing answers with the local vaults, `funds` and
+`registered` null, asking the coordinator nothing. The session derives the BIP-84 owner key
+`m/84'/0'/0'/0/0` through Krusty inside the slot that uses it and hands out public data only. Creation
+allocates the vault and records its script durably before anything that names a commitment or the
+script is sent; a deposit's bytes are durable before they are submitted; a
 funding is recorded only once the chain confirms it. Every reply is built from `QsbVaultView`,
 `QsbOwnerFunds` and `QsbDepositQuote`: no phrase, owner key, journal id, coordinator id or token, or
-signed bytes. The listing peeks at the session and holds the queue only for its local reads and writes.
+signed bytes. The listing peeks at the session rather than renewing it.
 
 **QSB account messages.** Five extension-page-only messages reach these records, through the vault
 service's QSB methods (`packages/platform/vault/src/service/qsb-accounts.ts`), each run in the

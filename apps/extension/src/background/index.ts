@@ -60,6 +60,7 @@ import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-preparations";
 import { qsbRuntime } from "./qsb/packaged-qsb-runtime";
+import { qsbCoordinatorAccess } from "./qsb/qsb-vault-access-grant";
 import { createQsbVaultWiring } from "./qsb/qsb-vault-wiring";
 import { createMessageHandler } from "./routing/messages";
 import { extensionIdentityOf } from "./routing/senders";
@@ -150,6 +151,7 @@ const vaultStores = (() => {
 // QSB vaults: the coordinator through the untrusted-fetch boundary, tokens in
 // memory only and dropped with the other key caches on lock.
 const qsbVaults = createQsbVaultWiring({
+  access: qsbCoordinatorAccess(extensionApi?.permissions),
   fetch: untrustedFetch,
   now: systemClock,
   runtime: qsbRuntime,

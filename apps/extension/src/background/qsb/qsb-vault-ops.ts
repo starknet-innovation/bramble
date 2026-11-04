@@ -5,7 +5,8 @@
  * gate turns every content script and page away before they get here. Inputs
  * are parsed strictly (./qsb-vault-inputs). Each runs over the unlocked
  * session's vault password, handed straight to the vault service's QSB
- * session and never kept: `wallet.qsbVaults`, which the panel polls, only
+ * session and never kept, under the account's QSB lock, so one account's
+ * flows never interleave: `wallet.qsbVaults`, which the panel polls, only
  * peeks at the session so it never holds the wallet unlocked, and answers as
  * a locked wallet does if a lock lands during the read; the user's own
  * actions, the quote included, renew it as every user-initiated read does.
@@ -16,6 +17,7 @@
  * `QsbVaultView`s, `QsbOwnerFunds` and `QsbDepositQuote`s: public data only,
  * never the phrase, the owner key, a journal id or a coordinator token.
  */
+import type { QsbVaultAccess } from "@bramble/vault/service-types";
 import type { RouterContext } from "../routing/message-context";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
@@ -27,7 +29,7 @@ import {
   readQsbQuoteInput,
   readQsbVaultInput,
 } from "./qsb-vault-inputs";
-import { listQsbVaults, type QsbVaultOpener } from "./qsb-vault-list";
+import { listQsbVaults } from "./qsb-vault-list";
 import type { QsbVaultDeps } from "./qsb-vault-session";
 
 type QsbVaultHandler = (ctx: RouterContext, message: unknown) => Promise<RuntimeResponse>;
@@ -35,19 +37,25 @@ type QsbVaultHandler = (ctx: RouterContext, message: unknown) => Promise<Runtime
 const UNAVAILABLE: RuntimeResponse = { error: "wallet unavailable" };
 const LOCKED: RuntimeResponse = { error: "wallet locked" };
 
+// Runs one flow over one vault session of one account.
+type QsbVaultOpener = <T>(task: (access: QsbVaultAccess) => Promise<T>) => Promise<T>;
+
 type Wired = {
   readonly deps: QsbVaultDeps;
   readonly opener: (vaultPassphrase: string) => QsbVaultOpener;
 };
 
 // The vault deps and a session opener for one account, or null when unwired.
+// Every flow runs under the account's QSB lock, end to end; its session takes
+// the vault's queue only for each short local step.
 const wiredFor = (ctx: RouterContext, accountId: string): Wired | null => {
   const deps = ctx.qsbVaults;
   const open = ctx.wallet.withQsbVaultAccount;
   if (!deps || !open) return null;
   return {
     deps,
-    opener: (vaultPassphrase) => (task) => open({ accountId, vaultPassphrase }, task),
+    opener: (vaultPassphrase) => (task) =>
+      deps.locks.run(accountId, () => open({ accountId, vaultPassphrase }, task)),
   };
 };
 
@@ -71,7 +79,9 @@ const listVaults: QsbVaultHandler = async (ctx, message) => {
   const authorized = captureSessionAuthorization(ctx.session);
   const vaultPassphrase = ctx.session.peekPassphrase();
   if (!vaultPassphrase) return LOCKED;
-  const listing = await listQsbVaults(wired.deps, wired.opener(vaultPassphrase));
+  const listing = await wired.opener(vaultPassphrase)((access) =>
+    listQsbVaults(wired.deps, access),
+  );
   return authorized.isCurrent() ? { ...listing, ok: true } : LOCKED;
 };
 

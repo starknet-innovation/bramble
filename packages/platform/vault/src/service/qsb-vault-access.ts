@@ -3,15 +3,25 @@
  * deposit flows may ask of one QSB account, implemented over the account's
  * journal store, its pending-deposit store and Krusty.
  *
- * Trust boundary: background-only, inside the service's mutation queue (the
- * service wraps the one method in it). The account record, its phrase and the
- * owner's private key never leave this module: the BIP-84 owner key
- * `m/84'/0'/0'/0/0` is derived through Krusty for each use and dropped; the
+ * Trust boundary: background-only. A session holds no queue slot of its own:
+ * every call takes one short slot of the service's mutation queue, and only
+ * for local work (a vault or store read, one durable write, a Krusty
+ * derivation or signature), never across a network call or a runtime run,
+ * which the caller makes between calls. Each slot re-reads what it depends on
+ * — the account (still present, still bound to the journal id it was opened
+ * over), the journal, the pending deposits — and re-validates it, so no slot
+ * acts on state an earlier slot read: an allocation is refused unless `v` is
+ * still `nextV` and the account still a writer, a script or funding unless the
+ * vault is still in the state its transition needs, a kept deposit unless the
+ * vault can still take one and no other bytes are kept for it.
+ *
+ * The account record, its phrase and the owner's private key never leave this
+ * module: the BIP-84 owner key `m/84'/0'/0'/0/0` is derived through Krusty
+ * inside the slot that uses it and dropped; only public values leave. The
  * journal crosses as its vault records only; journal changes are asked for by
- * name and applied here. Every journal and pending-deposit write is validated
- * and durable before its call resolves, and a lost journal is never
- * recreated. A session refuses every call once its task has settled, so a
- * leaked handle cannot act outside the queue.
+ * name and applied here. Every write is validated and durable before its call
+ * resolves, and a lost journal is never recreated. A session refuses every
+ * call once its task has settled.
  */
 import { RefusedBeforeWrite } from "@bramble/core/errors";
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
@@ -52,28 +62,39 @@ type QsbVaultDeps = {
     | "signBitcoinPsbtInputs"
   >;
   readonly readVaultSnapshot: (vaultPassphrase: string) => Promise<Vault>;
+  /** The service's mutation queue: one slot per call. */
+  readonly serialized: <T>(run: () => Promise<T>) => Promise<T>;
   readonly wiring: QsbAccountWiring | undefined;
 };
 
-type AccountStores = {
+/** What one slot runs with: the account as stored now and its two stores. */
+type Slot = {
+  readonly account: QsbAccountRecord;
   readonly deposits: EncryptedStore;
   readonly journal: EncryptedStore;
+  readonly vaultPassphrase: string;
 };
 
 type BoundState = Extract<QsbJournalState, { readonly status: "bound" }>;
 
 const refused = (message: string): RefusedBeforeWrite => new RefusedBeforeWrite(message);
 
-const storesOf = (
-  wiring: QsbAccountWiring | undefined,
-  account: QsbAccountRecord,
-): AccountStores => {
-  const journal = wiring?.journals.forJournal(account.journalId);
-  const deposits = wiring?.journals.forDeposits(account.journalId);
-  if (!journal || !deposits) {
+// The account as stored now, refused unless it is still the one opened over:
+// same id, same journal id.
+const currentSlot = async (
+  deps: QsbVaultDeps,
+  opened: Pick<QsbAccountRecord, "id" | "journalId">,
+  vaultPassphrase: string,
+): Promise<Slot> => {
+  const vault = await deps.readVaultSnapshot(vaultPassphrase);
+  const account = vault.qsbAccounts.find((held) => held.id === opened.id);
+  if (!account) throw refused(QSB_ACCOUNT_REFUSALS.unknownAccount);
+  const journal = deps.wiring?.journals.forJournal(account.journalId);
+  const deposits = deps.wiring?.journals.forDeposits(account.journalId);
+  if (account.journalId !== opened.journalId || !journal || !deposits) {
     throw refused(QSB_ACCOUNT_REFUSALS.journalUnavailable);
   }
-  return { deposits, journal };
+  return { account, deposits, journal, vaultPassphrase };
 };
 
 const transition = (binding: QsbJournalBinding, change: QsbJournalChange): QsbJournalResult => {
@@ -98,137 +119,143 @@ const boundState = (
   writer: isQsbWriter(binding),
 });
 
-// The session's view of a binding: no header, no account record.
-const stateOf = (binding: QsbJournalBinding): QsbJournalState =>
-  binding.status === "bound" ? boundState(binding) : { status: "unavailable" };
+const bindingOf = async (slot: Slot): Promise<QsbJournalBinding> =>
+  bindQsbJournal(slot.account, await readQsbJournal(slot.journal, slot.vaultPassphrase));
+
+// Re-validated by the journal's own transition against the journal as it is
+// in this slot: `nextV`, the vault's state and writer status included.
+const commitIn = async (slot: Slot, change: QsbJournalChange): Promise<QsbJournalChangeResult> => {
+  const binding = await bindingOf(slot);
+  const result = transition(binding, change);
+  if (!result.ok) return result;
+  const next = boundState({ account: slot.account, journal: result.journal, status: "bound" });
+  if (binding.status === "bound" && result.journal === binding.journal) {
+    return { journal: next, ok: true };
+  }
+  const written = await writeQsbJournal(
+    slot.journal,
+    slot.account,
+    result.journal,
+    slot.vaultPassphrase,
+    "replace",
+  );
+  if (written.ok) return { journal: next, ok: true };
+  return {
+    ok: false,
+    refusal: written.refusal === "journal-full" ? "journal-full" : "journal-unavailable",
+  };
+};
+
+const heldIn = async (slot: Slot): Promise<readonly QsbPendingDeposit[]> => {
+  const read = await readQsbPendingDeposits(slot.deposits, slot.account, slot.vaultPassphrase);
+  if (read.status !== "bound") throw refused(QSB_ACCOUNT_REFUSALS.journalUnavailable);
+  return read.deposits;
+};
+
+const writeHeld = async (slot: Slot, deposits: readonly QsbPendingDeposit[]): Promise<void> => {
+  const record = qsbPendingRecord(slot.account, deposits);
+  if (record === null) throw refused(QSB_VAULT_REFUSALS.depositPending);
+  await slot.deposits.write(record, slot.vaultPassphrase);
+};
+
+// Keeps a deposit only while its vault can still take one and no other bytes
+// are kept for it; the same bytes again change nothing.
+const holdIn = async (slot: Slot, deposit: QsbPendingDeposit): Promise<void> => {
+  const binding = await bindingOf(slot);
+  const record =
+    binding.status === "bound"
+      ? binding.journal.vaults.find((vault) => vault.v === deposit.v)
+      : undefined;
+  if (record?.state !== "allocated" || record.funding !== null || record.scriptPubKey === null) {
+    throw refused(QSB_VAULT_REFUSALS.notDepositable);
+  }
+  const held = await heldIn(slot);
+  const kept = held.find((entry) => entry.v === deposit.v);
+  if (kept) {
+    if (kept.rawTxHex !== deposit.rawTxHex) throw refused(QSB_VAULT_REFUSALS.depositPending);
+    return;
+  }
+  await writeHeld(slot, [...held, deposit]);
+};
+
+const releaseIn = async (slot: Slot, v: number, txid: string): Promise<void> => {
+  const held = await heldIn(slot);
+  if (held.some((entry) => entry.v === v && entry.txid === txid)) {
+    await writeHeld(
+      slot,
+      held.filter((entry) => entry.v !== v),
+    );
+  }
+};
 
 // The owner's BIP-84 key: account 0, receiving chain, index 0.
 const ownerKey = (deps: QsbVaultDeps, account: QsbAccountRecord) =>
   deps.kms.deriveBitcoinP2wpkhKeypair(account.mnemonic, 0, 0, 0);
 
-const journalMethods = (
-  account: QsbAccountRecord,
-  store: EncryptedStore,
-  vaultPassphrase: string,
-): Pick<QsbVaultAccess, "commit" | "journal"> => {
-  const read = async (): Promise<QsbJournalBinding> =>
-    bindQsbJournal(account, await readQsbJournal(store, vaultPassphrase));
-  return {
-    async commit(change): Promise<QsbJournalChangeResult> {
-      const binding = await read();
-      const result = transition(binding, change);
-      if (!result.ok) return result;
-      const next = boundState({ account, journal: result.journal, status: "bound" });
-      if (binding.status === "bound" && result.journal === binding.journal) {
-        return { journal: next, ok: true };
-      }
-      const written = await writeQsbJournal(
-        store,
-        account,
-        result.journal,
-        vaultPassphrase,
-        "replace",
-      );
-      if (written.ok) return { journal: next, ok: true };
-      return {
-        ok: false,
-        refusal: written.refusal === "journal-full" ? "journal-full" : "journal-unavailable",
-      };
-    },
-    journal: async () => stateOf(await read()),
-  };
-};
-
-const depositMethods = (
-  account: QsbAccountRecord,
-  store: EncryptedStore,
-  vaultPassphrase: string,
-): Pick<QsbVaultAccess, "holdDeposit" | "pendingDeposits" | "releaseDeposit"> => {
-  const held = async (): Promise<readonly QsbPendingDeposit[]> => {
-    const read = await readQsbPendingDeposits(store, account, vaultPassphrase);
-    if (read.status !== "bound") {
-      throw refused(QSB_ACCOUNT_REFUSALS.journalUnavailable);
-    }
-    return read.deposits;
-  };
-  const write = async (deposits: readonly QsbPendingDeposit[]): Promise<void> => {
-    const record = qsbPendingRecord(account, deposits);
-    if (record === null) {
-      throw refused(QSB_VAULT_REFUSALS.depositPending);
-    }
-    await store.write(record, vaultPassphrase);
-  };
-  return {
-    async holdDeposit(deposit) {
-      await write([...(await held()).filter((entry) => entry.v !== deposit.v), deposit]);
-    },
-    async pendingDeposits() {
-      const read = await readQsbPendingDeposits(store, account, vaultPassphrase);
-      return read.status === "bound" ? read.deposits : null;
-    },
-    async releaseDeposit(v, txid) {
-      const deposits = await held();
-      if (deposits.some((entry) => entry.v === v && entry.txid === txid)) {
-        await write(deposits.filter((entry) => entry.v !== v));
-      }
-    },
-  };
-};
-
-const keyMethods = (
+const sessionOver = (
   deps: QsbVaultDeps,
-  account: QsbAccountRecord,
-): Pick<QsbVaultAccess, "commitments" | "owner" | "signDeposit" | "signSignIn"> => ({
-  commitments: (v) => deps.kms.deriveQsbCommitments(account.mnemonic, v),
-  async owner() {
-    const { address, publicKey } = await ownerKey(deps, account);
-    return { address, publicKey };
-  },
-  async signDeposit(psbt, inputCount) {
-    const key = await ownerKey(deps, account);
-    const indices = Array.from({ length: inputCount }, (_, index) => index);
-    return deps.kms.signBitcoinPsbtInputs(key.privateKey, psbt, indices);
-  },
-  async signSignIn(message) {
-    const key = await ownerKey(deps, account);
-    return deps.kms.signBip322SimpleUnprefixed(key.privateKey, key.address, message);
-  },
-});
-
-// Every method, refusing once the session's task has settled.
-const guarded = (methods: Omit<QsbVaultAccess, "accountId">, isOpen: () => boolean) =>
-  Object.fromEntries(
-    Object.entries(methods).map(([name, method]) => [
-      name,
-      async (...args: unknown[]) => {
-        if (!isOpen()) {
-          throw refused(QSB_VAULT_REFUSALS.runtimeUnavailable);
-        }
-        return (method as (...values: unknown[]) => Promise<unknown>)(...args);
-      },
-    ]),
-  ) as Omit<QsbVaultAccess, "accountId">;
+  opened: Pick<QsbAccountRecord, "id" | "journalId">,
+  vaultPassphrase: string,
+  isOpen: () => boolean,
+): QsbVaultAccess => {
+  // One short slot per call, over the account as stored at that moment.
+  const inSlot = <T>(run: (slot: Slot) => Promise<T>): Promise<T> => {
+    if (!isOpen()) return Promise.reject(refused(QSB_VAULT_REFUSALS.runtimeUnavailable));
+    return deps.serialized(async () => run(await currentSlot(deps, opened, vaultPassphrase)));
+  };
+  return {
+    accountId: opened.id,
+    commit: (change) => inSlot((slot) => commitIn(slot, change)),
+    commitments: (v) => inSlot((slot) => deps.kms.deriveQsbCommitments(slot.account.mnemonic, v)),
+    holdDeposit: (deposit) => inSlot((slot) => holdIn(slot, deposit)),
+    journal: () =>
+      inSlot(async (slot) => {
+        const binding = await bindingOf(slot);
+        return binding.status === "bound" ? boundState(binding) : { status: "unavailable" };
+      }),
+    owner: () =>
+      inSlot(async (slot) => {
+        const { address, publicKey } = await ownerKey(deps, slot.account);
+        return { address, publicKey };
+      }),
+    pendingDeposits: () =>
+      inSlot(async (slot) => {
+        const read = await readQsbPendingDeposits(slot.deposits, slot.account, vaultPassphrase);
+        return read.status === "bound" ? read.deposits : null;
+      }),
+    releaseDeposit: (v, txid) => inSlot((slot) => releaseIn(slot, v, txid)),
+    signDeposit: (psbt, inputCount) =>
+      inSlot(async (slot) => {
+        const key = await ownerKey(deps, slot.account);
+        const indices = Array.from({ length: inputCount }, (_, index) => index);
+        return deps.kms.signBitcoinPsbtInputs(key.privateKey, psbt, indices);
+      }),
+    signSignIn: (message) =>
+      inSlot(async (slot) => {
+        const key = await ownerKey(deps, slot.account);
+        return deps.kms.signBip322SimpleUnprefixed(key.privateKey, key.address, message);
+      }),
+  };
+};
 
 /**
- * Builds the session method over the vault's snapshot read. The caller (the
- * vault service) runs each call inside its mutation queue.
+ * Builds the session method over the vault's snapshot read and the service's
+ * mutation queue. Opening takes one slot, to find the account (refused as
+ * unknown, or without wiring as unavailable, before `task` runs); `task` then
+ * runs outside the queue, and each of its calls takes a slot of its own.
  */
 export const qsbVaultAccessMethods = (deps: QsbVaultDeps): QsbVaultAccessService => ({
   async withQsbVaultAccount(input, task) {
-    const vault = await deps.readVaultSnapshot(input.vaultPassphrase);
-    const account = vault.qsbAccounts.find((held) => held.id === input.accountId);
-    if (!account) {
-      throw refused(QSB_ACCOUNT_REFUSALS.unknownAccount);
-    }
-    const stores = storesOf(deps.wiring, account);
+    const opened = await deps.serialized(async () => {
+      const vault = await deps.readVaultSnapshot(input.vaultPassphrase);
+      const account = vault.qsbAccounts.find((held) => held.id === input.accountId);
+      if (!account) throw refused(QSB_ACCOUNT_REFUSALS.unknownAccount);
+      const { id, journalId } = (await currentSlot(deps, account, input.vaultPassphrase)).account;
+      return { id, journalId };
+    });
     let open = true;
-    const methods = {
-      ...depositMethods(account, stores.deposits, input.vaultPassphrase),
-      ...journalMethods(account, stores.journal, input.vaultPassphrase),
-      ...keyMethods(deps, account),
-    };
     try {
-      return await task({ accountId: account.id, ...guarded(methods, () => open) });
+      return await task(sessionOver(deps, opened, input.vaultPassphrase, () => open));
     } finally {
       open = false;
     }

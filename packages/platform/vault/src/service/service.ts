@@ -244,7 +244,8 @@ export const createWalletVaultService = ({
     ...nostrWalletMethods(kms, readVault),
     ...shadowAccountScopeMethods(encryptedStore, readVaultSnapshot),
     ...qsbAccountMethods({ encryptedStore, kms, readVaultSnapshot, wiring: qsb }),
-    ...qsbVaultAccessMethods({ kms, readVaultSnapshot, wiring: qsb }),
+    // Not wrapped below: each session call takes its own slot of the queue.
+    ...qsbVaultAccessMethods({ kms, readVaultSnapshot, serialized, wiring: qsb }),
     previewAccount: (input) => deriveAccountRef(kms, input),
     previewStrk20ViewingPublicKey: (input) => previewStrk20ViewingPublicKey(kms, input),
     previewImportedStrk20ViewingPublicKey: (input) =>
@@ -434,10 +435,6 @@ export const createWalletVaultService = ({
     qsbAccounts: (vaultPassphrase) => serialized(() => service.qsbAccounts(vaultPassphrase)),
     revealQsbPhrase: (input) => serialized(() => service.revealQsbPhrase(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),
-    // A QSB vault task runs whole in the queue: no journal, pending-deposit or
-    // vault write can land between its checks and its writes.
-    withQsbVaultAccount: (input, task) =>
-      serialized(() => service.withQsbVaultAccount(input, task)),
     recordShadowAccountScope: (input) => serialized(() => service.recordShadowAccountScope(input)),
     setActiveAccount: (input) => serialized(() => service.setActiveAccount(input)),
     storeLedgerStrk20ViewingKey: (input) =>

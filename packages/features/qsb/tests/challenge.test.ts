@@ -6,7 +6,11 @@
  * a minute from their sign-in, per account and address.
  */
 import { describe, expect, test } from "bun:test";
-import { qsbChallengeRefusal } from "@bramble/qsb/challenge";
+import {
+  QSB_CHALLENGE_CLOCK_SKEW_MS,
+  QSB_CHALLENGE_LIFETIME_MS,
+  qsbChallengeRefusal,
+} from "@bramble/qsb/challenge";
 import { isoInstant, parseIsoInstant } from "@bramble/qsb/instant";
 import { createQsbSessions } from "@bramble/qsb/sessions";
 import { OWNER } from "./fixtures";
@@ -86,13 +90,17 @@ describe("the sign-in challenge", () => {
     expect(qsbChallengeRefusal(challenge({ address: "bc1qX" }), "bc1q.", NOW)).toBe("shape");
   });
 
-  test("refuses an expired challenge and one valid for too long", () => {
-    expect(qsbChallengeRefusal(challenge({ expires: isoInstant(NOW) }), OWNER.address, NOW)).toBe(
-      "expired",
-    );
-    expect(
-      qsbChallengeRefusal(challenge({ expires: isoInstant(NOW + 300_001) }), OWNER.address, NOW),
-    ).toBe("too-far");
+  test("allows two minutes of clock skew either way, and no more, at both edges", () => {
+    const at = (offset: number) =>
+      qsbChallengeRefusal(challenge({ expires: isoInstant(NOW + offset) }), OWNER.address, NOW);
+    expect(QSB_CHALLENGE_CLOCK_SKEW_MS).toBe(120_000);
+    // This device runs fast: a fresh challenge already reads as expired, by up to the skew.
+    expect(at(0)).toBeNull();
+    expect(at(-QSB_CHALLENGE_CLOCK_SKEW_MS + 1)).toBeNull();
+    expect(at(-QSB_CHALLENGE_CLOCK_SKEW_MS)).toBe("expired");
+    // This device runs slow: a fresh challenge reads as up to the skew too far ahead.
+    expect(at(QSB_CHALLENGE_LIFETIME_MS + QSB_CHALLENGE_CLOCK_SKEW_MS)).toBeNull();
+    expect(at(QSB_CHALLENGE_LIFETIME_MS + QSB_CHALLENGE_CLOCK_SKEW_MS + 1)).toBe("too-far");
   });
 });
 

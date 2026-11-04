@@ -19,6 +19,7 @@ import { createQsbJournalStores } from "@bramble/vault/qsb-journal-stores";
 import { emptyVault } from "@bramble/vault/schema";
 import { createWalletVaultService } from "@bramble/vault/service";
 import type { WalletVaultService } from "@bramble/vault/service-types";
+import { createQsbAccountLocks } from "../../apps/extension/src/background/qsb/qsb-vault-locks";
 import type { QsbVaultDeps } from "../../apps/extension/src/background/qsb/qsb-vault-session";
 import {
   extensionSender,
@@ -115,7 +116,9 @@ export const keyBoundaryQsbVaults = async (): Promise<KeyBoundaryQsbVaults> => {
   return {
     deps: {
       coordinator: createQsbCoordinator({ fetch: fakeQsbFetch(state, now) }),
+      coordinatorAccess: async () => true,
       drawVaultId: () => crypto.randomUUID(),
+      locks: createQsbAccountLocks(),
       now,
       runtime: fakeQsbRuntime(),
       sessions: createQsbSessions({ now }),
