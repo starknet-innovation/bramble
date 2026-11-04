@@ -187,7 +187,7 @@ export const qsbNoVaultLine = (account: QsbAccountView): string | null => {
 };
 
 /** Under the owner address. */
-export const QSB_ADDRESS_HINT = "Send bitcoin here before you make a vault.";
+export const QSB_ADDRESS_HINT = "Send bitcoin here before you deposit.";
 /** In place of the balance when the coordinator could not be reached. */
 export const QSB_FUNDS_UNAVAILABLE = "Can't reach the quantum-safe Bitcoin service.";
 /** While an account's vaults load. */

@@ -75,7 +75,7 @@ describe("a Quantum-safe Bitcoin account", () => {
     expect(app.querySelector("#qsb-account-label")?.textContent).toBe("Account 2");
     expect(app.querySelector("#qsb-address")?.textContent).toBe(QSB_ADDRESS);
     expect(text(app.querySelector("#qsb-address-copy")?.closest(".section"))).toContain(
-      "Send bitcoin here before you make a vault.",
+      "Send bitcoin here before you deposit.",
     );
     expect(text(app.querySelector("#qsb-balance"))).toBe("Confirmed balance 0.00250000 BTC");
     expect(text(row(app, 0))).toBe("Vault 1 Unfunded Deposit");
