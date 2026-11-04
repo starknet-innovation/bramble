@@ -15,10 +15,11 @@
  */
 import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "@bramble/core/json";
 import { isMnemonicText } from "@bramble/wallet-model/passphrase";
+import { QSB_PHRASE_WORDS } from "@bramble/wallet-model/qsb";
 import { isQsbHash32, QSB_NETWORK } from "./qsb-vault-record";
 
-/** Words in a dedicated QSB phrase: 24, so it carries 256 bits of entropy. */
-export const QSB_PHRASE_WORDS = 24;
+/** Words in a dedicated QSB phrase, single-sourced with the UI's phrase entry. */
+export { QSB_PHRASE_WORDS };
 
 /**
  * Most QSB accounts one vault keeps. A further account is refused, never

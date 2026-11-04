@@ -15,6 +15,7 @@
     "./passphrase": "./src/preferences/passphrase.ts",
     "./passphrase-strength": "./src/preferences/passphrase-strength.ts",
     "./preferences": "./src/preferences/preferences.ts",
+    "./qsb": "./src/accounts/qsb.ts",
     "./recovery": "./src/accounts/recovery.ts",
     "./vault-recovery": "./src/preferences/vault-recovery.ts",
     "./signing": "./src/accounts/signing.ts"
