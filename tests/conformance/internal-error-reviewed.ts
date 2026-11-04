@@ -193,6 +193,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ["shadow account balances unavailable", "Couldn't check balances. Try again."],
   ["shadow account sweep preparation failed", "Couldn't prepare the sweep. Nothing was sent."],
   [
+    "qsb backup words do not match",
+    "Those words don't match your phrase. Check them and try again.",
+  ],
+  [
     "argent multisig intent nonce is no longer current",
     "This transaction is out of date. Create a new one.",
   ],
