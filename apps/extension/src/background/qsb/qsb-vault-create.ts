@@ -1,7 +1,10 @@
 /**
  * `wallet.createQsbVault`: allocate a QSB account's next vault, build its
  * script from Krusty's commitments, and register it with the coordinator.
- * Runs whole inside one vault session, so inside the vault's mutation queue.
+ * Runs under the account's QSB lock, over one vault session whose every
+ * local step (each read, each durable write, each derivation) takes its own
+ * short slot of the vault's queue and re-validates what it depends on; the
+ * coordinator and the runtime are called between slots, never inside one.
  *
  * The order is the safety (BIP "QSB Wallet Secret Management", Allocation):
  * only a writer may create; `v = nextV` is allocated durably with Krusty's

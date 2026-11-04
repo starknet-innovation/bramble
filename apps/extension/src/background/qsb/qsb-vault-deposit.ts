@@ -1,7 +1,10 @@
 /**
  * `wallet.quoteQsbDeposit`, `wallet.depositQsbVault` and
- * `wallet.resendQsbDeposit`, each run whole inside one vault session (qsb-app
- * `sdk/client.ts` `submitDeposit`, `sendDeposit`, `resubmitDeposit`).
+ * `wallet.resendQsbDeposit` (qsb-app `sdk/client.ts` `submitDeposit`,
+ * `sendDeposit`, `resubmitDeposit`), each under the account's QSB lock and
+ * over one vault session whose local steps take short queue slots of their
+ * own; keeping the signed bytes re-checks, in its slot, that the vault can
+ * still take them and no other bytes are kept for it.
  *
  * A deposit is prepared (./qsb-vault-prepare), refused as `quoteChanged`
  * unless its fee is exactly the one the user accepted, signed by Krusty on

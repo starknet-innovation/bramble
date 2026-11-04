@@ -64,9 +64,10 @@ export type QsbJournalChangeResult =
   | { readonly ok: false; readonly refusal: QsbJournalRefusal };
 
 /**
- * One QSB account's session. Every journal write is durable before the call
- * resolves; so is every pending-deposit write. A refused journal change
- * resolves with its refusal and writes nothing.
+ * One QSB account's session. Each call is one slot of the vault's mutation
+ * queue over the account as stored at that moment. Every journal write is
+ * durable before the call resolves; so is every pending-deposit write. A
+ * refused journal change resolves with its refusal and writes nothing.
  */
 export type QsbVaultAccess = {
   /** The id of the account this session is over. */
@@ -80,9 +81,11 @@ export type QsbVaultAccess = {
   /** Krusty's QSB-HORS-v1 commitments of vault `v` of this account's phrase. */
   readonly commitments: (v: number) => Promise<QsbCommitments>;
   /**
-   * Keeps `deposit` pending, replacing any for its vault, durably. Throws the
-   * journal-unavailable refusal when the record cannot be read, and the
-   * deposit-pending refusal when the record is full.
+   * Keeps `deposit` pending, durably, re-checking in its slot that its vault is
+   * still `allocated`, unfunded and has its script (else `notDepositable`) and
+   * that no other bytes are kept for it (else `depositPending`); the same
+   * bytes again change nothing. Throws the journal-unavailable refusal when
+   * the record cannot be read, and `depositPending` when it is full.
    */
   readonly holdDeposit: (deposit: QsbPendingDeposit) => Promise<void>;
   /** The account's journal, read and bound now, as its vault records. */
@@ -115,10 +118,14 @@ export type QsbVaultAccessInput = {
 };
 
 /**
- * The method. Runs `task` inside the vault's mutation queue, so no journal,
- * pending-deposit or vault write overlaps it, and resolves with what `task`
- * resolves with. Refuses an unknown account (`unknownAccount`) and a service
- * without QSB wiring (`journalUnavailable`) before `task` runs.
+ * The method. Opens a session over one account and resolves with what `task`
+ * resolves with. The session holds no slot of the vault's mutation queue:
+ * each of its calls takes one short slot, re-reading and re-validating what it
+ * depends on, so a task may wait on the network or a runtime between calls
+ * without blocking any other vault operation. Serializing one account's
+ * flows end to end is the caller's (the background's per-account QSB lock).
+ * Refuses an unknown account (`unknownAccount`) and a service without QSB
+ * wiring (`journalUnavailable`) before `task` runs.
  */
 export type QsbVaultAccessService = {
   readonly withQsbVaultAccount: <T>(

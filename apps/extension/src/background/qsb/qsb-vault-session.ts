@@ -21,6 +21,7 @@ import { QsbCoordinatorFailure } from "@bramble/qsb/client";
 import type { QsbSessions } from "@bramble/qsb/sessions";
 import { isOwnerKey, ownerP2wpkhScript } from "@bramble/qsb/transactions";
 import type { QsbOwner, QsbVaultAccess } from "@bramble/vault/service-types";
+import type { QsbAccountLocks } from "./qsb-vault-locks";
 import { isSessionExpired, qsbRefusal } from "./qsb-vault-refusals";
 import type { QsbHorsCommitments, QsbVaultSetup } from "./qsb-vault-setup";
 
@@ -29,6 +30,8 @@ export type QsbVaultDeps = {
   readonly coordinator: QsbCoordinator;
   /** A fresh random uuid for a vault's coordinator id. */
   readonly drawVaultId: () => string;
+  /** One promise chain per account: its flows run end to end one at a time. */
+  readonly locks: QsbAccountLocks;
   /** Epoch milliseconds. */
   readonly now: () => number;
   readonly runtime: {

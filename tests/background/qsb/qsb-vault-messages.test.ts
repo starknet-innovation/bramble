@@ -14,6 +14,7 @@ import { createQsbSessions } from "@bramble/qsb/sessions";
 import { FAKE_BITCOIN_OWNER } from "@bramble/testkit/fake-kms";
 import type { QsbVaultAccess, QsbVaultAccessInput } from "@bramble/vault/service-types";
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
+import { createQsbAccountLocks } from "../../../apps/extension/src/background/qsb/qsb-vault-locks";
 import type { QsbVaultDeps } from "../../../apps/extension/src/background/qsb/qsb-vault-session";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import {
@@ -56,6 +57,7 @@ const offlineDeps = (): QsbVaultDeps => ({
     },
   }),
   drawVaultId: () => "11111111-2222-4333-8444-555555555555",
+  locks: createQsbAccountLocks(),
   now: () => Date.UTC(2026, 10, 4),
   runtime: fakeQsbRuntime(),
   sessions: createQsbSessions({ now: () => Date.UTC(2026, 10, 4) }),

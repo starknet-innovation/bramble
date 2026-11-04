@@ -24,6 +24,7 @@ import { emptyVault } from "@bramble/vault/schema";
 import { createWalletVaultService } from "@bramble/vault/service";
 import type { WalletVaultService } from "@bramble/vault/service-types";
 import { createWalletReader } from "../../apps/extension/src/background/accounts/wallet-reader";
+import { createQsbAccountLocks } from "../../apps/extension/src/background/qsb/qsb-vault-locks";
 import type { QsbVaultDeps } from "../../apps/extension/src/background/qsb/qsb-vault-session";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
@@ -132,6 +133,7 @@ export const qsbVaultHarness = async (
       drawn += 1;
       return `11111111-2222-4333-8444-${String(drawn).padStart(12, "0")}`;
     },
+    locks: createQsbAccountLocks(),
     now: clock,
     runtime,
     sessions: createQsbSessions({ now: clock }),
