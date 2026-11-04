@@ -5,11 +5,12 @@
  * else. A site's image or name is accepted and dropped.
  */
 import { describe, expect, test } from "bun:test";
+import type { Json } from "@bramble/core/json";
 import { toRuntimeMessage } from "@bramble/wallet-protocol/bridge";
 import { isProviderWatchNft, readProviderWatchNft } from "@bramble/wallet-protocol/watch-asset";
 
 const CONTRACT = "0x0511a2b3c4d5e6f";
-const params = (type: string, tokenId: unknown, extra: Record<string, unknown> = {}) => ({
+const params = (type: string, tokenId: Json, extra: Record<string, Json> = {}): Json => ({
   options: { address: CONTRACT, tokenId, ...extra },
   type,
 });
@@ -24,7 +25,12 @@ describe("collectible watch-asset params", () => {
     expect(
       readProviderWatchNft(params("ERC1155", "0x2a", { image: "https://x/y.png", name: "Hero" })),
     ).toEqual({ address: CONTRACT, standard: "ERC1155", tokenId: "42" });
-    expect(readProviderWatchNft({ ...params("ERC721", "1"), api_version: "0.8" })).not.toBeNull();
+    expect(
+      readProviderWatchNft({
+        ...(params("ERC721", "1") as Record<string, Json>),
+        api_version: "0.8",
+      }),
+    ).not.toBeNull();
   });
 
   test("refuses ids outside u256, other types, extra keys and bad options", () => {
@@ -40,7 +46,7 @@ describe("collectible watch-asset params", () => {
       params("ERC20", "1"),
       params("ERC721", "1", { image: 3 }),
       params("ERC721", "1", { decimals: 0 }),
-      { ...params("ERC721", "1"), extra: true },
+      { ...(params("ERC721", "1") as Record<string, Json>), extra: true },
       { options: { address: "0x0", tokenId: "1" }, type: "ERC721" },
       { type: "ERC721" },
     ]) {
