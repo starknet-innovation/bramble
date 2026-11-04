@@ -44,7 +44,8 @@ import type {
   Strk20WalletStateResponse,
 } from "../privacy/runtime-strk20-types";
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
-import type { SwapPreparationReview } from "../transactions/swap-preparations";
+import type { StakingOverviewResponse } from "../staking/staking-view";
+import type { SwapPreparationResponse } from "../transactions/swap-preparations";
 import type { NostrCoordinationResponse } from "./nostr-types";
 import type {
   AccountRecoveryState,
@@ -250,14 +251,6 @@ type SwapQuoteResponse = {
     // when the feed has no price for either token.
     readonly valueDeltaPercent?: number;
   };
-};
-
-/**
- * Frozen executable swap review returned before the final one-time confirm.
- */
-type SwapPreparationResponse = {
-  readonly ok: true;
-  readonly swapPreparation: SwapPreparationReview;
 };
 
 /**
@@ -492,6 +485,7 @@ export type RuntimeResponse =
   | TokenChartResponse
   | TransactionAlertsResponse
   | TransferResponse
+  | StakingOverviewResponse
   | SubmissionUnknownResponse
   | ValidateMnemonicResponse
   | WalletStatus

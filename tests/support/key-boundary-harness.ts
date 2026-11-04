@@ -61,6 +61,7 @@ import {
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
 import type { KeyBoundaryLiveIds } from "./key-boundary-types";
+import { testStakingNetworks } from "./staking-chain";
 import { awaitStrk20Job, strk20RunningJobId } from "./strk20-background";
 
 /**
@@ -128,6 +129,7 @@ export const makeKeyBoundaryHarness = async (
     preferencesStore,
     runtimeRpc: runtimeRpcFor(chainState),
     session,
+    stakingNetworks: testStakingNetworks,
     swap: swapService,
   });
 

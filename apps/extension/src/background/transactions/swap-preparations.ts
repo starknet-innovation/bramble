@@ -49,6 +49,14 @@ export type SwapPreparationReview = {
   readonly summaries: readonly string[];
 };
 
+/**
+ * Frozen executable swap review returned before the final one-time confirm.
+ */
+export type SwapPreparationResponse = {
+  readonly ok: true;
+  readonly swapPreparation: SwapPreparationReview;
+};
+
 const clonePreparation = (preparation: SwapPreparation): SwapPreparation =>
   structuredClone(preparation);
 

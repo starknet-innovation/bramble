@@ -41,6 +41,7 @@ import {
   type SubmitPreparedArgentMultisigInvokeV3Input,
   submitPreparedArgentMultisigInvokeV3,
 } from "@bramble/starknet/multisig-invoke";
+import { readAtPinnedBlock } from "@bramble/starknet/pinned-block";
 import { createRpcProvider, withRpcFallback } from "@bramble/starknet/provider";
 import {
   type AccountOwnerInput,
@@ -245,6 +246,12 @@ export type RuntimeRpc = {
    */
   readonly getNftMetadata?: (input: NftTokenUriInput) => Promise<NftTokenMetadata | null>;
   readonly getTokenBalances: (input: BalanceInput) => ReturnType<typeof getTokenBalances>;
+  /**
+   * Runs a group of read-only contract calls at one accepted block (staking
+   * pool verification). Optional so existing RPC stubs stay valid; staking
+   * refuses when it is absent.
+   */
+  readonly readAtPinnedBlock?: typeof readAtPinnedBlock;
   readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
   /**
    * Reads the account's recent on-chain transaction history for the activity
@@ -404,6 +411,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
   nftIndexer: createHttpNftIndexer(nftIndexerHttp),
+  readAtPinnedBlock,
   resolveStarkName,
   submitAccountDeployment,
   submitDeclareTransaction,

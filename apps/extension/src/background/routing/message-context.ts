@@ -5,6 +5,7 @@
  * stays a dispatch table.
  */
 
+import type { StakingNetworkTable } from "@bramble/transactions/staking-networks";
 import {
   memoryNostrCoordinationStore,
   type NostrCoordinationStore,
@@ -106,6 +107,8 @@ export type RouterContext = {
   readonly relaySignatures: RelaySignatureLog;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
+  /** Staking table override for tests; production uses the bundled one. */
+  readonly stakingNetworks?: StakingNetworkTable;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
   readonly strk20Jobs: Strk20JobRegistry;
@@ -150,6 +153,8 @@ export type MessageHandlerOptions = {
   readonly relaySignatures?: RelaySignatureLog;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
+  /** Staking table override for tests; production uses the bundled one. */
+  readonly stakingNetworks?: StakingNetworkTable;
   readonly swap?: SwapService;
   readonly swapPreparations?: SwapPreparationStore;
   /**
@@ -314,6 +319,7 @@ export const routerContext = (
     relaySignatures: relaySignaturesFor(options.relaySignatures),
     runtimeRpc,
     session,
+    ...(options.stakingNetworks ? { stakingNetworks: options.stakingNetworks } : {}),
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     strk20Jobs: strk20JobsFor(options.strk20Jobs, now),

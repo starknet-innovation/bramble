@@ -37,6 +37,7 @@ import { handlePreferenceOps } from "../settings/preference-ops";
 import { supportDiagnosticsResponse } from "../support/diagnostics";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
+import { handleStakingOps } from "../staking/staking-ops";
 import { handleSwapOps } from "../transactions/swap-ops";
 import { handleAccountCreationOps, type RouterHandler } from "./account-creation-handlers";
 import { type MessageHandlerOptions, type RouterContext, routerContext } from "./message-context";
@@ -387,6 +388,8 @@ const HANDLERS: readonly RouterHandler[] = [
       message,
     ),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
+  (ctx, messageType, message) =>
+    handleStakingOps(buildOpsDeps(ctx), messageType, message, ctx.stakingNetworks),
   (ctx, messageType, message) => handleNftOps(buildOpsDeps(ctx), messageType, message),
   handleMultisig,
   handlePreferences,

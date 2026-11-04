@@ -41,6 +41,7 @@ import {
   strk20ViewingKeyRecord,
 } from "./key-boundary-fixtures";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
+import { makeStakingChain, stakingReader } from "./staking-chain";
 import { makeStrk20Service } from "./strk20-background";
 
 /** The tracked mainnet ETH record the doubles quote balances and calls in. */
@@ -473,6 +474,7 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
         return input.prepared.transactionHash;
       },
     },
+    readAtPinnedBlock: stakingReader(makeStakingChain()),
     strk20: strk20ServiceFor(state),
     async verifyAccountClassHash() {
       return { onChainClassHash: account.classHash, status: "verified" };
