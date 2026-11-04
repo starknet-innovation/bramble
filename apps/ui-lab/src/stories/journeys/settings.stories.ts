@@ -57,6 +57,7 @@ export const ConnectedSites = checkpointStory(
   "settings-security",
   "connected-sites",
 );
+export const AppDirectory = checkpointStory("App directory", "settings-security", "app-directory");
 export const Backup = checkpointStory("Mixed-wallet backup", "settings-security", "backup");
 export const BackupExport = checkpointStory(
   "Backup · download",

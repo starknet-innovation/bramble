@@ -212,6 +212,15 @@ export const settingsScenario: WalletScenario = {
       state: { origins: 0 },
     },
     {
+      content: () =>
+        walletDashboard({ connectedSites: [], preferences: journeyPreferences, view: "apps" }),
+      id: "app-directory",
+      label: "App directory",
+      narrative:
+        "The bundled directory ships empty, so the screen says no app is listed yet and Settings offers no row to reach it.",
+      state: { listed: 0 },
+    },
+    {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "backup" }),
       id: "backup",
       label: "Mixed-wallet backup",
@@ -291,6 +300,7 @@ export const settingsScenario: WalletScenario = {
     "backup-export",
     "backup-restore",
     "connected-sites",
+    "apps",
     "reveal",
   ],
 };
