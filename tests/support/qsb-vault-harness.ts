@@ -62,6 +62,8 @@ export type QsbVaultHarness = {
   readonly state: FakeCoordinatorState;
   /** Storage writes (`write <key>`) and coordinator calls (`call <route>`), in order. */
   readonly events: string[];
+  /** Grants or revokes the coordinator's origin (granted at first). */
+  readonly grant: (granted: boolean) => void;
 };
 
 const realKrusty = async (): Promise<KmsPort> => ({
@@ -122,7 +124,9 @@ export const qsbVaultHarness = async (
   let drawn = 0;
   const runtime = fakeQsbRuntime();
   const fake = fakeQsbFetch(state, clock);
+  let granted = true;
   const deps: QsbVaultDeps = {
+    coordinatorAccess: async () => granted,
     coordinator: createQsbCoordinator({
       fetch: async (url, init) => {
         events.push(`call ${init.method ?? "GET"} ${new URL(url).pathname}`);
@@ -157,6 +161,9 @@ export const qsbVaultHarness = async (
     backend,
     deps,
     events,
+    grant: (value) => {
+      granted = value;
+    },
     owner,
     runtime,
     send: (message) => handler(message, extensionSender),

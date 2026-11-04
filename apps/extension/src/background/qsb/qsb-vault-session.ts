@@ -21,6 +21,7 @@ import { QsbCoordinatorFailure } from "@bramble/qsb/client";
 import type { QsbSessions } from "@bramble/qsb/sessions";
 import { isOwnerKey, ownerP2wpkhScript } from "@bramble/qsb/transactions";
 import type { QsbOwner, QsbVaultAccess } from "@bramble/vault/service-types";
+import type { QsbCoordinatorAccess } from "./qsb-vault-access-grant";
 import type { QsbAccountLocks } from "./qsb-vault-locks";
 import { isSessionExpired, qsbRefusal } from "./qsb-vault-refusals";
 import type { QsbHorsCommitments, QsbVaultSetup } from "./qsb-vault-setup";
@@ -28,6 +29,8 @@ import type { QsbHorsCommitments, QsbVaultSetup } from "./qsb-vault-setup";
 /** The collaborators every QSB vault flow is given. */
 export type QsbVaultDeps = {
   readonly coordinator: QsbCoordinator;
+  /** Whether the user granted the coordinator's origin; asked before any request. */
+  readonly coordinatorAccess: QsbCoordinatorAccess;
   /** A fresh random uuid for a vault's coordinator id. */
   readonly drawVaultId: () => string;
   /** One promise chain per account: its flows run end to end one at a time. */
@@ -40,8 +43,8 @@ export type QsbVaultDeps = {
   readonly sessions: QsbSessions;
 };
 
-/** Who signs in: the owner address and the one key operation sign-in needs. */
-export type QsbSigner = {
+// Who signs in: the owner address and the one key operation sign-in needs.
+type QsbSigner = {
   readonly address: string;
   readonly signSignIn: (message: string) => Promise<string>;
 };
@@ -89,19 +92,8 @@ const signIn = async (
   return token;
 };
 
-/** The session of the account `access` is over, signing in with its owner key. */
-export const qsbAccessSession = (
-  deps: QsbVaultDeps,
-  access: Pick<QsbVaultAccess, "accountId" | "signSignIn">,
-  owner: QsbOwner,
-): QsbCoordinatorSession =>
-  qsbCoordinatorSession(deps, access.accountId, {
-    address: owner.address,
-    signSignIn: (message) => access.signSignIn(message),
-  });
-
-/** Opens the account's coordinator session; nothing is sent until a call runs. */
-export const qsbCoordinatorSession = (
+// Opens the account's coordinator session; nothing is sent until a call runs.
+const qsbCoordinatorSession = (
   deps: QsbVaultDeps,
   accountId: string,
   signer: QsbSigner,
@@ -118,3 +110,14 @@ export const qsbCoordinatorSession = (
     }
   },
 });
+
+/** The session of the account `access` is over, signing in with its owner key. */
+export const qsbAccessSession = (
+  deps: QsbVaultDeps,
+  access: Pick<QsbVaultAccess, "accountId" | "signSignIn">,
+  owner: QsbOwner,
+): QsbCoordinatorSession =>
+  qsbCoordinatorSession(deps, access.accountId, {
+    address: owner.address,
+    signSignIn: (message) => access.signSignIn(message),
+  });

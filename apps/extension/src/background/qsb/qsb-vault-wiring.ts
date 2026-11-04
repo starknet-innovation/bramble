@@ -20,6 +20,7 @@ export type QsbVaultWiring = QsbVaultDeps & { readonly clearSessions: () => void
 
 /** Builds the QSB vault deps over the root's fetch, clock and runtime. */
 export const createQsbVaultWiring = (input: {
+  readonly access: QsbVaultDeps["coordinatorAccess"];
   readonly fetch: QsbHttpFetch;
   readonly now: () => number;
   readonly runtime: QsbVaultDeps["runtime"];
@@ -28,6 +29,7 @@ export const createQsbVaultWiring = (input: {
   return {
     clearSessions: sessions.clear,
     coordinator: createQsbCoordinator({ fetch: input.fetch }),
+    coordinatorAccess: input.access,
     drawVaultId: () => crypto.randomUUID(),
     locks: createQsbAccountLocks(),
     now: input.now,

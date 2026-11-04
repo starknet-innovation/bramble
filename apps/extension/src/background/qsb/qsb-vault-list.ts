@@ -10,9 +10,10 @@
  * A deposit is recorded as the vault's funding only once the coordinator's
  * `/funding` reports it confirmed, its transaction hashes to its txid and its
  * output 0 pays this vault's script exactly its amount; the pending bytes of
- * that txid are then dropped. If the coordinator cannot be reached, or
- * answers anything malformed, the reply is the address and the local vaults
- * with `funds` and every `registered` null, rather than a failure.
+ * that txid are then dropped. If the user has not granted the coordinator's
+ * origin (then it is not asked at all), it cannot be reached, or it answers
+ * anything malformed, the reply is the address and the local vaults with
+ * `funds` and every `registered` null, rather than a failure.
  */
 
 import { isVaultFunding } from "@bramble/qsb/transactions";
@@ -160,7 +161,10 @@ export const listQsbVaults = (
     const local = await readLocal(access);
     const owner = await qsbOwnerOf(access);
     const session = qsbAccessSession(deps, access, owner);
-    const remote = await readRemote(deps, session, local).catch(() => null);
+    // Without the user's grant the coordinator is not asked at all.
+    const remote = (await deps.coordinatorAccess())
+      ? await readRemote(deps, session, local).catch(() => null)
+      : null;
     const settled =
       remote && remote.confirmations.length > 0
         ? await recordConfirmations(access, remote.confirmations).catch(() => local)

@@ -56,6 +56,7 @@ const offlineDeps = (): QsbVaultDeps => ({
       throw new TypeError("offline");
     },
   }),
+  coordinatorAccess: async () => true,
   drawVaultId: () => "11111111-2222-4333-8444-555555555555",
   locks: createQsbAccountLocks(),
   now: () => Date.UTC(2026, 10, 4),

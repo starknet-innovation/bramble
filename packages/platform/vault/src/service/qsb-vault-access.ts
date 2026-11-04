@@ -166,12 +166,7 @@ const holdIn = async (slot: Slot, deposit: QsbPendingDeposit): Promise<void> => 
     binding.status === "bound"
       ? binding.journal.vaults.find((vault) => vault.v === deposit.v)
       : undefined;
-  if (
-    !record ||
-    record.state !== "allocated" ||
-    record.funding !== null ||
-    record.scriptPubKey === null
-  ) {
+  if (record?.state !== "allocated" || record.funding !== null || record.scriptPubKey === null) {
     throw refused(QSB_VAULT_REFUSALS.notDepositable);
   }
   const held = await heldIn(slot);

@@ -13,7 +13,21 @@
  * owner address the background reports. The five vault messages are driven with
  * `sendRuntimeMessage`; the spec then shows the journal recorded the funding
  * and that the worker fetched nothing but the coordinator and its own package.
+ *
+ * The coordinator's origin is an optional host permission the user grants at
+ * runtime, which a test cannot click through, so the funded journey loads a
+ * copy of `dist/` whose manifest grants it at install. The shipped `dist/`
+ * does not, and there every vault action refuses with `accessNeeded` and
+ * nothing is allocated or sent.
  */
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  QSB_COORDINATOR_ORIGIN,
+  QSB_COORDINATOR_PERMISSION,
+  QSB_VAULT_REFUSALS,
+} from "@bramble/wallet-model/qsb-vaults";
 import type { Page, Request, Route } from "@playwright/test";
 import {
   answerQsbRequest,
@@ -21,6 +35,7 @@ import {
   fakeCoordinatorState,
   paymentToAddress,
 } from "../support/qsb-coordinator-fake";
+import { distPath, type LoadedExtension, launchExtension } from "./extension-fixture";
 import { expect, test } from "./fixtures";
 import {
   IMPORT_MNEMONIC,
@@ -29,12 +44,50 @@ import {
   VAULT_PASSPHRASE,
 } from "./wallet-helpers";
 
-const COORDINATOR = "https://d1pjwwq89sze3g.cloudfront.net";
+const COORDINATOR = QSB_COORDINATOR_ORIGIN;
 
 type Reply = Record<string, unknown> & {
   readonly error?: string;
   readonly ok?: true;
 };
+
+// Runs `run` on a copy of `dist/` whose manifest grants the coordinator's
+// origin at install, as the user's runtime grant would.
+const withCoordinatorGranted = async (
+  run: (extension: LoadedExtension) => Promise<void>,
+): Promise<void> => {
+  const directory = await mkdtemp(join(tmpdir(), "bramble-qsb-granted-"));
+  await cp(distPath, directory, { recursive: true });
+  const manifestPath = join(directory, "manifest.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+    host_permissions: string[];
+  };
+  manifest.host_permissions = [...manifest.host_permissions, QSB_COORDINATOR_PERMISSION];
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  const extension = await launchExtension({ extensionPath: directory });
+  try {
+    await run(extension);
+  } finally {
+    await extension.close();
+    await rm(directory, { force: true, recursive: true });
+  }
+};
+
+// What the browser itself says about the coordinator's origin.
+const coordinatorGranted = (page: Page): Promise<boolean> =>
+  page.evaluate(
+    (origins) =>
+      (
+        globalThis as typeof globalThis & {
+          readonly chrome: {
+            readonly permissions: {
+              readonly contains: (query: { origins: string[] }) => Promise<boolean>;
+            };
+          };
+        }
+      ).chrome.permissions.contains({ origins }),
+    [QSB_COORDINATOR_PERMISSION],
+  );
 
 const send = async (page: Page, message: Record<string, unknown>): Promise<Reply> => {
   const reply = await sendRuntimeMessage<Reply>(page, message);
@@ -81,14 +134,53 @@ const createWriterAccount = async (page: Page): Promise<string> => {
   return accountId;
 };
 
-test("creates, funds and confirms a quantum-safe Bitcoin vault", async ({ extension }) => {
-  test.setTimeout(240_000);
+test("refuses every vault action, and allocates nothing, until the coordinator is granted", async ({
+  extension,
+}) => {
+  test.setTimeout(120_000);
   const fetched: string[] = [];
   extension.context.on("request", (request: Request) => {
     fetched.push(request.url());
   });
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
+  expect(await coordinatorGranted(sidepanel)).toBe(false);
+  const state = fakeCoordinatorState("");
+  await routeCoordinator(sidepanel, () => state);
+  const accountId = await createWriterAccount(sidepanel);
+
+  const listed = await send(sidepanel, { accountId, type: "wallet.qsbVaults" });
+  expect(String(listed["address"])).toMatch(/^bc1q[02-9ac-hj-np-z]{38}$/);
+  expect(listed).toMatchObject({ funds: null, vaults: [] });
+  const refused = { error: QSB_VAULT_REFUSALS.accessNeeded };
+  expect(await sendRuntimeMessage(sidepanel, { accountId, type: "wallet.createQsbVault" })).toEqual(
+    refused,
+  );
+  expect(
+    await sendRuntimeMessage(sidepanel, {
+      accountId,
+      amountSat: 100_000,
+      type: "wallet.quoteQsbDeposit",
+      v: 0,
+    }),
+  ).toEqual(refused);
+  // Nothing was allocated: the journal still holds no vault.
+  expect(await send(sidepanel, { accountId, type: "wallet.qsbVaults" })).toMatchObject({
+    funds: null,
+    vaults: [],
+  });
+  expect(state.calls).toEqual([]);
+  expect(fetched.filter((url) => url.startsWith(COORDINATOR))).toEqual([]);
+});
+
+const fundedJourney = async (extension: LoadedExtension): Promise<void> => {
+  const fetched: string[] = [];
+  extension.context.on("request", (request: Request) => {
+    fetched.push(request.url());
+  });
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
+  expect(await coordinatorGranted(sidepanel)).toBe(true);
   // First with the chain unreachable: the listing still names the owner.
   let state = fakeCoordinatorState("");
   state.refusals.set("GET /payment-utxos", { code: "chain_unavailable", status: 503 });
@@ -185,4 +277,9 @@ test("creates, funds and confirms a quantum-safe Bitcoin vault", async ({ extens
       "GET /vaults/:id/funding",
     ]),
   );
+};
+
+test("creates, funds and confirms a quantum-safe Bitcoin vault", async () => {
+  test.setTimeout(240_000);
+  await withCoordinatorGranted(fundedJourney);
 });

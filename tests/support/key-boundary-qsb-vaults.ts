@@ -116,6 +116,7 @@ export const keyBoundaryQsbVaults = async (): Promise<KeyBoundaryQsbVaults> => {
   return {
     deps: {
       coordinator: createQsbCoordinator({ fetch: fakeQsbFetch(state, now) }),
+      coordinatorAccess: async () => true,
       drawVaultId: () => crypto.randomUUID(),
       locks: createQsbAccountLocks(),
       now,

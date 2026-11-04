@@ -29,7 +29,7 @@ import type {
   QsbSubmission,
   QsbVaultView,
 } from "@bramble/wallet-model/qsb-vaults";
-import { requireDepositsOpen } from "./qsb-vault-gates";
+import { requireCoordinatorAccess, requireDepositsOpen } from "./qsb-vault-gates";
 import {
   depositableRecord,
   depositableServerVault,
@@ -49,10 +49,12 @@ export type QsbSubmissionReply = {
   readonly vault: QsbVaultView;
 };
 
+// Every action's context, refused with `accessNeeded` before anything else.
 const contextOf = async (
   deps: QsbVaultDeps,
   access: QsbVaultAccess,
 ): Promise<QsbDepositContext> => {
+  await requireCoordinatorAccess(deps);
   const owner = await qsbOwnerOf(access);
   return { access, deps, owner, session: qsbAccessSession(deps, access, owner) };
 };

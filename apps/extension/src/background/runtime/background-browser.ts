@@ -12,6 +12,7 @@ import type { ApprovalSurfaceBrowser } from "../approvals/approval-surface";
 import type { SurfaceRescueBrowser } from "../approvals/approval-surface-rescue";
 import type { SidePanelLearningBrowser } from "../approvals/side-panel-learning";
 import type { OnboardingSurfaceBrowser } from "../onboarding/onboarding-surface";
+import type { QsbHostPermissions } from "../qsb/qsb-vault-access-grant";
 import type { RuntimeSender } from "../routing/senders";
 import type { AlarmsApi } from "../transactions/tx-monitor";
 import type { SessionAlarmsApi } from "./session-expiry-alarm";
@@ -58,7 +59,7 @@ export type BackgroundBrowser = ApprovalSurfaceBrowser &
   SidePanelLearningBrowser &
   OnboardingSurfaceBrowser &
   AlarmsGlobal & {
-    readonly permissions?: DataConsentPermissions;
+    readonly permissions?: DataConsentPermissions & QsbHostPermissions;
     readonly runtime?: RuntimeApi;
     readonly tabs?: TabsApi;
   };

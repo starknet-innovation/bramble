@@ -196,7 +196,7 @@ if (import.meta.main) {
   // over HTTP or WS, which is the only plain-text endpoint a network accepts.
   // No page navigates by form or rebases its URLs.
   const expectedExtensionCsp =
-    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://d1pjwwq89sze3g.cloudfront.net https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; frame-src 'self'; base-uri 'none'; form-action 'none';";
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; frame-src 'self'; base-uri 'none'; form-action 'none';";
   // CSP for the sandboxed animation renderer (sandbox/render.html). It runs an
   // NFT's untrusted on-chain data:text/html in an isolated security principal:
   // `allow-scripts` (no `allow-same-origin`) lets the canvas animate but grants no
@@ -231,16 +231,16 @@ if (import.meta.main) {
     // signed.
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
-    // QSB coordinator (`QSB_COORDINATOR_ORIGIN`), CORS-closed to other origins.
-    "https://d1pjwwq89sze3g.cloudfront.net/*",
-    // No entry for the live phishing feed: it is read through CORS, and a new
+    // No entry for the live phishing feed (read through CORS) or the QSB
+    // coordinator (granted at runtime under the optional HTTPS pattern): a new
     // host here would be a privilege increase on update (issue 772).
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*",
   ];
   // Chrome grants none of these until a user saves a custom HTTP service from
-  // Settings. The UI requests only that endpoint's exact origin; the broad
-  // declaration is the MV3 ceiling needed to support arbitrary HTTPS hosts.
+  // Settings or opens QSB vaults. The UI requests only that endpoint's exact
+  // origin (`QSB_COORDINATOR_PERMISSION` for QSB); the broad declaration is the
+  // MV3 ceiling needed to support arbitrary HTTPS hosts.
   const expectedOptionalHostPermissions = [
     "https://*/*",
     "http://127.0.0.1/*",

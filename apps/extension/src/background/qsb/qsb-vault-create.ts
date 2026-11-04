@@ -7,7 +7,8 @@
  * coordinator and the runtime are called between slots, never inside one.
  *
  * The order is the safety (BIP "QSB Wallet Secret Management", Allocation):
- * only a writer may create; `v = nextV` is allocated durably with Krusty's
+ * only once the user has granted the coordinator's origin, and only a
+ * writer may create; `v = nextV` is allocated durably with Krusty's
  * root before any commitment or script leaves the background; the script is
  * rebuilt and associated durably next; then, on a fresh vault list, the reuse
  * scan; then the registration. A registration that failed for a retryable
@@ -30,7 +31,7 @@ import type { QsbVaultRecord } from "@bramble/vault/qsb-vault-record";
 import type { QsbJournalState, QsbVaultAccess } from "@bramble/vault/service-types";
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
 import type { QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
-import { requireOwnerAllowed } from "./qsb-vault-gates";
+import { requireCoordinatorAccess, requireOwnerAllowed } from "./qsb-vault-gates";
 import {
   coordinatorRefusal,
   failClosed,
@@ -167,6 +168,7 @@ const finish = async (
  */
 export const createQsbVault = (deps: QsbVaultDeps, access: QsbVaultAccess): Promise<QsbVaultView> =>
   failClosed("runtimeUnavailable", async () => {
+    await requireCoordinatorAccess(deps);
     const journal = await writerJournal(access);
     const owner = await qsbOwnerOf(access);
     const session = qsbAccessSession(deps, access, owner);
