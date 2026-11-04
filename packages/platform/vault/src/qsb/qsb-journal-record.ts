@@ -23,6 +23,7 @@
  * of messages, UI state, logs, and session storage like any vault data.
  */
 import { hasOnlyKnownKeys, isRecord, QSB_JOURNAL_MAX_BYTES } from "@bramble/core/json";
+import type { QsbAccountView } from "@bramble/wallet-model/qsb";
 import { isQsbAccountId, isQsbJournalId, type QsbAccountRecord } from "./qsb-account";
 import {
   isQsbHighWaterMark,
@@ -204,3 +205,17 @@ export const isQsbWriter = (binding: QsbJournalBinding): boolean =>
   binding.status === "bound" &&
   binding.account.seedContext.provenance === "generated-here" &&
   binding.account.backupConfirmed;
+
+/**
+ * The one projection of an account the UI may see: its id, provenance, backup
+ * flag, whether its journal is bound, and writer status as {@link isQsbWriter}
+ * defines it. It copies no other field, so neither the phrase nor the journal
+ * id can reach a reply built from it.
+ */
+export const qsbAccountView = (binding: QsbJournalBinding): QsbAccountView => ({
+  backupConfirmed: binding.account.backupConfirmed,
+  id: binding.account.id,
+  journal: binding.status,
+  provenance: binding.account.seedContext.provenance,
+  writer: isQsbWriter(binding),
+});

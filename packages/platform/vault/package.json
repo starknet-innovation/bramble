@@ -1,6 +1,6 @@
 {
   "name": "@bramble/vault",
-  "description": "The encrypted vault: envelopes, versioned schemas and migrations, account-secret custody, QSB accounts with their separately stored disclosure journals and recovery manifest, the unlock-aware vault service, origin grants and the `KmsPort` it requires.",
+  "description": "The encrypted vault: envelopes, versioned schemas and migrations, account-secret custody, QSB accounts with their separately stored disclosure journals, the open journal stores and recovery manifest, the unlock-aware vault service, origin grants and the `KmsPort` it requires.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -16,6 +16,7 @@
     "./qsb-journal": "./src/qsb/qsb-journal.ts",
     "./qsb-journal-record": "./src/qsb/qsb-journal-record.ts",
     "./qsb-journal-store": "./src/qsb/qsb-journal-store.ts",
+    "./qsb-journal-stores": "./src/qsb/qsb-journal-stores.ts",
     "./qsb-manifest": "./src/qsb/qsb-manifest.ts",
     "./qsb-merge": "./src/qsb/qsb-merge.ts",
     "./qsb-vault-record": "./src/qsb/qsb-vault-record.ts",

@@ -24,7 +24,18 @@ import type { AccountDerivationInput } from "../accounts/accounts";
 import type { ShadowAccountScopeRef } from "../accounts/shadow-account-scopes";
 import type { NostrApplicationData } from "../kms-port";
 import type { Vault } from "../schema/schema";
+import type { QsbAccountService } from "./qsb-account-types";
 import type { RecoverVaultAccountsInput } from "./recovery";
+
+/** The QSB account surface, re-exported from its behaviour split. */
+export type {
+  ConfirmQsbBackupInput,
+  ImportQsbAccountInput,
+  QsbAccountService,
+  QsbAccountWiring,
+  QsbBackupWord,
+  RevealQsbPhraseInput,
+} from "./qsb-account-types";
 
 /** Atomic recovery input re-exported for privileged runtime boundaries. */
 export type { RecoverVaultAccountsInput } from "./recovery";
@@ -255,9 +266,9 @@ export type RevealedSecrets = {
 };
 
 /**
- * Privileged encrypted-vault wallet service surface.
+ * Privileged encrypted-vault wallet service surface, QSB accounts included.
  */
-export type WalletVaultService = {
+export type WalletVaultService = QsbAccountService & {
   readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<DerivedAccountRef>;
   readonly addLedgerAccount: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<DerivedAccountRef>;

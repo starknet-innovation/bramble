@@ -21,7 +21,8 @@ import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnost
 import { createActivityLog, systemClock } from "@bramble/transactions/activity";
 import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
 import { createRelaySignatureLog } from "@bramble/transactions/relay-signatures";
-import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
+import { createEncryptedStore, randomQsbJournalId } from "@bramble/vault/encrypted-store";
+import { createQsbJournalStores } from "@bramble/vault/qsb-journal-stores";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@bramble/vault/store-migration";
 import * as krustyModule from "/dependencies/krusty-kms/krusty_kms_wasm.js";
@@ -116,40 +117,39 @@ const recoveryDiscovery = createRecoveryDiscoveryCache(sessionStore);
 // The vault store is created up front so the unlock session can drop its
 // cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
 // operations for the life of an unlock rather than re-derived every time.
-const vaultStores: { readonly primary: EncryptedStore; readonly staging: EncryptedStore } | null =
-  (() => {
-    try {
-      const store = createBrowserLocalStore();
-      const freshnessStore = createBrowserSyncStore();
-      // The vault blob and its freshness records both live in areas a content
-      // script can read and write on Firefox, which cannot restrict them; an
-      // attacker there rolls back the pair together and it stays
-      // self-consistent. `sessionStore` is `storage.session`, closed to content
-      // scripts on every browser, so it carries a second copy of the commit
-      // state that the rolled-back one has to agree with. Absent where the
-      // runtime has no session storage, which leaves the durable record as the
-      // only authority — the behaviour before this shadow existed.
-      return {
-        // Only the primary mirrors its commit record into `storage.local`, so a
-        // lost `storage.sync` record does not lock the vault; see
-        // `createEncryptedStore` for why staging must not.
-        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
-        staging: createEncryptedStore(
-          store,
-          VAULT_MIGRATION_STORE_KEY,
-          freshnessStore,
-          sessionStore,
-        ),
-      };
-    } catch {
-      return null;
-    }
-  })();
+const vaultStores = (() => {
+  try {
+    const store = createBrowserLocalStore();
+    const freshnessStore = createBrowserSyncStore();
+    // The vault blob and its freshness records both live in areas a content
+    // script can read and write on Firefox, which cannot restrict them; an
+    // attacker there rolls back the pair together and it stays
+    // self-consistent. `sessionStore` is `storage.session`, closed to content
+    // scripts on every browser, so it carries a second copy of the commit
+    // state that the rolled-back one has to agree with. Absent where the
+    // runtime has no session storage, which leaves the durable record as the
+    // only authority — the behaviour before this shadow existed.
+    return {
+      // Each QSB journal is wired exactly like the primary vault, commit-record
+      // mirror included: the wallet never deletes a journal's records.
+      journals: createQsbJournalStores((key) =>
+        createEncryptedStore(store, key, freshnessStore, sessionStore, true),
+      ),
+      // Only the primary mirrors its commit record into `storage.local`, so a
+      // lost `storage.sync` record does not lock the vault; see
+      // `createEncryptedStore` for why staging must not.
+      primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
+      staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY, freshnessStore, sessionStore),
+    };
+  } catch {
+    return null;
+  }
+})();
 const session = createBackgroundUnlockSession({
   alarms: extensionApi?.alarms,
   sessionStore,
   clearKeyCaches: () => {
-    for (const store of [vaultStores?.primary, vaultStores?.staging]) {
+    for (const store of [vaultStores?.primary, vaultStores?.staging, vaultStores?.journals]) {
       store?.clearKeys();
     }
     // Declared below; this runs only when the session locks, long after.
@@ -167,6 +167,7 @@ const wallet = vaultStores
           encryptedStore: vaultStores.primary,
           kms: createKrustyKms(krustyModule),
           migrationStore: vaultStores.staging,
+          qsb: { drawJournalId: randomQsbJournalId, journals: vaultStores.journals },
         }),
       )
       .catch(() => null)

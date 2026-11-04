@@ -109,6 +109,16 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
   "apps/extension/src/background/runtime/runtime-state.ts",
   "apps/extension/src/background/runtime/runtime-types.ts",
+  // Phrase-flow reply types split from runtime-types.ts: declares the reveal
+  // replies' phrase fields; types only, holding and logging nothing.
+  "apps/extension/src/background/runtime/runtime-phrase-types.ts",
+  // QSB account parsers: bound the phrase to import and the re-entered vault
+  // credential of a reveal; nothing is echoed, logged, or persisted.
+  "apps/extension/src/background/qsb/qsb-account-inputs.ts",
+  // QSB account handlers: hand the session's (or, for the one sanctioned
+  // reveal, the re-entered) vault credential straight to the vault service and
+  // return its views; the revealed phrase only transits to the extension page.
+  "apps/extension/src/background/qsb/qsb-account-ops.ts",
   "apps/extension/src/background/runtime/session.ts",
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",
@@ -242,6 +252,13 @@ export const SECRET_MATERIAL_FILES = new Set([
   // the caller's vault passphrase, like every other vault service method. The
   // journal holds no phrase; the credential is never logged or returned.
   "packages/platform/vault/src/qsb/qsb-journal-store.ts",
+  // QSB account methods: generate (through Krusty), import, confirm and reveal
+  // a dedicated phrase inside the encrypted vault under the caller's vault
+  // credential; only the re-authenticated reveal returns a phrase.
+  "packages/platform/vault/src/service/qsb-accounts.ts",
+  // Their type surface, split by behaviour: names the phrase and credential
+  // fields of the inputs and the reveal's result; types only.
+  "packages/platform/vault/src/service/qsb-account-types.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
   // Split from accounts.ts by the size budget: same boundary, same rules — the

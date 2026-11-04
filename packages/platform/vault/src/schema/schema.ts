@@ -436,8 +436,12 @@ export const isVaultV12 = (value: unknown): value is VaultV12 => {
 
 const V13_KEYS = [...V12_KEYS, "qsbAccounts"] as const;
 
-// Every Starknet phrase the vault retains: a QSB phrase must be none of them.
-const starknetPhrases = (value: Record<string, unknown>): readonly string[] => [
+/**
+ * Every Starknet phrase a vault value retains (the founding phrase and each
+ * imported seed's), as stored; a QSB phrase must be none of them. Reads an
+ * unvalidated value too, skipping anything that is not a string phrase.
+ */
+export const starknetPhrases = (value: Record<string, unknown>): readonly string[] => [
   ...(typeof value["mnemonic"] === "string" ? [value["mnemonic"]] : []),
   ...(Array.isArray(value["importedSeeds"])
     ? value["importedSeeds"].flatMap((seed: unknown) =>

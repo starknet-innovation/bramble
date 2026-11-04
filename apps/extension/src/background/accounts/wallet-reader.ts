@@ -57,6 +57,16 @@ export type WalletStatusReader = {
   readonly createKeyVault?: (input: CreateKeyVaultInput) => Promise<AccountRef>;
   /** Creates a mnemonic-less Ledger vault; fails closed over an existing vault. */
   readonly createLedgerVault?: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
+  /**
+   * The QSB account methods (`QsbAccountService`): views only, except the
+   * re-authenticated phrase reveal. Optional only for partial test stubs; every
+   * QSB message answers "wallet unavailable" without them.
+   */
+  readonly confirmQsbBackup?: WalletVaultService["confirmQsbBackup"];
+  readonly createQsbAccount?: WalletVaultService["createQsbAccount"];
+  readonly importQsbAccount?: WalletVaultService["importQsbAccount"];
+  readonly qsbAccounts?: WalletVaultService["qsbAccounts"];
+  readonly revealQsbPhrase?: WalletVaultService["revealQsbPhrase"];
   /** Derives Ledger picker candidates; optional only for partial test stubs. */
   readonly deriveLedgerAccounts?: (
     input: DeriveLedgerAccountsInput,
@@ -175,6 +185,9 @@ export const createWalletReader = (
     async addLedgerAccount(input) {
       return (await required()).addLedgerAccount(input);
     },
+    async confirmQsbBackup(input) {
+      return (await required()).confirmQsbBackup(input);
+    },
     async createAccount(input) {
       return (await required()).createAccount(input);
     },
@@ -183,6 +196,9 @@ export const createWalletReader = (
     },
     async createLedgerVault(input) {
       return (await required()).createLedgerVault(input);
+    },
+    async createQsbAccount(vaultPassphrase) {
+      return (await required()).createQsbAccount(vaultPassphrase);
     },
     async deriveLedgerAccounts(input) {
       return (await required()).deriveLedgerAccounts(input);
@@ -211,6 +227,9 @@ export const createWalletReader = (
     async grantOrigin(input) {
       return (await required()).grantOrigin(input);
     },
+    async importQsbAccount(input) {
+      return (await required()).importQsbAccount(input);
+    },
     async importRawKeyAccount(input) {
       return (await required()).importRawKeyAccount(input);
     },
@@ -232,6 +251,9 @@ export const createWalletReader = (
     async previewImportedAccount(input) {
       return (await required()).previewImportedAccount(input);
     },
+    async qsbAccounts(vaultPassphrase) {
+      return (await required()).qsbAccounts(vaultPassphrase);
+    },
     async recoverAccounts(input) {
       return (await required()).recoverAccounts(input);
     },
@@ -252,6 +274,9 @@ export const createWalletReader = (
     },
     async recoverUnverifiedVault(vaultPassphrase) {
       return (await required()).recoverUnverifiedVault(vaultPassphrase);
+    },
+    async revealQsbPhrase(input) {
+      return (await required()).revealQsbPhrase(input);
     },
     async revokeOrigin(input) {
       return (await required()).revokeOrigin(input);

@@ -56,6 +56,12 @@ import type {
   StarkNameResolutionResponse,
 } from "./runtime-lookup-types";
 import type {
+  GenerateMnemonicResponse,
+  QsbAccountResponse,
+  RevealSecretsResponse,
+  ValidateMnemonicResponse,
+} from "./runtime-phrase-types";
+import type {
   FeeReviewResponse,
   TransferResponse,
   TransferReviewResponse,
@@ -65,32 +71,6 @@ import type {
 type CreateAccountResponse = {
   readonly account: AccountRef;
   readonly ok: true;
-};
-
-/**
- * Successful mnemonic-generation response.
- */
-type GenerateMnemonicResponse = {
-  readonly mnemonic: string;
-  readonly ok: true;
-};
-
-/**
- * Successful mnemonic-validity response. Carries only the boolean verdict.
- */
-type ValidateMnemonicResponse = {
-  readonly ok: true;
-  readonly valid: boolean;
-};
-
-/**
- * Re-authenticated secret reveal returned only to the extension reveal flow.
- */
-type RevealSecretsResponse = {
-  readonly mnemonic: string | null;
-  readonly ok: true;
-  /** `null` on a network with no account: only the recovery phrase is revealed. */
-  readonly privateKey: string | null;
 };
 
 /**
@@ -474,6 +454,7 @@ export type RuntimeResponse =
   | PermissionsResponse
   | PreferencesResponse
   | PricesResponse
+  | QsbAccountResponse
   | RequestAccountsResponse
   | RevealSecretsResponse
   | SignHashResponse

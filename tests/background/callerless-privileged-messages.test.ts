@@ -20,7 +20,7 @@ import {
   testExtension,
   vaultPassphrase,
 } from "../support/background-wallet-stub";
-import { handledWalletMessages } from "../support/key-boundary-messages";
+import { handledWalletMessages } from "../support/key-boundary-handled";
 
 const REMOVED_TYPES = ["wallet.grantOrigin", "wallet.signHash"] as const;
 

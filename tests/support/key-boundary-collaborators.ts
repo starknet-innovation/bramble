@@ -41,6 +41,7 @@ import {
   SECRET_VIEWING_KEY,
   strk20ViewingKeyRecord,
 } from "./key-boundary-fixtures";
+import { qsbWalletStub } from "./key-boundary-qsb-wallet";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 import { makeStrk20Service } from "./strk20-background";
 
@@ -101,6 +102,7 @@ const recordedScopes: { value: readonly ShadowAccountScopeRef[] } = { value: [] 
 
 /** The salted stub vault service the scan runs the router against. */
 export const walletStub = {
+  ...qsbWalletStub,
   async addDerivedAccount() {
     return account;
   },

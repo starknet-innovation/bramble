@@ -30,6 +30,19 @@ import type { ImportRawKeyAccountInput, WalletVaultService } from "./service-typ
 import { requireVaultCapacity } from "./vault-capacity";
 
 /**
+ * Throws exactly what {@link writeVault} would refuse a vault with, touching
+ * no storage: `Vault storage limit reached` past its capacity, `Invalid vault`
+ * for anything that is not a well-formed current-schema vault. For a caller
+ * that must make an earlier write only if the vault write will be accepted.
+ */
+export const assertWritableVault = (vault: Vault): void => {
+  requireVaultCapacity(vault);
+  if (!isVaultV13(vault)) {
+    throw new WalletError("Invalid vault");
+  }
+};
+
+/**
  * Validates and persists a vault snapshot. Refuses to write anything that is
  * not a well-formed current-schema vault, so a buggy caller can never persist
  * a partial or downgraded shape, and names a vault past its capacity before
@@ -44,10 +57,7 @@ export const writeVault = async (
   vaultPassphrase: string,
   beforeCommit?: () => void,
 ): Promise<void> => {
-  requireVaultCapacity(vault);
-  if (!isVaultV13(vault)) {
-    throw new WalletError("Invalid vault");
-  }
+  assertWritableVault(vault);
   await encryptedStore.write(vault, vaultPassphrase, beforeCommit);
 };
 

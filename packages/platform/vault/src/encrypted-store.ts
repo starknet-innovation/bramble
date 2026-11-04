@@ -97,6 +97,16 @@ const encryptionParams = (
 };
 
 /**
+ * Draws a fresh QSB journal id: 32 bytes from the Web Crypto CSPRNG, as the 64
+ * lowercase hex digits `isQsbJournalId` accepts. It lives here because this
+ * module is the vault's one randomness boundary; the vault service takes it
+ * injected, so no pure code draws. Each call is independent and nothing is
+ * kept. Throws, drawing nothing, where the runtime has no Web Crypto.
+ */
+export const randomQsbJournalId = (): string =>
+  bytesToHex(crypto.getRandomValues(new Uint8Array(32)));
+
+/**
  * Encrypts JSON data with passphrase-derived AES-GCM bound to a caller scope.
  */
 export const encryptJson = async (

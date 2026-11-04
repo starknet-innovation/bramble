@@ -46,11 +46,11 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v10; account ids unique; strict cross-references; capacity below | fail closed |
 | `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
 | `bramble:qsb-journal:<journalId>` | `storage.local`, AES-GCM, same vault passphrase, commit records like the vault's | one QSB account's disclosure journal: allocation high-water mark and vault records (no phrase, no preimage) | journal schema v1; header bound to `accountId` and the random 256-bit `journalId`; 64 records and 256 KiB per journal; 8 accounts | fail closed for that account: not a writer, every allocation and disclosure refused, never recreated empty |
-| `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage | rollback refused; a missing primary record is restored from the local mirror |
-| `bramble:vault:commit:<lineage>` mirror (primary vault only) | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
-| `bramble:vault:legacy` | `storage.local`, plain | marker that this install has committed a version-3 envelope | one per install | any version-2 envelope after it is a rollback |
+| `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>`, `bramble:qsb-journal:<journalId>:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage; at most 211 bytes each (see the `storage.sync` budget below) | rollback refused; a missing primary-vault or journal record is restored from the local mirror |
+| `bramble:vault:commit:<lineage>`, `bramble:qsb-journal:<journalId>:commit:<lineage>` mirror (primary vault and each journal, never staging) | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
+| `bramble:vault:legacy`, `bramble:qsb-journal:<journalId>:legacy` | `storage.local`, plain | marker that this store has committed a version-3 envelope | one per store | any version-2 envelope after it is a rollback |
 | `bramble:vault:recovering` | `storage.local`, plain | lineage of an Unlock anyway write in progress | only while a recovery writes | the next recovery removes the records an interrupted one left |
-| `bramble:vault:commit:<lineage>`, `bramble:vault:promoted` shadow | `storage.session`, plain | session copy of the commit record and the last promoted lineage | browser session | a durable record that disagrees is a rollback |
+| `bramble:vault:commit:<lineage>`, `bramble:vault:promoted` shadow, and the same two per journal key | `storage.session`, plain | session copy of the commit record and the last promoted lineage | browser session | a durable record that disagrees is a rollback |
 | `bramble:preferences` | `storage.local`, plain | labels, groups, contacts, tokens, networks, watched NFTs | schema v1; deterministic ids and bounded validators | fail closed on invalid root |
 | `bramble:activity` | `storage.local`, plain | public transaction history | account + network; 200 entries per scope | discard invalid rows; monotonic status |
 | `bramble:relay-signatures` | `storage.local`, plain | OutsideExecution messages signed for relay: origin, message hash, nonce, deadline, call count, chain-read status and check time; no signature or calldata | account + network; 100 total | discard invalid rows; monotonic status (`nonce-used` is final) |
@@ -111,10 +111,32 @@ most). Hitting a limit refuses the write; nothing is evicted. Because the phrase
 longer change in one write, creation writes the empty journal first and the vault account naming it
 second; a journal left without an account is an orphan that nothing reads. An account whose journal is
 missing, unreadable, invalid, or bound to another account or journal id fails closed, and nothing
-recreates an empty journal over a lost one. Journal writes run in the vault's mutation queue and are
+recreates an empty journal over a lost one. Creation also checks that the vault will accept the new
+account (its capacity and validators) before writing the journal, so a full vault leaves no orphan;
+only a vault write that fails in storage can. Journal writes run in the vault's mutation queue and are
 durable before any commitment or preimage they authorize is released. No wallet-reset flow exists; if
 one is added it should leave `bramble:qsb-journal:*` keys in place, since they hold the only disclosure
 history, and a new wallet never binds them because its accounts draw fresh journal ids.
+
+**QSB account messages.** Five extension-page-only messages reach these records, through the vault
+service's QSB methods (`packages/platform/vault/src/service/qsb-accounts.ts`), each run in the
+mutation queue: `wallet.qsbAccounts`, `wallet.createQsbAccount` (a 24-word phrase from Krusty, unconfirmed),
+`wallet.importQsbAccount` (canonical spelling, dedicated, read-only for life), `wallet.confirmQsbBackup`
+(three retyped words at distinct positions) and `wallet.revealQsbPhrase`. Every reply is a
+`QsbAccountView`, with no phrase and no `journalId`, except the reveal's: the one QSB phrase a message
+may carry, after the vault decrypts under the password re-entered in the request, never the session's.
+The key-boundary scan sanctions that reveal alone.
+
+**`storage.sync` budget.** Chrome gives `storage.sync` 102,400 bytes in all, 8,192 bytes per item
+(key length plus the item's JSON) and 512 items; the wallet keeps only commit records there. A record
+is at most 87 bytes of JSON (`current` and `pending` both set, mid-write), so the vault's
+`bramble:vault:commit:<lineage>` item is at most 140 bytes, the staging copy's 150 (only during a
+migration), and each journal's `bramble:qsb-journal:<journalId>:commit:<lineage>` 211 (a 124-character
+key). A journal keeps one lineage for life, so eight journals take 1,688 bytes in 8 items, and with the
+vault and a staged migration everything fits in 1,978 bytes and 10 items: under 2% of the total and
+3% of one item's limit. Each orphan journal adds one 211-byte item, which room for about 475 more
+covers. Every journal write is two `storage.sync` writes (pending, then current), so creating an account
+costs four of Chrome's 120 per minute and 1,800 per hour.
 
 ## Account identity and first-class behavior
 

@@ -1,4 +1,22 @@
 /**
+ * A deterministic stand-in for Krusty KMS in wallet tests. Never a production
+ * dependency; every phrase here is public.
+ */
+
+// The 12-word phrase the fake generates by default (and for any count but 24).
+const FAKE_GENERATED_MNEMONIC =
+  "habit hope tip crystal because grunt nation idea electric witness alert like";
+
+/**
+ * The 24-word phrase the fake generates when asked for 24 words, as a QSB
+ * account is: a published BIP-39 test vector (entropy 0x68a79eac…6ce7c),
+ * public and never for funds, deliberately distinct from the 12-word one so a
+ * test can tell which count was requested.
+ */
+export const FAKE_GENERATED_MNEMONIC_24 =
+  "hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length";
+
+/**
  * Minimal fake Krusty KMS for wallet service tests.
  */
 export const fakeKms = (validMnemonic = true) => ({
@@ -36,8 +54,9 @@ export const fakeKms = (validMnemonic = true) => ({
       publicKeyY: "0xdef",
     };
   },
-  async generateMnemonic(_wordCount?: number) {
-    return "habit hope tip crystal because grunt nation idea electric witness alert like";
+  // Deterministic, and honours the one other count the wallet asks for.
+  async generateMnemonic(wordCount?: number) {
+    return wordCount === 24 ? FAKE_GENERATED_MNEMONIC_24 : FAKE_GENERATED_MNEMONIC;
   },
   async openNostrApplicationData(
     _mnemonic: string,

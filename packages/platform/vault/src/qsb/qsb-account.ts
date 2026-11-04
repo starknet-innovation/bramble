@@ -126,9 +126,14 @@ export const isQsbAccountRecord = (value: unknown): value is QsbAccountRecord =>
   typeof value["backupConfirmed"] === "boolean" &&
   value["network"] === QSB_NETWORK;
 
-// Whitespace-insensitive, case-folded, NFKD word sequence, so a phrase stored
-// with other spacing still collides with its QSB twin.
-const phraseKey = (phrase: string): string =>
+/**
+ * The one spelling phrases are compared and stored in: NFKD, lowercase,
+ * trimmed, every whitespace run collapsed to one space. A phrase typed with
+ * other spacing or case therefore still collides with its QSB or Starknet
+ * twin, and an imported QSB phrase is stored in exactly this form. Total;
+ * callers bound the input first.
+ */
+export const canonicalQsbPhrase = (phrase: string): string =>
   phrase.normalize("NFKD").toLowerCase().trim().split(/\s+/).join(" ");
 
 /**
@@ -148,8 +153,8 @@ export const hasValidQsbAccounts = (
   ) {
     return false;
   }
-  const phrases = accounts.map((account) => phraseKey(account.mnemonic));
-  const others = new Set(otherPhrases.map(phraseKey));
+  const phrases = accounts.map((account) => canonicalQsbPhrase(account.mnemonic));
+  const others = new Set(otherPhrases.map(canonicalQsbPhrase));
   return (
     hasUniqueStrings(accounts.map((account) => account.id)) &&
     hasUniqueStrings(accounts.map((account) => account.journalId)) &&
