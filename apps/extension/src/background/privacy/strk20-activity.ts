@@ -17,8 +17,8 @@ export const strk20FirstShieldSummary = (value: string): string =>
 
 const FIRST_SHIELD_PREFIX = `${STRK20_REGISTRATION_SUMMARY} and shield `;
 
-/** Whether an activity summary records a registration, alone or with a shield. */
-export const isStrk20RegistrationSummary = (summary: string): boolean =>
+// Whether an activity summary records a registration, alone or with a shield.
+const isStrk20RegistrationSummary = (summary: string): boolean =>
   summary === STRK20_REGISTRATION_SUMMARY || summary.startsWith(FIRST_SHIELD_PREFIX);
 
 /**
