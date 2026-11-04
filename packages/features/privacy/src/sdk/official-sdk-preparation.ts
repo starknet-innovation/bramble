@@ -65,9 +65,9 @@ const discoverWith = (
 /**
  * Historical state that must be indexed before proving can safely start.
  */
-export type HistoricalState = "deposits" | "registration";
+export type HistoricalState = "deposits" | "first-shield" | "registration";
 
-const historicalReadiness = (
+export const historicalReadiness = (
   kind: HistoricalState | undefined,
   provider: RpcProvider,
   input: Strk20PrepareInput,
@@ -77,6 +77,13 @@ const historicalReadiness = (
   }
   if (kind === "deposits") {
     return (block) =>
+      areHistoricalDepositsReady(provider, input.account.address, input.actions, block);
+  }
+  if (kind === "first-shield") {
+    // A first shield registers and deposits at one proof base, so it needs
+    // both the account contract and the deposited balances visible there.
+    return async (block) =>
+      (await isHistoricalAccountReady(provider, input.account.address, block)) &&
       areHistoricalDepositsReady(provider, input.account.address, input.actions, block);
   }
   return undefined;

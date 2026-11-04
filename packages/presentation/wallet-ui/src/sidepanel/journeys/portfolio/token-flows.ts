@@ -242,6 +242,10 @@ const privacyActions = (
   if (privacy.error) return "";
   if (privacy.value?.registration === "registered")
     return `<div class="token-privacy-actions">${button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: "Shield" })}${button({ attributes: { "data-send-unshield": tokenId }, label: "Unshield", variant: "secondary" })}</div>`;
+  // A deployed, unregistered account's first shield registers in the same
+  // transaction (#789), so it is offered directly: one pool fee, not two.
+  if (seen === true && privacy.value?.registration === "unregistered")
+    return button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: "Shield" });
   return button({
     attributes: { "data-privacy-open": tokenId },
     icon: "shield",

@@ -90,12 +90,18 @@ const addAction = (builder: SdkBuilder, action: Strk20Action, open: symbol): Sdk
 
 /**
  * Maps a validated Wallet API action batch onto the pinned SDK builder.
+ *
+ * `activate` (#789) puts the account's one-time registration in front of the
+ * batch: the SDK compiles `SetViewingKey`, then opens the self channel once
+ * (`autoSetup` deduplicates it), then the deposits, all in one `apply_actions`.
+ * Missing SDK support fails closed, as for a registration on its own.
  */
 export const strk20BuilderFor = (
   sdk: PrivacySdkRuntime,
   transfers: SdkTransfers,
   actions: readonly Strk20Action[],
   surplusRecipient: string,
+  activate = false,
 ): SdkBuilder => {
   let builder = transfers.build({
     autoDiscover: { channels: "refresh", notes: "refresh" },
@@ -104,6 +110,12 @@ export const strk20BuilderFor = (
     autoSetup: true,
     registryConst: true,
   });
+  if (activate) {
+    if (!builder.register) {
+      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    }
+    builder = builder.register();
+  }
   for (const action of actions) {
     builder = addAction(builder, action, sdk.Open);
   }

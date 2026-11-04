@@ -24,9 +24,11 @@ import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics
 import { createApprovalContext } from "../approvals/approval-context";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
+import { hasPendingRegistration } from "./strk20-activity";
 import { strk20FeeAssetFor } from "./strk20-fee-reference";
 import {
   type ActivePrivacyContext,
+  assertPrivacyAccountDeployed,
   assertPublicPoolSpendAffordable,
   errorText,
   estimatePublicStrk20Fee,
@@ -36,25 +38,40 @@ import {
 import { openPoolRoute } from "./strk20-pool-route";
 import { strk20WalletPreparationPayload } from "./strk20-wallet-preparations";
 
+const REGISTRATION_CHANGED = "Private balances changed. Review the shield again.";
+
 // Both parties a deposit touches must be in the pool: the depositor to own the
 // batch, and the credited account because the note lands in a channel derived
 // from its registered viewing key. Re-checked here rather than trusted from the
 // side panel's gate, because this message is untrusted like any other. A
-// self-credit needs only the one check.
-const depositRegistrationError = async (
+// self-credit needs only the one check, and an unregistered depositor crediting
+// itself registers in the same transaction (#789): `activate` is then true.
+type DepositRegistration = { readonly activate: boolean } | { readonly error: string };
+
+const depositRegistration = async (
+  deps: Strk20WalletOpsDeps,
   service: ReturnType<typeof strk20ServiceForRuntime>,
   context: ActivePrivacyContext,
   recipient: string,
-): Promise<string | null> => {
+): Promise<DepositRegistration> => {
   const status = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
     token: context.token.address,
   });
+  const toSelf = sameFelt(recipient, context.accountContext.account.address);
   if (status !== "registered") {
-    return "Activate private balances before shielding an asset";
+    if (!toSelf) {
+      return { error: "Activate private balances before shielding an asset" };
+    }
+    // The indexer lags a broadcast registration; one already on its way must
+    // not be sent a second time inside a shield.
+    if (await hasPendingRegistration(deps, context)) {
+      return { error: "A registration is already on its way for this account" };
+    }
+    return { activate: true };
   }
-  if (sameFelt(recipient, context.accountContext.account.address)) {
-    return null;
+  if (toSelf) {
+    return { activate: false };
   }
   const recipientStatus = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
@@ -62,8 +79,8 @@ const depositRegistrationError = async (
     token: context.token.address,
   });
   return recipientStatus === "registered"
-    ? null
-    : "The recipient has not activated private balances";
+    ? { activate: false }
+    : { error: "The recipient has not activated private balances" };
 };
 
 // The proof-building half of a shield, run detached inside a tracked job. The
@@ -82,9 +99,14 @@ const depositPreparationWork = async (
   const { recipient } = opened;
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
-    const registrationError = await depositRegistrationError(service, context, recipient);
-    if (registrationError !== null) {
-      return { error: registrationError };
+    const registration = await depositRegistration(deps, service, context, recipient);
+    if ("error" in registration) {
+      return { error: registration.error };
+    }
+    const { activate } = registration;
+    if (activate) {
+      // A registration is an invoke from this account, so it must exist.
+      await assertPrivacyAccountDeployed(deps, context);
     }
     const toSelf = sameFelt(recipient, context.accountContext.account.address);
     const amountRaw = parseTokenAmount(input.amount, context.token.decimals);
@@ -123,15 +145,15 @@ const depositPreparationWork = async (
     const prepared = await prepareStrk20AccountActions(service, {
       ...context.accountContext,
       actions,
+      ...(activate ? { activate: true as const } : {}),
       beforeProof: () =>
         runNestedGatewayAnalyticsService(service, async (nestedService) => {
-          const currentRegistrationError = await depositRegistrationError(
-            nestedService,
-            context,
-            recipient,
-          );
-          if (currentRegistrationError !== null) {
-            throw new WalletError(currentRegistrationError);
+          const current = await depositRegistration(deps, nestedService, context, recipient);
+          if ("error" in current) {
+            throw new WalletError(current.error);
+          }
+          if (current.activate !== activate) {
+            throw new WalletError(REGISTRATION_CHANGED);
           }
         }),
       poolFeeFri: plan.poolFeeFri,
@@ -148,10 +170,16 @@ const depositPreparationWork = async (
       plan,
       poolAddress: config.poolAddress,
       recipient,
+      ...(activate ? { activates: true as const } : {}),
       summaries: [
-        toSelf
-          ? `Shield ${input.amount} ${context.token.symbol}`
-          : `Shield ${input.amount} ${context.token.symbol} into ${recipient}'s private balance`,
+        activate
+          ? `Activate private balances and shield ${input.amount} ${context.token.symbol}`
+          : toSelf
+            ? `Shield ${input.amount} ${context.token.symbol}`
+            : `Shield ${input.amount} ${context.token.symbol} into ${recipient}'s private balance`,
+        ...(activate
+          ? ["Registration is public and links this wallet address to its viewing key"]
+          : []),
         summarizeStrk20Plan(
           plan,
           strk20FeeAssetFor(context.accountContext.account.networkId, plan),
