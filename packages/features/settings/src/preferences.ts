@@ -22,10 +22,7 @@ import {
 
 import {
   isAddressBookEntry,
-  isApprovalSurfacePreference,
-  isDisplayCurrency,
   isLabel,
-  isThemeChoice,
   isTokenId,
   withAddressBookId,
   withTokenId,
@@ -34,6 +31,7 @@ import { normalizeAccountGroups } from "./groups";
 import { withAccountHidden } from "./preferences-accounts";
 import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
 import { withCustomNetwork } from "./preferences-custom-networks";
+import { displayFlags, isValidDisplayInput } from "./preferences-display";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
   withAccountInGroup,
@@ -92,35 +90,6 @@ type WalletPreferencesStoreOptions = {
  * for the store and the record it validates.
  */
 export { isWalletPreferences } from "./preferences-stored";
-
-const isValidDisplayInput = (
-  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
-): boolean => {
-  if (input.approvalSurface !== undefined && !isApprovalSurfacePreference(input.approvalSurface)) {
-    return false;
-  }
-  if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
-    return false;
-  }
-  if (DISPLAY_FLAGS.some((flag) => input[flag] !== undefined && typeof input[flag] !== "boolean")) {
-    return false;
-  }
-  return input.theme === undefined || isThemeChoice(input.theme);
-};
-
-/** The on/off display preferences; each is written only when the input names it. */
-const DISPLAY_FLAGS = [
-  "collectiblesPreview",
-  "productAnalytics",
-  "reliabilityDiagnostics",
-] as const;
-
-const displayFlags = (
-  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
-): Partial<Record<(typeof DISPLAY_FLAGS)[number], boolean>> =>
-  Object.fromEntries(
-    DISPLAY_FLAGS.flatMap((flag) => (input[flag] === undefined ? [] : [[flag, input[flag]]])),
-  );
 
 /**
  * Creates default non-secret wallet preferences.
