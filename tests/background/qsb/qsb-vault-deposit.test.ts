@@ -101,6 +101,25 @@ describe("QSB deposit refusals, all before anything is kept or sent", () => {
     expect(await harness.send(QUOTE)).toEqual({ error: QSB_VAULT_REFUSALS.notDepositable });
   }, 60_000);
 
+  test("a signer that refuses, or returns unsigned bytes, is runtimeUnavailable", async () => {
+    for (const sign of [
+      async () => {
+        throw new Error("Krusty KMS returned an invalid PSBT");
+      },
+      async (_key: string, psbt: Uint8Array) => psbt,
+    ]) {
+      const harness = await qsbVaultHarness({
+        funds: [300_000],
+        kms: (kms) => ({ ...kms, signBitcoinPsbtInputs: sign }),
+      });
+      await harness.send({ accountId: "qsb-1", type: "wallet.createQsbVault" });
+      const fee = (await quoteOf(harness)).feeSat;
+      expect(await deposit(harness, fee)).toEqual({ error: QSB_VAULT_REFUSALS.runtimeUnavailable });
+      expect(await pending(harness)).toEqual([]);
+      expect(submits(harness)).toBe(0);
+    }
+  }, 60_000);
+
   test("a refused sign-in is signInRefused", async () => {
     const harness = await withVault();
     harness.deps.sessions.clear();

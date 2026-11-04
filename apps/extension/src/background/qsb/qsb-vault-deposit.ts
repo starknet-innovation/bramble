@@ -37,7 +37,6 @@ import {
   type QsbPreparedDeposit,
 } from "./qsb-vault-prepare";
 import { failClosed, journalUnavailable, qsbRefusal } from "./qsb-vault-refusals";
-import { rebuildQsbVault } from "./qsb-vault-script";
 import { type QsbVaultDeps, qsbAccessSession, qsbOwnerOf } from "./qsb-vault-session";
 import { qsbSubmittedView } from "./qsb-vault-view";
 
@@ -135,13 +134,13 @@ export const depositQsbVault = async (
     const context = await contextOf(deps, access);
     const prepared = await prepareQsbDeposit(context, request);
     if (prepared.quote.feeSat !== request.feeSat) throw qsbRefusal("quoteChanged");
-    const psbt = prepared.psbt.toPSBT(0);
-    const signed = finalizeQsbDeposit(
-      prepared.psbt,
-      await access.signDeposit(psbt, prepared.quote.inputCount),
-      context.owner.publicKey,
-    );
-    if (signed === null) throw qsbRefusal("runtimeUnavailable");
+    // A Krusty refusal to sign, or bytes that fail the checks, are this
+    // wallet's own failure: nothing was kept or sent.
+    const bytes = await access
+      .signDeposit(prepared.psbt.toPSBT(0), prepared.quote.inputCount)
+      .catch(() => null);
+    const signed = bytes && finalizeQsbDeposit(prepared.psbt, bytes, context.owner.publicKey);
+    if (!signed) throw qsbRefusal("runtimeUnavailable");
     await recheck(context, prepared, signed);
     const deposit = { ...signed, amountSat: request.amountSat, v: request.v };
     await access.holdDeposit(deposit);
@@ -180,9 +179,10 @@ const planResend = async (
   if (pending === null) throw journalUnavailable();
   const context = await contextOf(deps, access);
   requireDepositsOpen(await deps.coordinator.config());
-  const built = await rebuildQsbVault(deps, access, record, "notDepositable");
+  // No new bytes are signed, so the script is not rebuilt: the kept bytes were
+  // checked against it before they were kept, and are checked again below.
   const listed = await context.session.call((token) => deps.coordinator.vaults(token));
-  const server = listed.vaults.find((vault) => vault.scriptHash === built.script.scriptHash);
+  const server = listed.vaults.find((vault) => vault.scriptHash === record.scriptHash);
   if (!server || listed.noDeposit.includes(server.id) || server.scriptHex !== record.scriptPubKey) {
     throw qsbRefusal("notDepositable");
   }
