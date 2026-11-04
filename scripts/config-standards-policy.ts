@@ -54,7 +54,7 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/wallet-ui": "workspace:*",
   "@bramble/wallet-model": "workspace:*",
   "@bramble/wallet-protocol": "workspace:*",
-  "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+  "@starknetfoundation/krusty-kms-wasm": "0.15.0",
   // The QSB pipeline's Python runtime, the exact release qsb-app pins. Its
   // shipped files are digest-pinned by scripts/check-qsb-runtime.ts.
   pyodide: "0.29.3",
