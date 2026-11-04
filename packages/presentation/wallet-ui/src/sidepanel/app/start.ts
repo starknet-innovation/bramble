@@ -483,7 +483,13 @@ export const startWalletUi = async (
     paint();
     renderLatest();
   };
-  const qsb = createQsbJourney({ back: goBack, navigate, now, wallet });
+  const qsb = createQsbJourney({
+    back: goBack,
+    navigate,
+    now,
+    permissions: extensionApi?.permissions ?? null,
+    wallet,
+  });
   applyTheme();
   startRefreshLifecycle({ mutationRuntime, render, runtime, wallet });
   startUpdateBanner({ doc: document, wallet });

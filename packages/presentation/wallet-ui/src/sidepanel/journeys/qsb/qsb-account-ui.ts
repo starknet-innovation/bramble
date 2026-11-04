@@ -12,12 +12,18 @@
  * starts one or reattaches to the one already running. `wipe` stops the poll
  * and drops every reply still in flight; the journey calls it whenever this
  * screen is left or repainted.
+ *
+ * The coordinator origin is granted at runtime. Until it is, the balance gives
+ * way to Allow access, and New vault, Deposit and Resend ask for it in their
+ * own click before sending anything; a denial sends nothing.
  */
 import { QSB_ACCOUNT_REFUSALS, type QsbAccountView } from "@bramble/wallet-model/qsb";
 import type { QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
+import { QSB_VAULT_REFUSALS } from "@bramble/wallet-model/qsb-vaults";
 import { friendlyError } from "../../runtime/friendly-error";
 import { bindCopyButtons, buttonBusy, errorLine, renderFragment } from "../../shared/dom";
 import type { StageTimers } from "../../shared/stage-pacer";
+import { isQsbAccessNeeded, type QsbAccess, withQsbAccess } from "./qsb-access";
 import {
   type QsbAccountStep,
   qsbBalanceMarkup,
@@ -43,6 +49,7 @@ import type { QsbVaultWrites } from "./qsb-vault-writes";
 
 /** What the account binding needs. `accountId` is read live, never copied. */
 export type QsbAccountDeps = {
+  readonly access: QsbAccess;
   readonly accountId: () => string | null;
   readonly openDeposit: (accountId: string, v: number) => void;
   readonly root: HTMLElement;
@@ -67,7 +74,7 @@ const withVault = (reading: QsbVaultsReading, vault: QsbVaultView): QsbVaultsRea
  * failed later read keeps what is on screen and says why.
  */
 export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
-  const { root, wallet, writes } = deps;
+  const { access, root, wallet, writes } = deps;
   const find = <T extends Element>(selector: string): T | null => root.querySelector<T>(selector);
   const steps = Array.from(root.querySelectorAll<HTMLElement>("[data-qsb-account-step]"));
   const address = find<HTMLElement>("#qsb-address");
@@ -85,6 +92,8 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
   let reading: QsbVaultsReading | null = null;
   let confirming = false;
   let notice = "";
+  // The coordinator grant as last checked or answered; false until checked.
+  let accessHeld = false;
   // Writes this screen already waits on, so a repaint never attaches twice.
   const attached = new Set<string>();
   // Last markup written per region: a poll that changes nothing moves no focus.
@@ -150,9 +159,10 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
       const id = deps.accountId();
       if (id === null || reading === null) return;
       await read(
-        wallet.loadQsbVaults(id),
-        (next) => {
+        Promise.all([wallet.loadQsbVaults(id), access.check()]),
+        ([next, held]) => {
           reading = next;
+          accessHeld = held;
           paint();
         },
         () => undefined,
@@ -161,6 +171,35 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     },
     timers: deps.timers,
   });
+
+  // Sends `send` once the grant is held, asking in this click when it is not.
+  // A grant re-reads the account once the write settles, since its funds were
+  // unknown without it; a refusal for want of the grant marks it missing.
+  const guarded = <T>(send: () => Promise<T>): Promise<T> => {
+    const asking = !accessHeld;
+    const attempt = generation;
+    const flight = withQsbAccess(access, accessHeld, () => {
+      accessHeld = true;
+      const sent = send();
+      paint();
+      return sent;
+    });
+    flight.then(
+      () => {
+        if (asking && attempt === generation) load();
+      },
+      (error: unknown) => {
+        if (attempt !== generation) return;
+        if (isQsbAccessNeeded(error)) {
+          accessHeld = false;
+          paint();
+        } else if (asking) {
+          load();
+        }
+      },
+    );
+    return flight;
+  };
 
   const attachCreate = (flight: Promise<QsbVaultView>): void => {
     if (attached.has("create")) return;
@@ -213,14 +252,30 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
   const bindRows = (list: Element, id: string): void => {
     for (const control of list.querySelectorAll<HTMLButtonElement>("[data-qsb-deposit]")) {
       const v = Number(control.dataset["qsbDeposit"]);
-      if (isQsbVaultIndex(v)) control.addEventListener("click", () => deps.openDeposit(id, v));
+      if (!isQsbVaultIndex(v)) continue;
+      control.addEventListener("click", () => {
+        if (accessHeld) return deps.openDeposit(id, v);
+        // The deposit screen needs the balance, which needs the grant: ask
+        // in this click, and open it only once granted.
+        const attempt = generation;
+        void access.request().then((granted) => {
+          if (attempt !== generation) return;
+          accessHeld = granted;
+          if (granted) return deps.openDeposit(id, v);
+          notice = friendlyError(QSB_VAULT_REFUSALS.accessNeeded).message;
+          paint();
+        });
+      });
     }
     for (const control of list.querySelectorAll<HTMLButtonElement>("[data-qsb-resend]")) {
       const v = Number(control.dataset["qsbResend"]);
       if (!isQsbVaultIndex(v)) continue;
       control.addEventListener("click", () => {
         notice = "";
-        attachDeposit(v, writes.resend(id, v));
+        attachDeposit(
+          v,
+          guarded(() => writes.resend(id, v)),
+        );
         paint();
       });
     }
@@ -235,10 +290,19 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
       copy.dataset["copy"] = current.address;
       copy.disabled = false;
     }
-    if (region(balance, qsbBalanceMarkup(current.funds))) {
+    if (region(balance, qsbBalanceMarkup(current.funds, accessHeld))) {
       balance
         ?.querySelector<HTMLButtonElement>("[data-qsb-retry]")
         ?.addEventListener("click", () => load());
+      // The prompt is asked in the click itself; either answer re-reads.
+      balance
+        ?.querySelector<HTMLButtonElement>("[data-qsb-allow]")
+        ?.addEventListener("click", () => {
+          const attempt = generation;
+          void access.request().then(() => {
+            if (attempt === generation) load();
+          });
+        });
     }
     const busy = (v: number): boolean => writes.pendingDeposit(id, v) !== null;
     if (
@@ -273,8 +337,9 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     }
     if (reading === null) show("loading");
     void read(
-      Promise.all([wallet.loadQsbAccounts(), wallet.loadQsbVaults(id)]),
-      ([accounts, next]) => {
+      Promise.all([wallet.loadQsbAccounts(), wallet.loadQsbVaults(id), access.check()]),
+      ([accounts, next, held]) => {
+        accessHeld = held;
         account = accounts.find((entry) => entry.id === id) ?? null;
         if (account === null) {
           reading = null;
@@ -312,7 +377,7 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     const current = deps.accountId();
     if (current === null || !account?.writer) return;
     notice = "";
-    attachCreate(writes.createVault(current));
+    attachCreate(guarded(() => writes.createVault(current)));
     paint();
   });
 

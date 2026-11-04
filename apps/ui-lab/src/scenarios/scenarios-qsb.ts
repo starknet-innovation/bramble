@@ -73,6 +73,8 @@ const journeyFor = (context: FrameContext, fixture: Fixture) =>
     back: () => context.emit({ detail: "back", kind: "action" }),
     navigate: (view) => context.emit({ detail: `navigate ${view}`, kind: "action" }),
     now: () => CLOCK,
+    // These screens never reach the coordinator.
+    permissions: null,
     wallet: fixtureWallet(fixture),
   });
 

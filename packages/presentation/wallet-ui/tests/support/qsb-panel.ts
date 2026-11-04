@@ -2,13 +2,14 @@
  * A side-panel stand-in for the Quantum-safe Bitcoin journey tests: navigation
  * paints the view's real production markup and binds it, as the panel's paint
  * loop does; Back pops to the screen before. Timers are manual, so a test
- * decides when the account screen's poll fires, and the document's visibility
- * is scriptable.
+ * decides when the account screen's poll fires; the document's visibility and
+ * the browser's coordinator grant are scriptable.
  */
 import { EMPTY_ALLOWANCE_LISTING } from "../../src/popup/responses/responses";
 import { simpleFlowScreen } from "../../src/sidepanel/app/screens/flows";
 import type { WalletView } from "../../src/sidepanel/app/screens/views";
 import { createQsbJourney } from "../../src/sidepanel/journeys/qsb/qsb-journey";
+import type { HostPermissionApi } from "../../src/sidepanel/runtime/runtime-global";
 import { type ManualTimers, manualTimers } from "./manual-timers";
 import { mountApp, type QsbScript, qsbStatus, scriptedQsbWallet } from "./qsb-harness";
 
@@ -40,11 +41,37 @@ export const setVisibility = (state: "hidden" | "visible"): void => {
 };
 
 /**
+ * A browser permission API for the coordinator grant: `granted` is what
+ * `contains` answers and `answer` what the prompt does (a yes also grants).
+ * Records every origin list checked and asked for, in order.
+ */
+export const scriptedPermissions = (initial: { answer?: boolean; granted?: boolean } = {}) => {
+  const state = { answer: initial.answer ?? true, granted: initial.granted ?? true };
+  const checked: string[][] = [];
+  const asked: string[][] = [];
+  const api: HostPermissionApi = {
+    contains: async ({ origins }) => {
+      checked.push([...origins]);
+      return state.granted;
+    },
+    request: async ({ origins }) => {
+      asked.push([...origins]);
+      if (state.answer) state.granted = true;
+      return state.answer;
+    },
+  };
+  return { api, asked, checked, state };
+};
+
+/**
  * The journey over a scripted client, with every navigation painted and bound.
  * Back pops to the screen before; `timers` drives the poll; `script` is the
  * live script, which a test may change between reads.
  */
-export const qsbPanel = (script: QsbScript) => {
+export const qsbPanel = (
+  script: QsbScript,
+  permissions: ReturnType<typeof scriptedPermissions> = scriptedPermissions(),
+) => {
   const { calls, wallet } = scriptedQsbWallet(script);
   const timers: ManualTimers = manualTimers();
   const visited: WalletView[] = [];
@@ -68,6 +95,7 @@ export const qsbPanel = (script: QsbScript) => {
       paint(view);
     },
     now: () => 0,
+    permissions: permissions.api,
     timers,
     wallet,
   });
@@ -79,6 +107,7 @@ export const qsbPanel = (script: QsbScript) => {
     calls,
     journey,
     paint,
+    permissions,
     script,
     timers,
     visited,

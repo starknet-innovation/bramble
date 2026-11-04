@@ -11,6 +11,10 @@
  * mid-send only reattaches to the deposit already running. `wipe` empties the
  * form and drops every reply still in flight; the journey calls it whenever
  * this screen is left or repainted.
+ *
+ * The coordinator origin is granted at runtime. Without it the screen offers
+ * Allow access in place of the amount, and Review, Deposit and Resend ask for
+ * it in their own click before sending; a denial sends nothing.
  */
 import {
   QSB_VAULT_REFUSALS,
@@ -21,11 +25,13 @@ import { friendlyError } from "../../runtime/friendly-error";
 import { isOutcomeUnknown } from "../../runtime/runtime-errors";
 import { buttonBusy, errorLine, renderFragment } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
+import { isQsbAccessNeeded, type QsbAccess, withQsbAccess } from "./qsb-access";
 import { type QsbDepositStep, qsbQuoteRows } from "./qsb-deposit-view";
 import {
   btcText,
   checkQsbDepositAmount,
   isQsbQuoteChanged,
+  QSB_ACCESS_LINE,
   QSB_AMOUNT_LINE,
   QSB_DEPOSIT_UNKNOWN_TITLE,
   QSB_FUNDS_UNAVAILABLE,
@@ -43,6 +49,7 @@ export type QsbDepositTarget = { readonly accountId: string; readonly v: number 
 
 /** What the deposit binding needs. `target` is read live, never copied. */
 export type QsbDepositDeps = {
+  readonly access: QsbAccess;
   /** Leaves for the account screen the deposit was opened from. */
   readonly back: () => void;
   readonly root: HTMLElement;
@@ -69,7 +76,7 @@ type QsbWriteOrigin =
  * and "I accept these costs" is ticked.
  */
 export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
-  const { root, wallet, writes } = deps;
+  const { access, root, wallet, writes } = deps;
   const find = <T extends Element>(selector: string): T | null => root.querySelector<T>(selector);
   const steps = Array.from(root.querySelectorAll<HTMLElement>("[data-qsb-deposit-step]"));
   const amountForm = find<HTMLFormElement>("#qsb-amount-form");
@@ -88,6 +95,8 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
   let ticket = 0;
   let balanceSat: number | null = null;
   let quote: QsbDepositQuote | null = null;
+  // The coordinator grant as last checked or answered; false until checked.
+  let accessHeld = false;
 
   const show = (step: QsbDepositStep, focus = false): void => {
     for (const section of steps) section.hidden = section.dataset["qsbDepositStep"] !== step;
@@ -109,11 +118,30 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
     target.textContent = line;
     target.classList.toggle("is-invalid", refused && line.length > 0);
   };
-  const unavailable = (line: string, retry: boolean): void => {
+  // Why the screen cannot go on, and the one way forward if there is one.
+  const unavailable = (line: string, action: "allow" | "none" | "retry"): void => {
     text("#qsb-deposit-error", line);
+    // A grant still to give is a step, not a failure: it never reads in red.
+    const error = find<HTMLElement>("#qsb-deposit-error");
+    error?.classList.toggle("review-flag", action !== "allow");
+    error?.classList.toggle("hint", action === "allow");
     const again = find<HTMLButtonElement>("#qsb-deposit-retry");
-    if (again) again.hidden = !retry;
-    show("unavailable");
+    if (again) again.hidden = action !== "retry";
+    const allow = find<HTMLButtonElement>("#qsb-deposit-allow");
+    if (allow) allow.hidden = action !== "allow";
+    show("unavailable", action === "allow");
+  };
+  // Sends `send` once the grant is held, asking in this click when it is not;
+  // a denial, or a refusal for want of the grant, rejects with `accessNeeded`.
+  const guarded = <T>(send: () => Promise<T>): Promise<T> => {
+    const flight = withQsbAccess(access, accessHeld, () => {
+      accessHeld = true;
+      return send();
+    });
+    flight.catch((error: unknown) => {
+      if (isQsbAccessNeeded(error)) accessHeld = false;
+    });
+    return flight;
   };
   const syncAccept = (): void => {
     if (depositSubmit) depositSubmit.disabled = !(quote !== null && accept?.checked === true);
@@ -161,7 +189,7 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
     const mine = ++ticket;
     buttonBusy(amountSubmit, true);
     say(amountResult, "", false);
-    void wallet.quoteQsbDeposit(target.accountId, target.v, amountSat).then(
+    void guarded(() => wallet.quoteQsbDeposit(target.accountId, target.v, amountSat)).then(
       (next) => {
         buttonBusy(amountSubmit, false);
         if (mine === ticket) review(next, line);
@@ -212,29 +240,30 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
   const load = (line = "", refused = false): void => {
     const target = deps.target();
     if (target === null) {
-      unavailable(refusal(QSB_VAULT_REFUSALS.unknownVault), false);
+      unavailable(refusal(QSB_VAULT_REFUSALS.unknownVault), "none");
       return;
     }
     const mine = ++ticket;
     show("loading");
-    void wallet.loadQsbVaults(target.accountId).then(
-      (reading) => {
+    void Promise.all([wallet.loadQsbVaults(target.accountId), access.check()]).then(
+      ([reading, held]) => {
         if (mine !== ticket) return;
+        accessHeld = held;
         const vault = reading.vaults.find((entry) => entry.v === target.v);
-        if (!vault) return unavailable(refusal(QSB_VAULT_REFUSALS.unknownVault), false);
+        if (!vault) return unavailable(refusal(QSB_VAULT_REFUSALS.unknownVault), "none");
         if (!qsbDepositable(vault)) {
-          return unavailable(refusal(QSB_VAULT_REFUSALS.notDepositable), false);
+          return unavailable(refusal(QSB_VAULT_REFUSALS.notDepositable), "none");
         }
-        if (reading.funds === null) {
-          return unavailable(QSB_FUNDS_UNAVAILABLE, true);
-        }
+        // Without the grant the balance is unknown: no amount can be checked.
+        if (!held) return unavailable(QSB_ACCESS_LINE, "allow");
+        if (reading.funds === null) return unavailable(QSB_FUNDS_UNAVAILABLE, "retry");
         balanceSat = reading.funds.totalSat;
         text("#qsb-amount-available", `Confirmed balance: ${btcText(balanceSat)}`);
         say(amountResult, line, refused);
         show("amount", true);
       },
       (error: unknown) => {
-        if (mine === ticket) unavailable(errorLine(error, "wallet unavailable"), true);
+        if (mine === ticket) unavailable(errorLine(error, "wallet unavailable"), "retry");
       },
     );
   };
@@ -256,10 +285,11 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
     event.preventDefault();
     const target = deps.target();
     if (target === null || quote === null || accept?.checked !== true) return;
-    attach(writes.deposit(target.accountId, target.v, quote.amountSat, quote.feeSat), {
-      amountSat: quote.amountSat,
-      kind: "deposit",
-    });
+    const { amountSat, feeSat } = quote;
+    attach(
+      guarded(() => writes.deposit(target.accountId, target.v, amountSat, feeSat)),
+      { amountSat, kind: "deposit" },
+    );
   });
   find<HTMLButtonElement>("#qsb-review-back")?.addEventListener("click", () => {
     quote = null;
@@ -269,9 +299,20 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
   });
   resend?.addEventListener("click", () => {
     const target = deps.target();
-    if (target !== null) attach(writes.resend(target.accountId, target.v), { kind: "resend" });
+    if (target === null) return;
+    attach(
+      guarded(() => writes.resend(target.accountId, target.v)),
+      { kind: "resend" },
+    );
   });
   find<HTMLButtonElement>("#qsb-deposit-retry")?.addEventListener("click", () => load());
+  // The prompt is asked in the click itself; either answer re-reads.
+  find<HTMLButtonElement>("#qsb-deposit-allow")?.addEventListener("click", () => {
+    const attempt = generation;
+    void access.request().then(() => {
+      if (attempt === generation) load();
+    });
+  });
   for (const control of root.querySelectorAll<HTMLButtonElement>("[data-qsb-deposit-leave]")) {
     control.addEventListener("click", deps.back);
   }

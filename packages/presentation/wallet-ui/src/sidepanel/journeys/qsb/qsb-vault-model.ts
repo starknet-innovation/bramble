@@ -190,6 +190,10 @@ export const qsbNoVaultLine = (account: QsbAccountView): string | null => {
 export const QSB_ADDRESS_HINT = "Send bitcoin here before you deposit.";
 /** In place of the balance when the coordinator could not be reached. */
 export const QSB_FUNDS_UNAVAILABLE = "Can't reach the quantum-safe Bitcoin service.";
+/** In place of the balance while the coordinator origin is not granted, beside Allow access. */
+export const QSB_ACCESS_LINE = "Bramble needs access to the quantum-safe Bitcoin service.";
+/** The control that asks the browser for the coordinator origin. */
+export const QSB_ALLOW_ACCESS = "Allow access";
 /** While an account's vaults load. */
 export const QSB_VAULTS_LOADING = "Loading vaults…";
 /** An account with no vaults yet. */

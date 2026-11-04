@@ -23,7 +23,7 @@ export type EndpointUiDeps = {
    * dropped and discovery re-runs against the new configuration.
    */
   readonly onStrk20ConfigChanged?: () => void;
-  readonly permissions?: HostPermissionApi;
+  readonly permissions?: Pick<HostPermissionApi, "request">;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly wallet: SidepanelWallet;
 };
@@ -52,7 +52,7 @@ const typedEndpoint = (value: string, relay = false): string => {
 
 // Asks for the hosts of endpoints already passed through `typedEndpoint`.
 const requestHostAccess = (
-  permissions: HostPermissionApi | undefined,
+  permissions: Pick<HostPermissionApi, "request"> | undefined,
   urls: readonly string[],
 ): Promise<boolean> => {
   const configured = urls.filter(Boolean);

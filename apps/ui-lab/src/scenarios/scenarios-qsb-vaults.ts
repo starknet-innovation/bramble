@@ -11,6 +11,7 @@ import { createQsbJourney } from "@bramble/wallet-ui/lab";
 import {
   deposited,
   EVERY_VAULT,
+  labPermissions,
   labReading,
   labTimers,
   outcome,
@@ -18,6 +19,7 @@ import {
   type QsbLabScript,
   qsbLabWallet,
   unfunded,
+  ungrantedReading,
 } from "../fixtures/qsb-vault-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import { nextTurn } from "../runtime/scenario-runtime";
@@ -29,6 +31,7 @@ export const qsbLabJourney = (context: FrameContext, script: QsbLabScript) =>
     back: () => context.emit({ detail: "back", kind: "action" }),
     navigate: (view) => context.emit({ detail: `navigate ${view}`, kind: "action" }),
     now: null,
+    permissions: labPermissions(context, script),
     timers: labTimers(context),
     wallet: qsbLabWallet(script),
   });
@@ -94,6 +97,28 @@ export const qsbVaultsScenario: WalletScenario = {
       "The coordinator could not be reached: the balance gives way to one line and Try again; the address and vaults still show.",
       { funds: null },
       { reading: async () => ({ ...labReading(EVERY_VAULT.slice(0, 3)), funds: null }) },
+    ),
+    accountCheckpoint(
+      "qsb-account-access",
+      "Account · access not granted",
+      "Until the coordinator origin is granted, one line and Allow access stand where the balance would be; the address and vaults still show, and New vault, Deposit and Resend ask for the grant in their own click.",
+      { access: "not granted", funds: null },
+      {
+        access: { answer: false, granted: false },
+        reading: async () => ungrantedReading(EVERY_VAULT.slice(0, 3)),
+      },
+    ),
+    accountCheckpoint(
+      "qsb-account-access-denied",
+      "Account · access denied",
+      "New vault asked for the grant in its click and the browser was told no: nothing was sent, and the line says why.",
+      { access: "denied", sent: "nothing" },
+      {
+        access: { answer: false, granted: false },
+        create: async () => unfunded(3),
+        reading: async () => ungrantedReading(EVERY_VAULT.slice(0, 3)),
+      },
+      createVault,
     ),
     accountCheckpoint(
       "qsb-account-error",

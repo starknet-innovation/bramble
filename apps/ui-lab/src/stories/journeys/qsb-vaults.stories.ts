@@ -21,6 +21,8 @@ const deposit = (name: string, id: string) => checkpointStory(name, "qsb-deposit
 export const Account = account("Account · every vault state", "qsb-account");
 export const AccountEmpty = account("Account · no vaults", "qsb-account-empty");
 export const AccountOffline = account("Account · service out of reach", "qsb-account-offline");
+export const AccountAccess = account("Account · access not granted", "qsb-account-access");
+export const AccountAccessDenied = account("Account · access denied", "qsb-account-access-denied");
 export const AccountError = account("Account · read failed", "qsb-account-error");
 export const AccountReadOnly = account("Account · imported phrase", "qsb-account-read-only");
 export const AccountBackupNeeded = account("Account · backup needed", "qsb-account-backup-needed");
@@ -45,6 +47,7 @@ export const DepositQuoteChanged = deposit("Deposit · cost changed", "qsb-depos
 export const DepositUnknown = deposit("Deposit · status unknown", "qsb-deposit-unknown");
 export const DepositOffline = deposit("Deposit · service out of reach", "qsb-deposit-offline");
 export const DepositResent = deposit("Deposit · resent", "qsb-deposit-resend");
+export const DepositAccess = deposit("Deposit · access not granted", "qsb-deposit-access");
 
 // The narrowest side panel: the full address, every amount and the review's
 // rows must stay inside the panel and readable.
@@ -54,6 +57,24 @@ export const AccountNarrow = narrowSidepanelStory("Account · 320px", "qsb-vault
   (document) => assertInsidePanel(document, "[data-qsb-vault]"),
   (document) => assertInsidePanel(document, "[data-qsb-tx]"),
 ]);
+export const AccountAccessNarrow = narrowSidepanelStory(
+  "Account · access not granted · 320px",
+  "qsb-vaults",
+  "qsb-account-access",
+  [
+    (document) => assertValueFits(document, "#qsb-balance [role='status']"),
+    (document) => assertInsidePanel(document, "[data-qsb-allow]"),
+  ],
+);
+export const DepositAccessNarrow = narrowSidepanelStory(
+  "Deposit · access not granted · 320px",
+  "qsb-deposit",
+  "qsb-deposit-access",
+  [
+    (document) => assertValueFits(document, "#qsb-deposit-error"),
+    (document) => assertInsidePanel(document, "#qsb-deposit-allow"),
+  ],
+);
 export const VaultConfirmNarrow = narrowSidepanelStory(
   "New vault · 320px",
   "qsb-vaults",

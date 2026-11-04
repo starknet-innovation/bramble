@@ -13,8 +13,10 @@
  * the wallet locks.
  */
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
+import type { HostPermissionApi } from "../../runtime/runtime-global";
 import type { WalletView } from "../../shared/parts";
 import { platformTimers, type StageTimers } from "../../shared/stage-pacer";
+import { createQsbAccess } from "./qsb-access";
 import { bindQsbAccount } from "./qsb-account-ui";
 import { bindQsbAccounts } from "./qsb-accounts";
 import { bindQsbBackup, type QsbBackupTarget } from "./qsb-backup-ui";
@@ -35,6 +37,11 @@ export type QsbJourneyDeps = {
   readonly navigate: (view: WalletView) => void;
   /** Varies the check-word positions between backups; absent asks the same three. */
   readonly now: (() => number) | null;
+  /**
+   * Checks and asks for the coordinator origin. Null (no browser API) reads as
+   * never granted, so no coordinator write is ever sent.
+   */
+  readonly permissions: HostPermissionApi | null;
   /** Schedules the account screen's poll; the platform timers when absent. */
   readonly timers?: StageTimers;
   readonly wallet: QsbJourneyWallet;
@@ -65,6 +72,7 @@ export const createQsbJourney = (deps: QsbJourneyDeps): QsbJourney => {
   const { wallet } = deps;
   const timers = deps.timers ?? platformTimers;
   const writes = createQsbVaultWrites(wallet);
+  const access = createQsbAccess(deps.permissions);
   let target: QsbBackupTarget = { kind: "none" };
   let account: string | null = null;
   let deposit: QsbDepositTarget | null = null;
@@ -118,6 +126,7 @@ export const createQsbJourney = (deps: QsbJourneyDeps): QsbJourney => {
     const detail = app.querySelector<HTMLElement>("#qsb-account");
     if (detail) {
       return bindQsbAccount({
+        access,
         accountId: () => account,
         openDeposit,
         root: detail,
@@ -129,6 +138,7 @@ export const createQsbJourney = (deps: QsbJourneyDeps): QsbJourney => {
     const depositRoot = app.querySelector<HTMLElement>("#qsb-deposit");
     if (depositRoot) {
       return bindQsbDeposit({
+        access,
         back: deps.back,
         root: depositRoot,
         target: () => deposit,

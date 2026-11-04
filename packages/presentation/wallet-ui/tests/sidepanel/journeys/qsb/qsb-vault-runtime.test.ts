@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   QSB_MAX_SAT,
+  QSB_MAX_VAULTS_PER_ACCOUNT,
   QSB_VAULT_REFUSALS,
   type QsbVaultView,
 } from "@bramble/wallet-model/qsb-vaults";
@@ -123,6 +124,14 @@ describe("vault views", () => {
     ]) {
       expect(isQsbVaultView(bad)).toBe(false);
     }
+  });
+
+  test("a reading holds at most the contract's vault cap", () => {
+    const full = Array.from({ length: QSB_MAX_VAULTS_PER_ACCOUNT }, (_, v) => unfundedVault(v));
+    expect(readQsbVaults(vaultsReply(full))?.vaults).toHaveLength(QSB_MAX_VAULTS_PER_ACCOUNT);
+    expect(readQsbVaults(vaultsReply([...full, unfundedVault(QSB_MAX_VAULTS_PER_ACCOUNT)]))).toBe(
+      null,
+    );
   });
 
   test("a reading is read whole, with distinct indices, sorted by index", () => {

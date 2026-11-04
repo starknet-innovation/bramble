@@ -1,9 +1,10 @@
 /**
  * Quantum-safe Bitcoin vault fixtures for the UI Lab: the public BIP-173
  * P2WPKH example address, the genesis coinbase txid, one vault per row state,
- * a quote, and a fixture client that answers the journey's account and vault
- * calls from a script. Nothing here is a wallet's own address or a real
- * deposit; nothing reaches a background.
+ * a quote, a fixture client that answers the journey's account and vault
+ * calls from a script, and the browser's coordinator grant. Nothing here is a
+ * wallet's own address or a real deposit; nothing reaches a background or
+ * prompts the browser.
  */
 import type { QsbAccountView } from "@bramble/wallet-model/qsb";
 import type { QsbDepositQuote, QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
@@ -16,6 +17,8 @@ export type QsbLabWallet = Parameters<typeof createQsbJourney>[0]["wallet"];
 export type QsbLabReading = Awaited<ReturnType<QsbLabWallet["loadQsbVaults"]>>;
 /** What a deposit or resend answers. */
 export type QsbLabResult = Awaited<ReturnType<QsbLabWallet["depositQsbVault"]>>;
+/** The browser permission API the journey checks and asks. */
+type QsbLabPermissions = NonNullable<Parameters<typeof createQsbJourney>[0]["permissions"]>;
 
 const ADDRESS = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
 const TXID = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
@@ -110,6 +113,8 @@ const never = <T>(): Promise<T> => new Promise<T>(() => undefined);
 
 /** How each fixture call answers; an unset write never settles, like a busy worker. */
 export type QsbLabScript = {
+  /** The coordinator grant: held or not, and how the prompt answers. Held when unset. */
+  readonly access?: { readonly answer: boolean; readonly granted: boolean };
   readonly accounts?: readonly QsbAccountView[];
   readonly create?: () => Promise<QsbVaultView>;
   readonly deposit?: () => Promise<QsbLabResult>;
@@ -131,6 +136,32 @@ export const qsbLabWallet = (script: QsbLabScript): QsbLabWallet => ({
   resendQsbDeposit: script.resend ?? never,
   revealQsbPhrase: never,
 });
+
+/** What the background reads without the grant: no funds, registration unknown. */
+export const ungrantedReading = (vaults: readonly QsbVaultView[]): QsbLabReading => ({
+  ...labReading(vaults.map((vault) => ({ ...vault, registered: null }))),
+  funds: null,
+});
+
+/**
+ * The coordinator grant as `script` plays it. Asking is logged and answered
+ * from the script; the browser is never prompted.
+ */
+export const labPermissions = (context: FrameContext, script: QsbLabScript): QsbLabPermissions => {
+  const access = script.access ?? { answer: true, granted: true };
+  let held = access.granted;
+  return {
+    contains: async () => held,
+    request: async () => {
+      context.emit({
+        detail: `coordinator access asked: ${access.answer ? "allowed" : "denied"}`,
+        kind: "action",
+      });
+      held = held || access.answer;
+      return access.answer;
+    },
+  };
+};
 
 /**
  * Timers whose task never runs, so a checkpoint stays still: arming the

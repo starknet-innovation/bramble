@@ -13,6 +13,7 @@ import { flowHeader, flowScreen } from "../../shared/parts";
 import { QSB_TITLE } from "./qsb-model";
 import {
   btcText,
+  QSB_ALLOW_ACCESS,
   QSB_DEPOSIT_FACTS,
   QSB_DEPOSIT_SENDING,
   QSB_TX_LINK_LABEL,
@@ -38,6 +39,7 @@ export const qsbDepositFlow = (status: WalletStatus): string =>
       <section class="section" data-qsb-deposit-step="loading">${emptyState(QSB_VAULTS_LOADING, "status")}</section>
       <section class="section" data-qsb-deposit-step="unavailable" hidden>
         <p class="review-flag" id="qsb-deposit-error" role="alert"></p>
+        ${button({ attributes: { hidden: true, id: "qsb-deposit-allow" }, icon: "lockKeyholeOpen", label: QSB_ALLOW_ACCESS })}
         ${button({ attributes: { id: "qsb-deposit-retry" }, label: "Try again", variant: "secondary" })}
         ${button({ attributes: { "data-qsb-deposit-leave": true }, label: "View account", variant: "ghost" })}
       </section>

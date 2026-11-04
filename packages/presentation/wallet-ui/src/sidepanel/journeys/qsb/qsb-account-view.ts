@@ -15,7 +15,9 @@ import { accountLabel, flowHeader, flowScreen } from "../../shared/parts";
 import { QSB_TITLE } from "./qsb-model";
 import {
   btcText,
+  QSB_ACCESS_LINE,
   QSB_ADDRESS_HINT,
+  QSB_ALLOW_ACCESS,
   QSB_FUNDS_UNAVAILABLE,
   QSB_TX_LINK_LABEL,
   QSB_VAULT_CONFIRM,
@@ -73,14 +75,21 @@ export const qsbAccountFlow = (status: WalletStatus): string =>
   );
 
 /**
- * The balance region: the confirmed funds in BTC, or, when the coordinator
- * could not be reached (`funds` null), a line saying so with a retry.
+ * The balance region: while the coordinator origin is not granted
+ * (`accessHeld` false), a line saying so with Allow access; otherwise the
+ * confirmed funds in BTC, or, when the coordinator could not be reached
+ * (`funds` null), a line saying so with a retry.
  */
-export const qsbBalanceMarkup = (funds: QsbOwnerFunds | null): string =>
-  funds === null
+export const qsbBalanceMarkup = (funds: QsbOwnerFunds | null, accessHeld: boolean): string => {
+  if (!accessHeld) {
+    return `<p class="hint" role="status">${escapeHtml(QSB_ACCESS_LINE)}</p>
+      ${button({ attributes: { "data-qsb-allow": true }, icon: "lockKeyholeOpen", label: QSB_ALLOW_ACCESS, size: "small", variant: "secondary" })}`;
+  }
+  return funds === null
     ? `<p class="hint" role="status">${escapeHtml(QSB_FUNDS_UNAVAILABLE)}</p>
       ${button({ attributes: { "data-qsb-retry": true }, label: "Try again", size: "small", variant: "secondary" })}`
     : receipt([{ label: "Confirmed balance", value: btcText(funds.totalSat), valueStyle: "code" }]);
+};
 
 /** Which of a vault row's actions to offer, and which are running now. */
 export type QsbVaultRowOptions = {

@@ -21,7 +21,7 @@ import {
   TEST_PHRASE,
   typeInto,
 } from "../../../support/qsb-harness";
-import { qsbScreen } from "../../../support/qsb-panel";
+import { qsbScreen, scriptedPermissions } from "../../../support/qsb-panel";
 import { reading, unfundedVault } from "../../../support/qsb-vault-fixtures";
 
 beforeAll(registerDom);
@@ -47,6 +47,7 @@ const panel = (script: QsbScript) => {
       journey.bind(app);
     },
     now: () => 0,
+    permissions: scriptedPermissions().api,
     wallet,
   });
   return {

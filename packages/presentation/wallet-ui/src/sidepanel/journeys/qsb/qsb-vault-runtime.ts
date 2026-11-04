@@ -18,6 +18,7 @@
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@bramble/core/json";
 import {
   QSB_MAX_SAT,
+  QSB_MAX_VAULTS_PER_ACCOUNT,
   type QsbDepositQuote,
   type QsbDepositStatus,
   type QsbOwnerFunds,
@@ -116,8 +117,9 @@ export type QsbVaultsReading = {
 
 /**
  * The `wallet.qsbVaults` reply, read whole or not at all: a valid address,
- * funds or null, and valid vaults with distinct indices. The vaults come back
- * sorted by index, so the order shown never depends on the reply's.
+ * funds or null, and at most `QSB_MAX_VAULTS_PER_ACCOUNT` valid vaults with
+ * distinct indices. The vaults come back sorted by index, so the order shown
+ * never depends on the reply's.
  */
 export const readQsbVaults = (value: unknown): QsbVaultsReading | null => {
   if (
@@ -132,6 +134,7 @@ export const readQsbVaults = (value: unknown): QsbVaultsReading | null => {
   const vaults = value["vaults"];
   if (
     !Array.isArray(vaults) ||
+    vaults.length > QSB_MAX_VAULTS_PER_ACCOUNT ||
     !vaults.every(isQsbVaultView) ||
     new Set(vaults.map((vault) => vault.v)).size !== vaults.length
   ) {

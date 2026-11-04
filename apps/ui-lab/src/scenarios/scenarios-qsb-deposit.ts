@@ -14,6 +14,7 @@ import {
   type QsbLabScript,
   QUOTE,
   unfunded,
+  ungrantedReading,
 } from "../fixtures/qsb-vault-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import { nextTurn, updateForm } from "../runtime/scenario-runtime";
@@ -180,6 +181,22 @@ export const qsbDepositScenario: WalletScenario = {
         depositTo(
           context,
           { reading: async () => ({ ...labReading([unfunded(0)]), funds: null }) },
+          "amount",
+          "",
+        ),
+    ),
+    depositCheckpoint(
+      "qsb-deposit-access",
+      "Deposit · access not granted",
+      "Without the coordinator grant the balance is unknown, so Allow access stands in place of the amount and asks in its own click.",
+      { access: "not granted" },
+      (context) =>
+        depositTo(
+          context,
+          {
+            access: { answer: false, granted: false },
+            reading: async () => ungrantedReading([unfunded(0)]),
+          },
           "amount",
           "",
         ),
