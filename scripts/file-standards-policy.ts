@@ -283,6 +283,17 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Their type surface, split by behaviour: names the phrase and credential
   // fields of the inputs and the reveal's result; types only.
   "packages/platform/vault/src/service/qsb-account-types.ts",
+  // QSB vault session: derives the owner key from the account's phrase through
+  // Krusty for each use and signs with it, inside the vault service; returns
+  // public data only and never keeps, logs or persists the key or the phrase.
+  "packages/platform/vault/src/service/qsb-vault-access.ts",
+  // Its type surface: names the session's credential input and the public
+  // signatures it returns; types only.
+  "packages/platform/vault/src/service/qsb-vault-types.ts",
+  // QSB pending deposits: reads and writes one account's encrypted record of
+  // signed public transactions under the caller's vault passphrase, like the
+  // journal store; the credential is never logged or returned.
+  "packages/platform/vault/src/qsb/qsb-deposit-store.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
   // Split from accounts.ts by the size budget: same boundary, same rules — the

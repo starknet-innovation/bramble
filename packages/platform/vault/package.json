@@ -13,6 +13,7 @@
     "./network-account": "./src/accounts/network-account.ts",
     "./origin-grants": "./src/service/origin-grants.ts",
     "./qsb-account": "./src/qsb/qsb-account.ts",
+    "./qsb-deposit-store": "./src/qsb/qsb-deposit-store.ts",
     "./qsb-journal": "./src/qsb/qsb-journal.ts",
     "./qsb-journal-record": "./src/qsb/qsb-journal-record.ts",
     "./qsb-journal-store": "./src/qsb/qsb-journal-store.ts",
