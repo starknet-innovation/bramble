@@ -12,11 +12,14 @@
 import { WalletError } from "@bramble/core/errors";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import {
+  type PreparedStrk20AccountSubmission,
   prepareStrk20AccountActions,
   quoteStrk20Actions,
   readStrk20RegistrationStatus,
+  type Strk20AccountPlan,
   summarizeStrk20Plan,
 } from "@bramble/privacy/service";
+import { summarizeSponsoredShield } from "@bramble/privacy/sponsored-shield";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
@@ -34,6 +37,12 @@ import {
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
 import { openPoolRoute } from "./strk20-pool-route";
+import {
+  assertSponsoredDepositAffordable,
+  offerSponsoredShield,
+  type SponsoredShieldOffer,
+  sponsoredDepositCalls,
+} from "./strk20-sponsored-shield";
 import { strk20WalletPreparationPayload } from "./strk20-wallet-preparations";
 
 // Both parties a deposit touches must be in the pool: the depositor to own the
@@ -64,6 +73,35 @@ const depositRegistrationError = async (
   return recipientStatus === "registered"
     ? null
     : "The recipient has not activated private balances";
+};
+
+// What the frozen route adds to a shield's preparation, and its review line.
+// The sponsored route sends the user nothing to estimate: the relay submits,
+// and the pool-fee approval is dropped because the relay pays.
+const shieldRoute = async (
+  deps: Strk20WalletOpsDeps,
+  context: ActivePrivacyContext,
+  plan: Strk20AccountPlan,
+  prepared: PreparedStrk20AccountSubmission,
+  sponsored: SponsoredShieldOffer | null,
+  report: Strk20PhaseSink,
+) => {
+  if (sponsored) {
+    return {
+      allowanceGrants: sponsored.approveCalls,
+      calls: sponsoredDepositCalls(sponsored, prepared.calls),
+      feeLine: summarizeSponsoredShield(sponsored.plan, plan.poolFeeFri),
+      sponsorship: { plan: sponsored.plan, relay: sponsored.relay },
+    };
+  }
+  report({ phase: "estimating the network fee" });
+  return {
+    feeLine: summarizeStrk20Plan(
+      plan,
+      strk20FeeAssetFor(context.accountContext.account.networkId, plan),
+    ),
+    networkFee: await estimatePublicStrk20Fee(deps, context, prepared.calls, prepared.proof),
+  };
 };
 
 // The proof-building half of a shield, run detached inside a tracked job. The
@@ -109,13 +147,18 @@ const depositPreparationWork = async (
     if (plan.mode !== "account") {
       return { error: "Shielding route unavailable" };
     }
+    // Asked only now, after every refusal the self-paid route would make: a
+    // sponsor's no, or silence, leaves exactly that route.
+    const sponsored = await offerSponsoredShield(deps, context, actions, recipient);
     report({ phase: "checking the public balance" });
-    await assertPublicPoolSpendAffordable(
-      deps,
-      context,
-      plan.poolFeeFri,
-      `0x${amountRaw.toString(16)}`,
-    );
+    await (sponsored
+      ? assertSponsoredDepositAffordable(deps, context, `0x${amountRaw.toString(16)}`)
+      : assertPublicPoolSpendAffordable(
+          deps,
+          context,
+          plan.poolFeeFri,
+          `0x${amountRaw.toString(16)}`,
+        ));
     const config = context.accountContext.config;
     if (!config) {
       return { error: "Private balances are not configured for this network" };
@@ -136,15 +179,21 @@ const depositPreparationWork = async (
         }),
       poolFeeFri: plan.poolFeeFri,
     });
-    report({ phase: "estimating the network fee" });
-    const networkFee = await estimatePublicStrk20Fee(deps, context, prepared.calls, prepared.proof);
+    const { feeLine, ...route } = await shieldRoute(
+      deps,
+      context,
+      plan,
+      prepared,
+      sponsored,
+      report,
+    );
     const unsigned = {
       ...prepared,
+      ...route,
       actions,
       amount: input.amount,
       amountRaw: `0x${amountRaw.toString(16)}`,
       kind: "deposit" as const,
-      networkFee,
       plan,
       poolAddress: config.poolAddress,
       recipient,
@@ -152,10 +201,7 @@ const depositPreparationWork = async (
         toSelf
           ? `Shield ${input.amount} ${context.token.symbol}`
           : `Shield ${input.amount} ${context.token.symbol} into ${recipient}'s private balance`,
-        summarizeStrk20Plan(
-          plan,
-          strk20FeeAssetFor(context.accountContext.account.networkId, plan),
-        ),
+        feeLine,
         toSelf
           ? "The deposit is public; the resulting balance can be spent privately"
           : "The deposit is public: your address and the amount are on chain, and only the recipient stays hidden",

@@ -4,14 +4,11 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-import { isJson } from "@bramble/core/json";
-import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
-import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
-import { createRpcProvider, withRpcFallback } from "@bramble/starknet/provider";
+import { createRpcProvider } from "@bramble/starknet/provider";
 import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
 import { sameFelt } from "@bramble/wallet-model/networks";
-import type { Call, RpcProvider, TypedData } from "starknet";
-import { num, typedData } from "starknet";
+import type { Call, RpcProvider } from "starknet";
+import { num } from "starknet";
 import { submitStrk20PaymasterPlan } from "../paymaster/paymaster";
 import { quoteStrk20RelayPlan } from "../paymaster/relay-quote";
 import type { Strk20FeeReference } from "../policy/fee-policy";
@@ -44,6 +41,7 @@ import { strk20ReadMethods } from "./official-sdk-reads";
 import type { ServiceRetryPause } from "./official-sdk-retry";
 import type { PrivacySdkRuntime } from "./official-sdk-runtime";
 import { strk20ShadowAccountReads } from "./official-sdk-shadow-accounts";
+import { accountTypedDataSigner, sponsoredShieldSubmitter } from "./official-sdk-sponsored";
 import {
   approveCalls,
   RELAY_PAYS_POOL_FEE,
@@ -388,24 +386,7 @@ export const createOfficialStrk20Service = ({
             nowSeconds: nowSeconds(),
             plan: privatePlan,
             proof: callAndProof.proof,
-            signTypedData: async (value) => {
-              if (!isJson(value)) {
-                throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-              }
-              const messageHash = typedData.getMessageHash(
-                value as unknown as TypedData,
-                input.account.address,
-              );
-              if (input.account.accountContractType !== "openzeppelin") {
-                await withRpcFallback(
-                  input.rpcUrls,
-                  (provider) => requireLiveAuthorizableClass(provider, input.account),
-                  providerFor,
-                );
-              }
-              const signature = await input.signHash(messageHash);
-              return serializeAccountSignature(input.account.accountContractType, signature);
-            },
+            signTypedData: accountTypedDataSigner(input, providerFor),
           });
           return {
             // The relay executes the batch, but the approvals inside it are
@@ -426,6 +407,13 @@ export const createOfficialStrk20Service = ({
             : null,
       );
     },
+    submitSponsoredShield: sponsoredShieldSubmitter({
+      ...(http ? { http } : {}),
+      maturity,
+      ...(nowSeconds ? { nowSeconds } : {}),
+      providerFor,
+      submission,
+    }),
     async submitPrepared(input) {
       const config = requireStrk20Config(input);
       const calls = input.calls ?? (input.call ? [input.call] : []);

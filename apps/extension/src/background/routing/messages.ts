@@ -401,6 +401,7 @@ const HANDLERS: readonly RouterHandler[] = [
       {
         ...buildOpsDeps(ctx),
         prices: ctx.prices,
+        ...(ctx.sponsoredShield ? { sponsoredShield: ctx.sponsoredShield } : {}),
         strk20Jobs: ctx.strk20Jobs,
         strk20Preparations: ctx.strk20Preparations,
       },
