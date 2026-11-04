@@ -62,6 +62,12 @@ const STRK20_STAGE = /^strk20 services unavailable \(([a-z-]+)\/([a-z-]+)\)(?:: 
 // `mapStrk20ProtocolError`'s shape: the reviewed head and the sanitised cause.
 const STRK20_PROTOCOL = /^strk20 services unavailable: ([\s\S]+)$/i;
 const STRK20_SERVICES_DOWN = "strk20 services unavailable";
+// A privacy service that answered 502, 503 or 504, as the SDK words it
+// ("Indexer API <path> failed (502): …"), or the wallet gateway's own
+// `upstream_unavailable` body: an outage the reader can only wait out. It reads
+// as services down with the diagnostic kept beside it, so a report still says
+// what failed (mc-wallet 723). A 4xx is a refusal, not an outage.
+const STRK20_OUTAGE_CAUSE = /\bfailed \(50[234]\)|\bupstream_unavailable\b/;
 
 // A reviewed sentence with the sanitised detail kept beside it, so the cause
 // stays visible on a status line that has no copy control.
@@ -89,10 +95,12 @@ const STRK20_STAGE_COPY: ReadonlyMap<string, (detail: string | undefined) => str
  * STRK20 messages share one head, "strk20 services unavailable", whatever
  * actually happened. Only a category that means rate limiting or an
  * unreachable network earns the matching reviewed sentence; the SDK's
- * catch-all category is shown as written; a revert, a rejected proof, a
- * failed validation, a nonce or a fee reads as its reviewed sentence, never the
- * head, which would say the services were down when the transaction was
- * refused (errors audit F5); any other category is shown without the head. An
+ * catch-all category is shown as written; a protocol cause that is a
+ * privacy-service outage reads as services down, with the cause kept; a
+ * revert, a rejected proof, a failed validation, a nonce or a fee reads as its
+ * reviewed sentence, never the head, which would say the services were down
+ * when the transaction was refused (errors audit F5); any other category is
+ * shown without the head. An
  * unknown submission status, a privacy-leak refusal, and every other STRK20
  * message keep their own words.
  */
@@ -116,6 +124,7 @@ const strk20Message = (trimmed: string, normalized: string): string => {
   const cause = STRK20_PROTOCOL.exec(trimmed)?.[1];
   if (cause && RATE_LIMIT.test(cause)) return withDetail(RATE_LIMITED, cause);
   if (cause && friendlyNetworkError(cause)) return withDetail(NETWORK_ERROR_MESSAGE, cause);
+  if (cause && STRK20_OUTAGE_CAUSE.test(cause)) return withDetail(servicesDown, cause);
   return trimmed;
 };
 
