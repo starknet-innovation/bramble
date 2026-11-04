@@ -1,8 +1,8 @@
 /**
  * The Quantum-safe Bitcoin accounts screen, reached from the account drawer: a
  * static shell, then one row per account once `wallet.qsbAccounts` answers.
- * Each row states what the account can do now; only a phrase not yet backed up
- * carries an action. There are no balances or vaults to show yet.
+ * Each row states what the account can do now and opens the account's
+ * address, balance and vaults; a phrase not yet backed up also carries Back up.
  *
  * Rows render through the audited fragment sink from the pure template below,
  * whose dynamic text is escaped and whose ids were validated by the client.
@@ -45,23 +45,21 @@ export const qsbAccountsFlow = (status: WalletStatus): string =>
 
 const accountRow = (account: QsbAccountView): string => {
   const state = qsbAccountState(account);
+  const name = qsbAccountLabel(account.id);
   return `<li class="allowance-row" data-qsb-account="${escapeHtml(account.id)}">
-    <span class="allowance-copy">
-      <strong>${escapeHtml(qsbAccountLabel(account.id))}</strong>
-      <span class="hint">${escapeHtml(QSB_STATE_LABEL[state])}</span>
-      ${
+    ${menuRow({
+      attributes: { "data-qsb-open": account.id },
+      icon: "lockKeyhole",
+      label: name,
+      supportingText:
         state === "history-unavailable"
-          ? `<span class="hint">${escapeHtml(QSB_HISTORY_UNAVAILABLE_HINT)}</span>`
-          : ""
-      }
-    </span>
+          ? `${QSB_STATE_LABEL[state]} · ${QSB_HISTORY_UNAVAILABLE_HINT}`
+          : QSB_STATE_LABEL[state],
+    })}
     ${
       state === "backup-needed"
         ? button({
-            attributes: {
-              "aria-label": `Back up ${qsbAccountLabel(account.id)}`,
-              "data-qsb-back-up": account.id,
-            },
+            attributes: { "aria-label": `Back up ${name}`, "data-qsb-back-up": account.id },
             label: "Back up",
             size: "small",
             variant: "secondary",
@@ -81,19 +79,21 @@ export const qsbAccountRows = (accounts: readonly QsbAccountView[]): string =>
 export type QsbAccountsDeps = {
   readonly create: () => void;
   readonly list: HTMLElement;
+  readonly openAccount: (accountId: string) => void;
   readonly openBackup: (accountId: string) => void;
   readonly root: Element;
   readonly wallet: Pick<QsbWallet, "loadQsbAccounts">;
 };
 
 /**
- * Loads the accounts into `list` and wires Create and each Back up. A failed
+ * Loads the accounts into `list` and wires Create, each row and each Back up. A failed
  * read shows its reviewed line in place of the rows; nothing is retried
  * behind the user's back.
  */
 export const bindQsbAccounts = ({
   create,
   list,
+  openAccount,
   openBackup,
   root,
   wallet,
@@ -102,6 +102,10 @@ export const bindQsbAccounts = ({
   void wallet.loadQsbAccounts().then(
     (accounts) => {
       renderFragment(list, qsbAccountRows(accounts));
+      for (const control of list.querySelectorAll<HTMLButtonElement>("[data-qsb-open]")) {
+        const id = control.dataset["qsbOpen"];
+        if (id) control.addEventListener("click", () => openAccount(id));
+      }
       for (const control of list.querySelectorAll<HTMLButtonElement>("[data-qsb-back-up]")) {
         const id = control.dataset["qsbBackUp"];
         if (id) control.addEventListener("click", () => openBackup(id));

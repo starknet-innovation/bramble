@@ -53,11 +53,18 @@ type Fixture = {
   readonly list?: readonly QsbAccountView[];
 };
 
+// The vault calls belong to the account screen (scenarios-qsb-vaults); these
+// checkpoints never reach them.
 const fixtureWallet = (fixture: Fixture): QsbWallet => ({
   confirmQsbBackup: fixture.confirm ?? never,
   createQsbAccount: fixture.create ?? never,
+  createQsbVault: never,
+  depositQsbVault: never,
   importQsbAccount: fixture.import ?? never,
   loadQsbAccounts: async () => fixture.list ?? accounts,
+  loadQsbVaults: never,
+  quoteQsbDeposit: never,
+  resendQsbDeposit: never,
   revealQsbPhrase: async () => TEST_PHRASE,
 });
 
@@ -150,7 +157,7 @@ export const qsbScenario: WalletScenario = {
       id: "qsb-accounts",
       label: "Accounts",
       narrative:
-        "Each account states what it can do now: a phrase to back up, ready, read-only, or a history Bramble cannot read. Only the missing backup carries an action.",
+        "Each account states what it can do now: a phrase to back up, ready, read-only, or a history Bramble cannot read. Every row opens its account; only the missing backup also carries Back up.",
       prepare: async (context) => {
         journeyFor(context, {}).bind(context.app);
         await nextTurn();

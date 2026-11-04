@@ -140,6 +140,11 @@ export const READ_ONLY_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.previewAccount",
   "wallet.prices",
   "wallet.qsbAccounts",
+  // Reads one QSB account's vaults; may record a deposit the chain now
+  // confirms, which is idempotent, so a lost reply changed nothing to undo.
+  "wallet.qsbVaults",
+  // Prices a QSB deposit; signs and submits nothing.
+  "wallet.quoteQsbDeposit",
   "wallet.resolveMultisigSigner",
   "wallet.resolveStarkName",
   "wallet.reviewArgentMultisigDeployment",
