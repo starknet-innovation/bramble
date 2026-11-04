@@ -83,6 +83,30 @@ const depositRegistration = async (
     : { error: "The recipient has not activated private balances" };
 };
 
+// The review lines for a shield. A first shield that registers in the same
+// transaction (#789) says so in its headline and states the registration's
+// public link, exactly as a registration on its own does.
+const depositSummaries = (input: {
+  readonly activate: boolean;
+  readonly feeLine: string;
+  readonly recipient: string;
+  readonly toSelf: boolean;
+  readonly value: string;
+}): string[] => [
+  input.activate
+    ? `Activate private balances and shield ${input.value}`
+    : input.toSelf
+      ? `Shield ${input.value}`
+      : `Shield ${input.value} into ${input.recipient}'s private balance`,
+  ...(input.activate
+    ? ["Registration is public and links this wallet address to its viewing key"]
+    : []),
+  input.feeLine,
+  input.toSelf
+    ? "The deposit is public; the resulting balance can be spent privately"
+    : "The deposit is public: your address and the amount are on chain, and only the recipient stays hidden",
+];
+
 // The proof-building half of a shield, run detached inside a tracked job. The
 // route was opened on the request that started the job, so every refusal the
 // gate can make has already been answered synchronously; what remains is the
@@ -171,23 +195,16 @@ const depositPreparationWork = async (
       poolAddress: config.poolAddress,
       recipient,
       ...(activate ? { activates: true as const } : {}),
-      summaries: [
-        activate
-          ? `Activate private balances and shield ${input.amount} ${context.token.symbol}`
-          : toSelf
-            ? `Shield ${input.amount} ${context.token.symbol}`
-            : `Shield ${input.amount} ${context.token.symbol} into ${recipient}'s private balance`,
-        ...(activate
-          ? ["Registration is public and links this wallet address to its viewing key"]
-          : []),
-        summarizeStrk20Plan(
+      summaries: depositSummaries({
+        activate,
+        feeLine: summarizeStrk20Plan(
           plan,
           strk20FeeAssetFor(context.accountContext.account.networkId, plan),
         ),
-        toSelf
-          ? "The deposit is public; the resulting balance can be spent privately"
-          : "The deposit is public: your address and the amount are on chain, and only the recipient stays hidden",
-      ],
+        recipient,
+        toSelf,
+        value: `${input.amount} ${context.token.symbol}`,
+      }),
       token: context.token,
     };
     const approvalContext = await createApprovalContext(
