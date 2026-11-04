@@ -38,7 +38,7 @@ const watchAssetTrackedCard = (
 ): string => `
   <li class="request-card" data-approval-notice>
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Add token request")}
+      ${requestIdentity(approval, "Add token request")}
       <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
       <p>${escapeHtml(ALREADY_TRACKED_NOTICE)}</p>
     </div>
@@ -60,7 +60,7 @@ export const watchAssetCard = (approval: PendingApproval): string => {
   return `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Add token request")}
+      ${requestIdentity(approval, "Add token request")}
       <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
       ${reviewOutcome("Add this token contract to the wallet's tracked asset list.")}
     </div>

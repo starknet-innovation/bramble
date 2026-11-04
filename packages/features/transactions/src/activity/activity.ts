@@ -32,6 +32,7 @@ export {
   type ActivityOutcome,
   type ActivityScope,
   type ActivityStatus,
+  activityDappOrigin,
   activityForScope,
   activityOrigin,
   activityToken,

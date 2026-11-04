@@ -94,6 +94,8 @@ describe("a dapp invoke with a lost broadcast reply", () => {
     expect(rows.map((row) => [row.hash, row.status, row.kind])).toEqual([
       [SIGNED, "pending", "invoke"],
     ]);
+    // mc-wallet 749: the row names the requesting site from the validated sender.
+    expect(rows[0]?.dappOrigin).toBe(grantedOrigin);
   });
 
   // #678: the grant a lost-reply approve may have made must stay listed and

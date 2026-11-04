@@ -460,6 +460,7 @@ describe("executeStrk20InvokeApproval", () => {
     // A private-transaction entry was recorded without leaking action detail.
     const recorded = await activity.list();
     expect(recorded[0]?.summary).toContain("submitted a private transaction (1 action)");
+    expect(recorded[0]?.dappOrigin).toBe(origin);
   });
 
   test("records an invoke from a long origin under the end of its host (Sherlock 180)", async () => {
@@ -492,5 +493,7 @@ describe("executeStrk20InvokeApproval", () => {
     const [recorded] = await activity.list();
     expect(recorded?.summary).toStartWith("…");
     expect(recorded?.summary).toEndWith(".example.com submitted a private transaction (1 action)");
+    // The structured site keeps the whole origin; only the summary text is cut.
+    expect(recorded?.dappOrigin).toBe(longOrigin);
   });
 });

@@ -12,6 +12,7 @@ import { menuLink } from "@bramble/ui-kit/navigation";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { type BuildInfo, buildInfo } from "../../shell/build-info";
+import { APP_DIRECTORY_TITLE, hasListedApps } from "../apps/app-directory-view";
 import { SHADOW_ACCOUNTS_TITLE } from "../privacy/shadow-accounts-copy";
 import { PRIVACY_UNLOCK_TITLE } from "./privacy-unlock";
 
@@ -56,6 +57,7 @@ export const settingsScreen = (
       <p class="eyebrow">Access & permissions</p>
       <div class="menu-list" role="group" aria-label="Access and permissions">
         ${walletMenuRow("connected-sites", "Connected sites", "link")}
+        ${hasListedApps(status.networkId) ? walletMenuRow("apps", APP_DIRECTORY_TITLE, "layoutGrid") : ""}
         ${walletMenuRow("allowances", "Token allowances", "coins")}
         ${walletMenuRow("shadow-accounts", SHADOW_ACCOUNTS_TITLE, "shield")}
         ${walletMenuRow(

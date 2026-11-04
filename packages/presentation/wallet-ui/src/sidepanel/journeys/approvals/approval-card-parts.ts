@@ -55,8 +55,17 @@ export const decisionRow = (
     label,
   })}</div>`;
 
-/** The card eyebrow and the requesting site; the origin is escaped here. */
-export const requestIdentity = (origin: string, kind: string): string => {
+/**
+ * The card eyebrow and the requesting site; the origin is escaped here. A
+ * site the background matched to the app directory (mc-wallet issue 749) also
+ * shows its listed name. The match is the background's, made from the
+ * validated sender, so nothing the page sends can produce it.
+ */
+export const requestIdentity = (
+  approval: Pick<PendingApproval, "listing" | "origin">,
+  kind: string,
+): string => {
+  const { origin } = approval;
   let host = origin;
   try {
     host = new URL(origin).host || origin;
@@ -64,5 +73,9 @@ export const requestIdentity = (origin: string, kind: string): string => {
     // The full escaped value remains visible if an invalid origin reaches this
     // presentation boundary; approval validation still fails closed upstream.
   }
-  return `<p class="eyebrow">${kind}</p><div class="request-site"><span class="request-site-mark">${icon("globe")}</span><div class="request-site-copy"><span>Request from</span><strong title="${escapeHtml(origin)}">${escapeHtml(host)}</strong></div></div>`;
+  const listed =
+    approval.listing === undefined
+      ? ""
+      : `<span class="request-listed">${icon("check")}Listed app: ${escapeHtml(approval.listing)}</span>`;
+  return `<p class="eyebrow">${kind}</p><div class="request-site"><span class="request-site-mark">${icon("globe")}</span><div class="request-site-copy"><span>Request from</span><strong title="${escapeHtml(origin)}">${escapeHtml(host)}</strong>${listed}</div></div>`;
 };

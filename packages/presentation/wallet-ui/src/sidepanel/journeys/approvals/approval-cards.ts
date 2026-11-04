@@ -144,7 +144,7 @@ const connectCard = (
 ): string => `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Connection request")}
+      ${requestIdentity(approval, "Connection request")}
       ${status.locked ? '<p class="hint">Unlock the wallet to approve this site.</p>' : ""}
       ${connectIdentity(status, preferences)}
       ${reviewOutcome(
@@ -188,7 +188,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
   return `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Transaction request")}
+      ${requestIdentity(approval, "Transaction request")}
       ${status.locked ? '<p class="hint">Unlock the wallet to review and approve this transaction.</p>' : ""}
       ${approvalCalls(approval) || reviewOutcome("Sign and submit the decoded transaction from the active account.")}
     </div>
@@ -249,7 +249,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
   return `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Sign request")}
+      ${requestIdentity(approval, "Sign request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Signatures can authorize transfers or account access. Only sign requests you understand."}</p>
       ${reviewOutcome("Create a signed authorization over the decoded message shown below and return it to this site.")}
       ${reviewCallsList(approval.summaries?.slice(1) ?? [])}
@@ -270,7 +270,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
 const strk20Card = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Private transaction request")}
+      ${requestIdentity(approval, "Private transaction request")}
       ${status.locked ? '<p class="hint">Unlock the wallet to review this private transaction.</p>' : ""}
       ${approvalCalls(approval) || reviewOutcome("Authorize the exact private action bound to this request.")}
     </div>
@@ -293,7 +293,7 @@ const strk20DisclosureCard = (
 ): string => `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, copy.title)}
+      ${requestIdentity(approval, copy.title)}
       ${status.locked ? `<p class="hint">${copy.lockedHint}</p>` : ""}
       ${approvalCalls(approval) || reviewOutcome(copy.hint)}
     </div>
@@ -328,7 +328,7 @@ const strk20UnavailableCard = (approval: PendingApproval): string => `
 const switchCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Network switch request")}
+      ${requestIdentity(approval, "Network switch request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network."}</p>
       ${approvalCalls(approval) || reviewOutcome("Switch the wallet to the requested Starknet network.")}
     </div>
@@ -340,7 +340,7 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
 const addChainCard = (approval: PendingApproval): string => `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Add network request")}
+      ${requestIdentity(approval, "Add network request")}
       <p class="hint">This site is asking to add a custom Starknet network.</p>
       ${approvalCalls(approval) || reviewOutcome("Add the requested custom Starknet network to the wallet.")}
     </div>
@@ -355,7 +355,7 @@ const addChainCard = (approval: PendingApproval): string => `
 const declareCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Declare contract request")}
+      ${requestIdentity(approval, "Declare contract request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review and declare this contract class." : "Approving signs and submits this exact class declaration from the account shown below."}</p>
       ${reviewOutcome("Register this exact Cairo contract class on the active network from the reviewed account.")}
     </div>

@@ -5,6 +5,7 @@
  * callbacks and every state read goes through the shared render cache, so this
  * module holds no module-level state.
  */
+import { bindAppDirectory } from "../../journeys/apps/app-directory-ui";
 import { bindAllowances } from "../../journeys/portfolio/allowance-ui";
 import { bindTokenCatalog } from "../../journeys/portfolio/token-catalog-ui";
 import { bindTokens } from "../../journeys/portfolio/tokens-ui";
@@ -74,6 +75,7 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
     wallet,
   });
   bindConnectedSites({ app, render, wallet });
+  bindAppDirectory(app);
   bindTokens({
     app,
     openToken: deps.openToken,

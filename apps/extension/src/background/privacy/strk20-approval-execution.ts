@@ -17,7 +17,11 @@ import {
   submitStrk20Actions,
 } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
+import {
+  type ActivityLog,
+  activityDappOrigin,
+  activityOrigin,
+} from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { verificationContext } from "@bramble/transactions/verify";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
@@ -370,6 +374,7 @@ export const executeStrk20InvokeApproval = async (
     await recordPoolAllowances(deps, resolved, result);
     await recordSubmittedActivity(deps.activity, {
       accountId: resolved.account.id,
+      ...activityDappOrigin(approval.origin),
       hash: result.transactionHash,
       kind: "invoke",
       networkId: resolved.account.networkId,

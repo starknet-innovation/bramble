@@ -30,7 +30,7 @@ import {
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
-import { activityRecordFacts, counterpartyFact } from "./activity-detail";
+import { activityListedMark, activityRecordFacts, counterpartyFact } from "./activity-detail";
 import { type ActivityContact, activityRowAttributes } from "./activity-filter";
 import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
@@ -192,7 +192,7 @@ export const transactionRow = (
         <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-hidden="true" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
         <span class="tx-copy">
           <strong class="tx-title">${escapeHtml(heading)}</strong>
-        </span>
+        </span>${activityListedMark(entry)}
         ${
           entry.status === "accepted"
             ? ""

@@ -362,7 +362,8 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.classHashVerification = value;
     });
   }
-  if (activeView === "connected-sites") {
+  // The app directory marks connected apps from the same read.
+  if (activeView === "connected-sites" || activeView === "apps") {
     // A failed read keeps a list already shown (revoking still validates on
     // the background) and otherwise shows the failure, never an empty list.
     fill(

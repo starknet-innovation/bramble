@@ -15,6 +15,7 @@ import type {
   TokenBalance,
   WalletStatus,
 } from "../../../popup/responses/responses";
+import { appDirectoryFlow } from "../../journeys/apps/app-directory-view";
 import { addressFinderFields } from "../../journeys/onboarding/address-finder-view";
 import { recoveryScanFields, recoveryWordInputs } from "../../journeys/onboarding/onboarding-views";
 import { allowancesFlow } from "../../journeys/portfolio/allowance-views";
@@ -398,6 +399,8 @@ export const simpleFlowScreen = (
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":
       return connectedSitesFlow(ctx.status, ctx.connectedSites);
+    case "apps":
+      return appDirectoryFlow(ctx.status, ctx.connectedSites);
     case "allowances":
       return allowancesFlow(ctx.status, ctx.account, ctx.allowances, ctx.preferences);
     case "shadow-accounts":

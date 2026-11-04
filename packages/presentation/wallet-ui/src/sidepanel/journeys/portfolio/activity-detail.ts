@@ -7,6 +7,7 @@
  * not what the transaction was worth.
  */
 import { escapeHtml } from "@bramble/core/html";
+import { APP_DIRECTORY, type AppDirectory } from "@bramble/permissions/app-directory";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import {
@@ -15,6 +16,7 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
+import { icon } from "../../shared/icons";
 import { formatFri, inlineCopyButton } from "../../shared/parts";
 
 const fact = (term: string, value: string): string =>
@@ -69,21 +71,56 @@ export const activityFeeText = (
   return null;
 };
 
+/**
+ * The listed app name for a row's recorded site (mc-wallet issue 749), or
+ * null. Decided now, against the bundled directory, from the origin the
+ * background recorded: a delisted site leaves the listing, so it loses the mark
+ * on past rows too, and a row's summary text never counts.
+ */
+const activityListedApp = (
+  entry: ActivityEntry,
+  directory: AppDirectory = APP_DIRECTORY,
+): string | null =>
+  entry.dappOrigin === undefined ? null : (directory.listing(entry.dappOrigin)?.name ?? null);
+
+/** The collapsed row's mark for a transaction a listed app requested. */
+export const activityListedMark = (
+  entry: ActivityEntry,
+  directory: AppDirectory = APP_DIRECTORY,
+): string => {
+  const name = activityListedApp(entry, directory);
+  return name === null
+    ? ""
+    : `<span class="tx-listed" title="${escapeHtml(`Listed app: ${name}`)}">${icon("check")}<span class="sr-only">Listed app: ${escapeHtml(name)}</span></span>`;
+};
+
+// The site a dapp transaction came from, with its listed name when it has one.
+const siteFact = (entry: ActivityEntry, directory: AppDirectory): string => {
+  if (entry.dappOrigin === undefined) return "";
+  const name = activityListedApp(entry, directory);
+  return fact(
+    "Site",
+    `${escapeHtml(entry.dappOrigin)}${name === null ? "" : `<span class="tx-listed-name">Listed app: ${escapeHtml(name)}</span>`}`,
+  );
+};
+
 /** The counterparty fact, with the whole address on screen and copyable. */
 export const counterpartyFact = (role: string, address: string): string =>
   fact(role, identifier(address, `Copy ${role.toLowerCase()} address`));
 
 /**
- * The fee, network and token contract facts, each only when recorded.
+ * The site, fee, network and token contract facts, each only when recorded.
  * `tracked` lends a gasless fee token its scale when it is not a built-in.
  */
 export const activityRecordFacts = (
   entry: ActivityEntry,
   tracked: readonly TokenConfig[] = [],
+  directory: AppDirectory = APP_DIRECTORY,
 ): string => {
   const fee = activityFeeText(entry, tracked);
   const network = STARKNET_NETWORKS[entry.networkId]?.name;
   return [
+    siteFact(entry, directory),
     fee === null ? "" : fact("Network fee", escapeHtml(fee)),
     network === undefined ? "" : fact("Network", escapeHtml(network)),
     entry.tokenAddress === undefined

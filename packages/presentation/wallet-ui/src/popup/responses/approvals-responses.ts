@@ -18,6 +18,7 @@ import {
   JSON_BUDGETS,
 } from "@bramble/core/json";
 import { isWalletOrigin } from "@bramble/core/origin";
+import { MAX_APP_NAME_LENGTH } from "@bramble/permissions/app-directory";
 import { isFeeEstimate as isFee } from "@bramble/starknet/fee-bounds";
 import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
@@ -84,6 +85,9 @@ const isApprovalReviewAsset = (value: unknown): boolean =>
 
 const isInsightText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
+
+const isListingName = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= MAX_APP_NAME_LENGTH;
 
 const isSummaryText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= APPROVAL_SUMMARY_MAX_LENGTH;
@@ -198,6 +202,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "id",
       "insights",
       "kind",
+      "listing",
       "notice",
       "origin",
       "relayFeeAction",
@@ -227,6 +232,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       value["kind"] !== "switch-chain" &&
       value["kind"] !== "watch-asset") ||
     (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||
+    (value["listing"] !== undefined && !isListingName(value["listing"])) ||
     (value["insights"] !== undefined &&
       !(Array.isArray(value["insights"]) && value["insights"].every(isInsightText))) ||
     (value["summaries"] !== undefined &&
