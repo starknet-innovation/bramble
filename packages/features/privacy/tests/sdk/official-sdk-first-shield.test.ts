@@ -101,6 +101,7 @@ describe("official STRK20 SDK first shield", () => {
     const ready = historicalReadiness("first-shield", provider, {
       ...context,
       actions: [DEPOSIT],
+      simulate: false,
     });
     if (!ready) throw new Error("expected a readiness check");
 
