@@ -25,9 +25,23 @@ const ROW = {
 const staking: StakingState = {
   exitWindowSeconds: 604_800,
   rows: [
-    { ...ROW, staked: "1,250", state: "exit-pending", unclaimed: "18.4421", unpoolAmount: "250", unpoolTime: 1_800_000_000 },
+    {
+      ...ROW,
+      staked: "1,250",
+      state: "exit-pending",
+      unclaimed: "18.4421",
+      unpoolAmount: "250",
+      unpoolTime: 1_800_000_000,
+    },
     { ...ROW, delegated: "212.08", symbol: "WBTC", tokenId: "SN_MAIN:WBTC" },
-    { ...ROW, accepting: false, staked: "40", state: "staked", validatorId: "leaving", validatorName: "Leaving Validator" },
+    {
+      ...ROW,
+      accepting: false,
+      staked: "40",
+      state: "staked",
+      validatorId: "leaving",
+      validatorName: "Leaving Validator",
+    },
     {
       refusal: "Couldn't verify this validator on chain.",
       symbol: "STRK",
@@ -44,7 +58,15 @@ const review = async ({ app }: FrameContext): Promise<void> => {
   bindStaking({
     app,
     render: async () => undefined,
-    wallet: { stakingAction: async () => ({ overallFee: "1840000000000000", unit: "FRI" }) },
+    wallet: {
+      executeStaking: async () => "0x5ab",
+      prepareStaking: async () => ({
+        id: `sha256:${"a".repeat(64)}`,
+        review:
+          "Stake 500 STRK with Fixture Validator. This approves exactly 500 STRK for its pool.",
+        reviewedFee: { overallFee: "1840000000000000", unit: "FRI" },
+      }),
+    },
   });
   const field = app.querySelector<HTMLInputElement>('[data-staking-amount^="stake|"]');
   if (field) field.value = "500";
@@ -66,7 +88,8 @@ export const stakingCheckpoints: readonly ScenarioCheckpoint[] = [
     content: () => walletDashboard({ staking, view: "staking" }),
     id: "staking-review",
     label: "Staking review",
-    narrative: "The first tap shows exactly what will be signed and the maximum fee; the second confirms.",
+    narrative:
+      "The first tap shows exactly what will be signed and the maximum fee; the second confirms.",
     prepare: review,
     state: { amount: "500 STRK", step: "review" },
   },

@@ -33,6 +33,7 @@
     "./staking-calls": "./src/staking/staking-calls.ts",
     "./staking-decode": "./src/staking/staking-decode.ts",
     "./staking-networks": "./src/staking/staking-networks.ts",
+    "./staking-review": "./src/staking/staking-review.ts",
     "./starkscan": "./src/history/starkscan.ts",
     "./starkscan-parsers": "./src/history/starkscan-parsers.ts",
     "./starkscan-types": "./src/history/starkscan-types.ts",

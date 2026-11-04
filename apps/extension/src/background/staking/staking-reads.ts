@@ -22,7 +22,7 @@ import {
   verifyStakingPool,
 } from "@bramble/transactions/staking-decode";
 import type { StakingValidator } from "@bramble/transactions/staking-networks";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 
 /**
  * One validator and token as read for an account: the verified pool and the
@@ -90,8 +90,9 @@ export type StakingChainFacts = {
 };
 
 /**
- * Reads the active-token list and the exit wait (seconds). Null when either answer is
- * malformed, so the caller shows staking as unavailable rather than guessing.
+ * Reads the active-token list and the exit wait (seconds), and confirms the
+ * rewards token is STRK. Null when any answer is malformed or different, so
+ * the caller shows staking as unavailable rather than guessing.
  */
 export const readStakingChainFacts = async (
   read: PinnedContractRead,
@@ -103,5 +104,10 @@ export const readStakingChainFacts = async (
   ]);
   const activeTokens = decodeActiveTokens(tokensRaw);
   const exitWindowSeconds = decodeExitWindow(parametersRaw);
-  return activeTokens && exitWindowSeconds !== null ? { activeTokens, exitWindowSeconds } : null;
+  // Rewards are paid in the staking contract's own token, for BTC pools too.
+  // The wallet labels and scales them as STRK, so it confirms that first.
+  const rewardsInStrk = sameFelt(parametersRaw[1], STRK_TOKEN_ADDRESS);
+  return activeTokens && exitWindowSeconds !== null && rewardsInStrk
+    ? { activeTokens, exitWindowSeconds }
+    : null;
 };

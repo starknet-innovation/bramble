@@ -3,8 +3,9 @@
  * names a validator id, a tracked token id, an action and a decimal amount;
  * it never supplies an address, a pool or calldata.
  */
+
+import { isSha256Digest } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import { STAKING_ACTIONS, type StakingAction } from "@bramble/transactions/staking-calls";
 
 const MAX_ID_LENGTH = 120;
@@ -12,12 +13,11 @@ const MAX_AMOUNT_LENGTH = 80;
 const AMOUNT_PATTERN = /^\d+(?:\.\d+)?$/;
 
 /**
- * A validated staking action request.
+ * A validated staking prepare request.
  */
-export type StakingActionInput = {
+export type StakingPrepareInput = {
   readonly action: StakingAction;
   readonly amount: string | null;
-  readonly reviewedFee?: FeeEstimate;
   readonly tokenId: string;
   readonly validatorId: string;
 };
@@ -32,25 +32,17 @@ const isAmount = (value: unknown): value is string =>
   typeof value === "string" && value.length <= MAX_AMOUNT_LENGTH && AMOUNT_PATTERN.test(value);
 
 /**
- * Parses `wallet.stakingAction`. `amount` is required exactly for the actions
+ * Parses `wallet.stakingPrepare`. `amount` is required exactly for the actions
  * that move an amount (stake, unstake) and refused for the others.
  */
-export const readStakingActionInput = (message: unknown): StakingActionInput | null => {
+export const readStakingPrepareInput = (message: unknown): StakingPrepareInput | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, [
-      "action",
-      "amount",
-      "reviewedFee",
-      "tokenId",
-      "type",
-      "validatorId",
-    ]) ||
-    message["type"] !== "wallet.stakingAction" ||
+    !hasOnlyKnownKeys(message, ["action", "amount", "tokenId", "type", "validatorId"]) ||
+    message["type"] !== "wallet.stakingPrepare" ||
     !isAction(message["action"]) ||
     !isId(message["tokenId"]) ||
-    !isId(message["validatorId"]) ||
-    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"]))
+    !isId(message["validatorId"])
   ) {
     return null;
   }
@@ -61,8 +53,21 @@ export const readStakingActionInput = (message: unknown): StakingActionInput | n
   return {
     action,
     amount: needsAmount && isAmount(amount) ? amount : null,
-    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
     tokenId: message["tokenId"],
     validatorId: message["validatorId"],
   };
 };
+
+/**
+ * Parses `wallet.stakingExecute`: only the preparation id travels.
+ */
+export const readStakingExecuteInput = (
+  message: unknown,
+): { readonly preparationId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["preparationId", "type"]) &&
+  message["type"] === "wallet.stakingExecute" &&
+  typeof message["preparationId"] === "string" &&
+  isSha256Digest(message["preparationId"])
+    ? { preparationId: message["preparationId"] }
+    : null;

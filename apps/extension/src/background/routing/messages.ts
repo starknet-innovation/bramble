@@ -389,7 +389,7 @@ const HANDLERS: readonly RouterHandler[] = [
     ),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) =>
-    handleStakingOps(buildOpsDeps(ctx), messageType, message, ctx.stakingNetworks),
+    handleStakingOps(buildOpsDeps(ctx), messageType, message, ctx.staking),
   (ctx, messageType, message) => handleNftOps(buildOpsDeps(ctx), messageType, message),
   handleMultisig,
   handlePreferences,

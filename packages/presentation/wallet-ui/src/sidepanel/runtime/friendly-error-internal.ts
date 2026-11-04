@@ -67,6 +67,7 @@ const SECURITY_CHECK_COPY: readonly (readonly [string, string])[] = [
   ["typed data cannot be hashed", HASH_FAILED],
   ["invalid swap preparation commitment", PREPARATION_MISMATCH],
   ["invalid privacy preparation commitment", PREPARATION_MISMATCH],
+  ["invalid staking preparation commitment", PREPARATION_MISMATCH],
   ["argent account class hash does not match the pinned release", CLASS_UNEXPECTED],
   ["argent multisig class hash does not match the pinned release", CLASS_UNEXPECTED],
   ["deployed argent multisig class does not match the pinned release", CLASS_UNEXPECTED],

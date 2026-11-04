@@ -17,6 +17,10 @@ export type StakingRowView = {
   /** False while the validator is leaving: no new stake, exits still work. */
   readonly accepting?: boolean;
   readonly refusal?: string;
+  /** The token rewards are paid in (STRK for every pool). */
+  readonly rewardSymbol?: string;
+  /** The membership's reward address when it is not this account. */
+  readonly rewardsTo?: string;
   /** The account's staked amount, formatted ("0" when not a member). */
   readonly staked?: string;
   readonly state?: StakingPositionState;

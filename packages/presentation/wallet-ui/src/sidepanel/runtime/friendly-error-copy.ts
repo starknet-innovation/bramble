@@ -397,6 +397,8 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // A staking action signs a transaction: its unknown outcome says so. The
   // background's own refusals are already reader sentences, kept as written.
   ["staking action failed", SUBMISSION_UNKNOWN("The staking transaction")],
+  ["staking preparation failed", "Couldn't prepare this staking action. Try again."],
+  ["review this staking action again.", "Review this staking action again."],
   ["staking isn't available on this network.", "Staking isn't available on this network."],
   ["staking option unavailable.", "Staking option unavailable."],
   [

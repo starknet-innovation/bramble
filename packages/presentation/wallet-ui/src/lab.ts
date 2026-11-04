@@ -36,7 +36,9 @@ export { bindShadowAccounts } from "./sidepanel/journeys/privacy/shadow-accounts
 export * from "./sidepanel/journeys/send/send-model";
 export * from "./sidepanel/journeys/send/send-views";
 export * from "./sidepanel/journeys/send/transfer-ui";
+/** Staking screen state and bindings, for the UI Lab checkpoints. */
 export type { StakingState } from "./sidepanel/journeys/staking/staking-client";
+/** Binds the staking screen against a fixture client. */
 export { bindStaking } from "./sidepanel/journeys/staking/staking-ui";
 export * from "./sidepanel/journeys/swap/swap-client";
 export * from "./sidepanel/journeys/swap/swap-ui";

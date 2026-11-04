@@ -28,6 +28,8 @@ export type StakingChainState = {
   } | null;
   /** Staker the pool's own parameters name (a mismatch must be refused). */
   poolStaker: string;
+  /** The staking contract's own token, in which rewards are paid. */
+  rewardToken: string;
   stakerLeaving: boolean;
   reads: string[];
 };
@@ -41,6 +43,7 @@ export const makeStakingChain = (): StakingChainState => ({
   member: null,
   poolStaker: STAKER,
   reads: [],
+  rewardToken: STRK_TOKEN_ADDRESS,
   stakerLeaving: false,
 });
 
@@ -66,7 +69,7 @@ const answer = (
       case "get_active_tokens":
         return [hex(state.activeTokens.length), ...state.activeTokens];
       case "contract_parameters_v1":
-        return ["0x1", STRK_TOKEN_ADDRESS, "0x7", "0x8", "0x9", hex(604_800)];
+        return ["0x1", state.rewardToken, "0x7", "0x8", "0x9", hex(604_800)];
       case "staker_pool_info":
         return sameFelt(calldata[0], STAKER)
           ? ["0x0", hex(state.commission), "0x1", STAKING_POOL, STRK_TOKEN_ADDRESS, hex(10n ** 21n)]

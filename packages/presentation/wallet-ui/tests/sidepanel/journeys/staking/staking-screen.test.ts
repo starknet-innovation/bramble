@@ -12,10 +12,7 @@ import {
   type StakingRow,
   stakingStateFrom,
 } from "../../../../src/sidepanel/journeys/staking/staking-client";
-import {
-  bindStaking,
-  stakingReviewText,
-} from "../../../../src/sidepanel/journeys/staking/staking-ui";
+import { bindStaking } from "../../../../src/sidepanel/journeys/staking/staking-ui";
 import {
   exitWindowText,
   stakingFlow,
@@ -151,88 +148,161 @@ describe("stakingFlow", () => {
     expect(refused).not.toContain("data-staking-action");
   });
 
+  test("rewards are labelled in their own token, not the staked one", () => {
+    const html = screen([
+      {
+        ...ROW,
+        rewardSymbol: "STRK",
+        staked: "1",
+        state: "staked",
+        symbol: "WBTC",
+        unclaimed: "2",
+      },
+    ]);
+    expect(html).toContain("Rewards 2 STRK");
+  });
+
+  test("rewards paid elsewhere are stated on the row", () => {
+    expect(screen([{ ...ROW, rewardsTo: "0xabc1234567", staked: "5", state: "staked" }])).toContain(
+      "Rewards are paid to",
+    );
+  });
+
   test("names are escaped", () => {
     expect(screen([{ ...ROW, validatorName: "<b>x</b>" }])).not.toContain("<b>x</b>");
   });
 });
 
-describe("stakingReviewText", () => {
-  test("says what will be signed, including the exact approval", () => {
-    const facts = { amount: "5", symbol: "STRK", validator: "Val" };
-    expect(stakingReviewText("stake", facts, "0.001 STRK")).toBe(
-      "Stake 5 STRK with Val. This approves exactly 5 STRK for its pool. Maximum network fee: 0.001 STRK.",
-    );
-    expect(stakingReviewText("unstake", facts, "0.001 STRK")).toContain(
-      "It earns no rewards until you withdraw it.",
-    );
-  });
-});
+const PREP = {
+  id: `sha256:${"a".repeat(64)}`,
+  review: "Stake 5 STRK with Val. This approves exactly 5 STRK for its pool.",
+  reviewedFee: FEE,
+};
 
 describe("bindStaking", () => {
-  const mount = (respond: (request: unknown, fee: unknown) => Promise<unknown>) => {
+  const mount = (
+    rows: readonly StakingRow[],
+    prepare: (request: unknown) => Promise<typeof PREP> = async () => PREP,
+    execute: (id: string) => Promise<string> = async () => "0x5ab",
+  ) => {
     document.body.replaceChildren();
     const app = document.createElement("div");
     document.body.append(app);
-    app.innerHTML = screen([ROW]);
-    const calls: { request: unknown; fee: unknown }[] = [];
+    app.innerHTML = screen(rows);
+    const calls: { readonly kind: string; readonly value: unknown }[] = [];
     bindStaking({
       app,
       render: async () => undefined,
       wallet: {
-        stakingAction: async (request, fee) => {
-          calls.push({ fee, request });
-          return (await respond(request, fee)) as never;
+        executeStaking: async (id) => {
+          calls.push({ kind: "execute", value: id });
+          return execute(id);
+        },
+        prepareStaking: async (request) => {
+          calls.push({ kind: "prepare", value: request });
+          return prepare(request);
         },
       },
     });
-    const button = app.querySelector<HTMLButtonElement>('[data-staking-action="stake"]');
-    const field = app.querySelector<HTMLInputElement>("[data-staking-amount]");
+    const pick = (action: string) =>
+      app.querySelector<HTMLButtonElement>(`[data-staking-action="${action}"]`);
+    const field = (action: string) =>
+      app.querySelector<HTMLInputElement>(`[data-staking-amount^="${action}|"]`);
     const review = app.querySelector<HTMLElement>("[data-staking-review-for]");
-    return { button, calls, field, review };
+    return { calls, field, pick, review };
   };
 
-  test("first tap reviews the fee; second submits with exactly that fee and amount", async () => {
-    const { button, calls, field, review } = mount(async (_request, fee) => (fee ? "0x5ab" : FEE));
-    if (!button || !field || !review) throw new Error("not rendered");
+  test("first tap shows the background's review and fee; second confirms that preparation", async () => {
+    const { calls, field, pick, review } = mount([ROW]);
+    const button = pick("stake");
+    const amount = field("stake");
+    if (!button || !amount || !review) throw new Error("not rendered");
     button.click();
     expect(calls).toEqual([]);
-    field.value = "5";
+    amount.value = "5";
     button.click();
     await tick();
     expect(calls[0]).toEqual({
-      fee: undefined,
-      request: { action: "stake", amount: "5", tokenId: "SN_MAIN:strk", validatorId: "val" },
+      kind: "prepare",
+      value: { action: "stake", amount: "5", tokenId: "SN_MAIN:strk", validatorId: "val" },
     });
-    expect(review.textContent).toContain("Stake 5 STRK with Val.");
+    expect(review.textContent).toContain(`${PREP.review} Maximum network fee:`);
     expect(button.textContent).toContain("Confirm");
     button.click();
     await tick();
-    expect(calls[1]?.fee).toEqual(FEE);
+    expect(calls[1]).toEqual({ kind: "execute", value: PREP.id });
     expect(review.textContent).toBe("Submitted. Follow it in Activity.");
   });
 
-  test("editing the amount after the review discards the reviewed fee", async () => {
-    const { button, calls, field } = mount(async () => FEE);
-    if (!button || !field) throw new Error("not rendered");
-    field.value = "5";
+  test("editing the amount disarms the confirm", async () => {
+    const { calls, field, pick } = mount([ROW]);
+    const button = pick("stake");
+    const amount = field("stake");
+    if (!button || !amount) throw new Error("not rendered");
+    amount.value = "5";
     button.click();
     await tick();
-    field.value = "6";
-    field.dispatchEvent(new Event("input"));
+    amount.value = "6";
+    amount.dispatchEvent(new Event("input"));
     button.click();
     await tick();
-    expect(calls[1]).toEqual({
-      fee: undefined,
-      request: { action: "stake", amount: "6", tokenId: "SN_MAIN:strk", validatorId: "val" },
+    expect(calls.map((call) => call.kind)).toEqual(["prepare", "prepare"]);
+  });
+
+  test("reviewing another action in the row disarms the first", async () => {
+    const { calls, field, pick } = mount([
+      { ...ROW, staked: "5", state: "staked", unclaimed: "1" },
+    ]);
+    const stake = pick("stake");
+    const claim = pick("claim");
+    const amount = field("stake");
+    if (!stake || !claim || !amount) throw new Error("not rendered");
+    amount.value = "5";
+    stake.click();
+    await tick();
+    claim.click();
+    await tick();
+    expect(stake.textContent).toBe("Stake");
+    stake.click();
+    await tick();
+    expect(calls.map((call) => call.kind)).toEqual(["prepare", "prepare", "prepare"]);
+  });
+
+  test("overlapping preparations arm only the latest, under its own review", async () => {
+    const pending: ((value: typeof PREP) => void)[] = [];
+    const { field, pick, review } = mount(
+      [{ ...ROW, staked: "5", state: "staked", unclaimed: "1" }],
+      () => new Promise((resolve) => pending.push(resolve)),
+    );
+    const stake = pick("stake");
+    const claim = pick("claim");
+    const amount = field("stake");
+    if (!stake || !claim || !amount || !review) throw new Error("not rendered");
+    amount.value = "5";
+    stake.click();
+    claim.click();
+    pending[1]?.({
+      ...PREP,
+      id: `sha256:${"b".repeat(64)}`,
+      review: "Claim your STRK rewards from Val.",
     });
+    await tick();
+    pending[0]?.(PREP);
+    await tick();
+    expect(review.textContent).toContain("Claim your STRK rewards from Val.");
+    expect(claim.textContent).toContain("Confirm");
+    expect(stake.textContent).toBe("Stake");
+    expect(stake.disabled).toBe(false);
   });
 
   test("a refusal re-enables the control and shows the reason", async () => {
-    const { button, field, review } = mount(async () => {
+    const { field, pick, review } = mount([ROW], async () => {
       throw new Error("This validator is leaving staking.");
     });
-    if (!button || !field || !review) throw new Error("not rendered");
-    field.value = "5";
+    const button = pick("stake");
+    const amount = field("stake");
+    if (!button || !amount || !review) throw new Error("not rendered");
+    amount.value = "5";
     button.click();
     await tick();
     expect(review.textContent).toContain("This validator is leaving staking.");
@@ -241,10 +311,10 @@ describe("bindStaking", () => {
 });
 
 describe("createStakingRuntimeClient", () => {
-  test("sends only ids, the action and the amount; returns the fee then the hash", async () => {
+  test("prepare sends ids, action and amount; execute sends only the preparation id", async () => {
     const sent: unknown[] = [];
     const answers: unknown[] = [
-      { feeReview: FEE, ok: true },
+      { ok: true, stakingPreparation: PREP },
       { ok: true, transactionHash: "0x5ab" },
     ];
     const client = createStakingRuntimeClient(async (message) => {
@@ -252,9 +322,24 @@ describe("createStakingRuntimeClient", () => {
       return answers.shift();
     });
     const request = { action: "stake" as const, amount: "5", tokenId: "t", validatorId: "v" };
-    expect(await client.stakingAction(request)).toEqual(FEE);
-    expect(await client.stakingAction(request, FEE)).toBe("0x5ab");
-    expect(sent[1]).toEqual({ ...request, reviewedFee: FEE, type: "wallet.stakingAction" });
+    expect(await client.prepareStaking(request)).toEqual(PREP);
+    expect(await client.executeStaking(PREP.id)).toBe("0x5ab");
+    expect(sent).toEqual([
+      { ...request, type: "wallet.stakingPrepare" },
+      { preparationId: PREP.id, type: "wallet.stakingExecute" },
+    ]);
+  });
+
+  test("a malformed preparation or hash is an error", async () => {
+    const bad = createStakingRuntimeClient(async () => ({
+      ok: true,
+      stakingPreparation: { ...PREP, id: "x" },
+    }));
+    await expect(
+      bad.prepareStaking({ action: "claim", tokenId: "t", validatorId: "v" }),
+    ).rejects.toThrow();
+    const none = createStakingRuntimeClient(async () => ({ ok: true }));
+    await expect(none.executeStaking(PREP.id)).rejects.toThrow();
   });
 
   test("the overview is read with its own message and parsed strictly", async () => {
@@ -271,12 +356,5 @@ describe("createStakingRuntimeClient", () => {
     expect(await failing.loadStaking()).toEqual({
       unavailable: "Couldn't read staking on this network. Try again.",
     });
-  });
-
-  test("an unrecognised answer is an error, never a hash", async () => {
-    const client = createStakingRuntimeClient(async () => ({ ok: true }));
-    await expect(
-      client.stakingAction({ action: "claim", tokenId: "t", validatorId: "v" }),
-    ).rejects.toThrow();
   });
 });

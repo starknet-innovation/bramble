@@ -13,7 +13,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
-import { flowHeader, flowScreen } from "../../shared/parts";
+import { flowHeader, flowScreen, accountLabel as shortAddress } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate } from "../../shared/timestamp";
 import type { StakingAction, StakingRow, StakingState } from "./staking-client";
 
@@ -71,7 +71,9 @@ const amountForm = (row: StakingRow, action: "stake" | "unstake", label: string)
 const positionLines = (row: StakingRow): string => {
   const lines: string[] = [];
   if (row.staked && row.staked !== "0") lines.push(`Staked ${row.staked} ${row.symbol}`);
-  if (row.unclaimed && row.unclaimed !== "0") lines.push(`Rewards ${row.unclaimed} ${row.symbol}`);
+  if (row.unclaimed && row.unclaimed !== "0")
+    lines.push(`Rewards ${row.unclaimed} ${row.rewardSymbol ?? "STRK"}`);
+  if (row.rewardsTo) lines.push(`Rewards are paid to ${shortAddress(row.rewardsTo)}`);
   if (row.state === "exit-pending" && row.unpoolTime !== undefined) {
     lines.push(
       `Unstaking ${row.unpoolAmount ?? ""} ${row.symbol} · withdraw from ${unlockText(row.unpoolTime)}`,

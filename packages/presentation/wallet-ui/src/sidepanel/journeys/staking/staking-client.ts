@@ -5,10 +5,11 @@
  * empty list. Actions name a validator id, a token id and an amount; the
  * background resolves and verifies everything else.
  */
+
+import { isSha256Digest } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isTransferResponse } from "../../../popup/responses/responses";
-import { isFeeReviewResponse } from "../../../popup/responses/responses-transfer";
 import { refusalText, relabelLostReply, responseError } from "../../runtime/runtime-errors";
 
 const MAX_ROWS = 64;
@@ -23,6 +24,8 @@ export type StakingRow = {
   readonly commission?: string;
   readonly delegated?: string;
   readonly refusal?: string;
+  readonly rewardSymbol?: string;
+  readonly rewardsTo?: string;
   readonly staked?: string;
   readonly state?: StakingPositionState;
   readonly symbol: string;
@@ -52,6 +55,8 @@ const ROW_KEYS = [
   "commission",
   "delegated",
   "refusal",
+  "rewardSymbol",
+  "rewardsTo",
   "staked",
   "state",
   "symbol",
@@ -79,9 +84,16 @@ const isRow = (value: unknown): value is StakingRow =>
   optional(value["accepting"], (item) => typeof item === "boolean") &&
   optional(value["state"], (item) => typeof item === "string" && STATES.includes(item)) &&
   optional(value["unpoolTime"], (item) => Number.isSafeInteger(item) && (item as number) >= 0) &&
-  ["commission", "delegated", "refusal", "staked", "unclaimed", "unpoolAmount"].every((key) =>
-    optional(value[key], isText),
-  );
+  [
+    "commission",
+    "delegated",
+    "refusal",
+    "rewardSymbol",
+    "rewardsTo",
+    "staked",
+    "unclaimed",
+    "unpoolAmount",
+  ].every((key) => optional(value[key], isText));
 
 /**
  * Reads a `wallet.stakingOverview` reply into screen state. A refusal keeps the
@@ -119,6 +131,33 @@ export type StakingActionRequest = {
   readonly validatorId: string;
 };
 
+/** A frozen, priced action awaiting its one confirm. */
+export type StakingPreparation = {
+  readonly id: string;
+  /** The background's sentence for what will be signed. */
+  readonly review: string;
+  readonly reviewedFee: FeeEstimate;
+};
+
+const MAX_REVIEW = 400;
+
+const readPreparation = (response: unknown): StakingPreparation | null => {
+  const value = isRecord(response) ? response["stakingPreparation"] : undefined;
+  return isRecord(response) &&
+    hasOnlyKnownKeys(response, ["ok", "stakingPreparation"]) &&
+    response["ok"] === true &&
+    isRecord(value) &&
+    hasOnlyKnownKeys(value, ["id", "review", "reviewedFee"]) &&
+    typeof value["id"] === "string" &&
+    isSha256Digest(value["id"]) &&
+    typeof value["review"] === "string" &&
+    value["review"].length > 0 &&
+    value["review"].length <= MAX_REVIEW &&
+    isFeeEstimate(value["reviewedFee"])
+    ? { id: value["id"], review: value["review"], reviewedFee: value["reviewedFee"] }
+    : null;
+};
+
 /**
  * Creates the staking client over the panel's message sender.
  */
@@ -131,26 +170,31 @@ export const createStakingRuntimeClient = (
     );
   },
   /**
-   * Without `reviewedFee`, asks for the network fee and resolves with it. With
-   * the fee the user reviewed, signs and submits, and resolves with the
-   * transaction hash. Only that second call's lost reply is a staking
-   * "may not have gone through".
+   * Asks the background to build, verify and price one action. Nothing is
+   * signed; the answer is what the confirm will sign and its maximum fee.
    */
-  async stakingAction(
-    request: StakingActionRequest,
-    reviewedFee?: FeeEstimate,
-  ): Promise<FeeEstimate | string> {
+  async prepareStaking(request: StakingActionRequest): Promise<StakingPreparation> {
     const response = await sendMessage({
       action: request.action,
       ...(request.amount === undefined ? {} : { amount: request.amount }),
-      ...(reviewedFee ? { reviewedFee } : {}),
       tokenId: request.tokenId,
-      type: "wallet.stakingAction",
+      type: "wallet.stakingPrepare",
       validatorId: request.validatorId,
-    }).catch((error: unknown) => {
-      throw reviewedFee ? relabelLostReply(error, "staking action failed") : error;
     });
-    if (isFeeReviewResponse(response)) return response.feeReview;
+    const preparation = readPreparation(response);
+    if (preparation) return preparation;
+    throw responseError(response, "staking preparation failed");
+  },
+  /**
+   * Confirms a prepared action and resolves with its transaction hash. A lost
+   * reply here is "may not have gone through".
+   */
+  async executeStaking(preparationId: string): Promise<string> {
+    const response = await sendMessage({ preparationId, type: "wallet.stakingExecute" }).catch(
+      (error: unknown) => {
+        throw relabelLostReply(error, "staking action failed");
+      },
+    );
     if (isTransferResponse(response)) return response.transactionHash;
     throw responseError(response, "staking action failed");
   },

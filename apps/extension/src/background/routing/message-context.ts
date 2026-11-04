@@ -73,6 +73,8 @@ import {
 } from "../runtime/runtime-state";
 import type { UnlockSession } from "../runtime/session";
 import { inertUpdateReady, type UpdateReady } from "../runtime/update-ready";
+import type { StakingRouting } from "../staking/staking-ops";
+import { createStakingPreparationStore } from "../staking/staking-preparations";
 import {
   createSwapPreparationStore,
   type SwapPreparationStore,
@@ -107,8 +109,7 @@ export type RouterContext = {
   readonly relaySignatures: RelaySignatureLog;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
-  /** Staking table override for tests; production uses the bundled one. */
-  readonly stakingNetworks?: StakingNetworkTable;
+  readonly staking: StakingRouting;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
   readonly strk20Jobs: Strk20JobRegistry;
@@ -319,7 +320,10 @@ export const routerContext = (
     relaySignatures: relaySignaturesFor(options.relaySignatures),
     runtimeRpc,
     session,
-    ...(options.stakingNetworks ? { stakingNetworks: options.stakingNetworks } : {}),
+    staking: {
+      ...(options.stakingNetworks ? { networks: options.stakingNetworks } : {}),
+      preparations: createStakingPreparationStore(),
+    },
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     strk20Jobs: strk20JobsFor(options.strk20Jobs, now),
