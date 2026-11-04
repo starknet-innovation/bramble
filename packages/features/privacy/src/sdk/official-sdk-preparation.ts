@@ -67,6 +67,10 @@ const discoverWith = (
  */
 export type HistoricalState = "deposits" | "first-shield" | "registration";
 
+/**
+ * The readiness check a proof base must pass for `kind`, or undefined when no
+ * historical state is needed. Unreadable state is not ready, so it is retried.
+ */
 export const historicalReadiness = (
   kind: HistoricalState | undefined,
   provider: RpcProvider,
