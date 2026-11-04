@@ -272,6 +272,7 @@ export const WALLET_COMPLEXITY_GLOBS = [
   "packages/features/permissions/src/**",
   "packages/features/transactions/src/**",
   "packages/features/settings/src/**",
+  "packages/features/qsb/src/**",
 ] as const;
 
 export const REQUIRED_BIOME_NURSERY_RULES: Readonly<Record<string, string>> = {

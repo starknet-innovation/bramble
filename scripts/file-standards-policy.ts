@@ -239,6 +239,14 @@ export const SECRET_MATERIAL_FILES = new Set([
   // The field is public; private signing stays in Krusty via signHash.
   "packages/features/transactions/src/gasless/gasless-submit.ts",
   "packages/features/privacy/src/service.ts",
+  // QSB coordinator sign-in: matches the coordinator's fixed session-only text,
+  // which names a signature, and posts the public BIP-322 proof as the
+  // `signature` field; no key is read, held, logged or persisted here.
+  "packages/features/qsb/src/coordinator/challenge.ts",
+  "packages/features/qsb/src/coordinator/client.ts",
+  // Checks the public partial signatures Krusty added to a deposit PSBT and
+  // moves them into the witness; it never signs and holds no key.
+  "packages/features/qsb/src/deposit/psbt.ts",
   // Argent multisig stores public signer identifiers and verified public
   // signature fragments only. Private signing remains behind Krusty and the
   // privileged background accountHashSigner boundary.

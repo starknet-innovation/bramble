@@ -13,6 +13,7 @@
  */
 import { isLowercaseHexBytes } from "@bramble/core/hex";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { QSB_MAX_VAULTS_PER_ACCOUNT } from "@bramble/wallet-model/qsb-vaults";
 import { spendsOutpointOnce } from "./qsb-transaction";
 
 /** The derivation profile every QSB record follows. */
@@ -48,8 +49,9 @@ export const QSB_MAX_VALUE_SAT = 2_100_000_000_000_000;
  * refused, never evicting a record: a forgotten record is a key set that could
  * be mistaken for unused. The journal's byte cap (`QSB_JOURNAL_MAX_BYTES`)
  * applies too and refuses earlier once records carry full-size scripts.
+ * Single-sourced with the UI from the shared contract.
  */
-export const MAX_QSB_VAULTS_PER_ACCOUNT = 64;
+export const MAX_QSB_VAULTS_PER_ACCOUNT = QSB_MAX_VAULTS_PER_ACCOUNT;
 
 /**
  * Disclosure state of one vault key set, as the BIP defines it: `allocated`

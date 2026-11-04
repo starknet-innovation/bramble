@@ -33,6 +33,13 @@ export const QSB_MIN_DEPOSIT_SAT = 10_000;
 export const QSB_MAX_SAT = 2_100_000_000_000_000;
 
 /**
+ * Most vaults one QSB account keeps: its disclosure journal holds at most this
+ * many records and refuses a further allocation (`vaultLimit`) rather than
+ * evicting one, so no list of an account's vaults is ever longer.
+ */
+export const QSB_MAX_VAULTS_PER_ACCOUNT = 64;
+
+/**
  * Where a vault's one deposit stands. `none`: nothing signed. `pending`:
  * signed and kept here, not yet known to MARA. `submitted`: MARA has it.
  * `confirmed`: mined, and recorded as the vault's funding.

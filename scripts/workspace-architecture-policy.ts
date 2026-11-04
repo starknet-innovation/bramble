@@ -10,6 +10,7 @@ export const STRUCTURED_SOURCE_ROOTS: Readonly<Record<string, readonly string[]>
   "apps/ui-lab/src": [],
   "packages/features/portfolio/src": [],
   "packages/features/privacy/src": ["config.ts", "service.ts"],
+  "packages/features/qsb/src": [],
   "packages/features/transactions/src": [],
   "packages/foundation/wallet-model/src": [],
   "packages/foundation/wallet-protocol/src": [],
