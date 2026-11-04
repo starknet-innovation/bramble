@@ -73,7 +73,13 @@ test("the collectibles preview opens the gallery and site NFT watch cards", asyn
     await sidepanel.locator("#collectibles-preview").check();
     await expect(sidepanel.locator("#nft-indexer-form")).toHaveCount(1);
 
+    // Back out of Advanced endpoints and Network to the Settings dock, then Home.
+    for (let step = 0; step < 2; step += 1) {
+      await sidepanel.locator("[data-nav-back]").first().click();
+    }
+    await expect(sidepanel.locator("#wallet-screen-settings")).toBeVisible();
     await sidepanel.locator('nav [data-view="home"]').first().click();
+    await expect(sidepanel.locator("#wallet-screen-home")).toBeVisible();
     await sidepanel.getByRole("button", { name: "Portfolio actions" }).click();
     await sidepanel.getByRole("menuitem", { name: "Collectibles" }).click();
     await expect(sidepanel.locator("#wallet-screen-nfts")).toBeVisible();
