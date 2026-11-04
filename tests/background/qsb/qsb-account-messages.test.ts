@@ -216,6 +216,20 @@ describe("QSB account messages", () => {
       error: QSB_ACCOUNT_REFUSALS.unknownAccount,
     });
   });
+
+  test("a reveal whose password cannot decrypt the vault reads as a wrong password", async () => {
+    // What AES-GCM throws when the derived key does not authenticate the vault.
+    const decryptionFailure = new DOMException("The operation failed", "OperationError");
+    const { wallet } = qsbWallet({
+      revealQsbPhrase: async (): Promise<never> => {
+        throw decryptionFailure;
+      },
+    });
+    const { handler } = routed(wallet);
+    expect(await handler(REQUESTS.reveal, extensionSender)).toEqual({
+      error: "Incorrect passphrase",
+    });
+  });
 });
 
 // A request whose `key` is an accessor: never read by a validator.

@@ -9,7 +9,7 @@ import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
 export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
   [
     QSB_ACCOUNT_REFUSALS.accountLimit,
-    "This wallet already holds as many Bitcoin vault accounts as it can.",
+    "This wallet already holds as many quantum-safe Bitcoin accounts as it can.",
   ],
   [
     QSB_ACCOUNT_REFUSALS.backupMismatch,

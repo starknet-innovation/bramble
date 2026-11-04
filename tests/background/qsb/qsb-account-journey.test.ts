@@ -144,14 +144,14 @@ describe("the QSB account journey", () => {
     ).toEqual({ error: QSB_ACCOUNT_REFUSALS.unknownAccount });
   });
 
-  test("a wrong reveal password answers exactly as the Starknet reveal does", async () => {
+  test("a wrong reveal password answers as a wrong unlock password does", async () => {
     const send = await journey();
     await send({ type: "wallet.createQsbAccount" });
     const wrong = "not the wallet password";
-    const starknet = await send({ type: "wallet.revealSecrets", vaultPassphrase: wrong });
-    expect(starknet).toHaveProperty("error");
+    // The real AES-GCM failure, not a stub: unlock's classifier turns it into
+    // the diagnostic the panel words as a wrong password.
     expect(
       await send({ accountId: "qsb-1", passphrase: wrong, type: "wallet.revealQsbPhrase" }),
-    ).toEqual(starknet);
+    ).toEqual({ error: "Incorrect passphrase" });
   });
 });

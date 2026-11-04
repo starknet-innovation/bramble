@@ -112,7 +112,7 @@ describe("the Quantum-safe Bitcoin journey", () => {
     await flush();
     expect(backupStep(p.app())).toBe("unavailable");
     expect(p.app()?.querySelector("#qsb-backup-error")?.textContent).toBe(
-      "This wallet already holds as many Bitcoin vault accounts as it can.",
+      "This wallet already holds as many quantum-safe Bitcoin accounts as it can.",
     );
   });
 

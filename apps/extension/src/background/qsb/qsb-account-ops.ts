@@ -17,6 +17,7 @@
  */
 import type { RouterContext } from "../routing/message-context";
 import { readTypeOnlyInput } from "../routing/message-inputs";
+import { unlockFailureError } from "../routing/unlock-errors";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
 import {
@@ -77,14 +78,23 @@ const importQsbAccount: QsbHandler = async (ctx, message) => {
 };
 
 // The sanctioned QSB reveal: the password is the one in the message, checked
-// by decrypting the vault with it, whether the wallet is unlocked or not.
+// by decrypting the vault with it, whether the wallet is unlocked or not. A
+// failed decryption is a wrong password and reads as unlock's does; a corrupt
+// envelope or a refusal passes through unchanged.
 const revealQsbPhrase: QsbHandler = async (ctx, message) => {
   const input = readRevealQsbPhraseInput(message);
   if (!input) {
     return { error: "invalid reveal qsb phrase request" };
   }
   const reveal = ctx.wallet.revealQsbPhrase;
-  return reveal ? { mnemonic: await reveal(input), ok: true } : UNAVAILABLE;
+  if (!reveal) {
+    return UNAVAILABLE;
+  }
+  try {
+    return { mnemonic: await reveal(input), ok: true };
+  } catch (error) {
+    throw unlockFailureError(error);
+  }
 };
 
 const confirmQsbBackup: QsbHandler = async (ctx, message) => {
