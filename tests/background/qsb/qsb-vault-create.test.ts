@@ -149,6 +149,13 @@ describe("creating a QSB vault", () => {
     expect(registrations(harness)).toBe(1);
   }, 60_000);
 
+  test("a registration refused as invalid is runtimeUnavailable, the vault left allocated", async () => {
+    const harness = await qsbVaultHarness();
+    harness.state.refusals.set("POST /vaults", { code: "vault_invalid", status: 400 });
+    expect(await harness.send(CREATE)).toEqual({ error: QSB_VAULT_REFUSALS.runtimeUnavailable });
+    expect((await journalOf(harness)).vaults.map((vault) => vault.state)).toEqual(["allocated"]);
+  }, 60_000);
+
   test("a runtime failure leaves the allocated vault to be finished later", async () => {
     const harness = await qsbVaultHarness();
     const setup = harness.runtime.setupFromCommitments;

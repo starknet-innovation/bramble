@@ -31,6 +31,7 @@ import { requireOwnerAllowed } from "./qsb-vault-gates";
 import {
   coordinatorRefusal,
   failClosed,
+  isRegistrationRefused,
   isScriptTaken,
   journalRefusal,
   qsbRefusal,
@@ -149,6 +150,9 @@ const finish = async (
     return qsbVaultView(associated, undefined, { confirmations: null, vault });
   } catch (error) {
     if (isScriptTaken(error)) return markTaken(access, record.v);
+    // The vault Bramble built was refused as built (`vault_invalid`,
+    // `invalid_request`): its own failure, final for this attempt.
+    if (isRegistrationRefused(error)) throw qsbRefusal("runtimeUnavailable");
     throw error instanceof RefusedBeforeWrite ? error : coordinatorRefusal(error);
   }
 };

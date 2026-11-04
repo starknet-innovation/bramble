@@ -54,6 +54,10 @@ const isFailure = (error: unknown, codes: ReadonlySet<string>, status?: number):
 export const isSessionExpired = (error: unknown): boolean =>
   isFailure(error, new Set(["auth_required", "session_expired"]), 401);
 
+/** A 400 refusing a registration body as invalid: final, and Bramble's to fix. */
+export const isRegistrationRefused = (error: unknown): boolean =>
+  isFailure(error, new Set(["invalid_request", "vault_invalid"]), 400);
+
 /** A 409 refusing a script another vault holds, or that something already paid. */
 export const isScriptTaken = (error: unknown): boolean =>
   isFailure(error, new Set(["vault_script_paid", "vault_script_registered"]), 409);
