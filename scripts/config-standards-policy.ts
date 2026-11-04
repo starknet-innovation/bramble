@@ -16,6 +16,10 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/testkit": "workspace:*",
   "@biomejs/biome": "2.5.14",
+  // secp256k1 verification for the QSB suites, which check Krusty's deposit
+  // and sign-in signatures independently of Krusty. Tests only; the exact
+  // release @scure/btc-signer 2.4.1 already brings, so nothing new resolves.
+  "@noble/curves": "2.4.0",
   "@playwright/test": "1.63.0",
   // BIP-32/BIP-39 for the vendor-import dataset tooling in tools/vendor-dataset,
   // which reimplements the vendors' own derivation so the dataset stays
@@ -45,6 +49,7 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/permissions": "workspace:*",
   "@bramble/privacy": "workspace:*",
   "@bramble/portfolio": "workspace:*",
+  "@bramble/qsb": "workspace:*",
   "@bramble/starknet": "workspace:*",
   "@bramble/store": "workspace:*",
   "@bramble/settings": "workspace:*",
@@ -61,6 +66,11 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   // the exact release @scure/btc-signer 2.4.1 requires, so a later deposit
   // slice adds no second noble to the bundle.
   "@noble/hashes": "2.4.0",
+  // The PSBT library QSB deposits are built, checked, finalized and extracted
+  // with (in @bramble/qsb), declared here too for the suites that build real
+  // Bitcoin transactions. MIT, no install scripts, every dependency exact; its
+  // signing is never called (Krusty signs, and a test enforces it).
+  "@scure/btc-signer": "2.4.1",
   "@starknetfoundation/krusty-kms-wasm": "0.15.0",
   // The QSB pipeline's Python runtime, the exact release qsb-app pins. Its
   // shipped files are digest-pinned by scripts/check-qsb-runtime.ts.

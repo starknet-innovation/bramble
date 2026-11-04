@@ -53,6 +53,8 @@ export type KeyBoundaryLiveIds = {
   readonly multisigSubmitIntentId: string;
   /** Id of the watched NFT seeded into the preferences store. */
   readonly nftId: string;
+  /** Quotes the QSB deposit the catalog's deposit entry makes, for its exact fee. */
+  readonly qsbDepositFee: () => Promise<number>;
   /** Tracks a fresh non-default token and returns its id, for removal. */
   readonly removableTokenId: () => Promise<string>;
   /** Queues an unanswered dapp invoke approval and returns its id. */

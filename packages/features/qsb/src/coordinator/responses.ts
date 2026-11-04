@@ -20,6 +20,9 @@ import {
   readOutpoint,
 } from "./response-grammar";
 
+/** An outpoint as the coordinator names one, re-exported from its grammar. */
+export type { QsbOutpoint } from "./response-grammar";
+
 /** The deployment switches a QSB request is gated on. */
 export type QsbConfig = {
   readonly exactSubmitEnabled: boolean;

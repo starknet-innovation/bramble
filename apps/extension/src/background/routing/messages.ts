@@ -22,6 +22,7 @@ import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
 import { handleAddChainOps } from "../provider/add-chain-ops";
 import { handleProviderOps } from "../provider/provider-ops";
 import { handleQsbAccountOps } from "../qsb/qsb-account-ops";
+import { handleQsbVaultOps } from "../qsb/qsb-vault-ops";
 import {
   accountForNetwork,
   reconcileActiveAccount,
@@ -418,6 +419,7 @@ const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleOnboardingOps(ctx, messageType, message),
   handleRevealSecrets,
   handleQsbAccountOps,
+  handleQsbVaultOps,
   handleGetGrantedAccounts,
   handleDiagnostics,
   async (ctx, messageType, message) => handleUpdateOps(ctx.updates, messageType, message),

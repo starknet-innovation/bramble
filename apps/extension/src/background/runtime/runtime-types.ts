@@ -61,6 +61,7 @@ import type {
   RevealSecretsResponse,
   ValidateMnemonicResponse,
 } from "./runtime-phrase-types";
+import type { QsbVaultResponse } from "./runtime-qsb-types";
 import type {
   FeeReviewResponse,
   TransferResponse,
@@ -455,6 +456,7 @@ export type RuntimeResponse =
   | PreferencesResponse
   | PricesResponse
   | QsbAccountResponse
+  | QsbVaultResponse
   | RequestAccountsResponse
   | RevealSecretsResponse
   | SignHashResponse

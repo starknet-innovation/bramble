@@ -196,7 +196,7 @@ if (import.meta.main) {
   // over HTTP or WS, which is the only plain-text endpoint a network accepts.
   // No page navigates by form or rebases its URLs.
   const expectedExtensionCsp =
-    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; frame-src 'self'; base-uri 'none'; form-action 'none';";
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://d1pjwwq89sze3g.cloudfront.net https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; frame-src 'self'; base-uri 'none'; form-action 'none';";
   // CSP for the sandboxed animation renderer (sandbox/render.html). It runs an
   // NFT's untrusted on-chain data:text/html in an isolated security principal:
   // `allow-scripts` (no `allow-same-origin`) lets the canvas animate but grants no
@@ -231,6 +231,8 @@ if (import.meta.main) {
     // signed.
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
+    // QSB coordinator (`QSB_COORDINATOR_ORIGIN`), CORS-closed to other origins.
+    "https://d1pjwwq89sze3g.cloudfront.net/*",
     // No entry for the live phishing feed: it is read through CORS, and a new
     // host here would be a privilege increase on update (issue 772).
     "http://127.0.0.1:5050/*",

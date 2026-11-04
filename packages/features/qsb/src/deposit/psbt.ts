@@ -17,7 +17,7 @@
 import { bytesToHex, hexToBytes } from "@bramble/core/hex";
 import { NETWORK, Transaction } from "@scure/btc-signer";
 import { QSB_MAX_DEPOSIT_INPUTS } from "./coins";
-import { QSB_TRANSACTION_OPTIONS } from "./transactions";
+import { parseQsbTransaction, QSB_TRANSACTION_OPTIONS } from "./transactions";
 
 /** One owner output a deposit spends, with its whole previous transaction. */
 export type QsbDepositInput = {
@@ -58,16 +58,16 @@ const sameBytes = (left: Uint8Array | undefined, right: Uint8Array | undefined):
 const hasDistinctInputs = (inputs: readonly QsbDepositInput[]): boolean =>
   new Set(inputs.map((input) => `${input.txid}:${input.vout}`)).size === inputs.length;
 
+// Whether each input's previous transaction is the one its txid names.
+const isEachPreviousItsTxid = (inputs: readonly QsbDepositInput[]): boolean =>
+  inputs.every((input) => parseQsbTransaction(input.previousTxHex)?.id === input.txid);
+
 const buildDeposit = (plan: QsbDepositPlan, script: Uint8Array): Transaction => {
   const tx = new Transaction({ ...QSB_TRANSACTION_OPTIONS, version: 2 });
   for (const input of plan.inputs) {
-    const previous = hexToBytes(input.previousTxHex) ?? new Uint8Array();
-    if (Transaction.fromRaw(previous, QSB_TRANSACTION_OPTIONS).id !== input.txid) {
-      throw new Error("previous transaction is not its txid");
-    }
     tx.addInput({
       index: input.vout,
-      nonWitnessUtxo: previous,
+      nonWitnessUtxo: hexToBytes(input.previousTxHex) ?? new Uint8Array(),
       sequence: SEQUENCE,
       txid: input.txid,
       witnessUtxo: { amount: BigInt(input.valueSat), script: plan.ownerScript },
@@ -98,6 +98,7 @@ export const buildQsbDepositPsbt = (plan: QsbDepositPlan): Transaction | null =>
     plan.inputs.length === 0 ||
     plan.inputs.length > QSB_MAX_DEPOSIT_INPUTS ||
     !hasDistinctInputs(plan.inputs) ||
+    !isEachPreviousItsTxid(plan.inputs) ||
     plan.amountSat <= 0 ||
     plan.changeSat < 0 ||
     total - BigInt(plan.amountSat) - BigInt(plan.changeSat) <= 0n

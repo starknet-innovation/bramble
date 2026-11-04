@@ -119,6 +119,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // reveal, the re-entered) vault credential straight to the vault service and
   // return its views; the revealed phrase only transits to the extension page.
   "apps/extension/src/background/qsb/qsb-account-ops.ts",
+  // QSB vault handlers: hand the session's vault credential (peeked for the
+  // polled listing, renewed for user actions) straight to the vault service's
+  // QSB session; replies are public vault data only. Never logged or kept.
+  "apps/extension/src/background/qsb/qsb-vault-ops.ts",
   "apps/extension/src/background/runtime/session.ts",
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",
