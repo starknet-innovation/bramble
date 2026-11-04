@@ -30,7 +30,7 @@ import { presetSwapPair } from "../journeys/swap/swap-ui";
 import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
-import { bindCopyButtons, hiddenOverlayMount, showToast } from "../shared/dom";
+import { bindCopyButtons, hiddenOverlayMount, markPanelSupport, showToast } from "../shared/dom";
 import { closeAfterGuardedClear } from "../shared/guarded-copy";
 import { networkChangeAnnouncer } from "../shared/network-change";
 import { isParkedCollectibleView } from "../shared/parts";
@@ -73,6 +73,7 @@ export const startWalletUi = async (
 ): Promise<void> => {
   const app = document.querySelector("#app");
   const fullPageOnboarding = document.body.classList.contains("onboarding-surface");
+  markPanelSupport(extensionApi);
   const runtime = extensionApi?.runtime;
   const mutationRuntime = createMutationRuntime(runtime);
   const wallet = createSidepanelRuntime(mutationRuntime);

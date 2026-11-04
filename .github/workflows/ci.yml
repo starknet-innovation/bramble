@@ -278,9 +278,13 @@ jobs:
       # coverage regression below the floor fails the build here.
       - run: bun run check:coverage
       - run: bun run build
+      # The Safari build is loaded by tests/e2e/safari-surface.e2e.ts.
+      - run: bun run build:safari
       - run: bun run test:e2e
       - run: bun run package:extension
       - run: bun run package:extension:firefox
+      # The web-extension half of the Safari app (RELEASING.md, "Safari").
+      - run: bun run package:extension:safari
       # Mozilla's own validator, the one addons.mozilla.org runs at submission.
       # Fails on AMO errors; the manifest's warning-class regressions are held
       # by tests/scripts/firefox-manifest.test.ts, which runs in `check` above.

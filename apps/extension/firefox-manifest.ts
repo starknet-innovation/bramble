@@ -147,14 +147,19 @@ const CHROME_ONLY_KEYS = ["side_panel", "sandbox"] as const;
 /**
  * Manifest permissions that exist only on Chrome. `sidePanel` gates the
  * `chrome.sidePanel` API; `sidebar_action` requires no permission, and an
- * unrecognised permission is a hard install error on Firefox.
+ * unrecognised permission is a hard install error on Firefox. Safari has no
+ * panel API at all and drops the same set (`./safari-manifest.ts`).
  */
-const CHROME_ONLY_PERMISSIONS = new Set(["sidePanel"]);
+export const PANEL_PERMISSIONS: ReadonlySet<string> = new Set(["sidePanel"]);
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const requireRecord = (value: unknown, key: string): Readonly<Record<string, unknown>> => {
+/**
+ * Reads a manifest key that must be an object. Throws, naming the key, when it
+ * is not, so a derived manifest never rewrites a shape it did not expect.
+ */
+export const requireRecord = (value: unknown, key: string): Readonly<Record<string, unknown>> => {
   if (!isRecord(value)) {
     throw new Error(`chrome manifest ${key} must be an object`);
   }
@@ -242,20 +247,23 @@ const contentSecurityPolicy = (chrome: Manifest): Record<string, unknown> => {
 
 /**
  * Whether a build target ships the manifest-sandboxed collectible renderer.
+ * Firefox below 154 and Safari (which has no `sandbox` key at all) would load
+ * it as a privileged page, so neither ships it.
  *
  * One decision behind both halves of withholding that page: the build skips
- * bundling and copying it, and {@link FIREFOX_EXCLUDED_FILES} keeps it out of
+ * bundling and copying it, and {@link SANDBOXED_RENDERER_FILES} keeps it out of
  * the packaged set. Two independent target checks would eventually disagree,
  * and the disagreement would be a page shipped without the manifest entry that
  * sandboxes it.
  */
-export const shipsSandboxedRenderer = (target: string): boolean => target !== "firefox";
+export const shipsSandboxedRenderer = (target: string): boolean =>
+  target !== "firefox" && target !== "safari";
 
 /**
  * Packaged files withheld from a target that {@link shipsSandboxedRenderer}
  * returns false for, as they appear in `EXPECTED_RUNTIME_FILES`.
  */
-export const FIREFOX_EXCLUDED_FILES: readonly string[] = [
+export const SANDBOXED_RENDERER_FILES: readonly string[] = [
   "sandbox/render.html",
   "sandbox/render.js",
 ];
@@ -263,7 +271,7 @@ export const FIREFOX_EXCLUDED_FILES: readonly string[] = [
 /** Drops Chrome-only permissions; an unknown permission blocks install on Firefox. */
 const permissions = (chrome: Manifest): readonly string[] =>
   requireStringArray(chrome["permissions"], "permissions").filter(
-    (permission) => !CHROME_ONLY_PERMISSIONS.has(permission),
+    (permission) => !PANEL_PERMISSIONS.has(permission),
   );
 
 /**

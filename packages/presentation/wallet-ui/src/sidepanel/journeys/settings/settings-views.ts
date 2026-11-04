@@ -8,7 +8,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button, segmentedControl } from "@bramble/ui-kit/controls";
 import { selectField, textField } from "@bramble/ui-kit/fields";
-import { menuLink } from "@bramble/ui-kit/navigation";
+import { menuLink, menuRow } from "@bramble/ui-kit/navigation";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { type BuildInfo, buildInfo } from "../../shell/build-info";
@@ -58,12 +58,15 @@ export const settingsScreen = (
         ${walletMenuRow("connected-sites", "Connected sites", "link")}
         ${walletMenuRow("allowances", "Token allowances", "coins")}
         ${walletMenuRow("shadow-accounts", SHADOW_ACCOUNTS_TITLE, "shield")}
-        ${walletMenuRow(
-          "request-settings",
-          "Request display",
-          "activity",
-          (preferences?.approvalSurface ?? "side-panel") === "popup" ? "Popup" : "Side panel",
-        )}
+        ${menuRow({
+          // A browser with no panel API (Safari) always shows the popup, so
+          // the choice is hidden there rather than offered and ignored.
+          attributes: { "data-requires-panel": true, "data-view": "request-settings" },
+          icon: "activity",
+          label: "Request display",
+          value:
+            (preferences?.approvalSurface ?? "side-panel") === "popup" ? "Popup" : "Side panel",
+        })}
       </div>
     </section>
     <section class="section">

@@ -1,9 +1,11 @@
 /**
  * Creates a versioned browser-extension zip from the built MV3 output.
  *
- * Pass `--target=firefox` to build and package the Gecko output instead. The
- * two packages carry the same files and differ only in their manifest (see
- * `apps/extension/firefox-manifest.ts`).
+ * Pass `--target=firefox` or `--target=safari` to build and package that
+ * output instead. The packages differ in their manifest (see
+ * `apps/extension/firefox-manifest.ts` and `safari-manifest.ts`) and in the
+ * sandboxed collectible renderer, which only Chrome ships. The Safari zip is
+ * the input to Apple's `safari-web-extension-converter`, not a store upload.
  */
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -13,7 +15,7 @@ import {
   outputDirectory,
   requestedTargets,
 } from "../apps/extension/build-target";
-import { EXPECTED_RUNTIME_FILES, FIREFOX_RUNTIME_FILES } from "./extension-runtime-files";
+import { runtimeFilesFor } from "./extension-runtime-files";
 
 // Parsed by the same strict reader the build uses, so a misspelt target, a
 // space-separated `--target firefox`, or a future target this script has not
@@ -26,7 +28,7 @@ if (requested.length !== 1 || first === undefined) {
 }
 const target: BuildTarget = first;
 const distDir = outputDirectory(target);
-const expectedFiles = target === "firefox" ? FIREFOX_RUNTIME_FILES : EXPECTED_RUNTIME_FILES;
+const expectedFiles = runtimeFilesFor(target);
 const artifactDir = "artifacts";
 const reproducibleZipTime = "198001010000";
 
@@ -58,7 +60,7 @@ const run = async (cmd: string[], cwd = "."): Promise<void> => {
   }
 };
 
-await run(["bun", "run", target === "firefox" ? "build:firefox" : "build"]);
+await run(["bun", "run", target === "chrome" ? "build" : `build:${target}`]);
 await mkdir(artifactDir, { recursive: true });
 
 const manifest = await readJson(join(distDir, "manifest.json"));
@@ -73,7 +75,9 @@ if (files.join("\n") !== expectedFiles.join("\n")) {
 const zipName =
   target === "firefox"
     ? `bramble-firefox-${manifest["version"]}.zip`
-    : `bramble-${manifest["version"]}.zip`;
+    : target === "safari"
+      ? `bramble-safari-${manifest["version"]}.zip`
+      : `bramble-${manifest["version"]}.zip`;
 const zipPath = resolve(artifactDir, zipName);
 
 // Only this target's own artifacts are cleared, so packaging one browser never

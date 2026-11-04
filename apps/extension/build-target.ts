@@ -13,8 +13,12 @@
  */
 import { FIREFOX_NAME_LIMIT } from "./firefox-manifest";
 
-/** Every supported build target. `chrome` is the default and covers Chromium. */
-export const BUILD_TARGETS = ["chrome", "firefox"] as const;
+/**
+ * Every supported build target. `chrome` is the default and covers Chromium.
+ * `safari` is the web-extension half of the Safari app: Apple's converter wraps
+ * it in an Xcode project (RELEASING.md, "Safari").
+ */
+export const BUILD_TARGETS = ["chrome", "firefox", "safari"] as const;
 
 /** One supported build target. */
 export type BuildTarget = (typeof BUILD_TARGETS)[number];
@@ -25,7 +29,7 @@ export type BuildTarget = (typeof BUILD_TARGETS)[number];
  * the release pipeline — is unaffected by Firefox existing.
  */
 export const outputDirectory = (target: BuildTarget): string =>
-  target === "firefox" ? "dist-firefox" : "dist";
+  target === "chrome" ? "dist" : `dist-${target}`;
 
 /** Longest `name` the Chrome Web Store accepts. */
 export const CHROME_NAME_LIMIT = 75;

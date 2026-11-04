@@ -141,9 +141,12 @@ export const createLedgerOnboardEntry = (deps: {
 
   // Renders the surface notice into the shared overlay and wires its two
   // controls. Returns true when it took over, so callers stop before starting
-  // anything — including before stashing a first-run passphrase.
+  // anything — including before stashing a first-run passphrase. A browser
+  // with no Ledger transport (Safari, where the popup is the only surface)
+  // offers no Ledger route in the chooser, so there is nothing to protect and
+  // a notice asking for a side panel it cannot open would be a dead end.
   const blockedByPopupSurface = (): boolean => {
-    if (!isPopupSurface(mount)) {
+    if (!isPopupSurface(mount) || connector.isAvailable?.() === false) {
       return false;
     }
     renderFragment(mount, ledgerSurfaceNotice());

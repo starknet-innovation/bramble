@@ -166,7 +166,9 @@ describe("storage lockdown enforcement", () => {
     );
   });
 
-  test("stays fatal for chromium, an unstamped bundle, and an unknown stamp", () => {
+  // Safari stays strict: its manifest floor (SAFARI_MIN_VERSION, 27.2) is the
+  // first Safari with setAccessLevel on every storage area.
+  test("stays fatal for chromium, safari, an unstamped bundle, and an unknown stamp", () => {
     expect(lockdownIsEnforceable("chrome")).toBe(true);
     expect(lockdownIsEnforceable(undefined)).toBe(true);
     expect(lockdownIsEnforceable("")).toBe(true);

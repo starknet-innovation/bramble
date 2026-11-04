@@ -193,6 +193,7 @@ if (
     "!bun.lock",
     "!dist",
     "!dist-firefox",
+    "!dist-safari",
     "!node_modules",
     "!output",
     "!playwright-report",
@@ -468,13 +469,13 @@ const ciCommands = [
   "bun run check",
   "bun run check:coverage",
   "bun run build",
+  "bun run build:safari",
   "bun run test:e2e",
   "bun run package:extension",
-  // The Gecko artifact is built, packaged and validated in the same job. Its
-  // linter wraps the validator addons.mozilla.org runs at submission, so an
-  // add-on that would be rejected there fails here instead — which is how the
-  // wrong-browser artifact reached AMO once already.
+  // Gecko is built, packaged and validated in one job: its linter wraps AMO's
+  // submission validator (the wrong-browser artifact reached AMO once already).
   "bun run package:extension:firefox",
+  "bun run package:extension:safari",
   "bun run check:firefox",
 ];
 const ciLines = ciWorkflow.split("\n").map((line) => line.trim());
@@ -487,8 +488,7 @@ for (const command of ciCommands) {
   previousCiCommand = index;
 }
 // Release-artifact policy lives in ./artifact-policy, which locates the upload
-// step through the shared pin grammar in ./workflow-inventory rather than
-// re-deriving it.
+// step through the shared pin grammar in ./workflow-inventory, not a copy.
 failures.push(...artifactPolicyFailures(buildScript, ciWorkflow, packageScript));
 
 if (failures.length > 0) {

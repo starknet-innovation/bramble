@@ -31,7 +31,10 @@ const hostileConnector = {
   },
 } as unknown as LedgerConnector;
 
-const mountEntry = (surface: "popup" | "side-panel") => {
+const mountEntry = (
+  surface: "popup" | "side-panel",
+  connector: LedgerConnector = hostileConnector,
+) => {
   document.body.className = surface === "popup" ? "popup-surface" : "";
   const mount = document.createElement("div");
   document.body.append(mount);
@@ -39,7 +42,7 @@ const mountEntry = (surface: "popup" | "side-panel") => {
   const entry = createLedgerOnboardEntry({
     addHd: () => Promise.resolve(),
     cache: emptyRenderCache(),
-    connector: hostileConnector,
+    connector,
     mount,
     openImport: () => undefined,
     openFindAccounts: () => undefined,
@@ -98,5 +101,17 @@ describe("Ledger surface gating", () => {
     entry.startAddAccount();
     expect(mount.textContent).not.toContain("Ledger needs the side panel");
     expect(mount.textContent).toContain("Add a new account");
+  });
+
+  // Safari: the popup is the only surface and there is no Ledger transport.
+  // The chooser then offers no Ledger route, so the side-panel notice would be
+  // a dead end that also blocks adding an HD or imported account.
+  test("does not gate the popup when the browser has no Ledger transport", () => {
+    const transportless = { ...hostileConnector, isAvailable: () => false } as LedgerConnector;
+    const { entry, mount } = mountEntry("popup", transportless);
+    entry.startAddAccount();
+    expect(mount.textContent).not.toContain("Ledger needs the side panel");
+    expect(mount.textContent).toContain("Add a new account");
+    expect(mount.textContent).not.toContain("Ledger account");
   });
 });

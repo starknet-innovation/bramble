@@ -6,6 +6,9 @@
  * The user's choice is written only by the user (Settings, a restored backup).
  * The learner writes only its own record. The surface in effect is:
  * - the popup when the user chose the popup;
+ * - the popup on a browser with no panel API at all (Safari has neither
+ *   `sidePanel` nor `sidebarAction`), whatever the choice: a side-panel
+ *   toolbar there has no popup set and a click opens nothing;
  * - the side panel when the user chose it, unless this browser was learned
  *   not to draw side panels (Arc), where the popup serves it instead.
  */
@@ -104,8 +107,11 @@ export const createApprovalSurfaceControl = ({
   let chosen = false;
   let started: Promise<void> | null = null;
   let learner: SidePanelLearner | null = null;
+  const panelless = browser !== undefined && !browser.sidePanel && !browser.sidebarAction;
   const effective = (): ApprovalSurfacePreference =>
-    preference === "popup" || learner?.state() === "unsupported" ? "popup" : "side-panel";
+    preference === "popup" || panelless || learner?.state() === "unsupported"
+      ? "popup"
+      : "side-panel";
   const applyNow = (): Promise<void> =>
     configureApprovalSurface(browser, effective(), learner?.nativeClick() ?? true);
   // One configuration at a time, each reading the state when it runs, so the

@@ -106,6 +106,7 @@ bun run vendor:argent      # verifies the pinned official Argent release
 bun run package:extension           # writes artifacts/bramble-<version>.zip (+ .sha256)
 bun run package:extension:firefox   # writes artifacts/bramble-firefox-<version>.zip (+ .sha256)
 bun run check:firefox               # AMO's validator over dist-firefox/
+bun run package:extension:safari    # writes artifacts/bramble-safari-<version>.zip (+ .sha256)
 ```
 
 `scripts/package-extension.ts` produces a **reproducible** zip (normalized
@@ -354,6 +355,49 @@ a bad release, ship a patch with a higher version (vX.Y.Z+1) that contains the
 fix or the last good code. The Chrome Web Store refuses a lower version, but
 AMO and self-hosted zips don't, so this rule is the only guard there. User-facing
 recovery steps are in the README ("Upgrading") and on the website support page.
+
+## 8a. Safari (manual, macOS only)
+
+Safari loads web extensions only from inside a signed macOS app, so there is no
+store zip for Safari. `bun run package:extension:safari` produces the
+web-extension half: `dist-safari/` and `artifacts/bramble-safari-<version>.zip`,
+derived from the Chrome manifest by `apps/extension/safari-manifest.ts`. The
+app wrapper, signing and App Store submission happen on a Mac with Xcode; none
+of it runs in CI, and none of it has been run for Bramble yet.
+
+What the Safari build is:
+
+- **Popup only.** Safari has neither `sidePanel` nor `sidebarAction`. Every
+  request opens in the toolbar popup, and Settings hides the request-display
+  choice.
+- **No Ledger.** Safari has no WebUSB, WebHID or Web Bluetooth. The Ledger
+  routes are hidden, and an imported Ledger account says Ledger needs a
+  Chromium-based browser.
+- **Safari 27.2 or later** (`browser_specific_settings.safari.strict_min_version`).
+  27.2 is the first Safari with `storage.setAccessLevel` on every storage area;
+  the wallet refuses to start without it, exactly as on Chrome.
+- **No sandboxed collectible renderer.** Safari has no `sandbox` manifest key.
+  The collectibles gallery is parked, so nothing is lost.
+- **`storage.sync` does not sync on Safari**; it behaves like `storage.local`.
+  The vault freshness markers kept there therefore guard against the same
+  rollbacks as on a Chrome profile with sync off, not more.
+- **No update banner.** Safari has no `runtime.onUpdateAvailable`; updates come
+  with the app through the App Store.
+
+The Xcode lane (once an Apple Developer account exists):
+
+1. Build the zip above from the release commit and check its `.sha256`.
+2. Convert it once into the app project:
+   `xcrun safari-web-extension-converter dist-safari --project-location <dir> --app-name Bramble --bundle-identifier <reverse-DNS id> --macos-only`.
+   Keep the generated project under version control outside this repository's
+   build outputs, and on later releases replace only its extension resources
+   with the new `dist-safari/`.
+3. Set the version and build number to the manifest version, sign with the
+   Developer ID / App Store distribution identity, and archive.
+4. Smoke test on Safari 27.2+: Settings → Extensions → enable Bramble, allow it
+   on a test dapp, then onboard, unlock, connect, sign and send on Sepolia.
+5. Submit through App Store Connect (Mac App Store), with the privacy answers
+   matching the Chrome Web Store ones.
 
 ## 9. Where automation hooks in
 

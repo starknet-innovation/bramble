@@ -13,11 +13,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   FIREFOX_DATA_COLLECTION_PERMISSIONS,
-  FIREFOX_EXCLUDED_FILES,
   FIREFOX_EXTENSION_ID,
   FIREFOX_MIN_VERSION,
   FIREFOX_NAME_LIMIT,
   type Manifest,
+  SANDBOXED_RENDERER_FILES,
   shipsSandboxedRenderer,
   toFirefoxManifest,
 } from "../../apps/extension/firefox-manifest";
@@ -137,11 +137,11 @@ describe("firefox manifest derivation", () => {
 
   test("packages the chrome file set minus exactly the sandboxed renderer", () => {
     const chromeFiles: readonly string[] = EXPECTED_RUNTIME_FILES;
-    expect(FIREFOX_EXCLUDED_FILES).toEqual(["sandbox/render.html", "sandbox/render.js"]);
-    expect(FIREFOX_RUNTIME_FILES.length).toBe(chromeFiles.length - FIREFOX_EXCLUDED_FILES.length);
+    expect(SANDBOXED_RENDERER_FILES).toEqual(["sandbox/render.html", "sandbox/render.js"]);
+    expect(FIREFOX_RUNTIME_FILES.length).toBe(chromeFiles.length - SANDBOXED_RENDERER_FILES.length);
     expect(shipsSandboxedRenderer("firefox")).toBe(false);
     expect(shipsSandboxedRenderer("chrome")).toBe(true);
-    for (const excluded of FIREFOX_EXCLUDED_FILES) {
+    for (const excluded of SANDBOXED_RENDERER_FILES) {
       expect(chromeFiles).toContain(excluded);
       expect(FIREFOX_RUNTIME_FILES).not.toContain(excluded);
     }

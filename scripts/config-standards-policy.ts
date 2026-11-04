@@ -92,6 +92,7 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "artifacts/",
   "dist/",
   "dist-firefox/",
+  "dist-safari/",
   "node_modules/",
   "playwright-report/",
   "test-results/",
@@ -131,6 +132,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run --filter @bramble/extension build",
   "build:all": "bun run --filter @bramble/extension build:all",
   "build:firefox": "bun run --filter @bramble/extension build:firefox",
+  "build:safari": "bun run --filter @bramble/extension build:safari",
   check:
     "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
@@ -157,6 +159,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
   "package:extension:firefox": "bun run scripts/package-extension.ts --target=firefox",
+  "package:extension:safari": "bun run scripts/package-extension.ts --target=safari",
   "release:publish": "bun run scripts/publish-chrome-web-store.ts",
   test: "bun test ./tests",
   "test:e2e": "playwright test",
