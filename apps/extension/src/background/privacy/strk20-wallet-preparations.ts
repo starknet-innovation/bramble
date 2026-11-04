@@ -90,6 +90,8 @@ export type Strk20RegistrationPreparation = BasePreparation &
 export type Strk20DepositPreparation = BasePreparation &
   PreparedStrk20AccountSubmission & {
     readonly actions: readonly Strk20Action[];
+    /** The batch also registers this account (#789): a first shield. */
+    readonly activates?: true;
     readonly amount: string;
     readonly amountRaw: string;
     readonly kind: "deposit";
@@ -214,6 +216,7 @@ const depositPayload = (
   preparation: Omit<Strk20DepositPreparation, "context" | "id">,
 ): unknown => ({
   actions: preparation.actions,
+  ...(preparation.activates ? { activates: true } : {}),
   allowanceGrants: preparation.allowanceGrants,
   amount: preparation.amount,
   amountRaw: preparation.amountRaw,

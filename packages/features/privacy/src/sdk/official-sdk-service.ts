@@ -33,7 +33,7 @@ import {
   type Strk20Waits,
   type WaitScheduler,
 } from "./official-sdk-budget";
-import { strk20RegistrationBuilderFor } from "./official-sdk-builder";
+import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
 import { mapStrk20StageError } from "./official-sdk-errors";
 import { createStrk20MaturityRuntime, type Strk20SubmissionJournal } from "./official-sdk-maturity";
 import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
@@ -198,6 +198,12 @@ export const createOfficialStrk20Service = ({
       if (input.actions.length === 0 || input.actions.some((action) => action.type !== "deposit")) {
         throw new WalletError(STRK20_PRIVACY_LEAK);
       }
+      // A registration opens the self channel; a third-party credit would open
+      // a second one in the same batch, which links the two (USER_LINKAGE).
+      const activate = input.activate === true;
+      if (activate && input.actions.some((action) => "recipient" in action && action.recipient)) {
+        throw new WalletError(STRK20_PRIVACY_LEAK);
+      }
       reportStrk20Phase(input.onPhase, "reading the pool fee");
       const reviewedPoolFee = await requireReviewedStrk20PoolFee(
         providerFor,
@@ -205,7 +211,15 @@ export const createOfficialStrk20Service = ({
         config.poolAddress,
         input.poolFeeFri,
       );
-      const callAndProof = await prepare({ ...input, simulate: false }, input.beforeProof);
+      const callAndProof = await prepare(
+        { ...input, simulate: false },
+        input.beforeProof,
+        activate
+          ? (transfers) =>
+              strk20BuilderFor(sdk, transfers, input.actions, input.account.address, true)
+          : undefined,
+        activate ? "first-shield" : undefined,
+      );
       return publicBatch(
         config.poolAddress,
         approveCalls(input.actions, config.poolAddress, reviewedPoolFee),
