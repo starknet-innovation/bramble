@@ -138,3 +138,47 @@ if (
 ) {
   throw new Error("Krusty KMS known-answer vectors do not match the reviewed build");
 }
+
+// Quantum-safe Bitcoin and Bitcoin known answers, all from public test phrases.
+// The QSB roots and commitments are the draft BIP's `reference.py` values for
+// "all all … all" (QSB-HORS-v1, net 0), the mnemonic-level vectors Krusty's
+// own suite pins; the BIP's raw-key test vault (root 9b257b6a…) has no phrase,
+// so no mnemonic export can reach it. The P2WPKH address and key are BIP-84's
+// published `m/84'/0'/0'/0/0` vector. The BIP-322 proof is this build's
+// deterministic (RFC 6979) answer for the message below, which bip322-js 4.0.0
+// — the verifier the QSB coordinator runs — accepts in its unprefixed form.
+const qsbReferencePhrase = "all all all all all all all all all all all all";
+const bip84Phrase = `${"abandon ".repeat(11)}about`;
+const bip84Vector = {
+  address: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
+  publicKey: "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c",
+} as const;
+const bip322Message = [
+  "QSB Vault sign-in",
+  "Origin: https://d1pjwwq89sze3g.cloudfront.net",
+  `Address: ${bip84Vector.address}`,
+  "Network: bitcoin-mainnet",
+  "Nonce: 3f1c2b9e-4d5a-4b6c-8d7e-9f0a1b2c3d4e",
+  "Expires: 2026-11-04T12:05:00.000Z",
+  "This signature authorizes this session only. It does not authorize a Bitcoin transaction.",
+].join("\n");
+const bip322Proof =
+  "AkcwRAIgMoSEWC47IAAwzhOwoKVMAZPor0A0exlpE+W8y/ISUbMCIBE99KJ0NOeb5x1YFb+AyRRqXBB71MzY3dkWp2PKWx7iASEDMNVP0N1CCm5fjTYk9fNILK41D3nV8HU79b7vnC2Rrzw=";
+
+const qsbVault0 = await kms.deriveQsbCommitments(qsbReferencePhrase, 0);
+const qsbVaultMax = await kms.deriveQsbCommitments(qsbReferencePhrase, 2 ** 31 - 1);
+const owner = await kms.deriveBitcoinP2wpkhKeypair(bip84Phrase, 0, 0, 0);
+const proof = await kms.signBip322SimpleUnprefixed(owner.privateKey, owner.address, bip322Message);
+if (
+  qsbVault0.root !== "11f1da69fa1ca2e5f9b23a4416c7c1be994933d2d8d06d5cf80dc4be02e0d3c1" ||
+  qsbVault0.round0[0] !== "296a1cf12ce73e492d0c7ff22b389d2b9ca3abaa" ||
+  qsbVault0.round0[149] !== "6d1121d94beaa3734c741ee43424ba1c9f03964e" ||
+  qsbVault0.round1[0] !== "b84006e49e98aca181a416c4e0e4220c60248917" ||
+  qsbVault0.round1[149] !== "2d62908d953c4fa50a41d27627413be3b875b997" ||
+  qsbVaultMax.root !== "a4b150a02e955b647ade44d3cdfd72c6faf0f0a1c0692848ab6efae4df5b3b9e" ||
+  owner.address !== bip84Vector.address ||
+  owner.publicKey !== bip84Vector.publicKey ||
+  proof !== bip322Proof
+) {
+  throw new Error("Krusty KMS QSB and Bitcoin known answers do not match the reviewed build");
+}

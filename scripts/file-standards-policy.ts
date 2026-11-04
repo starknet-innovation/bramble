@@ -133,6 +133,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/accounts/wallet-reader.ts",
   "apps/extension/src/background/ledger/ledger-inputs.ts",
   "packages/platform/kms-krusty/src/adapter.ts",
+  // Krusty's QSB and Bitcoin calls, split from adapter.ts: checks the private
+  // key and the signatures crossing the Krusty boundary and frees Krusty's
+  // copy; nothing is logged, persisted, or returned past the vault service.
+  "packages/platform/kms-krusty/src/bitcoin.ts",
   "packages/foundation/wallet-model/src/accounts/signing.ts",
   // Pure length policy only; carries no passphrase value across a boundary.
   "packages/foundation/wallet-model/src/preferences/passphrase.ts",

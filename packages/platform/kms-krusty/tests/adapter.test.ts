@@ -4,8 +4,10 @@
 import { describe, expect, test } from "bun:test";
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { STARK_CURVE_ORDER } from "@bramble/wallet-model/networks";
+import { bitcoinExports } from "./bitcoin-exports";
 
 const createModule = (signatureR = "0x1") => ({
+  ...bitcoinExports(),
   deriveArgentLegacyKeypair() {
     return {
       private_key: "0x321",
