@@ -6,9 +6,13 @@
  * Trust boundary: the message is the coordinator's text and trusted for
  * nothing. It is signed only when it is exactly the session-only message for
  * this origin, this address and Bitcoin mainnet (qsb-app `sdk/client.ts`
- * `signInMessage`), and its expiry is still ahead, by at most the five
- * minutes a challenge lives, on the caller's injected clock. Anything else is
- * refused before the key is touched.
+ * `signInMessage`), and its expiry is no older than now and no further ahead
+ * than the five minutes a challenge lives, each widened by
+ * {@link QSB_CHALLENGE_CLOCK_SKEW_MS} on the caller's injected clock, since a
+ * device clock a few minutes off the coordinator's is ordinary. Anything else
+ * is refused before the key is touched. The skew loosens only the expiry: the
+ * message itself must still match exactly, and the coordinator still refuses
+ * a challenge it has expired, so the replay bound stays its five minutes.
  */
 import { parseIsoInstant } from "./instant";
 import { QSB_COORDINATOR_ORIGIN } from "./origin";
@@ -17,10 +21,18 @@ import { QSB_COORDINATOR_ORIGIN } from "./origin";
 export const QSB_CHALLENGE_LIFETIME_MS = 300_000;
 
 /**
+ * How far this device's clock may be from the coordinator's, either way, for
+ * a challenge's expiry to be accepted: two minutes. The expiry must lie in
+ * `(now - skew, now + lifetime + skew]`.
+ */
+export const QSB_CHALLENGE_CLOCK_SKEW_MS = 120_000;
+
+/**
  * Why a challenge may not be signed: `shape` (not the exact session-only
- * message for this origin and address), `expired` (its expiry is not after
- * now) or `too-far` (it expires more than {@link QSB_CHALLENGE_LIFETIME_MS}
- * from now, which no fresh challenge does).
+ * message for this origin and address), `expired` (its expiry is at or before
+ * now less the skew) or `too-far` (it expires more than
+ * {@link QSB_CHALLENGE_LIFETIME_MS} plus the skew from now, which no fresh
+ * challenge does).
  */
 export type QsbChallengeRefusal = "expired" | "shape" | "too-far";
 
@@ -48,8 +60,10 @@ export const qsbChallengeRefusal = (
   if (expiresAt === null) {
     return "shape";
   }
-  if (expiresAt <= nowMs) {
+  if (expiresAt <= nowMs - QSB_CHALLENGE_CLOCK_SKEW_MS) {
     return "expired";
   }
-  return expiresAt - nowMs > QSB_CHALLENGE_LIFETIME_MS ? "too-far" : null;
+  return expiresAt > nowMs + QSB_CHALLENGE_LIFETIME_MS + QSB_CHALLENGE_CLOCK_SKEW_MS
+    ? "too-far"
+    : null;
 };
