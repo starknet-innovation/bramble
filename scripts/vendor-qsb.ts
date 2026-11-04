@@ -17,7 +17,7 @@ import { mkdir } from "node:fs/promises";
 
 const repo = "https://github.com/starknet-innovation/qsb-app.git";
 const target = "vendor/qsb";
-const QSB_APP_REVISION = "8685328ca4e1ccae5f1f1f2fb84244893d9d2346";
+const QSB_APP_REVISION = "1c2cf01b91131923e877ef977e391317aa99b102";
 // The only upstream directory the wallet ships. A non-cone sparse pattern keeps
 // every other path of qsb-app — its server, solver, webapp and even its
 // top-level files, which cone mode would always materialize — out of this

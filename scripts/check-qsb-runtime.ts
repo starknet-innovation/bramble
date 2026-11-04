@@ -56,8 +56,8 @@ const sparsePattern = "/public/qsb/";
 const qsbDigests: Readonly<Record<string, string>> = {
   LICENSE: "8d2562b24636fb569997da918899eed12e95b573eef1207bf60be6bf7bd836ff",
   "bitcoin_tx.py": "c7e52af90bd0d9fce9834fce26dcd67aee0d7751ee228d9730873c4d12659a5c",
-  "bridge.py": "21f073bf940e8fc8ab3d19e8ff92a4e3f61b525fdac1514e5249e351f0e0dcfd",
-  [QSB_MANIFEST]: "f1cab3a8871f9918dda011c0723eb0d2993d255ab722c3e78439f183110f1d65",
+  "bridge.py": "2a786a36a988e298b4fbb6132f37a50d7610fb14fb382143518c7ad3ec6d6d96",
+  [QSB_MANIFEST]: "e73a049b7c02350d03d3b5409036e9d9aaf384f09500446eb497c361e1f3c60f",
   "qsb_pipeline.py": "05334c08fa012a77ccba2887e05d78f90a8b81c0e34b786931b423f7f11255d8",
   "secp256k1.py": "d2cebd1410b75cad606806cf02d7bee3e24724d5fcb7a53a07f598fcbc8afece",
 };
