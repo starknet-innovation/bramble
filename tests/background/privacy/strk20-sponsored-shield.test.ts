@@ -94,13 +94,14 @@ const harness = (
     readonly networks?: Record<string, typeof RELAY>;
     readonly relayed?: () => Promise<{ readonly transactionHash: string }>;
     readonly activity?: ReturnType<typeof memoryActivityLog>;
+    readonly registered?: boolean;
   } = {},
 ): Harness => {
   const asked: Record<string, unknown>[] = [];
   const prepared: unknown[] = [];
   const sponsored: Strk20SponsoredShieldSubmissionInput[] = [];
   const base = makeStrk20WalletService({
-    registered: { value: true },
+    registered: { value: options.registered ?? true },
     registrations: { value: 0 },
     submissions: [],
   });
@@ -182,6 +183,24 @@ describe("sponsored first shield", () => {
       feePayer: "sponsor",
       hash: "0x333",
       summary: `Shield 1.5 ${token.symbol}`,
+    });
+  });
+
+  test("a sponsored first shield registers in the same relayed batch (#789)", async () => {
+    const activity = memoryActivityLog(() => 1_700_000_000_000);
+    const run = harness({ activity, registered: false });
+    const review = (await shield(run.handler)).strk20Preparation;
+    expect(review.route).toBe("sponsored-relay");
+    expect(review.summaries[0]).toBe(`Activate private balances and shield 1.5 ${token.symbol}`);
+    await expect(executeStrk20Preparation(run.handler, review.id)).resolves.toMatchObject({
+      ok: true,
+      transactionHash: "0x333",
+    });
+    expect(run.sponsored).toHaveLength(1);
+    const row = (await activity.list()).find((entry) => entry.hash === "0x333");
+    expect(row).toMatchObject({
+      feePayer: "sponsor",
+      summary: `Activate private balances and shield 1.5 ${token.symbol}`,
     });
   });
 
