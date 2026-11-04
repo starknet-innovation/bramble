@@ -49,7 +49,7 @@ import {
 } from "./dapp-account";
 import type { InvokeExecuteDeps } from "./held-invoke-submit";
 import { priceMultisigInvoke } from "./multisig-dapp-price";
-import { MULTISIG_CLASS } from "./multisig-dapp-sign";
+import { freshSignerConfig, MULTISIG_CLASS } from "./multisig-dapp-sign";
 import { invokeFailureResponse } from "./provider-invoke-failure";
 /** Error a site receives when a higher-threshold invoke was saved, not sent. */
 export const MULTISIG_PROPOSAL_SAVED = "Multisig proposal saved. It was not submitted.";
@@ -297,6 +297,15 @@ const executeMultisigDappInvoke = async (
   const refusal =
     refuseOnAccountSelfCall(input.calls, input.record.address) ?? refuseOnPoisonedRecipient(report);
   if (refusal) return refusal;
+  // The stored threshold is what the card reviewed; the chain must still agree,
+  // or a "saved for signers" signature could already be enough to submit.
+  const changed = await freshSignerConfig(
+    deps.runtimeRpc,
+    input.record.address,
+    config,
+    networkRpcUrls(STARKNET_NETWORKS[input.record.networkId], preferences),
+  );
+  if (changed) return changed;
   const member = multisigMemberAccount(
     input.accounts,
     config.signerPublicKeys,

@@ -4,6 +4,7 @@
  * grants stay on the vault path.
  */
 import { describe, expect, test } from "bun:test";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { MULTISIG_PROPOSAL_SAVED } from "../../../apps/extension/src/background/provider/multisig-dapp-invoke";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -324,6 +325,78 @@ describe("multisig dapp accounts", () => {
     await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
     await expect(held).resolves.toEqual({
       error: "This multisig changed since this request was reviewed.",
+    });
+    expect(signed).toBe(false);
+    expect(await multisigs.listIntents()).toHaveLength(0);
+  });
+
+  test("a proposal is not saved when the chain threshold dropped but the record did not", async () => {
+    let signed = false;
+    const live = multisig(1).currentConfig;
+    if (!live) throw new Error("missing multisig config");
+    const { handler, multisigs, record } = await harness(2, {
+      member: true,
+      onSign: () => {
+        signed = true;
+      },
+      signerConfig: {
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+        signerGuids: live.signerPublicKeys.map((key) => argentSignerGuid(key)),
+        threshold: 1,
+      },
+    });
+    const connect = handler(
+      { origin: grantedOrigin, type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+    const held = handler(
+      { calls: invokeCalls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({
+      error: "This multisig changed since this request was reviewed.",
+    });
+    expect(signed).toBe(false);
+    expect(await multisigs.listIntents()).toHaveLength(0);
+  });
+
+  test("an invoke is not signed when the live signer config cannot be read", async () => {
+    let signed = false;
+    const { handler, multisigs, record } = await harness(2, {
+      member: true,
+      onSign: () => {
+        signed = true;
+      },
+      signerConfig: "throw",
+    });
+    const connect = handler(
+      { origin: grantedOrigin, type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+    const held = handler(
+      { calls: invokeCalls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({
+      error: "This multisig's signers aren't available yet.",
     });
     expect(signed).toBe(false);
     expect(await multisigs.listIntents()).toHaveLength(0);

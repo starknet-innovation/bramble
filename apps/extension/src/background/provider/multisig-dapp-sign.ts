@@ -45,7 +45,7 @@ type SignRpc = Pick<RuntimeRpc, "getClassHashAt"> & {
  * Refuses a signature when the live signer set no longer matches the watched
  * record. A missing read fails closed: a stale config must not be signed.
  */
-const freshSignerConfig = async (
+export const freshSignerConfig = async (
   rpc: SignRpc,
   address: string,
   stored: NonNullable<ArgentMultisigRecord["currentConfig"]>,
