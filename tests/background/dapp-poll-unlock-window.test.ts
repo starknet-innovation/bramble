@@ -180,9 +180,9 @@ describe("dapp polling cannot hold the wallet unlocked", () => {
   test("covers every dapp-reachable message that can reach the session", () => {
     // Guards the list above against drift: a new dapp message must either be
     // exercised here or be one of the read-only version queries that never
-    // touch the session. `wallet.getChainId`, `wallet.watchAsset` and
-    // `wallet.addStarknetChain` read preferences, the built-in network list or
-    // the approval queue only.
+    // touch the session. `wallet.getChainId` and `wallet.watchAsset` read
+    // preferences and the approval queue only; `wallet.addStarknetChain`
+    // consults the built-in network list only.
     const sessionFree = new Set([
       "wallet.addStarknetChain",
       "wallet.getChainId",
