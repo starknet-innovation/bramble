@@ -56,7 +56,7 @@ export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
   [QSB_WITHDRAWAL_REFUSALS.dustOutput, "This deposit is too small to withdraw after fees."],
   [
     QSB_WITHDRAWAL_REFUSALS.floorRisen,
-    "Miner fees rose above this withdrawal's fee. Nothing was released. Try again later.",
+    "Miner fees rose above this withdrawal's fee. Try again later.",
   ],
   [
     QSB_WITHDRAWAL_REFUSALS.helperNeeded,

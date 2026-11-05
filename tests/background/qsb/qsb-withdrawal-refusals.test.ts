@@ -197,7 +197,7 @@ describe("after a disclosure", () => {
     expect(harness.runtime.finished.slice(15)).toEqual(first);
   }, 120_000);
 
-  test("a signing failure answers uncertain, keeps nothing, and the retry is exact", async () => {
+  test("a signing failure is an unknown outcome, keeps nothing, and the retry is exact", async () => {
     // Off while the deposit is signed, on for the withdrawal's helper.
     let failSigning = false;
     const harness = await qsbWithdrawalHarness({
@@ -213,13 +213,12 @@ describe("after a disclosure", () => {
     harness.solve();
     const review = await harness.review();
     failSigning = true;
-    const released = await harness.release(review.digest);
-    expect(released).toMatchObject({
-      ok: true,
-      submission: "uncertain",
-      vault: { withdrawal: { status: "uncertain" } },
-    });
+    expect(await harness.release(review.digest)).toEqual(refused(QSB_WITHDRAWAL_OUTCOME_UNKNOWN));
     expect(harness.state.transactions.size).toBe(0);
+    expect(await journalState(harness)).toMatchObject({
+      state: "exposed",
+      withdrawal: { status: "ready" },
+    });
     failSigning = false;
     expect(await harness.release((await harness.review()).digest)).toMatchObject({
       submission: "submitted",

@@ -18,10 +18,11 @@
  * The answer is the deposit and how the coordinator took it, `uncertain` with
  * the withdrawal `pending` when it said nothing. The preimages are dropped as
  * soon as `finish` returns, whatever it returns; JavaScript cannot wipe the
- * strings themselves. Only when no transaction exists to name (`finish`
- * failed, or its bytes did not commit) does the release answer an unknown
- * outcome, and the deposit stays `ready` for an exact retry of the same
- * disclosure.
+ * strings themselves. Until signed bytes are kept here (`finish` failed, its
+ * bytes did not commit, or the helper sig or its durable write did
+ * not complete) there is nothing to resend, so the release answers an
+ * unknown outcome, and the deposit stays `ready` for an exact retry of the
+ * same disclosure.
  */
 import { WalletError } from "@bramble/core/errors";
 import {
@@ -179,13 +180,15 @@ const afterDisclosure = async (
   const raw = await finished(reviewed, preimages);
   const txid = parseQsbTransaction(raw)?.id;
   if (!txid) throw outcomeUnknown();
+  // Until signed bytes are kept, nothing exists to resend: an unknown
+  // outcome, and the deposit stays ready for an exact retry.
   const signed = await signHelper(reviewed, raw).catch(() => null);
-  if (!signed || signed.txid !== txid) return replyOf(basis, "uncertain", txid);
+  if (!signed || signed.txid !== txid) throw outcomeUnknown();
   const kept = await access.keepSignedWithdrawal(held.v, signed).then(
     () => true,
     () => false,
   );
-  if (!kept) return replyOf(basis, "uncertain", txid);
+  if (!kept) throw outcomeUnknown();
   if (!(await clearsFloor(deps, held, signed.rawTxHex))) return replyOf(basis, null, txid);
   return submitKept(reviewed.context, basis, signed);
 };
