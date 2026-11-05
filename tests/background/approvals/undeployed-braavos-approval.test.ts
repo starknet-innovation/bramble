@@ -100,8 +100,15 @@ describe("estimateInvokeApprovalFee", () => {
         return false;
       },
     });
+    // Any other undeployed account reviews its invoke and its deployment
+    // (issue 851); this stub prices no deployment, so that half is a retry.
     const oz = await estimate(undeployed, invokeAccount);
-    expect(oz).toMatchObject({ fee: null, requiresDeployment: true });
+    expect(oz).toMatchObject({
+      deploymentFee: null,
+      deploymentFeeEstimateFailed: true,
+      fee: { overallFee: "1", unit: "FRI" },
+      requiresDeployment: true,
+    });
     expect(oz).not.toHaveProperty("deployFirst");
   });
 });
