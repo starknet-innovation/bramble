@@ -91,6 +91,14 @@ describe("the coordinator grant", () => {
           registered: null,
           state: "allocated",
           v: 0,
+          withdrawal: {
+            confirmations: null,
+            destination: null,
+            feeSat: null,
+            outputSat: null,
+            status: "none",
+            txid: null,
+          },
         },
       ],
     });

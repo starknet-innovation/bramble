@@ -23,12 +23,23 @@ const NO_DEPOSIT: QsbVaultView["deposit"] = {
   txid: null,
 };
 
+/** No withdrawal started. */
+const NO_WITHDRAWAL: QsbVaultView["withdrawal"] = {
+  confirmations: null,
+  destination: null,
+  feeSat: null,
+  outputSat: null,
+  status: "none",
+  txid: null,
+};
+
 /** A vault at index `v` with nothing signed: Unfunded. */
 export const unfundedVault = (v: number): QsbVaultView => ({
   deposit: NO_DEPOSIT,
   registered: true,
   state: "allocated",
   v,
+  withdrawal: NO_WITHDRAWAL,
 });
 
 /** A vault at index `v` whose deposit is in `status`, for 0.001 BTC. */
@@ -41,6 +52,7 @@ export const depositedVault = (
   registered: true,
   state: "allocated",
   v,
+  withdrawal: NO_WITHDRAWAL,
 });
 
 /** One vault per row state, in index order. */

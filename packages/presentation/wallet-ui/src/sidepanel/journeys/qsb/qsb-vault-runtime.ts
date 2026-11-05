@@ -25,6 +25,7 @@ import {
   type QsbSubmission,
   type QsbVaultView,
 } from "@bramble/wallet-model/qsb-vaults";
+import type { QsbWithdrawalStatus, QsbWithdrawalView } from "@bramble/wallet-model/qsb-withdrawals";
 import { responseError } from "../../runtime/runtime-errors";
 
 // Mainnet bech32 P2WPKH: `bc1q`, then 32 data and 6 checksum characters from
@@ -82,15 +83,65 @@ const isDeposit = (value: unknown): value is QsbVaultView["deposit"] =>
   DEPOSIT_STATUSES.some((status) => status === value["status"]) &&
   (value["txid"] === null || isQsbTxid(value["txid"]));
 
+// A mainnet destination as text: bech32 `bc1…` or base58 `1…`/`3…`. The
+// background decides which types it accepts; this only bounds what is shown.
+const DESTINATION = /^(?:bc1[02-9ac-hj-np-z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/;
+const isQsbDestinationText = (value: unknown): value is string =>
+  typeof value === "string" && DESTINATION.test(value);
+
+const WITHDRAWAL_STATUSES: readonly QsbWithdrawalStatus[] = [
+  "conflict",
+  "confirmed",
+  "failed",
+  "none",
+  "paused",
+  "pending",
+  "ready",
+  "searching",
+  "submitted",
+  "uncertain",
+];
+
+// A withdrawal: its six keys, the status enum, and every other field null
+// while nothing has started.
+const isWithdrawal = (value: unknown): value is QsbWithdrawalView => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, [
+      "confirmations",
+      "destination",
+      "feeSat",
+      "outputSat",
+      "status",
+      "txid",
+    ]) ||
+    !WITHDRAWAL_STATUSES.some((status) => status === value["status"]) ||
+    !(value["confirmations"] === null || isCount(value["confirmations"])) ||
+    !(value["destination"] === null || isQsbDestinationText(value["destination"])) ||
+    !(value["feeSat"] === null || isQsbSat(value["feeSat"])) ||
+    !(value["outputSat"] === null || isQsbSat(value["outputSat"])) ||
+    !(value["txid"] === null || isQsbTxid(value["txid"]))
+  ) {
+    return false;
+  }
+  return (
+    value["status"] !== "none" ||
+    ["confirmations", "destination", "feeSat", "outputSat", "txid"].every(
+      (key) => value[key] === null,
+    )
+  );
+};
+
 /**
- * Whether `value` is exactly one {@link QsbVaultView}: its four keys, the
+ * Whether `value` is exactly one {@link QsbVaultView}: its five keys, the
  * enums, a safe non-negative index, satoshi amounts in range, and a txid that
  * is 64 lowercase hex characters or null. Anything else is refused.
  */
 export const isQsbVaultView = (value: unknown): value is QsbVaultView =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["deposit", "registered", "state", "v"]) &&
+  hasOnlyKnownKeys(value, ["deposit", "registered", "state", "v", "withdrawal"]) &&
   isDeposit(value["deposit"]) &&
+  isWithdrawal(value["withdrawal"]) &&
   (value["registered"] === null || typeof value["registered"] === "boolean") &&
   VAULT_STATES.some((state) => state === value["state"]) &&
   isQsbVaultIndex(value["v"]);

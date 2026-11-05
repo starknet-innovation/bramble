@@ -13,12 +13,23 @@ import type { QsbPublicVault } from "@bramble/qsb/vault-responses";
 import type { QsbPendingDeposit } from "@bramble/vault/qsb-deposit-store";
 import type { QsbVaultRecord } from "@bramble/vault/qsb-vault-record";
 import type { QsbSubmission, QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
+import type { QsbWithdrawalView } from "@bramble/wallet-model/qsb-withdrawals";
 
 /** What the coordinator says about one vault, or null when it could not be asked. */
 export type QsbServerView = {
   readonly confirmations: number | null;
   readonly vault: QsbPublicVault | undefined;
 } | null;
+
+/** A deposit with no withdrawal started. */
+const NO_WITHDRAWAL: QsbWithdrawalView = {
+  confirmations: null,
+  destination: null,
+  feeSat: null,
+  outputSat: null,
+  status: "none",
+  txid: null,
+};
 
 const NO_DEPOSIT: QsbVaultView["deposit"] = {
   amountSat: null,
@@ -64,6 +75,7 @@ export const qsbVaultView = (
   registered: server === null ? null : server.vault !== undefined,
   state: record.state,
   v: record.v,
+  withdrawal: NO_WITHDRAWAL,
 });
 
 /**
@@ -77,7 +89,12 @@ export const qsbSubmittedView = (
   submission: QsbSubmission,
   deposit: { readonly amountSat: number; readonly txid: string },
 ): QsbVaultView => {
-  const base = { registered: true, state: record.state, v: record.v } as const;
+  const base = {
+    registered: true,
+    state: record.state,
+    v: record.v,
+    withdrawal: NO_WITHDRAWAL,
+  } as const;
   if (submission === "rejected") {
     return { ...base, deposit: NO_DEPOSIT };
   }

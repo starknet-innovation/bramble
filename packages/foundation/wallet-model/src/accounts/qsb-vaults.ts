@@ -26,6 +26,8 @@
  *   same signed bytes again, never new ones.
  */
 
+import type { QsbWithdrawalView } from "./qsb-withdrawals";
+
 /**
  * The QSB coordinator's origin: qsb-app's deployment, exactly as its sign-in
  * challenge names it. Bramble reaches it only once the user grants this
@@ -74,6 +76,8 @@ export type QsbVaultView = {
   readonly registered: boolean | null;
   readonly state: "allocated" | "exposed" | "retired" | "unknown";
   readonly v: number;
+  /** The deposit's withdrawal (`@bramble/wallet-model/qsb-withdrawals`). */
+  readonly withdrawal: QsbWithdrawalView;
 };
 
 /** The owner address's confirmed funds, as the coordinator's chain API reports them. */

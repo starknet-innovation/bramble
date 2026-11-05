@@ -48,12 +48,15 @@ export const QSB_LAB_ACCOUNTS = {
   },
 } as const satisfies Record<string, QsbAccountView>;
 
+const NO_WITHDRAWAL: QsbVaultView["withdrawal"] = { confirmations: null, destination: null, feeSat: null, outputSat: null, status: "none", txid: null };
+
 /** A vault at index `v` with nothing signed. */
 export const unfunded = (v: number): QsbVaultView => ({
   deposit: { amountSat: null, confirmations: null, status: "none", txid: null },
   registered: true,
   state: "allocated",
   v,
+  withdrawal: NO_WITHDRAWAL,
 });
 
 /** A vault at index `v` whose 0.001 BTC deposit is in `status`. */
@@ -70,6 +73,7 @@ export const deposited = (
   registered: true,
   state: "allocated",
   v,
+  withdrawal: NO_WITHDRAWAL,
 });
 
 /** One vault per row state. */

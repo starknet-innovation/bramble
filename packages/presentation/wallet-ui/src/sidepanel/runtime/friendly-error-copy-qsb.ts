@@ -5,6 +5,7 @@
  */
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
 import { QSB_VAULT_REFUSALS } from "@bramble/wallet-model/qsb-vaults";
+import { QSB_WITHDRAWAL_REFUSALS } from "@bramble/wallet-model/qsb-withdrawals";
 
 /** QSB account entries merged into ERROR_COPY, in table order. */
 export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
@@ -46,4 +47,24 @@ export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
   [QSB_VAULT_REFUSALS.signInRefused, "Couldn't sign in to the QSB service."],
   [QSB_VAULT_REFUSALS.unknownVault, "That deposit isn't in this QSB vault."],
   [QSB_VAULT_REFUSALS.vaultLimit, "This QSB vault already holds as many deposits as it can."],
+  // Withdrawals.
+  [
+    QSB_WITHDRAWAL_REFUSALS.bindingRefused,
+    "This withdrawal doesn't check out, so Bramble released nothing.",
+  ],
+  [QSB_WITHDRAWAL_REFUSALS.destinationInvalid, "Enter a Bitcoin mainnet address."],
+  [QSB_WITHDRAWAL_REFUSALS.dustOutput, "This deposit is too small to withdraw after fees."],
+  [
+    QSB_WITHDRAWAL_REFUSALS.floorRisen,
+    "Miner fees rose above this withdrawal's fee. Nothing was released. Try again later.",
+  ],
+  [
+    QSB_WITHDRAWAL_REFUSALS.helperNeeded,
+    "Send a little bitcoin to this QSB vault's address first. A withdrawal needs it.",
+  ],
+  [QSB_WITHDRAWAL_REFUSALS.jobRefused, "The QSB service refused this withdrawal."],
+  [QSB_WITHDRAWAL_REFUSALS.notReady, "This withdrawal isn't ready to release yet."],
+  [QSB_WITHDRAWAL_REFUSALS.notWithdrawable, "This deposit can't be withdrawn."],
+  [QSB_WITHDRAWAL_REFUSALS.quoteChanged, "The cost changed. Review the new quote."],
+  [QSB_WITHDRAWAL_REFUSALS.reviewChanged, "The withdrawal changed. Review it again."],
 ];

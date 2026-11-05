@@ -48,6 +48,14 @@ describe("the QSB vault journey", () => {
         registered: true,
         state: "allocated",
         v: 0,
+        withdrawal: {
+          confirmations: null,
+          destination: null,
+          feeSat: null,
+          outputSat: null,
+          status: "none",
+          txid: null,
+        },
       },
     });
     // Allocated, then associated, both durable before the registration is sent.
@@ -94,6 +102,14 @@ describe("the QSB vault journey", () => {
         registered: true,
         state: "allocated",
         v: 0,
+        withdrawal: {
+          confirmations: null,
+          destination: null,
+          feeSat: null,
+          outputSat: null,
+          status: "none",
+          txid: null,
+        },
       },
     });
     // The signed bytes are kept before they are sent, and dropped once MARA has them.
@@ -130,6 +146,14 @@ describe("the QSB vault journey", () => {
         registered: true,
         state: "allocated",
         v: 0,
+        withdrawal: {
+          confirmations: null,
+          destination: null,
+          feeSat: null,
+          outputSat: null,
+          status: "none",
+          txid: null,
+        },
       },
     ]);
     const journal = await harness.service.withQsbVaultAccount(
@@ -184,6 +208,14 @@ describe("the QSB vault journey", () => {
           registered: null,
           state: "allocated",
           v: 0,
+          withdrawal: {
+            confirmations: null,
+            destination: null,
+            feeSat: null,
+            outputSat: null,
+            status: "none",
+            txid: null,
+          },
         },
       ],
     });
