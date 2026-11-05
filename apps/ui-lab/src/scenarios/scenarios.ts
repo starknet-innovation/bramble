@@ -32,6 +32,7 @@ import { privacyScenario } from "./scenarios-privacy";
 import { qsbScenario } from "./scenarios-qsb";
 import { qsbDepositScenario } from "./scenarios-qsb-deposit";
 import { qsbVaultsScenario } from "./scenarios-qsb-vaults";
+import { qsbWithdrawScenario } from "./scenarios-qsb-withdraw";
 import { settingsScenario } from "./scenarios-settings";
 import { ledgerScenario, sendScenario } from "./scenarios-signing";
 import { swapScenario } from "./scenarios-swap";
@@ -421,6 +422,7 @@ export const walletScenarios: readonly WalletScenario[] = [
   qsbScenario,
   qsbVaultsScenario,
   qsbDepositScenario,
+  qsbWithdrawScenario,
 ];
 
 export const walletScenario = (id: string): WalletScenario =>

@@ -38,6 +38,7 @@ import { createPrivacyUnlockClient } from "../journeys/privacy/privacy-unlock-ru
 import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
 import { createQsbRuntimeClient } from "../journeys/qsb/qsb-runtime";
 import { createQsbVaultClient } from "../journeys/qsb/qsb-vault-runtime";
+import { createQsbWithdrawalClient } from "../journeys/qsb/qsb-withdrawal-runtime";
 import { createSidePanelNoticeClient } from "../shell/side-panel-notice";
 import { createUpdateClient } from "../shell/update-banner";
 import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
@@ -87,6 +88,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createShadowAccountsRuntimeClient(sendMessage),
     ...createQsbRuntimeClient(sendMessage),
     ...createQsbVaultClient(sendMessage),
+    ...createQsbWithdrawalClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
     ...createDeployRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),

@@ -57,6 +57,8 @@ import { qsbAccountsFlow } from "../../journeys/qsb/qsb-accounts";
 import { qsbBackupFlow } from "../../journeys/qsb/qsb-backup-ui";
 import { qsbDepositFlow } from "../../journeys/qsb/qsb-deposit-view";
 import { qsbImportFlow } from "../../journeys/qsb/qsb-import-ui";
+import { qsbReleaseFlow } from "../../journeys/qsb/qsb-release-ui";
+import { qsbWithdrawFlow } from "../../journeys/qsb/qsb-withdraw-view";
 import type { SendIntent } from "../../journeys/send/send-model";
 import { sendFlow } from "../../journeys/send/send-views";
 import { advancedNetworkFlow, networkFlow } from "../../journeys/settings/network-views";
@@ -427,6 +429,10 @@ export const simpleFlowScreen = (
       return qsbImportFlow(ctx.status);
     case "qsb-deposit":
       return qsbDepositFlow(ctx.status);
+    case "qsb-withdraw":
+      return qsbWithdrawFlow(ctx.status);
+    case "qsb-release":
+      return qsbReleaseFlow(ctx.status);
     default:
       return null;
   }

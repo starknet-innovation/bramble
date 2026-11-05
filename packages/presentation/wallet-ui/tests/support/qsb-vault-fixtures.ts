@@ -6,9 +6,15 @@
  */
 import type { QsbDepositQuote, QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
 import type {
+  QsbWithdrawalQuote,
+  QsbWithdrawalReview,
+  QsbWithdrawalStatus,
+} from "@bramble/wallet-model/qsb-withdrawals";
+import type {
   QsbDepositResult,
   QsbVaultsReading,
 } from "../../src/sidepanel/journeys/qsb/qsb-vault-runtime";
+import type { QsbWithdrawalResult } from "../../src/sidepanel/journeys/qsb/qsb-withdrawal-runtime";
 
 /** BIP-173's mainnet P2WPKH example: `bc1q` and 38 bech32 characters. */
 export const QSB_ADDRESS = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
@@ -101,4 +107,75 @@ export const depositResult = (
     submission === "rejected"
       ? unfundedVault(v)
       : depositedVault(v, submission === "submitted" ? "submitted" : "pending"),
+});
+
+/** BIP-173's other mainnet example, P2WSH: a destination that is not the owner address. */
+export const DESTINATION = "bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3";
+
+/** A second public txid (block 170's spend), for a withdrawal's own transaction. */
+export const WITHDRAWAL_TXID = "f4184fc596403b9d638783cf57adfe4c75c605f6356fbc91338530e9831e9e16";
+
+/** The disclosure digest a review names. */
+export const DIGEST = "ab".repeat(32);
+
+const RELEASED: readonly QsbWithdrawalStatus[] = ["confirmed", "pending", "submitted", "uncertain"];
+
+/**
+ * A funded deposit at index `v` whose withdrawal is in `status`: to
+ * {@link DESTINATION} at 900 sat, receiving the deposit plus a 10,000 sat
+ * helper; a released one has its own txid, a mined one 2 confirmations.
+ */
+export const withdrawingVault = (
+  v: number,
+  status: QsbWithdrawalStatus,
+  confirmations: number | null = status === "confirmed" ? 2 : null,
+): QsbVaultView => ({
+  ...depositedVault(v, "confirmed"),
+  state: RELEASED.includes(status) || status === "conflict" ? "exposed" : "allocated",
+  withdrawal:
+    status === "none"
+      ? depositedVault(v, "confirmed").withdrawal
+      : {
+          confirmations,
+          destination: DESTINATION,
+          feeSat: 900,
+          outputSat: 109_100,
+          status,
+          txid: RELEASED.includes(status) ? WITHDRAWAL_TXID : null,
+        },
+});
+
+/** A quote withdrawing the 0.001 BTC deposit plus 10,000 sat to {@link DESTINATION}. */
+export const WITHDRAWAL_QUOTE: QsbWithdrawalQuote = {
+  destination: DESTINATION,
+  feeRate: "4",
+  feeSat: 900,
+  fundingSat: 100_000,
+  helperSat: 10_000,
+  outputSat: 109_100,
+  vsize: 225,
+};
+
+/** The release review of deposit `v`'s withdrawal at {@link WITHDRAWAL_QUOTE}'s terms. */
+export const withdrawalReview = (v: number): QsbWithdrawalReview => ({
+  binding: "unverified",
+  destination: DESTINATION,
+  digest: DIGEST,
+  feeSat: 900,
+  fundingSat: 100_000,
+  helperSat: 10_000,
+  network: "bitcoin-mainnet",
+  outputSat: 109_100,
+  secrets: 15,
+  v,
+  vsize: 1_180,
+});
+
+/** What a release or withdrawal resend of deposit `v` answers for each outcome. */
+export const withdrawalResult = (
+  v: number,
+  submission: QsbWithdrawalResult["submission"],
+): QsbWithdrawalResult => ({
+  submission,
+  vault: withdrawingVault(v, submission === "uncertain" ? "uncertain" : submission),
 });

@@ -7,6 +7,10 @@
 import { account } from "@bramble/testkit/sidepanel";
 import type { QsbAccountView } from "@bramble/wallet-model/qsb";
 import type { QsbDepositQuote, QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
+import type {
+  QsbWithdrawalQuote,
+  QsbWithdrawalReview,
+} from "@bramble/wallet-model/qsb-withdrawals";
 import type { WalletStatus } from "../../src/popup/responses/responses";
 import type { QsbJourneyWallet } from "../../src/sidepanel/journeys/qsb/qsb-journey";
 import type { QsbBackupWord } from "../../src/sidepanel/journeys/qsb/qsb-runtime";
@@ -14,6 +18,7 @@ import type {
   QsbDepositResult,
   QsbVaultsReading,
 } from "../../src/sidepanel/journeys/qsb/qsb-vault-runtime";
+import type { QsbWithdrawalResult } from "../../src/sidepanel/journeys/qsb/qsb-withdrawal-runtime";
 
 /** An unlocked one-account wallet on Mainnet. */
 export const qsbStatus: WalletStatus = {
@@ -106,6 +111,11 @@ export type QsbScript = {
   quote?: Scripted<QsbDepositQuote>;
   deposit?: Scripted<QsbDepositResult>;
   resend?: Scripted<QsbDepositResult>;
+  withdrawalQuote?: Scripted<QsbWithdrawalQuote>;
+  withdrawalStart?: Scripted<QsbVaultView>;
+  withdrawalReview?: Scripted<QsbWithdrawalReview>;
+  release?: Scripted<QsbWithdrawalResult>;
+  withdrawalResend?: Scripted<QsbWithdrawalResult>;
 };
 
 /** Everything the scripted client was asked, in order. */
@@ -120,6 +130,12 @@ export type QsbCalls = {
   readonly quote: (readonly [string, number, number])[];
   readonly deposit: (readonly [string, number, number, number])[];
   readonly resend: (readonly [string, number])[];
+  readonly withdrawalQuote: (readonly [string, number, string])[];
+  readonly withdrawalStart: (readonly [string, number, string, number])[];
+  readonly withdrawalReview: (readonly [string, number])[];
+  /** Each release as sent: account, deposit, digest and the passphrase typed. */
+  readonly release: (readonly [string, number, string, string])[];
+  readonly withdrawalResend: (readonly [string, number])[];
 };
 
 const pending = <T>(): Promise<T> => new Promise<T>(() => undefined);
@@ -139,9 +155,14 @@ export const scriptedQsbWallet = (
     import: [],
     list: [],
     quote: [],
+    release: [],
     resend: [],
     reveal: [],
     vaults: [],
+    withdrawalQuote: [],
+    withdrawalResend: [],
+    withdrawalReview: [],
+    withdrawalStart: [],
   };
   const answer = <T>(scripted: Scripted<T> | undefined): Promise<T> =>
     scripted ? settle(scripted) : pending();
@@ -165,6 +186,26 @@ export const scriptedQsbWallet = (
     resendQsbDeposit: (id, v) => {
       calls.resend.push([id, v]);
       return answer(script.resend);
+    },
+    quoteQsbWithdrawal: (id, v, destination) => {
+      calls.withdrawalQuote.push([id, v, destination]);
+      return answer(script.withdrawalQuote);
+    },
+    releaseQsbWithdrawal: (id, v, digest, typed) => {
+      calls.release.push([id, v, digest, typed]);
+      return answer(script.release);
+    },
+    resendQsbWithdrawal: (id, v) => {
+      calls.withdrawalResend.push([id, v]);
+      return answer(script.withdrawalResend);
+    },
+    reviewQsbWithdrawal: (id, v) => {
+      calls.withdrawalReview.push([id, v]);
+      return answer(script.withdrawalReview);
+    },
+    startQsbWithdrawal: (id, v, destination, feeSat) => {
+      calls.withdrawalStart.push([id, v, destination, feeSat]);
+      return answer(script.withdrawalStart);
     },
     confirmQsbBackup: (id, words) => {
       calls.confirm.push([id, words]);
