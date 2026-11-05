@@ -39,6 +39,7 @@ const CONFIG = {
   network: "mainnet",
   operationsEnabled: true,
   ownerLimits: { allowlist: false, allowlisted: null, maxActiveJobs: null, maxGpuSeconds: null },
+  solverReleaseId: "qsb-ranked-v2-40b5d9f9f741-6b4ac63b897c",
 };
 
 describe("deployment answers", () => {
@@ -48,7 +49,11 @@ describe("deployment answers", () => {
       network: "mainnet",
       operationsEnabled: true,
       ownerLimits: { allowlisted: null },
+      solverReleaseId: CONFIG.solverReleaseId,
     });
+    for (const solverReleaseId of [undefined, null, "Bad Release", 7]) {
+      expect(readQsbConfig({ ...CONFIG, solverReleaseId })?.solverReleaseId).toBeNull();
+    }
     expect(readQsbConfig({ ...CONFIG, ownerLimits: null })?.ownerLimits).toBeNull();
     expect(readQsbConfig({ ...CONFIG, operationsEnabled: "true" })).toBeNull();
     expect(readQsbConfig({ ...CONFIG, ownerLimits: { allowlisted: "no" } })).toBeNull();

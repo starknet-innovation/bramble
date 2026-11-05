@@ -60,7 +60,7 @@ import {
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
-import { isQsbVaultMessage, keyBoundaryQsbVaults, qsbDepositFee } from "./key-boundary-qsb-vaults";
+import { isQsbVaultMessage, keyBoundaryQsbVaults, qsbLiveIds } from "./key-boundary-qsb-vaults";
 import type { KeyBoundaryLiveIds } from "./key-boundary-types";
 import { awaitStrk20Job, strk20RunningJobId } from "./strk20-background";
 
@@ -73,6 +73,8 @@ export type KeyBoundaryHarness = {
   readonly handler: ReturnType<typeof createMessageHandler>;
   readonly liveIds: KeyBoundaryLiveIds;
   /** Every coordinator token the QSB vault entries were given: none may leak. */
+  /** Every preimage the stand-in QSB `finish` was handed. */
+  readonly qsbFinished: () => readonly string[];
   readonly qsbTokens: () => readonly string[];
   readonly session: UnlockSession;
   readonly settle: (message: Record<string, unknown>, sender: RuntimeSender) => Promise<unknown>;
@@ -324,7 +326,7 @@ export const makeKeyBoundaryHarness = async (
       if (!id) throw new Error("removable token was not stored");
       return id;
     },
-    qsbDepositFee: () => qsbDepositFee(handler),
+    ...qsbLiveIds(handler, qsb.state),
     tokenId: ETH.id,
     unregisterStrk20Account() {
       chainState.strk20Registered = false;
@@ -334,7 +336,15 @@ export const makeKeyBoundaryHarness = async (
   if (options.unlocked === false) {
     session.lock();
   }
-  return { handler, liveIds, qsbTokens: () => [...qsb.state.tokens], session, settle, unlock };
+  return {
+    handler,
+    liveIds,
+    qsbFinished: qsb.finished,
+    qsbTokens: () => [...qsb.state.tokens],
+    session,
+    settle,
+    unlock,
+  };
 };
 
 // A preparation answers with its one-time record nested under a per-flow key;

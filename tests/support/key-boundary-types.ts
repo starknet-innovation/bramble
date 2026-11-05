@@ -55,6 +55,14 @@ export type KeyBoundaryLiveIds = {
   readonly nftId: string;
   /** Quotes the QSB deposit the catalog's deposit entry makes, for its exact fee. */
   readonly qsbDepositFee: () => Promise<number>;
+  /** Confirms the catalog's QSB deposit and gives its owner a helper output. */
+  readonly qsbConfirmDeposit: () => Promise<void>;
+  /** Quotes the catalog's QSB withdrawal, for its exact fee. */
+  readonly qsbWithdrawalFee: () => Promise<number>;
+  /** Solves the catalog's QSB withdrawal job with the stand-in solution. */
+  readonly qsbSolveWithdrawal: () => void;
+  /** The digest the catalog's QSB withdrawal review reports now. */
+  readonly qsbWithdrawalDigest: () => Promise<string>;
   /** Tracks a fresh non-default token and returns its id, for removal. */
   readonly removableTokenId: () => Promise<string>;
   /** Queues an unanswered dapp invoke approval and returns its id. */

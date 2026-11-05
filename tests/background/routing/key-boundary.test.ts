@@ -32,7 +32,7 @@ import {
 import { handledWalletMessages } from "../../support/key-boundary-handled";
 import { makeKeyBoundaryHarness } from "../../support/key-boundary-harness";
 import { KEY_BOUNDARY_MESSAGES } from "../../support/key-boundary-messages";
-import { SECRET_QSB_OWNER_KEY } from "../../support/key-boundary-qsb-vaults";
+import { SECRET_QSB_OWNER_KEY, SECRET_QSB_PREIMAGES } from "../../support/key-boundary-qsb-vaults";
 import {
   KEY_BOUNDARY_QSB_JOURNAL_IDS,
   QSB_IMPORT_MNEMONIC,
@@ -106,9 +106,12 @@ describe("key boundary", () => {
       "wallet.confirmQsbBackup",
       "wallet.depositQsbVault",
       "wallet.qsbVaults",
+      "wallet.releaseQsbWithdrawal",
+      "wallet.releaseQsbWithdrawal",
       "wallet.removeMultisig",
       "wallet.revealQsbPhrase",
       "wallet.shareArgentMultisigIntent",
+      "wallet.startQsbWithdrawal",
       "wallet.status",
       "wallet.syncArgentMultisigIntents",
       "wallet.unlock",
@@ -237,6 +240,12 @@ describe("key boundary", () => {
       // container: a vault reply is public views only.
       expect(serialized).not.toContain(SECRET_QSB_OWNER_KEY);
       expect(serialized).not.toContain("rawTxHex");
+      // Nor a disclosed QSB preimage, a withdrawal's manifest or its job id.
+      for (const preimage of SECRET_QSB_PREIMAGES) {
+        expect(serialized).not.toContain(preimage);
+      }
+      expect(serialized).not.toContain("manifestJson");
+      expect(serialized).not.toContain("jobId");
       for (const token of harness.qsbTokens()) {
         expect(serialized).not.toContain(token);
       }
@@ -252,6 +261,8 @@ describe("key boundary", () => {
     }
     // The token grep was armed: the vault entries really signed in.
     expect(harness.qsbTokens().length).toBeGreaterThan(0);
+    // And the preimage grep: the release really disclosed exactly those 15.
+    expect(harness.qsbFinished()).toEqual(SECRET_QSB_PREIMAGES);
   });
 
   test("mnemonic generation reveals only to extension pages", async () => {

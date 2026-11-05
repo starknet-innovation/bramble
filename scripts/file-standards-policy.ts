@@ -123,6 +123,13 @@ export const SECRET_MATERIAL_FILES = new Set([
   // polled listing, renewed for user actions) straight to the vault service's
   // QSB session; replies are public vault data only. Never logged or kept.
   "apps/extension/src/background/qsb/qsb-vault-ops.ts",
+  // QSB withdrawal parsers: bound the re-entered vault credential of a
+  // release; nothing is echoed, logged, or persisted.
+  "apps/extension/src/background/qsb/qsb-withdrawal-inputs.ts",
+  // QSB withdrawal handlers: hand the session's vault credential, or for the
+  // release the re-entered one, straight to the vault service's QSB session;
+  // replies are public withdrawal data only. Never logged or kept.
+  "apps/extension/src/background/qsb/qsb-withdrawal-ops.ts",
   "apps/extension/src/background/runtime/session.ts",
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",

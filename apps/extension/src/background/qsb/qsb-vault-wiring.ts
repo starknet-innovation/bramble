@@ -30,6 +30,7 @@ export const createQsbVaultWiring = (input: {
     clearSessions: sessions.clear,
     coordinator: createQsbCoordinator({ fetch: input.fetch }),
     coordinatorAccess: input.access,
+    drawJobId: () => crypto.randomUUID(),
     drawVaultId: () => crypto.randomUUID(),
     locks: createQsbAccountLocks(),
     now: input.now,

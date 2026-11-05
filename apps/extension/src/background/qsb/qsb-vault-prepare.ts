@@ -11,8 +11,9 @@
  * commitments and must equal the journal's and the coordinator's, which
  * lists the vault unfunded, depositable, owned by this address, and no other
  * vault of this owner pushes one of its commitments; the fee rate is MARA's
- * floor; the owner's confirmed outputs are selected deterministically and
- * must cover amount and fee; each one's previous transaction is fetched and
+ * floor; the owner's confirmed outputs, less every helper output a
+ * withdrawal has frozen, are selected deterministically and must cover
+ * amount and fee; each one's previous transaction is fetched and
  * must be the txid it claims and pay the owner exactly its value; and the
  * PSBT is built from them.
  */
@@ -113,6 +114,21 @@ export const depositableServerVault = (
   return server;
 };
 
+/**
+ * The owner's outputs a deposit may spend: every helper a withdrawal intent
+ * holds is frozen from that intent on, since spending it would leave the
+ * withdrawal's `T` unspendable. Refused when the withdrawals cannot be read.
+ */
+const spendableCoins = async (
+  access: Pick<QsbVaultAccess, "withdrawals">,
+  coins: readonly QsbOutpoint[],
+): Promise<readonly QsbOutpoint[]> => {
+  const withdrawals = await access.withdrawals();
+  if (withdrawals === null) throw journalUnavailable();
+  const frozen = new Set(withdrawals.map(({ helper }) => `${helper.txid}:${helper.vout}`));
+  return coins.filter((coin) => !frozen.has(`${coin.txid}:${coin.vout}`));
+};
+
 /** MARA's floor in millisatoshis per vB, read now; any failure fails closed. */
 export const minerFloorMsat = async (deps: QsbVaultDeps): Promise<bigint> => {
   const floor = await deps.coordinator.rates().then(qsbMinerFloorMsat, () => null);
@@ -170,7 +186,10 @@ export const prepareQsbDeposit = async (
   const listed = await session.call((token) => deps.coordinator.vaults(token));
   const server = depositableServerVault(listed, built, owner);
   const rateMsat = await minerFloorMsat(deps);
-  const coins = await session.call((token) => deps.coordinator.paymentUtxos(token));
+  const coins = await spendableCoins(
+    access,
+    await session.call((token) => deps.coordinator.paymentUtxos(token)),
+  );
   const selection = selectQsbCoins({
     amountSat: request.amountSat,
     coins,

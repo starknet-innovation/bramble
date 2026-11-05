@@ -17,6 +17,7 @@ import { QsbCoordinatorFailure } from "@bramble/qsb/client";
 import type { QsbJournalRefusal } from "@bramble/vault/qsb-journal";
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
 import { QSB_VAULT_REFUSALS } from "@bramble/wallet-model/qsb-vaults";
+import { QSB_WITHDRAWAL_REFUSALS } from "@bramble/wallet-model/qsb-withdrawals";
 
 /** One of the contract's vault refusals, by name. */
 export type QsbVaultRefusal = keyof typeof QSB_VAULT_REFUSALS;
@@ -25,6 +26,13 @@ export type QsbVaultRefusal = keyof typeof QSB_VAULT_REFUSALS;
 export const qsbRefusal = (name: QsbVaultRefusal): RefusedBeforeWrite =>
   new RefusedBeforeWrite(QSB_VAULT_REFUSALS[name]);
 
+/** One of the contract's withdrawal refusals, by name. */
+export type QsbWithdrawalRefusal = keyof typeof QSB_WITHDRAWAL_REFUSALS;
+
+/** The withdrawal refusal `name`, raised before anything was disclosed or sent. */
+export const withdrawalRefusal = (name: QsbWithdrawalRefusal): RefusedBeforeWrite =>
+  new RefusedBeforeWrite(QSB_WITHDRAWAL_REFUSALS[name]);
+
 /** The account refusal that a missing or unreadable history is. */
 export const journalUnavailable = (): RefusedBeforeWrite =>
   new RefusedBeforeWrite(QSB_ACCOUNT_REFUSALS.journalUnavailable);
@@ -32,6 +40,7 @@ export const journalUnavailable = (): RefusedBeforeWrite =>
 const NAMED: ReadonlySet<string> = new Set([
   ...Object.values(QSB_VAULT_REFUSALS),
   ...Object.values(QSB_ACCOUNT_REFUSALS),
+  ...Object.values(QSB_WITHDRAWAL_REFUSALS),
 ]);
 
 // The codes whose refusal is the deployment's, for this owner, before it
@@ -93,8 +102,15 @@ export const journalRefusal = (refusal: QsbJournalRefusal): RefusedBeforeWrite =
  * Runs `run`, letting a named refusal through and turning a coordinator
  * failure into its refusal and anything else into `fallback`.
  */
-export const failClosed = async <T>(
-  fallback: QsbVaultRefusal,
+export const failClosed = <T>(fallback: QsbVaultRefusal, run: () => Promise<T>): Promise<T> =>
+  failClosedWith(() => qsbRefusal(fallback), run);
+
+/**
+ * {@link failClosed} with any fallback: a named refusal passes through, a
+ * coordinator failure becomes its contract refusal, anything else `fallback`.
+ */
+export const failClosedWith = async <T>(
+  fallback: () => Error,
   run: () => Promise<T>,
 ): Promise<T> => {
   try {
@@ -103,6 +119,6 @@ export const failClosed = async <T>(
     if (error instanceof WalletError && NAMED.has(error.message)) {
       throw error;
     }
-    throw error instanceof QsbCoordinatorFailure ? coordinatorRefusal(error) : qsbRefusal(fallback);
+    throw error instanceof QsbCoordinatorFailure ? coordinatorRefusal(error) : fallback();
   }
 };

@@ -133,6 +133,10 @@ export const qsbVaultHarness = async (
         return fake(url, init);
       },
     }),
+    drawJobId: () => {
+      drawn += 1;
+      return `21111111-2222-4333-8444-${String(drawn).padStart(12, "0")}`;
+    },
     drawVaultId: () => {
       drawn += 1;
       return `11111111-2222-4333-8444-${String(drawn).padStart(12, "0")}`;

@@ -1,6 +1,7 @@
 /**
  * A stand-in QSB coordinator for the vault suites and the extension E2E: the
- * routes a deposit uses, answered as qsb-app's `server/app.ts` answers them
+ * routes a deposit uses (and, through ./qsb-withdrawal-fake, a withdrawal),
+ * answered as qsb-app's `server/app.ts` answers them
  * (shapes, status codes, refusal codes), over an in-memory owner and chain.
  *
  * It enforces what the real deployment enforces at its edge, so a client
@@ -23,6 +24,13 @@ import type {
   QsbHorsCommitments,
   QsbVaultSetup,
 } from "../../apps/extension/src/background/qsb/qsb-vault-setup";
+import {
+  type FakeWithdrawalRuntime,
+  type FakeWithdrawalWorld,
+  fakeWithdrawalRuntime,
+  WITHDRAWAL_HANDLERS,
+  withdrawalRoute,
+} from "./qsb-withdrawal-fake";
 
 /** One owner output the fake chain holds, with its whole previous transaction. */
 export type FakeUtxo = {
@@ -33,7 +41,7 @@ export type FakeUtxo = {
 };
 
 /** The coordinator's mutable world. */
-export type FakeCoordinatorState = {
+export type FakeCoordinatorState = Omit<FakeWithdrawalWorld, "utxos"> & {
   readonly calls: string[];
   config: Record<string, unknown>;
   confirmed: Set<string>;
@@ -80,16 +88,20 @@ export const fakeCoordinatorState = (
     network: "mainnet",
     operationsEnabled: true,
     ownerLimits: { allowlist: false, allowlisted: null, maxActiveJobs: null, maxGpuSeconds: null },
+    solverReleaseId: "qsb-ranked-v2-40b5d9f9f741-6b4ac63b897c",
   },
   confirmed: new Set(),
+  jobs: new Map(),
   owner,
   rates: { market_rate: 1, submit_fee_rate: 2 },
   refusals: new Map(),
   signedIn: new Map(),
   submission: "submitted",
   tokens: new Set(),
+  transactions: new Map(),
   utxos,
   vaults: new Map(),
+  withdrawalSubmission: "submitted",
 });
 
 const RATES_EXTRA = {
@@ -203,7 +215,8 @@ const authenticated = (state: FakeCoordinatorState, request: FakeRequest): boole
 
 const routeOf = (request: FakeRequest): string => {
   const path = new URL(request.url).pathname.replace(/^\/v1/, "");
-  return `${request.method} ${path.replace(/\/vaults\/[0-9a-f-]{36}/, "/vaults/:id")}`;
+  const labelled = withdrawalRoute(path).path;
+  return `${request.method} ${labelled.replace(/\/vaults\/[0-9a-f-]{36}/, "/vaults/:id")}`;
 };
 
 type Handler = (
@@ -279,9 +292,11 @@ export const answerQsbRequest = (
     return refused(401, "auth_required");
   const handler = HANDLERS[route];
   const id = /\/vaults\/([0-9a-f-]{36})/.exec(request.url)?.[1] ?? "";
-  return handler
-    ? handler(state, JSON.parse(request.body ?? "{}"), id, now)
-    : refused(404, "not_found");
+  const body = JSON.parse(request.body ?? "{}");
+  if (handler) return handler(state, body, id, now);
+  const withdrawal = WITHDRAWAL_HANDLERS[route];
+  const path = new URL(request.url).pathname.replace(/^\/v1/, "");
+  return withdrawal ? withdrawal(state, body, withdrawalRoute(path).id) : refused(404, "not_found");
 };
 
 /** A fetch over the fake, at the injected clock. */
@@ -311,11 +326,11 @@ export const fakeQsbFetch =
  * The runtime stand-in: 300 commitment pushes and OP_CHECKSIG, with a public
  * state of the bridge's shape holding the very commitments and script.
  */
-export const fakeQsbRuntime = (): {
+export const fakeQsbRuntime = (): FakeWithdrawalRuntime & {
   calls: number;
   setupFromCommitments: (commitments: QsbHorsCommitments) => Promise<QsbVaultSetup>;
 } => {
-  const runtime = {
+  const runtime = Object.assign(fakeWithdrawalRuntime(), {
     calls: 0,
     async setupFromCommitments(commitments: QsbHorsCommitments): Promise<QsbVaultSetup> {
       runtime.calls += 1;
@@ -334,7 +349,7 @@ export const fakeQsbRuntime = (): {
       });
       return { publicStateJson, scriptHash: sha256(Buffer.from(scriptHex, "hex")), scriptHex };
     },
-  };
+  });
   return runtime;
 };
 

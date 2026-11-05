@@ -32,23 +32,30 @@ import {
 import { listQsbVaults } from "./qsb-vault-list";
 import type { QsbVaultDeps } from "./qsb-vault-session";
 
-type QsbVaultHandler = (ctx: RouterContext, message: unknown) => Promise<RuntimeResponse>;
+/** One QSB message handler. */
+export type QsbVaultHandler = (ctx: RouterContext, message: unknown) => Promise<RuntimeResponse>;
 
-const UNAVAILABLE: RuntimeResponse = { error: "wallet unavailable" };
+/** The answer for a wallet or root without QSB vault wiring. */
+export const UNAVAILABLE: RuntimeResponse = { error: "wallet unavailable" };
 const LOCKED: RuntimeResponse = { error: "wallet locked" };
 
-// Runs one flow over one vault session of one account.
-type QsbVaultOpener = <T>(task: (access: QsbVaultAccess) => Promise<T>) => Promise<T>;
+/** Runs one flow over one vault session of one account. */
+export type QsbVaultOpener = <T>(task: (access: QsbVaultAccess) => Promise<T>) => Promise<T>;
 
-type Wired = {
+// The vault deps and a session opener over any vault password.
+type QsbVaultWired = {
   readonly deps: QsbVaultDeps;
   readonly opener: (vaultPassphrase: string) => QsbVaultOpener;
 };
 
-// The vault deps and a session opener for one account, or null when unwired.
-// Every flow runs under the account's QSB lock, end to end; its session takes
-// the vault's queue only for each short local step.
-const wiredFor = (ctx: RouterContext, accountId: string): Wired | null => {
+type Wired = QsbVaultWired;
+
+/**
+ * The vault deps and a session opener for one account, or null when unwired.
+ * Every flow runs under the account's QSB lock, end to end; its session takes
+ * the vault's queue only for each short local step.
+ */
+export const wiredFor = (ctx: RouterContext, accountId: string): Wired | null => {
   const deps = ctx.qsbVaults;
   const open = ctx.wallet.withQsbVaultAccount;
   if (!deps || !open) return null;
@@ -59,8 +66,8 @@ const wiredFor = (ctx: RouterContext, accountId: string): Wired | null => {
   };
 };
 
-// Runs a user action under the renewed session.
-const asUser = async (
+/** Runs a user action under the renewed session. */
+export const asUser = async (
   ctx: RouterContext,
   accountId: string,
   run: (wired: Wired, open: QsbVaultOpener) => Promise<RuntimeResponse>,

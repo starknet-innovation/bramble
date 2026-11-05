@@ -1,12 +1,15 @@
 /**
- * Key-boundary catalog slice for the QSB account and vault messages, split
- * from ./key-boundary-messages by the size budget. All ten are extension-page
- * only. `wallet.revealQsbPhrase` is the one reply sanctioned to carry a QSB
+ * Key-boundary catalog slice for the QSB account, vault and withdrawal
+ * messages, split from ./key-boundary-messages by the size budget. All
+ * fifteen are extension-page only. `wallet.revealQsbPhrase` is the one reply sanctioned to carry a QSB
  * phrase; the scan holds every other QSB reply to carrying no phrase, no
  * journal id, no `qsbAccounts` record, no owner key and no coordinator token.
- * The negative entries are here because a refusal must leak nothing either: a
- * wrong password on the reveal, a wrong word on the backup check, a deposit
- * at a fee other than the quoted one, and an unknown account's vaults.
+ * The withdrawal entries run after the deposit's, over the same vault, and
+ * the release really discloses: no reply may carry a preimage either. The
+ * negative entries are here because a refusal must leak nothing: a wrong
+ * password on the reveal or the release, a wrong word on the backup check, a
+ * deposit or withdrawal at a fee other than the quoted one, a release of a
+ * digest other than the reviewed one, and an unknown account's vaults.
  */
 import {
   extensionSender,
@@ -14,7 +17,11 @@ import {
   SECRET_PASSPHRASE,
   SECRET_QSB_MNEMONIC,
 } from "./key-boundary-fixtures";
-import { KEY_BOUNDARY_QSB_AMOUNT, KEY_BOUNDARY_QSB_VAULT } from "./key-boundary-qsb-vaults";
+import {
+  KEY_BOUNDARY_QSB_AMOUNT,
+  KEY_BOUNDARY_QSB_DESTINATION,
+  KEY_BOUNDARY_QSB_VAULT,
+} from "./key-boundary-qsb-vaults";
 import { QSB_IMPORT_MNEMONIC } from "./key-boundary-qsb-wallet";
 import type { KeyBoundaryMessage } from "./key-boundary-types";
 
@@ -24,6 +31,14 @@ const depositOf = {
   amountSat: KEY_BOUNDARY_QSB_AMOUNT,
   v: KEY_BOUNDARY_QSB_VAULT,
 } as const;
+
+// The withdrawal the vault entries quote, start, review and release.
+const withdrawalOf = {
+  accountId: qsbAccount.id,
+  destination: KEY_BOUNDARY_QSB_DESTINATION,
+  v: KEY_BOUNDARY_QSB_VAULT,
+} as const;
+const vaultOf = { accountId: qsbAccount.id, v: KEY_BOUNDARY_QSB_VAULT } as const;
 
 // Three distinct positions of the stub vault's QSB phrase, retyped.
 const CHECK_POSITIONS = [0, 11, 23] as const;
@@ -101,4 +116,64 @@ export const QSB_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     negative: "an unknown account is refused without opening any vault or naming one",
     sender: extensionSender,
   },
+  // The withdrawal entries, in journey order: once the deposit is confirmed,
+  // quote, start at the quoted fee, review the solved job, release, resend.
+  {
+    live: async (ids) => {
+      await ids.qsbConfirmDeposit();
+      return {};
+    },
+    message: { ...withdrawalOf, type: "wallet.quoteQsbWithdrawal" },
+    sender: extensionSender,
+  },
+  {
+    message: { ...withdrawalOf, feeSat: 1, type: "wallet.startQsbWithdrawal" },
+    negative: "a withdrawal at a fee other than the quoted one keeps and sends nothing",
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ feeSat: await ids.qsbWithdrawalFee() }),
+    message: { ...withdrawalOf, feeSat: 0, type: "wallet.startQsbWithdrawal" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => {
+      ids.qsbSolveWithdrawal();
+      return {};
+    },
+    message: { ...vaultOf, type: "wallet.reviewQsbWithdrawal" },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      ...vaultOf,
+      digest: "00".repeat(32),
+      passphrase: SECRET_PASSPHRASE,
+      type: "wallet.releaseQsbWithdrawal",
+    },
+    negative: "a release of a digest other than the reviewed one discloses nothing",
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ digest: await ids.qsbWithdrawalDigest() }),
+    message: {
+      ...vaultOf,
+      digest: "00".repeat(32),
+      passphrase: "wrong passphrase!!",
+      type: "wallet.releaseQsbWithdrawal",
+    },
+    negative: "a wrong password on a release discloses nothing, nor echoes the vault",
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ digest: await ids.qsbWithdrawalDigest() }),
+    message: {
+      ...vaultOf,
+      digest: "00".repeat(32),
+      passphrase: SECRET_PASSPHRASE,
+      type: "wallet.releaseQsbWithdrawal",
+    },
+    sender: extensionSender,
+  },
+  { message: { ...vaultOf, type: "wallet.resendQsbWithdrawal" }, sender: extensionSender },
 ];

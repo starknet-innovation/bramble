@@ -30,6 +30,8 @@ export type QsbConfig = {
   readonly operationsEnabled: boolean;
   /** Null when the deployment's owner limits are misconfigured. */
   readonly ownerLimits: { readonly allowlisted: boolean | null } | null;
+  /** The solver release a withdrawal job must pin, or null when none is served. */
+  readonly solverReleaseId: string | null;
 };
 
 /** MARA Slipstream's two floor inputs, in sat/vB. */
@@ -64,6 +66,7 @@ const RATE_KEYS = [
   "submit_fee_rate",
 ] as const;
 const SESSION_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const SOLVER_RELEASE = /^[a-z0-9][a-z0-9-]{0,127}$/;
 const ERROR_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 const MAX_CHALLENGE_LENGTH = 1_000;
 // The owner's confirmed outputs Bramble will consider; an address with more
@@ -81,16 +84,28 @@ const readOwnerLimits = (value: unknown): QsbConfig["ownerLimits"] | undefined =
   return allowlisted === null || typeof allowlisted === "boolean" ? { allowlisted } : undefined;
 };
 
-/** Parses `GET /v1/config`, reading the gate fields only. */
+/**
+ * Parses `GET /v1/config`, reading the gate fields only. A solver release id
+ * outside its grammar reads as none served, which a withdrawal refuses.
+ */
 export const readQsbConfig = (value: unknown): QsbConfig | null => {
   if (!isRecord(value)) return null;
   const ownerLimits = readOwnerLimits(value["ownerLimits"]);
-  const { exactSubmitEnabled, network, operationsEnabled } = value;
+  const { exactSubmitEnabled, network, operationsEnabled, solverReleaseId } = value;
   return ownerLimits !== undefined &&
     typeof exactSubmitEnabled === "boolean" &&
     typeof network === "string" &&
     typeof operationsEnabled === "boolean"
-    ? { exactSubmitEnabled, network, operationsEnabled, ownerLimits }
+    ? {
+        exactSubmitEnabled,
+        network,
+        operationsEnabled,
+        ownerLimits,
+        solverReleaseId:
+          typeof solverReleaseId === "string" && SOLVER_RELEASE.test(solverReleaseId)
+            ? solverReleaseId
+            : null,
+      }
     : null;
 };
 

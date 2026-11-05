@@ -1,6 +1,6 @@
 /**
- * Replies of the five QSB vault messages, split from ./runtime-types by the
- * size budget. Every one is public data in the shared contract's shapes
+ * Replies of the five QSB vault messages and the five QSB withdrawal
+ * messages, split from ./runtime-types by the size budget. Every one is public data in the shared contract's shapes
  * (`@bramble/wallet-model/qsb-vaults`): the owner address, its confirmed
  * funds, vault views, a deposit quote and a submission outcome. None carries
  * a phrase, a key, a journal id, a coordinator id or token, or signed bytes.
@@ -11,6 +11,11 @@ import type {
   QsbSubmission,
   QsbVaultView,
 } from "@bramble/wallet-model/qsb-vaults";
+import type {
+  QsbWithdrawalQuote,
+  QsbWithdrawalReview,
+  QsbWithdrawalSubmission,
+} from "@bramble/wallet-model/qsb-withdrawals";
 
 /**
  * `wallet.qsbVaults` (address, funds or null, vaults), `wallet.createQsbVault`
@@ -28,3 +33,19 @@ export type QsbVaultResponse =
   | { readonly ok: true; readonly quote: QsbDepositQuote }
   | { readonly ok: true; readonly submission: QsbSubmission; readonly vault: QsbVaultView }
   | { readonly ok: true; readonly vault: QsbVaultView };
+
+/**
+ * `wallet.quoteQsbWithdrawal` (the quote), `wallet.startQsbWithdrawal` (the
+ * deposit, its withdrawal searching), `wallet.reviewQsbWithdrawal` (the
+ * release review), and `wallet.releaseQsbWithdrawal` and
+ * `wallet.resendQsbWithdrawal` (the deposit and how the coordinator took the
+ * withdrawal). None carries a preimage, a job id or signed bytes.
+ */
+export type QsbWithdrawalResponse =
+  | { readonly ok: true; readonly quote: QsbWithdrawalQuote }
+  | { readonly ok: true; readonly review: QsbWithdrawalReview }
+  | {
+      readonly ok: true;
+      readonly submission: QsbWithdrawalSubmission;
+      readonly vault: QsbVaultView;
+    };

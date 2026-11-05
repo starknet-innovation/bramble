@@ -21,6 +21,7 @@ import { QsbCoordinatorFailure } from "@bramble/qsb/client";
 import type { QsbSessions } from "@bramble/qsb/sessions";
 import { isOwnerKey, ownerP2wpkhScript } from "@bramble/qsb/transactions";
 import type { QsbOwner, QsbVaultAccess } from "@bramble/vault/service-types";
+import type { QsbRuntime } from "./qsb-runtime";
 import type { QsbCoordinatorAccess } from "./qsb-vault-access-grant";
 import type { QsbAccountLocks } from "./qsb-vault-locks";
 import { isSessionExpired, qsbRefusal } from "./qsb-vault-refusals";
@@ -33,11 +34,13 @@ export type QsbVaultDeps = {
   readonly coordinatorAccess: QsbCoordinatorAccess;
   /** A fresh random uuid for a vault's coordinator id. */
   readonly drawVaultId: () => string;
+  /** A fresh random v4 uuid for a withdrawal job's id (its idempotency key). */
+  readonly drawJobId: () => string;
   /** One promise chain per account: its flows run end to end one at a time. */
   readonly locks: QsbAccountLocks;
   /** Epoch milliseconds. */
   readonly now: () => number;
-  readonly runtime: {
+  readonly runtime: Pick<QsbRuntime, "finish" | "prepare"> & {
     readonly setupFromCommitments: (commitments: QsbHorsCommitments) => Promise<QsbVaultSetup>;
   };
   readonly sessions: QsbSessions;
@@ -93,13 +96,15 @@ const signIn = async (
 };
 
 // Opens the account's coordinator session; nothing is sent until a call runs.
+// A held token is reused only while it lives `minRemainingMs` longer.
 const qsbCoordinatorSession = (
   deps: QsbVaultDeps,
   accountId: string,
   signer: QsbSigner,
+  minRemainingMs: number,
 ): QsbCoordinatorSession => ({
   async call(run) {
-    const held = deps.sessions.token(accountId, signer.address);
+    const held = deps.sessions.token(accountId, signer.address, minRemainingMs);
     const token = held ?? (await signIn(deps, accountId, signer));
     try {
       return await run(token);
@@ -111,13 +116,29 @@ const qsbCoordinatorSession = (
   },
 });
 
-/** The session of the account `access` is over, signing in with its owner key. */
+/**
+ * How long a session must still live for a withdrawal review or release: a
+ * release that signs in afresh first can never find its session expired
+ * between disclosure and submission.
+ */
+export const QSB_FRESH_SESSION_MS = 15 * 60_000;
+
+/**
+ * The session of the account `access` is over, signing in with its owner key.
+ * With `minRemainingMs`, a held token with less life left is not reused.
+ */
 export const qsbAccessSession = (
   deps: QsbVaultDeps,
   access: Pick<QsbVaultAccess, "accountId" | "signSignIn">,
   owner: QsbOwner,
+  minRemainingMs = 0,
 ): QsbCoordinatorSession =>
-  qsbCoordinatorSession(deps, access.accountId, {
-    address: owner.address,
-    signSignIn: (message) => access.signSignIn(message),
-  });
+  qsbCoordinatorSession(
+    deps,
+    access.accountId,
+    {
+      address: owner.address,
+      signSignIn: (message) => access.signSignIn(message),
+    },
+    minRemainingMs,
+  );

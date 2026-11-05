@@ -30,8 +30,12 @@ export type QsbSessions = {
     token: string,
     signInStartedMs: number,
   ) => void;
-  /** The account's live token for exactly `address`, or null. */
-  readonly token: (accountId: string, address: string) => string | null;
+  /**
+   * The account's live token for exactly `address`, or null; with
+   * `minRemainingMs`, only one that lives at least that much longer, so a
+   * flow about to disclose secrets never runs on a session about to expire.
+   */
+  readonly token: (accountId: string, address: string, minRemainingMs?: number) => string | null;
 };
 
 type Held = { readonly address: string; readonly expiresAt: number; readonly token: string };
@@ -51,9 +55,9 @@ export const createQsbSessions = (deps: { readonly now: () => number }): QsbSess
         token,
       });
     },
-    token: (accountId, address) => {
+    token: (accountId, address, minRemainingMs = 0) => {
       const entry = held.get(accountId);
-      if (!entry || entry.address !== address || deps.now() >= entry.expiresAt) {
+      if (!entry || entry.address !== address || deps.now() + minRemainingMs >= entry.expiresAt) {
         held.delete(accountId);
         return null;
       }

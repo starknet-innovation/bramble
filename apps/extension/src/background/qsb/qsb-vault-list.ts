@@ -1,6 +1,8 @@
 /**
  * `wallet.qsbVaults`: the account's owner address, its confirmed funds and
- * every vault, matched to the coordinator's records by script hash. Like
+ * every vault, matched to the coordinator's records by script hash, each with
+ * its deposit's withdrawal (./qsb-withdrawal-view), whose jobs and
+ * transaction statuses are asked for only when a withdrawal is kept here. Like
  * every QSB flow it takes the vault's mutation queue only for its local
  * reads and writes, one short slot each, never across the network: it reads
  * the journal, the pending deposits and the owner, asks the coordinator
@@ -20,6 +22,7 @@ import { isVaultFunding } from "@bramble/qsb/transactions";
 import type { QsbFundingStatus, QsbPublicVault } from "@bramble/qsb/vault-responses";
 import type { QsbPendingDeposit } from "@bramble/vault/qsb-deposit-store";
 import type { QsbFunding, QsbVaultRecord } from "@bramble/vault/qsb-vault-record";
+import type { QsbWithdrawalRecord } from "@bramble/vault/qsb-withdrawal-store";
 import type { QsbJournalState, QsbVaultAccess } from "@bramble/vault/service-types";
 import {
   QSB_MAX_SAT,
@@ -34,6 +37,12 @@ import {
   qsbOwnerOf,
 } from "./qsb-vault-session";
 import { qsbVaultView } from "./qsb-vault-view";
+import {
+  QSB_UNKNOWN_REMOTES,
+  type QsbWithdrawalRemotes,
+  readWithdrawalRemotes,
+} from "./qsb-withdrawal-remote";
+import { qsbWithdrawalView } from "./qsb-withdrawal-view";
 
 /** The `wallet.qsbVaults` reply, without `ok`. */
 export type QsbVaultsListing = {
@@ -45,6 +54,7 @@ export type QsbVaultsListing = {
 type Local = {
   readonly journal: Extract<QsbJournalState, { readonly status: "bound" }>;
   readonly pending: readonly QsbPendingDeposit[];
+  readonly withdrawals: readonly QsbWithdrawalRecord[];
 };
 
 type Confirmation = {
@@ -62,7 +72,11 @@ type Remote = {
 const readLocal = async (access: QsbVaultAccess): Promise<Local> => {
   const journal = await access.journal();
   if (journal.status !== "bound") throw journalUnavailable();
-  return { journal, pending: (await access.pendingDeposits()) ?? [] };
+  return {
+    journal,
+    pending: (await access.pendingDeposits()) ?? [],
+    withdrawals: (await access.withdrawals()) ?? [],
+  };
 };
 
 // The deposit `/funding` proves confirmed for `record`, or null.
@@ -136,7 +150,11 @@ const recordConfirmations = async (
   return readLocal(access);
 };
 
-const viewsOf = (local: Local, remote: Remote | null): readonly QsbVaultView[] =>
+const viewsOf = (
+  local: Local,
+  remote: Remote | null,
+  withdrawals: QsbWithdrawalRemotes,
+): readonly QsbVaultView[] =>
   local.journal.vaults.map((record) =>
     qsbVaultView(
       record,
@@ -149,6 +167,10 @@ const viewsOf = (local: Local, remote: Remote | null): readonly QsbVaultView[] =
               null,
             vault: remote.vaults.find((vault) => vault.scriptHash === record.scriptHash),
           },
+      qsbWithdrawalView(
+        local.withdrawals.find((held) => held.v === record.v),
+        withdrawals(record.v),
+      ),
     ),
   );
 
@@ -162,9 +184,13 @@ export const listQsbVaults = (
     const owner = await qsbOwnerOf(access);
     const session = qsbAccessSession(deps, access, owner);
     // Without the user's grant the coordinator is not asked at all.
-    const remote = (await deps.coordinatorAccess())
-      ? await readRemote(deps, session, local).catch(() => null)
-      : null;
+    const granted = await deps.coordinatorAccess();
+    const remote = granted ? await readRemote(deps, session, local).catch(() => null) : null;
+    const withdrawals = granted
+      ? await readWithdrawalRemotes(deps, session, local.withdrawals).catch(
+          () => QSB_UNKNOWN_REMOTES,
+        )
+      : QSB_UNKNOWN_REMOTES;
     const settled =
       remote && remote.confirmations.length > 0
         ? await recordConfirmations(access, remote.confirmations).catch(() => local)
@@ -172,6 +198,6 @@ export const listQsbVaults = (
     return {
       address: owner.address,
       funds: remote?.funds ?? null,
-      vaults: viewsOf(settled, remote),
+      vaults: viewsOf(settled, remote, withdrawals),
     };
   });

@@ -1,11 +1,13 @@
 /**
- * The five QSB vault messages at the background router: extension pages only
+ * The five QSB vault messages and the five QSB withdrawal messages at the
+ * background router: extension pages only
  * (no content script or page reaches one, and none is dapp-reachable);
  * strict input parsing that refuses a malformed request before the wallet is
  * touched; the session's password peeked (never renewed) for the polled
  * listing and renewed for every user action, the quote included; a lock that
  * lands during the listing answering as a locked wallet; and a root without
- * QSB vault wiring answering unavailable.
+ * QSB vault wiring answering unavailable. The release alone opens the vault
+ * over the password in its own message, locked or not.
  */
 import { describe, expect, test } from "bun:test";
 import { RefusedBeforeWrite } from "@bramble/core/errors";
@@ -34,6 +36,34 @@ import {
 } from "../../support/background-wallet-stub";
 import { fakeQsbRuntime } from "../../support/qsb-coordinator-fake";
 
+/** One well-formed request per QSB withdrawal message type but the release. */
+const WITHDRAWAL_REQUESTS = {
+  quoteWithdrawal: {
+    accountId: "qsb-1",
+    destination: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
+    type: "wallet.quoteQsbWithdrawal",
+    v: 0,
+  },
+  resendWithdrawal: { accountId: "qsb-1", type: "wallet.resendQsbWithdrawal", v: 0 },
+  reviewWithdrawal: { accountId: "qsb-1", type: "wallet.reviewQsbWithdrawal", v: 0 },
+  startWithdrawal: {
+    accountId: "qsb-1",
+    destination: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
+    feeSat: 5_352,
+    type: "wallet.startQsbWithdrawal",
+    v: 0,
+  },
+} as const;
+
+/** The release, its password re-entered in the message. */
+const RELEASE = {
+  accountId: "qsb-1",
+  digest: "ab".repeat(32),
+  passphrase: "the password re-entered here",
+  type: "wallet.releaseQsbWithdrawal",
+  v: 0,
+} as const;
+
 /** One well-formed request per QSB vault message type. */
 const REQUESTS = {
   create: { accountId: "qsb-1", type: "wallet.createQsbVault" },
@@ -57,6 +87,7 @@ const offlineDeps = (): QsbVaultDeps => ({
     },
   }),
   coordinatorAccess: async () => true,
+  drawJobId: () => "21111111-2222-4333-8444-555555555555",
   drawVaultId: () => "11111111-2222-4333-8444-555555555555",
   locks: createQsbAccountLocks(),
   now: () => Date.UTC(2026, 10, 4),
@@ -234,6 +265,64 @@ describe("QSB vault message parsing", () => {
   ])("refuses %s before the wallet is touched", async (_label, request) => {
     const { handler, opened } = harness();
     const reply = (await handler(request, extensionSender)) as { readonly error?: string };
+    expect(reply.error).toMatch(/^invalid .*qsb .*request$/);
+    expect(opened).toEqual([]);
+  });
+});
+
+describe("QSB withdrawal messages", () => {
+  const ALL = [...Object.values(WITHDRAWAL_REQUESTS), RELEASE];
+
+  test("are extension-page only: no content script reaches one, and none is dapp-reachable", async () => {
+    const { handler, opened } = harness();
+    for (const request of ALL) {
+      expect(DAPP_MESSAGES.has(request.type)).toBe(false);
+      expect(isPrivilegedMessage(request.type)).toBe(true);
+      expect(await handler(request, contentSender)).toEqual({
+        error: "privileged sender required",
+      });
+      expect(await handler(request)).toEqual({ error: "untrusted sender" });
+    }
+    expect(opened).toEqual([]);
+  });
+
+  test("locked, all but the release answer as a locked wallet; the release opens over its own password", async () => {
+    const { handler, opened, session } = harness();
+    session.lock();
+    for (const request of Object.values(WITHDRAWAL_REQUESTS)) {
+      expect(await handler(request, extensionSender)).toEqual({ error: "wallet locked" });
+    }
+    expect(opened).toEqual([]);
+    await handler(RELEASE, extensionSender);
+    expect(opened).toEqual([{ accountId: "qsb-1", vaultPassphrase: RELEASE.passphrase }]);
+  });
+
+  test("a root without QSB vault wiring is unavailable", async () => {
+    const { handler } = harness({ wired: false });
+    for (const request of ALL) {
+      expect(await handler(request, extensionSender)).toEqual({ error: "wallet unavailable" });
+    }
+  });
+
+  test.each([
+    ["an extra key", { ...WITHDRAWAL_REQUESTS.reviewWithdrawal, extra: 1 }],
+    ["no destination", { ...WITHDRAWAL_REQUESTS.quoteWithdrawal, destination: undefined }],
+    [
+      "a destination past 100 characters",
+      { ...WITHDRAWAL_REQUESTS.quoteWithdrawal, destination: "b".repeat(101) },
+    ],
+    ["a fractional fee", { ...WITHDRAWAL_REQUESTS.startWithdrawal, feeSat: 1.5 }],
+    ["no fee", { ...WITHDRAWAL_REQUESTS.startWithdrawal, feeSat: undefined }],
+    ["an upper-case digest", { ...RELEASE, digest: "AB".repeat(32) }],
+    ["a short digest", { ...RELEASE, digest: "ab" }],
+    ["no password", { ...RELEASE, passphrase: undefined }],
+    ["an extra key on the release", { ...RELEASE, preimages: [] }],
+    ["a vault past 2^31", { ...WITHDRAWAL_REQUESTS.resendWithdrawal, v: 2 ** 31 }],
+  ])("refuses %s before the wallet is touched", async (_label, request) => {
+    const { handler, opened } = harness();
+    const reply = (await handler(JSON.parse(JSON.stringify(request)), extensionSender)) as {
+      readonly error?: string;
+    };
     expect(reply.error).toMatch(/^invalid .*qsb .*request$/);
     expect(opened).toEqual([]);
   });

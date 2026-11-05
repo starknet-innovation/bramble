@@ -1,8 +1,9 @@
 /**
  * The one projection of a QSB vault the panel may see (`QsbVaultView`):
- * its index and journal state, whether the coordinator holds its script, and
- * its one deposit as public chain data. It copies no other field, so no
- * script, root, journal id, server id or signed bytes reach a reply.
+ * its index and journal state, whether the coordinator holds its script, its
+ * one deposit as public chain data, and that deposit's withdrawal
+ * (./qsb-withdrawal-view). It copies no other field, so no script, root,
+ * journal id, server id, job id or signed bytes reach a reply.
  *
  * A deposit is `confirmed` only once the journal records its funding; it is
  * `pending` while its signed bytes are kept here; `submitted` when the
@@ -14,22 +15,13 @@ import type { QsbPendingDeposit } from "@bramble/vault/qsb-deposit-store";
 import type { QsbVaultRecord } from "@bramble/vault/qsb-vault-record";
 import type { QsbSubmission, QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
 import type { QsbWithdrawalView } from "@bramble/wallet-model/qsb-withdrawals";
+import { QSB_NO_WITHDRAWAL } from "./qsb-withdrawal-view";
 
 /** What the coordinator says about one vault, or null when it could not be asked. */
 export type QsbServerView = {
   readonly confirmations: number | null;
   readonly vault: QsbPublicVault | undefined;
 } | null;
-
-/** A deposit with no withdrawal started. */
-const NO_WITHDRAWAL: QsbWithdrawalView = {
-  confirmations: null,
-  destination: null,
-  feeSat: null,
-  outputSat: null,
-  status: "none",
-  txid: null,
-};
 
 const NO_DEPOSIT: QsbVaultView["deposit"] = {
   amountSat: null,
@@ -65,17 +57,21 @@ const depositOf = (
     : NO_DEPOSIT;
 };
 
-/** The view of `record`, with its pending deposit and what the coordinator said. */
+/**
+ * The view of `record`, with its pending deposit, what the coordinator said,
+ * and its withdrawal (none unless given).
+ */
 export const qsbVaultView = (
   record: QsbVaultRecord,
   pending: QsbPendingDeposit | undefined,
   server: QsbServerView,
+  withdrawal: QsbWithdrawalView = QSB_NO_WITHDRAWAL,
 ): QsbVaultView => ({
   deposit: depositOf(record, pending, server),
   registered: server === null ? null : server.vault !== undefined,
   state: record.state,
   v: record.v,
-  withdrawal: NO_WITHDRAWAL,
+  withdrawal,
 });
 
 /**
@@ -93,7 +89,7 @@ export const qsbSubmittedView = (
     registered: true,
     state: record.state,
     v: record.v,
-    withdrawal: NO_WITHDRAWAL,
+    withdrawal: QSB_NO_WITHDRAWAL,
   } as const;
   if (submission === "rejected") {
     return { ...base, deposit: NO_DEPOSIT };

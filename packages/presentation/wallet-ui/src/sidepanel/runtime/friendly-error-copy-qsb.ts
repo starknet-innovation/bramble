@@ -67,4 +67,11 @@ export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
   [QSB_WITHDRAWAL_REFUSALS.notWithdrawable, "This deposit can't be withdrawn."],
   [QSB_WITHDRAWAL_REFUSALS.quoteChanged, "The cost changed. Review the new quote."],
   [QSB_WITHDRAWAL_REFUSALS.reviewChanged, "The withdrawal changed. Review it again."],
+  // Not a refusal: the background's answer (`QSB_WITHDRAWAL_OUTCOME_UNKNOWN`)
+  // when secrets were released but no transaction could be built from them.
+  // The deposit stays ready, and releasing again repeats the same release.
+  [
+    "qsb withdrawal outcome unknown",
+    "Bramble couldn't finish this withdrawal. Check its status, then release it again.",
+  ],
 ];

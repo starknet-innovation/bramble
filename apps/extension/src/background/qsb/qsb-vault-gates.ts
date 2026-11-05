@@ -36,6 +36,19 @@ export const requireOwnerAllowed = (config: QsbConfig): void => {
   }
 };
 
+/**
+ * Refuses a deployment that cannot take a withdrawal end to end: one that
+ * will not serve this owner, has operations or MARA submission switched off,
+ * or serves no solver release a job could pin.
+ */
+export const requireWithdrawalsOpen = (config: QsbConfig): string => {
+  requireOwnerAllowed(config);
+  if (!config.operationsEnabled || !config.exactSubmitEnabled || config.solverReleaseId === null) {
+    throw qsbRefusal("coordinatorDisabled");
+  }
+  return config.solverReleaseId;
+};
+
 /** Also refuses one whose deposits or MARA submission are switched off. */
 export const requireDepositsOpen = (config: QsbConfig): void => {
   requireOwnerAllowed(config);
