@@ -81,7 +81,9 @@ describe("a QSB account", () => {
     expect(text(row(app, 0))).toBe("Deposit 1 Unfunded Fund");
     expect(text(row(app, 1))).toBe("Deposit 2 Waiting to send 0.00100000 BTC Resend");
     expect(text(row(app, 2))).toBe("Deposit 3 Sent 0.00100000 BTC 4a5e1e…a33b");
-    expect(text(row(app, 3))).toBe("Deposit 4 Funded · 3 confirmations 0.00100000 BTC 4a5e1e…a33b");
+    expect(text(row(app, 3))).toBe(
+      "Deposit 4 Funded · 3 confirmations 0.00100000 BTC 4a5e1e…a33b Withdraw",
+    );
     expect(text(row(app, 4))).toBe("Deposit 5 Withdrawn 0.00100000 BTC 4a5e1e…a33b");
     expect(text(row(app, 5))).toBe("Deposit 6 Unavailable");
     expect(app.querySelector("#qsb-vault-new")?.textContent).toBe("New deposit");

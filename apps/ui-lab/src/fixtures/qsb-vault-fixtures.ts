@@ -1,8 +1,8 @@
 /**
  * QSB vault and deposit fixtures for the UI Lab: the public BIP-173
  * P2WPKH example address, the genesis coinbase txid, one vault per row state,
- * a quote, a fixture client that answers the journey's account and vault
- * calls from a script, and the browser's coordinator grant. Nothing here is a
+ * a quote, a fixture client that answers the journey's account, vault and
+ * withdrawal calls from a script, and the browser's coordinator grant. Nothing here is a
  * wallet's own address or a real deposit; nothing reaches a background or
  * prompts the browser.
  */
@@ -17,6 +17,12 @@ export type QsbLabWallet = Parameters<typeof createQsbJourney>[0]["wallet"];
 export type QsbLabReading = Awaited<ReturnType<QsbLabWallet["loadQsbVaults"]>>;
 /** What a deposit or resend answers. */
 export type QsbLabResult = Awaited<ReturnType<QsbLabWallet["depositQsbVault"]>>;
+/** What a withdrawal quote answers. */
+export type QsbLabWithdrawalQuote = Awaited<ReturnType<QsbLabWallet["quoteQsbWithdrawal"]>>;
+/** What a release review answers. */
+export type QsbLabReview = Awaited<ReturnType<QsbLabWallet["reviewQsbWithdrawal"]>>;
+/** What a release or withdrawal resend answers. */
+export type QsbLabWithdrawalResult = Awaited<ReturnType<QsbLabWallet["releaseQsbWithdrawal"]>>;
 /** The browser permission API the journey checks and asks. */
 type QsbLabPermissions = NonNullable<Parameters<typeof createQsbJourney>[0]["permissions"]>;
 
@@ -48,7 +54,14 @@ export const QSB_LAB_ACCOUNTS = {
   },
 } as const satisfies Record<string, QsbAccountView>;
 
-const NO_WITHDRAWAL: QsbVaultView["withdrawal"] = { confirmations: null, destination: null, feeSat: null, outputSat: null, status: "none", txid: null };
+const NO_WITHDRAWAL: QsbVaultView["withdrawal"] = {
+  confirmations: null,
+  destination: null,
+  feeSat: null,
+  outputSat: null,
+  status: "none",
+  txid: null,
+};
 
 /** A vault at index `v` with nothing signed. */
 export const unfunded = (v: number): QsbVaultView => ({
@@ -124,7 +137,12 @@ export type QsbLabScript = {
   readonly deposit?: () => Promise<QsbLabResult>;
   readonly quote?: () => Promise<QsbDepositQuote>;
   readonly reading?: () => Promise<QsbLabReading>;
+  readonly release?: () => Promise<QsbLabWithdrawalResult>;
   readonly resend?: () => Promise<QsbLabResult>;
+  readonly review?: () => Promise<QsbLabReview>;
+  readonly startWithdrawal?: () => Promise<QsbVaultView>;
+  readonly withdrawalQuote?: () => Promise<QsbLabWithdrawalQuote>;
+  readonly withdrawalResend?: () => Promise<QsbLabWithdrawalResult>;
 };
 
 /** A fixture client over `script`; the account phrase calls are never asked here. */
@@ -137,8 +155,13 @@ export const qsbLabWallet = (script: QsbLabScript): QsbLabWallet => ({
   loadQsbAccounts: async () => script.accounts ?? [QSB_LAB_ACCOUNTS.ready],
   loadQsbVaults: script.reading ?? (async () => labReading(EVERY_VAULT)),
   quoteQsbDeposit: script.quote ?? (async () => QUOTE),
+  quoteQsbWithdrawal: script.withdrawalQuote ?? never,
+  releaseQsbWithdrawal: script.release ?? never,
   resendQsbDeposit: script.resend ?? never,
+  resendQsbWithdrawal: script.withdrawalResend ?? never,
   revealQsbPhrase: never,
+  reviewQsbWithdrawal: script.review ?? never,
+  startQsbWithdrawal: script.startWithdrawal ?? never,
 });
 
 /** What the background reads without the grant: no funds, registration unknown. */

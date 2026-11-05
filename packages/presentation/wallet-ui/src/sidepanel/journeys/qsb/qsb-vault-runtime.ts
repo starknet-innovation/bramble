@@ -57,7 +57,7 @@ const SUBMISSION_STATUSES: Readonly<Record<QsbSubmission, readonly QsbDepositSta
 };
 
 /** Whether `value` is a satoshi amount: an integer in `[0, QSB_MAX_SAT]`. */
-const isQsbSat = (value: unknown): value is number =>
+export const isQsbSat = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= QSB_MAX_SAT;
 
 /** Whether `value` is a vault index: a safe non-negative integer. */
@@ -86,7 +86,13 @@ const isDeposit = (value: unknown): value is QsbVaultView["deposit"] =>
 // A mainnet destination as text: bech32 `bc1…` or base58 `1…`/`3…`. The
 // background decides which types it accepts; this only bounds what is shown.
 const DESTINATION = /^(?:bc1[02-9ac-hj-np-z]{11,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/;
-const isQsbDestinationText = (value: unknown): value is string =>
+
+/**
+ * Whether `value` reads as a Bitcoin mainnet address: lowercase bech32
+ * `bc1…` or base58 `1…`/`3…`, within their lengths. A grammar only: the
+ * background's own check decides what it pays to.
+ */
+export const isQsbDestination = (value: unknown): value is string =>
   typeof value === "string" && DESTINATION.test(value);
 
 const WITHDRAWAL_STATUSES: readonly QsbWithdrawalStatus[] = [
@@ -102,9 +108,18 @@ const WITHDRAWAL_STATUSES: readonly QsbWithdrawalStatus[] = [
   "uncertain",
 ];
 
-// A withdrawal: its six keys, the status enum, and every other field null
-// while nothing has started.
-const isWithdrawal = (value: unknown): value is QsbWithdrawalView => {
+// Before release there is no transaction to name; from release on there is.
+const BEFORE_RELEASE: readonly QsbWithdrawalStatus[] = ["failed", "paused", "ready", "searching"];
+const RELEASED: readonly QsbWithdrawalStatus[] = ["confirmed", "pending", "submitted", "uncertain"];
+
+/**
+ * Whether `value` is exactly one {@link QsbWithdrawalView}: its six keys, the
+ * status enum, and the contract's rules. Nothing but `none` while nothing has
+ * started; a destination, fee and output once it has; no txid or
+ * confirmations before release, and a txid from release on (a conflict may
+ * have either); confirmations only beside a txid. Anything else is refused.
+ */
+export const isQsbWithdrawalView = (value: unknown): value is QsbWithdrawalView => {
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, [
@@ -117,19 +132,34 @@ const isWithdrawal = (value: unknown): value is QsbWithdrawalView => {
     ]) ||
     !WITHDRAWAL_STATUSES.some((status) => status === value["status"]) ||
     !(value["confirmations"] === null || isCount(value["confirmations"])) ||
-    !(value["destination"] === null || isQsbDestinationText(value["destination"])) ||
+    !(value["destination"] === null || isQsbDestination(value["destination"])) ||
     !(value["feeSat"] === null || isQsbSat(value["feeSat"])) ||
     !(value["outputSat"] === null || isQsbSat(value["outputSat"])) ||
     !(value["txid"] === null || isQsbTxid(value["txid"]))
   ) {
     return false;
   }
-  return (
-    value["status"] !== "none" ||
-    ["confirmations", "destination", "feeSat", "outputSat", "txid"].every(
+  const status = value["status"];
+  if (status === "none") {
+    return ["confirmations", "destination", "feeSat", "outputSat", "txid"].every(
       (key) => value[key] === null,
-    )
-  );
+    );
+  }
+  const feeSat = value["feeSat"];
+  const outputSat = value["outputSat"];
+  if (
+    value["destination"] === null ||
+    !isQsbSat(feeSat) ||
+    !isQsbSat(outputSat) ||
+    feeSat + outputSat > QSB_MAX_SAT ||
+    (value["confirmations"] !== null && value["txid"] === null)
+  ) {
+    return false;
+  }
+  if (BEFORE_RELEASE.some((entry) => entry === status)) {
+    return value["txid"] === null && value["confirmations"] === null;
+  }
+  return !RELEASED.some((entry) => entry === status) || value["txid"] !== null;
 };
 
 /**
@@ -141,7 +171,7 @@ export const isQsbVaultView = (value: unknown): value is QsbVaultView =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["deposit", "registered", "state", "v", "withdrawal"]) &&
   isDeposit(value["deposit"]) &&
-  isWithdrawal(value["withdrawal"]) &&
+  isQsbWithdrawalView(value["withdrawal"]) &&
   (value["registered"] === null || typeof value["registered"] === "boolean") &&
   VAULT_STATES.some((state) => state === value["state"]) &&
   isQsbVaultIndex(value["v"]);

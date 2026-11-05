@@ -53,8 +53,8 @@ type Fixture = {
   readonly list?: readonly QsbAccountView[];
 };
 
-// The vault calls belong to the account screen (scenarios-qsb-vaults); these
-// checkpoints never reach them.
+// The vault and withdrawal calls belong to the QSB vault screens
+// (scenarios-qsb-vaults and its siblings); these checkpoints never reach them.
 const fixtureWallet = (fixture: Fixture): QsbWallet => ({
   confirmQsbBackup: fixture.confirm ?? never,
   createQsbAccount: fixture.create ?? never,
@@ -64,8 +64,13 @@ const fixtureWallet = (fixture: Fixture): QsbWallet => ({
   loadQsbAccounts: async () => fixture.list ?? accounts,
   loadQsbVaults: never,
   quoteQsbDeposit: never,
+  quoteQsbWithdrawal: never,
+  releaseQsbWithdrawal: never,
   resendQsbDeposit: never,
+  resendQsbWithdrawal: never,
   revealQsbPhrase: async () => TEST_PHRASE,
+  reviewQsbWithdrawal: never,
+  startQsbWithdrawal: never,
 });
 
 const journeyFor = (context: FrameContext, fixture: Fixture) =>

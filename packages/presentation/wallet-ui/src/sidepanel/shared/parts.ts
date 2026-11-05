@@ -73,11 +73,11 @@ export const WALLET_VIEWS = [
   "qsb-backup",
   "qsb-import",
   "qsb-deposit",
+  "qsb-withdraw",
+  "qsb-release",
 ] as const;
 
-/**
- * Current side panel screen.
- */
+/** Current side panel screen. */
 export type WalletView = (typeof WALLET_VIEWS)[number];
 
 /**
@@ -143,6 +143,8 @@ const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   "qsb-backup": "QSB vault phrase backup",
   "qsb-deposit": "QSB deposit",
   "qsb-import": "QSB vault phrase import",
+  "qsb-release": "QSB withdrawal review",
+  "qsb-withdraw": "QSB withdrawal",
   reveal: "Recovery secrets",
   send: "Send",
   settings: "Settings",
@@ -166,9 +168,7 @@ export const walletViewLabel = (view: WalletView): string => WALLET_VIEW_LABELS[
  */
 export const DOCK_VIEWS: readonly WalletView[] = ["home", "activity", "settings"];
 
-/**
- * Checks untrusted dataset values before changing screens.
- */
+/** Checks untrusted dataset values before changing screens. */
 export const isWalletView = (value: unknown): value is WalletView =>
   typeof value === "string" && WALLET_VIEWS.some((view) => view === value);
 

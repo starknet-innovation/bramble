@@ -145,6 +145,10 @@ export const READ_ONLY_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.qsbVaults",
   // Prices a QSB deposit; signs and submits nothing.
   "wallet.quoteQsbDeposit",
+  // Prices a QSB withdrawal; fixes, releases and submits nothing.
+  "wallet.quoteQsbWithdrawal",
+  // Computes a found QSB withdrawal's release review; discloses nothing.
+  "wallet.reviewQsbWithdrawal",
   "wallet.resolveMultisigSigner",
   "wallet.resolveStarkName",
   "wallet.reviewArgentMultisigDeployment",

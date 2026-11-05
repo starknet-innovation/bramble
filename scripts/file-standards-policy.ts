@@ -206,6 +206,13 @@ export const SECRET_MATERIAL_FILES = new Set([
   // once into the privileged import request; the cells are emptied on success
   // and whenever the screen is left. Nothing is stored or logged.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-import-ui.ts",
+  // QSB withdrawal client: the release request carries the wallet passphrase
+  // the user just typed, passed through to the background and kept nowhere.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-withdrawal-runtime.ts",
+  // QSB release review: reads the wallet passphrase once at submit and empties
+  // its field as it is sent, and again whenever the screen is left or
+  // repainted; it never holds the value in state.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-release-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
   // Privileged UI message client: credentials transit directly to the
   // background and are never retained or rendered here.

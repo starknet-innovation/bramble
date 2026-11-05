@@ -14,8 +14,10 @@
  * screen is left or repainted.
  *
  * The coordinator origin is granted at runtime. Until it is, the balance gives
- * way to Allow access, and New vault, Deposit and Resend ask for it in their
- * own click before sending anything; a denial sends nothing.
+ * way to Allow access, and New deposit, Fund, Withdraw, Review and both
+ * Resends ask for it in their own click before going on; a denial sends
+ * nothing. A withdrawal's searching, sending or unconfirmed state keeps the
+ * poll running as a deposit's does.
  */
 import { QSB_ACCOUNT_REFUSALS, type QsbAccountView } from "@bramble/wallet-model/qsb";
 import type { QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
@@ -41,6 +43,8 @@ import {
   type QsbVaultWallet,
 } from "./qsb-vault-runtime";
 import type { QsbVaultWrites } from "./qsb-vault-writes";
+import { qsbWithdrawalInFlight, qsbWithdrawalLine } from "./qsb-withdrawal-model";
+import type { QsbWithdrawalResult } from "./qsb-withdrawal-runtime";
 
 /** What the account binding needs. `accountId` is read live, never copied. */
 export type QsbAccountDeps = {
@@ -49,6 +53,10 @@ export type QsbAccountDeps = {
   /** The screen's title, renamed "QSB vault <n>" for the one open; skipped when absent. */
   readonly heading: HTMLElement | null;
   readonly openDeposit: (accountId: string, v: number) => void;
+  /** Opens the release review of deposit `v`'s found withdrawal. */
+  readonly openRelease: (accountId: string, v: number) => void;
+  /** Opens the Withdraw flow for funded deposit `v`. */
+  readonly openWithdraw: (accountId: string, v: number) => void;
   readonly root: HTMLElement;
   readonly timers: StageTimers;
   readonly wallet: Pick<QsbWallet, "loadQsbAccounts"> & Pick<QsbVaultWallet, "loadQsbVaults">;
@@ -246,24 +254,69 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     );
   };
 
-  const bindRows = (list: Element, id: string): void => {
-    for (const control of list.querySelectorAll<HTMLButtonElement>("[data-qsb-deposit]")) {
-      const v = Number(control.dataset["qsbDeposit"]);
-      if (!isQsbVaultIndex(v)) continue;
-      control.addEventListener("click", () => {
-        if (accessHeld) return deps.openDeposit(id, v);
-        // The deposit screen needs the balance, which needs the grant: ask
-        // in this click, and open it only once granted.
-        const attempt = generation;
-        void access.request().then((granted) => {
-          if (attempt !== generation) return;
-          accessHeld = granted;
-          if (granted) return deps.openDeposit(id, v);
-          notice = friendlyError(QSB_VAULT_REFUSALS.accessNeeded).message;
-          paint();
-        });
-      });
+  const attachWithdrawal = (v: number, flight: Promise<QsbWithdrawalResult>): void => {
+    const key = `withdrawal:${v}`;
+    if (attached.has(key)) return;
+    attached.add(key);
+    const attempt = generation;
+    flight.then(
+      ({ submission, vault }) => {
+        attached.delete(key);
+        if (attempt !== generation || reading === null) return;
+        reading = withVault(reading, vault);
+        notice = qsbWithdrawalLine(submission);
+        paint();
+      },
+      (error: unknown) => {
+        attached.delete(key);
+        if (attempt !== generation) return;
+        notice = qsbWriteFailure(error, "wallet request failed");
+        paint();
+      },
+    );
+  };
+
+  // A row action that opens another screen needing the grant: opens it at
+  // once when held, otherwise asks in this click and opens it only once granted.
+  const openGranted = (open: () => void): void => {
+    if (accessHeld) {
+      open();
+      return;
     }
+    const attempt = generation;
+    void access.request().then((granted) => {
+      if (attempt !== generation) return;
+      accessHeld = granted;
+      if (granted) return open();
+      notice = friendlyError(QSB_VAULT_REFUSALS.accessNeeded).message;
+      paint();
+    });
+  };
+
+  // Each control under `list` carrying `attribute`, with its validated index.
+  const rowControls = (list: Element, attribute: string, bind: (v: number) => () => void) => {
+    for (const control of list.querySelectorAll<HTMLButtonElement>(`[${attribute}]`)) {
+      const v = Number(control.getAttribute(attribute));
+      if (isQsbVaultIndex(v)) control.addEventListener("click", bind(v));
+    }
+  };
+
+  const bindRows = (list: Element, id: string): void => {
+    rowControls(list, "data-qsb-deposit", (v) => () => openGranted(() => deps.openDeposit(id, v)));
+    rowControls(
+      list,
+      "data-qsb-withdraw",
+      (v) => () => openGranted(() => deps.openWithdraw(id, v)),
+    );
+    rowControls(list, "data-qsb-review", (v) => () => openGranted(() => deps.openRelease(id, v)));
+    rowControls(list, "data-qsb-resend-withdrawal", (v) => () => {
+      notice = "";
+      attachWithdrawal(
+        v,
+        guarded(() => writes.resendWithdrawal(id, v)),
+      );
+      paint();
+    });
     for (const control of list.querySelectorAll<HTMLButtonElement>("[data-qsb-resend]")) {
       const v = Number(control.dataset["qsbResend"]);
       if (!isQsbVaultIndex(v)) continue;
@@ -301,7 +354,10 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
           });
         });
     }
-    const busy = (v: number): boolean => writes.pendingDeposit(id, v) !== null;
+    const busy = (v: number): boolean =>
+      writes.pendingDeposit(id, v) !== null ||
+      writes.pendingStart(id, v) !== null ||
+      writes.pendingWithdrawal(id, v) !== null;
     if (
       vaultList &&
       region(vaultList, qsbVaultRows(current.vaults, { busy, writer: account.writer }))
@@ -320,10 +376,12 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     for (const vault of current.vaults) {
       const flight = writes.pendingDeposit(id, vault.v);
       if (flight) attachDeposit(vault.v, flight);
+      const withdrawal = writes.pendingWithdrawal(id, vault.v);
+      if (withdrawal) attachWithdrawal(vault.v, withdrawal);
     }
     if (creating) attachCreate(creating);
     show(creating ? "creating" : confirming ? "confirm" : "detail");
-    poll.sync(qsbDepositInFlight(current.vaults));
+    poll.sync(qsbDepositInFlight(current.vaults) || qsbWithdrawalInFlight(current.vaults));
   };
 
   const load = (): void => {
