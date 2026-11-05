@@ -8,8 +8,13 @@
  * own runtime (`src/lib/qsb-runtime.ts`) applies. Wallet randomness and secret
  * material belong to Krusty KMS, so this adapter exposes no bridge call that
  * draws or holds HORS secrets (`generate`, `setup`, `adopt`): it runs a
- * deterministic public-only probe, and `setup_from_commitments`, which builds a
- * vault script from public commitments alone.
+ * deterministic public-only probe; `setup_from_commitments`, which builds a
+ * vault script from public commitments alone; and the two-phase withdrawal
+ * assembly, `prepare` (public inputs only) and `finish`, which reads the 15
+ * preimages Krusty released for an exposure already durably recorded. After
+ * `finish`, succeed or fail, the interpreter is dropped, so the next call boots
+ * a fresh one and no preimage stays in this worker's Python heap. Pyodide
+ * offers no erasure, so that is the most this adapter can claim.
  *
  * Caller data never becomes Python source. A request reaches Python only
  * through the registered `qsb_request` module, whose one function hands over
@@ -32,6 +37,13 @@ import {
   readQsbCommitmentRequest,
   readQsbVaultSetup,
 } from "./qsb-vault-setup";
+import {
+  type QsbPreparedWithdrawal,
+  readQsbFinished,
+  readQsbFinishRequest,
+  readQsbPrepared,
+  readQsbPrepareRequest,
+} from "./qsb-withdrawal-assembly";
 
 /**
  * The pipeline sources, in the order qsb-app writes them into the interpreter.
@@ -106,6 +118,25 @@ export type QsbRuntime = {
    * with a fixed message.
    */
   readonly setupFromCommitments: (commitments: QsbHorsCommitments) => Promise<QsbVaultSetup>;
+  /**
+   * Phase one of a withdrawal: `T` and the indices to disclose for a vault's
+   * public state, a manifest and a solution (each JSON text), with no secret.
+   * Requests and the reply are checked (see `./qsb-withdrawal-assembly`).
+   */
+  readonly prepare: (
+    publicStateJson: string,
+    manifestJson: string,
+    solutionJson: string,
+  ) => Promise<QsbPreparedWithdrawal>;
+  /**
+   * Phase two: the raw transaction for `prepared` and exactly its 15
+   * preimages, round 0's then round 1's. Drops the interpreter afterwards,
+   * whatever the outcome.
+   */
+  readonly finish: (
+    prepared: QsbPreparedWithdrawal,
+    preimages: readonly string[],
+  ) => Promise<string>;
 };
 
 // qsb-app's startup, verbatim: rebind the pipeline's RIPEMD-160 (and the
@@ -144,8 +175,24 @@ const SETUP_FROM_COMMITMENTS = [
   "bridge.setup_from_commitments(qsb_request.commitments_json())",
 ].join("\n");
 
-// The one way a request reaches Python: `commitments_json` hands the pending
-// JSON text over once and refuses when no call has set one.
+// Each argument is JSON text inside one JSON list the module hands over.
+const PREPARE = [
+  "import bridge",
+  "import json",
+  "import qsb_request",
+  "bridge.prepare(*json.loads(qsb_request.arguments_json()))",
+].join("\n");
+
+const FINISH = [
+  "import bridge",
+  "import json",
+  "import qsb_request",
+  "bridge.finish(*json.loads(qsb_request.arguments_json()))",
+].join("\n");
+
+// The one way a request reaches Python: `commitments_json` (a setup's) or
+// `arguments_json` (a withdrawal call's) hands the pending JSON text over once
+// and refuses when no call has set one.
 type QsbRequestChannel = {
   readonly module: object;
   readonly hold: (json: string) => void;
@@ -154,19 +201,21 @@ type QsbRequestChannel = {
 
 const requestChannel = (): QsbRequestChannel => {
   let pending: string | undefined;
+  const take = (): string => {
+    const json = pending;
+    pending = undefined;
+    if (json === undefined) {
+      throw new Error("QSB runtime has no request in progress");
+    }
+    return json;
+  };
   return {
     hold: (json) => {
       pending = json;
     },
     module: {
-      commitments_json: (): string => {
-        const json = pending;
-        pending = undefined;
-        if (json === undefined) {
-          throw new Error("QSB runtime has no request in progress");
-        }
-        return json;
-      },
+      arguments_json: (): string => take(),
+      commitments_json: (): string => take(),
     },
     release: () => {
       pending = undefined;
@@ -319,7 +368,38 @@ export const createQsbRuntime = (deps: QsbRuntimeDeps): QsbRuntime => {
     queue = run.catch(() => undefined);
     return run;
   };
+  // One call with its arguments held for exactly as long as it runs.
+  const call = (
+    python: QsbInterpreter,
+    code: string,
+    json: string,
+    failure: string,
+  ): Promise<unknown> => {
+    request.hold(json);
+    return runPython(python, code, (cause) => new Error(failure, { cause })).finally(
+      request.release,
+    );
+  };
   return {
+    finish: async (prepared, preimages) => {
+      const json = readQsbFinishRequest(prepared, preimages);
+      const raw = await exclusive(async (python) => {
+        try {
+          return await call(python, FINISH, json, "QSB withdrawal finish failed");
+        } finally {
+          // The interpreter has held preimages: never reuse it.
+          started = undefined;
+        }
+      });
+      return readQsbFinished(raw);
+    },
+    prepare: async (publicStateJson, manifestJson, solutionJson) => {
+      const checked = readQsbPrepareRequest(publicStateJson, manifestJson, solutionJson);
+      const raw = await exclusive((python) =>
+        call(python, PREPARE, checked.json, "QSB withdrawal prepare failed"),
+      );
+      return readQsbPrepared(raw, checked);
+    },
     publicProbe: () =>
       exclusive(async (python) =>
         probeResult(

@@ -3,8 +3,10 @@
  * suites. The fake answers by what the adapter asks: the startup returns
  * nothing, the probe returns `probe`, and a commitments setup first reads its
  * request through the registered `qsb_request` module — the only way the
- * adapter hands Python data — then returns `setup(request)`. Every code
- * string, module and file the adapter hands it is recorded.
+ * adapter hands Python data — then returns `setup(request)`; a withdrawal
+ * `prepare` or `finish` reads its arguments the same way and returns
+ * `prepare(args)` or `finish(args)`. Every code string, module and file the
+ * adapter hands it is recorded.
  */
 import { createHash } from "node:crypto";
 import { ripemd160 } from "@noble/hashes/legacy.js";
@@ -78,6 +80,10 @@ export const commitmentsFor = (label: string): string[][] =>
 export type FakeReplies = {
   readonly probe?: unknown;
   readonly setup?: (requestJson: string) => unknown;
+  /** `bridge.prepare`'s reply to its three JSON-text arguments. */
+  readonly prepare?: (args: readonly string[]) => unknown;
+  /** `bridge.finish`'s reply to its two JSON-text arguments. */
+  readonly finish?: (args: readonly string[]) => unknown;
 };
 
 /** A fake interpreter and everything the adapter gave it. */
@@ -117,6 +123,18 @@ export const fakePython = (replies: FakeReplies = {}): FakePython => {
           const request = String(registeredFunction(fake, "qsb_request", "commitments_json")());
           fake.requests.push(request);
           return (replies.setup ?? vaultReply)(request);
+        }
+        for (const [call, reply] of [
+          ["bridge.prepare(", replies.prepare],
+          ["bridge.finish(", replies.finish],
+        ] as const) {
+          if (code.includes(call)) {
+            await Promise.resolve();
+            const request = String(registeredFunction(fake, "qsb_request", "arguments_json")());
+            fake.requests.push(request);
+            if (!reply) throw new Error(`no reply for ${call}`);
+            return reply(JSON.parse(request) as string[]);
+          }
         }
         if (code.includes("json.dumps(")) {
           return "probe" in replies ? replies.probe : JSON.stringify(QSB_PUBLIC_PROBE_ANSWERS);

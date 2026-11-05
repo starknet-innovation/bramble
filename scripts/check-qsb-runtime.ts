@@ -1,8 +1,9 @@
 /**
  * Verifies the QSB runtime the background ships before it enters the wallet:
  * the exact published Pyodide package and the commit-pinned qsb-app pipeline
- * sources, then runs the public-only known-answer probe and the commitments
- * setup of the QSB BIP test vault through the real adapter on those same bytes.
+ * sources, then runs the public-only known-answer probe, the commitments
+ * setup of the QSB BIP test vault, and the first mainnet withdrawal's
+ * `prepare` and `finish` through the real adapter on those same bytes.
  *
  * Provenance runs through the shared `vendor-pin-policy` helpers, and the
  * pinned qsb-app commit is read back out of `scripts/vendor-qsb.ts` rather than
@@ -28,6 +29,7 @@ import {
   QSB_TEST_VAULT_COMMITMENTS,
   QSB_TEST_VAULT_SETUP,
 } from "./qsb-known-answers";
+import { mainnetAssemblyFailures } from "./qsb-mainnet-assembly";
 import { loadPinnedPyodide } from "./qsb-pyodide";
 import {
   dynamicExecutionFailures,
@@ -181,4 +183,10 @@ if (
     QSB_TEST_VAULT_SETUP.publicStateHash
 ) {
   throw new Error("QSB commitments setup does not match the test vault's known answers");
+}
+// The withdrawal assembly against the chain: the bridge's T and finish must
+// be the first mainnet withdrawal's own bytes.
+const assembly = await mainnetAssemblyFailures(runtime);
+if (assembly.length > 0) {
+  throw new Error(`QSB withdrawal assembly does not match the chain: ${assembly.join("; ")}`);
 }
