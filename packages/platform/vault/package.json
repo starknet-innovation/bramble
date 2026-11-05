@@ -20,6 +20,7 @@
     "./qsb-journal-stores": "./src/qsb/qsb-journal-stores.ts",
     "./qsb-manifest": "./src/qsb/qsb-manifest.ts",
     "./qsb-merge": "./src/qsb/qsb-merge.ts",
+    "./qsb-transaction": "./src/qsb/qsb-transaction.ts",
     "./qsb-vault-record": "./src/qsb/qsb-vault-record.ts",
     "./reveal": "./src/service/reveal.ts",
     "./schema": "./src/schema/schema.ts",

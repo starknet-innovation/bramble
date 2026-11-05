@@ -7,7 +7,7 @@
  * wallet's known-answer and Nostr round-trip checks through the real adapter.
  */
 
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { deriveAccount } from "@bramble/vault/accounts";
@@ -181,4 +181,59 @@ if (
   proof !== bip322Proof
 ) {
   throw new Error("Krusty KMS QSB and Bitcoin known answers do not match the reviewed build");
+}
+
+// QSB disclosure known answers. The digest is the BIP's `binding_encoding`
+// vector (vectors.json). The preimages are recomputed here from the BIP's own
+// equations, s = HMAC-SHA256(K, m)[0:20], with K the BIP's seed vector for
+// "all all … all" (vectors.json `seed_vectors`), so no Krusty output is its
+// own reference; each must also hash to the commitment Krusty derived.
+const revealVector = {
+  binding: "d50c25f740af092cc115965a317beae0d72397eabd2b0495148de1c5e6bd2c4e",
+  digest: "eb9907c687e2a86336eb342d649b7c41e030f4eafe4129072377828e0eb57405",
+  round0: [0, 1, 2, 3, 4, 5, 6, 7],
+  round1: [140, 141, 142, 143, 144, 145, 146],
+  transaction:
+    "020000000111111111111111111111111111111111111111111111111111111111111111110000000000ffffffff01e803000000000000015100000000",
+} as const;
+const qsbReferenceKey = "f86a8947e1c227cf1a6d9a83c767291ef2f3fd51dd53b94f844bd5bde6e9e3e1";
+const horsSecret = (v: number, r: number, i: number): string => {
+  const message = Buffer.alloc(20);
+  message.write("QSB-HORS-v1", 0, "ascii");
+  message.writeUInt32BE(v, 13);
+  message.writeUInt8(r, 17);
+  message.writeUInt16BE(i, 18);
+  return createHmac("sha256", Buffer.from(qsbReferenceKey, "hex"))
+    .update(message)
+    .digest("hex")
+    .slice(0, 40);
+};
+const hash160 = (hex: string): string =>
+  createHash("ripemd160")
+    .update(createHash("sha256").update(Buffer.from(hex, "hex")).digest())
+    .digest("hex");
+// Unsorted on purpose: the order asked is the order returned.
+const revealRound0 = [149, 0, 77, 3, 12, 9, 140, 45];
+const revealRound1 = [5, 100, 4, 99, 33, 22, 11];
+const revealDigest = await kms.qsbRevealDigest(
+  revealVector.transaction,
+  revealVector.round0,
+  revealVector.round1,
+);
+const revealed = await kms.revealQsbPreimages(qsbReferencePhrase, 0, revealRound0, revealRound1);
+const expectedPreimages = [
+  ...revealRound0.map((index) => horsSecret(0, 0, index)),
+  ...revealRound1.map((index) => horsSecret(0, 1, index)),
+];
+const expectedCommitments = [
+  ...revealRound0.map((index) => qsbVault0.round0[index]),
+  ...revealRound1.map((index) => qsbVault0.round1[index]),
+];
+if (
+  revealDigest.binding !== revealVector.binding ||
+  revealDigest.digest !== revealVector.digest ||
+  revealed.join() !== expectedPreimages.join() ||
+  revealed.map(hash160).join() !== expectedCommitments.join()
+) {
+  throw new Error("Krusty KMS QSB disclosure known answers do not match the BIP");
 }

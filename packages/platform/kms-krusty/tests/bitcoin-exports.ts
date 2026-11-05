@@ -1,5 +1,5 @@
 /**
- * Well-formed stand-ins for Krusty's four QSB and Bitcoin exports, as plain
+ * Well-formed stand-ins for Krusty's six QSB and Bitcoin exports, as plain
  * objects the adapter reads by own data property, for the suites whose
  * module doubles must expose every export the adapter requires. The values
  * are the published BIP-84 vector and commitments whose root really binds
@@ -43,10 +43,36 @@ export const BIP322_WITNESS = Buffer.concat([
 /** The smallest buffer that starts like a PSBT. */
 export const PSBT_BYTES = Uint8Array.from([0x70, 0x73, 0x62, 0x74, 0xff, 0x01, 0x00]);
 
-/** The four exports, each answering with the well-formed value above. */
+/** The QSB disclosure digest of `transaction` (hex) and the indices, as the BIP defines it. */
+export const revealDigestResult = (
+  transaction: string,
+  round0: readonly number[],
+  round1: readonly number[],
+) => {
+  const binding = createHash("sha256").update(Buffer.from(transaction, "hex")).digest();
+  const indices = Buffer.from(
+    [...round0, ...round1].flatMap((index) => [index >> 8, index & 0xff]),
+  );
+  return {
+    binding: binding.toString("hex"),
+    digest: hex(Buffer.concat([Buffer.from("QSB-HORS-v1/reveal"), indices, binding])),
+  };
+};
+
+/** 15 real-shaped preimages for the indices, round 0's then round 1's. */
+export const preimagesResult = (round0: readonly number[], round1: readonly number[]) => [
+  ...round0.map((index) => hex(`preimage 0 ${index}`).slice(0, 40)),
+  ...round1.map((index) => hex(`preimage 1 ${index}`).slice(0, 40)),
+];
+
+/** The six exports, each answering with the well-formed value above. */
 export const bitcoinExports = (overrides: Record<string, unknown> = {}) => ({
   deriveBitcoinP2wpkhKeypair: () => ({ ...BIP84_VECTOR }),
   deriveQsbCommitments: () => commitmentsResult(),
+  qsbRevealDigest: (transaction: string, round0: number[], round1: number[]) =>
+    revealDigestResult(transaction, round0, round1),
+  revealQsbPreimages: (_m: string, _net: number, _v: number, round0: number[], round1: number[]) =>
+    preimagesResult(round0, round1),
   signBip322Simple: () => BIP322_WITNESS,
   signBitcoinPsbtInputs: (_key: string, psbt: string) => psbt,
   ...overrides,

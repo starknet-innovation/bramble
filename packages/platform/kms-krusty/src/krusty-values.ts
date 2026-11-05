@@ -23,6 +23,7 @@ const KRUSTY_RESULT_CLASSES = new Set([
   "WasmKeypair",
   "WasmNostrPublicKey",
   "WasmQsbCommitments",
+  "WasmQsbRevealDigest",
   "WasmStarkSignature",
   "WasmStarkXOnlyKeypair",
 ]);

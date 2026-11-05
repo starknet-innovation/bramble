@@ -26,6 +26,7 @@ import {
   requireFunction,
   requireStringField,
 } from "./krusty-values";
+import { krustyQsbRevealMethods } from "./qsb-reveal";
 
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
@@ -89,6 +90,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
 
   return {
     ...krustyBitcoinMethods(module, ready),
+    ...krustyQsbRevealMethods(module, ready),
     async deriveNostrPublicKey(mnemonic, addressIndex, accountIndex, passphrase) {
       await ready;
       if (

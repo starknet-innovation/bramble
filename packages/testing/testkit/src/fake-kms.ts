@@ -31,13 +31,31 @@ export const FAKE_BITCOIN_OWNER = {
 const sha256Hex = (data: string | Uint8Array): string =>
   createHash("sha256").update(data).digest("hex");
 
+/**
+ * The fake's HORS secret of phrase `mnemonic`, vault `vaultIndex`, round `r`,
+ * index `index`: 20 real-shaped bytes, lowercase hex, unique per slot. Public
+ * test values, so a suite can scan replies and requests for them.
+ */
+export const fakeQsbPreimage = (
+  mnemonic: string,
+  vaultIndex: number,
+  r: number,
+  index: number,
+): string => sha256Hex(`fake qsb secret ${mnemonic} ${vaultIndex} ${r} ${index}`).slice(0, 40);
+
+const hash160Hex = (hexValue: string): string =>
+  createHash("ripemd160")
+    .update(createHash("sha256").update(Buffer.from(hexValue, "hex")).digest())
+    .digest("hex");
+
 // Real-shaped commitments: 2 × 150 distinct 20-byte values per phrase and
-// vault, with the root QSB-HORS-v1 defines over them, so a consumer that
-// checks the root against the commitments accepts what the fake returns.
+// vault, each the HASH160 of its fake secret, with the root QSB-HORS-v1
+// defines over them, so a consumer that checks the root against the
+// commitments, or a preimage against its commitment, accepts the fake.
 const fakeQsbCommitments = (mnemonic: string, vaultIndex: number) => {
   const round = (r: number): string[] =>
     Array.from({ length: 150 }, (_, index) =>
-      sha256Hex(`fake qsb ${mnemonic} ${vaultIndex} ${r} ${index}`).slice(0, 40),
+      hash160Hex(fakeQsbPreimage(mnemonic, vaultIndex, r, index)),
     );
   const round0 = round(0);
   const round1 = round(1);
@@ -86,6 +104,26 @@ export const fakeKms = (validMnemonic = true) => ({
     _inputIndices: readonly number[],
   ) {
     return Uint8Array.from(psbt);
+  },
+  // The BIP's real B and D over the bytes given, as Krusty computes them.
+  async qsbRevealDigest(transaction: string, round0: readonly number[], round1: readonly number[]) {
+    const binding = Buffer.from(sha256Hex(Buffer.from(transaction, "hex")), "hex");
+    const indices = Buffer.from(
+      [...round0, ...round1].flatMap((index) => [index >> 8, index & 0xff]),
+    );
+    const digest = sha256Hex(Buffer.concat([Buffer.from("QSB-HORS-v1/reveal"), indices, binding]));
+    return { binding: binding.toString("hex"), digest };
+  },
+  async revealQsbPreimages(
+    mnemonic: string,
+    vaultIndex: number,
+    round0: readonly number[],
+    round1: readonly number[],
+  ) {
+    return [
+      ...round0.map((index) => fakeQsbPreimage(mnemonic, vaultIndex, 0, index)),
+      ...round1.map((index) => fakeQsbPreimage(mnemonic, vaultIndex, 1, index)),
+    ];
   },
   async deriveNostrPublicKey(
     _mnemonic: string,

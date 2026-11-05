@@ -141,6 +141,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // key and the signatures crossing the Krusty boundary and frees Krusty's
   // copy; nothing is logged, persisted, or returned past the vault service.
   "packages/platform/kms-krusty/src/bitcoin.ts",
+  // Krusty's QSB disclosure calls, split from bitcoin.ts: checks the phrase
+  // and the 15 preimages crossing the Krusty boundary; nothing is logged or
+  // persisted, and only the vault service's one release method calls it.
+  "packages/platform/kms-krusty/src/qsb-reveal.ts",
   "packages/foundation/wallet-model/src/accounts/signing.ts",
   // Pure length policy only; carries no passphrase value across a boundary.
   "packages/foundation/wallet-model/src/preferences/passphrase.ts",

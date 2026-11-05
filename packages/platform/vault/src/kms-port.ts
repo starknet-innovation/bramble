@@ -41,6 +41,16 @@ export type QsbCommitments = {
 };
 
 /**
+ * The transaction binding of one QSB disclosure: `binding` is `B = SHA256(T)`
+ * and `digest` is `D = SHA256("QSB-HORS-v1/reveal" || I || B)`, each 64
+ * lowercase hex digits. Public: they name what was disclosed, not a secret.
+ */
+export type QsbRevealDigest = {
+  readonly binding: string;
+  readonly digest: string;
+};
+
+/**
  * A BIP-84 mainnet P2WPKH key: its lowercase `bc1q` address, its 33-byte
  * compressed public key and its private key, each as lowercase hex without a
  * prefix. The private key is secret: vault flows only, derived on demand and
@@ -95,6 +105,30 @@ export type KmsPort = {
     psbt: Uint8Array,
     inputIndices: readonly number[],
   ) => Promise<Uint8Array>;
+  /**
+   * The QSB disclosure digest of the withdrawal transaction `T` (the BIP's
+   * empty-scriptSig, witness-free legacy serialization, lowercase hex) for 8
+   * round-0 and 7 round-1 indices, in the order given. Krusty parses `T`
+   * itself and never accepts a hash in its place. Reveals nothing.
+   */
+  readonly qsbRevealDigest: (
+    transaction: string,
+    round0: readonly number[],
+    round1: readonly number[],
+  ) => Promise<QsbRevealDigest>;
+  /**
+   * The 15 HORS preimages of vault `vaultIndex` of a dedicated QSB phrase
+   * (mainnet namespace) at those indices: round 0's then round 1's, in the
+   * order given, each 20 bytes of lowercase hex. Spending secrets: call only
+   * once the disclosure is durably recorded as exposed, from the vault
+   * service's one release method, and drop them as soon as they are used.
+   */
+  readonly revealQsbPreimages: (
+    mnemonic: string,
+    vaultIndex: number,
+    round0: readonly number[],
+    round1: readonly number[],
+  ) => Promise<readonly string[]>;
   readonly deriveNostrPublicKey: (
     mnemonic: string,
     addressIndex: number,
