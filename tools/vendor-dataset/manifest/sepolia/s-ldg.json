@@ -1,0 +1,20 @@
+{
+  "s-ldg/TA-32": {
+    "id": "s-ldg/TA-32",
+    "seed": "BRAMBLE_DATASET_SEED_S_LDG",
+    "vendorDerivation": "ledgerw",
+    "index": 0,
+    "address": "0x20c3f6b7c360309d62f78fe10f4882421695c780b9d50902ec14c3eef3284a8",
+    "pubkey": "0x58356253fee50793b20c5a1cb020aaa4afc42351ed2d86aa00cea045424edb4",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "Bramble Ledger OZ: listed by 'Ledger account' and the first-run scan",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "deployedBy": "Bramble (Ledger)",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
+    },
+    "log": ["funded STRK 0x4deaee3573f682e70628206d47d3739ac09437281ed4c5461da4af0b9d7a5c9"]
+  }
+}

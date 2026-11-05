@@ -22,7 +22,9 @@ import {
 } from "./matrix-lib";
 import { LegacySigner } from "./matrix-signers";
 import {
+  appSeed,
   deployer,
+  fundForApp,
   invokeSelf,
   type SepoliaFixture,
   STRK,
@@ -30,7 +32,7 @@ import {
   topUp,
   viewFelt,
 } from "./sepolia-fixtures";
-import { type SepoliaSecret, sepoliaSecret, sepoliaVar } from "./sepolia-seeds";
+import { sepoliaSecret, sepoliaVar } from "./sepolia-seeds";
 
 // OpenZeppelin Contracts for Cairo 3.x ERC20Upgradeable preset, declared on Sepolia:
 // constructor(name, symbol, fixed_supply: u256, recipient, owner).
@@ -41,25 +43,6 @@ const GUARDIAN = (() => {
   const priv = sepoliaSecret("K-GRD");
   return { priv, pub: ec.starkCurve.getStarkKey(priv) };
 })();
-
-// An app-made phrase, or null (with a note) until it is in the seed file.
-const appSeed = (name: SepoliaSecret, skips: string): string | null => {
-  try {
-    return sepoliaSecret(name);
-  } catch {
-    console.log(`${name} not in the seed file: skipping ${skips}`);
-    return null;
-  }
-};
-
-// Funded once from the bank; the app's own first transaction deploys it.
-const fundForApp =
-  (amount: bigint, app: string): SepoliaFixture["step"] =>
-  async (e) => {
-    const liveClass = await classAt(e.address);
-    if (!liveClass && !e.log.some((l) => l.startsWith("funded"))) await topUp(e, "STRK", amount);
-    return { state: { deployed: liveClass !== null, deployedBy: app, liveClass } };
-  };
 
 type Card = Pick<SepoliaFixture, "expected" | "detectability" | "backedBy" | "classAtDeploy">;
 

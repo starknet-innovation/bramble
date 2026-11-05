@@ -20,6 +20,7 @@ import {
   tokenBalance,
   transfer,
 } from "./matrix-lib";
+import { type SepoliaSecret, sepoliaSecret } from "./sepolia-seeds";
 
 if (NETWORK !== "sepolia") throw new Error("set BRAMBLE_DATASET_NETWORK=sepolia");
 
@@ -127,3 +128,22 @@ export async function runSepoliaFixtures(
     saveManifest(manifest);
   }
 }
+
+/** An app- or device-made phrase, or null (with a note) until it is in the seed file. */
+export const appSeed = (name: SepoliaSecret, skips: string): string | null => {
+  try {
+    return sepoliaSecret(name);
+  } catch {
+    console.log(`${name} not in the seed file: skipping ${skips}`);
+    return null;
+  }
+};
+
+/** Funds an account once from the bank; the app's own first transaction deploys it. */
+export const fundForApp =
+  (amount: bigint, app: string): SepoliaFixture["step"] =>
+  async (e) => {
+    const liveClass = await classAt(e.address);
+    if (!liveClass && !e.log.some((l) => l.startsWith("funded"))) await topUp(e, "STRK", amount);
+    return { state: { deployed: liveClass !== null, deployedBy: app, liveClass } };
+  };

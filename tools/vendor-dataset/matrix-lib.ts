@@ -84,6 +84,27 @@ export function readyKeypair(mnemonic: string, index: number): Keypair {
 }
 
 /** Braavos: BIP-39 seed directly, address axis. */
+// Ledger Starknet app paths (EIP-2645), as in wallet-model's ledger-path.ts:
+// Bramble's LedgerW ladder steps the account, Ready's argentx ladder the index.
+const LEDGER_PATHS = {
+  ledgerw: (i: number) => `m/2645'/1195502025'/734980059'/0'/${i}'/0`,
+  argentx: (i: number) => `m/2645'/1195502025'/1148870696'/0'/0'/${i}`,
+} as const;
+
+/** The stark keypair a Ledger holding `mnemonic` reports at `scheme` index `index`. */
+export function ledgerKeypair(
+  mnemonic: string,
+  scheme: keyof typeof LEDGER_PATHS,
+  index: number,
+): Keypair {
+  const node = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive(
+    LEDGER_PATHS[scheme](index),
+  );
+  if (!node.privateKey) throw new Error("derivation failed");
+  const priv = `0x${grindKey(node.privateKey)}`;
+  return { priv, pub: getStarkKey(priv) };
+}
+
 export function braavosKeypair(mnemonic: string, index: number): Keypair {
   const node = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive(
     `m/44'/9004'/0'/0/${index}`,
@@ -171,6 +192,8 @@ export type ManifestEntry = {
     | "ready-double"
     | "braavos-direct"
     | "bramble-account"
+    | "ledgerw"
+    | "ledger-argentx"
     | "key"
     | "multisig";
   readonly index: number;
