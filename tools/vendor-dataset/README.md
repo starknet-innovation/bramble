@@ -35,5 +35,14 @@ extension.
   through onboarding against live mainnet:
   `BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json]`.
   The `verification*.json` files are dated scorecard snapshots from earlier runs.
+- `verify-sepolia.ts` is the Sepolia counterpart: one fresh profile onboarded
+  with S-BRM, switched to Sepolia, then every in-wallet import path (P2…P8, P10)
+  driven against the fixtures and scored against the scope doc's "Now" line per
+  TA card (`verify-sepolia-checks.ts`; "Desired" rides along unscored).
+  Read-only, about 15 minutes, retries the public node's rate limits:
+  `BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts [out.json] [previous.json]`.
+  Passing a previous scorecard lists the verdicts that changed; keep a release's
+  run as a dated `verification-sepolia-*.json`. Ledger (TA-32…TA-38) needs the
+  device and is checked by hand.
 - Derivation uses `@scure/bip32`/`@scure/bip39` directly, never Krusty, so the
   dataset stays independent of the wallet code it measures.
