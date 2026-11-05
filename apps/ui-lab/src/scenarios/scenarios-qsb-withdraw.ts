@@ -137,7 +137,7 @@ export const qsbWithdrawScenario: WalletScenario = {
       "qsb-account",
       "qsb-withdrawals-rows",
       "Deposits · every withdrawal state",
-      "One row per withdrawal state: Searching (it can take hours), Paused, Failed, Ready to release (Review), Sending, Withdrawal sent (linked), Not confirmed yet (Resend), Withdrawn with its confirmations, and Conflict.",
+      "One row per withdrawal state: Withdrawing (it can take hours), Withdrawal paused, Withdrawal failed (its bitcoin stays locked), Ready to release (Review), Sending, Withdrawal sent (linked), Not confirmed yet (Resend), Withdrawn with its confirmations, and Spent elsewhere.",
       { rows: 9 },
       async (context) => {
         const journey = qsbLabJourney(context, {
@@ -181,7 +181,7 @@ export const qsbWithdrawScenario: WalletScenario = {
     withdrawCheckpoint(
       "qsb-withdraw-helper",
       "Withdraw · helper needed",
-      "The quote's refusal in its reviewed words: a withdrawal needs a little bitcoin at the QSB vault's own address.",
+      "The quote's refusal: send a little bitcoin to the QSB vault's own address and wait for it to confirm.",
       { refusal: "helper needed" },
       (context) =>
         withdrawTo(
@@ -321,7 +321,7 @@ export const qsbWithdrawScenario: WalletScenario = {
     releaseCheckpoint(
       "qsb-release-conflict",
       "Release · conflict",
-      "Something else spent the deposit: the screen says not to resend and offers no Resend.",
+      "Another transaction spent the deposit: the screen says so and offers no Resend.",
       { submission: "conflict" },
       (context) => releaseTo(context, { release: async () => releaseOutcome(3, "conflict") }, true),
     ),

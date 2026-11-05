@@ -42,6 +42,7 @@ import {
   QSB_ALLOW_ACCESS,
   QSB_DEPOSIT_SENDING,
   QSB_TX_LINK_LABEL,
+  qsbDepositTitle,
 } from "./qsb-vault-model";
 import type { QsbVaultWallet } from "./qsb-vault-runtime";
 import type { QsbVaultWrites } from "./qsb-vault-writes";
@@ -64,6 +65,7 @@ export const qsbReleaseFlow = (status: WalletStatus): string =>
   flowScreen(
     "qsb-release",
     `<div id="qsb-release" class="stack">
+      <p class="eyebrow" id="qsb-release-vault"></p>
       <section class="section" data-qsb-release-step="loading">${emptyState(QSB_REVIEW_LOADING, "status")}</section>
       <section class="section" data-qsb-release-step="unavailable" hidden>
         <p class="review-flag" id="qsb-release-error" role="alert"></p>
@@ -248,7 +250,7 @@ export const bindQsbRelease = (deps: QsbReleaseDeps): QsbReleaseSession => {
       }
       review = next;
       const rows = find<HTMLElement>("#qsb-release-review");
-      if (rows) renderFragment(rows, qsbReleaseReviewRows(target.accountId, next));
+      if (rows) renderFragment(rows, qsbReleaseReviewRows(next));
       say(line, refused);
       show("review", true);
     })().catch((error: unknown) => {
@@ -332,6 +334,9 @@ export const bindQsbRelease = (deps: QsbReleaseDeps): QsbReleaseSession => {
   }
 
   const target = deps.target();
+  const eyebrow = find<HTMLElement>("#qsb-release-vault");
+  if (eyebrow)
+    eyebrow.textContent = target === null ? "" : qsbDepositTitle(target.accountId, target.v);
   const running = target === null ? null : writes.pendingWithdrawal(target.accountId, target.v);
   if (running) attach(running, "attached");
   else load();

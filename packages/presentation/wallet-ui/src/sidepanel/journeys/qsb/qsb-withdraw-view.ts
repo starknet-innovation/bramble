@@ -60,13 +60,13 @@ export const qsbWithdrawFlow = (status: WalletStatus): string =>
 
 /**
  * The summary's rows for a validated quote, as the sum the destination
- * receives: the deposit, plus the helper from the QSB vault's own address,
+ * receives: the deposit, plus the helper from the QSB vault's own balance,
  * less the network fee; then where it goes and at what rate.
  */
 export const qsbWithdrawQuoteRows = (quote: QsbWithdrawalQuote): string =>
   receiptRows([
     { label: "Deposit", value: btcText(quote.fundingSat), valueStyle: "code" },
-    { label: "From your address", value: `+ ${btcText(quote.helperSat)}`, valueStyle: "code" },
+    { label: "From your balance", value: `+ ${btcText(quote.helperSat)}`, valueStyle: "code" },
     { label: "Network fee", value: `− ${btcText(quote.feeSat)}`, valueStyle: "code" },
     { label: "You receive", value: btcText(quote.outputSat), valueStyle: "code" },
     { label: "To", value: quote.destination, valueStyle: "code" },

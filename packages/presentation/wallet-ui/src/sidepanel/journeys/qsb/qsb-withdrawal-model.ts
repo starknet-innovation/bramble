@@ -51,20 +51,24 @@ export const qsbWithdrawalDisplay = (vault: QsbVaultView): QsbWithdrawalDisplay 
 };
 
 const LABEL: Readonly<Record<QsbWithdrawalDisplay, string>> = {
-  conflict: "Conflict",
-  failed: "Failed",
-  paused: "Paused",
+  conflict: "Spent elsewhere",
+  failed: "Withdrawal failed",
+  paused: "Withdrawal paused",
   ready: "Ready to release",
-  searching: "Searching",
+  searching: "Withdrawing",
   sending: "Sending",
   sent: "Withdrawal sent",
   uncertain: "Not confirmed yet",
   withdrawn: "Withdrawn",
 };
 
-/** The one line a few states need under their label. */
+/**
+ * The one line a few states need under their label. A failed withdrawal is
+ * final: a deposit gets one search, ever, so its bitcoin can't move through
+ * Bramble, and the row says so rather than only "failed".
+ */
 const HINT: Readonly<Partial<Record<QsbWithdrawalDisplay, string>>> = {
-  conflict: "Something else spent this deposit.",
+  failed: "Its bitcoin stays locked in this deposit.",
   searching: "This can take hours.",
 };
 
@@ -112,7 +116,7 @@ export const qsbWithdrawalLink = (vault: QsbVaultView): string | null => {
 };
 
 /** The Withdraw summary's one line under its costs. */
-export const QSB_WITHDRAW_TERMS = "The search can take hours, and this fee can't change later.";
+export const QSB_WITHDRAW_TERMS = "This can take hours, and the fee can't change later.";
 /** While the withdrawal is being fixed and its search started. */
 export const QSB_WITHDRAW_STARTING = "Starting…";
 /** While the release review loads. */
@@ -121,11 +125,14 @@ export const QSB_REVIEW_LOADING = "Loading the withdrawal…";
 /**
  * The prominent statement the BIP requires before any secret leaves: the
  * release discloses spending secrets with an unverified transaction binding.
- * A warning: no contractions. It must never read as a verified binding.
+ * A warning: no contractions. It must never read as a verified binding, and
+ * never as an unchecked transaction either: Bramble does rebuild and check
+ * `T`, so the title names no transaction and the body names what is not
+ * verified.
  */
-export const QSB_UNVERIFIED_TITLE = "Unverified transaction";
+export const QSB_UNVERIFIED_TITLE = "Unverified";
 /** The statement's body; see {@link QSB_UNVERIFIED_TITLE}. */
-export const QSB_UNVERIFIED_BODY = `Bramble cannot independently confirm these ${QSB_DISCLOSED_SECRETS} keys only allow this withdrawal.`;
+export const QSB_UNVERIFIED_BODY = `Bramble cannot independently confirm that these ${QSB_DISCLOSED_SECRETS} keys allow only this withdrawal.`;
 
 /** The release review's "keys released" value. */
 export const QSB_KEYS_RELEASED = `${QSB_DISCLOSED_SECRETS} one-time keys`;
@@ -134,7 +141,7 @@ export const QSB_KEYS_RELEASED = `${QSB_DISCLOSED_SECRETS} one-time keys`;
 export const QSB_WITHDRAWAL_COPY: Readonly<
   Record<QsbWithdrawalSubmission, { readonly line: string; readonly title: string }>
 > = {
-  conflict: { line: "Something else spent this deposit. Do not resend.", title: "Conflict" },
+  conflict: { line: "Another transaction spent this deposit.", title: "Spent elsewhere" },
   confirmed: { line: "The withdrawal is mined.", title: "Withdrawn" },
   submitted: { line: "It shows as withdrawn once it's mined.", title: "Withdrawal sent" },
   uncertain: { line: "Resend sends the same withdrawal again.", title: "Not confirmed yet" },

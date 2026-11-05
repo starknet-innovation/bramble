@@ -60,7 +60,7 @@ export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
   ],
   [
     QSB_WITHDRAWAL_REFUSALS.helperNeeded,
-    "Send a little bitcoin to this QSB vault's address first. A withdrawal needs it.",
+    "Send a little bitcoin to this QSB vault's address and wait for it to confirm.",
   ],
   [QSB_WITHDRAWAL_REFUSALS.jobRefused, "The QSB service refused this withdrawal."],
   [QSB_WITHDRAWAL_REFUSALS.notReady, "This withdrawal isn't ready to release yet."],
@@ -72,6 +72,6 @@ export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
   // The deposit stays ready, and releasing again repeats the same release.
   [
     "qsb withdrawal outcome unknown",
-    "Bramble couldn't finish this withdrawal. Check its status, then release it again.",
+    "Bramble couldn't finish this withdrawal. Check its status before releasing it again.",
   ],
 ];

@@ -114,15 +114,15 @@ describe("deposit rows", () => {
       vaults: { resolve: reading(STATES.map((status, v) => withdrawingVault(v, status))) },
     });
     expect(STATES.map((_, v) => text(row(panel, v)))).toEqual([
-      "Deposit 1 Searching This can take hours. 0.00100000 BTC 4a5e1e…a33b",
-      "Deposit 2 Paused 0.00100000 BTC 4a5e1e…a33b",
-      "Deposit 3 Failed 0.00100000 BTC 4a5e1e…a33b",
+      "Deposit 1 Withdrawing This can take hours. 0.00100000 BTC 4a5e1e…a33b",
+      "Deposit 2 Withdrawal paused 0.00100000 BTC 4a5e1e…a33b",
+      "Deposit 3 Withdrawal failed Its bitcoin stays locked in this deposit. 0.00100000 BTC 4a5e1e…a33b",
       "Deposit 4 Ready to release 0.00100000 BTC 4a5e1e…a33b Review",
       "Deposit 5 Sending 0.00100000 BTC 4a5e1e…a33b",
       "Deposit 6 Withdrawal sent 0.00100000 BTC f4184f…9e16",
       "Deposit 7 Not confirmed yet 0.00100000 BTC 4a5e1e…a33b Resend",
       "Deposit 8 Withdrawn · 2 confirmations 0.00100000 BTC f4184f…9e16",
-      "Deposit 9 Conflict Something else spent this deposit. 0.00100000 BTC 4a5e1e…a33b",
+      "Deposit 9 Spent elsewhere 0.00100000 BTC 4a5e1e…a33b",
     ]);
     // A sent or mined withdrawal links its own transaction.
     expect(row(panel, 5)?.querySelector("a")?.getAttribute("href")).toBe(
@@ -248,11 +248,11 @@ describe("the Withdraw flow", () => {
     await toSummary(panel);
     expect(step(panel)).toBe("summary");
     expect(text(find(panel, "#qsb-withdraw-quote"))).toBe(
-      "Deposit 0.00100000 BTC From your address + 0.00010000 BTC Network fee − 0.00000900 BTC " +
+      "Deposit 0.00100000 BTC From your balance + 0.00010000 BTC Network fee − 0.00000900 BTC " +
         `You receive 0.00109100 BTC To ${DESTINATION} Fee rate 4 sat/vB`,
     );
     expect(text(find(panel, '[data-qsb-withdraw-step="summary"]'))).toContain(
-      "The search can take hours, and this fee can't change later.",
+      "This can take hours, and the fee can't change later.",
     );
     expect(startButton(panel)?.disabled).toBe(true);
     submitForm(find<HTMLFormElement>(panel, "#qsb-withdraw-form"));
@@ -278,7 +278,7 @@ describe("the Withdraw flow", () => {
     await flush();
     await flush();
     expect(panel.app().querySelector("#qsb-account")).not.toBe(null);
-    expect(text(row(panel, 0))).toContain("Searching This can take hours.");
+    expect(text(row(panel, 0))).toContain("Withdrawing This can take hours.");
   });
 
   test("a changed quote is quoted again and asked again", async () => {
@@ -311,7 +311,7 @@ describe("the Withdraw flow", () => {
     await flush();
     expect(step(refused)).toBe("summary");
     expect(find(refused, "#qsb-withdraw-result")?.textContent).toBe(
-      "Send a little bitcoin to this QSB vault's address first. A withdrawal needs it.",
+      "Send a little bitcoin to this QSB vault's address and wait for it to confirm.",
     );
     const lost = await withdraw({
       withdrawalStart: { reject: new SubmissionUnknownError("lost", null) },

@@ -86,13 +86,16 @@ describe("the release review", () => {
     expect(panel.visited).toEqual(["qsb-account", "qsb-release"]);
     expect(step(panel)).toBe("review");
     expect(panel.calls.withdrawalReview).toEqual([["qsb-2", 3]]);
+    expect(find(panel, "#qsb-release-vault")?.textContent).toBe("QSB vault 2 · Deposit 4");
+    // Both inputs the release spends, as the Withdraw summary summed them.
     expect(text(find(panel, "#qsb-release-review"))).toBe(
-      "Network Bitcoin mainnet Deposit QSB vault 2 · Deposit 4 Releases 15 one-time keys " +
-        `To ${DESTINATION} You receive 0.00109100 BTC Network fee 0.00000900 BTC Size 1180 vB`,
+      "Network Bitcoin mainnet Releases 15 one-time keys Deposit 0.00100000 BTC " +
+        "From your balance + 0.00010000 BTC Network fee − 0.00000900 BTC " +
+        `You receive 0.00109100 BTC To ${DESTINATION} Size 1180 vB`,
     );
     const warning = find(panel, "#qsb-binding-warning");
     expect(text(warning)).toBe(
-      "Unverified transaction: Bramble cannot independently confirm these 15 keys only allow this withdrawal.",
+      "Unverified: Bramble cannot independently confirm that these 15 keys allow only this withdrawal.",
     );
     // Prominent: first in the review, in the warning style, never a hint.
     expect(warning?.classList.contains("qsb-binding-warning")).toBe(true);
@@ -205,14 +208,12 @@ describe("releasing", () => {
     expect(text(find(panel, "#qsb-release-title"))).toBe("Withdrawn");
   });
 
-  test("a conflict says not to resend, and offers no Resend", async () => {
+  test("a conflict says the deposit was spent elsewhere, and offers no Resend", async () => {
     const panel = await release({ release: { resolve: withdrawalResult(3, "conflict") } });
     send(panel);
     await flush();
-    expect(text(find(panel, "#qsb-release-title"))).toBe("Conflict");
-    expect(text(find(panel, "#qsb-release-line"))).toBe(
-      "Something else spent this deposit. Do not resend.",
-    );
+    expect(text(find(panel, "#qsb-release-title"))).toBe("Spent elsewhere");
+    expect(text(find(panel, "#qsb-release-line"))).toBe("Another transaction spent this deposit.");
     expect(find<HTMLButtonElement>(panel, "#qsb-release-resend")?.hidden).toBe(true);
   });
 
