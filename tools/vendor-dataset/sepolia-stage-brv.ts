@@ -1,5 +1,5 @@
 /**
- * Sepolia fixtures on S-BRV (Braavos ladder, script-deployed: TA-27…TA-29).
+ * Sepolia fixtures on S-BRV (Braavos ladder, script-deployed: TA-27…TA-29, TA-61).
  * Braavos deploys carry the extended deploy signature (see BraavosDeploySigner); the
  * 2FA account registers K-P256 as its secp256r1 signer at deploy.
  */
@@ -30,8 +30,11 @@ const r1 = (() => {
 // AdditionalDeploymentParams: impl, signer_type, secp256r1 (u256 x, u256 y),
 // multisig_threshold, withdrawal_limit_low, fee_rate, stark_fee_rate, chain_id.
 /** Braavos AdditionalDeploymentParams for the current implementation, with K-P256 as 2FA when `twoFa`. */
-export const braavosDeployParams = (twoFa: boolean): string[] => [
-  CLASSES.braavosImpl,
+export const braavosDeployParams = (
+  twoFa: boolean,
+  impl: string = CLASSES.braavosImpl,
+): string[] => [
+  impl,
   twoFa ? "0x2" : "0x0", // SignerType::Secp256r1, or Empty
   ...(twoFa ? [...u256felts(r1.x), ...u256felts(r1.y)] : ["0x0", "0x0", "0x0", "0x0"]),
   "0x0",
@@ -46,6 +49,7 @@ function braavosFixture(
   index: number,
   mode: "deploy" | "fund" | "2fa",
   expected: string,
+  impl: string = CLASSES.braavosImpl,
 ): SepoliaFixture {
   const kp = braavos(index);
   return {
@@ -67,7 +71,7 @@ function braavosFixture(
         return { state: { deployed: false, funded: "STRK" } };
       }
       const liveClass = await selfDeploy(e, {
-        signer: new BraavosDeploySigner(kp, braavosDeployParams(mode === "2fa")),
+        signer: new BraavosDeploySigner(kp, braavosDeployParams(mode === "2fa", impl)),
         classHash: CLASSES.braavosDeploy,
         calldata: [kp.pub],
         salt: kp.pub,
@@ -82,4 +86,11 @@ export const BRV_FIXTURES: readonly SepoliaFixture[] = [
   braavosFixture("s-brv/TA-27", 0, "deploy", "Braavos 1.0.0, current implementation"),
   braavosFixture("s-brv/TA-28", 1, "fund", "Braavos funded counterfactual, deployable"),
   braavosFixture("s-brv/TA-29", 2, "2fa", "2FA: stark-key signing must be refused"),
+  braavosFixture(
+    "s-brv/TA-61",
+    3,
+    "deploy",
+    "Braavos on the 1.1.0 implementation: listed, view only (release)",
+    CLASSES.braavosImpl110,
+  ),
 ];

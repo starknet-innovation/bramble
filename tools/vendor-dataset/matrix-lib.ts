@@ -42,6 +42,11 @@ export const CLASSES = {
   braavosImpl: "0x03957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
   braavosBase: "0x013bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6",
   multisig020: "0x07aeca3456816e3b833506d7cc5c1313d371fbdb0ae95ee70af72a4ddbf42594",
+  // Newer vendor releases outside Bramble's class table (Krusty 0.12.0's
+  // registry), declared on Sepolia: TA-62 upgrades to the first, TA-61 deploys
+  // behind the second. Braavos 1.2.0 is braavosImpl above.
+  argent050: "0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2",
+  braavosImpl110: "0x02c8c7e6fbcfb3e8e15a46648e8914c6aa1fc506fc1e7fb3d1e19630716174bc",
   oz300: "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
 } as const;
 

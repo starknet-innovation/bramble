@@ -243,6 +243,10 @@ export async function runChecks(session: Session): Promise<Result[]> {
       row("s-scr/TA-24", "P2", "not listed (index 250)", { listed: false }),
       row("s-scr/TA-26", "P2", "Xverse class, listed", { listed: true }),
       row("s-scr/TA-30", "P2", "Braavos base counterfactual, listed", { listed: true }),
+      row("s-scr/TA-62", "P2", "upgraded to Argent 0.5.0: listed, release, view only", {
+        listed: true,
+        hint: /unsupported release · view only/,
+      }),
     ],
     [
       row("s-scr/TA-15", "P4", "owner matched → guardian, view only (UNVERIFIED)", {
@@ -255,6 +259,14 @@ export async function runChecks(session: Session): Promise<Result[]> {
       row("s-scr/TA-24", "P4", "'This recovery phrase doesn't control that account.'", {
         message: /doesn.t control that account/,
       }),
+      row(
+        "s-scr/TA-62",
+        "P4",
+        "unsupportedClass: 'doesn't support this account's contract version'",
+        {
+          message: /doesn.t support this account.s contract version/,
+        },
+      ),
       row("key/TA-25", "P4", "'controlled by a signer Bramble can't use'", {
         message: /signer Bramble can.t use/,
       }),
@@ -262,11 +274,29 @@ export async function runChecks(session: Session): Promise<Result[]> {
   );
 
   console.log("\n## S-BRV: phrase import (P2)");
-  await phraseGroup(session, sepoliaSecret("S-BRV"), [
-    row("s-brv/TA-27", "P2", "listed", { listed: true }),
-    row("s-brv/TA-28", "P2", "listed as funded", { listed: true, hint: /Funded/ }),
-    row("s-brv/TA-29", "P2", "listed; 2FA restriction shown (no doc line)", { listed: true }),
-  ]);
+  await phraseGroup(
+    session,
+    sepoliaSecret("S-BRV"),
+    [
+      row("s-brv/TA-27", "P2", "listed", { listed: true }),
+      row("s-brv/TA-28", "P2", "listed as funded", { listed: true, hint: /Funded/ }),
+      row("s-brv/TA-29", "P2", "listed; 2FA restriction shown (no doc line)", { listed: true }),
+      row("s-brv/TA-61", "P2", "Braavos 1.1.0 implementation: listed, release, view only", {
+        listed: true,
+        hint: /unsupported release · view only/,
+      }),
+    ],
+    [
+      row(
+        "s-brv/TA-61",
+        "P4",
+        "unsupportedClass: 'doesn't support this account's contract version'",
+        {
+          message: /doesn.t support this account.s contract version/,
+        },
+      ),
+    ],
+  );
 
   if (have("S-RDY")) {
     console.log("\n## S-RDY: phrase import (P2)");

@@ -1,6 +1,6 @@
 /**
  * Sepolia fixtures on S-SCR: script-made Argent, Xverse and Braavos shapes on
- * every ladder (TA-15…TA-26, TA-30), per the scope doc's TA cards. "argentx N"
+ * every ladder (TA-15…TA-26, TA-30, TA-62), per the scope doc's TA cards. "argentx N"
  * on a card is the Ready double derivation at index N. Argent 0.4.0 calldata
  * and change_owner hashing follow the vendored account-0.4.0 source.
  */
@@ -105,14 +105,17 @@ const ta15 = ready(5);
 const TA15_SALT = "0x15a175";
 const ta15Calldata = ["0x0", ta15.pub, "0x0", "0x0", GUARDIAN.pub];
 
-// TA-17: deployed at 0.3.0, then upgraded in place to 0.4.0.
-const upgradeTo040 = async (e: ManifestEntry): Promise<Record<string, unknown>> => {
-  const live = await classAt(e.address);
-  if (live && BigInt(live) !== BigInt(CLASSES.argent040)) {
-    await invokeSelf(e, new LegacySigner([ready(1)]), "upgrade", [CLASSES.argent040, "0x0"]);
-  }
-  return { upgradedTo: CLASSES.argent040 };
-};
+// TA-17 (0.3.0 → 0.4.0) and TA-62 (0.4.0 → 0.5.0): deployed at one release,
+// then upgraded in place, so the address keeps the older shape.
+const upgradeTo =
+  (cls: string, index: number) =>
+  async (e: ManifestEntry): Promise<Record<string, unknown>> => {
+    const live = await classAt(e.address);
+    if (live && BigInt(live) !== BigInt(cls)) {
+      await invokeSelf(e, new LegacySigner([ready(index)]), "upgrade", [cls, "0x0"]);
+    }
+    return { upgradedTo: cls };
+  };
 
 // TA-20: change_owner takes the new owner's SignerSignature over
 // pedersen-array(selector("change_owner"), chain id, account, old owner guid).
@@ -192,7 +195,7 @@ export const SCR_FIXTURES: readonly SepoliaFixture[] = [
     {
       expected: "address from the 0.3.0 shape; live class 0.4.0",
       detectability: "D2",
-      after: upgradeTo040,
+      after: upgradeTo(CLASSES.argent040, 1),
     },
   ),
   scripted(
@@ -295,6 +298,18 @@ export const SCR_FIXTURES: readonly SepoliaFixture[] = [
     {
       expected: "index 250: beyond the owner-search cap",
       detectability: "D2",
+    },
+  ),
+  scripted(
+    "s-scr/TA-62",
+    "ready-double",
+    9,
+    ready(9),
+    { classHash: CLASSES.argent040 },
+    {
+      expected: "upgraded to Argent 0.5.0: found at its 0.4.0 address, view only (release)",
+      detectability: "D2",
+      after: upgradeTo(CLASSES.argent050, 9),
     },
   ),
   {

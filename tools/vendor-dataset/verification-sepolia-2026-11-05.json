@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-11-05T17:36:12.435Z",
+  "ranAt": "2026-11-05T18:11:08.675Z",
   "version": "0.10.8",
   "network": "SN_SEPOLIA",
   "results": {
@@ -23,16 +23,20 @@
     "s-scr/TA-24 P2": "pass: not listed",
     "s-scr/TA-26 P2": "pass: listed · Deployed on Starknet",
     "s-scr/TA-30 P2": "pass: listed · Funded, not deployed · view only for now",
+    "s-scr/TA-62 P2": "pass: listed · Deployed on Starknet · unsupported release · view only",
     "s-scr/TA-15 P4": "pass: Found Account 5. It's view only until you recover it.",
     "s-scr/TA-17 P4": "pass: Found Account 1.",
     "s-scr/TA-21 P4": "pass: Found Account 6.",
     "s-scr/TA-22 P4": "pass: Found Account 7.",
     "s-scr/TA-23 P4": "pass: No account found at this address on Starknet Sepolia. Check the address and network.",
     "s-scr/TA-24 P4": "pass: This recovery phrase doesn't control that account.",
+    "s-scr/TA-62 P4": "pass: Bramble doesn't support this account's contract version yet.",
     "key/TA-25 P4": "pass: This account is controlled by a signer Bramble can't use.",
     "s-brv/TA-27 P2": "pass: listed · Deployed on Starknet",
     "s-brv/TA-28 P2": "pass: listed · Funded and ready to deploy",
     "s-brv/TA-29 P2": "pass: listed · Deployed on Starknet · 2FA active · view only",
+    "s-brv/TA-61 P2": "pass: listed · Deployed on Starknet · unsupported release · view only",
+    "s-brv/TA-61 P4": "pass: Bramble doesn't support this account's contract version yet.",
     "s-rdy/TA-09 P2": "pass: listed · Deployed on Starknet",
     "s-rdy/TA-10 P2": "pass: listed · Funded and ready to deploy",
     "s-rdy/TA-11 P2": "pass: not listed",
@@ -53,7 +57,7 @@
     "s-scr/TA-15 P8": "pass: Found your account. It's view only until you recover it.",
     "s-rdy/TA-12 P8": "pass: Found your account. It's view only until you recover it.",
     "s-brv/TA-27 P8": "pass: Bramble can't import a Braavos account from a private key yet.",
-    "multisig/TA-39 P10": "review: Multisig synced · watch-only",
-    "multisig/TA-40 P10": "review: Undeployed multisig added · complete setup to deploy"
+    "multisig/TA-39 P10": "pass: Multisig synced · watch-only",
+    "multisig/TA-40 P10": "pass: Undeployed multisig added · complete setup to deploy"
   }
 }

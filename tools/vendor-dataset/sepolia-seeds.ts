@@ -11,9 +11,9 @@ import { envSeed } from "./dataset-env";
 const SEPOLIA_SECRETS = {
   // Bramble ladder: TA-01 (the bank and deployer), TA-02/03/06/08, multisig seat A.
   "S-BRM": "BRAMBLE_DATASET_SEED_S_BRM",
-  // Script-made shapes on every ladder: TA-15…TA-26, TA-30, multisig seat B.
+  // Script-made shapes on every ladder: TA-15…TA-26, TA-30, TA-62, multisig seat B.
   "S-SCR": "BRAMBLE_DATASET_SEED_S_SCR",
-  // Braavos ladder, script-deployed: TA-27…TA-29.
+  // Braavos ladder, script-deployed: TA-27…TA-29, TA-61.
   "S-BRV": "BRAMBLE_DATASET_SEED_S_BRV",
   // Made in the Ready app (step 3): TA-09…TA-13, run only once it is present.
   "S-RDY": "BRAMBLE_DATASET_SEED_S_RDY",

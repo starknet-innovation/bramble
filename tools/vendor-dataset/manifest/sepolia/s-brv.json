@@ -59,5 +59,25 @@
       "funded STRK 0x51b0f211864e99888b9f78859f1e289f269ce5c37275ba1c7f4b53a44f509d3",
       "deployed 0x68238b564ebce4e28690b349e0e434a3ba0290e9008905e7b75b7f7dbca3c26"
     ]
+  },
+  "s-brv/TA-61": {
+    "id": "s-brv/TA-61",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRV",
+    "vendorDerivation": "braavos-direct",
+    "index": 3,
+    "address": "0x48d3792a24031c0a02853af3dd85408a4e255cd1e2d173fd16851d0acddc62e",
+    "pubkey": "0x56e25121c926cb718303a949ec7c77ee568f47db341b87de2d352761a5413c6",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "Braavos on the 1.1.0 implementation: listed, view only (release)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x2c8c7e6fbcfb3e8e15a46648e8914c6aa1fc506fc1e7fb3d1e19630716174bc"
+    },
+    "log": [
+      "funded STRK 0x72ffeca3181ff3b1bbeff7fd30299c5a4390539ea63354600c21476a34e1096",
+      "deployed 0x433cdb6ef6033c3ab5cdcf0f27dd9904f2be78dccf4396d76c5d37a3a178031"
+    ]
   }
 }
