@@ -17,6 +17,8 @@ const SEPOLIA_SECRETS = {
   "S-BRV": "BRAMBLE_DATASET_SEED_S_BRV",
   // Made in the Ready app (step 3): TA-09…TA-13, run only once it is present.
   "S-RDY": "BRAMBLE_DATASET_SEED_S_RDY",
+  // Made in the Xverse extension (step 3): TA-26, run only once it is present.
+  "S-XVS": "BRAMBLE_DATASET_SEED_S_XVS",
   // 15/18/21-word phrases on Bramble's ladder: TA-42…TA-44.
   "S-W15": "BRAMBLE_DATASET_SEED_S_W15",
   "S-W18": "BRAMBLE_DATASET_SEED_S_W18",

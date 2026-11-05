@@ -4,12 +4,15 @@
  * salt = pubkey as Ready deploys them. The app made the accounts; this stage
  * funds them, deploys TA-11's test token, and shapes the guardian states.
  * TA-09 is deployed from the Ready app itself, so here it is only funded.
- * Runs only once the seed file holds S-RDY.
+ * Also S-XVS, the phrase made in the Xverse extension: TA-26 at the own
+ * ladder's index 0 on the Xverse class, funded here and deployed by the app.
+ * Each group runs only once the seed file holds its phrase.
  */
 import { byteArray, CallData, cairo, ec, hash } from "starknet";
 import {
   argentAddress,
   argentConstructor,
+  brambleKeypair,
   CLASSES,
   classAt,
   type ManifestEntry,
@@ -27,7 +30,7 @@ import {
   topUp,
   viewFelt,
 } from "./sepolia-fixtures";
-import { sepoliaSecret, sepoliaVar } from "./sepolia-seeds";
+import { type SepoliaSecret, sepoliaSecret, sepoliaVar } from "./sepolia-seeds";
 
 // OpenZeppelin Contracts for Cairo 3.x ERC20Upgradeable preset, declared on Sepolia:
 // constructor(name, symbol, fixed_supply: u256, recipient, owner).
@@ -39,14 +42,24 @@ const GUARDIAN = (() => {
   return { priv, pub: ec.starkCurve.getStarkKey(priv) };
 })();
 
-const rdySeed = (() => {
+// An app-made phrase, or null (with a note) until it is in the seed file.
+const appSeed = (name: SepoliaSecret, skips: string): string | null => {
   try {
-    return sepoliaSecret("S-RDY");
+    return sepoliaSecret(name);
   } catch {
-    console.log("S-RDY not in the seed file: skipping TA-09…TA-13");
+    console.log(`${name} not in the seed file: skipping ${skips}`);
     return null;
   }
-})();
+};
+
+// Funded once from the bank; the app's own first transaction deploys it.
+const fundForApp =
+  (amount: bigint, app: string): SepoliaFixture["step"] =>
+  async (e) => {
+    const liveClass = await classAt(e.address);
+    if (!liveClass && !e.log.some((l) => l.startsWith("funded"))) await topUp(e, "STRK", amount);
+    return { state: { deployed: liveClass !== null, deployedBy: app, liveClass } };
+  };
 
 type Card = Pick<SepoliaFixture, "expected" | "detectability" | "backedBy" | "classAtDeploy">;
 
@@ -166,13 +179,7 @@ const rdyFixtures = (seed: string): SepoliaFixture[] => [
       backedBy: "none",
       classAtDeploy: CLASSES.argent040,
     },
-    async (e) => {
-      // Funded once; the app's own first transaction deploys it.
-      const liveClass = await classAt(e.address);
-      if (!liveClass && !e.log.some((l) => l.startsWith("funded")))
-        await topUp(e, "STRK", 5n * STRK);
-      return { state: { deployed: liveClass !== null, deployedBy: "Ready app", liveClass } };
-    },
+    fundForApp(5n * STRK, "Ready app"),
   ),
   readyFixture(
     seed,
@@ -194,4 +201,27 @@ const rdyFixtures = (seed: string): SepoliaFixture[] => [
   guardianFixture(seed, "s-rdy/TA-13", 4, true, "guardian removed: usable again"),
 ];
 
-export const RDY_FIXTURES: readonly SepoliaFixture[] = rdySeed ? rdyFixtures(rdySeed) : [];
+const xverseFixture = (seed: string): SepoliaFixture => {
+  const kp = brambleKeypair(seed, 0);
+  return {
+    id: "s-xvs/TA-26",
+    seed: sepoliaVar("S-XVS"),
+    vendorDerivation: "bramble-account",
+    index: 0,
+    address: argentAddress(kp.pub, CLASSES.xverse040),
+    pubkey: kp.pub,
+    classAtDeploy: CLASSES.xverse040,
+    expected: "made in the Xverse app: Xverse class on the own ladder, account 0",
+    detectability: "D1",
+    backedBy: "none",
+    step: fundForApp(2n * STRK, "Xverse app"),
+  };
+};
+
+const rdySeed = appSeed("S-RDY", "TA-09…TA-13");
+const xvsSeed = appSeed("S-XVS", "TA-26 (app)");
+
+export const RDY_FIXTURES: readonly SepoliaFixture[] = [
+  ...(rdySeed ? rdyFixtures(rdySeed) : []),
+  ...(xvsSeed ? [xverseFixture(xvsSeed)] : []),
+];

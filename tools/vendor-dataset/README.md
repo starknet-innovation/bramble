@@ -21,8 +21,9 @@ extension.
   and keys (one `sepolia-stage-*.ts` file per seed group, sharing
   `sepolia-fixtures.ts`). It is idempotent; pass a TA id to run one fixture:
   `BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/matrix-stage-sepolia.ts TA-08`.
-  The S-RDY fixtures (TA-09…TA-13, `sepolia-stage-rdy.ts`) run only once the
-  Ready-made seed is in the seed file as `BRAMBLE_DATASET_SEED_S_RDY`.
+  The app-made fixtures in `sepolia-stage-rdy.ts` (S-RDY: TA-09…TA-13; S-XVS:
+  TA-26) run only once their phrase is in the seed file
+  (`BRAMBLE_DATASET_SEED_S_RDY`, `BRAMBLE_DATASET_SEED_S_XVS`).
 - `manifest/<network>/` is the dataset ledger, with one file per fixture group. It records
   every account's provenance, expected import outcome and transaction log
   (addresses and transaction hashes only, no key material). The matrix stages
