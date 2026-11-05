@@ -57,7 +57,7 @@ const onboardHero = (chip: string, head: string, actions: string): string => `
 // select-then-confirm step. The chevron marks each tile as a direct action.
 const chooserOption = (
   kind: LedgerOnboardAddKind,
-  iconName: "book" | "link" | "shield" | "users" | "wallet",
+  iconName: "book" | "link" | "lockKeyhole" | "shield" | "users" | "wallet",
   label: string,
   supportingText: string,
 ): string => `
@@ -89,6 +89,7 @@ export const addAccountChooser = (ledgerAvailable = true): string => {
       ${chooserOption("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
       ${ledgerAvailable ? chooserOption("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.") : ""}
       ${chooserOption("multisig", "users", "Multisig account", "Create or add a multisig account controlled by multiple signers.")}
+      ${chooserOption("qsb-create", "lockKeyhole", "QSB vault", "Create a QSB vault with its own 24-word phrase.")}
       ${chooserOption("import", "link", "Import an existing account", "Bring accounts you already own: a recovery phrase or a private key.")}
     </div>
   </div>`;
@@ -123,6 +124,7 @@ export const importAccountChooser = (ledgerAvailable = true, phraselessNote?: st
       ${phraselessNote ? "" : chooserOption("find-accounts", "users", "Find my other accounts", "Search this wallet for accounts it does not list yet.")}
       ${chooserOption("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
       ${chooserOption("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
+      ${chooserOption("qsb-import", "lockKeyhole", "QSB vault phrase", "Import a QSB vault phrase, read-only.")}
       ${ledgerAvailable ? chooserOption("restore-ready-ledger", "shield", "Ready Ledger account", "Bring over a Ledger account created in Ready (Argent X).") : ""}
     </div>
     <div class="onboard-actions">

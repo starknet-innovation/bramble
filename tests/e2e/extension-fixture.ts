@@ -20,7 +20,8 @@ export type LoadedExtension = {
 };
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const distPath = resolve(repoRoot, "dist");
+/** The built extension every E2E spec loads, directly or as a composed copy. */
+export const distPath = resolve(repoRoot, "dist");
 
 // BRAMBLE_E2E_LIVE_NETWORK is set by playwright.mainnet.config.ts and rejected by
 // tests/e2e/global-setup.ts.
@@ -33,8 +34,12 @@ const NETWORK_BLOCK_ARGS = [
   "--no-proxy-server",
 ] as const;
 
-const isWalletServiceWorker = (worker: Worker): boolean =>
-  worker.url().startsWith("chrome-extension://") && worker.url().endsWith("/background/index.js");
+const WALLET_SERVICE_WORKER = "background/index.js";
+
+const isServiceWorker =
+  (script: string) =>
+  (worker: Worker): boolean =>
+    worker.url().startsWith("chrome-extension://") && worker.url().endsWith(`/${script}`);
 
 /**
  * Options for {@link launchExtension}. Every field defaults to the E2E suite's
@@ -44,7 +49,15 @@ const isWalletServiceWorker = (worker: Worker): boolean =>
 export type LaunchExtensionOptions = {
   /** Extra Chromium switches appended to the extension-loading ones. */
   readonly args?: readonly string[];
+  /**
+   * An unpacked extension directory to load instead of `dist/`, for a spec
+   * that composes its own copy of the built extension. It must still be built
+   * from `dist/`; only the spec that composed it may change what it holds.
+   */
+  readonly extensionPath?: string;
   readonly headless?: boolean;
+  /** The worker script the manifest names, relative to the extension root. */
+  readonly serviceWorkerScript?: string;
   /**
    * A profile directory to reuse. When supplied it is treated as the caller's
    * own: it is neither created fresh nor removed on close, so extension storage
@@ -70,10 +83,14 @@ export const launchExtension = async (
 ): Promise<LoadedExtension> => {
   const ownedProfile = options.userDataDir === undefined;
   const userDataDir = options.userDataDir ?? (await mkdtemp(resolve(tmpdir(), "bramble-e2e-")));
+  const extensionPath = options.extensionPath ?? distPath;
+  const isWalletServiceWorker = isServiceWorker(
+    options.serviceWorkerScript ?? WALLET_SERVICE_WORKER,
+  );
   const context = await chromium.launchPersistentContext(userDataDir, {
     args: [
-      `--disable-extensions-except=${distPath}`,
-      `--load-extension=${distPath}`,
+      `--disable-extensions-except=${extensionPath}`,
+      `--load-extension=${extensionPath}`,
       ...(options.args ?? []),
       ...(liveNetworkAllowed() ? [] : NETWORK_BLOCK_ARGS),
     ],

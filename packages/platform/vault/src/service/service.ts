@@ -32,12 +32,15 @@ import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import { migrateVault } from "../schema/migrations";
-import { isVaultV12, type Vault } from "../schema/schema";
+import { isVaultV13, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { createGrantCache } from "./grant-cache";
 import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
+import type { QsbAccountWiring } from "./qsb-account-types";
+import { qsbAccountMethods } from "./qsb-accounts";
+import { qsbVaultAccessMethods } from "./qsb-vault-access";
 import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
 import { vaultCreationMethods, writeVault } from "./service-creation";
 import type { VaultRecovery, WalletVaultService } from "./service-types";
@@ -80,6 +83,11 @@ type WalletVaultServiceOptions = {
   readonly encryptedStore: EncryptedStore;
   readonly kms: KmsPort;
   readonly migrationStore: EncryptedStore;
+  /**
+   * The QSB journal stores and journal-id drawer. Absent, QSB accounts list
+   * with their journals `unavailable` and none can be created or imported.
+   */
+  readonly qsb?: QsbAccountWiring;
 };
 
 /**
@@ -90,6 +98,7 @@ export const createWalletVaultService = ({
   encryptedStore: primaryStore,
   kms,
   migrationStore,
+  qsb,
 }: WalletVaultServiceOptions): WalletVaultService => {
   assertStoreAccess("vault", actor);
   const grants = createGrantCache();
@@ -234,6 +243,9 @@ export const createWalletVaultService = ({
     },
     ...nostrWalletMethods(kms, readVault),
     ...shadowAccountScopeMethods(encryptedStore, readVaultSnapshot),
+    ...qsbAccountMethods({ encryptedStore, kms, readVaultSnapshot, wiring: qsb }),
+    // Not wrapped below: each session call takes its own slot of the queue.
+    ...qsbVaultAccessMethods({ kms, readVaultSnapshot, serialized, wiring: qsb }),
     previewAccount: (input) => deriveAccountRef(kms, input),
     previewStrk20ViewingPublicKey: (input) => previewStrk20ViewingPublicKey(kms, input),
     previewImportedStrk20ViewingPublicKey: (input) =>
@@ -358,7 +370,7 @@ export const createWalletVaultService = ({
       serialized(async () => {
         requirePassphrase(vaultPassphrase);
         const vault = migrateVault(await encryptedStore.readUnverified(vaultPassphrase));
-        invariant(isVaultV12(vault), "Unsupported vault schema");
+        invariant(isVaultV13(vault), "Unsupported vault schema");
         // A rollback can restore a revoked site connection or a removed Ledger
         // viewing key; the user cannot tell which, so recovery drops them all.
         await encryptedStore.replaceUnverified(
@@ -406,14 +418,22 @@ export const createWalletVaultService = ({
     ...service,
     addDerivedAccount: (input) => serialized(() => service.addDerivedAccount(input)),
     addLedgerAccount: (input) => serialized(() => service.addLedgerAccount(input)),
+    // Every QSB method, reads included, so a journal is never read or written
+    // while a queued vault or QSB write is under way.
+    confirmQsbBackup: (input) => serialized(() => service.confirmQsbBackup(input)),
     createAccount: (input) => serialized(() => service.createAccount(input)),
     createKeyVault: (input) => serialized(() => service.createKeyVault(input)),
     createLedgerVault: (input) => serialized(() => service.createLedgerVault(input)),
+    createQsbAccount: (vaultPassphrase) =>
+      serialized(() => service.createQsbAccount(vaultPassphrase)),
     ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
     forgetLedgerStrk20ViewingKey: (input) =>
       serialized(() => service.forgetLedgerStrk20ViewingKey(input)),
+    importQsbAccount: (input) => serialized(() => service.importQsbAccount(input)),
     importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
+    qsbAccounts: (vaultPassphrase) => serialized(() => service.qsbAccounts(vaultPassphrase)),
+    revealQsbPhrase: (input) => serialized(() => service.revealQsbPhrase(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),
     recordShadowAccountScope: (input) => serialized(() => service.recordShadowAccountScope(input)),
     setActiveAccount: (input) => serialized(() => service.setActiveAccount(input)),

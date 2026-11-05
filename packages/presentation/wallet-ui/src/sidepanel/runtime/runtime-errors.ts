@@ -139,6 +139,16 @@ export const READ_ONLY_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.preferences",
   "wallet.previewAccount",
   "wallet.prices",
+  "wallet.qsbAccounts",
+  // Reads one QSB account's vaults; may record a deposit the chain now
+  // confirms, which is idempotent, so a lost reply changed nothing to undo.
+  "wallet.qsbVaults",
+  // Prices a QSB deposit; signs and submits nothing.
+  "wallet.quoteQsbDeposit",
+  // Prices a QSB withdrawal; fixes, releases and submits nothing.
+  "wallet.quoteQsbWithdrawal",
+  // Computes a found QSB withdrawal's release review; discloses nothing.
+  "wallet.reviewQsbWithdrawal",
   "wallet.resolveMultisigSigner",
   "wallet.resolveStarkName",
   "wallet.reviewArgentMultisigDeployment",
@@ -146,6 +156,8 @@ export const READ_ONLY_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.reviewBraavosRecovery",
   "wallet.reviewNftTransfer",
   "wallet.reviewTransfer",
+  // Re-authenticates, then reads one QSB phrase: it changes nothing.
+  "wallet.revealQsbPhrase",
   "wallet.sidePanelNotice",
   "wallet.status",
   "wallet.strk20PreparationStatus",

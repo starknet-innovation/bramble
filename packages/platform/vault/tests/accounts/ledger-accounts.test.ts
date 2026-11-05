@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet/account-contracts";
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@bramble/vault/accounts";
-import { isVaultV2, isVaultV8, isVaultV12, type Vault } from "@bramble/vault/schema";
+import { isVaultV2, isVaultV8, isVaultV13, type Vault } from "@bramble/vault/schema";
 import {
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
   isAccountRef,
@@ -264,8 +264,8 @@ describe("keyless account in the vault schema", () => {
   };
 
   test("a current vault admits a keyless Ledger account with no signing key", () => {
-    const vault: Vault = { ...base, schemaVersion: 12, shadowAccountScopes: [] };
-    expect(isVaultV12(vault)).toBe(true);
+    const vault: Vault = { ...base, qsbAccounts: [], schemaVersion: 13, shadowAccountScopes: [] };
+    expect(isVaultV13(vault)).toBe(true);
   });
 
   test("a Ledger account is rejected at the legacy v2 schema", () => {
@@ -274,9 +274,10 @@ describe("keyless account in the vault schema", () => {
 
   test("a Ledger account carrying a signing key is rejected", () => {
     expect(
-      isVaultV12({
+      isVaultV13({
         ...base,
-        schemaVersion: 12,
+        qsbAccounts: [],
+        schemaVersion: 13,
         shadowAccountScopes: [],
         signingKeys: [{ accountId: ledgerAccount.id, privateKey: "0x1" }],
       }),
@@ -295,14 +296,15 @@ describe("keyless account in the vault schema", () => {
       publicKeyY: "0x4",
     };
     expect(
-      isVaultV12({
+      isVaultV13({
         accounts: [hdAccount],
         accountSecrets: [],
         activeAccountId: hdAccount.id,
         importedSeeds: [],
         mnemonic: null,
         originGrants: [],
-        schemaVersion: 12,
+        qsbAccounts: [],
+        schemaVersion: 13,
         shadowAccountScopes: [],
         signingKeys: [],
       }),
@@ -363,12 +365,13 @@ describe("keyless account in the vault schema", () => {
       ...base,
       accounts: [readyAccount],
       activeAccountId: readyAccount.id,
-      schemaVersion: 12,
+      qsbAccounts: [],
+      schemaVersion: 13,
       shadowAccountScopes: [],
     };
-    expect(isVaultV12(vault)).toBe(true);
+    expect(isVaultV13(vault)).toBe(true);
     expect(
-      isVaultV12({
+      isVaultV13({
         ...vault,
         accounts: [
           {

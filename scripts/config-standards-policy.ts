@@ -45,6 +45,7 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/permissions": "workspace:*",
   "@bramble/privacy": "workspace:*",
   "@bramble/portfolio": "workspace:*",
+  "@bramble/qsb": "workspace:*",
   "@bramble/starknet": "workspace:*",
   "@bramble/store": "workspace:*",
   "@bramble/settings": "workspace:*",
@@ -54,7 +55,28 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/wallet-ui": "workspace:*",
   "@bramble/wallet-model": "workspace:*",
   "@bramble/wallet-protocol": "workspace:*",
-  "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+  // RIPEMD-160 for the QSB pipeline's HASH160, which Pyodide's OpenSSL-less
+  // `hashlib` cannot provide. Only `ripemd160` from `@noble/hashes/legacy.js`
+  // is imported (by the worker and by check:qsb), the function qsb-app wires.
+  // MIT, dependency-free, no install scripts, already resolved in bun.lock, and
+  // the exact release @scure/btc-signer 2.4.1 requires, so a later deposit
+  // slice adds no second noble to the bundle.
+  "@noble/hashes": "2.4.0",
+  // secp256k1 verification of the helper signature Krusty adds to a QSB
+  // withdrawal before it is finalized and submitted (in @bramble/qsb), and of
+  // Krusty's deposit and sign-in signatures in the QSB suites. The exact
+  // release @scure/btc-signer 2.4.1 already requires and bundles, so nothing
+  // new resolves or ships; MIT, no install scripts.
+  "@noble/curves": "2.4.0",
+  // The PSBT library QSB deposits are built, checked, finalized and extracted
+  // with (in @bramble/qsb), declared here too for the suites that build real
+  // Bitcoin transactions. MIT, no install scripts, every dependency exact; its
+  // signing is never called (Krusty signs, and a test enforces it).
+  "@scure/btc-signer": "2.4.1",
+  "@starknetfoundation/krusty-kms-wasm": "0.15.0",
+  // The QSB pipeline's Python runtime, the exact release qsb-app pins. Its
+  // shipped files are digest-pinned by scripts/check-qsb-runtime.ts.
+  pyodide: "0.29.3",
   starknet: "10.8.0",
 };
 
@@ -64,6 +86,11 @@ export const PINNED_RUNTIME_FILES = [
   "content/index.js",
   "dependencies/krusty-kms/krusty_kms_wasm.js",
   "dependencies/krusty-kms/krusty_kms_wasm_bg.wasm",
+  "dependencies/pyodide/pyodide-lock.json",
+  "dependencies/pyodide/pyodide.asm.js",
+  "dependencies/pyodide/pyodide.asm.wasm",
+  "dependencies/pyodide/pyodide.mjs",
+  "dependencies/pyodide/python_stdlib.zip",
   "icons/icon-128.png",
   "icons/icon-16.png",
   "icons/icon-24.png",
@@ -79,6 +106,12 @@ export const PINNED_RUNTIME_FILES = [
   "sandbox/render.js",
   "sidepanel.html",
   "sidepanel/index.js",
+  "vendor/qsb/LICENSE",
+  "vendor/qsb/bitcoin_tx.py",
+  "vendor/qsb/bridge.py",
+  "vendor/qsb/manifest.json",
+  "vendor/qsb/qsb_pipeline.py",
+  "vendor/qsb/secp256k1.py",
   "vendor/starknet-privacy/sdk/starknet-sdk.min.js",
 ] as const;
 
@@ -96,7 +129,39 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "playwright-report/",
   "test-results/",
   "vendor/argent-contracts/",
+  "vendor/qsb/",
   "vendor/starknet-privacy/",
+] as const;
+
+/**
+ * Vendor scripts whose upstream revision must be a commit pin, never a branch.
+ */
+export const VENDOR_PIN_SCRIPTS = [
+  { constant: "PRIVACY_SDK_REVISION", script: "scripts/vendor-privacy-sdk.ts" },
+  { constant: "QSB_APP_REVISION", script: "scripts/vendor-qsb.ts" },
+] as const;
+
+/**
+ * Commands `.github/workflows/ci.yml` must run, in this order.
+ */
+export const EXPECTED_CI_COMMANDS = [
+  "bun install --frozen-lockfile",
+  "bun run test:e2e:install",
+  "bun run check:files",
+  "bun run vendor:argent",
+  "bun run vendor:privacy",
+  "bun run vendor:qsb",
+  "bun run check",
+  "bun run check:coverage",
+  "bun run build",
+  "bun run test:e2e",
+  "bun run package:extension",
+  // The Gecko artifact is built, packaged and validated in the same job. Its
+  // linter wraps the validator addons.mozilla.org runs at submission, so an
+  // add-on that would be rejected there fails here instead — which is how the
+  // wrong-browser artifact reached AMO once already.
+  "bun run package:extension:firefox",
+  "bun run check:firefox",
 ] as const;
 
 export const EXPECTED_README_SECTIONS = ["## Features", "## Quick start", "## Docs"] as const;
@@ -132,7 +197,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "build:all": "bun run --filter @bramble/extension build:all",
   "build:firefox": "bun run --filter @bramble/extension build:firefox",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:qsb && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
   // Warns only, never fails: wording is a judgement call. See docs/COPY_STYLE.md.
   "check:copy": "bun run scripts/check-copy.ts",
@@ -148,6 +213,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:lint": "biome check .",
   "check:argent": "bun run scripts/check-argent-contracts.ts",
   "check:privacy": "bun run scripts/check-privacy-sdk.ts",
+  "check:qsb": "bun run scripts/check-qsb-runtime.ts",
   "check:release-version": "bun run scripts/release-version.ts",
   "check:types": "tsc --noEmit",
   "check:workspaces":
@@ -166,6 +232,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
   "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
+  "vendor:qsb": "bun run scripts/vendor-qsb.ts",
 };
 
 export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {
@@ -217,6 +284,7 @@ export const WALLET_COMPLEXITY_GLOBS = [
   "packages/features/permissions/src/**",
   "packages/features/transactions/src/**",
   "packages/features/settings/src/**",
+  "packages/features/qsb/src/**",
 ] as const;
 
 export const REQUIRED_BIOME_NURSERY_RULES: Readonly<Record<string, string>> = {

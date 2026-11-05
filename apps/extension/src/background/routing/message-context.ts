@@ -64,6 +64,7 @@ import {
   type Strk20WalletPreparationStore,
 } from "../privacy/strk20-wallet-preparations";
 import { createWatchAssetAdmission, type WatchAssetAdmission } from "../provider/watch-asset";
+import type { QsbVaultDeps } from "../qsb/qsb-vault-session";
 import { defaultRuntimeRpc, type RuntimeRpc } from "../runtime/runtime-rpc";
 import {
   type ActiveStateCoordinator,
@@ -100,6 +101,8 @@ export type RouterContext = {
   readonly phishingFeedHealth?: () => PhishingFeedHealth;
   readonly preferencesStore: WalletPreferencesStore;
   readonly prices: PriceService;
+  /** The QSB vault flows' collaborators; absent, every vault message is unavailable. */
+  readonly qsbVaults?: QsbVaultDeps;
   readonly recoveryDiscovery: RecoveryDiscoveryCache;
   /** Accounts whose deploy may be in flight; every deploy route consults it. */
   readonly pendingDeployments: PendingDeployments;
@@ -145,6 +148,8 @@ export type MessageHandlerOptions = {
   readonly phishingFeedHealth?: () => PhishingFeedHealth;
   readonly preferencesStore?: WalletPreferencesStore;
   readonly prices?: PriceService;
+  /** The QSB coordinator, runtime, clock and id drawer; absent, QSB vaults are unavailable. */
+  readonly qsbVaults?: QsbVaultDeps;
   readonly recoveryDiscovery?: RecoveryDiscoveryCache;
   /** Signed OutsideExecution messages for Activity; in memory when absent. */
   readonly relaySignatures?: RelaySignatureLog;
@@ -310,6 +315,7 @@ export const routerContext = (
     ...phishingFeedHealthFor(options.phishingFeedHealth),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
+    ...(options.qsbVaults ? { qsbVaults: options.qsbVaults } : {}),
     recoveryDiscovery: recoveryDiscoveryFor(options.recoveryDiscovery),
     relaySignatures: relaySignaturesFor(options.relaySignatures),
     runtimeRpc,

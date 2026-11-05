@@ -29,6 +29,7 @@ import { NO_RECOVERY_PHRASE_REFUSAL } from "@bramble/wallet-model/accounts";
 import { ADDRESS_IMPORT_ERROR_COPY } from "./friendly-error-copy-address";
 import { MULTISIG_ERROR_COPY } from "./friendly-error-copy-multisig";
 import { PRIVACY_ERROR_COPY } from "./friendly-error-copy-privacy";
+import { QSB_ERROR_COPY } from "./friendly-error-copy-qsb";
 import { INTERNAL_ERROR_COPY } from "./friendly-error-internal";
 import {
   ADD_ACCOUNT_FAILED,
@@ -463,6 +464,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["complete ledger sign failed", LEDGER_SIGN_UNFINISHED],
 
   ...PRIVACY_ERROR_COPY,
+  ...QSB_ERROR_COPY,
   ...MULTISIG_ERROR_COPY,
   ...INTERNAL_ERROR_COPY,
 ]);

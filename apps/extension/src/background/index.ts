@@ -21,10 +21,10 @@ import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnost
 import { createActivityLog, systemClock } from "@bramble/transactions/activity";
 import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
 import { createRelaySignatureLog } from "@bramble/transactions/relay-signatures";
-import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
+import { createEncryptedStore, randomQsbJournalId } from "@bramble/vault/encrypted-store";
+import { createQsbJournalStores } from "@bramble/vault/qsb-journal-stores";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@bramble/vault/store-migration";
-import type { WalletEventMessage } from "@bramble/wallet-protocol/events";
 import * as krustyModule from "/dependencies/krusty-kms/krusty_kms_wasm.js";
 import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import {
@@ -59,8 +59,13 @@ import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-preparations";
+import { qsbRuntime } from "./qsb/packaged-qsb-runtime";
+import { qsbCoordinatorAccess } from "./qsb/qsb-vault-access-grant";
+import { createQsbVaultWiring } from "./qsb/qsb-vault-wiring";
 import { createMessageHandler } from "./routing/messages";
+import { extensionIdentityOf } from "./routing/senders";
 import type { BackgroundBrowser } from "./runtime/background-browser";
+import { createWalletEventBroadcast } from "./runtime/event-broadcast";
 import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
 import { schedulePhishingFeedRefresh } from "./runtime/phishing-feed-alarm";
 import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
@@ -75,7 +80,6 @@ import { startTransactionMonitor } from "./transactions/tx-monitor";
 
 const extensionApi = resolveExtensionApi<BackgroundBrowser>();
 const runtime = extensionApi?.runtime;
-const tabs = extensionApi?.tabs;
 declare const __MC_BUILD_BRANCH__: string | undefined;
 let productAnalyticsEnabled = false;
 // The request surface: the user's choice, and the side-panel learning that
@@ -116,42 +120,50 @@ const recoveryDiscovery = createRecoveryDiscoveryCache(sessionStore);
 // The vault store is created up front so the unlock session can drop its
 // cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
 // operations for the life of an unlock rather than re-derived every time.
-const vaultStores: { readonly primary: EncryptedStore; readonly staging: EncryptedStore } | null =
-  (() => {
-    try {
-      const store = createBrowserLocalStore();
-      const freshnessStore = createBrowserSyncStore();
-      // The vault blob and its freshness records both live in areas a content
-      // script can read and write on Firefox, which cannot restrict them; an
-      // attacker there rolls back the pair together and it stays
-      // self-consistent. `sessionStore` is `storage.session`, closed to content
-      // scripts on every browser, so it carries a second copy of the commit
-      // state that the rolled-back one has to agree with. Absent where the
-      // runtime has no session storage, which leaves the durable record as the
-      // only authority — the behaviour before this shadow existed.
-      return {
-        // Only the primary mirrors its commit record into `storage.local`, so a
-        // lost `storage.sync` record does not lock the vault; see
-        // `createEncryptedStore` for why staging must not.
-        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
-        staging: createEncryptedStore(
-          store,
-          VAULT_MIGRATION_STORE_KEY,
-          freshnessStore,
-          sessionStore,
-        ),
-      };
-    } catch {
-      return null;
-    }
-  })();
+const vaultStores = (() => {
+  try {
+    const store = createBrowserLocalStore();
+    const freshnessStore = createBrowserSyncStore();
+    // The vault blob and its freshness records both live in areas a content
+    // script can read and write on Firefox, which cannot restrict them; an
+    // attacker there rolls back the pair together and it stays
+    // self-consistent. `sessionStore` is `storage.session`, closed to content
+    // scripts on every browser, so it carries a second copy of the commit
+    // state that the rolled-back one has to agree with. Absent where the
+    // runtime has no session storage, which leaves the durable record as the
+    // only authority — the behaviour before this shadow existed.
+    return {
+      // Each QSB journal is wired exactly like the primary vault, commit-record
+      // mirror included: the wallet never deletes a journal's records.
+      journals: createQsbJournalStores((key) =>
+        createEncryptedStore(store, key, freshnessStore, sessionStore, true),
+      ),
+      // Only the primary mirrors its commit record into `storage.local`, so a
+      // lost `storage.sync` record does not lock the vault; see
+      // `createEncryptedStore` for why staging must not.
+      primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
+      staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY, freshnessStore, sessionStore),
+    };
+  } catch {
+    return null;
+  }
+})();
+// QSB vaults: the coordinator through the untrusted-fetch boundary, tokens in
+// memory only and dropped with the other key caches on lock.
+const qsbVaults = createQsbVaultWiring({
+  access: qsbCoordinatorAccess(extensionApi?.permissions),
+  fetch: untrustedFetch,
+  now: systemClock,
+  runtime: qsbRuntime,
+});
 const session = createBackgroundUnlockSession({
   alarms: extensionApi?.alarms,
   sessionStore,
   clearKeyCaches: () => {
-    for (const store of [vaultStores?.primary, vaultStores?.staging]) {
+    for (const store of [vaultStores?.primary, vaultStores?.staging, vaultStores?.journals]) {
       store?.clearKeys();
     }
+    qsbVaults.clearSessions();
     // Declared below; this runs only when the session locks, long after.
     void wallet.then((service) => service?.clearGrantCache());
   },
@@ -167,6 +179,7 @@ const wallet = vaultStores
           encryptedStore: vaultStores.primary,
           kms: createKrustyKms(krustyModule),
           migrationStore: vaultStores.staging,
+          qsb: { drawJournalId: randomQsbJournalId, journals: vaultStores.journals },
         }),
       )
       .catch(() => null)
@@ -349,19 +362,8 @@ const strk20Preparations = createStrk20WalletPreparationStore({
   ...workerKeepAlive,
   now: systemClock,
 });
-// This extension's own identity. The origin MUST come from the runtime: on
-// Firefox `runtime.id` is the add-on id while pages are served from
-// `moz-extension://<per-install uuid>`, so an origin built from the id matches
-// nothing. An unreadable origin stays empty, which fails the gate closed.
-const extensionOrigin = (): string => {
-  try {
-    const url = runtime?.getURL?.("");
-    return url === undefined ? "" : new URL(url).origin;
-  } catch {
-    return "";
-  }
-};
-const extension = { id: runtime?.id ?? "", origin: extensionOrigin() };
+// This extension's own identity; the origin comes from the runtime, never the id.
+const extension = extensionIdentityOf(runtime);
 // Applies a downloaded update as soon as nothing is in progress (mc-wallet 708).
 const updateReady = createUpdateReady({
   isBusy: () =>
@@ -387,6 +389,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   ...(activityLog ? { activity: activityLog } : {}),
   ...(originHistory ? { originHistory } : {}),
   prices: priceService,
+  qsbVaults,
   recoveryDiscovery,
   relaySignatures: createRelaySignatureLog({ now: systemClock, store: createBrowserLocalStore() }),
   swap: swapService,
@@ -419,23 +422,7 @@ if (activityLog) {
   });
 }
 
-let broadcastQueue: Promise<void> = Promise.resolve();
-const broadcastEvent = (event: WalletEventMessage): void => {
-  broadcastQueue = broadcastQueue.then(async () => {
-    await runtime?.sendMessage?.(event).catch(() => undefined);
-    const openTabs = await tabs?.query({}).catch(() => []);
-    await Promise.all(
-      (openTabs ?? []).map((tab) =>
-        typeof tab.id === "number"
-          ? tabs?.sendMessage(tab.id, event).then(
-              () => undefined,
-              () => undefined,
-            )
-          : undefined,
-      ),
-    );
-  });
-};
+const broadcastEvent = createWalletEventBroadcast(extensionApi);
 
 // On Firefox a dapp-triggered approval cannot raise the wallet, so the toolbar
 // mark is the only sign something waits; it tracks the queue on every path,
@@ -443,7 +430,6 @@ const broadcastEvent = (event: WalletEventMessage): void => {
 const refreshPendingApprovals = (): void => {
   showPendingApprovals(extensionApi, approvals.list().length);
 };
-
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {
   const events = walletEventBroadcasts(message, response);
   for (const event of events) {
@@ -465,7 +451,6 @@ setApprovalNotifier(() => {
   refreshPendingApprovals();
   approvalKeepAlive.sync();
 });
-
 runtime?.onInstalled.addListener((details) => {
   void openOnboardingOnInstall(extensionApi, details.reason);
 });
@@ -496,3 +481,6 @@ runtime?.onMessage.addListener((message, sender, sendResponse) => {
   );
   return true;
 });
+
+/** The lazy QSB runtime the vault messages build scripts with (also exported for the E2E probe). */
+export { qsbRuntime };

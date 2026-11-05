@@ -200,7 +200,8 @@ describe("vault service guard branches", () => {
       importedSeeds: [],
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 12,
+      qsbAccounts: [],
+      schemaVersion: 13,
       shadowAccountScopes: [],
       signingKeys: [
         { accountId: mainnet.id, privateKey: "0x123456" },

@@ -153,6 +153,22 @@ describe("add-account chooser routing", () => {
     expect(h.seedImports()).toBe(1);
   });
 
+  test("the QSB tiles dismiss into the QSB journey without touching the wallet", () => {
+    const h = onboardHarness();
+    const controller = createLedgerOnboardController(h.deps);
+    controller.showChooser();
+    controller.choose("qsb-create");
+    expect(h.views.at(-1)).toBeNull();
+    controller.showChooser();
+    controller.choose("import");
+    controller.choose("qsb-import");
+    expect(h.views.at(-1)).toBeNull();
+    expect(h.qsbRoutes).toEqual(["create", "import"]);
+    expect(h.hdAdds()).toBe(0);
+    expect(h.seedImports()).toBe(0);
+    expect(h.imports()).toBe(0);
+  });
+
   test("a regular-account choice derives an HD account, dismisses, and refreshes", async () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);

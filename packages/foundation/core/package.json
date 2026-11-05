@@ -1,6 +1,6 @@
 {
   "name": "@bramble/core",
-  "description": "Pure, environment-independent primitives: bounded JSON parsing, errors, identifiers, normalized origins, HTML text helpers, network-error classification and service URL validation.",
+  "description": "Pure, environment-independent primitives: bounded and strict JSON parsing, errors, identifiers, normalized origins, HTML text helpers, network-error classification and service URL validation.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,8 @@
     "./json": "./src/json.ts",
     "./network-error": "./src/network-error.ts",
     "./origin": "./src/origin.ts",
-    "./service-url": "./src/service-url.ts"
+    "./service-url": "./src/service-url.ts",
+    "./strict-json": "./src/strict-json.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

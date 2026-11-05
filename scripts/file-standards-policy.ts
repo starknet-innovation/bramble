@@ -109,6 +109,27 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
   "apps/extension/src/background/runtime/runtime-state.ts",
   "apps/extension/src/background/runtime/runtime-types.ts",
+  // Phrase-flow reply types split from runtime-types.ts: declares the reveal
+  // replies' phrase fields; types only, holding and logging nothing.
+  "apps/extension/src/background/runtime/runtime-phrase-types.ts",
+  // QSB account parsers: bound the phrase to import and the re-entered vault
+  // credential of a reveal; nothing is echoed, logged, or persisted.
+  "apps/extension/src/background/qsb/qsb-account-inputs.ts",
+  // QSB account handlers: hand the session's (or, for the one sanctioned
+  // reveal, the re-entered) vault credential straight to the vault service and
+  // return its views; the revealed phrase only transits to the extension page.
+  "apps/extension/src/background/qsb/qsb-account-ops.ts",
+  // QSB vault handlers: hand the session's vault credential (peeked for the
+  // polled listing, renewed for user actions) straight to the vault service's
+  // QSB session; replies are public vault data only. Never logged or kept.
+  "apps/extension/src/background/qsb/qsb-vault-ops.ts",
+  // QSB withdrawal parsers: bound the re-entered vault credential of a
+  // release; nothing is echoed, logged, or persisted.
+  "apps/extension/src/background/qsb/qsb-withdrawal-inputs.ts",
+  // QSB withdrawal handlers: hand the session's vault credential, or for the
+  // release the re-entered one, straight to the vault service's QSB session;
+  // replies are public withdrawal data only. Never logged or kept.
+  "apps/extension/src/background/qsb/qsb-withdrawal-ops.ts",
   "apps/extension/src/background/runtime/session.ts",
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",
@@ -123,6 +144,14 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/accounts/wallet-reader.ts",
   "apps/extension/src/background/ledger/ledger-inputs.ts",
   "packages/platform/kms-krusty/src/adapter.ts",
+  // Krusty's QSB and Bitcoin calls, split from adapter.ts: checks the private
+  // key and the signatures crossing the Krusty boundary and frees Krusty's
+  // copy; nothing is logged, persisted, or returned past the vault service.
+  "packages/platform/kms-krusty/src/bitcoin.ts",
+  // Krusty's QSB disclosure calls, split from bitcoin.ts: checks the phrase
+  // and the 15 preimages crossing the Krusty boundary; nothing is logged or
+  // persisted, and only the vault service's one release method calls it.
+  "packages/platform/kms-krusty/src/qsb-reveal.ts",
   "packages/foundation/wallet-model/src/accounts/signing.ts",
   // Pure length policy only; carries no passphrase value across a boundary.
   "packages/foundation/wallet-model/src/preferences/passphrase.ts",
@@ -172,6 +201,25 @@ export const SECRET_MATERIAL_FILES = new Set([
   // neither persists it nor renders it.
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/unlock-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
+  // Quantum-safe Bitcoin client: the reveal request carries the freshly typed
+  // vault passphrase and its reply the phrase; the import request carries the
+  // typed phrase. Validated and passed through, never kept, logged, or stored.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-runtime.ts",
+  // QSB backup screen: reads the vault passphrase once at submit and empties
+  // the field as it is sent; the revealed phrase lives only in the grid cells,
+  // which are emptied before the check words and whenever the screen is left.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-backup-ui.ts",
+  // QSB phrase import: the typed phrase lives only in the grid cells and goes
+  // once into the privileged import request; the cells are emptied on success
+  // and whenever the screen is left. Nothing is stored or logged.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-import-ui.ts",
+  // QSB withdrawal client: the release request carries the wallet passphrase
+  // the user just typed, passed through to the background and kept nowhere.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-withdrawal-runtime.ts",
+  // QSB release review: reads the wallet passphrase once at submit and empties
+  // its field as it is sent, and again whenever the screen is left or
+  // repainted; it never holds the value in state.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/qsb/qsb-release-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
   // Privileged UI message client: credentials transit directly to the
   // background and are never retained or rendered here.
@@ -213,6 +261,14 @@ export const SECRET_MATERIAL_FILES = new Set([
   // The field is public; private signing stays in Krusty via signHash.
   "packages/features/transactions/src/gasless/gasless-submit.ts",
   "packages/features/privacy/src/service.ts",
+  // QSB coordinator sign-in: matches the coordinator's fixed session-only text,
+  // which names a signature, and posts the public BIP-322 proof as the
+  // `signature` field; no key is read, held, logged or persisted here.
+  "packages/features/qsb/src/coordinator/challenge.ts",
+  "packages/features/qsb/src/coordinator/client.ts",
+  // Checks the public partial signatures Krusty added to a deposit PSBT and
+  // moves them into the witness; it never signs and holds no key.
+  "packages/features/qsb/src/deposit/psbt.ts",
   // Argent multisig stores public signer identifiers and verified public
   // signature fragments only. Private signing remains behind Krusty and the
   // privileged background accountHashSigner boundary.
@@ -234,6 +290,44 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Imported-seed validators split from schema.ts on the size budget; they name
   // the retained phrase field only to validate it inside the vault.
   "packages/platform/vault/src/schema/schema-seeds.ts",
+  // QSB account records: declares and validates each dedicated phrase inside
+  // the encrypted vault. Validators only; no phrase is derived from, returned,
+  // logged, or persisted elsewhere here.
+  "packages/platform/vault/src/qsb/qsb-account.ts",
+  // QSB journal store: reads and writes one account's encrypted journal with
+  // the caller's vault passphrase, like every other vault service method. The
+  // journal holds no phrase; the credential is never logged or returned.
+  "packages/platform/vault/src/qsb/qsb-journal-store.ts",
+  // QSB account methods: generate (through Krusty), import, confirm and reveal
+  // a dedicated phrase inside the encrypted vault under the caller's vault
+  // credential; only the re-authenticated reveal returns a phrase.
+  "packages/platform/vault/src/service/qsb-accounts.ts",
+  // Their type surface, split by behaviour: names the phrase and credential
+  // fields of the inputs and the reveal's result; types only.
+  "packages/platform/vault/src/service/qsb-account-types.ts",
+  // QSB vault session: derives the owner key from the account's phrase through
+  // Krusty for each use and signs with it, inside the vault service; returns
+  // public data only and never keeps, logs or persists the key or the phrase.
+  "packages/platform/vault/src/service/qsb-vault-access.ts",
+  // Its type surface: names the session's credential input and the public
+  // signatures it returns; types only.
+  "packages/platform/vault/src/service/qsb-vault-types.ts",
+  // QSB pending deposits: reads and writes one account's encrypted record of
+  // signed public transactions under the caller's vault passphrase, like the
+  // journal store; the credential is never logged or returned.
+  "packages/platform/vault/src/qsb/qsb-deposit-store.ts",
+  // QSB withdrawals: reads and writes one account's encrypted record of
+  // intents and signed public transactions under the caller's vault
+  // passphrase, like the deposit store; no key or preimage is ever in it.
+  "packages/platform/vault/src/qsb/qsb-withdrawal-store.ts",
+  // A QSB session's slot, split from qsb-vault-access.ts: reads the account
+  // and its stores under the session's vault credential; nothing leaves.
+  "packages/platform/vault/src/service/qsb-vault-slot.ts",
+  // The session's withdrawal methods, split from qsb-vault-access.ts: the one
+  // release reads the phrase inside a single slot, after the exposure is
+  // durable, and returns only the 15 preimages; the helper signature derives
+  // the owner key for that use alone. Nothing is kept, logged or persisted.
+  "packages/platform/vault/src/service/qsb-vault-withdrawals.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
   // Split from accounts.ts by the size budget: same boundary, same rules — the

@@ -6,10 +6,12 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { bitcoinExports } from "./bitcoin-exports";
 
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 
 const createModule = (overrides: Record<string, unknown> = {}) => ({
+  ...bitcoinExports(),
   deriveArgentLegacyKeypair() {
     return {
       private_key: "0x321",

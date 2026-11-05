@@ -29,6 +29,10 @@ import { approvalsScenario } from "./scenarios-approvals";
 import { multisigScenario } from "./scenarios-multisig";
 import { ledgerOnboardingScenario, onboardingScenario } from "./scenarios-onboarding";
 import { privacyScenario } from "./scenarios-privacy";
+import { qsbScenario } from "./scenarios-qsb";
+import { qsbDepositScenario } from "./scenarios-qsb-deposit";
+import { qsbVaultsScenario } from "./scenarios-qsb-vaults";
+import { qsbWithdrawScenario } from "./scenarios-qsb-withdraw";
 import { settingsScenario } from "./scenarios-settings";
 import { ledgerScenario, sendScenario } from "./scenarios-signing";
 import { swapScenario } from "./scenarios-swap";
@@ -415,6 +419,10 @@ export const walletScenarios: readonly WalletScenario[] = [
   nftScenario,
   multisigScenario,
   settingsScenario,
+  qsbScenario,
+  qsbVaultsScenario,
+  qsbDepositScenario,
+  qsbWithdrawScenario,
 ];
 
 export const walletScenario = (id: string): WalletScenario =>

@@ -20,27 +20,52 @@ import {
 } from "@bramble/wallet-model/accounts";
 import { canonicalFelt, isStarkPrivateKey } from "@bramble/wallet-model/networks";
 import { isMnemonicText } from "@bramble/wallet-model/passphrase";
-import {
-  hasValidShadowAccountScopes,
-  type ShadowAccountScopeRef,
-} from "../accounts/shadow-account-scopes";
-import { hasValidSeedBindings, type ImportedSeedRef } from "./schema-seeds";
-import type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
+import { hasValidAccountSecretBindings, isAccountSecretRef } from "../accounts/account-secrets";
+import { hasValidShadowAccountScopes } from "../accounts/shadow-account-scopes";
+import { hasValidQsbAccounts, type QsbAccountRecord } from "../qsb/qsb-account";
+import { hasValidSeedBindings } from "./schema-seeds";
+import type {
+  OriginGrant,
+  SigningKeyRef,
+  VaultV1,
+  VaultV2,
+  VaultV3,
+  VaultV4,
+  VaultV5,
+  VaultV6,
+  VaultV7,
+  VaultV8,
+  VaultV9,
+  VaultV10,
+  VaultV11,
+  VaultV12,
+} from "./schema-types";
 
 /** Re-exports the imported-seed record type from its size-budget split. */
 export type { ImportedSeedRef } from "./schema-seeds";
 /** Re-exports the legacy type surface from its size-budget split. */
-export type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
-
-import {
-  type AccountSecretRef,
-  hasValidAccountSecretBindings,
-  isAccountSecretRef,
-} from "../accounts/account-secrets";
+export type {
+  OriginGrant,
+  SigningKeyRef,
+  VaultV1,
+  VaultV2,
+  VaultV3,
+  VaultV4,
+  VaultV5,
+  VaultV6,
+  VaultV7,
+  VaultV8,
+  VaultV9,
+  VaultV10,
+  VaultV11,
+  VaultV12,
+} from "./schema-types";
 
 /**
  * Current vault schema version accepted by validators and writers.
  *
+ * Version 13 adds Quantum Safe Bitcoin accounts: a dedicated phrase per account
+ * and the id of its disclosure journal, which lives in its own encrypted key.
  * Version 12 keeps an encrypted record of the shadow-account scopes each account
  * used (#443), so stuck shadow-account funds stay recoverable. Version 11 admits
  * accounts derived with Ready's ETH-seeded scheme. Version 10 admits Braavos accounts, and Argent accounts at any release they
@@ -54,95 +79,24 @@ import {
  * identities. Version 4 introduced optional account secrets separated from
  * public {@link AccountRef} metadata.
  */
-export const CURRENT_SCHEMA_VERSION = 12;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 /**
- * Current encrypted vault schema. Optional account secrets are deliberately
- * separate from {@link AccountRef}: account metadata is safe to project to the
- * UI and granted origins, while this collection never leaves the privileged
- * encrypted-vault boundary. An account has no record until it retains an
- * optional secret.
+ * Current encrypted vault schema. Version 13 adds the QSB accounts: each one's
+ * dedicated phrase, provenance, backup flag, and `journalId` (see
+ * `../qsb/qsb-account`). The journal itself is a separate encrypted record
+ * with its own budget (`../qsb/qsb-journal-store`). The phrase must never
+ * leave this boundary.
  */
-export type VaultV4 = {
-  readonly accounts: readonly LegacyAccountRef[];
-  readonly accountSecrets: readonly AccountSecretRef[];
-  readonly activeAccountId: string | null;
-  readonly mnemonic: string | null;
-  readonly originGrants: readonly OriginGrant[];
-  readonly schemaVersion: 4;
-  readonly signingKeys: readonly SigningKeyRef[];
-};
-
-/**
- * Current encrypted vault schema. Version 5 makes every account identity and
- * public-key felt canonical so aliases cannot survive as distinct records.
- */
-export type VaultV5 = Omit<VaultV4, "schemaVersion"> & { readonly schemaVersion: 5 };
-
-/**
- * Current encrypted vault schema. Every account carries explicit contract
- * semantics; historical accounts migrate deterministically to OpenZeppelin.
- */
-export type VaultV6 = Omit<VaultV4, "accounts" | "schemaVersion"> & {
-  readonly accounts: readonly LegacyV6AccountRef[];
-  readonly schemaVersion: 6;
-};
-
-/**
- * Current encrypted vault schema. Argent accounts retain the exact deployment
- * salt so externally created accounts remain deployable at their real address.
- */
-export type VaultV7 = Omit<VaultV4, "accounts" | "schemaVersion"> & {
-  readonly accounts: readonly AccountRef[];
-  readonly schemaVersion: 7;
-};
-
-/**
- * Legacy encrypted vault schema. Version 8 retains imported seeds so accounts
- * recovered from another wallet's phrase stay re-derivable and revealable; its
- * Ledger derivations may only follow Bramble's `LedgerW` scheme.
- */
-export type VaultV8 = Omit<VaultV7, "schemaVersion"> & {
-  readonly importedSeeds: readonly ImportedSeedRef[];
-  readonly schemaVersion: 8;
-};
-
-/**
- * Schema-v9 vault, accepted only by the adjacent v10 migration. Admits a Ledger
- * derivation under Ready's `argentx` path scheme beside Bramble's `LedgerW`; the
- * record shape is unchanged from v8.
- */
-export type VaultV9 = Omit<VaultV8, "schemaVersion"> & { readonly schemaVersion: 9 };
-
-/**
- * Current encrypted vault schema. Version 10 admits Braavos accounts, and Argent
- * accounts at any release they could have been deployed with; the record shape
- * is unchanged, only the values a record may hold have widened.
- */
-export type VaultV10 = Omit<VaultV9, "schemaVersion"> & { readonly schemaVersion: 10 };
-
-/**
- * Schema-v11 vault, accepted only by the adjacent v12 migration. Version 11
- * admits accounts derived with Ready's ETH-seeded scheme (`argentx-bip44`,
- * issue 505); the record shape is unchanged from v10.
- */
-export type VaultV11 = Omit<VaultV10, "schemaVersion"> & { readonly schemaVersion: 11 };
-
-/**
- * Current encrypted vault schema. Version 12 adds the shadow-account scope
- * records (#443): which sites, labels, and exact nonces each account drove a
- * shadow account through, so the wallet can find and sweep funds a site left.
- * They reveal which sites someone used privately and so live only here.
- */
-export type VaultV12 = Omit<VaultV11, "schemaVersion"> & {
-  readonly schemaVersion: 12;
-  readonly shadowAccountScopes: readonly ShadowAccountScopeRef[];
+export type VaultV13 = Omit<VaultV12, "schemaVersion"> & {
+  readonly qsbAccounts: readonly QsbAccountRecord[];
+  readonly schemaVersion: 13;
 };
 
 /**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV12;
+export type Vault = VaultV13;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -171,13 +125,14 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV12 => ({
+export const emptyVault = (): VaultV13 => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
   importedSeeds: [],
   mnemonic: null,
   originGrants: [],
+  qsbAccounts: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
   shadowAccountScopes: [],
   signingKeys: [],
@@ -463,21 +418,57 @@ export const isVaultV11 = (value: unknown): value is VaultV11 =>
 const V12_KEYS = [...V8_KEYS, "shadowAccountScopes"] as const;
 
 /**
- * Validates the current schema-v12 vault: everything v11 holds, plus
- * shadow-account scope records that are well formed, canonical, distinct, and
- * bound to a retained account on its own chain.
+ * Validates schema-v12 vaults for the adjacent v13 migration, and is the body
+ * of the v13 validator: everything v11 holds, plus shadow-account scope
+ * records that are well formed, canonical, distinct, and bound to a retained
+ * account on its own chain.
  */
 export const isVaultV12 = (value: unknown): value is VaultV12 => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, V12_KEYS) ||
-    value["schemaVersion"] !== CURRENT_SCHEMA_VERSION
-  ) {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, V12_KEYS) || value["schemaVersion"] !== 12) {
     return false;
   }
   const { shadowAccountScopes, ...rest } = value;
   return (
     isVaultV11({ ...rest, schemaVersion: 11 }) &&
     hasValidShadowAccountScopes(rest["accounts"] as VaultV11["accounts"], shadowAccountScopes)
+  );
+};
+
+const V13_KEYS = [...V12_KEYS, "qsbAccounts"] as const;
+
+/**
+ * Every Starknet phrase a vault value retains (the founding phrase and each
+ * imported seed's), as stored; a QSB phrase must be none of them. Reads an
+ * unvalidated value too, skipping anything that is not a string phrase.
+ */
+export const starknetPhrases = (value: Record<string, unknown>): readonly string[] => [
+  ...(typeof value["mnemonic"] === "string" ? [value["mnemonic"]] : []),
+  ...(Array.isArray(value["importedSeeds"])
+    ? value["importedSeeds"].flatMap((seed: unknown) =>
+        isRecord(seed) && typeof seed["mnemonic"] === "string" ? [seed["mnemonic"]] : [],
+      )
+    : []),
+];
+
+/**
+ * Validates the current schema-v13 vault: everything v12 holds, plus QSB
+ * accounts that are each valid, within the account bound, distinct, and hold a
+ * dedicated phrase. The whole value, QSB records included, must also fit the
+ * provider JSON budget — the capacity the write path enforces — so a vault
+ * this accepts on read is one the wallet could have written.
+ */
+export const isVaultV13 = (value: unknown): value is VaultV13 => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, V13_KEYS) ||
+    value["schemaVersion"] !== CURRENT_SCHEMA_VERSION
+  ) {
+    return false;
+  }
+  const { qsbAccounts, ...rest } = value;
+  return (
+    isVaultV12({ ...rest, schemaVersion: 12 }) &&
+    isJson(value) &&
+    hasValidQsbAccounts(qsbAccounts, starknetPhrases(rest))
   );
 };

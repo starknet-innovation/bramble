@@ -10,6 +10,7 @@ export const STRUCTURED_SOURCE_ROOTS: Readonly<Record<string, readonly string[]>
   "apps/ui-lab/src": [],
   "packages/features/portfolio/src": [],
   "packages/features/privacy/src": ["config.ts", "service.ts"],
+  "packages/features/qsb/src": [],
   "packages/features/transactions/src": [],
   "packages/foundation/wallet-model/src": [],
   "packages/foundation/wallet-protocol/src": [],
@@ -57,6 +58,7 @@ export const DEVELOPMENT_SOURCE_FILES = new Set(["apps/terminal/src/data/extende
 export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
   ["packages/presentation/wallet-ui/tests/support/groups-harness.ts", 1],
   ["scripts/check-privacy-sdk.ts", 1],
+  ["scripts/qsb-pyodide.ts", 1],
 ]);
 
 /**

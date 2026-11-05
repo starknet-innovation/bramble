@@ -1,7 +1,130 @@
 /**
- * Minimal fake Krusty KMS for wallet service tests.
+ * A deterministic stand-in for Krusty KMS in wallet tests. Never a production
+ * dependency; every phrase and key here is public.
+ */
+import { createHash } from "node:crypto";
+
+// The 12-word phrase the fake generates by default (and for any count but 24).
+const FAKE_GENERATED_MNEMONIC =
+  "habit hope tip crystal because grunt nation idea electric witness alert like";
+
+/**
+ * The 24-word phrase the fake generates when asked for 24 words, as a QSB
+ * account is: a published BIP-39 test vector (entropy 0x68a79eac…6ce7c),
+ * public and never for funds, deliberately distinct from the 12-word one so a
+ * test can tell which count was requested.
+ */
+export const FAKE_GENERATED_MNEMONIC_24 =
+  "hamster diagram private dutch cause delay private meat slide toddler razor book happy fancy gospel tennis maple dilemma loan word shrug inflict delay length";
+
+/**
+ * The BIP-84 test vector the fake's Bitcoin key always is: `m/84'/0'/0'/0/0`
+ * of the published `abandon … about` phrase, as BIP-84 lists it. Public, and
+ * never for funds.
+ */
+export const FAKE_BITCOIN_OWNER = {
+  address: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
+  privateKey: "4604b4b710fe91f584fff084e1a9159fe4f8408fff380596a604948474ce4fa3",
+  publicKey: "0330d54fd0dd420a6e5f8d3624f5f3482cae350f79d5f0753bf5beef9c2d91af3c",
+} as const;
+
+const sha256Hex = (data: string | Uint8Array): string =>
+  createHash("sha256").update(data).digest("hex");
+
+/**
+ * The fake's HORS secret of phrase `mnemonic`, vault `vaultIndex`, round `r`,
+ * index `index`: 20 real-shaped bytes, lowercase hex, unique per slot. Public
+ * test values, so a suite can scan replies and requests for them.
+ */
+export const fakeQsbPreimage = (
+  mnemonic: string,
+  vaultIndex: number,
+  r: number,
+  index: number,
+): string => sha256Hex(`fake qsb secret ${mnemonic} ${vaultIndex} ${r} ${index}`).slice(0, 40);
+
+const hash160Hex = (hexValue: string): string =>
+  createHash("ripemd160")
+    .update(createHash("sha256").update(Buffer.from(hexValue, "hex")).digest())
+    .digest("hex");
+
+// Real-shaped commitments: 2 × 150 distinct 20-byte values per phrase and
+// vault, each the HASH160 of its fake secret, with the root QSB-HORS-v1
+// defines over them, so a consumer that checks the root against the
+// commitments, or a preimage against its commitment, accepts the fake.
+const fakeQsbCommitments = (mnemonic: string, vaultIndex: number) => {
+  const round = (r: number): string[] =>
+    Array.from({ length: 150 }, (_, index) =>
+      hash160Hex(fakeQsbPreimage(mnemonic, vaultIndex, r, index)),
+    );
+  const round0 = round(0);
+  const round1 = round(1);
+  const root = sha256Hex(
+    Buffer.concat([
+      Buffer.from("QSB-HORS-v1/root"),
+      ...[...round0, ...round1].map((commitment) => Buffer.from(commitment, "hex")),
+    ]),
+  );
+  return { root, round0, round1 };
+};
+
+/**
+ * Minimal fake Krusty KMS for wallet service tests. Its Bitcoin calls are
+ * deterministic and real-shaped but never sign: the BIP-322 proof is a fixed
+ * well-formed witness and a PSBT comes back unchanged, so a flow that verifies
+ * what was signed refuses the fake's output. Suites that need a real
+ * signature use the real Krusty adapter.
  */
 export const fakeKms = (validMnemonic = true) => ({
+  async deriveBitcoinP2wpkhKeypair(
+    _mnemonic: string,
+    _accountIndex: number,
+    _change: number,
+    _addressIndex: number,
+  ) {
+    return { ...FAKE_BITCOIN_OWNER };
+  },
+  async deriveQsbCommitments(mnemonic: string, vaultIndex: number) {
+    return fakeQsbCommitments(mnemonic, vaultIndex);
+  },
+  async signBip322SimpleUnprefixed(_privateKey: string, _address: string, message: string) {
+    // [a 71-byte DER-shaped item ending in SIGHASH_ALL, the owner's key].
+    const body = Buffer.from(sha256Hex(message).repeat(3).slice(0, 140), "hex");
+    const signed = Buffer.concat([Buffer.from([0x30]), body, Buffer.from([0x01])]);
+    return Buffer.concat([
+      Buffer.from([2, signed.length]),
+      signed,
+      Buffer.from([33]),
+      Buffer.from(FAKE_BITCOIN_OWNER.publicKey, "hex"),
+    ]).toString("base64");
+  },
+  async signBitcoinPsbtInputs(
+    _privateKey: string,
+    psbt: Uint8Array,
+    _inputIndices: readonly number[],
+  ) {
+    return Uint8Array.from(psbt);
+  },
+  // The BIP's real B and D over the bytes given, as Krusty computes them.
+  async qsbRevealDigest(transaction: string, round0: readonly number[], round1: readonly number[]) {
+    const binding = Buffer.from(sha256Hex(Buffer.from(transaction, "hex")), "hex");
+    const indices = Buffer.from(
+      [...round0, ...round1].flatMap((index) => [index >> 8, index & 0xff]),
+    );
+    const digest = sha256Hex(Buffer.concat([Buffer.from("QSB-HORS-v1/reveal"), indices, binding]));
+    return { binding: binding.toString("hex"), digest };
+  },
+  async revealQsbPreimages(
+    mnemonic: string,
+    vaultIndex: number,
+    round0: readonly number[],
+    round1: readonly number[],
+  ) {
+    return [
+      ...round0.map((index) => fakeQsbPreimage(mnemonic, vaultIndex, 0, index)),
+      ...round1.map((index) => fakeQsbPreimage(mnemonic, vaultIndex, 1, index)),
+    ];
+  },
   async deriveNostrPublicKey(
     _mnemonic: string,
     _addressIndex: number,
@@ -36,8 +159,9 @@ export const fakeKms = (validMnemonic = true) => ({
       publicKeyY: "0xdef",
     };
   },
-  async generateMnemonic(_wordCount?: number) {
-    return "habit hope tip crystal because grunt nation idea electric witness alert like";
+  // Deterministic, and honours the one other count the wallet asks for.
+  async generateMnemonic(wordCount?: number) {
+    return wordCount === 24 ? FAKE_GENERATED_MNEMONIC_24 : FAKE_GENERATED_MNEMONIC;
   },
   async openNostrApplicationData(
     _mnemonic: string,

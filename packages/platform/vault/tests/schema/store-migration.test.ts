@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@bramble/store/kv";
 import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
 import { migrateVault } from "@bramble/vault/migrations";
-import { isVaultV12 } from "@bramble/vault/schema";
+import { isVaultV13 } from "@bramble/vault/schema";
 import {
   readMigratedVault,
   VAULT_MIGRATION_STORE_KEY,
@@ -48,7 +48,7 @@ describe("readMigratedVault", () => {
 
     const migrated = await readMigratedVault({ primary, staging }, vaultPassphrase);
 
-    expect(isVaultV12(migrated)).toBe(true);
+    expect(isVaultV13(migrated)).toBe(true);
     expect(migrated.accountSecrets).toEqual([]);
     expect(await primary.read(vaultPassphrase)).toEqual(migrated);
     expect(await staging.exists()).toBe(false);
@@ -161,10 +161,11 @@ describe("readMigratedVault", () => {
       readMigratedVault({ primary: unwritablePrimary, staging }, vaultPassphrase),
     ).rejects.toThrow("injected primary write failure");
     expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
-    expect(isVaultV12(await staging.read(vaultPassphrase))).toBe(true);
+    expect(isVaultV13(await staging.read(vaultPassphrase))).toBe(true);
 
     await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toMatchObject({
-      schemaVersion: 12,
+      qsbAccounts: [],
+      schemaVersion: 13,
       shadowAccountScopes: [],
     });
     expect(await staging.exists()).toBe(false);
@@ -192,7 +193,7 @@ describe("readMigratedVault", () => {
     const sync = createMemoryStore();
     const primary = createEncryptedStore(local, VAULT_STORE_KEY, sync, undefined, true);
     const staging = createEncryptedStore(local, VAULT_MIGRATION_STORE_KEY, sync);
-    const { shadowAccountScopes: _scopes, ...current } = migrateVault(legacyV3);
+    const { qsbAccounts: _qsb, shadowAccountScopes: _scopes, ...current } = migrateVault(legacyV3);
     const v11 = { ...current, schemaVersion: 11 };
     await primary.write(v11, vaultPassphrase);
     await staging.write({ ...v11, activeAccountId: null }, vaultPassphrase);

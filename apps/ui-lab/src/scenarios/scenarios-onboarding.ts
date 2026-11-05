@@ -316,8 +316,8 @@ export const ledgerOnboardingScenario: WalletScenario = {
       id: "method",
       label: "Choose account method",
       narrative:
-        "Standard, Ledger, shared, and import routes are explicit; one click on a tile routes immediately.",
-      state: { choices: 4, secretBoundary: "visible" },
+        "Standard, Ledger, shared, QSB vault, and import routes are explicit; one click on a tile routes immediately.",
+      state: { choices: 5, secretBoundary: "visible" },
     },
     {
       content: () => addAccountChooser(false),
@@ -325,23 +325,23 @@ export const ledgerOnboardingScenario: WalletScenario = {
       label: "Choose account method (no Ledger transport)",
       narrative:
         "Without a Ledger transport the chooser offers only the routes this browser can finish.",
-      state: { choices: 3, ledgerTransport: "unavailable" },
+      state: { choices: 4, ledgerTransport: "unavailable" },
     },
     {
       content: () => importAccountChooser(),
       id: "method-import",
       label: "Import an existing account",
       narrative:
-        "The import stage offers the recovery-phrase and private-key routes, each a single click.",
-      state: { choices: 2 },
+        "The import stage offers the rescan, recovery-phrase, private-key, Ready Ledger, and Bitcoin vault phrase routes, each a single click.",
+      state: { choices: 5 },
     },
     {
       content: () => importAccountChooser(false),
       id: "method-import-no-ledger",
       label: "Import an existing account (no Ledger transport)",
       narrative:
-        "The Ready Ledger restore route is likewise absent, leaving the phrase and key routes.",
-      state: { choices: 2, ledgerTransport: "unavailable" },
+        "The Ready Ledger restore route is likewise absent; the routes that need no device remain.",
+      state: { choices: 4, ledgerTransport: "unavailable" },
     },
     {
       content: ledgerConnectPrompt,

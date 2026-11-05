@@ -231,14 +231,16 @@ if (import.meta.main) {
     // signed.
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
-    // No entry for the live phishing feed: it is read through CORS, and a new
+    // No entry for the live phishing feed (read through CORS) or the QSB
+    // coordinator (granted at runtime under the optional HTTPS pattern): a new
     // host here would be a privilege increase on update (issue 772).
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*",
   ];
   // Chrome grants none of these until a user saves a custom HTTP service from
-  // Settings. The UI requests only that endpoint's exact origin; the broad
-  // declaration is the MV3 ceiling needed to support arbitrary HTTPS hosts.
+  // Settings or opens QSB vaults. The UI requests only that endpoint's exact
+  // origin (`QSB_COORDINATOR_PERMISSION` for QSB); the broad declaration is the
+  // MV3 ceiling needed to support arbitrary HTTPS hosts.
   const expectedOptionalHostPermissions = [
     "https://*/*",
     "http://127.0.0.1/*",

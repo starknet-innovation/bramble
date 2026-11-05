@@ -62,6 +62,8 @@ const RANDOM_UUID_FILES = new Set([
   "apps/extension/src/background/analytics/gateway-analytics.ts",
   "apps/extension/src/background/approvals/approvals.ts",
   "apps/extension/src/provider/inpage.ts",
+  // A QSB vault's coordinator id, fresh per registration and never kept.
+  "apps/extension/src/background/qsb/qsb-vault-wiring.ts",
   "packages/platform/ledger-browser/src/grant-window.ts",
 ]);
 const RAW_ERROR_BOUNDARY_FILES = new Set([

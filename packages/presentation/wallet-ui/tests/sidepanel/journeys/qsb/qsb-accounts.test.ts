@@ -1,0 +1,160 @@
+/**
+ * The QSB accounts screen under happy-dom: it is reachable
+ * from the account drawer, lists each account with its state (backup needed,
+ * ready, read-only, history unavailable), opens an account from its row,
+ * offers Back up only where a backup is missing, and shows a failed read as
+ * its reviewed line.
+ */
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { preferences } from "@bramble/testkit/sidepanel";
+import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
+import { dashboard } from "../../../../src/sidepanel/app/screens/views";
+import {
+  bindQsbAccounts,
+  qsbAccountRows,
+  qsbAccountsFlow,
+} from "../../../../src/sidepanel/journeys/qsb/qsb-accounts";
+import { walletViewLabel } from "../../../../src/sidepanel/shared/parts";
+import { registerDom, unregisterDom } from "../../../support/groups-harness";
+import {
+  flush,
+  mountApp,
+  QSB_VIEWS,
+  qsbStatus,
+  type Scripted,
+  scriptedQsbWallet,
+} from "../../../support/qsb-harness";
+
+beforeAll(registerDom);
+afterAll(unregisterDom);
+beforeEach(() => {
+  document.body.replaceChildren();
+});
+
+const mount = (list: Scripted<readonly (typeof QSB_VIEWS)[keyof typeof QSB_VIEWS][]>) => {
+  const app = mountApp(qsbAccountsFlow(qsbStatus));
+  const { calls, wallet } = scriptedQsbWallet({ list });
+  const opened: string[] = [];
+  const shown: string[] = [];
+  let created = 0;
+  const listNode = app.querySelector<HTMLElement>("#qsb-accounts-list");
+  if (!listNode) throw new Error("missing list");
+  bindQsbAccounts({
+    create: () => {
+      created += 1;
+    },
+    list: listNode,
+    openAccount: (id) => shown.push(id),
+    openBackup: (id) => opened.push(id),
+    root: app,
+    wallet,
+  });
+  return { app, calls, created: () => created, list: listNode, opened, shown };
+};
+
+// Each text node of the row, in order: the row's own markup puts no spaces
+// between a name and its state.
+const rowText = (app: HTMLElement, id: string): string => {
+  const row = app.querySelector(`[data-qsb-account="${id}"]`);
+  if (!row) return "";
+  const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+  const parts: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.textContent?.trim();
+    if (text) parts.push(text);
+  }
+  return parts.join(" ");
+};
+
+describe("QSB accounts", () => {
+  test("the drawer links to the screen, which has its own title and route label", () => {
+    const html = dashboard("home", qsbStatus, [], preferences, { balances: [] });
+    const foot = html.slice(html.indexOf("drawer-foot"));
+    expect(foot).toContain('data-view="qsb-accounts"');
+    expect(foot).toContain("QSB vaults");
+    const screen = dashboard("qsb-accounts", qsbStatus, [], preferences, { balances: [] });
+    expect(screen).toContain('id="wallet-screen-qsb-accounts"');
+    expect(screen).toContain("<h1>QSB vaults</h1>");
+    expect(walletViewLabel("qsb-accounts")).toBe("QSB vaults");
+  });
+
+  test("shows loading until the list answers, then one row per state", async () => {
+    const { app, calls, list } = mount({
+      resolve: [
+        QSB_VIEWS.backupNeeded,
+        QSB_VIEWS.ready,
+        QSB_VIEWS.readOnly,
+        QSB_VIEWS.historyUnavailable,
+      ],
+    });
+    expect(list.textContent).toContain("Loading QSB vaults…");
+    await flush();
+    expect(calls.list).toHaveLength(1);
+    expect(rowText(app, "qsb-1")).toBe("QSB vault 1 Backup needed Back up");
+    expect(rowText(app, "qsb-2")).toBe("QSB vault 2 Ready");
+    expect(rowText(app, "qsb-3")).toBe("QSB vault 3 Read-only");
+    expect(rowText(app, "qsb-4")).toBe("QSB vault 4 History unavailable");
+  });
+
+  test("every row opens its account; Back up stays a separate control", async () => {
+    const { app, opened, shown } = mount({ resolve: [QSB_VIEWS.ready, QSB_VIEWS.backupNeeded] });
+    await flush();
+    const rows = app.querySelectorAll<HTMLButtonElement>("[data-qsb-open]");
+    expect(Array.from(rows, (row) => row.dataset["qsbOpen"])).toEqual(["qsb-2", "qsb-1"]);
+    rows[1]?.click();
+    expect(shown).toEqual(["qsb-1"]);
+    expect(opened).toEqual([]);
+    // The Back up control sits beside the row, never inside it.
+    const backUp = app.querySelector<HTMLButtonElement>('[data-qsb-back-up="qsb-1"]');
+    expect(backUp?.closest("[data-qsb-open]")).toBe(null);
+    backUp?.click();
+    expect(opened).toEqual(["qsb-1"]);
+    expect(shown).toEqual(["qsb-1"]);
+  });
+
+  test("only an account without a backup offers Back up, which opens that account", async () => {
+    const { app, opened } = mount({ resolve: [QSB_VIEWS.ready, QSB_VIEWS.backupNeeded] });
+    await flush();
+    const controls = app.querySelectorAll<HTMLButtonElement>("[data-qsb-back-up]");
+    expect(controls).toHaveLength(1);
+    expect(controls[0]?.getAttribute("aria-label")).toBe("Back up QSB vault 1");
+    controls[0]?.click();
+    expect(opened).toEqual(["qsb-1"]);
+  });
+
+  test("Create account and Import phrase lead into the journey", () => {
+    const { app, created } = mount({ resolve: [] });
+    app.querySelector<HTMLButtonElement>("#qsb-create")?.click();
+    expect(created()).toBe(1);
+    // Import is a plain route the shell's navigation binds.
+    expect(app.querySelector('[data-view="qsb-import"]')?.textContent).toContain("Import phrase");
+  });
+
+  test("an empty wallet says so", async () => {
+    const { list } = mount({ resolve: [] });
+    await flush();
+    expect(list.textContent).toBe("No QSB vaults yet.");
+  });
+
+  test("a failed read shows the refusal's reviewed sentence, not the raw diagnostic", async () => {
+    const { list } = mount({ reject: new Error(QSB_ACCOUNT_REFUSALS.journalUnavailable) });
+    await flush();
+    expect(list.querySelector('[role="alert"]')?.textContent).toBe(
+      "Bramble can't read this QSB vault's history right now.",
+    );
+    const unrecognised = mount({ reject: new Error("wallet unavailable") });
+    await flush();
+    expect(unrecognised.list.textContent).toBe(
+      "The wallet is locked or unavailable. Unlock it and try again.",
+    );
+  });
+
+  test("the rows template escapes and states each account once", () => {
+    const html = qsbAccountRows([QSB_VIEWS.backupNeeded, QSB_VIEWS.ready]);
+    expect(html.match(/data-qsb-account=/g)).toHaveLength(2);
+    expect(html.match(/data-qsb-open=/g)).toHaveLength(2);
+    expect(html).toContain('<span class="hint">Backup needed</span>');
+    expect(html).toContain('<span class="hint">Ready</span>');
+    expect(qsbAccountRows([])).toContain("No QSB vaults yet.");
+  });
+});

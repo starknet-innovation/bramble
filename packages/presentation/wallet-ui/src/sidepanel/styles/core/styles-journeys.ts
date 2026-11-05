@@ -99,5 +99,32 @@ export const JOURNEY_STYLES = `
   .nft-send-art .icon { height: 26px; width: 26px; }
   #nft-send-form[data-stage="reviewing"] #nft-review-panel,
   #nft-send-form[data-stage="submitting"] #nft-review-panel { opacity: 0.62; }
+  /* A QSB account's address, balance and vaults are separate
+     sections: they sit apart as a screen's sections do. */
+  #qsb-account > [data-qsb-account-step="detail"] { gap: ${SPACE.lg}; }
+  /* A row's own action keeps its one-line label at 320 px; the name beside it
+     gives way instead. */
+  [data-qsb-back-up], [data-qsb-deposit], [data-qsb-resend] { flex: none; }
+  /* The BIP's unverified-binding statement before a release: a warning in the
+     danger tone, never a footnote. */
+  .qsb-binding-warning {
+    align-items: flex-start;
+    background: var(--bramble-danger-soft);
+    border-radius: ${RADIUS.md};
+    color: var(--bramble-danger);
+    display: flex;
+    font-size: ${TYPE.label.size};
+    gap: ${SPACE.sm};
+    line-height: ${TYPE.label.line};
+    padding: ${SPACE.sm} ${SPACE.md};
+  }
+  .qsb-binding-warning .icon { flex: none; height: 18px; width: 18px; }
+  .qsb-binding-warning p { color: inherit; margin: 0; min-width: 0; }
+  .qsb-binding-warning strong { font-weight: ${WEIGHT.semibold}; }
+  /* QSB status lines take no row until they say something. */
+  #qsb-vault-result:empty, #qsb-amount-result:empty, #qsb-review-result:empty,
+  #qsb-destination-result:empty, #qsb-withdraw-result:empty, #qsb-release-result:empty { display: none; }
+  #qsb-amount-result.is-invalid, #qsb-review-result.is-invalid, #qsb-destination-result.is-invalid,
+  #qsb-withdraw-result.is-invalid, #qsb-release-result.is-invalid { color: var(--bramble-danger); }
 
 `;

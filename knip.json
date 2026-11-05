@@ -3,6 +3,7 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/*.ts", "tests/**/*.test.ts", "tools/vendor-dataset/*.ts"],
+      "ignoreDependencies": ["pyodide"],
       "project": ["scripts/**/*.ts", "tests/**/*.ts", "tools/**/*.ts"]
     },
     "apps/extension": {
@@ -15,7 +16,11 @@
         "src/sidepanel/index.ts"
       ],
       "ignoreDependencies": ["buffer"],
-      "ignoreUnresolved": ["/dependencies/krusty-kms/krusty_kms_wasm.js"],
+      "ignoreUnresolved": [
+        "/dependencies/krusty-kms/krusty_kms_wasm.js",
+        "/dependencies/pyodide/pyodide.asm.js",
+        "/dependencies/pyodide/pyodide.mjs"
+      ],
       "project": ["src/**/*.ts"]
     },
     "apps/terminal": {

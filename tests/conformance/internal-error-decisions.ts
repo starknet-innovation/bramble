@@ -128,3 +128,53 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Unlock failed",
   "Wallet request preference failed",
 ]);
+
+// The QSB runtime's refusals (apps/extension/src/background/qsb), its
+// commitments setup included, and the Krusty adapter's and the instant
+// formatter's QSB and Bitcoin refusals. The QSB vault messages reach them, but
+// every vault flow answers with the contract's own refusals (failClosed in
+// qsb-vault-refusals.ts), so none can reach the panel; each names the check
+// that stopped it, so each is shown as written should one ever surface.
+export const QSB_RUNTIME_DIAGNOSTICS: ReadonlySet<string> = new Set([
+  "Invalid BIP-322 signing input",
+  "Invalid Bitcoin derivation input",
+  "Invalid PSBT signing input",
+  "Invalid QSB derivation input",
+  "Krusty KMS returned a QSB root that does not bind its commitments",
+  "Krusty KMS returned an invalid BIP-322 proof",
+  "Krusty KMS returned an invalid Bitcoin P2WPKH keypair",
+  "Krusty KMS returned an invalid PSBT",
+  "Krusty KMS returned invalid QSB commitments: x",
+  "Krusty KMS returned repeated QSB commitments",
+  "QSB instant is not an integer",
+  "QSB instant is out of range",
+  "QSB commitment is not 20 bytes of lowercase hex",
+  "QSB commitment repeats",
+  "QSB commitments are not 2 rounds of 150",
+  "QSB commitments setup failed",
+  "QSB commitments setup returned an unexpected shape",
+  "QSB hash input is not lowercase hex",
+  "QSB interpreter failed to load",
+  "QSB pipeline failed to start",
+  "QSB public probe failed",
+  "QSB public probe returned an unexpected shape",
+  "QSB public state does not match the requested vault",
+  "QSB runtime cannot read a packaged file",
+  "QSB runtime cannot resolve the extension package URL",
+  "QSB runtime has no request in progress",
+  "QSB source integrity check failed",
+  "QSB source manifest does not list exactly the pinned sources",
+  "QSB source manifest is not JSON",
+  "QSB vault script does not match its hash",
+  // The withdrawal assembly's and the disclosure calls' refusals: the same
+  // rule, and none quotes a preimage, a request or a reply.
+  "Invalid QSB disclosure digest input",
+  "Invalid QSB disclosure input",
+  "Krusty KMS returned a QSB disclosure digest that does not bind T",
+  "Krusty KMS returned invalid QSB preimages",
+  "QSB withdrawal finish needs exactly 15 preimages",
+  "QSB withdrawal finish returned an unexpected shape",
+  "QSB withdrawal prepare answered for another withdrawal",
+  "QSB withdrawal prepare returned an unexpected shape",
+  "QSB withdrawal request is not a public state, manifest and solution",
+]);

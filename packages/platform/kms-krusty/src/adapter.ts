@@ -2,7 +2,7 @@
  * Krusty KMS WASM adapter. Wallet cryptography must enter through this boundary.
  */
 import { WalletError } from "@bramble/core/errors";
-import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { KmsPort } from "@bramble/vault/kms-port";
 import {
   canonicalFelt,
@@ -18,68 +18,20 @@ import {
   parseNostrEventJson,
 } from "@bramble/wallet-model/nostr";
 import { isMnemonicPassphrase, isMnemonicText } from "@bramble/wallet-model/passphrase";
+import { krustyBitcoinMethods } from "./bitcoin";
+import {
+  asRecord,
+  type Callable,
+  ownValue,
+  requireFunction,
+  requireStringField,
+} from "./krusty-values";
+import { krustyQsbRevealMethods } from "./qsb-reveal";
 
-type Callable = (...args: unknown[]) => unknown;
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
-const KRUSTY_RESULT_CLASSES = new Set([
-  "WasmKeypair",
-  "WasmNostrPublicKey",
-  "WasmStarkSignature",
-  "WasmStarkXOnlyKeypair",
-]);
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
 const isNostrIdentifier = (value: string): boolean =>
   value.length > 0 && value.length <= 128 && /^[ -~]+$/.test(value);
-
-const asRecord = (value: unknown): Record<string, unknown> => {
-  if (typeof value !== "object" || value === null) {
-    throw new WalletError("Krusty KMS module did not load as an object");
-  }
-  return value as Record<string, unknown>;
-};
-
-// Reads a field only when it is an own enumerable data property, through the
-// shared boundary predicate: a getter on the WASM module object must never run
-// during validation, and must never answer differently on a second read.
-const ownValue = (record: Record<string, unknown>, field: string): unknown => {
-  const descriptor = Object.getOwnPropertyDescriptor(record, field);
-  return isOwnDataProperty(descriptor) ? descriptor.value : undefined;
-};
-
-const krustyResultValue = (record: Record<string, unknown>, field: string): unknown => {
-  const value = ownValue(record, field);
-  if (value !== undefined) {
-    return value;
-  }
-
-  const prototype = Object.getPrototypeOf(record);
-  const prototypeConstructor = prototype
-    ? Object.getOwnPropertyDescriptor(prototype, "constructor")?.value
-    : null;
-  const descriptor = prototype ? Object.getOwnPropertyDescriptor(prototype, field) : null;
-  return typeof prototypeConstructor === "function" &&
-    KRUSTY_RESULT_CLASSES.has(prototypeConstructor.name) &&
-    typeof descriptor?.get === "function"
-    ? descriptor.get.call(record)
-    : undefined;
-};
-
-const requireFunction = (module: Record<string, unknown>, name: string): Callable => {
-  const value = ownValue(module, name);
-  if (typeof value !== "function") {
-    throw new WalletError(`Krusty KMS export missing: ${name}`);
-  }
-  return value as Callable;
-};
-
-const requireStringField = (value: unknown, field: string): string => {
-  const record = asRecord(value);
-  const fieldValue = krustyResultValue(record, field);
-  if (typeof fieldValue !== "string") {
-    throw new WalletError(`Krusty KMS result missing string field: ${field}`);
-  }
-  return fieldValue;
-};
 
 const requireFieldElementField = (value: unknown, field: string): string => {
   const fieldValue = requireStringField(value, field);
@@ -137,6 +89,8 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
   const wrapNostrApplicationData = requireFunction(module, "wrapNostrApplicationData");
 
   return {
+    ...krustyBitcoinMethods(module, ready),
+    ...krustyQsbRevealMethods(module, ready),
     async deriveNostrPublicKey(mnemonic, addressIndex, accountIndex, passphrase) {
       await ready;
       if (

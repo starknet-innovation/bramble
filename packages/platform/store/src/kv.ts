@@ -36,13 +36,50 @@ export const ENCRYPTED_ENVELOPE_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The budget a write to `key` is held to. Only the vault envelope keys get the
- * larger at-rest budget (`JSON_BUDGETS.storage`); every other key keeps the
- * provider budget, so no other value can grow toward the browser's shared
- * storage quota.
+ * Prefix of the per-account QSB disclosure journal keys,
+ * `bramble:qsb-journal:<journalId>`, each an encrypted envelope of its own.
+ * The vault's journal store builds its keys from this one spelling.
  */
-export const storageBudgetFor = (key: string): JsonBudget =>
-  ENCRYPTED_ENVELOPE_KEYS.has(key) ? JSON_BUDGETS.storage : JSON_BUDGETS.provider;
+export const QSB_JOURNAL_KEY_PREFIX = "bramble:qsb-journal:";
+
+const QSB_JOURNAL_KEY_PATTERN = /^bramble:qsb-journal:[0-9a-f]{64}$/;
+
+/**
+ * Prefix of the per-account QSB pending-deposit keys,
+ * `bramble:qsb-deposit:<journalId>`, each an encrypted envelope of its own
+ * under the provider budget. The vault's journal stores build these keys
+ * from this one spelling, beside the journal of the same id.
+ */
+export const QSB_DEPOSIT_KEY_PREFIX = "bramble:qsb-deposit:";
+
+/**
+ * Prefix of the per-account QSB withdrawal keys,
+ * `bramble:qsb-withdrawal:<journalId>`, each an encrypted envelope of its own
+ * under the provider budget, beside the journal of the same id and built
+ * from this one spelling.
+ */
+export const QSB_WITHDRAWAL_KEY_PREFIX = "bramble:qsb-withdrawal:";
+
+/**
+ * Checks for exactly one QSB journal envelope key: the prefix and a 64-digit
+ * lowercase-hex journal id, nothing after it. The journal's own commit and
+ * marker records (`…:commit:<lineage>`) are not journal keys.
+ */
+export const isQsbJournalStorageKey = (key: string): boolean => QSB_JOURNAL_KEY_PATTERN.test(key);
+
+/**
+ * The budget a write to `key` is held to. The vault envelope keys get the
+ * larger at-rest budget (`JSON_BUDGETS.storage`) and each QSB journal key the
+ * at-rest budget of one capped journal (`JSON_BUDGETS.qsbJournalStorage`);
+ * every other key keeps the provider budget, so no other value can grow
+ * toward the browser's shared storage quota.
+ */
+export const storageBudgetFor = (key: string): JsonBudget => {
+  if (ENCRYPTED_ENVELOPE_KEYS.has(key)) {
+    return JSON_BUDGETS.storage;
+  }
+  return isQsbJournalStorageKey(key) ? JSON_BUDGETS.qsbJournalStorage : JSON_BUDGETS.provider;
+};
 
 /**
  * Throws when a value would serialize as lossy JSON or exceed `budget`, by

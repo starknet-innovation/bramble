@@ -12,6 +12,7 @@
 import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, renderFragment } from "../../shared/dom";
+import type { QsbRoute } from "../qsb/qsb-model";
 import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,
@@ -61,6 +62,7 @@ export type LedgerOnboardRuntimeDeps = {
   readonly openImportSeed: () => void;
   readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
+  readonly openQsb: (route: QsbRoute) => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: Pick<SidepanelWallet, "deriveLedgerAccounts">;
 };
@@ -83,6 +85,8 @@ const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
   value === "import-phrase" ||
   value === "ledger" ||
   value === "multisig" ||
+  value === "qsb-create" ||
+  value === "qsb-import" ||
   value === "regular" ||
   value === "restore-ready-ledger";
 
@@ -245,6 +249,7 @@ export const createLedgerOnboardRuntime = (
     openImportSeed: () => deps.openImportSeed(),
     openFindAccounts: () => deps.openFindAccounts(),
     openMultisig: () => deps.openMultisig(),
+    openQsb: (route) => deps.openQsb(route),
     refresh,
     render,
   });

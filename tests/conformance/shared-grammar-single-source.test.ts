@@ -226,6 +226,13 @@ const vaultWithSigningKey = (privateKey: string) => ({
 
 const kmsReturning = (privateKey: string, viewingKey: string) =>
   createKrustyKms({
+    // The QSB and Bitcoin exports the adapter requires; never called here.
+    deriveBitcoinP2wpkhKeypair: () => ({}),
+    deriveQsbCommitments: () => ({}),
+    signBip322Simple: () => "",
+    signBitcoinPsbtInputs: () => "",
+    qsbRevealDigest: () => ({}),
+    revealQsbPreimages: () => [],
     deriveArgentLegacyKeypair: () => ({ private_key: privateKey, public_key_x: "0xabc" }),
     deriveNostrPublicKey: () => ({ public_key: "11".repeat(32) }),
     deriveOzAccountAddress: () => "0xabc",

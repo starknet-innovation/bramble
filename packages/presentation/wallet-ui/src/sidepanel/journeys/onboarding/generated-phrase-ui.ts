@@ -29,6 +29,7 @@ export type GeneratedPhraseControls = {
 export const bindGeneratedPhrase = (
   form: HTMLFormElement,
   readPhrase: () => string,
+  phraseName = "recovery phrase",
 ): GeneratedPhraseControls => {
   const grid = form.querySelector<HTMLElement>('[data-recovery-grid="generated"]');
   const inputs = Array.from(
@@ -51,7 +52,7 @@ export const bindGeneratedPhrase = (
     const masked = !(grid?.classList.contains("is-masked") ?? false);
     setGeneratedPhraseMasked(grid, inputs, masked);
     toggle.lastChild?.replaceWith(masked ? "Show" : "Hide");
-    toggle.setAttribute("aria-label", `${masked ? "Show" : "Hide"} recovery phrase`);
+    toggle.setAttribute("aria-label", `${masked ? "Show" : "Hide"} ${phraseName}`);
     revealed ||= !masked;
     syncUnlocked();
   });
@@ -62,7 +63,7 @@ export const bindGeneratedPhrase = (
       revealed = false;
       setGeneratedPhraseMasked(grid, inputs, true);
       toggle?.lastChild?.replaceWith("Show");
-      toggle?.setAttribute("aria-label", "Show recovery phrase");
+      toggle?.setAttribute("aria-label", `Show ${phraseName}`);
       syncUnlocked();
     },
   };

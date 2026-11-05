@@ -1,8 +1,8 @@
 /**
  * Key-boundary scan catalog: one request payload per handled background message
- * type, plus a source-derived list of every wallet.* type the background
- * actually handles. The key-boundary suite asserts the catalog covers the
- * derived list, so new message types cannot bypass the secret scan.
+ * type. The key-boundary suite asserts the catalog covers the source-derived
+ * list of every wallet.* type the background actually handles
+ * (./key-boundary-handled), so new message types cannot bypass the secret scan.
  *
  * Payloads are written to reach a real handler, not merely to parse: an entry
  * that bounces off its input validator or a missing collaborator produces an
@@ -11,8 +11,6 @@
  * reason. Identifiers the background mints at run time (approvals, proposals,
  * one-time preparations) are filled in by the harness through `live`.
  */
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { DEPLOY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-deploy-messages";
 import {
@@ -29,6 +27,7 @@ import {
 } from "./key-boundary-fixtures";
 import { LOOKUP_KEY_BOUNDARY_MESSAGES } from "./key-boundary-lookup-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
+import { QSB_KEY_BOUNDARY_MESSAGES } from "./key-boundary-qsb-messages";
 import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
 import { TOKEN_KEY_BOUNDARY_MESSAGES } from "./key-boundary-token-messages";
@@ -53,46 +52,6 @@ const TYPED_DATA = {
       { name: "chainId", type: "felt" },
     ],
   },
-};
-
-// Broadcast event envelope: emitted by the background, never handled as an
-// inbound request, so it has no scan entry.
-const OUTBOUND_ONLY = new Set(["wallet.event"]);
-
-/**
- * Reads every wallet.* message type the background sources handle. Derived
- * from the literals under `apps/extension/src/background` so the scan's
- * coverage is enforced by construction rather than by memory.
- *
- * The walk recurses deliberately: the background surface is split across
- * per-capability directories, so a listing that only read the top level would
- * derive an almost-empty set and turn the coverage assertion this feeds into a
- * no-op — exactly the inert scan MCW-V09-111 closed. A new handler directory
- * is therefore picked up without anyone remembering to register it.
- */
-export const handledWalletMessages = async (): Promise<ReadonlySet<string>> => {
-  const handled = new Set<string>();
-  const visit = async (dir: string): Promise<void> => {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        await visit(path);
-        continue;
-      }
-      if (!entry.isFile() || !entry.name.endsWith(".ts")) {
-        continue;
-      }
-      const source = await readFile(path, "utf8");
-      for (const match of source.matchAll(/"(wallet\.[a-zA-Z0-9]+)"/g)) {
-        const type = match[1] ?? "";
-        if (type && !OUTBOUND_ONLY.has(type)) {
-          handled.add(type);
-        }
-      }
-    }
-  };
-  await visit("apps/extension/src/background");
-  return handled;
 };
 
 /** One live request per handled type; the response of each is secret-scanned. */
@@ -473,6 +432,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   ...MULTISIG_KEY_BOUNDARY_MESSAGES,
   ...STRK20_KEY_BOUNDARY_MESSAGES,
+  ...QSB_KEY_BOUNDARY_MESSAGES,
   {
     message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.supportedSpecs" },
     sender: contentSender,

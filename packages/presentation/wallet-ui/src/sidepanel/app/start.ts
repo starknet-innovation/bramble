@@ -19,6 +19,7 @@ import { resetActivityViewState } from "../journeys/portfolio/activity-view-stat
 import { createHeroTotalWait } from "../journeys/portfolio/hero-total-wait";
 import { bindHomeUi } from "../journeys/portfolio/home-ui";
 import { createPrivacyController } from "../journeys/privacy/privacy-controller";
+import { createQsbJourney } from "../journeys/qsb/qsb-journey";
 import type { SendIntent } from "../journeys/send/send-model";
 import * as transfer from "../journeys/send/transfer-bindings";
 import { bindEndpointSettings } from "../journeys/settings/endpoint-ui";
@@ -125,6 +126,7 @@ export const startWalletUi = async (
     openImportSeed: () => navigate("import-phrase"),
     openFindAccounts: () => navigate("find-accounts"),
     openMultisig: () => navigate("multisig-add"),
+    openQsb: (route) => qsb.open(route),
     refresh: async () => render(await wallet.loadStatus()),
     wallet,
   });
@@ -189,6 +191,7 @@ export const startWalletUi = async (
     });
     bindDrawerFolders({ ...drawerFolders, app, render, wallet });
     bindReveal({ app, wallet });
+    qsb.bind(app);
     transfer.bindActivity({ app, render, repaint: paint, wallet });
     transfer.bindTransfer({
       app,
@@ -480,6 +483,13 @@ export const startWalletUi = async (
     paint();
     renderLatest();
   };
+  const qsb = createQsbJourney({
+    back: goBack,
+    navigate,
+    now,
+    permissions: extensionApi?.permissions ?? null,
+    wallet,
+  });
   applyTheme();
   startRefreshLifecycle({ mutationRuntime, render, runtime, wallet });
   startUpdateBanner({ doc: document, wallet });

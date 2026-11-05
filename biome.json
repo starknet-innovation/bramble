@@ -89,7 +89,8 @@
         "packages/features/portfolio/src/**",
         "packages/features/permissions/src/**",
         "packages/features/transactions/src/**",
-        "packages/features/settings/src/**"
+        "packages/features/settings/src/**",
+        "packages/features/qsb/src/**"
       ],
       "linter": {
         "rules": {

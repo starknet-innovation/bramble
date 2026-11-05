@@ -22,13 +22,22 @@ import { viewingKeyDerivations } from "../../support/key-boundary-collaborators"
 import {
   contentSender,
   extensionSender,
+  qsbAccount,
   SECRET_MNEMONIC,
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
+  SECRET_QSB_MNEMONIC,
   SECRET_VIEWING_KEY,
 } from "../../support/key-boundary-fixtures";
+import { handledWalletMessages } from "../../support/key-boundary-handled";
 import { makeKeyBoundaryHarness } from "../../support/key-boundary-harness";
-import { handledWalletMessages, KEY_BOUNDARY_MESSAGES } from "../../support/key-boundary-messages";
+import { KEY_BOUNDARY_MESSAGES } from "../../support/key-boundary-messages";
+import { SECRET_QSB_OWNER_KEY, SECRET_QSB_PREIMAGES } from "../../support/key-boundary-qsb-vaults";
+import {
+  KEY_BOUNDARY_QSB_JOURNAL_IDS,
+  QSB_IMPORT_MNEMONIC,
+  SECRET_QSB_GENERATED_MNEMONIC,
+} from "../../support/key-boundary-qsb-wallet";
 import type { KeyBoundaryLiveIds, KeyBoundaryMessage } from "../../support/key-boundary-types";
 import { awaitStrk20Job } from "../../support/strk20-background";
 
@@ -94,8 +103,15 @@ describe("key boundary", () => {
     // Pinned so excusing a new entry from the liveness rule is a deliberate,
     // reviewed edit rather than the quiet way to make this suite green again.
     expect(excused.map((entry) => typeOf(entry.message)).sort()).toEqual([
+      "wallet.confirmQsbBackup",
+      "wallet.depositQsbVault",
+      "wallet.qsbVaults",
+      "wallet.releaseQsbWithdrawal",
+      "wallet.releaseQsbWithdrawal",
       "wallet.removeMultisig",
+      "wallet.revealQsbPhrase",
       "wallet.shareArgentMultisigIntent",
+      "wallet.startQsbWithdrawal",
       "wallet.status",
       "wallet.syncArgentMultisigIntents",
       "wallet.unlock",
@@ -209,6 +225,33 @@ describe("key boundary", () => {
       expect(serialized).not.toContain("signingKeys");
       expect(serialized).not.toContain("accountSecrets");
       expect(serialized).not.toContain(SECRET_VIEWING_KEY);
+      // A QSB phrase has exactly one sanctioned reveal, `wallet.revealQsbPhrase`
+      // (proved below to really carry it); revealSecrets is not one of them.
+      if (messageType !== "wallet.revealQsbPhrase") {
+        expect(serialized).not.toContain(SECRET_QSB_MNEMONIC);
+      }
+      // No reply, that reveal included, carries another QSB phrase, the vault's
+      // QSB records, or any journal id.
+      expect(serialized).not.toContain(SECRET_QSB_GENERATED_MNEMONIC);
+      expect(serialized).not.toContain(QSB_IMPORT_MNEMONIC);
+      expect(serialized).not.toContain("qsbAccounts");
+      expect(serialized).not.toContain("journalId");
+      // Nor the QSB owner key, a coordinator session, or the signed bytes'
+      // container: a vault reply is public views only.
+      expect(serialized).not.toContain(SECRET_QSB_OWNER_KEY);
+      expect(serialized).not.toContain("rawTxHex");
+      // Nor a disclosed QSB preimage, a withdrawal's manifest or its job id.
+      for (const preimage of SECRET_QSB_PREIMAGES) {
+        expect(serialized).not.toContain(preimage);
+      }
+      expect(serialized).not.toContain("manifestJson");
+      expect(serialized).not.toContain("jobId");
+      for (const token of harness.qsbTokens()) {
+        expect(serialized).not.toContain(token);
+      }
+      for (const journalId of KEY_BOUNDARY_QSB_JOURNAL_IDS) {
+        expect(serialized).not.toContain(journalId);
+      }
       if (messageType !== "wallet.revealSecrets") {
         expect(serialized).not.toContain(SECRET_PRIVATE_KEY);
       }
@@ -216,6 +259,10 @@ describe("key boundary", () => {
         expect(serialized).not.toContain(SECRET_MNEMONIC);
       }
     }
+    // The token grep was armed: the vault entries really signed in.
+    expect(harness.qsbTokens().length).toBeGreaterThan(0);
+    // And the preimage grep: the release really disclosed exactly those 15.
+    expect(harness.qsbFinished()).toEqual(SECRET_QSB_PREIMAGES);
   });
 
   test("mnemonic generation reveals only to extension pages", async () => {
@@ -251,6 +298,31 @@ describe("key boundary", () => {
         extensionSender,
       ),
     ).toEqual({ mnemonic: SECRET_MNEMONIC, ok: true, privateKey: SECRET_PRIVATE_KEY });
+  });
+
+  test("the QSB phrase reveals only to extension pages, with the re-entered password", async () => {
+    // Locked on purpose: the reveal never takes the password from the session.
+    const { handler } = await makeKeyBoundaryHarness({ unlocked: false });
+    const reveal = (passphrase: string) => ({
+      accountId: qsbAccount.id,
+      passphrase,
+      type: "wallet.revealQsbPhrase",
+    });
+
+    expect(await handler(reveal(SECRET_PASSPHRASE), contentSender)).toEqual({
+      error: "privileged sender required",
+    });
+    expect(await handler(reveal("wrong passphrase!!"), extensionSender)).toEqual({
+      error: "bad passphrase",
+    });
+    expect(
+      await handler({ ...reveal(SECRET_PASSPHRASE), accountId: "qsb-9" }, extensionSender),
+    ).toEqual({ error: "unknown qsb account" });
+    // The one reply the scan above lets carry a QSB phrase really does.
+    expect(await handler(reveal(SECRET_PASSPHRASE), extensionSender)).toEqual({
+      mnemonic: SECRET_QSB_MNEMONIC,
+      ok: true,
+    });
   });
 
   test("an unwired dispatcher still refuses secret-bearing traffic", async () => {
@@ -304,5 +376,12 @@ describe("key boundary", () => {
       extensionSender,
     );
     expect(response).toEqual({ error: "wallet unavailable" });
+    // A wallet surface without the QSB methods refuses the QSB reveal too.
+    expect(
+      await handler(
+        { accountId: qsbAccount.id, passphrase: SECRET_PASSPHRASE, type: "wallet.revealQsbPhrase" },
+        extensionSender,
+      ),
+    ).toEqual({ error: "wallet unavailable" });
   });
 });

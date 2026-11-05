@@ -34,12 +34,14 @@ import {
   KEY_BOUNDARY_MULTISIG_CONFIG,
   KEY_BOUNDARY_ORIGIN,
   KEY_BOUNDARY_TOKENS,
+  qsbAccount,
   SECRET_MNEMONIC,
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
   SECRET_VIEWING_KEY,
   strk20ViewingKeyRecord,
 } from "./key-boundary-fixtures";
+import { qsbWalletStub } from "./key-boundary-qsb-wallet";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 import { makeStrk20Service } from "./strk20-background";
 
@@ -58,7 +60,8 @@ const vault = {
   importedSeeds: [],
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 12,
+  qsbAccounts: [qsbAccount],
+  schemaVersion: 13,
   shadowAccountScopes: [],
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
@@ -99,6 +102,7 @@ const recordedScopes: { value: readonly ShadowAccountScopeRef[] } = { value: [] 
 
 /** The salted stub vault service the scan runs the router against. */
 export const walletStub = {
+  ...qsbWalletStub,
   async addDerivedAccount() {
     return account;
   },

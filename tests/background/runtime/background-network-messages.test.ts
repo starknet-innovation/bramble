@@ -102,7 +102,8 @@ describe("background network messages", () => {
             importedSeeds: [],
             mnemonic: null,
             originGrants: [],
-            schemaVersion: 12 as const,
+            qsbAccounts: [],
+            schemaVersion: 13 as const,
             shadowAccountScopes: [],
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
@@ -203,7 +204,8 @@ describe("background network messages", () => {
             importedSeeds: [],
             mnemonic: null,
             originGrants: [{ accountIds: grantedAccountIds, origin: "https://example.com" }],
-            schemaVersion: 12 as const,
+            qsbAccounts: [],
+            schemaVersion: 13 as const,
             shadowAccountScopes: [],
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,

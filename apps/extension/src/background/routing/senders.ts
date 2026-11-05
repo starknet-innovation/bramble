@@ -38,6 +38,30 @@ export type ExtensionIdentity = {
   readonly origin: string;
 };
 
+// The origin of this extension's own pages, read from `runtime.getURL("")`;
+// empty when the runtime cannot answer.
+const runtimePageOrigin = (getURL: ((path: string) => string) | undefined): string => {
+  try {
+    const url = getURL?.("");
+    return url === undefined ? "" : new URL(url).origin;
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * Reads this extension's {@link ExtensionIdentity} from its runtime: the id it
+ * stamps on senders, and the origin `runtime.getURL("")` reports, never one
+ * built from the id. A half the runtime cannot give stays empty, which fails
+ * every extension-page gate closed rather than open.
+ */
+export const extensionIdentityOf = (
+  runtime: { readonly getURL?: (path: string) => string; readonly id?: string } | undefined,
+): ExtensionIdentity => ({
+  id: runtime?.id ?? "",
+  origin: runtimePageOrigin(runtime?.getURL),
+});
+
 /**
  * Every browser-supplied origin signal present on a runtime sender
  * (`sender.origin` and the origin of `sender.url`), with missing ones dropped.

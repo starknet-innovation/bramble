@@ -426,6 +426,9 @@ export const createLedgerOnboardController = (
     } else if (kind === "import-key") {
       deps.render(null);
       deps.openImport();
+    } else if (kind === "qsb-create" || kind === "qsb-import") {
+      deps.render(null);
+      deps.openQsb(kind === "qsb-create" ? "create" : "import");
     } else {
       deps.render(null);
       deps.openMultisig();

@@ -25,9 +25,22 @@ import {
 } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV12, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV13, type Vault } from "../schema/schema";
 import type { ImportRawKeyAccountInput, WalletVaultService } from "./service-types";
 import { requireVaultCapacity } from "./vault-capacity";
+
+/**
+ * Throws exactly what {@link writeVault} would refuse a vault with, touching
+ * no storage: `Vault storage limit reached` past its capacity, `Invalid vault`
+ * for anything that is not a well-formed current-schema vault. For a caller
+ * that must make an earlier write only if the vault write will be accepted.
+ */
+export const assertWritableVault = (vault: Vault): void => {
+  requireVaultCapacity(vault);
+  if (!isVaultV13(vault)) {
+    throw new WalletError("Invalid vault");
+  }
+};
 
 /**
  * Validates and persists a vault snapshot. Refuses to write anything that is
@@ -44,10 +57,7 @@ export const writeVault = async (
   vaultPassphrase: string,
   beforeCommit?: () => void,
 ): Promise<void> => {
-  requireVaultCapacity(vault);
-  if (!isVaultV12(vault)) {
-    throw new WalletError("Invalid vault");
-  }
+  assertWritableVault(vault);
   await encryptedStore.write(vault, vaultPassphrase, beforeCommit);
 };
 
@@ -258,8 +268,9 @@ export const vaultCreationMethods = ({
   },
   async createKeyVault(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
-    // A phrase-less imported-key vault can only be created over a fresh store.
-    if (vault.accounts.length > 0 || vault.mnemonic !== null) {
+    // A phrase-less imported-key vault can only be created over a fresh store,
+    // so no QSB account (the only record naming its journal) is overwritten.
+    if (vault.accounts.length > 0 || vault.mnemonic !== null || vault.qsbAccounts.length > 0) {
       throw new RefusedBeforeWrite("Wallet already exists");
     }
     const derived = await deriveRawKeyAccounts(kms, input, []);
@@ -278,6 +289,7 @@ export const vaultCreationMethods = ({
         importedSeeds: [],
         mnemonic: null,
         originGrants: [],
+        qsbAccounts: [],
         schemaVersion: CURRENT_SCHEMA_VERSION,
         signingKeys: derived.map(({ account, privateKey }) => ({
           accountId: account.id,
@@ -291,8 +303,9 @@ export const vaultCreationMethods = ({
   },
   async createLedgerVault(input) {
     const vault = await readVaultSnapshot(input.vaultPassphrase);
-    // A mnemonic-less Ledger vault can only be created over a fresh store.
-    if (vault.accounts.length > 0 || vault.mnemonic !== null) {
+    // A mnemonic-less Ledger vault can only be created over a fresh store, so
+    // no QSB account (the only record naming its journal) is overwritten.
+    if (vault.accounts.length > 0 || vault.mnemonic !== null || vault.qsbAccounts.length > 0) {
       throw new RefusedBeforeWrite("Wallet already exists");
     }
     const account = await deriveLedgerAccount(kms, {
@@ -315,6 +328,7 @@ export const vaultCreationMethods = ({
         importedSeeds: [],
         mnemonic: null,
         originGrants: [],
+        qsbAccounts: [],
         schemaVersion: CURRENT_SCHEMA_VERSION,
         signingKeys: [],
       },

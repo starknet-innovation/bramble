@@ -51,7 +51,7 @@ below mean “is a dependency of”; dependencies flow upward toward application
 flowchart TD
     foundation["foundation<br/><i>core · wallet-model · wallet-protocol</i>"]
     platform["platform<br/><i>store · vault · Krusty · Starknet · Ledger</i>"]
-    features["features<br/><i>permissions · portfolio · transactions · multisig · privacy · settings</i>"]
+    features["features<br/><i>permissions · portfolio · transactions · multisig · privacy · settings · qsb</i>"]
     presentation["presentation<br/><i>UI Kit · wallet UI</i>"]
     extension["apps/extension<br/><i>privileged composition + browser surfaces</i>"]
     lab["apps/ui-lab"]

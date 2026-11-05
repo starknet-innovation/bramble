@@ -68,6 +68,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
   let imports = 0;
   let seedImports = 0;
   let multisigs = 0;
+  const qsbRoutes: string[] = [];
   const connector: LedgerConnector = {
     openConnected: () => Promise.resolve(null),
     request: () => Promise.resolve({ client: enumerateClient, close: () => Promise.resolve() }),
@@ -99,6 +100,9 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     openMultisig: () => {
       multisigs += 1;
     },
+    openQsb: (route) => {
+      qsbRoutes.push(route);
+    },
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
@@ -121,6 +125,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     seedImports: () => seedImports,
     multisigs: () => multisigs,
     mount,
+    qsbRoutes,
     refreshed: () => refreshed,
     runtime,
   };
@@ -308,7 +313,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
     // Restoring a Ready Ledger account is an import, so it lives one level in.
     expect(h.mount.querySelector('[data-add-kind="restore-ready-ledger"]')).toBeNull();
-    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(4);
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(5);
 
     // One click routes: the Ledger tile opens the connect prompt directly.
     click(h.mount, '[data-add-kind="ledger"]');
@@ -346,6 +351,18 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, '[data-add-kind="multisig"]');
     expect(h.mount.hidden).toBe(true);
     expect(h.multisigs()).toBe(1);
+
+    // The QSB tiles dismiss into the QSB journey: create
+    // from the first stage, the phrase import from inside Import.
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="qsb-create"]');
+    expect(h.mount.hidden).toBe(true);
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="import"]');
+    click(h.mount, '[data-add-kind="qsb-import"]');
+    expect(h.mount.hidden).toBe(true);
+    expect(h.qsbRoutes).toEqual(["create", "import"]);
+    expect(h.hdAdds()).toBe(1);
   });
 
   test("startAddAccount omits the Ledger route when the connector reports no transport", () => {
@@ -361,7 +378,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(h.mount.textContent).toContain("Add a new account");
     expect(h.mount.querySelector('[data-add-kind="ledger"]')).toBeNull();
     expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
-    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(3);
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(4);
   });
 
   test("startAddAccount keeps the Ledger route when the connector does not report capability", () => {

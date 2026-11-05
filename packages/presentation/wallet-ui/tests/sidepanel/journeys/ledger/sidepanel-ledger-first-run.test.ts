@@ -254,6 +254,7 @@ const entryHarness = () => {
     openMultisig: () => {
       multisigs += 1;
     },
+    openQsb: () => undefined,
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
