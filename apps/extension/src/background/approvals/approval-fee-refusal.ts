@@ -42,13 +42,15 @@ const pendingDeclareFeeRefusal = (
  * means that offer is still the one the queue holds, or that the queue has no
  * such approval. A missing approval is not a fee-review failure: the claim
  * answers not-found, the same as a fee-bearing decision with nothing pending.
+ * An undeployed account is refused whatever offers the entry carries: the
+ * relay cannot deploy it, and the gasless lane binds no deployment ceiling.
  */
 export const pendingGaslessRefusal = (
   pending: PendingApproval | null,
   choice: GaslessFeeOffer,
 ): RuntimeResponse | null => {
   if (pending === null) return null;
-  if (pending.deployFirst === true) {
+  if (pending.deployFirst === true || pending.requiresDeployment === true) {
     return { error: UNDEPLOYED_BRAAVOS_REFUSAL };
   }
   if (pending.kind !== "invoke") {
