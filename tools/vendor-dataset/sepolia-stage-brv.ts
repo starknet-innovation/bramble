@@ -29,7 +29,8 @@ const r1 = (() => {
 
 // AdditionalDeploymentParams: impl, signer_type, secp256r1 (u256 x, u256 y),
 // multisig_threshold, withdrawal_limit_low, fee_rate, stark_fee_rate, chain_id.
-const deployParams = (twoFa: boolean): string[] => [
+/** Braavos AdditionalDeploymentParams for the current implementation, with K-P256 as 2FA when `twoFa`. */
+export const braavosDeployParams = (twoFa: boolean): string[] => [
   CLASSES.braavosImpl,
   twoFa ? "0x2" : "0x0", // SignerType::Secp256r1, or Empty
   ...(twoFa ? [...u256felts(r1.x), ...u256felts(r1.y)] : ["0x0", "0x0", "0x0", "0x0"]),
@@ -66,7 +67,7 @@ function braavosFixture(
         return { state: { deployed: false, funded: "STRK" } };
       }
       const liveClass = await selfDeploy(e, {
-        signer: new BraavosDeploySigner(kp, deployParams(mode === "2fa")),
+        signer: new BraavosDeploySigner(kp, braavosDeployParams(mode === "2fa")),
         classHash: CLASSES.braavosDeploy,
         calldata: [kp.pub],
         salt: kp.pub,

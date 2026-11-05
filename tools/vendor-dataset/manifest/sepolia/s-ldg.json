@@ -16,5 +16,102 @@
       "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
     },
     "log": ["funded STRK 0x4deaee3573f682e70628206d47d3739ac09437281ed4c5461da4af0b9d7a5c9"]
+  },
+  "s-ldg/TA-33": {
+    "id": "s-ldg/TA-33",
+    "seed": "BRAMBLE_DATASET_SEED_S_LDG",
+    "vendorDerivation": "ledger-argentx",
+    "index": 0,
+    "address": "0x3891c0f79289712245f39180a0b0b8ededd7ffb84ee87b0ec2a20437b6d5741",
+    "pubkey": "0x58a03e23d7787eace1b65310a64cb5cbf15f57c55c8b12502953805b05d57fd",
+    "expected": "Ready Ledger 0.4.0, deployed by Ready: listed under 'Ready Ledger account'",
+    "detectability": "D1",
+    "backedBy": "none",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "state": {
+      "deployed": true,
+      "deployedBy": "Ready (Ledger)",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": ["funded STRK 0x5e6e408c6949164bfbdbf837805821c0e6ae7c21de667f85526266b9f6aaf3f"]
+  },
+  "s-ldg/TA-34": {
+    "id": "s-ldg/TA-34",
+    "seed": "BRAMBLE_DATASET_SEED_S_LDG",
+    "vendorDerivation": "ledger-argentx",
+    "index": 1,
+    "address": "0x27b8e1fe616642846c378c44b604f6240f7f79f14b0a0b4d27db9fb5383acec",
+    "pubkey": "0x68f4f79aa2d72cda5143083e9720d7b839b156ff69a5b74f70e265ae0ff8d57",
+    "expected": "Braavos on the argentx Ledger ladder: only under 'Ready Ledger account' (N12)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": [
+      "funded STRK 0x2c8b3563fd4887c5c25221a82cf58f37e5777cd3bc0909c3e4e6e1ccfeeb524",
+      "deployed 0x198bf1db8f6150550d3b28750125f7fc880e05307ece64279a9934cc2cbe313"
+    ]
+  },
+  "s-ldg/TA-35": {
+    "id": "s-ldg/TA-35",
+    "seed": "BRAMBLE_DATASET_SEED_S_LDG",
+    "vendorDerivation": "ledger-argentx",
+    "index": 2,
+    "address": "0x5530e56c753d905215be61385b7817c545aed4b15a7cb4f98f3a4789654ec19",
+    "pubkey": "0xc456b1fa27c0eca165ecf4f2e4d9aa9ff8e6d3ce2946c70e90e232cc4026fc",
+    "expected": "Ready Ledger funded counterfactual: activity unproven on Sepolia (N11)",
+    "detectability": "D1",
+    "backedBy": "none",
+    "classAtDeploy": null,
+    "state": {
+      "deployed": false,
+      "funded": "STRK"
+    },
+    "log": ["funded STRK 0x411ad00436a4affbe0273c1d66c1a4fef880be013bd56daaa7650131a9275e7"]
+  },
+  "s-ldg/TA-36": {
+    "id": "s-ldg/TA-36",
+    "seed": "BRAMBLE_DATASET_SEED_S_LDG",
+    "vendorDerivation": "ledger-argentx",
+    "index": 3,
+    "address": "0x5bab0a00d30d241a1226fdc3bba7340d90b6b86d256427b8ba8f0ec099c002",
+    "pubkey": "0x26171cc0711e0df526ddf0a6e7abd167eb295d9c1eecdc0e7747f0424b66770",
+    "expected": "Ready Ledger with a guardian: selectable, no restriction label (N2)",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "guardian": "0x1d14b8b0b3fabf65e1805322d19b037466d86454d0cf78d170aee6bad20909b"
+    },
+    "log": [
+      "funded STRK 0x3b4edd060791d4ea2e00806dfcf4efdb4690b66df610a1b2b592e9cb5048088",
+      "deployed 0x68a130fc2f0bbcdfe47ab26925ee035b27347fd6e5e736343f3470a6a1c9d84",
+      "change_guardian 0xbacae4d6da6fcb8a8692cfe23d09c908310f484bfd5f334f7d7b6343d0e386"
+    ]
+  },
+  "s-ldg/TA-37": {
+    "id": "s-ldg/TA-37",
+    "seed": "BRAMBLE_DATASET_SEED_S_LDG",
+    "vendorDerivation": "ledger-argentx",
+    "index": 4,
+    "address": "0x1b11ecd53fe50adaa05a805e471877e91abbb7b88c351a923206854df524bb8",
+    "pubkey": "0x688ee66c5554c42b4b15a7a546b7c38429610f00755d40f9f7125f082733678",
+    "expected": "Ready Ledger on Argent 0.3.1: not found (N2, one class)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "classAtDeploy": "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b"
+    },
+    "log": [
+      "funded STRK 0x11e8e377609c86247cef883b2cef6848ad692e6128b9b1857c760982ca31557",
+      "deployed 0x6e11066bba2b2e506014d87e3f6e6cb8b8569afa3cd45bc32bd7348f4a35e55"
+    ]
   }
 }

@@ -15,7 +15,6 @@ import {
   brambleKeypair,
   CLASSES,
   classAt,
-  type ManifestEntry,
   provider,
   readyKeypair,
   UDC,
@@ -117,39 +116,48 @@ function tokenFixture(seed: string): SepoliaFixture {
   );
 }
 
+/**
+ * Deploys an Argent 0.4.0 account at salt = pubkey (if not already), sets the
+ * K-GRD guardian once, and removes it again when `removeAfter`.
+ */
+export const guardianStep =
+  (
+    kp: { readonly priv: string; readonly pub: string },
+    removeAfter: boolean,
+  ): SepoliaFixture["step"] =>
+  async (e) => {
+    await selfDeploy(e, {
+      signer: kp.priv,
+      classHash: CLASSES.argent040,
+      calldata: argentConstructor(kp.pub, CLASSES.argent040),
+      salt: kp.pub,
+    });
+    const everSet = e.log.some((l) => l.startsWith("change_guardian"));
+    if ((await viewFelt(e.address, "get_guardian")) === 0n && !everSet) {
+      await invokeSelf(e, new LegacySigner([kp]), "change_guardian", ["0x0", "0x0", GUARDIAN.pub]);
+    }
+    if (removeAfter && (await viewFelt(e.address, "get_guardian")) !== 0n) {
+      await invokeSelf(e, new LegacySigner([kp, GUARDIAN]), "change_guardian", ["0x1"]);
+    }
+    const guardian = removeAfter ? null : GUARDIAN.pub;
+    return { state: { deployed: true, liveClass: await classAt(e.address), guardian } };
+  };
+
 /** A Ready account at `index`, deployed (if the app has not already) and guardian-shaped. */
-function guardianFixture(
+const guardianFixture = (
   seed: string,
   id: string,
   index: number,
   removeAfter: boolean,
   expected: string,
-): SepoliaFixture {
-  const kp = readyKeypair(seed, index);
-  const setGuardian = (e: ManifestEntry) =>
-    invokeSelf(e, new LegacySigner([kp]), "change_guardian", ["0x0", "0x0", GUARDIAN.pub]);
-  return readyFixture(
+): SepoliaFixture =>
+  readyFixture(
     seed,
     id,
     index,
     { expected, detectability: "D2", backedBy: "simulated", classAtDeploy: CLASSES.argent040 },
-    async (e) => {
-      await selfDeploy(e, {
-        signer: kp.priv,
-        classHash: CLASSES.argent040,
-        calldata: argentConstructor(kp.pub, CLASSES.argent040),
-        salt: kp.pub,
-      });
-      const everSet = e.log.some((l) => l.startsWith("change_guardian"));
-      if ((await viewFelt(e.address, "get_guardian")) === 0n && !everSet) await setGuardian(e);
-      if (removeAfter && (await viewFelt(e.address, "get_guardian")) !== 0n) {
-        await invokeSelf(e, new LegacySigner([kp, GUARDIAN]), "change_guardian", ["0x1"]);
-      }
-      const guardian = removeAfter ? null : GUARDIAN.pub;
-      return { state: { deployed: true, liveClass: await classAt(e.address), guardian } };
-    },
+    guardianStep(readyKeypair(seed, index), removeAfter),
   );
-}
 
 const rdyFixtures = (seed: string): SepoliaFixture[] => [
   readyFixture(
