@@ -38,7 +38,6 @@ export const REVIEWED_PLUMBING_SNAPSHOT: readonly string[] = [
   "invalid argent multisig threshold response",
   "invalid argent signer guid",
   "invalid argent signer guids",
-  "invalid custom network",
   "invalid derivation index",
   "invalid display preference",
   "invalid explorer api endpoint",

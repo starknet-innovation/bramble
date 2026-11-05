@@ -28,7 +28,6 @@ export const createBackgroundPreferences = ({
     return resolved;
   };
   return {
-    addCustomNetwork: async (input) => (await required()).addCustomNetwork(input),
     addNft: async (input) => (await required()).addNft(input),
     createGroup: async (input) => (await required()).createGroup(input),
     async importPreferences(input) {

@@ -24,7 +24,6 @@ import {
   matchesStrk20DisclosureKind,
   type Strk20DisclosureApprovalKind,
 } from "../privacy/strk20-approval-types";
-import { executeAddChainApproval } from "../provider/add-chain-ops";
 import { executeInvokeApproval } from "../provider/provider-ops";
 import { readApprovalIdInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -225,17 +224,6 @@ const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => 
   };
 };
 
-const applyAddChain: ApproveApplier = async (deps, { payload }) => {
-  if (payload?.chain === undefined) {
-    return reject(NOT_FOUND);
-  }
-  const result = await executeAddChainApproval(
-    { preferencesStore: deps.preferencesStore },
-    { chain: payload.chain },
-  );
-  return settleExecutor(result);
-};
-
 const applyDeclare: ApproveApplier = async (deps, { approval, payload }, decision) => {
   if (payload?.declare === undefined) {
     return reject(NOT_FOUND);
@@ -321,7 +309,6 @@ const applyStrk20Unavailable: ApproveApplier = async (_deps, { payload }) =>
  * silent fall-through to the connection path.
  */
 const APPROVE_APPLIERS: Record<ApprovalKind, ApproveApplier> = {
-  "add-chain": applyAddChain,
   connect: applyConnect,
   declare: applyDeclare,
   invoke: applyInvoke,

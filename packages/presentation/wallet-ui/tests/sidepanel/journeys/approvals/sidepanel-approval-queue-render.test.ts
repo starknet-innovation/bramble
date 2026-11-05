@@ -29,19 +29,6 @@ describe("side panel consent queue rendering (MCW-V09-106)", () => {
     expect(await loadQueue([honestPrompt, unknownKind])).toEqual([honestPrompt]);
   });
 
-  test("keeps the honest prompt when a dapp forces an over-long add-chain host", async () => {
-    // `wallet_addStarknetChain` with a 400-character RPC host: the background
-    // records the host verbatim as a summary, and the popup's 300-character cap
-    // rejects that one entry. Pre-fix this blanked the whole rendered queue.
-    const longHost = {
-      id: uuid(3),
-      kind: "add-chain",
-      origin: ORIGIN,
-      summaries: ["Evil Chain", "0x534e5f5345504f4c4941", `${"a".repeat(400)}.example.com`],
-    };
-    expect(await loadQueue([longHost, honestPrompt])).toEqual([honestPrompt]);
-  });
-
   test("keeps the honest prompt when a queued fee unit is neither FRI nor WEI", async () => {
     const badUnit = {
       context: {

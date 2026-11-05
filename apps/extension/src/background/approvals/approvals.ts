@@ -274,27 +274,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         origin,
       });
     },
-    requestAddChain({ chain, origin, summaries }) {
-      if (!isWalletOrigin(origin)) {
-        throw new WalletError("Invalid origin");
-      }
-      const existing = queued().find(
-        (approval) =>
-          approval.kind === "add-chain" &&
-          approval.origin === origin &&
-          approval.chain?.chainId === chain.chainId,
-      );
-      if (existing) {
-        return approvalSnapshot(existing);
-      }
-      return enqueue({
-        chain,
-        id: crypto.randomUUID(),
-        kind: "add-chain",
-        origin,
-        summaries: [...summaries],
-      });
-    },
     requestDeclare({ context, declaration, declare, origin, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
