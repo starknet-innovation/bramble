@@ -39,8 +39,9 @@ const packagedUrl = (path: string): string => {
 const ignorePythonOutput = (): void => undefined;
 
 /**
- * The worker's QSB runtime. Lazy: it boots on the first QSB vault message that
- * builds a script, and only `setupFromCommitments` is reachable from one;
+ * The worker's QSB runtime. Lazy: it boots on the first QSB vault or withdrawal
+ * message that needs it; only `setupFromCommitments`, `prepare` and `finish`
+ * are reachable from one, and `finish` drops its interpreter afterwards;
  * `scripts/check-qsb-runtime.ts` pins the packaged files it reads.
  */
 export const qsbRuntime: QsbRuntime = createQsbRuntime({

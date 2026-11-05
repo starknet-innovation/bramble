@@ -47,8 +47,9 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
 | `bramble:qsb-journal:<journalId>` | `storage.local`, AES-GCM, same vault passphrase, commit records like the vault's | one QSB account's disclosure journal: allocation high-water mark and vault records (no phrase, no preimage) | journal schema v1; header bound to `accountId` and the random 256-bit `journalId`; 64 records and 256 KiB per journal; 8 accounts | fail closed for that account: not a writer, every allocation and disclosure refused, never recreated empty |
 | `bramble:qsb-deposit:<journalId>` | `storage.local`, AES-GCM, same vault passphrase, commit records like the vault's | one QSB account's pending deposits: signed deposit transactions kept before they are sent (public chain data, no key) | record schema v1; header bound to `accountId` and `journalId`; at most 4 deposits of at most 12,000 bytes, 100 KiB per record; created by the first deposit | fail closed for that account: every deposit and resend refused; the listing shows no pending deposit |
-| `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>`, `bramble:qsb-journal:<journalId>:commit:<lineage>`, `bramble:qsb-deposit:<journalId>:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage; at most 211 bytes each (see the `storage.sync` budget below) | rollback refused; a missing primary-vault or journal record is restored from the local mirror |
-| `bramble:vault:commit:<lineage>`, `bramble:qsb-journal:<journalId>:commit:<lineage>`, `bramble:qsb-deposit:<journalId>:commit:<lineage>` mirror (primary vault, each journal and each pending-deposit record, never staging) | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
+| `bramble:qsb-withdrawal:<journalId>` | `storage.local`, AES-GCM, same vault passphrase, commit records like the vault's | one QSB account's withdrawals: each deposit's intent (canonical manifest and hash, frozen helper, destination, fee, payout, job id), its signed transaction and last outcome (public chain data and public coordinator ids; no key, no preimage) | record schema v1; header bound to `accountId` and `journalId`; at most 16 withdrawals, signed bytes of at most 2,000 bytes, 96 KiB per record; created by the first intent | fail closed for that account: every withdrawal refused, and every deposit that picks coins, since a frozen helper could not be excluded; the listing shows no withdrawal |
+| `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>`, `bramble:qsb-journal:<journalId>:commit:<lineage>`, `bramble:qsb-deposit:<journalId>:commit:<lineage>`, `bramble:qsb-withdrawal:<journalId>:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage; at most 214 bytes each (see the `storage.sync` budget below) | rollback refused; a missing primary-vault or journal record is restored from the local mirror |
+| `bramble:vault:commit:<lineage>`, `bramble:qsb-journal:<journalId>:commit:<lineage>`, `bramble:qsb-deposit:<journalId>:commit:<lineage>`, `bramble:qsb-withdrawal:<journalId>:commit:<lineage>` mirror (primary vault, each journal, each pending-deposit and each withdrawal record, never staging) | `storage.local`, plain | copy of the `storage.sync` commit record | read only when the `storage.sync` record is missing | fail closed when both are missing |
 | `bramble:vault:legacy`, `bramble:qsb-journal:<journalId>:legacy` | `storage.local`, plain | marker that this store has committed a version-3 envelope | one per store | any version-2 envelope after it is a rollback |
 | `bramble:vault:recovering` | `storage.local`, plain | lineage of an Unlock anyway write in progress | only while a recovery writes | the next recovery removes the records an interrupted one left |
 | `bramble:vault:commit:<lineage>`, `bramble:vault:promoted` shadow, and the same two per journal key | `storage.session`, plain | session copy of the commit record and the last promoted lineage | browser session | a durable record that disagrees is a rollback |
@@ -136,7 +137,23 @@ from just before `fund/submit` until the coordinator answers about this vault an
 (`submitted` naming this txid, or `rejected` with no funding) or `/funding` confirms that txid; any
 other answer, a transport failure included, leaves it pending for a resend. Eight full records take
 about 1.1 MB at rest, so with eight full journals and the vault and its migration copy `storage.local`
-stays under 7 MB of its 10 MiB.
+stays under 7 MB of its 10 MiB, and under 8.1 MB with eight full withdrawal records (below).
+
+**QSB withdrawals.** A withdrawal's terms are fixed before a search that takes hours and can never
+change after disclosure, so each account keeps them in one record under `bramble:qsb-withdrawal:<journalId>`,
+opened and wired exactly like its journal and pending deposits and written in the vault's mutation
+queue. Per deposit it holds the intent — the canonical manifest JSON and its hash, the frozen helper
+output, the destination, fee, payout and job id — kept before `POST /v1/jobs`, so a lost answer can
+only ever be retried with the same manifest; the signed transaction, kept before `POST …/submit` and
+only once the journal records the exposure, so an unknown outcome can only ever resend the same bytes;
+and the coordinator's last outcome. An intent is never replaced and signed bytes never change, and no
+two intents share a helper. The disclosure itself is the journal's (`recordQsbExposure`), not this
+record's. A vault is withdrawn once, ever, and the journal's byte cap admits about twelve vaults with
+Bramble's 9,923-byte scripts, so the record's cap of 16 withdrawals (`QSB_MAX_WITHDRAWALS`) never binds
+first; a 17th intent would be refused (`vaultLimit`), never evicting one. A withdrawal's signed bytes
+are at most about 1,440 bytes (capped at 2,000), its manifest under 900 characters, so a full record is
+about 90 KB of plaintext, capped at 96 KiB (`QSB_WITHDRAWAL_STORE_MAX_BYTES`), whose envelope (about
+131 KB) stays inside the provider budget; eight take about 1.05 MB at rest.
 
 **QSB vault messages.** Five more extension-page-only messages, `wallet.qsbVaults`,
 `wallet.createQsbVault`, `wallet.quoteQsbDeposit`, `wallet.depositQsbVault` and
@@ -158,6 +175,24 @@ funding is recorded only once the chain confirms it. Every reply is built from `
 `QsbOwnerFunds` and `QsbDepositQuote`: no phrase, owner key, journal id, coordinator id or token, or
 signed bytes. The listing peeks at the session rather than renewing it.
 
+**QSB withdrawal messages.** Five more extension-page-only messages, `wallet.quoteQsbWithdrawal`,
+`wallet.startQsbWithdrawal`, `wallet.reviewQsbWithdrawal`, `wallet.releaseQsbWithdrawal` and
+`wallet.resendQsbWithdrawal`, run the same way, under the account's QSB lock with short slots. The one
+release of HORS preimages is the session's `releasePreimages`
+(`packages/platform/vault/src/service/qsb-vault-withdrawals.ts`), the only caller of Krusty's reveal: in
+a single slot it re-reads the bound journal, has Krusty compute the disclosure digest from the parsed
+`T`, refuses unless it is the reviewed one, records the exposure through `recordQsbExposure` (from
+`allocated`, or an exact retry) and awaits that write, and only then reveals the 15; nothing is
+released before the `exposed` record is durable, and two releases can never interleave. The release
+message carries the wallet password, and opening its session decrypts the vault with it: the fresh user
+authorization each disclosure session needs, retries included. The review checks `T` against Bramble's
+own rebuild from the kept manifest and the solution, the previous transactions, the submittable
+sequence and locktime ranges and the disclosed indices, but not the QSB puzzle, so it reports
+`binding: "unverified"`. After the disclosure nothing refuses; the preimages are dropped once `finish`
+returns, and the interpreter that held them is discarded. Every reply is built from `QsbVaultView`,
+`QsbWithdrawalQuote` and `QsbWithdrawalReview`: no preimage, phrase, owner key, job id, manifest or
+signed bytes. A deposit never spends a withdrawal's helper output.
+
 **QSB account messages.** Five extension-page-only messages reach these records, through the vault
 service's QSB methods (`packages/platform/vault/src/service/qsb-accounts.ts`), each run in the
 mutation queue: `wallet.qsbAccounts`, `wallet.createQsbAccount` (a 24-word phrase from Krusty, unconfirmed),
@@ -173,15 +208,18 @@ is at most 87 bytes of JSON (`current` and `pending` both set, mid-write), so th
 `bramble:vault:commit:<lineage>` item is at most 140 bytes, the staging copy's 150 (only during a
 migration), and each journal's `bramble:qsb-journal:<journalId>:commit:<lineage>` 211 (a 124-character
 key), and each pending-deposit record's `bramble:qsb-deposit:<journalId>:commit:<lineage>` 211 too (its
-prefix is as long as the journal's). A journal and a pending-deposit record each keep one lineage for
-life, so eight accounts' journals take 1,688 bytes in 8 items and their pending-deposit records another
-1,688 in 8, and with the vault and a staged migration everything fits in 3,666 bytes and 18 items: under
-4% of the total and 3% of one item's limit. Each orphan journal adds one 211-byte item, which room for
-about 467 more covers; a pending-deposit record has no orphans, since only a deposit for an existing
-account creates one. Every journal or pending-deposit write is two `storage.sync` writes (pending, then
-current), so creating an account costs four of Chrome's 120 per minute and 1,800 per hour, creating a
-vault four (allocation, then its script), a deposit four (kept, then released) and recording its
-funding two.
+prefix is as long as the journal's), and each withdrawal record's
+`bramble:qsb-withdrawal:<journalId>:commit:<lineage>` 214 (a 127-character key). A journal, a
+pending-deposit record and a withdrawal record each keep one lineage for life, so eight accounts'
+journals take 1,688 bytes in 8 items, their pending-deposit records another 1,688 in 8 and their
+withdrawal records 1,712 in 8, and with the vault and a staged migration everything fits in 5,378 bytes
+and 26 items: under 6% of the total and 3% of one item's limit. Each orphan journal adds one 211-byte
+item, which room for about 459 more covers; a pending-deposit or withdrawal record has no orphans,
+since only a deposit or withdrawal of an existing account creates one. Every journal, pending-deposit or
+withdrawal write is two `storage.sync` writes (pending, then current), so creating an account costs
+four of Chrome's 120 per minute and 1,800 per hour, creating a vault four (allocation, then its script),
+a deposit four (kept, then released), recording its funding two, starting a withdrawal four (the intent,
+then its job) and releasing one six (the exposure, the signed bytes, then the outcome).
 
 ## Account identity and first-class behavior
 

@@ -20,119 +20,30 @@
  * does not, and there every vault action refuses with `accessNeeded` and
  * nothing is allocated or sent.
  */
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import {
-  QSB_COORDINATOR_ORIGIN,
-  QSB_COORDINATOR_PERMISSION,
-  QSB_VAULT_REFUSALS,
-} from "@bramble/wallet-model/qsb-vaults";
-import type { Page, Request, Route } from "@playwright/test";
-import {
-  answerQsbRequest,
-  type FakeCoordinatorState,
-  fakeCoordinatorState,
-  paymentToAddress,
-} from "../support/qsb-coordinator-fake";
-import { distPath, type LoadedExtension, launchExtension } from "./extension-fixture";
+import { QSB_VAULT_REFUSALS } from "@bramble/wallet-model/qsb-vaults";
+import type { Request } from "@playwright/test";
+import { fakeCoordinatorState, paymentToAddress } from "../support/qsb-coordinator-fake";
+import type { LoadedExtension } from "./extension-fixture";
 import { expect, test } from "./fixtures";
 import {
-  IMPORT_MNEMONIC,
-  importWalletFromPhrase,
-  sendRuntimeMessage,
-  VAULT_PASSPHRASE,
-} from "./wallet-helpers";
+  COORDINATOR,
+  coordinatorGranted,
+  createWriterAccount,
+  routeCoordinator,
+  send,
+  withCoordinatorGranted,
+} from "./qsb-e2e-support";
+import { IMPORT_MNEMONIC, importWalletFromPhrase, sendRuntimeMessage } from "./wallet-helpers";
 
-const COORDINATOR = QSB_COORDINATOR_ORIGIN;
-
-type Reply = Record<string, unknown> & {
-  readonly error?: string;
-  readonly ok?: true;
-};
-
-// Runs `run` on a copy of `dist/` whose manifest grants the coordinator's
-// origin at install, as the user's runtime grant would.
-const withCoordinatorGranted = async (
-  run: (extension: LoadedExtension) => Promise<void>,
-): Promise<void> => {
-  const directory = await mkdtemp(join(tmpdir(), "bramble-qsb-granted-"));
-  await cp(distPath, directory, { recursive: true });
-  const manifestPath = join(directory, "manifest.json");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
-    host_permissions: string[];
-  };
-  manifest.host_permissions = [...manifest.host_permissions, QSB_COORDINATOR_PERMISSION];
-  await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
-  const extension = await launchExtension({ extensionPath: directory });
-  try {
-    await run(extension);
-  } finally {
-    await extension.close();
-    await rm(directory, { force: true, recursive: true });
-  }
-};
-
-// What the browser itself says about the coordinator's origin.
-const coordinatorGranted = (page: Page): Promise<boolean> =>
-  page.evaluate(
-    (origins) =>
-      (
-        globalThis as typeof globalThis & {
-          readonly chrome: {
-            readonly permissions: {
-              readonly contains: (query: { origins: string[] }) => Promise<boolean>;
-            };
-          };
-        }
-      ).chrome.permissions.contains({ origins }),
-    [QSB_COORDINATOR_PERMISSION],
-  );
-
-const send = async (page: Page, message: Record<string, unknown>): Promise<Reply> => {
-  const reply = await sendRuntimeMessage<Reply>(page, message);
-  if (!reply || reply.error !== undefined) {
-    throw new Error(`${String(message["type"])} failed: ${reply?.error ?? "no reply"}`);
-  }
-  return reply;
-};
-
-// The coordinator, answered from whatever stand-in `current` returns now.
-const routeCoordinator = async (page: Page, current: () => FakeCoordinatorState): Promise<void> => {
-  await page.context().route(`${COORDINATOR}/**`, async (route: Route) => {
-    const request = route.request();
-    const answer = answerQsbRequest(
-      current(),
-      {
-        body: request.postData(),
-        headers: request.headers(),
-        method: request.method(),
-        url: request.url(),
-      },
-      Date.now(),
-    );
-    await route.fulfill({ json: answer.body, status: answer.status });
-  });
-};
-
-// Creates a QSB account and confirms its backup with three words of the
-// phrase the vault reveals under the wallet password: a writer.
-const createWriterAccount = async (page: Page): Promise<string> => {
-  const created = await send(page, { type: "wallet.createQsbAccount" });
-  const accountId = String((created["account"] as { readonly id: string }).id);
-  const revealed = await send(page, {
-    accountId,
-    passphrase: VAULT_PASSPHRASE,
-    type: "wallet.revealQsbPhrase",
-  });
-  const words = String(revealed["mnemonic"]).split(" ");
-  await send(page, {
-    accountId,
-    type: "wallet.confirmQsbBackup",
-    words: [0, 11, 23].map((index) => ({ index, word: words[index] ?? "" })),
-  });
-  return accountId;
-};
+// A deposit no withdrawal has started for.
+const NO_WITHDRAWAL = {
+  confirmations: null,
+  destination: null,
+  feeSat: null,
+  outputSat: null,
+  status: "none",
+  txid: null,
+} as const;
 
 test("refuses every vault action, and allocates nothing, until the coordinator is granted", async ({
   extension,
@@ -147,7 +58,7 @@ test("refuses every vault action, and allocates nothing, until the coordinator i
   expect(await coordinatorGranted(sidepanel)).toBe(false);
   const state = fakeCoordinatorState("");
   await routeCoordinator(sidepanel, () => state);
-  const accountId = await createWriterAccount(sidepanel);
+  const { accountId } = await createWriterAccount(sidepanel);
 
   const listed = await send(sidepanel, { accountId, type: "wallet.qsbVaults" });
   expect(String(listed["address"])).toMatch(/^bc1q[02-9ac-hj-np-z]{38}$/);
@@ -185,7 +96,7 @@ const fundedJourney = async (extension: LoadedExtension): Promise<void> => {
   let state = fakeCoordinatorState("");
   state.refusals.set("GET /payment-utxos", { code: "chain_unavailable", status: 503 });
   await routeCoordinator(sidepanel, () => state);
-  const accountId = await createWriterAccount(sidepanel);
+  const { accountId } = await createWriterAccount(sidepanel);
   const offlineFirst = await send(sidepanel, { accountId, type: "wallet.qsbVaults" });
   const owner = String(offlineFirst["address"]);
   expect(owner).toMatch(/^bc1q[02-9ac-hj-np-z]{38}$/);
@@ -208,6 +119,7 @@ const fundedJourney = async (extension: LoadedExtension): Promise<void> => {
     registered: true,
     state: "allocated",
     v: 0,
+    withdrawal: NO_WITHDRAWAL,
   });
   const [registered] = [...state.vaults.values()];
   expect(String(registered?.vault["scriptHex"]).length).toBe(9_923 * 2);
@@ -251,6 +163,7 @@ const fundedJourney = async (extension: LoadedExtension): Promise<void> => {
       registered: true,
       state: "allocated",
       v: 0,
+      withdrawal: NO_WITHDRAWAL,
     },
   ]);
   // The journal holds it now: confirmed even with the coordinator unreachable.
