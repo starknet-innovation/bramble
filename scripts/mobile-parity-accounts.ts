@@ -21,12 +21,14 @@ import {
 import { isLabel } from "@bramble/wallet-model/preferences";
 import {
   type RecoveryAccountCandidate,
+  type RecoverySigningRestriction,
   recoverySelectionKey,
 } from "@bramble/wallet-model/recovery";
 // Not package exports: side-panel presentation rules, read here only to pin the mobile port.
 import {
   candidateState,
   candidateTitle,
+  privacyPoolCopy,
   selectable,
 } from "../packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-account-copy";
 import {
@@ -245,6 +247,39 @@ const recoveryVectors = (accounts: readonly AccountRef[], vectors: readonly Pari
       }),
     );
 
+// Every advisory restriction (the `satisfies` fails the build when one is added) and no
+// restriction, each on a deployed row of every family, with its privacy-pool note.
+const RESTRICTIONS = Object.keys({
+  guardian: true,
+  "owner-changed": true,
+  "owner-type": true,
+  release: true,
+  "strong-signer": true,
+} satisfies Record<RecoverySigningRestriction, true>) as RecoverySigningRestriction[];
+
+const noteVectors = (accounts: readonly AccountRef[]) =>
+  (["openzeppelin", "argent", "braavos"] as const).flatMap((family) => {
+    const account = accounts.find((candidate) => candidate.accountContractType === family);
+    if (!account) throw new Error(`no ${family} account to word`);
+    return [undefined, ...RESTRICTIONS].map((restriction) => {
+      const candidate = {
+        account,
+        deployed: true,
+        funded: false,
+        privacyPool: "other-wallet",
+        ...(restriction ? { restriction } : {}),
+      } as RecoveryAccountCandidate;
+      return {
+        accountContractType: family,
+        classHash: account.classHash,
+        derivation: account.derivation.kind,
+        hint: candidateState(candidate, false),
+        note: privacyPoolCopy(candidate),
+        restriction: restriction ?? null,
+      };
+    });
+  });
+
 /** Every account vector set, split into the three committed fixtures (each under 500 lines). */
 export const computeAccountParity = async () => {
   const { accounts, vectors } = await familyVectors();
@@ -270,7 +305,7 @@ export const computeAccountParity = async () => {
   return {
     familiesMainnet: families("SN_MAIN"),
     familiesSepolia: families("SN_SEPOLIA"),
-    recovery: { recovery: recoveryVectors(accounts, vectors) },
+    recovery: { notes: noteVectors(accounts), recovery: recoveryVectors(accounts, vectors) },
     rules,
   };
 };

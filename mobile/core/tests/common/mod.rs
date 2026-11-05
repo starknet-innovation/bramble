@@ -2,7 +2,7 @@
 //! scripted in-memory JSON-RPC responder that plays the node for the discovery scan.
 #![allow(dead_code)] // Each test crate uses a different subset of these helpers.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -138,6 +138,27 @@ pub struct Node {
     pub funded: HashSet<String>,
     /// Answer class-hash probes with this raw error instead (e.g. a rate limit).
     pub failure: Option<Value>,
+    /// A deployed address's live class, when not the default above.
+    pub classes: HashMap<String, String>,
+    /// `starknet_call` results keyed `contract:selector:first-calldata` (empty when none), for
+    /// the advisory reads; any other call is a balance read.
+    pub views: HashMap<String, Vec<String>>,
+    /// The latest block's timestamp.
+    pub block_time: u64,
+}
+
+/// The `views` key for a call.
+pub fn view_key(contract: &str, selector: &str, argument: Option<&str>) -> String {
+    format!("{contract}:{selector}:{}", argument.unwrap_or(""))
+}
+
+fn call_key(body: &Value) -> String {
+    let request = &body["params"]["request"];
+    view_key(
+        request["contract_address"].as_str().unwrap(),
+        request["entry_point_selector"].as_str().unwrap(),
+        request["calldata"][0].as_str(),
+    )
 }
 
 impl Node {
@@ -150,10 +171,20 @@ impl Node {
                 if let Some(error) = &self.failure {
                     json!({ "jsonrpc": "2.0", "id": id, "error": error })
                 } else if self.deployed.contains(address) {
-                    json!({ "jsonrpc": "2.0", "id": id, "result": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381" })
+                    let class = self.classes.get(address).map_or(
+                        "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+                        String::as_str,
+                    );
+                    json!({ "jsonrpc": "2.0", "id": id, "result": class })
                 } else {
                     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": 20, "message": "Contract not found" } })
                 }
+            }
+            "starknet_call" if self.views.contains_key(&call_key(&body)) => {
+                json!({ "jsonrpc": "2.0", "id": id, "result": self.views[&call_key(&body)] })
+            }
+            "starknet_getBlockWithTxHashes" => {
+                json!({ "jsonrpc": "2.0", "id": id, "result": { "timestamp": self.block_time } })
             }
             "starknet_call" => {
                 let account = body["params"]["request"]["calldata"][0].as_str().unwrap();

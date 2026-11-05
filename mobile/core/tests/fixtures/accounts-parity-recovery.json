@@ -1,4 +1,150 @@
 {
+  "notes": [
+    {
+      "accountContractType": "openzeppelin",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": null
+    },
+    {
+      "accountContractType": "openzeppelin",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · has a guardian · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "guardian"
+    },
+    {
+      "accountContractType": "openzeppelin",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · owner key changed · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "owner-changed"
+    },
+    {
+      "accountContractType": "openzeppelin",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · unsupported signer · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "owner-type"
+    },
+    {
+      "accountContractType": "openzeppelin",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · unsupported release · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "release"
+    },
+    {
+      "accountContractType": "openzeppelin",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · 2FA active · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "strong-signer"
+    },
+    {
+      "accountContractType": "argent",
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet",
+      "note": "Private balances off · privacy previously set up in Ready and cannot be imported to Bramble",
+      "restriction": null
+    },
+    {
+      "accountContractType": "argent",
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · has a guardian · view only",
+      "note": "Private balances off · privacy previously set up in Ready and cannot be imported to Bramble",
+      "restriction": "guardian"
+    },
+    {
+      "accountContractType": "argent",
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · owner key changed · view only",
+      "note": "Private balances off · privacy previously set up in Ready and cannot be imported to Bramble",
+      "restriction": "owner-changed"
+    },
+    {
+      "accountContractType": "argent",
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · unsupported signer · view only",
+      "note": "Private balances off · privacy previously set up in Ready and cannot be imported to Bramble",
+      "restriction": "owner-type"
+    },
+    {
+      "accountContractType": "argent",
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · unsupported release · view only",
+      "note": "Private balances off · privacy previously set up in Ready and cannot be imported to Bramble",
+      "restriction": "release"
+    },
+    {
+      "accountContractType": "argent",
+      "classHash": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · 2FA active · view only",
+      "note": "Private balances off · privacy previously set up in Ready and cannot be imported to Bramble",
+      "restriction": "strong-signer"
+    },
+    {
+      "accountContractType": "braavos",
+      "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": null
+    },
+    {
+      "accountContractType": "braavos",
+      "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · has a guardian · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "guardian"
+    },
+    {
+      "accountContractType": "braavos",
+      "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · owner key changed · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "owner-changed"
+    },
+    {
+      "accountContractType": "braavos",
+      "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · unsupported signer · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "owner-type"
+    },
+    {
+      "accountContractType": "braavos",
+      "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · unsupported release · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "release"
+    },
+    {
+      "accountContractType": "braavos",
+      "classHash": "0x3d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "derivation": "starknet-bip44",
+      "hint": "Deployed on Starknet · 2FA active · view only",
+      "note": "Private balances off · privacy previously set up in another wallet and cannot be imported to Bramble",
+      "restriction": "strong-signer"
+    }
+  ],
   "recovery": [
     {
       "accountContractType": "openzeppelin",

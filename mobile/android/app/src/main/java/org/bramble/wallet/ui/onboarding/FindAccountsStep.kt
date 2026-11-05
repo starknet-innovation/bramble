@@ -210,6 +210,7 @@ private fun CandidateRow(
     ) {
         Text(candidate.shortAddress, color = skin.muted, style = textStyle(BrambleTypeScale.caption, mono = true))
         Text(candidate.hint, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
+        candidate.note?.let { Text(it, color = skin.danger, style = textStyle(BrambleTypeScale.caption)) }
     }
 }
 

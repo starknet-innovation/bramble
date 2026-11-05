@@ -150,6 +150,9 @@ private struct CandidateRow: View {
                         .brambleText(BrambleTypeScale.caption, mono: true)
                         .foregroundStyle(skin.muted)
                     Text(candidate.hint).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.muted)
+                    if let note = candidate.note {
+                        Text(note).brambleText(BrambleTypeScale.caption).foregroundStyle(skin.danger)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -161,7 +164,7 @@ private struct CandidateRow: View {
         .opacity(candidate.selectable ? 1 : Layout.unselectableOpacity)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(candidate.title), \(candidate.shortAddress)")
-        .accessibilityValue(candidate.hint)
+        .accessibilityValue([candidate.hint, candidate.note].compactMap(\.self).joined(separator: ", "))
         .accessibilityAddTraits(checked ? [.isButton, .isSelected] : .isButton)
     }
 }

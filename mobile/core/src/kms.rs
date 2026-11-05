@@ -239,3 +239,25 @@ pub fn derive_scoped_viewing_key(
     }
     Ok(viewing_key)
 }
+
+/// The public viewing key this wallet would register for one account in one pool
+/// (`previewStrk20ViewingPublicKey`), so recovery can compare it with the key the pool holds.
+/// The viewing key is derived inside this call and only Krusty's public x-coordinate leaves it.
+pub fn scoped_viewing_public_key(
+    phrase: &str,
+    passphrase: Option<&str>,
+    path: Ladder,
+    account_index: u32,
+    chain_id: &str,
+    pool_address: &str,
+) -> Result<Felt, CoreError> {
+    let viewing_key = derive_scoped_viewing_key(
+        phrase,
+        passphrase,
+        path,
+        account_index,
+        chain_id,
+        pool_address,
+    )?;
+    krusty_kms::stark_public_key(&viewing_key).map_err(kms_error("viewing public key"))
+}

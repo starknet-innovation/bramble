@@ -9,7 +9,7 @@
 //! non-OHTTP discovery URL (docs/privacy.md §1.1).
 
 mod bodies;
-mod config;
+pub(crate) mod config;
 pub(crate) mod gates;
 pub(crate) mod home;
 mod json;

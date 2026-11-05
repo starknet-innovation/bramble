@@ -90,7 +90,12 @@ fn activity_is_found_and_auto_selected_across_families() {
         .find(|c| c.account_index == 1)
         .expect("deployed Argent 0.3.1 is kept");
     assert_eq!(argent.title, "Account 1 · Argent 0.3.1 · Ready extension");
-    assert_eq!(argent.hint, "Deployed on Starknet");
+    // The scripted node answers every deployed account with a pre-0.4 Argent class, whose
+    // authorization this wallet does not produce.
+    assert_eq!(
+        argent.hint,
+        "Deployed on Starknet · unsupported release · view only"
+    );
     assert!(argent.auto_select && argent.selectable);
     assert_eq!(
         argent.key,
