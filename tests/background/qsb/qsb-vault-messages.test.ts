@@ -64,6 +64,21 @@ const offlineDeps = (): QsbVaultDeps => ({
   sessions: createQsbSessions({ now: () => Date.UTC(2026, 10, 4) }),
 });
 
+// No withdrawal is made here: every withdrawal call refuses.
+const notUnderTest = async (): Promise<never> => {
+  throw new Error("not under test");
+};
+const withdrawalsNotUnderTest = {
+  holdWithdrawal: notUnderTest,
+  keepSignedWithdrawal: notUnderTest,
+  markWithdrawalJob: notUnderTest,
+  recordWithdrawalOutcome: notUnderTest,
+  releasePreimages: notUnderTest,
+  revealDigest: notUnderTest,
+  signWithdrawal: notUnderTest,
+  withdrawals: async () => [],
+} satisfies Partial<QsbVaultAccess>;
+
 // An account with no vaults whose every key call is the fake owner's.
 const emptyAccess = (onOpen: () => void = () => undefined): QsbVaultAccess => {
   onOpen();
@@ -83,6 +98,7 @@ const emptyAccess = (onOpen: () => void = () => undefined): QsbVaultAccess => {
     releaseDeposit: async () => undefined,
     signDeposit: async (psbt) => psbt,
     signSignIn: async () => "proof",
+    ...withdrawalsNotUnderTest,
   };
 };
 

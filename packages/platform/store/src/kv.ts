@@ -53,6 +53,14 @@ const QSB_JOURNAL_KEY_PATTERN = /^bramble:qsb-journal:[0-9a-f]{64}$/;
 export const QSB_DEPOSIT_KEY_PREFIX = "bramble:qsb-deposit:";
 
 /**
+ * Prefix of the per-account QSB withdrawal keys,
+ * `bramble:qsb-withdrawal:<journalId>`, each an encrypted envelope of its own
+ * under the provider budget, beside the journal of the same id and built
+ * from this one spelling.
+ */
+export const QSB_WITHDRAWAL_KEY_PREFIX = "bramble:qsb-withdrawal:";
+
+/**
  * Checks for exactly one QSB journal envelope key: the prefix and a 64-digit
  * lowercase-hex journal id, nothing after it. The journal's own commit and
  * marker records (`…:commit:<lineage>`) are not journal keys.

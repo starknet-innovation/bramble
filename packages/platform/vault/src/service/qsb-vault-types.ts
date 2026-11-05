@@ -13,10 +13,15 @@
  * sign-in proof, signed PSBT bytes) and the journal's vault records, never
  * the account record or its header. A session ends with its task; using it afterwards throws.
  */
-import type { QsbCommitments } from "../kms-port";
+import type { QsbCommitments, QsbRevealDigest } from "../kms-port";
 import type { QsbPendingDeposit } from "../qsb/qsb-deposit-store";
 import type { QsbJournalRefusal } from "../qsb/qsb-journal";
 import type { QsbFunding, QsbVaultRecord } from "../qsb/qsb-vault-record";
+import type {
+  QsbSignedWithdrawalRecord,
+  QsbWithdrawalOutcome,
+  QsbWithdrawalRecord,
+} from "../qsb/qsb-withdrawal-store";
 
 /** The account's Bitcoin owner: BIP-84 `m/84'/0'/0'/0/0` of its own phrase. */
 export type QsbOwner = {
@@ -69,7 +74,7 @@ export type QsbJournalChangeResult =
  * durable before the call resolves; so is every pending-deposit write. A
  * refused journal change resolves with its refusal and writes nothing.
  */
-export type QsbVaultAccess = {
+export type QsbVaultAccess = QsbWithdrawalAccess & {
   /** The id of the account this session is over. */
   readonly accountId: string;
   /**
@@ -109,6 +114,62 @@ export type QsbVaultAccess = {
   readonly signDeposit: (psbt: Uint8Array, inputCount: number) => Promise<Uint8Array>;
   /** The owner key's unprefixed BIP-322 proof over `message`. */
   readonly signSignIn: (message: string) => Promise<string>;
+};
+
+/**
+ * One disclosure the release is asked for: vault `v`, the transaction `T` as
+ * lowercase hex, the 8 round-0 and 7 round-1 indices in signing order, and
+ * the digest `D` the user reviewed.
+ */
+export type QsbReleaseRequest = {
+  readonly digest: string;
+  readonly round0: readonly number[];
+  readonly round1: readonly number[];
+  readonly transaction: string;
+  readonly v: number;
+};
+
+/**
+ * The withdrawal half of a session (./qsb-vault-withdrawals). Every write is
+ * durable before its call resolves and is re-validated in its own slot.
+ */
+export type QsbWithdrawalAccess = {
+  /**
+   * Keeps a withdrawal's intent, durably, before its job is created: refused
+   * unless the account is the writer, vault `v` is allocated, funded and
+   * scripted, and no other intent exists for `v` (the same intent again
+   * changes nothing) or uses its helper. Refused when the record is full.
+   */
+  readonly holdWithdrawal: (intent: QsbWithdrawalRecord) => Promise<void>;
+  /** Records that the coordinator created exactly this withdrawal's job. Durable. */
+  readonly markWithdrawalJob: (v: number) => Promise<void>;
+  /**
+   * Keeps a withdrawal's signed bytes, durably, before they are submitted,
+   * with the outcome `pending`; only once vault `v` is exposed. The same
+   * bytes again change nothing; any others are refused.
+   */
+  readonly keepSignedWithdrawal: (v: number, signed: QsbSignedWithdrawalRecord) => Promise<void>;
+  /** Records what the coordinator last said about withdrawal `v`. Durable. */
+  readonly recordWithdrawalOutcome: (v: number, outcome: QsbWithdrawalOutcome) => Promise<void>;
+  /**
+   * The ONE way a preimage leaves the vault service. In a single slot: re-reads
+   * the bound journal, has Krusty compute `D` from the parsed `T`, refuses
+   * unless it is the reviewed digest, records vault `v`'s exposure (from
+   * `allocated`, or an exact retry of an exposure already recorded) and makes
+   * it durable, and only then has Krusty reveal the 15 preimages. Any refusal
+   * releases nothing.
+   */
+  readonly releasePreimages: (request: QsbReleaseRequest) => Promise<readonly string[]>;
+  /** Krusty's disclosure digest of `T` and the indices; reveals nothing. */
+  readonly revealDigest: (
+    transaction: string,
+    round0: readonly number[],
+    round1: readonly number[],
+  ) => Promise<QsbRevealDigest>;
+  /** The owner key's SIGHASH_ALL partial signature on input 0 of a withdrawal PSBT only. */
+  readonly signWithdrawal: (psbt: Uint8Array) => Promise<Uint8Array>;
+  /** The withdrawals, or null when the record cannot be read. */
+  readonly withdrawals: () => Promise<readonly QsbWithdrawalRecord[] | null>;
 };
 
 /** Which account to open a session over, under the session's password. */

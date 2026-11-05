@@ -23,10 +23,8 @@
  * resolves, and a lost journal is never recreated. A session refuses every
  * call once its task has settled.
  */
-import { RefusedBeforeWrite } from "@bramble/core/errors";
 import { QSB_ACCOUNT_REFUSALS } from "@bramble/wallet-model/qsb";
 import { QSB_VAULT_REFUSALS } from "@bramble/wallet-model/qsb-vaults";
-import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import type { QsbAccountRecord } from "../qsb/qsb-account";
 import {
@@ -41,10 +39,11 @@ import {
   type QsbJournalResult,
   recordQsbFunding,
 } from "../qsb/qsb-journal";
-import { bindQsbJournal, isQsbWriter, type QsbJournalBinding } from "../qsb/qsb-journal-record";
-import { readQsbJournal, writeQsbJournal } from "../qsb/qsb-journal-store";
+import { isQsbWriter, type QsbJournalBinding } from "../qsb/qsb-journal-record";
+import { writeQsbJournal } from "../qsb/qsb-journal-store";
 import type { Vault } from "../schema/schema";
 import type { QsbAccountWiring } from "./qsb-account-types";
+import { currentQsbSlot, type QsbSlot, qsbSlotBinding, qsbSlotRefusal } from "./qsb-vault-slot";
 import type {
   QsbJournalChange,
   QsbJournalChangeResult,
@@ -52,12 +51,15 @@ import type {
   QsbVaultAccess,
   QsbVaultAccessService,
 } from "./qsb-vault-types";
+import { qsbWithdrawalMethods } from "./qsb-vault-withdrawals";
 
 type QsbVaultDeps = {
   readonly kms: Pick<
     KmsPort,
     | "deriveBitcoinP2wpkhKeypair"
     | "deriveQsbCommitments"
+    | "qsbRevealDigest"
+    | "revealQsbPreimages"
     | "signBip322SimpleUnprefixed"
     | "signBitcoinPsbtInputs"
   >;
@@ -67,35 +69,12 @@ type QsbVaultDeps = {
   readonly wiring: QsbAccountWiring | undefined;
 };
 
-/** What one slot runs with: the account as stored now and its two stores. */
-type Slot = {
-  readonly account: QsbAccountRecord;
-  readonly deposits: EncryptedStore;
-  readonly journal: EncryptedStore;
-  readonly vaultPassphrase: string;
-};
+type Slot = QsbSlot;
 
 type BoundState = Extract<QsbJournalState, { readonly status: "bound" }>;
 
-const refused = (message: string): RefusedBeforeWrite => new RefusedBeforeWrite(message);
-
-// The account as stored now, refused unless it is still the one opened over:
-// same id, same journal id.
-const currentSlot = async (
-  deps: QsbVaultDeps,
-  opened: Pick<QsbAccountRecord, "id" | "journalId">,
-  vaultPassphrase: string,
-): Promise<Slot> => {
-  const vault = await deps.readVaultSnapshot(vaultPassphrase);
-  const account = vault.qsbAccounts.find((held) => held.id === opened.id);
-  if (!account) throw refused(QSB_ACCOUNT_REFUSALS.unknownAccount);
-  const journal = deps.wiring?.journals.forJournal(account.journalId);
-  const deposits = deps.wiring?.journals.forDeposits(account.journalId);
-  if (account.journalId !== opened.journalId || !journal || !deposits) {
-    throw refused(QSB_ACCOUNT_REFUSALS.journalUnavailable);
-  }
-  return { account, deposits, journal, vaultPassphrase };
-};
+const refused = qsbSlotRefusal;
+const currentSlot = currentQsbSlot;
 
 const transition = (binding: QsbJournalBinding, change: QsbJournalChange): QsbJournalResult => {
   switch (change.kind) {
@@ -119,8 +98,7 @@ const boundState = (
   writer: isQsbWriter(binding),
 });
 
-const bindingOf = async (slot: Slot): Promise<QsbJournalBinding> =>
-  bindQsbJournal(slot.account, await readQsbJournal(slot.journal, slot.vaultPassphrase));
+const bindingOf = qsbSlotBinding;
 
 // Re-validated by the journal's own transition against the journal as it is
 // in this slot: `nextV`, the vault's state and writer status included.
@@ -235,6 +213,7 @@ const sessionOver = (
         const key = await ownerKey(deps, slot.account);
         return deps.kms.signBip322SimpleUnprefixed(key.privateKey, key.address, message);
       }),
+    ...qsbWithdrawalMethods(deps.kms, inSlot, isOpen),
   };
 };
 

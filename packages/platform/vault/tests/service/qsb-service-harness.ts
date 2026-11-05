@@ -44,7 +44,7 @@ export const journalKeyOf = (journalId: string): string => `bramble:qsb-journal:
  */
 export type QsbHarnessOptions = {
   readonly journalIds?: readonly string[];
-  readonly kms?: Partial<Pick<KmsPort, "generateMnemonic" | "validateMnemonic">>;
+  readonly kms?: Partial<KmsPort>;
   readonly phrases?: readonly string[];
   readonly vault?: Vault | null;
   readonly wired?: boolean;

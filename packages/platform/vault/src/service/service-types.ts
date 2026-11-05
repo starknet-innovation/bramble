@@ -44,9 +44,11 @@ export type {
   QsbJournalChangeResult,
   QsbJournalState,
   QsbOwner,
+  QsbReleaseRequest,
   QsbVaultAccess,
   QsbVaultAccessInput,
   QsbVaultAccessService,
+  QsbWithdrawalAccess,
 } from "./qsb-vault-types";
 
 /** Atomic recovery input re-exported for privileged runtime boundaries. */

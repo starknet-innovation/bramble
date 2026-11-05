@@ -309,6 +309,18 @@ export const SECRET_MATERIAL_FILES = new Set([
   // signed public transactions under the caller's vault passphrase, like the
   // journal store; the credential is never logged or returned.
   "packages/platform/vault/src/qsb/qsb-deposit-store.ts",
+  // QSB withdrawals: reads and writes one account's encrypted record of
+  // intents and signed public transactions under the caller's vault
+  // passphrase, like the deposit store; no key or preimage is ever in it.
+  "packages/platform/vault/src/qsb/qsb-withdrawal-store.ts",
+  // A QSB session's slot, split from qsb-vault-access.ts: reads the account
+  // and its stores under the session's vault credential; nothing leaves.
+  "packages/platform/vault/src/service/qsb-vault-slot.ts",
+  // The session's withdrawal methods, split from qsb-vault-access.ts: the one
+  // release reads the phrase inside a single slot, after the exposure is
+  // durable, and returns only the 15 preimages; the helper signature derives
+  // the owner key for that use alone. Nothing is kept, logged or persisted.
+  "packages/platform/vault/src/service/qsb-vault-withdrawals.ts",
   "packages/platform/vault/src/schema/store-migration.ts",
   "packages/platform/vault/src/accounts/accounts.ts",
   // Split from accounts.ts by the size budget: same boundary, same rules — the
