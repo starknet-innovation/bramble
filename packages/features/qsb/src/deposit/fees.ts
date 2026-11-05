@@ -108,13 +108,14 @@ export const qsbFormatFeeRate = (rateMsat: bigint): string => {
 };
 
 /**
- * The estimated fee of the vault's later withdrawal at `rateMsat`: one owner
- * P2WPKH helper input, the QSB input at its largest scriptSig, and one output
- * of the largest standard size, so the estimate is an upper bound.
+ * The vsize of a signed withdrawal paying one output script of
+ * `outputScriptBytes` bytes (qsb-app `withdrawalVsize`): input 0 the owner's
+ * P2WPKH helper with its witness at the 72-byte DER maximum, input 1 the QSB
+ * input at its largest scriptSig (1,185 bytes), so it is an upper bound:
+ * P2WPKH 1,338 vB, P2SH 1,339, P2PKH 1,341, P2WSH and P2TR 1,350.
  */
-export const qsbWithdrawalFeeSat = (rateMsat: bigint): bigint => {
-  const outputs =
-    1 + 8 + varintSize(WITHDRAWAL_OUTPUT_SCRIPT_BYTES) + WITHDRAWAL_OUTPUT_SCRIPT_BYTES;
+export const qsbWithdrawalVsize = (outputScriptBytes: number): number => {
+  const outputs = 1 + 8 + varintSize(outputScriptBytes) + outputScriptBytes;
   const base =
     4 +
     1 +
@@ -127,5 +128,13 @@ export const qsbWithdrawalFeeSat = (rateMsat: bigint): bigint => {
     outputs +
     4;
   const witness = 2 + (1 + 1 + 72 + 1 + 33) + 1;
-  return qsbFeeAt(Math.ceil((base * 4 + witness) / 4), rateMsat);
+  return Math.ceil((base * 4 + witness) / 4);
 };
+
+/**
+ * The estimated fee of the vault's later withdrawal at `rateMsat`: one owner
+ * P2WPKH helper input, the QSB input at its largest scriptSig, and one output
+ * of the largest standard size, so the estimate is an upper bound.
+ */
+export const qsbWithdrawalFeeSat = (rateMsat: bigint): bigint =>
+  qsbFeeAt(qsbWithdrawalVsize(WITHDRAWAL_OUTPUT_SCRIPT_BYTES), rateMsat);

@@ -166,3 +166,72 @@ describe("answers", () => {
     ).toBe("unreachable");
   });
 });
+
+describe("withdrawal routes", () => {
+  const JOB_ID = "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
+  const TXID = "ab".repeat(32);
+  const MANIFEST = {
+    vaultId: VAULT_ID,
+    funding: { txid: TXID, vout: 0, value: "100000" },
+    helper: { txid: TXID, vout: 1, value: "1449" },
+    destination: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
+    outputScript: "0014c0cebcd6c3d3ca8c75dc5ec62ebe55330ef910e2",
+    outputValue: "88673",
+    fee: "12776",
+    idempotencyKey: JOB_ID,
+    costAccepted: true,
+  } as const;
+  const job = {
+    id: JOB_ID,
+    manifest: MANIFEST,
+    manifestHash: sha256Hex(JSON.stringify(MANIFEST)),
+    stage: "pinning",
+    status: "queued",
+    vaultId: VAULT_ID,
+  };
+
+  test("a job is created from the canonical manifest, hashed as sent", async () => {
+    const { coordinator, sent } = answering(201, { job });
+    expect(await coordinator.createJob(TOKEN, MANIFEST)).toMatchObject({
+      id: JOB_ID,
+      status: "queued",
+    });
+    const [request] = sent;
+    expect(request?.url).toBe("https://d1pjwwq89sze3g.cloudfront.net/v1/jobs");
+    expect(request?.init.body).toBe(JSON.stringify(MANIFEST));
+    expect(headersOf(request as Sent)["x-amz-content-sha256"]).toBe(job.manifestHash);
+  });
+
+  test("the solved result, the submission and the status take their own paths", async () => {
+    const solved = answering(404, { code: "solved_result_unavailable" });
+    expect((await failure(solved.coordinator.solvedResult(TOKEN, JOB_ID))).code).toBe(
+      "solved_result_unavailable",
+    );
+    expect(solved.sent[0]?.url).toBe(
+      `https://d1pjwwq89sze3g.cloudfront.net/v1/jobs/${JOB_ID}/solved-result`,
+    );
+    const submit = answering(200, { status: "submitted", txid: TXID });
+    expect(await submit.coordinator.submitWithdrawal(TOKEN, JOB_ID, "00ff")).toEqual({
+      status: "submitted",
+      txid: TXID,
+    });
+    expect(submit.sent[0]?.init.body).toBe('{"rawTxHex":"00ff"}');
+    const status = answering(200, { chain: null, status: "uncertain", txid: TXID });
+    expect((await status.coordinator.withdrawalStatus(TOKEN, TXID)).status).toBe("uncertain");
+    expect(status.sent[0]?.url).toBe(
+      `https://d1pjwwq89sze3g.cloudfront.net/v1/transactions/${TXID}/status`,
+    );
+  });
+
+  test("never builds a path from a non-uuid job id or a non-hex txid", async () => {
+    const { coordinator, sent } = answering(200, {});
+    expect((await failure(coordinator.solvedResult(TOKEN, "../vaults"))).kind).toBe("unreachable");
+    expect((await failure(coordinator.submitWithdrawal(TOKEN, "x", "00"))).kind).toBe(
+      "unreachable",
+    );
+    expect((await failure(coordinator.withdrawalStatus(TOKEN, "AB".repeat(32)))).kind).toBe(
+      "unreachable",
+    );
+    expect(sent).toEqual([]);
+  });
+});

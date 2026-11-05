@@ -1,6 +1,7 @@
 /**
- * The QSB coordinator client: one typed call per route a deposit uses, over
- * an injected `fetch`, against {@link QSB_COORDINATOR_ORIGIN} only.
+ * The QSB coordinator client: one typed call per route a deposit or a
+ * withdrawal uses, over an injected `fetch`, against
+ * {@link QSB_COORDINATOR_ORIGIN} only.
  *
  * Every request carries `Content-Type: application/json`; an authenticated
  * one carries the session as `X-Qsb-Authorization: Bearer <token>` (never
@@ -12,7 +13,7 @@
  * byte budget and the same deadline.
  *
  * Trust boundary: answers are untrusted and parsed strictly (./responses,
- * ./vault-responses). Every failure is a {@link QsbCoordinatorFailure}:
+ * ./vault-responses, ./withdrawal-responses). Every failure is a {@link QsbCoordinatorFailure}:
  * `unreachable` (no answer, a timeout, an oversized or malformed one) or
  * `refused` (an HTTP error with the coordinator's status and code). Neither
  * carries the coordinator's message text, so nothing it says reaches a page.
@@ -23,6 +24,7 @@ import {
   readBoundedText,
   UNTRUSTED_REQUEST_INIT,
 } from "@bramble/core/http-json";
+import type { QsbWithdrawalManifest } from "../withdrawal/manifest";
 import { QSB_API_BASE_PATH, QSB_COORDINATOR_ORIGIN } from "./origin";
 import { hasExactKeys, isQsbUuid, type QsbOutpoint } from "./response-grammar";
 import {
@@ -48,6 +50,17 @@ import {
   readQsbSubmitAnswer,
   readQsbVaultList,
 } from "./vault-responses";
+import {
+  type QsbJob,
+  type QsbSolvedResult,
+  type QsbWithdrawalSubmitAnswer,
+  type QsbWithdrawalTransactionStatus,
+  readQsbCreatedJob,
+  readQsbJobs,
+  readQsbSolvedResult,
+  readQsbWithdrawalSubmitAnswer,
+  readQsbWithdrawalTransactionStatus,
+} from "./withdrawal-responses";
 
 /** The transport: `fetch`-shaped, with the response's status. */
 export type QsbHttpFetch = (
@@ -94,6 +107,8 @@ export type QsbDepositSubmission = {
 export type QsbCoordinator = {
   readonly challenge: (address: string) => Promise<QsbChallenge>;
   readonly config: () => Promise<QsbConfig>;
+  /** `POST /v1/jobs`: the manifest is sent as its canonical JSON, the bytes it is hashed over. */
+  readonly createJob: (token: string, manifest: QsbWithdrawalManifest) => Promise<QsbJob>;
   readonly funding: (token: string, vaultId: string) => Promise<QsbFundingStatus>;
   readonly fundResubmit: (token: string, vaultId: string) => Promise<QsbSubmitAnswer>;
   readonly fundSubmit: (
@@ -101,6 +116,7 @@ export type QsbCoordinator = {
     vaultId: string,
     deposit: QsbDepositSubmission,
   ) => Promise<QsbSubmitAnswer>;
+  readonly jobs: (token: string) => Promise<readonly QsbJob[]>;
   readonly paymentInput: (token: string, outpoint: QsbOutpoint) => Promise<QsbPaymentInput>;
   readonly paymentUtxos: (token: string) => Promise<readonly QsbOutpoint[]>;
   readonly rates: () => Promise<QsbRates>;
@@ -108,8 +124,18 @@ export type QsbCoordinator = {
     token: string,
     vault: Readonly<Record<string, unknown>>,
   ) => Promise<QsbPublicVault>;
+  readonly solvedResult: (token: string, jobId: string) => Promise<QsbSolvedResult>;
+  readonly submitWithdrawal: (
+    token: string,
+    jobId: string,
+    rawTxHex: string,
+  ) => Promise<QsbWithdrawalSubmitAnswer>;
   readonly vaults: (token: string) => Promise<QsbVaultList>;
   readonly verify: (challengeId: string, proof: string) => Promise<string>;
+  readonly withdrawalStatus: (
+    token: string,
+    txid: string,
+  ) => Promise<QsbWithdrawalTransactionStatus>;
 };
 
 type Request = {
@@ -138,6 +164,22 @@ const vaultPath = (vaultId: string, route: string): string => {
     throw unreachable();
   }
   return `/vaults/${vaultId.toLowerCase()}${route}`;
+};
+
+// A job id is interpolated into a path only once it is a uuid, a txid only
+// once it is 32 bytes of hex.
+const jobPath = (jobId: string, route: string): string => {
+  if (!isQsbUuid(jobId)) {
+    throw unreachable();
+  }
+  return `/jobs/${jobId.toLowerCase()}${route}`;
+};
+
+const transactionPath = (txid: string): string => {
+  if (!/^[0-9a-f]{64}$/.test(txid)) {
+    throw unreachable();
+  }
+  return `/transactions/${txid}/status`;
 };
 
 // The method, headers and body of one request: the session when there is
@@ -206,6 +248,8 @@ export const createQsbCoordinator = (deps: {
   return {
     challenge: (address) => call({ body: { address }, path: "/auth/challenge" }, readQsbChallenge),
     config: () => call({ path: "/config" }, readQsbConfig),
+    createJob: (token, manifest) =>
+      call({ body: manifest, path: "/jobs", token }, readQsbCreatedJob),
     funding: async (token, vaultId) =>
       call({ path: vaultPath(vaultId, "/funding"), token }, readQsbFundingStatus),
     fundResubmit: async (token, vaultId) =>
@@ -223,6 +267,7 @@ export const createQsbCoordinator = (deps: {
         },
         readQsbSubmitAnswer,
       ),
+    jobs: (token) => call({ path: "/jobs", token }, readQsbJobs),
     paymentInput: (token, outpoint) =>
       call(
         {
@@ -238,11 +283,20 @@ export const createQsbCoordinator = (deps: {
       call({ body: vault, path: "/vaults", token }, (value) =>
         hasExactKeys(value, ["vault"]) ? readQsbPublicVault(value["vault"]) : null,
       ),
+    solvedResult: async (token, jobId) =>
+      call({ path: jobPath(jobId, "/solved-result"), token }, readQsbSolvedResult),
+    submitWithdrawal: async (token, jobId, rawTxHex) =>
+      call(
+        { body: { rawTxHex }, path: jobPath(jobId, "/submit"), token },
+        readQsbWithdrawalSubmitAnswer,
+      ),
     vaults: (token) => call({ path: "/vaults", token }, readQsbVaultList),
     verify: (challengeId, proof) =>
       call(
         { body: { id: challengeId, signature: proof }, path: "/auth/verify" },
         readQsbSessionToken,
       ),
+    withdrawalStatus: async (token, txid) =>
+      call({ path: transactionPath(txid), token }, readQsbWithdrawalTransactionStatus),
   };
 };

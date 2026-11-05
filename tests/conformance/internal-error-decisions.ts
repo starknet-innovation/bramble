@@ -166,4 +166,15 @@ export const QSB_RUNTIME_DIAGNOSTICS: ReadonlySet<string> = new Set([
   "QSB source manifest does not list exactly the pinned sources",
   "QSB source manifest is not JSON",
   "QSB vault script does not match its hash",
+  // The withdrawal assembly's and the disclosure calls' refusals: the same
+  // rule, and none quotes a preimage, a request or a reply.
+  "Invalid QSB disclosure digest input",
+  "Invalid QSB disclosure input",
+  "Krusty KMS returned a QSB disclosure digest that does not bind T",
+  "Krusty KMS returned invalid QSB preimages",
+  "QSB withdrawal finish needs exactly 15 preimages",
+  "QSB withdrawal finish returned an unexpected shape",
+  "QSB withdrawal prepare answered for another withdrawal",
+  "QSB withdrawal prepare returned an unexpected shape",
+  "QSB withdrawal request is not a public state, manifest and solution",
 ]);

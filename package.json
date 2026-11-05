@@ -50,7 +50,6 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@bramble/testkit": "workspace:*",
-    "@noble/curves": "2.4.0",
     "@playwright/test": "1.63.0",
     "@scure/bip32": "1.7.0",
     "@scure/bip39": "1.6.0",
@@ -80,6 +79,7 @@
     "@bramble/wallet-ui": "workspace:*",
     "@bramble/wallet-model": "workspace:*",
     "@bramble/wallet-protocol": "workspace:*",
+    "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
     "@scure/btc-signer": "2.4.1",
     "@starknetfoundation/krusty-kms-wasm": "0.15.0",

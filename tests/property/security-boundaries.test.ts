@@ -147,6 +147,8 @@ const validModule = (overrides: Record<string, unknown> = {}) => ({
   deriveQsbCommitments: () => ({}),
   signBip322Simple: () => "",
   signBitcoinPsbtInputs: () => "",
+  qsbRevealDigest: () => ({}),
+  revealQsbPreimages: () => [],
   deriveArgentLegacyKeypair: () => ({ private_key: "0x321", public_key_x: "0xcba" }),
   deriveNostrPublicKey: () => ({ public_key: "11".repeat(32) }),
   deriveOzAccountAddress: () => "0xabc",
