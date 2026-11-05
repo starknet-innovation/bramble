@@ -31,6 +31,9 @@ const FEE_FLOAT = 2n * STRK;
 
 export const deployer = deployerAccount();
 
+const RETRIES = 3;
+const BACKOFF_MS = 20_000;
+
 /** One test account: its manifest identity plus the step that brings the chain to its target state. */
 export type SepoliaFixture = Omit<ManifestEntry, "state" | "log"> & {
   readonly step: (entry: ManifestEntry) => Promise<FixtureOutcome>;
@@ -124,7 +127,19 @@ export async function runSepoliaFixtures(
     if (filter && !identity.id.includes(filter)) continue;
     // Identity comes from the spec; state and log carry over from earlier runs.
     const { state, log } = manifest[identity.id] ?? { state: {}, log: [] };
-    manifest[identity.id] = await runFixture({ ...identity, state, log }, step);
+    // The public node rate-limits bursts. Every step checks chain state first
+    // and a failed read raises, so a retry resumes; only the last attempt is kept.
+    let carried = [...log];
+    for (let attempt = 0; ; attempt += 1) {
+      const outcome = await runFixture({ ...identity, state, log: carried }, step);
+      if (!("error" in outcome.state) || attempt === RETRIES) {
+        manifest[identity.id] = outcome;
+        break;
+      }
+      // Keep any transaction a failed attempt already sent; drop its error line.
+      carried = outcome.log.filter((line) => !line.startsWith("ERROR: "));
+      await new Promise((done) => setTimeout(done, BACKOFF_MS));
+    }
     saveManifest(manifest);
   }
 }

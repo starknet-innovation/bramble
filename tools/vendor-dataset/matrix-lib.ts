@@ -170,8 +170,17 @@ export async function tokenBalance(token: keyof typeof TOKENS, holder: string): 
   return uint256.uint256ToBN({ low, high });
 }
 
+/**
+ * The class deployed at `address`, or null when the node says no contract is
+ * there. Any other failure (a rate limit, a node error page) is raised: read
+ * as "not deployed", it would send a fixture to fund or deploy again.
+ */
 export async function classAt(address: string): Promise<string | null> {
-  return provider.getClassHashAt(address).catch(() => null);
+  return provider.getClassHashAt(address).catch((error: unknown) => {
+    const code = (error as { baseError?: { code?: unknown } }).baseError?.code;
+    if (code === 20 || /contract not found/i.test(String(error))) return null;
+    throw error;
+  });
 }
 
 export async function transfer(
