@@ -1,5 +1,6 @@
 /**
- * Classifies vault-read failures raised while unlocking the wallet.
+ * Classifies vault-read failures raised while unlocking the wallet, or while
+ * re-checking its passphrase (the reveal-secrets screen).
  */
 
 import { WalletError } from "@bramble/core/errors";
