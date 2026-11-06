@@ -124,18 +124,38 @@ final class WalletStore {
 
     func create(password: String) async throws {
         let walletCore = core, selected = network
-        pendingBackup = try await work {
-            try walletCore.createWalletOnNetwork(
-                password: password,
-                wordCount: WalletDefaults.newPhraseWordCount,
-                network: selected
-            )
-        }.words
+        do {
+            pendingBackup = try await work {
+                try walletCore.createWalletOnNetwork(
+                    password: password,
+                    wordCount: WalletDefaults.newPhraseWordCount,
+                    network: selected
+                )
+            }.words
+        } catch {
+            routeToUnlockIfLockedDuringCreation(error)
+            throw error
+        }
     }
 
     func importWallet(phrase: String, password: String) async throws {
         let walletCore = core
-        try await work { try walletCore.importWallet(password: password, phrase: phrase, passphrase: nil) }
+        do {
+            try await work { try walletCore.importWallet(password: password, phrase: phrase, passphrase: nil) }
+        } catch {
+            routeToUnlockIfLockedDuringCreation(error)
+            throw error
+        }
+    }
+
+    /// A lock (the app went to the background) that overtook a create or import has left a vault
+    /// on disk without a session, so retrying would only answer "A wallet already exists". Go to
+    /// Unlock instead, as Android's `relocked` does: unlocking resumes at Save phrase (the backup
+    /// is still pending) or at account discovery (the import's recovery is still pending).
+    private func routeToUnlockIfLockedDuringCreation(_ error: Error) {
+        if case CoreError.Locked = error, core.status() == .locked {
+            route = .locked
+        }
     }
 
     /// The first account of a just-created vault, for the review step.

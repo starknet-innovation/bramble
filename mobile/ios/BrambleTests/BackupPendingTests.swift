@@ -55,4 +55,26 @@ final class BackupPendingTests: XCTestCase {
         XCTAssertEqual(store.pendingBackup, [])
         store.lock()
     }
+
+    @MainActor
+    func testALockDuringCreationGoesToUnlockAndThenToSavePhrase() async throws {
+        let core = try WalletCore(dataDir: directory(), clock: DeviceClock())
+        let store = WalletStore(core: core)
+        XCTAssertEqual(store.route, .onboarding)
+        let creating = Task { try await store.create(password: password) }
+        // Backgrounded while the passphrase is stretched: the vault lands after the lock.
+        try await Task.sleep(for: .milliseconds(200))
+        store.lock()
+        do {
+            try await creating.value
+            XCTFail("a lock during creation wins")
+        } catch CoreError.Locked {
+            // Expected.
+        }
+        XCTAssertEqual(store.route, .locked, "the vault exists, so the way on is Unlock")
+        try await store.unlock(password: password)
+        XCTAssertEqual(store.route, .backup)
+        XCTAssertEqual(store.pendingBackup.count, 12, "the phrase never shown is offered now")
+        store.lock()
+    }
 }
