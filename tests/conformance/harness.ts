@@ -42,7 +42,6 @@ const VAULT_PASSPHRASE = "correct horse battery staple";
  * cannot go uncounted (Sherlock 208).
  */
 export type MutationSpy = {
-  addCustomNetwork: number;
   addDerivedAccount: number;
   createAccount: number;
   ensureNetworkAccount: number;
@@ -120,7 +119,9 @@ const walletStub = (bump: Bump) => ({
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [ACCOUNT.id], origin: ORIGIN }],
-      schemaVersion: 12 as const,
+      schemaVersion: 13 as const,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
       shadowAccountScopes: [],
       signingKeys: [{ accountId: ACCOUNT.id, privateKey: "0x123456" }],
     };
@@ -146,10 +147,6 @@ const preferencesStub = (bump: Bump) => {
   return {
     ...unavailablePreferencesStore,
     async read() {
-      return preferences;
-    },
-    async addCustomNetwork() {
-      bump("addCustomNetwork");
       return preferences;
     },
     async setActiveNetwork() {
@@ -233,7 +230,6 @@ const rpcStub = (bump: Bump): RuntimeRpc => ({
  */
 export const buildHarness = (): Harness => {
   const spy: MutationSpy = {
-    addCustomNetwork: 0,
     addDerivedAccount: 0,
     createAccount: 0,
     ensureNetworkAccount: 0,

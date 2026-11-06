@@ -12,11 +12,12 @@
  * shield does not have yet. Recovering the fee from the deposited token instead
  * would link the deposit to later private spending on chain (Sherlock 189).
  *
- * The relay's sponsored mode is a backend contract that does not exist yet, so
- * every network is switched off here: {@link SPONSORED_SHIELD_NETWORKS} is
- * empty. While a network has no entry the wallet never asks and shields
- * self-paid, exactly as before. The request and answer shapes this module
- * accepts are the contract the relay must implement; anything else fails
+ * The relay URL is wallet-configured and on for mainnet and Sepolia; the
+ * gateway behind it, built and run outside Bramble, is the on/off switch.
+ * While sponsorship is switched off there it answers 404, which the wallet
+ * reads as "not offered": the user shields self-paid and pays as before, and
+ * is never told a sponsor was asked. The request and answer shapes this module
+ * accepts are the contract the gateway must implement; anything else fails
  * closed before the user signs.
  *
  * Transport and lost-reply classification are shared with the sponsored-deploy
@@ -59,12 +60,17 @@ export type SponsoredShieldNetworks = Readonly<
 >;
 
 /**
- * Off on every network until the relay's sponsored mode, its budget and abuse
- * limits, and the finance review exist (#789). Adding an entry is the wallet's
- * half of switching it on; the relay stays the authority on whether it
- * sponsors any given shield.
+ * The wallet-owned gateway's sponsored-shield routes. The gateway is the on/off
+ * switch: while a network is switched off there it answers every call 404,
+ * which the wallet reads as "nothing offered" and shields self-paid as if
+ * sponsorship did not exist. Its budget and abuse limits live there too, and it
+ * stays the authority on whether it sponsors any given shield. Removing a
+ * network here stops the wallet asking.
  */
-export const SPONSORED_SHIELD_NETWORKS: SponsoredShieldNetworks = {};
+export const SPONSORED_SHIELD_NETWORKS: SponsoredShieldNetworks = {
+  SN_MAIN: { url: "https://wallet.nodes.starknet.org/api/sponsored-shield/mainnet" },
+  SN_SEPOLIA: { url: "https://wallet.nodes.starknet.org/api/sponsored-shield/sepolia" },
+};
 
 /** The relay for `networkId`, or null when sponsorship is off there. */
 export const sponsoredShieldConfig = (

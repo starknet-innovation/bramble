@@ -52,6 +52,7 @@ const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => 
     const account = await runVaultCreationWithNetwork(
       ctx.session,
       ctx.preferencesStore,
+      ctx.wallet,
       networkId,
       () => ctx.wallet.createAccount(input),
     );
@@ -159,6 +160,7 @@ const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) =>
     const account = await runVaultCreationWithNetwork(
       ctx.session,
       ctx.preferencesStore,
+      ctx.wallet,
       input.networkId,
       () => createKeyVault({ ...input, ...pick }),
     );

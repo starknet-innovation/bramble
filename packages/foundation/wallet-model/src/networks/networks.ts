@@ -203,11 +203,18 @@ export const isStarknetNetworkId = (value: unknown): value is StarknetNetworkId 
  *
  * Each configured network carries a distinct `chainId` (devnet uses a sentinel
  * rather than reusing Sepolia's on-chain id), so this lookup is deterministic:
- * insertion order is stable and no two networks share a chain id. Returns
- * `null` for any chain id the wallet is not configured for.
+ * insertion order is stable and no two networks share a chain id. A chain id is
+ * a felt, so it is matched by value through {@link sameFelt}: a zero-padded or
+ * upper-case spelling of a built-in id resolves to that network, and any other
+ * felt returns `null`. Anything that is not an {@link isCanonicalChainId} (at
+ * most 64 hex digits) is refused before it is parsed, so a dapp cannot pad an id
+ * without bound to reach a network.
  */
 export const networkIdForChainId = (chainId: string): StarknetNetworkId | null =>
-  Object.values(STARKNET_NETWORKS).find((network) => network.chainId === chainId)?.id ?? null;
+  isCanonicalChainId(chainId)
+    ? (Object.values(STARKNET_NETWORKS).find((network) => sameFelt(network.chainId, chainId))?.id ??
+      null)
+    : null;
 
 /**
  * Stark curve field modulus for validating hashes before signing.

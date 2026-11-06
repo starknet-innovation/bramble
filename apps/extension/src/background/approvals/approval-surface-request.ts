@@ -9,7 +9,6 @@ import {
   readStrk20RegisterMessage,
   readStrk20ShadowAccountMessage,
 } from "../privacy/strk20-provider-inputs";
-import { readAddStarknetChainInput } from "../provider/add-chain-ops";
 import { readWatchAssetInput } from "../provider/provider-inputs";
 import {
   readAddInvokeTransactionInput,
@@ -35,7 +34,6 @@ export const readApprovalSurfaceRequest = (message: unknown): ApprovalSurfaceReq
 
   const parsed =
     readAddInvokeTransactionInput(message) ??
-    readAddStarknetChainInput(message) ??
     readAddDeclareTransactionInput(message) ??
     readWatchAssetInput(message) ??
     readSwitchChainInput(message) ??

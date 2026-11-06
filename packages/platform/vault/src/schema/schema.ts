@@ -37,24 +37,18 @@ import {
   hasValidAccountSecretBindings,
   isAccountSecretRef,
 } from "../accounts/account-secrets";
+import {
+  hasValidMultisigStrk20VaultData,
+  type MultisigStrk20KeyConflict,
+  type MultisigStrk20ViewingKeyRef,
+} from "../accounts/multisig-strk20-key";
 
 /**
  * Current vault schema version accepted by validators and writers.
- *
- * Version 12 keeps an encrypted record of the shadow-account scopes each account
- * used (#443), so stuck shadow-account funds stay recoverable. Version 11 admits
- * accounts derived with Ready's ETH-seeded scheme. Version 10 admits Braavos accounts, and Argent accounts at any release they
- * could have been deployed with rather than only the one this wallet creates;
- * every earlier version stays pinned to that release and holds no Braavos.
- * Version 9 admits Ready's `argentx` Ledger path scheme beside Bramble's
- * `LedgerW`; every earlier version stays pinned to `LedgerW`. Version 8 retains
- * imported seeds, each HD account bound to the phrase that derived it. Version
- * 7 retains the exact Argent deployment salt. Version 6 records
- * account-contract semantics explicitly. Version 5 canonicalized account
- * identities. Version 4 introduced optional account secrets separated from
- * public {@link AccountRef} metadata.
+ * Version 13 retains a multisig's shared STRK20 viewing key (#826).
+ * The older steps are recorded in `docs/ARCHITECTURE.md`.
  */
-export const CURRENT_SCHEMA_VERSION = 12;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 /**
  * Current encrypted vault schema. Optional account secrets are deliberately
@@ -140,9 +134,19 @@ export type VaultV12 = Omit<VaultV11, "schemaVersion"> & {
 };
 
 /**
+ * Current encrypted vault. One shared STRK20 viewing key per multisig, chain,
+ * and pool, plus a conflict mark when a co-owner offered a different key.
+ */
+export type VaultV13 = Omit<VaultV12, "schemaVersion"> & {
+  readonly multisigStrk20KeyConflicts: readonly MultisigStrk20KeyConflict[];
+  readonly multisigStrk20ViewingKeys: readonly MultisigStrk20ViewingKeyRef[];
+  readonly schemaVersion: 13;
+};
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV12;
+export type Vault = VaultV13;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -171,12 +175,14 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV12 => ({
+export const emptyVault = (): Vault => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
   importedSeeds: [],
   mnemonic: null,
+  multisigStrk20KeyConflicts: [],
+  multisigStrk20ViewingKeys: [],
   originGrants: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
   shadowAccountScopes: [],
@@ -463,21 +469,31 @@ export const isVaultV11 = (value: unknown): value is VaultV11 =>
 const V12_KEYS = [...V8_KEYS, "shadowAccountScopes"] as const;
 
 /**
- * Validates the current schema-v12 vault: everything v11 holds, plus
- * shadow-account scope records that are well formed, canonical, distinct, and
- * bound to a retained account on its own chain.
+ * Validates a schema-v12 vault: everything v11 holds, plus shadow-account
+ * scope records. Accepted only by the adjacent v13 migration.
  */
 export const isVaultV12 = (value: unknown): value is VaultV12 => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, V12_KEYS) ||
-    value["schemaVersion"] !== CURRENT_SCHEMA_VERSION
-  ) {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, V12_KEYS) || value["schemaVersion"] !== 12) {
     return false;
   }
   const { shadowAccountScopes, ...rest } = value;
   return (
     isVaultV11({ ...rest, schemaVersion: 11 }) &&
     hasValidShadowAccountScopes(rest["accounts"] as VaultV11["accounts"], shadowAccountScopes)
+  );
+};
+const V13_KEYS = [...V12_KEYS, "multisigStrk20KeyConflicts", "multisigStrk20ViewingKeys"] as const;
+
+/**
+ * Validates the current schema-v13 vault, including multisig viewing keys.
+ */
+export const isVaultV13 = (value: unknown): value is VaultV13 => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, V13_KEYS) || value["schemaVersion"] !== 13) {
+    return false;
+  }
+  const { multisigStrk20KeyConflicts, multisigStrk20ViewingKeys, ...rest } = value;
+  return (
+    isVaultV12({ ...rest, schemaVersion: 12 }) &&
+    hasValidMultisigStrk20VaultData(multisigStrk20ViewingKeys, multisigStrk20KeyConflicts)
   );
 };

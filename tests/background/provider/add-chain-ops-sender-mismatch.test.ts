@@ -1,11 +1,9 @@
 /**
  * Dapp add-chain sender gate: a well-formed wallet.addStarknetChain whose sender
- * origin does not match the claimed origin is rejected before any approval is
- * queued, closing the spoof where one page claims another's origin.
+ * origin does not match the claimed origin is rejected before it is answered,
+ * closing the spoof where one page claims another's origin.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@bramble/settings/preferences";
-import { createMemoryStore } from "@bramble/store/kv";
 import {
   type AddChainOpsDeps,
   handleAddChainOps,
@@ -15,13 +13,7 @@ import { testExtension } from "../../support/background-wallet-stub";
 
 const ORIGIN = "https://dapp.example";
 
-const deps = (): AddChainOpsDeps =>
-  ({
-    approvals: {} as AddChainOpsDeps["approvals"],
-    extension: testExtension,
-    preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
-    waiters: {} as AddChainOpsDeps["waiters"],
-  }) as AddChainOpsDeps;
+const deps = (): AddChainOpsDeps => ({ extension: testExtension });
 
 const message = {
   chain: {

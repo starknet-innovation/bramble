@@ -2,6 +2,7 @@
 import type {
   ArgentMultisigOperationRecord,
   ArgentMultisigRecord,
+  ArgentMultisigSigningIntent,
 } from "@bramble/multisig/repository";
 import type { TokenBalance } from "@bramble/starknet/rpc";
 import { systemClock } from "@bramble/transactions/activity";
@@ -20,6 +21,7 @@ import {
   readRemoveMultisigInput,
 } from "./multisig-inputs";
 import { resolveArgentDeployment } from "./multisig-operation-recovery";
+import { forgetStrk20KeysForRemovedMultisig } from "./multisig-strk20-key-ops";
 
 const removeIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const input = readRemoveIntentInput(message);
@@ -99,6 +101,40 @@ const settledOperations = async (
   return ownOperations();
 };
 
+const hasBlockingWork = (
+  intents: readonly ArgentMultisigSigningIntent[],
+  operations: readonly ArgentMultisigOperationRecord[],
+): boolean => {
+  const terminalHashes = intents
+    .filter(
+      (intent) =>
+        intent.state !== "collecting" && intent.state !== "ready" && intent.state !== "submitted",
+    )
+    .map((intent) => intent.prepared.transactionHash);
+  const pending = intents.some(
+    (intent) =>
+      intent.state === "collecting" || intent.state === "ready" || intent.state === "submitted",
+  );
+  const unresolved = operations.some(
+    (operation) =>
+      operation.transactionHash === undefined &&
+      !(
+        operation.kind === "sign" && terminalHashes.some((hash) => sameFelt(hash, operation.target))
+      ),
+  );
+  return pending || unresolved;
+};
+
+// An unsent private relay holds the only copy of its proof, so it blocks too.
+const removalBlocked = async (
+  deps: MultisigOpsDeps,
+  accountId: string,
+  intents: readonly ArgentMultisigSigningIntent[],
+  operations: readonly ArgentMultisigOperationRecord[],
+): Promise<boolean> =>
+  hasBlockingWork(intents, operations) ||
+  ((await deps.strk20MultisigStore?.hasLiveRelay(accountId)) ?? false);
+
 /**
  * Drops a removed account from the presented selection before the record is
  * gone. Returns false when the session lapsed, writing nothing further.
@@ -136,29 +172,7 @@ const removeMultisig = async (
     (intent) => intent.accountId === context.record.id,
   );
   const operations = await settledOperations(deps, context.record);
-  const terminalIntentHashes = intents
-    .filter(
-      (intent) =>
-        !(
-          "collecting" === intent.state ||
-          "ready" === intent.state ||
-          "submitted" === intent.state
-        ),
-    )
-    .map((intent) => intent.prepared.transactionHash);
-  const pendingIntent = intents.some(
-    (intent) =>
-      intent.state === "collecting" || intent.state === "ready" || intent.state === "submitted",
-  );
-  const unresolvedOperation = operations.some(
-    (operation) =>
-      operation.transactionHash === undefined &&
-      !(
-        operation.kind === "sign" &&
-        terminalIntentHashes.some((hash) => sameFelt(hash, operation.target))
-      ),
-  );
-  if (pendingIntent || unresolvedOperation) {
+  if (await removalBlocked(deps, context.record.id, intents, operations)) {
     return { error: "Argent multisig has a pending or unresolved operation" };
   }
   const unconfirmed = input.confirmHistoryRemoval
@@ -173,10 +187,18 @@ const removeMultisig = async (
     isAuthorized: authorized.isCurrent,
     multisigId: context.record.id,
   });
-  return (await deps.multisigStore.removeMultisig(context.record.id, authorized.isCurrent)) ===
-    "removed"
-    ? { ok: true }
-    : { error: "wallet locked" };
+  const removed =
+    (await deps.multisigStore.removeMultisig(context.record.id, authorized.isCurrent)) ===
+    "removed";
+  if (!removed) return { error: "wallet locked" };
+  // Requests, typed data, fragments, and proof bytes are stored unencrypted.
+  await deps.strk20MultisigStore?.purgeAccount(context.record.id);
+  const keys = await forgetStrk20KeysForRemovedMultisig(
+    deps,
+    context.record.id,
+    authorized.isCurrent,
+  );
+  return keys === "locked" ? { error: "wallet locked" } : { ok: true };
 };
 
 const multisigBalances = async (

@@ -316,21 +316,6 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
     ${decisionRow(approval, "Switch network", status.locked)}
   </li>`;
 
-const addChainCard = (approval: PendingApproval): string => `
-  <li class="request-card">
-    <div class="request-copy">
-      ${requestIdentity(approval.origin, "Add network request")}
-      <p class="hint">This site is asking to add a custom Starknet network.</p>
-      ${approvalCalls(approval) || reviewOutcome("Add the requested custom Starknet network to the wallet.")}
-    </div>
-    ${reviewPanel([
-      "Custom network endpoints can observe requests sent through them. Review the network details before use.",
-      ...(approval.insights ?? []),
-    ])}
-    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(approval, "Add network", false)}
-  </li>`;
-
 const declareCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -406,8 +391,6 @@ export const approvalCard = (
       return strk20UnavailableCard(approval);
     case "switch-chain":
       return switchCard(approval, status);
-    case "add-chain":
-      return addChainCard(approval);
     case "declare":
       return declareCard(approval, status);
     case "connect":

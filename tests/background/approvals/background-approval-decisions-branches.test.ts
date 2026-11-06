@@ -161,7 +161,6 @@ describe("handleApprovalDecision missing-payload guards", () => {
     { kind: "strk20-shadow-account", payload: {} },
     { kind: "sign-typed-data", payload: {} },
     { kind: "switch-chain", payload: {} },
-    { kind: "add-chain", payload: {} },
     { kind: "declare", payload: {} },
   ];
 

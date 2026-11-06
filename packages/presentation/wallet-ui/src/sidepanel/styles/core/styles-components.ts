@@ -225,7 +225,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     gap: ${SPACE.sm};
     padding: ${SPACE.md} ${SPACE.lg};
   }
-  .review-panel p { color: var(--bramble-text); font-size: ${TYPE.label.size}; }
+  .review-panel p { color: var(--bramble-text); font-size: ${TYPE.label.size}; overflow-wrap: anywhere; }
   .review-panel .decision-label { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
 ${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; }

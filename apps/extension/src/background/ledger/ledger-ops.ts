@@ -12,6 +12,7 @@
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
+  refuseExistingVault,
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
 } from "../runtime/active-network-mutation";
@@ -42,9 +43,11 @@ const handleCreateLedgerVault: LedgerOpsHandler = async (deps, message) => {
     return refusal;
   }
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
+    await refuseExistingVault(deps.session, deps.wallet, input.vaultPassphrase);
     const account = await runVaultCreationWithNetwork(
       deps.session,
       deps.preferencesStore,
+      deps.wallet,
       input.networkId,
       () => createLedgerVault(input),
     );
