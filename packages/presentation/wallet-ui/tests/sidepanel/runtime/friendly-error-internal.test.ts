@@ -175,6 +175,34 @@ describe("STRK20 (review F1, F2)", () => {
     );
   });
 
+  test("a privacy service's outage reads as unavailable and keeps its diagnostic (mc-wallet 723)", () => {
+    for (const cause of [
+      'Indexer API /v1/sync/preflight_check failed (502): {"error":"upstream_unavailable"}',
+      "Indexer API /v1/sync/incoming_state failed (503)",
+      "Indexer API /v1/history failed (504): gateway timeout",
+      'Indexer API /v1/sync/outgoing_state failed (500): {"error":"upstream_unavailable"}',
+    ]) {
+      expect(friendlyError(`strk20 services unavailable: ${cause}`).message).toBe(
+        `${STRK20_DOWN} (${cause})`,
+      );
+    }
+  });
+
+  test("a privacy service's 4xx refusal and other causes keep their words", () => {
+    for (const raw of [
+      'strk20 services unavailable: Indexer API /v1/sync/preflight_check failed (400): {"error":"bad_request"}',
+      "strk20 services unavailable: Indexer API /v1/history failed (404)",
+      "strk20 services unavailable: Indexer API /v1/history failed (501)",
+      "strk20 services unavailable: Indexer API /v1/history failed (5020)",
+      "strk20 services unavailable: unexpected discovery response shape",
+      // A stage error's catch-all keeps its words even with an outage detail:
+      // at submission a 5xx can mean the outcome is unknown.
+      "strk20 services unavailable (submission/service-unavailable): relay failed (503)",
+    ]) {
+      expect(friendlyError(raw).message).toBe(raw);
+    }
+  });
+
   test("a privacy-leak refusal says so, in every form, never 'may not have gone through'", () => {
     for (const raw of [
       "strk20 privacy leak",

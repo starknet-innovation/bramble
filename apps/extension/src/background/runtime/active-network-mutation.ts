@@ -102,7 +102,9 @@ export const runUnlockedNetworkMutation = async <T>(
 
 /**
  * Binds first-run vault creation to its network preference. If an old wallet
- * session exists, an ambiguous failure revokes only that generation.
+ * session exists, an ambiguous failure revokes only that generation. A refusal
+ * the vault raises before writing, such as a wallet that already exists, undoes
+ * the network write on either path.
  */
 export const runVaultCreationWithNetwork = async <T>(
   session: UnlockSession,
@@ -112,8 +114,18 @@ export const runVaultCreationWithNetwork = async <T>(
 ): Promise<T> => {
   const existingPassphrase = session.peekPassphrase();
   if (!existingPassphrase) {
+    const previousNetworkId = (await preferencesStore.read()).activeNetworkId;
     await preferencesStore.setActiveNetwork(networkId);
-    return operation();
+    try {
+      return await operation();
+    } catch (error) {
+      // No session to lock here: a failed undo leaves the network switched and
+      // the vault's own refusal is still what the caller hears.
+      if (error instanceof RefusedBeforeWrite && previousNetworkId !== networkId) {
+        await preferencesStore.setActiveNetwork(previousNetworkId).catch(() => undefined);
+      }
+      throw error;
+    }
   }
   return runGuardedNetworkMutation(
     session,

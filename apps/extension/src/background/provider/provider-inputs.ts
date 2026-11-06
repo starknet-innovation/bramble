@@ -9,7 +9,9 @@ import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { normalizeWalletOrigin } from "@bramble/core/origin";
 import {
   isProviderWatchAsset,
+  isProviderWatchNft,
   type ProviderWatchAsset,
+  type ProviderWatchNft,
 } from "@bramble/wallet-protocol/watch-asset";
 
 /**
@@ -32,17 +34,24 @@ export const readGetPermissionsInput = (message: unknown): { readonly origin: st
  */
 export const readWatchAssetInput = (
   message: unknown,
-): { readonly asset: ProviderWatchAsset; readonly origin: string } | null => {
+):
+  | { readonly asset: ProviderWatchAsset; readonly origin: string }
+  | { readonly nft: ProviderWatchNft; readonly origin: string }
+  | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["asset", "origin", "type"]) ||
-    message["type"] !== "wallet.watchAsset"
+    message["type"] !== "wallet.watchAsset" ||
+    !(
+      hasOnlyKnownKeys(message, ["asset", "origin", "type"]) ||
+      hasOnlyKnownKeys(message, ["nft", "origin", "type"])
+    )
   ) {
     return null;
   }
   const origin = normalizeWalletOrigin(message["origin"]);
-  const asset = isProviderWatchAsset(message["asset"]) ? message["asset"] : null;
-  return origin && asset ? { asset, origin } : null;
+  if (!origin) return null;
+  if (isProviderWatchAsset(message["asset"])) return { asset: message["asset"], origin };
+  return isProviderWatchNft(message["nft"]) ? { nft: message["nft"], origin } : null;
 };
 
 /**

@@ -12,6 +12,10 @@ type ActivityCsvEntry = {
   readonly networkId: string;
   readonly status: string;
   readonly submittedAt: number;
+  readonly submittedPrice?: {
+    readonly currency: string;
+    readonly unitPrice: number;
+  };
   readonly summary: string;
   readonly token?: string;
 };
@@ -21,7 +25,7 @@ type ActivityCsvEntry = {
 // network is its own column), and the transaction hash sits beside its explorer
 // link. The human-readable summary stays last.
 const CSV_HEADER =
-  "datetimeUtc,networkId,accountAddress,kind,status,amount,token,counterparty,transactionHash,explorerUrl,summary";
+  "datetimeUtc,networkId,accountAddress,kind,status,amount,token,counterparty,transactionHash,explorerUrl,valueAtSubmission,valueCurrency,summary";
 const CSV_FORMULA_LEAD = /^[\t\r=+@-]/;
 const isPaddingCode = (code: number): boolean => code <= 0x20 || code === 0x7f;
 
@@ -80,6 +84,16 @@ const accountAddress = (accountId: string): string => {
   return separator === -1 ? accountId : accountId.slice(separator + 1);
 };
 
+// The amount's worth at the unit price captured when the row was submitted,
+// to the cent, in the currency it was priced in. Blank when no price was
+// captured or the amount is not a plain number: never an estimate.
+const submittedValue = (entry: ActivityCsvEntry): readonly [string, string] => {
+  const amount = Number(entry.amount?.trim() || Number.NaN);
+  const price = entry.submittedPrice;
+  if (!price || !Number.isFinite(amount) || amount <= 0) return ["", ""];
+  return [(amount * price.unitPrice).toFixed(2), price.currency.toUpperCase()];
+};
+
 // A transfer's stored summary shortens the counterparty and words its verb by
 // where the row came from ("Send" for a local record, "Sent" or "Received" for
 // a chain read). The export rebuilds it from the structured fields so every
@@ -122,6 +136,7 @@ export const activityToCsv = (entries: readonly ActivityCsvEntry[]): string =>
         entry.counterparty ?? "",
         entry.hash,
         explorerTransactionUrl(entry.networkId, entry.hash) ?? "",
+        ...submittedValue(entry),
         csvSummary(entry),
       ]
         .map(csvField)

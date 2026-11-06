@@ -132,7 +132,12 @@ const handleRevealSecrets: RouterHandler = async (ctx, messageType, message) => 
   if (!input) {
     return { error: "invalid reveal request" };
   }
-  const vault = await ctx.wallet.readVault(input.vaultPassphrase);
+  // A wrong passphrase fails AES-GCM authentication, whose DOMException text
+  // the panel cannot word; classify it as unlock does, so the reveal answers
+  // "Incorrect passphrase" and a corrupt envelope keeps its own message.
+  const vault = await ctx.wallet.readVault(input.vaultPassphrase).catch((error: unknown) => {
+    throw unlockFailureError(error);
+  });
   const preferences = await ctx.preferencesStore.read();
   // The account the panel shows as active, which is per network, not the
   // vault's stored pointer: when the pointer names an account on another
@@ -401,6 +406,7 @@ const HANDLERS: readonly RouterHandler[] = [
       {
         ...buildOpsDeps(ctx),
         prices: ctx.prices,
+        ...(ctx.sponsoredShield ? { sponsoredShield: ctx.sponsoredShield } : {}),
         strk20Jobs: ctx.strk20Jobs,
         strk20Preparations: ctx.strk20Preparations,
       },

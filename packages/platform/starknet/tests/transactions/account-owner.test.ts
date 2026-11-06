@@ -115,6 +115,19 @@ describe("getAccountOwner", () => {
     });
   });
 
+  // Import-paths scope doc TA-60 and TA-61/62: real vendor classes outside the
+  // table. Hashes from Krusty 0.12.0's class registry (argent_legacy proxy,
+  // argent 0.5.0, braavos account-1.1.0); Braavos 1.2.0 is the current class.
+  test("the Ready Cairo 0 proxy and the newer Argent and Braavos releases are unsupported", async () => {
+    for (const liveClass of [
+      "0x025ec026985a3bf9d0cc1fe17326b245dfdc3ff89b8fde106542a3ea56c5a918",
+      "0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2",
+      "0x02c8c7e6fbcfb3e8e15a46648e8914c6aa1fc506fc1e7fb3d1e19630716174bc",
+    ]) {
+      await expect(read(providerOf(liveClass))).resolves.toEqual({ kind: "unsupported-class" });
+    }
+  });
+
   test("Bramble's own OpenZeppelin class is its own answer, read no further", async () => {
     const calls: string[] = [];
     await expect(read(providerOf(OPENZEPPELIN_ACCOUNT_CLASS_HASH, {}, calls))).resolves.toEqual({

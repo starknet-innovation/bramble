@@ -6,9 +6,10 @@
  *   [r_tx, s_tx, actual_impl, chain_id, r_aux, s_aux]
  * where (r_aux, s_aux) sign poseidon(actual_impl, chain_id). Idempotent.
  */
-import { Account, constants, ec, hash, num, Signer } from "starknet";
+import { Account, ec, hash, num, Signer } from "starknet";
 import {
   braavosKeypair,
+  CHAIN_ID,
   CLASSES,
   classAt,
   deployerAccount,
@@ -26,7 +27,6 @@ import {
 const { poseidonHashMany } = ec.starkCurve;
 
 const BRAAVOS_IMPL_CURRENT = "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
-const CHAIN_ID = constants.StarknetChainId.SN_MAIN;
 const STRK_FLOAT = 2n * 10n ** 18n;
 const STRK_DUST = 2n * 10n ** 18n;
 const USDC_DUST = 2n * 10n ** 6n;

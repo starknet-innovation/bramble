@@ -132,6 +132,9 @@ const INVALID_JSON = Symbol("invalid-json");
 type NormalizedJson = Json | typeof INVALID_JSON;
 type NormalizationContext = {
   readonly ancestors: WeakSet<object>;
+  // Provider-input mode: an own data member whose value is `undefined` is
+  // omitted, as JSON serialization would omit it, instead of failing the value.
+  readonly dropUndefinedMembers: boolean;
   readonly normalizeBigints: boolean;
   readonly tracker: JsonBudgetTracker;
 };
@@ -224,6 +227,9 @@ const normalizeJsonRecord = (
     if (!isOwnDataProperty(descriptor)) {
       return INVALID_JSON;
     }
+    if (descriptor.value === undefined && context.dropUndefinedMembers) {
+      continue;
+    }
     const item = normalizeJsonValue(descriptor.value, context, depth + 1);
     if (item === INVALID_JSON) {
       return INVALID_JSON;
@@ -288,6 +294,9 @@ const normalizeWithinBudget = (
       value,
       {
         ancestors: new WeakSet<object>(),
+        // Both relaxations belong to provider input only (`normalizeFeltBigints`);
+        // `isJson` stays strict.
+        dropUndefinedMembers: normalizeBigints,
         normalizeBigints,
         tracker: new JsonBudgetTracker(budget),
       },
@@ -449,6 +458,12 @@ export const hasUniqueStrings = (values: readonly string[]): boolean =>
  * a dapp passes with bigint felts (get-starknet forwards `request` args
  * unserialized) survives the isJson gate instead of being dropped. A negative
  * bigint is not a felt, so it is left untouched and still fails isJson.
+ *
+ * For the same reason an object member whose value is `undefined` (an unset
+ * optional argument, such as starknet.js passing `{ actions, simulate }` with no
+ * `simulate`) is omitted, exactly as JSON serialization would omit it, rather
+ * than failing the whole request. Only own enumerable data members qualify:
+ * accessors, and `undefined` array items, still fail closed.
  */
 export const normalizeFeltBigints = (
   value: unknown,
