@@ -11,6 +11,8 @@ import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { NftTokenMetadata } from "@bramble/portfolio/nft-token-metadata";
 import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import { createMemoryStore } from "@bramble/store/kv";
+import { createStarkscanClient } from "@bramble/transactions/starkscan";
+import { createStarkscanNftSource } from "@bramble/transactions/starkscan-nfts";
 import { createNftSnapshotStore } from "../../../apps/extension/src/background/portfolio/nft-snapshots";
 import { account, candidate, makeHandler, sender } from "../../support/nft-discovery-harness";
 
@@ -66,6 +68,32 @@ describe("NFT auto-discovery messages", () => {
       ok: true,
     });
     await handler({ type: "wallet.discoverNfts" }, sender);
+    expect(indexerCalls()).toBe(1);
+  });
+
+  test("a failed refresh no longer claims a cached complete list is whole", async () => {
+    const snapshots = createNftSnapshotStore(createMemoryStore());
+    const owned = candidate("5", "0x511a2b3");
+    await snapshots.write({
+      accountId: account.id,
+      checkedAt: 1,
+      coverage: "complete",
+      fetchedAt: 1,
+      lane: "complete",
+      networkId: "SN_MAIN",
+      nfts: [owned],
+    });
+    const { handler, indexerCalls } = makeHandler({
+      candidates: [],
+      indexerFails: true,
+      nftSnapshots: snapshots,
+      now: () => 200_000,
+      owners: {},
+    });
+    const stale = { coverage: "incomplete", nfts: [owned], ok: true } as const;
+    await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual(stale);
+    // During the retry backoff the cached answer keeps saying so.
+    await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual(stale);
     expect(indexerCalls()).toBe(1);
   });
 
@@ -309,8 +337,8 @@ describe("NFT auto-discovery messages", () => {
   });
 
   test("Starkscan candidates are shown only once the chain proves ownership", async () => {
-    const route = "https://gateway.example/starkscan/nft";
     const requested: string[] = [];
+    let now = 1_000;
     const page = {
       chainId: "SN_MAIN",
       coverage: {
@@ -337,30 +365,48 @@ describe("NFT auto-discovery messages", () => {
       schemaVersion: "starkscan.nft_positions.v1",
       snapshotBlock: 10,
     };
-    const snapshots = createNftSnapshotStore(createMemoryStore());
+    // The wallet's existing Starkscan client, with only its transport faked.
+    const client = createStarkscanClient({
+      baseUrl: "https://starkscan.co/v1",
+      http: async (url) => {
+        requested.push(url);
+        return new Response(JSON.stringify(page));
+      },
+    });
     const { handler, preferencesStore } = makeHandler({
       candidates: [],
-      nftIndexer: createHttpNftIndexer(async (url) => {
-        requested.push(url);
-        return { json: async () => page, ok: true };
-      }, route),
-      nftSnapshots: snapshots,
-      now: () => 1_000,
+      nftIndexer: createHttpNftIndexer(
+        async () => {
+          throw new Error("no custom indexer is saved");
+        },
+        createStarkscanNftSource({ client, readPreferences: async () => ({}) }),
+      ),
+      nftSnapshots: createNftSnapshotStore(createMemoryStore()),
+      now: () => now,
       // Starkscan lists both; the chain says the second belongs to someone else.
       owners: { "0x511a2b3": account.address, "0x6220000": "0x999" },
     });
+    const message = { includeWatched: false, type: "wallet.discoverNfts" };
+    // Preview off: Starkscan is never asked.
+    await expect(handler(message, sender)).resolves.toEqual({
+      coverage: "none",
+      nfts: [],
+      ok: true,
+    });
+    expect(requested).toEqual([]);
     await preferencesStore.setDisplay({ collectiblesPreview: true });
-    await preferencesStore.setNftIndexerUrl({ url: route });
+    now += 120_000;
     const expected = {
       coverage: "incomplete",
       nfts: [expect.objectContaining({ contract: "0x511a2b3", tokenId: "5" })],
       ok: true,
     } as const;
-    const message = { includeWatched: false, type: "wallet.discoverNfts" };
     await expect(handler(message, sender)).resolves.toEqual(expected);
     // The cached answer keeps saying the list is incomplete.
     await expect(handler(message, sender)).resolves.toEqual(expected);
-    expect(requested).toEqual([`${route}/${account.address}/nft-positions?limit=100`]);
+    expect(requested).toEqual([
+      `https://starkscan.co/v1/SN_MAIN/address/${account.address}/nft-positions?limit=100`,
+    ]);
   });
 
   test("rejects a malformed discover request", async () => {

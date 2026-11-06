@@ -217,8 +217,7 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
   });
 };
 
-// The collectibles preview switch, and the one-click Bramble indexer offer,
-// which asks for its host like any typed endpoint before it is saved.
+// The collectibles preview switch.
 const bindCollectibles = (deps: EndpointUiDeps): void => {
   const toggle = deps.app?.querySelector<HTMLInputElement>("#collectibles-preview");
   toggle?.addEventListener("change", () => {
@@ -234,26 +233,6 @@ const bindCollectibles = (deps: EndpointUiDeps): void => {
         toggle.disabled = false;
       },
     );
-  });
-  const offer = deps.app?.querySelector<HTMLButtonElement>("[data-indexer-default]");
-  offer?.addEventListener("click", () => {
-    const url = offer.dataset["indexerDefault"] ?? "";
-    buttonBusy(offer, true);
-    void requestHostAccess(deps.permissions, [url])
-      .then((granted) => {
-        if (!granted) throw new Error("Your browser did not grant access to that service host");
-        return deps.wallet.setNftIndexerUrl(url);
-      })
-      .then(
-        async () => {
-          showToast("Indexer endpoint saved", "success", offer);
-          await deps.render(await deps.wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorDetails(error, "Indexer endpoint update failed"), "error", offer);
-          buttonBusy(offer, false);
-        },
-      );
   });
 };
 

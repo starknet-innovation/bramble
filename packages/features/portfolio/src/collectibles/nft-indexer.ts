@@ -16,38 +16,22 @@
  *     -> NftRecord[]  |  { nfts: NftRecord[] }
  *   NftRecord = { contract_address, token_id, name?, collection_name?, image_url? }
  *
- * The default indexer is Starkscan, reached only through the SNF gateway route
- * {@link STARKSCAN_NFT_ROUTE} (which holds the API key). A saved indexer URL
- * equal to that route is read with Starkscan's own schema
- * (`./starkscan-nft-positions`), on Mainnet only; any other URL speaks the
- * contract above.
+ * The built-in indexer is Starkscan, over the wallet's existing Starkscan
+ * connection ({@link StarkscanNftSource}, injected by the wiring). It runs only
+ * when the caller sets `starkscan` (the Collectibles preview is on) and no
+ * indexer URL is saved: a saved URL is the user's own choice and replaces it.
  *
- * A null `indexerUrl` means the wallet is unconfigured: discovery resolves to
- * coverage "none" without touching the network, exactly like
- * {@link unavailableNftIndexer}. A transport failure or malformed body resolves
- * to "unavailable", and a Starkscan page that is not complete to "incomplete",
- * so the gallery never reads an outage or a partial index as "no NFTs".
+ * With neither, discovery resolves to coverage "none" without touching the
+ * network, exactly like {@link unavailableNftIndexer}. A transport failure or
+ * malformed body resolves to "unavailable", and a partial answer to
+ * "incomplete", so the gallery never reads an outage or a gap as "no NFTs".
  */
 
 import { type BoundedHttpFetch, fetchBoundedJson, HTTP_BODY_LIMITS } from "@bramble/core/http-json";
 import { isRecord } from "@bramble/core/json";
 import { trimTrailingSlashes } from "@bramble/core/service-url";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { type DiscoveredNft, type NftCoverage, normalizeIndexerNft } from "./nft-metadata";
-import {
-  parseStarkscanNftPage,
-  STARKSCAN_NFT_NETWORK,
-  STARKSCAN_NFT_ROUTE,
-  starkscanNftPositionsUrl,
-} from "./starkscan-nft-positions";
-
-/**
- * The Bramble indexer offered as a one-step opt-in in Settings: the SNF
- * gateway route in front of Starkscan. Null until that route exists, because
- * a Starkscan key cannot ship in a public extension.
- */
-export const DEFAULT_NFT_INDEXER_URL: string | null = STARKSCAN_NFT_ROUTE;
 
 /** Re-exported so discovery callers import coverage beside the service. */
 export type { NftCoverage } from "./nft-metadata";
@@ -65,7 +49,23 @@ export type NftIndexerInput = {
   readonly address: string;
   readonly indexerUrl: string | null;
   readonly networkId: StarknetNetworkId;
+  /**
+   * True only while the Collectibles preview is on: lets the built-in
+   * Starkscan source run when no indexer URL is saved. Absent means off, so a
+   * caller that forgets it sends nothing.
+   */
+  readonly starkscan?: boolean;
 };
+
+/**
+ * The built-in Starkscan source: owned-token candidates for one address and
+ * network, with coverage. It decides for itself whether it may run (Mainnet
+ * only, explorer lane permitted) and never throws.
+ */
+export type StarkscanNftSource = (input: {
+  readonly address: string;
+  readonly networkId: StarknetNetworkId;
+}) => Promise<NftDiscovery>;
 
 /**
  * The injected HTTP transport, `fetch`-shaped so the wiring that owns network
@@ -112,13 +112,9 @@ const recordsFrom = (body: unknown): readonly unknown[] | null => {
 // status, a transport error, an over-budget body, an exchange that outlives its
 // deadline, or a malformed body — so a discovery outage surfaces as an empty
 // gallery rather than a thrown error or a parked request.
-const fetchIndexerBody = async (
-  http: NftIndexerHttp,
-  url: string,
-  limit: number = HTTP_BODY_LIMITS.nftIndexer,
-): Promise<unknown | null> => {
+const fetchIndexerBody = async (http: NftIndexerHttp, url: string): Promise<unknown | null> => {
   try {
-    return await fetchBoundedJson(http, url, limit);
+    return await fetchBoundedJson(http, url, HTTP_BODY_LIMITS.nftIndexer);
   } catch {
     return null;
   }
@@ -154,47 +150,23 @@ const foldDiscovered = (
 const NO_DISCOVERY: NftDiscovery = { coverage: "none", nfts: [] };
 const UNAVAILABLE: NftDiscovery = { coverage: "unavailable", nfts: [] };
 
-// Starkscan through the gateway: Mainnet only, one page, the canonical address
-// as the only account data sent, and the page held to Starkscan's own schema.
-const listStarkscanNfts = async (
-  http: NftIndexerHttp,
-  route: string,
-  { address, networkId }: NftIndexerInput,
-): Promise<NftDiscovery> => {
-  if (networkId !== STARKSCAN_NFT_NETWORK) return NO_DISCOVERY;
-  const owner = canonicalFelt(address);
-  if (owner === null) return UNAVAILABLE;
-  const body = await fetchIndexerBody(
-    http,
-    starkscanNftPositionsUrl(route, owner),
-    HTTP_BODY_LIMITS.nftPositions,
-  );
-  const page = body === null ? null : parseStarkscanNftPage(body, owner, networkId);
-  return page === null ? UNAVAILABLE : { coverage: page.coverage, nfts: page.nfts };
-};
-
-const isRoute = (indexerUrl: string, route: string | null): route is string =>
-  route !== null && trimTrailingSlashes(indexerUrl) === trimTrailingSlashes(route);
-
 /**
- * Builds an {@link NftIndexerService} over the given HTTP transport. A null
- * `indexerUrl` reproduces the unavailable behavior. A URL equal to the
- * Starkscan gateway route (`starkscanRoute`, injectable for tests) is read with
- * Starkscan's schema on Mainnet only; any other URL drives the documented wire
- * contract. A non-ok response, a transport error, or a malformed body resolves
- * to coverage "unavailable" rather than throwing or claiming an empty account.
+ * Builds an {@link NftIndexerService} over the given HTTP transport and the
+ * optional built-in Starkscan source. A saved `indexerUrl` drives the
+ * documented wire contract; otherwise, only when `starkscan` is set, the
+ * Starkscan source answers; otherwise nothing is sent ("none"). A non-ok
+ * response, a transport error, or a malformed body resolves to "unavailable"
+ * rather than throwing or claiming an empty account.
  */
 export const createHttpNftIndexer = (
   http: NftIndexerHttp,
-  starkscanRoute: string | null = STARKSCAN_NFT_ROUTE,
+  starkscanSource?: StarkscanNftSource,
 ): NftIndexerService => ({
-  async listOwnedNfts(input) {
-    const { address, indexerUrl, networkId } = input;
+  async listOwnedNfts({ address, indexerUrl, networkId, starkscan }) {
     if (indexerUrl === null) {
-      return NO_DISCOVERY;
-    }
-    if (isRoute(indexerUrl, starkscanRoute)) {
-      return listStarkscanNfts(http, starkscanRoute, input);
+      return starkscan === true && starkscanSource
+        ? starkscanSource({ address, networkId })
+        : NO_DISCOVERY;
     }
     const body = await fetchIndexerBody(http, ownedNftsUrl(indexerUrl, address, networkId));
     const records = body === null ? null : recordsFrom(body);

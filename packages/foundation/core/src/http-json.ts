@@ -48,11 +48,6 @@ export const HTTP_BODY_LIMITS = {
    * a realistic page rather than tuned to the trimmed result.
    */
   nftIndexer: 4 * 1024 * 1024,
-  /**
-   * Starkscan NFT positions through the SNF gateway: one page of at most 100
-   * ERC-721 positions with short collection names, a few tens of kilobytes.
-   */
-  nftPositions: 1024 * 1024,
   /** Public web3 phishing lists are a few MB of registrable domains. */
   phishingFeed: 8 * 1024 * 1024,
   /** CoinGecko price and 7-day chart bodies are a few kilobytes. */

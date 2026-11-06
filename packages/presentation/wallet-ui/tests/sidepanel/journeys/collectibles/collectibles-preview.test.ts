@@ -63,31 +63,21 @@ describe("collectibles preview entry point", () => {
     expect(on).toContain('id="collectibles-preview"');
   });
 
-  test("Starkscan is offered only when its route exists and no indexer is set", () => {
-    const preview = prefs({ collectiblesPreview: true });
-    expect(collectiblesSettings(preview, disclosure, null)).not.toContain("data-indexer-default");
-    const offered = collectiblesSettings(preview, disclosure, "https://nft.bramble.example/v1");
-    expect(offered).toContain('data-indexer-default="https://nft.bramble.example/v1"');
-    expect(offered).toContain(
-      "Finds ERC-721 NFTs on Mainnet. Starkscan and nft.bramble.example see this account's address. Watch ERC-1155 NFTs by contract.",
+  test("the opt-in names Starkscan, what it finds and that it sees the address", () => {
+    const off = collectiblesSettings(prefs(), disclosure);
+    expect(off).toContain(
+      "Unfinished. On Mainnet, Starkscan finds this account's ERC-721 NFTs and sees its address. Every NFT shown is checked on-chain.",
     );
-    expect(offered).toContain("Use Starkscan");
+    const empty = collectiblesSettings(prefs({ collectiblesPreview: true }), disclosure);
+    expect(empty).toContain("NFT indexer Starkscan");
+    expect(empty).toContain(
+      "Leave empty to use Starkscan, which finds ERC-721 NFTs on Mainnet only. Watch ERC-1155 NFTs by contract.",
+    );
     const configured = collectiblesSettings(
       prefs({ collectiblesPreview: true, nftIndexerUrl: "https://mine.example" }),
       disclosure,
-      "https://nft.bramble.example/v1",
     );
-    expect(configured).not.toContain("data-indexer-default");
     expect(configured).toContain("NFT indexer Configured");
-    const chosen = collectiblesSettings(
-      prefs({ collectiblesPreview: true, nftIndexerUrl: "https://nft.bramble.example/v1" }),
-      disclosure,
-      "https://nft.bramble.example/v1",
-    );
-    expect(chosen).toContain("NFT indexer Starkscan");
-    expect(collectiblesSettings(prefs(), disclosure, "https://x.example")).not.toContain(
-      "data-indexer-default",
-    );
   });
 });
 
@@ -180,7 +170,7 @@ describe("collectibles preview bindings", () => {
 
   test("the switch writes its literal state, and a failure restores it", async () => {
     const writes: Array<boolean | undefined> = [];
-    const html = collectiblesSettings(prefs(), disclosure, null);
+    const html = collectiblesSettings(prefs(), disclosure);
     const { app } = mount(html, {
       setDisplay: async (input) => {
         writes.push(input.collectiblesPreview);
@@ -199,27 +189,5 @@ describe("collectibles preview bindings", () => {
     await tick();
     expect(writes).toEqual([true, false]);
     expect(toggle.checked).toBe(true);
-  });
-
-  test("the Bramble indexer is saved only after its host is granted", async () => {
-    const saved: string[] = [];
-    const html = collectiblesSettings(
-      prefs({ collectiblesPreview: true }),
-      disclosure,
-      "https://nft.bramble.example/v1",
-    );
-    const setNftIndexerUrl = async (url: string) => {
-      saved.push(url);
-    };
-    const denied = mount(html, { setNftIndexerUrl }, false);
-    denied.app.querySelector<HTMLButtonElement>("[data-indexer-default]")?.click();
-    await tick();
-    expect(denied.requested).toEqual([["https://nft.bramble.example/*"]]);
-    expect(saved).toEqual([]);
-    document.body.replaceChildren();
-    const granted = mount(html, { setNftIndexerUrl });
-    granted.app.querySelector<HTMLButtonElement>("[data-indexer-default]")?.click();
-    await tick();
-    expect(saved).toEqual(["https://nft.bramble.example/v1"]);
   });
 });

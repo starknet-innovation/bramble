@@ -165,10 +165,10 @@ out.
 Add an ERC-721 or ERC-1155 collectible by contract address and token ID. Bramble proves that the active account owns it on-chain before saving it, then
 reads the name, image, description, and attributes from the token's `token_uri`
 / `uri`. Automatic discovery is also ownership-checked before an item appears.
-Once Bramble's Starkscan route is available, Settings offers it as the indexer:
-it finds ERC-721 NFTs on Mainnet only, Starkscan and Bramble's server see the
-account's address, and ERC-1155 collectibles are still added by contract. When
-the index is incomplete or unreachable, the gallery says so.
+With the preview on and no indexer of your own, Bramble asks Starkscan for the
+account's ERC-721 NFTs on Mainnet; Starkscan sees the account's address, as it
+does for Activity. ERC-1155 collectibles are still added by contract. When the
+list is incomplete or Starkscan can't be reached, the gallery says so.
 When a site asks you to watch a collectible, the request shows the contract,
 token ID and network; approving it runs the same ownership check before the
 collectible is saved.

@@ -53,12 +53,33 @@ const refreshSnapshot = (
   return refresh;
 };
 
+// After a failed refresh the last proof is still shown, but a list that could
+// not be refreshed is no longer claimed to be whole, now or during the backoff.
+const retainAfterFailure = async (
+  store: NftSnapshotStore,
+  input: {
+    readonly accountId: string;
+    readonly lane: NftSnapshotLane;
+    readonly networkId: StarknetNetworkId;
+  },
+  cached: NonNullable<Awaited<ReturnType<NftSnapshotStore["read"]>>>,
+  now: number,
+): Promise<NftLaneResult> => {
+  if (cached.coverage !== "complete") {
+    await store.touch(input.accountId, input.networkId, input.lane, now).catch(() => undefined);
+    return fromSnapshot(cached);
+  }
+  const stale = { ...cached, coverage: "incomplete" as const };
+  await store.write({ ...input, ...stale, checkedAt: now }).catch(() => undefined);
+  return fromSnapshot(stale);
+};
+
 /**
  * Returns a validated local snapshot immediately when requested, otherwise
  * refreshes snapshots older than two minutes. Failed refreshes retain the last
  * ownership proof and wait one minute before another expensive verification.
  * The coverage travels with the NFTs, so a cached answer says what the fresh
- * one said.
+ * one said; a failed refresh downgrades a cached "complete" to "incomplete".
  */
 export const cachedNfts = async (
   deps: WalletOpsDeps,
@@ -84,10 +105,7 @@ export const cachedNfts = async (
   try {
     return await refreshSnapshot(store, { ...input, fetchedAt: now }, load);
   } catch (error) {
-    if (cached) {
-      await store.touch(input.accountId, input.networkId, input.lane, now).catch(() => undefined);
-      return fromSnapshot(cached);
-    }
-    throw error;
+    if (!cached) throw error;
+    return retainAfterFailure(store, input, cached, now);
   }
 };

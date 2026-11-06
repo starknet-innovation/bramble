@@ -31,6 +31,7 @@
     "./relay-signatures": "./src/activity/relay-signatures.ts",
     "./send-routes": "./src/routing/send-routes.ts",
     "./starkscan": "./src/history/starkscan.ts",
+    "./starkscan-nfts": "./src/history/starkscan-nfts.ts",
     "./starkscan-parsers": "./src/history/starkscan-parsers.ts",
     "./starkscan-types": "./src/history/starkscan-types.ts",
     "./starkscan-wallet": "./src/history/starkscan-wallet.ts",

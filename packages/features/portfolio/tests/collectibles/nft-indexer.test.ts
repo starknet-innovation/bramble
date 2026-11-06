@@ -130,4 +130,47 @@ describe("createHttpNftIndexer", () => {
       await unavailableNftIndexer.listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" }),
     ).toEqual({ coverage: "none", nfts: [] });
   });
+
+  test("Starkscan answers only when asked for and no indexer URL is saved", async () => {
+    const asked: string[] = [];
+    const source = async ({ address: owner }: { readonly address: string }) => {
+      asked.push(owner);
+      return { coverage: "incomplete", nfts: [] } as const;
+    };
+    const { http, calls } = httpReturning([record("1")]);
+    const indexer = createHttpNftIndexer(http, source);
+    // Not asked for (the preview is off), or the flag left out: nothing runs.
+    expect(
+      await indexer.listOwnedNfts({ address, indexerUrl: null, networkId: "SN_MAIN" }),
+    ).toEqual({ coverage: "none", nfts: [] });
+    expect(
+      await indexer.listOwnedNfts({
+        address,
+        indexerUrl: null,
+        networkId: "SN_MAIN",
+        starkscan: false,
+      }),
+    ).toEqual({ coverage: "none", nfts: [] });
+    expect(asked).toEqual([]);
+    // Asked for: Starkscan's own answer, coverage included.
+    expect(
+      await indexer.listOwnedNfts({
+        address,
+        indexerUrl: null,
+        networkId: "SN_MAIN",
+        starkscan: true,
+      }),
+    ).toEqual({ coverage: "incomplete", nfts: [] });
+    expect(asked).toEqual([address]);
+    // A saved URL is the user's own choice and replaces Starkscan.
+    const own = await indexer.listOwnedNfts({
+      address,
+      indexerUrl,
+      networkId: "SN_MAIN",
+      starkscan: true,
+    });
+    expect(own.nfts.map((nft) => nft.tokenId)).toEqual(["1"]);
+    expect(asked).toEqual([address]);
+    expect(calls).toHaveLength(1);
+  });
 });

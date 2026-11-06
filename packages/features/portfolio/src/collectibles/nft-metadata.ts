@@ -68,8 +68,9 @@ export type DiscoveredNft = {
 
 /**
  * What one discovery run can say about the candidates it returns:
- * - "none": no indexer ran (none configured, the preview is off, or the
- *   Starkscan route on a network it does not serve); only watched NFTs show.
+ * - "none": no indexer ran (the preview is off, the network is not Mainnet
+ *   for Starkscan, or the user keeps the explorer off it); only watched NFTs
+ *   show.
  * - "complete": the indexer answered and claims its list is whole.
  * - "incomplete": the list may be missing NFTs: Starkscan reports a partial
  *   index or more positions than one page, an indexer listed more than the

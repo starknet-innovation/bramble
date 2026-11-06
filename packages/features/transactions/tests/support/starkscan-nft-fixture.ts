@@ -5,8 +5,8 @@
  * `AddressNftPositionsView`, `NftPositionView`, `NftPositionCollectionView`
  * and `NftPositionCoverageView` (read 2026-11-06). Live replies can differ
  * from a schema (for example `null` against an absent field, as PR 850 found),
- * so these must be replaced or joined by a verbatim capture once the SNF
- * gateway route and its Starkscan key exist. Every required key is present.
+ * so a verbatim capture must join them before the preview leaves preview.
+ * Every required key is present.
  * Addresses are stand-ins, not real contracts.
  */
 

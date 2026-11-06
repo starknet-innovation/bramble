@@ -337,9 +337,11 @@ const handleDiscoverNfts = async (
       const discovery = await indexer.listOwnedNfts({
         address: owner,
         // The gallery preview is the only surface that asks for discovery, so
-        // with it off a saved indexer stays unused and no address leaves.
+        // with it off neither a saved indexer nor Starkscan runs and no
+        // address leaves.
         indexerUrl: preferences.collectiblesPreview ? (preferences.nftIndexerUrl ?? null) : null,
         networkId: context.networkId,
+        starkscan: preferences.collectiblesPreview === true,
       });
       const watched = watchedCandidates(preferences, context.networkId, owner);
       const watchedIds = new Set(watched.map((nft) => nft.id));

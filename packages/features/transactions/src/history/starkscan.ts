@@ -20,6 +20,7 @@ import {
   parseStarkscanBlock,
   parseStarkscanContract,
   parseStarkscanEvent,
+  parseStarkscanNftPositions,
   parseStarkscanPage,
   parseStarkscanTokenBalance,
   parseStarkscanTransfer,
@@ -32,6 +33,7 @@ import type {
   StarkscanChainId,
   StarkscanContractEvent,
   StarkscanContractMetadata,
+  StarkscanNftPositions,
   StarkscanPage,
   StarkscanPageOptions,
   StarkscanTokenBalance,
@@ -128,6 +130,12 @@ export type StarkscanClient = {
     address: string,
     options?: StarkscanPageOptions,
   ) => Promise<StarkscanPage<StarkscanTransfer>>;
+  /** One page (at most 100) of an address's current ERC-721 positions. */
+  readonly getAddressNftPositions: (
+    chainId: StarkscanChainId,
+    address: string,
+    limit?: number,
+  ) => Promise<StarkscanNftPositions>;
   readonly getTokenBalance: (
     chainId: StarkscanChainId,
     tokenAddress: string,
@@ -362,6 +370,17 @@ export const createStarkscanClient = ({
         "transfers",
         (value) => parseStarkscanPage(value, parseStarkscanTransfer),
         query,
+      );
+    },
+    getAddressNftPositions: (chainId, address, limit = 100) => {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+        throw new StarkscanError("Invalid Starkscan page limit", null);
+      }
+      return request(
+        chainId,
+        `address/${inputAddress(address)}/nft-positions`,
+        parseStarkscanNftPositions,
+        new URLSearchParams({ limit: String(limit) }),
       );
     },
     getTokenBalance: (chainId, tokenAddress, ownerAddress, blockTag = "latest") => {
