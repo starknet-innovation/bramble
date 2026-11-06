@@ -32,6 +32,9 @@ import { promptReconnectForStaleGrant } from "../approvals/reconnect-prompt";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { grantedDappAccounts, isGrantedMultisig } from "../provider/dapp-account";
+import { queuedMultisigSignBlock, signMultisigIfGranted } from "../provider/multisig-dapp-sign";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import {
   readOriginRequestInput,
   type readSignTypedDataInput,
@@ -42,6 +45,7 @@ import {
   isClaimedSenderOrigin,
   type RuntimeSender,
 } from "../routing/senders";
+import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import {
   type ActiveStateCoordinator,
   networkRpcUrls,
@@ -57,6 +61,7 @@ import {
 } from "../runtime/session";
 import { reviewOutsideExecution } from "./outside-execution-review";
 import { recordRelaySignature } from "./relay-record";
+import { resolveSignGrant } from "./sign-grant";
 import { admitSignTypedData } from "./sign-typed-data-admission";
 import { withTrustedRecipients } from "./trusted-recipients";
 import { describeTypedData } from "./typed-data-summary";
@@ -85,6 +90,7 @@ export type ChainOpsDeps = {
    * test stubs stay valid; a Ledger typed-data sign with no queue fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly multisigGrants?: MultisigOriginGrantStore;
   /** Watched shared accounts, trusted as the user's own; optional like the invoke route's. */
   readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
@@ -106,8 +112,15 @@ export type ChainOpsDeps = {
 export const executeSignApproval = async (
   deps: Pick<
     ChainOpsDeps,
-    "activity" | "ledgerSignQueue" | "multisigStore" | "preferencesStore" | "session" | "wallet"
+    | "activity"
+    | "ledgerSignQueue"
+    | "multisigGrants"
+    | "multisigStore"
+    | "preferencesStore"
+    | "session"
+    | "wallet"
   > & {
+    readonly runtimeRpc?: Pick<RuntimeRpc, "getClassHashAt" | "multisig">;
     /** Signed OutsideExecution messages, recorded for Activity (issue 299). */
     readonly relaySignatures?: Pick<RelaySignatureLog, "record">;
     /** Overrides endpoint construction. Unset, each endpoint builds its own client. */
@@ -119,29 +132,10 @@ export const executeSignApproval = async (
     readonly typedData: unknown;
   },
 ): Promise<RuntimeResponse> => {
-  const { preferencesStore, session, wallet } = deps;
-  const passphrase = session.peekPassphrase();
-  const authorized = captureSessionAuthorization(session);
-  if (!passphrase) {
-    return { error: "wallet locked" };
-  }
-  const preferences = await preferencesStore.read();
-  if (input.context && preferences.activeNetworkId !== input.context.networkId) {
-    return { error: "approval context changed" };
-  }
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  if (!authorized.isCurrent()) return { error: "wallet locked" };
-  const account = input.context
-    ? granted.find(
-        (stored) =>
-          stored.id === input.context?.accountId &&
-          stored.networkId === input.context.networkId &&
-          stored.networkId === preferences.activeNetworkId,
-      )
-    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
+  const resolved = await resolveSignGrant(deps, input);
+  if ("error" in resolved) return resolved;
+  const { account, authorized, passphrase, preferences } = resolved;
+  const { wallet } = deps;
   let messageHash: string;
   try {
     messageHash = typedDataHashForChain(
@@ -152,9 +146,6 @@ export const executeSignApproval = async (
   } catch {
     return { error: "invalid typed data" };
   }
-  // An OutsideExecution's calls are re-reviewed against the trusted set as it
-  // is now, not as it was when the card was queued (audit 144), including the
-  // own accounts and paid recipients the invoke route trusts (audit 163).
   const trusted = await withTrustedRecipients(
     deps,
     preferences,
@@ -165,6 +156,16 @@ export const executeSignApproval = async (
   if (review && "error" in review) {
     return review;
   }
+  const multisigSigned = await signMultisigIfGranted(
+    deps,
+    account,
+    input.typedData,
+    passphrase,
+    networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+    input.origin,
+  );
+  if (multisigSigned) return multisigSigned;
+  if (isGrantedMultisig(account)) return { error: "Argent multisig not found" };
   // A keyless Ledger account signs typed data on the device (verified against
   // publicKeyX) instead of the vault; accountHashSigner makes the same choice as
   // every other submitting path. A device rejection/timeout/verify-failure, or a
@@ -210,20 +211,7 @@ type ChainOpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
-/**
- * Everything a dapp typed-data signature request does between admission and
- * the approval queue: the session and vault reads, the SNIP-12 hash, and the
- * outside-execution review.
- *
- * `summary` is the approval card's one-line description of the request.
- *
- * Runs under the origin's admission reservation (Sherlock 151) and calls
- * `release` in the same synchronous step that queues the approval, so the
- * queued prompt replaces the reservation. Every refusal is returned as a
- * response, never thrown; the authorization captured before the first read is
- * re-checked after every await, so a lock mid-request queues nothing
- * (Sherlock 166).
- */
+/** Queues a typed-data approval under the origin's admission reservation. */
 const queueSignTypedData = async (
   deps: ChainOpsDeps,
   input: NonNullable<ReturnType<typeof readSignTypedDataInput>>,
@@ -242,7 +230,7 @@ const queueSignTypedData = async (
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  const granted = await grantedDappAccounts(deps, input.origin, passphrase);
   if (!authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
@@ -253,6 +241,8 @@ const queueSignTypedData = async (
     promptReconnectForStaleGrant(approvals, granted, input.origin);
     return { error: "origin not connected" };
   }
+  const blocked = await queuedMultisigSignBlock(deps, account, passphrase);
+  if (blocked) return blocked;
   try {
     typedDataHashForChain(
       input.typedData,
@@ -337,7 +327,7 @@ const handleGetChainId: ChainOpsHandler = async (deps, message, sender) => {
 };
 
 const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extension, session, waiters, wallet } = deps;
+  const { approvals, extension, session, waiters } = deps;
   const input = readSwitchChainInput(message);
   if (!input) {
     return { error: "invalid switch chain request" };
@@ -356,7 +346,7 @@ const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
   }
   const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
-  const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
+  const granted = passphrase ? await grantedDappAccounts(deps, input.origin, passphrase) : [];
   // Only an origin that already holds a connection grant may ask to switch the
   // network — and even then it may only ask: the switch never happens without
   // an explicit user approval. A locked or unconnected site is refused, and a
@@ -413,10 +403,23 @@ const heldAccountOn = (
   )?.id;
 };
 
+// A partial approval stub omits the preferences store. Production always has
+// one, so a multisig grant is visible; the stub still rechecks the vault grant.
+const grantedForSwitch = (
+  deps: Pick<ChainOpsDeps, "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet">,
+  origin: string,
+  passphrase: string,
+) =>
+  deps.preferencesStore
+    ? grantedDappAccounts(deps, origin, passphrase)
+    : deps.wallet.getGrantedAccounts(origin, passphrase);
+
 // Queues the reconnect prompt only when the account the switch landed on is
 // really outside the origin's grant, never for a dapp still connected after it.
 const promptWhenLandedOutsideGrant = async (
-  deps: Pick<ChainOpsDeps, "wallet"> & { readonly approvals?: Pick<ApprovalQueue, "request"> },
+  deps: Pick<ChainOpsDeps, "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet"> & {
+    readonly approvals?: Pick<ApprovalQueue, "request">;
+  },
   origin: string,
   passphrase: string,
   connected: readonly unknown[],
@@ -424,7 +427,7 @@ const promptWhenLandedOutsideGrant = async (
   if (!deps.approvals) {
     return;
   }
-  const landed = await deps.wallet.getGrantedAccounts(origin, passphrase);
+  const landed = await grantedForSwitch(deps, origin, passphrase);
   if (landed.length === 0) {
     promptReconnectForStaleGrant(deps.approvals, connected, origin);
   }
@@ -440,7 +443,10 @@ const promptWhenLandedOutsideGrant = async (
  * reconnect (connect) prompt is queued instead, which names the account to share.
  */
 export const executeSwitchChainApproval = async (
-  deps: Pick<ChainOpsDeps, "activeStateCoordinator" | "preferencesStore" | "wallet"> & {
+  deps: Pick<
+    ChainOpsDeps,
+    "activeStateCoordinator" | "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet"
+  > & {
     /** Queue for the reconnect prompt; unset (partial test stubs) queues nothing. */
     readonly approvals?: Pick<ApprovalQueue, "request">;
     /**
@@ -463,7 +469,7 @@ export const executeSwitchChainApproval = async (
     // validator skips it and this is the only place the grant is re-checked.
     // Read it BEFORE switching: a revoked or disconnected origin is refused
     // rather than having the approved card switch the network on its behalf.
-    const connected = await wallet.getGrantedAccounts(input.origin, passphrase);
+    const connected = await grantedForSwitch(deps, input.origin, passphrase);
     if (connected.length === 0) {
       return { error: "origin not connected" };
     }

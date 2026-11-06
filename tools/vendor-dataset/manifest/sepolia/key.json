@@ -1,0 +1,68 @@
+{
+  "key/TA-05": {
+    "id": "key/TA-05",
+    "seed": "BRAMBLE_DATASET_KEY_K_OZ",
+    "vendorDerivation": "key",
+    "index": 0,
+    "address": "0x270cce0c81b79b3394773a94a180c574ff5ceba9f2953b4376660a7ea1b58d4",
+    "pubkey": "0x143643efa805f30927967b7876085c7af19f4b20ea6161b8bc40a65f5523056",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "standalone key import (P6) finds it",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x0",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
+    },
+    "log": [
+      "funded STRK 0x3e62685e29271d68702576cb233379cde2fd61a3ada140959e1f646806afdfc",
+      "deployed 0x168422b5001401d206d950e2d3d13756fb64f50617bc91d29a90cf49d25619c"
+    ]
+  },
+  "key/TA-07": {
+    "id": "key/TA-07",
+    "seed": "BRAMBLE_DATASET_KEY_K_SNC",
+    "vendorDerivation": "key",
+    "index": 0,
+    "address": "0x3e1749a16477f519fdda94146d65ec222a0974d45819ed89cd9f87560b29996",
+    "pubkey": "0x2172fa3b22fc00734c7750477b65975e9d7cea3d86366fa3fddd615012a0044",
+    "classAtDeploy": "0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
+    "expected": "made by sncast: another OZ class and a random salt; key import alone cannot find it",
+    "detectability": "D5",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0xfd6d011db255712d",
+      "liveClass": "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564"
+    },
+    "log": [
+      "funded STRK 0x3969daa59af951e282e5fdba7d33688768900218e2533775195eb8aa65b7b35",
+      "deployed 0x5bbcd765a80d2fe31cf98048eded1294d45a55d7ac8d7cd10d68dae33b041fe"
+    ]
+  },
+  "key/TA-25": {
+    "id": "key/TA-25",
+    "seed": "BRAMBLE_DATASET_KEY_K_SECP",
+    "vendorDerivation": "key",
+    "index": 0,
+    "address": "0xf85b31be509fc9777f3ecc5d2d0f8123854599a2857105b22fe070d8425f8a",
+    "pubkey": "0x9b45d2045969a0e6ca7329c3bc521211505aba3c",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "Argent 0.4.0 with a secp256k1 owner: no stark key can sign for it",
+    "detectability": "D5",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x25",
+      "ownerType": "secp256k1",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "funded STRK 0x7a7318b9d7eb48800d69d9d950d9228c9bcfea1d14ca6d71e506b35f408b801",
+      "ERROR: RpcError: RPC: starknet_addDeployAccountTransaction with params {\n  \"deploy_account_transaction\": {\n    \"type\": \"DEPLOY_ACCOUNT\",\n    \"constructor_calldata\": [\n      \"0x1\",\n      \"0x9b45d2045969a0e6ca",
+      "funded STRK 0x463cd1620e434e1238841eef860960756ce82a05502e09d361f00bfb920c86c",
+      "deployed 0x63a7a8d32c6b41d04dc27ebfd273e98d921b9fae5571b1fc37bd506fd22fc4"
+    ]
+  }
+}

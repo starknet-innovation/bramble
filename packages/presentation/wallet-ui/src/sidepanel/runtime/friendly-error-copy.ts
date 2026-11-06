@@ -197,6 +197,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["display update failed", SAVE_FAILED],
   ["label update failed", SAVE_FAILED],
   ["rpc endpoint update failed", SAVE_FAILED],
+  ["indexer endpoint update failed", SAVE_FAILED],
   ["explorer fallback update failed", SAVE_FAILED],
   ["privacy service configuration failed", SAVE_FAILED],
   ["token visibility update failed", SAVE_FAILED],
@@ -393,6 +394,23 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // on-chain allowance revoke has its own code (copy review bf07).
   ["revoke failed", REQUEST_UNKNOWN],
   ["allowance revoke failed", SUBMISSION_UNKNOWN("The revoke")],
+  // --- Staking (issue 750) ---------------------------------------------------
+  // A staking action signs a transaction: its unknown outcome says so. The
+  // background's own refusals are already reader sentences, kept as written.
+  ["staking action failed", SUBMISSION_UNKNOWN("The staking transaction")],
+  ["staking preparation failed", "Couldn't prepare this staking action. Try again."],
+  ["review this staking action again.", "Review this staking action again."],
+  ["staking isn't available on this network.", "Staking isn't available on this network."],
+  ["staking option unavailable.", "Staking option unavailable."],
+  [
+    "couldn't read staking on this network. try again.",
+    "Couldn't read staking on this network. Try again.",
+  ],
+  [
+    "couldn't load the validator list. paste a validator address instead.",
+    "Couldn't load the validator list. Paste a validator address instead.",
+  ],
+  ["couldn't load your stakes.", "Couldn't load your stakes."],
   [
     "switch to the account that granted this allowance",
     "Switch to the account that granted this allowance.",
@@ -404,6 +422,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
 
   // --- Collectibles --------------------------------------------------------
   ["this account does not own that nft", "This account doesn't own that collectible."],
+  [
+    "collectibles preview is off",
+    "Turn on Collectibles preview in Advanced endpoints to watch collectibles.",
+  ],
   [
     "switch to the nft's network first",
     "This collectible is on another network. Switch networks to move it.",

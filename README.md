@@ -114,6 +114,9 @@ by construction — never send real funds to an address it shows, and read the h
 `tests/e2e/dev-session.ts` before pointing `BRAMBLE_DEV_MNEMONIC` at a phrase of your own. The wallet it
 creates is kept in a git-ignored `.dev-profile/`; delete that directory to start over.
 
+Opt-in mainnet UI tests against an sncast account on your machine are
+`bun run test:e2e:mainnet:wallet`. They are not part of CI. See `docs/MAINNET_E2E.md`.
+
 ### Offline checks
 
 After `bun install --frozen-lockfile`, the fast PR gates below need only Bun and the checked-out

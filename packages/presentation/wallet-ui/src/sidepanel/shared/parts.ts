@@ -52,6 +52,7 @@ export const WALLET_VIEWS = [
   "privacy",
   "shadow-accounts",
   "allowances",
+  "staking",
   "multisigs",
   "multisig-add",
   "multisig-watch",
@@ -90,16 +91,18 @@ export const PARKED_COLLECTIBLE_VIEWS = [
 
 /**
  * Returns whether a valid screen route is deliberately unavailable while the
- * collectibles journey is parked.
+ * collectibles journey is parked. The opt-in collectibles preview
+ * (`collectiblesPreview` in Settings) lifts the park.
  */
-export const isParkedCollectibleView = (view: WalletView): boolean =>
-  PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
+export const isParkedCollectibleView = (view: WalletView, preview = false): boolean =>
+  !preview && PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
 
 const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   account: "Accounts",
   activity: "Activity",
   "address-book": "Address book",
   allowances: "Token allowances",
+  staking: "Staking",
   "advanced-network": "Network services",
   appearance: "Appearance",
   backup: "Backup and restore",

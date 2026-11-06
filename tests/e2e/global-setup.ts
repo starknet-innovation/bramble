@@ -17,7 +17,7 @@ const globalSetup = (): void => {
   // Fail closed: a stray flag would silently put this offline suite on production.
   if (process.env["BRAMBLE_E2E_LIVE_NETWORK"] !== undefined) {
     throw new Error(
-      "BRAMBLE_E2E_LIVE_NETWORK is set; this suite is offline-only. Unset it, or use test:e2e:mainnet",
+      "BRAMBLE_E2E_LIVE_NETWORK is set; this suite is offline-only. Unset it, or use test:e2e:mainnet or test:e2e:mainnet:wallet",
     );
   }
 };

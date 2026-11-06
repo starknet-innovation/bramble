@@ -1,13 +1,12 @@
 /**
- * Custom-network persistence checks: wallet_addStarknetChain stores a validated
- * custom chain, dedupes by normalized chain id, and rejects malformed input.
+ * Stored custom-network compaction: a preferences record an earlier build
+ * filled through wallet_addStarknetChain is shrunk on read so later writes fit.
  */
 import { describe, expect, test } from "bun:test";
 import { isJson, type Json } from "@bramble/core/json";
 import {
   createPreferencesStore,
   defaultWalletPreferences,
-  MAX_CUSTOM_NETWORKS,
   PREFERENCES_STORE_KEY,
 } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
@@ -19,69 +18,11 @@ const chain = {
   rpcUrls: ["https://rpc.katana.example"] as const,
 };
 
-describe("preferences custom networks", () => {
-  test("persists a validated custom network", async () => {
-    const store = createPreferencesStore({ store: createMemoryStore() });
-    const next = await store.addCustomNetwork(chain);
-    expect(next.customNetworks).toEqual([chain]);
-    const reread = await store.read();
-    expect(reread.customNetworks).toEqual([chain]);
-  });
-
-  test("dedupes by normalized chain id rather than appending", async () => {
-    const store = createPreferencesStore({ store: createMemoryStore() });
-    await store.addCustomNetwork(chain);
-    const next = await store.addCustomNetwork({
-      ...chain,
-      chainId: "0x0534e5f4b4154414e41",
-      name: "Katana Renamed",
-    });
-    expect(next.customNetworks).toHaveLength(1);
-    expect(next.customNetworks?.[0]?.name).toBe("Katana Renamed");
-  });
-
-  test("rejects a malformed custom network", async () => {
-    const store = createPreferencesStore({ store: createMemoryStore() });
-    await expect(store.addCustomNetwork({ ...chain, chainId: "not-hex" })).rejects.toThrow();
-    await expect(store.addCustomNetwork({ ...chain, rpcUrls: ["ftp://nope"] })).rejects.toThrow();
-  });
-});
-
 // Sherlock audit 153: dapp-added networks were unbounded and kept every URL a
 // dapp sent, so approved add-chain cards could fill the 1 MiB record and wedge
-// every later token, contact and group write.
-describe("custom network bounds (Sherlock audit 153)", () => {
-  const network = (index: number) => ({
-    chainId: `0x${(0x1000 + index).toString(16)}`,
-    id: `chain-${index}`,
-    name: `Chain ${index}`,
-  });
-
-  test("keeps the newest sixteen networks, evicting the oldest", async () => {
-    const memory = createMemoryStore();
-    const store = createPreferencesStore({ store: memory });
-    for (let index = 1; index <= 17; index += 1) {
-      await store.addCustomNetwork(network(index));
-    }
-    const stored = (await store.read()).customNetworks ?? [];
-    expect(stored).toHaveLength(MAX_CUSTOM_NETWORKS);
-    expect(stored[0]?.id).toBe("chain-2");
-    expect(stored.at(-1)?.id).toBe("chain-17");
-    const raw = (await memory.get(PREFERENCES_STORE_KEY)) as { customNetworks: unknown[] };
-    expect(raw.customNetworks).toHaveLength(MAX_CUSTOM_NETWORKS);
-  });
-
-  test("stores only the first RPC URL of a network", async () => {
-    const store = createPreferencesStore({ store: createMemoryStore() });
-    const next = await store.addCustomNetwork({
-      ...chain,
-      blockExplorerUrls: ["https://explorer.katana.example"],
-      iconUrls: ["https://icons.katana.example/a.png"],
-      rpcUrls: ["https://rpc.katana.example", "https://rpc2.katana.example"],
-    });
-    expect(next.customNetworks).toEqual([chain]);
-  });
-
+// every later token, contact and group write. Nothing writes custom networks
+// now (issue 852), but a record an earlier build wrote still shrinks on read.
+describe("stored custom network compaction (Sherlock audit 153)", () => {
   // A record an earlier build wrote: one network carrying as many 2 KB URLs
   // as the budget allows, padded so it sits just under the 1 MiB limit.
   const wedgedRecord = (): Record<string, unknown> => {

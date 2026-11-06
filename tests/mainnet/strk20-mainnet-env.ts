@@ -12,9 +12,9 @@ import {
   normalizeFeltInput,
 } from "@bramble/wallet-model/networks";
 import { assertLiveMainnetAllowed } from "../../scripts/mainnet-e2e-guard";
-import { isSharedMainnetRpcHost } from "../../scripts/mainnet-e2e-rpc";
+import { dedicatedHttpsRpcUrl, MAINNET_WRITE_ACK } from "./mainnet-safety";
 
-const MAINNET_ACK = "I_UNDERSTAND_THIS_WRITES_TO_MAINNET";
+const MAINNET_ACK = MAINNET_WRITE_ACK;
 const PUBLIC_CALLER_ACK = "I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS";
 const RESUME_AFTER_DEPOSIT_ACK = "I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED";
 const STRK_DECIMALS = 18;
@@ -47,13 +47,8 @@ const httpsServiceUrl = (value: string | undefined, name: string): string => {
   return url.toString();
 };
 
-const dedicatedRpcUrl = (value: string | undefined): string => {
-  const rpcUrl = httpsServiceUrl(value, "BRAMBLE_STRK20_E2E_RPC_URL");
-  if (isSharedMainnetRpcHost(new URL(rpcUrl).hostname)) {
-    throw new Error("BRAMBLE_STRK20_E2E_RPC_URL must be a dedicated test RPC endpoint");
-  }
-  return rpcUrl;
-};
+const dedicatedRpcUrl = (value: string | undefined): string =>
+  dedicatedHttpsRpcUrl(value, "BRAMBLE_STRK20_E2E_RPC_URL");
 
 /**
  * Reads the explicit mainnet-write opt-in and bounded test amount. Generic CI

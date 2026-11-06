@@ -7,13 +7,14 @@
 /**
  * `fee` when the node refused this version's signed fee while the account
  * nonce was still the one it was signed for; `nonce` when that nonce moved, so
- * a co-signer may have sent it; `config` when the signer set changed.
+ * a co-signer may have sent it; `config` when the signer set changed; `proof`
+ * when the private proof's block window closed before the intent was sent.
  */
-export type ArgentMultisigStaleReason = "config" | "fee" | "nonce";
+export type ArgentMultisigStaleReason = "config" | "fee" | "nonce" | "proof";
 
 /** True for a known stale reason. */
 export const isArgentMultisigStaleReason = (value: unknown): value is ArgentMultisigStaleReason =>
-  value === "config" || value === "fee" || value === "nonce";
+  value === "config" || value === "fee" || value === "nonce" || value === "proof";
 
 /**
  * What the chain said about a stale version's exact signed hash (mc-wallet

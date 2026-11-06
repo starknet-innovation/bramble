@@ -1,7 +1,7 @@
 /**
- * Portfolio section on the home screen. Only Tokens is shown today: the
- * Collectibles tab is parked until the NFT journey is ready, so the section
- * renders a heading rather than a tablist and no tab runtime exists. Activity
+ * Portfolio section on the home screen. Tokens, plus a Staking tab where
+ * staking is switched on; the Collectibles tab is parked until the NFT journey
+ * is ready, so elsewhere the section renders a heading rather than a tablist. Activity
  * remains a top-level dock destination rather than appearing twice. A single
  * overflow menu progressively discloses asset management, refresh, and
  * settings actions.
@@ -30,6 +30,9 @@ import {
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
+import type { StakingState } from "../staking/staking-directory-client";
+import { homeTabPanels } from "../staking/staking-home";
+import { activityRecordFacts, counterpartyFact } from "./activity-detail";
 import { type ActivityContact, activityRowAttributes } from "./activity-filter";
 import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
@@ -147,7 +150,8 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
  * the full recorded summary (prefixed by the verb when the summary does not
  * already start with it) — the row never announces less than the record says.
  * The transaction hash, its Starkscan link and its copy control, and a
- * recorded counterparty with its own copy control, sit in the expanded body:
+ * recorded counterparty in full with its own copy control, sit in the expanded
+ * body, followed by the fee, network and token contract the record holds:
  * a `<summary>` is one control with its own accessible name, so links and
  * buttons inside it may never reach assistive tech (mc-wallet issue 476).
  * Without `pricing` the fiat delta is simply absent.
@@ -208,11 +212,12 @@ export const transactionRow = (
           }${inlineCopyButton(entry.hash, "Copy transaction hash")}</dd></div>
           ${
             row.counterparty
-              ? `<div><dt>${escapeHtml(capitalise(row.counterparty.role))}</dt><dd><code title="${escapeHtml(row.counterparty.address)}">${escapeHtml(accountLabel(row.counterparty.address))}</code>${inlineCopyButton(row.counterparty.address, `Copy ${row.counterparty.role} address`)}</dd></div>`
+              ? counterpartyFact(capitalise(row.counterparty.role), row.counterparty.address)
               : row.detail && row.detail !== figure
                 ? `<div><dt>Detail</dt><dd>${escapeHtml(row.detail)}</dd></div>`
                 : ""
           }
+          ${activityRecordFacts(entry, pricing?.tokens)}
           ${when === "" ? "" : `<div><dt>Submitted</dt><dd>${escapeHtml(when)}</dd></div>`}
           ${hint ? `<div><dt>Status</dt><dd>${escapeHtml(hint)}</dd></div>` : ""}
         </dl>
@@ -384,9 +389,9 @@ export const activityEmptyCopy = (historyUnavailable: boolean): string =>
     : "No activity yet. Transactions for this account appear here.";
 
 /**
- * Renders the portfolio section. With only Tokens visible there is no tab
- * switching: the section title is a plain heading rather than a one-item
- * tablist, and the token list needs no panel wrapper.
+ * Renders the portfolio section. Where staking is on (`staking` given), Tokens
+ * and Staking are tabs; otherwise the section title is a plain heading rather
+ * than a one-item tablist, and the token list needs no panel wrapper.
  */
 export const homeTabs = (
   state: BalanceState,
@@ -401,12 +406,24 @@ export const homeTabs = (
   },
   deployment: boolean | null = null,
   fundedForFees: boolean | null = true,
-): string => `
+  staking: StakingState | null = null,
+): string => {
+  const tokens = tokensPanel(
+    state,
+    preferences,
+    prices,
+    changes,
+    currency,
+    privacy,
+    deployment,
+    fundedForFees,
+  );
+  // With staking on, Tokens and Staking are tabs (../staking/staking-home).
+  const tabs = staking ? homeTabPanels(staking.homeTab ?? "tokens", tokens, staking) : null;
+  return `
   <section class="home-tabs" aria-label="Portfolio">
     <div class="tab-bar">
-      <div class="tab-set">
-        <h2>Tokens</h2>
-      </div>
+      ${tabs ? tabs.bar : '<div class="tab-set"><h2>Tokens</h2></div>'}
       <div class="portfolio-actions">
         ${iconButton({
           attributes: {
@@ -428,6 +445,19 @@ export const homeTabs = (
             label: "Manage tokens",
             variant: "ghost",
           })}
+          ${
+            // The parked gallery's only way back in, and only with the opt-in
+            // collectibles preview on (Settings → Advanced).
+            preferences?.collectiblesPreview
+              ? button({
+                  attributes: { "data-view": "nfts", role: "menuitem", tabindex: "-1" },
+                  className: "portfolio-menu-item",
+                  icon: "image",
+                  label: "Collectibles",
+                  variant: "ghost",
+                })
+              : ""
+          }
           ${button({
             attributes: {
               "data-reload-balances": true,
@@ -443,5 +473,6 @@ export const homeTabs = (
         </div>
       </div>
     </div>
-    ${tokensPanel(state, preferences, prices, changes, currency, privacy, deployment, fundedForFees)}
+    ${tabs ? tabs.panels : tokens}
   </section>`;
+};

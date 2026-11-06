@@ -55,6 +55,30 @@ export const sumFeeEstimates = (left: FeeEstimate, right: FeeEstimate): FeeEstim
     : null;
 
 /**
+ * The single figure an invoke review shows and its approval echoes: the invoke
+ * fee, plus the deployment fee when the account must deploy first. Null when
+ * any component is pending, failed, missing, or the two cannot be added — there
+ * is then no total for consent to bind. The background refusal and the card's
+ * Approve control both read this, so the displayed and the enforced figure
+ * cannot drift.
+ */
+export const reviewedInvokeTotal = (review: {
+  readonly deploymentFee?: FeeEstimate | null;
+  readonly deploymentFeeEstimateFailed?: boolean;
+  readonly fee?: FeeEstimate | null;
+  readonly feeEstimateFailed?: boolean;
+  readonly feeEstimatePending?: boolean;
+  readonly requiresDeployment?: boolean;
+}): FeeEstimate | null => {
+  if (!review.fee || review.feeEstimateFailed === true || review.feeEstimatePending === true) {
+    return null;
+  }
+  if (review.requiresDeployment !== true) return review.fee;
+  if (!review.deploymentFee || review.deploymentFeeEstimateFailed === true) return null;
+  return sumFeeEstimates(review.fee, review.deploymentFee);
+};
+
+/**
  * How far above the reviewed figure a submission-time estimate may land before
  * the wallet refuses to sign, as an exact rational (numerator/denominator) so
  * the comparison stays integer arithmetic on base units.

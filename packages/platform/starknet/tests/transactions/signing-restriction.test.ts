@@ -74,6 +74,10 @@ describe("argentSigningRestriction", () => {
       "release",
     );
     await expect(argentSigningRestriction(providerOf("0x9999"), ACCOUNT)).resolves.toBe("release");
+    // Argent 0.5.0 (Krusty 0.12.0's registry), declared on Sepolia: an account
+    // upgraded to it is found at its 0.4.0 address and is view only (TA-62).
+    const argent050 = "0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2";
+    await expect(argentSigningRestriction(providerOf(argent050), ACCOUNT)).resolves.toBe("release");
   });
 });
 
@@ -133,6 +137,12 @@ describe("braavosSigningRestriction", () => {
     ).resolves.toBe("owner-changed");
     await expect(
       braavosSigningRestriction(braavosProvider(starkOnly, 1_000, "0x9999"), ACCOUNT),
+    ).resolves.toBe("release");
+    // Braavos account 1.1.0 (Krusty 0.12.0's registry): an older release than
+    // the current 1.2.0 class, so view only (TA-61).
+    const braavos110 = "0x02c8c7e6fbcfb3e8e15a46648e8914c6aa1fc506fc1e7fb3d1e19630716174bc";
+    await expect(
+      braavosSigningRestriction(braavosProvider(starkOnly, 1_000, braavos110), ACCOUNT),
     ).resolves.toBe("release");
   });
 });

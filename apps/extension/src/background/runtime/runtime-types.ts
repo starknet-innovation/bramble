@@ -26,6 +26,7 @@ import type {
 } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
+import type { DappMultisigAccount } from "@bramble/wallet-protocol/results";
 import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { PendingApproval } from "../approvals/approvals";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
@@ -43,8 +44,10 @@ import type {
   Strk20WalletPreparationResponse,
   Strk20WalletStateResponse,
 } from "../privacy/runtime-strk20-types";
+import type { StakingPreparationResponse } from "../staking/staking-preparations";
+import type { StakingResponse } from "../staking/staking-view";
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
-import type { SwapPreparationReview } from "../transactions/swap-preparations";
+import type { SwapPreparationResponse } from "../transactions/swap-preparations";
 import type { NostrCoordinationResponse } from "./nostr-types";
 import type {
   AccountRecoveryState,
@@ -93,11 +96,9 @@ type RevealSecretsResponse = {
   readonly privateKey: string | null;
 };
 
-/**
- * Account list response scoped by origin grants.
- */
+/** Account list response scoped by origin grants. */
 type AccountsResponse = {
-  readonly accounts: readonly AccountRef[];
+  readonly accounts: readonly (AccountRef | DappMultisigAccount)[];
   readonly ok: true;
 };
 
@@ -250,14 +251,6 @@ type SwapQuoteResponse = {
     // when the feed has no price for either token.
     readonly valueDeltaPercent?: number;
   };
-};
-
-/**
- * Frozen executable swap review returned before the final one-time confirm.
- */
-type SwapPreparationResponse = {
-  readonly ok: true;
-  readonly swapPreparation: SwapPreparationReview;
 };
 
 /**
@@ -492,6 +485,8 @@ export type RuntimeResponse =
   | TokenChartResponse
   | TransactionAlertsResponse
   | TransferResponse
+  | StakingResponse
+  | StakingPreparationResponse
   | SubmissionUnknownResponse
   | ValidateMnemonicResponse
   | WalletStatus

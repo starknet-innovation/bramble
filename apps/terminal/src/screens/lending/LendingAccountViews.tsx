@@ -27,6 +27,7 @@ import {
   buildVesuVaultRedeemCalls,
   VESU_VAULT_DEPOSITS_ENABLED,
   VESU_VAULT_DEPOSITS_PAUSED,
+  verifyCuratedVesuVault,
 } from "../../protocols/index";
 import { shortenAddress } from "../../shell/screens";
 import { useWallet } from "../../wallet/connection/WalletProvider";
@@ -168,8 +169,11 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
         BigInt(raw),
         address,
       );
+      const vault = selected.address;
       await requestTransaction({
         calls,
+        // The vault's class is read again right before the wallet sees the calls (#270).
+        handoffCheck: () => verifyCuratedVesuVault(vault),
         description:
           "Deposit into the selected curated Vesu vault. The allowance is revoked in the same transaction.",
         details: [
@@ -198,8 +202,10 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
     if (selected === null || address === null || redeemRaw === null || vaultPosition === null) return;
     try {
       const calls = buildVesuVaultRedeemCalls(selected.address, BigInt(redeemRaw), address);
+      const vault = selected.address;
       await requestTransaction({
         calls,
+        handoffCheck: () => verifyCuratedVesuVault(vault),
         description:
           "Submit an asynchronous Vesu vault redemption request. Assets become claimable after the vault processes its epoch.",
         details: [
@@ -222,6 +228,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
       const calls = buildVesuVaultClaimCalls(redeem.sharesAddress, BigInt(redeem.redemptionId));
       await requestTransaction({
         calls,
+        handoffCheck: () => verifyCuratedVesuVault(redeem.sharesAddress),
         description: "Claim the underlying assets from a processed Vesu vault redemption.",
         details: [
           { label: "Redemption id", value: redeem.redemptionId },
@@ -287,7 +294,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
               </div>
             </label>
             {message !== null ? <p className="lending-ticket-message">{message}</p> : null}
-            {/* Deposits pay the API-named vault, which nothing verifies yet (Sherlock 169). */}
+            {/* Deposits stay paused until the curated-vault allowlist is reviewed (Sherlock 169, #270). */}
             {VESU_VAULT_DEPOSITS_ENABLED ? null : <p className="lending-ticket-message">{VESU_VAULT_DEPOSITS_PAUSED}</p>}
             <button className="lending-submit" disabled={!VESU_VAULT_DEPOSITS_ENABLED || (isConnected && raw === null)} onClick={() => void deposit()} type="button">
               {isConnected ? "Review deposit" : "Connect wallet"}<ArrowRight size={14} aria-hidden />

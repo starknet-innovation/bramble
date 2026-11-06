@@ -234,8 +234,10 @@ describe("createPreferencesStore", () => {
     if (!currentMainnet?.paymaster) {
       throw new Error("missing bundled STRK20 Mainnet routing");
     }
+    // The Vercel-era snapshot predates the bundled anonymizer.
+    const { shadowAccountAnonymizerAddress: _none, ...currentRouting } = currentMainnet;
     const retiredMainnet = {
-      ...currentMainnet,
+      ...currentRouting,
       discoveryUrl: "https://mc-wallet-terminal.vercel.app/api/strk20/discovery",
       ohttpEnabled: true,
       paymaster: {

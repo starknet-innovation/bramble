@@ -19,6 +19,7 @@ bun run test:e2e             # Playwright extension E2E (requires dist/; egress 
 bun run check:firefox        # Mozilla's validator over dist-firefox/ (needs build:firefox first)
 bun run package:extension    # writes artifacts/*.zip + .sha256
 bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
+bun run verify:sepolia       # live Sepolia import scorecard (needs dist/ + seed file; ~15 min)
 ```
 
 - `bun run dev:session` is development-only: it onboards from the repository's published test phrase,
@@ -26,10 +27,18 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
   git-ignored `.dev-profile/`. Read the header of `tests/e2e/dev-session.ts` before overriding
   `BRAMBLE_DEV_MNEMONIC`.
 
+- `bun run verify:sepolia [out.json] [previous.json]` imports every Sepolia vendor test account
+  through the built extension and scores it. It needs the git-ignored `.env.vendor-seeds.local`
+  (password manager only) and live network, so it is not a gate. Agents without that file skip
+  it and say so; never ask for, create, or commit the seeds. See `tools/vendor-dataset/README.md`.
+
 - The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
   via `BRAMBLE_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
   flag is set. Live mainnet CI is `.github/workflows/mainnet-e2e.yml`
   (`docs/MAINNET_E2E_CI.md`), not this suite and not pull-request CI.
+- `bun run test:e2e:mainnet:wallet` is a local-only mainnet UI suite (sncast account, dedicated RPC,
+  spend caps). It is not part of `bun run check` or CI. Unconfigured, it prints a skip and exits 0.
+  See `docs/MAINNET_E2E.md`.
 - Krusty KMS is installed as an exact, lockfile-pinned npm package by `bun install`.
   `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,

@@ -31,6 +31,11 @@ export type WalletPreferences = {
   readonly activeNetworkId: StarknetNetworkId;
   readonly approvalSurface?: ApprovalSurfacePreference;
   readonly addressBook: readonly AddressBookEntry[];
+  /**
+   * Opt-in preview of the collectibles gallery, parked since v0.10.1. Off (or
+   * absent) keeps every gallery route, NFT load and indexer request withheld.
+   */
+  readonly collectiblesPreview?: boolean;
   readonly customNetworks?: readonly CustomNetwork[];
   /**
    * Ids of tracked tokens a dapp added (wallet_watchAsset) and the user has not
@@ -64,6 +69,11 @@ export type WalletPreferences = {
    * lifts the entry. Absent on preferences written before the field existed.
    */
   readonly removedTokens?: readonly string[];
+  /**
+   * Multisig the wallet is presenting to sites. Absent means the active
+   * single-signer account. The id is a public account id, not a secret.
+   */
+  readonly selectedMultisigId?: string;
   readonly nfts?: readonly WatchedNft[];
   /** Custom relay replacing the reviewed Nostr defaults for explicit multisig handoffs. */
   readonly nostrRelayUrl?: string;
@@ -73,18 +83,25 @@ export type WalletPreferences = {
   /** Opt-in process-local aggregate RPC counters; never uploaded automatically. */
   readonly reliabilityDiagnostics?: boolean;
   readonly schemaVersion: 1;
+  /**
+   * The STRK20 bundled-defaults migration this record has had
+   * (`STRK20_DEFAULTS_VERSION`). Absent on records written before it existed;
+   * those have their bundled Mainnet snapshot rebased once, on the next read.
+   */
+  readonly strk20DefaultsVersion?: number;
   readonly strk20Networks?: Strk20NetworkConfigs;
   /** @deprecated Legacy incomplete prover-only setting retained for backup compatibility. */
   readonly strk20ProverUrl?: string;
   readonly theme?: ThemeChoice;
   readonly tokens: readonly TokenConfig[];
+  /** False once the user turns off the Home VIP eligibility notice; absent means shown. */
+  readonly vipNotice?: boolean;
 };
 
 /**
  * Plain preferences store methods exposed to the background worker.
  */
 export type WalletPreferencesStore = {
-  readonly addCustomNetwork: (network: CustomNetwork) => Promise<WalletPreferences>;
   readonly addNft: (nft: Omit<WatchedNft, "id">) => Promise<WalletPreferences>;
   readonly createGroup: (input: {
     readonly icon: AccountGroupIcon;
@@ -148,14 +165,24 @@ export type WalletPreferencesStore = {
   readonly setActiveNetwork: (networkId: StarknetNetworkId) => Promise<WalletPreferences>;
   readonly setDisplay: (input: {
     readonly approvalSurface?: ApprovalSurfacePreference;
+    readonly collectiblesPreview?: boolean;
     readonly displayCurrency?: DisplayCurrency;
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: ThemeChoice;
+    readonly vipNotice?: boolean;
   }) => Promise<WalletPreferences>;
   readonly setRpcOverride: (input: {
     readonly networkId: StarknetNetworkId;
     readonly rpcUrl: string;
+  }) => Promise<WalletPreferences>;
+  /**
+   * Presents `multisigId` to connected sites, or the active single-signer
+   * account when `multisigId` is null. Does not change the vault's active
+   * account. A malformed id throws and writes nothing.
+   */
+  readonly setSelectedMultisig: (input: {
+    readonly multisigId: string | null;
   }) => Promise<WalletPreferences>;
   readonly setStrk20NetworkConfig: (input: {
     readonly config: Strk20NetworkConfig | null;

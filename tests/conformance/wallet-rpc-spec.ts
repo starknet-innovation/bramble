@@ -222,10 +222,12 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
     runtimeType: "wallet.addStarknetChain",
     paramKeys: ["id", "chain_id", "chain_name"],
     optionalApiVersion: true,
-    stateChanging: true,
+    // Answered at once, never held: a built-in chain is already added and any
+    // other chain is unsupported (issue 852), so nothing is prompted or stored.
+    stateChanging: false,
     errorCodes: [
       ERROR_CODES.INVALID_REQUEST_PAYLOAD,
-      ERROR_CODES.USER_REFUSED_OP,
+      ERROR_CODES.CHAIN_ID_NOT_SUPPORTED,
       ERROR_CODES.API_VERSION_NOT_SUPPORTED,
       ERROR_CODES.UNKNOWN_ERROR,
     ],

@@ -19,6 +19,13 @@ export const HOME_STYLES = `
   .recovery-confirm .recovery-confirm-warning { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; margin: 0; }
   .recovery-confirm .read-only-detail { max-width: none; }
   .recovery-confirm .button-row { justify-content: center; margin-top: ${SPACE.xs}; }
+  /* Starknet VIP notice (mc-wallet 688): a quiet line under the total, like the
+     read-only flag; its link and dismiss wrap rather than overflow at narrow widths. */
+  .vip-notice { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xxs}; }
+  .vip-notice-actions { align-items: center; display: flex; flex-wrap: wrap; gap: ${SPACE.sm}; justify-content: center; }
+  .vip-notice .vip-link { align-items: center; color: var(--bramble-accent); display: inline-flex; font-size: ${TYPE.caption.size}; gap: ${SPACE.xxs}; }
+  .vip-notice .vip-link .icon { height: 1em; width: 1em; }
+  .vip-notice #vip-notice-hide { font-size: ${TYPE.caption.size}; min-height: 0; padding: 0; }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */

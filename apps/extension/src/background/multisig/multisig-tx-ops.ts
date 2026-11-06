@@ -44,6 +44,7 @@ import {
   signerAccountFor,
 } from "./multisig-ops";
 import { markFeeRefusedStale, refuseResend } from "./multisig-stale-intents";
+import { multisigStrk20SubmitProof } from "./multisig-strk20-submit";
 
 const preparationContext = async (
   deps: MultisigOpsDeps,
@@ -72,7 +73,6 @@ const preparationContext = async (
   const review = await reviewArgentMultisigCalls(deps, context, input.calls, config);
   return review && "error" in review ? review : { authorized, config, context, record, review };
 };
-
 const importedIntentReview = async (deps: MultisigOpsDeps, intent: ArgentMultisigSigningIntent) => {
   const resolved = await currentArgentIntentContext(deps, intent, false);
   if ("error" in resolved) return resolved;
@@ -123,7 +123,6 @@ const persistSignature = async (
     ? { intent: next, intentPackage: argentMultisigIntentPackage(next), ok: true }
     : { error: `Argent multisig intent ${stored}` };
 };
-
 const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const input = readPrepareIntentInput(message);
   if (!input) {
@@ -169,7 +168,6 @@ const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<R
       }
     : { error: `Argent multisig intent ${stored}` };
 };
-
 const importIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const input = readImportIntentInput(message);
   if (!input) {
@@ -199,7 +197,6 @@ const importIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
       }
     : { error: `Argent multisig intent ${stored}` };
 };
-
 const resolveLocalSigning = async (
   deps: MultisigOpsDeps,
   input: NonNullable<ReturnType<typeof readSignIntentInput>>,
@@ -428,21 +425,27 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
   }
   let transactionHash: string;
   try {
+    const { intent, authorized, resolved } = submission;
+    const proof = await multisigStrk20SubmitProof(deps, {
+      intent,
+      isAuthorized: authorized.isCurrent,
+      networkId: resolved.context.record.networkId,
+      rpcUrls: resolved.context.rpcUrls,
+    });
     transactionHash = await multisigRpc(deps).submitPreparedInvoke({
       config: {
-        signerPublicKeys: submission.intent.signatures.map((signature) => signature.publicKey),
-        threshold: submission.resolved.config.threshold,
+        signerPublicKeys: intent.signatures.map((fragment) => fragment.publicKey),
+        threshold: resolved.config.threshold,
       },
-      prepared: submission.intent.prepared,
-      rpcUrls: submission.resolved.context.rpcUrls,
-      signatures: submission.intent.signatures,
-      isAuthorized: submission.authorized.isCurrent,
+      isAuthorized: authorized.isCurrent,
+      prepared: intent.prepared,
+      ...(proof ? { proof } : {}),
+      rpcUrls: resolved.context.rpcUrls,
+      signatures: intent.signatures,
     });
   } catch (error) {
     if (error instanceof IndeterminateRpcWriteError) {
-      // The reply was lost, so the signed package may be on chain under the
-      // hash every signer holds. Keep the claim, journal it as pending, and say
-      // the outcome is unknown; a resend reuses that hash and nonce (#681).
+      // The reply was lost. Keep the claim; a resend reuses that hash and nonce (#681).
       const pending = submission.intent.prepared.transactionHash;
       await afterBroadcast(() =>
         recordBroadcastIntent(deps, submission.intent, submission.resolved.context.record, pending),

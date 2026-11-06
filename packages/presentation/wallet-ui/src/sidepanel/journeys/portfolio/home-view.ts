@@ -6,6 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import { type AccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
@@ -33,9 +34,12 @@ import {
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
+import type { StakingState } from "../staking/staking-directory-client";
+import { stakedLine } from "../staking/staking-home";
 import { heroChange } from "./hero-change";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
 import { readOnlyNotice } from "./recovery-view";
+import { vipEligible, vipNotice } from "./vip-notice";
 
 /**
  * Whether the active account's private discovery has landed: a reading for
@@ -90,7 +94,10 @@ export const homeScreen = (
   privacy: PrivacyDisclosureState,
   signability: SignabilityVerdict | null = null,
   privateTotalWaitOver = false,
+  stakingState: StakingState | null = null,
 ): string => {
+  // The Staking tab and the "Staked" line exist only where staking is on.
+  const staking = account !== null && stakingNetwork(status.networkId) ? stakingState : null;
   // Read-only until proven otherwise never — the flag is advisory UX; the
   // transaction path enforces. Null (unknown) renders as a normal account.
   const readOnly = signability?.readOnly === true;
@@ -111,7 +118,12 @@ export const homeScreen = (
       (token) =>
         token.networkId === status.networkId && sameFelt(token.address, STRK_TOKEN_ADDRESS),
     )?.id ?? null;
-  const privateReady = privacy.value?.registration === "registered";
+  // A deployed, unregistered account's first shield registers in the same
+  // transaction (mc-wallet 789), so Shield opens directly for it too.
+  const privateReady =
+    privacy.value?.registration === "registered" ||
+    (privacy.value?.registration === "unregistered" &&
+      deploymentKnownFromPrivacy(deployment, privacy) === true);
   const balancesComplete =
     "balances" in balances && privateDiscoveryComplete(status, account, privacy);
   const totalKnown = account !== null && "balances" in balances && Object.keys(prices).length > 0;
@@ -126,8 +138,9 @@ export const homeScreen = (
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${totalKnown ? heroChange(unified, prices, changes, currency, !showTotal) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
+      ${staking ? stakedLine(staking, preferences?.tokens ?? []) : ""}
       ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
-      ${account ? "" : noAccountEmpty(status)}
+      ${account ? vipNotice(vipEligible({ currency, preferences, showTotal, total })) : noAccountEmpty(status)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">
       <div class="action-row">
@@ -144,6 +157,6 @@ export const homeScreen = (
         )}
       </div>
     </section>
-    ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment, fundedForFees)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment, fundedForFees, staking)}`,
   );
 };
