@@ -100,15 +100,23 @@ export const runUnlockedNetworkMutation = async <T>(
   );
 };
 
+/** The one vault fact the creation guards read: whether any vault is stored. */
+export type VaultPresence = {
+  readonly status: () => Promise<{ readonly hasVault: boolean }>;
+};
+
 /**
  * Binds first-run vault creation to its network preference. If an old wallet
  * session exists, an ambiguous failure revokes only that generation. A refusal
  * the vault raises before writing, such as a wallet that already exists, undoes
- * the network write on either path.
+ * the network write on either path. With no session, any failure that leaves
+ * no vault stored also undoes it: nothing was written, so no account can be
+ * left on the requested network (issue 822).
  */
 export const runVaultCreationWithNetwork = async <T>(
   session: UnlockSession,
   preferencesStore: WalletPreferencesStore,
+  wallet: VaultPresence,
   networkId: StarknetNetworkId,
   operation: () => Promise<T>,
 ): Promise<T> => {
@@ -121,7 +129,7 @@ export const runVaultCreationWithNetwork = async <T>(
     } catch (error) {
       // No session to lock here: a failed undo leaves the network switched and
       // the vault's own refusal is still what the caller hears.
-      if (error instanceof RefusedBeforeWrite && previousNetworkId !== networkId) {
+      if (previousNetworkId !== networkId && (await nothingWritten(wallet, error))) {
         await preferencesStore.setActiveNetwork(previousNetworkId).catch(() => undefined);
       }
       throw error;
@@ -136,4 +144,37 @@ export const runVaultCreationWithNetwork = async <T>(
     "Unlock session changed during vault creation",
     async () => operation(),
   );
+};
+
+// A failed first-run creation wrote nothing when the vault refused before its
+// write, or when no vault is stored afterwards. A vault that is present may
+// hold this request's write, and an unreadable status proves nothing, so
+// either keeps the network the write was bound to.
+const nothingWritten = async (wallet: VaultPresence, error: unknown): Promise<boolean> => {
+  if (error instanceof RefusedBeforeWrite) return true;
+  try {
+    return !(await wallet.status()).hasVault;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Refuses a creation that only ever writes a fresh store (a Ledger vault, a
+ * recovered wallet) while a vault exists, before the network preference is
+ * touched. The vault would refuse it too, but a wrong passphrase fails
+ * decryption first, and that failure with a vault present cannot prove that
+ * nothing was written, so the network write would stay (issue 822). The
+ * session's own passphrase is let through: it opens the vault, whose refusal
+ * then undoes the network and keeps the session.
+ */
+export const refuseExistingVault = async (
+  session: UnlockSession,
+  wallet: VaultPresence,
+  vaultPassphrase: string,
+): Promise<void> => {
+  if (session.peekPassphrase() === vaultPassphrase) return;
+  if ((await wallet.status()).hasVault) {
+    throw new WalletError("Wallet already exists");
+  }
 };
