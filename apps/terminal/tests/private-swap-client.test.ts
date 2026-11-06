@@ -2,7 +2,7 @@ import { avnuRouteCalldata, type AvnuRouteFixture } from "@bramble/testkit/avnu-
 import { transaction } from "starknet";
 import { AVNU_ADDRESSES } from "../src/protocols/constants";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PRIVATE_SWAP_FEE_TOKEN } from "../shared/privacy";
+import { PRIVATE_SWAP_EXECUTOR_CLASS_HASH, PRIVATE_SWAP_FEE_TOKEN } from "../shared/privacy";
 import {
   fetchPrivateSwapPlan,
   submitPrivateSwapProof,
@@ -42,6 +42,9 @@ const executorCalldata = (overrides: Partial<AvnuRouteFixture> = {}) => [
 ];
 
 const transactionHash = `0x01${"0".repeat(62)}`;
+
+// The executor runs the pinned class; the class guard has its own suite.
+const pinnedClass = async (): Promise<string> => PRIVATE_SWAP_EXECUTOR_CLASS_HASH;
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -107,7 +110,7 @@ describe("private swap server boundary", () => {
       sellToken: "0x4",
       takerAddress: "0x7",
     };
-    await expect(fetchPrivateSwapPlan(input)).resolves.toMatchObject({
+    await expect(fetchPrivateSwapPlan(input, pinnedClass)).resolves.toMatchObject({
       actions: [
         { type: "withdraw" },
         { type: "withdraw" },
@@ -117,9 +120,9 @@ describe("private swap server boundary", () => {
       executor: "0x3",
       quoteId: "quote-1",
     });
-    await expect(fetchPrivateSwapPlan(input)).rejects.toThrow("substituted route");
-    await expect(fetchPrivateSwapPlan(input)).rejects.toThrow();
-    await expect(fetchPrivateSwapPlan(input)).rejects.toThrow("invalid route");
+    await expect(fetchPrivateSwapPlan(input, pinnedClass)).rejects.toThrow("substituted route");
+    await expect(fetchPrivateSwapPlan(input, pinnedClass)).rejects.toThrow();
+    await expect(fetchPrivateSwapPlan(input, pinnedClass)).rejects.toThrow("invalid route");
     expect(fetch).toHaveBeenCalledWith(
       "/api/private-swap/plan",
       expect.objectContaining({ method: "POST" }),

@@ -12,6 +12,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { TokenIcon } from "../../components/index";
 import {
   fetchPrivateSwapPlan,
+  provePrivateSwap,
   submitPrivateSwapProof,
 } from "../../protocols/avnu/private-swap-client";
 import { readPrivacyPool, type PrivacyPoolSnapshot } from "../../protocols/privacy/privacy-pool";
@@ -191,7 +192,8 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
     setBusy(true);
     setStatus("Wallet review open · waiting for proof authorization…");
     try {
-      const proof = await preparePrivateInvoke(swapReview.actions);
+      // The executor's class is read again right before the wallet proves (#269).
+      const proof = await provePrivateSwap(() => preparePrivateInvoke(swapReview.actions));
       setStatus("Proof ready · submitting through the AVNU private paymaster…");
       const transactionHash = await submitPrivateSwapProof(proof, FEE_MODE);
       setStatus(`Private swap accepted · ${short(transactionHash)}`);
