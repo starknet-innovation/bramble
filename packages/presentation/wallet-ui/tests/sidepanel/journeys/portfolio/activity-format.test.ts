@@ -81,6 +81,12 @@ describe("activityAppearance", () => {
       [{ summary: "Unshield 5 USDC to this account" }, "Unshielded", "shield", "internal"],
       [{ summary: "Unshield 5 USDC to 0xabc" }, "Unshielded", "shield", "out"],
       [{ summary: "Activate private balances" }, "Private transaction", "shield", null],
+      [
+        { summary: "Activate private balances and shield 5 USDC" },
+        "Shielded",
+        "shield",
+        "internal",
+      ],
       [{ summary: "Allow 0x… to spend 5 STRK" }, "Approved", "keyRound", null],
       [{ summary: "Revoke approval" }, "Revoked", "keyRound", null],
       [{ kind: "deploy", summary: "Deploy account contract" }, "Deployed", "rocket", null],
