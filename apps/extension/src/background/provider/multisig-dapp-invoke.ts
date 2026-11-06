@@ -396,7 +396,7 @@ const submitThresholdOne = async (
 };
 
 const preparedProposalRefusal = async (
-  deps: { readonly runtimeRpc: Pick<RuntimeRpc, "getClassHashAt"> },
+  deps: { readonly runtimeRpc: Pick<RuntimeRpc, "getClassHashAt" | "multisig"> },
   record: ArgentMultisigRecord,
   prepared: Parameters<typeof preparedArgentMultisigFee>[0],
   reviewedFee: FeeEstimate | undefined,
@@ -406,6 +406,14 @@ const preparedProposalRefusal = async (
   if (!live || !sameFelt(live, ARGENT_MULTISIG_CONTRACT.classHash)) {
     return { error: MULTISIG_CLASS };
   }
+  // Read again after preparation took its nonce: a signer change that landed
+  // before it would let the one signature saved here already be enough, and
+  // one that lands later spends that nonce and voids this transaction.
+  const config = record.currentConfig;
+  const changed = config
+    ? await freshSignerConfig(deps.runtimeRpc, record.address, config, rpcUrls)
+    : { error: THRESHOLD_CHANGED };
+  if (changed) return changed;
   if (!reviewedFee) return { error: REVIEWED_FEE_REQUIRED };
   let quoted: FeeEstimate;
   try {

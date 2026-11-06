@@ -21,8 +21,8 @@ import {
   testExtension,
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
-import { latestApprovalId, waitForPendingApprovals } from "../../support/held";
-import { harness } from "./multisig-dapp-harness";
+import { latestApprovalId, reviewedApprovalFee, waitForPendingApprovals } from "../../support/held";
+import { harness, invokeCalls } from "./multisig-dapp-harness";
 
 const ETH = "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const SPENDER = "0x56780000000000000000000000000000000000000000000000000000000abc";
@@ -168,5 +168,36 @@ describe("multisig dapp audit follow-ups", () => {
     }>(handler, extensionSender);
     const card = pending.find((entry) => entry.kind === "invoke");
     expect(card?.flags?.map((flag) => flag.code)).toContain("unlimited-approval");
+  });
+
+  test("a proposal is not saved when the signers change while it is prepared", async () => {
+    let reads = 0;
+    let armed = false;
+    const { handler, multisigs, record } = await harness(2, {
+      member: true,
+      // The check before preparation still matches; the one after it sees
+      // the threshold already lowered to 1.
+      onConfigRead: () => {
+        if (!armed) return undefined;
+        reads += 1;
+        return reads > 1
+          ? { classHash: record.classHash, signerGuids: [], threshold: 1 }
+          : undefined;
+      },
+    });
+    await connect(handler, record.id);
+    const held = handler(
+      { calls: invokeCalls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+    armed = true;
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({
+      error: "This multisig changed since this request was reviewed.",
+    });
+    expect(reads).toBe(2);
+    expect(await multisigs.listIntents()).toEqual([]);
   });
 });

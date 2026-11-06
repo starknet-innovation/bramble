@@ -98,6 +98,14 @@ export const harness = async (
     readonly grantAccountIds?: readonly string[];
     readonly member?: boolean;
     readonly onGrantRead?: () => Promise<void> | void;
+    /** Replaces one live signer-config read; undefined keeps the default. */
+    readonly onConfigRead?: () =>
+      | {
+          readonly classHash: string;
+          readonly signerGuids: readonly string[];
+          readonly threshold: number;
+        }
+      | undefined;
     readonly onList?: () => void;
     readonly onSign?: () => void;
     readonly relaySignatures?: RelaySignatureLog;
@@ -169,6 +177,8 @@ export const harness = async (
         multisig: {
           async getConfig() {
             if (options.signerConfig === "throw") throw new Error("config unavailable");
+            const replaced = options.onConfigRead?.();
+            if (replaced) return replaced;
             const stored = record.currentConfig;
             return (
               options.signerConfig ?? {
