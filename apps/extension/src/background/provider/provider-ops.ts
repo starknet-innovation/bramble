@@ -336,8 +336,21 @@ export const handleProviderOps = async (
   return handler ? handler(deps, message, sender) : null;
 };
 
+// The reviewed figures, each the ceiling at its own submit boundary: the invoke
+// fee, and the deployment fee when the account deploys before the calls.
+const reviewedCeiling = (approval: {
+  readonly reviewedDeploymentFee?: FeeEstimate;
+  readonly reviewedFee?: FeeEstimate;
+}) => ({
+  ...(approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {}),
+  ...(approval.reviewedDeploymentFee
+    ? { reviewedDeploymentFee: approval.reviewedDeploymentFee }
+    : {}),
+});
+
 /**
- * Executes a user-approved invoke. `reviewedFee` is the ceiling the card showed.
+ * Executes a user-approved invoke. `reviewedFee` is the ceiling the card showed;
+ * `reviewedDeploymentFee` bounds the deployment an undeployed account sends first.
  * A locked wallet or a revoked grant fails closed. Returns an error response
  * instead of throwing so the caller can keep the approval queued.
  */
@@ -349,6 +362,8 @@ export const executeInvokeApproval = async (
     readonly origin: string;
     readonly payload: ApprovalPayload;
     readonly reviewedFee?: FeeEstimate;
+    /** The reviewed deployment half, when the account deploys before the calls. */
+    readonly reviewedDeploymentFee?: FeeEstimate;
   },
 ): Promise<RuntimeResponse> => {
   const { activity, allowanceStore, runtimeRpc } = deps;
@@ -383,7 +398,7 @@ export const executeInvokeApproval = async (
   // settles the held request with the reason. Fails closed — nothing submitted.
   // Spread into whichever submit lane runs: the ceiling is a property of the
   // approval, not of the lane, so it is decided once here rather than at each.
-  const ceiling = approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {};
+  const ceiling = reviewedCeiling(approval);
   const strk20 = runtimeRpc.strk20 ?? unavailableStrk20Service;
   const baseSummary =
     approval.payload.activitySummary ??

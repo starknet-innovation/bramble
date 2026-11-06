@@ -150,8 +150,18 @@ const isDeployFirstReview = (value: Readonly<Record<string, unknown>>): boolean 
     value["feeEstimatePending"] !== true &&
     value["requiresDeployment"] === true);
 
+// The deployment half travels exactly when an account other than deploy-first
+// Braavos must deploy before its calls: an amount, or null with its failure
+// flag set. Nowhere else.
+const isDeploymentHalf = (value: Readonly<Record<string, unknown>>): boolean =>
+  value["requiresDeployment"] === true && value["deployFirst"] === undefined
+    ? (value["deploymentFee"] === null || isFee(value["deploymentFee"])) &&
+      value["deploymentFeeEstimateFailed"] === (value["deploymentFee"] === null)
+    : value["deploymentFee"] === undefined && value["deploymentFeeEstimateFailed"] === undefined;
+
 const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
   isDeployFirstReview(value) &&
+  isDeploymentHalf(value) &&
   (value["fee"] === undefined || value["fee"] === null || isFee(value["fee"])) &&
   (value["feeAffordability"] === undefined ||
     value["feeAffordability"] === "insufficient" ||
@@ -160,8 +170,6 @@ const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
   (value["feeEstimateFailed"] === undefined || typeof value["feeEstimateFailed"] === "boolean") &&
   (value["feeEstimatePending"] === undefined || typeof value["feeEstimatePending"] === "boolean") &&
   (value["requiresDeployment"] === undefined || typeof value["requiresDeployment"] === "boolean") &&
-  (value["requiresDeployment"] !== true ||
-    ((value["fee"] ?? null) === null && value["feeEstimateFailed"] !== true)) &&
   (value["feeEstimateFailed"] !== true || (value["fee"] ?? null) === null) &&
   (value["feeEstimatePending"] !== true ||
     ((value["fee"] ?? null) === null &&
@@ -172,7 +180,8 @@ const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
       value["gaslessFees"].length > 0 &&
       value["gaslessFees"].length <= 3 &&
       value["gaslessFees"].every(isGaslessFeeOffer) &&
-      (value["fee"] ?? null) !== null)) &&
+      (value["fee"] ?? null) !== null &&
+      value["requiresDeployment"] !== true)) &&
   ((value["fee"] ?? null) !== null ||
     value["feeAffordability"] === undefined ||
     value["feeAffordability"] === "unknown");
@@ -188,6 +197,8 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "context",
       "declaration",
       "deployFirst",
+      "deploymentFee",
+      "deploymentFeeEstimateFailed",
       "existingGrant",
       "fee",
       "feeAffordability",
@@ -258,13 +269,15 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
         (value["alreadyTracked"] === undefined || value["alreadyTracked"] === true)
       : value["token"] === undefined && value["alreadyTracked"] === undefined;
   // The fee review travels only on invoke prompts and must be internally
-  // consistent, mirroring `resolveReviewFee`: an undeployed account has no
-  // estimate and no failure; a failed estimate carries no amount. Inconsistent
-  // combinations are rejected at the boundary rather than rendered.
+  // consistent: an undeployed account carries both halves of its total, a
+  // failed estimate carries no amount, and deploy-first carries neither.
+  // Inconsistent combinations are rejected at the boundary rather than rendered.
   const feeValid =
     value["kind"] === "invoke"
       ? isInvokeFeeReview(value)
       : value["deployFirst"] === undefined &&
+        value["deploymentFee"] === undefined &&
+        value["deploymentFeeEstimateFailed"] === undefined &&
         value["fee"] === undefined &&
         value["feeAffordability"] === undefined &&
         value["feeEstimateFailed"] === undefined &&
