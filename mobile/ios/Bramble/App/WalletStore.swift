@@ -351,7 +351,12 @@ final class WalletStore {
     }
 
     /// Re-checks the passphrase, stores a fresh wrap secret behind biometrics, and adds the slot.
+    /// Does nothing while biometric unlock is already on: storing a new secret replaces the
+    /// Keychain item before the core checks the passphrase, so a mistyped one would leave the
+    /// existing slot without the secret that opens it.
     func enableBiometric(password: String) async throws {
+        refreshSecurity()
+        guard !security.biometricEnabled else { return }
         guard let domain = BiometricKeychain.enrolmentState() else { throw BiometricKeychain.Failure.unavailable }
         guard await BiometricKeychain.confirm(reason: BrambleCopy.biometricPromptReason) else {
             throw BiometricKeychain.Failure.cancelled

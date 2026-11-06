@@ -111,9 +111,21 @@ private suspend fun WalletStore.unlockWithSecret(
 /**
  * Stores a fresh wrap secret behind a biometric-bound Keystore key (after a prompt), then has
  * the core re-check [password] (throttled and counted) and add the slot. Returns false when
- * the person cancelled the prompt. The secret is zero-filled before this returns.
+ * the person cancelled the prompt; returns true without touching anything when biometric unlock
+ * is already on. The secret is zero-filled before this returns.
  */
 suspend fun WalletStore.enableBiometric(
+    activity: Context,
+    password: String,
+): Boolean {
+    // Already on: storing a new secret replaces the Keystore key before the core checks the
+    // passphrase, so a mistyped one would leave the existing slot without the key that opens it.
+    refreshSecurity()
+    return security.biometricEnabled || addBiometric(activity, password)
+}
+
+/** [enableBiometric] once biometric unlock is known to be off. */
+private suspend fun WalletStore.addBiometric(
     activity: Context,
     password: String,
 ): Boolean {
