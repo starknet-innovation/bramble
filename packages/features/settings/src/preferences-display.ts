@@ -14,6 +14,7 @@ const DISPLAY_FLAGS = [
   "collectiblesPreview",
   "productAnalytics",
   "reliabilityDiagnostics",
+  "vipNotice",
 ] as const;
 
 /** Whether a `setDisplay` input carries only known values. */
