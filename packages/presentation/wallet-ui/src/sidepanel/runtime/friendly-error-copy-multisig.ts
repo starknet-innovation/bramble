@@ -215,6 +215,8 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   // The raw sentence is already what the reader should see.
   ["couldn't update this multisig's key.", "Couldn't update this multisig's key."],
   ["create a key before sharing it.", "Create a key before sharing it."],
+  ["share the key with a co-owner first.", "Share the key with a co-owner first."],
+  ["argent multisig intent is not ready", "This transaction isn't ready to send."],
   [
     "this multisig's signers aren't available yet.",
     "This multisig's signers aren't available yet.",

@@ -5,20 +5,25 @@
 import { describe, expect, test } from "bun:test";
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
-import {
-  type MultisigStrk20Authorization,
-  type MultisigStrk20RelayRequest,
-  multisigStrk20CallSetHash,
+import type {
+  MultisigStrk20Authorization,
+  MultisigStrk20RelayRequest,
 } from "@bramble/privacy/multisig-strk20";
-import { redactStrk20Calldata } from "@bramble/privacy/multisig-strk20-redaction";
 import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import type { Strk20Service } from "@bramble/privacy/service";
 import { createMemoryStore } from "@bramble/store/kv";
-import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
-import { ec, num, typedData } from "starknet";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  STRK_TOKEN_ADDRESS,
+} from "@bramble/wallet-model/networks";
+import { ec, num, OutsideExecutionVersion, outsideExecution, typedData } from "starknet";
 import type { MultisigOpsDeps } from "../../../apps/extension/src/background/multisig/multisig-deps";
 import { multisigStrk20SubmitProof } from "../../../apps/extension/src/background/multisig/multisig-strk20-submit";
-import { paymasterTypedData } from "../../../packages/features/privacy/tests/support/paymaster";
+import {
+  callSetAuthorization,
+  deposit,
+} from "../../../packages/features/privacy/tests/support/multisig-callset";
 import {
   HARNESS_KEYS,
   HARNESS_MULTISIG,
@@ -45,33 +50,37 @@ const strk20 = {
 
 const facts = ["0x1", "0x2", "0x3", "0x4", "0x64", "0x6", "0x7", "0x1", "0x9"];
 
-const authorization = (): MultisigStrk20Authorization => {
-  const calls = [
-    {
-      calldata: redactStrk20Calldata(["0x10", SCALAR, "0x9999"], SCALAR) ?? [],
-      contractAddress: HARNESS_MULTISIG,
-      entrypoint: "compile_actions",
-    },
-  ];
-  const hash = multisigStrk20CallSetHash(HARNESS_MULTISIG, calls, CHAIN, SCALAR) ?? "0x1";
-  return {
+const POOL = canonicalFelt(STRK20_MAINNET_POOL) ?? "0x1";
+const NOW_SECONDS = 2_000_000_000;
+const STRK = canonicalFelt(STRK_TOKEN_ADDRESS) ?? "0x1";
+
+const authorization = (): MultisigStrk20Authorization =>
+  callSetAuthorization({
     accountAddress: HARNESS_MULTISIG,
     accountId: HARNESS_MULTISIG_ID,
-    calls,
+    actions: [deposit(STRK_TOKEN_ADDRESS, 10n ** 18n)],
     chainId: CHAIN,
-    fragments: [],
-    hash,
-    id: `${HARNESS_MULTISIG_ID}:${hash}`,
-    request: { kind: "register" },
+    pool: POOL,
+    scalar: SCALAR,
     signerPublicKeys: HARNESS_KEYS,
-    state: "collecting",
     summary: FORGED,
     threshold: 2,
-  };
-};
+  });
 
 const relayRequest = (): MultisigStrk20RelayRequest => {
-  const typed = paymasterTypedData();
+  const typed = outsideExecution.getTypedData(
+    CHAIN,
+    { caller: "0x99", execute_after: "0x1", execute_before: num.toHex(NOW_SECONDS + 600) },
+    "0x5",
+    [
+      {
+        calldata: [POOL, num.toHex(10n ** 18n), "0x0"],
+        contractAddress: STRK_TOKEN_ADDRESS,
+        entrypoint: "approve",
+      },
+    ],
+    OutsideExecutionVersion.V2,
+  );
   const messageHash = num.toHex(typedData.getMessageHash(typed, HARNESS_MULTISIG));
   const signed = ec.starkCurve.sign(messageHash, "0x123");
   return {
@@ -80,11 +89,11 @@ const relayRequest = (): MultisigStrk20RelayRequest => {
     authorization: {
       caller: "0x99",
       executeAfter: "0x1",
-      executeBefore: "0x100",
+      executeBefore: num.toHex(NOW_SECONDS + 600),
       publicCallCount: 1,
     },
-    call: { calldata: ["0x1"], contractAddress: "0x2", entrypoint: "apply_actions" },
-    feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+    call: { calldata: ["0x1"], contractAddress: POOL, entrypoint: "apply_actions" },
+    feeAction: { amount: "0x5", recipient: "0x4", token: STRK, type: "withdraw" },
     fragments: [
       {
         publicKey: harnessAccountA.publicKeyX,
@@ -95,7 +104,7 @@ const relayRequest = (): MultisigStrk20RelayRequest => {
     id: `${HARNESS_MULTISIG_ID}:${messageHash}`,
     messageHash,
     proof: { data: PROOF, output: ["0x1"], proof_facts: facts },
-    request: { amount: "0x10", kind: "transfer", recipient: "0x6", token: "0x7" },
+    request: { amount: "0x10", kind: "transfer", recipient: "0x6", token: STRK },
     signerPublicKeys: HARNESS_KEYS,
     state: "collecting",
     summary: FORGED,
@@ -212,8 +221,9 @@ describe("Argent multisig STRK20 relay coordination", () => {
     expect(shown.relays[0]).toEqual(
       expect.objectContaining({ id: relay.id, offer: "send", refresh: true }),
     );
-    expect(shown.authorizations[0]?.summary).toBe("compile_actions");
-    expect(shown.authorizations[0]?.lines).toContain("0x9999");
+    expect(shown.authorizations[0]?.summary).toBe("Privacy pool · compile_actions");
+    expect(shown.authorizations[0]?.lines).toContain("Deposit 1 STRK");
+    expect(shown.authorizations[0]?.lines).toContain(`Account ${HARNESS_MULTISIG}`);
     expect(JSON.stringify(shown.authorizations)).not.toContain(FORGED);
   });
 });

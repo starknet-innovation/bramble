@@ -13,6 +13,7 @@ import { createMemoryStore } from "@bramble/store/kv";
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { createEncryptedStore } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 
 const vaultKey = "bramble:vault";
 const migrationKey = "bramble:vault-migration";
@@ -195,6 +196,25 @@ describe("recoverUnverifiedVault", () => {
     expect(vault.accounts.map((entry) => entry.id)).toEqual([parts.account.id]);
     expect(vault.originGrants).toEqual([]);
     expect(vault.accountSecrets).toEqual([]);
+  });
+
+  test("keeps a multisig's shared viewing key, which may be the only copy left", async () => {
+    const parts = await populated();
+    const scope = {
+      chainId: STARKNET_NETWORKS.SN_MAIN.chainId,
+      isAuthorized: () => true,
+      multisigId: "SN_MAIN:0xabc",
+      poolAddress: "0x123",
+      vaultPassphrase,
+    };
+    expect(await parts.open().createMultisigStrk20Key(scope)).toBe("created");
+    await dropRecords(parts);
+
+    await parts.open().recoverUnverifiedVault(vaultPassphrase);
+
+    const reopened = parts.open();
+    expect(await reopened.multisigStrk20KeyStatus(scope)).toBe("held");
+    expect((await reopened.readVault(vaultPassphrase)).originGrants).toEqual([]);
   });
 
   test("refuses a wrong passphrase and leaves the vault awaiting recovery", async () => {

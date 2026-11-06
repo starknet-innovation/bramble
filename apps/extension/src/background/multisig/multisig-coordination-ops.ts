@@ -28,20 +28,19 @@ import {
   isCoordinationSigner,
   publishForRecipients,
 } from "./multisig-nostr-publish";
+import { importSharedStrk20Authorization } from "./multisig-strk20-import";
 import {
   handleMultisigStrk20KeyOps,
   importSharedStrk20Key,
   type Strk20KeyImport,
 } from "./multisig-strk20-key-ops";
-import { importSharedStrk20Authorization } from "./multisig-strk20-relay";
+import { isWrapPastRetry, nostrSyncSince, retryableSyncedAt } from "./multisig-sync-window";
 import { handleMultisigTxOps } from "./multisig-tx-ops";
 import { type NostrRelayTransport, nativeNostrRelayTransport } from "./nostr-relay";
 
 export { coordinationRelayUrls } from "./multisig-nostr-publish";
 
 const MULTISIG_NOSTR_IDENTIFIER = "bramble.multisig";
-const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
-const NOSTR_INCREMENTAL_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
 
 const readIntentId = (message: unknown): string | null =>
   isRecord(message) &&
@@ -146,19 +145,6 @@ const recentGiftWraps = async (
     return null;
   }
 };
-
-const retryableSyncedAt = (nowSeconds: number, oldestRetryableAt: number | null): number =>
-  oldestRetryableAt === null
-    ? nowSeconds
-    : Math.min(nowSeconds, oldestRetryableAt + NOSTR_INCREMENTAL_LOOKBACK_SECONDS);
-
-const nostrSyncSince = (nowSeconds: number, syncedAt: number | undefined): number =>
-  Math.max(
-    0,
-    syncedAt !== undefined && syncedAt <= nowSeconds
-      ? syncedAt - NOSTR_INCREMENTAL_LOOKBACK_SECONDS
-      : nowSeconds - NOSTR_SYNC_LOOKBACK_SECONDS,
-  );
 
 const FINAL_IMPORT_REFUSALS: ReadonlySet<string> = new Set([
   "Argent multisig intent conflict",
@@ -288,10 +274,14 @@ const recordOpenedWraps = async (
       isAuthorized,
     );
     const event = events[index];
-    if (!result.final && event) {
+    const settled =
+      event && isWrapPastRetry(event.created_at, deps.now() / 1_000)
+        ? { ...result, final: true }
+        : result;
+    if (!settled.final && event) {
       oldestRetryableAt = Math.min(oldestRetryableAt ?? event.created_at, event.created_at);
     }
-    strk20Key = noteWrap(imported, verifiedEventIds, strk20Key, result, event);
+    strk20Key = noteWrap(imported, verifiedEventIds, strk20Key, settled, event);
   }
   return {
     intentIds: [...imported],

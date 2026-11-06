@@ -3,22 +3,17 @@
  * Messages report ids and phases, never the shared scalar or proof bytes.
  */
 
-import { WalletError } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
-import { staleArgentMultisigIntent } from "@bramble/multisig/repository";
-import {
-  strk20ProofBaseBlock,
-  strk20ProofSubmittable,
-} from "@bramble/privacy/multisig-proof-window";
 import {
   MULTISIG_STRK20_AUTHORIZATION_IDENTIFIER,
   type MultisigStrk20ActionRequest,
-  multisigStrk20CallSetAggregate,
+  type MultisigStrk20Authorization,
+  multisigStrk20CallSetHash,
   withMultisigStrk20Fragment,
 } from "@bramble/privacy/multisig-strk20";
+import { isBoundToMultisig } from "@bramble/privacy/multisig-strk20-binding";
+import { reviewMultisigStrk20Calls } from "@bramble/privacy/multisig-strk20-review";
 import { resolveMultisigStrk20Amount } from "@bramble/privacy/multisig-strk20-token";
-import { submitStrk20PaymasterPlan } from "@bramble/privacy/paymaster";
-import { relayClaimSlots } from "@bramble/privacy/relay-claim-slots";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
@@ -26,7 +21,6 @@ import {
   isNonZeroStarkFieldElement,
   sameFelt,
 } from "@bramble/wallet-model/networks";
-import { type TypedData, typedData } from "starknet";
 import { signerForContext } from "../accounts/wallet-ops";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { MultisigOpsDeps } from "./multisig-deps";
@@ -35,17 +29,15 @@ import {
   coordinationRelayUrls,
   publishForRecipients,
 } from "./multisig-nostr-publish";
+import { multisigStrk20PanelCards } from "./multisig-strk20-cards";
 import { proveMultisigStrk20 } from "./multisig-strk20-prove";
+import { shareCollectedStrk20Relay, signCollectedStrk20Relay } from "./multisig-strk20-relay";
+import { multisigStrk20Binding, multisigStrk20ReviewScope } from "./multisig-strk20-scope";
+import { refreshMultisigStrk20, submitMultisigStrk20Relay } from "./multisig-strk20-send";
 import {
-  multisigStrk20PanelCards,
-  shareCollectedStrk20Relay,
-  signCollectedStrk20Relay,
-} from "./multisig-strk20-relay";
-import {
-  MULTISIG_STRK20_PROOF_EXPIRED,
+  MULTISIG_STRK20_SHARE_FIRST,
   type MultisigStrk20Session,
   openMultisigStrk20Session,
-  readMultisigStrk20Window,
 } from "./multisig-strk20-session";
 import {
   multisigStrk20Unaffordable,
@@ -148,18 +140,59 @@ const actionFor = async (
   };
 };
 
+// True while co-owners exist and none of them is known to hold the key.
+const soleKeyCopy = async (session: MultisigStrk20Session): Promise<boolean> =>
+  session.config.signerPublicKeys.some(
+    (key) => !sameFelt(key, session.context.active.account.publicKeyX),
+  ) && !(await session.store.isKeyShared(session.context.record.id));
+
 const prepare = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const parsed = requestFrom(message);
   if (!parsed) return { error: "invalid multisig private action" };
   if ("error" in parsed) return parsed;
   const session = await openMultisigStrk20Session(deps, parsed.id);
   if ("error" in session) return session;
+  const kind = "request" in parsed ? parsed.request.kind : parsed.draft.kind;
+  if ((kind === "register" || kind === "deposit") && (await soleKeyCopy(session))) {
+    return { error: MULTISIG_STRK20_SHARE_FIRST };
+  }
   if ("request" in parsed) {
     return proveMultisigStrk20(deps, session, parsed.request, session.readScalar);
   }
   const action = await actionFor(deps, session, parsed.draft);
   if ("error" in action) return action;
   return proveMultisigStrk20(deps, session, action.request, session.readScalar);
+};
+
+/**
+ * True when a stored CallSet is for this multisig as this wallet knows it:
+ * the digest recomputed from the record's own address and chain, the live
+ * signer set and threshold, and calls that decode into a review.
+ */
+const authorizationReviewed = async (
+  deps: MultisigOpsDeps,
+  session: MultisigStrk20Session,
+  authorization: MultisigStrk20Authorization,
+): Promise<boolean> => {
+  const record = session.context.record;
+  const scalar = await session.readScalar();
+  const digest = multisigStrk20CallSetHash(
+    record.address,
+    authorization.calls,
+    session.chainId,
+    scalar,
+  );
+  const preferences = await deps.preferencesStore.read();
+  return (
+    digest !== null &&
+    sameFelt(digest, authorization.hash) &&
+    isBoundToMultisig(authorization, multisigStrk20Binding(record, session.config)) &&
+    reviewMultisigStrk20Calls(
+      authorization.calls,
+      scalar,
+      multisigStrk20ReviewScope(record, session.poolAddress, preferences.tokens),
+    ) !== null
+  );
 };
 
 const signCollected = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
@@ -178,6 +211,9 @@ const signCollected = async (deps: MultisigOpsDeps, message: unknown): Promise<R
   }
   if (authorization.state !== "collecting") {
     return { error: "Argent multisig intent is not collecting signatures" };
+  }
+  if (!(await authorizationReviewed(deps, session, authorization))) {
+    return { error: "Invalid Argent multisig private proof" };
   }
   const member = session.config.signerPublicKeys.find((key) =>
     sameFelt(key, session.context.active.account.publicKeyX),
@@ -246,100 +282,12 @@ const shareCollected = async (
 
 const refresh = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const id = readId(message, REFRESH, "id");
-  if (!id) return { error: "invalid multisig private action" };
-  const intent = await deps.multisigStore.getIntent(id);
-  const accountId = intent?.accountId ?? id.slice(0, id.lastIndexOf(":"));
-  const session = await openMultisigStrk20Session(deps, accountId);
-  if ("error" in session) return session;
-  const proof = intent ? await session.store.getProof(intent.id) : null;
-  const relay = proof ? null : await session.store.getRelay(id);
-  const base = strk20ProofBaseBlock(proof?.proof.proof_facts ?? relay?.proof.proof_facts ?? []);
-  if (base === null) return { error: "Argent multisig private proof is missing" };
-  const window = await readMultisigStrk20Window(session.context.rpcUrls, session.poolAddress);
-  if (strk20ProofSubmittable({ baseBlock: base, ...window })) {
-    return { id, ok: true, phase: "fresh" };
-  }
-  const request = proof?.request ?? relay?.request;
-  if (!request) return { error: "Argent multisig private proof is missing" };
-  if (intent) {
-    await deps.multisigStore.upsertIntent(
-      staleArgentMultisigIntent(intent, "proof"),
-      session.isAuthorized,
-    );
-    await session.store.dropProof(intent.id);
-  }
-  return proveMultisigStrk20(deps, session, request, session.readScalar);
+  return id ? refreshMultisigStrk20(deps, id) : INVALID_ACTION;
 };
 
 const submitRelay = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const id = readId(message, SUBMIT, "id");
-  if (!id) return { error: "invalid multisig private action" };
-  const session = await openMultisigStrk20Session(deps, id.slice(0, id.lastIndexOf(":")));
-  if ("error" in session) return session;
-  const relay = await session.store.getRelay(id);
-  if (!relay || relay.state === "collecting") {
-    return {
-      error: relay ? "Argent multisig intent is not ready" : "Argent multisig intent not found",
-    };
-  }
-  const base = strk20ProofBaseBlock(relay.proof.proof_facts);
-  if (base === null) return { error: "Invalid Argent multisig private proof" };
-  const window = await readMultisigStrk20Window(session.context.rpcUrls, session.poolAddress);
-  if (!strk20ProofSubmittable({ baseBlock: base, ...window })) {
-    return { error: MULTISIG_STRK20_PROOF_EXPIRED };
-  }
-  const paymaster = session.privacyConfig.paymaster;
-  if (!paymaster || !session.strk20.submitAcceptedRelay) {
-    return { error: "strk20 private submission unavailable" };
-  }
-  const relaySlots = relayClaimSlots([...relay.call.calldata]);
-  if (!relaySlots) return { error: "Invalid Argent multisig private proof" };
-  const aggregate = relay.messageHash === undefined ? null : relay.fragments;
-  const sent = await session.strk20.submitAcceptedRelay({
-    ...session.readContext(),
-    broadcast: () =>
-      submitStrk20PaymasterPlan({
-        accountAddress: relay.accountAddress,
-        call: {
-          calldata: [...relay.call.calldata],
-          contractAddress: relay.call.contractAddress,
-          entrypoint: relay.call.entrypoint,
-        },
-        config: paymaster,
-        isAuthorized: session.isAuthorized,
-        nowSeconds: Math.floor(deps.now() / 1000),
-        plan: {
-          ...(relay.authorization ? { authorization: relay.authorization } : {}),
-          feeAction: relay.feeAction,
-          mode: "private-relay",
-          ...(relay.typedData ? { typedData: relay.typedData } : {}),
-        },
-        proof: relay.proof,
-        signTypedData: async (value) => {
-          if (!relay.messageHash || !aggregate)
-            throw new WalletError("Invalid Argent multisig private proof");
-          const again = canonicalFelt(
-            typedData.getMessageHash(value as TypedData, relay.accountAddress),
-          );
-          if (!again || !sameFelt(again, relay.messageHash)) {
-            throw new WalletError(
-              "Argent multisig private proof does not match the signed transaction",
-            );
-          }
-          return [
-            ...multisigStrk20CallSetAggregate(aggregate, {
-              signerPublicKeys: relay.signerPublicKeys,
-              threshold: relay.threshold,
-            }),
-          ];
-        },
-      }),
-    relaySlots: [...relaySlots],
-  });
-  // The paymaster already accepted this write. Keep the mark if the session
-  // lapses afterwards; rolling it back would offer Send again.
-  await session.store.upsertRelay({ ...relay, state: "submitted" }, () => true);
-  return { ok: true, transactionHash: sent.transactionHash };
+  return id ? submitMultisigStrk20Relay(deps, id) : INVALID_ACTION;
 };
 
 const panel = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
@@ -357,8 +305,9 @@ const panel = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeRe
   const cards = await multisigStrk20PanelCards(
     session,
     scalar,
-    preferences.tokens,
+    multisigStrk20ReviewScope(session.context.record, session.poolAddress, preferences.tokens),
     session.context.active.account.publicKeyX,
+    Math.floor(deps.now() / 1000),
   );
   return { ...cards, balances, ok: true };
 };

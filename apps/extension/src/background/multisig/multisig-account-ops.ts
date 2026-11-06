@@ -124,6 +124,16 @@ const hasBlockingWork = (
   return pending || unresolved;
 };
 
+// An unsent private relay holds the only copy of its proof, so it blocks too.
+const removalBlocked = async (
+  deps: MultisigOpsDeps,
+  accountId: string,
+  intents: readonly ArgentMultisigSigningIntent[],
+  operations: readonly ArgentMultisigOperationRecord[],
+): Promise<boolean> =>
+  hasBlockingWork(intents, operations) ||
+  ((await deps.strk20MultisigStore?.hasLiveRelay(accountId)) ?? false);
+
 const removeMultisig = async (
   deps: MultisigOpsDeps,
   message: unknown,
@@ -143,7 +153,7 @@ const removeMultisig = async (
     (intent) => intent.accountId === context.record.id,
   );
   const operations = await settledOperations(deps, context.record);
-  if (hasBlockingWork(intents, operations)) {
+  if (await removalBlocked(deps, context.record.id, intents, operations)) {
     return { error: "Argent multisig has a pending or unresolved operation" };
   }
   const unconfirmed = input.confirmHistoryRemoval
@@ -155,6 +165,8 @@ const removeMultisig = async (
     (await deps.multisigStore.removeMultisig(context.record.id, authorized.isCurrent)) ===
     "removed";
   if (!removed) return { error: "wallet locked" };
+  // Requests, typed data, fragments, and proof bytes are stored unencrypted.
+  await deps.strk20MultisigStore?.purgeAccount(context.record.id);
   const keys = await forgetStrk20KeysForRemovedMultisig(
     deps,
     context.record.id,

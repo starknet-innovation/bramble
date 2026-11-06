@@ -25,6 +25,7 @@ import {
   coordinationRecipients,
   coordinationRelayUrls,
   isCoordinationSigner,
+  isSavedNostrContact,
   publishForRecipients,
 } from "./multisig-nostr-publish";
 import { nativeNostrRelayTransport } from "./nostr-relay";
@@ -101,9 +102,37 @@ const unlocked = (
   return passphrase ? { passphrase } : { error: "wallet locked" };
 };
 
+// The parsed package and its multisig, or final when the wrap is malformed, for
+// another multisig or chain, or from a sender who is not a saved contact. The
+// contact check runs before any RPC read is spent on the wrap.
+const keyWrapFor = (
+  opened: NostrApplicationData,
+  contacts: readonly AddressBookEntry[],
+  records: readonly ArgentMultisigRecord[],
+):
+  | { readonly final: true }
+  | {
+      readonly parsed: NonNullable<ReturnType<typeof readMultisigStrk20KeyPackage>>;
+      readonly record: ArgentMultisigRecord;
+    } => {
+  if (!isNostrPublicKey(opened.senderPublicKey)) return { final: true };
+  const parsed = readMultisigStrk20KeyPackage(opened.content);
+  const record = parsed && records.find((candidate) => candidate.id === parsed.multisigId);
+  if (
+    !parsed ||
+    !record ||
+    !sameFelt(parsed.chainId, STARKNET_NETWORKS[record.networkId].chainId) ||
+    !isSavedNostrContact(contacts, opened.senderPublicKey, record.networkId)
+  ) {
+    return { final: true };
+  }
+  return { parsed, record };
+};
+
 /**
  * Stores a co-owner's viewing key when the wrap is theirs to send. A malformed
- * wrap is finished. An unknown sender or a missing pool is left for a later
+ * wrap, or one from a sender who is not a saved contact, is finished. A
+ * contact who is not a current signer, or a missing pool, is left for a later
  * sync. A conflicting key is left too, so dropping the local key can accept it.
  * Returns null when the wrap is not a viewing key.
  */
@@ -116,13 +145,9 @@ export const importSharedStrk20Key = async (
   isAuthorized: () => boolean,
 ): Promise<Strk20KeyImport | null> => {
   if (opened.identifier !== MULTISIG_STRK20_KEY_IDENTIFIER) return null;
-  if (!isNostrPublicKey(opened.senderPublicKey)) return { final: true };
-  const parsed = readMultisigStrk20KeyPackage(opened.content);
-  if (!parsed) return { final: true };
-  const record = records.find((candidate) => candidate.id === parsed.multisigId);
-  if (!record || !sameFelt(parsed.chainId, STARKNET_NETWORKS[record.networkId].chainId)) {
-    return { final: true };
-  }
+  const wrap = keyWrapFor(opened, contacts, records);
+  if ("final" in wrap) return wrap;
+  const { parsed, record } = wrap;
   const accept = deps.wallet.acceptMultisigStrk20Key;
   if (!accept || !isAuthorized()) return { final: false };
   const preferences = await deps.preferencesStore.read();
@@ -144,6 +169,8 @@ export const importSharedStrk20Key = async (
     vaultPassphrase,
   });
   if (!isAuthorized()) return { final: false, strk20Key: result };
+  // The sender holds this key too, so this wallet's copy is not the only one.
+  if (result !== "conflict") await deps.strk20MultisigStore?.markKeyShared(record.id, true);
   return { final: result !== "conflict", strk20Key: result };
 };
 
@@ -186,6 +213,7 @@ const create = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeR
       poolAddress: scope.poolAddress,
       vaultPassphrase: session.passphrase,
     });
+    if (state === "created") await deps.strk20MultisigStore?.markKeyShared(multisigId, false);
     return { ok: true, state };
   } catch (error) {
     const refusal = locked(error);
@@ -228,7 +256,7 @@ const share = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeRe
   if (recipients.length === 0) {
     return { error: "Save a co-signer wallet card before sharing securely" };
   }
-  return publishSharedKey(
+  const published = await publishSharedKey(
     deps,
     recipients,
     content,
@@ -236,6 +264,10 @@ const share = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeRe
     authorized.isCurrent,
     coordinationRelayUrls(preferences),
   );
+  if ("recipients" in published && Number(published["recipients"]) > 0) {
+    await deps.strk20MultisigStore?.markKeyShared(multisigId, true);
+  }
+  return published;
 };
 
 const publishSharedKey = async (
@@ -293,6 +325,7 @@ const forget = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeR
     if (refusal) return refusal;
     throw error;
   }
+  await deps.strk20MultisigStore?.markKeyShared(multisigId, false);
   return { ok: true };
 };
 

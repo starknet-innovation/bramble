@@ -40,6 +40,19 @@ export const isCoordinationSigner = (
 ): boolean => signerContact(contacts, senderPublicKey, networkId, signerGuids) !== null;
 
 /**
+ * True when the Nostr sender is any saved contact on this network. Checked
+ * before an RPC read, so a stranger's wrap costs nothing and is not retried.
+ */
+export const isSavedNostrContact = (
+  contacts: readonly AddressBookEntry[],
+  senderPublicKey: string,
+  networkId: string,
+): boolean =>
+  contacts.some(
+    (contact) => contact.networkId === networkId && contact.nostrPublicKey === senderPublicKey,
+  );
+
+/**
  * Saved co-signer cards on this network, excluding this wallet's own Nostr key.
  * One card per Nostr key.
  */

@@ -13,7 +13,10 @@ import type {
   MultisigStrk20ActionRequest,
   MultisigStrk20RelayRequest,
 } from "@bramble/privacy/multisig-strk20";
-import { multisigStrk20Summary } from "@bramble/privacy/multisig-strk20-review";
+import {
+  multisigStrk20Summary,
+  reviewMultisigStrk20TypedData,
+} from "@bramble/privacy/multisig-strk20-review";
 import {
   canonicalStrk20PoolFee,
   prepareStrk20AccountActions,
@@ -30,7 +33,12 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { reviewArgentMultisigCalls } from "./multisig-call-review";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import { configSnapshot } from "./multisig-ops";
-import { MULTISIG_STRK20_WAITING, type MultisigStrk20Session } from "./multisig-strk20-session";
+import { multisigStrk20ReviewScope } from "./multisig-strk20-scope";
+import {
+  MULTISIG_STRK20_FULL,
+  MULTISIG_STRK20_WAITING,
+  type MultisigStrk20Session,
+} from "./multisig-strk20-session";
 
 const contextWithScalar = (
   session: MultisigStrk20Session,
@@ -164,6 +172,14 @@ const signRelayFragment = async (
   messageHash: string | null,
 ): Promise<MultisigStrk20RelayRequest> => {
   if (!messageHash) return relay;
+  const preferences = await deps.preferencesStore.read();
+  const reviewed = reviewMultisigStrk20TypedData(
+    relay.typedData,
+    messageHash,
+    Math.floor(deps.now() / 1000),
+    multisigStrk20ReviewScope(session.context.record, session.poolAddress, preferences.tokens),
+  );
+  if (!reviewed) throw new WalletError("Invalid Argent multisig private proof");
   const member = session.config.signerPublicKeys.find((key) =>
     sameFelt(key, session.context.active.account.publicKeyX),
   );
@@ -211,7 +227,11 @@ const relayStored = (
     ? { id, ok: true, phase: state === "collecting" ? "authorization" : "relay" }
     : {
         error:
-          stored === "unauthorized" ? "wallet locked" : "Invalid Argent multisig private proof",
+          stored === "unauthorized"
+            ? "wallet locked"
+            : stored === "full"
+              ? MULTISIG_STRK20_FULL
+              : "Invalid Argent multisig private proof",
       };
 
 const freezeRelay = async (
@@ -317,10 +337,11 @@ export const proveMultisigStrk20 = async (
   session.prepareRequest(request);
   const context = contextWithScalar(session, scalar);
   try {
+    // Awaited inside the try, so an asynchronous waiting refusal is caught here.
     if (request.kind === "register" || request.kind === "deposit") {
-      return proveAccount(deps, session, context, request);
+      return await proveAccount(deps, session, context, request);
     }
-    return proveRelay(deps, session, context, request);
+    return await proveRelay(deps, session, context, request);
   } catch (error) {
     if (error instanceof WalletError && error.message === MULTISIG_STRK20_WAITING) {
       const id = session.waitingId();

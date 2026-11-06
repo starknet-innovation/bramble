@@ -368,13 +368,14 @@ export const createWalletVaultService = ({
         const vault = migrateVault(await encryptedStore.readUnverified(vaultPassphrase));
         invariant(isVaultV13(vault), "Unsupported vault schema");
         // A rollback can restore a revoked site connection or a removed viewing
-        // key; the user cannot tell which, so recovery drops them all.
+        // key; the user cannot tell which, so recovery drops them all. A
+        // multisig's shared key is kept: co-owners already hold it, so a rolled
+        // back copy grants nothing new, and it may be the only copy left.
         await encryptedStore.replaceUnverified(
           {
             ...vault,
             accountSecrets: [],
             multisigStrk20KeyConflicts: [],
-            multisigStrk20ViewingKeys: [],
             originGrants: [],
           },
           vaultPassphrase,

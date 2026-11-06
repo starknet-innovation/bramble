@@ -1,14 +1,25 @@
 /**
  * What a co-owner is shown before signing a pool CallSet or a relay digest.
- * The CallSet digest covers the calls only, so a stored request or summary is
- * not rendered. A relay digest covers the typed data, so that is what is shown.
+ * Every line is decoded from what the digest covers: the pool call, its
+ * actions, the token and amount in that token's decimals, and the recipient,
+ * plus the account and network the digest is bound to. A sender's label is
+ * never rendered, and anything that does not decode returns null so it cannot
+ * be signed.
  */
 
-import { isRecord } from "@bramble/core/json";
-import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
-import { hash, type TypedData, typedData } from "starknet";
+import { sameFelt } from "@bramble/wallet-model/networks";
+import {
+  decodeMultisigStrk20CompileActions,
+  type MultisigStrk20PoolAction,
+} from "./pool-call-decode";
 import type { MultisigStrk20ActionRequest } from "./records";
 import { restoreStrk20Calldata } from "./redaction";
+import {
+  type MultisigStrk20Review,
+  type MultisigStrk20ReviewScope,
+  reviewAmount,
+  reviewScopeLines,
+} from "./review-scope";
 
 /**
  * The summary this wallet writes for an action it proved. A co-owner's screen
@@ -23,126 +34,105 @@ export const multisigStrk20Summary = (kind: MultisigStrk20ActionRequest["kind"])
         ? "Withdraw from this multisig's private balance"
         : "Transfer from this multisig's private balance";
 
-type TokenName = { readonly address: string; readonly symbol: string };
+const party = (recipient: string, scope: MultisigStrk20ReviewScope): string =>
+  sameFelt(recipient, scope.accountAddress) ? "this multisig" : recipient;
 
-const labeledFelt = (felt: string, scalar: string, tokens: readonly TokenName[]): string | null => {
-  if (sameFelt(felt, scalar)) return null;
-  return tokens.find((candidate) => sameFelt(candidate.address, felt))?.symbol ?? felt;
+const actionLine = (
+  action: MultisigStrk20PoolAction,
+  scope: MultisigStrk20ReviewScope,
+): string | null | undefined => {
+  if (action.kind === "setup") return undefined;
+  if (action.kind === "register") return multisigStrk20Summary("register");
+  const value = reviewAmount(action.token, action.amount, scope.tokens);
+  if (!value) return null;
+  if (action.kind === "deposit") return `Deposit ${value}`;
+  if (action.kind === "withdraw") return `Withdraw ${value} to ${party(action.recipient, scope)}`;
+  return sameFelt(action.recipient, scope.accountAddress)
+    ? `Keep ${value} in this multisig`
+    : `Send ${value} to ${action.recipient}`;
 };
 
 /**
- * One CallSet as the signer should read it: the entrypoints, then every
- * restored felt except the shared scalar. A tracked token is named by its
- * symbol. Returns null when the scalar does not restore the calls.
+ * One CallSet as the signer should read it. Returns null unless it is exactly
+ * one `compile_actions` call on the configured pool, for this account and
+ * this scalar, whose actions all decode against tracked tokens.
  */
 export const reviewMultisigStrk20Calls = (
-  calls: readonly { readonly calldata: readonly string[]; readonly entrypoint: string }[],
+  calls: readonly {
+    readonly calldata: readonly string[];
+    readonly contractAddress: string;
+    readonly entrypoint: string;
+  }[],
   scalar: string,
-  tokens: readonly TokenName[],
-): { readonly lines: readonly string[]; readonly title: string } | null => {
-  const restored = calls.map((call) => {
-    const calldata = restoreStrk20Calldata(call.calldata, scalar);
-    return calldata ? { calldata, entrypoint: call.entrypoint } : null;
-  });
-  if (restored.some((call) => call === null)) return null;
-  const lines: string[] = [];
-  for (const call of restored) {
-    if (!call) continue;
-    for (const felt of call.calldata) {
-      const label = labeledFelt(felt, scalar, tokens);
-      if (label) lines.push(label);
-    }
-  }
-  const title = restored
-    .map((call) => call?.entrypoint ?? "")
-    .filter((entrypoint) => entrypoint.length > 0)
-    .join(", ");
-  return { lines, title: title.length > 0 ? title : "Calls" };
-};
-
-const typedCalls = (
-  message: Record<string, unknown>,
-):
-  | readonly {
-      readonly calldata: readonly string[];
-      readonly selector: string;
-      readonly to: string;
-    }[]
-  | null => {
-  const calls = message["Calls"];
-  if (!Array.isArray(calls)) return null;
-  const rows = calls.map((call) => {
-    if (!isRecord(call) || typeof call["To"] !== "string" || typeof call["Selector"] !== "string") {
-      return null;
-    }
-    const calldata = call["Calldata"];
-    if (!Array.isArray(calldata) || !calldata.every((felt) => typeof felt === "string"))
-      return null;
-    return { calldata, selector: call["Selector"], to: call["To"] };
-  });
-  return rows.every((row) => row !== null) ? rows : null;
-};
-
-const titleFor = (entrypoint: string | undefined, selectors: readonly string[]): string => {
-  if (!entrypoint) return "Calls";
-  try {
-    const selector = hash.getSelectorFromName(entrypoint);
-    return selectors.every((value) => sameFelt(value, selector)) ? entrypoint : "Calls";
-  } catch {
-    return "Calls";
-  }
-};
-
-const typedDigest = (value: TypedData, accountAddress: string): string | null => {
-  try {
-    return canonicalFelt(typedData.getMessageHash(value, accountAddress));
-  } catch {
+  scope: MultisigStrk20ReviewScope,
+): MultisigStrk20Review | null => {
+  const [call] = calls;
+  if (
+    calls.length !== 1 ||
+    !call ||
+    call.entrypoint !== "compile_actions" ||
+    !sameFelt(call.contractAddress, scope.poolAddress)
+  ) {
     return null;
   }
-};
-
-const typedLines = (
-  calls: readonly { readonly calldata: readonly string[]; readonly to: string }[],
-  scalar: string,
-  tokens: readonly TokenName[],
-): readonly string[] => {
+  const calldata = restoreStrk20Calldata(call.calldata, scalar);
+  const actions = calldata
+    ? decodeMultisigStrk20CompileActions(calldata, scope.accountAddress, scalar)
+    : null;
+  if (!actions) return null;
   const lines: string[] = [];
-  for (const call of calls) {
-    const to = labeledFelt(call.to, scalar, tokens);
-    if (to) lines.push(to);
-    for (const felt of call.calldata) {
-      const label = labeledFelt(felt, scalar, tokens);
-      if (label) lines.push(label);
-    }
+  for (const action of actions) {
+    const line = actionLine(action, scope);
+    if (line === null) return null;
+    if (line !== undefined) lines.push(line);
   }
-  return lines;
+  if (lines.length === 0) return null;
+  return { lines: [...reviewScopeLines(scope), ...lines], title: "Privacy pool · compile_actions" };
 };
 
 /**
- * The relay typed data, once its digest matches `messageHash`. Lines are the
- * call addresses and calldata the digest covers. `entrypoint` is used as the
- * title only when every call selector is that name. Returns null when the
- * digest does not match, so a substituted label cannot be shown.
+ * The relay this device proved, before Send. Returns null unless its call is
+ * `apply_actions` on the configured pool and the action and fee tokens are
+ * tracked. The request is this device's own; it never arrives from a co-owner.
  */
-export const reviewMultisigStrk20TypedData = (
-  value: unknown,
-  accountAddress: string,
-  messageHash: string,
-  scalar: string,
-  tokens: readonly TokenName[],
-  entrypoint?: string,
-): { readonly lines: readonly string[]; readonly title: string } | null => {
-  if (!isRecord(value)) return null;
-  const digest = typedDigest(value as unknown as TypedData, accountAddress);
-  if (!digest || !sameFelt(digest, messageHash)) return null;
-  const message = value["message"];
-  const calls = isRecord(message) ? typedCalls(message) : null;
-  if (!calls) return { lines: [messageHash], title: "Calls" };
+export const reviewMultisigStrk20Relay = (
+  relay: {
+    readonly call: { readonly contractAddress: string; readonly entrypoint: string };
+    readonly feeAction: { readonly amount: string; readonly token: string };
+    readonly request: MultisigStrk20ActionRequest;
+  },
+  scope: MultisigStrk20ReviewScope,
+): MultisigStrk20Review | null => {
+  const { call, feeAction, request } = relay;
+  if (call.entrypoint !== "apply_actions" || !sameFelt(call.contractAddress, scope.poolAddress)) {
+    return null;
+  }
+  if (
+    (request.kind !== "transfer" && request.kind !== "withdraw") ||
+    !request.token ||
+    !request.amount ||
+    !request.recipient
+  ) {
+    return null;
+  }
+  const value = reviewAmount(request.token, BigInt(request.amount), scope.tokens);
+  const fee = reviewAmount(feeAction.token, BigInt(feeAction.amount), scope.tokens);
+  if (!value || !fee) return null;
+  const action =
+    request.kind === "transfer"
+      ? `Send ${value} to ${request.recipient}`
+      : `Withdraw ${value} to ${party(request.recipient, scope)}`;
   return {
-    lines: typedLines(calls, scalar, tokens),
-    title: titleFor(
-      entrypoint,
-      calls.map((call) => call.selector),
-    ),
+    lines: [...reviewScopeLines(scope), action, `Relay fee ${fee}`],
+    title: "Privacy pool · apply_actions",
   };
 };
+
+/** The scope and card types every multisig STRK20 review shares. */
+export type {
+  MultisigStrk20Review,
+  MultisigStrk20ReviewScope,
+  MultisigStrk20ReviewToken,
+} from "./review-scope";
+/** Relay typed-data review; see `./typed-review`. */
+export { reviewMultisigStrk20TypedData } from "./typed-review";

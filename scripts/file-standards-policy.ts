@@ -228,6 +228,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Relay fragment collection. The vault credential only transits into the
   // hash signer. Proof bytes stay on this device and are never wrapped.
   "apps/extension/src/background/multisig/multisig-strk20-relay.ts",
+  // Co-owner package import. The vault credential only transits into the
+  // vault read of the shared scalar, which never leaves the binding check.
+  "apps/extension/src/background/multisig/multisig-strk20-import.ts",
   // Argent multisig stores public signer identifiers and verified public
   // signature fragments only. Private signing remains behind Krusty and the
   // privileged background accountHashSigner boundary.

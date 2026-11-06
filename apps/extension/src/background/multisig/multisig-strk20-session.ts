@@ -14,7 +14,10 @@ import {
   withMultisigStrk20Fragment,
 } from "@bramble/privacy/multisig-strk20";
 import { redactStrk20Calldata } from "@bramble/privacy/multisig-strk20-redaction";
-import { multisigStrk20Summary } from "@bramble/privacy/multisig-strk20-review";
+import {
+  multisigStrk20Summary,
+  reviewMultisigStrk20Calls,
+} from "@bramble/privacy/multisig-strk20-review";
 import type { MultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import type { Strk20AccountContext } from "@bramble/privacy/service";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
@@ -28,9 +31,19 @@ import { captureSessionAuthorization } from "../runtime/session";
 import { type ArgentMultisigContext, contextFor } from "./multisig-context";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import { currentConfigFor } from "./multisig-ops";
+import { multisigStrk20ReviewScope } from "./multisig-strk20-scope";
 
 /** Thrown when co-owners still have to authorize the pool CallSet. */
 export const MULTISIG_STRK20_WAITING = "Waiting for co-owners to authorize this private action.";
+
+/**
+ * Refusal to register or deposit while this wallet holds the only copy of the
+ * viewing key. Losing that copy would lock the private balance for everyone.
+ */
+export const MULTISIG_STRK20_SHARE_FIRST = "Share the key with a co-owner first.";
+
+/** Refusal when this multisig already has as many open private rounds as it can keep. */
+export const MULTISIG_STRK20_FULL = "Argent multisig has a pending or unresolved operation";
 
 /** Thrown when the pool would reject the stored proof. */
 export const MULTISIG_STRK20_PROOF_EXPIRED = "This private transaction expired. Refresh it.";
@@ -65,7 +78,11 @@ export type MultisigStrk20Session = {
 const requireStoredAuthorization = (stored: string): void => {
   if (stored === "stored") return;
   throw new WalletError(
-    stored === "unauthorized" ? "wallet locked" : "Invalid Argent multisig private proof",
+    stored === "unauthorized"
+      ? "wallet locked"
+      : stored === "full"
+        ? MULTISIG_STRK20_FULL
+        : "Invalid Argent multisig private proof",
   );
 };
 
@@ -125,13 +142,20 @@ export const openMultisigStrk20Session = async (
   let pending: string | null = null;
   let request: MultisigStrk20ActionRequest = { kind: "register" };
   const chainId = STARKNET_NETWORKS[resolved.record.networkId].chainId;
+  const reviewScope = multisigStrk20ReviewScope(resolved.record, poolAddress, preferences.tokens);
   const signCallSet = async (messageHash: string, calls: readonly Call[]): Promise<string[]> => {
     const callsForHash = redactedCalls(calls, scalar);
     const digest = callsForHash
       ? multisigStrk20CallSetHash(resolved.record.address, callsForHash, chainId, scalar)
       : null;
     const hash = digest ? canonicalFelt(digest) : null;
-    if (!callsForHash || !hash || !sameFelt(hash, messageHash)) {
+    // The same decoded review a co-owner sees must pass before this key signs.
+    if (
+      !callsForHash ||
+      !hash ||
+      !sameFelt(hash, messageHash) ||
+      !reviewMultisigStrk20Calls(callsForHash, scalar, reviewScope)
+    ) {
       throw new WalletError("Invalid Argent multisig private proof");
     }
     const id = `${resolved.record.id}:${hash}`;

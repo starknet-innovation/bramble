@@ -18,8 +18,9 @@ import { reviewMultisigStrk20Calls } from "@bramble/privacy/multisig-strk20-revi
 import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import { ec, num, typedData } from "starknet";
+import { callSetAuthorization, deposit } from "../support/multisig-callset";
 import { paymasterTypedData } from "../support/paymaster";
 
 const SCALAR = "0x654321";
@@ -63,12 +64,30 @@ const proof = (intentId: string) => ({
 });
 
 describe("multisig STRK20 review binding", () => {
-  test("shows the restored calls and not a label the sender wrote", async () => {
-    const record = authorization(FORGED);
+  test("shows the decoded calls and not a label the sender wrote", async () => {
+    const pool = "0x9001";
+    const record = callSetAuthorization({
+      accountAddress: ACCOUNT,
+      accountId: `SN_MAIN:${ACCOUNT}`,
+      actions: [deposit(STRK_TOKEN_ADDRESS, 10n ** 18n)],
+      chainId: CHAIN,
+      pool,
+      scalar: SCALAR,
+      signerPublicKeys: ["0xabc"],
+      summary: FORGED,
+      threshold: 1,
+    });
     const store = createMultisigStrk20Store(createMemoryStore());
     expect(await store.upsertAuthorization(record, SCALAR)).toBe("stored");
-    const review = reviewMultisigStrk20Calls(record.calls, SCALAR, []);
-    expect(review).toEqual({ lines: ["0x10", "0x9999"], title: "compile_actions" });
+    const review = reviewMultisigStrk20Calls(record.calls, SCALAR, {
+      accountAddress: ACCOUNT,
+      chainId: CHAIN,
+      network: "Starknet Mainnet",
+      poolAddress: pool,
+      tokens: [{ address: STRK_TOKEN_ADDRESS, decimals: 18, symbol: "STRK" }],
+    });
+    expect(review?.title).toBe("Privacy pool · compile_actions");
+    expect(review?.lines).toContain("Deposit 1 STRK");
     expect(JSON.stringify(review)).not.toContain(FORGED);
   });
 
