@@ -46,6 +46,7 @@ export const bindHomeStaking = (deps: HomeStakingUiDeps): void => {
       // Only the tabs on screen: NFTs and Staking are each offered only where
       // they apply.
       const tabs = TABS.filter((item) => app?.querySelector(`[data-home-tab="${item}"]`));
+      if (tabs.length === 0) return;
       const index = tabs.findIndex((item) => item === tab.dataset["homeTab"]);
       const next =
         event.key === "ArrowRight"

@@ -191,6 +191,29 @@ describe("Home tabs (#845's tab mechanism, with NFTs between Tokens and Staking)
     expect(off.selections).toEqual(["staking"]);
   });
 
+  test("keys on a tab with no offered tabs around it do nothing", async () => {
+    const app = document.createElement("div");
+    app.innerHTML = '<button data-home-tab="unknown" type="button" role="tab">?</button>';
+    document.body.append(app);
+    const selections: Array<HomeTab | undefined> = [];
+    bindHomeStaking({
+      app,
+      navigate: () => undefined,
+      render: async () => undefined,
+      setState: (next) => selections.push(next.homeTab),
+      state: () => STAKING_LOADING,
+      status: () => ({}) as WalletStatus,
+    });
+    const tab = app.querySelector("button");
+    for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
+      const event = new KeyboardEvent("keydown", { cancelable: true, key });
+      tab?.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    await settle();
+    expect(selections).toEqual([]);
+  });
+
   test("a remembered tab that is not offered falls back to Tokens", () => {
     const { bar } = homeTabPanels("nfts", "", STAKING_LOADING, null);
     expect(bar).toContain(

@@ -31,10 +31,21 @@ import { type BoundedHttpFetch, fetchBoundedJson, HTTP_BODY_LIMITS } from "@bram
 import { isRecord } from "@bramble/core/json";
 import { trimTrailingSlashes } from "@bramble/core/service-url";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import { type DiscoveredNft, type NftCoverage, normalizeIndexerNft } from "./nft-metadata";
+import { type DiscoveredNft, normalizeIndexerNft } from "./nft-metadata";
 
-/** Re-exported so discovery callers import coverage beside the service. */
-export type { NftCoverage } from "./nft-metadata";
+/**
+ * What one discovery run can say about the candidates it returns:
+ * - "none": no indexer ran (the preview is off, the network is not Mainnet
+ *   for Starkscan, or the user keeps the explorer off it); only watched NFTs
+ *   show.
+ * - "complete": the indexer answered and claims its list is whole.
+ * - "incomplete": the list may be missing NFTs: Starkscan reports a partial
+ *   index or more positions than one page, an indexer listed more than the
+ *   wallet's discovery cap or records it could not read, or an on-chain
+ *   ownership read failed so a candidate could be neither shown nor ruled out.
+ * - "unavailable": the indexer failed or answered something malformed.
+ */
+export type NftCoverage = "complete" | "incomplete" | "none" | "unavailable";
 
 /** One discovery run: owned-token candidates (still untrusted) and coverage. */
 export type NftDiscovery = {

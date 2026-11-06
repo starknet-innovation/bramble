@@ -134,6 +134,12 @@ describe("NFT gallery bindings", () => {
     expect(remove?.textContent).toBe("Tap again to remove");
     expect(remove?.getAttribute("aria-label")).toBe("Tap again to remove");
     expect(remove?.classList.contains("is-confirming")).toBe(true);
+    // Losing focus disarms it: the next tap only arms again.
+    remove?.dispatchEvent(new Event("blur"));
+    expect(remove?.textContent).toBe("Remove");
+    remove?.click();
+    await flush();
+    expect(removed).toEqual([]);
     remove?.click();
 
     const form = app.querySelector<HTMLFormElement>("#nft-form");
@@ -214,6 +220,13 @@ describe("NFT gallery bindings", () => {
     spam?.click();
     remove?.click();
     remove?.click();
+    await flush();
+    // The removal failed and the control is enabled again: one later tap only
+    // arms it again, it never retries the removal on its own.
+    expect(remove?.disabled).toBe(false);
+    expect(remove?.textContent).toBe("Remove");
+    remove?.click();
+    expect(remove?.textContent).toBe("Tap again to remove");
 
     const form = app.querySelector<HTMLFormElement>("#nft-form");
     const contract = form?.querySelector<HTMLInputElement>('input[name="contract"]');

@@ -9,7 +9,8 @@ import type {
   ArgentMultisigSigningIntent,
 } from "@bramble/multisig/repository";
 import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
-import type { DiscoveredNft, NftCoverage } from "@bramble/portfolio/nft-metadata";
+import type { NftCoverage } from "@bramble/portfolio/nft-indexer";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { DeploySponsorship } from "@bramble/privacy/sponsored-deploy";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
 import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
