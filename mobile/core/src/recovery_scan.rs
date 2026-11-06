@@ -6,6 +6,9 @@
 //! Probe judging follows `isAccountDeployed` / `isContractNotFoundError`: a felt result is
 //! deployed; error code 20 or a "contract not found" message is not deployed; anything else, or a
 //! missing, duplicate or foreign id, pauses the scan with the batch left to be retried.
+//!
+//! The second round reads balances for undeployed candidates and, for deployed ones, the
+//! advisory signer and privacy-pool reads (`recovery_advisory.rs`), whose failures never pause.
 
 use std::collections::HashMap;
 
@@ -17,7 +20,9 @@ use crate::account_store::{is_usable_account_index, VaultPayload};
 use crate::kms::Ladder;
 use crate::kms_accounts::family_address;
 use crate::networks::{self, NetworkId};
+use crate::privacy::config::route_for;
 use crate::recovery::{candidate, keep, scan_shapes, Found, RecoveryCandidate};
+use crate::recovery_advisory::{self as advisory, Gathered, Read};
 use crate::rpc::{self, rpc_error, RpcRequest, RpcResponse, MAX_RESPONSE_BYTES};
 use crate::{felt, CoreError};
 
@@ -42,10 +47,15 @@ pub struct RecoveryScanStep {
 enum Pending {
     ClassHash(usize),
     Balance(usize),
+    Advisory(usize, Read),
+    Block,
 }
 
 struct Probe {
     found: Found,
+    /// The key the account was derived from, which a signable account names as its owner.
+    public_key: Felt,
+    gathered: Gathered,
 }
 
 struct Batch {
@@ -53,6 +63,11 @@ struct Batch {
     manual: bool,
     probes: Vec<Probe>,
     outstanding: HashMap<u64, Pending>,
+    /// The second round (balances and advisory reads) has been issued.
+    detailed: bool,
+    /// The third round (the latest block, only for a Braavos 2FA removal) has been considered.
+    timed: bool,
+    block_time: Option<u64>,
 }
 
 /// One scan's in-memory state.
@@ -77,8 +92,8 @@ fn class_hash_request(id: u64, address: &Felt) -> String {
     )
 }
 
-/// Judges a `starknet_getClassHashAt` response: `Ok(true)` deployed, `Ok(false)` not deployed.
-pub(crate) fn judge_class_hash(body: &str, id: u64) -> Result<bool, CoreError> {
+/// Judges a `starknet_getClassHashAt` response: `Ok(Some(class))` deployed, `Ok(None)` not.
+pub(crate) fn judge_class_hash(body: &str, id: u64) -> Result<Option<Felt>, CoreError> {
     if body.len() > MAX_RESPONSE_BYTES {
         return Err(paused());
     }
@@ -90,14 +105,14 @@ pub(crate) fn judge_class_hash(body: &str, id: u64) -> Result<bool, CoreError> {
         return result
             .as_str()
             .and_then(felt::parse)
-            .map(|_| true)
+            .map(Some)
             .ok_or_else(paused);
     }
     let error = value.get("error").ok_or_else(paused)?;
     let code = error.get("code").and_then(Value::as_i64);
     let message = error.get("message").and_then(Value::as_str).unwrap_or("");
     if code == Some(CONTRACT_NOT_FOUND) || message.to_lowercase().contains("contract not found") {
-        return Ok(false);
+        return Ok(None);
     }
     Err(paused())
 }
@@ -230,7 +245,11 @@ pub(crate) fn next(
                     address: placed.address,
                     deployed: false,
                     funded: false,
+                    restriction: None,
+                    privacy_elsewhere: false,
                 },
+                public_key,
+                gathered: Gathered::default(),
             });
         }
     }
@@ -249,6 +268,9 @@ pub(crate) fn next(
         manual: manual_index.is_some(),
         probes,
         outstanding,
+        detailed: false,
+        timed: false,
+        block_time: None,
     });
     Ok(scan.step(requests))
 }
@@ -278,7 +300,9 @@ fn judge(batch: &mut Batch, responses: &[RpcResponse]) -> Result<(), CoreError> 
     for (pending, body, id) in matched(batch, responses)? {
         match pending {
             Pending::ClassHash(position) => {
-                batch.probes[position].found.deployed = judge_class_hash(&body, id)?;
+                let probe = &mut batch.probes[position];
+                probe.gathered.live_class = judge_class_hash(&body, id)?;
+                probe.found.deployed = probe.gathered.live_class.is_some();
             }
             Pending::Balance(position) => {
                 let balance = rpc::parse_balance_of(&body, id).map_err(|_| paused())?;
@@ -286,15 +310,55 @@ fn judge(batch: &mut Batch, responses: &[RpcResponse]) -> Result<(), CoreError> 
                     batch.probes[position].found.funded = true;
                 }
             }
+            Pending::Advisory(position, read) => {
+                let felts = advisory::judge_call(&body, id);
+                batch.probes[position].gathered.reads.insert(read, felts);
+            }
+            Pending::Block => batch.block_time = advisory::judge_block(&body, id),
         }
     }
     Ok(())
 }
 
-/// Judges the host's responses. Returns balance requests for undeployed candidates after the
-/// class-hash round, or the finished batch once every answer is in.
+impl ScanState {
+    /// The second round: balances for each undeployed candidate, and each deployed one's
+    /// advisory reads.
+    fn detail_requests(&mut self, batch: &mut Batch) -> Result<Vec<RpcRequest>, CoreError> {
+        let tokens = &networks::info(self.network).tokens;
+        let pool = route_for(self.network).map(|route| route.pool);
+        let pool_address = pool.unwrap_or(Felt::ZERO);
+        let mut requests = Vec::new();
+        for position in 0..batch.probes.len() {
+            let probe = &batch.probes[position];
+            let address = probe.found.address;
+            if let Some(live_class) = probe.gathered.live_class {
+                let family = probe.found.family;
+                for read in advisory::reads(family, &live_class, pool.is_some()) {
+                    let id = self.allocate_id();
+                    batch
+                        .outstanding
+                        .insert(id, Pending::Advisory(position, read));
+                    requests.push(advisory::request(id, read, &address, &pool_address));
+                }
+                continue;
+            }
+            for token in tokens {
+                let id = self.allocate_id();
+                let account = felt::canonical(&address);
+                let body = rpc::balance_of_request(id, &token.address, &account)?;
+                batch.outstanding.insert(id, Pending::Balance(position));
+                requests.push(RpcRequest::new(id, body));
+            }
+        }
+        Ok(requests)
+    }
+}
+
+/// Judges the host's responses. Returns the second round's requests after the class-hash round,
+/// then the latest block when a Braavos verdict needs it, or the finished batch.
 pub(crate) fn submit(
     state: &mut Option<ScanState>,
+    payload: &VaultPayload,
     responses: &[RpcResponse],
 ) -> Result<RecoveryScanStep, CoreError> {
     let scan = state.as_mut().ok_or_else(|| CoreError::InvalidInput {
@@ -303,32 +367,42 @@ pub(crate) fn submit(
     let mut batch = scan.batch.take().ok_or_else(|| CoreError::InvalidInput {
         reason: "no account search in progress".into(),
     })?;
-    let balance_round = batch
-        .outstanding
-        .values()
-        .any(|pending| matches!(pending, Pending::Balance(_)));
     // On failure the batch is dropped, so `next` re-issues it from the same index.
     judge(&mut batch, responses)?;
     batch.outstanding.clear();
-    if !balance_round {
-        let tokens = &networks::info(scan.network).tokens;
-        let mut requests = Vec::new();
-        for position in 0..batch.probes.len() {
-            if batch.probes[position].found.deployed {
-                continue;
-            }
-            for token in tokens {
-                let id = scan.allocate_id();
-                let account = felt::canonical(&batch.probes[position].found.address);
-                let body = rpc::balance_of_request(id, &token.address, &account)?;
-                batch.outstanding.insert(id, Pending::Balance(position));
-                requests.push(RpcRequest::new(id, body));
-            }
-        }
+    if !batch.detailed {
+        batch.detailed = true;
+        let requests = scan.detail_requests(&mut batch)?;
         if !requests.is_empty() {
             scan.batch = Some(batch);
             return Ok(scan.step(requests));
         }
+    }
+    // A block lists every transaction hash, so it is read only when a verdict needs its time
+    // (`braavosSignerVerdict` reads it only for a requested 2FA removal), as rarely as there.
+    if !batch.timed {
+        batch.timed = true;
+        let needed = batch.probes.iter().any(|probe| {
+            advisory::needs_block(probe.found.family, &probe.gathered, &probe.public_key)
+        });
+        if needed {
+            let id = scan.allocate_id();
+            batch.outstanding.insert(id, Pending::Block);
+            let requests = vec![advisory::block_request(id)];
+            scan.batch = Some(batch);
+            return Ok(scan.step(requests));
+        }
+    }
+    for probe in batch.probes.iter_mut().filter(|probe| probe.found.deployed) {
+        let (found, gathered) = (&mut probe.found, &probe.gathered);
+        advisory::settle(
+            found,
+            gathered,
+            &probe.public_key,
+            batch.block_time,
+            payload,
+            scan.network,
+        );
     }
     for probe in batch
         .probes
@@ -357,12 +431,19 @@ mod tests {
     #[test]
     fn probe_judging_matches_the_extension() {
         let ok = |body: &str| judge_class_hash(body, 3);
-        assert!(ok(r#"{"jsonrpc":"2.0","id":3,"result":"0x1a2b"}"#).unwrap());
-        assert!(!ok(r#"{"jsonrpc":"2.0","id":3,"error":{"code":20,"message":"x"}}"#).unwrap());
-        assert!(!ok(
+        assert!(ok(r#"{"jsonrpc":"2.0","id":3,"result":"0x1a2b"}"#)
+            .unwrap()
+            .is_some());
+        assert!(
+            ok(r#"{"jsonrpc":"2.0","id":3,"error":{"code":20,"message":"x"}}"#)
+                .unwrap()
+                .is_none()
+        );
+        assert!(ok(
             r#"{"jsonrpc":"2.0","id":3,"error":{"code":-1,"message":"Contract NOT found"}}"#
         )
-        .unwrap());
+        .unwrap()
+        .is_none());
         assert!(
             ok(r#"{"jsonrpc":"2.0","id":3,"error":{"code":24,"message":"Block not found"}}"#)
                 .is_err()
@@ -381,6 +462,8 @@ mod tests {
             address: Felt::from(u64::from(account_index) + 1),
             deployed,
             funded,
+            restriction: None,
+            privacy_elsewhere: false,
         }
     }
 

@@ -36,6 +36,10 @@ pub struct RecoveryCandidate {
     pub selectable: bool,
     /// Deployed or funded: selected automatically the first time it is seen.
     pub auto_select: bool,
+    /// A warning on its own line in the danger colour (`privacyPoolCopy`): another wallet
+    /// registered this account with the privacy pool. The row stays selectable.
+    #[uniffi(default = None)]
+    pub note: Option<String>,
 }
 
 /// One coordinate the user picked to restore.
@@ -110,6 +114,34 @@ pub(crate) struct Found {
     pub address: Felt,
     pub deployed: bool,
     pub funded: bool,
+    /// The scan's advisory signability verdict for a deployed account; `None` when there is
+    /// none or the reads did not answer. The send path re-checks authoritatively either way.
+    pub restriction: Option<Restriction>,
+    /// Another wallet's viewing key is registered for this account in the privacy pool.
+    pub privacy_elsewhere: bool,
+}
+
+/// `RecoverySigningRestriction`: why this wallet could not sign for a deployed account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Restriction {
+    Guardian,
+    OwnerChanged,
+    OwnerType,
+    Release,
+    StrongSigner,
+}
+
+impl Restriction {
+    /// `RESTRICTION_COPY`.
+    fn copy(self) -> &'static str {
+        match self {
+            Self::Guardian => "has a guardian",
+            Self::OwnerChanged => "owner key changed",
+            Self::OwnerType => "unsupported signer",
+            Self::Release => "unsupported release",
+            Self::StrongSigner => "2FA active",
+        }
+    }
 }
 
 /// Whether the scan lists this coordinate with no history (`isCreatableCandidate`, on each
@@ -183,10 +215,16 @@ fn hint(found: &Found) -> String {
         }
         .into();
     }
-    // `activityState`.
-    let text = if found.deployed {
-        "Deployed on Starknet"
-    } else if found.funded {
+    // `activityState`, whose deployed branch is `deployedState`.
+    if found.deployed {
+        return match found.restriction {
+            Some(restriction) => {
+                format!("Deployed on Starknet · {} · view only", restriction.copy())
+            }
+            None => "Deployed on Starknet".into(),
+        };
+    }
+    let text = if found.funded {
         if deployable_here(found.family, &found.class_hash) {
             "Funded and ready to deploy"
         } else {
@@ -253,7 +291,21 @@ pub(crate) fn candidate(found: &Found) -> RecoveryCandidate {
         funded: found.funded,
         selectable: found.family == AccountFamily::OpenZeppelin || found.deployed || found.funded,
         auto_select: found.deployed || found.funded,
+        note: found
+            .privacy_elsewhere
+            .then(|| privacy_pool_note(found.family)),
     }
+}
+
+/// `privacyPoolCopy`: the Ready group names Ready; the check only knows the key is not this
+/// wallet's, so other groups say "another wallet".
+fn privacy_pool_note(family: AccountFamily) -> String {
+    let wallet = if family == AccountFamily::Argent {
+        "Ready"
+    } else {
+        "another wallet"
+    };
+    format!("Private balances off · privacy previously set up in {wallet} and cannot be imported to Bramble")
 }
 
 fn invalid(reason: &str) -> CoreError {
@@ -354,6 +406,8 @@ mod tests {
             address: Felt::from(99u64),
             deployed: false,
             funded: false,
+            restriction: None,
+            privacy_elsewhere: false,
         }
     }
 

@@ -25,7 +25,12 @@ pub enum Answer {
 
 /// Parses a reply; `None` when it is oversized, malformed, or answers another request.
 pub fn answer(body: &str, id: u64) -> Option<Answer> {
-    if body.len() > MAX_RESPONSE_BYTES {
+    answer_within(body, id, MAX_RESPONSE_BYTES)
+}
+
+/// [`answer`] for a request sent with a larger bound (`RpcRequest::max_response_bytes`).
+pub fn answer_within(body: &str, id: u64, max_bytes: usize) -> Option<Answer> {
+    if body.len() > max_bytes {
         return None;
     }
     let value: Value = serde_json::from_str(body).ok()?;

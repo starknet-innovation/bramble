@@ -80,15 +80,33 @@ struct RpcClient {
             var responses: [RpcResponse] = []
             for _ in 0..<Self.concurrency {
                 guard let request = pending.next() else { break }
-                group.addTask { RpcResponse(id: request.id, body: try await post(request.body, to: url)) }
+                group.addTask { try await answer(request, at: url) }
             }
             while let response = try await group.next() {
                 responses.append(response)
                 if let request = pending.next() {
-                    group.addTask { RpcResponse(id: request.id, body: try await post(request.body, to: url)) }
+                    group.addTask { try await answer(request, at: url) }
                 }
             }
             return responses
+        }
+    }
+
+    /// One reply, bounded by its request. A required read's failure fails the batch; an optional
+    /// (advisory) read that fails answers an empty body, which the core judges as no answer.
+    private func answer(_ request: RpcRequest, at url: URL) async throws -> RpcResponse {
+        do {
+            let body = try await transport.post(
+                request.body,
+                to: url,
+                write: false,
+                maxBytes: request.maxResponseBytes
+            )
+            return RpcResponse(id: request.id, body: body)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch where request.optional {
+            return RpcResponse(id: request.id, body: "")
         }
     }
 

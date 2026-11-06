@@ -428,7 +428,7 @@ impl WalletCore {
         responses: Vec<RpcResponse>,
     ) -> Result<RecoveryScanStep, CoreError> {
         self.with_session(true, |session| {
-            recovery_scan::submit(&mut session.scan, &responses)
+            recovery_scan::submit(&mut session.scan, &session.payload, &responses)
         })
     }
 

@@ -323,6 +323,7 @@ impl MultisigAuthorityRead {
             id,
             body: envelope(id, method, params),
             max_response_bytes: MAX_RESPONSE_BYTES as u64,
+            optional: false,
         })
     }
 

@@ -8,7 +8,7 @@ mod common;
 
 use std::collections::BTreeMap;
 
-use bramble_core::testing::recovery_candidate;
+use bramble_core::testing::{deployed_recovery_candidate, recovery_candidate};
 use bramble_core::{
     account_display_name, account_label, is_account_label, AccountFamily, Ladder, NetworkId,
     RecoverySelection,
@@ -221,6 +221,31 @@ fn discovery_rows_are_worded_like_the_extension() {
             "{}",
             row.key
         );
+    }
+}
+
+#[test]
+fn advisory_notes_are_worded_like_the_extension() {
+    let fixture = recovery_fixture();
+    let notes = fixture["notes"].as_array().unwrap();
+    assert_eq!(
+        notes.len(),
+        3 * 6,
+        "every family, with no and each restriction"
+    );
+    for case in notes {
+        let restriction = case["restriction"].as_str();
+        let row = deployed_recovery_candidate(
+            family(&case["accountContractType"]),
+            ladder(case),
+            case["classHash"].as_str().unwrap(),
+            0,
+            "0x1",
+            restriction,
+            true,
+        );
+        assert_eq!(row.hint, text(&case["hint"]), "{restriction:?}");
+        assert_eq!(row.note, Some(text(&case["note"])));
     }
 }
 

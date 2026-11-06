@@ -24,16 +24,20 @@ use super::types::{RpcPurpose, SendFailure, SendFailureCode as Code, SendStep};
 use crate::account_catalog::{catalog, class_entry, AccountFamily};
 
 /// `get_owner`, `get_owner_type` and `get_guardian` (`starknet_keccak` of each name).
-const GET_OWNER: &str = "0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4";
-const GET_OWNER_TYPE: &str = "0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4";
-const GET_GUARDIAN: &str = "0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d";
+pub(crate) const GET_OWNER: &str =
+    "0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4";
+pub(crate) const GET_OWNER_TYPE: &str =
+    "0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4";
+pub(crate) const GET_GUARDIAN: &str =
+    "0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d";
 /// Braavos's `get_signers` and `get_deferred_remove_signers`.
-const GET_SIGNERS: &str = "0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932";
-const GET_DEFERRED_REMOVE_SIGNERS: &str =
+pub(crate) const GET_SIGNERS: &str =
+    "0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932";
+pub(crate) const GET_DEFERRED_REMOVE_SIGNERS: &str =
     "0x3f4c3fd98c1f85cfe943da13a3e1970248bf364130b9590071520aa2ec61e93";
 
 /// The authorization shape this wallet produces for Ready accounts.
-const ARGENT_SIGNER_ARRAY: &str = "argent-signer-array";
+pub(crate) const ARGENT_SIGNER_ARRAY: &str = "argent-signer-array";
 
 /// `atAcceptedBlock`: three attempts, then the miss fails closed.
 const PIN_ATTEMPTS: u8 = 3;
@@ -69,7 +73,7 @@ fn refused(code: Code, detail: Option<String>) -> Outcome {
     })
 }
 
-fn selector(hex: &str) -> Felt {
+pub(crate) fn selector(hex: &str) -> Felt {
     Felt::from_hex(hex).expect("selector constant is a felt")
 }
 
@@ -94,7 +98,7 @@ fn authorizable(class_hash: &Felt) -> Result<(), Outcome> {
 /// `parseBraavosSigners`: `get_signers` serialises three felt arrays, `[stark_len, ...stark,
 /// secp256r1_len, ...secp256r1, webauthn_len, ...webauthn]`. Returns the first Stark signer and
 /// whether any strong (2FA) signer exists; `None` when a length overruns the result.
-fn braavos_signers(result: &[Felt]) -> Option<(Option<Felt>, bool)> {
+pub(crate) fn braavos_signers(result: &[Felt]) -> Option<(Option<Felt>, bool)> {
     let mut lists = Vec::with_capacity(3);
     let mut offset = 0;
     for _ in 0..3 {
