@@ -83,3 +83,19 @@ export const RevealLedger = checkpointStory(
   "settings-security",
   "reveal-ledger",
 );
+export const StakingSettingsRow = checkpointStory(
+  "Staking in Settings",
+  "settings-security",
+  "staking-settings-row",
+);
+export const StakingTokenStake = checkpointStory(
+  "Stake from a token",
+  "settings-security",
+  "staking-token-stake",
+);
+export const StakingUnavailable = checkpointStory(
+  "Staking, Starkscan unavailable",
+  "settings-security",
+  "staking-paste-only",
+);
+export const Staking = checkpointStory("Staking", "settings-security", "staking");

@@ -37,16 +37,25 @@ export type ClusterUiDeps = {
   readonly openToken: (tokenId: string) => void;
   /** Opens a collectible's detail screen (collectibles preview only). */
   readonly openNft: (id: string) => void;
-  /** Leaves a finished collectible transfer for a dock screen. */
-  readonly navigate: (view: "activity" | "home") => void;
+  /** Leaves a finished collectible transfer, or opens staking from a token. */
+  readonly navigate: (view: "activity" | "home" | "staking") => void;
   readonly render: (status: RenderData["status"]) => Promise<void>;
   readonly swap: SwapClient;
   readonly wallet: SidepanelWallet;
 };
 
-// The token detail screen's own Send and Swap. Each seeds the asset and hands
-// over to that journey; neither prepares anything itself.
+// The token detail screen's own Send, Swap and Stake. Send and Swap carry the
+// asset and hand over to that journey; Stake opens the staking list. None of
+// them prepares anything itself.
 const bindTokenDetailActions = (deps: ClusterUiDeps): void => {
+  const { cache } = deps;
+  deps.app
+    ?.querySelector<HTMLButtonElement>("[data-stake-token]")
+    ?.addEventListener("click", () => {
+      // The staking list, not whichever validator was open last.
+      cache.staking = { ...cache.staking, selected: null, validator: { loading: true } };
+      deps.navigate("staking");
+    });
   for (const [attribute, key, view] of [
     ["data-send-token", "sendToken", "send"],
     ["data-swap-token", "swapToken", "swap"],

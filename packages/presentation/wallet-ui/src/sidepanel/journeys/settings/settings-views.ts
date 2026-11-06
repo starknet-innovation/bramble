@@ -51,6 +51,7 @@ export const settingsScreen = (
       <div class="menu-list" role="group" aria-label="This account">
         ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
         ${walletMenuRow("privacy-unlock", PRIVACY_UNLOCK_TITLE, "lock")}
+        ${stakingNetwork(status.networkId) ? walletMenuRow("staking", "Staking", "trendingUp") : ""}
       </div>
     </section>
     <section class="section">
@@ -58,7 +59,6 @@ export const settingsScreen = (
       <div class="menu-list" role="group" aria-label="Access and permissions">
         ${walletMenuRow("connected-sites", "Connected sites", "link")}
         ${walletMenuRow("allowances", "Token allowances", "coins")}
-        ${stakingNetwork(status.networkId) ? walletMenuRow("staking", "Staking", "lockKeyhole") : ""}
         ${walletMenuRow("shadow-accounts", SHADOW_ACCOUNTS_TITLE, "shield")}
         ${walletMenuRow(
           "request-settings",

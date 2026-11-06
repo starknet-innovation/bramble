@@ -71,6 +71,7 @@ import {
   STAKING_LOADING,
   type StakingState,
 } from "../../journeys/staking/staking-directory-client";
+import { canStakeToken } from "../../journeys/staking/staking-entry";
 import type { BalanceState } from "../../runtime/runtime";
 import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
@@ -101,6 +102,7 @@ type JourneyContext = {
   readonly prices: Readonly<Record<string, number>>;
   readonly privacy: PrivacyDisclosureState;
   readonly privacyJourney: PrivacyJourneyState;
+  readonly staking: StakingState;
   /** A pre-configured send from a shield or unshield shortcut. */
   readonly sendIntent?: SendIntent | null;
   readonly selectedMultisigId: string | null;
@@ -265,6 +267,7 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.currency,
     context.privacy,
     context.deployment,
+    canStakeToken(context.status.networkId, token, context.staking),
   );
 };
 
@@ -352,6 +355,7 @@ export const dashboard = (
     selectedNftId,
     selectedTokenId,
     ...(sendIntent ? { sendIntent } : {}),
+    staking,
     status,
     trackedBalances,
   };

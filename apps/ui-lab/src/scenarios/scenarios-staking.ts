@@ -11,6 +11,7 @@
  */
 import { bindStaking, bindStakingDirectory, type StakingState } from "@bramble/wallet-ui/lab";
 import { statusFor } from "../fixtures/fixtures";
+import { journeyBalances, journeyPreferences, STRK_TOKEN } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { FrameContext, ScenarioCheckpoint } from "../runtime/types";
 
@@ -172,6 +173,29 @@ const review = async ({ app }: FrameContext): Promise<void> => {
 
 /** The staking checkpoints, grouped with the settings journey. */
 export const stakingCheckpoints: readonly ScenarioCheckpoint[] = [
+  {
+    content: () => walletDashboard({ preferences: journeyPreferences, view: "settings" }),
+    id: "staking-settings-row",
+    label: "Staking in Settings",
+    narrative:
+      "Staking sits under This account, shown only on a network where staking is on (Mainnet).",
+    state: { network: "SN_MAIN", section: "This account" },
+  },
+  {
+    content: () =>
+      walletDashboard({
+        balanceState: { balances: journeyBalances },
+        chart: [0.41, 0.42, 0.4, 0.43, 0.44, 0.43, 0.45],
+        preferences: journeyPreferences,
+        selectedTokenId: STRK_TOKEN.id,
+        view: "token-detail",
+      }),
+    id: "staking-token-stake",
+    label: "Stake from a token",
+    narrative:
+      "STRK's screen offers Stake below Send and Swap on Mainnet; it opens the staking list. Tokens staking doesn't take never show it.",
+    state: { action: "Stake", symbol: "STRK" },
+  },
   {
     content: () => walletDashboard({ staking: pasteOnly, view: "staking" }),
     id: "staking-paste-only",
