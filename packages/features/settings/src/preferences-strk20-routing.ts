@@ -10,8 +10,18 @@
  * over (#443, decision 3): it names an old-class anonymizer the pinned rc.8 SDK
  * only half-drives — address lookups fail and invokes are misrouted — so the
  * user re-enters a current anonymizer instead.
+ *
+ * Also rebases exact bundled Mainnet snapshots onto today's defaults on read
+ * ({@link withCurrentStrk20Defaults}).
  */
 import { isRecord } from "@bramble/core/json";
+import {
+  DEFAULT_STRK20_NETWORKS,
+  STRK20_MAINNET_POOL,
+  type Strk20NetworkConfig,
+  type Strk20NetworkConfigs,
+} from "@bramble/privacy/config";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 
 const RETIRED_ANONYMIZER_KEY = "subaccountAnonymizerAddress";
 
@@ -43,4 +53,65 @@ export const dropRetiredStrk20RoutingKeys = (strk20Networks: unknown): unknown =
     next[network] = rewritten;
   }
   return changed ? next : strk20Networks;
+};
+
+const RETIRED_STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";
+
+// The Vercel-era bundled Mainnet snapshot. Requiring every field preserves
+// custom routing and an empty-map opt-out.
+const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined): boolean =>
+  config !== undefined &&
+  config.discoveryUrl === `${RETIRED_STRK20_GATEWAY_BASE}/discovery` &&
+  config.ohttpEnabled === true &&
+  config.ohttpRelayUrl === undefined &&
+  config.paymaster?.feeToken === STRK_TOKEN_ADDRESS &&
+  config.paymaster.url === `${RETIRED_STRK20_GATEWAY_BASE}/paymaster` &&
+  config.poolAddress === STRK20_MAINNET_POOL &&
+  config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
+  config.shadowAccountAnonymizerAddress === undefined;
+
+// The bundled Mainnet snapshot from before the default anonymizer (#666): the
+// current bundled routing, field for field, with no anonymizer at all. A user
+// who set any anonymizer, or changed any endpoint, is not this snapshot.
+const isPreAnonymizerBundledMainnetRouting = (
+  config: Strk20NetworkConfig | undefined,
+  bundled: Strk20NetworkConfig,
+): boolean =>
+  config !== undefined &&
+  config.discoveryUrl === bundled.discoveryUrl &&
+  config.ohttpEnabled === bundled.ohttpEnabled &&
+  config.ohttpRelayUrl === bundled.ohttpRelayUrl &&
+  config.paymaster?.feeToken === bundled.paymaster?.feeToken &&
+  config.paymaster?.url === bundled.paymaster?.url &&
+  config.poolAddress === bundled.poolAddress &&
+  config.proverUrl === bundled.proverUrl &&
+  config.shadowAccountAnonymizerAddress === undefined;
+
+/**
+ * Brings stored STRK20 routing to the current bundled defaults, or returns the
+ * same reference when nothing changes. Only two exact bundled Mainnet
+ * snapshots are rebased: the Vercel-era one (to today's defaults) and the one
+ * from before the default anonymizer (gains the bundled anonymizer). Custom
+ * routing, a user-set anonymizer, other networks, and an empty-map opt-out are
+ * kept as stored. An absent map reads as the bundled defaults.
+ *
+ * Trust boundary: rebasing only changes which anonymizer a site's shadow-account
+ * request names; every such request still needs the user's approval. Clearing
+ * the anonymizer on otherwise-bundled Mainnet routing does not persist, since
+ * that record is the pre-anonymizer snapshot by construction.
+ */
+export const withCurrentStrk20Defaults = (
+  strk20Networks: Strk20NetworkConfigs | undefined,
+): Strk20NetworkConfigs => {
+  if (strk20Networks === undefined) {
+    return DEFAULT_STRK20_NETWORKS;
+  }
+  if (isRetiredBundledMainnetRouting(strk20Networks.SN_MAIN)) {
+    return { ...strk20Networks, ...DEFAULT_STRK20_NETWORKS };
+  }
+  const bundled = DEFAULT_STRK20_NETWORKS.SN_MAIN;
+  if (bundled && isPreAnonymizerBundledMainnetRouting(strk20Networks.SN_MAIN, bundled)) {
+    return { ...strk20Networks, SN_MAIN: bundled };
+  }
+  return strk20Networks;
 };
