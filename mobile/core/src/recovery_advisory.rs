@@ -19,9 +19,10 @@ use crate::account_store::VaultPayload;
 use crate::networks::{self, NetworkId};
 use crate::privacy::config::route_for;
 use crate::recovery::{Found, Restriction};
+use crate::rpc::{self, RpcRequest};
 use crate::send::judge;
 use crate::send::plan_probe::{self as probe, braavos_signers, selector, ARGENT_SIGNER_ARRAY};
-use crate::{felt, kms, rpc};
+use crate::{felt, kms};
 
 /// The pool's `get_public_key(address)`: the viewing key registered for an account.
 const GET_PUBLIC_KEY: &str = "0x1a35984e05126dbecb7c3bb9929e7dd9106d460c59b1633739a5c733a5fb13b";
@@ -100,7 +101,7 @@ pub(crate) fn needs_block(family: AccountFamily, gathered: &Gathered, public_key
 }
 
 /// The `starknet_call` body for `read` at `latest`. `pool` is required for `Read::PoolKey`.
-pub(crate) fn body(id: u64, read: Read, address: &Felt, pool: &Felt) -> String {
+fn body(id: u64, read: Read, address: &Felt, pool: &Felt) -> String {
     let (contract, entry_point, calldata) = match read {
         Read::Owner => (address, probe::GET_OWNER, vec![]),
         Read::OwnerType => (address, probe::GET_OWNER_TYPE, vec![]),
@@ -123,13 +124,24 @@ pub(crate) fn body(id: u64, read: Read, address: &Felt, pool: &Felt) -> String {
     )
 }
 
-/// `starknet_getBlockWithTxHashes` at `latest`, for its timestamp.
-pub(crate) fn block_body(id: u64) -> String {
-    rpc::envelope(
+/// A block lists every transaction hash (about 70 bytes each), so a busy mainnet block passes the
+/// default 64 KiB bound; 1 MiB holds roughly 15,000.
+pub(crate) const BLOCK_RESPONSE_BYTES: usize = 1024 * 1024;
+
+/// One advisory `starknet_call` for `read`. Optional: a failed POST answers empty, never pauses.
+pub(crate) fn request(id: u64, read: Read, address: &Felt, pool: &Felt) -> RpcRequest {
+    RpcRequest::optional(id, body(id, read, address, pool), rpc::MAX_RESPONSE_BYTES)
+}
+
+/// `starknet_getBlockWithTxHashes` at `latest`, for its timestamp, bounded at
+/// [`BLOCK_RESPONSE_BYTES`] and optional like every advisory read.
+pub(crate) fn block_request(id: u64) -> RpcRequest {
+    let body = rpc::envelope(
         id,
         "starknet_getBlockWithTxHashes",
         json!({ "block_id": "latest" }),
-    )
+    );
+    RpcRequest::optional(id, body, BLOCK_RESPONSE_BYTES)
 }
 
 /// A call's felts, or `None` for an error, a malformed reply or a foreign id.
@@ -139,7 +151,7 @@ pub(crate) fn judge_call(body: &str, id: u64) -> Option<Vec<Felt>> {
 
 /// A block's timestamp, or `None` when the reply is unusable.
 pub(crate) fn judge_block(body: &str, id: u64) -> Option<u64> {
-    judge::block_timestamp(judge::answer(body, id)).ok()
+    judge::block_timestamp(judge::answer_within(body, id, BLOCK_RESPONSE_BYTES)).ok()
 }
 
 /// `argentSigningRestriction` / `braavosSigningRestriction`: the first reason this wallet could

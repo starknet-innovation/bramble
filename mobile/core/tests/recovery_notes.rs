@@ -4,7 +4,7 @@
 mod common;
 
 use bramble_core::testing;
-use bramble_core::{account_classes, Ladder, NetworkId};
+use bramble_core::{account_classes, Ladder, NetworkId, RpcResponse};
 use common::{pending, view_key, Node, PHRASE};
 
 const GET_OWNER: &str = "0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4";
@@ -143,5 +143,101 @@ fn a_network_without_a_pool_reads_no_pool_key() {
             .iter()
             .any(|request| request.body.contains(GET_PUBLIC_KEY)),
         "no pool on Sepolia, so no pool read"
+    );
+}
+
+#[test]
+fn a_failed_advisory_read_or_a_busy_block_never_pauses_the_search() {
+    let network = NetworkId::Mainnet;
+    let (_dir, _clock, core) = pending();
+    let step = core.recovery_scan_next(network, None).unwrap();
+    let address_of = |position: usize| {
+        let body: serde_json::Value = serde_json::from_str(&step.requests[position].body).unwrap();
+        body["params"]["contract_address"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let (ready, braavos) = (address_of(7), address_of(8));
+    let braavos_key = testing::ladder_public_key(PHRASE, Ladder::Address, 0).unwrap();
+    let argent_040 = account_classes()
+        .into_iter()
+        .find(|class| class.label == "argent 0.4.0")
+        .unwrap()
+        .class_hash;
+    // A block of 2,000 transactions is about 140 KiB, past the default 64 KiB bound.
+    let mut node = Node {
+        block_time: 100,
+        block_transactions: 2_000,
+        ..Node::default()
+    };
+    node.deployed.insert(ready.clone());
+    node.deployed.insert(braavos.clone());
+    node.classes.insert(ready.clone(), argent_040);
+    node.classes
+        .insert(braavos.clone(), testing::braavos_implementation_class());
+    view(
+        &mut node,
+        &braavos,
+        GET_SIGNERS,
+        None,
+        &["0x1", &braavos_key, "0x1", "0x9", "0x0"],
+    );
+    view(
+        &mut node,
+        &braavos,
+        GET_DEFERRED_REMOVE_SIGNERS,
+        None,
+        &["0x64"],
+    );
+    assert!(
+        step.requests.iter().all(|request| !request.optional),
+        "a class-hash probe is never optional"
+    );
+
+    let mut step = step;
+    while !step.requests.is_empty() {
+        let mut responses = Vec::new();
+        for request in &step.requests {
+            let is_call = request.body.contains("starknet_call");
+            if is_call && request.body.contains(&ready) {
+                // Every Ready signer read fails in transport: the host answers it empty.
+                assert!(request.optional, "an advisory read is optional");
+                responses.push(RpcResponse {
+                    id: request.id,
+                    body: String::new(),
+                });
+                continue;
+            }
+            let response = node.answer(request);
+            if request.body.contains("starknet_getBlockWithTxHashes") {
+                assert!(request.optional);
+                assert!(response.body.len() > 64 * 1024);
+                assert!(response.body.len() as u64 <= request.max_response_bytes);
+            } else if is_call && !request.body.contains(GET_PUBLIC_KEY) {
+                // Only the advisory reads are optional; a balance read stays mandatory.
+                assert_eq!(request.optional, request.body.contains(&braavos));
+            }
+            responses.push(response);
+        }
+        step = core
+            .recovery_scan_submit(responses)
+            .expect("an advisory failure never pauses the search");
+    }
+    let row = |address: &str| {
+        step.candidates
+            .iter()
+            .find(|candidate| candidate.address == address)
+            .expect("deployed rows are kept")
+    };
+    assert_eq!(
+        row(&ready).hint,
+        "Deployed on Starknet",
+        "no answer, no label"
+    );
+    assert_eq!(
+        row(&braavos).hint,
+        "Deployed on Starknet · 2FA active · view only",
+        "the busy block was judged"
     );
 }

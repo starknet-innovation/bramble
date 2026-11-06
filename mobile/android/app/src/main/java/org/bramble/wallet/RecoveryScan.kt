@@ -97,7 +97,11 @@ class LiveRpcTransport : RpcTransport {
         runCatching { rpcVerifyChainId(RpcClient.post(url, rpcChainIdRequest(0u)), 0u, network.network) }
             .getOrDefault(false)
 
-    /** Posts every request to [url], at most [MAX_IN_FLIGHT] at once; the first failure cancels the rest. */
+    /**
+     * Posts every request to [url], at most [MAX_IN_FLIGHT] at once, each reply bounded by its
+     * request. The first failure of a required read cancels the rest; an optional (advisory) read
+     * that fails answers an empty body, which the core judges as no answer.
+     */
     private suspend fun postAll(
         url: URL,
         requests: List<RpcRequest>,
@@ -107,15 +111,24 @@ class LiveRpcTransport : RpcTransport {
             requests
                 .map { request ->
                     async {
-                        gate.withPermit {
-                            RpcResponse(
-                                request.id,
-                                RpcClient.post(url, request.body),
-                            )
-                        }
+                        gate.withPermit { RpcResponse(request.id, postOne(url, request)) }
                     }
                 }.awaitAll()
         }
+
+    private fun postOne(
+        url: URL,
+        request: RpcRequest,
+    ): String {
+        val maxBytes = request.maxResponseBytes.coerceAtMost(Int.MAX_VALUE.toULong()).toInt()
+        return try {
+            RpcClient.post(url, request.body, maxBytes = maxBytes)
+        } catch (failed: IOException) {
+            if (request.optional) "" else throw failed
+        } catch (failed: IllegalStateException) {
+            if (request.optional) "" else throw failed
+        }
+    }
 }
 
 /** How many recovery reads one endpoint serves at once. */

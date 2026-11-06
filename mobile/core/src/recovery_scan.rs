@@ -326,6 +326,7 @@ impl ScanState {
     fn detail_requests(&mut self, batch: &mut Batch) -> Result<Vec<RpcRequest>, CoreError> {
         let tokens = &networks::info(self.network).tokens;
         let pool = route_for(self.network).map(|route| route.pool);
+        let pool_address = pool.unwrap_or(Felt::ZERO);
         let mut requests = Vec::new();
         for position in 0..batch.probes.len() {
             let probe = &batch.probes[position];
@@ -334,11 +335,10 @@ impl ScanState {
                 let family = probe.found.family;
                 for read in advisory::reads(family, &live_class, pool.is_some()) {
                     let id = self.allocate_id();
-                    let body = advisory::body(id, read, &address, &pool.unwrap_or(Felt::ZERO));
                     batch
                         .outstanding
                         .insert(id, Pending::Advisory(position, read));
-                    requests.push(RpcRequest::new(id, body));
+                    requests.push(advisory::request(id, read, &address, &pool_address));
                 }
                 continue;
             }
@@ -388,7 +388,7 @@ pub(crate) fn submit(
         if needed {
             let id = scan.allocate_id();
             batch.outstanding.insert(id, Pending::Block);
-            let requests = vec![RpcRequest::new(id, advisory::block_body(id))];
+            let requests = vec![advisory::block_request(id)];
             scan.batch = Some(batch);
             return Ok(scan.step(requests));
         }

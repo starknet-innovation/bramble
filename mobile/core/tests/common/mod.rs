@@ -145,6 +145,8 @@ pub struct Node {
     pub views: HashMap<String, Vec<String>>,
     /// The latest block's timestamp.
     pub block_time: u64,
+    /// How many transaction hashes the latest block lists (a busy block outgrows 64 KiB).
+    pub block_transactions: usize,
 }
 
 /// The `views` key for a call.
@@ -184,7 +186,9 @@ impl Node {
                 json!({ "jsonrpc": "2.0", "id": id, "result": self.views[&call_key(&body)] })
             }
             "starknet_getBlockWithTxHashes" => {
-                json!({ "jsonrpc": "2.0", "id": id, "result": { "timestamp": self.block_time } })
+                let hash = format!("0x{}", "a".repeat(63));
+                let transactions = vec![hash; self.block_transactions];
+                json!({ "jsonrpc": "2.0", "id": id, "result": { "timestamp": self.block_time, "transactions": transactions } })
             }
             "starknet_call" => {
                 let account = body["params"]["request"]["calldata"][0].as_str().unwrap();

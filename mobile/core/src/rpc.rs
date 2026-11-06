@@ -25,6 +25,11 @@ pub struct RpcRequest {
     pub id: u64,
     pub body: String,
     pub max_response_bytes: u64,
+    /// An advisory read the core can do without: when its POST fails (a timeout, a non-200
+    /// status, a reply past `max_response_bytes`), the host answers it with an empty body instead
+    /// of failing the batch, and the core judges that as no answer.
+    #[uniffi(default = false)]
+    pub optional: bool,
 }
 
 impl RpcRequest {
@@ -39,6 +44,15 @@ impl RpcRequest {
             id,
             body,
             max_response_bytes: max_bytes as u64,
+            optional: false,
+        }
+    }
+
+    /// An advisory read whose transport failure the host answers with an empty body.
+    pub(crate) fn optional(id: u64, body: String, max_bytes: usize) -> Self {
+        Self {
+            optional: true,
+            ..Self::bounded(id, body, max_bytes)
         }
     }
 }
