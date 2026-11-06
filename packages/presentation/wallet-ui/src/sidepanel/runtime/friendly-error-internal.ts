@@ -193,7 +193,6 @@ export const REVIEWED_PLUMBING: ReadonlyMap<string, string> = new Map([
   ["invalid account", "account record built by the wallet"],
   ["invalid account label", "label is pre-validated in the UI"],
   ["invalid address book entry", "entry is pre-validated in the UI"],
-  ["invalid custom network", "network form is pre-validated in the UI"],
   ["invalid derivation index", "index is derived"],
   ["invalid display preference", "choice comes from a fixed control"],
   ["invalid explorer api endpoint", "endpoint is pre-validated in the UI"],

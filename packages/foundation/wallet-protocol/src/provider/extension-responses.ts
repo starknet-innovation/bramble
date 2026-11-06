@@ -25,7 +25,6 @@ export type Strk20NoticeReason = "other-wallet" | "record-limit" | "request-fail
  * Every approval kind that may cross the background-to-UI boundary.
  */
 export type ApprovalKind =
-  | "add-chain"
   | "connect"
   | "declare"
   | "invoke"

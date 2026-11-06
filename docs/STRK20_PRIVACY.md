@@ -51,7 +51,15 @@ Each enabled network needs one complete routing configuration:
 
 The bundled Mainnet configuration points only at the wallet-owned AWS gateway and the
 deployed pool
-`0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a`.
+`0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a`, with the shadow-account
+anonymizer `0x4f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7`
+(`STRK20_MAINNET_SHADOW_ACCOUNT_ANONYMIZER`, `Delegated` on that pool). That value is pinned for
+good, by a test as well: changing it would move every user's shadow accounts. A stored Mainnet
+configuration that is exactly the bundled routing from before this default (same endpoints, pool,
+and fee token, no anonymizer) gains it once, as a one-time migration recorded in the preferences
+as `strk20DefaultsVersion`; a user-set anonymizer, any custom endpoint, and an empty-map opt-out
+are kept. After that the stored routing is the user's: clearing the anonymizer sticks, including
+across a preferences backup restore. Every site request still needs its own approval.
 The private discovery and prover upstream URLs and any paymaster key are server-only ECS runtime
 configuration. They never appear in the extension source, preferences, source maps, logs, or
 browser requests. The public gateway URL is necessarily visible to clients.
@@ -399,7 +407,8 @@ production service.
 ## Opt-in Mainnet lifecycle test
 
 `tests/mainnet/strk20-lifecycle.mainnet.ts` is a separate, local-only Playwright core-lifecycle suite
-for the real deployed pool and configured discovery/proving services. It imports a dedicated funded
+for the real deployed pool and configured discovery/proving services. Wallet send, balance, dapp,
+and signing flows on mainnet are `bun run test:e2e:mainnet:wallet` (`docs/MAINNET_E2E.md`). It imports a dedicated funded
 account into a disposable Chromium profile, confirms that the derived address matches the expected
 address, connects that one account to a loopback dapp, and exercises registration, deposit,
 transfer to self, and withdrawal to self. It prepares real proofs, but deliberately submits them

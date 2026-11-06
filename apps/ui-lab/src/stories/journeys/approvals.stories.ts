@@ -60,7 +60,6 @@ export const WatchAsset: LabStory = {
   },
 };
 export const SwitchChain = checkpointStory("Approval · switch chain", "approvals", "switch-chain");
-export const AddChain = checkpointStory("Approval · add chain", "approvals", "add-chain");
 export const Declare = checkpointStory("Approval · declare", "approvals", "declare");
 export const Blocked = checkpointStory("Approval · blocked origin", "approvals", "blocked-origin");
 export const Queue = checkpointStory("Approval · request queue", "approvals", "queue");

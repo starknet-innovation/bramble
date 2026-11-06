@@ -16,6 +16,7 @@ import { dynamicExecutionFailures } from "./vendor-pin-policy";
 import { websiteDeployFailures } from "./website-deploy-policy";
 import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
 import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
+import { sepoliaSeedsFailures } from "./workflow-sepolia-policy";
 
 const NODE_SETUP_ACTION = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1";
 const GITHUB_EXPRESSION = "$" + "{{";
@@ -446,6 +447,7 @@ export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string
     const named = NAMED_POLICIES[name];
     failures.push(...baselineFailures(name, source, named !== undefined));
     failures.push(...scopedServiceSecretFailures(name, source));
+    failures.push(...sepoliaSeedsFailures(name, source));
     failures.push(...websiteDeployFailures(name, source));
     failures.push(...vendoringFailures(name, source));
     failures.push(...(named?.(source) ?? []));

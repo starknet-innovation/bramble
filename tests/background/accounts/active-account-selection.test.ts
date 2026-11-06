@@ -19,6 +19,8 @@ import { selectActiveAccount } from "../../../apps/extension/src/background/runt
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 
 const vaultPassphrase = "correct horse battery staple";
+// A vault is stored, so only the vault's own refusal proves nothing was written.
+const vaultPresent = { status: async () => ({ hasVault: true }) };
 const mainnetAccount: AccountRef = {
   accountContractType: "openzeppelin",
   address: "0xabc",
@@ -100,7 +102,7 @@ describe("active account selection", () => {
       const result =
         mutation === "add"
           ? runUnlockedNetworkMutation(session, preferencesStore, "SN_MAIN", async () => fail())
-          : runVaultCreationWithNetwork(session, preferencesStore, "SN_MAIN", fail);
+          : runVaultCreationWithNetwork(session, preferencesStore, vaultPresent, "SN_MAIN", fail);
       await expect(result).rejects.toThrow(`injected ${mutation} failure`);
       expect(session.isUnlocked()).toBe(false);
     }
@@ -207,9 +209,15 @@ describe("active account selection", () => {
     const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
     await preferencesStore.setActiveNetwork("SN_SEPOLIA");
     await expect(
-      runVaultCreationWithNetwork(createUnlockSession(), preferencesStore, "SN_MAIN", async () => {
-        throw new RefusedBeforeWrite("Wallet already exists");
-      }),
+      runVaultCreationWithNetwork(
+        createUnlockSession(),
+        preferencesStore,
+        vaultPresent,
+        "SN_MAIN",
+        async () => {
+          throw new RefusedBeforeWrite("Wallet already exists");
+        },
+      ),
     ).rejects.toThrow("Wallet already exists");
     expect((await preferencesStore.read()).activeNetworkId).toBe("SN_SEPOLIA");
   });

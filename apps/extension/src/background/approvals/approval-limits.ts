@@ -4,7 +4,7 @@
  * the queue that stores it.
  *
  * Trust boundary: every queued approval originates from an untrusted page, and
- * several kinds (connect, watch-asset, switch-chain, add-chain) need no grant,
+ * several kinds (connect, watch-asset, switch-chain) need no grant,
  * so the queue is remotely fillable. This module owns the caps that keep one
  * origin from denying the wallet's consent surface to every other site, the age
  * at which an unanswered approval counts as abandoned, and the ordering token
@@ -151,7 +151,7 @@ export type ApprovalAdmissionProbe = {
  *
  * Call it from a surface that queues a NON-deduplicating approval after
  * expensive work (typed-data hashing, a vault read, an RPC). A deduplicating
- * surface — connect, watch-asset, switch-chain, add-chain — must NOT: a repeat
+ * surface — connect, watch-asset, switch-chain — must NOT: a repeat
  * of a prompt already on screen consumes no slot and returns the existing
  * approval, and refusing that at the cap would break the dedupe it relies on.
  *

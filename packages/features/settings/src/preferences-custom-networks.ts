@@ -1,55 +1,19 @@
 /**
- * Bounds on the custom networks dapps add through `wallet_addStarknetChain`
- * (Sherlock audit 153). They live in the single 1 MiB preferences record, and
- * the only reader is the add-chain dedupe check, so the store keeps a small,
- * fixed footprint per network instead of whatever lists a dapp sent.
+ * Bounds on the custom networks earlier builds stored for dapps through
+ * `wallet_addStarknetChain` (Sherlock audit 153). Nothing adds or uses them
+ * now (issue 852: the wallet refuses chains it cannot switch to), but a record
+ * from an earlier build may still carry them in the single 1 MiB preferences
+ * record, so it is compacted to a small, fixed footprint on read.
  */
-import { WalletError } from "@bramble/core/errors";
 import { isRecord } from "@bramble/core/json";
-import {
-  type CustomNetwork,
-  isCustomNetwork,
-  normalizeChainId,
-} from "@bramble/wallet-model/custom-network";
-import type { WalletPreferences } from "./preferences-types";
 
 /**
- * Most custom networks kept. Adding one more evicts the oldest, which is
- * harmless: the list only lets a repeat add-chain request skip its prompt.
+ * Most stored custom networks kept when an earlier build's record is compacted.
  */
 export const MAX_CUSTOM_NETWORKS = 16;
 
 // Fields a stored network no longer keeps. Nothing reads them.
 const DROPPED_FIELDS = new Set(["blockExplorerUrls", "iconUrls"]);
-
-const compactNetwork = (network: CustomNetwork): CustomNetwork => ({
-  chainId: network.chainId,
-  id: network.id,
-  name: network.name,
-  ...(network.rpcUrls?.[0] === undefined ? {} : { rpcUrls: [network.rpcUrls[0]] }),
-});
-
-/**
- * Adds or replaces (by normalized chain id) one custom network, keeping only
- * its first RPC URL and the newest {@link MAX_CUSTOM_NETWORKS} entries. Throws
- * {@link WalletError} for a malformed network.
- */
-export const withCustomNetwork = (
-  preferences: WalletPreferences,
-  network: CustomNetwork,
-): WalletPreferences => {
-  if (!isCustomNetwork(network)) {
-    throw new WalletError("Invalid custom network");
-  }
-  const key = normalizeChainId(network.chainId);
-  const existing = (preferences.customNetworks ?? []).filter(
-    (stored) => normalizeChainId(stored.chainId) !== key,
-  );
-  return {
-    ...preferences,
-    customNetworks: [...existing, compactNetwork(network)].slice(-MAX_CUSTOM_NETWORKS),
-  };
-};
 
 const compactStoredNetwork = (entry: unknown): unknown => {
   if (!isRecord(entry)) {

@@ -96,7 +96,8 @@ export const harness = (
 ) => {
   let vaultReads = 0;
   const seen: Harness = { imports: [], ownerReads: [], previews: [], recovers: [] };
-  const base = createWallet();
+  // A harness handed a locked session runs first-run paths: no vault is stored.
+  const base = createWallet({ hasVault: options.session === undefined });
   const wallet = {
     ...base,
     async importSeedAccounts(input: RecoverVaultAccountsInput) {

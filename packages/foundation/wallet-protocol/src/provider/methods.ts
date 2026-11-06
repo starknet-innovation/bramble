@@ -18,7 +18,7 @@ export const PROVIDER_METHOD_POLICY = {
     approvalSurface: true,
     runtimeType: "wallet.addInvokeTransaction",
   },
-  wallet_addStarknetChain: { approvalSurface: true, runtimeType: "wallet.addStarknetChain" },
+  wallet_addStarknetChain: { approvalSurface: false, runtimeType: "wallet.addStarknetChain" },
   wallet_deploymentData: { approvalSurface: false, runtimeType: "wallet.deploymentData" },
   wallet_getPermissions: { approvalSurface: false, runtimeType: "wallet.getPermissions" },
   wallet_requestAccounts: { approvalSurface: true, runtimeType: "wallet.requestAccounts" },
