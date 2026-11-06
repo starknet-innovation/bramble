@@ -21,7 +21,7 @@ const wallet = vi.hoisted(() => ({
   },
 }));
 
-const runtime = vi.hoisted(() => ({ confirmTokenDeployment: vi.fn() }));
+const runtime = vi.hoisted(() => ({ assertErc1155Recipient: vi.fn(), confirmTokenDeployment: vi.fn() }));
 
 vi.mock("../../wallet/connection/WalletProvider", () => ({
   useWallet: () => wallet.value,
@@ -33,6 +33,8 @@ vi.mock("../../create/create-runtime", async () => {
   );
   return { ...actual, confirmTokenDeployment: runtime.confirmTokenDeployment };
 });
+
+vi.mock("../../create/recipient-check", () => ({ assertErc1155Recipient: runtime.assertErc1155Recipient }));
 
 import CreateToken from "./CreateToken";
 
@@ -56,6 +58,7 @@ describe("Create", () => {
     wallet.value.requestTransaction = wallet.requestTransaction;
     wallet.requestTransaction.mockResolvedValue({ transaction_hash: "0xabc" });
     runtime.confirmTokenDeployment.mockResolvedValue(undefined);
+    runtime.assertErc1155Recipient.mockResolvedValue(undefined);
   });
 
   test("an ERC-20 create sends one UDC call and reports success only after the class check", async () => {
@@ -159,6 +162,36 @@ describe("Create", () => {
     expect(await screen.findByText(note)).toBeTruthy();
   });
 
+  test("an ERC-1155 create checks the recipient on the wallet's network before the wallet sees it", async () => {
+    renderCreate();
+    fireEvent.click(screen.getByRole("tab", { name: "ERC-1155" }));
+    fill("Base URI", "https://example.org/{id}.json");
+    fill("Token ids", "7");
+    fill("Amounts", "2");
+    fill("Mint to", " 0xABC ");
+    fireEvent.click(await screen.findByRole("button", { name: "Review create" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Created at"));
+    expect(runtime.assertErc1155Recipient).toHaveBeenCalledWith("0x534e5f5345504f4c4941", "0xabc");
+    expect(runtime.assertErc1155Recipient.mock.invocationCallOrder[0]).toBeLessThan(
+      wallet.requestTransaction.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  test("an ERC-1155 recipient that can't receive it is refused and nothing reaches the wallet", async () => {
+    runtime.assertErc1155Recipient.mockRejectedValue(new Error("The recipient can't receive ERC-1155 tokens."));
+    renderCreate();
+    fireEvent.click(screen.getByRole("tab", { name: "ERC-1155" }));
+    fill("Base URI", "https://example.org/{id}.json");
+    fill("Token ids", "7");
+    fill("Amounts", "2");
+    fireEvent.click(await screen.findByRole("button", { name: "Review create" }));
+    await waitFor(() => expect(screen.getByRole("status").className).toContain("studio-status--error"));
+    expect(screen.getByRole("status").textContent).toContain("The recipient can't receive ERC-1155 tokens.");
+    expect(runtime.assertErc1155Recipient).toHaveBeenCalledWith("0x534e5f5345504f4c4941", "0x1234");
+    expect(wallet.requestTransaction).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link", { name: /View transaction/ })).toBeNull();
+  });
+
   test("a rejected wallet review is an error and nothing is confirmed", async () => {
     wallet.requestTransaction.mockRejectedValue(new Error("User rejected the request."));
     renderCreate();
@@ -170,6 +203,8 @@ describe("Create", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Review create" }));
     await waitFor(() => expect(screen.getByRole("status").className).toContain("studio-status--error"));
     expect(runtime.confirmTokenDeployment).not.toHaveBeenCalled();
+    // Only the ERC-1155 preset mints with an acceptance check.
+    expect(runtime.assertErc1155Recipient).not.toHaveBeenCalled();
   });
 });
 
