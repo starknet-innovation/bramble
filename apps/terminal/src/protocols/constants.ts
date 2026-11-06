@@ -134,6 +134,14 @@ export const VESU_LENDING_ENABLED = true;
 export const VESU_VAULT_DEPOSITS_ENABLED: boolean = false;
 
 /**
+ * Networks the Create screen (issue 154) may deploy on: a pinned OpenZeppelin
+ * ERC-20, ERC-721 or ERC-1155 preset through the Universal Deployer. Sepolia
+ * first; Mainnet stays off until the Sepolia launch has been reviewed. With no
+ * network listed, the tab is hidden and `#create` falls back to Discover.
+ */
+export const TOKEN_CREATE_NETWORKS: readonly string[] = ["SN_SEPOLIA"];
+
+/**
  * Vesu API base. The recon repo pointed at STAGING; mainnet integrations must
  * use the production base below and re-resolve pool config from it.
  */

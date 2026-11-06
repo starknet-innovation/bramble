@@ -13,6 +13,7 @@ import type { RenderData } from "../rendering/render-cache";
 import type { ConnectedSitesState } from "../screens/support-flows";
 import type { WalletView } from "../screens/views";
 import type { DeploymentCache } from "./deployment-cache";
+import { hydrateNfts } from "./hydrate-nfts";
 import type { RefreshReason } from "./refresh-scheduler";
 import type { SignabilityCache } from "./signability-cache";
 
@@ -381,9 +382,8 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.allowances = value;
     });
   }
-  // The collectibles journey is parked: no view can reach the gallery, so the
-  // wallet never runs watched-NFT metadata or indexer discovery. Restoring the
-  // gallery restores these lanes with it.
+  // The collectibles journey is parked unless its preview is on.
+  hydrateNfts({ activeView, ambient: refreshReason === "ambient", cache, status, wallet }, fill);
   if (registryView) {
     primaryJobs.push(
       hydrateMultisigs(cache.multisigs, multisig, status.networkId).then((value) => {

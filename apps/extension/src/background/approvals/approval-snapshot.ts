@@ -25,6 +25,7 @@ export type {
   ApprovalRiskFlag,
   DeclarationReview,
   PendingApproval,
+  WatchAssetNft,
   WatchAssetToken,
 } from "@bramble/wallet-protocol/extension-responses";
 
@@ -34,6 +35,9 @@ export type {
 export type InvokeFeeReview = {
   /** The account must be deployed through its own step first; no fee. */
   readonly deployFirst?: true;
+  /** Present only when `requiresDeployment`: the deployment half of the total. */
+  readonly deploymentFee?: FeeEstimate | null;
+  readonly deploymentFeeEstimateFailed?: boolean;
   readonly fee: FeeEstimate | null;
   readonly feeAffordability: FeeAffordability;
   readonly feeEstimateFailed: boolean;
@@ -42,6 +46,29 @@ export type InvokeFeeReview = {
   readonly gaslessFees?: readonly GaslessFeeOffer[];
   readonly requiresDeployment: boolean;
 };
+
+/**
+ * Deep-copies a fee review onto a queued invoke. The deployment half and the
+ * gasless offers are written only when present, so a caller replacing an
+ * earlier review must strip those keys first.
+ */
+export const invokeFeeReviewFields = (review: InvokeFeeReview): InvokeFeeReview => ({
+  ...(review.deployFirst === true ? { deployFirst: true } : {}),
+  ...(review.deploymentFee === undefined
+    ? {}
+    : { deploymentFee: review.deploymentFee && { ...review.deploymentFee } }),
+  ...(review.deploymentFeeEstimateFailed === undefined
+    ? {}
+    : { deploymentFeeEstimateFailed: review.deploymentFeeEstimateFailed }),
+  fee: review.fee && { ...review.fee },
+  feeAffordability: review.feeAffordability,
+  feeEstimateFailed: review.feeEstimateFailed,
+  feeEstimatePending: review.feeEstimatePending,
+  ...(review.gaslessFees === undefined
+    ? {}
+    : { gaslessFees: review.gaslessFees.map((fee) => ({ ...fee })) }),
+  requiresDeployment: review.requiresDeployment,
+});
 
 /**
  * One approval as its requester supplies it: the display fields plus the
@@ -57,10 +84,22 @@ const noticeSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => 
   ...(approval.notice === undefined ? {} : { notice: approval.notice }),
 });
 
+// A watch-asset card's token or collectible; absent for every other approval.
+const watchSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
+  ...(approval.nft === undefined ? {} : { nft: { ...approval.nft } }),
+});
+
 // Copies an invoke entry's fee review onto its snapshot without materializing
 // absent fields, so non-invoke snapshots stay byte-identical to before.
 const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
   ...(approval.deployFirst === true ? { deployFirst: true } : {}),
+  ...(approval.deploymentFee === undefined
+    ? {}
+    : { deploymentFee: approval.deploymentFee && { ...approval.deploymentFee } }),
+  ...(approval.deploymentFeeEstimateFailed === undefined
+    ? {}
+    : { deploymentFeeEstimateFailed: approval.deploymentFeeEstimateFailed }),
   ...(approval.fee === undefined ? {} : { fee: approval.fee && { ...approval.fee } }),
   ...(approval.feeAffordability === undefined
     ? {}
@@ -136,7 +175,7 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
   ...(approval.reviewAssets === undefined
     ? {}
     : { reviewAssets: approval.reviewAssets.map((asset) => ({ ...asset })) }),
-  ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
+  ...watchSnapshot(approval),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
   ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
   ...(approval.typedData === undefined

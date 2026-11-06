@@ -7,8 +7,9 @@
  * the user), and sponsorship is never offered for that account again.
  */
 import { describe, expect, test } from "bun:test";
+import { INDETERMINATE_RPC_WRITE_MESSAGE } from "@bramble/starknet/provider";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
-import type { ActivityLog } from "@bramble/transactions/activity";
+import { type ActivityLog, memoryActivityLog } from "@bramble/transactions/activity";
 import {
   type DeployAccountDeps,
   handleDeployAccountSponsored,
@@ -263,10 +264,33 @@ describe("sponsored attempt hold", () => {
     const scope = { accountId: ozAccount.id, networkId: "SN_SEPOLIA" } as const;
     await activity.record({ ...scope, hash: "0x5ab", kind: "transfer", summary: "Sent 1 STRK" });
     await activity.updateStatuses({ "0x5ab": { status: "rejected" } }, scope);
-    expect(await submit(deps, 0)).toMatchObject({ submissionUnknown: true });
+    // The transfer's hash is not the deploy's, so the reply does not name it.
+    expect(await submit(deps, 0)).toEqual({
+      error: INDETERMINATE_RPC_WRITE_MESSAGE,
+      submissionUnknown: true,
+    });
     const [row] = await activity.list();
     expect(row).toMatchObject({ hash: "0x5ab", kind: "transfer", summary: "Sent 1 STRK" });
     expect(row?.feePayer).toBeUndefined();
+    expect(pending.entry(ozAccount)?.hash).toBeUndefined();
+    expect(await submit(deps, INSIDE)).toEqual(HELD);
+  });
+
+  test("a relay hash the activity log cannot store is still returned, and the hold stands", async () => {
+    const activity = memoryActivityLog();
+    const failing: ActivityLog = {
+      ...activity,
+      async recordIfAbsent() {
+        throw new Error("quota");
+      },
+    };
+    const { deps, pending } = await harness({ activity: failing, relay: relay(accepted) });
+    expect(await submit(deps, 0)).toEqual({
+      error: INDETERMINATE_RPC_WRITE_MESSAGE,
+      submissionUnknown: true,
+      transactionHash: "0x5ab",
+    });
+    expect(await activity.list()).toEqual([]);
     expect(pending.entry(ozAccount)?.hash).toBeUndefined();
     expect(await submit(deps, INSIDE)).toEqual(HELD);
   });
