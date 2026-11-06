@@ -322,11 +322,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE="$report" bun run test:e2e:mainnet --reporter=json >/dev/null 2>&1
           status=$?
           set -e
-          count() { local v; v="$(jq -r ".stats.$1 // 0" "$report" 2>/dev/null)" || v=""; [[ "$v" =~ ^[0-9]{1,6}$ ]] || { echo "::error::Playwright mainnet report is malformed." >&2; exit 1; }; echo "$v"; }
-          expected="$(count expected)"
-          unexpected="$(count unexpected)"
-          flaky="$(count flaky)"
-          skipped="$(count skipped)"
+          counts="$(jq -ser 'if length == 1 then .[0].stats else error("malformed") end | [.expected, .unexpected, .flaky, .skipped] | if all(type == "number" and . >= 0 and . <= 999999 and . == floor) then map(floor | tostring) | join(" ") else error("malformed") end' "$report" 2>/dev/null)" && [[ "$counts" =~ ^[0-9]{1,6}( [0-9]{1,6}){3}$ ]] || { echo "::error::Playwright mainnet report is malformed."; exit 1; }; read -r expected unexpected flaky skipped <<< "$counts"
           rm -f "$report"
           echo "Playwright mainnet: exit $status, passed $expected, failed $unexpected, flaky $flaky, skipped $skipped."
           if [ "$expected" -eq 0 ]; then
@@ -365,6 +361,10 @@ jobs:
             echo "::error::Gasless mainnet failed. Output is withheld in CI; rerun locally for details."; exit 1
           fi
           echo "result=passed" >> "$GITHUB_OUTPUT"
+      - name: Require the gasless send
+        if: always()
+        env: { GASLESS: "${{ steps.gasless.outputs.result }}" }
+        run: '[ "$GASLESS" = passed ] || { echo "::error::The gasless mainnet send did not pass."; exit 1; }'
 
   post:
     needs: [resolve, gate, preflight, build, execute]

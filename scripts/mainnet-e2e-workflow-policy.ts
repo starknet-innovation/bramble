@@ -207,7 +207,7 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
   requireText(
     failures,
     execute,
-    `[[ "$v" =~ ^[0-9]{1,6}$ ]] || { echo "::error::Playwright mainnet report is malformed." >&2; exit 1; }; echo "$v"; }`,
+    `jq -ser 'if length == 1 then .[0].stats else error("malformed") end | [.expected, .unexpected, .flaky, .skipped] | if all(type == "number" and . >= 0 and . <= 999999 and . == floor) then map(floor | tostring) | join(" ") else error("malformed") end' "$report" 2>/dev/null)" && [[ "$counts" =~ ^[0-9]{1,6}( [0-9]{1,6}){3}$ ]] || { echo "::error::Playwright mainnet report is malformed."; exit 1; }`,
     "mainnet execution must fail on a malformed Playwright report",
   );
   // Each check keeps its `exit 1`; without it the step reports passed.
@@ -336,8 +336,34 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
   const rpcCheck = execute.indexOf('if [ "${chain,,}" != "0x534e5f4d41494e" ]; then');
   const firstTest = execute.indexOf("      - name: Playwright mainnet");
   const secretsStep = execute.indexOf("        id: secrets\n");
-  if (rpcCheck < 0 || firstTest < 0 || !(secretsStep < rpcCheck && rpcCheck < firstTest)) {
+  if (
+    secretsStep < 0 ||
+    rpcCheck < 0 ||
+    firstTest < 0 ||
+    !(secretsStep < rpcCheck && rpcCheck < firstTest)
+  ) {
     failures.push("mainnet execution must check the RPC in the secrets step, before any live test");
+  }
+  requireText(
+    failures,
+    execute,
+    "      - name: Check and mask mainnet secrets\n        id: secrets\n",
+    "mainnet execution must keep the secrets step id that later steps depend on",
+  );
+  requireText(
+    failures,
+    execute,
+    "if: steps.secrets.outcome == 'success' && steps.playwright.outcome != 'failure'",
+    "mainnet execution must run the gasless send only after the secrets step passed",
+  );
+  // The last step: execute is green only when the gasless send passed.
+  const guard = `      - name: Require the gasless send
+        if: always()
+        env: { GASLESS: "${GITHUB_EXPRESSION} steps.gasless.outputs.result }}" }
+        run: '[ "$GASLESS" = passed ] || { echo "::error::The gasless mainnet send did not pass."; exit 1; }'
+`;
+  if (!execute.trimEnd().endsWith(guard.trimEnd())) {
+    failures.push("mainnet execution must end by requiring a passed gasless send");
   }
   if (
     occurrences(source, "actions/upload-artifact") !== occurrences(build, "actions/upload-artifact")

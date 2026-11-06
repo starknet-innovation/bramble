@@ -150,8 +150,8 @@ describe("mainnet E2E workflow policy", () => {
     );
     const lenient = mutate(
       sources,
-      '[[ "$v" =~ ^[0-9]{1,6}$ ]] || { echo "::error::Playwright mainnet report is malformed." >&2; exit 1; }; ',
-      "",
+      'type == "number" and . >= 0 and . <= 999999 and . == floor',
+      "true",
     );
     expect(mainnetE2eWorkflowFailures(lenient[WORKFLOW] ?? "")).toContain(
       "mainnet execution must fail on a malformed Playwright report",
@@ -315,6 +315,55 @@ describe("mainnet E2E workflow policy", () => {
     }
   });
 
+  test("keeps the secrets step id and ends execute on a passed gasless send", async () => {
+    const sources = await readWorkflowSources();
+    const failuresAfter = (search: string, replacement: string): string[] =>
+      mainnetE2eWorkflowFailures(mutate(sources, search, replacement)[WORKFLOW] ?? "");
+    for (const renamed of ["        id: check\n", "        id: secrets2\n", ""]) {
+      const failures = failuresAfter("        id: secrets\n", renamed);
+      expect(failures).toContain(
+        "mainnet execution must keep the secrets step id that later steps depend on",
+      );
+      expect(failures).toContain(
+        "mainnet execution must check the RPC in the secrets step, before any live test",
+      );
+    }
+    expect(
+      failuresAfter(
+        "if: steps.secrets.outcome == 'success' && steps.playwright.outcome != 'failure'",
+        "if: steps.playwright.outcome != 'failure'",
+      ),
+    ).toContain("mainnet execution must run the gasless send only after the secrets step passed");
+    const guarded = "mainnet execution must end by requiring a passed gasless send";
+    const step = (source: string): string => {
+      const at = source.indexOf("      - name: Require the gasless send\n");
+      return source.slice(at, source.indexOf("\n\n", at) + 1);
+    };
+    const source = sources[WORKFLOW] ?? "";
+    expect(failuresAfter(step(source), "")).toContain(guarded);
+    expect(failuresAfter('[ "$GASLESS" = passed ]', '[ "$GASLESS" != x ]')).toContain(guarded);
+    expect(failuresAfter("not pass.\"; exit 1; }'", "not pass.\"; }'")).toContain(guarded);
+    expect(
+      failuresAfter("        if: always()\n        env: { GASLESS", "        env: { GASLESS"),
+    ).toContain(guarded);
+  });
+
+  test("the final guard fails execute unless the gasless send passed", async () => {
+    const source = (await readWorkflowSources())[WORKFLOW] ?? "";
+    const marker = '        run: \'[ "$GASLESS" = passed ]';
+    const at = source.indexOf(marker);
+    expect(at).toBeGreaterThan(0);
+    const line = source.slice(at + "        run: '".length, source.indexOf("\n", at) - 1);
+    const run = (gasless: string): number | null =>
+      Bun.spawnSync(["bash", "-c", line], {
+        env: { GASLESS: gasless, PATH: process.env["PATH"] ?? "" },
+      }).exitCode;
+    expect(run("passed")).toBe(0);
+    for (const result of ["", "failed", "skipped", "passed ", "PASSED"]) {
+      expect(run(result)).not.toBe(0);
+    }
+  });
+
   test("the Playwright and gasless wrappers never report passed without a real pass", async () => {
     const source = (await readWorkflowSources())[WORKFLOW] ?? "";
     const runOf = (step: string): string => {
@@ -370,8 +419,31 @@ describe("mainnet E2E workflow policy", () => {
       ['{"expected":"1\\n1","unexpected":0,"flaky":0,"skipped":0}', 0],
       ['{"expected":-1,"unexpected":0,"flaky":0,"skipped":0}', 0],
       ['{"expected":1,"unexpected":"x","flaky":0,"skipped":0}', 0],
+      ['{"expected":1,"unexpected":false,"flaky":null,"skipped":0}', 0],
+      ['{"expected":1,"unexpected":0,"flaky":0}', 0],
+      ['{"expected":1,"unexpected":null,"flaky":0,"skipped":0}', 0],
+      ['{"expected":1,"unexpected":0,"flaky":false,"skipped":0}', 0],
+      ['{"expected":"1","unexpected":0,"flaky":0,"skipped":0}', 0],
+      ['{"expected":1.5,"unexpected":0,"flaky":0,"skipped":0}', 0],
+      ['{"expected":1,"unexpected":0,"flaky":0,"skipped":1000000}', 0],
+      ['{"expected":0.0,"unexpected":0,"flaky":0,"skipped":0}', 0],
+      ['{"expected":1,"unexpected":1.0,"flaky":0,"skipped":0}', 0],
     ] as const) {
       const result = playwright(stats, status);
+      expect(result.code).not.toBe(0);
+      expect(result.passed).toBe(false);
+    }
+    // Only one report document is accepted; an empty report is malformed.
+    for (const fixture of [
+      '{"stats":{"expected":1,"unexpected":0,"flaky":0,"skipped":0}}{"stats":{"expected":0,"unexpected":1,"flaky":0,"skipped":0}}',
+      "",
+    ]) {
+      const result = wrapper(
+        "Playwright mainnet",
+        'printf "%s" "$FAKE_FIXTURE" > "$PLAYWRIGHT_JSON_OUTPUT_FILE"',
+        fixture,
+        0,
+      );
       expect(result.code).not.toBe(0);
       expect(result.passed).toBe(false);
     }

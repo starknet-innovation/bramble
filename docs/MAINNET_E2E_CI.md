@@ -245,5 +245,7 @@ The next run picks up the new secret. No workflow edit is required.
 | `execute`'s RPC differs from preflight's, is not dedicated HTTPS, is down, or is not mainnet | Red, before any test. No fallback |
 | A send would exceed the per-run cap | Red, refused before signing |
 | Playwright runs and executes no test | Red |
+| The Playwright report is missing, or any count is not a whole number | Red |
+| The gasless send is skipped or does not pass | Red. `execute` ends by requiring it |
 | A test fails, or the spend exceeds the cap | Red, with before/after/spent in the summary and the issue |
 | A run ends below the minimum, inside the cap | Green. The next preflight asks for a top-up |
