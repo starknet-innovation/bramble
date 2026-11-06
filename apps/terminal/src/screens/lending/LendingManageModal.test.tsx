@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   buildIncrease: vi.fn(),
   buildLending: vi.fn(() => [{ contractAddress: "0x1", entrypoint: "deposit" }]),
   buildVaultDeposit: vi.fn(),
+  depositsEnabled: false,
   buildVaultRedeem: vi.fn(),
   quoteClose: vi.fn(async () => ({ maxInputAmount: 1n })),
   quoteIncrease: vi.fn(),
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   recheckMultiplyQuote: vi.fn(async () => undefined),
   registeredVToken: vi.fn(async () => REGISTERED_VTOKEN),
   verifyMultiplyPool: vi.fn(async () => undefined),
+  verifyVault: vi.fn(async () => undefined),
   requestTransaction: vi.fn(async () => ({ transaction_hash: "0xabc" })),
   watchAsset: vi.fn(async () => undefined),
 }));
@@ -32,7 +34,10 @@ vi.mock("../../protocols/index", () => ({
   recheckVesuLendingQuote: mocks.recheckLendingQuote,
   recheckVesuMultiplyQuote: mocks.recheckMultiplyQuote,
   registeredVesuVToken: mocks.registeredVToken,
-  VESU_VAULT_DEPOSITS_ENABLED: false,
+  get VESU_VAULT_DEPOSITS_ENABLED() {
+    return mocks.depositsEnabled;
+  },
+  verifyCuratedVesuVault: mocks.verifyVault,
   verifyVesuMultiplyPool: mocks.verifyMultiplyPool,
 }));
 
@@ -294,6 +299,48 @@ describe("LendingManageModal", () => {
     expect(mocks.quoteClose).not.toHaveBeenCalled();
     expect(mocks.buildClose).not.toHaveBeenCalled();
     expect(mocks.requestTransaction).not.toHaveBeenCalled();
+  });
+
+  it("re-checks the vault's class at handoff for a vault redeem (#270)", async () => {
+    mocks.buildVaultRedeem.mockReturnValue([{ contractAddress: "0xa17", entrypoint: "request_redeem" }]);
+    render(
+      <LendingManageModal
+        markets={[market]}
+        onClose={vi.fn()}
+        onSubmitted={vi.fn()}
+        position={{ ...earn, poolId: "0xa17", type: "vault" }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Redeem" }));
+    fireEvent.change(screen.getByLabelText("Position amount"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: /Review in wallet/ }));
+    await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalled());
+    expect(mocks.verifyVault).not.toHaveBeenCalled();
+    await handedOff().handoffCheck?.();
+    expect(mocks.verifyVault).toHaveBeenCalledWith("0xa17");
+  });
+
+  it("re-checks the vault's class at handoff for a vault deposit once deposits are on (#270)", async () => {
+    mocks.depositsEnabled = true;
+    mocks.buildVaultDeposit.mockReturnValue([{ contractAddress: "0xa17", entrypoint: "deposit" }]);
+    try {
+      render(
+        <LendingManageModal
+          markets={[market]}
+          onClose={vi.fn()}
+          onSubmitted={vi.fn()}
+          position={{ ...earn, poolId: "0xa17", type: "vault" }}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Add funds" }));
+      fireEvent.change(screen.getByLabelText("Position amount"), { target: { value: "2" } });
+      fireEvent.click(screen.getByRole("button", { name: /Review in wallet/ }));
+      await waitFor(() => expect(mocks.requestTransaction).toHaveBeenCalled());
+      await handedOff().handoffCheck?.();
+      expect(mocks.verifyVault).toHaveBeenCalledWith("0xa17");
+    } finally {
+      mocks.depositsEnabled = false;
+    }
   });
 
   it("offers a vault position no deposit while vault deposits are paused (Sherlock 169)", () => {
