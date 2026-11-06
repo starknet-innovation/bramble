@@ -291,8 +291,9 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
   );
   for (const control of [
     `PREFLIGHT_RPC_SHA256: ${GITHUB_EXPRESSION} needs.preflight.outputs.rpc_sha256 }}`,
-    '[ "$actual" != "$PREFLIGHT_RPC_SHA256" ]; then',
+    '[ "$actual" != "$PREFLIGHT_RPC_SHA256" ]; then\n            echo "::error::The mainnet-e2e RPC is not the one preflight validated."; exit 1\n          fi',
   ]) {
+    // Each refusal must keep its `exit 1`, or the step would only warn.
     requireText(
       failures,
       execute,
@@ -301,10 +302,10 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
     );
   }
   for (const control of [
-    '[[ "$MAINNET_E2E_RPC_URL" == https://* ]] || {',
+    '[[ "$MAINNET_E2E_RPC_URL" == https://* ]] || { echo "::error::The mainnet RPC must be HTTPS."; exit 1; }',
     "--proto '=https'",
-    'case "${host,,}" in wallet.nodes.starknet.org|mainnet.nodes.starknet.org) echo',
-    'if [ "${chain,,}" != "0x534e5f4d41494e" ]; then',
+    'case "${host,,}" in wallet.nodes.starknet.org|mainnet.nodes.starknet.org) echo "::error::The mainnet RPC must be a dedicated test endpoint."; exit 1 ;; esac',
+    'if [ "${chain,,}" != "0x534e5f4d41494e" ]; then\n            echo "::error::The mainnet RPC is unavailable or not mainnet. CI does not fall back."; exit 1\n          fi',
   ]) {
     requireText(
       failures,

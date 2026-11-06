@@ -5,6 +5,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import { STRK_TOKEN_ADDRESS, USDC_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import type { Call, RpcProvider } from "starknet";
+import { broadcastReviewedSend, type TokenAttempt } from "../../scripts/gasless-mainnet-attempt";
 import {
   MAINNET_E2E_CI_OPT_IN,
   MAINNET_E2E_ENVIRONMENT,
@@ -71,5 +73,75 @@ describe("mainnet send budget", () => {
     expect(sendBudgetFor(allowed("strk20"))).not.toBeNull();
     expect(() => sendBudgetFor(allowed("unlimited"))).toThrow("standard or strk20");
     expect(() => sendBudgetFor({ CI: "true" })).toThrow("local-only");
+  });
+});
+
+describe("gasless broadcast charges the budget before signing", () => {
+  const provider = {
+    callContract: async () => ["0x10", "0x0"],
+  } as unknown as RpcProvider;
+  const attempt = (budget: TokenAttempt["budget"]): TokenAttempt =>
+    ({
+      account: { address: "0x123", label: "fixture", privateKey: "0x456", publicKey: null },
+      budget,
+      classHash: "0x1",
+      family: "openzeppelin",
+      listed: [],
+      provider,
+      route: { enabled: true, forwarder: "0x2" },
+      token: { address: USDC_TOKEN_ADDRESS, decimals: 6, symbol: "USDC" },
+      transport: {
+        executed: () => 0,
+        http: fetch,
+        lastExchange: () => ({ request: "", status: 0, text: "" }),
+      },
+    }) as unknown as TokenAttempt;
+  const call: Call = { calldata: [], contractAddress: "0x3", entrypoint: "transfer" };
+  const offer = (tokenAddress: string, amount: bigint) => ({
+    amount: amount.toString(),
+    decimals: 6,
+    label: "USDC",
+    tokenAddress,
+  });
+
+  test("an over-budget or off-list fee never reaches the signer", async () => {
+    const cap = spendCeilings("standard").usdc.capRaw;
+    let submits = 0;
+    const spy = (async () => {
+      submits += 1;
+      throw new Error("signer reached");
+    }) as unknown as Parameters<typeof broadcastReviewedSend>[4];
+
+    await expect(
+      broadcastReviewedSend(
+        attempt(createSendBudget("standard")),
+        call,
+        offer(USDC_TOKEN_ADDRESS, cap + 1n),
+        1n,
+        spy,
+      ),
+    ).rejects.toThrow("Refusing to sign");
+    await expect(
+      broadcastReviewedSend(attempt(createSendBudget("standard")), call, offer("0x4", 1n), 1n, spy),
+    ).rejects.toThrow("only spend STRK or native USDC");
+    expect(submits).toBe(0);
+
+    // Within the cap the send goes on to the signer.
+    const original = console.log;
+    console.log = () => undefined;
+    try {
+      expect(
+        await broadcastReviewedSend(
+          attempt(createSendBudget("standard")),
+          call,
+          offer(USDC_TOKEN_ADDRESS, cap),
+          1n,
+          spy,
+        ),
+      ).toBe(false);
+    } finally {
+      console.log = original;
+    }
+    expect(submits).toBe(1);
   });
 });

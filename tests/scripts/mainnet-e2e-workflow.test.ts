@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { MAINNET_E2E_WORKFLOW_NAME } from "../../scripts/mainnet-e2e-guard";
+import { rpcUrlSha256 } from "../../scripts/mainnet-e2e-rpc";
 import { mainnetE2eWorkflowFailures } from "../../scripts/mainnet-e2e-workflow-policy";
 import { readWorkflowSources, type WorkflowSources } from "../../scripts/workflow-inventory";
 import { workflowSecurityPolicyFailures } from "../../scripts/workflow-security-policy";
@@ -195,6 +196,18 @@ describe("mainnet E2E workflow policy", () => {
     expect(
       failuresAfter('if [ "${chain,,}" != "0x534e5f4d41494e" ]; then', "if false; then"),
     ).toContain(refused);
+    // Dropping any refusal's `exit 1` turns a failure into a warning.
+    for (const [message, expected] of [
+      ['"::error::The mainnet-e2e RPC is not the one preflight validated."; exit 1', same],
+      ['"::error::The mainnet RPC must be HTTPS."; exit 1', refused],
+      ['"::error::The mainnet RPC must be a dedicated test endpoint."; exit 1', refused],
+      [
+        '"::error::The mainnet RPC is unavailable or not mainnet. CI does not fall back."; exit 1',
+        refused,
+      ],
+    ] as const) {
+      expect(failuresAfter(message, message.replace("; exit 1", ""))).toContain(expected);
+    }
     const source = sources[WORKFLOW] ?? "";
     const chainCheck = source.indexOf('          if [ "${chain,,}" != "0x534e5f4d41494e" ]; then');
     const chainEnd = source.indexOf("          fi\n", chainCheck) + "          fi\n".length;
@@ -232,5 +245,44 @@ describe("mainnet E2E workflow policy", () => {
     expect(probe(`${mainnet} trailing\n200`, 0)).toBe(false);
     expect(probe('{"result":"0x534e5f5345504f4c4941"}\n200', 0)).toBe(false);
     expect(probe("", 7)).toBe(false);
+  });
+
+  test("the RPC validation step exits before any test on a hash mismatch", async () => {
+    const source = (await readWorkflowSources())[WORKFLOW] ?? "";
+    const start = source.indexOf('          actual="$(printf \'%s\' "$MAINNET_E2E_RPC_URL"');
+    const chain = source.indexOf('          if [ "${chain,,}"', start);
+    const end = source.indexOf("          fi\n", chain) + "          fi\n".length;
+    expect(start).toBeGreaterThan(0);
+    const url = "https://rpc.example/v0_10";
+    // The workflow's whole validation step, curl stubbed to answer mainnet.
+    const script = [
+      "set -euo pipefail",
+      `curl() { cat >/dev/null; printf '%s\\n200' '{"result":"0x534e5f4d41494e"}'; }`,
+      source.slice(start, end),
+      "echo TESTS_WOULD_RUN",
+    ].join("\n");
+    const run = (rpcUrl: string, hash: string) =>
+      Bun.spawnSync(["bash", "-c", script], {
+        env: {
+          MAINNET_E2E_RPC_URL: rpcUrl,
+          PATH: process.env["PATH"] ?? "",
+          PREFLIGHT_RPC_SHA256: hash,
+        },
+      });
+    const validated = rpcUrlSha256(url);
+    const ok = run(url, validated);
+    expect(ok.exitCode).toBe(0);
+    expect(ok.stdout.toString()).toContain("TESTS_WOULD_RUN");
+    for (const [rpcUrl, hash] of [
+      ["https://other-rpc.example/v0_10", validated],
+      [url, ""],
+      [url, "0".repeat(64)],
+    ] as const) {
+      const refused = run(rpcUrl, hash);
+      expect(refused.exitCode).not.toBe(0);
+      expect(refused.stdout.toString()).not.toContain("TESTS_WOULD_RUN");
+      expect(refused.stdout.toString()).toContain("not the one preflight validated");
+      expect(refused.stdout.toString()).not.toContain("other-rpc");
+    }
   });
 });

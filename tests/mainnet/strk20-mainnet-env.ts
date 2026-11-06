@@ -11,7 +11,7 @@ import {
   isStarkPrivateKey,
   normalizeFeltInput,
 } from "@bramble/wallet-model/networks";
-import { assertLiveMainnetAllowed } from "../../scripts/mainnet-e2e-guard";
+import { assertLiveMainnetAllowed, assertStrk20CiAllowed } from "../../scripts/mainnet-e2e-guard";
 import { dedicatedHttpsRpcUrl, MAINNET_WRITE_ACK } from "./mainnet-safety";
 
 const MAINNET_ACK = MAINNET_WRITE_ACK;
@@ -52,14 +52,16 @@ const dedicatedRpcUrl = (value: string | undefined): string =>
 
 /**
  * Reads the explicit mainnet-write opt-in and bounded test amount. Generic CI
- * is refused. The Mainnet E2E workflow may opt in; the 1 STRK deposit cap and
- * the dedicated-RPC rule still apply. Malformed inputs are rejected without
- * echoing any supplied value.
+ * is refused, and so is the Mainnet E2E workflow until the STRK20 signing
+ * paths charge the per-send budget (`assertStrk20CiAllowed`). The 1 STRK
+ * deposit cap and the dedicated-RPC rule always apply. Malformed inputs are
+ * rejected without echoing any supplied value.
  */
 export const readStrk20MainnetEnvironment = (
   env: Readonly<Record<string, string | undefined>>,
 ): Strk20MainnetEnvironment => {
   assertLiveMainnetAllowed(env);
+  assertStrk20CiAllowed(env);
   if (env["BRAMBLE_STRK20_E2E_MAINNET_ACK"] !== MAINNET_ACK) {
     throw new Error(`Set BRAMBLE_STRK20_E2E_MAINNET_ACK=${MAINNET_ACK} to permit mainnet writes`);
   }

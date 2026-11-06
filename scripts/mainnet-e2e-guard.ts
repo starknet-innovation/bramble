@@ -90,3 +90,26 @@ export const assertLiveMainnetAllowed = (env: MainnetCiEnv): MainnetCiDecision =
  */
 export const strk20LifecycleExcluded = (env: MainnetCiEnv): boolean =>
   decideMainnetCi(env).kind === "allowed" && env["BRAMBLE_STRK20_E2E_CI"] !== STRK20_CI_OPT_IN;
+
+/**
+ * Whether every STRK20 signing path charges `sendBudgetFor(process.env)`
+ * before it signs. False today: the STRK20 lifecycle spec does not (#830
+ * item 1). Flip it only in the change that wires that budget in.
+ */
+export const STRK20_SEND_BUDGET_WIRED: boolean = false;
+
+/** Fixed refusal text for a STRK20 run in Mainnet E2E CI. Safe to print. */
+export const STRK20_CI_REFUSAL =
+  "The STRK20 lifecycle is off in Mainnet E2E CI until every STRK20 signing path charges the per-send budget before signing";
+
+/**
+ * Throws {@link STRK20_CI_REFUSAL} when `env` is an allowed Mainnet E2E CI
+ * run and the STRK20 send budget is not wired in, so setting
+ * `vars.MAINNET_E2E_STRK20` cannot start the lifecycle early. Local runs are
+ * unchanged. Generic CI is refused by {@link assertLiveMainnetAllowed}.
+ */
+export const assertStrk20CiAllowed = (env: MainnetCiEnv): void => {
+  if (decideMainnetCi(env).kind === "allowed" && !STRK20_SEND_BUDGET_WIRED) {
+    throw new Error(STRK20_CI_REFUSAL);
+  }
+};

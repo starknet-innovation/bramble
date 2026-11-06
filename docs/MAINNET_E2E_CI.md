@@ -115,8 +115,9 @@ secrets. **Do not fund the key until steps 1 to 3 are done.**
    cache, volume, or Docker layer cache that keeps files between runs.
 7. Set the repository variable `MAINNET_E2E_CONFIGURED` to `true`.
 
-Until that variable is `true`, the workflow exits green and starts no
-self-hosted runner. Once it is `true`, any missing variable or secret fails
+Until that variable is `true`, the workflow exits green after the hosted
+`resolve` and `gate` jobs. No self-hosted runner starts and no job reads a
+secret. Once it is `true`, any missing variable or secret fails
 the run.
 
 ### Secrets
@@ -131,7 +132,8 @@ the run.
 `vars.MAINNET_E2E_STRK20=true` opts into the STRK20 lifecycle. Leave it unset
 for the standard tier. **Keep the STRK20 tier off** until every STRK20 signing
 path charges the per-send budget before signing (see [The real cap is the
-balance](#the-real-cap-is-the-balance)).
+balance](#the-real-cap-is-the-balance)). The code enforces this: in CI the
+STRK20 lifecycle refuses to start.
 
 ### What `execute` exports
 
@@ -215,6 +217,13 @@ until every STRK20 signing path, including the lifecycle spec, charges the
 per-send budget before it signs. Today the lifecycle spec does not, so only
 the post-run check and the balance would bound it.
 
+The code refuses it too. In Mainnet E2E CI, `readStrk20MainnetEnvironment`
+calls `assertStrk20CiAllowed` (`scripts/mainnet-e2e-guard.ts`), which stops
+the lifecycle with a fixed message while `STRK20_SEND_BUDGET_WIRED` is false.
+Setting the variable therefore turns the run red before anything signs. Flip
+that constant only in the change that wires the budget into every STRK20
+signing path.
+
 ## Rotate the key
 
 1. Create and deploy a new account. Do not reuse the old key.
@@ -229,7 +238,8 @@ The next run picks up the new secret. No workflow edit is required.
 
 | State | Result |
 | --- | --- |
-| `MAINNET_E2E_CONFIGURED` is not `true` | Green skip. No runner, no secret read |
+| `MAINNET_E2E_CONFIGURED` is not `true` | Green skip. Only the hosted `resolve` and `gate` jobs run; no self-hosted runner, no secret read |
+| `vars.MAINNET_E2E_STRK20=true` before the STRK20 budget is wired | Red. The STRK20 lifecycle refuses to start, before anything signs |
 | Enabled, any variable or secret missing | Red. The missing names are listed, not the values |
 | Balance below the minimum or above the maximum | Red, before any test, and a tracking issue |
 | `execute`'s RPC differs from preflight's, is not dedicated HTTPS, is down, or is not mainnet | Red, before any test. No fallback |

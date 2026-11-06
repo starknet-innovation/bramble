@@ -53,7 +53,8 @@ type GaslessTransport = {
   };
 };
 
-type TokenAttempt = {
+/** One token attempt's inputs. Exported for {@link broadcastReviewedSend}'s tests. */
+export type TokenAttempt = {
   readonly account: LoadedMainnetAccount;
   /** Charged before the signature that moves funds. `null` on a local run. */
   readonly budget: SendBudget | null;
@@ -352,11 +353,18 @@ const refuseWithoutSpending = async (
   console.log("Forwarder mismatch and over-ceiling quote refused before execute.");
 };
 
-const broadcast = async (
+/**
+ * Signs and submits the reviewed send, after charging its fee to the run's
+ * budget. A refused charge throws before `submit` (and so the signer) runs.
+ * `submit` is injectable so tests can prove that order; callers use the
+ * default. Returns false after printing why a submit failed.
+ */
+export const broadcastReviewedSend = async (
   input: TokenAttempt,
   call: Call,
   offer: GaslessFeeOffer,
   priced: bigint,
+  submit: typeof submitReviewedGaslessInvoke = submitReviewedGaslessInvoke,
 ): Promise<boolean> => {
   const symbol = input.token.symbol;
   const strk = await balanceOf(input.provider, STRK_TOKEN_ADDRESS, input.account.address);
@@ -366,7 +374,7 @@ const broadcast = async (
   input.budget?.charge(offer.tokenAddress, BigInt(offer.amount));
   let submitted: Awaited<ReturnType<typeof submitReviewedGaslessInvoke>>;
   try {
-    submitted = await submitReviewedGaslessInvoke({
+    submitted = await submit({
       account: {
         accountContractType: input.family,
         address: input.account.address,
@@ -448,5 +456,5 @@ export const payWithToken = async (input: TokenAttempt): Promise<boolean> => {
   );
   console.log(`Forwarder ${input.route.forwarder}.`);
   await refuseWithoutSpending(input, call, offer, priced);
-  return broadcast(input, call, offer, priced);
+  return broadcastReviewedSend(input, call, offer, priced);
 };
