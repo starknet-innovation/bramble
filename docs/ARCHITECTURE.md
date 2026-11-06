@@ -469,7 +469,7 @@ directly and adopted when it is at least the tracked figure. Collection approval
 reviewed as their own kinds: an ERC721 `approve` carries a token id, so a "revoke" would approve
 item 0. The store `bramble:allowances` sits outside the vault.
 
-## NFT gallery (parked: tab, menu entry, and indexer setting hidden; home loads no NFT data)
+## NFT gallery (parked; reachable only through the opt-in collectibles preview)
 
 The gallery merges auto-discovered collectibles with watched `nfts` preferences (contract, token
 id, network, optional label, spam flag).
@@ -479,10 +479,9 @@ URLs. The detail screen shows the resolved artwork and attributes, then sends th
 review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-1155, decodes the
 exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
-While parked, no view hydrates NFT data: neither watched-NFT metadata nor indexer discovery runs,
-and a saved `nftIndexerUrl` is unused and unsettable. Restore the entry points, `bindNfts`, indexer
-setter, and gallery-only hydration together; then remove the parked-view guard/test and cover no-unprompted egress on restored routes.
-Ownership proofs stay untrusted-first whenever it does: concurrent refreshes for the same account
+Parked unless the opt-in `collectiblesPreview` preference is on (gallery, indexer field, gated site watch cards; see PR #840);
+otherwise no NFT data loads and no indexer URL is used. `DEFAULT_NFT_INDEXER_URL` is unset.
+Ownership proofs stay untrusted-first whenever discovery runs: concurrent refreshes for the same account
 share the in-flight request, account switches remain isolated, and the first visible watched
 images are fetched eagerly so the gallery is warm when opened.
 

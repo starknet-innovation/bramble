@@ -36,6 +36,13 @@ export const PRIVACY_ERROR_COPY: readonly (readonly [string, string])[] = [
   ],
   ["activate private balances before sending privately", ACTIVATE_FIRST],
   ["activate private balances before unshielding", ACTIVATE_FIRST],
+  ["activate private balances before shielding an asset", ACTIVATE_FIRST],
+  // A first shield that registers (mc-wallet 789) found the account registered,
+  // or a registration on its way, after review.
+  [
+    "private balances changed. review the shield again.",
+    "Private balances changed. Review the shield again.",
+  ],
   ["deploy this account before activating private balances", DEPLOY_FIRST],
   ["deploy this account before submitting a public private deposit", DEPLOY_FIRST],
   ["track a token before activating private balances", "Track a token first."],

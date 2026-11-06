@@ -159,10 +159,61 @@ describe("invoke approval card fee review (#189)", () => {
     );
   });
 
-  test("an undeployed account reuses the Send wording instead of a fee amount", () => {
-    const undeployed: PendingApproval = { ...withFee, fee: null, requiresDeployment: true };
-    expect(activity([undeployed])).toContain(
-      "The network fee is estimated once this account is deployed.",
+  // Issue 851: an undeployed account shows one total, and Approve echoes it.
+  const undeployed: PendingApproval = {
+    ...withFee,
+    context: {
+      accountId: account.id,
+      chainId: "0x534e5f4d41494e",
+      networkId: "SN_MAIN",
+      payloadDigest: `sha256:${"a".repeat(64)}`,
+    },
+    deploymentFee: { overallFee: "1500000000000000", unit: "FRI" },
+    deploymentFeeEstimateFailed: false,
+    requiresDeployment: true,
+  };
+
+  test("an undeployed account shows the combined total and Approve echoes it", () => {
+    const html = activity([undeployed]);
+    expect(html).toContain("Estimated fee: 0.004 STRK");
+    expect(html).toContain("Creating this account on Starknet is 0.0015 STRK of that.");
+    expect(html).not.toContain("estimated once this account is deployed");
+    expect(html).toContain('data-approval-fee="4000000000000000"');
+    expect(html).not.toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
+    );
+  });
+
+  test("an undeployed Ledger account is told it signs twice", () => {
+    const ledger = {
+      ...account,
+      derivation: {
+        accountIndex: 0,
+        eip2645application: "LedgerW",
+        kind: "ledger",
+        path: "m/2645'/1195502025'/734980059'/0'/0'/0",
+      },
+    } as WalletStatus["accounts"][number];
+    const html = dashboard(
+      "activity",
+      { ...status, accounts: [ledger] },
+      [undeployed],
+      preferences,
+      {
+        balances: [],
+      },
+    );
+    expect(html).toContain("and your Ledger asks to sign both");
+  });
+
+  test("an unpriced deployment offers retry and keeps Approve disabled", () => {
+    const html = activity([
+      { ...undeployed, deploymentFee: null, deploymentFeeEstimateFailed: true },
+    ]);
+    expect(html).toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
+    expect(html).not.toContain("data-approval-fee=");
+    expect(html).toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
     );
   });
 });

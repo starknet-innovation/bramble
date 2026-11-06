@@ -194,7 +194,12 @@ const senderBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
     return wait("Waiting for your registration to be indexed…");
   }
   if (input.senderRegistration === "unregistered") {
-    return refuse("Activate private balances before sending privately");
+    // A shield into the account's own private balance registers it in the same
+    // transaction (#789); anything else still needs the registration first.
+    const selfShield =
+      route.id === "public-private" &&
+      (input.recipient === null || sameFelt(input.recipient, input.senderAddress));
+    return selfShield ? null : refuse("Activate private balances before sending privately");
   }
   if (input.source === "private" && !input.relayConfigured) {
     // Without an unlinkable broadcast route there is no way to spend a note

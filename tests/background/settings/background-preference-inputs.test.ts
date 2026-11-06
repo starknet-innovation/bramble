@@ -38,6 +38,15 @@ describe("readSetDisplayInput", () => {
     ).toBeNull();
   });
 
+  test("reads the collectibles preview switch only as a boolean", () => {
+    expect(readSetDisplayInput({ collectiblesPreview: true, type: "wallet.setDisplay" })).toEqual({
+      collectiblesPreview: true,
+    });
+    expect(
+      readSetDisplayInput({ collectiblesPreview: "true", type: "wallet.setDisplay" }),
+    ).toBeNull();
+  });
+
   test("rejects unknown currency or theme values", () => {
     expect(
       readSetDisplayInput({ approvalSurface: "window", type: "wallet.setDisplay" }),
