@@ -35,6 +35,7 @@ import { createMemoryStore } from "../packages/platform/store/src/kv";
 import type { LoadedMainnetAccount } from "./gasless-mainnet-account";
 import { receiptReverted, receiptSucceeded, transferredAmount } from "./gasless-mainnet-receipt";
 import type { SendBudget } from "./mainnet-e2e-send-budget";
+import { chargeBeforeSigning } from "./mainnet-e2e-signed-send";
 
 const RECEIPT_TIMEOUT_MS = 180_000;
 const RECEIPT_POLL_MS = 4_000;
@@ -53,8 +54,7 @@ type GaslessTransport = {
   };
 };
 
-/** One token attempt's inputs. Exported for {@link broadcastReviewedSend}'s tests. */
-export type TokenAttempt = {
+type TokenAttempt = {
   readonly account: LoadedMainnetAccount;
   /** Charged before the signature that moves funds. `null` on a local run. */
   readonly budget: SendBudget | null;
@@ -353,28 +353,20 @@ const refuseWithoutSpending = async (
   console.log("Forwarder mismatch and over-ceiling quote refused before execute.");
 };
 
-/**
- * Signs and submits the reviewed send, after charging its fee to the run's
- * budget. A refused charge throws before `submit` (and so the signer) runs.
- * `submit` is injectable so tests can prove that order; callers use the
- * default. Returns false after printing why a submit failed.
- */
-export const broadcastReviewedSend = async (
+const broadcast = async (
   input: TokenAttempt,
   call: Call,
   offer: GaslessFeeOffer,
   priced: bigint,
-  submit: typeof submitReviewedGaslessInvoke = submitReviewedGaslessInvoke,
 ): Promise<boolean> => {
   const symbol = input.token.symbol;
   const strk = await balanceOf(input.provider, STRK_TOKEN_ADDRESS, input.account.address);
   const token = await balanceOf(input.provider, input.token.address, input.account.address);
   // The reviewed fee is the most the paymaster can take: submit refuses a
-  // signed fee above it. Charge it before signing, not after funds move.
-  input.budget?.charge(offer.tokenAddress, BigInt(offer.amount));
-  let submitted: Awaited<ReturnType<typeof submitReviewedGaslessInvoke>>;
-  try {
-    submitted = await submit({
+  // signed fee above it. Charge it before signing, not after funds move; a
+  // refused charge throws here, outside the catch below.
+  const signAndSubmit = chargeBeforeSigning(input.budget, offer, () =>
+    submitReviewedGaslessInvoke({
       account: {
         accountContractType: input.family,
         address: input.account.address,
@@ -391,7 +383,11 @@ export const broadcastReviewedSend = async (
       reviewed: offer,
       route: input.route,
       signHash: signerFor(input.account),
-    });
+    }),
+  );
+  let submitted: Awaited<ReturnType<typeof submitReviewedGaslessInvoke>>;
+  try {
+    submitted = await signAndSubmit();
   } catch (error) {
     if (error instanceof IndeterminateRpcWriteError) throw error;
     const message = error instanceof Error ? error.message : "submit failed";
@@ -456,5 +452,5 @@ export const payWithToken = async (input: TokenAttempt): Promise<boolean> => {
   );
   console.log(`Forwarder ${input.route.forwarder}.`);
   await refuseWithoutSpending(input, call, offer, priced);
-  return broadcastReviewedSend(input, call, offer, priced);
+  return broadcast(input, call, offer, priced);
 };

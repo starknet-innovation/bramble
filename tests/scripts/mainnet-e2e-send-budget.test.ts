@@ -5,8 +5,6 @@
  */
 import { describe, expect, test } from "bun:test";
 import { STRK_TOKEN_ADDRESS, USDC_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
-import type { Call, RpcProvider } from "starknet";
-import { broadcastReviewedSend, type TokenAttempt } from "../../scripts/gasless-mainnet-attempt";
 import {
   MAINNET_E2E_CI_OPT_IN,
   MAINNET_E2E_ENVIRONMENT,
@@ -16,6 +14,7 @@ import {
   mainnetE2eWorkflowRef,
 } from "../../scripts/mainnet-e2e-guard";
 import { createSendBudget, sendBudgetFor } from "../../scripts/mainnet-e2e-send-budget";
+import { chargeBeforeSigning } from "../../scripts/mainnet-e2e-signed-send";
 import { spendCeilings } from "../../scripts/mainnet-e2e-spend";
 
 const OTHER_TOKEN = "0x068f5c6a61780768455de69077e07e89787839bf8166decfbf92b645209c0fb8";
@@ -77,71 +76,51 @@ describe("mainnet send budget", () => {
 });
 
 describe("gasless broadcast charges the budget before signing", () => {
-  const provider = {
-    callContract: async () => ["0x10", "0x0"],
-  } as unknown as RpcProvider;
-  const attempt = (budget: TokenAttempt["budget"]): TokenAttempt =>
-    ({
-      account: { address: "0x123", label: "fixture", privateKey: "0x456", publicKey: null },
-      budget,
-      classHash: "0x1",
-      family: "openzeppelin",
-      listed: [],
-      provider,
-      route: { enabled: true, forwarder: "0x2" },
-      token: { address: USDC_TOKEN_ADDRESS, decimals: 6, symbol: "USDC" },
-      transport: {
-        executed: () => 0,
-        http: fetch,
-        lastExchange: () => ({ request: "", status: 0, text: "" }),
-      },
-    }) as unknown as TokenAttempt;
-  const call: Call = { calldata: [], contractAddress: "0x3", entrypoint: "transfer" };
-  const offer = (tokenAddress: string, amount: bigint) => ({
-    amount: amount.toString(),
-    decimals: 6,
-    label: "USDC",
-    tokenAddress,
-  });
-
   test("an over-budget or off-list fee never reaches the signer", async () => {
     const cap = spendCeilings("standard").usdc.capRaw;
     let submits = 0;
-    const spy = (async () => {
+    const submit = async (): Promise<string> => {
       submits += 1;
-      throw new Error("signer reached");
-    }) as unknown as Parameters<typeof broadcastReviewedSend>[4];
-
-    await expect(
-      broadcastReviewedSend(
-        attempt(createSendBudget("standard")),
-        call,
-        offer(USDC_TOKEN_ADDRESS, cap + 1n),
-        1n,
-        spy,
+      return "submitted";
+    };
+    const budget = createSendBudget("standard");
+    expect(() =>
+      chargeBeforeSigning(
+        budget,
+        { amount: (cap + 1n).toString(), tokenAddress: USDC_TOKEN_ADDRESS },
+        submit,
       ),
-    ).rejects.toThrow("Refusing to sign");
-    await expect(
-      broadcastReviewedSend(attempt(createSendBudget("standard")), call, offer("0x4", 1n), 1n, spy),
-    ).rejects.toThrow("only spend STRK or native USDC");
+    ).toThrow("Refusing to sign");
+    expect(() => chargeBeforeSigning(budget, { amount: "1", tokenAddress: "0x4" }, submit)).toThrow(
+      "only spend STRK or native USDC",
+    );
     expect(submits).toBe(0);
 
-    // Within the cap the send goes on to the signer.
-    const original = console.log;
-    console.log = () => undefined;
-    try {
-      expect(
-        await broadcastReviewedSend(
-          attempt(createSendBudget("standard")),
-          call,
-          offer(USDC_TOKEN_ADDRESS, cap),
-          1n,
-          spy,
-        ),
-      ).toBe(false);
-    } finally {
-      console.log = original;
-    }
+    // Within the cap the send goes on to the signer, and the charge counts.
+    const send = chargeBeforeSigning(
+      budget,
+      { amount: cap.toString(), tokenAddress: USDC_TOKEN_ADDRESS },
+      submit,
+    );
+    expect(submits).toBe(0);
+    expect(await send()).toBe("submitted");
     expect(submits).toBe(1);
+    expect(() =>
+      chargeBeforeSigning(budget, { amount: "1", tokenAddress: USDC_TOKEN_ADDRESS }, submit),
+    ).toThrow("Refusing to sign");
+    expect(submits).toBe(1);
+    // A local run has no budget and submits unchanged.
+    expect(await chargeBeforeSigning(null, { amount: "1", tokenAddress: "0x4" }, submit)()).toBe(
+      "submitted",
+    );
+  });
+
+  test("the gasless script signs only through the budget charge", async () => {
+    const source = await Bun.file("scripts/gasless-mainnet-attempt.ts").text();
+    const charge = source.indexOf("chargeBeforeSigning(input.budget, offer, () =>");
+    const signed = source.indexOf("signHash: signerFor(input.account),\n    }),\n  );");
+    expect(charge).toBeGreaterThan(0);
+    expect(signed).toBeGreaterThan(charge);
+    expect(source.split("signHash: signerFor(input.account)").length - 1).toBe(1);
   });
 });
