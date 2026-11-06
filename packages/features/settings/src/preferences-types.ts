@@ -84,6 +84,12 @@ export type WalletPreferences = {
   /** Opt-in process-local aggregate RPC counters; never uploaded automatically. */
   readonly reliabilityDiagnostics?: boolean;
   readonly schemaVersion: 1;
+  /**
+   * The STRK20 bundled-defaults migration this record has had
+   * (`STRK20_DEFAULTS_VERSION`). Absent on records written before it existed;
+   * those have their bundled Mainnet snapshot rebased once, on the next read.
+   */
+  readonly strk20DefaultsVersion?: number;
   readonly strk20Networks?: Strk20NetworkConfigs;
   /** @deprecated Legacy incomplete prover-only setting retained for backup compatibility. */
   readonly strk20ProverUrl?: string;
@@ -97,7 +103,6 @@ export type WalletPreferences = {
  * Plain preferences store methods exposed to the background worker.
  */
 export type WalletPreferencesStore = {
-  readonly addCustomNetwork: (network: CustomNetwork) => Promise<WalletPreferences>;
   readonly addNft: (nft: Omit<WatchedNft, "id">) => Promise<WalletPreferences>;
   readonly createGroup: (input: {
     readonly icon: AccountGroupIcon;

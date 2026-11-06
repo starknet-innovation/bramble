@@ -134,3 +134,6 @@ On success the script prints the transaction hash, a Voyager link, and a
 Starkscan link. A quote that fails the forwarder pin or the 7/2 ceiling is
 refused before execute and does not spend. A malformed build is checked only
 as a gateway error code (`invalid_gasless_request`) and is not submitted.
+
+The wallet UI path is `bun run test:e2e:mainnet:wallet`. This script stays the
+non-UI check. See `docs/MAINNET_E2E.md`.

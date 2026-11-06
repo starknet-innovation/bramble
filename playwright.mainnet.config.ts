@@ -17,7 +17,9 @@ export default defineConfig({
   reporter: "list",
   retries: 0,
   testDir: "./tests/mainnet",
-  testMatch: "**/*.mainnet.ts",
+  // The wallet suite lives under tests/mainnet/wallet and has its own config.
+  // A recursive match here would run those specs inside the STRK20 gates.
+  testMatch: "strk20-*.mainnet.ts",
   timeout: 15 * 60_000,
   use: {
     screenshot: "off",
