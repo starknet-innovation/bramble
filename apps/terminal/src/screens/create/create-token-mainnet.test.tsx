@@ -19,7 +19,7 @@ const wallet = vi.hoisted(() => ({
   },
 }));
 
-const runtime = vi.hoisted(() => ({ confirmTokenDeployment: vi.fn() }));
+const runtime = vi.hoisted(() => ({ assertErc1155Recipient: vi.fn(), confirmTokenDeployment: vi.fn() }));
 
 vi.mock("../../protocols/constants", async () => ({
   ...(await vi.importActual<typeof import("../../protocols/constants")>("../../protocols/constants")),
@@ -37,6 +37,8 @@ vi.mock("../../create/create-runtime", async () => {
   return { ...actual, confirmTokenDeployment: runtime.confirmTokenDeployment };
 });
 
+vi.mock("../../create/recipient-check", () => ({ assertErc1155Recipient: runtime.assertErc1155Recipient }));
+
 import CreateToken from "./CreateToken";
 
 // Mainnet ships off. This pins the real-fees warning for when it is turned on.
@@ -47,6 +49,7 @@ describe("Create once Mainnet is on", () => {
     wallet.value.requestTransaction = wallet.requestTransaction;
     wallet.requestTransaction.mockResolvedValue({ transaction_hash: "0xabc" });
     runtime.confirmTokenDeployment.mockResolvedValue(undefined);
+    runtime.assertErc1155Recipient.mockResolvedValue(undefined);
   });
 
   test("adds the real-fees warning to the request", async () => {
@@ -60,5 +63,6 @@ describe("Create once Mainnet is on", () => {
     const request = wallet.requestTransaction.mock.calls[0]?.[0];
     expect(request.warning).toBe("This is a Mainnet transaction with real network fees.");
     expect(request.title).toBe("Create ERC-1155 collection");
+    expect(runtime.assertErc1155Recipient).toHaveBeenCalledWith("0x534e5f4d41494e", "0x1234");
   });
 });
