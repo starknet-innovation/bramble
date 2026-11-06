@@ -111,11 +111,15 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   tokens: DEFAULT_TRACKED_TOKENS.map(withTokenId),
 });
 
-const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => {
-  const current = { ...preferences, productAnalytics: preferences.productAnalytics ?? true };
-  const strk20Networks = withCurrentStrk20Defaults(current.strk20Networks);
-  return strk20Networks === current.strk20Networks ? current : { ...current, strk20Networks };
-};
+// Also stamps the STRK20 defaults migration, so a fresh install's first write
+// records it and a later anonymizer clear is never taken for an old snapshot.
+// Not part of `defaultWalletPreferences`: the backup file is built from those,
+// and an older build must still restore it.
+const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => ({
+  ...preferences,
+  productAnalytics: preferences.productAnalytics ?? true,
+  ...withCurrentStrk20Defaults(preferences),
+});
 
 const writePreferences = async (
   store: KeyValueStore,
@@ -140,7 +144,7 @@ export const createPreferencesStore = ({
     // failing the strict entry guards and locking the user out of preferences.
     const stored = normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY));
     if (stored === undefined) {
-      return defaultWalletPreferences();
+      return withCurrentDefaults(defaultWalletPreferences());
     }
     if (!isWalletPreferences(stored)) {
       throw new WalletError("Invalid stored preferences");
@@ -162,7 +166,7 @@ export const createPreferencesStore = ({
   const readImportBase = async (): Promise<WalletPreferences> =>
     isWalletPreferences(normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY)))
       ? await read()
-      : defaultWalletPreferences();
+      : withCurrentDefaults(defaultWalletPreferences());
 
   return serializeStoreMutations<WalletPreferencesStore>(
     {

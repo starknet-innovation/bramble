@@ -56,9 +56,10 @@ anonymizer `0x4f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7`
 (`STRK20_MAINNET_SHADOW_ACCOUNT_ANONYMIZER`, `Delegated` on that pool). That value is pinned for
 good, by a test as well: changing it would move every user's shadow accounts. A stored Mainnet
 configuration that is exactly the bundled routing from before this default (same endpoints, pool,
-and fee token, no anonymizer) gains it on read; a user-set anonymizer, any custom endpoint, and an
-empty-map opt-out are kept. Clearing the anonymizer on otherwise-bundled Mainnet routing therefore
-does not persist; every site request still needs its own approval.
+and fee token, no anonymizer) gains it once, as a one-time migration recorded in the preferences
+as `strk20DefaultsVersion`; a user-set anonymizer, any custom endpoint, and an empty-map opt-out
+are kept. After that the stored routing is the user's: clearing the anonymizer sticks, including
+across a preferences backup restore. Every site request still needs its own approval.
 The private discovery and prover upstream URLs and any paymaster key are server-only ECS runtime
 configuration. They never appear in the extension source, preferences, source maps, logs, or
 browser requests. The public gateway URL is necessarily visible to clients.

@@ -11,16 +11,13 @@
  * only half-drives — address lookups fail and invokes are misrouted — so the
  * user re-enters a current anonymizer instead.
  *
- * Also rebases exact bundled Mainnet snapshots onto today's defaults on read
- * ({@link withCurrentStrk20Defaults}).
+ * Also rebases exact bundled Mainnet snapshots onto today's defaults, once per
+ * record ({@link withCurrentStrk20Defaults}).
  */
 import { isRecord } from "@bramble/core/json";
-import {
-  DEFAULT_STRK20_NETWORKS,
-  type Strk20NetworkConfig,
-  type Strk20NetworkConfigs,
-} from "@bramble/privacy/config";
+import { DEFAULT_STRK20_NETWORKS, type Strk20NetworkConfig } from "@bramble/privacy/config";
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import type { WalletPreferences } from "./preferences-types";
 
 const RETIRED_ANONYMIZER_KEY = "subaccountAnonymizerAddress";
 
@@ -89,29 +86,48 @@ const isPreAnonymizerBundledMainnetRouting = (config: Strk20NetworkConfig | unde
   config.shadowAccountAnonymizerAddress === undefined;
 
 /**
- * Brings stored STRK20 routing to the current bundled defaults, or returns the
- * same reference when nothing changes. Only two exact bundled Mainnet
- * snapshots, each pinned as it shipped, are rebased to today's defaults: the
- * Vercel-era one and the one from before the default anonymizer (#666). Custom
- * routing, a user-set anonymizer, other networks, and an empty-map opt-out are
- * kept as stored. An absent map reads as the bundled defaults.
- *
- * Trust boundary: rebasing only changes which anonymizer a site's shadow-account
- * request names; every such request still needs the user's approval. Clearing
- * the anonymizer on otherwise-bundled Mainnet routing does not persist, since
- * that record is the pre-anonymizer snapshot by construction.
+ * The bundled-defaults migration a record has had, kept in the record as
+ * `strk20DefaultsVersion`. Step 1 is the snapshot rebase below: the default
+ * anonymizer (#666) and the Vercel-era rebase before it. A later step raises
+ * the current version and gates itself on its own number, never this one's.
  */
-export const withCurrentStrk20Defaults = (
-  strk20Networks: Strk20NetworkConfigs | undefined,
-): Strk20NetworkConfigs => {
+const STRK20_DEFAULTS_VERSION = 1;
+const SNAPSHOT_REBASE_STEP = 1;
+
+type Strk20Routing = Pick<WalletPreferences, "strk20DefaultsVersion" | "strk20Networks">;
+
+/**
+ * Brings stored STRK20 routing to the current bundled defaults and records that
+ * it did. Total and deterministic; it never widens what validates.
+ *
+ * An absent map reads as the bundled defaults. A record that has not had the
+ * snapshot rebase (`strk20DefaultsVersion` absent) has two exact bundled
+ * Mainnet snapshots, each pinned as it shipped, rebased to today's defaults:
+ * the Vercel-era one and the one from before the default anonymizer (#666).
+ * Custom routing, a user-set anonymizer, other networks, and an empty-map
+ * opt-out are kept as stored. Either way the result carries the version, and
+ * the next preferences write persists it with the routing; every write goes
+ * through a read, so no routing the user saves is ever stored without it.
+ *
+ * Trust boundary: the rebase runs once per record. A record past that step is
+ * returned as stored, so clearing the anonymizer on otherwise-bundled Mainnet
+ * routing sticks; the rebase only ever changes which anonymizer a site's
+ * shadow-account request names, and every such request still needs approval.
+ */
+export const withCurrentStrk20Defaults = ({
+  strk20DefaultsVersion,
+  strk20Networks,
+}: Strk20Routing): Required<Strk20Routing> => {
+  const version = Math.max(strk20DefaultsVersion ?? 0, STRK20_DEFAULTS_VERSION);
   if (strk20Networks === undefined) {
-    return DEFAULT_STRK20_NETWORKS;
+    return { strk20DefaultsVersion: version, strk20Networks: DEFAULT_STRK20_NETWORKS };
   }
-  if (isRetiredBundledMainnetRouting(strk20Networks.SN_MAIN)) {
-    return { ...strk20Networks, ...DEFAULT_STRK20_NETWORKS };
-  }
-  if (isPreAnonymizerBundledMainnetRouting(strk20Networks.SN_MAIN)) {
-    return { ...strk20Networks, ...DEFAULT_STRK20_NETWORKS };
-  }
-  return strk20Networks;
+  const rebase =
+    (strk20DefaultsVersion ?? 0) < SNAPSHOT_REBASE_STEP &&
+    (isRetiredBundledMainnetRouting(strk20Networks.SN_MAIN) ||
+      isPreAnonymizerBundledMainnetRouting(strk20Networks.SN_MAIN));
+  return {
+    strk20DefaultsVersion: version,
+    strk20Networks: rebase ? { ...strk20Networks, ...DEFAULT_STRK20_NETWORKS } : strk20Networks,
+  };
 };
