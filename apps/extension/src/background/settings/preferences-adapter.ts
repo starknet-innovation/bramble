@@ -67,6 +67,7 @@ export const createBackgroundPreferences = ({
     setNostrRelayUrl: async (input) => (await required()).setNostrRelayUrl(input),
     setNftSpam: async (input) => (await required()).setNftSpam(input),
     setRpcOverride: async (input) => (await required()).setRpcOverride(input),
+    setSelectedMultisig: async (input) => (await required()).setSelectedMultisig(input),
     setStrk20NetworkConfig: async (input) => (await required()).setStrk20NetworkConfig(input),
     setTokenHidden: async (input) => (await required()).setTokenHidden(input),
     upsertToken: async (input, source) => (await required()).upsertToken(input, source),

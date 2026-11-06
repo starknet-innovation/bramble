@@ -207,6 +207,24 @@ describe("recoverUnverifiedVault", () => {
     expect((await parts.open().status()).recovery).toBe("unverified");
   });
 
+  test("checks a recoverable vault without accepting it", async () => {
+    const parts = await populated();
+    await dropRecords(parts);
+    const service = parts.open();
+
+    await expect(service.assertRecoverableVault(vaultPassphrase)).resolves.toBeUndefined();
+    expect((await service.status()).recovery).toBe("unverified");
+    await expect(service.assertRecoverableVault("wrong horse battery staple")).rejects.toThrow();
+    expect((await parts.open().status()).recovery).toBe("unverified");
+  });
+
+  test("refuses to check a vault that verifies", async () => {
+    const parts = await populated();
+    await expect(parts.open().assertRecoverableVault(vaultPassphrase)).rejects.toThrow(
+      "not awaiting recovery",
+    );
+  });
+
   test("refuses a vault that verifies", async () => {
     const parts = await populated();
     const service = parts.open();

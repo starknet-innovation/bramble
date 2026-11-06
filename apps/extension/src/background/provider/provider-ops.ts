@@ -1,14 +1,13 @@
 /** Dapp provider operations validate origin and phishing policy on every request. */
 
+import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { PriceService } from "@bramble/portfolio/prices";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
-import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
@@ -19,7 +18,7 @@ import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import { recordAutoDeployment } from "../accounts/deployment-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
+import { createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalPayload, ApprovalQueue, PendingApproval } from "../approvals/approvals";
@@ -29,7 +28,19 @@ import {
   PENDING_INVOKE_FEE,
 } from "../approvals/invoke-fee-review";
 import { gaslessFeeSummary } from "../transactions/gasless-review";
-import { type InvokeExecuteDeps, submitHeldInvoke } from "./held-invoke-submit";
+import { grantedDappAccounts } from "./dapp-account";
+import {
+  type InvokeExecuteDeps,
+  type ReviewedInvokeApproval,
+  reviewedCeiling,
+  submitHeldInvoke,
+} from "./held-invoke-submit";
+import {
+  maybeQueueMultisigInvoke,
+  maybeRetryMultisigFee,
+  withMultisigInvoke,
+} from "./multisig-dapp-invoke";
+import type { MultisigOriginGrantStore } from "./multisig-grants";
 import { type ResolvedOriginAccount, resolveOriginAccount } from "./provider-grant";
 import { invokeFailureResponse } from "./provider-invoke-failure";
 
@@ -83,6 +94,8 @@ export type ProviderOpsDeps = {
    * invoke estimation does not call it; Ledger submission fails closed without it.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: MultisigStore;
   readonly preferencesStore: WalletPreferencesStore;
   /** Fiat prices for a gasless fee offer. Absent in narrow test doubles. */
   readonly prices?: PriceService;
@@ -212,9 +225,7 @@ type ProviderOpsHandler = (
 
 const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) => {
   const input = readGetPermissionsInput(message);
-  if (!input) {
-    return { error: "invalid permissions request" };
-  }
+  if (!input) return { error: "invalid permissions request" };
   if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
@@ -225,7 +236,7 @@ const handleGetPermissions: ProviderOpsHandler = async (deps, message, sender) =
   // a timer, so it must not extend the unlock lifetime.
   const passphrase = deps.session.peekPassphrase();
   const authorized = captureSessionAuthorization(deps.session);
-  const granted = passphrase ? await deps.wallet.getGrantedAccounts(input.origin, passphrase) : [];
+  const granted = passphrase ? await grantedDappAccounts(deps, input.origin, passphrase) : [];
   // A lock that lands during the read answers what a locked wallet answers,
   // never an error only that race produces: a polling page would otherwise
   // learn when each lock happened (Sherlock 148).
@@ -270,6 +281,12 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   // deduplicates, so an origin already holding its full share of the queue is
   // getting this request refused at admission whatever the calls turn out to be.
   requireApprovalAdmission(deps.approvals, input.origin);
+  const multisigQueued = await maybeQueueMultisigInvoke(deps, input);
+  if (multisigQueued) {
+    return "approval" in multisigQueued
+      ? deps.waiters.register(multisigQueued.approval.id)
+      : multisigQueued;
+  }
   const resolved = await resolveOriginAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
@@ -292,6 +309,8 @@ const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
   if (approval?.kind !== "invoke" || !payload?.calls) {
     return { error: "approval not found" };
   }
+  const multisigFee = await maybeRetryMultisigFee(deps, approval, payload.calls);
+  if (multisigFee) return multisigFee;
   const resolved = await resolveOriginAccount(deps, approval.origin, approval.context);
   if ("error" in resolved) {
     return resolved;
@@ -340,18 +359,6 @@ export const handleProviderOps = async (
   return handler ? handler(deps, message, sender) : null;
 };
 
-// The reviewed figures, each the ceiling at its own submit boundary: the invoke
-// fee, and the deployment fee when the account deploys before the calls.
-const reviewedCeiling = (approval: {
-  readonly reviewedDeploymentFee?: FeeEstimate;
-  readonly reviewedFee?: FeeEstimate;
-}) => ({
-  ...(approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {}),
-  ...(approval.reviewedDeploymentFee
-    ? { reviewedDeploymentFee: approval.reviewedDeploymentFee }
-    : {}),
-});
-
 /**
  * Executes a user-approved invoke. `reviewedFee` is the ceiling the card showed;
  * `reviewedDeploymentFee` bounds the deployment an undeployed account sends first.
@@ -360,21 +367,16 @@ const reviewedCeiling = (approval: {
  */
 export const executeInvokeApproval = async (
   deps: InvokeExecuteDeps,
-  approval: {
-    readonly context?: ApprovalContext;
-    readonly gaslessFee?: GaslessFeeOffer;
-    readonly origin: string;
-    readonly payload: ApprovalPayload;
-    readonly reviewedFee?: FeeEstimate;
-    /** The reviewed deployment half, when the account deploys before the calls. */
-    readonly reviewedDeploymentFee?: FeeEstimate;
-  },
+  approval: ReviewedInvokeApproval,
+): Promise<RuntimeResponse> =>
+  withMultisigInvoke(deps, approval, (calls) => executeSignerInvoke(deps, approval, calls));
+
+const executeSignerInvoke = async (
+  deps: InvokeExecuteDeps,
+  approval: ReviewedInvokeApproval,
+  calls: readonly Call[],
 ): Promise<RuntimeResponse> => {
   const { activity, allowanceStore, runtimeRpc } = deps;
-  const calls = approval.payload.calls;
-  if (!calls) {
-    return { error: "approval not found" };
-  }
   const resolved = await resolveOriginAccount(deps, approval.origin, approval.context);
   if ("error" in resolved) {
     return resolved;

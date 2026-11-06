@@ -1,0 +1,50 @@
+{
+  "multisig/TA-39": {
+    "id": "multisig/TA-39",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRM account 4 + BRAMBLE_DATASET_SEED_S_SCR account 2",
+    "vendorDerivation": "multisig",
+    "index": 0,
+    "address": "0x6f9a6614e3800c8ca479555150322f5cd5467fbff9a354e125ba619b86ed6f5",
+    "pubkey": "0x2374d9aaa3aaf0ce5ecdcfa4d77dbb9679f280ccb808a46184edd03afeab57",
+    "classAtDeploy": "0x07aeca3456816e3b833506d7cc5c1313d371fbdb0ae95ee70af72a4ddbf42594",
+    "expected": "deployed 2-of-2; P10 adds it by address",
+    "detectability": "D4",
+    "backedBy": "none",
+    "state": {
+      "threshold": 2,
+      "seats": [
+        "0x2374d9aaa3aaf0ce5ecdcfa4d77dbb9679f280ccb808a46184edd03afeab57",
+        "0x530561f9b1c6cbd356c92a3b112a74eeceacf4115ed8aaf9db8683b37c2d086"
+      ],
+      "salt": "0x39",
+      "deployed": true,
+      "liveClass": "0x7aeca3456816e3b833506d7cc5c1313d371fbdb0ae95ee70af72a4ddbf42594"
+    },
+    "log": [
+      "funded STRK 0x5f35c93482ab81f0538e69ba22cc1bf0758ee4aac472b789b5da6928e5a2098",
+      "deployed 0x9785082b74b0ef767f7e6adc3c1e1bc52f3d7b802df9b398a5a0fc9e9a5246"
+    ]
+  },
+  "multisig/TA-40": {
+    "id": "multisig/TA-40",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRM account 4 + BRAMBLE_DATASET_SEED_S_SCR account 2",
+    "vendorDerivation": "multisig",
+    "index": 0,
+    "address": "0x188aa41985b25380e358db489893f6cefd068daee71d26b56c2a52494b9e04e",
+    "pubkey": "0x2374d9aaa3aaf0ce5ecdcfa4d77dbb9679f280ccb808a46184edd03afeab57",
+    "classAtDeploy": "0x07aeca3456816e3b833506d7cc5c1313d371fbdb0ae95ee70af72a4ddbf42594",
+    "expected": "counterfactual 2-of-2: no class to read by address",
+    "detectability": "D4",
+    "backedBy": "none",
+    "state": {
+      "threshold": 2,
+      "seats": [
+        "0x2374d9aaa3aaf0ce5ecdcfa4d77dbb9679f280ccb808a46184edd03afeab57",
+        "0x530561f9b1c6cbd356c92a3b112a74eeceacf4115ed8aaf9db8683b37c2d086"
+      ],
+      "salt": "0x40",
+      "deployed": false
+    },
+    "log": []
+  }
+}

@@ -10,7 +10,7 @@
 
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { Account, ec, num, Signer } from "starknet";
+import { Account, ec, type Signer } from "starknet";
 import {
   argentAddress,
   argentConstructor,
@@ -28,13 +28,13 @@ import {
   tokenBalance,
   transfer,
 } from "./matrix-lib";
+import { type KP, LegacySigner, ModernSigner } from "./matrix-signers";
 
 const { grindKey, getStarkKey } = ec.starkCurve;
 
 const STRK_FLOAT = 2n * 10n ** 18n;
 const USDC_DUST = 2n * 10n ** 6n; // 2 USDC
 
-type KP = { priv: string; pub: string };
 const auxKey = (index: number): KP => {
   const node = HDKey.fromMasterSeed(
     mnemonicToSeedSync(envSeed("BRAMBLE_DATASET_SEED_DEPLOYER")),
@@ -45,40 +45,6 @@ const auxKey = (index: number): KP => {
 };
 const GUARDIAN = auxKey(1);
 const NEW_OWNER = auxKey(2);
-
-const sigOf = (msgHash: string, priv: string): [string, string] => {
-  const sig = ec.starkCurve.sign(msgHash, priv);
-  return [num.toHex(sig.r), num.toHex(sig.s)];
-};
-
-const firstKey = (keys: readonly KP[]): KP => {
-  const [first] = keys;
-  if (!first) throw new Error("a signer needs at least one key");
-  return first;
-};
-
-/** Legacy multi-sig: [or, os] or [or, os, gr, gs]. */
-class LegacySigner extends Signer {
-  constructor(private keys: KP[]) {
-    super(firstKey(keys).priv);
-  }
-  override async signRaw(msgHash: string): Promise<string[]> {
-    return this.keys.flatMap((k) => sigOf(msgHash, k.priv));
-  }
-}
-
-/** Modern signer array: [n, (0, pubkey, r, s)×n] — required for guardian-alone. */
-class ModernSigner extends Signer {
-  constructor(private keys: KP[]) {
-    super(firstKey(keys).priv);
-  }
-  override async signRaw(msgHash: string): Promise<string[]> {
-    return [
-      num.toHex(this.keys.length),
-      ...this.keys.flatMap((k) => ["0x0", k.pub, ...sigOf(msgHash, k.priv)]),
-    ];
-  }
-}
 
 const deployer = deployerAccount();
 const manifest = loadManifest();

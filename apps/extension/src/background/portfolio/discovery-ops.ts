@@ -8,6 +8,7 @@
 
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { normalizeWalletOrigin } from "@bramble/core/origin";
+import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { accountDeployment } from "@bramble/starknet/deployment";
@@ -15,6 +16,8 @@ import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks
 import { API_VERSION_PATTERN } from "@bramble/wallet-protocol/results";
 import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@bramble/wallet-protocol/versions";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { presentedVaultAccount } from "../provider/dapp-account";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import {
   type ExtensionIdentity,
   isClaimedSenderOrigin,
@@ -37,6 +40,8 @@ export { SUPPORTED_SPECS, SUPPORTED_WALLET_API };
 export type DiscoveryOpsDeps = {
   readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   /**
@@ -105,7 +110,7 @@ const handleSupportedVersions: DiscoveryOpsHandler = async (deps, messageType, m
 };
 
 const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, message, sender) => {
-  const { extension, preferencesStore, runtimeRpc, session, wallet } = deps;
+  const { extension, preferencesStore, runtimeRpc, session } = deps;
   const input = readDiscoveryInput(message, "wallet.deploymentData");
   if (!input) {
     return { error: "invalid deployment data request" };
@@ -125,12 +130,14 @@ const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, mes
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  const account = await presentedVaultAccount(
+    deps,
+    input.origin,
+    passphrase,
+    (stored) => stored.networkId === preferences.activeNetworkId,
+  );
   if (!authorized.isCurrent()) return { error: "wallet locked" };
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
+  if ("error" in account) return account;
   const network = STARKNET_NETWORKS[account.networkId];
   const deployed = await runtimeRpc.getDeploymentStatus({
     accountAddress: account.address,
