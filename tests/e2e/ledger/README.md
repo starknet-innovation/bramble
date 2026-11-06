@@ -88,7 +88,8 @@ Docker reproduction, with the owner's approval.
 - A dapp SNIP-12 signature: the hash the wallet shows equals the hash on the
   device screen, and a signature comes back.
 - Refusals: Blind signing off on the device, and the user rejecting on the
-  device. Both show the existing copy.
+  device. The app answers both with 0x6985, so both show the copy that
+  covers either cause, after one hash APDU.
 - Nano S+ (`/button`) and Flex (`/finger`); Stax is supported but not default.
 
 ## How it works

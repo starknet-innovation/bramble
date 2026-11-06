@@ -270,10 +270,10 @@ describe("ledgerSignHashOnDevice", () => {
     });
   });
 
-  test("maps an ExecutionError from signHash to blind-signing-disabled", async () => {
+  test("maps an ExecutionError from signHash to rejected-or-blind-signing-off", async () => {
     // The real signHash swallows every thrown transport error and folds any
-    // non-accepted status word (e.g. the conditions-not-satisfied returned when
-    // blind signing is off) into ExecutionError (0x6f00) — never a distinct word.
+    // non-accepted status word (the app's 0x6985 for a reject or for Blind
+    // signing off) into ExecutionError (0x6f00), so neither cause is claimed.
     const client = fakeClient({
       async signHash() {
         return {
@@ -286,7 +286,7 @@ describe("ledgerSignHashOnDevice", () => {
       },
     });
     await expect(ledgerSignHashOnDevice(client, "m", "0x1")).rejects.toMatchObject({
-      code: "blind-signing-disabled",
+      code: "rejected-or-blind-signing-off",
     });
   });
 

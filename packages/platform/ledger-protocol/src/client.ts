@@ -13,9 +13,9 @@
  * version read), while `getPubKey`/`signHash` catch every thrown transport error
  * internally and report it as an `ExecutionError` (0x6f00) return code — and
  * their `sendApdu` only passes NoError/BadCla/BadIns/InvalidP1P2/UserRejected, so
- * any other status word (e.g. the conditions-not-satisfied the Starknet app
- * returns when blind signing is disabled) also surfaces as `ExecutionError`.
- * Sign-path classification therefore keys off that return code, not a message.
+ * any other status word (e.g. the 0x6985 the Starknet app returns when a sign
+ * is refused) also surfaces as `ExecutionError`. Sign-path classification
+ * therefore keys off that return code, not a message.
  */
 
 import { LedgerRejection, type LedgerRejectionCode } from "@bramble/ledger-protocol/errors";
@@ -155,19 +155,23 @@ const classifyDeviceStatus = (returnCode: number): LedgerRejection =>
       ? new LedgerRejection("no-app-open", returnCode)
       : new LedgerRejection("unexpected-device-error", returnCode);
 
-// Classifies a non-OK return code from `signHash`. The library reports a user
-// rejection as UserRejected, but folds every other on-device refusal — including
-// the conditions-not-satisfied the Starknet app returns when blind signing is
-// disabled — into ExecutionError. Blind signing being off is the one recoverable,
-// actionable sign-time failure (the user enables it and retries), and the shared
-// pre-check has already ruled out a locked/disconnected/wrong/too-old device
-// before this runs, so ExecutionError here is surfaced as that unblock prompt.
+// Classifies a non-OK return code from `signHash`. The Starknet app 2.4.0 to
+// 2.4.3 (`Ins::SignHash`) answers both an on-device reject and Blind signing
+// being off with the same status, 0x6985 (`UserCancelled` in the legacy Ledger
+// Rust SDK io), after the same 0x9000 for the path APDU. The library does not
+// accept 0x6985, so its transport throw is folded into ExecutionError. Nothing
+// the wallet receives tells the two apart, so ExecutionError gets copy that
+// covers both. The shared pre-check rules out a locked, wrong or too-old device
+// before the sign starts, but a transport failure during the sign (a
+// disconnect) is folded into the same ExecutionError and cannot be separated
+// here either. UserRejected (0x6e04) is unambiguous and no supported app
+// version sends it here.
 const classifySignStatus = (returnCode: number): LedgerRejection => {
   if (returnCode === STATUS_USER_REJECTED) {
     return new LedgerRejection("rejected-on-device", returnCode);
   }
   if (returnCode === STATUS_EXECUTION_ERROR) {
-    return new LedgerRejection("blind-signing-disabled", returnCode);
+    return new LedgerRejection("rejected-or-blind-signing-off", returnCode);
   }
   return new LedgerRejection("unexpected-device-error", returnCode);
 };
@@ -375,7 +379,7 @@ export const ledgerPublicKeyX = async (
 
 /**
  * Blind-signs a hash on the device at a path and returns the raw `(r, s)`.
- * Maps a blind-signing-disabled refusal, a user rejection, and transport
+ * Maps a rejected-or-blind-signing-off refusal, a user rejection, and transport
  * failures to typed rejections; the caller verifies `(r, s)` host-side.
  */
 export const ledgerSignHashOnDevice = async (
