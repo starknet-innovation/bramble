@@ -14,6 +14,7 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import { memoryOriginHistory, type OriginHistoryStore } from "@bramble/permissions/origin-history";
 import type { PhishingFeedHealth } from "@bramble/permissions/phishing-feed";
 import { type PriceService, unavailablePriceService } from "@bramble/portfolio/prices";
+import type { MultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type ActivityLog, memoryActivityLog, systemClock } from "@bramble/transactions/activity";
 import { type AllowanceStore, memoryAllowanceStore } from "@bramble/transactions/allowance-store";
@@ -59,10 +60,15 @@ import {
   createStrk20JobRegistry,
   type Strk20JobRegistry,
 } from "../privacy/strk20-preparation-jobs";
+import type { SponsoredShieldDeps } from "../privacy/strk20-sponsored-shield";
 import {
   createStrk20WalletPreparationStore,
   type Strk20WalletPreparationStore,
 } from "../privacy/strk20-wallet-preparations";
+import {
+  type MultisigOriginGrantStore,
+  memoryMultisigGrantStore,
+} from "../provider/multisig-grants";
 import { createWatchAssetAdmission, type WatchAssetAdmission } from "../provider/watch-asset";
 import { defaultRuntimeRpc, type RuntimeRpc } from "../runtime/runtime-rpc";
 import {
@@ -92,6 +98,7 @@ export type RouterContext = {
   readonly ledgerSignQueue: LedgerSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
+  readonly multisigGrants: MultisigOriginGrantStore;
   readonly nostrCoordinationStore: NostrCoordinationStore;
   readonly nftSnapshots?: NftSnapshotStore;
   readonly nostrRelayTransport?: NostrRelayTransport;
@@ -109,8 +116,10 @@ export type RouterContext = {
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
   readonly strk20Jobs: Strk20JobRegistry;
+  readonly strk20MultisigStore?: MultisigStrk20Store;
   readonly strk20Preparations: Strk20WalletPreparationStore;
   readonly sidePanelLearning?: SidePanelNotice;
+  readonly sponsoredShield?: SponsoredShieldDeps;
   readonly updates: UpdateReady;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
@@ -129,6 +138,7 @@ export type MessageHandlerOptions = {
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
+  readonly multisigGrants?: MultisigOriginGrantStore;
   readonly nostrCoordinationStore?: NostrCoordinationStore;
   readonly nftSnapshots?: NftSnapshotStore;
   readonly nostrRelayTransport?: NostrRelayTransport;
@@ -158,9 +168,12 @@ export type MessageHandlerOptions = {
    * jobs but relies on the panel's polls alone to hold the worker open.
    */
   readonly strk20Jobs?: Strk20JobRegistry;
+  readonly strk20MultisigStore?: MultisigStrk20Store;
   readonly strk20Preparations?: Strk20WalletPreparationStore;
   /** The one-time "opens as a popup" notice (#690); absent, it is never due. */
   readonly sidePanelLearning?: SidePanelNotice;
+  /** Sponsored first-shield relay table and transport (#789); the bundled table is off. */
+  readonly sponsoredShield?: SponsoredShieldDeps;
   readonly updates?: UpdateReady;
   /**
    * Held-response registry the router parks deferred sign requests in. The
@@ -219,6 +232,11 @@ const balanceSnapshotsFor = (provided: BalanceSnapshotStore | undefined): Balanc
 const phishingFeedHealthFor = (
   health: (() => PhishingFeedHealth) | undefined,
 ): Pick<RouterContext, "phishingFeedHealth"> => (health ? { phishingFeedHealth: health } : {});
+
+const strk20MultisigStoreFor = (
+  provided: RouterContext["strk20MultisigStore"],
+): Pick<RouterContext, "strk20MultisigStore"> | Record<string, never> =>
+  provided ? { strk20MultisigStore: provided } : {};
 
 const nftSnapshotsFor = (
   provided: NftSnapshotStore | undefined,
@@ -301,6 +319,7 @@ export const routerContext = (
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
+    multisigGrants: options.multisigGrants ?? memoryMultisigGrantStore(),
     nostrCoordinationStore: nostrCoordinationStoreFor(options.nostrCoordinationStore),
     ...nftSnapshotsFor(options.nftSnapshots),
     ...nostrRelayTransportFor(options.nostrRelayTransport),
@@ -317,8 +336,10 @@ export const routerContext = (
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     strk20Jobs: strk20JobsFor(options.strk20Jobs, now),
+    ...strk20MultisigStoreFor(options.strk20MultisigStore),
     strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
     ...sidePanelLearningFor(options.sidePanelLearning),
+    ...(options.sponsoredShield ? { sponsoredShield: options.sponsoredShield } : {}),
     updates: updatesFor(options.updates),
     waiters,
     wallet,

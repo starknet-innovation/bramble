@@ -28,7 +28,6 @@ export const createBackgroundPreferences = ({
     return resolved;
   };
   return {
-    addCustomNetwork: async (input) => (await required()).addCustomNetwork(input),
     addNft: async (input) => (await required()).addNft(input),
     createGroup: async (input) => (await required()).createGroup(input),
     async importPreferences(input) {
@@ -67,6 +66,7 @@ export const createBackgroundPreferences = ({
     setNostrRelayUrl: async (input) => (await required()).setNostrRelayUrl(input),
     setNftSpam: async (input) => (await required()).setNftSpam(input),
     setRpcOverride: async (input) => (await required()).setRpcOverride(input),
+    setSelectedMultisig: async (input) => (await required()).setSelectedMultisig(input),
     setStrk20NetworkConfig: async (input) => (await required()).setStrk20NetworkConfig(input),
     setTokenHidden: async (input) => (await required()).setTokenHidden(input),
     upsertToken: async (input, source) => (await required()).upsertToken(input, source),

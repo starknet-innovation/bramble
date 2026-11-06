@@ -42,6 +42,7 @@ import {
   type WalletRequestPreview,
   type WalletRequestView,
   type WalletTransactionRequest,
+  WALLET_IDENTITY_CHANGED,
   walletInvokeParams,
   walletRequestError,
   walletTransactionHash,
@@ -62,7 +63,6 @@ export type { WalletContextValue };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
-const WALLET_IDENTITY_CHANGED = "Wallet account or network changed before approval.";
 
 const walletIdentity = (address: string | null, chainId: string | null): string =>
   address === null ? "" : `${address}:${chainId ?? ""}`;

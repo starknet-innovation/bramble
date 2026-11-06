@@ -39,8 +39,12 @@ export const emptyState = (
   message: string,
   role?: "alert" | "status",
   attributes?: UiAttributes,
-): string =>
-  `<p class="empty"${role ? ` role="${role}"` : ""}${uiAttributes(attributes)}>${escapeHtml(message)}</p>`;
+): string => {
+  // Only the two ARIA roles this control offers. Anything else is omitted so a
+  // caller cannot close the attribute and inject markup.
+  const ariaRole = role === "alert" ? ' role="alert"' : role === "status" ? ' role="status"' : "";
+  return `<p class="empty"${ariaRole}${uiAttributes(attributes)}>${escapeHtml(message)}</p>`;
+};
 
 /**
  * Shared informational callout configuration.

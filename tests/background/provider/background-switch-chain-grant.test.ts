@@ -66,7 +66,9 @@ const walletStub = (connected: () => readonly AccountRef[], grants: string[] = [
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 12 as const,
+      schemaVersion: 13 as const,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
       shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
@@ -118,7 +120,9 @@ const vaultWallet = (input: {
     importedSeeds: [],
     mnemonic: null,
     originGrants: [...(input.otherGrants ?? []), { accountIds: [...input.grant], origin }],
-    schemaVersion: 12,
+    schemaVersion: 13,
+    multisigStrk20KeyConflicts: [],
+    multisigStrk20ViewingKeys: [],
     shadowAccountScopes: [],
     signingKeys: [],
   });
@@ -213,6 +217,29 @@ describe("switchChain grant gate (A-M1)", () => {
     });
     await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
     expect(coordinatedMutations).toBe(1);
+  });
+
+  test("resolves a zero-padded built-in chain id to that network (issue 852)", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(
+      walletStub(() => [account]),
+      testExtension,
+      { session },
+    );
+
+    const held = handler({ ...switchMessage, chainId: "0x0534e5f4d41494e" }, contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    // The page is answered with the canonical id, not the spelling it sent.
+    await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
+    // A different felt, or padding past 64 hex digits, is still no network.
+    for (const chainId of ["0x534e5f4d41494f", `0x${"0".repeat(51)}534e5f4d41494e`]) {
+      await expect(handler({ ...switchMessage, chainId }, contentSender)).resolves.toEqual({
+        error: "unsupported chain",
+      });
+    }
   });
 
   test("rejects a switch from an origin with no grant", async () => {

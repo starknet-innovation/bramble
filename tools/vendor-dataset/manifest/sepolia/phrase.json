@@ -1,0 +1,65 @@
+{
+  "phrase/TA-42": {
+    "id": "phrase/TA-42",
+    "seed": "BRAMBLE_DATASET_SEED_S_W15",
+    "vendorDerivation": "bramble-account",
+    "index": 0,
+    "address": "0x60b26d527001ef16f6960b35c219dbe46d8b7aa71e7cd59f57f1cbcee8e5417",
+    "pubkey": "0x10821ce6ad5717fffb7a83aacec7217aa7e60fd10684cc904de4a2b183ccefb",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "15-word phrase: valid BIP-39, account 0",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x0",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
+    },
+    "log": [
+      "funded STRK 0x3663197940fa1042c631ea53752b8e92590d6e1720247e49b838afe6cfe22d1",
+      "deployed 0x25369831221aaa46d6334fddd5a6753e941d33d11d1b1b51bba7986bbbdc063"
+    ]
+  },
+  "phrase/TA-43": {
+    "id": "phrase/TA-43",
+    "seed": "BRAMBLE_DATASET_SEED_S_W18",
+    "vendorDerivation": "bramble-account",
+    "index": 0,
+    "address": "0xb9f5037f614911bfc85b2a95cfcc4c964624c6da1ac0d8e385b8b59dd9d330",
+    "pubkey": "0xf32bf54db20ad5e9b5c792bbea45d1171d5b016cda30396b187d695ce78543",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "18-word phrase: valid BIP-39, account 0",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x0",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
+    },
+    "log": [
+      "funded STRK 0x757e4a7b438859cb3ab28070524ffd8c783fc07961358fb8ca3466c26f84816",
+      "deployed 0x4e038192dae3521801a123c18c5c2063ddfec54799382d832f6aedb7db67af3"
+    ]
+  },
+  "phrase/TA-44": {
+    "id": "phrase/TA-44",
+    "seed": "BRAMBLE_DATASET_SEED_S_W21",
+    "vendorDerivation": "bramble-account",
+    "index": 0,
+    "address": "0x15a957f2b0eeb373afabd494ba150f49a2d5a159b764f6d43a2ae86a3a3dc26",
+    "pubkey": "0x4156351ff86b0a1f8cedc5103ae4573e027b871f55b4faa7d2cf8288b87c47d",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "21-word phrase: valid BIP-39, account 0",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x0",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
+    },
+    "log": [
+      "funded STRK 0x49431ce8838a4a0c310472f2fe814521073039720e15d7b814e1c4a64bfe403",
+      "deployed 0x233b9fa7502178bb948457dfaed44151d3ac4e3350aafa596cefe054f757a83"
+    ]
+  }
+}

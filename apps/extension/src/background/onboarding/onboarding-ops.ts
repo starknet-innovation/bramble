@@ -42,7 +42,10 @@ import {
 } from "../accounts/account-creation-inputs";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { strk20PoolAddress, strk20RegisteredElsewhere } from "../privacy/strk20-registration-owner";
-import { runVaultCreationWithNetwork } from "../runtime/active-network-mutation";
+import {
+  refuseExistingVault,
+  runVaultCreationWithNetwork,
+} from "../runtime/active-network-mutation";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { type ActiveStateCoordinator, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -411,9 +414,11 @@ const recoverAccounts = async (
   // authorization) must see the new generation the moment it runs, never a
   // replaced vault under the old one.
   const accounts = await deps.activeStateCoordinator.run(async () => {
+    await refuseExistingVault(deps.session, deps.wallet, input.vaultPassphrase);
     const recovered = await runVaultCreationWithNetwork(
       deps.session,
       deps.preferencesStore,
+      deps.wallet,
       input.networkId,
       () => recover(input),
     );

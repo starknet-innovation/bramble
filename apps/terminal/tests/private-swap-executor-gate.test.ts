@@ -1,4 +1,8 @@
-/** Unverified executor deployments never receive tokens through private-swap plans. */
+/**
+ * The kill switch: with `PRIVATE_SWAP_EXECUTOR` set to null, no private-swap
+ * request leaves the browser and the server refuses every action before any
+ * upstream operation.
+ */
 import { afterEach, expect, it, vi } from "vitest";
 import type { ApiRequest, ApiResponse } from "../api/_lib/http";
 import handler from "../api/private-swap/[action]";
@@ -7,6 +11,11 @@ import {
   fetchPrivateSwapPlan,
   submitPrivateSwapProof,
 } from "../src/protocols/avnu/private-swap-client";
+
+vi.mock("../shared/privacy", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/privacy")>()),
+  PRIVATE_SWAP_EXECUTOR: null,
+}));
 
 afterEach(() => {
   vi.unstubAllGlobals();

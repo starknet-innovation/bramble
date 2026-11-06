@@ -9,8 +9,10 @@ import { WalletError, walletErrorMessage } from "@bramble/core/errors";
 import type { PriceService } from "@bramble/portfolio/prices";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
 import { canonicalStrk20PoolFee, type Strk20AccountContext } from "@bramble/privacy/service";
+import type { SponsoredShieldNetworks } from "@bramble/privacy/sponsored-shield";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { withTokenId } from "@bramble/wallet-model/preferences";
 import {
@@ -34,6 +36,16 @@ import { strk20RegistrationBlock } from "./strk20-registration-owner";
 import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations";
 
 /**
+ * Relay table, transport and clock for the sponsored shield. Production leaves
+ * it unset: the bundled table (off everywhere), `fetch`, and the system clock.
+ */
+export type SponsoredShieldDeps = {
+  readonly http?: PaymasterHttp;
+  readonly networks?: SponsoredShieldNetworks;
+  readonly nowSeconds?: () => number;
+};
+
+/**
  * Extension-owned privacy dependencies: the one-time preparation store that
  * keeps executable payloads out of the side panel, and the job registry that
  * lets a proof outlive the runtime request that asked for it.
@@ -45,6 +57,8 @@ export type Strk20WalletOpsDeps = WalletOpsDeps & {
    * on the fee token exactly as the relay quote would fall back.
    */
   readonly prices?: PriceService;
+  /** Sponsored first-shield seam (#789); production uses the bundled table, off. */
+  readonly sponsoredShield?: SponsoredShieldDeps;
   readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
 };

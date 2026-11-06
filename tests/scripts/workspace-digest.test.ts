@@ -7,7 +7,7 @@
  * inside the build's own directory.
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { workspaceDigest } from "../../scripts/workspace-digest";
 
@@ -64,9 +64,19 @@ describe("workspaceDigest", () => {
     const root = await tree(baseline);
     const path = join(root, "node_modules/esbuild/index.js");
     const before = await workspaceDigest(root, [BUILD_DIR]);
-    const { atime, mtime } = await stat(path);
-    const original = await readFile(path, "utf8");
-    await writeFile(path, original.replace("build", "evil!"));
+    // One file handle for the timestamp, the read, and the rewrite. Separate
+    // path checks would race with the write this test is pinning.
+    const handle = await open(path, "r+");
+    let atime: Date;
+    let mtime: Date;
+    try {
+      ({ atime, mtime } = await handle.stat());
+      const original = await handle.readFile("utf8");
+      await handle.truncate(0);
+      await handle.write(original.replace("build", "evil!"), 0, "utf8");
+    } finally {
+      await handle.close();
+    }
     await utimes(path, atime, mtime);
     expect(await workspaceDigest(root, [BUILD_DIR])).not.toBe(before);
   });

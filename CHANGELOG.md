@@ -11,6 +11,12 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+### Changed
+- Shadow accounts are on by default on Mainnet: the bundled configuration now
+  names the Mainnet shadow-account anonymizer, and an existing Mainnet
+  configuration that is still the bundled one picks it up. A custom
+  configuration or an anonymizer you set yourself is kept (#666).
+
 ## [0.10.8] - 2026-10-30
 
 Import accounts the recovery phrase can't find, pay network fees in other

@@ -13,6 +13,7 @@ import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import { refuseOnPoisonedRecipient, verifyCalls } from "@bramble/transactions/verify";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import {
   activeAccountContext,
   networkRpcUrls,
@@ -46,7 +47,7 @@ const OWNER_CHECK_CONCURRENCY = 5;
 // returns the detected transfer standard. The optional unified reader supports
 // ERC1155; older test doubles fall back to their ERC721 owner reader.
 const ownedNftStandard = async (
-  deps: WalletOpsDeps,
+  deps: Pick<WalletOpsDeps, "runtimeRpc">,
   target: NftTarget,
   accountAddress: string,
   rpcUrls: readonly string[],
@@ -211,11 +212,13 @@ const loadWatchedNfts = async (
   return enrichWatchedNfts(deps, owned, new Set(watched.map((nft) => nft.id)), rpcUrls);
 };
 
-const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<RuntimeResponse> => {
-  const input = readAddNftInput(message);
-  if (!input) {
-    return { error: "invalid add nft request" };
-  }
+/** Watches an NFT the active account is re-proved to own (watch form and site card alike). */
+export const watchOwnedNft = async (
+  deps: Pick<WalletOpsDeps, "nftSnapshots" | "preferencesStore" | "runtimeRpc" | "session"> & {
+    readonly wallet: WalletStatusReader;
+  },
+  input: NftTarget & { readonly label?: string },
+): Promise<RuntimeResponse> => {
   const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
     return { error: context.error };
@@ -238,6 +241,11 @@ const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<Runt
   });
   await deps.nftSnapshots?.clear(context.account.id, context.networkId).catch(() => undefined);
   return { ok: true, preferences: updated };
+};
+
+const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<RuntimeResponse> => {
+  const input = readAddNftInput(message);
+  return input ? watchOwnedNft(deps, input) : { error: "invalid add nft request" };
 };
 
 type NftTransferInput = NonNullable<ReturnType<typeof readTransferNftInput>>;
@@ -407,7 +415,9 @@ const handleDiscoverNfts = async (
       const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
       const candidates = await indexer.listOwnedNfts({
         address: owner,
-        indexerUrl: preferences.nftIndexerUrl ?? null,
+        // The gallery preview is the only surface that asks for discovery, so
+        // with it off a saved indexer stays unused and no address leaves.
+        indexerUrl: preferences.collectiblesPreview ? (preferences.nftIndexerUrl ?? null) : null,
         networkId: context.networkId,
       });
       const watched = watchedCandidates(preferences, context.networkId, owner);

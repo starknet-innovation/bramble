@@ -69,7 +69,9 @@ export const invokeWalletStub = (connected: readonly AccountRef[]) => ({
       importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [invokeAccount.id], origin: invokeOrigin }],
-      schemaVersion: 12 as const,
+      schemaVersion: 13 as const,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
       shadowAccountScopes: [],
       signingKeys: [{ accountId: invokeAccount.id, privateKey: "0x123456" }],
     };

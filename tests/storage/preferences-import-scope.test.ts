@@ -8,6 +8,7 @@
  * restore stays the recovery path out of an unreadable stored record.
  */
 import { describe, expect, test } from "bun:test";
+import type { Json } from "@bramble/core/json";
 import {
   createPreferencesStore,
   defaultWalletPreferences,
@@ -78,16 +79,18 @@ const asBackupFile = (preferences: WalletPreferences): unknown =>
   JSON.parse(JSON.stringify(preferences)) as unknown;
 
 const seededStore = async (): Promise<ReturnType<typeof createPreferencesStore>> => {
-  const preferences = createPreferencesStore({ store: createMemoryStore() });
+  // An earlier build's stored custom network; nothing writes one any more.
+  const memory = createMemoryStore();
+  await memory.set(PREFERENCES_STORE_KEY, {
+    ...defaultWalletPreferences(),
+    customNetworks: [
+      { chainId: "0x534e5f474f45524c49", id: "mine", name: "My chain", rpcUrls: [MINE_RPC] },
+    ],
+  } as unknown as Json);
+  const preferences = createPreferencesStore({ store: memory });
   await preferences.setRpcOverride({ networkId: "SN_MAIN", rpcUrl: MINE_RPC });
   await preferences.setNftIndexerUrl({ url: MINE_INDEXER });
   await preferences.setNostrRelayUrl({ relayUrl: MINE_NOSTR_RELAY });
-  await preferences.addCustomNetwork({
-    chainId: "0x534e5f474f45524c49",
-    id: "mine",
-    name: "My chain",
-    rpcUrls: [MINE_RPC],
-  });
   await preferences.addNft({ contract: "0x5", networkId: "SN_MAIN", tokenId: "3" });
   await preferences.setDisplay({ approvalSurface: "side-panel", theme: "dark" });
   return preferences;
@@ -104,6 +107,7 @@ describe("importPreferences trust scope", () => {
     expect(next.rpcOverrides).toEqual({ SN_MAIN: MINE_RPC });
     expect(next.nftIndexerUrl).toBe(MINE_INDEXER);
     expect(next.nostrRelayUrl).toBe(MINE_NOSTR_RELAY);
+    expect(before.customNetworks).toHaveLength(1);
     expect(next.customNetworks).toEqual(before.customNetworks);
     expect(next.nfts).toEqual(before.nfts);
     expect(next.strk20Networks).toEqual(before.strk20Networks);

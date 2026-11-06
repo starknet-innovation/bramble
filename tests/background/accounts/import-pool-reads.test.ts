@@ -39,7 +39,8 @@ const handlerFor = (runtimeRpc: ReturnType<typeof makeRuntimeRpc>, unlocked: boo
   const session = createUnlockSession();
   if (unlocked) session.unlock(vaultPassphrase);
   const wallet = {
-    ...createWallet(),
+    // No vault yet, so the first-run create reaches its write.
+    ...createWallet({ hasVault: false }),
     async addLedgerAccount() {
       return account;
     },
