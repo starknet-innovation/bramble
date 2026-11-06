@@ -64,8 +64,8 @@ extension.
   step sees the secret, and it masks each value in the log
   (`scripts/workflow-security-policy.ts` holds it there). The secret reaches
   whatever code is on the release branch, so release branches must stay
-  protected. Each run uploads its scorecard and a recorded tape as the
-  `sepolia-verification` artifact.
+  protected. It records no tape and uploads nothing, since the repository is
+  public; the verdicts are in the job log and summary.
 - `BRAMBLE_SEPOLIA_RECORD=<tape.json>` records the network answers of a live
   run; `BRAMBLE_SEPOLIA_REPLAY=<tape.json>` (without `BRAMBLE_E2E_LIVE_NETWORK`)
   replays it fully offline against the same chain state (`sepolia-tape.ts`):
@@ -80,9 +80,8 @@ extension.
   `/strk20/` path) is never recorded, because its requests carry the account's
   viewing key; secret-named request fields are stored as `[omitted]`; and a
   tape that still carries a seed, key or secret-named field is not written.
-  Replay a nightly's tape locally with
+  Record and replay are local-only, and a tape stays on the machine that made
+  it; never commit or upload one. Replay with
   `BRAMBLE_DATASET_NETWORK=sepolia BRAMBLE_SEPOLIA_REPLAY=tape.json bun tools/vendor-dataset/verify-sepolia.ts`.
-  Replay still types the seeds into the UI, so it runs locally only, never in
-  PR CI; the nightly records the tape.
 - Derivation uses `@scure/bip32`/`@scure/bip39` directly, never Krusty, so the
   dataset stays independent of the wallet code it measures.

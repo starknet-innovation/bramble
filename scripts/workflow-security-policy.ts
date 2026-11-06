@@ -140,9 +140,10 @@ const SEPOLIA_SEEDS_STEP = `      - name: Sepolia import paths (live)
 const sepoliaSeedsFailures = (name: string, source: string): string[] => {
   const path = workflowPath(name);
   // Ways to hand every secret over at once would reach the seeds too.
-  const failures = ["toJSON(secrets)", "secrets: inherit"]
+  // ...and a recorded Sepolia tape is network traffic not fit to publish.
+  const failures = ["toJSON(secrets)", "secrets: inherit", "BRAMBLE_SEPOLIA_RECORD"]
     .filter((form) => source.includes(form))
-    .map((form) => `${path} must not pass every secret on (${form})`);
+    .map((form) => `${path} must not use ${form}`);
   const uses = source.match(/secrets(?:\.|\[\s*['"])BRAMBLE_SEPOLIA_SEEDS/g)?.length ?? 0;
   if (uses === 0) return failures;
   if (name !== "nightly.yml")

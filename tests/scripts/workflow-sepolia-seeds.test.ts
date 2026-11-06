@@ -38,7 +38,19 @@ describe("Sepolia seed secret policy", () => {
     const sources = await readWorkflowSources();
     const ci = `${sources["ci.yml"] ?? ""}\n# $\{{ toJSON(secrets) }}\n`;
     expect(workflowSecurityPolicyFailures({ ...sources, "ci.yml": ci })).toContain(
-      ".github/workflows/ci.yml must not pass every secret on (toJSON(secrets))",
+      ".github/workflows/ci.yml must not use toJSON(secrets)",
+    );
+  });
+
+  test("no workflow records a Sepolia tape", async () => {
+    const sources = await readWorkflowSources();
+    const nightly = (sources["nightly.yml"] ?? "").replace(
+      "BRAMBLE_DATASET_NETWORK=sepolia \\\n",
+      'BRAMBLE_DATASET_NETWORK=sepolia BRAMBLE_SEPOLIA_RECORD="$RUNNER_TEMP/tape.json" \\\n',
+    );
+    expect(nightly).toContain("BRAMBLE_SEPOLIA_RECORD");
+    expect(workflowSecurityPolicyFailures({ ...sources, "nightly.yml": nightly })).toContain(
+      ".github/workflows/nightly.yml must not use BRAMBLE_SEPOLIA_RECORD",
     );
   });
 

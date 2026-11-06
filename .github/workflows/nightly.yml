@@ -177,7 +177,9 @@ jobs:
       # never signs or sends. Its testnet-only seed file is the one secret this
       # workflow holds, and only this step sees it: written owner-only to the
       # runner's temp directory and removed when the step ends. The run's own
-      # redactor keeps seeds and derived keys out of every line it prints.
+      # redactor keeps seeds and derived keys out of every line it prints. It
+      # records no tape and uploads nothing: this is a public repository, and
+      # a run's network traffic is not for publishing (replay is local-only).
       - name: Sepolia import paths (live)
         id: sepolia
         continue-on-error: true
@@ -213,20 +215,7 @@ jobs:
           done
           mkdir -p "$RUNNER_TEMP/sepolia"
           BRAMBLE_DATASET_ENV_FILE="$seeds" BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia \
-            BRAMBLE_SEPOLIA_RECORD="$RUNNER_TEMP/sepolia/tape.json" \
             bun tools/vendor-dataset/verify-sepolia.ts "$@"
-      # The redacted scorecard and the recorded tape (node answers only; the
-      # privacy service is never recorded, and the runner refuses to write a
-      # tape that carries a seed, key or secret-named field), so the checks can
-      # be rerun offline against the same chain state with BRAMBLE_SEPOLIA_REPLAY.
-      - name: Upload Sepolia scorecard and tape
-        if: always() && steps.sepolia.outcome != 'skipped'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: sepolia-verification
-          path: ${{ runner.temp }}/sepolia/
-          if-no-files-found: ignore
-          retention-days: 14
 
       - name: Categorized summary
         if: always()
