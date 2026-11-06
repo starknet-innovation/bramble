@@ -308,9 +308,11 @@ describe("sponsored first shield against the bundled gateway", () => {
   };
 
   test("asks only the active network's route, and a switched-off gateway (404) is self-paid", async () => {
-    const run = harness({ answer: () => new Response("", { status: 404 }), bundled: true });
-    await expectSelfPaid(run);
-    expect(run.urls).toEqual([BUNDLED_SEPOLIA]);
+    for (const status of [404, 429, 503]) {
+      const run = harness({ answer: () => new Response("", { status }), bundled: true });
+      await expectSelfPaid(run);
+      expect(run.urls).toEqual([BUNDLED_SEPOLIA]);
+    }
   });
 
   test("a sponsor's yes from the gateway relays through that same route", async () => {
@@ -343,7 +345,9 @@ describe("sponsored first shield against the bundled gateway", () => {
       const run = harness({
         answer: (init) =>
           new Promise<Response>((_resolve, reject) => {
-            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+            const signal = init?.signal;
+            if (signal?.aborted) reject(signal.reason);
+            signal?.addEventListener("abort", () => reject(signal.reason));
           }),
         bundled: true,
       });
