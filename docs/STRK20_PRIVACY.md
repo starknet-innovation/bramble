@@ -407,7 +407,8 @@ production service.
 ## Opt-in Mainnet lifecycle test
 
 `tests/mainnet/strk20-lifecycle.mainnet.ts` is a separate, local-only Playwright core-lifecycle suite
-for the real deployed pool and configured discovery/proving services. It imports a dedicated funded
+for the real deployed pool and configured discovery/proving services. Wallet send, balance, dapp,
+and signing flows on mainnet are `bun run test:e2e:mainnet:wallet` (`docs/MAINNET_E2E.md`). It imports a dedicated funded
 account into a disposable Chromium profile, confirms that the derived address matches the expected
 address, connects that one account to a loopback dapp, and exercises registration, deposit,
 transfer to self, and withdrawal to self. It prepares real proofs, but deliberately submits them

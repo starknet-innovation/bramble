@@ -35,6 +35,9 @@ bun run verify:sepolia       # live Sepolia import scorecard (needs dist/ + seed
 - The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
   via `BRAMBLE_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
   flag is set.
+- `bun run test:e2e:mainnet:wallet` is a local-only mainnet UI suite (sncast account, dedicated RPC,
+  spend caps). It is not part of `bun run check` or CI. Unconfigured, it prints a skip and exits 0.
+  See `docs/MAINNET_E2E.md`.
 - Krusty KMS is installed as an exact, lockfile-pinned npm package by `bun install`.
   `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,

@@ -1,5 +1,12 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "playwright": {
+    "config": [
+      "playwright.config.ts",
+      "playwright.mainnet.config.ts",
+      "playwright.mainnet-wallet.config.ts"
+    ]
+  },
   "workspaces": {
     ".": {
       "entry": ["scripts/*.ts", "tests/**/*.test.ts", "tools/vendor-dataset/*.ts"],
