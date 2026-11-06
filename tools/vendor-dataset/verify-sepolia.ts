@@ -36,7 +36,7 @@ import { readTape, recordTape, replayTape, type Tape, writeTape } from "./sepoli
 import { runChecks } from "./verify-sepolia-checks";
 import { runLedgerChecks } from "./verify-sepolia-ledger";
 import { allResults, type Result, type Verdict } from "./verify-sepolia-score";
-import { openSession } from "./verify-sepolia-ui";
+import { openSession, type Session } from "./verify-sepolia-ui";
 
 if (NETWORK !== "sepolia") throw new Error("set BRAMBLE_DATASET_NETWORK=sepolia");
 // Playwright's debug logs echo every value typed, secrets included, before any redaction.
@@ -53,6 +53,18 @@ if (RECORD && REPLAY)
   throw new Error("set BRAMBLE_SEPOLIA_RECORD or BRAMBLE_SEPOLIA_REPLAY, not both");
 
 let clean = false;
+let tapeKept = true;
+
+/** Writes the recorded tape; a refusal is reported, never allowed to hide the run's own result. */
+const keepTape = (path: string, tape: Tape): void => {
+  try {
+    writeTape(path, tape);
+  } catch (error) {
+    tapeKept = false;
+    console.error(`tape not written: ${redact(String(error)).slice(0, 300)}`);
+  }
+};
+
 const ok = await guarded(async () => {
   const OUT_PATH = resolve(process.argv[2] ?? defaultOutPath());
   let tape: Tape = REPLAY ? readTape(REPLAY) : {};
@@ -66,17 +78,18 @@ const ok = await guarded(async () => {
           tape = await recordTape(context);
         }
       : undefined;
-  const session = await openSession(secret(sepoliaSecret("S-BRM")), network, LEDGER);
+  let session: Session | undefined;
   let results: readonly Result[];
   try {
+    session = await openSession(secret(sepoliaSecret("S-BRM")), network, LEDGER);
     await runChecks(session);
     if (LEDGER) await runLedgerChecks(session);
     else console.log("\n## Test Ledger (TA-32…TA-37): skipped; set BRAMBLE_SEPOLIA_LEDGER=1");
     results = allResults();
   } finally {
-    await session.close();
+    await session?.close();
     // A partial tape is still worth keeping; writeTape refuses one carrying a secret.
-    if (RECORD) writeTape(RECORD, tape);
+    if (RECORD) keepTape(RECORD, tape);
   }
   if (missing.size) {
     console.log(`replay: ${missing.size} request(s) not on the tape, for example:`);
@@ -130,4 +143,4 @@ const ok = await guarded(async () => {
   }
 });
 // Exit explicitly: a failed run can leave the browser open.
-process.exit(ok && clean ? 0 : 1);
+process.exit(ok && clean && tapeKept ? 0 : 1);

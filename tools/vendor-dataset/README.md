@@ -54,22 +54,33 @@ extension.
   and automating the device with Ledger's emulator is tracked in #861:
   `BRAMBLE_SEPOLIA_LEDGER=1 BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts`.
 - The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts`, without
-  the Ledger, on the active release branch against the newest committed scorecard, so a failing
-  import path blocks the release like any other nightly gate. It reads the seed
-  file from the `BRAMBLE_SEPOLIA_SEEDS` repository secret: the Sepolia lines of
-  `.env.vendor-seeds.local` pasted whole, with `S-LDG` left out (the runner
-  never uses it). Only that one step sees the secret
-  (`scripts/workflow-security-policy.ts`). Each run uploads its scorecard and
-  a recorded tape as the `sepolia-verification` artifact.
-- `BRAMBLE_SEPOLIA_RECORD=<tape.json>` records every network answer of a live
+  the Ledger, on the active release branch against the newest committed
+  scorecard, so a failing import path blocks the release like any other nightly
+  gate. It reads the seed file from the `BRAMBLE_SEPOLIA_SEEDS` repository
+  secret, which holds only the eleven lines the runner reads:
+  `BRAMBLE_DATASET_SEED_S_{BRM,SCR,BRV,RDY,XVS,W15,W18,W21}` and
+  `BRAMBLE_DATASET_KEY_K_{OZ,ROT_A,SNC}`. Leave everything else out, the
+  Ledger seed and the guardian, 2FA and rotation keys included. Only that one
+  step sees the secret, and it masks each value in the log
+  (`scripts/workflow-security-policy.ts` holds it there). The secret reaches
+  whatever code is on the release branch, so release branches must stay
+  protected. Each run uploads its scorecard and a recorded tape as the
+  `sepolia-verification` artifact.
+- `BRAMBLE_SEPOLIA_RECORD=<tape.json>` records the network answers of a live
   run; `BRAMBLE_SEPOLIA_REPLAY=<tape.json>` (without `BRAMBLE_E2E_LIVE_NETWORK`)
   replays it fully offline against the same chain state (`sepolia-tape.ts`):
   about 90 seconds instead of the live run's 15 minutes, because a replay has
   no rate limit to pace around. It tolerates the wallet taking a different
   path than the live run did (another RPC endpoint, another block), and lists
-  any request the tape cannot answer. A tape holds addresses and node answers
-  only, and is refused if it would carry a registered secret. Download a
-  nightly's tape to replay a failure locally:
+  any request the tape cannot answer. A replay reproduces what the wallet did
+  with that chain state, so a wallet regression shows; a live failure caused
+  by the node (a rate limit, a failover) does not, since a replay serves
+  successful answers first.
+- A tape holds addresses and node answers only. The privacy service (any
+  `/strk20/` path) is never recorded, because its requests carry the account's
+  viewing key; secret-named request fields are stored as `[omitted]`; and a
+  tape that still carries a seed, key or secret-named field is not written.
+  Replay a nightly's tape locally with
   `BRAMBLE_DATASET_NETWORK=sepolia BRAMBLE_SEPOLIA_REPLAY=tape.json bun tools/vendor-dataset/verify-sepolia.ts`.
   Replay still types the seeds into the UI, so it runs locally only, never in
   PR CI; the nightly records the tape.

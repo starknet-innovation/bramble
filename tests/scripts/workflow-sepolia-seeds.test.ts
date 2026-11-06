@@ -26,6 +26,34 @@ describe("Sepolia seed secret policy", () => {
     );
   });
 
+  test("the bracket form counts as a reference", async () => {
+    const sources = await readWorkflowSources();
+    const ci = `${sources["ci.yml"] ?? ""}\n# $\{{ secrets['BRAMBLE_SEPOLIA_SEEDS'] }}\n`;
+    expect(workflowSecurityPolicyFailures({ ...sources, "ci.yml": ci })).toContain(
+      ".github/workflows/ci.yml must not reference the Sepolia seed secret",
+    );
+  });
+
+  test("handing every secret on fails in any workflow", async () => {
+    const sources = await readWorkflowSources();
+    const ci = `${sources["ci.yml"] ?? ""}\n# $\{{ toJSON(secrets) }}\n`;
+    expect(workflowSecurityPolicyFailures({ ...sources, "ci.yml": ci })).toContain(
+      ".github/workflows/ci.yml must not pass every secret on (toJSON(secrets))",
+    );
+  });
+
+  test("the live Sepolia step may not write to later steps", async () => {
+    const sources = await readWorkflowSources();
+    const nightly = (sources["nightly.yml"] ?? "").replace(
+      "          unset BRAMBLE_SEPOLIA_SEEDS\n",
+      '          echo "LEAK=$BRAMBLE_SEPOLIA_SEEDS" >> "$GITHUB_ENV"\n          unset BRAMBLE_SEPOLIA_SEEDS\n',
+    );
+    expect(nightly).toContain("GITHUB_ENV");
+    expect(workflowSecurityPolicyFailures({ ...sources, "nightly.yml": nightly })).toContain(
+      ".github/workflows/nightly.yml must not let the live Sepolia step write to later steps",
+    );
+  });
+
   test("a second reference in the nightly fails", async () => {
     const sources = await readWorkflowSources();
     const nightly = (sources["nightly.yml"] ?? "").replace(

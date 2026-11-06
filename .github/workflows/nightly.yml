@@ -189,19 +189,36 @@ jobs:
             echo "::error::The BRAMBLE_SEPOLIA_SEEDS secret is not set (tools/vendor-dataset/README.md)."
             exit 1
           fi
+          if [ ! -f tools/vendor-dataset/verify-sepolia.ts ]; then
+            echo "::error::This release branch predates the Sepolia runner (issue 821)."
+            exit 1
+          fi
           umask 077
           seeds="$RUNNER_TEMP/sepolia-seeds.env"
           trap 'rm -f "$seeds"' EXIT
           printf '%s\n' "$BRAMBLE_SEPOLIA_SEEDS" > "$seeds"
           unset BRAMBLE_SEPOLIA_SEEDS
-          baseline="$(ls tools/vendor-dataset/verification-sepolia-*.json | sort | tail -1)"
+          # GitHub masks a multi-line secret line by line, and a line here is
+          # NAME="value", so each value is masked on its own as well.
+          while IFS= read -r line; do
+            value="${line#*=}"
+            value="${value#\"}"
+            value="${value%\"}"
+            if [ -n "$value" ]; then echo "::add-mask::$value"; fi
+          done < "$seeds"
+          # The newest committed scorecard, if this branch has one (dated names sort in order).
+          set -- "$RUNNER_TEMP/sepolia/scorecard.json"
+          for previous in tools/vendor-dataset/verification-sepolia-*.json; do
+            if [ -f "$previous" ]; then set -- "$RUNNER_TEMP/sepolia/scorecard.json" "$previous"; fi
+          done
           mkdir -p "$RUNNER_TEMP/sepolia"
           BRAMBLE_DATASET_ENV_FILE="$seeds" BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia \
             BRAMBLE_SEPOLIA_RECORD="$RUNNER_TEMP/sepolia/tape.json" \
-            bun tools/vendor-dataset/verify-sepolia.ts "$RUNNER_TEMP/sepolia/scorecard.json" "$baseline"
+            bun tools/vendor-dataset/verify-sepolia.ts "$@"
       # The redacted scorecard and the recorded tape (node answers only; the
-      # runner refuses to write a tape that carries a seed or key), so a failure
-      # can be replayed offline with BRAMBLE_SEPOLIA_REPLAY.
+      # privacy service is never recorded, and the runner refuses to write a
+      # tape that carries a seed, key or secret-named field), so the checks can
+      # be rerun offline against the same chain state with BRAMBLE_SEPOLIA_REPLAY.
       - name: Upload Sepolia scorecard and tape
         if: always() && steps.sepolia.outcome != 'skipped'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

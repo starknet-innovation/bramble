@@ -1,29 +1,41 @@
 /**
  * Record and replay of the network traffic behind a Sepolia verification run
- * (verify-sepolia.ts, issue 821). A live run can record every HTTP answer the
+ * (verify-sepolia.ts, issue 821). A live run can record the HTTP answers the
  * extension received into a tape; a later run replays that tape with the
  * suite's DNS blackhole in place, so the same checks run offline, without rate
- * limits, against exactly the chain state the tape saw.
+ * limits, against the chain state the tape saw.
  *
- * A tape holds requests and answers only: addresses, public keys, class hashes
- * and visible errors. The run is read-only, so no signature or key is sent;
- * `writeTape` still refuses a tape the redactor would change. JSON-RPC ids are
- * dropped from the key and written back on replay, so a replay matches however
- * the wallet numbers its calls. Repeated identical requests are answered in the
- * order recorded, the last answer repeating.
+ * What a tape may hold. Requests and answers only: addresses, public keys,
+ * class hashes and visible errors. The run is read-only, so no signature is
+ * sent, but the official privacy SDK's discovery preflight does send the
+ * account's STRK20 viewing key. So the privacy service (any `/strk20/` path)
+ * is never recorded: its requests reach the network on a live run and are
+ * aborted on a replay, where they are not counted as missing. Elsewhere,
+ * request fields named like a secret (viewing key, private key, secret,
+ * mnemonic, seed) are stored as "[omitted]", and replay omits them the same
+ * way so the request still matches. As a last guard, `writeTape` refuses a
+ * tape that still carries a secret-named field, or anything the redactor
+ * would change.
  *
- * A replay cannot steer the wallet exactly as the live run went, in two ways:
- * the wallet fails over between RPC endpoints when one rate-limits or refuses,
- * so a call can reach a different endpoint; and a call pinned to a block
- * (`block_id`, or an event range's `from_block`/`to_block`, by number or hash)
- * names whichever block the node last reported, which can come back in a
- * different order. A JSON-RPC call the tape lacks is
- * therefore answered from the same call recorded at any endpoint and any block
- * (`looseKey`); the blocks of one run are minutes apart, so the state read is
- * the same. Where a request ever succeeded, only its successful answers are
- * served, since a replay has no rate limit to reproduce. Anything else the
- * tape lacks is aborted as unresolvable, as the blackhole would, and listed in
- * `missing`.
+ * How a replay matches. JSON-RPC ids are dropped from the key and written
+ * back on replay, so a replay matches however the wallet numbers its calls.
+ * Repeated identical requests are answered in the order recorded, the last
+ * answer repeating. A replay cannot steer the wallet exactly as the live run
+ * went: the wallet fails over between RPC endpoints when one rate-limits or
+ * refuses, and a call pinned to a block (`block_id`, or an event range's
+ * `from_block`/`to_block`) names whichever block the node last reported,
+ * which can come back in a different order. A JSON-RPC call the tape lacks is
+ * therefore answered from the same call recorded at any endpoint and any
+ * block (`looseKey`); the blocks of one run are minutes apart, so the state
+ * read is the same. Where a request ever succeeded, only its successful
+ * answers are served, since a replay has no rate limit to reproduce. Anything
+ * else the tape lacks is aborted as unresolvable, as the blackhole would, and
+ * listed in `missing`.
+ *
+ * Known limits. A replay serves successes first, so a live failure caused by
+ * the node (a rate limit, a failover) does not reproduce; a failure caused by
+ * the wallet does. A JSON-RPC batch's answers are matched to its calls by
+ * position; the wallet sends no batches today.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import type { BrowserContext, Route } from "@playwright/test";
@@ -40,6 +52,11 @@ export type TapeAnswer = {
 export type Tape = Record<string, TapeAnswer[]>;
 
 const NETWORK = /^https?:\/\//;
+// The privacy service carries viewing keys and note data: never on a tape.
+const UNRECORDED = /^https?:\/\/[^/]+\/(?:[^?#]*\/)?strk20\//;
+
+/** True for a URL a tape never records: any path through the privacy service (`/strk20/`). */
+export const isUnrecorded = (url: string): boolean => UNRECORDED.test(url);
 
 const parse = (text: string): unknown => {
   try {
@@ -55,9 +72,30 @@ const withoutId = (call: unknown): unknown => {
   return rest;
 };
 
-/** The tape key for a request: method, URL and body, with JSON-RPC ids removed. */
+// Field names whose values never go on a tape, in snake or camel case.
+const SECRET_FIELD = /^(?:viewing_?key|private_?key|secret|mnemonic|seed)$/i;
+// The same names in written tape text, where request bodies sit escaped
+// inside JSON strings, followed by any value other than the placeholder.
+const SECRET_IN_TEXT =
+  /\\?"(?:viewing_?key|private_?key|secret|mnemonic|seed)\\?"\s*:\s*(?!\\?"\[omitted\]\\?")/i;
+
+const omitSecrets = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(omitSecrets);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([name, inner]) => [
+      name,
+      SECRET_FIELD.test(name) ? "[omitted]" : omitSecrets(inner),
+    ]),
+  );
+};
+
+/**
+ * The tape key for a request: method, URL and body, with JSON-RPC ids removed
+ * and secret-named fields replaced by "[omitted]".
+ */
 export const tapeKey = (method: string, url: string, body: string | null): string => {
-  const json = body === null ? undefined : parse(body);
+  const json = body === null ? undefined : omitSecrets(parse(body));
   const shape = Array.isArray(json) ? json.map(withoutId) : withoutId(json);
   return `${method} ${url} ${json === undefined ? (body ?? "") : JSON.stringify(shape)}`;
 };
@@ -101,8 +139,8 @@ const keyOfRoute = (route: Route): string => {
 };
 
 /**
- * Forwards every request to the network and records its answer. Returns the
- * tape, which fills as the run goes on. A request that gets no answer at all
+ * Forwards every request to the network and records its answer, except the
+ * privacy service's. Returns the tape, which fills as the run goes on. A request that gets no answer at all
  * (DNS, reset, timeout) is aborted and left off the tape, so a replay of it
  * fails the same way.
  */
@@ -118,12 +156,13 @@ export const recordTape = async (context: BrowserContext): Promise<Tape> => {
       await route.abort("failed");
       return;
     }
+    await route.fulfill({ response, body });
+    if (isUnrecorded(route.request().url())) return;
     const key = keyOfRoute(route);
     tape[key] = [
       ...(tape[key] ?? []),
       { status: response.status(), contentType: response.headers()["content-type"] ?? "", body },
     ];
-    await route.fulfill({ response, body });
   });
   return tape;
 };
@@ -173,7 +212,8 @@ export const replayTape = async (context: BrowserContext, tape: Tape): Promise<S
     const exact = keyOfRoute(route);
     const { key, answers } = answersFor(tape, index, exact);
     if (!answers.length) {
-      missing.add(exact);
+      // Never recorded on purpose, so not a gap in the tape.
+      if (!isUnrecorded(route.request().url())) missing.add(exact);
       await route.abort("namenotresolved");
       return;
     }
@@ -194,11 +234,14 @@ export const readTape = (path: string): Tape => JSON.parse(readFileSync(path, "u
 
 /**
  * Writes `tape` with its keys sorted, so two recordings diff line by line.
- * Throws, writing nothing, if any part of it matches a registered secret.
+ * Throws, writing nothing, if any part of it, request or answer, matches a
+ * registered secret or carries a secret-named field with a value.
  */
 export const writeTape = (path: string, tape: Tape): void => {
   const sorted = Object.fromEntries(Object.entries(tape).sort(([a], [b]) => a.localeCompare(b)));
   const text = `${JSON.stringify(sorted, null, 1)}\n`;
-  if (redact(text) !== text) throw new Error("the tape carries a secret; not written");
+  if (redact(text) !== text || SECRET_IN_TEXT.test(text)) {
+    throw new Error("the tape carries a secret; not written");
+  }
   writeFileSync(path, text, { mode: 0o600 });
 };

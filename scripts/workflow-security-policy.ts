@@ -138,11 +138,15 @@ const SEPOLIA_SEEDS_STEP = `      - name: Sepolia import paths (live)
 `;
 
 const sepoliaSeedsFailures = (name: string, source: string): string[] => {
-  const uses = source.split("secrets.BRAMBLE_SEPOLIA_SEEDS").length - 1;
-  if (uses === 0) return [];
   const path = workflowPath(name);
-  if (name !== "nightly.yml") return [`${path} must not reference the Sepolia seed secret`];
-  const failures: string[] = [];
+  // Ways to hand every secret over at once would reach the seeds too.
+  const failures = ["toJSON(secrets)", "secrets: inherit"]
+    .filter((form) => source.includes(form))
+    .map((form) => `${path} must not pass every secret on (${form})`);
+  const uses = source.match(/secrets(?:\.|\[\s*['"])BRAMBLE_SEPOLIA_SEEDS/g)?.length ?? 0;
+  if (uses === 0) return failures;
+  if (name !== "nightly.yml")
+    return [...failures, `${path} must not reference the Sepolia seed secret`];
   requireText(
     failures,
     source,
@@ -150,6 +154,11 @@ const sepoliaSeedsFailures = (name: string, source: string): string[] => {
     `${path} must scope the Sepolia seeds to its live Sepolia step`,
   );
   if (uses !== 1) failures.push(`${path} must reference the Sepolia seed secret exactly once`);
+  const at = source.indexOf(SEPOLIA_SEEDS_STEP);
+  const step = at < 0 ? "" : source.slice(at, source.indexOf("\n      - ", at + 1));
+  if (/GITHUB_(?:ENV|OUTPUT|PATH|STEP_SUMMARY)/.test(step)) {
+    failures.push(`${path} must not let the live Sepolia step write to later steps`);
+  }
   return failures;
 };
 

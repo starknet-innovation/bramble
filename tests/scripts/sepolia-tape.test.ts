@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { secret } from "../../tools/vendor-dataset/sepolia-redact";
 import {
   answersFor,
+  isUnrecorded,
   looseIndex,
   looseKey,
   readTape,
@@ -86,6 +87,35 @@ describe("sepolia tape", () => {
     expect(pick({})).toEqual([]);
   });
 
+  test("a viewing key or other secret-named field never reaches the key, and still matches", () => {
+    const preflight = (viewingKey: string) =>
+      tapeKey(
+        "POST",
+        `${URL}/strk20/preflight_check`,
+        JSON.stringify({
+          sender_address: "0x1",
+          viewing_key: viewingKey,
+          nested: { privateKey: "0x2" },
+        }),
+      );
+    const key = preflight("0xabc123");
+    expect(key).not.toContain("0xabc123");
+    expect(key).not.toContain('"0x2"');
+    expect(key).toContain('"viewing_key":"[omitted]"');
+    expect(preflight("0xdef456")).toBe(key);
+  });
+
+  test("the privacy service is never recorded; node and other hosts are", () => {
+    expect(
+      isUnrecorded(
+        "https://wallet.nodes.starknet.org/api/strk20/discovery/v1/sync/preflight_check",
+      ),
+    ).toBe(true);
+    expect(isUnrecorded("https://privacy.example/strk20/notes")).toBe(true);
+    expect(isUnrecorded("https://wallet.nodes.starknet.org/rpc/sepolia/v0_10")).toBe(false);
+    expect(isUnrecorded("https://starkscan.co/v1/SN_SEPOLIA/token/0x1?q=strk20/")).toBe(false);
+  });
+
   test("a non-JSON body keys on its raw text", () => {
     expect(tapeKey("GET", URL, null)).toBe(`GET ${URL} `);
     expect(tapeKey("POST", URL, "not json")).toBe(`POST ${URL} not json`);
@@ -113,6 +143,15 @@ describe("sepolia tape", () => {
     const answer = { status: 200, contentType: "application/json", body: '{"result":"0x1"}' };
     writeTape(path, { b: [answer], a: [answer] });
     expect(Object.keys(readTape(path))).toEqual(["a", "b"]);
+
+    expect(() => writeTape(path, { a: [{ ...answer, body: '{"viewing_key":"0x1234"}' }] })).toThrow(
+      /secret/,
+    );
+    expect(() => writeTape(path, { [`POST ${URL} {"viewingKey":"0x1"}`]: [answer] })).toThrow(
+      /secret/,
+    );
+    // A key made by tapeKey carries only the placeholder, so it is written.
+    writeTape(`${path}.masked`, { [tapeKey("POST", URL, '{"viewing_key":"0x1"}')]: [answer] });
 
     const leaked = `0x00${"7d".repeat(30)}`;
     secret(leaked);
