@@ -13,10 +13,9 @@ export const VIP_THRESHOLD_USD = 10_000;
 
 /**
  * The VIP site. Bundled, never fetched, so no remote source can change where
- * the notice points. Null until the address is confirmed; the notice stays
- * hidden while it is null. TODO(mc-wallet 688): set the confirmed address.
+ * the notice points. The notice only links to it.
  */
-export const VIP_SITE_URL: string | null = null;
+export const VIP_SITE_URL = "https://vip.starknet.io/";
 
 /**
  * Whether the active account qualifies. Only a complete, priced total counts

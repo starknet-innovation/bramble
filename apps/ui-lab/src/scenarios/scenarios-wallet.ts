@@ -278,6 +278,27 @@ export const portfolioScenario: WalletScenario = {
     {
       content: () =>
         walletDashboard({
+          balanceState: {
+            balances: journeyBalances.map((balance) =>
+              balance.id === ETH_TOKEN.id
+                ? { ...balance, balance: "3250000000000000000", formatted: "3.25" }
+                : balance,
+            ),
+          },
+          changes: journeyChanges,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+        }),
+      id: "vip-eligible",
+      label: "Starknet VIP eligible",
+      narrative:
+        "A complete dollar total at or above $10,000 adds a quiet line under the total: a link out to Starknet VIP and a way to turn it off. Decided on this device; nothing is sent.",
+      prepare: bindFixtureHome,
+      state: { currency: "usd", notice: "vip", thresholdUsd: 10_000 },
+    },
+    {
+      content: () =>
+        walletDashboard({
           balanceState: { balances: journeyBalances },
           preferences: journeyPreferences,
           priceStale: true,

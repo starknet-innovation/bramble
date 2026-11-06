@@ -1,7 +1,7 @@
 /**
  * The Home VIP eligibility notice (issue 688): decided locally from the hero's
  * own complete total, dollars only, hidden once the user turns it off, and
- * never rendered without a bundled https site address.
+ * never rendered without a bundled https site address (https://vip.starknet.io/).
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
@@ -50,9 +50,13 @@ describe("vipEligible", () => {
 });
 
 describe("vipNotice", () => {
-  test("ships with no site address, so nothing renders until one is confirmed", () => {
-    expect(VIP_SITE_URL).toBeNull();
-    expect(vipNotice(true)).toBe("");
+  test("ships with the confirmed Starknet VIP address and renders it by default", () => {
+    expect(VIP_SITE_URL).toBe("https://vip.starknet.io/");
+    const html = vipNotice(true);
+    expect(html).toContain('href="https://vip.starknet.io/"');
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(vipNotice(false)).toBe("");
   });
 
   test("renders a link out and a dismiss control, and asks for nothing", () => {
@@ -64,8 +68,9 @@ describe("vipNotice", () => {
     expect(html).not.toMatch(/<input|<form|<textarea/);
   });
 
-  test("renders nothing when not eligible or the address is not https", () => {
+  test("renders nothing when not eligible or the address is missing or not https", () => {
     expect(vipNotice(false, SITE)).toBe("");
+    expect(vipNotice(true, null)).toBe("");
     expect(vipNotice(true, "http://vip.example")).toBe("");
     expect(vipNotice(true, "javascript:alert(1)")).toBe("");
   });
