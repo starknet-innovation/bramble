@@ -46,6 +46,33 @@ describe("submitHeldInvoke gasless choice", () => {
     expect(prepared).toBe(0);
   });
 
+  // Issue 851: only the public lane deploys an account before its calls, so a
+  // reviewed deployment on the pool or gasless lane is refused, not dropped.
+  test("refuses a reviewed deployment on the pool or gasless lane", async () => {
+    let submitted = 0;
+    const count = async () => {
+      submitted += 1;
+      return { transactionHash: "0x5" };
+    };
+    const deployment = { reviewedDeploymentFee: { overallFee: "2", unit: "FRI" } };
+    for (const lane of [
+      { approval: { payload: { calls: [] } }, poolProof: { mode: "execute" } },
+      { approval: { gaslessFee: offer, payload: { calls: [] } } },
+    ]) {
+      const input = {
+        ...lane,
+        calls: [],
+        ceiling: deployment,
+        context: {},
+        deps: { prices: {} },
+        runtimeRpc: { submitInvokeTransaction: count },
+        strk20: { submitPrepared: count },
+      } as unknown as Parameters<typeof submitHeldInvoke>[0];
+      await expect(submitHeldInvoke(input)).rejects.toThrow(WalletError);
+    }
+    expect(submitted).toBe(0);
+  });
+
   test("still submits a pool batch that did not choose a gasless fee", async () => {
     let prepared = 0;
     const input = {
