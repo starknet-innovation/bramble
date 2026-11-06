@@ -17,6 +17,12 @@ import { requireText, workflowPath } from "./workflow-policy-text";
 
 const GITHUB_EXPRESSION = "$" + "{{";
 const REFERENCE = /secrets\s*(?:\.|\[\s*['"])\s*bramble_sepolia_seeds/gi;
+// Expression functions and keys ignore case, and spacing is free.
+const FORBIDDEN: readonly (readonly [string, RegExp])[] = [
+  ["toJSON(secrets)", /tojson\s*\(\s*secrets\s*\)/i],
+  ["secrets: inherit", /secrets\s*:\s*inherit/i],
+  ["BRAMBLE_SEPOLIA_RECORD", /BRAMBLE_SEPOLIA_RECORD/i],
+];
 
 const CONFIGURED_STEP = `      - name: Sepolia seeds configured
         id: sepolia_seeds
@@ -39,9 +45,9 @@ const LIVE_STEP = `      - name: Sepolia import paths (live)
  */
 export const sepoliaSeedsFailures = (name: string, source: string): string[] => {
   const path = workflowPath(name);
-  const failures = ["toJSON(secrets)", "secrets: inherit", "BRAMBLE_SEPOLIA_RECORD"]
-    .filter((form) => source.includes(form))
-    .map((form) => `${path} must not use ${form}`);
+  const failures = FORBIDDEN.filter(([, pattern]) => pattern.test(source)).map(
+    ([label]) => `${path} must not use ${label}`,
+  );
   const uses = source.match(REFERENCE)?.length ?? 0;
   if (uses === 0) return failures;
   if (name !== "nightly.yml") {

@@ -108,6 +108,7 @@ jobs:
       e2e_install: ${{ steps.e2e_install.outcome }}
       e2e: ${{ steps.e2e.outcome }}
       sepolia: ${{ steps.sepolia.outcome }}
+      sepolia_configured: ${{ steps.sepolia_seeds.outputs.configured }}
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -180,9 +181,10 @@ jobs:
       # redactor keeps seeds and derived keys out of every line it prints. It
       # records no tape and uploads nothing: this is a public repository, and
       # a run's network traffic is not for publishing (replay is local-only).
-      # Until the secret is configured the gate is skipped, and the summary and
-      # tracking issue say "not run", never "passed". Only a boolean leaves
-      # this step; the secret itself reaches the live step alone.
+      # Until the secret is configured the gate is skipped: the summary lists it
+      # under "Not run" and says not to promote, and it is never shown as passed.
+      # Any other skip (an earlier hard failure) counts as failing. Only a
+      # boolean leaves this step; the secret itself reaches the live step alone.
       - name: Sepolia seeds configured
         id: sepolia_seeds
         env:
@@ -213,8 +215,13 @@ jobs:
           # NAME="value", so each value is masked on its own as well.
           while IFS= read -r line; do
             value="${line#*=}"
+            value="${value%$'\r'}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
             value="${value#\"}"
             value="${value%\"}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
             if [ -n "$value" ]; then echo "::add-mask::$value"; fi
           done < "$seeds"
           # The newest committed scorecard, if this branch has one (dated names sort in order).
@@ -237,6 +244,7 @@ jobs:
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
           SEPOLIA: ${{ steps.sepolia.outcome }}
+          SEPOLIA_CONFIGURED: ${{ steps.sepolia_seeds.outputs.configured }}
         run: |
           set -euo pipefail
           declare -A GATES=(
@@ -251,8 +259,8 @@ jobs:
           failing=()
           passing=()
           not_run=()
-          # The Sepolia gate is skipped only while its secret is unconfigured.
-          if [ "$SEPOLIA" = "skipped" ]; then
+          # Not run only when the check step saw no secret; any other skip fails.
+          if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then
             unset 'GATES[Sepolia import paths (live)]'
             not_run+=("Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured")
           fi
@@ -296,7 +304,10 @@ jobs:
             echo "failure is release-blocking per CONTRIBUTING.md (high/critical advisory)."
             echo ""
             echo "### Recommended next work"
-            if [ "${#failing[@]}" -eq 0 ]; then
+            if [ "${#failing[@]}" -eq 0 ] && [ "${#not_run[@]}" -gt 0 ]; then
+              echo "- Do not promote this release branch to main until every gate has run:"
+              echo "  configure the BRAMBLE_SEPOLIA_SEEDS secret (tools/vendor-dataset/README.md)."
+            elif [ "${#failing[@]}" -eq 0 ]; then
               echo "- Proceed with the release-completion checklist in RELEASING.md."
             else
               echo "- Triage the failing gates above against the nightly tracking issue."
@@ -314,10 +325,11 @@ jobs:
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
           SEPOLIA: ${{ steps.sepolia.outcome }}
+          SEPOLIA_CONFIGURED: ${{ steps.sepolia_seeds.outputs.configured }}
         run: |
           set -euo pipefail
-          # A skipped Sepolia gate (secret not configured) is reported as not run, not failed.
-          if [ "$SEPOLIA" = "skipped" ]; then SEPOLIA=success; fi
+          # Skipped because the secret is unset: not run, not failed. Any other skip fails.
+          if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then SEPOLIA=success; fi
           for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E" "$SEPOLIA"; do
             if [ "$o" != "success" ]; then
               echo "At least one nightly gate did not pass — failing the job."
@@ -348,6 +360,7 @@ jobs:
           E2E_INSTALL: ${{ needs.nightly.outputs.e2e_install }}
           E2E: ${{ needs.nightly.outputs.e2e }}
           SEPOLIA: ${{ needs.nightly.outputs.sepolia }}
+          SEPOLIA_CONFIGURED: ${{ needs.nightly.outputs.sepolia_configured }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -361,11 +374,12 @@ jobs:
               ["Full E2E (Playwright)", process.env.E2E],
               ["Sepolia import paths (live)", process.env.SEPOLIA],
             ];
-            // A skipped Sepolia gate means its secret is not configured: not run, not failed.
+            // Skipped because its secret is unset: not run, not failed. Any other skip fails.
+            const sepoliaNotRun =
+              process.env.SEPOLIA === "skipped" && process.env.SEPOLIA_CONFIGURED === "false";
             const failing = gates.filter(
               ([name, outcome]) =>
-                outcome !== "success" &&
-                !(name === "Sepolia import paths (live)" && outcome === "skipped"),
+                outcome !== "success" && !(name === "Sepolia import paths (live)" && sepoliaNotRun),
             );
             const title = `Nightly: ${branch} — failing checks`;
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
@@ -398,6 +412,9 @@ jobs:
               "",
               "### Failing gates",
               ...failing.map(([name, outcome]) => `- ${name} (${outcome})`),
+              ...(sepoliaNotRun
+                ? ["", "### Not run", "- Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured"]
+                : []),
               "",
               "See the run's job summary for the full categorized report",
               "(newly failing / known / flaky / regressions / release-blocking).",

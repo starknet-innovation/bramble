@@ -42,6 +42,19 @@ describe("Sepolia seed secret policy", () => {
     );
   });
 
+  test("handing every secret on is caught in any case or spacing", async () => {
+    const sources = await readWorkflowSources();
+    for (const [form, label] of [
+      ["${{ tojson( secrets ) }}", "toJSON(secrets)"],
+      ["secrets:   INHERIT", "secrets: inherit"],
+    ]) {
+      const ci = `${sources["ci.yml"] ?? ""}\n# ${form}\n`;
+      expect(workflowSecurityPolicyFailures({ ...sources, "ci.yml": ci })).toContain(
+        `.github/workflows/ci.yml must not use ${label}`,
+      );
+    }
+  });
+
   test("the live step runs only when the seeds are configured", async () => {
     const sources = await readWorkflowSources();
     const nightly = (sources["nightly.yml"] ?? "").replace(

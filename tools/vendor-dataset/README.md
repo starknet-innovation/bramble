@@ -64,7 +64,7 @@ extension.
   `BRAMBLE_DATASET_KEY_K_{OZ,ROT_A,SNC}`. Leave everything else out, the
   Ledger seed and the guardian, 2FA and rotation keys included. Only that one
   step sees the secret, and it masks each value in the log
-  (`scripts/workflow-security-policy.ts` holds it there). The secret reaches
+  (`scripts/workflow-sepolia-policy.ts` holds it there). The secret reaches
   whatever code is on the release branch, so release branches must stay
   protected. It records no tape and uploads nothing, since the repository is
   public; the verdicts are in the job log and summary.
