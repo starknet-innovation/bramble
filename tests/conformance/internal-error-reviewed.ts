@@ -136,6 +136,11 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ],
   ["activate private balances before sending privately", "Activate private balances first."],
   ["activate private balances before unshielding", "Activate private balances first."],
+  ["activate private balances before shielding an asset", "Activate private balances first."],
+  [
+    "private balances changed. review the shield again.",
+    "Private balances changed. Review the shield again.",
+  ],
   ["deploy this account before activating private balances", "Deploy this account first."],
   ["deploy this account before submitting a public private deposit", "Deploy this account first."],
   ["track a token before activating private balances", "Track a token first."],
@@ -285,6 +290,21 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   [
     "save a co-signer wallet card before sharing securely",
     "Save a co-signer's wallet card before sharing securely.",
+  ],
+  ["this multisig can't submit a private proof.", "This multisig can't submit a private proof."],
+  [
+    "this transaction could not be saved for the signers.",
+    "This transaction could not be saved for the signers.",
+  ],
+  ["this multisig isn't the pinned account.", "This multisig isn't the pinned account."],
+  ["this multisig needs more than one signer.", "This multisig needs more than one signer."],
+  [
+    "this multisig's signers aren't available yet.",
+    "This multisig's signers aren't available yet.",
+  ],
+  [
+    "this wallet doesn't hold a signer for this multisig.",
+    "This wallet doesn't hold a signer for this multisig.",
   ],
   ["invalid private key", "Couldn't import that account. Check what you pasted and try again."],
   ["insufficient private balance", "Insufficient private balance"],

@@ -48,3 +48,21 @@ export type Strk20AccountPlan = {
  * substitution after consent is not permitted.
  */
 export type Strk20SubmissionPlan = Strk20PrivateRelayPlan | Strk20AccountPlan;
+
+/** One network's sponsored-shield relay (mc-wallet 789). */
+export type SponsoredShieldConfig = { readonly url: string };
+
+/**
+ * A sponsor's frozen acceptance of one exact deposit batch. `typedData` is the
+ * canonical SNIP-9 outside execution of the deposit approvals; `authorization`
+ * is what the review shows of it. `estimatedNetworkFeeFri` is the relay's own
+ * gas estimate, informational only: the user pays none of it, but the review
+ * still shows it so the sponsorship does not hide what the shield costs.
+ */
+export type Strk20SponsoredShieldPlan = {
+  readonly authorization: PaymasterAuthorizationReview;
+  readonly estimatedNetworkFeeFri?: string;
+  readonly mode: "sponsored-deposit";
+  readonly sponsor: string;
+  readonly typedData: unknown;
+};

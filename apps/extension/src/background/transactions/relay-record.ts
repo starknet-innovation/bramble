@@ -20,13 +20,16 @@ import { type StarknetNetworkId, sameFelt } from "@bramble/wallet-model/networks
  * Account families whose outside-execution nonce view is known to answer for
  * every message revision they execute: Argent keeps one used-nonce map for v1
  * and v2 (vendored `outside_execution.cairo`), and OpenZeppelin's SRC9 supports
- * only v2. Braavos is not verified, so its rows are recorded but not tracked.
+ * only v2. Braavos and Argent multisig are not verified, so their rows are
+ * recorded but not tracked.
  */
-const CHECKABLE_FAMILIES: ReadonlySet<AccountContractType> = new Set(["argent", "openzeppelin"]);
+const CHECKABLE_FAMILIES: ReadonlySet<string> = new Set(["argent", "openzeppelin"]);
+
+type RelayAccountType = AccountContractType | "argent-multisig";
 
 type RelayRecordInput = {
   readonly account: {
-    readonly accountContractType: AccountContractType;
+    readonly accountContractType: RelayAccountType;
     readonly id: string;
     readonly networkId: StarknetNetworkId;
   };

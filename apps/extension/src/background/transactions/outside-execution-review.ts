@@ -52,7 +52,7 @@ export type OutsideExecutionReview = {
  */
 export const reviewOutsideExecution = (
   typedData: unknown,
-  account: AccountRef,
+  account: Pick<AccountRef, "address" | "id" | "networkId">,
   preferences: Pick<WalletPreferences, "addressBook" | "dappTokenIds" | "nfts" | "tokens"> &
     Partial<TrustedRecipientSources>,
   allowances: readonly AllowanceRecord[] = [],

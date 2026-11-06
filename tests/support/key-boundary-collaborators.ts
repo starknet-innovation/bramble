@@ -191,6 +191,13 @@ export const walletStub = {
     }
     return vault;
   },
+  // Confirms the passphrase without writing, so a wrong one never reaches the
+  // grant clear. The correct one continues into recovery below.
+  async assertRecoverableVault(passphrase: string) {
+    if (passphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
+  },
   // Accepts like a vault awaiting recovery, so the scan reads the unlocked
   // status that "Unlock anyway" returns rather than a refusal.
   async recoverUnverifiedVault(passphrase: string) {

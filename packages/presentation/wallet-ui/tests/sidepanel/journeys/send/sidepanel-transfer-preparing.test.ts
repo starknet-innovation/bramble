@@ -235,9 +235,7 @@ describe("Review shield", () => {
     expect(stage(app)).toBe("details");
     expect(hidden(app, "#send-working")).toBe(true);
     expect(hidden(app, "#send-details")).toBe(false);
-    expect(text(app, "#transfer-result")).toBe(
-      "Activate private balances before shielding an asset",
-    );
+    expect(text(app, "#transfer-result")).toBe("Activate private balances first.");
     expect(text(app, "#send-review-label")).toBe("Review shield");
     expect(app.querySelector("#send-review-button")?.hasAttribute("data-busy")).toBe(false);
     expect(disabled(app, "#send-review-button")).toBe(false);

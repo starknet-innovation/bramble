@@ -4,6 +4,7 @@
 import type { NostrCoordinationStore } from "@bramble/multisig/coordination";
 import type { MultisigStore } from "@bramble/multisig/repository";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import type { ArgentMultisigDeploymentReviews } from "./multisig-deployment-reviews";
 import type { NostrRelayTransport } from "./nostr-relay";
 
@@ -12,6 +13,8 @@ import type { NostrRelayTransport } from "./nostr-relay";
  */
 export type MultisigOpsDeps = WalletOpsDeps & {
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
+  /** Site grants; a removed multisig is dropped from them. */
+  readonly multisigGrants?: MultisigOriginGrantStore;
   readonly multisigStore: MultisigStore;
   readonly nostrCoordinationStore: NostrCoordinationStore;
   /** Injectable encrypted-event transport; production reuses short-lived native WebSockets. */
