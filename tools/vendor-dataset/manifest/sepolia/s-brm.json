@@ -1,0 +1,101 @@
+{
+  "s-brm/TA-01": {
+    "id": "s-brm/TA-01",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRM",
+    "vendorDerivation": "bramble-account",
+    "index": 0,
+    "address": "0x7d27246b85bb9abf06075ef7293f15c4cf66c1e41948a5d268d308fb6a3a27d",
+    "pubkey": "0x4450f28f4aa5a5d8b534fc20cd90754b6a2cb536fe6a461ac602678b44f07f3",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "bank and deployer; found by the first-run scan as Bramble account 0",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "role": "bank"
+    },
+    "log": []
+  },
+  "s-brm/TA-02": {
+    "id": "s-brm/TA-02",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRM",
+    "vendorDerivation": "bramble-account",
+    "index": 1,
+    "address": "0x578e46e04e54ce378b21ad7c0d954421edef009ed2b4e0edc99f15cb0ccaa6e",
+    "pubkey": "0x4742b81b28334253d744ff4f3561b03b30abf0fd07c29099fe8b6a88d66a95b",
+    "classAtDeploy": null,
+    "expected": "funded counterfactual: found by the STRK balance probe, deployable",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "STRK"
+    },
+    "log": ["funded STRK 0x576f5bc01cc2732963943226c19cb852585d5480a522a9cb305315cf0dd5264"]
+  },
+  "s-brm/TA-03": {
+    "id": "s-brm/TA-03",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRM",
+    "vendorDerivation": "bramble-account",
+    "index": 25,
+    "address": "0x3be5adf0bd3d47b0e124745d92060600064620e1cd7c5e786a1b29b517a0d7a",
+    "pubkey": "0x48e034356b2e0e31c44f878073bcf5e36b73d921cbaf0b4aeeebf56d2e29355",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "past a 22-account gap: needs the advanced index (P5)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x0",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
+    },
+    "log": [
+      "funded STRK 0x6568b37358b2ffcc541405b03cb780f97ad3367f8cfb6c1f88d708ac0811b00",
+      "deployed 0x6a986edd5da5c72ab392e6eb364dab0dc45bcdc8b41cdd43fe2e9de6edcc470"
+    ]
+  },
+  "s-brm/TA-06": {
+    "id": "s-brm/TA-06",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRM",
+    "vendorDerivation": "bramble-account",
+    "index": 2,
+    "address": "0x7a5bd33fc5f0e5fe0535cd623c74d37851f499b8b4df8a27fafad926de48fe",
+    "pubkey": "0x16e750e79f1a5ae34ee0d1ead250cafd909bec00491378f4190159b51f9ff5b",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "OZ 3.0.0 with salt = pubkey: not the address Bramble derives (salt 0)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x16e750e79f1a5ae34ee0d1ead250cafd909bec00491378f4190159b51f9ff5b",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
+    },
+    "log": [
+      "funded STRK 0x605a9a5fc0ceb071bbfdf3e554da9a63e9293537a8bf1ce9ca1e250bc55c66e",
+      "deployed 0x42ec088385777a320dcd89df908ff2e953e6ed47a0d9967e14af952389e05ad"
+    ]
+  },
+  "s-brm/TA-08": {
+    "id": "s-brm/TA-08",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRM",
+    "vendorDerivation": "bramble-account",
+    "index": 3,
+    "address": "0x4fb1381d6222b60cd2b05c1ea9ca357aca67104f5746e67d9166affd09e2cf0",
+    "pubkey": "0x2c9a02e41cf70541e4cea89f245c7ddc0b17b0b687f73bc318bc5144de0ba5e",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "owner rotated to K-ROT-O: the seed's key no longer signs for it",
+    "detectability": "D5",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "owner": "0x7101c312fda62d5c1309ad4c668432c1fcbff0999941bc1ba7c136867fa6fed"
+    },
+    "log": [
+      "funded STRK 0x6e9eb247ac87d65ffb3ff9611d48fafdff89bf3253ebb7ce6077b7bb682581e",
+      "deployed 0x166da91dd8d86e0eacfd8c991957f2bc81f906952c123da722a98438557f6cc",
+      "set_public_key 0x441f2937cc70562d19fd770447b1697213c3887e42c26bc3b91d9f78cca7f1f"
+    ]
+  }
+}
