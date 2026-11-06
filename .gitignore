@@ -13,6 +13,7 @@ test-results/
 output/
 vendor/argent-contracts/
 vendor/starknet-privacy/
+vendor/ledger-app-starknet/
 *.log
 .env
 .env*.local
