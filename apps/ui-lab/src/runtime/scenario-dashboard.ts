@@ -135,6 +135,6 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     options.signability ?? null,
     [],
     false,
-    options.staking ?? { loading: true },
+    options.staking,
   );
 };

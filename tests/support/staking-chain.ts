@@ -1,6 +1,6 @@
 /**
  * Deterministic staking chain for background tests: one staking contract, one
- * curated validator with a STRK pool, and a mutable membership for the account
+ * validator (staker) with a STRK pool, and a mutable membership for the account
  * under test. Answers use the deployed contracts' serialization (Cairo Option:
  * Some = 0, None = 1), so the production decoders run unmodified.
  */
@@ -9,9 +9,8 @@ import type { StakingNetworkTable } from "@bramble/transactions/staking-networks
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 
 const STAKING_CONTRACT = "0x5a1";
-export const STAKER = "0x5a2";
+export const STAKER = `0x5a2${"0".repeat(56)}beef`;
 export const STAKING_POOL = "0x5a3";
-export const VALIDATOR_ID = "test-validator";
 
 /** Mutable chain state; tests change it between requests. */
 export type StakingChainState = {
@@ -47,14 +46,10 @@ export const makeStakingChain = (): StakingChainState => ({
   stakerLeaving: false,
 });
 
-/** Mainnet switched on with the one test validator. */
+/** Mainnet switched on against the test staking contract. */
 export const testStakingNetworks: StakingNetworkTable = {
   SN_DEVNET: null,
-  SN_MAIN: {
-    enabled: true,
-    stakingContract: STAKING_CONTRACT,
-    validators: [{ id: VALIDATOR_ID, name: "Test Validator", staker: STAKER }],
-  },
+  SN_MAIN: { enabled: true, stakingContract: STAKING_CONTRACT },
   SN_SEPOLIA: null,
 };
 

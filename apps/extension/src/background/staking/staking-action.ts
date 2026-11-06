@@ -2,9 +2,12 @@
  * Staking actions (issue 750), prepared then executed, like the in-wallet
  * swap.
  *
- * Prepare: the validator comes from the curated table, the token from the
- * account's TRACKED registry and the staking contract's active-token list, and
- * the pool is resolved and verified on chain at one pinned block. The calls
+ * Prepare: the staker address is the user's pick (from the directory or
+ * pasted) and is only a candidate; the token comes from the account's TRACKED
+ * registry and the staking contract's active-token list; and the pool is
+ * resolved and verified on chain at one pinned block. A staker the staking
+ * contract does not list a pool for is refused before anything is built. No
+ * directory data reaches this file: the review names the full staker address. The calls
  * are built from those facts alone (a stake approves exactly what it stakes),
  * checked by the shared verifier, priced, and frozen in a one-time
  * preparation together with the review sentence the user will confirm.
@@ -19,9 +22,9 @@ import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import { activityToken } from "@bramble/transactions/activity";
 import { buildStakingCalls, stakingActivitySummary } from "@bramble/transactions/staking-calls";
-import { curatedValidator, type StakingValidator } from "@bramble/transactions/staking-networks";
 import { stakingReviewSentence } from "@bramble/transactions/staking-review";
 import { refuseOnPoisonedRecipient, verifyCalls } from "@bramble/transactions/verify";
+import { shortAddress } from "@bramble/transactions/verify-decode";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { recordAutoDeployment } from "../accounts/deployment-ops";
@@ -54,18 +57,18 @@ const baseUnits = (amount: string | null, decimals: number): bigint | null => {
   }
 };
 
-const readActionPool = (context: StakingContext, token: TokenConfig, validator: StakingValidator) =>
+const readActionPool = (context: StakingContext, token: TokenConfig, staker: string) =>
   context
     .read(context.rpcUrls, async (pinned) => {
       const facts = await readStakingChainFacts(pinned, context.network.stakingContract);
       if (!facts?.activeTokens.some((active) => sameFelt(active, token.address))) {
-        return { refusal: "This token can't be staked.", token: token.address, validator };
+        return { refusal: "This token can't be staked.", staker, token: token.address };
       }
       return readStakingPool(pinned, {
         account: context.account.address,
+        staker,
         stakingContract: context.network.stakingContract,
         token: token.address,
-        validator,
       });
     })
     .catch(() => null);
@@ -86,12 +89,11 @@ export const prepareStakingResponse = async (
   const context = await stakingContext(deps);
   if ("error" in context) return { error: context.error };
   const now = nowSeconds(deps);
-  const validator = curatedValidator(context.network, input.validatorId);
   const token = context.preferences.tokens.find(
     (entry) => entry.id === input.tokenId && entry.networkId === context.networkId,
   );
-  if (now === null || !validator || !token) return { error: "Staking option unavailable." };
-  const reading = await readActionPool(context, token, validator);
+  if (now === null || !token) return { error: "Staking option unavailable." };
+  const reading = await readActionPool(context, token, input.staker);
   if (!reading) return STAKING_UNREADABLE;
   if ("refusal" in reading) return { error: reading.refusal };
   const built = buildStakingCalls({
@@ -120,7 +122,13 @@ export const prepareStakingResponse = async (
   if (!reviewedFee) {
     return { error: "Couldn't estimate the network fee, so nothing was signed. Try again." };
   }
-  const facts = { amount: input.amount, symbol: token.symbol, validator: validator.name };
+  // The review names the full verified staker address; Activity the short
+  // form. Neither is ever a directory name.
+  const facts = {
+    amount: input.amount,
+    symbol: token.symbol,
+    validator: `validator ${input.staker}`,
+  };
   const unsigned = {
     action: input.action,
     amount: input.amount,
@@ -133,7 +141,11 @@ export const prepareStakingResponse = async (
       member: reading.member,
     }),
     reviewedFee,
-    summary: stakingActivitySummary({ ...facts, action: input.action }),
+    summary: stakingActivitySummary({
+      ...facts,
+      action: input.action,
+      validator: `validator ${shortAddress(input.staker)}`,
+    }),
     // A claim pays STRK whatever the staked token.
     symbol: input.action === "claim" ? "STRK" : token.symbol,
     tokenAddress: input.action === "claim" ? STRK_TOKEN_ADDRESS : token.address,

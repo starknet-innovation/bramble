@@ -66,7 +66,7 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
     LABELS.set(button, button.textContent ?? "");
     const action = button.dataset["stakingAction"];
     const key = button.dataset["stakingRow"] ?? "";
-    const [validatorId = "", tokenId = ""] = key.split("|");
+    const [staker = "", tokenId = ""] = key.split("|");
     const row = button.closest<HTMLElement>(".staking-row");
     const review = row?.querySelector<HTMLElement>("[data-staking-review-for]");
     const field = row?.querySelector<HTMLInputElement>(
@@ -93,7 +93,7 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
       }
     };
     button.addEventListener("click", () => {
-      if (!isAction(action) || !validatorId || !tokenId) return;
+      if (!isAction(action) || !staker || !tokenId) return;
       const amount = field?.value.trim() ?? "";
       if (field && amount.length === 0) {
         field.focus();
@@ -116,7 +116,7 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
       }
       // Only a preparation can be superseded: a confirm's failure is always
       // shown, and a lost confirm keeps its control down.
-      const request = { action, ...(field ? { amount } : {}), tokenId, validatorId };
+      const request = { action, ...(field ? { amount } : {}), staker, tokenId };
       void wallet.prepareStaking(request).then(
         (preparation) => {
           if (!isLatest(row ?? null, generation)) return release();

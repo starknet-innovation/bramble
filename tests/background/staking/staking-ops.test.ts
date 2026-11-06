@@ -34,8 +34,10 @@ import {
   type StakingChainState,
   stakingReader,
   testStakingNetworks,
-  VALIDATOR_ID,
 } from "../../support/staking-chain";
+
+const VALIDATOR = `validator ${STAKER}`;
+const OVERVIEW = { staker: STAKER, type: "wallet.stakingOverview" } as const;
 
 const NOW_SECONDS = 1_800_000_000;
 const FEE = { overallFee: "1", unit: "FRI" } as const;
@@ -86,9 +88,9 @@ const harness = async (
   // execute confirms it by id.
   const act = async (fields: Record<string, unknown>) => {
     const message = {
+      staker: STAKER,
       tokenId: strk?.id ?? "",
       type: "wallet.stakingPrepare",
-      validatorId: VALIDATOR_ID,
       ...fields,
     };
     const review = await send(message);
@@ -116,7 +118,7 @@ const member = (overrides: Partial<NonNullable<StakingChainState["member"]>> = {
 describe("staking overview", () => {
   test("is unavailable while the network is switched off", async () => {
     const { send } = await harness({ enabled: false });
-    expect(await send({ type: "wallet.stakingOverview" })).toEqual({
+    expect(await send(OVERVIEW)).toEqual({
       error: "Staking isn't available on this network.",
     });
   });
@@ -125,7 +127,7 @@ describe("staking overview", () => {
     const chain = makeStakingChain();
     chain.member = member({ unclaimed: 25n * 10n ** 16n });
     const { send } = await harness({ chain });
-    const response = await send({ type: "wallet.stakingOverview" });
+    const response = await send(OVERVIEW);
     expect(response).toMatchObject({
       ok: true,
       staking: {
@@ -138,9 +140,8 @@ describe("staking overview", () => {
             staked: "5",
             state: "staked",
             symbol: "STRK",
+            staker: STAKER,
             unclaimed: "0.25",
-            validatorId: VALIDATOR_ID,
-            validatorName: "Test Validator",
           },
         ],
       },
@@ -151,11 +152,11 @@ describe("staking overview", () => {
     const chain = makeStakingChain();
     chain.member = member({ unclaimed: 10n ** 18n });
     const { send } = await harness({ chain });
-    expect(await send({ type: "wallet.stakingOverview" })).toMatchObject({
+    expect(await send(OVERVIEW)).toMatchObject({
       staking: { rows: [{ rewardSymbol: "STRK", unclaimed: "1" }] },
     });
     chain.rewardToken = "0x777";
-    expect(await send({ type: "wallet.stakingOverview" })).toEqual({
+    expect(await send(OVERVIEW)).toEqual({
       error: "Couldn't read staking on this network. Try again.",
     });
   });
@@ -164,7 +165,7 @@ describe("staking overview", () => {
     const chain = makeStakingChain();
     chain.poolStaker = "0x999";
     const { send } = await harness({ chain });
-    const response = await send({ type: "wallet.stakingOverview" });
+    const response = await send(OVERVIEW);
     expect(response).toMatchObject({
       staking: { rows: [{ refusal: "Couldn't verify this validator on chain." }] },
     });
@@ -178,7 +179,7 @@ describe("staking actions", () => {
     expect(review).toMatchObject({
       ok: true,
       stakingPreparation: {
-        review: "Stake 5 STRK with Test Validator. This approves exactly 5 STRK for its pool.",
+        review: `Stake 5 STRK with ${VALIDATOR}. This approves exactly 5 STRK for its pool.`,
         reviewedFee: FEE,
       },
     });
@@ -200,7 +201,7 @@ describe("staking actions", () => {
     }
     expect(submitted[0]?.reviewedFee).toEqual(FEE);
     expect(await activity.list()).toMatchObject([
-      { hash: "0x5ab", kind: "invoke", summary: "Stake 5 STRK with Test Validator" },
+      { hash: "0x5ab", kind: "invoke", summary: "Stake 5 STRK with validator 0x5a20…beef" },
     ]);
     expect(await allowanceStore.list()).toMatchObject([{ spender: STAKING_POOL }]);
   });
@@ -279,17 +280,18 @@ describe("staking actions", () => {
     expect(estimated).toEqual([]);
   });
 
-  test("a validator that is not on the curated list is refused, even by staker address", async () => {
-    const { act } = await harness();
-    expect((await act({ action: "stake", amount: "1", validatorId: "0x5a4" })).review).toEqual({
-      error: "Staking option unavailable.",
+  test("a pasted address the staking contract does not list is refused before anything is built", async () => {
+    const { act, chain, estimated, submitted } = await harness();
+    expect((await act({ action: "stake", amount: "1", staker: "0x5a4" })).review).toEqual({
+      error: "Couldn't verify this validator on chain.",
     });
-    // The curated validator may be named by its staker address too.
-    expect((await act({ action: "stake", amount: "1", validatorId: STAKER })).review).toMatchObject(
-      {
-        ok: true,
-      },
-    );
+    expect(chain.reads).toContain("staker_pool_info");
+    expect(estimated).toEqual([]);
+    expect(submitted).toEqual([]);
+    // The same staker in another spelling is the same validator.
+    expect(
+      (await act({ action: "stake", amount: "1", staker: `0x0${STAKER.slice(2)}` })).review,
+    ).toMatchObject({ ok: true });
   });
 
   test("a lost reply is status unknown with the signed hash and a pending row", async () => {
@@ -313,9 +315,9 @@ describe("staking actions", () => {
     const prepare = {
       action: "stake",
       amount: "5",
+      staker: STAKER,
       tokenId: "",
       type: "wallet.stakingPrepare",
-      validatorId: VALIDATOR_ID,
     };
     const strkId = (
       await createPreferencesStore({ store: createMemoryStore() }).read()
@@ -345,11 +347,10 @@ describe("staking actions", () => {
     const { review } = await act({ action: "claim" });
     expect(review).toMatchObject({
       stakingPreparation: {
-        review:
-          "Claim your STRK rewards from Test Validator. Rewards are paid to 0xabc1…c123, not this account.",
+        review: `Claim your STRK rewards from ${VALIDATOR}. Rewards are paid to 0xabc1…c123, not this account.`,
       },
     });
-    expect(await send({ type: "wallet.stakingOverview" })).toMatchObject({
+    expect(await send(OVERVIEW)).toMatchObject({
       staking: { rows: [{ rewardsTo: "0xabc123" }] },
     });
   });
@@ -362,23 +363,32 @@ describe("staking actions", () => {
         amount: "1",
         tokenId: "x",
         type: "wallet.stakingPrepare",
-        validatorId: VALIDATOR_ID,
+        staker: STAKER,
       },
-      { action: "stake", tokenId: "x", type: "wallet.stakingPrepare", validatorId: VALIDATOR_ID },
+      { action: "stake", staker: STAKER, tokenId: "x", type: "wallet.stakingPrepare" },
       {
         action: "stake",
         amount: "-1",
         tokenId: "x",
         type: "wallet.stakingPrepare",
-        validatorId: VALIDATOR_ID,
+        staker: STAKER,
       },
-      { action: "burn", tokenId: "x", type: "wallet.stakingPrepare", validatorId: VALIDATOR_ID },
+      { action: "burn", staker: STAKER, tokenId: "x", type: "wallet.stakingPrepare" },
+      // A staker must be a well-formed non-zero felt, and the old curated id is gone.
+      { action: "claim", staker: "0x0", tokenId: "x", type: "wallet.stakingPrepare" },
+      { action: "claim", staker: "0xZZ", tokenId: "x", type: "wallet.stakingPrepare" },
+      { action: "claim", tokenId: "x", type: "wallet.stakingPrepare", validatorId: STAKER },
+      { type: "wallet.stakingOverview" },
+      { staker: "not-an-address", type: "wallet.stakingOverview" },
+      { cursor: "", type: "wallet.stakingDirectory" },
+      { cursor: "a b", type: "wallet.stakingDirectory" },
+      { cursor: "x".repeat(1025), type: "wallet.stakingDirectory" },
       {
         action: "claim",
         pool: STAKING_POOL,
         tokenId: "x",
         type: "wallet.stakingPrepare",
-        validatorId: VALIDATOR_ID,
+        staker: STAKER,
       },
     ]) {
       expect(await send(message)).toEqual({ error: "invalid staking request" });

@@ -378,9 +378,19 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     );
   }
   if (activeView === "staking" && refreshReason !== "ambient") {
-    fill(wallet.loadStaking(), (value) => {
-      cache.staking = value;
-    });
+    // One validator open: its pools, kept only while it is still the one open.
+    // Otherwise the directory's first page, read again only after a failure.
+    const opened = cache.staking.selected?.staker;
+    if (opened) {
+      fill(wallet.loadStakingValidator(opened), (value) => {
+        if (cache.staking.selected?.staker === opened)
+          cache.staking = { ...cache.staking, validator: value };
+      });
+    } else if (!("entries" in cache.staking.directory)) {
+      fill(wallet.loadStakingDirectory(), (value) => {
+        cache.staking = { ...cache.staking, directory: value };
+      });
+    }
   }
   if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {

@@ -3,9 +3,13 @@
  * (issue 750). All three messages are privileged (extension pages only) and
  * absent from the dapp allowlist.
  *
- * - `wallet.stakingOverview` lists each curated validator and tracked token
- *   with the account's position, verified on chain at one pinned block. It is
- *   panel-poll traffic, so it reads the session without renewing it.
+ * - `wallet.stakingDirectory` is one page of the validator directory
+ *   (./staking-directory-ops): untrusted display data, never signed.
+ * - `wallet.stakingOverview` lists one staker's pools for each tracked token
+ *   with the account's position, verified on chain at one pinned block. The
+ *   staker comes from the directory or is pasted; either way it is only a
+ *   candidate until the staking contract lists its pool. Both reads are
+ *   panel-poll traffic, so they read the session without renewing it.
  * - `wallet.stakingPrepare` / `wallet.stakingExecute` are ./staking-action.
  *
  * Failure behaviour: anything unverifiable is an error or an "unavailable"
@@ -15,7 +19,6 @@ import { formatTokenAmount } from "@bramble/starknet/rpc";
 import { stakingPositionState } from "@bramble/transactions/staking-calls";
 import type { StakingNetworkTable } from "@bramble/transactions/staking-networks";
 import { canonicalFelt, STRK_TOKEN_DECIMALS, sameFelt } from "@bramble/wallet-model/networks";
-import { readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { executeStakingResponse, prepareStakingResponse } from "./staking-action";
 import {
@@ -25,7 +28,17 @@ import {
   type StakingOpsDeps,
   stakingContext,
 } from "./staking-context";
-import { readStakingExecuteInput, readStakingPrepareInput } from "./staking-inputs";
+import {
+  DEFAULT_STAKING_DIRECTORY,
+  type StakingDirectoryRouting,
+  stakingDirectoryResponse,
+} from "./staking-directory-ops";
+import {
+  readStakingDirectoryInput,
+  readStakingExecuteInput,
+  readStakingOverviewInput,
+  readStakingPrepareInput,
+} from "./staking-inputs";
 import type { StakingPreparationStore } from "./staking-preparations";
 import { readStakingChainFacts, readStakingPool, type StakingPoolReading } from "./staking-reads";
 import type { StakingRowView } from "./staking-view";
@@ -39,12 +52,7 @@ const rowView = (
   account: string,
   now: number,
 ): StakingRowView => {
-  const base = {
-    symbol: token.symbol,
-    tokenId: token.id,
-    validatorId: reading.validator.id,
-    validatorName: reading.validator.name,
-  };
+  const base = { staker: reading.staker, symbol: token.symbol, tokenId: token.id };
   if ("refusal" in reading) return { ...base, refusal: reading.refusal };
   const member = reading.member === "none" ? null : reading.member;
   const format = (value: bigint): string => formatTokenAmount(value, token.decimals);
@@ -70,7 +78,7 @@ const rowView = (
   };
 };
 
-const overviewResponse = async (deps: StakingOpsDeps): Promise<RuntimeResponse> => {
+const overviewResponse = async (deps: StakingOpsDeps, staker: string): Promise<RuntimeResponse> => {
   const context = await stakingContext(deps, true);
   if ("error" in context) return { error: context.error };
   const now = nowSeconds(deps);
@@ -86,16 +94,14 @@ const overviewResponse = async (deps: StakingOpsDeps): Promise<RuntimeResponse> 
           facts.activeTokens.some((active) => sameFelt(active, token.address)),
       );
       const rows: StakingRowView[] = [];
-      for (const validator of network.validators) {
-        for (const token of tokens) {
-          const reading = await readStakingPool(pinned, {
-            account: account.address,
-            stakingContract: network.stakingContract,
-            token: token.address,
-            validator,
-          });
-          rows.push(rowView(reading, token, account.address, now));
-        }
+      for (const token of tokens) {
+        const reading = await readStakingPool(pinned, {
+          account: account.address,
+          staker,
+          stakingContract: network.stakingContract,
+          token: token.address,
+        });
+        rows.push(rowView(reading, token, account.address, now));
       }
       return { ok: true, staking: { exitWindowSeconds: facts.exitWindowSeconds, rows } };
     });
@@ -106,9 +112,10 @@ const overviewResponse = async (deps: StakingOpsDeps): Promise<RuntimeResponse> 
 
 /**
  * Router-supplied staking collaborators: the one-time preparation store and,
- * in tests only, a staking table override.
+ * in tests only, a staking table and directory override.
  */
 export type StakingRouting = {
+  readonly directory?: StakingDirectoryRouting;
   readonly networks?: StakingNetworkTable;
   readonly preparations: StakingPreparationStore;
 };
@@ -128,10 +135,20 @@ export const handleStakingOps = async (
     stakingPreparations: routing.preparations,
   };
   switch (messageType) {
-    case "wallet.stakingOverview":
-      return readTypeOnlyInput(message, "wallet.stakingOverview")
-        ? overviewResponse(deps)
+    case "wallet.stakingDirectory": {
+      const input = readStakingDirectoryInput(message);
+      return input
+        ? stakingDirectoryResponse(
+            deps,
+            routing.directory ?? DEFAULT_STAKING_DIRECTORY,
+            input.cursor,
+          )
         : { error: "invalid staking request" };
+    }
+    case "wallet.stakingOverview": {
+      const input = readStakingOverviewInput(message);
+      return input ? overviewResponse(deps, input.staker) : { error: "invalid staking request" };
+    }
     case "wallet.stakingPrepare": {
       const input = readStakingPrepareInput(message);
       return input ? prepareStakingResponse(deps, input) : { error: "invalid staking request" };

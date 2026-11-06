@@ -58,6 +58,11 @@ export const HTTP_BODY_LIMITS = {
    */
   starkscan: 2 * 1024 * 1024,
   /**
+   * One staking-directory page through the SNF gateway: at most 50 validators,
+   * each with a few pools, stakes, rewards and liveness figures.
+   */
+  stakingDirectory: 1024 * 1024,
+  /**
    * Swap-aggregator quotes, builds, and the verified token catalogue (at most
    * 200 entries with names, symbols, and logo URLs).
    */

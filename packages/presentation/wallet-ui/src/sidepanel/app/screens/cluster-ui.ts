@@ -11,6 +11,7 @@ import { bindTokenCatalog } from "../../journeys/portfolio/token-catalog-ui";
 import { bindTokens } from "../../journeys/portfolio/tokens-ui";
 import { bindShadowAccounts } from "../../journeys/privacy/shadow-accounts-ui";
 import { bindConnectedSites } from "../../journeys/settings/origins-ui";
+import { bindStakingDirectory } from "../../journeys/staking/staking-directory-ui";
 import { bindStaking } from "../../journeys/staking/staking-ui";
 import type { SwapClient } from "../../journeys/swap/swap-client";
 import { bindSwap } from "../../journeys/swap/swap-ui";
@@ -100,6 +101,16 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
   });
   bindAllowances({ app, render, wallet });
   bindStaking({ app, render, wallet });
+  bindStakingDirectory({
+    app,
+    render,
+    setState: (state) => {
+      cache.staking = state;
+    },
+    state: () => cache.staking,
+    status: () => cache.status,
+    wallet,
+  });
   // Gallery markup exists only while the collectibles preview is on, so on
   // every other paint these bindings find nothing to install.
   bindNfts({ app, navigate: deps.navigate, openDetail: deps.openNft, render, wallet });

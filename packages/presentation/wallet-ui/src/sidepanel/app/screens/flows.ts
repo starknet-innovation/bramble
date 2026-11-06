@@ -62,7 +62,10 @@ import {
   backupRestoreFlow,
   requestSettingsFlow,
 } from "../../journeys/settings/settings-views";
-import { STAKING_LOADING, type StakingState } from "../../journeys/staking/staking-client";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
 import { stakingFlow } from "../../journeys/staking/staking-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";

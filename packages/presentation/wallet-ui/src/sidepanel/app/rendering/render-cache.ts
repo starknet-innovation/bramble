@@ -9,7 +9,10 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
-import { STAKING_LOADING, type StakingState } from "../../journeys/staking/staking-client";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
 import { type BalanceLoadingState, emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
 import type { ConnectedSitesState } from "../screens/support-flows";
 

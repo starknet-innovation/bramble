@@ -73,6 +73,7 @@ import {
 } from "../runtime/runtime-state";
 import type { UnlockSession } from "../runtime/session";
 import { inertUpdateReady, type UpdateReady } from "../runtime/update-ready";
+import type { StakingDirectoryRouting } from "../staking/staking-directory-ops";
 import type { StakingRouting } from "../staking/staking-ops";
 import { createStakingPreparationStore } from "../staking/staking-preparations";
 import {
@@ -154,6 +155,8 @@ export type MessageHandlerOptions = {
   readonly relaySignatures?: RelaySignatureLog;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
+  /** Staking directory routes and transport for tests; production uses the bundled ones. */
+  readonly stakingDirectory?: StakingDirectoryRouting;
   /** Staking table override for tests; production uses the bundled one. */
   readonly stakingNetworks?: StakingNetworkTable;
   readonly swap?: SwapService;
@@ -321,6 +324,7 @@ export const routerContext = (
     runtimeRpc,
     session,
     staking: {
+      ...(options.stakingDirectory ? { directory: options.stakingDirectory } : {}),
       ...(options.stakingNetworks ? { networks: options.stakingNetworks } : {}),
       preparations: createStakingPreparationStore(),
     },

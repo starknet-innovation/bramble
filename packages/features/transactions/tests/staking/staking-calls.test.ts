@@ -11,8 +11,9 @@ import {
 } from "../../src/staking/staking-calls";
 import type { PoolMember } from "../../src/staking/staking-decode";
 import {
-  curatedValidator,
+  STAKING_DIRECTORY_URLS,
   STAKING_NETWORKS,
+  stakerAddress,
   stakingNetwork,
 } from "../../src/staking/staking-networks";
 
@@ -145,14 +146,28 @@ describe("staking network table", () => {
     );
   });
 
-  test("an enabled network with no validators is still off; the list is the only source", () => {
-    const network = { enabled: true, stakingContract: "0x1", validators: [] };
+  test("no directory route is bundled: the key stays in the gateway, which does not exist yet", () => {
+    expect(STAKING_DIRECTORY_URLS).toEqual({ SN_DEVNET: null, SN_MAIN: null, SN_SEPOLIA: null });
+  });
+
+  test("a switched-on network needs no validator list", () => {
+    const network = { enabled: true, stakingContract: "0x1" };
+    expect(stakingNetwork("SN_MAIN", { SN_DEVNET: null, SN_MAIN: network, SN_SEPOLIA: null })).toBe(
+      network,
+    );
     expect(
-      stakingNetwork("SN_MAIN", { SN_DEVNET: null, SN_MAIN: network, SN_SEPOLIA: null }),
+      stakingNetwork("SN_MAIN", {
+        SN_DEVNET: null,
+        SN_MAIN: { ...network, enabled: false },
+        SN_SEPOLIA: null,
+      }),
     ).toBeNull();
-    const listed = { ...network, validators: [{ id: "v", name: "V", staker: "0x0abc" }] };
-    expect(curatedValidator(listed, "v")?.name).toBe("V");
-    expect(curatedValidator(listed, "0xabc")?.name).toBe("V");
-    expect(curatedValidator(listed, "0xdef")).toBeNull();
+  });
+
+  test("a staker address is a canonical non-zero felt or nothing", () => {
+    expect(stakerAddress("0x0abc")).toBe("0xabc");
+    for (const bad of ["0x0", "0xABC", "abc", "0x", 12, null, `0x${"f".repeat(64)}`]) {
+      expect(stakerAddress(bad)).toBeNull();
+    }
   });
 });

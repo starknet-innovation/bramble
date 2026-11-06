@@ -37,7 +37,9 @@ export * from "./sidepanel/journeys/send/send-model";
 export * from "./sidepanel/journeys/send/send-views";
 export * from "./sidepanel/journeys/send/transfer-ui";
 /** Staking screen state and bindings, for the UI Lab checkpoints. */
-export type { StakingState } from "./sidepanel/journeys/staking/staking-client";
+export type { StakingState } from "./sidepanel/journeys/staking/staking-directory-client";
+/** Binds the staking list (paste, open, sort, more) against fixture state. */
+export { bindStakingDirectory } from "./sidepanel/journeys/staking/staking-directory-ui";
 /** Binds the staking screen against a fixture client. */
 export { bindStaking } from "./sidepanel/journeys/staking/staking-ui";
 export * from "./sidepanel/journeys/swap/swap-client";

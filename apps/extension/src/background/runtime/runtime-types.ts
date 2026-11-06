@@ -44,7 +44,7 @@ import type {
   Strk20WalletStateResponse,
 } from "../privacy/runtime-strk20-types";
 import type { StakingPreparationResponse } from "../staking/staking-preparations";
-import type { StakingOverviewResponse } from "../staking/staking-view";
+import type { StakingDirectoryResponse, StakingOverviewResponse } from "../staking/staking-view";
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
 import type { SwapPreparationResponse } from "../transactions/swap-preparations";
 import type { NostrCoordinationResponse } from "./nostr-types";
@@ -486,6 +486,7 @@ export type RuntimeResponse =
   | TokenChartResponse
   | TransactionAlertsResponse
   | TransferResponse
+  | StakingDirectoryResponse
   | StakingOverviewResponse
   | StakingPreparationResponse
   | SubmissionUnknownResponse

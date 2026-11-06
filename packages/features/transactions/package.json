@@ -32,6 +32,7 @@
     "./send-routes": "./src/routing/send-routes.ts",
     "./staking-calls": "./src/staking/staking-calls.ts",
     "./staking-decode": "./src/staking/staking-decode.ts",
+    "./staking-directory": "./src/staking/staking-directory.ts",
     "./staking-networks": "./src/staking/staking-networks.ts",
     "./staking-review": "./src/staking/staking-review.ts",
     "./starkscan": "./src/history/starkscan.ts",

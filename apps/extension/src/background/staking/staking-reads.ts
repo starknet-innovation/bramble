@@ -3,9 +3,11 @@
  *
  * Trust boundary: every answer is an untrusted RPC response, decoded by
  * @bramble/transactions/staking-decode and checked by `verifyStakingPool`
- * before anything is built from it. The staking contract and the validators
- * come only from the curated network table; the token comes only from the
- * account's tracked registry AND the staking contract's own active-token list.
+ * before anything is built from it. The staking contract comes only from the
+ * network table. The staker address is a candidate from the directory or the
+ * user, never trusted: it counts only once the staking contract lists a pool
+ * for it here. The token comes only from the account's tracked registry AND
+ * the staking contract's own active-token list.
  * Failure behaviour: an unreadable or inconsistent answer yields a refusal or
  * an "unavailable" row, never a guessed pool.
  */
@@ -21,7 +23,6 @@ import {
   type VerifiedStakingPool,
   verifyStakingPool,
 } from "@bramble/transactions/staking-decode";
-import type { StakingValidator } from "@bramble/transactions/staking-networks";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 
 /**
@@ -32,28 +33,29 @@ export type StakingPoolReading =
   | {
       readonly member: PoolMember | "none";
       readonly pool: VerifiedStakingPool;
+      readonly staker: string;
       readonly token: string;
-      readonly validator: StakingValidator;
     }
-  | { readonly refusal: string; readonly token: string; readonly validator: StakingValidator };
+  | { readonly refusal: string; readonly staker: string; readonly token: string };
 
 /**
- * Reads and verifies one validator's pool for one token, plus the account's
- * membership in it, all through the same pinned reader.
+ * Reads and verifies one staker's pool for one token, plus the account's
+ * membership in it, all through the same pinned reader. `staker` must already
+ * be canonical (see `stakerAddress`).
  */
 export const readStakingPool = async (
   read: PinnedContractRead,
   input: {
     readonly account: string;
+    readonly staker: string;
     readonly stakingContract: string;
     readonly token: string;
-    readonly validator: StakingValidator;
   },
 ): Promise<StakingPoolReading> => {
-  const { account, stakingContract, token, validator } = input;
+  const { account, staker, stakingContract, token } = input;
   const [poolInfoRaw, statusRaw] = await Promise.all([
-    read(stakingContract, "staker_pool_info", [validator.staker]),
-    read(stakingContract, "get_staker_info_v1", [validator.staker]),
+    read(stakingContract, "staker_pool_info", [staker]),
+    read(stakingContract, "get_staker_info_v1", [staker]),
   ]);
   const poolInfo = decodeStakerPoolInfo(poolInfoRaw);
   const listed = poolInfo?.pools.find((pool) => sameFelt(pool.token, token));
@@ -69,14 +71,14 @@ export const readStakingPool = async (
       poolInfo,
       status: decodeStakerStatus(statusRaw),
     },
-    { staker: validator.staker, stakingContract, token },
+    { staker, stakingContract, token },
   );
-  if ("refusal" in verified) return { refusal: verified.refusal, token, validator };
+  if ("refusal" in verified) return { refusal: verified.refusal, staker, token };
   const member = memberRaw ? decodePoolMember(memberRaw) : null;
   if (member === null) {
-    return { refusal: "Couldn't read your stake with this validator.", token, validator };
+    return { refusal: "Couldn't read your stake with this validator.", staker, token };
   }
-  return { member, pool: verified, token, validator };
+  return { member, pool: verified, staker, token };
 };
 
 /**

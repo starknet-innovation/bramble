@@ -1,8 +1,9 @@
 /**
- * The staking screen (issue 750): a strict parser for the background's
- * overview, rows that offer only the actions their on-chain state allows, the
- * exit window stated from the chain's own figure, and a two-tap action whose
- * confirm carries exactly the fee and amount the user reviewed.
+ * The staking screen with one validator open (issue 750): a strict parser for
+ * the background's overview of that staker, rows that offer only the actions
+ * their on-chain state allows, the exit window stated from the chain's own
+ * figure, and a two-tap action whose confirm carries exactly the fee and
+ * amount the user reviewed, for that staker.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { account } from "@bramble/testkit/sidepanel";
@@ -10,8 +11,9 @@ import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import {
   createStakingRuntimeClient,
   type StakingRow,
-  stakingStateFrom,
+  stakingValidatorFrom,
 } from "../../../../src/sidepanel/journeys/staking/staking-client";
+import { STAKING_LOADING } from "../../../../src/sidepanel/journeys/staking/staking-directory-client";
 import { bindStaking } from "../../../../src/sidepanel/journeys/staking/staking-ui";
 import {
   exitWindowText,
@@ -36,26 +38,39 @@ const status: WalletStatus = {
   ready: true,
 };
 
+const STAKER = `0x5a2${"0".repeat(56)}beef`;
+
 const ROW: StakingRow = {
   accepting: true,
   commission: "10%",
   delegated: "1000",
   staked: "0",
+  staker: STAKER,
   state: "none",
   symbol: "STRK",
   tokenId: "SN_MAIN:strk",
   unclaimed: "0",
   unpoolAmount: "0",
-  validatorId: "val",
-  validatorName: "Val",
 };
 
 const FEE = { overallFee: "1000000000000000", unit: "FRI" } as const;
 
-const screen = (rows: readonly StakingRow[], exitWindowSeconds = 604_800): string =>
-  stakingFlow(status, account, { exitWindowSeconds, rows });
+const opened = (
+  validator: Parameters<typeof stakingFlow>[2]["validator"],
+  name: string | null = "Val",
+): string =>
+  stakingFlow(status, account, {
+    ...STAKING_LOADING,
+    selected: { name, staker: STAKER },
+    validator,
+  });
 
-describe("stakingStateFrom", () => {
+const screen = (rows: readonly StakingRow[], exitWindowSeconds = 604_800): string =>
+  opened({ exitWindowSeconds, rows });
+
+const stakingStateFrom = (response: unknown) => stakingValidatorFrom(response, STAKER);
+
+describe("stakingValidatorFrom", () => {
   test("accepts the overview shape and nothing beside it", () => {
     const overview = { ok: true, staking: { exitWindowSeconds: 300, rows: [ROW] } };
     expect(stakingStateFrom(overview)).toEqual({ exitWindowSeconds: 300, rows: [ROW] });
@@ -72,6 +87,19 @@ describe("stakingStateFrom", () => {
       stakingStateFrom({
         ok: true,
         staking: { exitWindowSeconds: 300, rows: [{ ...ROW, state: "gone" }] },
+      }),
+    ).toMatchObject({ unavailable: expect.any(String) });
+    // Every row must be for the staker that was asked for.
+    expect(
+      stakingStateFrom({
+        ok: true,
+        staking: { exitWindowSeconds: 300, rows: [{ ...ROW, staker: "0x5a3" }] },
+      }),
+    ).toMatchObject({ unavailable: expect.any(String) });
+    expect(
+      stakingStateFrom({
+        ok: true,
+        staking: { exitWindowSeconds: 300, rows: [{ ...ROW, staker: "0x05a3" }] },
       }),
     ).toMatchObject({ unavailable: expect.any(String) });
   });
@@ -96,12 +124,23 @@ describe("stakingFlow", () => {
   });
 
   test("loading, unavailable and locked never read as an empty list", () => {
-    expect(stakingFlow(status, account, { loading: true })).toContain("Loading staking…");
-    expect(stakingFlow(status, account, { unavailable: "Nope." })).toContain("Nope.");
-    expect(stakingFlow(status, null, { loading: true })).toContain(
+    expect(opened({ loading: true })).toContain("Loading staking…");
+    expect(opened({ unavailable: "Nope." })).toContain("Nope.");
+    expect(stakingFlow(status, null, STAKING_LOADING)).toContain(
       "Unlock an account on this network to stake.",
     );
-    expect(screen([])).toContain("No validators to stake with on tokens you track.");
+    expect(screen([])).toContain("No tokens you track can be staked here.");
+  });
+
+  test("names the opened validator by its full address, beside any directory name", () => {
+    const html = screen([ROW]);
+    expect(html).toContain("<strong>Val</strong>");
+    expect(html).toContain(`<code>${STAKER}</code>`);
+    expect(html).toContain("data-staking-back");
+    expect(html).toContain("All validators");
+    expect(opened({ exitWindowSeconds: 1, rows: [] }, null)).toContain(
+      "<strong>Validator</strong>",
+    );
   });
 
   test("a new position offers only Stake", () => {
@@ -137,11 +176,10 @@ describe("stakingFlow", () => {
     expect(screen([{ ...ROW, accepting: false }])).not.toContain('data-staking-action="stake"');
     const refused = screen([
       {
+        refusal: "Couldn't verify this validator on chain.",
+        staker: STAKER,
         symbol: "STRK",
         tokenId: "t",
-        validatorId: "v",
-        validatorName: "V",
-        refusal: "Couldn't verify this validator on chain.",
       },
     ]);
     expect(refused).toContain("Couldn&#39;t verify this validator on chain.");
@@ -168,8 +206,10 @@ describe("stakingFlow", () => {
     );
   });
 
-  test("names are escaped", () => {
-    expect(screen([{ ...ROW, validatorName: "<b>x</b>" }])).not.toContain("<b>x</b>");
+  test("a directory name is escaped", () => {
+    const html = opened({ exitWindowSeconds: 1, rows: [ROW] }, "<b>x</b>");
+    expect(html).not.toContain("<b>x</b>");
+    expect(html).toContain("&lt;b&gt;x&lt;/b&gt;");
   });
 });
 
@@ -224,7 +264,7 @@ describe("bindStaking", () => {
     await tick();
     expect(calls[0]).toEqual({
       kind: "prepare",
-      value: { action: "stake", amount: "5", tokenId: "SN_MAIN:strk", validatorId: "val" },
+      value: { action: "stake", amount: "5", staker: STAKER, tokenId: "SN_MAIN:strk" },
     });
     expect(review.textContent).toContain(`${PREP.review} Maximum network fee:`);
     expect(button.textContent).toContain("Confirm");
@@ -321,7 +361,7 @@ describe("createStakingRuntimeClient", () => {
       sent.push(message);
       return answers.shift();
     });
-    const request = { action: "stake" as const, amount: "5", tokenId: "t", validatorId: "v" };
+    const request = { action: "stake" as const, amount: "5", staker: STAKER, tokenId: "t" };
     expect(await client.prepareStaking(request)).toEqual(PREP);
     expect(await client.executeStaking(PREP.id)).toBe("0x5ab");
     expect(sent).toEqual([
@@ -336,7 +376,7 @@ describe("createStakingRuntimeClient", () => {
       stakingPreparation: { ...PREP, id: "x" },
     }));
     await expect(
-      bad.prepareStaking({ action: "claim", tokenId: "t", validatorId: "v" }),
+      bad.prepareStaking({ action: "claim", staker: STAKER, tokenId: "t" }),
     ).rejects.toThrow();
     const none = createStakingRuntimeClient(async () => ({ ok: true }));
     await expect(none.executeStaking(PREP.id)).rejects.toThrow();
@@ -348,12 +388,12 @@ describe("createStakingRuntimeClient", () => {
       sent.push(message);
       return { ok: true, staking: { exitWindowSeconds: 300, rows: [] } };
     });
-    expect(await client.loadStaking()).toEqual({ exitWindowSeconds: 300, rows: [] });
-    expect(sent).toEqual([{ type: "wallet.stakingOverview" }]);
+    expect(await client.loadStakingValidator(STAKER)).toEqual({ exitWindowSeconds: 300, rows: [] });
+    expect(sent).toEqual([{ staker: STAKER, type: "wallet.stakingOverview" }]);
     const failing = createStakingRuntimeClient(async () => {
       throw new Error("gone");
     });
-    expect(await failing.loadStaking()).toEqual({
+    expect(await failing.loadStakingValidator(STAKER)).toEqual({
       unavailable: "Couldn't read staking on this network. Try again.",
     });
   });

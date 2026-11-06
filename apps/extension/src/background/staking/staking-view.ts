@@ -4,10 +4,11 @@
  * background; the panel never derives an address, a pool or calldata from it.
  */
 import type { StakingPositionState } from "@bramble/transactions/staking-calls";
+import type { StakingDirectoryEntry } from "@bramble/transactions/staking-directory";
 
 /**
- * One validator and token row. `refusal` replaces the figures when the pool
- * could not be verified on chain, and the row offers no action.
+ * One token row for the chosen staker. `refusal` replaces the figures when
+ * the pool could not be verified on chain, and the row offers no action.
  */
 export type StakingRowView = {
   /** Commission in percent, e.g. "10%". */
@@ -23,6 +24,8 @@ export type StakingRowView = {
   readonly rewardsTo?: string;
   /** The account's staked amount, formatted ("0" when not a member). */
   readonly staked?: string;
+  /** The canonical staker address the row was read and verified for. */
+  readonly staker: string;
   readonly state?: StakingPositionState;
   readonly symbol: string;
   readonly tokenId: string;
@@ -32,12 +35,10 @@ export type StakingRowView = {
   readonly unpoolAmount?: string;
   /** Unix seconds the pending exit becomes withdrawable. */
   readonly unpoolTime?: number;
-  readonly validatorId: string;
-  readonly validatorName: string;
 };
 
 /**
- * The whole staking screen for the active account and network.
+ * One staker's pools for the active account and network.
  */
 type StakingOverview = {
   /** Seconds an unstake waits, read from the staking contract. */
@@ -51,4 +52,24 @@ type StakingOverview = {
 export type StakingOverviewResponse = {
   readonly ok: true;
   readonly staking: StakingOverview;
+};
+
+/**
+ * What `wallet.stakingDirectory` answers: no route ("off"), a snapshot that
+ * Starkscan reports as incomplete (no validators offered), or one page.
+ */
+export type StakingDirectoryView =
+  | { readonly state: "incomplete" | "off" }
+  | {
+      readonly entries: readonly StakingDirectoryEntry[];
+      readonly nextCursor: string | null;
+      readonly state: "ready";
+    };
+
+/**
+ * `wallet.stakingDirectory` success.
+ */
+export type StakingDirectoryResponse = {
+  readonly ok: true;
+  readonly stakingDirectory: StakingDirectoryView;
 };

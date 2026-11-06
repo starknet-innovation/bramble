@@ -1,30 +1,24 @@
 /**
  * Native Starknet staking (delegation pools) per network: the staking
  * contract the wallet trusts, whether the feature is switched on, and the
- * curated validator list.
+ * gateway route that serves the validator directory.
  *
- * Trust boundary: these constants are the ONLY source of a staking contract
- * or a validator the wallet will build calls for. A pool address is never
- * taken from this list, the UI, or an API: it is resolved on chain from the
- * staking contract below and checked against the pool's own parameters (see
- * ./staking-decode `verifyStakingPool`). Nothing here is read from storage.
+ * Trust boundary: the staking contract below is the ONLY one the wallet will
+ * build calls for. A validator (staker address) may come from the directory or
+ * be pasted by the user; either way it is untrusted until the staking contract
+ * lists a pool for it on chain and that pool's own parameters agree (see
+ * ./staking-decode `verifyStakingPool`). A pool address is never taken from
+ * the directory, the UI, or an API. Nothing here is read from storage.
  *
- * Off by default on every network. Turning a network on, and choosing its
- * validators, is a product decision (issue 750); until then the feature has
- * no entry point and the background refuses every staking message.
+ * Off by default on every network. Turning a network on is a product decision
+ * (issue 750); until then the feature has no entry point and the background
+ * refuses every staking message.
  */
-import { type StarknetNetworkId, sameFelt } from "@bramble/wallet-model/networks";
-
-/**
- * A validator the wallet offers for delegation. `staker` is the validator's
- * staker address on the staking contract; its pools are resolved on chain.
- */
-export type StakingValidator = {
-  /** Stable, lowercase id used in messages; never shown to the user. */
-  readonly id: string;
-  readonly name: string;
-  readonly staker: string;
-};
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  type StarknetNetworkId,
+} from "@bramble/wallet-model/networks";
 
 /**
  * Per-network staking configuration.
@@ -38,7 +32,6 @@ export type StakingNetwork = {
    * (exit window 604800 s on Mainnet, 300 s on Sepolia) on 2026-11-04.
    */
   readonly stakingContract: string;
-  readonly validators: readonly StakingValidator[];
 };
 
 /**
@@ -54,36 +47,43 @@ export const STAKING_NETWORKS: StakingNetworkTable = {
   SN_MAIN: {
     enabled: false,
     stakingContract: "0x00ca1702e64c81d9a07b86bd2c540188d92a2c73cf5cc0e508d949015e7e84a7",
-    validators: [],
   },
   SN_SEPOLIA: {
     enabled: false,
     stakingContract: "0x03745ab04a431fc02871a139be6b93d9260b0ff3e779ad9c8b377183b23109f1",
-    validators: [],
   },
 };
 
 /**
- * Returns the network's staking configuration when staking is switched on and
- * has at least one validator, otherwise null. Callers treat null as "staking is
- * unavailable here" and build nothing.
+ * The SNF gateway route that serves Starkscan's validator directory for each
+ * network, or null where there is none. The Starkscan API key lives only in
+ * the gateway; the extension never holds it. Null everywhere until the route
+ * exists: the screen then offers only a pasted validator address. Starkscan
+ * does not serve Sepolia (it answers 404), so Sepolia stays null.
+ */
+export const STAKING_DIRECTORY_URLS: Readonly<Record<StarknetNetworkId, string | null>> = {
+  SN_DEVNET: null,
+  SN_MAIN: null,
+  SN_SEPOLIA: null,
+};
+
+/**
+ * Returns the network's staking configuration when staking is switched on,
+ * otherwise null. Callers treat null as "staking is unavailable here" and
+ * build nothing.
  */
 export const stakingNetwork = (
   networkId: StarknetNetworkId,
   networks: StakingNetworkTable = STAKING_NETWORKS,
 ): StakingNetwork | null => {
   const network = networks[networkId];
-  return network?.enabled === true && network.validators.length > 0 ? network : null;
+  return network?.enabled === true ? network : null;
 };
 
 /**
- * Finds a curated validator by id or staker address on an enabled network.
- * Anything not on the list is refused (null), whatever the caller claims.
+ * A validator's staker address in canonical form, or null when `value` is not
+ * a non-zero felt. Pure. A well-formed address is only a candidate: the
+ * staking contract decides on chain whether it is a validator at all.
  */
-export const curatedValidator = (
-  network: StakingNetwork,
-  idOrStaker: string,
-): StakingValidator | null =>
-  network.validators.find(
-    (validator) => validator.id === idOrStaker || sameFelt(validator.staker, idOrStaker),
-  ) ?? null;
+export const stakerAddress = (value: unknown): string | null =>
+  typeof value === "string" && isNonZeroStarkFieldElement(value) ? canonicalFelt(value) : null;

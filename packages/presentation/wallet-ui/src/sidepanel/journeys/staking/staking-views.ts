@@ -1,7 +1,10 @@
 /**
- * Staking screen (issue 750): one row per curated validator and token, with
- * the account's position in that pool and the actions its state allows. Every
- * figure comes from the background's on-chain reads; the screen derives none.
+ * Staking screen (issue 750). With no validator open it shows the directory
+ * and the paste field (./staking-directory-views). With one open it shows a
+ * row per tracked token, with the account's position in that pool and the
+ * actions its state allows. Every figure on that screen comes from the
+ * background's on-chain reads; the screen derives none. The directory name, if
+ * any, is shown beside the full address, which is what the review names.
  *
  * Copy states the two facts a delegator acts on: an unstake waits out the
  * exit window the staking contract reports (7 days on Mainnet), and earns no
@@ -15,7 +18,9 @@ import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { flowHeader, flowScreen, accountLabel as shortAddress } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate } from "../../shared/timestamp";
-import type { StakingAction, StakingRow, StakingState } from "./staking-client";
+import type { StakingAction, StakingRow, StakingValidatorState } from "./staking-client";
+import type { StakingState } from "./staking-directory-client";
+import { stakingDirectorySection } from "./staking-directory-views";
 
 const UNIT_SECONDS: readonly (readonly [number, string])[] = [
   [86_400, "day"],
@@ -41,7 +46,7 @@ export const exitWindowText = (seconds: number): string => {
 const unlockText = (seconds: number): string =>
   `${formatUtcDate(seconds * 1000) ?? ""}, ${formatUtcClock(seconds * 1000) ?? ""}`;
 
-const rowKey = (row: StakingRow): string => `${row.validatorId}|${row.tokenId}`;
+const rowKey = (row: StakingRow): string => `${row.staker}|${row.tokenId}`;
 
 const actionButton = (
   row: StakingRow,
@@ -100,9 +105,9 @@ const rowActions = (row: StakingRow): string => {
 };
 
 const stakingRow = (row: StakingRow): string => `
-  <li class="allowance-row staking-row" data-staking-symbol="${escapeHtml(row.symbol)}" data-staking-validator="${escapeHtml(row.validatorName)}">
+  <li class="allowance-row staking-row" data-staking-symbol="${escapeHtml(row.symbol)}">
     <div class="allowance-copy staking-copy">
-      <strong>${escapeHtml(row.validatorName)} · ${escapeHtml(row.symbol)}</strong>
+      <strong>${escapeHtml(row.symbol)}</strong>
       ${
         row.refusal
           ? `<p class="hint">${escapeHtml(row.refusal)}</p>`
@@ -114,8 +119,31 @@ const stakingRow = (row: StakingRow): string => `
     </div>
   </li>`;
 
+const validatorSection = (
+  selected: NonNullable<StakingState["selected"]>,
+  state: StakingValidatorState,
+): string => `
+  <div class="staking-validator">
+    ${button({ attributes: { "data-staking-back": "" }, label: "All validators", size: "small", variant: "ghost" })}
+    <strong>${escapeHtml(selected.name ?? "Validator")}</strong>
+    <code>${escapeHtml(selected.staker)}</code>
+  </div>
+  ${
+    "loading" in state
+      ? emptyState("Loading staking…")
+      : "unavailable" in state
+        ? emptyState(state.unavailable, "alert")
+        : `<p class="lede">${escapeHtml(`Unstaking takes ${exitWindowText(state.exitWindowSeconds)}, with no rewards while you wait.`)}</p>
+           ${
+             state.rows.length === 0
+               ? emptyState("No tokens you track can be staked here.")
+               : `<ul class="allowance-list staking-list">${state.rows.map(stakingRow).join("")}</ul>`
+           }`
+  }`;
+
 /**
- * Staking flow for the active account and network.
+ * Staking flow for the active account and network: the directory, or the one
+ * validator the user opened.
  */
 export const stakingFlow = (
   status: WalletStatus,
@@ -129,16 +157,9 @@ export const stakingFlow = (
       ${
         account === null
           ? emptyState("Unlock an account on this network to stake.")
-          : "loading" in state
-            ? emptyState("Loading staking…")
-            : "unavailable" in state
-              ? emptyState(state.unavailable, "alert")
-              : `<p class="lede">${escapeHtml(`Unstaking takes ${exitWindowText(state.exitWindowSeconds)}, with no rewards while you wait.`)}</p>
-                 ${
-                   state.rows.length === 0
-                     ? emptyState("No validators to stake with on tokens you track.")
-                     : `<ul class="allowance-list staking-list">${state.rows.map(stakingRow).join("")}</ul>`
-                 }`
+          : state.selected
+            ? validatorSection(state.selected, state.validator)
+            : stakingDirectorySection(state)
       }
     </section>`,
   );

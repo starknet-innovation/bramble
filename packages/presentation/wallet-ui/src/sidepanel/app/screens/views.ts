@@ -67,7 +67,10 @@ import { privacyFlow } from "../../journeys/privacy/privacy-views";
 import type { SendIntent } from "../../journeys/send/send-model";
 import { revealFlow } from "../../journeys/settings/reveal-ui";
 import { settingsScreen } from "../../journeys/settings/settings-views";
-import { STAKING_LOADING, type StakingState } from "../../journeys/staking/staking-client";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
 import type { BalanceState } from "../../runtime/runtime";
 import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";

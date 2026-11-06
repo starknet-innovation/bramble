@@ -21,6 +21,11 @@ export const JOURNEY_STYLES = `
     margin-top: ${SPACE.xs};
   }
   .staking-form input { min-width: 0; }
+  /* The paste field and the opened validator: the address wraps, never clips. */
+  .staking-paste { margin-bottom: ${SPACE.sm}; }
+  .staking-validator { display: grid; gap: ${SPACE.xs}; justify-items: start; margin-bottom: ${SPACE.sm}; }
+  .staking-validator code { max-width: 100%; }
+  .staking-more { display: flex; justify-content: center; margin-top: ${SPACE.sm}; }
   .allowance-review, .staking-review {
     color: var(--bramble-text);
     font-size: ${TYPE.caption.size};

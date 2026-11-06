@@ -407,6 +407,10 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
     "Couldn't read staking on this network. Try again.",
   ],
   [
+    "couldn't load the validator list. paste a validator address instead.",
+    "Couldn't load the validator list. Paste a validator address instead.",
+  ],
+  [
     "switch to the account that granted this allowance",
     "Switch to the account that granted this allowance.",
   ],
