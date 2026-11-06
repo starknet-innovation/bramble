@@ -24,6 +24,7 @@ import type {
   DeclarationReview,
   InvokeFeeReview,
   PendingApproval,
+  WatchAssetNft,
   WatchAssetToken,
 } from "./approval-snapshot";
 
@@ -182,15 +183,23 @@ export type ApprovalQueue = {
     readonly origin: string;
     readonly summary: string;
   }) => PendingApproval;
-  readonly requestWatchAsset: (input: {
-    /**
-     * The wallet already tracks this token: queue a close-only notice whose
-     * Close answers the site as an approval would (audit M1).
-     */
-    readonly alreadyTracked?: true;
-    readonly origin: string;
-    readonly token: WatchAssetToken;
-  }) => PendingApproval;
+  readonly requestWatchAsset: (
+    input:
+      | {
+          /**
+           * The wallet already tracks this token: queue a close-only notice whose
+           * Close answers the site as an approval would (audit M1).
+           */
+          readonly alreadyTracked?: true;
+          readonly origin: string;
+          readonly token: WatchAssetToken;
+        }
+      | {
+          /** A collectible; its ownership is proven only when the user approves. */
+          readonly nft: WatchAssetNft;
+          readonly origin: string;
+        },
+  ) => PendingApproval;
   /** Writes a fee review only while its queue revision remains current. */
   readonly updateFee: (
     revision: ApprovalFeeRevision,

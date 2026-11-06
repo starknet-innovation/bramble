@@ -325,7 +325,7 @@ describe("dApp invoke fee estimate (#189)", () => {
     await expect(held).resolves.toEqual({ error: "request rejected" });
   });
 
-  test("an undeployed account carries no fee, no failure, and never estimates", async () => {
+  test("an undeployed account prices its invoke and flags an unpriced deployment", async () => {
     let estimated = 0;
     const { handler } = makeHarness([account], unavailablePreferencesStore, {
       async estimateInvokeFee() {
@@ -337,11 +337,14 @@ describe("dApp invoke fee estimate (#189)", () => {
       },
     });
 
+    // Issue 851: the invoke is still priced; the deployment half (unpriced by
+    // this stub) is a retryable failure, so approval stays refused until it is.
     const { held, pending } = await queueInvoke(handler);
-    expect(pending.fee).toBeNull();
+    expect(pending.fee).toEqual({ overallFee: "1", unit: "FRI" });
     expect(pending.feeEstimateFailed).toBe(false);
     expect(pending.requiresDeployment).toBe(true);
-    expect(estimated).toBe(0);
+    expect(pending).toMatchObject({ deploymentFee: null, deploymentFeeEstimateFailed: true });
+    expect(estimated).toBe(1);
 
     await handler({ id: pending.id, type: "wallet.denyOrigin" }, extensionSender);
     await expect(held).resolves.toEqual({ error: "request rejected" });

@@ -11,7 +11,6 @@
  * decision instead of substituting its own figure.
  */
 
-import { sameFeeEstimate } from "@bramble/starknet/fee-bounds";
 import {
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,
@@ -40,7 +39,11 @@ import { pendingFeeRefusal, pendingGaslessRefusal } from "./approval-fee-refusal
 import { heldInvoke, invokeExecutionDeps } from "./approval-invoke-execution";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
-import { applyWatchAssetApproval, WATCH_ASSET_TRACKED_RESPONSE } from "./approval-watch-asset";
+import {
+  applyWatchAssetApproval,
+  applyWatchNftApproval,
+  WATCH_ASSET_TRACKED_RESPONSE,
+} from "./approval-watch-asset";
 import type { ApprovalClaim, ApprovalKind, PendingApproval } from "./approvals";
 import { applyGaslessInvoke } from "./gasless-approval";
 import { grantPresentedMultisig } from "./multisig-connect";
@@ -64,7 +67,9 @@ type ApproveApplier = (
 ) => Promise<ApplyResult>;
 
 const applyWatchAsset: ApproveApplier = (deps, { approval }) =>
-  applyWatchAssetApproval(deps.preferencesStore, approval);
+  approval.nft
+    ? applyWatchNftApproval(deps, approval)
+    : applyWatchAssetApproval(deps.preferencesStore, approval);
 
 const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision) => {
   if (!payload) {
@@ -73,28 +78,15 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
   if (decision.gaslessFee) {
     return applyGaslessInvoke(deps, approval, payload, decision);
   }
-  const reviewedFee = decision.reviewedFee;
-  if (
-    !reviewedFee ||
-    !approval.fee ||
-    approval.feeEstimateFailed === true ||
-    approval.feeEstimatePending === true
-  ) {
-    return reject(FEE_REVIEW_REQUIRED);
-  }
-  // The ceiling is the figure the clicking surface says it was displaying, and
-  // it only binds if the queue still agrees with it. A fee slot can be replaced
-  // between paint and click — a retry pressed on a second open wallet surface
-  // re-estimates the same approval — so a card that has not repainted since
-  // would otherwise consent to a snapshot it never showed. A moved figure is
-  // refused rather than substituted: the honest answer is "re-review", not a
-  // ceiling of the wallet's own choosing.
-  if (reviewedFee && !(approval.fee && sameFeeEstimate(reviewedFee, approval.fee))) {
-    return reject({ error: "the fee changed since this request was reviewed" });
-  }
+  // The echo must equal the total the card displayed (see pendingFeeRefusal).
+  // What binds submission is each component at its own boundary: the invoke
+  // fee, and the deployment fee when the account deploys first.
+  const feeRefusal = pendingFeeRefusal(approval, decision.reviewedFee);
+  if (feeRefusal) return reject(feeRefusal);
+  if (!approval.fee) return reject(FEE_REVIEW_REQUIRED);
   const result = await executeInvokeApproval(
     invokeExecutionDeps(deps),
-    heldInvoke(approval, payload, reviewedFee),
+    heldInvoke(approval, payload, approval.fee),
   );
   if ("error" in result && result.error === MULTISIG_PROPOSAL_SAVED) {
     return {

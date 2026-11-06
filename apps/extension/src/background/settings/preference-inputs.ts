@@ -186,6 +186,7 @@ export const readSetAccountInGroupInput = (
  */
 type DisplayPreferenceInput = {
   readonly approvalSurface?: "popup" | "side-panel";
+  readonly collectiblesPreview?: boolean;
   readonly displayCurrency?: "eur" | "gbp" | "usd";
   readonly productAnalytics?: boolean;
   readonly reliabilityDiagnostics?: boolean;
@@ -205,14 +206,9 @@ const hasValidDisplayValues = (
     return false;
   }
   if (
-    message["productAnalytics"] !== undefined &&
-    typeof message["productAnalytics"] !== "boolean"
-  ) {
-    return false;
-  }
-  if (
-    message["reliabilityDiagnostics"] !== undefined &&
-    typeof message["reliabilityDiagnostics"] !== "boolean"
+    ["collectiblesPreview", "productAnalytics", "reliabilityDiagnostics"].some(
+      (flag) => message[flag] !== undefined && typeof message[flag] !== "boolean",
+    )
   ) {
     return false;
   }
@@ -229,6 +225,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
   if (
     !hasOnlyKnownKeys(message, [
       "approvalSurface",
+      "collectiblesPreview",
       "displayCurrency",
       "productAnalytics",
       "reliabilityDiagnostics",
@@ -245,12 +242,14 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
     return null;
   }
   const approvalSurface = message["approvalSurface"];
+  const collectiblesPreview = message["collectiblesPreview"];
   const displayCurrency = message["displayCurrency"];
   const productAnalytics = message["productAnalytics"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
   return {
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
+    ...(collectiblesPreview === undefined ? {} : { collectiblesPreview }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
     ...(productAnalytics === undefined ? {} : { productAnalytics }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),

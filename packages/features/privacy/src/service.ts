@@ -172,6 +172,14 @@ export type Strk20ShadowAccountInfo = {
   readonly nonce: string;
 };
 
+/** Deposit-only batch; `activate` (#789) also registers, self-credit only. */
+export type Strk20AccountActionsInput = Strk20AccountContext & {
+  readonly actions: readonly Strk20Action[];
+  readonly activate?: true;
+  readonly beforeProof?: () => Promise<void>;
+  readonly poolFeeFri: string;
+};
+
 /**
  * Injectable official-SDK adapter. Implementations must validate every SDK and
  * service response, target the configured pool, and fail closed.
@@ -193,11 +201,7 @@ export type Strk20Service = {
   ) => Promise<PreparedStrk20AccountSubmission>;
   /** Builds a deposit-only public-account proof and calls without broadcasting. */
   readonly prepareAccountActions?: (
-    input: Strk20AccountContext & {
-      readonly actions: readonly Strk20Action[];
-      readonly beforeProof?: () => Promise<void>;
-      readonly poolFeeFri: string;
-    },
+    input: Strk20AccountActionsInput,
   ) => Promise<PreparedStrk20AccountSubmission>;
   /**
    * Reads the pool's per-`apply_actions` STRK fee so the UI can show it before
@@ -436,11 +440,7 @@ export const submitStrk20Actions = async (
  */
 export const prepareStrk20AccountActions = async (
   service: Strk20Service,
-  input: Strk20AccountContext & {
-    readonly actions: readonly Strk20Action[];
-    readonly beforeProof?: () => Promise<void>;
-    readonly poolFeeFri: string;
-  },
+  input: Strk20AccountActionsInput,
 ): Promise<PreparedStrk20AccountSubmission> => {
   if (!service.prepareAccountActions || !isDepositOnly(input.actions)) {
     throw new WalletError(STRK20_PRIVACY_LEAK);

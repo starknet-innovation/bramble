@@ -210,14 +210,19 @@ const LEET: Readonly<Record<string, string>> = {
 
 // Digits and symbols at the edges are padding ("password1") or letters in
 // disguise ("1etmein"), and "1" stands for both "i" and "l", so every
-// reading is tried.
-const EDGES = [/^[^a-z@$]+|[^a-z]+$/g, /^[^a-z@$013457]+|[^a-z]+$/g];
+// reading is tried. Leading and trailing runs are stripped by separate
+// replacements so each anchor applies to the whole pattern.
+const stripEdges = (value: string, keepLeadingLeet: boolean): string => {
+  const withoutLeading = keepLeadingLeet
+    ? value.replace(/^[^a-z@$013457]+/, "")
+    : value.replace(/^[^a-z@$]+/, "");
+  return withoutLeading.replace(/[^a-z]+$/, "");
+};
 
 const readings = (lower: string): string[] =>
-  EDGES.flatMap((edges) =>
+  ([false, true] as const).flatMap((keepLeadingLeet) =>
     (["i", "l"] as const).map((one) =>
-      lower
-        .replace(edges, "")
+      stripEdges(lower, keepLeadingLeet)
         .replace(/[013457@$]/g, (char) => (char === "1" ? one : (LEET[char] ?? char)))
         .replace(/[^a-z]/g, ""),
     ),

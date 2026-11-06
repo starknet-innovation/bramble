@@ -31,6 +31,11 @@ export type WalletPreferences = {
   readonly activeNetworkId: StarknetNetworkId;
   readonly approvalSurface?: ApprovalSurfacePreference;
   readonly addressBook: readonly AddressBookEntry[];
+  /**
+   * Opt-in preview of the collectibles gallery, parked since v0.10.1. Off (or
+   * absent) keeps every gallery route, NFT load and indexer request withheld.
+   */
+  readonly collectiblesPreview?: boolean;
   readonly customNetworks?: readonly CustomNetwork[];
   /**
    * Ids of tracked tokens a dapp added (wallet_watchAsset) and the user has not
@@ -153,6 +158,7 @@ export type WalletPreferencesStore = {
   readonly setActiveNetwork: (networkId: StarknetNetworkId) => Promise<WalletPreferences>;
   readonly setDisplay: (input: {
     readonly approvalSurface?: ApprovalSurfacePreference;
+    readonly collectiblesPreview?: boolean;
     readonly displayCurrency?: DisplayCurrency;
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;

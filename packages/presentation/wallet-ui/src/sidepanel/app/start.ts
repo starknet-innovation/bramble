@@ -81,7 +81,7 @@ export const startWalletUi = async (
   const multisig = createMultisigClient(mutationRuntime);
   const swapClient = createSwapClient(mutationRuntime);
   let activeView: WalletView = "home";
-  const selectedNftId: string | null = null;
+  let selectedNftId: string | null = null;
   const selection = { hydrated: false, id: null as string | null };
   let selectedMultisigId: string | null = null;
   const showSelection = (id: string | null): void => {
@@ -161,7 +161,7 @@ export const startWalletUi = async (
       deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),
       render,
       setActiveView: (view: WalletView) => {
-        if (isParkedCollectibleView(view)) return;
+        if (isParkedCollectibleView(view, cache.preferences?.collectiblesPreview)) return;
         if (view !== "home") {
           activeView = view;
           return;
@@ -269,6 +269,11 @@ export const startWalletUi = async (
         [sendIntent, selectedTokenId] = [null, tokenId];
         if (view === "swap") presetSwapPair(tokenId, cache.preferences?.tokens ?? []);
         navigate(view);
+      },
+      navigate,
+      openNft: (id) => {
+        selectedNftId = id;
+        navigate("nft-detail");
       },
       openToken: (tokenId) => {
         selectedTokenId = tokenId;
@@ -472,7 +477,7 @@ export const startWalletUi = async (
       .catch(() => undefined);
   };
   const navigate = (view: WalletView): void => {
-    if (isParkedCollectibleView(view)) return;
+    if (isParkedCollectibleView(view, cache.preferences?.collectiblesPreview)) return;
     if (view !== activeView) viewHistory = pushView(viewHistory, activeView);
     activeView = view;
     if (view !== "multisig-detail") selectedMultisigIntentId = null;
@@ -484,7 +489,9 @@ export const startWalletUi = async (
     const popped = popView(viewHistory);
     viewHistory = popped.history;
     forcedDirection = "back";
-    activeView = isParkedCollectibleView(popped.view) ? "home" : popped.view;
+    activeView = isParkedCollectibleView(popped.view, cache.preferences?.collectiblesPreview)
+      ? "home"
+      : popped.view;
     if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();

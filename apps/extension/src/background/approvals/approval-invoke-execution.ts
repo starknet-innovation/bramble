@@ -39,12 +39,16 @@ export const invokeExecutionDeps = (
 /**
  * The invoke approval as execution sees it, including the threshold the card
  * reviewed so a later signer-set change cannot turn a proposal into a send.
+ * `reviewedFee` is the invoke half the card bound; an account that deploys
+ * first also carries its reviewed deployment half as a separate ceiling.
  */
 export const heldInvoke = (
   approval: {
     readonly context?: PendingApproval["context"];
+    readonly deploymentFee?: PendingApproval["deploymentFee"];
     readonly multisigThreshold?: number;
     readonly origin: string;
+    readonly requiresDeployment?: boolean;
   },
   payload: NonNullable<ApprovalClaim["payload"]>,
   reviewedFee: NonNullable<ApproveDecision["reviewedFee"]>,
@@ -56,4 +60,7 @@ export const heldInvoke = (
   origin: approval.origin,
   payload,
   reviewedFee,
+  ...(approval.requiresDeployment === true && approval.deploymentFee
+    ? { reviewedDeploymentFee: approval.deploymentFee }
+    : {}),
 });

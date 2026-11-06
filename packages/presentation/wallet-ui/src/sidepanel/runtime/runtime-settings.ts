@@ -82,6 +82,7 @@ export const createSettingsRuntimeClient = (
   },
   async setDisplay(input: {
     readonly approvalSurface?: "popup" | "side-panel";
+    readonly collectiblesPreview?: boolean;
     readonly displayCurrency?: "eur" | "gbp" | "usd";
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;

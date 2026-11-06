@@ -22,10 +22,7 @@ import {
 
 import {
   isAddressBookEntry,
-  isApprovalSurfacePreference,
-  isDisplayCurrency,
   isLabel,
-  isThemeChoice,
   isTokenId,
   withAddressBookId,
   withTokenId,
@@ -34,6 +31,7 @@ import { normalizeAccountGroups } from "./groups";
 import { selectedMultisigPreference, withAccountHidden } from "./preferences-accounts";
 import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
 import { withCustomNetwork } from "./preferences-custom-networks";
+import { displayFlags, isValidDisplayInput } from "./preferences-display";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
   withAccountInGroup,
@@ -92,27 +90,6 @@ type WalletPreferencesStoreOptions = {
  * for the store and the record it validates.
  */
 export { isWalletPreferences } from "./preferences-stored";
-
-const isValidDisplayInput = (
-  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
-): boolean => {
-  if (input.approvalSurface !== undefined && !isApprovalSurfacePreference(input.approvalSurface)) {
-    return false;
-  }
-  if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
-    return false;
-  }
-  if (input.productAnalytics !== undefined && typeof input.productAnalytics !== "boolean") {
-    return false;
-  }
-  if (
-    input.reliabilityDiagnostics !== undefined &&
-    typeof input.reliabilityDiagnostics !== "boolean"
-  ) {
-    return false;
-  }
-  return input.theme === undefined || isThemeChoice(input.theme);
-};
 
 /**
  * Creates default non-secret wallet preferences.
@@ -366,12 +343,7 @@ export const createPreferencesStore = ({
           ...(input.displayCurrency === undefined
             ? {}
             : { displayCurrency: input.displayCurrency }),
-          ...(input.productAnalytics === undefined
-            ? {}
-            : { productAnalytics: input.productAnalytics }),
-          ...(input.reliabilityDiagnostics === undefined
-            ? {}
-            : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
+          ...displayFlags(input),
           ...(input.theme === undefined ? {} : { theme: input.theme }),
         };
         await writePreferences(store, next);

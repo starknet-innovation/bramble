@@ -44,6 +44,8 @@ const CONTEXT_CHARACTERS = 96;
 const WALLET_FIELDS: ReadonlySet<string> = new Set([
   "context",
   "deployFirst",
+  "deploymentFee",
+  "deploymentFeeEstimateFailed",
   "existingGrant",
   "fee",
   "feeAffordability",

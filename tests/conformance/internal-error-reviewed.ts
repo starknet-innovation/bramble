@@ -136,6 +136,11 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ],
   ["activate private balances before sending privately", "Activate private balances first."],
   ["activate private balances before unshielding", "Activate private balances first."],
+  ["activate private balances before shielding an asset", "Activate private balances first."],
+  [
+    "private balances changed. review the shield again.",
+    "Private balances changed. Review the shield again.",
+  ],
   ["deploy this account before activating private balances", "Deploy this account first."],
   ["deploy this account before submitting a public private deposit", "Deploy this account first."],
   ["track a token before activating private balances", "Track a token first."],
