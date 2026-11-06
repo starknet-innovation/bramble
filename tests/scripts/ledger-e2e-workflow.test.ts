@@ -13,6 +13,9 @@ const PATH = `.github/workflows/${WORKFLOW}`;
 const EXPRESSION = "$" + "{{";
 const CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const SUITE = "        run: BRAMBLE_SPECULOS_REQUIRED=1 bun run test:e2e:ledger\n";
+// The record-hashes job's checkout; the speculos one also carries the nightly
+// ref and is covered in ledger-e2e-nightly-target.test.ts.
+const RECORD_CHECKOUT = "          persist-credentials: false\n      - uses: oven-sh/setup-bun@";
 
 const mutate = (
   sources: WorkflowSources,
@@ -148,11 +151,13 @@ describe("Ledger E2E workflow policy", () => {
 
   test("rejects a checkout that keeps its token, even behind a comment", async () => {
     const message = `${PATH} must not leave a checkout token in .git/config`;
-    expect(await failuresAfter("          persist-credentials: false\n", "")).toContain(message);
+    expect(await failuresAfter(RECORD_CHECKOUT, "      - uses: oven-sh/setup-bun@")).toContain(
+      message,
+    );
     expect(
       await failuresAfter(
-        "        with:\n          persist-credentials: false\n",
-        "        # persist-credentials: false\n",
+        `        with:\n${RECORD_CHECKOUT}`,
+        "        # persist-credentials: false\n      - uses: oven-sh/setup-bun@",
       ),
     ).toContain(message);
   });
@@ -257,10 +262,12 @@ describe("Ledger E2E workflow policy", () => {
   test("pins every action's inputs, so no extra upload or checkout ref slips in", async () => {
     expect(
       await failuresAfter(
-        "          persist-credentials: false\n",
-        "          persist-credentials: false\n          ref: main\n",
+        RECORD_CHECKOUT,
+        "          persist-credentials: false\n          ref: main\n      - uses: oven-sh/setup-bun@",
       ),
-    ).toContain(`${PATH} job speculos must use exactly the reviewed actions and inputs, in order`);
+    ).toContain(
+      `${PATH} job record-hashes must use exactly the reviewed actions and inputs, in order`,
+    );
     expect(
       await failuresAfter(
         "          if-no-files-found: ignore\n",

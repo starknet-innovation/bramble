@@ -7,13 +7,18 @@
  * are compared with the reviewed shape, and every decoded string is searched
  * for credential expressions. An unparseable workflow fails closed.
  */
+import {
+  NIGHTLY_TARGET_CHECKOUT_WITH,
+  NIGHTLY_TARGET_SCRIPT,
+  NIGHTLY_TARGET_STEP,
+} from "./ledger-e2e-nightly-target";
 import { isPinnedActionReference } from "./workflow-inventory";
 
 const EXPRESSION = /\$\{\{([\s\S]*?)\}\}/g;
 const GITHUB_TOKEN = /\bgithub\s*(?:\.\s*token\b|\[\s*['"]token['"]\s*\])/i;
 const ROOT_KEYS = ["concurrency", "jobs", "name", "on", "permissions", "run-name"];
 const JOB_KEYS = ["if", "name", "runs-on", "steps", "timeout-minutes"];
-const STEP_KEYS = ["if", "name", "run", "shell", "timeout-minutes", "uses", "with"];
+const STEP_KEYS = ["env", "id", "if", "name", "run", "shell", "timeout-minutes", "uses", "with"];
 const EVENTS = ["pull_request", "push", "schedule", "workflow_dispatch"];
 const BRANCHES = ["main", "release/**"];
 const REQUIRED_PATHS = [
@@ -25,6 +30,7 @@ const REQUIRED_PATHS = [
 ];
 
 const CHECKOUT = { action: "actions/checkout", if: null, with: { "persist-credentials": false } };
+const NIGHTLY_CHECKOUT = { ...CHECKOUT, with: NIGHTLY_TARGET_CHECKOUT_WITH };
 const BUN = { action: "oven-sh/setup-bun", if: null, with: { "bun-version": "1.3.3" } };
 const NODE = { action: "actions/setup-node", if: null, with: { "node-version": 24 } };
 const TRACES = {
@@ -56,9 +62,10 @@ const JOBS: Readonly<Record<string, JobShape>> = {
     ],
   },
   speculos: {
-    actions: [CHECKOUT, BUN, NODE, TRACES],
+    actions: [NIGHTLY_CHECKOUT, BUN, NODE, TRACES],
     if: "${{ !inputs.record_hashes }}",
     runs: [
+      NIGHTLY_TARGET_SCRIPT,
       "bun run scripts/ledger-app-hashes.ts require nanosp flex",
       "bun install --frozen-lockfile",
       "bun run vendor:argent",
@@ -159,6 +166,25 @@ const eventFailures = (events: Node, path: string): string[] => {
   return failures;
 };
 
+// The resolve step first, then the checkout of its output: in any other order
+// a scheduled run would test the default branch and still look correct.
+const nightlyTargetFailures = (steps: readonly unknown[], path: string): string[] => {
+  const failures: string[] = [];
+  if (!same(steps[0], NIGHTLY_TARGET_STEP)) {
+    failures.push(`${path} must resolve the nightly release commit first, exactly as reviewed`);
+  }
+  const checkout = record(steps[1]);
+  if (
+    typeof checkout["uses"] !== "string" ||
+    !checkout["uses"].startsWith("actions/checkout@") ||
+    !same(extraKeys(checkout, ["uses", "with"]), []) ||
+    !same(checkout["with"], NIGHTLY_TARGET_CHECKOUT_WITH)
+  ) {
+    failures.push(`${path} must check out the resolved nightly commit second`);
+  }
+  return failures;
+};
+
 const stepFailures = (job: string, steps: readonly unknown[], path: string): string[] => {
   const failures: string[] = [];
   for (const step of steps.map(record)) {
@@ -184,6 +210,13 @@ const stepFailures = (job: string, steps: readonly unknown[], path: string): str
     if (Object.hasOwn(step, "if") && !traces) {
       failures.push(`${path} job ${job} must not make a step conditional`);
     }
+    // Only the nightly resolve step may set an id or environment.
+    if (
+      (Object.hasOwn(step, "env") || Object.hasOwn(step, "id")) &&
+      !same(step, NIGHTLY_TARGET_STEP)
+    ) {
+      failures.push(`${path} job ${job} must not give a step an id or environment`);
+    }
     if (Object.hasOwn(step, "shell") && step["shell"] !== "bash") {
       failures.push(`${path} job ${job} must run steps in the default bash shell`);
     }
@@ -191,6 +224,7 @@ const stepFailures = (job: string, steps: readonly unknown[], path: string): str
   const runs = steps
     .map(record)
     .flatMap((step) => (Object.hasOwn(step, "run") ? [step["run"]] : []));
+  if (job === "speculos") failures.push(...nightlyTargetFailures(steps, path));
   if (!same(runs, JOBS[job]?.runs)) {
     failures.push(`${path} job ${job} must run exactly the reviewed commands, in order`);
   }
