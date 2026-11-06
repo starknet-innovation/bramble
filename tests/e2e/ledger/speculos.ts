@@ -198,13 +198,28 @@ type ScreenText = {
 
 /** REST client for the emulated screen and inputs. */
 export class SpeculosScreen {
+  private readonly seen: string[] = [];
+
   constructor(private readonly endpoints: SpeculosEndpoints) {}
+
+  /**
+   * Every distinct screen read and every input sent, in order. Test evidence
+   * only: the device holds the public test phrase, never a secret.
+   */
+  transcript(): readonly string[] {
+    return [...this.seen];
+  }
 
   /** Text elements on the current screen. */
   async texts(): Promise<readonly ScreenText[]> {
     const response = await fetch(`${this.endpoints.apiUrl}/events?currentscreenonly=true`);
     const body = (await response.json()) as { readonly events?: readonly ScreenText[] };
-    return (body.events ?? []).filter((event) => typeof event.text === "string");
+    const texts = (body.events ?? []).filter((event) => typeof event.text === "string");
+    const line = `screen: ${texts.map((event) => `${event.text}@${event.x},${event.y}`).join(" | ")}`;
+    if (this.seen.at(-1) !== line) {
+      this.seen.push(line);
+    }
+    return texts;
   }
 
   /** The current screen's text joined with spaces. */
@@ -249,6 +264,7 @@ export class SpeculosScreen {
   }
 
   private async post(path: string, body: unknown): Promise<void> {
+    this.seen.push(`input: ${path} ${JSON.stringify(body)}`);
     const response = await fetch(`${this.endpoints.apiUrl}${path}`, {
       body: JSON.stringify(body),
       headers: { "content-type": "application/json" },
