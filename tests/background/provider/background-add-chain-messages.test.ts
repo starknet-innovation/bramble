@@ -181,12 +181,28 @@ describe("wallet_addStarknetChain", () => {
     expect(writes).toHaveLength(0);
   });
 
-  test("agrees with wallet_switchStarknetChain on a padded built-in chain id", async () => {
-    // A leading-zero spelling of SN_MAIN passes both readers' hex check, but
-    // the switch matches chain ids exactly and refuses it. Answering `added`
-    // here would promise a network the follow-up switch rejects (issue 852).
-    const { handler } = makeHarness();
-    const chainId = "0x0534e5f4d41494e";
+  test("accepts another spelling of a built-in chain id, as the switch does", async () => {
+    // A chain id is a felt: a zero-padded or upper-case spelling of SN_MAIN
+    // names the same chain, so it is already added. The switch resolves the
+    // same felt (it then asks for a grant rather than refusing the chain).
+    const { handler, pendingCount, writes } = makeHarness();
+
+    for (const chainId of ["0x0534e5f4d41494e", "0x000534e5f4d41494e", "0x534E5F4D41494E"]) {
+      await expect(handler(addChainMessage({ chainId }), contentSender)).resolves.toEqual({
+        added: true,
+        ok: true,
+      });
+    }
+    await expect(
+      handler({ chainId: "0x0534e5f4d41494e", origin, type: "wallet.switchChain" }, contentSender),
+    ).resolves.toEqual({ error: "origin not connected" });
+    expect(await pendingCount()).toBe(0);
+    expect(writes).toHaveLength(0);
+  });
+
+  test("refuses a felt one away from a built-in chain id, add and switch alike", async () => {
+    const { handler, pendingCount } = makeHarness();
+    const chainId = "0x0534e5f4d41494f";
 
     await expect(handler(addChainMessage({ chainId }), contentSender)).resolves.toEqual({
       error: "unsupported chain",
@@ -194,6 +210,7 @@ describe("wallet_addStarknetChain", () => {
     await expect(
       handler({ chainId, origin, type: "wallet.switchChain" }, contentSender),
     ).resolves.toEqual({ error: "unsupported chain" });
+    expect(await pendingCount()).toBe(0);
   });
 
   test("rejects an oversized chain label crossed on a runtime message", async () => {
@@ -220,9 +237,12 @@ describe("wallet_addStarknetChain", () => {
 
   test("rejects a malformed chain payload", async () => {
     const { handler } = makeHarness();
-    await expect(handler(addChainMessage({ chainId: "not-hex" }), contentSender)).resolves.toEqual({
-      error: "invalid add chain request",
-    });
+    // Decimal SN_MAIN is the same number but not a hex chain id.
+    for (const chainId of ["not-hex", "0x0", "23448594291968334", `0x${"0".repeat(64)}1`]) {
+      await expect(handler(addChainMessage({ chainId }), contentSender)).resolves.toEqual({
+        error: "invalid add chain request",
+      });
+    }
   });
 
   test("rejects an add-chain from a blocklisted origin", async () => {

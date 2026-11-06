@@ -69,7 +69,7 @@ export const handleAddChainOps = async (
   if (guard.isBlocked(input.origin)) {
     return { error: "origin blocked" };
   }
-  // The same exact-match lookup wallet_switchStarknetChain uses, so a chain
+  // The same felt-value lookup wallet_switchStarknetChain uses, so a chain
   // reported as added is always one the follow-up switch accepts.
   return networkIdForChainId(input.chain.chainId) !== null
     ? { added: true, ok: true }
