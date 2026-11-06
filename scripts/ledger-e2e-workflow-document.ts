@@ -8,6 +8,7 @@
  * for credential expressions. An unparseable workflow fails closed.
  */
 import {
+  NIGHTLY_TARGET_CHECKOUT_USES,
   NIGHTLY_TARGET_CHECKOUT_WITH,
   NIGHTLY_TARGET_SCRIPT,
   NIGHTLY_TARGET_STEP,
@@ -44,15 +45,21 @@ const TRACES = {
   },
 };
 
+// A record run runs no test, so it must say so wherever a run is listed.
+const RECORD_NAME = "Record Ledger app hashes (no tests run)";
+const RUN_NAME = `\${{ inputs.record_hashes && '${RECORD_NAME}' || '' }}`;
+
 type JobShape = {
   readonly actions: readonly unknown[];
   readonly if: string;
+  readonly name: string;
   readonly runs: readonly string[];
 };
 
 /** Each job's reviewed `if:`, exact actions (with inputs) and exact commands, in order. */
 const JOBS: Readonly<Record<string, JobShape>> = {
   "record-hashes": {
+    name: RECORD_NAME,
     actions: [CHECKOUT, BUN],
     if: "github.event_name == 'workflow_dispatch' && inputs.record_hashes",
     runs: [
@@ -62,6 +69,7 @@ const JOBS: Readonly<Record<string, JobShape>> = {
     ],
   },
   speculos: {
+    name: "Speculos Ledger E2E",
     actions: [NIGHTLY_CHECKOUT, BUN, NODE, TRACES],
     if: "${{ !inputs.record_hashes }}",
     runs: [
@@ -175,8 +183,7 @@ const nightlyTargetFailures = (steps: readonly unknown[], path: string): string[
   }
   const checkout = record(steps[1]);
   if (
-    typeof checkout["uses"] !== "string" ||
-    !checkout["uses"].startsWith("actions/checkout@") ||
+    checkout["uses"] !== NIGHTLY_TARGET_CHECKOUT_USES ||
     !same(extraKeys(checkout, ["uses", "with"]), []) ||
     !same(checkout["with"], NIGHTLY_TARGET_CHECKOUT_WITH)
   ) {
@@ -261,6 +268,9 @@ const jobFailures = (jobs: Node, path: string): string[] => {
     if (typeof job["timeout-minutes"] !== "number") {
       failures.push(`${path} job ${name} must set timeout-minutes`);
     }
+    if (job["name"] !== JOBS[name]?.name) {
+      failures.push(`${path} job ${name} must keep its reviewed name`);
+    }
     if (job["if"] !== JOBS[name]?.if) {
       failures.push(`${path} job ${name} must keep its reviewed run condition`);
     }
@@ -287,6 +297,9 @@ export const ledgerE2eDocumentFailures = (source: string, path: string): string[
   const failures = extraKeys(root, ROOT_KEYS).map(
     (key) => `${path} must not declare workflow-level ${key}`,
   );
+  if (root["run-name"] !== RUN_NAME) {
+    failures.push(`${path} must name a record run as one that runs no tests`);
+  }
   const permissions = record(root["permissions"]);
   if (!same(permissions, { contents: "read" })) {
     failures.push(`${path} must grant only contents: read`);

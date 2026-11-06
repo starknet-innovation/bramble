@@ -184,6 +184,15 @@ describe("Ledger E2E workflow policy", () => {
     expect(await failuresAfter("        shell: bash\n", "")).toContain(
       `${PATH} must report the recorded hashes and fail when one is missing`,
     );
+    expect(await failuresAfter("run-name: ", "# run-name: ")).toContain(
+      `${PATH} must name a record run as one that runs no tests`,
+    );
+    expect(
+      await failuresAfter(
+        "    name: Record Ledger app hashes (no tests run)\n",
+        "    name: Speculos Ledger E2E\n",
+      ),
+    ).toContain(`${PATH} job record-hashes must keep its reviewed name`);
   });
 
   test("rejects an extra job, a job without a timeout, or a wider artifact", async () => {

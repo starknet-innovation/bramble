@@ -55,7 +55,9 @@ const TOUCH: Readonly<Record<"flex" | "stax", TouchLayout>> = {
 };
 
 const REVIEW = /review hash|blind sign/i;
-const BLIND_SIGNING_OFF = /cannot be clear-signed|enable blind-signing/i;
+// The Nano breaks a hyphenated word across lines ("clear-" / "signed"), and
+// screen text joins lines with a space, so the break may be whitespace.
+const BLIND_SIGNING_OFF = /cannot be clear-\s*signed|enable blind-\s*signing/i;
 const MAX_NANO_STEPS = 12;
 
 /** Presses right until `pattern` is on screen, collecting every screen seen. */

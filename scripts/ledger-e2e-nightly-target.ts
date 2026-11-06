@@ -73,6 +73,10 @@ export const NIGHTLY_TARGET_STEP = {
   run: NIGHTLY_TARGET_SCRIPT,
 } as const;
 
+/** The checkout action the speculos job must use, pinned by commit (v7.0.1). */
+export const NIGHTLY_TARGET_CHECKOUT_USES =
+  "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+
 /** The speculos job's checkout inputs: no stored token, the resolved commit. */
 export const NIGHTLY_TARGET_CHECKOUT_WITH = {
   "persist-credentials": false,

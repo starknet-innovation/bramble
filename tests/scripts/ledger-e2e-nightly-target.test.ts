@@ -77,6 +77,15 @@ describe("Ledger E2E nightly target policy", () => {
     ).toContain(SECOND);
   });
 
+  test("rejects any other checkout implementation, even one pinned by SHA", async () => {
+    expect(
+      await failuresAfter(
+        CHECKOUT,
+        CHECKOUT.replace("3d3c42e5aac5ba805825da76410c181273ba90b1", "a".repeat(40)),
+      ),
+    ).toContain(SECOND);
+  });
+
   test("rejects a widened source for the branch name", async () => {
     for (const [search, replacement] of [
       [`${EXPRESSION} vars.ACTIVE_RELEASE_BRANCH }}`, `${EXPRESSION} github.head_ref }}`],
