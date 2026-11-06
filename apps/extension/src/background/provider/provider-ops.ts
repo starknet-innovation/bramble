@@ -58,6 +58,7 @@ import {
   readWatchAssetInput,
 } from "./provider-inputs";
 import { trackWatchAsset, type WatchAssetAdmission } from "./watch-asset";
+import { trackWatchNft } from "./watch-nft";
 
 /**
  * Dependencies shared by the dapp provider operation handlers.
@@ -241,15 +242,18 @@ const handleWatchAsset: ProviderOpsHandler = async (deps, message, sender) => {
   if (gate) {
     return gate;
   }
-  const approval = await trackWatchAsset(
-    {
-      admission: deps.watchAssetAdmission,
-      approvals: deps.approvals,
-      preferencesStore: deps.preferencesStore,
-      runtimeRpc: deps.runtimeRpc,
-    },
-    input,
-  );
+  const approval =
+    "nft" in input
+      ? await trackWatchNft(deps, input)
+      : await trackWatchAsset(
+          {
+            admission: deps.watchAssetAdmission,
+            approvals: deps.approvals,
+            preferencesStore: deps.preferencesStore,
+            runtimeRpc: deps.runtimeRpc,
+          },
+          input,
+        );
   return approval ? deps.waiters.register(approval.id) : { error: "invalid watch asset metadata" };
 };
 

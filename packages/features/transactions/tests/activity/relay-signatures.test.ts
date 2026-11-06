@@ -96,7 +96,7 @@ for (const [name, make] of logs) {
       await log.record(input({ origin: `https://${"a".repeat(100)}.example.com` }));
       const [entry] = await log.list(scope);
       expect(entry?.origin.startsWith("…")).toBe(true);
-      expect(entry?.origin.endsWith("example.com")).toBe(true);
+      expect(entry?.origin.endsWith(".example.com")).toBe(true);
     });
 
     test(`keeps the newest ${MAX_RELAY_SIGNATURES} records`, async () => {

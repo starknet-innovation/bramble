@@ -7,20 +7,22 @@
  *
  * Run from the repository root after `bun run build`:
  *   BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json]
- * The scorecard goes to the given path, or to the system temp directory; copy a
- * run into this folder as a dated `verification-*.json` snapshot to keep it.
+ * The scorecard goes to the given path, or to a new owner-only directory under
+ * the system temp directory; copy a run into this folder as a dated
+ * `verification-*.json` snapshot to keep it.
  */
-import { writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { launchExtension } from "../../tests/e2e/extension-fixture";
 import { envSeed } from "./dataset-env";
 import { loadManifest } from "./matrix-lib";
 
-const OUT_PATH = resolve(
-  process.argv[2] ?? resolve(tmpdir(), "bramble-vendor-dataset-verification.json"),
-);
+const defaultOutPath = (): string =>
+  join(mkdtempSync(join(tmpdir(), "bramble-vendor-dataset-")), "verification.json");
+
+const OUT_PATH = resolve(process.argv[2] ?? defaultOutPath());
 const SCAN_TIMEOUT_MS = 300_000;
 const VAULT_PASSPHRASE = "dataset verification passphrase";
 
@@ -125,5 +127,5 @@ for (const entry of Object.values(manifest)) {
   console.log(`${hit ? "FOUND " : "missed"} [${entry.detectability}] ${entry.id}`);
 }
 console.log(`\n${found}/${total} dataset accounts surfaced by the current wallet`);
-writeFileSync(OUT_PATH, JSON.stringify({ results, scorecard }, null, 2));
+writeFileSync(OUT_PATH, JSON.stringify({ results, scorecard }, null, 2), { mode: 0o600 });
 console.log(`written: ${OUT_PATH}`);

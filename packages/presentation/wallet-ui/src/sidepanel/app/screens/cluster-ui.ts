@@ -1,10 +1,11 @@
 /**
  * Wiring for the asset cluster: swap, tokens, the AVNU token catalog,
- * allowances, and connected sites. Extracted from the side panel entrypoint to
+ * allowances, collectibles, and connected sites. Extracted from the side panel entrypoint to
  * keep it within the size budget; navigation side effects are passed in as
  * callbacks and every state read goes through the shared render cache, so this
  * module holds no module-level state.
  */
+import { bindNfts } from "../../journeys/collectibles/nft-ui";
 import { bindAllowances } from "../../journeys/portfolio/allowance-ui";
 import { bindTokenCatalog } from "../../journeys/portfolio/token-catalog-ui";
 import { bindTokens } from "../../journeys/portfolio/tokens-ui";
@@ -32,6 +33,10 @@ export type ClusterUiDeps = {
    */
   readonly openWithToken: (view: "send" | "swap", tokenId: string) => void;
   readonly openToken: (tokenId: string) => void;
+  /** Opens a collectible's detail screen (collectibles preview only). */
+  readonly openNft: (id: string) => void;
+  /** Leaves a finished collectible transfer for a dock screen. */
+  readonly navigate: (view: "activity" | "home") => void;
   readonly render: (status: RenderData["status"]) => Promise<void>;
   readonly swap: SwapClient;
   readonly wallet: SidepanelWallet;
@@ -93,5 +98,8 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
     wallet,
   });
   bindAllowances({ app, render, wallet });
+  // Gallery markup exists only while the collectibles preview is on, so on
+  // every other paint these bindings find nothing to install.
+  bindNfts({ app, navigate: deps.navigate, openDetail: deps.openNft, render, wallet });
   bindShadowAccounts({ app, wallet });
 };

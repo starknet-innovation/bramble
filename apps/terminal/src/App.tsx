@@ -5,6 +5,7 @@
  */
 import { X } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
+import CreateToken from "./screens/create/CreateToken";
 import Discover from "./screens/discover/Discover";
 import NftStudio from "./screens/nft/NftStudio";
 import Lending from "./screens/lending/Lending";
@@ -20,6 +21,7 @@ import { useWallet } from "./wallet/connection/WalletProvider";
 type ScreenProps = { readonly onNavigate: (screen: ScreenId) => void };
 
 const SCREENS: Record<ScreenId, ComponentType<ScreenProps>> = {
+  create: CreateToken,
   discover: Discover,
   lending: Lending,
   nfts: NftStudio,

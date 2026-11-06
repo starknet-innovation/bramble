@@ -447,7 +447,7 @@ export const onboardingWizard = (status: WalletStatus, ledgerAvailable = true): 
   FORM: Staged wallet setup based on the supplied reference flow, adapted to Bramble trust boundaries.
   -->
   <section class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
-    <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready}" novalidate>
+    <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready === true ? "true" : "false"}" novalidate>
       ${welcomeStep(status.ready)}
       ${methodStep(ledgerAvailable)}
       ${recoveryStep()}
