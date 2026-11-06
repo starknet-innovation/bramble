@@ -368,6 +368,28 @@ describe("vendor-ladder derivation (issue 505)", () => {
     expect(account.accountContractType).toBe("argent");
   });
 
+  test("hands a BIP-39 passphrase to the KMS derivation, and none when absent", async () => {
+    // Import-paths scope doc TA-46 / B7: no screen sends one, so this pins the
+    // plumbing — the passphrase reaches the KMS untouched and only when given.
+    const seen: Array<string | undefined> = [];
+    const kms = {
+      ...fakeKms(),
+      async deriveStarknetKeypair(
+        ...args: Parameters<ReturnType<typeof fakeKms>["deriveStarknetKeypair"]>
+      ) {
+        seen.push(args[3]);
+        return fakeKms().deriveStarknetKeypair(...args);
+      },
+    };
+    await deriveAccountRef(kms, {
+      accountContractType: "openzeppelin",
+      mnemonic,
+      mnemonicPassphrase: "x",
+    });
+    await deriveAccountRef(kms, { accountContractType: "openzeppelin", mnemonic });
+    expect(seen).toEqual(["x", undefined]);
+  });
+
   test("refuses the Ready scheme off Argent and under a passphrase", async () => {
     await expect(
       deriveAccountRef(fakeKms(), {

@@ -59,6 +59,7 @@ import {
   createStrk20JobRegistry,
   type Strk20JobRegistry,
 } from "../privacy/strk20-preparation-jobs";
+import type { SponsoredShieldDeps } from "../privacy/strk20-sponsored-shield";
 import {
   createStrk20WalletPreparationStore,
   type Strk20WalletPreparationStore,
@@ -116,6 +117,7 @@ export type RouterContext = {
   readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
   readonly sidePanelLearning?: SidePanelNotice;
+  readonly sponsoredShield?: SponsoredShieldDeps;
   readonly updates: UpdateReady;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
@@ -167,6 +169,8 @@ export type MessageHandlerOptions = {
   readonly strk20Preparations?: Strk20WalletPreparationStore;
   /** The one-time "opens as a popup" notice (#690); absent, it is never due. */
   readonly sidePanelLearning?: SidePanelNotice;
+  /** Sponsored first-shield relay table and transport (#789); the bundled table is off. */
+  readonly sponsoredShield?: SponsoredShieldDeps;
   readonly updates?: UpdateReady;
   /**
    * Held-response registry the router parks deferred sign requests in. The
@@ -326,6 +330,7 @@ export const routerContext = (
     strk20Jobs: strk20JobsFor(options.strk20Jobs, now),
     strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
     ...sidePanelLearningFor(options.sidePanelLearning),
+    ...(options.sponsoredShield ? { sponsoredShield: options.sponsoredShield } : {}),
     updates: updatesFor(options.updates),
     waiters,
     wallet,
