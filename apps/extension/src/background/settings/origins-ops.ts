@@ -34,6 +34,19 @@ const connectedSites = async (deps: OriginOpsDeps): Promise<RuntimeResponse> => 
 };
 
 /**
+ * Drops a multisig that is being removed from every connected site, using the
+ * unlock that authorized the removal. Throws, changing nothing, when the grant
+ * ledger can't be read or the unlock lapses; absent a ledger it does nothing.
+ */
+export const dropMultisigFromSites = async (
+  grants: MultisigOriginGrantStore | undefined,
+  active: { readonly vaultPassphrase: string },
+  input: { readonly isAuthorized: () => boolean; readonly multisigId: string },
+): Promise<void> => {
+  await grants?.removeAccount({ ...input, credential: active.vaultPassphrase });
+};
+
+/**
  * Handles connected-sites messages; returns null for other message types so
  * the dispatcher can keep trying later handlers.
  */

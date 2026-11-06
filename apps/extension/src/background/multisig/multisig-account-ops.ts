@@ -11,6 +11,7 @@ import { readPortfolioBalances } from "../portfolio/portfolio-balances";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
+import { dropMultisigFromSites } from "../settings/origins-ops";
 import { type ArgentMultisigContext, contextFor } from "./multisig-context";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import {
@@ -168,8 +169,7 @@ const removeMultisig = async (
     return { error: "wallet locked" };
   }
   // Sites lose it before the record goes, so a failed read keeps both.
-  await deps.multisigGrants?.removeAccount({
-    credential: context.active.vaultPassphrase,
+  await dropMultisigFromSites(deps.multisigGrants, context.active, {
     isAuthorized: authorized.isCurrent,
     multisigId: context.record.id,
   });

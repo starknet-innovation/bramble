@@ -107,8 +107,8 @@ const withoutId = (current: GrantDocument, multisigId: string): GrantDocument =>
 });
 
 // withoutId only removes, so an unchanged count means nothing to write.
-const idCount = (document: GrantDocument): number =>
-  document.grants.reduce((total, grant) => total + grant.multisigIds.length, 0);
+const idCount = (ledger: GrantDocument): number =>
+  ledger.grants.reduce((total, grant) => total + grant.multisigIds.length, 0);
 
 const byOrigin = (left: ConnectedSite, right: ConnectedSite): number =>
   left.origin < right.origin ? -1 : left.origin > right.origin ? 1 : 0;
