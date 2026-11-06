@@ -208,6 +208,11 @@ export const SECRET_MATERIAL_FILES = new Set([
   // same Krusty-delegated boundary, no secret ever stored or logged here.
   "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
   "packages/features/privacy/src/paymaster/paymaster.ts",
+  // Sponsored first shield (mc-wallet 789): posts the user's outside-execution
+  // signature to the sponsor's relay, and the typed-data signer split from
+  // official-sdk-service. Public fragments only; signing stays in Krusty.
+  "packages/features/privacy/src/paymaster/sponsored-shield.ts",
+  "packages/features/privacy/src/sdk/official-sdk-sponsored.ts",
   // Posts the outside-execution signature the gasless gateway requires.
   // The field is public; private signing stays in Krusty via signHash.
   "packages/features/transactions/src/gasless/gasless-submit.ts",

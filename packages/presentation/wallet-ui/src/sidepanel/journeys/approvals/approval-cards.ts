@@ -388,7 +388,7 @@ export const approvalCard = (
 ): string => {
   switch (approval.kind) {
     case "watch-asset":
-      return watchAssetCard(approval);
+      return watchAssetCard(approval, preferences?.collectiblesPreview === true);
     case "invoke":
       return invokeCard(approval, status);
     case "sign-typed-data":

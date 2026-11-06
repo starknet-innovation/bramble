@@ -25,6 +25,7 @@ export type {
   ApprovalRiskFlag,
   DeclarationReview,
   PendingApproval,
+  WatchAssetNft,
   WatchAssetToken,
 } from "@bramble/wallet-protocol/extension-responses";
 
@@ -81,6 +82,12 @@ export type ApprovalRequest = PendingApproval & ApprovalPayload;
 const noticeSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
   ...(approval.alreadyTracked === true ? { alreadyTracked: true } : {}),
   ...(approval.notice === undefined ? {} : { notice: approval.notice }),
+});
+
+// A watch-asset card's token or collectible; absent for every other approval.
+const watchSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
+  ...(approval.nft === undefined ? {} : { nft: { ...approval.nft } }),
 });
 
 // Copies an invoke entry's fee review onto its snapshot without materializing
@@ -168,7 +175,7 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
   ...(approval.reviewAssets === undefined
     ? {}
     : { reviewAssets: approval.reviewAssets.map((asset) => ({ ...asset })) }),
-  ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
+  ...watchSnapshot(approval),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
   ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
   ...(approval.typedData === undefined

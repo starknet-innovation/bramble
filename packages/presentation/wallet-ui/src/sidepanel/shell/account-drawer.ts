@@ -41,13 +41,19 @@ const drawerMultisigRow = (
   selectedId: string | null,
 ): string => {
   const { record } = view;
+  // Threshold and signer count are safe integers at the response boundary.
+  // Escape them anyway: this string is later parsed as HTML.
+  const authority = view.config
+    ? escapeHtml(`${view.config.threshold} of ${view.config.signerGuids.length}`)
+    : "authority unavailable";
+  const openLabel = open > 0 ? ` · ${escapeHtml(String(open))} open` : "";
   return `<li class="drawer-account-item">
     <button class="drawer-account drawer-multisig" data-multisig-select="${escapeHtml(record.id)}" type="button" aria-pressed="${record.id === selectedId}">
       <span class="option-avatar">${accountAvatar(record.address)}</span>
       <span class="drawer-copy">
         <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
         <code title="${escapeHtml(record.address)}">${escapeHtml(accountLabel(record.address))}</code>
-        <span class="account-groups-line">Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}` : "authority unavailable"}${open > 0 ? ` · ${open} open` : ""}</span>
+        <span class="account-groups-line">Multisig · ${authority}${openLabel}</span>
       </span>
       <span class="option-mark">${icon(record.id === selectedId ? "check" : "chevronRight")}</span>
     </button>

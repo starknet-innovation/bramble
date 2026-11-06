@@ -4,14 +4,11 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-import { isJson } from "@bramble/core/json";
-import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
-import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
-import { createRpcProvider, withRpcFallback } from "@bramble/starknet/provider";
+import { createRpcProvider } from "@bramble/starknet/provider";
 import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
 import { sameFelt } from "@bramble/wallet-model/networks";
-import type { Call, RpcProvider, TypedData } from "starknet";
-import { num, typedData } from "starknet";
+import type { Call, RpcProvider } from "starknet";
+import { num } from "starknet";
 import { submitStrk20PaymasterPlan } from "../paymaster/paymaster";
 import { quoteStrk20RelayPlan } from "../paymaster/relay-quote";
 import type { Strk20FeeReference } from "../policy/fee-policy";
@@ -36,7 +33,7 @@ import {
   type Strk20Waits,
   type WaitScheduler,
 } from "./official-sdk-budget";
-import { strk20RegistrationBuilderFor } from "./official-sdk-builder";
+import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
 import { mapStrk20StageError } from "./official-sdk-errors";
 import { createStrk20MaturityRuntime, type Strk20SubmissionJournal } from "./official-sdk-maturity";
 import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
@@ -44,6 +41,7 @@ import { strk20ReadMethods } from "./official-sdk-reads";
 import type { ServiceRetryPause } from "./official-sdk-retry";
 import type { PrivacySdkRuntime } from "./official-sdk-runtime";
 import { strk20ShadowAccountReads } from "./official-sdk-shadow-accounts";
+import { accountTypedDataSigner, sponsoredShieldSubmitter } from "./official-sdk-sponsored";
 import {
   approveCalls,
   RELAY_PAYS_POOL_FEE,
@@ -200,6 +198,12 @@ export const createOfficialStrk20Service = ({
       if (input.actions.length === 0 || input.actions.some((action) => action.type !== "deposit")) {
         throw new WalletError(STRK20_PRIVACY_LEAK);
       }
+      // A registration opens the self channel; a third-party credit would open
+      // a second one in the same batch, which links the two (USER_LINKAGE).
+      const activate = input.activate === true;
+      if (activate && input.actions.some((action) => "recipient" in action && action.recipient)) {
+        throw new WalletError(STRK20_PRIVACY_LEAK);
+      }
       reportStrk20Phase(input.onPhase, "reading the pool fee");
       const reviewedPoolFee = await requireReviewedStrk20PoolFee(
         providerFor,
@@ -207,7 +211,15 @@ export const createOfficialStrk20Service = ({
         config.poolAddress,
         input.poolFeeFri,
       );
-      const callAndProof = await prepare({ ...input, simulate: false }, input.beforeProof);
+      const callAndProof = await prepare(
+        { ...input, simulate: false },
+        input.beforeProof,
+        activate
+          ? (transfers) =>
+              strk20BuilderFor(sdk, transfers, input.actions, input.account.address, true)
+          : undefined,
+        activate ? "first-shield" : undefined,
+      );
       return publicBatch(
         config.poolAddress,
         approveCalls(input.actions, config.poolAddress, reviewedPoolFee),
@@ -388,24 +400,7 @@ export const createOfficialStrk20Service = ({
             nowSeconds: nowSeconds(),
             plan: privatePlan,
             proof: callAndProof.proof,
-            signTypedData: async (value) => {
-              if (!isJson(value)) {
-                throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-              }
-              const messageHash = typedData.getMessageHash(
-                value as unknown as TypedData,
-                input.account.address,
-              );
-              if (input.account.accountContractType !== "openzeppelin") {
-                await withRpcFallback(
-                  input.rpcUrls,
-                  (provider) => requireLiveAuthorizableClass(provider, input.account),
-                  providerFor,
-                );
-              }
-              const signature = await input.signHash(messageHash);
-              return serializeAccountSignature(input.account.accountContractType, signature);
-            },
+            signTypedData: accountTypedDataSigner(input, providerFor),
           });
           return {
             // The relay executes the batch, but the approvals inside it are
@@ -426,6 +421,13 @@ export const createOfficialStrk20Service = ({
             : null,
       );
     },
+    submitSponsoredShield: sponsoredShieldSubmitter({
+      ...(http ? { http } : {}),
+      maturity,
+      ...(nowSeconds ? { nowSeconds } : {}),
+      providerFor,
+      submission,
+    }),
     async submitPrepared(input) {
       const config = requireStrk20Config(input);
       const calls = input.calls ?? (input.call ? [input.call] : []);

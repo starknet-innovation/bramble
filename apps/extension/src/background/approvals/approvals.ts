@@ -62,6 +62,7 @@ import type {
   ApprovalQueueOptions,
 } from "./approval-queue-types";
 import { requireRenderableSummaries } from "./approval-summary-bound";
+import { sameWatchTarget, watchTarget } from "./approval-watch-target";
 
 /**
  * The queue contract, re-exported so existing wiring keeps one import site.
@@ -423,7 +424,8 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [summary],
       });
     },
-    requestWatchAsset({ alreadyTracked, origin, token }) {
+    requestWatchAsset(request) {
+      const { origin } = request;
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
@@ -431,18 +433,16 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         (approval) =>
           approval.kind === "watch-asset" &&
           approval.origin === origin &&
-          approval.token?.address === token.address &&
-          approval.token?.networkId === token.networkId,
+          sameWatchTarget(approval, request),
       );
       if (existing) {
         return approvalSnapshot(existing);
       }
       return enqueue({
-        ...(alreadyTracked === true ? { alreadyTracked } : {}),
+        ...watchTarget(request),
         id: crypto.randomUUID(),
         kind: "watch-asset",
         origin,
-        token: { ...token },
       });
     },
     updateFee({ id, revision }, update) {

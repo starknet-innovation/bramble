@@ -5,7 +5,6 @@
 import { isSha256Digest } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord, isStringArray } from "@bramble/core/json";
 import type { PaymasterAuthorizationReview } from "@bramble/privacy/paymaster-typed-data";
-import { canonicalStrk20PoolFee } from "@bramble/privacy/service";
 import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 
 import {
@@ -18,6 +17,12 @@ import { isTokenId } from "@bramble/wallet-model/preferences";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/wallet-protocol/fee-estimate";
 import { STRK20_LIMITS } from "@bramble/wallet-protocol/strk20";
 import { responseError } from "../../runtime/runtime-errors";
+import {
+  isPoolFee,
+  type PrivacySponsor,
+  readAuthorization,
+  readSponsor,
+} from "./privacy-preparation-fields";
 import {
   type PreparationJobOptions,
   type PreparationProgress,
@@ -81,8 +86,10 @@ export type PrivacyPreparation = {
   readonly poolAddress: string;
   readonly poolFeeFri?: string;
   readonly recipient?: string;
-  readonly route: "private-relay" | "public-account";
+  readonly route: "private-relay" | "public-account" | "sponsored-relay";
   readonly relayFee?: PrivacyRelayFee;
+  /** Only on `sponsored-relay`: who pays the pool fee and gas (mc-wallet 789). */
+  readonly sponsor?: PrivacySponsor;
   readonly summaries: readonly string[];
   readonly symbol: string;
   readonly tokenId: string;
@@ -104,42 +111,6 @@ const isSummaryList = (value: unknown): value is readonly string[] =>
   isStringArray(value) &&
   value.length <= MAX_SUMMARIES &&
   value.every((entry) => entry.length > 0 && entry.length <= MAX_SUMMARY_CHARACTERS);
-
-const readAuthorization = (value: unknown): PaymasterAuthorizationReview | null => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["caller", "executeAfter", "executeBefore", "publicCallCount"]) ||
-    typeof value["caller"] !== "string" ||
-    !isNonZeroStarkFieldElement(value["caller"]) ||
-    typeof value["executeAfter"] !== "string" ||
-    !isStarkFieldElement(value["executeAfter"]) ||
-    typeof value["executeBefore"] !== "string" ||
-    !isStarkFieldElement(value["executeBefore"]) ||
-    typeof value["publicCallCount"] !== "number" ||
-    !Number.isSafeInteger(value["publicCallCount"]) ||
-    value["publicCallCount"] < 0 ||
-    value["publicCallCount"] > STRK20_LIMITS.actions
-  ) {
-    return null;
-  }
-  return {
-    caller: value["caller"],
-    executeAfter: value["executeAfter"],
-    executeBefore: value["executeBefore"],
-    publicCallCount: value["publicCallCount"],
-  };
-};
-
-const isPoolFee = (value: unknown): value is string => {
-  if (typeof value !== "string") {
-    return false;
-  }
-  try {
-    return canonicalStrk20PoolFee(value) === value;
-  } catch {
-    return false;
-  }
-};
 
 type ExpectedPreparation = {
   readonly amount?: string;
@@ -194,6 +165,7 @@ export const readPrivacyPreparation = (
     value["authorization"] === undefined ? undefined : readAuthorization(value["authorization"]);
   const relayFee =
     value["relayFee"] === undefined ? undefined : readPrivacyRelayFee(value["relayFee"]);
+  const sponsor = value["sponsor"] === undefined ? undefined : readSponsor(value["sponsor"]);
   if (
     !hasOnlyKnownKeys(value, [
       "amount",
@@ -207,13 +179,25 @@ export const readPrivacyPreparation = (
       "recipient",
       "relayFee",
       "route",
+      "sponsor",
       "summaries",
       "symbol",
       "tokenId",
     ]) ||
     value["kind"] !== expected.kind ||
     !hasRouteFee(value["route"], value["networkFee"]) ||
-    (value["route"] !== "private-relay" && value["route"] !== "public-account") ||
+    (value["route"] !== "private-relay" &&
+      value["route"] !== "public-account" &&
+      value["route"] !== "sponsored-relay") ||
+    // A sponsored route is a shield only, names its sponsor and the pool fee
+    // it pays, carries the typed data's summary, and charges the user nothing.
+    (value["route"] === "sponsored-relay") !== (sponsor !== undefined) ||
+    (value["sponsor"] !== undefined && !sponsor) ||
+    (value["route"] === "sponsored-relay" &&
+      (value["kind"] !== "deposit" ||
+        !authorization ||
+        value["relayFee"] !== undefined ||
+        !isPoolFee(value["poolFeeFri"]))) ||
     !isSha256Digest(value["id"]) ||
     typeof value["payloadDigest"] !== "string" ||
     value["id"] !== value["payloadDigest"] ||
@@ -256,6 +240,7 @@ export const readPrivacyPreparation = (
     ...(typeof value["recipient"] === "string" ? { recipient: value["recipient"] } : {}),
     ...(relayFee ? { relayFee } : {}),
     route: value["route"],
+    ...(sponsor ? { sponsor } : {}),
     summaries: [...value["summaries"]],
     symbol: value["symbol"],
     tokenId: value["tokenId"],
