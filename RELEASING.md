@@ -45,13 +45,16 @@ step relies on.
 2. **Version metadata.** Bump `package.json` **and** `apps/extension/public/manifest.json` to
    `X.Y.0` in lockstep (section 1) and run the single-source guard.
 3. **Gates green.** Required PR CI is green on the release-branch tip; the
-   nightly / full suite (E2E, dependency audit, build — `.github/workflows/nightly.yml`)
-   is green on `release/vX.Y`.
+   nightly / full suite (E2E, live Sepolia import paths, dependency audit, build —
+   `.github/workflows/nightly.yml`) is green on `release/vX.Y`.
 4. **Release notes.** Draft the notes (CHANGELOG section once #60 lands;
    otherwise the tag's auto-generated notes).
 5. **Release candidate (when appropriate).** Tag `vX.Y.0-rc.1` on the release
    branch and run a final validation pass — build + package + `sha256sum -c`
-   (section 2), load the unpacked build, confirm E2E. Iterate `-rc.2`, … if the
+   (section 2), load the unpacked build, confirm E2E. Dispatch the nightly on
+   the release branch for a fresh Sepolia import-path scorecard, check TA-32…TA-38
+   on the test Ledger by hand, and commit the run as
+   `tools/vendor-dataset/verification-sepolia-<date>.json`. Iterate `-rc.2`, … if the
    RC turns up blockers. RC tags are validation only; they do not publish.
 6. **Full validation.** Confirm the RC against the acceptance criteria.
 7. **Promote to `main`.** Merge `release/vX.Y` → `main` as a **merge commit**

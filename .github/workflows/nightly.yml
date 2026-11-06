@@ -2,7 +2,8 @@ name: Nightly
 
 # Full-suite nightly run against the ACTIVE release branch (DEVELOPMENT.md).
 # This is the heaviest tier of the layered CI model: full E2E (Playwright),
-# dependency audit, the extension build, and a placeholder for perf/regression
+# the live Sepolia import-path run (issue 821), dependency audit, the
+# extension build, and a placeholder for perf/regression
 # checks (none exist in-repo yet — the step is an explicit NO-OP, never a fake
 # pass). It writes a categorized summary and, on failure, upserts ONE tracking
 # issue for the release.
@@ -106,6 +107,7 @@ jobs:
       properties: ${{ steps.properties.outcome }}
       e2e_install: ${{ steps.e2e_install.outcome }}
       e2e: ${{ steps.e2e.outcome }}
+      sepolia: ${{ steps.sepolia.outcome }}
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -170,6 +172,44 @@ jobs:
         id: properties
         continue-on-error: true
         run: bun test tests/property
+      # Live Sepolia run of every in-wallet import path against the issue-821
+      # test accounts (tools/vendor-dataset/verify-sepolia.ts). Read-only: it
+      # never signs or sends. Its testnet-only seed file is the one secret this
+      # workflow holds, and only this step sees it: written owner-only to the
+      # runner's temp directory and removed when the step ends. The run's own
+      # redactor keeps seeds and derived keys out of every line it prints.
+      - name: Sepolia import paths (live)
+        id: sepolia
+        continue-on-error: true
+        env:
+          BRAMBLE_SEPOLIA_SEEDS: ${{ secrets.BRAMBLE_SEPOLIA_SEEDS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BRAMBLE_SEPOLIA_SEEDS:-}" ]; then
+            echo "::error::The BRAMBLE_SEPOLIA_SEEDS secret is not set (tools/vendor-dataset/README.md)."
+            exit 1
+          fi
+          umask 077
+          seeds="$RUNNER_TEMP/sepolia-seeds.env"
+          trap 'rm -f "$seeds"' EXIT
+          printf '%s\n' "$BRAMBLE_SEPOLIA_SEEDS" > "$seeds"
+          unset BRAMBLE_SEPOLIA_SEEDS
+          baseline="$(ls tools/vendor-dataset/verification-sepolia-*.json | sort | tail -1)"
+          mkdir -p "$RUNNER_TEMP/sepolia"
+          BRAMBLE_DATASET_ENV_FILE="$seeds" BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia \
+            BRAMBLE_SEPOLIA_RECORD="$RUNNER_TEMP/sepolia/tape.json" \
+            bun tools/vendor-dataset/verify-sepolia.ts "$RUNNER_TEMP/sepolia/scorecard.json" "$baseline"
+      # The redacted scorecard and the recorded tape (node answers only; the
+      # runner refuses to write a tape that carries a seed or key), so a failure
+      # can be replayed offline with BRAMBLE_SEPOLIA_REPLAY.
+      - name: Upload Sepolia scorecard and tape
+        if: always() && steps.sepolia.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sepolia-verification
+          path: ${{ runner.temp }}/sepolia/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Categorized summary
         if: always()
@@ -181,6 +221,7 @@ jobs:
           PROPERTIES: ${{ steps.properties.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
+          SEPOLIA: ${{ steps.sepolia.outcome }}
         run: |
           set -euo pipefail
           declare -A GATES=(
@@ -190,6 +231,7 @@ jobs:
             ["Security property suite"]="$PROPERTIES"
             ["E2E browser install"]="$E2E_INSTALL"
             ["Full E2E (Playwright)"]="$E2E"
+            ["Sepolia import paths (live)"]="$SEPOLIA"
           )
           failing=()
           passing=()
@@ -224,7 +266,7 @@ jobs:
             echo ""
             echo "### Release-blocking"
             echo "Any failing gate above blocks promoting \`$BRANCH\` to \`main\`. Vendor,"
-            echo "build, and E2E failures are release-blocking; a dependency-audit"
+            echo "build, E2E and Sepolia import-path failures are release-blocking; a dependency-audit"
             echo "failure is release-blocking per CONTRIBUTING.md (high/critical advisory)."
             echo ""
             echo "### Recommended next work"
@@ -245,9 +287,10 @@ jobs:
           PROPERTIES: ${{ steps.properties.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
+          SEPOLIA: ${{ steps.sepolia.outcome }}
         run: |
           set -euo pipefail
-          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E"; do
+          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E" "$SEPOLIA"; do
             if [ "$o" != "success" ]; then
               echo "At least one nightly gate did not pass — failing the job."
               exit 1
@@ -276,6 +319,7 @@ jobs:
           PROPERTIES: ${{ needs.nightly.outputs.properties }}
           E2E_INSTALL: ${{ needs.nightly.outputs.e2e_install }}
           E2E: ${{ needs.nightly.outputs.e2e }}
+          SEPOLIA: ${{ needs.nightly.outputs.sepolia }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -287,6 +331,7 @@ jobs:
               ["Security property suite", process.env.PROPERTIES],
               ["E2E browser install", process.env.E2E_INSTALL],
               ["Full E2E (Playwright)", process.env.E2E],
+              ["Sepolia import paths (live)", process.env.SEPOLIA],
             ];
             const failing = gates.filter(([, outcome]) => outcome !== "success");
             const title = `Nightly: ${branch} — failing checks`;

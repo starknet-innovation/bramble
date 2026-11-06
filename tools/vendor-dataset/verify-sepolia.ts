@@ -13,14 +13,21 @@
  *     bun tools/vendor-dataset/verify-sepolia.ts [out.json] [previous.json]
  * With a previous scorecard, the verdicts that changed are listed at the end.
  * The scorecard goes to the given path, or to a new owner-only directory under
- * the system temp directory.
+ * the system temp directory. The run exits non-zero when any check fails or
+ * errors, so CI (the nightly) can gate on it.
+ *
+ * BRAMBLE_SEPOLIA_RECORD=<tape.json> records every network answer of a live
+ * run; BRAMBLE_SEPOLIA_REPLAY=<tape.json> replays one with no network at all
+ * (drop BRAMBLE_E2E_LIVE_NETWORK). See sepolia-tape.ts.
  */
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import type { BrowserContext } from "@playwright/test";
 import { NETWORK } from "./matrix-lib";
 import { guarded, redact, secret } from "./sepolia-redact";
 import { sepoliaSecret } from "./sepolia-seeds";
+import { readTape, recordTape, replayTape, type Tape, writeTape } from "./sepolia-tape";
 import { type Result, runChecks, type Verdict } from "./verify-sepolia-checks";
 import { openSession } from "./verify-sepolia-ui";
 
@@ -32,16 +39,35 @@ const defaultOutPath = (): string =>
   join(mkdtempSync(join(tmpdir(), "bramble-sepolia-")), "verification.json");
 
 const PREVIOUS = process.argv[3];
+const RECORD = process.env["BRAMBLE_SEPOLIA_RECORD"];
+const REPLAY = process.env["BRAMBLE_SEPOLIA_REPLAY"];
+if (RECORD && REPLAY)
+  throw new Error("set BRAMBLE_SEPOLIA_RECORD or BRAMBLE_SEPOLIA_REPLAY, not both");
 
+let clean = false;
 const ok = await guarded(async () => {
   const OUT_PATH = resolve(process.argv[2] ?? defaultOutPath());
-  const session = await openSession(secret(sepoliaSecret("S-BRM")));
+  let tape: Tape = REPLAY ? readTape(REPLAY) : {};
+  let missing = new Set<string>();
+  const network = REPLAY
+    ? async (context: BrowserContext) => {
+        missing = await replayTape(context, tape);
+      }
+    : RECORD
+      ? async (context: BrowserContext) => {
+          tape = await recordTape(context);
+        }
+      : undefined;
+  const session = await openSession(secret(sepoliaSecret("S-BRM")), network);
   let results: Result[];
   try {
     results = await runChecks(session);
   } finally {
     await session.close();
+    // A partial tape is still worth keeping; writeTape refuses one carrying a secret.
+    if (RECORD) writeTape(RECORD, tape);
   }
+  if (missing.size) console.log(`replay: ${missing.size} request(s) not on the tape`);
 
   const version = (() => {
     try {
@@ -51,6 +77,7 @@ const ok = await guarded(async () => {
     }
   })();
   const count = (v: Verdict): number => results.filter((r) => r.verdict === v).length;
+  clean = count("fail") === 0 && count("error") === 0;
   console.log(
     `\n${count("pass")} pass · ${count("fail")} fail · ${count("review")} review · ${count("error")} error`,
   );
@@ -89,4 +116,4 @@ const ok = await guarded(async () => {
   }
 });
 // Exit explicitly: a failed run can leave the browser open.
-process.exit(ok ? 0 : 1);
+process.exit(ok && clean ? 0 : 1);

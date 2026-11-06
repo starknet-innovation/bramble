@@ -128,6 +128,31 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
   return failures;
 };
 
+// The issue-821 Sepolia seed file is testnet-only, but it still controls the
+// funded test accounts. Only the nightly's one live Sepolia step may see it.
+const SEPOLIA_SEEDS_STEP = `      - name: Sepolia import paths (live)
+        id: sepolia
+        continue-on-error: true
+        env:
+          BRAMBLE_SEPOLIA_SEEDS: ${GITHUB_EXPRESSION} secrets.BRAMBLE_SEPOLIA_SEEDS }}
+`;
+
+const sepoliaSeedsFailures = (name: string, source: string): string[] => {
+  const uses = source.split("secrets.BRAMBLE_SEPOLIA_SEEDS").length - 1;
+  if (uses === 0) return [];
+  const path = workflowPath(name);
+  if (name !== "nightly.yml") return [`${path} must not reference the Sepolia seed secret`];
+  const failures: string[] = [];
+  requireText(
+    failures,
+    source,
+    SEPOLIA_SEEDS_STEP,
+    `${path} must scope the Sepolia seeds to its live Sepolia step`,
+  );
+  if (uses !== 1) failures.push(`${path} must reference the Sepolia seed secret exactly once`);
+  return failures;
+};
+
 const ciFailures = (source: string): string[] => {
   const failures: string[] = [];
   const validation = jobBody(source, "release-validation");
@@ -446,6 +471,7 @@ export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string
     const named = NAMED_POLICIES[name];
     failures.push(...baselineFailures(name, source, named !== undefined));
     failures.push(...scopedServiceSecretFailures(name, source));
+    failures.push(...sepoliaSeedsFailures(name, source));
     failures.push(...websiteDeployFailures(name, source));
     failures.push(...vendoringFailures(name, source));
     failures.push(...(named?.(source) ?? []));

@@ -44,5 +44,21 @@ extension.
   Passing a previous scorecard lists the verdicts that changed; keep a release's
   run as a dated `verification-sepolia-*.json`. Ledger (TA-32…TA-38) needs the
   device and is checked by hand.
+  It exits non-zero when any check fails or errors.
+- The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts` on the
+  active release branch against the newest committed scorecard, so a failing
+  import path blocks the release like any other nightly gate. It reads the seed
+  file from the `BRAMBLE_SEPOLIA_SEEDS` repository secret: the Sepolia lines of
+  `.env.vendor-seeds.local` pasted whole, with `S-LDG` left out (the runner
+  never uses it). Only that one step sees the secret
+  (`scripts/workflow-security-policy.ts`). Each run uploads its scorecard and
+  a recorded tape as the `sepolia-verification` artifact.
+- `BRAMBLE_SEPOLIA_RECORD=<tape.json>` records every network answer of a live
+  run; `BRAMBLE_SEPOLIA_REPLAY=<tape.json>` (without `BRAMBLE_E2E_LIVE_NETWORK`)
+  replays it fully offline, so a check can be rerun in seconds against the same
+  chain state (`sepolia-tape.ts`). A tape holds addresses and node answers only,
+  and is refused if it would carry a registered secret. Download a nightly's
+  tape to replay a failure locally. Replay still types the seeds into the UI,
+  so it runs locally and in the nightly only, never in PR CI.
 - Derivation uses `@scure/bip32`/`@scure/bip39` directly, never Krusty, so the
   dataset stays independent of the wallet code it measures.

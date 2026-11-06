@@ -6,7 +6,7 @@
  * Read-only: nothing here deploys, sends or signs. Secrets are typed into the
  * UI and never returned; scraped rows carry addresses and visible text only.
  */
-import { expect, type Locator, type Page } from "@playwright/test";
+import { type BrowserContext, expect, type Locator, type Page } from "@playwright/test";
 import { type LoadedExtension, launchExtension } from "../../tests/e2e/extension-fixture";
 import { sendRuntimeMessage } from "../../tests/e2e/wallet-helpers";
 
@@ -131,9 +131,17 @@ const accountsOf = async (page: Page): Promise<string[]> => {
   return (status?.accounts ?? []).map(({ address }) => `0x${BigInt(address).toString(16)}`);
 };
 
-/** Onboards `mnemonic` on mainnet, keeping Bramble account 0, then switches to Sepolia. */
-export async function openSession(mnemonic: string): Promise<Session> {
+/**
+ * Onboards `mnemonic` on mainnet, keeping Bramble account 0, then switches to
+ * Sepolia. `tap`, when given, is installed on the browser context before
+ * any page opens (sepolia-tape's record or replay).
+ */
+export async function openSession(
+  mnemonic: string,
+  tap?: (context: BrowserContext) => Promise<unknown>,
+): Promise<Session> {
   const loaded: LoadedExtension = await launchExtension({ headless: true });
+  await tap?.(loaded.context);
   const base = `chrome-extension://${loaded.extensionId}`;
   const onboarding = await loaded.context.newPage();
   await onboarding.goto(`${base}/onboarding.html`);
