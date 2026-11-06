@@ -47,10 +47,12 @@ export type RenderData = {
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
   connectedSites: ConnectedSitesState;
   deployment: boolean | null;
-  // Collectibles preview lanes: indexer candidates and explicit watches, each
+  // NFT lanes: indexer candidates and explicit watches, each
   // re-proved on-chain, merged into the gallery snapshot.
   discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["nfts"];
   indexedNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["nfts"];
+  // The open Home portfolio tab. NFTs load on Home only while "nfts" is open.
+  homeTab: "nfts" | "tokens";
   // How complete the indexer said its list was; "none" until it answers.
   nftCoverage: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["coverage"];
   watchedNfts: Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>;
@@ -152,6 +154,7 @@ export const emptyRenderCache = (): RenderData => ({
   signability: null,
   ...emptyActivityCache(),
   ...emptyNftCache(),
+  homeTab: "tokens",
   pending: [],
   changes: {},
   preferences: null,

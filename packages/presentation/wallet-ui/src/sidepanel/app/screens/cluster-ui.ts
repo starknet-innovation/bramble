@@ -7,6 +7,7 @@
  */
 import { bindNfts } from "../../journeys/collectibles/nft-ui";
 import { bindAllowances } from "../../journeys/portfolio/allowance-ui";
+import { bindHomeTabs } from "../../journeys/portfolio/home-tab-bar";
 import { bindTokenCatalog } from "../../journeys/portfolio/token-catalog-ui";
 import { bindTokens } from "../../journeys/portfolio/tokens-ui";
 import { bindShadowAccounts } from "../../journeys/privacy/shadow-accounts-ui";
@@ -33,7 +34,7 @@ export type ClusterUiDeps = {
    */
   readonly openWithToken: (view: "send" | "swap", tokenId: string) => void;
   readonly openToken: (tokenId: string) => void;
-  /** Opens a collectible's detail screen (collectibles preview only). */
+  /** Opens a collectible's detail screen (while NFTs are turned on). */
   readonly openNft: (id: string) => void;
   /** Leaves a finished collectible transfer for a dock screen. */
   readonly navigate: (view: "activity" | "home") => void;
@@ -60,8 +61,7 @@ const bindTokenDetailActions = (deps: ClusterUiDeps): void => {
 
 /**
  * Binds the swap, connected-sites, tokens, catalog, and allowance screens. The
- * NFT bindings remain in their journey while it is parked, but no live screen
- * installs their handlers.
+ * NFT bindings install on the NFTs screens and the Home NFTs tab.
  */
 export const bindClusterScreens = (deps: ClusterUiDeps): void => {
   const { app, cache, render, wallet } = deps;
@@ -98,8 +98,12 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
     wallet,
   });
   bindAllowances({ app, render, wallet });
-  // Gallery markup exists only while the collectibles preview is on, so on
-  // every other paint these bindings find nothing to install.
+  // Gallery markup (the NFTs screens and the Home NFTs tab) exists only while
+  // NFTs are turned on, so on every other paint these find nothing to install.
   bindNfts({ app, navigate: deps.navigate, openDetail: deps.openNft, render, wallet });
+  bindHomeTabs(app, async (tab) => {
+    cache.homeTab = tab;
+    await render(cache.status);
+  });
   bindShadowAccounts({ app, wallet });
 };

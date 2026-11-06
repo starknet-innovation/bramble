@@ -3,7 +3,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import type { WalletPreferences } from "@bramble/settings/preferences";
+import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
 import { shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState, pill } from "@bramble/ui-kit/content";
 import { iconButton } from "@bramble/ui-kit/controls";
@@ -89,12 +89,14 @@ export const PARKED_COLLECTIBLE_VIEWS = [
 ] as const satisfies readonly WalletView[];
 
 /**
- * Returns whether a valid screen route is deliberately unavailable while the
- * collectibles journey is parked. The opt-in collectibles preview
- * (`collectiblesPreview` in Settings) lifts the park.
+ * Returns whether a collectible screen route is unavailable: the user turned
+ * NFTs off (`collectiblesPreview: false`, "Show NFTs on Home"), or preferences
+ * are not loaded yet, so a stored "off" is never bypassed (`nftsShown`).
  */
-export const isParkedCollectibleView = (view: WalletView, preview = false): boolean =>
-  !preview && PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
+export const isParkedCollectibleView = (
+  view: WalletView,
+  preferences: Parameters<typeof nftsShown>[0],
+): boolean => !nftsShown(preferences) && PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
 
 const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   account: "Accounts",

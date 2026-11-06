@@ -41,10 +41,14 @@ export type DashboardOptions = {
   readonly collapsedFolders?: readonly string[];
   readonly expandedGroupId?: string | null;
   readonly historyUnavailable?: boolean;
+  /** The open Home portfolio tab; Tokens unless a checkpoint opens NFTs. */
+  readonly homeTab?: "nfts" | "tokens";
   readonly multisigClassDeclared?: boolean | "error" | null;
   readonly multisigIntents?: readonly ArgentMultisigSigningIntent[];
   readonly multisigs?: readonly ArgentMultisigView[];
   readonly multisigsError?: boolean;
+  /** How complete the NFT indexer said its list was. */
+  readonly nftCoverage?: "complete" | "incomplete" | "none" | "unavailable";
   readonly pending?: readonly PendingApproval[];
   readonly preferences?: WalletPreferences | null;
   readonly priceAsOf?: number | null;
@@ -131,5 +135,9 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     selectedMultisigIntentId,
     null,
     options.signability ?? null,
+    [],
+    false,
+    options.nftCoverage ?? "none",
+    options.homeTab ?? "tokens",
   );
 };

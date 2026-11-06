@@ -89,6 +89,7 @@ type WalletPreferencesStoreOptions = {
  * Stored-shape guard, re-exported so existing importers keep one entry point
  * for the store and the record it validates.
  */
+export { nftsShown } from "./preferences-display";
 export { isWalletPreferences } from "./preferences-stored";
 
 /**

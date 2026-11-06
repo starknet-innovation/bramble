@@ -153,19 +153,18 @@ Common tokens (ETH, STRK, USDC, USDT, DAI, WBTC) are auto-detected. Live prices
 come from CoinGecko with a 7-day sparkline, and likely spam tokens are filtered
 out.
 
-### NFT gallery (collectibles)
+### NFTs (collectibles)
 
-> **Preview.** The gallery is still being finished, so it is off by default and
-> the wallet fetches no collectible data. To try it, turn on **Collectibles
-> preview** in Settings → Network → Advanced endpoints: **Collectibles** then
-> appears in the portfolio menu, the NFT indexer field appears, and a site can
-> ask you to watch a collectible. An indexer URL saved in an earlier release
-> stays unused until the preview is on.
+Home shows **Tokens** and **NFTs** tabs. NFT data loads only when you open the
+NFTs tab or an NFT screen. To hide NFTs, turn off **Show NFTs on Home** in
+Settings → Appearance & currency: the tab goes away, no NFT data loads, and a
+site's request to watch an NFT can only be closed. The NFT indexer field in
+Settings → Network → Advanced endpoints appears while NFTs are on.
 
 Add an ERC-721 or ERC-1155 collectible by contract address and token ID. Bramble proves that the active account owns it on-chain before saving it, then
 reads the name, image, description, and attributes from the token's `token_uri`
 / `uri`. Automatic discovery is also ownership-checked before an item appears.
-With the preview on and no indexer of your own, Bramble asks Starkscan for the
+With NFTs on and no indexer of your own, Bramble asks Starkscan for the
 account's ERC-721 NFTs on Mainnet; Starkscan sees the account's address, as it
 does for Activity. ERC-1155 collectibles are still added by contract. When the
 list is incomplete or Starkscan can't be reached, the gallery says so.

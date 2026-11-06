@@ -156,7 +156,7 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
 /**
  * Renders the security-sensitive custom service endpoint editor: expert RPC,
  * prover, and explorer-fallback settings, away from the primary network picker.
- * The NFT-indexer field appears only with the collectibles preview on.
+ * The NFT-indexer field appears only while NFTs are turned on.
  * Read-only — every field submits a privileged message and the
  * rendered state always comes from the preferences the background returned.
  */

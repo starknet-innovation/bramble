@@ -1,8 +1,9 @@
 /**
- * Collectibles lanes for the opt-in gallery preview. While the preview is off
- * (the default) no view reaches the gallery and nothing here runs, so no
- * watched-NFT metadata is read and no address reaches an indexer.
+ * NFT lanes for the Home NFTs tab and the gallery screens. They run only while
+ * one of those is on screen and NFTs are turned on (the default), so the Tokens
+ * tab and every other screen read nothing and send no address to an indexer.
  */
+import { nftsShown } from "@bramble/settings/preferences";
 
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -34,8 +35,8 @@ export const nftSnapshot = (
 };
 
 /**
- * Queues the gallery's two lanes when the active view shows collectibles and
- * the preview is on. Watched NFTs and indexer discovery load independently;
+ * Queues the gallery's two lanes when the active view shows collectibles (a
+ * gallery screen, or Home with its NFTs tab open) and NFTs are turned on. Watched NFTs and indexer discovery load independently;
  * each re-proves ownership in the background before it reaches the cache.
  */
 export const hydrateNfts = (
@@ -49,8 +50,9 @@ export const hydrateNfts = (
   fill: <T>(load: () => Promise<T>, assign: (value: T) => void) => void,
 ): void => {
   const { activeView, cache, status, wallet } = input;
-  if (input.ambient || !cache.preferences?.collectiblesPreview) return;
-  if (!NFT_DATA_VIEWS.has(activeView)) return;
+  if (input.ambient || !nftsShown(cache.preferences)) return;
+  const homeNfts = activeView === "home" && cache.homeTab === "nfts";
+  if (!homeNfts && !NFT_DATA_VIEWS.has(activeView)) return;
   const scope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
   fill(
     () => wallet.loadWatchedNfts(scope),

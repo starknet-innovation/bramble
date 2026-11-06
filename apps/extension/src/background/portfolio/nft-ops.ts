@@ -8,6 +8,7 @@
 import { buildErc721TransferCall, buildErc1155TransferCall } from "@bramble/portfolio/nft";
 import { unavailableNftIndexer } from "@bramble/portfolio/nft-indexer";
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import { nftsShown } from "@bramble/settings/preferences";
 import type { NftStandard } from "@bramble/starknet/rpc";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
 import { refuseOnPoisonedRecipient, verifyCalls } from "@bramble/transactions/verify";
@@ -336,12 +337,11 @@ const handleDiscoverNfts = async (
       const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
       const discovery = await indexer.listOwnedNfts({
         address: owner,
-        // The gallery preview is the only surface that asks for discovery, so
-        // with it off neither a saved indexer nor Starkscan runs and no
-        // address leaves.
-        indexerUrl: preferences.collectiblesPreview ? (preferences.nftIndexerUrl ?? null) : null,
+        // With NFTs turned off neither a saved indexer nor Starkscan runs and
+        // no address leaves.
+        indexerUrl: nftsShown(preferences) ? (preferences.nftIndexerUrl ?? null) : null,
         networkId: context.networkId,
-        starkscan: preferences.collectiblesPreview === true,
+        starkscan: nftsShown(preferences),
       });
       const watched = watchedCandidates(preferences, context.networkId, owner);
       const watchedIds = new Set(watched.map((nft) => nft.id));

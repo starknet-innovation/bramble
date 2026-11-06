@@ -126,7 +126,15 @@ describe("NFT gallery bindings", () => {
 
     app.querySelector<HTMLButtonElement>(`[data-nft-hide="${airdrop.id}"]`)?.click();
     app.querySelector<HTMLButtonElement>(`[data-nft-spam="${nft.id}"]`)?.click();
-    app.querySelector<HTMLButtonElement>(`[data-remove-nft="${nft.id}"]`)?.click();
+    // Remove takes two taps: the first only arms it and says so.
+    const remove = app.querySelector<HTMLButtonElement>(`[data-remove-nft="${nft.id}"]`);
+    remove?.click();
+    await flush();
+    expect(removed).toEqual([]);
+    expect(remove?.textContent).toBe("Tap again to remove");
+    expect(remove?.getAttribute("aria-label")).toBe("Tap again to remove");
+    expect(remove?.classList.contains("is-confirming")).toBe(true);
+    remove?.click();
 
     const form = app.querySelector<HTMLFormElement>("#nft-form");
     const contract = form?.querySelector<HTMLInputElement>('input[name="contract"]');
@@ -204,6 +212,7 @@ describe("NFT gallery bindings", () => {
     const remove = app.querySelector<HTMLButtonElement>(`[data-remove-nft="${nft.id}"]`);
     hide?.click();
     spam?.click();
+    remove?.click();
     remove?.click();
 
     const form = app.querySelector<HTMLFormElement>("#nft-form");

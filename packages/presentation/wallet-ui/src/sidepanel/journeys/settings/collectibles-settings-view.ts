@@ -1,44 +1,29 @@
 /**
- * The collectibles preview switch and, while it is on, the NFT indexer field
- * on the advanced-endpoints screen. The gallery has been parked since v0.10.1;
- * the preview reopens it for people who opt in, and the indexer stays empty
- * unless they choose their own: left empty, Starkscan lists Mainnet ERC-721s.
+ * The NFT indexer field on the advanced-endpoints screen, shown while NFTs are
+ * turned on ("Show NFTs on Home" in Appearance & currency). Left empty,
+ * Starkscan lists the account's Mainnet ERC-721 NFTs.
  */
 
-import type { WalletPreferences } from "@bramble/settings/preferences";
+import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
-import { checkboxField, textField } from "@bramble/ui-kit/fields";
+import { textField } from "@bramble/ui-kit/fields";
 
 type Disclosure = (id: string, title: string, state: string, body: string) => string;
 
 /**
- * Renders the preview switch, then the indexer form when the preview is on.
+ * Renders the indexer form while NFTs are on, and nothing while they are off.
  */
 export const collectiblesSettings = (
   preferences: WalletPreferences | null,
   disclosure: Disclosure,
 ): string => {
-  const preview = preferences?.collectiblesPreview ?? false;
+  if (!nftsShown(preferences)) return "";
   const configured = preferences?.nftIndexerUrl ?? "";
-  const toggle = disclosure(
-    "collectibles-preview",
-    "Collectibles preview",
-    preview ? "On" : "Off",
-    `${checkboxField({
-      attributes: { id: "collectibles-preview" },
-      checked: preview,
-      name: "collectiblesPreview",
-      text: "Show Collectibles in the portfolio menu",
-    })}
-    <p class="hint">Unfinished. On Mainnet, Starkscan finds this account's ERC-721 NFTs and sees its address. Every NFT shown is checked on-chain.</p>`,
-  );
-  if (!preview) return toggle;
-  return `${toggle}
-    ${disclosure(
-      "nft-indexer",
-      "NFT indexer",
-      configured ? "Configured" : "Starkscan",
-      `<form id="nft-indexer-form">
+  return disclosure(
+    "nft-indexer",
+    "NFT indexer",
+    configured ? "Configured" : "Starkscan",
+    `<form id="nft-indexer-form">
         ${textField({
           autocomplete: "off",
           className: "mono",
@@ -53,5 +38,5 @@ export const collectiblesSettings = (
         ${button({ icon: "check", label: "Save indexer", type: "submit", variant: "secondary" })}
         <p id="nft-indexer-result" role="status"></p>
       </form>`,
-    )}`;
+  );
 };

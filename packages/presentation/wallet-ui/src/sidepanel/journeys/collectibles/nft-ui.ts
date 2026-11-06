@@ -129,6 +129,23 @@ const bindHideDiscovered = (deps: NftUiDeps): void => {
   });
 };
 
+// The label an armed Remove shows (and is announced as) before its second tap.
+const REMOVE_CONFIRM_LABEL = "Tap again to remove";
+
+// Arms a Remove control on its first tap and returns false; returns true once
+// it is already armed. A text button shows the confirm label; an icon button
+// keeps its icon and carries it as its accessible name.
+const armRemove = (button: HTMLButtonElement): boolean => {
+  if (button.dataset["confirm"] === "true") return true;
+  const control = button;
+  control.dataset["confirm"] = "true";
+  control.classList.add("is-confirming");
+  control.setAttribute("aria-label", REMOVE_CONFIRM_LABEL);
+  control.title = REMOVE_CONFIRM_LABEL;
+  if (!control.classList.contains("icon-button")) control.textContent = REMOVE_CONFIRM_LABEL;
+  return false;
+};
+
 const bindRowActions = (deps: NftUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-open]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -162,6 +179,11 @@ const bindRowActions = (deps: NftUiDeps): void => {
     button.addEventListener("click", () => {
       const id = button.dataset["removeNft"];
       if (!id) {
+        return;
+      }
+      // Two taps, like deleting a folder: the first arms the control and says
+      // so; only a second tap on the same control removes.
+      if (!armRemove(button)) {
         return;
       }
       buttonBusy(button, true);

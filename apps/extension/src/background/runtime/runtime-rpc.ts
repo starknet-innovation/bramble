@@ -434,7 +434,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     resolveSignerAccount: getMultisigSignerAccount,
     submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
-  // Starkscan is the Collectibles preview's built-in indexer, over the same
+  // Starkscan is the built-in NFT indexer, over the same
   // host, base override and explorer-lane gate as Activity.
   nftIndexer: createHttpNftIndexer(
     nftIndexerHttp,

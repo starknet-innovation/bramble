@@ -469,7 +469,7 @@ directly and adopted when it is at least the tracked figure. Collection approval
 reviewed as their own kinds: an ERC721 `approve` carries a token id, so a "revoke" would approve
 item 0. The store `bramble:allowances` sits outside the vault.
 
-## NFT gallery (parked; reachable only through the opt-in collectibles preview)
+## NFTs (Home tab and gallery; on unless the user turns them off)
 
 The gallery merges auto-discovered collectibles with watched `nfts` preferences (contract, token
 id, network, optional label, spam flag).
@@ -479,8 +479,8 @@ URLs. The detail screen shows the resolved artwork and attributes, then sends th
 review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-1155, decodes the
 exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
-Parked unless the opt-in `collectiblesPreview` preference is on (gallery, indexer field, gated site watch cards; see PR #840);
-otherwise no NFT data loads and no indexer URL is used. With it on and no indexer saved, Starkscan's Mainnet ERC-721 positions are read over the existing Starkscan client and `explorerFallback` gate (`starkscan-nfts.ts`).
+Shown unless `collectiblesPreview` is explicitly `false` ("Show NFTs on Home"; `nftsShown`): the Home NFTs tab, gallery, indexer field and approvable site watch cards. NFT lanes load only on the NFTs tab or a gallery screen.
+With NFTs off nothing loads and no indexer URL is used. With no indexer saved, Starkscan's Mainnet ERC-721 positions are read over the existing Starkscan client and `explorerFallback` gate (`starkscan-nfts.ts`).
 A partial or failed index is reported as such, never as "no NFTs"; ERC-1155 stays watch-only.
 Ownership proofs stay untrusted-first whenever discovery runs: concurrent refreshes for the same account
 share the in-flight request, account switches remain isolated, and the first visible watched

@@ -113,8 +113,16 @@ describe("sidepanel home", () => {
     expect(html).toContain('id="starkscan-button"');
   });
 
-  test("portfolio has a Tokens heading, no tablist, and one accessible quick-actions menu", () => {
-    const html = dashboard("home", status, [], preferences, { balances: [] });
+  test("with NFTs off the portfolio has a Tokens heading, no tablist, and one menu", () => {
+    const html = dashboard(
+      "home",
+      status,
+      [],
+      { ...preferences, collectiblesPreview: false },
+      {
+        balances: [],
+      },
+    );
 
     const portfolio = html.slice(
       html.indexOf('<section class="home-tabs"'),

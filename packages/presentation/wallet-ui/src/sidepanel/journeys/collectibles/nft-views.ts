@@ -158,7 +158,7 @@ const hideButton = (item: NftGalleryItem): string =>
         attributes: { "data-nft-spam": item.id, "data-nft-spam-value": "true" },
         label: "Hide",
         size: "small",
-        variant: "ghost",
+        variant: "secondary",
       })
     : button({
         attributes: {
@@ -170,7 +170,7 @@ const hideButton = (item: NftGalleryItem): string =>
         },
         label: "Hide",
         size: "small",
-        variant: "ghost",
+        variant: "secondary",
       });
 
 /**
@@ -196,7 +196,7 @@ export const nftGalleryCard = (item: NftGalleryItem, eager: boolean): string => 
               label: "Remove",
               size: "small",
               tone: "danger",
-              variant: "ghost",
+              variant: "secondary",
             })
           : ""
       }
@@ -241,16 +241,16 @@ const hiddenNftsForAccount = (
 };
 
 /**
- * NFT gallery flow: an auto-discovered grid of owned collectibles merged with
- * manual watches. Watch and hidden-item management are dedicated screens.
+ * The gallery content shared by the NFTs screen and the Home NFTs tab. An
+ * incomplete or failed list says so and never reads as "none found".
  */
-export const nftGalleryFlow = (
+export const nftGalleryBody = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[] = [],
   coverage: NftCoverage = "none",
-): string => {
+): { readonly html: string; readonly shown: number } => {
   const note = nftCoverageNote(coverage);
   const watched = preferences?.nfts ?? [];
   const visible = visibleNftItems(
@@ -260,11 +260,7 @@ export const nftGalleryFlow = (
     account?.address ?? null,
   );
   const hidden = hiddenNftsForAccount(watched, discoveredNfts, status.networkId, account);
-  return (
-    flowHeader("NFTs", status, `${visible.length} shown`) +
-    flowScreen(
-      "nfts",
-      `<section class="section">
+  const html = `<section class="section">
         <div class="menu-list" role="group" aria-label="Collectible actions">
           ${walletMenuRow("nft-watch", "Watch by contract", "plus")}
           ${walletMenuRow("nft-hidden", "Hidden collectibles", "image", String(hidden.length))}
@@ -280,9 +276,20 @@ export const nftGalleryFlow = (
               )
             : `${note ? `<p class="hint" role="status">${escapeHtml(note)}</p>` : ""}<ul class="nft-grid">${visible.map((nft, index) => nftGalleryCard(nft, index < 4)).join("")}</ul>`
         }
-      </section>`,
-    )
-  );
+      </section>`;
+  return { html, shown: visible.length };
+};
+
+/** NFT gallery flow: owned collectibles merged with manual watches. */
+export const nftGalleryFlow = (
+  status: WalletStatus,
+  account: AccountRef | null,
+  preferences: WalletPreferences | null,
+  discoveredNfts: readonly DiscoveredNft[] = [],
+  coverage: NftCoverage = "none",
+): string => {
+  const body = nftGalleryBody(status, account, preferences, discoveredNfts, coverage);
+  return flowHeader("NFTs", status, `${body.shown} shown`) + flowScreen("nfts", body.html);
 };
 
 /**

@@ -27,6 +27,7 @@ import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, WalletScenario } from "../runtime/types";
 import { approvalsScenario } from "./scenarios-approvals";
 import { multisigScenario } from "./scenarios-multisig";
+import { nftHomeScenario } from "./scenarios-nft-home";
 import { ledgerOnboardingScenario, onboardingScenario } from "./scenarios-onboarding";
 import { privacyScenario } from "./scenarios-privacy";
 import { settingsScenario } from "./scenarios-settings";
@@ -430,6 +431,7 @@ export const walletScenarios: readonly WalletScenario[] = [
   activityScenario,
   assetsScenario,
   nftScenario,
+  nftHomeScenario,
   multisigScenario,
   settingsScenario,
 ];

@@ -5,7 +5,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import type { WalletPreferences } from "@bramble/settings/preferences";
+import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
 import { button, segmentedControl } from "@bramble/ui-kit/controls";
 import { checkboxField, selectField, textField } from "@bramble/ui-kit/fields";
 import { menuLink } from "@bramble/ui-kit/navigation";
@@ -139,6 +139,13 @@ export const appearanceFlow = (
         name: "vipNotice",
         text: "Show when an account is eligible for Starknet VIP",
       })}
+      ${checkboxField({
+        attributes: { id: "nfts-on-home" },
+        checked: nftsShown(preferences),
+        name: "collectiblesPreview",
+        text: "Show NFTs on Home",
+      })}
+      <p class="hint">On Mainnet, Starkscan finds this account's ERC-721 NFTs and sees its address. Every NFT shown is checked on-chain.</p>
     </section>
     <p id="display-result" role="status"></p>`,
   );

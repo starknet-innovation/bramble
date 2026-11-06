@@ -405,10 +405,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
 
   // --- Collectibles --------------------------------------------------------
   ["this account does not own that nft", "This account doesn't own that collectible."],
-  [
-    "collectibles preview is off",
-    "Turn on Collectibles preview in Advanced endpoints to watch collectibles.",
-  ],
+  ["nfts are turned off", "Turn on Show NFTs on Home in Appearance & currency to watch NFTs."],
   [
     "switch to the nft's network first",
     "This collectible is on another network. Switch networks to move it.",

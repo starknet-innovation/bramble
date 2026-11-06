@@ -122,13 +122,25 @@ describe("NFT auto-discovery messages", () => {
     });
   });
 
-  test("a saved indexer is used only while the collectibles preview is on", async () => {
-    const { handler, indexerUrls, preferencesStore } = makeHandler({ candidates: [], owners: {} });
+  test("NFTs are on by default; turned off, no indexer or Starkscan runs", async () => {
+    const asked: Array<string | null> = [];
+    const { handler, preferencesStore } = makeHandler({
+      candidates: [],
+      nftIndexer: {
+        async listOwnedNfts(input) {
+          asked.push(`${input.indexerUrl}|${input.starkscan}`);
+          return { coverage: "none", nfts: [] };
+        },
+      },
+      owners: {},
+    });
     await preferencesStore.setNftIndexerUrl({ url: "https://indexer.example" });
+    // Nothing stored: NFTs are on, so the saved indexer is used.
     await handler({ type: "wallet.discoverNfts" }, sender);
-    await preferencesStore.setDisplay({ collectiblesPreview: true });
+    // The user turns NFTs off: nothing may be asked.
+    await preferencesStore.setDisplay({ collectiblesPreview: false });
     await handler({ includeWatched: false, type: "wallet.discoverNfts" }, sender);
-    expect(indexerUrls).toEqual([null, "https://indexer.example"]);
+    expect(asked).toEqual(["https://indexer.example|true", "null|false"]);
   });
 
   test("scopes shared-account discovery to a watched multisig address", async () => {
@@ -387,13 +399,15 @@ describe("NFT auto-discovery messages", () => {
       owners: { "0x511a2b3": account.address, "0x6220000": "0x999" },
     });
     const message = { includeWatched: false, type: "wallet.discoverNfts" };
-    // Preview off: Starkscan is never asked.
+    // NFTs turned off: Starkscan is never asked.
+    await preferencesStore.setDisplay({ collectiblesPreview: false });
     await expect(handler(message, sender)).resolves.toEqual({
       coverage: "none",
       nfts: [],
       ok: true,
     });
     expect(requested).toEqual([]);
+    // Back on by default once the user turns them on again.
     await preferencesStore.setDisplay({ collectiblesPreview: true });
     now += 120_000;
     const expected = {

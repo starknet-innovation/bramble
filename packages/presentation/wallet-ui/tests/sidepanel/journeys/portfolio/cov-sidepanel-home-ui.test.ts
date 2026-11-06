@@ -336,11 +336,13 @@ describe("home portfolio section", () => {
     document.body.replaceChildren();
   });
 
-  test("renders a Tokens heading with no tablist while Collectibles is parked", () => {
+  test("renders Tokens and NFTs tabs, Tokens open, while NFTs are on (the default)", () => {
     const h = mount();
     const section = el(h.app, ".home-tabs");
-    expect(el(section, "h2").textContent).toBe("Tokens");
-    expect(section.innerHTML).not.toContain('role="tab');
+    const tabs = [...section.querySelectorAll<HTMLElement>('[role="tab"]')];
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Tokens", "NFTs"]);
+    expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual(["true", "false"]);
+    expect(el(section, "#home-panel-nfts").hidden).toBe(true);
     expect(section.querySelector(".tab-panel")).toBeNull();
   });
 });

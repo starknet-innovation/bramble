@@ -51,6 +51,7 @@ import {
 } from "../../journeys/multisig/multisig-views";
 import { activityContacts } from "../../journeys/portfolio/activity-filter";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
+import type { HomeTab } from "../../journeys/portfolio/home-tab-bar";
 import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
 import { tokenCatalogFlow } from "../../journeys/portfolio/token-catalog-view";
 import {
@@ -316,6 +317,7 @@ export const dashboard = (
   relays: readonly RelaySignature[] = [],
   privateTotalWaitOver = false,
   nftCoverage: NftCoverage = "none",
+  homeTab: HomeTab = "tokens",
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -473,6 +475,7 @@ export const dashboard = (
               privacy,
               signability,
               privateTotalWaitOver,
+              { coverage: nftCoverage, discovered: discoveredNfts, selected: homeTab },
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}

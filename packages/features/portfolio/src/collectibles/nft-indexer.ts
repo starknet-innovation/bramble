@@ -18,7 +18,7 @@
  *
  * The built-in indexer is Starkscan, over the wallet's existing Starkscan
  * connection ({@link StarkscanNftSource}, injected by the wiring). It runs only
- * when the caller sets `starkscan` (the Collectibles preview is on) and no
+ * when the caller sets `starkscan` (NFTs are turned on, the default) and no
  * indexer URL is saved: a saved URL is the user's own choice and replaces it.
  *
  * With neither, discovery resolves to coverage "none" without touching the
@@ -50,7 +50,7 @@ export type NftIndexerInput = {
   readonly indexerUrl: string | null;
   readonly networkId: StarknetNetworkId;
   /**
-   * True only while the Collectibles preview is on: lets the built-in
+   * True only while NFTs are turned on (the default): lets the built-in
    * Starkscan source run when no indexer URL is saved. Absent means off, so a
    * caller that forgets it sends nothing.
    */

@@ -217,29 +217,10 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
   });
 };
 
-// The collectibles preview switch.
-const bindCollectibles = (deps: EndpointUiDeps): void => {
-  const toggle = deps.app?.querySelector<HTMLInputElement>("#collectibles-preview");
-  toggle?.addEventListener("change", () => {
-    toggle.disabled = true;
-    void deps.wallet.setDisplay({ collectiblesPreview: toggle.checked }).then(
-      async () => {
-        showToast(`Collectibles preview ${toggle.checked ? "on" : "off"}`, "success", toggle);
-        await deps.render(await deps.wallet.loadStatus());
-      },
-      (error: unknown) => {
-        toggle.checked = !toggle.checked;
-        showToast(errorDetails(error, "Collectibles preference failed"), "error", toggle);
-        toggle.disabled = false;
-      },
-    );
-  });
-};
-
 /**
- * Binds the RPC-override, explorer-fallback, STRK20-prover, collectibles
- * preview and NFT-indexer controls on the advanced-endpoints screen. The
- * indexer form renders only with the collectibles preview on.
+ * Binds the RPC-override, explorer-fallback, STRK20-prover and NFT-indexer
+ * controls on the advanced-endpoints screen. The indexer form renders only
+ * while NFTs are turned on.
  */
 export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
   bindEndpointForm(deps, "#rpc-form", "rpcUrl", "RPC endpoint", (rpcUrl) =>
@@ -255,7 +236,6 @@ export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
     (relayUrl) => deps.wallet.setNostrRelayUrl(relayUrl),
     true,
   );
-  bindCollectibles(deps);
   bindEndpointForm(deps, "#nft-indexer-form", "indexerUrl", "Indexer endpoint", (indexerUrl) =>
     deps.wallet.setNftIndexerUrl(indexerUrl),
   );

@@ -32,8 +32,9 @@ export type WalletPreferences = {
   readonly approvalSurface?: ApprovalSurfacePreference;
   readonly addressBook: readonly AddressBookEntry[];
   /**
-   * Opt-in preview of the collectibles gallery, parked since v0.10.1. Off (or
-   * absent) keeps every gallery route, NFT load and indexer request withheld.
+   * Whether NFTs are shown ("Show NFTs on Home"). Absent means on; an explicit
+   * `false` (the user turned NFTs off) withholds the Home NFTs tab, every
+   * gallery route, NFT load and indexer request. Read it through `nftsShown`.
    */
   readonly collectiblesPreview?: boolean;
   readonly customNetworks?: readonly CustomNetwork[];

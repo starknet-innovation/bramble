@@ -1,5 +1,5 @@
 /**
- * Starkscan as the Collectibles preview's built-in NFT indexer, over the
+ * Starkscan as the built-in NFT indexer (while NFTs are turned on), over the
  * wallet's existing Starkscan connection (the same client, per-network base
  * override, untrusted HTTP transport and `explorerFallback` gate as Activity).
  *
