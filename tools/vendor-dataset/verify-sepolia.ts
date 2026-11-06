@@ -6,23 +6,37 @@
  * Read-only: no deploy, send or signature. Secrets are typed into the UI only;
  * the output carries addresses and visible text, and everything printed or
  * written, a failure included, is redacted (sepolia-redact).
- * Ledger (TA-32…TA-38) needs the device and stays a manual check.
+ *
+ * The test Ledger (TA-32…TA-37, path P9) is opt-in: BRAMBLE_SEPOLIA_LEDGER=1
+ * shows the browser and adds those checks after the rest, asking in the
+ * terminal for the device (verify-sepolia-ledger.ts). Without it they are
+ * skipped, so the run needs no Ledger; the nightly never sets it. TA-38 stays
+ * a manual check.
  *
  * Run from the repository root after `bun run build`:
  *   BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia \
  *     bun tools/vendor-dataset/verify-sepolia.ts [out.json] [previous.json]
  * With a previous scorecard, the verdicts that changed are listed at the end.
  * The scorecard goes to the given path, or to a new owner-only directory under
- * the system temp directory.
+ * the system temp directory. The run exits non-zero when any check fails or
+ * errors, so CI (the nightly) can gate on it.
+ *
+ * BRAMBLE_SEPOLIA_RECORD=<tape.json> records every network answer of a live
+ * run; BRAMBLE_SEPOLIA_REPLAY=<tape.json> replays one with no network at all
+ * (drop BRAMBLE_E2E_LIVE_NETWORK). See sepolia-tape.ts.
  */
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import type { BrowserContext } from "@playwright/test";
 import { NETWORK } from "./matrix-lib";
 import { guarded, redact, secret } from "./sepolia-redact";
 import { sepoliaSecret } from "./sepolia-seeds";
-import { type Result, runChecks, type Verdict } from "./verify-sepolia-checks";
-import { openSession } from "./verify-sepolia-ui";
+import { readTape, recordTape, replayTape, type Tape, writeTape } from "./sepolia-tape";
+import { runChecks } from "./verify-sepolia-checks";
+import { runLedgerChecks } from "./verify-sepolia-ledger";
+import { allResults, type Result, type Verdict } from "./verify-sepolia-score";
+import { openSession, type Session } from "./verify-sepolia-ui";
 
 if (NETWORK !== "sepolia") throw new Error("set BRAMBLE_DATASET_NETWORK=sepolia");
 // Playwright's debug logs echo every value typed, secrets included, before any redaction.
@@ -32,15 +46,54 @@ const defaultOutPath = (): string =>
   join(mkdtempSync(join(tmpdir(), "bramble-sepolia-")), "verification.json");
 
 const PREVIOUS = process.argv[3];
+const RECORD = process.env["BRAMBLE_SEPOLIA_RECORD"];
+const REPLAY = process.env["BRAMBLE_SEPOLIA_REPLAY"];
+const LEDGER = process.env["BRAMBLE_SEPOLIA_LEDGER"] === "1";
+if (RECORD && REPLAY)
+  throw new Error("set BRAMBLE_SEPOLIA_RECORD or BRAMBLE_SEPOLIA_REPLAY, not both");
+
+let clean = false;
+let tapeKept = true;
+
+/** Writes the recorded tape; a refusal is reported, never allowed to hide the run's own result. */
+const keepTape = (path: string, tape: Tape): void => {
+  try {
+    writeTape(path, tape);
+  } catch (error) {
+    tapeKept = false;
+    console.error(`tape not written: ${redact(String(error)).slice(0, 300)}`);
+  }
+};
 
 const ok = await guarded(async () => {
   const OUT_PATH = resolve(process.argv[2] ?? defaultOutPath());
-  const session = await openSession(secret(sepoliaSecret("S-BRM")));
-  let results: Result[];
+  let tape: Tape = REPLAY ? readTape(REPLAY) : {};
+  let missing = new Set<string>();
+  const network = REPLAY
+    ? async (context: BrowserContext) => {
+        missing = await replayTape(context, tape);
+      }
+    : RECORD
+      ? async (context: BrowserContext) => {
+          tape = await recordTape(context);
+        }
+      : undefined;
+  let session: Session | undefined;
+  let results: readonly Result[];
   try {
-    results = await runChecks(session);
+    session = await openSession(secret(sepoliaSecret("S-BRM")), network, LEDGER);
+    await runChecks(session);
+    if (LEDGER) await runLedgerChecks(session);
+    else console.log("\n## Test Ledger (TA-32…TA-37): skipped; set BRAMBLE_SEPOLIA_LEDGER=1");
+    results = allResults();
   } finally {
-    await session.close();
+    await session?.close();
+    // A partial tape is still worth keeping; writeTape refuses one carrying a secret.
+    if (RECORD) keepTape(RECORD, tape);
+  }
+  if (missing.size) {
+    console.log(`replay: ${missing.size} request(s) not on the tape, for example:`);
+    for (const key of [...missing].slice(0, 5)) console.log(`   ${redact(key).slice(0, 200)}`);
   }
 
   const version = (() => {
@@ -51,6 +104,7 @@ const ok = await guarded(async () => {
     }
   })();
   const count = (v: Verdict): number => results.filter((r) => r.verdict === v).length;
+  clean = count("fail") === 0 && count("error") === 0;
   console.log(
     `\n${count("pass")} pass · ${count("fail")} fail · ${count("review")} review · ${count("error")} error`,
   );
@@ -89,4 +143,4 @@ const ok = await guarded(async () => {
   }
 });
 // Exit explicitly: a failed run can leave the browser open.
-process.exit(ok ? 0 : 1);
+process.exit(ok && clean && tapeKept ? 0 : 1);
