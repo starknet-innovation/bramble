@@ -43,7 +43,9 @@ import {
 
 const STARKNET_CLA = 0x5a;
 const SIGN_HASH_INS = 0x02;
-const USER_REJECTED = 0x6e04;
+// `UserCancelled` in the app's Ledger Rust SDK io (legacy), the app's own
+// SW_DENY. App 2.4.x sends it for a reject and for Blind signing off alike.
+const USER_CANCELLED = 0x6985;
 
 const endpoints = speculosEndpointsFromEnv();
 
@@ -93,6 +95,13 @@ const importAndRequestSign = async (rig: Rig): Promise<PendingLedgerSign> => {
   return requestLedgerSignature(rig.extension, sidepanel);
 };
 
+// Statuses of every sign-hash APDU the device answered, in order. One attempt
+// is the path APDU (P1 = 0, 0x9000) then the hash APDU (P1 = 1).
+const signHashStatuses = (bridge: LedgerHidBridge): readonly number[] =>
+  bridge.log
+    .filter((entry) => entry.cla === STARKNET_CLA && entry.ins === SIGN_HASH_INS)
+    .map((entry) => entry.status);
+
 // Status of the hash APDU (P1 = 1), the one the user answers on the device;
 // the preceding path APDU (P1 = 0) always succeeds and is not the outcome.
 const lastSignHashStatus = (bridge: LedgerHidBridge): number | undefined =>
@@ -127,21 +136,23 @@ test("imports LedgerW and finds the argentx (Ready) account from the device", as
   });
 });
 
-test("blind signing off: the device refuses and the wallet shows the existing copy", async () => {
+test("blind signing off: the device refuses and the wallet shows the combined copy", async () => {
   await withRig(async (rig) => {
     const pending = await importAndRequestSign(rig);
     try {
       await rejectBlindSigningPrompt(rig.screen, rig.speculos.model);
       // App 2.4.3 answers a hash with the setting off by showing its
-      // "cannot be clear-signed" prompt, then status 0x6E04 once the user
-      // backs out (starknet/src/main.rs, Ins::SignHash). Bramble maps 0x6E04
-      // to the rejection copy; its separate blind-signing-disabled copy is
-      // mapped from 0x6F00, which this app version does not send here.
+      // "cannot be clear-signed" prompt, then UserCancelled (0x6985) once the
+      // user backs out (starknet/src/main.rs, Ins::SignHash), the same status
+      // as a reject. hw-app-starknet folds 0x6985 into ExecutionError
+      // (0x6F00), so Bramble shows the copy that covers both (mc-wallet 876).
       await expect(pending.overlay.locator('p.review-flag[role="alert"]')).toHaveText(
-        ledgerMessage("rejected-on-device"),
+        ledgerMessage("rejected-or-blind-signing-off"),
         { timeout: 30_000 },
       );
-      expect(lastSignHashStatus(rig.bridge)).toBe(USER_REJECTED);
+      expect(lastSignHashStatus(rig.bridge)).toBe(USER_CANCELLED);
+      // The device was asked once: one path APDU, one refused hash APDU.
+      expect(signHashStatuses(rig.bridge)).toEqual([0x9000, USER_CANCELLED]);
       await pending.overlay.locator("[data-ledger-cancel]").click();
       await expect(pending.dapp.getByTestId("sign-result")).toContainText('"status":"rejected"');
     } finally {
@@ -150,17 +161,20 @@ test("blind signing off: the device refuses and the wallet shows the existing co
   });
 });
 
-test("rejecting on the device shows the existing rejection copy", async () => {
+test("rejecting on the device shows the combined copy", async () => {
   await withRig(async (rig) => {
     await enableBlindSigning(rig.screen, rig.speculos.model);
     const pending = await importAndRequestSign(rig);
     try {
       await rejectHashReview(rig.screen, rig.speculos.model);
+      // A reject answers UserCancelled (0x6985), indistinguishable from Blind
+      // signing off, so the wallet shows the same combined copy.
       await expect(pending.overlay.locator('p.review-flag[role="alert"]')).toHaveText(
-        ledgerMessage("rejected-on-device"),
+        ledgerMessage("rejected-or-blind-signing-off"),
         { timeout: 30_000 },
       );
-      expect(lastSignHashStatus(rig.bridge)).toBe(USER_REJECTED);
+      expect(lastSignHashStatus(rig.bridge)).toBe(USER_CANCELLED);
+      expect(signHashStatuses(rig.bridge)).toEqual([0x9000, USER_CANCELLED]);
       await pending.overlay.locator("[data-ledger-cancel]").click();
       await expect(pending.dapp.getByTestId("sign-result")).toContainText('"status":"rejected"');
     } finally {
