@@ -1,6 +1,11 @@
 /** Fee-echo validation performed before an approval is consumed. */
 
-import { type FeeEstimate, sameFeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import {
+  type FeeEstimate,
+  reviewedInvokeTotal,
+  sameFeeEstimate,
+  sumFeeEstimates,
+} from "@bramble/starknet/fee-bounds";
 import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
@@ -37,13 +42,15 @@ const pendingDeclareFeeRefusal = (
  * means that offer is still the one the queue holds, or that the queue has no
  * such approval. A missing approval is not a fee-review failure: the claim
  * answers not-found, the same as a fee-bearing decision with nothing pending.
+ * An undeployed account is refused whatever offers the entry carries: the
+ * relay cannot deploy it, and the gasless lane binds no deployment ceiling.
  */
 export const pendingGaslessRefusal = (
   pending: PendingApproval | null,
   choice: GaslessFeeOffer,
 ): RuntimeResponse | null => {
   if (pending === null) return null;
-  if (pending.deployFirst === true) {
+  if (pending.deployFirst === true || pending.requiresDeployment === true) {
     return { error: UNDEPLOYED_BRAAVOS_REFUSAL };
   }
   if (pending.kind !== "invoke") {
@@ -71,15 +78,12 @@ export const pendingFeeRefusal = (
   if (pending?.kind !== "invoke") return null;
   // No fee can bind it: the account deploys only through its own step.
   if (pending.deployFirst === true) return { error: UNDEPLOYED_BRAAVOS_REFUSAL };
-  if (
-    !reviewedFee ||
-    !pending.fee ||
-    pending.feeEstimateFailed === true ||
-    pending.feeEstimatePending === true
-  ) {
-    return FEE_REVIEW_REQUIRED;
-  }
-  return sameFeeEstimate(reviewedFee, pending.fee)
+  const total = reviewedInvokeTotal(pending);
+  if (!reviewedFee || !total) return FEE_REVIEW_REQUIRED;
+  // The echo is the figure the card displayed, and it only binds if the queue
+  // still agrees with it: a retry on a second surface can replace the slot
+  // between paint and click. A moved figure is refused, never substituted.
+  return sameFeeEstimate(reviewedFee, total)
     ? null
     : { error: "the fee changed since this request was reviewed" };
 };

@@ -74,7 +74,7 @@ export const sceneContent = (cache: RenderData, state: SceneContentState): strin
     state.expandedGroupId,
     cache.priceStale,
     cache.priceAsOf,
-    [],
+    cache.discoveredNfts,
     state.addFolderOpen,
     verificationForAccount(cache.classHashVerification, status.activeAccountId),
     cache.historyUnavailable,

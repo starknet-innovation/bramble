@@ -56,6 +56,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "activeNetworkId",
   "approvalSurface",
   "addressBook",
+  "collectiblesPreview",
   "customNetworks",
   "dappTokenIds",
   "displayCurrency",
@@ -106,6 +107,8 @@ const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
 const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
   hasValidIdKeyedEntries(value) && hasValidDisplayEntries(value);
 const hasValidTelemetryEntries = (value: Record<string, unknown>): boolean =>
+  (value["collectiblesPreview"] === undefined ||
+    typeof value["collectiblesPreview"] === "boolean") &&
   (value["productAnalytics"] === undefined || typeof value["productAnalytics"] === "boolean") &&
   (value["reliabilityDiagnostics"] === undefined ||
     typeof value["reliabilityDiagnostics"] === "boolean");

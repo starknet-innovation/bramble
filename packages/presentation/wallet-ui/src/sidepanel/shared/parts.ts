@@ -91,10 +91,11 @@ export const PARKED_COLLECTIBLE_VIEWS = [
 
 /**
  * Returns whether a valid screen route is deliberately unavailable while the
- * collectibles journey is parked.
+ * collectibles journey is parked. The opt-in collectibles preview
+ * (`collectiblesPreview` in Settings) lifts the park.
  */
-export const isParkedCollectibleView = (view: WalletView): boolean =>
-  PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
+export const isParkedCollectibleView = (view: WalletView, preview = false): boolean =>
+  !preview && PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
 
 const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   account: "Accounts",

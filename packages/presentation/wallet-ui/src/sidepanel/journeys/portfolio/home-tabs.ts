@@ -431,6 +431,19 @@ export const homeTabs = (
             label: "Manage tokens",
             variant: "ghost",
           })}
+          ${
+            // The parked gallery's only way back in, and only with the opt-in
+            // collectibles preview on (Settings → Advanced).
+            preferences?.collectiblesPreview
+              ? button({
+                  attributes: { "data-view": "nfts", role: "menuitem", tabindex: "-1" },
+                  className: "portfolio-menu-item",
+                  icon: "image",
+                  label: "Collectibles",
+                  variant: "ghost",
+                })
+              : ""
+          }
           ${button({
             attributes: {
               "data-reload-balances": true,

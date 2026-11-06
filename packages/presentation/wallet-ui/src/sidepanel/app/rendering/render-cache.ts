@@ -49,6 +49,11 @@ export type RenderData = {
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
   connectedSites: ConnectedSitesState;
   deployment: boolean | null;
+  // Collectibles preview lanes: indexer candidates and explicit watches, each
+  // re-proved on-chain, merged into the gallery snapshot.
+  discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
+  indexedNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
+  watchedNfts: Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>;
   signability: SignabilityVerdict | null;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
   preferences: WalletPreferences | null;
@@ -76,6 +81,16 @@ const emptyActivityCache = (): Pick<
 });
 
 /**
+ * Empty account-scoped NFT lanes used on account/network switches so an old
+ * gallery never flashes while fresh ownership proofs are in flight.
+ */
+const emptyNftCache = (): Pick<RenderData, "discoveredNfts" | "indexedNfts" | "watchedNfts"> => ({
+  discoveredNfts: [],
+  indexedNfts: [],
+  watchedNfts: [],
+});
+
+/**
  * Applies a freshly loaded status and clears account-scoped render data when
  * the active signer or network changed. The precise change is returned so a
  * signer handoff can retain a selected contract-account portfolio while a
@@ -93,6 +108,7 @@ export const updateRenderScope = (
     ...(changed
       ? {
           ...emptyActivityCache(),
+          ...emptyNftCache(),
           balances: { loading: true },
           staking: STAKING_LOADING,
           multisigBalanceId: null,
@@ -133,6 +149,7 @@ export const emptyRenderCache = (): RenderData => ({
   deployment: null,
   signability: null,
   ...emptyActivityCache(),
+  ...emptyNftCache(),
   pending: [],
   changes: {},
   preferences: null,
