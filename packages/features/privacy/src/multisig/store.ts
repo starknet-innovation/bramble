@@ -19,6 +19,13 @@ import {
   type MultisigStrk20RelayRequest,
 } from "./records";
 import { isMultisigStrk20RelayInvite, type MultisigStrk20RelayInvite } from "./relay-invite";
+import {
+  isMultisigStrk20RowFor,
+  mergedMultisigStrk20Authorization,
+  mergedMultisigStrk20Invite,
+  multisigStrk20RelayConflicts,
+  placeMultisigStrk20Row,
+} from "./store-rows";
 
 const STORE_KEY = "bramble:argent-multisig-strk20:v1";
 
@@ -27,13 +34,25 @@ type Shape = {
   readonly invites: readonly unknown[];
   readonly proofs: readonly unknown[];
   readonly relays: readonly unknown[];
+  /** Multisig ids whose viewing key another holder has: shared, or received. */
+  readonly sharedKeys: readonly unknown[];
 };
+
+type Upsert = "conflict" | "full" | "invalid" | "stored" | "unauthorized";
 
 /**
  * Persistent multisig STRK20 round state. Mutations are serialized per store.
  */
 export type MultisigStrk20Store = {
   readonly dropProof: (intentId: string) => Promise<void>;
+  /** True while a relay for this multisig is collecting or ready to send. */
+  readonly hasLiveRelay: (accountId: string) => Promise<boolean>;
+  /** True once this multisig's viewing key was shared, or came from a co-owner. */
+  readonly isKeyShared: (accountId: string) => Promise<boolean>;
+  /** Records whether another holder has this multisig's viewing key. */
+  readonly markKeyShared: (accountId: string, shared: boolean) => Promise<void>;
+  /** Drops every row for a removed multisig, including its proof bytes. */
+  readonly purgeAccount: (accountId: string) => Promise<void>;
   readonly getAuthorization: (
     id: string,
     scalar: string,
@@ -56,25 +75,31 @@ export type MultisigStrk20Store = {
     record: MultisigStrk20Authorization,
     scalar: string,
     isAuthorized?: () => boolean,
-  ) => Promise<"conflict" | "full" | "invalid" | "stored" | "unauthorized">;
+  ) => Promise<Upsert>;
   readonly upsertInvite: (
     record: MultisigStrk20RelayInvite,
     isAuthorized?: () => boolean,
-  ) => Promise<"conflict" | "full" | "invalid" | "stored" | "unauthorized">;
+  ) => Promise<Upsert>;
   readonly upsertRelay: (
     record: MultisigStrk20RelayRequest,
     isAuthorized?: () => boolean,
-  ) => Promise<"conflict" | "full" | "invalid" | "stored" | "unauthorized">;
+  ) => Promise<Upsert>;
+};
+
+const list = (stored: Record<string, unknown>, key: string): readonly unknown[] => {
+  const value = stored[key];
+  return Array.isArray(value) ? value : [];
 };
 
 const readShape = async (store: KeyValueStore): Promise<Shape> => {
   const stored = await store.get(STORE_KEY);
-  if (!isRecord(stored)) return { authorizations: [], invites: [], proofs: [], relays: [] };
+  const row = isRecord(stored) ? stored : {};
   return {
-    authorizations: Array.isArray(stored["authorizations"]) ? stored["authorizations"] : [],
-    invites: Array.isArray(stored["invites"]) ? stored["invites"] : [],
-    proofs: Array.isArray(stored["proofs"]) ? stored["proofs"] : [],
-    relays: Array.isArray(stored["relays"]) ? stored["relays"] : [],
+    authorizations: list(row, "authorizations"),
+    invites: list(row, "invites"),
+    proofs: list(row, "proofs"),
+    relays: list(row, "relays"),
+    sharedKeys: list(row, "sharedKeys"),
   };
 };
 
@@ -85,56 +110,20 @@ const writeShape = async (store: KeyValueStore, shape: Shape): Promise<void> => 
       invites: [...shape.invites],
       proofs: [...shape.proofs],
       relays: [...shape.relays],
+      sharedKeys: [...shape.sharedKeys],
     }),
   ) as Json;
   await store.set(STORE_KEY, payload);
 };
 
-const fit = (values: readonly unknown[], max: number): readonly unknown[] =>
-  values.length > max ? values.slice(values.length - max) : values;
-
-const keptFragments = (
-  current: readonly { readonly publicKey: string }[],
-  next: readonly { readonly publicKey: string }[],
-): boolean =>
-  current.every((fragment) => next.some((item) => item.publicKey === fragment.publicKey));
-
-const authorizationConflicts = (
-  current: MultisigStrk20Authorization,
-  record: MultisigStrk20Authorization,
-): boolean =>
-  current.summary !== record.summary ||
-  current.hash !== record.hash ||
-  JSON.stringify(current.calls) !== JSON.stringify(record.calls) ||
-  !keptFragments(current.fragments, record.fragments);
-
-const relayConflicts = (
-  current: MultisigStrk20RelayRequest,
-  record: MultisigStrk20RelayRequest,
-): boolean =>
-  current.proof.data !== record.proof.data || !keptFragments(current.fragments, record.fragments);
-
-const inviteConflicts = (
-  current: MultisigStrk20RelayInvite,
-  record: MultisigStrk20RelayInvite,
-): boolean =>
-  current.messageHash !== record.messageHash ||
-  JSON.stringify(current.typedData) !== JSON.stringify(record.typedData) ||
-  !keptFragments(current.fragments, record.fragments);
-
 /**
  * Creates the multisig STRK20 store on an existing key-value store. Invalid
- * rows are dropped on read. A full collection drops the oldest row.
+ * rows are dropped on read. Each collection is capped per multisig: a full
+ * one makes room only from rows that are finished, and otherwise reports
+ * `full` so the caller can retry later.
  */
 export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20Store => {
-  const write = (shape: Shape): Promise<void> =>
-    writeShape(store, {
-      authorizations: fit(shape.authorizations, MAX_MULTISIG_STRK20_AUTHORIZATIONS),
-      // Proofs are capped in putProof so a live intent is never the row dropped.
-      invites: fit(shape.invites, MAX_MULTISIG_STRK20_PROOFS),
-      proofs: shape.proofs,
-      relays: fit(shape.relays, MAX_MULTISIG_STRK20_PROOFS),
-    });
+  const write = (shape: Shape): Promise<void> => writeShape(store, shape);
   const proofId = (row: unknown): string | null =>
     isRecord(row) && typeof row["intentId"] === "string" ? row["intentId"] : null;
   const cappedProofs = (
@@ -227,49 +216,92 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
         if (!isAuthorized()) return "unauthorized";
         if (!isMultisigStrk20Authorization(record, scalar)) return "invalid";
         const shape = await readShape(store);
-        const index = shape.authorizations.findIndex(
+        const current = shape.authorizations.find(
           (row) => isRecord(row) && row["id"] === record.id,
         );
-        const current = index >= 0 ? shape.authorizations[index] : undefined;
-        if (
-          current &&
-          isMultisigStrk20Authorization(current, scalar) &&
-          authorizationConflicts(current, record)
-        ) {
-          return "conflict";
-        }
-        const authorizations = [...shape.authorizations];
-        if (index >= 0) authorizations[index] = record;
-        else authorizations.push(record);
+        const merged =
+          current && isMultisigStrk20Authorization(current, scalar)
+            ? mergedMultisigStrk20Authorization(current, record)
+            : record;
+        if (!merged) return "conflict";
+        // A ready round has been used to prove; a collecting one is still owed.
+        const authorizations = placeMultisigStrk20Row(
+          shape.authorizations,
+          merged,
+          MAX_MULTISIG_STRK20_AUTHORIZATIONS,
+          (row) => !isMultisigStrk20Authorization(row, scalar) || row.state === "ready",
+        );
+        if (!authorizations) return "full";
         return commit(shape, { ...shape, authorizations }, isAuthorized);
       },
       async upsertInvite(record, isAuthorized = () => true) {
         if (!isAuthorized()) return "unauthorized";
         if (!isMultisigStrk20RelayInvite(record)) return "invalid";
         const shape = await readShape(store);
-        const index = shape.invites.findIndex((row) => isRecord(row) && row["id"] === record.id);
-        const current = index >= 0 ? shape.invites[index] : undefined;
-        if (current && isMultisigStrk20RelayInvite(current) && inviteConflicts(current, record)) {
-          return "conflict";
-        }
-        const invites = [...shape.invites];
-        if (index >= 0) invites[index] = record;
-        else invites.push(record);
+        const current = shape.invites.find((row) => isRecord(row) && row["id"] === record.id);
+        const merged =
+          current && isMultisigStrk20RelayInvite(current)
+            ? mergedMultisigStrk20Invite(current, record)
+            : record;
+        if (!merged) return "conflict";
+        const invites = placeMultisigStrk20Row(
+          shape.invites,
+          merged,
+          MAX_MULTISIG_STRK20_PROOFS,
+          (row) => !isMultisigStrk20RelayInvite(row) || row.fragments.length >= row.threshold,
+        );
+        if (!invites) return "full";
         return commit(shape, { ...shape, invites }, isAuthorized);
       },
       async upsertRelay(record, isAuthorized = () => true) {
         if (!isAuthorized()) return "unauthorized";
         if (!isMultisigStrk20RelayRequest(record)) return "invalid";
         const shape = await readShape(store);
-        const index = shape.relays.findIndex((row) => isRecord(row) && row["id"] === record.id);
-        const current = index >= 0 ? shape.relays[index] : undefined;
-        if (current && isMultisigStrk20RelayRequest(current) && relayConflicts(current, record)) {
+        const current = shape.relays.find((row) => isRecord(row) && row["id"] === record.id);
+        if (
+          current &&
+          isMultisigStrk20RelayRequest(current) &&
+          multisigStrk20RelayConflicts(current, record)
+        ) {
           return "conflict";
         }
-        const relays = [...shape.relays];
-        if (index >= 0) relays[index] = record;
-        else relays.push(record);
+        // A collecting or ready relay holds the only copy of its proof.
+        const relays = placeMultisigStrk20Row(
+          shape.relays,
+          record,
+          MAX_MULTISIG_STRK20_PROOFS,
+          (row) => !isMultisigStrk20RelayRequest(row) || row.state === "submitted",
+        );
+        if (!relays) return "full";
         return commit(shape, { ...shape, relays }, isAuthorized);
+      },
+      async hasLiveRelay(accountId) {
+        const shape = await readShape(store);
+        return shape.relays.some(
+          (row) =>
+            isMultisigStrk20RelayRequest(row) &&
+            row.accountId === accountId &&
+            row.state !== "submitted",
+        );
+      },
+      async isKeyShared(accountId) {
+        return (await readShape(store)).sharedKeys.includes(accountId);
+      },
+      async markKeyShared(accountId, shared) {
+        const shape = await readShape(store);
+        const others = shape.sharedKeys.filter((id) => id !== accountId);
+        await write({ ...shape, sharedKeys: shared ? [...others, accountId] : others });
+      },
+      async purgeAccount(accountId) {
+        const shape = await readShape(store);
+        const keep = (row: unknown): boolean => !isMultisigStrk20RowFor(row, accountId);
+        await write({
+          authorizations: shape.authorizations.filter(keep),
+          invites: shape.invites.filter(keep),
+          proofs: shape.proofs.filter(keep),
+          relays: shape.relays.filter(keep),
+          sharedKeys: shape.sharedKeys.filter((id) => id !== accountId),
+        });
       },
     },
     [
@@ -277,6 +309,8 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
       "getInvite",
       "getProof",
       "getRelay",
+      "hasLiveRelay",
+      "isKeyShared",
       "listAuthorizations",
       "listInvites",
       "listRelays",

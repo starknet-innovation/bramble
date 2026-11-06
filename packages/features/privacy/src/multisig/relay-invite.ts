@@ -72,9 +72,14 @@ const fragmentsFit = (
 ): boolean => {
   if (fragments.length > threshold) return false;
   const members = new Set(signers);
+  // Strictly increasing signer GUIDs, as in a CallSet record: a repeated
+  // signer cannot fill a slot another co-owner still has to sign.
+  let prior = 0n;
   for (const fragment of fragments) {
+    const guid = BigInt(argentSignerGuid(fragment.publicKey));
     if (
       !members.has(fragment.publicKey) ||
+      guid <= prior ||
       !verifyStarkSignature({
         hash,
         publicKeyX: fragment.publicKey,
@@ -83,6 +88,7 @@ const fragmentsFit = (
     ) {
       return false;
     }
+    prior = guid;
   }
   return true;
 };
@@ -104,6 +110,7 @@ export const isMultisigStrk20RelayInvite = (value: unknown): value is MultisigSt
     value["summary"].length > 280 ||
     !Array.isArray(value["signerPublicKeys"]) ||
     !value["signerPublicKeys"].every(isFelt) ||
+    new Set(value["signerPublicKeys"]).size !== value["signerPublicKeys"].length ||
     typeof value["threshold"] !== "number" ||
     !Number.isSafeInteger(value["threshold"]) ||
     value["threshold"] < 1 ||
