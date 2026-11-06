@@ -155,9 +155,7 @@ describe("a review that fails after a re-render", () => {
     pending.reject(new Error("Activate private balances before shielding an asset"));
     await flush();
     expect(stage(mounted.app)).toBe("details");
-    expect(text(mounted.app, "#transfer-result")).toBe(
-      "Activate private balances before shielding an asset",
-    );
+    expect(text(mounted.app, "#transfer-result")).toBe("Activate private balances first.");
     expect(reviewLocked(mounted.app)).toBe(false);
   });
 });

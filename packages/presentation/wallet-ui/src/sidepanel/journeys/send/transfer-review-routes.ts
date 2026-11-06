@@ -14,6 +14,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { SendDisclosure, SendRoute } from "@bramble/transactions/send-routes";
 import { formatFri } from "../../shared/parts";
 import { reviewCostSection, reviewFeeSection } from "../../shared/review-render";
+import type { PrivacySponsor } from "../privacy/privacy-preparation-fields";
 import { isStrkRelayFee, relayFeeAmountText } from "../privacy/privacy-relay-fee";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 import type { TransferReview } from "./transfer-submit";
@@ -154,6 +155,21 @@ const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
     ? `<p class="review-fee">${escapeHtml(poolFeeText(route.feeBucket, formatFri(poolFeeFri)))}</p>`
     : "";
 
+// A sponsored shield (mc-wallet 789) still shows what it costs, attributed to whoever
+// pays: the user is charged nothing, and the sponsor's figures stay visible so
+// "free" never hides a charge.
+const sponsoredFeeHtml = (sponsor: PrivacySponsor, poolFeeFri: string): string =>
+  reviewCostSection(
+    `${feeLine("Fee", `paid by ${sponsor.name}`)}${feeLine("Pool fee", `${formatFri(poolFeeFri)}, paid by ${sponsor.name}`)}${
+      sponsor.estimatedNetworkFeeFri === undefined
+        ? ""
+        : feeLine(
+            "Estimated fee",
+            `${formatFri(sponsor.estimatedNetworkFeeFri)}, paid by ${sponsor.name}`,
+          )
+    }`,
+  );
+
 /**
  * Renders the fee lines for one route: the network fee, then the pool's charge
  * when the route pays one.
@@ -164,6 +180,10 @@ const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
  * differently again.
  */
 export const routeFeeHtml = (route: SendRoute, state: RouteFeeState): string => {
+  const sponsor = state.preparation?.sponsor;
+  if (sponsor && state.preparation?.poolFeeFri !== undefined) {
+    return sponsoredFeeHtml(sponsor, state.preparation.poolFeeFri);
+  }
   const poolFeeFri =
     route.submission === "account" ? state.preparation?.poolFeeFri : state.poolFeeFri;
   const charged = route.poolFeeRequired && route.feeBucket !== "none" ? poolFeeFri : undefined;

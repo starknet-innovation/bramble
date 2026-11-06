@@ -12,6 +12,7 @@ import {
   deploymentClasses,
 } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const vaultPassphrase = "correct horse battery staple";
@@ -210,6 +211,34 @@ describe("vault recovery", () => {
       }),
     ).rejects.toThrow("Invalid recovery account selection");
     expect(await store.get("bramble:vault")).toBeUndefined();
+  });
+
+  test("restores at most the recovery selection limit in one call", async () => {
+    // Import-paths scope doc B6: the vault refuses one past the cap itself,
+    // whatever the message parser or the picker let through.
+    const pick = (count: number) =>
+      Array.from({ length: count }, (_, accountIndex) => ({
+        accountContractType: "openzeppelin" as const,
+        accountIndex,
+      }));
+    const limit = RECOVERY_SCAN_LIMITS.maxSelections;
+    const refusedStore = createMemoryStore();
+    await expect(
+      serviceOver(refusedStore).recoverAccounts({
+        mnemonic,
+        networkId: "SN_MAIN",
+        selections: pick(limit + 1),
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("Invalid recovery account selection");
+    expect(await refusedStore.get("bramble:vault")).toBeUndefined();
+    const recovered = await serviceOver(createMemoryStore()).recoverAccounts({
+      mnemonic,
+      networkId: "SN_MAIN",
+      selections: pick(limit),
+      vaultPassphrase,
+    });
+    expect(recovered).toHaveLength(limit);
   });
 
   test("switching network keeps each account at the class it was deployed with", async () => {

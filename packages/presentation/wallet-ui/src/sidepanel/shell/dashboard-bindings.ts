@@ -67,6 +67,7 @@ const decisionWords = (
 export type BindingContext = {
   readonly app: Element | null;
   readonly render: (status: WalletStatus) => Promise<void>;
+  readonly onConnectAccount?: (id: string, kind: "account" | "multisig") => void;
   readonly snoozeApproval?: (id: string) => void;
   /** Timer seam for the approval takeover's stage pacing; platform timers when absent. */
   readonly stageTimers?: StageTimers;
@@ -300,6 +301,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
  */
 export const bindApprovals = ({
   app,
+  onConnectAccount,
   render,
   snoozeApproval,
   stageTimers,
@@ -334,6 +336,15 @@ export const bindApprovals = ({
       result.textContent = errorLine(error, "Approval failed");
     }
   };
+  app?.querySelectorAll<HTMLButtonElement>("[data-connect-choice]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["connectChoice"];
+      const kind = button.dataset["connectKind"];
+      if (!id || (kind !== "account" && kind !== "multisig")) return;
+      if (button.getAttribute("aria-pressed") === "true") return;
+      onConnectAccount?.(id, kind);
+    });
+  });
   app?.querySelectorAll<HTMLButtonElement>("[data-approval-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["approvalId"];
@@ -351,7 +362,15 @@ export const bindApprovals = ({
       if (live && !notice) {
         live.hidden = false;
       }
-      const words = decisionWords(action, notice);
+      const words =
+        button.dataset["multisigProposal"] === "true"
+          ? {
+              done: "Saved for signers",
+              line: "Other signers still need to sign.",
+              pending: "Saving…",
+              title: "Saving for signers",
+            }
+          : decisionWords(action, notice);
       if (liveTitle) {
         liveTitle.textContent = words.title;
       }

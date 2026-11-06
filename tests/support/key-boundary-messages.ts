@@ -359,6 +359,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   { message: { displayCurrency: "usd", type: "wallet.setDisplay" }, sender: extensionSender },
+  { message: { multisigId: null, type: "wallet.setSelectedMultisig" }, sender: extensionSender },
   {
     message: { icon: "folder", name: "Savings", type: "wallet.createGroup" },
     sender: extensionSender,

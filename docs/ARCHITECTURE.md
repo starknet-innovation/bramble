@@ -192,12 +192,12 @@ Recovery boundaries are deliberately explicit:
 4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
 5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is at **v12**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
+The vault schema is at **v13**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
 v4 adds encrypted `accountSecrets` (public `AccountRef` records cannot contain optional secrets; Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance);
 v5 canonicalizes account ids; v6 records the account-contract type; v7 retains the Argent deployment salt; v8 retains imported seeds; v9 admits Ready's `argentx` Ledger path scheme;
-v10 admits Braavos accounts (with their deployment salt) and an Argent account at any release it could have been deployed with; v11 admits Ready-scheme accounts (`argentx-bip44`, issue 505), x-only with no `publicKeyY`; v12 adds `shadowAccountScopes`, the encrypted record of which shadow-account scopes (account, chain, pool, anonymizer, origin, label, exact nonces) each account used (#443), and its step adds an empty collection.
+v10 admits Braavos accounts (with their deployment salt) and an Argent account at any release it could have been deployed with; v11 admits Ready-scheme accounts (`argentx-bip44`, issue 505), x-only with no `publicKeyY`; v12 adds `shadowAccountScopes`, the encrypted record of which shadow-account scopes (account, chain, pool, anonymizer, origin, label, exact nonces) each account used (#443), and its step adds an empty collection. v13 adds `multisigStrk20ViewingKeys` and `multisigStrk20KeyConflicts` (#826): one shared STRK20 viewing key per multisig, chain, and pool, plus a mark when a co-owner offered a different key. The v13 step adds empty collections. The key never enters account metadata.
 The v3–v8 validators stay pinned to `LedgerW`, so the v9 step rewrites nothing but the version stamp; likewise the v9 validator stays pinned to Argent 0.4 and no Braavos, and the v10 validator refuses the Ready-scheme kind, so the v10 and v11 steps each rewrite nothing but the version stamp. Vaults migrated from v1 carry `mnemonic: null`; they cannot add software
-accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v12`).
+accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v13`).
 
 Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
 therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs
@@ -469,7 +469,7 @@ directly and adopted when it is at least the tracked figure. Collection approval
 reviewed as their own kinds: an ERC721 `approve` carries a token id, so a "revoke" would approve
 item 0. The store `bramble:allowances` sits outside the vault.
 
-## NFT gallery (parked: tab, menu entry, and indexer setting hidden; home loads no NFT data)
+## NFT gallery (parked; reachable only through the opt-in collectibles preview)
 
 The gallery merges auto-discovered collectibles with watched `nfts` preferences (contract, token
 id, network, optional label, spam flag).
@@ -479,10 +479,9 @@ URLs. The detail screen shows the resolved artwork and attributes, then sends th
 review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-1155, decodes the
 exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
-While parked, no view hydrates NFT data: neither watched-NFT metadata nor indexer discovery runs,
-and a saved `nftIndexerUrl` is unused and unsettable. Restore the entry points, `bindNfts`, indexer
-setter, and gallery-only hydration together; then remove the parked-view guard/test and cover no-unprompted egress on restored routes.
-Ownership proofs stay untrusted-first whenever it does: concurrent refreshes for the same account
+Parked unless the opt-in `collectiblesPreview` preference is on (gallery, indexer field, gated site watch cards; see PR #840);
+otherwise no NFT data loads and no indexer URL is used. `DEFAULT_NFT_INDEXER_URL` is unset.
+Ownership proofs stay untrusted-first whenever discovery runs: concurrent refreshes for the same account
 share the in-flight request, account switches remain isolated, and the first visible watched
 images are fetched eagerly so the gallery is warm when opened.
 

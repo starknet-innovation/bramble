@@ -40,7 +40,12 @@ export const transfersFor = (
   const signer = new Strk20CallSetSigner({
     accountAddress: context.account.address,
     chainId,
-    sign: (messageHash) => signatureFor(context, messageHash),
+    // A multisig supplies the threshold aggregate. Everyone else still signs
+    // one Stark pair from signHash; that path is unchanged.
+    sign: async (messageHash, calls) =>
+      context.signCallSet
+        ? [...(await context.signCallSet(messageHash, calls ?? []))]
+        : signatureFor(context, messageHash),
   });
   const ohttp =
     config.ohttpEnabled || config.ohttpRelayUrl

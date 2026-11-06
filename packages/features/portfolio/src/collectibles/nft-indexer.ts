@@ -30,6 +30,15 @@ import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { type DiscoveredNft, normalizeIndexerNft } from "./nft-metadata";
 
 /**
+ * The Bramble-run indexer offered as a one-step opt-in in Settings. Unset:
+ * no public Starknet NFT API lists a wallet's NFTs without an API key (Voyager,
+ * Blast and NFTScan all require one), and a key cannot ship in a public
+ * extension. An endpoint speaking the wire contract above goes here; until
+ * then discovery stays off unless the user enters an indexer of their own.
+ */
+export const DEFAULT_NFT_INDEXER_URL: string | null = null;
+
+/**
  * Inputs for listing the NFTs an account owns through the configured indexer.
  */
 export type NftIndexerInput = {

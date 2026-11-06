@@ -112,7 +112,12 @@ export const homeScreen = (
       (token) =>
         token.networkId === status.networkId && sameFelt(token.address, STRK_TOKEN_ADDRESS),
     )?.id ?? null;
-  const privateReady = privacy.value?.registration === "registered";
+  // A deployed, unregistered account's first shield registers in the same
+  // transaction (mc-wallet 789), so Shield opens directly for it too.
+  const privateReady =
+    privacy.value?.registration === "registered" ||
+    (privacy.value?.registration === "unregistered" &&
+      deploymentKnownFromPrivacy(deployment, privacy) === true);
   const balancesComplete =
     "balances" in balances && privateDiscoveryComplete(status, account, privacy);
   const totalKnown = account !== null && "balances" in balances && Object.keys(prices).length > 0;

@@ -22,18 +22,16 @@ import {
 
 import {
   isAddressBookEntry,
-  isApprovalSurfacePreference,
-  isDisplayCurrency,
   isLabel,
-  isThemeChoice,
   isTokenId,
   withAddressBookId,
   withTokenId,
 } from "@bramble/wallet-model/preferences";
 import { normalizeAccountGroups } from "./groups";
-import { withAccountHidden } from "./preferences-accounts";
+import { selectedMultisigPreference, withAccountHidden } from "./preferences-accounts";
 import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
 import { withCustomNetwork } from "./preferences-custom-networks";
+import { displayFlags, isValidDisplayInput } from "./preferences-display";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
   withAccountInGroup,
@@ -92,34 +90,6 @@ type WalletPreferencesStoreOptions = {
  * for the store and the record it validates.
  */
 export { isWalletPreferences } from "./preferences-stored";
-
-const isValidDisplayInput = (
-  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
-): boolean => {
-  if (input.approvalSurface !== undefined && !isApprovalSurfacePreference(input.approvalSurface)) {
-    return false;
-  }
-  if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
-    return false;
-  }
-  const flags = [input.productAnalytics, input.reliabilityDiagnostics, input.vipNotice];
-  if (flags.some((flag) => flag !== undefined && typeof flag !== "boolean")) return false;
-  return input.theme === undefined || isThemeChoice(input.theme);
-};
-
-/** The fields a display update sets: only those the caller passed. */
-const displayUpdate = (
-  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
-): Partial<WalletPreferences> => ({
-  ...(input.approvalSurface === undefined ? {} : { approvalSurface: input.approvalSurface }),
-  ...(input.displayCurrency === undefined ? {} : { displayCurrency: input.displayCurrency }),
-  ...(input.productAnalytics === undefined ? {} : { productAnalytics: input.productAnalytics }),
-  ...(input.reliabilityDiagnostics === undefined
-    ? {}
-    : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
-  ...(input.theme === undefined ? {} : { theme: input.theme }),
-  ...(input.vipNotice === undefined ? {} : { vipNotice: input.vipNotice }),
-});
 
 /**
  * Creates default non-secret wallet preferences.
@@ -185,9 +155,7 @@ const writePreferences = async (
   await store.set(PREFERENCES_STORE_KEY, preferences);
 };
 
-/**
- * Creates the plain preferences store with capability checks.
- */
+/** Creates the plain preferences store with capability checks. */
 export const createPreferencesStore = ({
   actor = "background",
   store,
@@ -367,7 +335,17 @@ export const createPreferencesStore = ({
           throw new WalletError("Invalid display preference");
         }
         const preferences = await read();
-        const next = { ...preferences, ...displayUpdate(input) };
+        const next = {
+          ...preferences,
+          ...(input.approvalSurface === undefined
+            ? {}
+            : { approvalSurface: input.approvalSurface }),
+          ...(input.displayCurrency === undefined
+            ? {}
+            : { displayCurrency: input.displayCurrency }),
+          ...displayFlags(input),
+          ...(input.theme === undefined ? {} : { theme: input.theme }),
+        };
         await writePreferences(store, next);
         return next;
       },
@@ -398,6 +376,8 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
+      setSelectedMultisig: ({ multisigId }) =>
+        selectedMultisigPreference(read, (next) => writePreferences(store, next), multisigId),
       async setRpcOverride({ networkId, rpcUrl }) {
         if (!isStarknetNetworkId(networkId)) {
           throw new WalletError("Invalid Starknet network");

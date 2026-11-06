@@ -125,8 +125,19 @@ export const errorForMessage = (message: string): WalletRpcError => {
   if (invalid) {
     return invalid;
   }
+  return siteError(message) ?? unknownError();
+};
+
+const siteError = (message: string): WalletRpcError | null => {
   if (/^strk20 (?:services unavailable|private submission unavailable)/i.test(message)) {
     return unknownError(message);
   }
-  return unknownError();
+  if (
+    message.startsWith("Multisig proposal saved") ||
+    message.startsWith("This multisig") ||
+    message.startsWith("This wallet doesn't hold a signer")
+  ) {
+    return { code: 163, message };
+  }
+  return null;
 };

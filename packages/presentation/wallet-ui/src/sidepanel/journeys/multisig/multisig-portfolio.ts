@@ -98,6 +98,7 @@ export const multisigPortfolio = (input: {
   readonly intentList: CompactIntentList;
   readonly record: ArgentMultisigRecord;
   readonly signerKnown: boolean;
+  readonly strk20KeyPanel?: string;
 }): string => {
   const openCount =
     Number.isSafeInteger(input.openCount) && input.openCount > 0 ? input.openCount : 0;
@@ -129,6 +130,7 @@ export const multisigPortfolio = (input: {
                   : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>
+  ${input.strk20KeyPanel ?? ""}
   <section class="home-tabs multisig-portfolio-tabs" aria-label="Multisig account">
     <div class="tab-bar">
       <div class="tab-set" role="tablist" aria-label="Multisig sections">

@@ -1,9 +1,12 @@
 /** Fail-closed cross-store account-selection invariants. */
 import { describe, expect, test } from "bun:test";
+import { RefusedBeforeWrite } from "@bramble/core/errors";
 import {
+  createPreferencesStore,
   defaultWalletPreferences,
   type WalletPreferencesStore,
 } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
@@ -196,5 +199,18 @@ describe("active account selection", () => {
     ).rejects.toThrow("stale selection");
     expect(preferenceWrites).toBe(0);
     expect(session.peekPassphrase()).toBe("replacement horse battery staple");
+  });
+
+  test("a first-run refusal before the write undoes the network it stored", async () => {
+    // Every first-run create (key, Ledger, phrase, recovery) routes through
+    // here with no session; an existing vault must not switch the network.
+    const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+    await preferencesStore.setActiveNetwork("SN_SEPOLIA");
+    await expect(
+      runVaultCreationWithNetwork(createUnlockSession(), preferencesStore, "SN_MAIN", async () => {
+        throw new RefusedBeforeWrite("Wallet already exists");
+      }),
+    ).rejects.toThrow("Wallet already exists");
+    expect((await preferencesStore.read()).activeNetworkId).toBe("SN_SEPOLIA");
   });
 });

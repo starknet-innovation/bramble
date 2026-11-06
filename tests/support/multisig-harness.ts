@@ -6,6 +6,7 @@ import type { ArgentUnsupportedSigner } from "@bramble/multisig/chain";
 import type { NostrCoordinationStore } from "@bramble/multisig/coordination";
 import { type MultisigStore, memoryMultisigStore } from "@bramble/multisig/repository";
 import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
+import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import {
   ARGENT_ACCOUNT_CONTRACT,
@@ -29,6 +30,7 @@ import type { RuntimeSender } from "../../apps/extension/src/background/routing/
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { testExtension } from "./background-wallet-stub";
+import { multisigStrk20WalletMethods } from "./multisig-strk20-wallet";
 
 const HARNESS_PRIVATE_A = "0x123";
 const HARNESS_PRIVATE_B = "0x456";
@@ -150,6 +152,10 @@ export type MultisigHarnessOptions = {
   >;
   readonly nonce?: string;
   readonly nostrCoordinationStore?: NostrCoordinationStore;
+  /** Caps the in-memory viewing-key collection so a test can fill it. */
+  readonly strk20KeyCapacity?: number;
+  /** Privacy service used by multisig STRK20 sessions. Absent, those sessions fail closed. */
+  readonly strk20?: RuntimeRpc["strk20"];
   readonly now?: () => number;
   readonly onSigned?: () => void;
   readonly submitAccountDeployment?: () => Promise<string>;
@@ -167,6 +173,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     [harnessAccountB.id, HARNESS_PRIVATE_B],
   ]);
   const multisigStore = options.multisigStore ?? memoryMultisigStore();
+  const strk20MultisigStore = createMultisigStrk20Store(createMemoryStore());
   const storedPreferences = createPreferencesStore({ store: createMemoryStore() });
   // The background and its activity log share one clock, as in production.
   const activity = memoryActivityLog(options.now ?? systemClock);
@@ -187,6 +194,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
   };
   let activeAccountId = harnessAccountA.id;
   const wallet = {
+    ...multisigStrk20WalletMethods(options.strk20KeyCapacity),
     async addDerivedAccount() {
       return harnessAccountA;
     },
@@ -297,7 +305,9 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     ...(options.now ? { now: options.now } : {}),
     ...(options.coordination ? { nostrRelayTransport: options.coordination.transport } : {}),
     preferencesStore,
+    strk20MultisigStore,
     runtimeRpc: {
+      ...(options.strk20 ? { strk20: options.strk20 } : {}),
       async estimateAccountDeploymentFee() {
         if (options.deploymentEstimateError) throw options.deploymentEstimateError;
         return { overallFee: "44", unit: "FRI" };
@@ -428,6 +438,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     multisigStore,
     preferencesStore,
     session,
+    strk20MultisigStore,
     submitCount: () => submitCount,
   };
 };

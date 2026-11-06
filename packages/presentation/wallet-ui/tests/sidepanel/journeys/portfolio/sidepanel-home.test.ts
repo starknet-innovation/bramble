@@ -324,6 +324,26 @@ describe("shield tile", () => {
     }
   });
 
+  test("opens Shield directly for a deployed, unregistered account (#789)", () => {
+    // Its first shield registers in the same transaction, so there is no
+    // separate activation step to route through.
+    const html = homeScreen(
+      status,
+      account,
+      { balances: [] },
+      0,
+      true,
+      defaultWalletPreferences(),
+      {},
+      {},
+      "usd",
+      disclosure("unregistered"),
+    );
+
+    expect(html).toMatch(/class="action-tile" data-send-shield="SN_MAIN:STRK:[^"]+"/);
+    expect(html).not.toContain('data-privacy-open="SN_MAIN:STRK');
+  });
+
   test("is disabled rather than hidden when no token is tracked", () => {
     // Keeps the row at four tiles instead of reflowing, the same reason the
     // explorer tile it replaced was disabled rather than dropped.

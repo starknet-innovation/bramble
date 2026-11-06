@@ -11,9 +11,12 @@
  * payload that no longer matches its digest all refuse the approval.
  */
 
+import type { MultisigStore } from "@bramble/multisig/repository";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { grantedDappAccounts } from "../provider/dapp-account";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
 import { approvalPayloadMatchesContext } from "./approval-context";
@@ -23,6 +26,8 @@ import type { SignatureWaiters } from "./signature-waiters";
 
 /** The collaborators claim validation and settlement read. */
 export type ClaimContextDeps = {
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly session: UnlockSession;
   readonly waiters: SignatureWaiters;
@@ -51,7 +56,7 @@ export const validateClaimContext = async (
   ) {
     return { error: "approval context changed" };
   }
-  const granted = await deps.wallet.getGrantedAccounts(claim.approval.origin, passphrase);
+  const granted = await grantedDappAccounts(deps, claim.approval.origin, passphrase);
   if (
     !granted.some(
       (account) => account.id === context.accountId && account.networkId === context.networkId,
