@@ -40,3 +40,15 @@ export const displayFlags = (
   Object.fromEntries(
     DISPLAY_FLAGS.flatMap((flag) => (input[flag] === undefined ? [] : [[flag, input[flag]]])),
   );
+
+/**
+ * Whether NFTs are shown (the Home NFTs tab, the gallery, NFT discovery, and
+ * site NFT watch cards that can be approved). On by default: only an explicit
+ * `collectiblesPreview: false`, the user turning NFTs off, hides them.
+ * Unknown preferences (null, not loaded yet) fail closed to off, so nothing is
+ * read or sent before the user's choice is known.
+ */
+export const nftsShown = (
+  preferences: { readonly collectiblesPreview?: boolean } | null | undefined,
+): boolean =>
+  preferences !== null && preferences !== undefined && preferences.collectiblesPreview !== false;

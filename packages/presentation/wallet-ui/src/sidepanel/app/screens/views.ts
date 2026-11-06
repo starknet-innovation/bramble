@@ -21,19 +21,14 @@ import {
   type AllowanceListing,
   type DiscoveredNft,
   EMPTY_ALLOWANCE_LISTING,
+  type NftCoverage,
   type PendingApproval,
   type SignabilityVerdict,
   type TokenBalance,
   type WalletStatus,
 } from "../../../popup/responses/responses";
 import { actionableApprovals, approvalTakeover } from "../../journeys/approvals/approval-screen";
-import { nftSendFlow } from "../../journeys/collectibles/nft-send-view";
-import {
-  nftDetailFlow,
-  nftGalleryFlow,
-  nftHiddenFlow,
-  nftWatchFlow,
-} from "../../journeys/collectibles/nft-views";
+import { collectibleJourneyScreen } from "../../journeys/collectibles/nft-screens";
 import {
   multisigAddFlow,
   multisigReceiveFlow,
@@ -92,6 +87,7 @@ type JourneyContext = {
   readonly chart: readonly number[];
   readonly currency: DisplayCurrency;
   readonly discoveredNfts: readonly DiscoveredNft[];
+  readonly nftCoverage: NftCoverage;
   readonly multisigClassDeclared: boolean | "error" | null;
   readonly multisigPortfolio: MultisigPortfolioData;
   readonly multisigIntents: readonly ArgentMultisigSigningIntent[];
@@ -180,49 +176,6 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
   return activeView === "multisig-track"
     ? multisigTrackFlow(context.status, selected)
     : multisigProposeFlow(context.status, selected, context.preferences, context.multisigPortfolio);
-};
-
-const collectibleJourneyScreen = (
-  activeView: WalletView,
-  context: JourneyContext,
-): string | null => {
-  if (activeView === "nfts") {
-    return nftGalleryFlow(
-      context.status,
-      context.account,
-      context.preferences,
-      context.discoveredNfts,
-    );
-  }
-  if (activeView === "nft-watch") {
-    return nftWatchFlow(context.status, context.account);
-  }
-  if (activeView === "nft-hidden") {
-    return nftHiddenFlow(
-      context.status,
-      context.preferences,
-      context.account,
-      context.discoveredNfts,
-    );
-  }
-  if (activeView === "nft-detail") {
-    return nftDetailFlow(
-      context.status,
-      context.account,
-      context.preferences,
-      context.selectedNftId,
-      context.discoveredNfts,
-    );
-  }
-  return activeView === "nft-send"
-    ? nftSendFlow(
-        context.status,
-        context.account,
-        context.preferences,
-        context.selectedNftId,
-        context.discoveredNfts,
-      )
-    : null;
 };
 
 const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): string | null => {
@@ -320,6 +273,7 @@ export const dashboard = (
   relays: readonly RelaySignature[] = [],
   privateTotalWaitOver = false,
   staking: StakingState = STAKING_LOADING,
+  nftCoverage: NftCoverage = "none",
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -336,6 +290,7 @@ export const dashboard = (
     currency,
     fundedForFees,
     discoveredNfts,
+    nftCoverage,
     multisigClassDeclared,
     multisigPortfolio: {
       balances: selectedPortfolioBalances,
@@ -479,6 +434,7 @@ export const dashboard = (
               signability,
               privateTotalWaitOver,
               staking,
+              { coverage: nftCoverage, discovered: discoveredNfts },
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}

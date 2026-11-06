@@ -101,6 +101,7 @@ import {
   type StarkscanClient,
   type StarkscanHttp,
 } from "@bramble/transactions/starkscan";
+import { createStarkscanNftSource } from "@bramble/transactions/starkscan-nfts";
 import {
   createExplorerFirstHistory,
   createRpcFirstBalances,
@@ -368,11 +369,18 @@ const starkscanHttp: StarkscanHttp = untrustedFetch;
 // obey the user's per-network `explorerFallback` choice.
 const DEFAULT_EXPLORER_API_URL = "https://starkscan.co/v1";
 const starkscanClients = new Map<string, ReturnType<typeof createStarkscanClient>>();
-const starkscanClientFor = (baseUrl: string): ReturnType<typeof createStarkscanClient> => {
-  const stored = starkscanClients.get(baseUrl);
+// NFT discovery gets its own client per base: the same host, transport and
+// override, but its own rate-limit cooldown, so an NFT failure never blocks
+// Activity or the balance rescue (and theirs never blocks the gallery).
+const nftStarkscanClients = new Map<string, ReturnType<typeof createStarkscanClient>>();
+const starkscanClientFor = (
+  baseUrl: string,
+  clients = starkscanClients,
+): ReturnType<typeof createStarkscanClient> => {
+  const stored = clients.get(baseUrl);
   if (stored) return stored;
   const client = createStarkscanClient({ baseUrl, http: starkscanHttp });
-  starkscanClients.set(baseUrl, client);
+  clients.set(baseUrl, client);
   return client;
 };
 const starkscanClient = starkscanClientFor(DEFAULT_EXPLORER_API_URL);
@@ -447,7 +455,20 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     resolveSignerAccount: getMultisigSignerAccount,
     submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
-  nftIndexer: createHttpNftIndexer(nftIndexerHttp),
+  // Starkscan is the built-in NFT indexer, over the same
+  // host, base override and explorer-lane gate as Activity.
+  nftIndexer: createHttpNftIndexer(
+    nftIndexerHttp,
+    createStarkscanNftSource({
+      client: starkscanClientFor(DEFAULT_EXPLORER_API_URL, nftStarkscanClients),
+      clientFor: (networkId, preferences) =>
+        starkscanClientFor(
+          preferences.explorerApiUrls?.[networkId] ?? DEFAULT_EXPLORER_API_URL,
+          nftStarkscanClients,
+        ),
+      readPreferences,
+    }),
+  ),
   readAtPinnedBlock,
   resolveStarkName,
   starkscanFor: configuredStarkscanClient,
