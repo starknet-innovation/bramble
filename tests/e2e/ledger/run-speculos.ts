@@ -8,7 +8,7 @@
  *
  * Without Docker or a vendored binary it SKIPS: it prints "NOT RUN" with the
  * reason and runs no test, so nothing is reported as passed. Set
- * BRAMBLE_SPECULOS_REQUIRED=1 (a future CI job) to make that a failure. A
+ * BRAMBLE_SPECULOS_REQUIRED=1 (as `ledger-e2e.yml` does) to make that a failure. A
  * binary that is present but unrecorded or mismatched always fails.
  *
  * Needs `bun run build` and `bun run vendor:ledger-app`. Never takes a seed

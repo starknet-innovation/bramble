@@ -12,6 +12,7 @@
  * checked without anyone remembering to list it — which is the whole point: the
  * previous hand-maintained list had already fallen three workflows behind.
  */
+import { LEDGER_E2E_WORKFLOW, ledgerE2eWorkflowFailures } from "./ledger-e2e-workflow-policy";
 import { dynamicExecutionFailures } from "./vendor-pin-policy";
 import { websiteDeployFailures } from "./website-deploy-policy";
 import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
@@ -424,6 +425,7 @@ const releaseIntegrationFailures = (source: string): string[] => {
 // is also what lets it hold a self-hosted runner or a privileged trigger.
 const NAMED_POLICIES: Readonly<Record<string, (source: string) => string[]>> = {
   "ci.yml": ciFailures,
+  [LEDGER_E2E_WORKFLOW]: ledgerE2eWorkflowFailures,
   "nightly.yml": nightlyFailures,
   "release-build.yml": releaseBuildFailures,
   "release-integration.yml": releaseIntegrationFailures,
