@@ -188,6 +188,12 @@ through the terminal review before the wallet opens. Multiply wind/unwind
 reviews show the target multiplier or full debt, route slippage, LTV, and
 delegation lifecycle.
 
+Vault deposits, redemption requests and claims may only target the curated vaults
+pinned in `VESU_CURATED_VAULTS` (`src/protocols/constants.ts`: address, class hash and
+asset; #270). The vault's class hash is read again right before the wallet sees the
+calls, and a different class or a failed read refuses. The Vesu API's vault list only
+decides what is shown. A new curated vault is added by PR after the same checks.
+
 The data boundary only accepts `protocolVersion=v2`, Vesu-verified,
 non-deprecated pools. API JSON is validated and normalized before rendering;
 deployed `modify_position`, `modify_delegation`, ERC-4626, and `modify_lever`
