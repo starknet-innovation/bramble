@@ -111,6 +111,9 @@ let failed = false;
 for (const model of models) {
   const binary = binaries.get(model) ?? fail(`no binary for ${model}`);
   const name = `bramble-speculos-${model}-${process.pid}`;
+  // Tracked before launch: an interrupted or failed start may still have
+  // created the container, and stopping a missing one is harmless.
+  runningContainer = name;
   const started = run([
     "docker",
     "run",
@@ -142,9 +145,9 @@ for (const model of models) {
     `/apps/${model}.elf`,
   ]);
   if (started !== 0) {
+    stopAll();
     fail(`could not start Speculos for ${model}`);
   }
-  runningContainer = name;
   try {
     const endpoints: SpeculosEndpoints = {
       apduPort: APDU_PORT,
