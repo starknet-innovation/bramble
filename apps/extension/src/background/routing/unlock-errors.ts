@@ -5,6 +5,13 @@
 import { WalletError } from "@bramble/core/errors";
 import { INVALID_ENVELOPE } from "@bramble/vault/encrypted-store";
 
+/**
+ * The caller-facing message for a wrong passphrase. Exported so the mobile
+ * apps show the same words (generated into their copy tables); it never
+ * includes anything the user typed.
+ */
+export const INCORRECT_PASSPHRASE_MESSAGE = "Incorrect passphrase";
+
 // An AES-GCM authentication failure surfaces as a DOMException named
 // "OperationError": it is thrown when the derived key cannot decrypt the
 // stored ciphertext, i.e. the supplied passphrase is wrong.
@@ -23,7 +30,7 @@ export const unlockFailureError = (error: unknown): Error => {
     return error;
   }
   if (isDecryptionFailure(error)) {
-    return new WalletError("Incorrect passphrase");
+    return new WalletError(INCORRECT_PASSPHRASE_MESSAGE);
   }
   return error instanceof Error ? error : new WalletError("wallet request failed");
 };

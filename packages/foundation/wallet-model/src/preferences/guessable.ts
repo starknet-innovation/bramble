@@ -15,7 +15,11 @@
  * stripped of digits and symbols; words under four letters were dropped.
  */
 
-const COMMON_WORDS = [
+/**
+ * The folded common-password words, space-separated. Exported only so the mobile asset generator
+ * can hand the native meter the same list; the extension reads it through {@link isGuessable}.
+ */
+export const COMMON_WORDS = [
   "password qwerty dragon pussy baseball football letmein monkey mustang michael shadow",
   "master jennifer jordan superman harley fuckme hunter fuckyou trustno ranger buster",
   "thomas tigger robert soccer fuck batman test pass killer hockey george charlie andrew",

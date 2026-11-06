@@ -56,7 +56,8 @@ export type { ArgentMultisigStaleOutcome, ArgentMultisigStaleReason } from "./st
  */
 export const MULTISIG_STORE_KEY = "bramble:argent-multisigs:v2";
 
-const MAX_MULTISIGS = 20;
+/** Shared accounts the registry holds; mirrored by the mobile core. */
+export const MAX_MULTISIGS = 20;
 const MAX_OPERATIONS = 100;
 
 /**

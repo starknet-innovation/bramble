@@ -1,0 +1,261 @@
+{
+  "refusals": [
+    {
+      "code": "braavosDeployFirst",
+      "flow": "transfer",
+      "name": "braavosDeployFirst-transfer-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "reviewState": {
+        "deployed": false,
+        "nonce": "0x0"
+      },
+      "submitState": {
+        "deployed": false,
+        "nonce": "0x0"
+      },
+      "reviewDeployment": [],
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"error\":{\"code\":20,\"message\":\"Contract not found\"}}}"
+      ],
+      "reviewMessage": "Deploy this account first (Settings → Deploy account).",
+      "reviewedFee": null,
+      "submit": [],
+      "submitMessage": null
+    },
+    {
+      "code": "braavosNotDeployable",
+      "flow": "transfer",
+      "name": "braavosNotDeployable-transfer-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6",
+      "reviewState": {
+        "deployed": false,
+        "nonce": "0x0"
+      },
+      "submitState": {
+        "deployed": false,
+        "nonce": "0x0"
+      },
+      "reviewDeployment": [],
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x1ea35fce4ae60319c833a36f6f159ecdcc9c0b5a3de31d923c045c67c94980c\"},\"reply\":{\"error\":{\"code\":20,\"message\":\"Contract not found\"}}}"
+      ],
+      "reviewMessage": "This wallet does not deploy Braavos accounts",
+      "reviewedFee": null,
+      "submit": [],
+      "submitMessage": null
+    },
+    {
+      "code": "braavosNotDeployable",
+      "flow": "deployment",
+      "name": "braavosNotDeployable-deployment-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x13bfe114fb1cf405bfc3a7f8dbe2d91db146c17521d40dcf57e16d6b59fa8e6",
+      "reviewState": {
+        "deployed": false,
+        "nonce": "0x0"
+      },
+      "submitState": {
+        "deployed": false,
+        "nonce": "0x0"
+      },
+      "reviewDeployment": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x1ea35fce4ae60319c833a36f6f159ecdcc9c0b5a3de31d923c045c67c94980c\"},\"reply\":{\"error\":{\"code\":20,\"message\":\"Contract not found\"}}}"
+      ],
+      "reviewInvoke": [],
+      "reviewMessage": "This wallet does not deploy Braavos accounts",
+      "reviewedFee": null,
+      "submit": [],
+      "submitMessage": null
+    },
+    {
+      "code": "braavosClassUnrecognised",
+      "flow": "transfer",
+      "name": "braavosClassUnrecognised-transfer-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "liveClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201"
+      },
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "liveClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201"
+      },
+      "reviewDeployment": [],
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"result\":\"0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201\"}}"
+      ],
+      "reviewMessage": "Deployed Braavos account class is not a release this wallet recognizes",
+      "reviewedFee": null,
+      "submit": [],
+      "submitMessage": null
+    },
+    {
+      "code": "braavosOwnerMismatch",
+      "flow": "transfer",
+      "name": "braavosOwnerMismatch-transfer-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "stark": ["0x1234"]
+      },
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "stark": ["0x1234"]
+      },
+      "reviewDeployment": [],
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"result\":\"0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x1\",\"0x1234\",\"0x0\",\"0x0\"]}}"
+      ],
+      "reviewMessage": "Deployed Braavos account owner does not match the wallet signer",
+      "reviewedFee": null,
+      "submit": [],
+      "submitMessage": null
+    },
+    {
+      "code": "braavosOwnerMismatch",
+      "flow": "transfer",
+      "name": "braavosOwnerMismatch-transfer-submit",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5"
+      },
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "stark": ["0x1234"]
+      },
+      "reviewDeployment": [],
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"result\":\"0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x1\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x0\",\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[\"SKIP_VALIDATE\"]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "reviewMessage": null,
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"result\":\"0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x1\",\"0x1234\",\"0x0\",\"0x0\"]}}"
+      ],
+      "submitMessage": "Deployed Braavos account owner does not match the wallet signer"
+    },
+    {
+      "code": "braavosSignerListMalformed",
+      "flow": "transfer",
+      "name": "braavosSignerListMalformed-transfer-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "malformedSigners": true
+      },
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "malformedSigners": true
+      },
+      "reviewDeployment": [],
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"result\":\"0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x2\",\"0x1\"]}}"
+      ],
+      "reviewMessage": "Braavos account returned a malformed signer list",
+      "reviewedFee": null,
+      "submit": [],
+      "submitMessage": null
+    },
+    {
+      "code": "braavosStrongSigner",
+      "flow": "transfer",
+      "name": "braavosStrongSigner-transfer-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "strong": 1
+      },
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "strong": 1
+      },
+      "reviewDeployment": [],
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"result\":\"0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x1\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x4\",\"0x7\",\"0x8\",\"0x9\",\"0xa\",\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x3f4c3fd98c1f85cfe943da13a3e1970248bf364130b9590071520aa2ec61e93\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x0\",\"0x0\",\"0x0\"]}}"
+      ],
+      "reviewMessage": "Deployed Braavos account has an active 2FA signer",
+      "reviewedFee": null,
+      "submit": [],
+      "submitMessage": null
+    },
+    {
+      "code": "braavosStrongSigner",
+      "flow": "transfer",
+      "name": "braavosStrongSigner-transfer-submit",
+      "networkId": "SN_MAIN",
+      "recordClass": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5"
+      },
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "expireAt": 1760000000,
+        "strong": 1
+      },
+      "reviewDeployment": [],
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"result\":\"0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x1\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x0\",\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[\"SKIP_VALIDATE\"]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "reviewMessage": null,
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"},\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\"},\"reply\":{\"result\":\"0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x2b8faca80de28f81027b46c4f3cb534c44616e721ae9f1e96539c6b54a1d932\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x1\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x4\",\"0x7\",\"0x8\",\"0x9\",\"0xa\",\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x34fd655998ec844bfefc97364c2528c1b6e59162c844f13d7548ea40a010475\",\"entry_point_selector\":\"0x3f4c3fd98c1f85cfe943da13a3e1970248bf364130b9590071520aa2ec61e93\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":[\"0x68e77800\",\"0x0\",\"0x0\"]}}",
+        "{\"method\":\"starknet_getBlockWithTxHashes\",\"params\":{\"block_id\":{\"block_hash\":\"0xb7aa05\"}},\"reply\":{\"result\":{\"block_hash\":\"0xb7aa05\",\"block_number\":812345,\"timestamp\":1760000000,\"transactions\":[]}}}"
+      ],
+      "submitMessage": "Deployed Braavos account has an active 2FA signer"
+    }
+  ]
+}
