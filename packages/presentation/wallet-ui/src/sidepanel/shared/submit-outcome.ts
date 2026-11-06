@@ -140,7 +140,7 @@ export const KNOWN_NOT_SENT: ReadonlySet<string> = new Set([
  */
 const PRE_SIGNATURE_LEDGER_CODES: ReadonlySet<LedgerRejectionCode> = new Set([
   "app-below-minimum",
-  "blind-signing-disabled",
+  "rejected-or-blind-signing-off",
   "dashboard-restore-failed",
   "deploy-unfunded",
   "device-busy",
