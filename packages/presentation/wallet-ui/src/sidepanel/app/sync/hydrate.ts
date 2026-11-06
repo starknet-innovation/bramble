@@ -6,6 +6,7 @@
  * `./index.ts` so the app shell stays within the file-length standard.
  */
 
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -380,6 +381,9 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (activeView === "staking" && refreshReason !== "ambient")
     hydrateStaking({ cache, wallet }, fill);
+  // Home's Staking tab and "Staked" line, where staking is on.
+  if (activeView === "home" && refreshReason !== "ambient" && stakingNetwork(status.networkId))
+    hydrateStaking({ cache, home: true, wallet }, fill);
   if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;

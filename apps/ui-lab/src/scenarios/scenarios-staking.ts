@@ -25,7 +25,7 @@ const ROW = {
   staker: STAKER,
   state: "none" as const,
   symbol: "STRK",
-  tokenId: "SN_MAIN:STRK",
+  tokenId: STRK_TOKEN.id,
   unclaimed: "0",
   unpoolAmount: "0",
 };
@@ -86,7 +86,7 @@ const list: StakingState = {
   positions: {
     complete: true,
     rows: [
-      { ...ROW, staked: "1,250", state: "staked", unclaimed: "18.4421" },
+      { ...ROW, staked: "1250", state: "staked", unclaimed: "18.4421" },
       {
         ...ROW,
         staked: "0",
@@ -104,10 +104,29 @@ const list: StakingState = {
   validator: { loading: true },
 };
 
+const homeStakes: StakingState = { ...list, homeTab: "staking" };
+const homeEmpty: StakingState = {
+  ...list,
+  homeTab: "staking",
+  positions: { complete: true, rows: [] },
+};
+const homeUnavailable: StakingState = {
+  ...list,
+  homeTab: "staking",
+  positions: { unavailable: "Couldn't load your stakes." },
+};
+const homeDashboard = (staking: StakingState): string =>
+  walletDashboard({
+    balanceState: { balances: journeyBalances },
+    preferences: journeyPreferences,
+    staking,
+    view: "home",
+  });
+
 const incomplete: StakingState = {
   ...list,
   directory: { incomplete: true },
-  positions: { complete: false, rows: [{ ...ROW, staked: "1,250", state: "staked" }] },
+  positions: { complete: false, rows: [{ ...ROW, staked: "1250", state: "staked" }] },
 };
 
 const opened: StakingState = {
@@ -118,7 +137,7 @@ const opened: StakingState = {
     rows: [
       {
         ...ROW,
-        staked: "1,250",
+        staked: "1250",
         state: "exit-pending",
         unclaimed: "18.4421",
         unpoolAmount: "250",
@@ -174,6 +193,38 @@ const review = async ({ app }: FrameContext): Promise<void> => {
 /** The staking checkpoints, grouped with the settings journey. */
 export const stakingCheckpoints: readonly ScenarioCheckpoint[] = [
   {
+    content: () => homeDashboard(homeStakes),
+    id: "staking-home",
+    label: "Home Staking tab",
+    narrative:
+      'Home\'s Staking tab beside Tokens (Mainnet only): Stake first, then each confirmed position as one button that opens its validator. Under the total, "Staked" sums the confirmed stake and opens this tab; it never joins the total.',
+    state: { positions: 2, tab: "staking" },
+  },
+  {
+    content: () => homeDashboard(list),
+    id: "staking-home-staked",
+    label: "Home Staked line",
+    narrative:
+      'On the Tokens tab, the "Staked" line under the total sums confirmed stake per token and opens the Staking tab; the total itself is unchanged.',
+    state: { line: "Staked", tab: "tokens" },
+  },
+  {
+    content: () => homeDashboard(homeEmpty),
+    id: "staking-home-empty",
+    label: "Home Staking, no stakes",
+    narrative:
+      'A complete lookup with no confirmed stake: the empty line and Stake. No "Staked" line.',
+    state: { positions: 0, tab: "staking" },
+  },
+  {
+    content: () => homeDashboard(homeUnavailable),
+    id: "staking-home-unavailable",
+    label: "Home Staking, couldn't load",
+    narrative:
+      '"Your stakes" couldn\'t be read: one line, never "no stakes", and Stake still works.',
+    state: { positions: "unavailable", tab: "staking" },
+  },
+  {
     content: () => walletDashboard({ preferences: journeyPreferences, view: "settings" }),
     id: "staking-settings-row",
     label: "Staking in Settings",
@@ -210,7 +261,7 @@ export const stakingCheckpoints: readonly ScenarioCheckpoint[] = [
     id: "staking",
     label: "Staking",
     narrative:
-      '"Your stakes" first: each position Starkscan listed and the chain confirmed, with chain-read figures and a View button. Then validators from Starkscan\'s directory (schema-derived fixtures), with their addresses, commission, 30-day uptime and delegated totals; unknown figures say unknown. A pasted address always works.',
+      '"Your stakes" first: each position Starkscan listed and the chain confirmed, with chain-read figures, as one button. Then validators from Starkscan\'s directory (schema-derived fixtures), each card one button, with their addresses, commission, 30-day uptime and delegated totals; unknown figures say unknown. The paste field sits below the list as the fallback.',
     prepare: bindList,
     state: { directory: "ready", positions: 2, validators: 3 },
   },

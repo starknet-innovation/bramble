@@ -49,7 +49,7 @@ const actionButton = (
   row: StakingRow,
   action: StakingAction,
   label: string,
-  variant: "ghost" | "primary" = "ghost",
+  variant: "ghost" | "primary" | "secondary" = "ghost",
 ): string =>
   button({
     attributes: { "data-staking-action": action, "data-staking-row": rowKey(row) },
@@ -73,11 +73,11 @@ const amountForm = (row: StakingRow, action: "stake" | "unstake", label: string)
 const rowActions = (row: StakingRow): string => {
   const parts: string[] = [];
   if (row.unclaimed && row.unclaimed !== "0")
-    parts.push(actionButton(row, "claim", "Claim rewards"));
+    parts.push(actionButton(row, "claim", "Claim rewards", "secondary"));
   if (row.state === "withdrawable")
     parts.push(actionButton(row, "withdraw", "Withdraw", "primary"));
   if (row.state === "exit-pending" || row.state === "withdrawable") {
-    parts.push(actionButton(row, "cancel-unstake", "Cancel unstake"));
+    parts.push(actionButton(row, "cancel-unstake", "Cancel unstake", "secondary"));
   }
   return `${parts.length > 0 ? `<div class="staking-actions">${parts.join("")}</div>` : ""}
     ${row.accepting ? amountForm(row, "stake", "Stake") : `<p class="hint">${escapeHtml("This validator is leaving staking.")}</p>`}

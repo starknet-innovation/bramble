@@ -336,11 +336,12 @@ describe("home portfolio section", () => {
     document.body.replaceChildren();
   });
 
-  test("renders a Tokens heading with no tablist while Collectibles is parked", () => {
+  test("renders Tokens and Staking tabs on Mainnet, and no Collectibles tab while it is parked", () => {
     const h = mount();
     const section = el(h.app, ".home-tabs");
-    expect(el(section, "h2").textContent).toBe("Tokens");
-    expect(section.innerHTML).not.toContain('role="tab');
+    const tabs = [...section.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+    expect(tabs).toEqual(["Tokens", "Staking"]);
+    expect(section.innerHTML).not.toContain("Collectibles");
     expect(section.querySelector(".tab-panel")).toBeNull();
   });
 });

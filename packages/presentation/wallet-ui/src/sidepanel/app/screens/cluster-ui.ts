@@ -12,6 +12,7 @@ import { bindTokens } from "../../journeys/portfolio/tokens-ui";
 import { bindShadowAccounts } from "../../journeys/privacy/shadow-accounts-ui";
 import { bindConnectedSites } from "../../journeys/settings/origins-ui";
 import { bindStakingDirectory } from "../../journeys/staking/staking-directory-ui";
+import { bindHomeStaking } from "../../journeys/staking/staking-home-ui";
 import { bindStaking } from "../../journeys/staking/staking-ui";
 import type { SwapClient } from "../../journeys/swap/swap-client";
 import { bindSwap } from "../../journeys/swap/swap-ui";
@@ -110,6 +111,16 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
   });
   bindAllowances({ app, render, wallet });
   bindStaking({ app, render, wallet });
+  bindHomeStaking({
+    app,
+    navigate: deps.navigate,
+    render,
+    setState: (state) => {
+      cache.staking = state;
+    },
+    state: () => cache.staking,
+    status: () => cache.status,
+  });
   bindStakingDirectory({
     app,
     render,

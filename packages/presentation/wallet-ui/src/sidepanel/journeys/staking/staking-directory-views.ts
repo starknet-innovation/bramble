@@ -1,7 +1,8 @@
 /**
- * The staking screen with no validator open (issue 750): a field to paste a
- * validator address, always shown, and Starkscan's validator directory when
- * it can be read (a failure leaves the paste field and one short line).
+ * The staking screen with no validator open (issue 750): Starkscan's validator
+ * directory when it can be read, each card one button that opens it, and
+ * below it a field to paste a validator address, always shown (a failure
+ * leaves one short line and the paste field).
  *
  * Every directory string is third-party text: it is escaped, a website is
  * shown only as its hostname and never as a link, nothing remote is loaded,
@@ -12,6 +13,7 @@ import { escapeHtml } from "@bramble/core/html";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl, selectField } from "@bramble/ui-kit/fields";
+import { icon } from "../../shared/icons";
 import { accountLabel as shortAddress } from "../../shared/parts";
 import {
   type StakingDirectoryEntry,
@@ -26,7 +28,9 @@ const SORTS: readonly { readonly label: string; readonly value: StakingSort }[] 
   { label: "Highest uptime", value: "uptime" },
 ];
 
-const pasteForm = (): string => `
+// Below a listed directory the paste field is the fallback, so it says so.
+const pasteForm = (listed: boolean): string => `
+  ${listed ? '<p class="hint staking-paste-label">Validator not listed? Paste its address</p>' : ""}
   <form class="staking-form staking-paste" data-staking-paste novalidate>
     ${inputControl({
       ariaLabel: "Validator address",
@@ -49,18 +53,20 @@ const poolLine = (pool: StakingDirectoryEntry["pools"][number]): string =>
     ? `${pool.symbol} delegated unknown`
     : `${pool.delegated} ${pool.symbol} delegated`;
 
+// The whole card is one button that opens the validator; its text is inline
+// (a button holds no block elements).
 const entryRow = (entry: StakingDirectoryEntry): string => `
-  <li class="allowance-row staking-row" data-staking-entry="${escapeHtml(entry.staker)}">
-    <div class="allowance-copy staking-copy">
-      <strong>${escapeHtml(entry.name ?? "Unnamed validator")}</strong>
-      <code>${escapeHtml(shortAddress(entry.staker))}</code>
-      <p class="hint">${escapeHtml(figuresLine(entry))}</p>
-      ${entry.pools.map((pool) => `<p class="hint">${escapeHtml(poolLine(pool))}</p>`).join("")}
-      ${entry.website ? `<p class="hint">${escapeHtml(entry.website)}</p>` : ""}
-      <div class="staking-actions">
-        ${button({ attributes: { "data-staking-open": entry.staker }, label: "View", size: "small", variant: "ghost" })}
-      </div>
-    </div>
+  <li class="allowance-row staking-row staking-card-row" data-staking-entry="${escapeHtml(entry.staker)}">
+    <button class="staking-card" type="button" data-staking-open="${escapeHtml(entry.staker)}">
+      <span class="allowance-copy staking-copy">
+        <strong>${escapeHtml(entry.name ?? "Unnamed validator")}</strong>
+        <code>${escapeHtml(shortAddress(entry.staker))}</code>
+        <span class="hint">${escapeHtml(figuresLine(entry))}</span>
+        ${entry.pools.map((pool) => `<span class="hint">${escapeHtml(poolLine(pool))}</span>`).join("")}
+        ${entry.website ? `<span class="hint">${escapeHtml(entry.website)}</span>` : ""}
+      </span>
+      <span class="disclosure-mark" aria-hidden="true">${icon("chevronRight")}</span>
+    </button>
   </li>`;
 
 const listed = (
@@ -88,11 +94,12 @@ const listed = (
   }`;
 
 /**
- * The paste field, then the directory in whatever state it is in.
+ * The directory in whatever state it is in, then the paste field: under the
+ * list as the fallback, or after the line saying the list couldn't load.
  */
 export const stakingDirectorySection = (state: StakingState): string => {
   const { directory } = state;
-  return `${pasteForm()}${
+  return `${
     "loading" in directory
       ? emptyState("Loading validators…")
       : "off" in directory
@@ -102,5 +109,5 @@ export const stakingDirectorySection = (state: StakingState): string => {
           : "unavailable" in directory
             ? emptyState(directory.unavailable, "alert")
             : listed(directory, state.sort)
-  }`;
+  }${pasteForm("entries" in directory)}`;
 };

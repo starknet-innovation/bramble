@@ -478,6 +478,7 @@ export const dashboard = (
               privacy,
               signability,
               privateTotalWaitOver,
+              staking,
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}

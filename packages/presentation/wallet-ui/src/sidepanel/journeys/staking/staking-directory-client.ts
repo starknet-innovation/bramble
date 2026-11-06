@@ -58,6 +58,8 @@ export type StakingState = {
   readonly selected: { readonly name: string | null; readonly staker: string } | null;
   readonly sort: StakingSort;
   readonly validator: StakingValidatorState;
+  /** Home's open portfolio tab, kept for this account and network. */
+  readonly homeTab?: "staking" | "tokens";
 };
 
 /** The state before the first read. */
