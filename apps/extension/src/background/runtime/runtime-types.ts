@@ -26,6 +26,7 @@ import type {
 } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
+import type { DappMultisigAccount } from "@bramble/wallet-protocol/results";
 import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { PendingApproval } from "../approvals/approvals";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
@@ -93,11 +94,9 @@ type RevealSecretsResponse = {
   readonly privateKey: string | null;
 };
 
-/**
- * Account list response scoped by origin grants.
- */
+/** Account list response scoped by origin grants. */
 type AccountsResponse = {
-  readonly accounts: readonly AccountRef[];
+  readonly accounts: readonly (AccountRef | DappMultisigAccount)[];
   readonly ok: true;
 };
 

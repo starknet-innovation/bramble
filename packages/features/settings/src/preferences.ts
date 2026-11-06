@@ -28,7 +28,7 @@ import {
   withTokenId,
 } from "@bramble/wallet-model/preferences";
 import { normalizeAccountGroups } from "./groups";
-import { withAccountHidden } from "./preferences-accounts";
+import { selectedMultisigPreference, withAccountHidden } from "./preferences-accounts";
 import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
 import { withCustomNetwork } from "./preferences-custom-networks";
 import { displayFlags, isValidDisplayInput } from "./preferences-display";
@@ -155,9 +155,7 @@ const writePreferences = async (
   await store.set(PREFERENCES_STORE_KEY, preferences);
 };
 
-/**
- * Creates the plain preferences store with capability checks.
- */
+/** Creates the plain preferences store with capability checks. */
 export const createPreferencesStore = ({
   actor = "background",
   store,
@@ -378,6 +376,8 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
+      setSelectedMultisig: ({ multisigId }) =>
+        selectedMultisigPreference(read, (next) => writePreferences(store, next), multisigId),
       async setRpcOverride({ networkId, rpcUrl }) {
         if (!isStarknetNetworkId(networkId)) {
           throw new WalletError("Invalid Starknet network");

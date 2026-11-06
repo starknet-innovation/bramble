@@ -166,6 +166,12 @@ export type WalletStatusReader = {
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
   /**
+   * Checks a vault awaiting recovery without writing. See
+   * `WalletVaultService.assertRecoverableVault`. Optional only for partial test
+   * stubs; the handler fails closed without it.
+   */
+  readonly assertRecoverableVault?: (vaultPassphrase: string) => Promise<void>;
+  /**
    * Accepts a vault awaiting recovery; see `WalletVaultService.recoverUnverifiedVault`.
    * Optional only for partial test stubs; the handler fails closed without it.
    */
@@ -295,6 +301,9 @@ export const createWalletReader = (
     },
     async readVault(vaultPassphrase) {
       return (await required()).readVault(vaultPassphrase);
+    },
+    async assertRecoverableVault(vaultPassphrase) {
+      return (await required()).assertRecoverableVault(vaultPassphrase);
     },
     async recoverUnverifiedVault(vaultPassphrase) {
       return (await required()).recoverUnverifiedVault(vaultPassphrase);

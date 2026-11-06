@@ -217,6 +217,21 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   ["create a key before sharing it.", "Create a key before sharing it."],
   ["share the key with a co-owner first.", "Share the key with a co-owner first."],
   ["argent multisig intent is not ready", "This transaction isn't ready to send."],
+
+  // A connected site talking to a multisig. These sentences are already the
+  // words the reader should see; the table records that decision.
+  [
+    "multisig proposal saved. it was not submitted.",
+    "Multisig proposal saved. It was not submitted.",
+  ],
+  ["this multisig can't submit a private proof.", "This multisig can't submit a private proof."],
+  ["this multisig can't make this request.", "This multisig can't make this request."],
+  [
+    "this transaction could not be saved for the signers.",
+    "This transaction could not be saved for the signers.",
+  ],
+  ["this multisig isn't the pinned account.", "This multisig isn't the pinned account."],
+  ["this multisig needs more than one signer.", "This multisig needs more than one signer."],
   [
     "this multisig's signers aren't available yet.",
     "This multisig's signers aren't available yet.",
@@ -232,5 +247,23 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
   [
     "amount exceeds this multisig's private balance.",
     "Amount exceeds this multisig's private balance.",
+  ],
+  [
+    "this wallet doesn't hold a signer for this multisig.",
+    "This wallet doesn't hold a signer for this multisig.",
+  ],
+  [
+    "the network fee was not reviewed. nothing was submitted — review the transaction again.",
+    "The network fee was not reviewed. Nothing was submitted — review the transaction again.",
+  ],
+  ["invalid multisig grant", "Couldn't connect this multisig."],
+  [
+    "couldn't read your connected sites. try again.",
+    "Couldn't read your connected sites. Try again.",
+  ],
+  ["argent multisig threshold is above 1", "This multisig needs more than one signer."],
+  [
+    "this multisig changed since this request was reviewed.",
+    "This multisig changed since this request was reviewed.",
   ],
 ];

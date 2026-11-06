@@ -12,6 +12,7 @@ import { readPortfolioBalances } from "../portfolio/portfolio-balances";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
+import { dropMultisigFromSites } from "../settings/origins-ops";
 import { type ArgentMultisigContext, contextFor } from "./multisig-context";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import {
@@ -134,6 +135,24 @@ const removalBlocked = async (
   hasBlockingWork(intents, operations) ||
   ((await deps.strk20MultisigStore?.hasLiveRelay(accountId)) ?? false);
 
+/**
+ * Drops a removed account from the presented selection before the record is
+ * gone. Returns false when the session lapsed, writing nothing further.
+ */
+const clearRemovedSelection = async (
+  deps: MultisigOpsDeps,
+  multisigId: string,
+  isCurrent: () => boolean,
+): Promise<boolean> => {
+  if (!isCurrent()) return false;
+  const preferences = await deps.preferencesStore.read();
+  if (!isCurrent()) return false;
+  if (preferences.selectedMultisigId === multisigId) {
+    await deps.preferencesStore.setSelectedMultisig({ multisigId: null });
+  }
+  return isCurrent();
+};
+
 const removeMultisig = async (
   deps: MultisigOpsDeps,
   message: unknown,
@@ -160,7 +179,14 @@ const removeMultisig = async (
     ? null
     : await unconfirmedRemoval(deps, context, intents.length > 0 || operations.length > 0);
   if (unconfirmed) return { error: unconfirmed };
-  if (!authorized.isCurrent()) return { error: "wallet locked" };
+  if (!(await clearRemovedSelection(deps, context.record.id, authorized.isCurrent))) {
+    return { error: "wallet locked" };
+  }
+  // Sites lose it before the record goes, so a failed read keeps both.
+  await dropMultisigFromSites(deps.multisigGrants, context.active, {
+    isAuthorized: authorized.isCurrent,
+    multisigId: context.record.id,
+  });
   const removed =
     (await deps.multisigStore.removeMultisig(context.record.id, authorized.isCurrent)) ===
     "removed";

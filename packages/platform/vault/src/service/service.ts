@@ -362,6 +362,11 @@ export const createWalletVaultService = ({
 
       return kms.signStarkHash(signingKey.privateKey, input.messageHash);
     },
+    assertRecoverableVault: (vaultPassphrase) =>
+      serialized(async () => {
+        requirePassphrase(vaultPassphrase);
+        await encryptedStore.readUnverified(vaultPassphrase);
+      }),
     recoverUnverifiedVault: (vaultPassphrase) =>
       serialized(async () => {
         requirePassphrase(vaultPassphrase);

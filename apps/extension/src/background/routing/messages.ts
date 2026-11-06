@@ -22,6 +22,7 @@ import { handleTokenOps } from "../portfolio/token-ops";
 import { handleStrk20Ops } from "../privacy/strk20-ops";
 import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
 import { handleAddChainOps } from "../provider/add-chain-ops";
+import { grantedDappAccounts } from "../provider/dapp-account";
 import { handleProviderOps } from "../provider/provider-ops";
 import {
   accountForNetwork,
@@ -84,6 +85,7 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
 const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
   multisigDeploymentReviews: ctx.multisigDeploymentReviews,
+  multisigGrants: ctx.multisigGrants,
   multisigStore: ctx.multisigStore,
   nostrCoordinationStore: ctx.nostrCoordinationStore,
   ...(ctx.strk20MultisigStore ? { strk20MultisigStore: ctx.strk20MultisigStore } : {}),
@@ -178,7 +180,7 @@ const handleGetGrantedAccounts: RouterHandler = async (ctx, messageType, message
     // site cannot use `mc_accounts` as a lock-state oracle.
     return { accounts: [], ok: true };
   }
-  const accounts = await ctx.wallet.getGrantedAccounts(input.origin, vaultPassphrase);
+  const accounts = await grantedDappAccounts(ctx, input.origin, vaultPassphrase);
   if (!input.vaultPassphrase && !authorized.isCurrent()) return { accounts: [], ok: true };
   return { accounts, ok: true };
 };
@@ -216,7 +218,7 @@ const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, s
   const passphrase = ctx.session.peekPassphrase();
   const authorized = captureSessionAuthorization(ctx.session);
   if (passphrase) {
-    const accounts = await ctx.wallet.getGrantedAccounts(input.origin, passphrase);
+    const accounts = await grantedDappAccounts(ctx, input.origin, passphrase);
     if (accounts.length > 0) {
       // Record the origin only once it is actually connecting, so the enricher
       // still reports "first time seen" for a new site's approval.
@@ -293,18 +295,20 @@ const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
     : { error: "invalid diagnostics request" };
 };
 
-// `wallet.unlockUnverified` is the recovery screen's "Unlock anyway": it first
-// accepts a vault the store cannot verify (the service drops every site
-// connection and retained Ledger viewing key while doing so), then unlocks it
-// exactly like `wallet.unlock`. The service refuses a vault that verifies, so
-// this cannot be used to skip the freshness check on a healthy wallet.
+// `wallet.unlockUnverified` is the recovery screen's "Unlock anyway". Passphrase and
+// recovery state are checked before multisig connections are dropped, and those are
+// dropped before the vault is accepted, so a mistyped passphrase leaves them in place.
+// The service refuses a vault that verifies, so this cannot skip the freshness check.
 const acceptUnverifiedVault = async (
   wallet: WalletStatusReader,
+  grants: { readonly clear: () => Promise<void> },
   vaultPassphrase: string,
 ): Promise<void> => {
-  if (!wallet.recoverUnverifiedVault) {
+  if (!wallet.recoverUnverifiedVault || !wallet.assertRecoverableVault) {
     throw new WalletError("wallet unavailable");
   }
+  await wallet.assertRecoverableVault(vaultPassphrase);
+  await grants.clear();
   await wallet.recoverUnverifiedVault(vaultPassphrase);
 };
 
@@ -323,7 +327,7 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
         return { error: "wallet locked" };
       }
       if (messageType === "wallet.unlockUnverified") {
-        await acceptUnverifiedVault(ctx.wallet, input.vaultPassphrase);
+        await acceptUnverifiedVault(ctx.wallet, ctx.multisigGrants, input.vaultPassphrase);
       }
       await ctx.wallet.readVault(input.vaultPassphrase);
       if (ctx.session.generation() !== generation) {
@@ -360,7 +364,6 @@ const handlePreferences: RouterHandler = async (ctx, messageType, message) => {
 };
 
 // Ordered handlers own disjoint message types and return null otherwise.
-//
 // Deliberately absent (MCW-V09-124): there is no `wallet.signHash` message. An
 // arbitrary field element signed with the account key, under no approval and no
 // domain separation, is a signing oracle; hash signing is reachable only from
@@ -397,6 +400,7 @@ const HANDLERS: readonly RouterHandler[] = [
       {
         ...buildOpsDeps(ctx),
         prices: ctx.prices,
+        ...(ctx.sponsoredShield ? { sponsoredShield: ctx.sponsoredShield } : {}),
         strk20Jobs: ctx.strk20Jobs,
         strk20Preparations: ctx.strk20Preparations,
       },

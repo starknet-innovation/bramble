@@ -97,6 +97,9 @@ describe("post-broadcast outcome integrity", () => {
         "await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(pending)));",
         "await afterBroadcast(async () => {\n    await recordSubmittedActivity(deps.activity, activityFor(transactionHash));",
       ],
+      "apps/extension/src/background/provider/multisig-dapp-invoke.ts": [
+        "await afterBroadcast(() => recordPending(result.transactionHash));",
+      ],
       "apps/extension/src/background/transactions/swap-ops.ts": [
         "await afterBroadcast(() => recordSubmitted(pending));",
         "await afterBroadcast(() => recordSubmitted(transactionHash));",

@@ -407,6 +407,13 @@ export type WalletVaultService = {
    */
   readonly clearGrantCache: () => void;
   /**
+   * Checks that `vaultPassphrase` opens a vault awaiting recovery, and writes
+   * nothing. Throws the same errors as {@link recoverUnverifiedVault} for a
+   * wrong passphrase or a vault that is not awaiting recovery, so a caller can
+   * drop other state only after this succeeds.
+   */
+  readonly assertRecoverableVault: (vaultPassphrase: string) => Promise<void>;
+  /**
    * Accepts a vault whose status reports `unverified` or `rollback` after the
    * user consented to a possibly older copy: decrypts it with the passphrase,
    * removes every origin grant and retained Ledger viewing key a rollback could

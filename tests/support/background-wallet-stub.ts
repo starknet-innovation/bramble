@@ -134,6 +134,11 @@ export type WalletStubOptions = {
   readonly captureGrant?: (input: OriginGrantInput) => void;
   readonly captureSign?: (input: SignHashInput) => void;
   /**
+   * Vault account ids the stub origin grant names. Defaults to the canonical
+   * Sepolia account, which is absent when a suite substitutes `accounts`.
+   */
+  readonly grantAccountIds?: readonly string[];
+  /**
    * Public viewing key the stub says this wallet would register. Privacy checks
    * compare it with the pool. Defaults to `0x1`.
    */
@@ -158,7 +163,7 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     activeAccountId: options.activeAccountId?.() ?? account.id,
     importedSeeds: [],
     mnemonic: null,
-    originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
+    originGrants: [{ accountIds: options.grantAccountIds ?? [account.id], origin: grantedOrigin }],
     schemaVersion: 13,
     multisigStrk20KeyConflicts: [],
     multisigStrk20ViewingKeys: [],
