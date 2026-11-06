@@ -296,7 +296,7 @@ export const gaslessFeeSummary = (
   base: string,
   fee: { readonly amount: string; readonly decimals: number; readonly token: string },
 ): string => {
-  let shown = fee.token;
+  let shown: string;
   try {
     shown = `${formatTokenAmount(BigInt(fee.amount), fee.decimals)} ${fee.token}`;
   } catch {
