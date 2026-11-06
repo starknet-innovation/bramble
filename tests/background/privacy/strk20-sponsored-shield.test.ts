@@ -16,6 +16,7 @@ import {
 import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { memoryActivityLog } from "@bramble/transactions/activity";
+import { PAYMASTER_TIMEOUT_MS } from "@bramble/transactions/paymaster-http";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { OutsideExecutionVersion, outsideExecution } from "starknet";
 import { assertSponsoredDepositAffordable } from "../../../apps/extension/src/background/privacy/strk20-sponsored-shield";
@@ -35,6 +36,7 @@ import { makeStrk20WalletService } from "../../support/strk20-wallet-service";
 
 const POOL = "0x123";
 const RELAY = { url: "https://gateway.test/api/sponsored-shield/sepolia" };
+const BUNDLED_SEPOLIA = "https://wallet.nodes.starknet.org/api/sponsored-shield/sepolia";
 const AMOUNT_RAW = "0x14d1120d7b160000";
 
 const preferences = (): WalletPreferences => ({
@@ -83,6 +85,7 @@ const envelope = (body: Record<string, unknown>): Response =>
 
 type Harness = {
   readonly asked: Record<string, unknown>[];
+  readonly urls: string[];
   readonly handler: ReturnType<typeof buildStrk20Handler>;
   readonly activations: (true | undefined)[];
   readonly prepared: unknown[];
@@ -92,7 +95,9 @@ type Harness = {
 
 const harness = (
   options: {
-    readonly answer?: () => Response;
+    readonly answer?: (init?: RequestInit) => Response | Promise<Response>;
+    /** The bundled relay table, as production ships it, instead of {@link RELAY}. */
+    readonly bundled?: true;
     readonly networks?: Record<string, typeof RELAY>;
     readonly relayed?: () => Promise<{ readonly transactionHash: string }>;
     readonly activity?: ReturnType<typeof memoryActivityLog>;
@@ -100,6 +105,7 @@ const harness = (
   } = {},
 ): Harness => {
   const asked: Record<string, unknown>[] = [];
+  const urls: string[] = [];
   const prepared: unknown[] = [];
   const sponsored: Strk20SponsoredShieldSubmissionInput[] = [];
   const activations: (true | undefined)[] = [];
@@ -129,16 +135,17 @@ const harness = (
     preferences: preferences(),
     publicBalance: "2000000000000000000",
     sponsoredShield: {
-      http: async (_url, init) => {
+      http: async (url, init) => {
+        urls.push(String(url));
         asked.push(JSON.parse(String(init?.body)));
-        return (options.answer ?? (() => envelope({ result: sponsoredQuote })))();
+        return (options.answer ?? (() => envelope({ result: sponsoredQuote })))(init);
       },
-      networks: options.networks ?? { SN_SEPOLIA: RELAY },
+      ...(options.bundled ? {} : { networks: options.networks ?? { SN_SEPOLIA: RELAY } }),
       nowSeconds: () => 100,
     },
     strk20,
   });
-  return { activations, asked, handler, prepared, registered, sponsored };
+  return { activations, asked, handler, prepared, registered, sponsored, urls };
 };
 
 type Review = {
@@ -270,15 +277,82 @@ describe("sponsored first shield", () => {
     expect(run.sponsored).toHaveLength(1);
   });
 
-  test("a sponsor that declines at broadcast says so, and nothing else is sent", async () => {
+  test("a sponsor that declines at broadcast says so, and never pays self-paid instead", async () => {
     const run = harness({
+      bundled: true,
       relayed: () => Promise.reject(new WalletError(SPONSORED_SHIELD_DECLINED)),
     });
     const review = (await shield(run.handler)).strk20Preparation;
+    expect(review.route).toBe("sponsored-relay");
     await expect(executeStrk20Preparation(run.handler, review.id)).resolves.toEqual({
       error: SPONSORED_SHIELD_DECLINED,
     });
+    expect(SPONSORED_SHIELD_DECLINED).toBe("The sponsor declined this shield. Nothing was sent.");
+    expect(run.sponsored).toHaveLength(1);
+    expect(run.sponsored[0]?.relay).toEqual({ url: BUNDLED_SEPOLIA });
     expect(run.prepared).toHaveLength(0);
+  });
+});
+
+describe("sponsored first shield against the bundled gateway", () => {
+  const expectSelfPaid = async (run: Harness) => {
+    const review = (await shield(run.handler)).strk20Preparation;
+    expect(review.route).toBe("public-account");
+    expect(review.sponsor).toBeUndefined();
+    expect(review.networkFee).toBeDefined();
+    await expect(executeStrk20Preparation(run.handler, review.id)).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(run.sponsored).toHaveLength(0);
+    expect(run.prepared).toHaveLength(1);
+  };
+
+  test("asks only the active network's route, and a switched-off gateway (404) is self-paid", async () => {
+    const run = harness({ answer: () => new Response("", { status: 404 }), bundled: true });
+    await expectSelfPaid(run);
+    expect(run.urls).toEqual([BUNDLED_SEPOLIA]);
+  });
+
+  test("a sponsor's yes from the gateway relays through that same route", async () => {
+    const run = harness({ bundled: true });
+    const review = (await shield(run.handler)).strk20Preparation;
+    expect(review.route).toBe("sponsored-relay");
+    await executeStrk20Preparation(run.handler, review.id);
+    expect(run.urls).toEqual([BUNDLED_SEPOLIA]);
+    expect(run.sponsored[0]?.relay).toEqual({ url: BUNDLED_SEPOLIA });
+  });
+
+  test("an unreachable gateway is self-paid, unannounced", async () => {
+    const run = harness({
+      answer: () => Promise.reject(new TypeError("fetch failed")),
+      bundled: true,
+    });
+    await expectSelfPaid(run);
+    expect(run.urls).toEqual([BUNDLED_SEPOLIA]);
+  });
+
+  test("a gateway that hangs is cut off at the paymaster deadline and is self-paid", async () => {
+    const realTimeout = AbortSignal.timeout;
+    const deadlines: number[] = [];
+    // The real deadline, run fast: record what was asked for, fire at once.
+    AbortSignal.timeout = (ms: number) => {
+      deadlines.push(ms);
+      return realTimeout.call(AbortSignal, 1);
+    };
+    try {
+      const run = harness({
+        answer: (init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+          }),
+        bundled: true,
+      });
+      await expectSelfPaid(run);
+      expect(run.urls).toEqual([BUNDLED_SEPOLIA]);
+    } finally {
+      AbortSignal.timeout = realTimeout;
+    }
+    expect(deadlines).toContain(PAYMASTER_TIMEOUT_MS);
   });
 });
 
