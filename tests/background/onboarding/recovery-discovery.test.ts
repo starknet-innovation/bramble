@@ -43,6 +43,25 @@ const accountFor = (input: AccountDerivationInput): DerivedAccountRef => {
     : { ...account, accountContractType: "openzeppelin" };
 };
 
+// accountFor maps every family onto OpenZeppelin; this keeps Braavos rows
+// Braavos, one distinct address per deployment class scanned.
+const braavosAwareAccountFor = (input: AccountDerivationInput) => {
+  const base = accountFor(input);
+  if (input.accountContractType !== "braavos") return base;
+  const classIndex = deploymentClasses("braavos").findIndex(
+    (entry) => entry.classHash === input.classHash,
+  );
+  const address = `0x${(0xb00 + (input.accountIndex ?? 0) * 8 + classIndex).toString(16)}`;
+  return {
+    ...base,
+    accountContractType: "braavos" as const,
+    address,
+    classHash: canonicalFelt(input.classHash ?? "") ?? "",
+    deploymentSalt: base.publicKeyX,
+    id: `SN_MAIN:${address}`,
+  };
+};
+
 describe("recovery discovery", () => {
   test("checks every account family in bounded resumable batches", async () => {
     const previewed: Array<readonly [string, number]> = [];
@@ -329,21 +348,7 @@ describe("recovery discovery", () => {
       wallet: {
         ...walletStub,
         async previewAccount(input: AccountDerivationInput) {
-          const base = accountFor(input);
-          if (input.accountContractType !== "braavos") return base;
-          // One distinct Braavos address per deployment class scanned.
-          const classIndex = deploymentClasses("braavos").findIndex(
-            (entry) => entry.classHash === input.classHash,
-          );
-          const address = `0x${(0xb00 + (input.accountIndex ?? 0) * 8 + classIndex).toString(16)}`;
-          return {
-            ...base,
-            accountContractType: "braavos" as const,
-            address,
-            classHash: canonicalFelt(input.classHash ?? "") ?? "",
-            deploymentSalt: base.publicKeyX,
-            id: `SN_MAIN:${address}`,
-          };
+          return braavosAwareAccountFor(input);
         },
       },
     };
@@ -368,6 +373,50 @@ describe("recovery discovery", () => {
     const ozAddresses = new Set(byFamily("openzeppelin").map((c) => c.account.address));
     expect(probed.some(([, address]) => ozAddresses.has(address))).toBe(false);
   });
+
+  for (const family of ["argent", "braavos"] as const) {
+    test(`lists deployed ${family} candidates unlabelled when the ${family} probe fails`, async () => {
+      // Import-paths scope doc B5: no live account makes the probe fail, so it
+      // is pinned here. A rejection is no verdict, never a refusal or a drop.
+      const fail = async (): Promise<never> => {
+        throw new Error("probe unavailable");
+      };
+      const answer = async () => null;
+      const deps = {
+        activeStateCoordinator: createActiveStateCoordinator(),
+        preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+        recoveryDiscovery: createRecoveryDiscoveryCache(),
+        runtimeRpc: {
+          ...offlineDiscoveryRpc,
+          getArgentSigningRestriction: family === "argent" ? fail : answer,
+          getBraavosSigningRestriction: family === "braavos" ? fail : answer,
+          async getDeploymentStatus() {
+            return true;
+          },
+        },
+        session: createUnlockSession(),
+        wallet: {
+          ...walletStub,
+          async previewAccount(input: AccountDerivationInput) {
+            return braavosAwareAccountFor(input);
+          },
+        },
+      };
+      const response = (await handleOnboardingOps(deps, "wallet.discoverRecoveryAccounts", {
+        manualIndex: 0,
+        mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+        networkId: "SN_MAIN",
+        type: "wallet.discoverRecoveryAccounts",
+      })) as { readonly candidates: readonly RecoveryAccountCandidate[] };
+
+      const rows = response.candidates.filter(
+        (candidate) => candidate.account.accountContractType === family,
+      );
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((candidate) => candidate.deployed)).toBe(true);
+      expect(rows.every((candidate) => candidate.restriction === undefined)).toBe(true);
+    });
+  }
 
   test("previews every Argent release an account could have been deployed with", async () => {
     // A Ready account deployed at Argent 0.3.x keeps that address forever,
