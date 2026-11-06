@@ -14,6 +14,7 @@ output/
 vendor/argent-contracts/
 vendor/starknet-privacy/
 vendor/ledger-app-starknet/
+vendor/ledger-app-bin/
 *.log
 .env
 .env*.local

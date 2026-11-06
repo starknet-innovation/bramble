@@ -38,8 +38,14 @@ export const LEDGER_APP_BUILDER_IMAGE =
 export const SPECULOS_IMAGE =
   "ghcr.io/ledgerhq/speculos@sha256:028d1e368244631578537e7ca50b6f13ca2932b5f3fd220627289b559c07a886";
 
-/** Where the vendoring script checks out the app and writes binaries. */
+/** Where the vendoring script checks out the app source. */
 export const LEDGER_APP_DIR = "vendor/ledger-app-starknet";
+
+/**
+ * Where built binaries go: outside the checkout, which is wiped to the pinned
+ * tree before every build.
+ */
+export const LEDGER_APP_BIN_DIR = "vendor/ledger-app-bin";
 
 /** Speculos model name → cargo-ledger device and the recorded binary hash. */
 export const LEDGER_APP_BINARIES: Readonly<
@@ -55,4 +61,4 @@ export const LEDGER_APP_BINARIES: Readonly<
 
 /** Path of one model's built app binary. */
 export const ledgerAppBinaryPath = (model: keyof typeof LEDGER_APP_BINARIES): string =>
-  `${LEDGER_APP_DIR}/bin/${model}.elf`;
+  `${LEDGER_APP_BIN_DIR}/${model}.elf`;

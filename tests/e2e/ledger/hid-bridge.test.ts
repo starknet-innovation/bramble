@@ -169,4 +169,22 @@ describe("Speculos endpoints and socket", () => {
     expect(Buffer.concat(received)).toEqual(Buffer.from([0, 0, 0, 5, 0x5a, 0, 0, 0, 0]));
     expect(reply).toEqual(Uint8Array.of(0xaa, 0xbb, 0xcc, 0x90, 0x00));
   });
+
+  test("a connection that drops mid-reply rejects instead of hanging", async () => {
+    server = createServer((socket) => {
+      socket.on("data", () => {
+        socket.end(Buffer.from([0, 0, 0, 9, 0xaa]));
+      });
+    });
+    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    const client = new SpeculosApdu({
+      apduPort: typeof address === "object" && address ? address.port : 0,
+      apiUrl: "http://127.0.0.1:1",
+      host: "127.0.0.1",
+      model: "flex",
+    });
+    await expect(client.exchange(Uint8Array.of(0x5a, 0, 0, 0, 0))).rejects.toThrow("closed");
+    client.close();
+  });
 });

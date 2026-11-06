@@ -20,6 +20,8 @@ export type SpeculosEndpoints = {
   readonly model: LedgerModel;
 };
 
+// Long enough for an on-device review the suite answers through the REST API.
+const EXCHANGE_TIMEOUT_MS = 120_000;
 const MODELS: readonly LedgerModel[] = ["nanosp", "flex", "stax"];
 const LOOPBACK = new Set(["127.0.0.1", "localhost"]);
 
@@ -87,7 +89,8 @@ export const probeSpeculos = async (endpoints: SpeculosEndpoints): Promise<strin
 /** Raw APDU client for Speculos's TCP server. One exchange at a time. */
 export class SpeculosApdu implements ApduBackend {
   private buffered = Buffer.alloc(0);
-  private pending: ((chunk: Buffer) => void) | null = null;
+  private pending: { readonly fail: (error: Error) => void; readonly take: () => void } | null =
+    null;
   private queue: Promise<unknown> = Promise.resolve();
   private socket: Socket | null = null;
 
@@ -100,10 +103,21 @@ export class SpeculosApdu implements ApduBackend {
     return next;
   }
 
-  /** Closes the socket. */
+  /** Closes the socket; a pending exchange rejects. */
   close(): void {
-    this.socket?.destroy();
+    this.drop(new Error("Speculos APDU socket closed"));
+  }
+
+  // Ends the connection and rejects whatever read is waiting on it, so an
+  // emulator crash fails the exchange at once instead of hanging the queue.
+  private drop(error: Error): void {
+    const socket = this.socket;
     this.socket = null;
+    this.buffered = Buffer.alloc(0);
+    socket?.destroy();
+    const pending = this.pending;
+    this.pending = null;
+    pending?.fail(error);
   }
 
   private async open(): Promise<Socket> {
@@ -117,14 +131,20 @@ export class SpeculosApdu implements ApduBackend {
     });
     socket.on("data", (chunk: Buffer) => {
       this.buffered = Buffer.concat([this.buffered, chunk]);
-      this.pending?.(this.buffered);
+      this.pending?.take();
+    });
+    socket.on("error", (error) => this.drop(error));
+    socket.on("close", () => {
+      if (this.socket === socket) {
+        this.drop(new Error("Speculos closed the APDU connection"));
+      }
     });
     this.socket = socket;
     return socket;
   }
 
   private read(size: number): Promise<Buffer> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const take = (): boolean => {
         if (this.buffered.length < size) {
           return false;
@@ -136,8 +156,11 @@ export class SpeculosApdu implements ApduBackend {
         return true;
       };
       if (!take()) {
-        this.pending = () => {
-          take();
+        this.pending = {
+          fail: reject,
+          take: () => {
+            take();
+          },
         };
       }
     });
@@ -149,8 +172,18 @@ export class SpeculosApdu implements ApduBackend {
     header.writeUInt32BE(apdu.length, 0);
     socket.write(Buffer.concat([header, Buffer.from(apdu)]));
     // Speculos counts the reply length without the 2-byte status word.
-    const length = (await this.read(4)).readUInt32BE(0);
-    return Uint8Array.from(await this.read(length + 2));
+    // Bounded: a reply that never comes (a dead emulator, a review nobody
+    // answers) fails the exchange instead of waiting on the test timeout.
+    const timer = setTimeout(
+      () => this.drop(new Error("Speculos did not answer the APDU in time")),
+      EXCHANGE_TIMEOUT_MS,
+    );
+    try {
+      const length = (await this.read(4)).readUInt32BE(0);
+      return Uint8Array.from(await this.read(length + 2));
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 

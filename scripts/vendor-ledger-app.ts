@@ -16,6 +16,7 @@ import { resolve } from "node:path";
 import {
   APP_STARKNET_REPOSITORY,
   APP_STARKNET_REVISION,
+  LEDGER_APP_BIN_DIR,
   LEDGER_APP_BINARIES,
   LEDGER_APP_BUILDER_IMAGE,
   LEDGER_APP_DIR,
@@ -52,8 +53,21 @@ if (!(await Bun.file(`${LEDGER_APP_DIR}/ledger_app.toml`).exists())) {
   ]);
 }
 await run(["git", "fetch", "--depth=1", "origin", APP_STARKNET_REVISION], LEDGER_APP_DIR);
-await run(["git", "checkout", "--detach", APP_STARKNET_REVISION], LEDGER_APP_DIR);
-await mkdir(`${LEDGER_APP_DIR}/bin`, { recursive: true });
+await run(["git", "checkout", "--force", "--detach", APP_STARKNET_REVISION], LEDGER_APP_DIR);
+// Nothing but the pinned tree may reach the build: drop local edits and every
+// untracked or ignored file (an old target/ included), then prove it.
+await run(["git", "reset", "--hard", APP_STARKNET_REVISION], LEDGER_APP_DIR);
+await run(["git", "clean", "-ffdx"], LEDGER_APP_DIR);
+const git = (args: string[]): string =>
+  Bun.spawnSync(["git", ...args], { cwd: LEDGER_APP_DIR })
+    .stdout.toString()
+    .trim();
+if (
+  git(["rev-parse", "HEAD"]) !== APP_STARKNET_REVISION ||
+  git(["status", "--porcelain", "--ignored", "--untracked-files=all"]) !== ""
+) {
+  throw new Error("Ledger app checkout is not exactly the pinned commit; refusing to build");
+}
 
 const failures: string[] = [];
 for (const model of models) {
@@ -77,6 +91,7 @@ for (const model of models) {
     "--locked",
   ]);
   const output = ledgerAppBinaryPath(model);
+  await mkdir(LEDGER_APP_BIN_DIR, { recursive: true });
   await copyFile(`${LEDGER_APP_DIR}/starknet/target/${cargoDevice}/release/starknet`, output);
   const digest = createHash("sha256")
     .update(await readFile(output))

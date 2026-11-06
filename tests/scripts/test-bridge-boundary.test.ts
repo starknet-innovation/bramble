@@ -32,6 +32,18 @@ describe("test bridge boundary", () => {
     ).toHaveLength(1);
   });
 
+  test("refuses any route out of apps/ and packages/, so a re-export cannot launder it", () => {
+    expect(check("packages/a/src/b.ts", ["../../../scripts/helper"])).toEqual([
+      "packages/a/src/b.ts imports outside apps/ and packages/ via ../../../scripts/helper",
+    ]);
+    expect(check("apps/extension/src/x.ts", ["bramble/tests/e2e/ledger/hid-bridge"])).toHaveLength(
+      1,
+    );
+    expect(check("apps/extension/src/x.ts", ["/tests/e2e/ledger/hid-shim.js"])).toHaveLength(1);
+    expect(check("apps/extension/src/x.ts", ["/vendor/starknet-privacy/sdk.js"])).toEqual([]);
+    expect(check("apps/extension/src/x.ts", ["bramble"])).toHaveLength(1);
+  });
+
   test("allows ordinary imports, including look-alike names", () => {
     expect(
       check("packages/a/src/b.ts", [

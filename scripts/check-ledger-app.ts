@@ -56,7 +56,7 @@ if (await Bun.file(`${LEDGER_APP_DIR}/ledger_app.toml`).exists()) {
       head: git(["rev-parse", "HEAD"]),
       name: "Ledger Starknet app",
       pinnedRevision: APP_STARKNET_REVISION,
-      // Build output (target/, bin/) is not source.
+      // Build output (target/) is not source; the vendoring step wipes it.
       worktreeStatus: git(["status", "--porcelain", "--untracked-files=no"]),
     }),
   );

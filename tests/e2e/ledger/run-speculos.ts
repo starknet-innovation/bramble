@@ -90,6 +90,23 @@ for (const model of models) {
   binaries.set(model, await verifiedBinary(model));
 }
 
+// Ctrl-C or a CI cancel must not leave a container holding the ports.
+let runningContainer: string | null = null;
+let runningSuite: ReturnType<typeof Bun.spawn> | null = null;
+const stopAll = (): void => {
+  runningSuite?.kill();
+  if (runningContainer !== null) {
+    Bun.spawnSync(["docker", "stop", runningContainer], { stderr: "ignore", stdout: "ignore" });
+    runningContainer = null;
+  }
+};
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    stopAll();
+    process.exit(130);
+  });
+}
+
 let failed = false;
 for (const model of models) {
   const binary = binaries.get(model) ?? fail(`no binary for ${model}`);
@@ -127,6 +144,7 @@ for (const model of models) {
   if (started !== 0) {
     fail(`could not start Speculos for ${model}`);
   }
+  runningContainer = name;
   try {
     const endpoints: SpeculosEndpoints = {
       apduPort: APDU_PORT,
@@ -143,17 +161,28 @@ for (const model of models) {
     if (reason !== null) {
       throw new Error(`Speculos for ${model} did not come up: ${reason}`);
     }
-    const exitCode = run(["bun", "run", "test:e2e", "--config", "playwright.ledger.config.ts"], {
-      BRAMBLE_SPECULOS_APDU_PORT: String(APDU_PORT),
-      BRAMBLE_SPECULOS_API_PORT: String(API_PORT),
-      BRAMBLE_SPECULOS_MODEL: model,
-    });
+    // Asynchronous, so the signal handlers above can run while it does.
+    runningSuite = Bun.spawn(
+      ["bun", "run", "test:e2e", "--config", "playwright.ledger.config.ts"],
+      {
+        env: {
+          ...process.env,
+          BRAMBLE_SPECULOS_APDU_PORT: String(APDU_PORT),
+          BRAMBLE_SPECULOS_API_PORT: String(API_PORT),
+          BRAMBLE_SPECULOS_MODEL: model,
+        },
+        stderr: "inherit",
+        stdout: "inherit",
+      },
+    );
+    const exitCode = await runningSuite.exited;
+    runningSuite = null;
     failed ||= exitCode !== 0;
   } catch (error) {
     console.error(`test:e2e:ledger: ${error instanceof Error ? error.message : String(error)}`);
     failed = true;
   } finally {
-    run(["docker", "stop", name]);
+    stopAll();
   }
 }
 process.exit(failed ? 1 : 0);
