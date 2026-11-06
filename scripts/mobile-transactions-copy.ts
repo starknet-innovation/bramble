@@ -93,6 +93,21 @@ export const computeCopyVectors = () => {
           addressBook: [],
           tokens: [],
         }).flags.find((flag) => flag.code === "address-poisoning")?.message ?? null,
+      tokenContractRecipient:
+        verifyCalls(
+          [
+            buildErc20TransferCall(
+              DEFAULT_TOKENS[0]?.address ?? "",
+              DEFAULT_TOKENS[0]?.address ?? "",
+              1n,
+            ),
+          ],
+          {
+            account: { address: MAINNET_ACCOUNT, networkId: "SN_MAIN" } as never,
+            addressBook: [],
+            tokens: [],
+          },
+        ).flags.find((flag) => flag.code === "token-contract-recipient")?.message ?? null,
       indeterminateWrite: INDETERMINATE_RPC_WRITE_MESSAGE,
       invalidRecipient: recipientFieldError("not an address"),
       reviewedDeploymentFeeExceeded: REVIEWED_DEPLOYMENT_FEE_EXCEEDED,

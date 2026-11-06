@@ -88,6 +88,7 @@ fn run(core: &std::sync::Arc<WalletCore>, scenario: &Value) {
                 recipient: scenario["recipient"].as_str().unwrap().into(),
                 amount: scenario["amount"].as_str().unwrap().into(),
                 fee_balance: None,
+                tracked_tokens: vec![],
             })
             .unwrap()
     } else {

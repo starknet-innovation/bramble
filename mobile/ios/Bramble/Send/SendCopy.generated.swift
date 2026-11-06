@@ -104,6 +104,7 @@ enum SendCopy {
     static let maximumFeePrefix = "Maximum network fee: "
     static let poisonedRecipient = "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending."
     static let selfTransfer = "The recipient is this wallet's own address."
+    static let tokenContractRecipient = "This is a token contract, not a wallet. Tokens sent here are usually lost."
     static let sentTo = " sent to "
     static let activityPending = "pending"
     static let activityPreconfirmed = "pre-confirmed"

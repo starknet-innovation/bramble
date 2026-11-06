@@ -240,6 +240,9 @@ const SHORT_INPUTS = [RECIPIENT, "0x1", "0x12345", "0x123456789a", "not an addre
 
 const MAINNET_ACCOUNT = "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9";
 const LOOKALIKE = "0x2083610000000000000000000000000000000000000000000000000000098d9";
+/** A saved contact, stored padded as the address book stores it, and a twin that imitates it. */
+const CONTACT = "0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc";
+const CONTACT_TWIN = "0x555af000000000000000000000000000000000000000000000000000000bbcc";
 
 /** Display rules: truncation, recipient grammar, explorer links, fee and amount text, summaries. */
 export const computePresentationVectors = () => ({
@@ -289,11 +292,13 @@ export const computePresentationVectors = () => ({
       id: `${networkId}:${token.address}`,
     }));
     const account = { address: MAINNET_ACCOUNT, networkId } as never;
-    return [RECIPIENT, MAINNET_ACCOUNT, LOOKALIKE].flatMap((recipient) =>
+    const addressBook = [{ address: CONTACT, label: "Contact", networkId }] as never[];
+    const recipients = [RECIPIENT, MAINNET_ACCOUNT, LOOKALIKE, CONTACT, CONTACT_TWIN];
+    return [...recipients, tokens[0]?.address ?? ""].flatMap((recipient) =>
       tokens.map((token) => {
         const report = verifyCalls(
           [buildErc20TransferCall(token.address, recipient, 1_500_000_000_000_000_000n)],
-          { account, addressBook: [], tokens },
+          { account, addressBook, tokens },
         );
         return {
           account: MAINNET_ACCOUNT,
@@ -302,6 +307,7 @@ export const computePresentationVectors = () => ({
           recipient,
           summary: report.calls[0]?.summary ?? null,
           token: token.address,
+          trusted: [CONTACT],
         };
       }),
     );

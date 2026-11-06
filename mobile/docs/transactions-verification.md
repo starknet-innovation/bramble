@@ -35,7 +35,9 @@ path, never from Krusty. Accounts: the published E2E phrase, indices 0 and 1, SN
 5. **Presentation rules.** `shortAddress`; `normalizeFeltInput` + `isStarkFieldElement`;
    `explorerTransactionUrl` (mainnet, Sepolia, malformed, zero); `formatFri` /
    `formatFeeEstimate`; `formatTokenAmount`; the `verifyCalls` summary per bundled token and
-   "Deploy account contract"; `address-poisoning` / `self-transfer` cases.
+   "Deploy account contract"; `self-transfer`, `token-contract-recipient` and
+   `address-poisoning` cases, the last against both the account and a padded saved contact
+   (`extension-transactions-verification.json`).
 6. **Status judgement.** `classifyStatus` over every finality × execution combination, code 29 and
    the "transaction hash not found" message; `monotonicActivityStatus`; the not-found threshold.
 7. **Copy.** Every string in §2, read from the extension modules that export it (the

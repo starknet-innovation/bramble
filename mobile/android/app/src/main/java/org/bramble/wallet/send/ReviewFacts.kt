@@ -21,6 +21,7 @@ fun reviewRisks(review: TransferReview): List<String> =
     review.flags.map { flag ->
         when (flag) {
             ReviewFlag.SELF_TRANSFER -> SendCopy.selfTransfer
+            ReviewFlag.TOKEN_CONTRACT_RECIPIENT -> SendCopy.tokenContractRecipient
             ReviewFlag.ADDRESS_POISONING -> SendCopy.poisonedRecipient
         }
     } +

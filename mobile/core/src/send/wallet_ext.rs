@@ -19,10 +19,11 @@ use crate::account_catalog::{self, AccountFamily};
 use crate::account_store::StoredAccount;
 use crate::activity::{observation, store};
 use crate::history::activity::ActivityEntry;
-use crate::networks;
+use crate::networks::{self, NetworkId};
+use crate::portfolio::registry;
 use crate::wallet::WalletCore;
 use crate::wallet_accounts::{sign_for, signing_record, SignRefusal};
-use crate::{felt, kms, CoreError};
+use crate::{contacts, felt, kms, multisig_store, CoreError};
 
 impl From<SignRefusal> for SendError {
     fn from(refusal: SignRefusal) -> Self {
@@ -94,6 +95,22 @@ fn plan_account(record: &StoredAccount) -> Result<Account, SendError> {
     })
 }
 
+/// The token contracts the wallet knows on `network` (`tokenContractRecipientFlag`'s list): the
+/// bundled Send tokens, STRK among them, and the curated registry.
+pub(crate) fn known_token_addresses(network: NetworkId) -> Vec<Felt> {
+    let bundled = networks::info(network)
+        .tokens
+        .iter()
+        .map(|t| t.address.clone());
+    let curated = registry::known_tokens(network)
+        .into_iter()
+        .map(|t| t.address);
+    bundled
+        .chain(curated)
+        .filter_map(|address| felt::parse(&address))
+        .collect()
+}
+
 /// The plan's view of vault-security's session (`wallet.rs`): the generation is `lock_epoch`, read
 /// and checked only through `with_session`, so the idle lock applies and the check happens under
 /// the same session mutex every lock, idle lock and new session advances it under.
@@ -102,6 +119,43 @@ impl WalletCore {
     pub(crate) fn session_generation(&self) -> Option<u64> {
         self.with_session(false, |_| Ok(self.lock_epoch.load(Ordering::SeqCst)))
             .ok()
+    }
+
+    /// Every address on `network` the person can be expected to recognise, for the poisoning
+    /// check: their vault accounts, their multisig accounts, and saved contacts (the extension's
+    /// `withTrustedRecipients`). Recipients merely seen in the activity log are left out, because
+    /// chain history is merged into it and an attacker can plant rows there (the extension
+    /// excludes chain-discovered history for the same reason). Fails closed: an unreadable
+    /// contacts or multisig file refuses the send rather than checking against fewer addresses.
+    fn trusted_recipients(&self, network: NetworkId) -> Result<Vec<Felt>, SendError> {
+        let own = self
+            .with_session(false, |session| {
+                Ok(session
+                    .payload
+                    .accounts
+                    .iter()
+                    .filter(|record| record.network() == network)
+                    .filter_map(|record| felt::parse(&record.address))
+                    .collect::<Vec<_>>())
+            })
+            .map_err(|_| SendError::Locked)?;
+        // The recipient cannot be vetted without the addresses it might imitate.
+        let contacts =
+            contacts::list(&self.data_dir, network).map_err(|_| SendError::InvalidRecipient)?;
+        let multisigs =
+            multisig_store::load(&self.data_dir).map_err(|_| SendError::InvalidRecipient)?;
+        let catalog_id = contacts::network_catalog_id(network);
+        Ok(own
+            .into_iter()
+            .chain(contacts.iter().filter_map(|c| felt::parse(&c.address)))
+            .chain(
+                multisigs
+                    .records
+                    .iter()
+                    .filter(|record| record.network_id == catalog_id)
+                    .filter_map(|record| felt::parse(&record.address)),
+            )
+            .collect())
     }
 
     /// The stored record `account_id` names plus the session generation, for a plan being
@@ -156,7 +210,9 @@ impl WalletCore {
     /// Braavos account is refused by the plan's review (`BraavosDeployFirst`): it deploys only
     /// through `prepare_deployment`.
     /// Refuses a token that is not bundled for the network, an unparseable or zero recipient,
-    /// and an amount the extension would refuse or no ERC-20 could carry.
+    /// and an amount the extension would refuse or no ERC-20 could carry. Also refuses with
+    /// `InvalidRecipient` when the contacts or multisig file is unreadable, since the recipient
+    /// cannot then be checked against every address it might imitate.
     pub fn prepare_transfer(
         self: Arc<Self>,
         request: TransferRequest,
@@ -188,7 +244,20 @@ impl WalletCore {
             amount,
             amount_text: request.amount.trim().to_string(),
             summary: calls::transfer_summary(&amount, token.decimals, &token.symbol, &recipient),
-            flags: calls::transfer_flags(&recipient, &account.address),
+            flags: calls::transfer_flags(
+                &recipient,
+                &account.address,
+                &self.trusted_recipients(request.network)?,
+                &known_token_addresses(request.network)
+                    .into_iter()
+                    .chain(
+                        request
+                            .tracked_tokens
+                            .iter()
+                            .filter_map(|address| felt::parse(address)),
+                    )
+                    .collect::<Vec<_>>(),
+            ),
             calldata,
             fee_balance: request.fee_balance.as_deref().and_then(U256::from_decimal),
         };

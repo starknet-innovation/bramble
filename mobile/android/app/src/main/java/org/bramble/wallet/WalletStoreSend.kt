@@ -42,6 +42,7 @@ fun WalletStore.makeSendModel(startToken: String? = null): SendFlowModel? {
             showToast(message, positive = success)
         },
         startToken,
+        trackedTokens = portfolio.preferences.trustedTokenAddresses(networkInfo.network),
     )
 }
 

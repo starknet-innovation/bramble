@@ -58,6 +58,8 @@ final class SendFlowModel {
     let accounts: [AccountRecord]
     private let core: WalletCore
     private let balances: [String: String]
+    /// The tracked tokens on this network the review warns about paying (`trustedTokenAddresses`).
+    private let trackedTokens: [String]
     private let transport: RpcTransport
     private let track: (TransferPlan) -> Void
     private var driver: SendDriver?
@@ -69,6 +71,7 @@ final class SendFlowModel {
         accounts: [AccountRecord],
         balances: [String: String],
         transport: RpcTransport,
+        trackedTokens: [String] = [],
         openingToken: String? = nil,
         track: @escaping (TransferPlan) -> Void = { _ in /* Nothing tracks the plan. */ }
     ) {
@@ -77,6 +80,7 @@ final class SendFlowModel {
         self.account = account
         self.accounts = accounts
         self.balances = balances
+        self.trackedTokens = trackedTokens
         self.transport = transport
         self.track = track
         token = Self.token(openingToken, in: network) ?? network.tokens.first { $0.symbol == "STRK" }
@@ -240,7 +244,8 @@ final class SendFlowModel {
             tokenAddress: token.address,
             recipient: recipient,
             amount: amount,
-            feeBalance: balances["STRK"]
+            feeBalance: balances["STRK"],
+            trackedTokens: trackedTokens
         )
         let plan: TransferPlan
         do {

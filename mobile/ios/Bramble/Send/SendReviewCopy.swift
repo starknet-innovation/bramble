@@ -108,7 +108,16 @@ enum SendReviewCopy {
     /// account. Empty when there is nothing to warn about, and then no panel is shown.
     static func risks(_ review: TransferReview) -> [String] {
         let flags = review.flags.map { flag in
-            flag == .selfTransfer ? SendCopy.selfTransfer : SendCopy.poisonedRecipient
+            switch flag {
+            case .selfTransfer:
+                SendCopy.selfTransfer
+
+            case .tokenContractRecipient:
+                SendCopy.tokenContractRecipient
+
+            case .addressPoisoning:
+                SendCopy.poisonedRecipient
+            }
         }
         return flags + (review.requiresDeployment ? [SendCopy.deployNote] : [])
     }

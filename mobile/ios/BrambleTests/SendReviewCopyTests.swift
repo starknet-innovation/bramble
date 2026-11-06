@@ -98,9 +98,10 @@ final class SendReviewCopyTests: XCTestCase {
         XCTAssertTrue(quiet.isEmpty, "no panel, and no 'no warnings' line either")
         let first = review(fee: sendFee, deploymentFee: deployFee, requiresDeployment: true)
         XCTAssertEqual([SendCopy.riskAndRecovery] + SendReviewCopy.risks(first), undeployed)
+        let flagged = review(fee: sendFee, flags: [.selfTransfer, .tokenContractRecipient, .addressPoisoning])
         XCTAssertEqual(
-            SendReviewCopy.risks(review(fee: sendFee, flags: [.selfTransfer, .addressPoisoning])),
-            [SendCopy.selfTransfer, SendCopy.poisonedRecipient]
+            SendReviewCopy.risks(flagged),
+            [SendCopy.selfTransfer, SendCopy.tokenContractRecipient, SendCopy.poisonedRecipient]
         )
     }
 

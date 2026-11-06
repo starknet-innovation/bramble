@@ -191,6 +191,17 @@ impl TokenPreferences {
             .collect()
     }
 
+    /// The tracked tokens on `network` the Send review treats as known token contracts
+    /// (`trustedTokens`): every one except those the spam heuristic flags. Pass to
+    /// `TransferRequest.tracked_tokens`.
+    pub fn trusted_token_addresses(&self, network: NetworkId) -> Vec<String> {
+        self.tracked(network)
+            .into_iter()
+            .filter(|t| !t.likely_spam)
+            .map(|t| t.token.address)
+            .collect()
+    }
+
     /// `setTokenHidden`.
     pub fn set_hidden(&self, token_id: String, hidden: bool) -> Result<(), CoreError> {
         if !is_token_id(&token_id) {
@@ -343,5 +354,37 @@ mod tests {
             .tracked(NetworkId::Mainnet)
             .iter()
             .any(|t| t.likely_spam && t.hidden_from_home));
+    }
+
+    #[test]
+    fn spam_is_not_a_known_token_for_the_send_review() {
+        let prefs = TokenPreferences::new(None);
+        prefs
+            .add(with_token_id(
+                NetworkId::Mainnet,
+                "0x1234",
+                "USDC",
+                "USD Coin",
+                6,
+            ))
+            .unwrap();
+        prefs
+            .add(with_token_id(
+                NetworkId::Mainnet,
+                "0x5678",
+                "ZZT",
+                "Zed Token",
+                18,
+            ))
+            .unwrap();
+        let known = prefs.trusted_token_addresses(NetworkId::Mainnet);
+        // Stored addresses are padded, so compare as felts.
+        let has = |list: &[String], address: &str| list.iter().any(|a| same_felt(a, address));
+        assert!(has(&known, "0x5678"));
+        assert!(!has(&known, "0x1234"));
+        assert!(!has(
+            &prefs.trusted_token_addresses(NetworkId::Sepolia),
+            "0x5678"
+        ));
     }
 }

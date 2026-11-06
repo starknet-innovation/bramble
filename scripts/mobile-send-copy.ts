@@ -162,6 +162,7 @@ export const sendCopyEntries = (copy: Json): readonly (readonly [string, string]
     ["maximumFeePrefix", at(deploy, "maximumFeePrefix")],
     ["poisonedRecipient", at(refusals, "poisonedRecipient")],
     ["selfTransfer", at(refusals, "selfTransfer")],
+    ["tokenContractRecipient", at(refusals, "tokenContractRecipient")],
     ["sentTo", at(copy, "successSummary").replace("1.5 STRK", "").replace("0x3fa7…41a3", "")],
     ...["pending", "preconfirmed", "accepted", "rejected", "reverted"].map(
       (status) =>

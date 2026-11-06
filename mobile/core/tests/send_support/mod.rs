@@ -325,6 +325,7 @@ pub fn request(recipient: &str) -> TransferRequest {
         recipient: recipient.into(),
         amount: "1.5".into(),
         fee_balance: Some("100000000000000000000".into()),
+        tracked_tokens: vec![],
     }
 }
 

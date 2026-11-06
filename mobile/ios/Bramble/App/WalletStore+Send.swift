@@ -19,6 +19,7 @@ extension WalletStore {
             accounts: records,
             balances: balances,
             transport: rpc.transport,
+            trackedTokens: portfolio.preferences.trustedTokenAddresses(network: networkInfo.network),
             openingToken: token
         ) { [weak self] plan in self?.plans.append(plan) }
     }

@@ -18,6 +18,11 @@ pub struct TransferRequest {
     pub amount: String,
     /// STRK base units the host last read for this account, for the shortfall warning only.
     pub fee_balance: Option<String>,
+    /// The person's tracked tokens on this network (`TokenPreferences::trusted_token_addresses`),
+    /// for the token-contract-recipient warning only. Host-supplied and untrusted: an entry that
+    /// is not a felt is ignored, and an extra one can only add a warning, never remove a refusal.
+    #[uniffi(default = [])]
+    pub tracked_tokens: Vec<String>,
 }
 
 /// The unit a fee is quoted in.
@@ -41,6 +46,8 @@ pub struct FeeAmount {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum ReviewFlag {
     SelfTransfer,
+    /// The recipient is a token contract the wallet knows. A warning: it does not block Confirm.
+    TokenContractRecipient,
     AddressPoisoning,
 }
 

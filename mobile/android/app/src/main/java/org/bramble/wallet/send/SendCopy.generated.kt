@@ -104,6 +104,7 @@ object SendCopy {
     const val maximumFeePrefix = "Maximum network fee: "
     const val poisonedRecipient = "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending."
     const val selfTransfer = "The recipient is this wallet's own address."
+    const val tokenContractRecipient = "This is a token contract, not a wallet. Tokens sent here are usually lost."
     const val sentTo = " sent to "
     const val activityPending = "pending"
     const val activityPreconfirmed = "pre-confirmed"

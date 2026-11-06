@@ -21,6 +21,7 @@ fn fixture() -> Value {
     for text in [
         include_str!("../../tests/fixtures/extension-transactions-rules.json"),
         include_str!("../../tests/fixtures/extension-transactions-presentation.json"),
+        include_str!("../../tests/fixtures/extension-transactions-verification.json"),
         include_str!("../../tests/fixtures/extension-transactions-status.json"),
         include_str!("../../tests/fixtures/extension-transactions-observation.json"),
     ] {
@@ -208,7 +209,7 @@ fn presentation_rules_match_the_extension() {
             case["text"].as_str().unwrap()
         );
     }
-    for case in presentation["verification"].as_array().unwrap() {
+    for case in fixture()["verification"].as_array().unwrap() {
         let recipient = felt::parse(case["recipient"].as_str().unwrap()).unwrap();
         let account = felt::parse(case["account"].as_str().unwrap()).unwrap();
         let token = crate::networks::all()
@@ -223,10 +224,20 @@ fn presentation_rules_match_the_extension() {
             &recipient,
         );
         assert_eq!(summary, case["summary"].as_str().unwrap());
-        let flags: Vec<&str> = calls::transfer_flags(&recipient, &account)
+        let network =
+            crate::contacts::network_from_catalog_id(case["networkId"].as_str().unwrap()).unwrap();
+        let trusted: Vec<Felt> = case["trusted"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| felt::parse(a.as_str().unwrap()).unwrap())
+            .collect();
+        let tokens = super::wallet_ext::known_token_addresses(network);
+        let flags: Vec<&str> = calls::transfer_flags(&recipient, &account, &trusted, &tokens)
             .iter()
             .map(|flag| match flag {
                 ReviewFlag::SelfTransfer => "self-transfer",
+                ReviewFlag::TokenContractRecipient => "token-contract-recipient",
                 ReviewFlag::AddressPoisoning => "address-poisoning",
             })
             .collect();

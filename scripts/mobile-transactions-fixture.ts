@@ -65,6 +65,13 @@ export const computeTransactionFixture = async (): Promise<unknown> => {
 
 type Scenario = Record<string, unknown>;
 
+type Presentation = Record<string, unknown> & { readonly verification: unknown };
+
+const withoutVerification = (presentation: unknown): Record<string, unknown> => {
+  const { verification: _verification, ...rest } = presentation as Presentation;
+  return rest;
+};
+
 type Fixture = Record<string, unknown> & {
   readonly argent: {
     readonly refusals: readonly Scenario[];
@@ -139,7 +146,12 @@ export const splitTransactionFixture = (whole: unknown): ReadonlyMap<string, unk
     ],
     [file("braavos-refusals"), { refusals: fixture.braavos.refusals.map(compactWire) }],
     [file("rules"), { calls: fixture["calls"], fees: fixture["fees"], timing: fixture["timing"] }],
-    [file("presentation"), { presentation: fixture["presentation"] }],
+    // The verifier's flag cases live apart so neither file outgrows the 500-line limit.
+    [file("presentation"), { presentation: withoutVerification(fixture["presentation"]) }],
+    [
+      file("verification"),
+      { verification: (fixture["presentation"] as Presentation).verification },
+    ],
     [file("status"), { status: fixture["status"] }],
     [file("observation"), { observation: fixture["observation"] }],
     [file("copy"), { copy: fixture["copy"] }],

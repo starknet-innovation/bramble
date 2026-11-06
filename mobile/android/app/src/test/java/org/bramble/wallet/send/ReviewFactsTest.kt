@@ -50,9 +50,20 @@ class ReviewFactsTest {
     fun risksThenDeployNote() {
         val risks =
             reviewRisks(
-                review(listOf(ReviewFlag.ADDRESS_POISONING, ReviewFlag.SELF_TRANSFER), requiresDeployment = true),
+                review(
+                    listOf(ReviewFlag.ADDRESS_POISONING, ReviewFlag.SELF_TRANSFER, ReviewFlag.TOKEN_CONTRACT_RECIPIENT),
+                    requiresDeployment = true,
+                ),
             )
-        assertEquals(listOf(SendCopy.poisonedRecipient, SendCopy.selfTransfer, SendCopy.deployNote), risks)
+        assertEquals(
+            listOf(
+                SendCopy.poisonedRecipient,
+                SendCopy.selfTransfer,
+                SendCopy.tokenContractRecipient,
+                SendCopy.deployNote,
+            ),
+            risks,
+        )
     }
 
     @Test

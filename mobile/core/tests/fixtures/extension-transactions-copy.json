@@ -57,6 +57,7 @@
     "refusals": {
       "selfTransfer": "The recipient is this wallet's own address.",
       "poisonedRecipient": "The recipient closely mimics an address you saved or paid but is a different account. Re-check every character before sending.",
+      "tokenContractRecipient": "This is a token contract, not a wallet. Tokens sent here are usually lost.",
       "indeterminateWrite": "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
       "invalidRecipient": "Enter a valid Starknet address.",
       "reviewedDeploymentFeeExceeded": "The account deployment fee rose above the amount you reviewed. Nothing was submitted — review it again.",

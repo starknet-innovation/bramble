@@ -47,6 +47,7 @@ fn transfer(core: &Arc<WalletCore>, account_id: &str) -> Arc<TransferPlan> {
             recipient: ACCOUNT_1.into(),
             amount: "1.5".into(),
             fee_balance: None,
+            tracked_tokens: vec![],
         })
         .unwrap()
 }

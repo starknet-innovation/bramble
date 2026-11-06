@@ -71,6 +71,7 @@ fn transfer(core: &Arc<WalletCore>, scenario: &Value, account_id: &str) -> Arc<T
             recipient: ACCOUNT_1.into(),
             amount: "1.5".into(),
             fee_balance: None,
+            tracked_tokens: vec![],
         })
         .unwrap()
 }

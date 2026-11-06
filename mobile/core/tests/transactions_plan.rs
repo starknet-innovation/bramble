@@ -151,6 +151,29 @@ fn a_poisoned_recipient_is_flagged_and_refused_at_confirm() {
 }
 
 #[test]
+fn a_twin_of_a_saved_contact_is_refused() {
+    let (_dir, core) = wallet();
+    let mut node = sepolia(true);
+    let contact = "0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc";
+    core.save_contact(
+        bramble_core::NetworkId::Sepolia,
+        "Rent".into(),
+        contact.into(),
+        None,
+        None,
+    )
+    .unwrap();
+    let twin = "0x555af000000000000000000000000000000000000000000000000000000bbcc";
+    let plan = reviewed(&core, &mut node, twin);
+    let review = plan.current_review().unwrap();
+    assert!(review.flags.contains(&ReviewFlag::AddressPoisoning) && !review.can_confirm);
+    assert_eq!(
+        failure(plan.advance(StepReply::Confirm).unwrap()).code,
+        SendFailureCode::PoisonedRecipient
+    );
+}
+
+#[test]
 fn self_transfer_is_flagged_but_allowed() {
     let (_dir, core) = wallet();
     let mut node = sepolia(true);
@@ -158,6 +181,26 @@ fn self_transfer_is_flagged_but_allowed() {
         .current_review()
         .unwrap();
     assert_eq!(review.flags, vec![ReviewFlag::SelfTransfer]);
+    assert!(review.can_confirm);
+}
+
+#[test]
+fn a_tracked_token_recipient_is_warned_but_allowed() {
+    let (_dir, core) = wallet();
+    let mut node = sepolia(true);
+    // Not a bundled or curated token: only the tracked list makes it known.
+    let token = "0x7e57ab1ec0de";
+    let mut request = request(token);
+    // A host entry that is not a felt is ignored rather than failing the send.
+    request.tracked_tokens = vec!["not a token".into(), token.into()];
+    let plan = core.clone().prepare_transfer(request).unwrap();
+    let first = plan.advance(StepReply::Start).unwrap();
+    assert_eq!(
+        run_until(&plan, &core, &mut node, first, never),
+        SendStep::Review
+    );
+    let review = plan.current_review().unwrap();
+    assert_eq!(review.flags, vec![ReviewFlag::TokenContractRecipient]);
     assert!(review.can_confirm);
 }
 

@@ -36,6 +36,8 @@ class SendFlowModel(
     private val hooks: SendHooks = SendHooks(),
     /** The token to open on (a token screen's Send), or null for STRK; the flow still starts at the recipient. */
     startToken: String? = null,
+    /** The tracked tokens on this network the review warns about paying (`trustedTokenAddresses`). */
+    private val trackedTokens: List<String> = emptyList(),
 ) {
     /** The screen the journey shows, in the extension's order. */
     enum class Stage {
@@ -192,7 +194,15 @@ class SendFlowModel(
     private fun prepare(to: String): TransferPlan? =
         try {
             core.prepareTransfer(
-                TransferRequest(network.network, account.id, token.address, to, amount, balances["STRK"]),
+                TransferRequest(
+                    network.network,
+                    account.id,
+                    token.address,
+                    to,
+                    amount,
+                    balances["STRK"],
+                    trackedTokens,
+                ),
             )
         } catch (_: SendException.InvalidRecipient) {
             recipientError = SendCopy.invalidRecipient
