@@ -103,13 +103,13 @@ const home = (staking: StakingState, networkId: "SN_MAIN" | "SN_SEPOLIA" = "SN_M
 const panel = (app: Element) => app.querySelector("#home-panel-staking");
 
 describe("the Home Staking tab", () => {
-  test("is a tab beside Tokens on Mainnet, and absent where staking is off", () => {
+  test("is the last tab on Mainnet (Tokens · NFTs · Staking), absent where staking is off", () => {
     const main = home(STAKING_LOADING);
     expect(
       [...main.querySelectorAll('.home-tabs [role="tab"]')].map((tab) => tab.textContent),
-    ).toEqual(["Tokens", "Staking"]);
+    ).toEqual(["Tokens", "NFTs", "Staking"]);
     const sepolia = home(STAKING_LOADING, "SN_SEPOLIA");
-    expect(sepolia.querySelector('.home-tabs [role="tab"]')).toBeNull();
+    expect(sepolia.querySelector("#home-tab-staking")).toBeNull();
     expect(sepolia.textContent).not.toContain("Staked");
   });
 

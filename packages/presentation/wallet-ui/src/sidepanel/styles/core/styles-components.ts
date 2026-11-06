@@ -313,11 +313,11 @@ ${SIGN_REQUEST_STYLES}
   .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 ${SPACE.xxs}; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .nft-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  /* Compact two-up ghost actions; the danger Remove stays borderless like Hide
-     (red ink carries the signal, not a box), with danger-soft hover feedback. */
+  /* Compact two-up secondary actions with a real button shape. Remove is two
+     taps: the first arms it ("Tap again to remove") in the danger hue. */
   .nft-actions { display: grid; gap: 6px; grid-template-columns: 1fr 1fr; }
   .nft-actions button { min-width: 0; padding: 0 ${SPACE.sm}; }
-  .nft-actions button.danger { background: transparent; }
+  .nft-actions button.is-confirming { background: var(--bramble-danger-soft); }
   /* dApp approval/sign prompts are a solid panel card — a hairline edge plus a
      gentle low shadow lift a consequential request above the request list. */
   .request-card {

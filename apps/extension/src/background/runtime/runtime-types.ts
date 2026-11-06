@@ -9,6 +9,7 @@ import type {
   ArgentMultisigSigningIntent,
 } from "@bramble/multisig/repository";
 import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
+import type { NftCoverage } from "@bramble/portfolio/nft-indexer";
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { DeploySponsorship } from "@bramble/privacy/sponsored-deploy";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
@@ -200,9 +201,10 @@ type DetectTokensResponse = {
 };
 
 /**
- * Auto-discovered, on-chain-verified owned NFTs returned to extension pages.
+ * Auto-discovered, on-chain-verified owned NFTs, with the indexer's coverage.
  */
 type DiscoverNftsResponse = {
+  readonly coverage?: NftCoverage;
   readonly nfts: readonly DiscoveredNft[];
   readonly ok: true;
 };

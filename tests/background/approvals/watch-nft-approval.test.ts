@@ -2,7 +2,7 @@
  * A site's wallet_watchAsset for a collectible (ERC721/ERC1155, ahead of the
  * Starknet wallet API): a card is always queued without reading the chain, so
  * the site learns nothing before the user acts; approve is refused while the
- * collectibles preview is off, and otherwise watches the NFT only after
+ * user has turned NFTs off, and otherwise watches the NFT only after
  * ownership is re-proved on-chain.
  */
 import { describe, expect, test } from "bun:test";
@@ -60,7 +60,8 @@ const makeHandler = async (options: { readonly preview: boolean; readonly owner:
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  if (options.preview) await preferencesStore.setDisplay({ collectiblesPreview: true });
+  // NFTs are on by default: only the user turning them off stores `false`.
+  if (!options.preview) await preferencesStore.setDisplay({ collectiblesPreview: false });
   const ownerReads: string[] = [];
   const handler = createMessageHandler(walletStub, testExtension, {
     approvals: createApprovalQueue(),
@@ -83,7 +84,7 @@ const watch = (tokenId = "7", type = "ERC721") => ({
 });
 
 describe("watch-collectible approval lifecycle", () => {
-  test("waits for the user even while the preview is off, and approve is refused", async () => {
+  test("waits for the user even while NFTs are turned off, and approve is refused", async () => {
     const { handler, ownerReads, preferencesStore } = await makeHandler({
       owner: account.address,
       preview: false,
@@ -97,9 +98,9 @@ describe("watch-collectible approval lifecycle", () => {
     expect(early).toBe("waiting");
     const id = await latestApprovalId(handler, extensionSender);
     await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
-      error: "collectibles preview is off",
+      error: "nfts are turned off",
     });
-    await expect(held).resolves.toEqual({ error: "collectibles preview is off" });
+    await expect(held).resolves.toEqual({ error: "nfts are turned off" });
     expect(ownerReads).toEqual([]);
     expect((await preferencesStore.read()).nfts ?? []).toEqual([]);
   });

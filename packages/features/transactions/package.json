@@ -37,6 +37,7 @@
     "./staking-positions": "./src/staking/staking-positions.ts",
     "./staking-review": "./src/staking/staking-review.ts",
     "./starkscan": "./src/history/starkscan.ts",
+    "./starkscan-nfts": "./src/history/starkscan-nfts.ts",
     "./starkscan-parsers": "./src/history/starkscan-parsers.ts",
     "./starkscan-types": "./src/history/starkscan-types.ts",
     "./starkscan-wallet": "./src/history/starkscan-wallet.ts",

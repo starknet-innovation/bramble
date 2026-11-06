@@ -13,9 +13,9 @@ import type { ApprovalQueue, PendingApproval } from "../approvals/approvals";
 
 /**
  * Queues one collectible watch card for the active network. The card is queued
- * whether or not the collectibles preview is on, so a site cannot tell the
- * preference from how fast it is answered (audit M1): with the preview off the
- * panel shows a close-only notice, and approve is refused.
+ * whether or not NFTs are turned on, so a site cannot tell the preference
+ * from how fast it is answered (audit M1): with NFTs off the panel shows a
+ * close-only notice, and approve is refused.
  */
 export const trackWatchNft = async (
   deps: {

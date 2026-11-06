@@ -5,7 +5,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import type { WalletPreferences } from "@bramble/settings/preferences";
+import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
 import { reviewedInvokeTotal } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
@@ -349,7 +349,7 @@ export const approvalCard = (
 ): string => {
   switch (approval.kind) {
     case "watch-asset":
-      return watchAssetCard(approval, preferences?.collectiblesPreview === true);
+      return watchAssetCard(approval, nftsShown(preferences));
     case "invoke":
       return invokeCard(approval, status);
     case "sign-typed-data":

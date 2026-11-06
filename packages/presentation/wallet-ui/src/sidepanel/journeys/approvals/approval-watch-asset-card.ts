@@ -46,10 +46,10 @@ const watchAssetTrackedCard = (
     <div class="button-row">${denyButton(approval, "Close")}</div>
   </li>`;
 
-// Collectibles are a preview; with it off the card can only be closed, which
-// answers the site as a decline. The site cannot tell this from a decline.
-const PREVIEW_OFF_NOTICE =
-  "Collectibles are a preview. Turn on Collectibles preview in Advanced endpoints to watch one.";
+// With NFTs turned off the card can only be closed, which answers the site as
+// a decline. The site cannot tell this from a decline.
+const NFTS_OFF_NOTICE =
+  "NFTs are turned off. Turn on Show NFTs on Home in Appearance & currency to watch one.";
 
 // A site asked to watch a collectible (ahead of the Starknet wallet API). The
 // wallet re-proves ownership on approve, so the card promises only that check.
@@ -64,10 +64,8 @@ const watchNftCard = (
       <dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(nft.contract)}</code>${inlineCopyButton(nft.contract, "Copy contract address")}</dd></div><div><dt>Token ID</dt><dd><code>${escapeHtml(nft.tokenId)}</code></dd></div><div><dt>Network</dt><dd>${escapeHtml(STARKNET_NETWORKS[nft.networkId].name)}</dd></div></dl>
       ${
         preview
-          ? reviewOutcome(
-              "Show this collectible in Collectibles once Bramble confirms this account owns it.",
-            )
-          : `<p>${escapeHtml(PREVIEW_OFF_NOTICE)}</p>`
+          ? reviewOutcome("Show this NFT on Home once Bramble confirms this account owns it.")
+          : `<p>${escapeHtml(NFTS_OFF_NOTICE)}</p>`
       }
     </div>
     ${

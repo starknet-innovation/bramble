@@ -90,7 +90,11 @@ describe("reviewed plumbing", () => {
 
 describe("Ledger device rejections", () => {
   test("a rejection code reads as the device catalog's own sentence, whatever the context", () => {
-    for (const code of ["rejected-on-device", "device-locked", "blind-signing-disabled"] as const) {
+    for (const code of [
+      "rejected-on-device",
+      "device-locked",
+      "rejected-or-blind-signing-off",
+    ] as const) {
       expect(friendlyError(code).message).toBe(ledgerMessage(code));
       expect(friendlyError(code, ADD_ACCOUNT).message).toBe(ledgerMessage(code));
     }

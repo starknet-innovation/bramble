@@ -6,6 +6,7 @@
 
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { confirmSecondTap } from "../../shared/two-tap-confirm";
 import { bindNftSendForm, type NftSendDeps } from "./nft-send-ui";
 
 /**
@@ -162,6 +163,18 @@ const bindRowActions = (deps: NftUiDeps): void => {
     button.addEventListener("click", () => {
       const id = button.dataset["removeNft"];
       if (!id) {
+        return;
+      }
+      // Two taps, like deleting a folder: the first arms the control and says
+      // so; only a second tap on the same control removes.
+      // A text button shows the confirm label; an icon button keeps its icon
+      // and carries the label as its accessible name.
+      if (
+        !confirmSecondTap(button, {
+          label: "Tap again to remove",
+          replaceContent: !button.classList.contains("icon-button"),
+        })
+      ) {
         return;
       }
       buttonBusy(button, true);

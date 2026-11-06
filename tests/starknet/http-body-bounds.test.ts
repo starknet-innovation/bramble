@@ -121,12 +121,15 @@ describe("NFT indexer response bounds", () => {
 
   test("refuses an endless indexer body and degrades to an empty gallery", async () => {
     const { chunkBytes, emitted, response } = endlessBody();
-    expect(await listOwned(async () => response)).toEqual([]);
+    expect(await listOwned(async () => response)).toEqual({ coverage: "unavailable", nfts: [] });
     expect(emitted.bytes).toBeLessThanOrEqual(HTTP_BODY_LIMITS.nftIndexer + 2 * chunkBytes);
   });
 
   test("refuses a body whose declared length is already over budget", async () => {
-    expect(await listOwned(async () => declaredHugeBody())).toEqual([]);
+    expect(await listOwned(async () => declaredHugeBody())).toEqual({
+      coverage: "unavailable",
+      nfts: [],
+    });
   });
 
   test("still reads a normal indexer body", async () => {
@@ -136,7 +139,7 @@ describe("NFT indexer response bounds", () => {
           JSON.stringify([{ contract_address: "0x0511a2b3", name: "Punk #1", token_id: "1" }]),
         ),
     );
-    expect(nfts).toHaveLength(1);
+    expect(nfts.nfts).toHaveLength(1);
   });
 });
 

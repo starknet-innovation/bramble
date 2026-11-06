@@ -52,10 +52,12 @@ export type RenderData = {
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
   connectedSites: ConnectedSitesState;
   deployment: boolean | null;
-  // Collectibles preview lanes: indexer candidates and explicit watches, each
+  // NFT lanes: indexer candidates and explicit watches, each
   // re-proved on-chain, merged into the gallery snapshot.
-  discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
-  indexedNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
+  discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["nfts"];
+  indexedNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["nfts"];
+  // How complete the indexer said its list was; "none" until it answers.
+  nftCoverage: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["coverage"];
   watchedNfts: Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>;
   signability: SignabilityVerdict | null;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
@@ -87,9 +89,13 @@ const emptyActivityCache = (): Pick<
  * Empty account-scoped NFT lanes used on account/network switches so an old
  * gallery never flashes while fresh ownership proofs are in flight.
  */
-const emptyNftCache = (): Pick<RenderData, "discoveredNfts" | "indexedNfts" | "watchedNfts"> => ({
+const emptyNftCache = (): Pick<
+  RenderData,
+  "discoveredNfts" | "indexedNfts" | "nftCoverage" | "watchedNfts"
+> => ({
   discoveredNfts: [],
   indexedNfts: [],
+  nftCoverage: "none",
   watchedNfts: [],
 });
 
