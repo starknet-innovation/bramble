@@ -84,10 +84,18 @@ const quote = (http: ReturnType<typeof relay>, approveCalls: readonly Call[] = A
   });
 
 describe("sponsored shield configuration", () => {
-  test("is off on every network until the relay's sponsored mode exists", () => {
-    expect(SPONSORED_SHIELD_NETWORKS).toEqual({});
-    expect(sponsoredShieldConfig("SN_MAIN")).toBeNull();
-    expect(sponsoredShieldConfig("SN_SEPOLIA")).toBeNull();
+  test("asks the wallet gateway on mainnet and Sepolia; the gateway is the switch", () => {
+    expect(SPONSORED_SHIELD_NETWORKS).toEqual({
+      SN_MAIN: { url: "https://wallet.nodes.starknet.org/api/sponsored-shield/mainnet" },
+      SN_SEPOLIA: { url: "https://wallet.nodes.starknet.org/api/sponsored-shield/sepolia" },
+    });
+    expect(sponsoredShieldConfig("SN_MAIN")).toEqual({
+      url: "https://wallet.nodes.starknet.org/api/sponsored-shield/mainnet",
+    });
+    expect(sponsoredShieldConfig("SN_SEPOLIA")).toEqual({
+      url: "https://wallet.nodes.starknet.org/api/sponsored-shield/sepolia",
+    });
+    expect(sponsoredShieldConfig("SN_SEPOLIA", {})).toBeNull();
     expect(sponsoredShieldConfig("SN_SEPOLIA", { SN_MAIN: config })).toBeNull();
     expect(sponsoredShieldConfig("SN_SEPOLIA", { SN_SEPOLIA: config })).toEqual(config);
     expect(SPONSORED_SHIELD_SPONSOR).toBe("Starknet Foundation");

@@ -74,6 +74,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "rpcOverrides",
   "reliabilityDiagnostics",
   "schemaVersion",
+  "strk20DefaultsVersion",
   "strk20Networks",
   "strk20ProverUrl",
   "theme",
@@ -118,9 +119,14 @@ const hasValidTelemetryEntries = (value: Record<string, unknown>): boolean =>
     typeof value["reliabilityDiagnostics"] === "boolean");
 const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   hasValidGeneralOptionalEntries(value) && hasValidTelemetryEntries(value);
+// A recorded migration step: absent, or a positive integer (a later build's
+// higher step still validates here).
+const isOptionalMigrationVersion = (value: unknown): boolean =>
+  value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 1);
 const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>
   (value["strk20ProverUrl"] === undefined ||
     (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&
+  isOptionalMigrationVersion(value["strk20DefaultsVersion"]) &&
   (value["strk20Networks"] === undefined || isStrk20NetworkConfigs(value["strk20Networks"])) &&
   (value["nftIndexerUrl"] === undefined ||
     (typeof value["nftIndexerUrl"] === "string" && isCustomRpcUrl(value["nftIndexerUrl"]))) &&
