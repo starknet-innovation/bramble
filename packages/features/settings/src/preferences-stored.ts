@@ -14,7 +14,7 @@
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
 import { isWatchedNft } from "@bramble/portfolio/watched-nft";
 import { isStrk20NetworkConfigs } from "@bramble/privacy/config";
-import { canonicalAccountId } from "@bramble/wallet-model/accounts";
+import { canonicalAccountId, isAccountId } from "@bramble/wallet-model/accounts";
 import {
   isCustomNetwork,
   isCustomRpcUrl,
@@ -70,6 +70,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "nostrRelayUrl",
   "productAnalytics",
   "removedTokens",
+  "selectedMultisigId",
   "rpcOverrides",
   "reliabilityDiagnostics",
   "schemaVersion",
@@ -77,6 +78,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "strk20ProverUrl",
   "theme",
   "tokens",
+  "vipNotice",
 ];
 
 // Optional-section guards, each pure, keeping the main guard a single `&&` chain.
@@ -93,7 +95,8 @@ const hasValidIdKeyedEntries = (value: Record<string, unknown>): boolean =>
   (value["hiddenAccountIds"] === undefined || isHiddenAccountIds(value["hiddenAccountIds"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
   (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"])) &&
-  (value["removedTokens"] === undefined || isHiddenTokens(value["removedTokens"]));
+  (value["removedTokens"] === undefined || isHiddenTokens(value["removedTokens"])) &&
+  (value["selectedMultisigId"] === undefined || isAccountId(value["selectedMultisigId"]));
 // Optional display and routing preferences written from the settings screens.
 const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["approvalSurface"] === undefined ||
@@ -103,6 +106,7 @@ const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
+  (value["vipNotice"] === undefined || typeof value["vipNotice"] === "boolean") &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
 const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
   hasValidIdKeyedEntries(value) && hasValidDisplayEntries(value);

@@ -10,6 +10,7 @@
     "./declare": "./src/transactions/declare.ts",
     "./deployment": "./src/transactions/deployment.ts",
     "./fee-bounds": "./src/rpc/fee-bounds.ts",
+    "./multisig-dapp-invoke": "./src/rpc/multisig-dapp-invoke.ts",
     "./multisig-invoke": "./src/rpc/multisig-invoke.ts",
     "./pinned-block": "./src/rpc/pinned-block.ts",
     "./provider": "./src/rpc/provider.ts",

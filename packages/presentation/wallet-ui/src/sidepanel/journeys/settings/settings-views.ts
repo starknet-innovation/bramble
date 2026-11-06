@@ -8,7 +8,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import { button, segmentedControl } from "@bramble/ui-kit/controls";
-import { selectField, textField } from "@bramble/ui-kit/fields";
+import { checkboxField, selectField, textField } from "@bramble/ui-kit/fields";
 import { menuLink } from "@bramble/ui-kit/navigation";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
@@ -131,6 +131,15 @@ export const appearanceFlow = (
           value: currency,
         })),
         selected: preferences?.displayCurrency ?? "usd",
+      })}
+    </section>
+    <section class="section">
+      <p class="eyebrow">Home</p>
+      ${checkboxField({
+        attributes: { id: "vip-notice-toggle" },
+        checked: preferences?.vipNotice !== false,
+        name: "vipNotice",
+        text: "Show when an account is eligible for Starknet VIP",
       })}
     </section>
     <p id="display-result" role="status"></p>`,

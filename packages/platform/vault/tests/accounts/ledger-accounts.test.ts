@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { ARGENT_ACCOUNT_CONTRACT, argentAccountAddress } from "@bramble/starknet/account-contracts";
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@bramble/vault/accounts";
-import { isVaultV2, isVaultV8, isVaultV12, type Vault } from "@bramble/vault/schema";
+import { isVaultV2, isVaultV8, isVaultV12, type VaultV12 } from "@bramble/vault/schema";
 import {
   BRAAVOS_DEPLOYMENT_CLASS_HASH,
   isAccountRef,
@@ -263,8 +263,8 @@ describe("keyless account in the vault schema", () => {
     signingKeys: [],
   };
 
-  test("a current vault admits a keyless Ledger account with no signing key", () => {
-    const vault: Vault = { ...base, schemaVersion: 12, shadowAccountScopes: [] };
+  test("a v12 vault admits a keyless Ledger account with no signing key", () => {
+    const vault: VaultV12 = { ...base, schemaVersion: 12, shadowAccountScopes: [] };
     expect(isVaultV12(vault)).toBe(true);
   });
 
@@ -349,7 +349,7 @@ describe("keyless account in the vault schema", () => {
     ).toBe(false);
   });
 
-  test("a current vault admits a Ledger account restored at Ready's path", () => {
+  test("a v12 vault admits a Ledger account restored at Ready's path", () => {
     const readyAccount = {
       ...ledgerAccount,
       derivation: {
@@ -359,7 +359,7 @@ describe("keyless account in the vault schema", () => {
         path: ledgerAccountPath(12, READY_EIP2645_APPLICATION),
       },
     };
-    const vault: Vault = {
+    const vault: VaultV12 = {
       ...base,
       accounts: [readyAccount],
       activeAccountId: readyAccount.id,

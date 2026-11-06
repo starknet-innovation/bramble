@@ -59,7 +59,9 @@ const vault = {
   importedSeeds: [],
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 12,
+  schemaVersion: 13,
+  multisigStrk20KeyConflicts: [],
+  multisigStrk20ViewingKeys: [],
   shadowAccountScopes: [],
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
@@ -100,9 +102,15 @@ const recordedScopes: { value: readonly ShadowAccountScopeRef[] } = { value: [] 
 
 /** The salted stub vault service the scan runs the router against. */
 export const walletStub = {
+  acceptMultisigStrk20Key: async () => "stored" as const,
   async addDerivedAccount() {
     return account;
   },
+  createMultisigStrk20Key: async () => "created" as const,
+  forgetMultisigStrk20Key: async () => false,
+  forgetMultisigStrk20Keys: async () => false,
+  multisigStrk20KeyStatus: async () => "absent" as const,
+  packageMultisigStrk20Key: async () => null,
   async addLedgerAccount(): Promise<LedgerAccountRef> {
     return ledgerAccount;
   },
@@ -191,6 +199,13 @@ export const walletStub = {
       throw new Error("bad passphrase");
     }
     return vault;
+  },
+  // Confirms the passphrase without writing, so a wrong one never reaches the
+  // grant clear. The correct one continues into recovery below.
+  async assertRecoverableVault(passphrase: string) {
+    if (passphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
   },
   // Accepts like a vault awaiting recovery, so the scan reads the unlocked
   // status that "Unlock anyway" returns rather than a refusal.

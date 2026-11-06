@@ -19,6 +19,15 @@ export const STALE_INTENT_MAY_HAVE_BEEN_SENT = "This may already have been sent 
  * the account nonce was still its own (mc-wallet 673). It reports that refusal
  * and nothing more: it does not claim no co-signer could send the package later.
  */
+/** What a stale card says when the private proof's block span closed before send. */
+const STALE_INTENT_PROOF_EXPIRED =
+  "This private transaction expired. Refresh it. Collected signatures no longer apply.";
+
+/**
+ * What a stale card says when the node refused this version's signed fee while
+ * the account nonce was still its own (mc-wallet 673). It reports that refusal
+ * and nothing more: it does not claim no co-signer could send the package later.
+ */
 export const STALE_INTENT_FEE_REFUSED =
   "The network refused this version: the fee rose above what was signed.";
 
@@ -82,7 +91,11 @@ const intentAction = (
     // nonce, a signer change, or an older record without a reason may have
     // been sent by a co-signer (Sherlock 177, audit M3).
     const lead =
-      intent.staleReason === "fee" ? STALE_INTENT_FEE_REFUSED : STALE_INTENT_MAY_HAVE_BEEN_SENT;
+      intent.staleReason === "fee"
+        ? STALE_INTENT_FEE_REFUSED
+        : intent.staleReason === "proof"
+          ? STALE_INTENT_PROOF_EXPIRED
+          : STALE_INTENT_MAY_HAVE_BEEN_SENT;
     const approvals = `${intent.configSnapshot.threshold} approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
     const freshApprovals = `${intent.configSnapshot.threshold} fresh approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
     return {

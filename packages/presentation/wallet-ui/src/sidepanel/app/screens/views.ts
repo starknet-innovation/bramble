@@ -359,11 +359,12 @@ export const dashboard = (
   // regardless of which dock or flow screen was previously open. The user may
   // explicitly snooze it back to Activity after seeing it.
   const actionable = actionableApprovals(pending, snoozedApprovalIds);
+  const connectPicker = { multisigs, selectedMultisigId };
   if (actionable.length > 0) {
-    return approvalTakeover(actionable, status, activeView, preferences);
+    return approvalTakeover(actionable, status, activeView, preferences, connectPicker);
   }
   if (activeView === "requests") {
-    return requestsFlow(pending, status, preferences);
+    return requestsFlow(pending, status, preferences, connectPicker);
   }
   const simpleFlow = simpleFlowScreen(activeView, {
     account,

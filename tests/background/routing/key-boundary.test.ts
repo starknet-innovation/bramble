@@ -95,9 +95,15 @@ describe("key boundary", () => {
     // reviewed edit rather than the quiet way to make this suite green again.
     expect(excused.map((entry) => typeOf(entry.message)).sort()).toEqual([
       "wallet.createKeyVault",
+      "wallet.prepareArgentMultisigStrk20",
+      "wallet.refreshArgentMultisigStrk20",
       "wallet.removeMultisig",
       "wallet.shareArgentMultisigIntent",
+      "wallet.shareArgentMultisigStrk20Authorization",
+      "wallet.shareArgentMultisigStrk20Key",
+      "wallet.signArgentMultisigStrk20Authorization",
       "wallet.status",
+      "wallet.submitArgentMultisigStrk20Relay",
       "wallet.syncArgentMultisigIntents",
       "wallet.unlock",
     ]);

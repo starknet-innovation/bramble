@@ -3,7 +3,7 @@
  * and compact management subflows. All color and scale values come from the
  * shared skin tokens.
  */
-import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
 
 /**
  * Journey-specific styles composed after shared component structure.
@@ -55,6 +55,27 @@ export const JOURNEY_STYLES = `
   .approval-live div { display: grid; gap: 2px; min-width: 0; }
   .approval-live strong { font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.semibold}; }
   .approval-live p { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .request-account-choices { display: grid; gap: ${SPACE.xs}; }
+  button.request-account-choice {
+    align-items: center;
+    background: transparent;
+    border-radius: ${RADIUS.md};
+    color: var(--bramble-text);
+    display: flex;
+    gap: ${SPACE.sm};
+    justify-content: space-between;
+    min-height: ${CONTROL.hit};
+    padding: 0 ${SPACE.sm};
+    text-align: left;
+    width: 100%;
+  }
+  button.request-account-choice strong { font-weight: ${WEIGHT.medium}; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  button.request-account-choice code { color: var(--bramble-muted); flex: none; font-size: ${TYPE.caption.size}; }
+  button.request-account-choice[aria-pressed="true"] { background: var(--bramble-accent-soft); }
+  @media (hover: hover) and (pointer: fine) {
+    button.request-account-choice:not(:disabled):hover { background: var(--bramble-hover); }
+    button.request-account-choice[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); }
+  }
   .request-card[data-state="working"] > :not(.button-row) {
     opacity: 0.46;
     transition: opacity ${MOTION.pressMs}ms ${MOTION.ease};

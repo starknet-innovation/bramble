@@ -10,6 +10,7 @@
     "./encrypted-store": "./src/encrypted-store.ts",
     "./kms-port": "./src/kms-port.ts",
     "./migrations": "./src/schema/migrations.ts",
+    "./multisig-strk20-key": "./src/accounts/multisig-strk20-key.ts",
     "./network-account": "./src/accounts/network-account.ts",
     "./origin-grants": "./src/service/origin-grants.ts",
     "./reveal": "./src/service/reveal.ts",

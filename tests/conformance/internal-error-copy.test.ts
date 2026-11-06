@@ -93,6 +93,10 @@ const READER_SENTENCES = new Set([
   "Couldn't check this account's privacy setup. Try again.",
   "Account already exists",
   "Deploying your account. This can take a few minutes.",
+  // Sponsored first shield (issue 789): the relay's stated refusal at
+  // broadcast, and an authorization window that ran out before sending.
+  "The sponsor declined this shield. Nothing was sent.",
+  "This shield review expired. Start again.",
   "Couldn't confirm whether this account is deployed. Check your connection and try again.",
   "Account deployment status is unknown. Check the account on-chain before retrying.",
   "Account is already deployed",
@@ -102,6 +106,9 @@ const READER_SENTENCES = new Set([
   "Amount exceeds the multisig account balance",
   "Built-in tokens can't be removed",
   "Could not confirm the public balance required by this transaction",
+  "Create a key before sharing it.",
+  "Share the key with a co-owner first.",
+  "This multisig's signers aren't available yet.",
   "Could not read NFT metadata URI",
   "Could not read NFT owner",
   "Could not read NFT ownership",

@@ -83,6 +83,15 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/routing/messages.ts",
   "apps/extension/src/background/provider/provider-grant.ts",
   "apps/extension/src/background/provider/provider-ops.ts",
+  // Multisig dapp signing and submission. They read the vault to find the
+  // local signer and return the account aggregate. The credential is only
+  // forwarded to the existing hash signer.
+  "apps/extension/src/background/provider/multisig-dapp-sign.ts",
+  "apps/extension/src/background/provider/multisig-dapp-invoke.ts",
+  // Re-resolves the granted account before a typed-data signature. It peeks
+  // the session only to read grants, then forwards that credential to the
+  // existing signer. Nothing here is logged, persisted, or returned.
+  "apps/extension/src/background/transactions/sign-grant.ts",
   "apps/extension/src/background/settings/origins-ops.ts",
   "apps/extension/src/background/privacy/strk20-account-context.ts",
   // Approved-request execution split out of strk20-ops.ts: it re-resolves the
@@ -209,10 +218,33 @@ export const SECRET_MATERIAL_FILES = new Set([
   // same Krusty-delegated boundary, no secret ever stored or logged here.
   "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
   "packages/features/privacy/src/paymaster/paymaster.ts",
+  // Sponsored first shield (mc-wallet 789): posts the user's outside-execution
+  // signature to the sponsor's relay, and the typed-data signer split from
+  // official-sdk-service. Public fragments only; signing stays in Krusty.
+  "packages/features/privacy/src/paymaster/sponsored-shield.ts",
+  "packages/features/privacy/src/sdk/official-sdk-sponsored.ts",
   // Posts the outside-execution signature the gasless gateway requires.
   // The field is public; private signing stays in Krusty via signHash.
   "packages/features/transactions/src/gasless/gasless-submit.ts",
   "packages/features/privacy/src/service.ts",
+  // Multisig STRK20 CallSet records. Fragments are public Stark pairs. The
+  // shared scalar is redacted before it reaches this module and is only
+  // substituted while recomputing the digest.
+  "packages/features/privacy/src/multisig/records.ts",
+  // Relay invites carry the same public Stark fragments as CallSet records.
+  // The proof never enters this module.
+  "packages/features/privacy/src/multisig/relay-invite.ts",
+  // Multisig STRK20 prove path. Holds the vault credential only long enough
+  // to read the shared scalar and to sign a fragment, and returns neither.
+  "apps/extension/src/background/multisig/multisig-strk20-session.ts",
+  "apps/extension/src/background/multisig/multisig-strk20-prove.ts",
+  "apps/extension/src/background/multisig/multisig-strk20-actions.ts",
+  // Relay fragment collection. The vault credential only transits into the
+  // hash signer. Proof bytes stay on this device and are never wrapped.
+  "apps/extension/src/background/multisig/multisig-strk20-relay.ts",
+  // Co-owner package import. The vault credential only transits into the
+  // vault read of the shared scalar, which never leaves the binding check.
+  "apps/extension/src/background/multisig/multisig-strk20-import.ts",
   // Argent multisig stores public signer identifiers and verified public
   // signature fragments only. Private signing remains behind Krusty and the
   // privileged background accountHashSigner boundary.
@@ -224,6 +256,12 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Explicit user-triggered coordination keeps the vault credential inside the
   // privileged worker while Krusty opens or wraps payloads; it is never stored.
   "apps/extension/src/background/multisig/multisig-coordination-ops.ts",
+  // Gift-wrap publication. The passphrase transits into Krusty; the payload
+  // is not inspected or logged here.
+  "apps/extension/src/background/multisig/multisig-nostr-publish.ts",
+  // Multisig STRK20 viewing-key share (#826). The key is wrapped for each
+  // co-owner and is never placed on a response.
+  "apps/extension/src/background/multisig/multisig-strk20-key-ops.ts",
   "apps/extension/src/background/multisig/multisig-tx-ops.ts",
   "packages/platform/vault/src/accounts/account-secrets.ts",
   "packages/platform/vault/src/encrypted-store.ts",
@@ -246,6 +284,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // the phrase key signs here and nothing is logged or persisted.
   "packages/platform/starknet/src/transactions/argent-recovery.ts",
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
+  // Multisig STRK20 viewing keys (#826): generated in the vault, stored only
+  // here, and wrapped for co-owners. The key never enters a message or the UI.
+  "packages/platform/vault/src/accounts/multisig-strk20-key.ts",
+  "packages/platform/vault/src/service/multisig-strk20-key.ts",
   "packages/platform/vault/src/accounts/network-account.ts",
   "packages/platform/vault/src/service/reveal.ts",
   "packages/platform/vault/src/service/service-creation.ts",

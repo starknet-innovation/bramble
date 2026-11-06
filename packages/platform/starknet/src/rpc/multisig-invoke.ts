@@ -1,7 +1,13 @@
 /** Frozen Argent multisig V3 preparation and exact-signature submission. */
 
 import { WalletError } from "@bramble/core/errors";
-import { isStarknetNetworkId, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  canonicalFelt,
+  isStarknetNetworkId,
+  STARKNET_NETWORKS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
+import { isStrk20Proof, type Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import {
   ETransactionVersion3,
   type ResourceBoundsOverhead,
@@ -87,18 +93,50 @@ const createArgentMultisigProvider = (nodeUrl: string): RpcProvider =>
     resourceBoundsOverhead: ARGENT_MULTISIG_RESOURCE_BOUNDS_OVERHEAD,
   });
 
+const canonicalProofFacts = (proof: Strk20Proof): readonly string[] => {
+  if (!isStrk20Proof(proof) || proof.data.length === 0 || proof.proof_facts.length === 0) {
+    throw new WalletError("Invalid Argent multisig private proof");
+  }
+  return proof.proof_facts.map((fact) => {
+    const canonical = canonicalFelt(fact);
+    if (canonical === null) throw new WalletError("Invalid Argent multisig private proof");
+    return canonical;
+  });
+};
+
+/**
+ * Proof bytes that match the facts already committed in the frozen hash.
+ * A public transaction accepts no proof. A private one accepts only its own.
+ */
+export const multisigStrk20SubmissionProof = (
+  prepared: PreparedArgentMultisigInvokeV3,
+  proof: Strk20Proof | undefined,
+): Strk20Proof | undefined => {
+  const facts = prepared.proofFacts;
+  if (facts === undefined || facts.length === 0) {
+    if (proof !== undefined) throw new WalletError("Invalid Argent multisig private proof");
+    return undefined;
+  }
+  if (!proof) throw new WalletError("Argent multisig private proof is missing");
+  const canonical = canonicalProofFacts(proof);
+  if (canonical.length !== facts.length || canonical.some((fact, index) => fact !== facts[index])) {
+    throw new WalletError("Argent multisig private proof does not match the signed transaction");
+  }
+  return { ...proof, proof_facts: canonical };
+};
+
 /**
  * Provider-level preparation seam for tests and already selected read paths.
  * It estimates with an Argent-shaped F3 query signature and freezes the
- * corresponding production V3 hash without KMS access. Most callers should
- * use {@link prepareArgentMultisigInvokeV3} with RPC URLs. The supplied
- * provider owns estimate overhead; this seam stores its returned bounds as-is.
+ * corresponding production V3 hash without KMS access. A proof's facts are
+ * included in that hash; the bytes stay with the caller.
  */
 export const prepareArgentMultisigInvokeV3WithProvider = async (
   provider: RpcProvider,
   account: ArgentMultisigAccountInput,
   calls: readonly ArgentMultisigCall[],
   config: ArgentMultisigConfig,
+  proof?: Strk20Proof,
 ): Promise<PreparedArgentMultisigInvokeV3> => {
   if (
     account.accountContractType !== "argent-multisig" ||
@@ -127,6 +165,7 @@ export const prepareArgentMultisigInvokeV3WithProvider = async (
   const paymasterData: readonly string[] = [];
   const nonceDataAvailabilityMode = "L1";
   const feeDataAvailabilityMode = "L1";
+  const proofFacts = proof ? canonicalProofFacts(proof) : undefined;
   const queryAccount = argentQueryAccount(provider, account, { multisig: normalizedConfig });
   const estimate = await queryAccount.estimateInvokeFee(
     normalizedCalls.map((call) => ({ ...call, calldata: [...call.calldata] })),
@@ -137,6 +176,7 @@ export const prepareArgentMultisigInvokeV3WithProvider = async (
       nonceDataAvailabilityMode,
       paymasterData: [...paymasterData],
       skipValidate: false,
+      ...(proof && proofFacts ? { proof: proof.data, proofFacts: [...proofFacts] } : {}),
       tip,
       version: ETransactionVersion3.F3,
     },
@@ -162,6 +202,7 @@ export const prepareArgentMultisigInvokeV3WithProvider = async (
     paymasterData,
     resourceBounds,
     senderAddress,
+    ...(proofFacts ? { proofFacts } : {}),
     tip,
     version: ETransactionVersion3.V3,
   };
@@ -172,12 +213,13 @@ export const prepareArgentMultisigInvokeV3WithProvider = async (
  * Prepares a frozen transaction using transport-only read failover.
  */
 export const prepareArgentMultisigInvokeV3 = async (
-  { account, calls, config, rpcUrls }: PrepareArgentMultisigInvokeV3Input,
+  { account, calls, config, proof, rpcUrls }: PrepareArgentMultisigInvokeV3Input,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<PreparedArgentMultisigInvokeV3> =>
   withRpcFallback(
     rpcUrls,
-    (provider) => prepareArgentMultisigInvokeV3WithProvider(provider, account, calls, config),
+    (provider) =>
+      prepareArgentMultisigInvokeV3WithProvider(provider, account, calls, config, proof),
     makeProvider ?? createArgentMultisigProvider,
   );
 
@@ -190,6 +232,7 @@ export const submitPreparedArgentMultisigInvokeV3 = async (
     config,
     isAuthorized,
     prepared,
+    proof,
     rpcUrls,
     signatures,
   }: SubmitPreparedArgentMultisigInvokeV3Input,
@@ -198,6 +241,7 @@ export const submitPreparedArgentMultisigInvokeV3 = async (
   if (!isPreparedArgentMultisigInvokeV3(prepared)) {
     throw new WalletError("Invalid prepared Argent multisig transaction");
   }
+  const attached = multisigStrk20SubmissionProof(prepared, proof);
   const signature = serializeArgentMultisigSignature(signatures, config);
   try {
     return await withRpcWrite(
@@ -212,6 +256,7 @@ export const submitPreparedArgentMultisigInvokeV3 = async (
             calldata: [...prepared.calldata],
             contractAddress: prepared.senderAddress,
             signature: [...signature],
+            ...(attached ? { proof: attached.data, proofFacts: [...attached.proof_facts] } : {}),
           },
           {
             accountDeploymentData: [...prepared.accountDeploymentData],

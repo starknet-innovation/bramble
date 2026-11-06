@@ -154,7 +154,8 @@ device.
    accounts derive it lazily through Krusty from the selected account's encrypted signing key. The
    derivation matches the pinned SDK reference: deterministic Stark ECDSA over the canonical
    `chainId:poolAddress`, Poseidon of `(r,s)`, and the privacy pool's lower-half curve-order fold.
-   Software-derived keys are never persisted. A Ledger account may resolve only an exact
+   Software-derived keys are never persisted. An Argent multisig does not derive one; its shared key is
+   created once and retained, as described under Argent multisig. A Ledger account may resolve only an exact
    account/chain/pool-scoped key retained in encrypted vault `accountSecrets`; if none exists it
    fails closed. The typed-data hardware ceremony that provisions such a key is deliberately not
    implemented until its domain, message, reduction, confirmation UI, and test vectors are
@@ -277,6 +278,72 @@ lane, which requires `approve` calls followed by exactly one `apply_actions` on 
 it is never converted into an ordinary public invoke. Any other proof-bearing batch, such as a SNIP-36
 application proof, is submitted as an ordinary invoke with `proof` and `proof_facts` attached, under the
 same fee review and reviewed-fee ceiling.
+
+## Argent multisig
+
+An Argent multisig has no single signing key, so it cannot derive a viewing key the way a
+software account does. One co-owner creates the key. Bramble asks Krusty for a throwaway phrase,
+derives the viewing key for this chain and pool, and discards the phrase. The key is stored in
+the encrypted vault (schema v13), bound to that multisig, chain, and pool
+(`multisig-strk20-shared-v1`). It is not the creator's personal viewing key. A second create does
+not rotate it: the pool commitment is the public key of this scalar, and a replacement would
+desynchronize co-owners.
+
+The key is shared on the multisig Nostr channel. Each co-owner gets their own gift wrap,
+addressed to the Nostr key on their saved signer card. The application identifier is
+`bramble.multisig.strk20-viewing-key`, not the intent identifier, so an intent parser never reads
+the key. The payload is the key, the multisig, the chain, and the pool. Krusty encrypts the wrap.
+Nothing in a browser message, the multisig record, preferences, or activity contains the key.
+The private-balance section says that anyone with the viewing key can see all of this multisig's
+private activity. Register, deposit, transfer, and withdraw use the tokens a single-signer
+private balance already tracks, including a curated token the pool reports as privately held.
+Deposit spends that token's public balance. Transfer and withdraw spend its private balance.
+A co-owner who receives a CallSet authorization reviews the entrypoints and the restored
+calls — the facts the digest covers — and signs or shares that fragment from the card. A label
+the sender wrote is not shown. A ready authorization stays on the card so the fragment can be
+returned. The card is loaded again when the panel opens.
+
+A wrap is stored only when the sender is a saved contact whose Stark key is in the chain's
+current signer set, and only for the pool configured on that network. Deployment signers are not
+treated as current. A signer set that cannot be read is left for a later sync. The first key wins.
+The same key offered again is a no-op. A different key is not stored; the vault keeps a conflict
+mark with no copy of the foreign key, and the section says this wallet kept its own. Dropping the
+key removes it from this wallet only. Removing the multisig removes the key and any conflict mark
+with it. Co-owners who already have it still can see private activity. A conflict wrap, and a wrap
+refused because the key collection or the vault is full, stays uncheckpointed. The next sync still
+reaches back to that wrap, so dropping a key can accept it while the wrap remains on the relay.
+
+Registration and deposit freeze an ordinary V3 intent. The hash includes `proofFacts` when a
+proof is attached, and matches starknet.js. The proof bytes are stored beside that intent, on
+this device only: they are not part of the hash and do not fit a Nostr gift wrap. A public intent
+omits `proofFacts` and keeps the previous hash. Submission sends the local proof with the
+threshold aggregate. Co-owners who did not generate the proof can sign the hash, and only the
+device that holds the bytes can broadcast it.
+
+Private transfer and withdraw use the relay. The second round is the paymaster's typed-data
+digest when the quote includes public calls. Co-owners exchange fragments of that digest. The
+wrap carries the typed data and the fragments, not the proof. The device that holds the proof
+sends only once the threshold is met, and only after the maturity journal has claimed the write.
+A quote with no public calls has already been authorized by the CallSet aggregate inside the
+proof, and the relay request is ready to send. A reloaded panel still lists a relay that has
+not been sent. Submitting a proof-bearing account intent checks that its `apply_actions` call
+targets the pool configured now. A proof for an intent that is still collecting, ready, or
+submitted is not dropped to make room for a newer one. An authorization or relay-fragment write
+is abandoned if the wallet locks before it commits.
+
+Both rounds use the multisig's Nostr channel. The CallSet authorization is a separate gift wrap
+(`bramble.multisig.strk20-authorization`). Its calldata has the shared scalar replaced before it
+is stored or wrapped; each co-owner puts their own copy back to recompute the digest. The signer
+callback returns `serializeArgentMultisigSignature`. A single signer still returns one Stark
+pair. `Strk20CallSetSigner` does not wrap either result.
+
+The pool accepts a proof only while `base_block < current_block <= base_block + proof_validity_blocks`.
+If co-signing outlasts that window, refresh marks the frozen intent stale, drops the local proof,
+and proves again. Collected signatures on the old hash no longer apply.
+
+A multisig dapp request that carries a private proof is still refused on pull request 825, which
+is not in this branch. That refusal can be lifted, after both land, only for a proof whose facts
+are committed in the frozen hash and whose account signature is the Argent aggregate.
 
 ## Failure and trust boundaries
 

@@ -26,7 +26,11 @@ import {
 } from "./policy/fee-guards";
 import { canonicalStrk20PoolFee, STRK20_SERVICE_UNAVAILABLE } from "./policy/fee-policy";
 import type { Strk20PhaseSink } from "./policy/phases";
-import type { Strk20SubmissionPlan } from "./policy/submission-plan";
+import type {
+  SponsoredShieldConfig,
+  Strk20SponsoredShieldPlan,
+  Strk20SubmissionPlan,
+} from "./policy/submission-plan";
 
 export { STRK20_INSUFFICIENT_BALANCE } from "./policy/fee-guards";
 export {
@@ -58,20 +62,14 @@ export {
   summarizeStrk20Plan,
 } from "./policy/summaries";
 
-/**
- * Wallet-API NOT_REGISTERED (118).
- */
+/** Wallet-API NOT_REGISTERED (118). */
 export const STRK20_NOT_REGISTERED = "account not registered in strk20";
 /**
  * Wallet-API INSUFFICIENT_PRIVATE_BALANCE (119).
  */
-/**
- * Wallet-API PRIVACY_LEAK (120).
- */
+/** Wallet-API PRIVACY_LEAK (120). */
 export const STRK20_PRIVACY_LEAK = "strk20 privacy leak";
-/**
- * No unlinkable broadcast service is configured.
- */
+/** No unlinkable broadcast service is configured. */
 export const STRK20_SUBMISSION_UNAVAILABLE = "strk20 private submission unavailable";
 /**
  * Privileged account context supplied only by the background worker. Viewing
@@ -83,21 +81,16 @@ export type Strk20AccountContext = {
   readonly config: Strk20NetworkConfig | null;
   /** Live unlock authorization checked at the final public-account write. */
   readonly isAuthorized: () => boolean;
-  /**
-   * Progress sink for the phases of a long operation (maturity, discovery,
-   * proving, broadcast). Set only by a tracked background job; absent on every
-   * request-path call, where reporting is a no-op. Receives fixed labels from
-   * `./policy/phases` and nothing derived from the account or its notes.
-   */
+  /** Phase labels for a tracked job. Absent on the request path. */
   readonly onPhase?: Strk20PhaseSink;
   readonly rpcUrls: readonly string[];
+  /** Multisig pool aggregate. Absent, `signHash` still returns one Stark pair. */
+  readonly signCallSet?: (messageHash: string, calls: readonly Call[]) => Promise<string[]>;
   readonly signHash: (messageHash: string) => Promise<StarkSignature>;
   readonly viewingKey: () => Promise<string>;
 };
 
-/**
- * A private-balance query. Empty `tokens` means every shielded token.
- */
+/** A private-balance query. Empty `tokens` means every shielded token. */
 export type Strk20BalancesInput = Strk20AccountContext & {
   readonly tokens: readonly string[];
 };
@@ -110,9 +103,7 @@ export type Strk20PrepareInput = Strk20AccountContext & {
   readonly simulate: boolean;
 };
 
-/**
- * Prepared-proof submission input used by wallet_addInvokeTransaction.
- */
+/** Prepared-proof submission input used by wallet_addInvokeTransaction. */
 export type Strk20PreparedSubmissionInput = Strk20AccountContext & {
   /** Exact batch for a wallet-prepared public transaction. */
   readonly calls?: readonly Call[];
@@ -161,11 +152,7 @@ export type Strk20SubmissionResult = {
  */
 export { STRK20_SHADOW_VIEW_NONCE_LIMIT } from "@bramble/wallet-protocol/strk20-batch";
 
-/**
- * One shadow account as the anonymizer reports it: the nonce, its address (the
- * deployed one, or the address the primer deploy would derive), and whether it
- * is deployed yet.
- */
+/** One shadow account as the anonymizer reports it (address deployed or derived). */
 export type Strk20ShadowAccountInfo = {
   readonly address: string;
   readonly deployed: boolean;
@@ -208,17 +195,20 @@ export type Strk20Service = {
    * any quote exists. Absent implementations leave the fee unknown.
    */
   readonly poolFee?: (input: Strk20AccountContext) => Promise<string>;
+  /**
+   * Claims the relay maturity journal, then runs `broadcast` once. A later
+   * call while that claim is still open throws instead of sending again.
+   */
+  readonly submitAcceptedRelay?: (
+    input: Strk20AccountContext & {
+      readonly broadcast: () => Promise<{ readonly transactionHash: string }>;
+      readonly relaySlots: readonly string[];
+    },
+  ) => Promise<{ readonly transactionHash: string }>;
   readonly quoteActions: (
     input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
   ) => Promise<Strk20SubmissionPlan>;
-  /**
-   * Lists the shadow accounts of one origin-bound scope at the requested
-   * nonces through the configured anonymizer's `get_shadow_accounts` view,
-   * including undeployed ones (which may already hold funds). Derives the
-   * partial commitment from the viewing key, then sends it to the RPC node:
-   * the read links these addresses at the provider, so callers run it only on
-   * the user's request. Absent implementations fail closed at the caller.
-   */
+  /** Shadow accounts for one origin. Absent implementations fail closed. */
   readonly shadowAccounts?: (
     input: Strk20AccountContext & {
       readonly dappName: string;
@@ -238,6 +228,13 @@ export type Strk20Service = {
   ) => Promise<Strk20SubmissionResult>;
   readonly submitPrepared: (
     input: Strk20PreparedSubmissionInput,
+  ) => Promise<{ readonly transactionHash: string }>;
+  /** Relays a prepared deposit-only shield on a sponsor's frozen plan (#789). */
+  readonly submitSponsoredShield?: (
+    input: Strk20PreparedSubmissionInput & {
+      readonly plan: Strk20SponsoredShieldPlan;
+      readonly relay: SponsoredShieldConfig;
+    },
   ) => Promise<{ readonly transactionHash: string }>;
 };
 

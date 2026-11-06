@@ -69,6 +69,11 @@ export type WalletPreferences = {
    * lifts the entry. Absent on preferences written before the field existed.
    */
   readonly removedTokens?: readonly string[];
+  /**
+   * Multisig the wallet is presenting to sites. Absent means the active
+   * single-signer account. The id is a public account id, not a secret.
+   */
+  readonly selectedMultisigId?: string;
   readonly nfts?: readonly WatchedNft[];
   /** Custom relay replacing the reviewed Nostr defaults for explicit multisig handoffs. */
   readonly nostrRelayUrl?: string;
@@ -83,6 +88,8 @@ export type WalletPreferences = {
   readonly strk20ProverUrl?: string;
   readonly theme?: ThemeChoice;
   readonly tokens: readonly TokenConfig[];
+  /** False once the user turns off the Home VIP eligibility notice; absent means shown. */
+  readonly vipNotice?: boolean;
 };
 
 /**
@@ -158,10 +165,19 @@ export type WalletPreferencesStore = {
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: ThemeChoice;
+    readonly vipNotice?: boolean;
   }) => Promise<WalletPreferences>;
   readonly setRpcOverride: (input: {
     readonly networkId: StarknetNetworkId;
     readonly rpcUrl: string;
+  }) => Promise<WalletPreferences>;
+  /**
+   * Presents `multisigId` to connected sites, or the active single-signer
+   * account when `multisigId` is null. Does not change the vault's active
+   * account. A malformed id throws and writes nothing.
+   */
+  readonly setSelectedMultisig: (input: {
+    readonly multisigId: string | null;
   }) => Promise<WalletPreferences>;
   readonly setStrk20NetworkConfig: (input: {
     readonly config: Strk20NetworkConfig | null;

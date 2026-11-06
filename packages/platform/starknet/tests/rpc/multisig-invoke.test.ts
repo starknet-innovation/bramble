@@ -5,6 +5,7 @@ import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import {
   type ArgentMultisigCall,
   ArgentMultisigFeeExpiredError,
+  argentMultisigTransactionHash,
   isArgentMultisigFeeExpiredMessage,
   isPreparedArgentMultisigInvokeV3,
   prepareArgentMultisigInvokeV3WithProvider,
@@ -12,8 +13,8 @@ import {
   samePreparedArgentMultisigInvokeV3,
   submitPreparedArgentMultisigInvokeV3,
 } from "@bramble/starknet/multisig-invoke";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
-import { RpcError, RpcProvider } from "starknet";
+import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { hash, RpcError, RpcProvider } from "starknet";
 
 const ACCOUNT = {
   accountContractType: "argent-multisig" as const,
@@ -304,5 +305,104 @@ describe("prepared Argent multisig V3 invoke", () => {
       ),
     ).rejects.toThrow("wallet locked");
     expect(seen.submissions).toHaveLength(0);
+  });
+
+  test("commits proof facts in the starknet.js hash and submits the matching proof", async () => {
+    const seen: Seen = { estimates: [], submissions: [] };
+    const provider = fakeProvider(seen);
+    const prepared = await prepareArgentMultisigInvokeV3WithProvider(
+      provider,
+      ACCOUNT,
+      CALLS,
+      CONFIG,
+    );
+    const { transactionHash: _hash, ...frozen } = prepared;
+    expect(argentMultisigTransactionHash(frozen)).toBe(prepared.transactionHash);
+    const proofFacts = ["0x2", "0x10"] as const;
+    const withFacts = { ...frozen, proofFacts };
+    const committed = argentMultisigTransactionHash(withFacts);
+    expect(committed).not.toBe(prepared.transactionHash);
+    const da = (value: string): 0 | 1 => (value === "L2" ? 1 : 0);
+    expect(
+      canonicalFelt(
+        hash.calculateInvokeTransactionHash({
+          accountDeploymentData: [...frozen.accountDeploymentData],
+          chainId: frozen.chainId as Parameters<
+            typeof hash.calculateInvokeTransactionHash
+          >[0]["chainId"],
+          compiledCalldata: [...frozen.calldata],
+          feeDataAvailabilityMode: da(frozen.feeDataAvailabilityMode),
+          nonce: frozen.nonce,
+          nonceDataAvailabilityMode: da(frozen.nonceDataAvailabilityMode),
+          paymasterData: [...frozen.paymasterData],
+          proofFacts: [...proofFacts],
+          resourceBounds: {
+            l1_data_gas: {
+              max_amount: BigInt(frozen.resourceBounds.l1DataGas.maxAmount),
+              max_price_per_unit: BigInt(frozen.resourceBounds.l1DataGas.maxPricePerUnit),
+            },
+            l1_gas: {
+              max_amount: BigInt(frozen.resourceBounds.l1Gas.maxAmount),
+              max_price_per_unit: BigInt(frozen.resourceBounds.l1Gas.maxPricePerUnit),
+            },
+            l2_gas: {
+              max_amount: BigInt(frozen.resourceBounds.l2Gas.maxAmount),
+              max_price_per_unit: BigInt(frozen.resourceBounds.l2Gas.maxPricePerUnit),
+            },
+          },
+          senderAddress: frozen.senderAddress,
+          tip: frozen.tip,
+          version: frozen.version,
+        }),
+      ),
+    ).toBe(committed);
+    expect(isPreparedArgentMultisigInvokeV3({ ...withFacts, transactionHash: committed })).toBe(
+      true,
+    );
+    expect(isPreparedArgentMultisigInvokeV3({ ...prepared, proofFacts: [] })).toBe(false);
+    expect(isPreparedArgentMultisigInvokeV3({ ...prepared, proofFacts: ["0x01"] })).toBe(false);
+    expect(
+      samePreparedArgentMultisigInvokeV3(
+        { ...withFacts, transactionHash: committed },
+        { ...prepared, transactionHash: prepared.transactionHash },
+      ),
+    ).toBe(false);
+    const signed = { ...withFacts, transactionHash: committed };
+    await expect(
+      submitPreparedArgentMultisigInvokeV3(
+        {
+          config: CONFIG,
+          prepared: signed,
+          rpcUrls: ["https://one.invalid"],
+          signatures: [
+            { publicKey: "0x456", r: "0x3", s: "0x4" },
+            { publicKey: "0x123", r: "0x1", s: "0x2" },
+          ],
+        },
+        () => provider,
+      ),
+    ).rejects.toThrow("Argent multisig private proof is missing");
+    const proof = { data: "proof", output: ["0x1"], proof_facts: [...proofFacts] };
+    seen.transactionHash = committed;
+    await expect(
+      submitPreparedArgentMultisigInvokeV3(
+        {
+          config: CONFIG,
+          prepared: signed,
+          proof,
+          rpcUrls: ["https://one.invalid"],
+          signatures: [
+            { publicKey: "0x456", r: "0x3", s: "0x4" },
+            { publicKey: "0x123", r: "0x1", s: "0x2" },
+          ],
+        },
+        () => provider,
+      ),
+    ).resolves.toBe(committed);
+    expect(seen.submissions).toEqual([
+      expect.objectContaining({
+        invocation: expect.objectContaining({ proof: "proof", proofFacts: [...proofFacts] }),
+      }),
+    ]);
   });
 });

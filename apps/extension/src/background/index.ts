@@ -11,6 +11,7 @@ import { createOriginHistoryStore } from "@bramble/permissions/origin-history";
 import { createPhishingFeed } from "@bramble/permissions/phishing-feed";
 import { createPriceService, unavailablePriceService } from "@bramble/portfolio/prices";
 import { createStrk20MaturityStore } from "@bramble/privacy/maturity-store";
+import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
@@ -59,6 +60,11 @@ import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
 import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
 import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
 import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-preparations";
+import {
+  encryptedMultisigGrantStore,
+  MULTISIG_ORIGIN_GRANTS_KEY,
+  memoryMultisigGrantStore,
+} from "./provider/multisig-grants";
 import { createMessageHandler } from "./routing/messages";
 import type { BackgroundBrowser } from "./runtime/background-browser";
 import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
@@ -114,51 +120,44 @@ const sessionStore = (() => {
 })();
 const multisigDeploymentReviews = createArgentMultisigDeploymentReviews(sessionStore);
 const recoveryDiscovery = createRecoveryDiscoveryCache(sessionStore);
-// The vault store is created up front so the unlock session can drop its
-// cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
-// operations for the life of an unlock rather than re-derived every time.
-const vaultStores: { readonly primary: EncryptedStore; readonly staging: EncryptedStore } | null =
-  (() => {
-    try {
-      const store = createBrowserLocalStore();
-      const freshnessStore = createBrowserSyncStore();
-      // The vault blob and its freshness records both live in areas a content
-      // script can read and write on Firefox, which cannot restrict them; an
-      // attacker there rolls back the pair together and it stays
-      // self-consistent. `sessionStore` is `storage.session`, closed to content
-      // scripts on every browser, so it carries a second copy of the commit
-      // state that the rolled-back one has to agree with. Absent where the
-      // runtime has no session storage, which leaves the durable record as the
-      // only authority — the behaviour before this shadow existed.
-      return {
-        // Only the primary mirrors its commit record into `storage.local`, so a
-        // lost `storage.sync` record does not lock the vault; see
-        // `createEncryptedStore` for why staging must not.
-        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
-        staging: createEncryptedStore(
-          store,
-          VAULT_MIGRATION_STORE_KEY,
-          freshnessStore,
-          sessionStore,
-        ),
-      };
-    } catch {
-      return null;
-    }
-  })();
+const vaultStores: {
+  readonly grants: EncryptedStore;
+  readonly primary: EncryptedStore;
+  readonly staging: EncryptedStore;
+} | null = (() => {
+  try {
+    const store = createBrowserLocalStore();
+    const freshnessStore = createBrowserSyncStore();
+    return {
+      // Only the primary mirrors its commit record into `storage.local`, so a
+      // lost `storage.sync` record does not lock the vault; see
+      // `createEncryptedStore` for why staging must not.
+      grants: createEncryptedStore(
+        store,
+        MULTISIG_ORIGIN_GRANTS_KEY,
+        freshnessStore,
+        sessionStore,
+        true,
+      ),
+      primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
+      staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY, freshnessStore, sessionStore),
+    };
+  } catch {
+    return null;
+  }
+})();
 const session = createBackgroundUnlockSession({
   alarms: extensionApi?.alarms,
   sessionStore,
   clearKeyCaches: () => {
-    for (const store of [vaultStores?.primary, vaultStores?.staging]) {
+    for (const store of [vaultStores?.primary, vaultStores?.staging, vaultStores?.grants]) {
       store?.clearKeys();
     }
     // Declared below; this runs only when the session locks, long after.
     void wallet.then((service) => service?.clearGrantCache());
   },
 });
-// Storage lockdown is a startup prerequisite, not a best-effort side effect.
-// Requests remain fail-closed if Chrome cannot remove content-script access.
+// Storage lockdown is a startup prerequisite. Requests fail closed if it cannot run.
 const storageReady = requireTrustedStorageAccess();
 const sessionReady = storageReady.then(() => session.restore());
 const wallet = vaultStores
@@ -272,15 +271,13 @@ const swapService = (() => {
     return unavailableSwapService;
   }
 })();
-// Durable intent and operation claims are part of the signing safety model.
-// If local storage is unavailable, fail background initialization rather than
-// silently accepting signatures or broadcasts into a volatile registry.
-const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
+// Durable intent claims. Missing local storage must fail startup, not sign into memory.
+const multisigBrowserStore = createBrowserLocalStore();
+const multisigLog = createMultisigStore({ store: multisigBrowserStore });
+const strk20MultisigLog = createMultisigStrk20Store(multisigBrowserStore);
 const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
-// Live phishing feed, read through CORS with no host permission, cached locally,
-// and refreshed on worker start and on a recurring alarm once its TTL lapses.
-// The guard reads its in-memory snapshot on every check; the bundled seed list
-// in blocklist.ts is always enforced, before the first fetch and offline too.
+// Live phishing feed, cached locally and refreshed on an alarm. The bundled seed
+// list is always enforced, before the first fetch and offline too.
 const phishingFeed = (() => {
   try {
     return createPhishingFeed({ fetch: untrustedFetch, store: createBrowserLocalStore() });
@@ -391,6 +388,10 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   multisigDeploymentReviews,
   multisigStore: multisigLog,
+  strk20MultisigStore: strk20MultisigLog,
+  multisigGrants: vaultStores
+    ? encryptedMultisigGrantStore(vaultStores.grants)
+    : memoryMultisigGrantStore(),
   nostrCoordinationStore: nostrCoordinationLog,
   strk20Jobs,
   strk20Preparations,

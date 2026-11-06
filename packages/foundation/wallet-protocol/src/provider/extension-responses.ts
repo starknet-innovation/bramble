@@ -170,6 +170,11 @@ export type PendingApproval = {
   readonly insights?: readonly string[];
   readonly kind: ApprovalKind;
   /**
+   * Invoke from a multisig whose threshold is above 1. Approving saves an
+   * intent for the other signers and does not broadcast.
+   */
+  readonly multisigThreshold?: number;
+  /**
    * `strk20-unavailable` only: why the private request is held on a notice.
    * Absent means the network has no private services for it. Wallet-chosen,
    * never site text; the panel maps it to a fixed line.

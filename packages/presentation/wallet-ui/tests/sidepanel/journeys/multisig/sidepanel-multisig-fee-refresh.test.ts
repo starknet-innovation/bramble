@@ -279,7 +279,12 @@ describe("Argent multisig fee refresh", () => {
     const client = await makeMultisigUiClient({
       syncIntents: async (multisigId) => {
         synced.push(multisigId);
-        return { imported: intentIds.length, intentIds, received: intentIds.length };
+        return {
+          imported: intentIds.length,
+          intentIds,
+          received: intentIds.length,
+          strk20Key: "none" as const,
+        };
       },
     });
     const app = document.createElement("div");

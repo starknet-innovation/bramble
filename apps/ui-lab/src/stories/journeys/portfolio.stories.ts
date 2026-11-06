@@ -61,6 +61,24 @@ export const DeployFailed = failedReceiptStory("Deployment failed", "portfolio",
   reason: "Starknet rejected this transaction. Nothing changed.",
   title: "Deployment failed",
 });
+// Over $10,000 in dollars, Home links out to Starknet VIP (mc-wallet 688). It
+// only links out: no form, no input, and the bundled address is the real site.
+export const VipEligible: LabStory = {
+  args: { checkpointId: "vip-eligible", scenarioId: "portfolio" },
+  name: "Starknet VIP eligible",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const notice = body?.querySelector("[data-vip-notice]");
+    await expect(notice).toHaveTextContent("Eligible for Starknet VIP");
+    const link = notice?.querySelector("a.vip-link");
+    await expect(link).toHaveAttribute("href", "https://vip.starknet.io/");
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(notice?.querySelector("#vip-notice-hide")).toHaveTextContent("Don't show again");
+    await expect(notice?.querySelector("input, form, textarea")).toBeNull();
+  },
+};
 export const PricesOffline = checkpointStory("Prices unavailable", "portfolio", "prices-offline");
 export const BalanceFailed = checkpointStory(
   "Balance refresh failed",

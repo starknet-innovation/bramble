@@ -36,6 +36,10 @@ import {
   verifyAccountClassHash,
 } from "@bramble/starknet/class-hash-verify";
 import {
+  estimateArgentMultisigDappFee,
+  submitArgentMultisigDappInvoke,
+} from "@bramble/starknet/multisig-dapp-invoke";
+import {
   type PrepareArgentMultisigInvokeV3Input,
   prepareArgentMultisigInvokeV3,
   type SubmitPreparedArgentMultisigInvokeV3Input,
@@ -158,6 +162,21 @@ export type RuntimeRpc = {
    */
   readonly estimateDeclareFee?: (input: DeclareInput) => ReturnType<typeof estimateDeclareFee>;
   readonly estimateInvokeFee: (input: InvokeInput) => ReturnType<typeof estimateInvokeFee>;
+  /**
+   * Multisig dapp invoke fee, estimated with a query aggregate. Optional so
+   * narrow stubs stay valid; production wires the real estimator.
+   */
+  readonly estimateMultisigDappFee?: (
+    input: Parameters<typeof estimateArgentMultisigDappFee>[0],
+  ) => ReturnType<typeof estimateArgentMultisigDappFee>;
+  /** Live class hash at an address. Used to refuse a multisig that was upgraded away. */
+  readonly getClassHashAt?: (input: {
+    readonly address: string;
+    readonly rpcUrls: readonly string[];
+  }) => Promise<string>;
+  readonly submitMultisigDappInvoke?: (
+    input: Parameters<typeof submitArgentMultisigDappInvoke>[0],
+  ) => ReturnType<typeof submitArgentMultisigDappInvoke>;
   /**
    * Discovers ERC20 allowances granted outside this wallet for an account's
    * tracked tokens. Optional so existing RPC stubs stay valid; when absent the
@@ -371,6 +390,10 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  estimateMultisigDappFee: estimateArgentMultisigDappFee,
+  getClassHashAt: ({ address, rpcUrls }) =>
+    withRpcFallback(rpcUrls, (provider) => provider.getClassHashAt(address)),
+  submitMultisigDappInvoke: submitArgentMultisigDappInvoke,
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
   getAccountOwner,
