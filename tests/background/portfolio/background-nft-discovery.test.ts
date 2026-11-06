@@ -104,6 +104,7 @@ const makeHandler = (options: {
   const multisigStore = memoryMultisigStore();
   let indexerCalls = 0;
   const indexedAddresses: string[] = [];
+  const indexerUrls: Array<string | null> = [];
   const handler = createMessageHandler(walletStub, testExtension, {
     multisigStore,
     ...(options.nftSnapshots ? { nftSnapshots: options.nftSnapshots } : {}),
@@ -123,6 +124,7 @@ const makeHandler = (options: {
           indexerCalls += 1;
           if (options.indexerFails) throw new Error("offline");
           indexedAddresses.push(input.address);
+          indexerUrls.push(input.indexerUrl);
           return options.candidates;
         },
       },
@@ -133,6 +135,7 @@ const makeHandler = (options: {
     handler,
     indexedAddresses,
     indexerCalls: () => indexerCalls,
+    indexerUrls,
     multisigStore,
     preferencesStore,
   };
@@ -213,6 +216,15 @@ describe("NFT auto-discovery messages", () => {
       nfts: [],
       ok: true,
     });
+  });
+
+  test("a saved indexer is used only while the collectibles preview is on", async () => {
+    const { handler, indexerUrls, preferencesStore } = makeHandler({ candidates: [], owners: {} });
+    await preferencesStore.setNftIndexerUrl({ url: "https://indexer.example" });
+    await handler({ type: "wallet.discoverNfts" }, sender);
+    await preferencesStore.setDisplay({ collectiblesPreview: true });
+    await handler({ includeWatched: false, type: "wallet.discoverNfts" }, sender);
+    expect(indexerUrls).toEqual([null, "https://indexer.example"]);
   });
 
   test("scopes shared-account discovery to a watched multisig address", async () => {

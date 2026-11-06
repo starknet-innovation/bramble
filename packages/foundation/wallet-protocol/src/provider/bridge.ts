@@ -20,7 +20,7 @@ import { readProviderChain } from "../transactions/add-chain";
 import { readProviderDeclare } from "../transactions/declare";
 import { providerDeploymentResult } from "../transactions/deployment";
 import { providerInvokeRequest } from "../transactions/invoke";
-import { readProviderWatchAsset } from "../transactions/watch-asset";
+import { readProviderWatchAsset, readProviderWatchNft } from "../transactions/watch-asset";
 import { isProviderMethod, type ProviderMethod } from "./methods";
 import { readProviderParams } from "./request-params";
 import {
@@ -321,7 +321,9 @@ const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
     versionedMessage(params, origin, "wallet.deploymentData"),
   wallet_watchAsset: (params, origin) => {
     const asset = readProviderWatchAsset(params);
-    return asset ? { asset, origin, type: "wallet.watchAsset" } : null;
+    if (asset) return { asset, origin, type: "wallet.watchAsset" };
+    const nft = readProviderWatchNft(params);
+    return nft ? { nft, origin, type: "wallet.watchAsset" } : null;
   },
   wallet_addInvokeTransaction: (params, origin) => {
     const input = providerInvokeRequest(params);

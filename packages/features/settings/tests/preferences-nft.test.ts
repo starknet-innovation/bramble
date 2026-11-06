@@ -13,6 +13,26 @@ import { createMemoryStore } from "@bramble/store/kv";
 const CONTRACT = "0x051a2b3c4d";
 
 describe("preferences NFT tracking", () => {
+  test("the collectibles preview is off until switched on, and stays a boolean", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+    expect((await preferences.read()).collectiblesPreview).toBeUndefined();
+    await preferences.setDisplay({ collectiblesPreview: true });
+    expect((await preferences.read()).collectiblesPreview).toBe(true);
+    await preferences.setDisplay({ theme: "light" });
+    expect((await preferences.read()).collectiblesPreview).toBe(true);
+    await preferences.setDisplay({ collectiblesPreview: false });
+    expect((await preferences.read()).collectiblesPreview).toBe(false);
+    await expect(
+      preferences.setDisplay({ collectiblesPreview: "yes" as unknown as boolean }),
+    ).rejects.toThrow("Invalid display preference");
+    await store.set(
+      PREFERENCES_STORE_KEY,
+      JSON.parse(JSON.stringify({ ...defaultWalletPreferences(), collectiblesPreview: "yes" })),
+    );
+    await expect(preferences.read()).rejects.toThrow();
+  });
+
   test("adds, spam-hides, and removes watched NFTs", async () => {
     const preferences = createPreferencesStore({ store: createMemoryStore() });
 
