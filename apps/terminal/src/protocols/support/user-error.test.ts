@@ -67,6 +67,8 @@ const READER_SENTENCES = new Set([
   "Collection, sender, and recipient must be valid Starknet addresses.",
   "Connect Bramble to use private balances.",
   "Connect a wallet before submitting a transaction.",
+  "Connect a wallet first.",
+  "Create works on x only.",
   "Connect a wallet that supports contract declarations.",
   "Connect a wallet that supports token tracking.",
   "Ekubo sell amount must be greater than zero",
@@ -89,6 +91,8 @@ const READER_SENTENCES = new Set([
   "Root container #root not found", // unreachable: boot invariant
   "The terminal refused an empty wallet request.", // unreachable: guard
   "Switch the connected wallet to Starknet Mainnet before minting.",
+  "Switch your wallet to x.",
+  "The new contract doesn't run the expected OpenZeppelin class.", // a fact: shown as written
   "Symbol must be 2–10 uppercase letters or numbers.",
   "This Multiply position is missing its debt leg.",
   "This token supports at most x decimal places.",
