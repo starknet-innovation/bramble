@@ -30,7 +30,7 @@ export const nftHomeScenario: WalletScenario = {
       id: "home-nfts",
       label: "Home NFTs tab",
       narrative:
-        "Home reads Tokens · NFTs. The NFTs tab shows Watch by contract, Hidden collectibles, and each owned NFT as a card that opens its detail screen.",
+        "Home reads Tokens · NFTs · Staking. The NFTs tab shows Watch by contract, Hidden collectibles, and each owned NFT as a card that opens its detail screen.",
       state: { coverage: "complete", homeTab: "nfts", shown: 1 },
     },
     {
@@ -63,7 +63,7 @@ export const nftHomeScenario: WalletScenario = {
       content: () => walletDashboard({ preferences: nftsOff }),
       id: "home-nfts-off",
       label: "NFTs turned off",
-      narrative: "With Show NFTs on Home off, Home has only Tokens and loads no NFT data.",
+      narrative: "With Show NFTs on Home off, Home reads Tokens · Staking and loads no NFT data.",
       state: { homeTab: "none", nfts: "off" },
     },
     {
