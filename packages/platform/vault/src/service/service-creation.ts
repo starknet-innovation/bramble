@@ -25,7 +25,7 @@ import {
 } from "../accounts/accounts";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV12, type Vault } from "../schema/schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV13, type Vault } from "../schema/schema";
 import type { ImportRawKeyAccountInput, WalletVaultService } from "./service-types";
 import { requireVaultCapacity } from "./vault-capacity";
 
@@ -45,7 +45,7 @@ export const writeVault = async (
   beforeCommit?: () => void,
 ): Promise<void> => {
   requireVaultCapacity(vault);
-  if (!isVaultV12(vault)) {
+  if (!isVaultV13(vault)) {
     throw new WalletError("Invalid vault");
   }
   await encryptedStore.write(vault, vaultPassphrase, beforeCommit);
@@ -273,6 +273,8 @@ export const vaultCreationMethods = ({
       {
         accounts: derived.map(({ account }) => account),
         accountSecrets: [],
+        multisigStrk20KeyConflicts: [],
+        multisigStrk20ViewingKeys: [],
         shadowAccountScopes: [],
         activeAccountId: first.account.id,
         importedSeeds: [],
@@ -310,6 +312,8 @@ export const vaultCreationMethods = ({
       {
         accounts: [account],
         accountSecrets: [],
+        multisigStrk20KeyConflicts: [],
+        multisigStrk20ViewingKeys: [],
         shadowAccountScopes: [],
         activeAccountId: account.id,
         importedSeeds: [],

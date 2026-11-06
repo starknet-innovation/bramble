@@ -19,6 +19,7 @@ import { bindMultisigIntentCards } from "./multisig-intent-ui";
 import { parseArgentMultisigIntentPackage } from "./multisig-model";
 import { armResendConfirmation, resendConfirmed } from "./multisig-resend-confirm";
 import { bindMultisigSignerManagement } from "./multisig-signer-management-ui";
+import { bindMultisigStrk20Key } from "./multisig-strk20-key-ui";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 /**
@@ -415,6 +416,7 @@ export const bindMultisigs = (deps: MultisigUiDeps): void => {
   bindList(deps);
   bindMultisigIntentCards(deps);
   bindMultisigSignerManagement(deps);
+  bindMultisigStrk20Key(deps);
   bindPrepare(deps);
   bindImport(deps);
   bindTabs(deps);

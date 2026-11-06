@@ -11,6 +11,7 @@ import { createOriginHistoryStore } from "@bramble/permissions/origin-history";
 import { createPhishingFeed } from "@bramble/permissions/phishing-feed";
 import { createPriceService, unavailablePriceService } from "@bramble/portfolio/prices";
 import { createStrk20MaturityStore } from "@bramble/privacy/maturity-store";
+import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
@@ -270,15 +271,13 @@ const swapService = (() => {
     return unavailableSwapService;
   }
 })();
-// Durable intent and operation claims are part of the signing safety model.
-// If local storage is unavailable, fail background initialization rather than
-// silently accepting signatures or broadcasts into a volatile registry.
-const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
+// Durable intent claims. Missing local storage must fail startup, not sign into memory.
+const multisigBrowserStore = createBrowserLocalStore();
+const multisigLog = createMultisigStore({ store: multisigBrowserStore });
+const strk20MultisigLog = createMultisigStrk20Store(multisigBrowserStore);
 const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
-// Live phishing feed, read through CORS with no host permission, cached locally,
-// and refreshed on worker start and on a recurring alarm once its TTL lapses.
-// The guard reads its in-memory snapshot on every check; the bundled seed list
-// in blocklist.ts is always enforced, before the first fetch and offline too.
+// Live phishing feed, cached locally and refreshed on an alarm. The bundled seed
+// list is always enforced, before the first fetch and offline too.
 const phishingFeed = (() => {
   try {
     return createPhishingFeed({ fetch: untrustedFetch, store: createBrowserLocalStore() });
@@ -389,6 +388,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   multisigDeploymentReviews,
   multisigStore: multisigLog,
+  strk20MultisigStore: strk20MultisigLog,
   multisigGrants: vaultStores
     ? encryptedMultisigGrantStore(vaultStores.grants)
     : memoryMultisigGrantStore(),
