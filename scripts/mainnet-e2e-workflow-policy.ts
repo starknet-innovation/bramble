@@ -4,6 +4,12 @@
  * The workflow holds a funded hot-wallet key and runs on the self-hosted
  * runner, so it is a reviewed policy rather than a baseline workflow. The
  * checks are textual on purpose: each one is a control a diff can drop.
+ *
+ * Jobs split by trust. `build` runs release-controlled install and build with
+ * no secret. `execute` holds the key and may not install, build, check out,
+ * or print raw test output. `preflight` and `post` run trusted `main` code
+ * without the key or the release commit, and pass the spend baseline as a
+ * job output the code under test cannot write.
  * Parsing is left to the website-deploy policy, which already fails closed
  * when any workflow is not YAML.
  */
@@ -17,6 +23,19 @@ const HOT_WALLET_BINDINGS = 5;
 const keyBindings = (source: string): readonly string[] =>
   source.split("\n").filter((line) => line.includes(HOT_WALLET_KEY));
 
+const occurrences = (source: string, text: string): number => source.split(text).length - 1;
+
+/** Release-controlled steps that must not share a runner with the key. */
+const UNTRUSTED_SETUP = [
+  "bun install",
+  "bun run build",
+  "vendor:argent",
+  "vendor:privacy",
+  "test:e2e:install",
+  "actions/checkout@",
+  "git checkout",
+] as const;
+
 /**
  * Violations of the mainnet E2E workflow's reviewed controls. `source` is the
  * workflow text. The function does not read the filesystem.
@@ -25,6 +44,9 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
   const failures: string[] = [];
   const path = workflowPath("mainnet-e2e.yml");
   const execute = jobBody(source, "execute");
+  const build = jobBody(source, "build");
+  const preflight = jobBody(source, "preflight");
+  const post = jobBody(source, "post");
   const report = jobBody(source, "report");
 
   for (const trigger of [
@@ -96,11 +118,17 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
     "vars.MAINNET_E2E_CONFIGURED",
     `${path} must skip until maintainers set vars.MAINNET_E2E_CONFIGURED`,
   );
-  requireText(
+  forbidText(
     failures,
     source,
     "ready=false",
-    `${path} must skip when the hot-wallet secrets are unset`,
+    `${path} must fail, not skip green, when it is enabled without its secrets`,
+  );
+  requireText(
+    failures,
+    execute,
+    `if [ "\${#missing[@]}" -ne 0 ]; then`,
+    "mainnet execution must fail when any hot-wallet secret is missing",
   );
 
   requireText(
@@ -117,33 +145,99 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
   );
   forbidText(
     failures,
-    execute,
+    source,
     "\n          ref:",
-    "self-hosted mainnet execution must not pass configured refs to checkout",
+    `${path} must not pass configured refs to checkout`,
   );
+  if (
+    occurrences(source, "actions/checkout@") !== occurrences(source, "persist-credentials: false")
+  ) {
+    failures.push(`${path} must not leave a checkout token in .git/config`);
+  }
   requireText(
     failures,
-    execute,
-    "persist-credentials: false",
-    "self-hosted mainnet execution must not leave the checkout token in .git/config",
-  );
-  requireText(
-    failures,
-    execute,
+    build,
     `REVISION: ${GITHUB_EXPRESSION} needs.resolve.outputs.revision }}`,
-    "mainnet execution must consume the resolved immutable commit",
+    "the mainnet build must consume the resolved immutable commit",
   );
   requireText(
     failures,
-    execute,
+    build,
     '[[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]',
-    "mainnet execution must validate the resolved immutable commit",
+    "the mainnet build must validate the resolved immutable commit",
   );
   requireText(
     failures,
-    execute,
+    build,
     'git checkout --detach "$REVISION"',
-    "mainnet execution must detach onto the resolved immutable commit",
+    "the mainnet build must detach onto the resolved immutable commit",
+  );
+  for (const forbidden of ["secrets.", "environment:"]) {
+    forbidText(
+      failures,
+      build,
+      forbidden,
+      "the mainnet build runs release code and must not receive any secret",
+    );
+  }
+  for (const setup of UNTRUSTED_SETUP) {
+    forbidText(
+      failures,
+      execute,
+      setup,
+      `mainnet execution must not run ${setup}; install and build in the keyless build job`,
+    );
+  }
+  requireText(
+    failures,
+    execute,
+    "| sha256sum -c --quiet",
+    "mainnet execution must verify the build bundle it runs",
+  );
+  for (const printer of ['cat "', "tee ", "--reporter=list", "--reporter=line"]) {
+    forbidText(
+      failures,
+      execute,
+      printer,
+      "mainnet execution must not print raw test output; report counts only",
+    );
+  }
+  requireText(
+    failures,
+    execute,
+    'if [ "$expected" -eq 0 ]; then',
+    "mainnet execution must fail when Playwright executed no test",
+  );
+  for (const [name, job] of [
+    ["preflight", preflight],
+    ["post", post],
+  ] as const) {
+    for (const forbidden of [HOT_WALLET_KEY, "git checkout", "download-artifact"]) {
+      forbidText(
+        failures,
+        job,
+        forbidden,
+        `the ${name} balance check must run trusted main code without the key`,
+      );
+    }
+    requireText(
+      failures,
+      job,
+      "environment:\n      name: mainnet-e2e-balance",
+      `the ${name} balance check must use the read-only mainnet-e2e-balance environment`,
+    );
+    requireText(
+      failures,
+      job,
+      "runs-on: ubuntu-latest",
+      `the ${name} balance check must run on a hosted runner, apart from the tests`,
+    );
+  }
+  requireText(
+    failures,
+    post,
+    `MAINNET_E2E_STRK_BEFORE_RAW: ${GITHUB_EXPRESSION} needs.preflight.outputs.strk_before_raw }}`,
+    "the post-run check must take its baseline from the preflight job output",
   );
   requireText(
     failures,
@@ -160,7 +254,7 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
   requireText(
     failures,
     execute,
-    "timeout-minutes: 180",
+    "timeout-minutes: 120",
     "mainnet execution must time out so a stuck run releases the nonce lock",
   );
   requireText(
@@ -187,17 +281,16 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
     "::add-mask::",
     "mainnet execution must mask the hot-wallet secrets",
   );
-  forbidText(
-    failures,
-    source,
-    "actions/upload-artifact",
-    `${path} must not upload artifacts that could contain the hot-wallet key`,
-  );
+  if (
+    occurrences(source, "actions/upload-artifact") !== occurrences(build, "actions/upload-artifact")
+  ) {
+    failures.push(`${path} may upload artifacts only from the keyless build job`);
+  }
 
   const bindings = keyBindings(source);
-  if (bindings.length !== HOT_WALLET_BINDINGS) {
+  if (bindings.length !== HOT_WALLET_BINDINGS || keyBindings(execute).length !== bindings.length) {
     failures.push(
-      `${path} must bind the hot-wallet private key in exactly ${HOT_WALLET_BINDINGS} step env values`,
+      `${path} must bind the hot-wallet private key in exactly ${HOT_WALLET_BINDINGS} step env values, all in execute`,
     );
   }
   for (const line of bindings) {

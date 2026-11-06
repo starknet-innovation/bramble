@@ -162,7 +162,6 @@ describe("mainnet balance command", () => {
     const dir = await mkdtemp(join(tmpdir(), "mainnet-e2e-"));
     const env = {
       MAINNET_E2E_ADDRESS: "0x123",
-      MAINNET_E2E_BALANCE_FILE: join(dir, "balance.json"),
       MAINNET_E2E_REPORT_FILE: join(dir, "report.txt"),
       MAINNET_E2E_RPC_URL: SECRET_RPC,
       MAINNET_E2E_SPEND_TIER: "standard",
@@ -177,9 +176,30 @@ describe("mainnet balance command", () => {
       const ok = await Bun.file(env.MAINNET_E2E_REPORT_FILE).text();
       expect(ok).toContain("verdict=ok");
       expect(ok).toContain("strk_before=1");
+      expect(ok).toContain(`strk_before_raw=${STRK}`);
+      expect(ok).toContain(`usdc_before_raw=${USDC}`);
       expect(ok).not.toContain("super-secret-key");
 
+      // The baseline arrives as job outputs from the trusted preflight job,
+      // never from a file the code under test could rewrite.
       expect(await runBalanceCommand("post", env, balances(STRK / 2n, USDC))).toBe(1);
+      expect(await Bun.file(env.MAINNET_E2E_REPORT_FILE).text()).toBe("verdict=unavailable\n");
+      expect(errors.join("\n")).toContain("Preflight balances are missing or malformed");
+      for (const malformed of ["", "-1", "0x10", "1.5", "01", "9".repeat(79)]) {
+        const bad = {
+          ...env,
+          MAINNET_E2E_STRK_BEFORE_RAW: malformed,
+          MAINNET_E2E_USDC_BEFORE_RAW: `${USDC}`,
+        };
+        expect(await runBalanceCommand("post", bad, balances(STRK, USDC))).toBe(1);
+      }
+
+      const post = {
+        ...env,
+        MAINNET_E2E_STRK_BEFORE_RAW: `${STRK}`,
+        MAINNET_E2E_USDC_BEFORE_RAW: `${USDC}`,
+      };
+      expect(await runBalanceCommand("post", post, balances(STRK / 2n, USDC))).toBe(1);
       const over = await Bun.file(env.MAINNET_E2E_REPORT_FILE).text();
       expect(over).toContain("verdict=over-cap");
       expect(over).toContain("strk_delta=0.5");

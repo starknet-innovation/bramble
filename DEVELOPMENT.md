@@ -243,11 +243,14 @@ read-only self-hosted job; a separate hosted job receives the narrow
 
 Trigger: **scheduled** (`cron: 0 6 * * *`, after nightly) and manual
 `workflow_dispatch` from `main`, against the same active release branch as
-nightly. It runs `bun run test:e2e:mainnet` and `bun run test:mainnet` on the
-CodeBuild runner only when the `mainnet-e2e` environment is configured.
-Secrets stay in that environment. A missing configuration skips green. Spend
-is capped, and a failure or a hot wallet outside that cap upserts one
-`ci-cd` issue. Setup is in [docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md).
+nightly, once `vars.MAINNET_E2E_CONFIGURED` is `true`. A keyless job installs
+and builds the release commit; a separate CodeBuild job in the `mainnet-e2e`
+environment unpacks that build and runs `bun run test:mainnet` (plus
+`bun run test:e2e:mainnet` in the STRK20 tier) without printing test output.
+Hosted jobs running `main`'s code check the balance before and after. Once
+enabled, missing secrets or zero executed tests fail. Spend is capped before
+each signature and after the run, and a failure upserts one `ci-cd` issue.
+Setup is in [docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md).
 
 ### What runs where
 

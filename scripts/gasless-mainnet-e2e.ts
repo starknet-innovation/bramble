@@ -33,6 +33,7 @@ import { type LoadedMainnetAccount, loadProcessAccount } from "./gasless-mainnet
 import { payWithToken, recordingHttp } from "./gasless-mainnet-attempt";
 import { displayRpcUrl, selectMainnetRpc } from "./gasless-mainnet-rpc";
 import { assertLiveMainnetAllowed } from "./mainnet-e2e-guard";
+import { sendBudgetFor } from "./mainnet-e2e-send-budget";
 
 const PIN = "0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f";
 
@@ -139,9 +140,11 @@ const runGaslessMainnet = async (account: LoadedMainnetAccount): Promise<void> =
   );
   const usdc = known.find((token) => token.symbol === "USDC");
   const ordered = usdc === undefined ? known : [usdc, ...known.filter((token) => token !== usdc)];
+  const budget = sendBudgetFor(process.env);
   for (const token of ordered) {
     const paid = await payWithToken({
       account,
+      budget,
       classHash,
       family,
       listed: supported,

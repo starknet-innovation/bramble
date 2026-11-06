@@ -2,18 +2,23 @@
  * Preflight and post-run balance check for the mainnet E2E job.
  *
  * Reads STRK and native USDC through the dedicated RPC, compares them with
- * the spend policy, and writes a line-oriented report the workflow can
- * sanitize. The private key is not an input. The RPC URL is never printed.
+ * the spend policy, and writes a line-oriented `key=value` report. The private
+ * key is not an input. The RPC URL is never printed.
  *
  *   bun run scripts/mainnet-e2e-balance.ts preflight
  *   bun run scripts/mainnet-e2e-balance.ts post
  *
- * Requires MAINNET_E2E_ADDRESS, MAINNET_E2E_RPC_URL, MAINNET_E2E_BALANCE_FILE,
- * and MAINNET_E2E_REPORT_FILE. MAINNET_E2E_SPEND_TIER is `standard` or `strk20`.
+ * The workflow runs both phases from the workflow's own `main` checkout, in
+ * hosted jobs that never hold the signing key or the release commit. The
+ * preflight's raw balances travel to `post` as job outputs
+ * (MAINNET_E2E_STRK_BEFORE_RAW, MAINNET_E2E_USDC_BEFORE_RAW), so code under
+ * test cannot rewrite the baseline its spend is measured against.
+ *
+ * Requires MAINNET_E2E_ADDRESS, MAINNET_E2E_RPC_URL, and
+ * MAINNET_E2E_REPORT_FILE. MAINNET_E2E_SPEND_TIER is `standard` or `strk20`.
  */
 
-import { readFile, writeFile } from "node:fs/promises";
-import { isRecord } from "@bramble/core/json";
+import { writeFile } from "node:fs/promises";
 import { type RpcFetch, readHotWalletBalances, starknetAddress } from "./mainnet-e2e-rpc";
 import {
   type BalanceJudgement,
@@ -26,12 +31,6 @@ import {
 } from "./mainnet-e2e-spend";
 
 type Phase = "post" | "preflight";
-
-type Snapshot = {
-  readonly strk: bigint;
-  readonly tier: SpendTier;
-  readonly usdc: bigint;
-};
 
 const envValue = (env: NodeJS.ProcessEnv, name: string): string => {
   const value = env[name];
@@ -48,34 +47,15 @@ const writeText = async (path: string, text: string): Promise<void> => {
   await writeFile(path, text, { mode: 0o600 });
 };
 
-const snapshotText = (snapshot: Snapshot): string =>
-  `${JSON.stringify({
-    strk: snapshot.strk.toString(),
-    tier: snapshot.tier,
-    usdc: snapshot.usdc.toString(),
-  })}\n`;
+const RAW_AMOUNT = /^(0|[1-9][0-9]{0,77})$/;
 
-const readSnapshot = async (path: string, tier: SpendTier): Promise<Snapshot> => {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
-  } catch {
-    throw new Error("Preflight balance file is unreadable");
+const readBefore = (env: NodeJS.ProcessEnv): BalancePair => {
+  const strk = env["MAINNET_E2E_STRK_BEFORE_RAW"] ?? "";
+  const usdc = env["MAINNET_E2E_USDC_BEFORE_RAW"] ?? "";
+  if (!RAW_AMOUNT.test(strk) || !RAW_AMOUNT.test(usdc)) {
+    throw new Error("Preflight balances are missing or malformed");
   }
-  if (
-    !isRecord(parsed) ||
-    typeof parsed["strk"] !== "string" ||
-    typeof parsed["usdc"] !== "string" ||
-    typeof parsed["tier"] !== "string" ||
-    !/^[0-9]+$/.test(parsed["strk"]) ||
-    !/^[0-9]+$/.test(parsed["usdc"])
-  ) {
-    throw new Error("Preflight balance file is unreadable");
-  }
-  if (parsed["tier"] !== tier) {
-    throw new Error("Preflight balance file does not match this run's spend tier");
-  }
-  return { strk: BigInt(parsed["strk"]), tier, usdc: BigInt(parsed["usdc"]) };
+  return { strk: BigInt(strk), usdc: BigInt(usdc) };
 };
 
 const reportText = (input: {
@@ -96,6 +76,8 @@ const reportText = (input: {
     `usdc_before=${formatSignedAmount(input.before.usdc, ceilings.usdc.decimals)}`,
     `usdc_after=${formatSignedAmount(input.after.usdc, ceilings.usdc.decimals)}`,
     `usdc_delta=${formatSignedAmount(input.judgement.usdcDelta, ceilings.usdc.decimals)}`,
+    `strk_before_raw=${input.before.strk.toString()}`,
+    `usdc_before_raw=${input.before.usdc.toString()}`,
   ];
   return `${lines.join("\n")}\n`;
 };
@@ -109,7 +91,9 @@ const safeError = (error: unknown, rpcUrl: string): string => {
 /**
  * Runs one balance phase against `env`. Returns 0 when the policy accepts the
  * reading and 1 otherwise. `fetchImpl` stubs the RPC in tests; the CLI uses
- * the platform fetch. Writes the report file even when the policy refuses.
+ * the platform fetch. Writes the report file even when the policy refuses, and
+ * writes `verdict=unavailable` alone when the balances cannot be read. A
+ * missing or malformed preflight baseline fails `post` closed.
  */
 export const runBalanceCommand = async (
   phaseArg: string | undefined,
@@ -122,11 +106,10 @@ export const runBalanceCommand = async (
     const phase = phaseOf(phaseArg);
     const tier = parseSpendTier(env["MAINNET_E2E_SPEND_TIER"]);
     const address = starknetAddress(env["MAINNET_E2E_ADDRESS"]);
-    const balancePath = envValue(env, "MAINNET_E2E_BALANCE_FILE");
     if (reportPath === undefined || reportPath.length === 0) {
       throw new Error("MAINNET_E2E_REPORT_FILE is required");
     }
-    const stored = phase === "post" ? await readSnapshot(balancePath, tier) : null;
+    const stored = phase === "post" ? readBefore(env) : null;
     const balances = await readHotWalletBalances({
       address,
       rpcUrl: envValue(env, "MAINNET_E2E_RPC_URL"),
@@ -134,12 +117,6 @@ export const runBalanceCommand = async (
     });
     const before = stored ?? balances;
     const after = balances;
-    if (phase === "preflight") {
-      await writeText(
-        balancePath,
-        snapshotText({ strk: balances.strk, tier, usdc: balances.usdc }),
-      );
-    }
     const judgement = judgeBalances({ after, before, phase, tier });
     await writeText(reportPath, reportText({ address, after, before, judgement, tier }));
     if (judgement.kind !== "ok") {

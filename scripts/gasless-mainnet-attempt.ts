@@ -34,6 +34,7 @@ import { buildErc20TransferCall } from "../packages/platform/starknet/src/rpc/rp
 import { createMemoryStore } from "../packages/platform/store/src/kv";
 import type { LoadedMainnetAccount } from "./gasless-mainnet-account";
 import { receiptReverted, receiptSucceeded, transferredAmount } from "./gasless-mainnet-receipt";
+import type { SendBudget } from "./mainnet-e2e-send-budget";
 
 const RECEIPT_TIMEOUT_MS = 180_000;
 const RECEIPT_POLL_MS = 4_000;
@@ -54,6 +55,8 @@ type GaslessTransport = {
 
 type TokenAttempt = {
   readonly account: LoadedMainnetAccount;
+  /** Charged before the signature that moves funds. `null` on a local run. */
+  readonly budget: SendBudget | null;
   readonly classHash: string;
   readonly family: Family;
   readonly listed: readonly GaslessListedToken[];
@@ -358,6 +361,9 @@ const broadcast = async (
   const symbol = input.token.symbol;
   const strk = await balanceOf(input.provider, STRK_TOKEN_ADDRESS, input.account.address);
   const token = await balanceOf(input.provider, input.token.address, input.account.address);
+  // The reviewed fee is the most the paymaster can take: submit refuses a
+  // signed fee above it. Charge it before signing, not after funds move.
+  input.budget?.charge(offer.tokenAddress, BigInt(offer.amount));
   let submitted: Awaited<ReturnType<typeof submitReviewedGaslessInvoke>>;
   try {
     submitted = await submitReviewedGaslessInvoke({

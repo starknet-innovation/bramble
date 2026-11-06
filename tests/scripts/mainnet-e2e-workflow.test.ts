@@ -46,7 +46,7 @@ describe("mainnet E2E workflow policy", () => {
     const sources = await readWorkflowSources();
     const persisted = mutate(sources, "          persist-credentials: false\n", "");
     expect(mainnetE2eWorkflowFailures(persisted[WORKFLOW] ?? "")).toContain(
-      "self-hosted mainnet execution must not leave the checkout token in .git/config",
+      ".github/workflows/mainnet-e2e.yml must not leave a checkout token in .git/config",
     );
     const ref = mutate(
       sources,
@@ -54,7 +54,7 @@ describe("mainnet E2E workflow policy", () => {
       "          persist-credentials: false\n          ref: release/v0.10.9\n",
     );
     expect(mainnetE2eWorkflowFailures(ref[WORKFLOW] ?? "")).toContain(
-      "self-hosted mainnet execution must not pass configured refs to checkout",
+      ".github/workflows/mainnet-e2e.yml must not pass configured refs to checkout",
     );
   });
 
@@ -66,7 +66,7 @@ describe("mainnet E2E workflow policy", () => {
       `          ${KEY_BINDING}\n          COPIED_KEY: ${EXPRESSION} secrets.MAINNET_E2E_PRIVATE_KEY }}\n`,
     );
     expect(mainnetE2eWorkflowFailures(extra[WORKFLOW] ?? "")).toContain(
-      ".github/workflows/mainnet-e2e.yml must bind the hot-wallet private key in exactly 5 step env values",
+      ".github/workflows/mainnet-e2e.yml must bind the hot-wallet private key in exactly 5 step env values, all in execute",
     );
     const hoisted = mutate(
       sources,
@@ -78,15 +78,15 @@ describe("mainnet E2E workflow policy", () => {
     );
   });
 
-  test("rejects an artifact upload and a reporter that checks out source", async () => {
+  test("rejects an artifact upload outside the build and a reporter that checks out source", async () => {
     const sources = await readWorkflowSources();
     const uploaded = mutate(
       sources,
       "    steps:\n",
       "    steps:\n      - uses: actions/upload-artifact@0000000000000000000000000000000000000000\n",
     );
-    expect(mainnetE2eWorkflowFailures(uploaded[WORKFLOW] ?? "").join("\n")).toContain(
-      "must not upload artifacts",
+    expect(mainnetE2eWorkflowFailures(uploaded[WORKFLOW] ?? "")).toContain(
+      ".github/workflows/mainnet-e2e.yml may upload artifacts only from the keyless build job",
     );
     const report = sources[WORKFLOW]?.indexOf("  report:\n") ?? -1;
     expect(report).toBeGreaterThan(0);
@@ -95,5 +95,71 @@ describe("mainnet E2E workflow policy", () => {
     expect(mainnetE2eWorkflowFailures(withCheckout)).toContain(
       "the hosted mainnet reporter must not check out or execute release-branch source",
     );
+  });
+
+  test("keeps install and build off the runner that holds the key", async () => {
+    const sources = await readWorkflowSources();
+    const install = mutate(
+      sources,
+      "      - name: Check and mask mainnet secrets\n",
+      "      - run: bun install --frozen-lockfile\n      - name: Check and mask mainnet secrets\n",
+    );
+    expect(mainnetE2eWorkflowFailures(install[WORKFLOW] ?? "")).toContain(
+      "mainnet execution must not run bun install; install and build in the keyless build job",
+    );
+    const keyed = mutate(
+      sources,
+      "      - name: Install dependencies\n        run: bun install --frozen-lockfile\n",
+      `      - name: Install dependencies\n        env:\n          RPC: ${EXPRESSION} secrets.MAINNET_E2E_RPC_URL }}\n        run: bun install --frozen-lockfile\n`,
+    );
+    expect(mainnetE2eWorkflowFailures(keyed[WORKFLOW] ?? "")).toContain(
+      "the mainnet build runs release code and must not receive any secret",
+    );
+  });
+
+  test("keeps the spend baseline and balance checks out of reach of the tests", async () => {
+    const sources = await readWorkflowSources();
+    const baseline = mutate(
+      sources,
+      `MAINNET_E2E_STRK_BEFORE_RAW: ${EXPRESSION} needs.preflight.outputs.strk_before_raw }}`,
+      `MAINNET_E2E_STRK_BEFORE_RAW: ${EXPRESSION} needs.execute.outputs.strk_before_raw }}`,
+    );
+    expect(mainnetE2eWorkflowFailures(baseline[WORKFLOW] ?? "")).toContain(
+      "the post-run check must take its baseline from the preflight job output",
+    );
+    const selfHosted = mutate(
+      sources,
+      "      name: mainnet-e2e-balance\n    permissions:\n      contents: read\n    runs-on: ubuntu-latest\n",
+      `      name: mainnet-e2e-balance\n    permissions:\n      contents: read\n    runs-on: codebuild-gha-runner-mc-wallet-${EXPRESSION} github.run_id }}\n`,
+    );
+    expect(mainnetE2eWorkflowFailures(selfHosted[WORKFLOW] ?? "")).toContain(
+      "the preflight balance check must run on a hosted runner, apart from the tests",
+    );
+  });
+
+  test("fails closed on missing secrets, zero tests, and raw test output", async () => {
+    const sources = await readWorkflowSources();
+    const zero = mutate(sources, 'if [ "$expected" -eq 0 ]; then', "if false; then");
+    expect(mainnetE2eWorkflowFailures(zero[WORKFLOW] ?? "")).toContain(
+      "mainnet execution must fail when Playwright executed no test",
+    );
+    const printed = mutate(
+      sources,
+      "          set +e\n          bun run test:mainnet",
+      '          cat "$RUNNER_TEMP/x"\n          set +e\n          bun run test:mainnet',
+    );
+    expect(mainnetE2eWorkflowFailures(printed[WORKFLOW] ?? "")).toContain(
+      "mainnet execution must not print raw test output; report counts only",
+    );
+    const skipped = mutate(
+      sources,
+      `if [ "\${#missing[@]}" -ne 0 ]; then`,
+      `if [ "\${#missing[@]}" -eq 3 ]; then echo "ready=false"; fi\n          if false; then`,
+    );
+    const failures = mainnetE2eWorkflowFailures(skipped[WORKFLOW] ?? "");
+    expect(failures).toContain(
+      ".github/workflows/mainnet-e2e.yml must fail, not skip green, when it is enabled without its secrets",
+    );
+    expect(failures).toContain("mainnet execution must fail when any hot-wallet secret is missing");
   });
 });
