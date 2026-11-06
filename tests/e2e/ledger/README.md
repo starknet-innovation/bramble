@@ -22,8 +22,47 @@ match, starts the digest-pinned Speculos image on loopback ports, and runs
 emulator fails every test. Without Docker or a vendored binary the runner prints
 `NOT RUN (skipped, no test passed)` with the reason and runs nothing; set
 `BRAMBLE_SPECULOS_REQUIRED=1` to make that a failure. The default
-`bun run test:e2e` (and CI) does not match `*.speculos.ts`; it runs only
+`bun run test:e2e` (and `ci.yml`) does not match `*.speculos.ts`; it runs only
 `hid-bridge-reach.e2e.ts`, which needs no emulator.
+
+## In CI
+
+`.github/workflows/ledger-e2e.yml` runs the suite on a GitHub-hosted
+`ubuntu-latest` runner (Docker included) for pull requests and pushes into
+`main` and `release/**` that touch Ledger code, nightly at 04:30 UTC, and on
+manual dispatch. It holds no repository secret and a read-only token, so fork
+pull requests run it as they are. It builds the extension, builds the pinned
+app for `nanosp` and `flex`, runs `BRAMBLE_SPECULOS_REQUIRED=1 bun run
+test:e2e:ledger`, and then requires each model's Playwright JSON report to show
+tests that ran and passed, none skipped (`scripts/ledger-e2e-results.ts`). On
+failure it keeps the Playwright traces (`test-results/ledger-<model>/`) for 7
+days; they show only the wallet driven with the public test phrase.
+`scripts/ledger-e2e-workflow-policy.ts` pins these controls.
+
+While a tested model's hash is `null`, the job fails in its first step and
+says to record the hashes. That red run is intended: it must never report
+green without running the suite.
+
+## Recording the app hashes
+
+Hashes change only when `APP_STARKNET_REVISION` or `LEDGER_APP_BUILDER_IMAGE`
+in `scripts/ledger-app-pins.ts` changes. A new Speculos image does not change
+them. When either changes, the hashes go back to `null` in the same pull
+request, and the procedure runs again:
+
+1. A maintainer with write access dispatches record mode: Actions, Ledger E2E,
+   Run workflow, `record_hashes` ticked, on the branch that carries the pins
+   (`gh workflow run ledger-e2e.yml --ref <branch> -f record_hashes=true`). It
+   builds every model, prints each ELF's SHA-256 to the job summary, and runs
+   no test. The test job is skipped in that run.
+2. That maintainer reproduces the hashes with an independent local build
+   (`bun run vendor:ledger-app` with Docker) and opens a pull request that sets
+   `LEDGER_APP_BINARIES` to them, linking the record run.
+3. A second maintainer reviews it: same commit and builder digest as the
+   record run, and both builds agree byte for byte. A mismatch is not
+   recorded; it is investigated.
+4. Once merged, the workflow's test mode runs the suite against those hashes,
+   and `vendor:ledger-app` fails on any build that does not match.
 
 ## What it covers
 

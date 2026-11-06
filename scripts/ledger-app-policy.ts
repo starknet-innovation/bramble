@@ -59,3 +59,57 @@ export const ledgerAppBinaryFailure = (
   }
   return digest === pinned ? null : `${model} app binary does not match its recorded hash`;
 };
+
+/**
+ * The requested models whose binary hash is still unrecorded (null). The CI
+ * test mode fails on any, before building anything: without a recorded hash
+ * the Speculos runner refuses the binary, so a run could only fail later or,
+ * worse, be mistaken for a pass.
+ */
+export const unrecordedLedgerModels = (
+  binaries: LedgerAppPins["binaries"],
+  models: readonly string[],
+): readonly string[] => models.filter((model) => binaries[model]?.sha256 === null);
+
+/** One built binary as the record mode reports it. `digest` is null when absent. */
+export type LedgerHashRow = {
+  readonly digest: string | null;
+  readonly model: string;
+  readonly recorded: string | null;
+};
+
+const rowStatus = ({ digest, recorded }: LedgerHashRow): string => {
+  if (digest === null) {
+    return "MISSING: not built";
+  }
+  if (recorded === null) {
+    return "unrecorded: review, then record";
+  }
+  return digest === recorded ? "matches the recorded hash" : "DIFFERS from the recorded hash";
+};
+
+/**
+ * The Markdown report record mode writes to the job summary. It states that no
+ * test ran, so the report is never read as a test result. `complete` is false
+ * when any binary is missing or differs from its recorded hash, which fails the
+ * record job.
+ */
+export const ledgerHashReport = (
+  rows: readonly LedgerHashRow[],
+): { readonly complete: boolean; readonly markdown: string } => {
+  const lines = [
+    "## Ledger app binary hashes (record mode: no tests ran)",
+    "",
+    "| Model | SHA-256 | Status |",
+    "| --- | --- | --- |",
+    ...rows.map((row) => `| ${row.model} | \`${row.digest ?? "-"}\` | ${rowStatus(row)} |`),
+    "",
+    "Review these against a second build before recording them in `LEDGER_APP_BINARIES` " +
+      "(`scripts/ledger-app-pins.ts`) in a reviewed pull request. See `tests/e2e/ledger/README.md`.",
+    "",
+  ];
+  const complete = rows.every(
+    (row) => row.digest !== null && (row.recorded === null || row.recorded === row.digest),
+  );
+  return { complete, markdown: lines.join("\n") };
+};

@@ -7,11 +7,19 @@
  */
 import { defineConfig } from "@playwright/test";
 
+const MODEL = process.env["BRAMBLE_SPECULOS_MODEL"] ?? "unset";
+
 export default defineConfig({
   forbidOnly: true,
   fullyParallel: false,
   globalSetup: "./tests/e2e/global-setup.ts",
-  reporter: "list",
+  // One folder per model: the runner starts Playwright once per model, and
+  // each start empties its output folder, so a shared one would lose the
+  // first model's failure traces before CI uploads them.
+  outputDir: `test-results/ledger-${MODEL}`,
+  // The JSON report lets CI prove tests ran and passed, not just that the
+  // process exited 0 (scripts/ledger-e2e-results.ts).
+  reporter: [["list"], ["json", { outputFile: `test-results/ledger-${MODEL}.json` }]],
   retries: 0,
   testDir: "./tests/e2e/ledger",
   testMatch: "**/*.speculos.ts",
