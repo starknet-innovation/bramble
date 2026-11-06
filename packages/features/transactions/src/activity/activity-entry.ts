@@ -14,6 +14,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
+import { type DisplayCurrency, isDisplayCurrency } from "@bramble/wallet-model/preferences";
 
 /**
  * Lifecycle status of a submitted transaction.
@@ -133,6 +134,14 @@ export type ActivityEntry = {
   readonly seenOnChain?: boolean;
   readonly status: ActivityStatus;
   readonly submittedAt: number;
+  /**
+   * What one unit of `token` was worth in the display currency when this
+   * wallet submitted the row (issue 480): a fresh cached price, captured at
+   * `pricedAt`, never a later one. Absent on discovered and older rows, on
+   * private (STRK20) rows, and whenever no fresh price was known. Never
+   * back-filled, so a row only ever shows what was known at submission.
+   */
+  readonly submittedPrice?: SubmittedPrice;
   readonly summary: string;
   readonly token?: string;
   /**
@@ -153,6 +162,13 @@ export type ActivityEntry = {
    * `token`. Absent on rows recorded before it existed, which stay valid.
    */
   readonly tokenAddress?: string;
+};
+
+/** A unit price captured when a row was submitted (see `submittedPrice`). */
+export type SubmittedPrice = {
+  readonly currency: DisplayCurrency;
+  readonly pricedAt: number;
+  readonly unitPrice: number;
 };
 
 /**
@@ -262,6 +278,19 @@ const isRecordedTokenAddress = (value: unknown, token: unknown): boolean =>
     isNonZeroStarkFieldElement(value) &&
     canonicalFelt(value) === value);
 
+const isSubmittedPrice = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOnlyKnownKeys(value, ["currency", "pricedAt", "unitPrice"]) &&
+    isDisplayCurrency(value["currency"]) &&
+    typeof value["pricedAt"] === "number" &&
+    Number.isSafeInteger(value["pricedAt"]) &&
+    value["pricedAt"] >= 0 &&
+    value["pricedAt"] <= MAX_ACTIVITY_TIMESTAMP_MS &&
+    typeof value["unitPrice"] === "number" &&
+    Number.isFinite(value["unitPrice"]) &&
+    value["unitPrice"] > 0);
+
 /**
  * Checks stored activity entries before trusting them. The detail fields are
  * optional, so older entries that predate them still validate.
@@ -285,6 +314,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "seenOnChain",
     "status",
     "submittedAt",
+    "submittedPrice",
     "summary",
     "token",
     "tokenAddress",
@@ -314,6 +344,7 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   (value["feePaid"] === undefined || isTransactionFee(value["feePaid"])) &&
   (value["feePayer"] === undefined || value["feePayer"] === "sponsor") &&
   isUserFee(value["userFee"]) &&
+  isSubmittedPrice(value["submittedPrice"]) &&
   (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
   (value["seenOnChain"] === undefined || typeof value["seenOnChain"] === "boolean") &&
   isNotFoundCount(value["notFoundCount"]) &&

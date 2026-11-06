@@ -6,7 +6,7 @@
  * background enqueue the approval, then drive the decision.
  */
 
-import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { type FeeEstimate, reviewedInvokeTotal } from "@bramble/starknet/fee-bounds";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
 /**
@@ -60,6 +60,7 @@ export const latestApprovalId = async (
 /**
  * Waits until an invoke or declare approval has the fee its card may echo.
  * Throws on failure/no fee so a test cannot accidentally bypass fee review.
+ * An invoke echoes what its card does: the reviewed total, deployment included.
  */
 export const reviewedApprovalFee = async (
   handler: Handler,
@@ -67,14 +68,14 @@ export const reviewedApprovalFee = async (
   id: string,
 ): Promise<FeeEstimate> => {
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    const pending = await waitForPendingApprovals<{
-      readonly declaration?: { readonly fee?: FeeEstimate | null };
-      readonly fee?: FeeEstimate | null;
-      readonly feeEstimatePending?: boolean;
-      readonly id: string;
-    }>(handler, extensionSender);
+    const pending = await waitForPendingApprovals<
+      Parameters<typeof reviewedInvokeTotal>[0] & {
+        readonly declaration?: { readonly fee?: FeeEstimate | null };
+        readonly id: string;
+      }
+    >(handler, extensionSender);
     const approval = pending.find((entry) => entry.id === id);
-    const fee = approval?.fee ?? approval?.declaration?.fee;
+    const fee = approval?.declaration?.fee ?? (approval && reviewedInvokeTotal(approval));
     if (fee && approval?.feeEstimatePending !== true) {
       return fee;
     }

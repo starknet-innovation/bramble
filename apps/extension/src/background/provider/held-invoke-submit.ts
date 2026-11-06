@@ -13,6 +13,7 @@ import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
+import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
@@ -67,7 +68,10 @@ export const submitHeldInvoke = async (input: {
     readonly reviewedFee?: FeeEstimate;
   };
   readonly calls: readonly Call[];
-  readonly ceiling: { readonly reviewedFee?: FeeEstimate };
+  readonly ceiling: {
+    readonly reviewedDeploymentFee?: FeeEstimate;
+    readonly reviewedFee?: FeeEstimate;
+  };
   readonly context: { readonly signHash: StarkHashSigner };
   readonly deps: InvokeExecuteDeps;
   readonly poolProof: ApprovalPayload["proof"];
@@ -95,6 +99,11 @@ export const submitHeldInvoke = async (input: {
   // would be dropped, so a choice on a proof-bearing invoke is refused.
   if (gaslessFee && (input.poolProof !== undefined || input.approval.payload.proof !== undefined)) {
     throw new WalletError("Paying the network fee in another token is unavailable.");
+  }
+  // Only the public lane deploys an account before its calls. A reviewed
+  // deployment on the pool or gasless lane would be dropped, so it is refused.
+  if (input.ceiling.reviewedDeploymentFee && (input.poolProof || gaslessFee)) {
+    throw new WalletError(UNDEPLOYED_BRAAVOS_REFUSAL);
   }
   if (input.poolProof) {
     return input.strk20.submitPrepared({
