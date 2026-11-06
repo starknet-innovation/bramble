@@ -108,8 +108,8 @@ Per the Braavos engineer's forum post: master node straight from the mnemonic
   is not known to the pinned Krusty 0.11.0 (it arrives with 0.12.0) and is not in
   the extension's creation path; treat as specimen. Its constructor is
   `[0, pk, 1]`, like 0.4.0 (Krusty 0.12.0 typings); the class is declared on
-  Sepolia and live there as TA-62. Cairo 0 era: proxy `0x25ec026…` over impls 0.2.1–0.2.4, salt =
-  pubkey, cairo0 constructor shape.
+  Sepolia and live there as TA-62. Cairo 0 era: proxy `0x25ec026…` over impls
+  0.2.1–0.2.4, salt = pubkey, cairo0 constructor shape.
 - Ready smart (email guardian): the **backend chooses both the salt and the
   address** (`addSmartAccountResponse.address/.salt`, guardian in the constructor).
   Doubly unrecomputable from the seed → firmly D4. A scripted simulation (our own
