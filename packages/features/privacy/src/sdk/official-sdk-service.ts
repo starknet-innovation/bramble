@@ -14,12 +14,10 @@ import type { Call, RpcProvider, TypedData } from "starknet";
 import { num, typedData } from "starknet";
 import { submitStrk20PaymasterPlan } from "../paymaster/paymaster";
 import { quoteStrk20RelayPlan } from "../paymaster/relay-quote";
-import type { Strk20FeeReference } from "../policy/fee-policy";
 import {
   memoryStrk20MaturityStore,
   STRK20_PRIOR_WRITE_UNRESOLVED,
   type Strk20MaturityScope,
-  type Strk20MaturityStore,
   type Strk20SubmissionRoute,
 } from "../policy/maturity";
 import { reportStrk20Phase } from "../policy/phases";
@@ -36,15 +34,13 @@ import {
   STRK20_WAIT_BUDGETS,
   type Strk20WaitBudgets,
   type Strk20Waits,
-  type WaitScheduler,
 } from "./official-sdk-budget";
 import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
 import { mapStrk20StageError } from "./official-sdk-errors";
 import { createStrk20MaturityRuntime, type Strk20SubmissionJournal } from "./official-sdk-maturity";
+import type { OfficialServiceOptions } from "./official-sdk-options";
 import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
 import { strk20ReadMethods } from "./official-sdk-reads";
-import type { ServiceRetryPause } from "./official-sdk-retry";
-import type { PrivacySdkRuntime } from "./official-sdk-runtime";
 import { strk20ShadowAccountReads } from "./official-sdk-shadow-accounts";
 import {
   approveCalls,
@@ -58,28 +54,6 @@ import {
  * Re-exported vendored SDK boundary for production wiring and test doubles.
  */
 export type { PrivacySdkRuntime } from "./official-sdk-runtime";
-
-type OfficialServiceOptions = {
-  /**
-   * Independent price used only to bound a converted (non-STRK) relay fee.
-   * Omitting it leaves the converted route refused; the STRK route never
-   * consults it, because the pool's own charge bounds that one on-chain.
-   */
-  readonly feeReference?: Strk20FeeReference;
-  readonly http?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-  readonly maturityStore?: Strk20MaturityStore;
-  readonly nowSeconds?: () => number;
-  readonly pauseForMaturity?: () => Promise<void>;
-  readonly pauseForServiceRetry?: ServiceRetryPause;
-  readonly providerFor?: (nodeUrl: string) => RpcProvider;
-  readonly sdk: PrivacySdkRuntime;
-  readonly submitInvoke?: typeof submitInvokeTransaction;
-  /** Wall-clock ceilings per phase; see ./official-sdk-budget. */
-  readonly waitBudgets?: Partial<Strk20WaitBudgets>;
-  readonly waitForAccepted?: (provider: RpcProvider, transactionHash: string) => Promise<number>;
-  /** Timer seam for the wait budgets; tests inject a manual scheduler. */
-  readonly waitScheduler?: WaitScheduler;
-};
 
 /**
  * Creates the production STRK20 service backed by the pinned official SDK.

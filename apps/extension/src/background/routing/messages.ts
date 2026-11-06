@@ -9,6 +9,7 @@ import { enrichApprovals } from "../approvals/approval-insights";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { handleSidePanelNoticeOps } from "../approvals/side-panel-notice-ops";
 import { handleLedgerOps } from "../ledger/ledger-ops";
+import { MULTISIG_ACTIVE_STATE_MESSAGES } from "../multisig/multisig-active-messages";
 import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
 import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
 import { handleMultisigStrk20Actions } from "../multisig/multisig-strk20-actions";
@@ -89,24 +90,6 @@ const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...(ctx.nostrRelayTransport ? { nostrRelayTransport: ctx.nostrRelayTransport } : {}),
   now: ctx.now,
 });
-
-const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
-  "wallet.addMultisig",
-  "wallet.deployArgentMultisig",
-  "wallet.importArgentMultisigIntent",
-  "wallet.importArgentMultisigSignature",
-  "wallet.prepareArgentMultisigIntent",
-  "wallet.removeArgentMultisigIntent",
-  "wallet.removeMultisig",
-  "wallet.reviewArgentMultisigDeployment",
-  "wallet.signArgentMultisigIntent",
-  "wallet.prepareArgentMultisigStrk20",
-  "wallet.refreshArgentMultisigStrk20",
-  "wallet.shareArgentMultisigStrk20Authorization",
-  "wallet.signArgentMultisigStrk20Authorization",
-  "wallet.submitArgentMultisigIntent",
-  "wallet.submitArgentMultisigStrk20Relay",
-]);
 
 const handleMultisig: RouterHandler = async (ctx, messageType, message) => {
   const handle = async (): Promise<RuntimeResponse | null> => {
