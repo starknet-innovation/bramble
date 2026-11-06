@@ -216,6 +216,22 @@ describe("manage-accounts group management", () => {
     expect(harness.container.querySelector('[data-group-expand="work"]')).toBeNull();
   });
 
+  test("an armed delete disarms on blur, so a later single tap deletes nothing", async () => {
+    const harness = mount([group("folder", "work", "Work")], "account");
+    click(harness.container.querySelector('[data-group-expand="work"]'));
+    await harness.tick();
+    const removeButton = harness.container.querySelector('[data-remove-group="work"]');
+    click(removeButton);
+    await harness.tick();
+    expect(removeButton?.getAttribute("aria-label")).toBe("Tap again to delete");
+    removeButton?.dispatchEvent(new Event("blur"));
+    expect(removeButton?.classList.contains("is-confirming")).toBe(false);
+    expect(removeButton?.getAttribute("aria-label")).not.toBe("Tap again to delete");
+    click(removeButton);
+    await harness.tick();
+    expect(harness.calls.removeGroup).toEqual([]);
+  });
+
   test("My accounts counts unfiled accounts, and clearing that row writes nothing", async () => {
     const harness = mount([group("folder", "work", "Work", [acctA.id])], "account");
 

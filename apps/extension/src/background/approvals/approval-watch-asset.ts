@@ -7,7 +7,7 @@
 
 import { WalletError } from "@bramble/core/errors";
 import { isLikelySpam } from "@bramble/portfolio/token-registry";
-import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { nftsShown, type WalletPreferencesStore } from "@bramble/settings/preferences";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { withTokenId } from "@bramble/wallet-model/preferences";
 import { watchOwnedNft } from "../portfolio/nft-ops";
@@ -92,10 +92,10 @@ export const applyWatchNftApproval = async (
   if (!approval.nft) {
     return reject({ error: "approval not found" });
   }
-  // The panel offers only Close while the preview is off; a stale card
-  // approved after it was turned off is refused the same way.
-  if (!(await deps.preferencesStore.read()).collectiblesPreview) {
-    return reject({ error: "collectibles preview is off" });
+  // The panel offers only Close while NFTs are turned off; a stale card
+  // approved after they were turned off is refused the same way.
+  if (!nftsShown(await deps.preferencesStore.read())) {
+    return reject({ error: "nfts are turned off" });
   }
   const { contract, networkId, tokenId } = approval.nft;
   const watched = await watchOwnedNft(deps, { contract, networkId, tokenId });

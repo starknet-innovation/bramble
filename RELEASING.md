@@ -60,6 +60,10 @@ step relies on.
    (`tools/vendor-dataset/README.md`). Iterate `-rc.2`, … if the
    RC turns up blockers. RC tags are validation only; they do not publish.
 6. **Full validation.** Confirm the RC against the acceptance criteria.
+   The physical test Ledger check stays: import and blind-sign on the real
+   device (TA-32…TA-38). The Speculos suite (`bun run test:e2e:ledger`) answers
+   the dashboard steps with canned replies and fakes WebHID, so it does not
+   replace real firmware.
 7. **Promote to `main`.** Merge `release/vX.Y` → `main` as a **merge commit**
    (not squash — preserve release history), done explicitly by a maintainer.
 8. **Automatic release.** The merge triggers `auto-release.yml`: it derives the

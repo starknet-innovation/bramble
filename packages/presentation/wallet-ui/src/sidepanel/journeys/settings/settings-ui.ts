@@ -264,6 +264,23 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     );
   });
 
+  const nftsToggle = deps.app?.querySelector<HTMLInputElement>("#nfts-on-home");
+  nftsToggle?.addEventListener("change", () => {
+    nftsToggle.disabled = true;
+    // The literal state is written, so turning NFTs off is remembered as off.
+    void deps.wallet.setDisplay({ collectiblesPreview: nftsToggle.checked }).then(
+      async () => {
+        showToast(nftsToggle.checked ? "NFTs on Home" : "NFTs off", "success", nftsToggle);
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        nftsToggle.checked = !nftsToggle.checked;
+        showToast(errorDetails(error, "NFT preference failed"), "error", nftsToggle);
+        nftsToggle.disabled = false;
+      },
+    );
+  });
+
   const diagnosticsToggle = deps.app?.querySelector<HTMLInputElement>("#reliability-diagnostics");
   const analyticsToggle = deps.app?.querySelector<HTMLInputElement>("#product-analytics");
   analyticsToggle?.addEventListener("change", () => {

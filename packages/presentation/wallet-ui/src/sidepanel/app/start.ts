@@ -157,7 +157,7 @@ export const startWalletUi = async (
       deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),
       render,
       setActiveView: (view: WalletView) => {
-        if (isParkedCollectibleView(view, cache.preferences?.collectiblesPreview)) return;
+        if (isParkedCollectibleView(view, cache.preferences)) return;
         if (view !== "home") {
           activeView = view;
           return;
@@ -470,7 +470,7 @@ export const startWalletUi = async (
       .catch(() => undefined);
   };
   const navigate = (view: WalletView): void => {
-    if (isParkedCollectibleView(view, cache.preferences?.collectiblesPreview)) return;
+    if (isParkedCollectibleView(view, cache.preferences)) return;
     if (view !== activeView) viewHistory = pushView(viewHistory, activeView);
     activeView = view;
     if (view !== "multisig-detail") selectedMultisigIntentId = null;
@@ -482,9 +482,7 @@ export const startWalletUi = async (
     const popped = popView(viewHistory);
     viewHistory = popped.history;
     forcedDirection = "back";
-    activeView = isParkedCollectibleView(popped.view, cache.preferences?.collectiblesPreview)
-      ? "home"
-      : popped.view;
+    activeView = isParkedCollectibleView(popped.view, cache.preferences) ? "home" : popped.view;
     if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();

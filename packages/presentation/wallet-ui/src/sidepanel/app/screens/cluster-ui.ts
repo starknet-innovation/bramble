@@ -36,7 +36,7 @@ export type ClusterUiDeps = {
    */
   readonly openWithToken: (view: "send" | "swap", tokenId: string) => void;
   readonly openToken: (tokenId: string) => void;
-  /** Opens a collectible's detail screen (collectibles preview only). */
+  /** Opens a collectible's detail screen (while NFTs are turned on). */
   readonly openNft: (id: string) => void;
   /** Leaves a finished collectible transfer, or opens staking from a token. */
   readonly navigate: (view: "activity" | "home" | "staking") => void;
@@ -72,8 +72,7 @@ const bindTokenDetailActions = (deps: ClusterUiDeps): void => {
 
 /**
  * Binds the swap, connected-sites, tokens, catalog, and allowance screens. The
- * NFT bindings remain in their journey while it is parked, but no live screen
- * installs their handlers.
+ * NFT bindings install on the NFTs screens and the Home NFTs tab.
  */
 export const bindClusterScreens = (deps: ClusterUiDeps): void => {
   const { app, cache, render, wallet } = deps;
@@ -131,8 +130,8 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
     status: () => cache.status,
     wallet,
   });
-  // Gallery markup exists only while the collectibles preview is on, so on
-  // every other paint these bindings find nothing to install.
+  // Gallery markup (the NFTs screens and the Home NFTs tab) exists only while
+  // NFTs are turned on, so on every other paint these find nothing to install.
   bindNfts({ app, navigate: deps.navigate, openDetail: deps.openNft, render, wallet });
   bindShadowAccounts({ app, wallet });
 };

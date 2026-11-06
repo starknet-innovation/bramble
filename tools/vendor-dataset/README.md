@@ -50,8 +50,9 @@ extension.
   the Starknet app and pick it in the device prompt, once for "Ledger account"
   and once for "Ready Ledger account" (`verify-sepolia-ledger.ts`). The wallet
   reads public keys from the device itself, which is why no seed file can stand
-  in for it; nothing is signed. TA-38 (the first-run Ledger screen) stays manual,
-  and automating the device with Ledger's emulator is tracked in #861:
+  in for it; nothing is signed. TA-38 (the first-run Ledger screen) stays manual
+  here; the offline Speculos suite in `tests/e2e/ledger/` (see its README)
+  drives first-run import and blind-sign with the public test phrase (#861):
   `BRAMBLE_SEPOLIA_LEDGER=1 BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts`.
 - The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts`, without
   the Ledger, on the active release branch against the newest committed
