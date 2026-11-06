@@ -1,8 +1,8 @@
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { KeyRound, ShieldAlert } from "lucide-react";
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { createNetworkFor, createNetworkNames } from "../../create/create-runtime";
-import { assertOwnerDeployed, confirmOwnershipChange, readContractOwnership } from "../../create/ownership-runtime";
+import { assertOwnerIsAccount, confirmOwnershipChange, readContractOwnership } from "../../create/ownership-runtime";
 import {
   buildOwnershipCall,
   type ContractOwnership,
@@ -16,6 +16,7 @@ import { TOKEN_PRESETS } from "../../create/token-presets";
 import { userErrorMessage } from "../../protocols/support/user-error";
 import { shortenAddress } from "../../shell/screens";
 import { useWallet } from "../../wallet/connection/WalletProvider";
+import { WALLET_IDENTITY_CHANGED } from "../../wallet/requests/wallet-request";
 import { type CreateOperation, CreateStatus } from "./create-parts";
 
 type TokenOwnershipProps = {
@@ -55,6 +56,11 @@ export default function TokenOwnership({ createdAddress }: TokenOwnershipProps):
   const [confirmingRenounce, setConfirmingRenounce] = useState(false);
   const [operation, setOperation] = useState<CreateOperation | null>(null);
   const network = createNetworkFor(chainId);
+  // The wallet as it is now, for the hand-off check of a request built earlier.
+  const live = useRef({ address, chainId });
+  useEffect(() => {
+    live.current = { address, chainId };
+  }, [address, chainId]);
   const contractText = contractInput || createdAddress || "";
   const identity = `${chainId ?? ""}:${address ?? ""}:${contractText.trim().toLowerCase()}`;
   const ownership = loaded?.identity === identity ? loaded.ownership : null;
@@ -89,7 +95,7 @@ export default function TokenOwnership({ createdAddress }: TokenOwnershipProps):
         kind === "transfer" ? { kind, newOwner: readNewOwner(newOwnerInput, ownership) } : { kind };
       if (request.kind === "transfer") {
         setOperation({ chainId, message: "Checking…", tone: "busy" });
-        await assertOwnerDeployed(chainId, request.newOwner);
+        await assertOwnerIsAccount(chainId, request.newOwner);
       }
       const call = buildOwnershipCall(ownership.contract, request);
       const preset = TOKEN_PRESETS[ownership.standard];
@@ -111,7 +117,14 @@ export default function TokenOwnership({ createdAddress }: TokenOwnershipProps):
         ],
         // The owner can change while the review is open; re-read it before the wallet sees the call.
         handoffCheck: async () => {
+          const sameWallet = (): void => {
+            if (live.current.chainId !== chainId || !sameFelt(live.current.address, address)) {
+              throw new Error(WALLET_IDENTITY_CHANGED);
+            }
+          };
+          sameWallet();
           const fresh = await readContractOwnership(chainId, ownership.contract);
+          sameWallet();
           if (!sameFelt(fresh.owner, address)) throw new Error("Your account no longer owns this contract.");
         },
         reviewMode: "terminal",

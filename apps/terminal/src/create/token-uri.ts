@@ -19,6 +19,8 @@ const MAX_BASE_URI_LENGTH = 200;
 export const MAX_IMAGE_URI_LENGTH = 2048;
 
 const URI_PATTERN = /^(?:https|ipfs):\/\/[\x21-\x7e]+$/;
+// `ipfs://` then a content id (letters and digits), optionally after `ipfs/`.
+const IPFS_PATTERN = /^ipfs:\/\/(?:ipfs\/)?[A-Za-z0-9]+(?:[/?#]|$)/;
 const ID_PLACEHOLDER = "{id}";
 const FILE_NAME_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
 
@@ -36,12 +38,12 @@ const isPublicHost = (hostname: string): boolean => {
 
 /**
  * True for an `https://` URL on a public hostname (no credentials, no IP
- * literal, no localhost or `.local` name) or a non-empty `ipfs://` path, with
+ * literal, no localhost or `.local` name) or an `ipfs://` content id, with
  * no spaces or control characters and at most `maxLength` characters.
  */
 export const isPublicTokenUri = (value: string, maxLength: number): boolean => {
   if (value.length > maxLength || !URI_PATTERN.test(value)) return false;
-  if (value.startsWith("ipfs://")) return value.length > "ipfs://".length;
+  if (value.startsWith("ipfs://")) return IPFS_PATTERN.test(value);
   try {
     const url = new URL(value);
     return url.protocol === "https:" && url.username === "" && url.password === "" && isPublicHost(url.hostname);

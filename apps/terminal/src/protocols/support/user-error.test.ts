@@ -73,6 +73,7 @@ const READER_SENTENCES = new Set([
   "Base URI must be a public https:// or ipfs:// address, with no spaces, up to x characters.",
   "Check the contract first.", // unreachable: guard, the actions show only after a check
   "No account is deployed at the new owner address.",
+  "The new owner address isn't a Starknet account.",
   "No contract is deployed at this address.",
   "Ownership changes work on x only.",
   "The contract doesn't show the expected owner after this transaction.", // a fact: shown as written

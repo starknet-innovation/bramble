@@ -12,6 +12,8 @@ import { type ContractOwnership, standardForClass } from "./token-ownership";
 
 // Starknet JSON-RPC `CONTRACT_NOT_FOUND`.
 const CONTRACT_NOT_FOUND = 20;
+// SNIP-6 account interface id, as SRC5 `supports_interface` takes it.
+const SRC6_INTERFACE_ID = "0x2ceccef7f994940b3962a6c67e0ba4fcd37df7d131417c604f91e03caecc1cd";
 
 const networkOrThrow = (chainId: string | null) => {
   const network = createNetworkFor(chainId);
@@ -19,8 +21,14 @@ const networkOrThrow = (chainId: string | null) => {
   return network;
 };
 
-const isContractNotFound = (error: unknown): boolean =>
-  (error as { readonly baseError?: { readonly code?: unknown } } | null)?.baseError?.code === CONTRACT_NOT_FOUND;
+const rpcErrorCode = (error: unknown): unknown =>
+  (error as { readonly baseError?: { readonly code?: unknown } } | null)?.baseError?.code;
+
+const isContractNotFound = (error: unknown): boolean => rpcErrorCode(error) === CONTRACT_NOT_FOUND;
+
+// A node's answer about the contract (missing entry point, failed call), not
+// a transport fault.
+const isRpcError = (error: unknown): boolean => typeof rpcErrorCode(error) === "number";
 
 const readOwner = (provider: RpcProvider, contract: string): Promise<string> =>
   provider.callContract({ calldata: [], contractAddress: contract, entrypoint: "owner" }).then((result) => {
@@ -56,23 +64,35 @@ export const readContractOwnership = async (
 };
 
 /**
- * Refuses a new owner with nothing deployed at its address. A mistyped
- * address almost never holds an account, so this stops ownership going to an
- * address nobody controls.
+ * Refuses a new owner that is not a deployed Starknet account. Ownership given
+ * to an empty address (a typo, almost always) or to a contract that can't send
+ * transactions, such as another token, can never be used or moved again. An
+ * account answers SRC5 `supports_interface` with true for the SRC6 account
+ * interface; anything else, including a contract without SRC5, is refused.
  */
-export const assertOwnerDeployed = async (
+export const assertOwnerIsAccount = async (
   chainId: string | null,
   address: string,
   deps: CreateRuntimeDeps = {},
 ): Promise<void> => {
   const network = networkOrThrow(chainId);
-  await withRpcFallback(
+  const answer = await withRpcFallback(
     network.rpcUrls,
-    (provider) => provider.getClassHashAt(address),
+    (provider) =>
+      provider.callContract({
+        calldata: [SRC6_INTERFACE_ID],
+        contractAddress: address,
+        entrypoint: "supports_interface",
+      }),
     deps.makeProvider ?? createBoundedProvider,
   ).catch((error: unknown) => {
-    throw isContractNotFound(error) ? new Error("No account is deployed at the new owner address.") : error;
+    if (isContractNotFound(error)) throw new Error("No account is deployed at the new owner address.");
+    if (isRpcError(error)) return [] as string[];
+    throw error;
   });
+  if (answer.length !== 1 || !sameFelt(answer[0], "0x1")) {
+    throw new Error("The new owner address isn't a Starknet account.");
+  }
 };
 
 /**

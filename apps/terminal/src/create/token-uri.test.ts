@@ -16,12 +16,18 @@ describe("isPublicTokenUri", () => {
     expect(isPublicTokenUri("https://example.org/meta/", 200)).toBe(true);
     expect(isPublicTokenUri("https://cdn.example.org./a.png", 200)).toBe(true);
     expect(isPublicTokenUri("ipfs://bafybeigdyrzt/1.png", 200)).toBe(true);
+    expect(isPublicTokenUri("ipfs://ipfs/QmYwAPJzv5CZsnA/{id}.json", 200)).toBe(true);
+    expect(isPublicTokenUri("ipfs://bafybeigdyrzt", 200)).toBe(true);
   });
 
   test("refuses hosts the wallet would never read, credentials, and other schemes", () => {
     for (const uri of [
       "http://example.org/",
       "ipfs://",
+      "ipfs:///",
+      "ipfs://?",
+      "ipfs://{id}",
+      "ipfs://-cid/",
       "https://localhost/meta/",
       "https://shop.localhost/meta/",
       "https://printer.local/meta/",

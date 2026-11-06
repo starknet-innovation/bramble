@@ -17,7 +17,7 @@ const wallet = vi.hoisted(() => ({
 }));
 
 const runtime = vi.hoisted(() => ({
-  assertOwnerDeployed: vi.fn(),
+  assertOwnerIsAccount: vi.fn(),
   confirmOwnershipChange: vi.fn(),
   readContractOwnership: vi.fn(),
 }));
@@ -48,7 +48,7 @@ describe("Ownership", () => {
     });
     wallet.requestTransaction.mockResolvedValue({ transaction_hash: "0xabc" });
     runtime.readContractOwnership.mockResolvedValue(owned(ME));
-    runtime.assertOwnerDeployed.mockResolvedValue(undefined);
+    runtime.assertOwnerIsAccount.mockResolvedValue(undefined);
     runtime.confirmOwnershipChange.mockResolvedValue(undefined);
   });
 
@@ -63,7 +63,7 @@ describe("Ownership", () => {
     fireEvent.change(screen.getByLabelText("New owner"), { target: { value: NEW_OWNER } });
     fireEvent.click(screen.getByRole("button", { name: "Transfer ownership" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Waiting for Starknet"));
-    expect(runtime.assertOwnerDeployed).toHaveBeenCalledWith(SEPOLIA, NEW_OWNER);
+    expect(runtime.assertOwnerIsAccount).toHaveBeenCalledWith(SEPOLIA, NEW_OWNER);
     expect(wallet.requestTransaction).toHaveBeenCalledTimes(1);
     const request = lastRequest();
     expect(request.calls).toEqual([
@@ -107,7 +107,7 @@ describe("Ownership", () => {
     expect(request.title).toBe("Renounce contract ownership");
     expect(request.warning).toBe("This cannot be undone.");
     expect(request.details).toContainEqual({ label: "New owner", value: "None" });
-    expect(runtime.assertOwnerDeployed).not.toHaveBeenCalled();
+    expect(runtime.assertOwnerIsAccount).not.toHaveBeenCalled();
     expect(runtime.confirmOwnershipChange).toHaveBeenCalledWith(SEPOLIA, "0xabc", CONTRACT, "0x0");
     expect(screen.getByText("None — renounced")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Renounce/ })).toBeNull();
@@ -135,7 +135,7 @@ describe("Ownership", () => {
   });
 
   test("an empty new-owner address is refused before the wallet", async () => {
-    runtime.assertOwnerDeployed.mockRejectedValue(new Error("No account is deployed at the new owner address."));
+    runtime.assertOwnerIsAccount.mockRejectedValue(new Error("No account is deployed at the new owner address."));
     render(<TokenOwnership createdAddress={null} />);
     await check();
     fireEvent.change(screen.getByLabelText("New owner"), { target: { value: NEW_OWNER } });
@@ -186,6 +186,37 @@ describe("Ownership", () => {
     );
     expect(screen.getByRole("status").textContent).not.toMatch(/failed to|not sent/i);
     expect(screen.getByRole("link", { name: /View transaction/ })).toBeTruthy();
+  });
+
+  test("the hand-off refuses a request built before the wallet switched", async () => {
+    let settle: () => void = () => undefined;
+    runtime.assertOwnerIsAccount.mockReturnValue(new Promise<void>((resolve) => (settle = resolve)));
+    const view = render(<TokenOwnership createdAddress={null} />);
+    await check();
+    fireEvent.change(screen.getByLabelText("New owner"), { target: { value: NEW_OWNER } });
+    fireEvent.click(screen.getByRole("button", { name: "Transfer ownership" }));
+    // The wallet moves to Mainnet while the new owner is still being checked.
+    wallet.value.chainId = "0x534e5f4d41494e";
+    view.rerender(<TokenOwnership createdAddress={null} />);
+    settle();
+    await waitFor(() => expect(wallet.requestTransaction).toHaveBeenCalled());
+    await expect(lastRequest().handoffCheck()).rejects.toThrow("Wallet account or network changed before approval.");
+    expect(runtime.readContractOwnership).toHaveBeenCalledTimes(1);
+  });
+
+  test("the hand-off refuses a switch during its own owner read", async () => {
+    const view = render(<TokenOwnership createdAddress={null} />);
+    await check();
+    fireEvent.click(screen.getByRole("button", { name: "Renounce ownership" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm renounce" }));
+    await waitFor(() => expect(wallet.requestTransaction).toHaveBeenCalled());
+    const { handoffCheck } = lastRequest();
+    runtime.readContractOwnership.mockImplementation(async () => {
+      wallet.value.address = NEW_OWNER;
+      view.rerender(<TokenOwnership createdAddress={null} />);
+      return owned(ME);
+    });
+    await expect(handoffCheck()).rejects.toThrow("Wallet account or network changed before approval.");
   });
 
   test("a wallet switch drops the owner read for the old account or network", async () => {
