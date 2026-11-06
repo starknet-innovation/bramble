@@ -78,7 +78,10 @@ const ok = await guarded(async () => {
     // A partial tape is still worth keeping; writeTape refuses one carrying a secret.
     if (RECORD) writeTape(RECORD, tape);
   }
-  if (missing.size) console.log(`replay: ${missing.size} request(s) not on the tape`);
+  if (missing.size) {
+    console.log(`replay: ${missing.size} request(s) not on the tape, for example:`);
+    for (const key of [...missing].slice(0, 5)) console.log(`   ${redact(key).slice(0, 200)}`);
+  }
 
   const version = (() => {
     try {

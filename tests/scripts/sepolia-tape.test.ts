@@ -10,6 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { secret } from "../../tools/vendor-dataset/sepolia-redact";
 import {
+  answersFor,
+  looseIndex,
+  looseKey,
   readTape,
   tapeKey,
   withRequestIds,
@@ -32,6 +35,55 @@ describe("sepolia tape", () => {
       tapeKey("POST", URL, `[${call(7)},${call(8)}]`),
     );
     expect(tapeKey("POST", URL, call(1))).not.toBe(tapeKey("POST", `${URL}/v2`, call(1)));
+  });
+
+  test("a JSON-RPC call falls back across endpoints and blocks; nothing else does", () => {
+    const at = (url: string, blockId: unknown) =>
+      tapeKey(
+        "POST",
+        url,
+        JSON.stringify({
+          id: 1,
+          jsonrpc: "2.0",
+          method: "starknet_getClassHashAt",
+          params: { block_id: blockId, contract_address: "0x1" },
+        }),
+      );
+    const loose = looseKey(at(URL, { block_number: 7 }));
+    expect(loose).toBeDefined();
+    expect(looseKey(at("https://other.example/rpc", { block_number: 9 }))).toBe(loose);
+    expect(looseKey(at(URL, { block_hash: "0xab" }))).toBe(loose);
+    expect(looseKey(at(URL, "latest"))).not.toBe(loose);
+    const events = (from: number) =>
+      tapeKey(
+        "POST",
+        URL,
+        JSON.stringify({
+          id: 2,
+          jsonrpc: "2.0",
+          method: "starknet_getEvents",
+          params: { filter: { address: "0x1", from_block: { block_number: from }, keys: [] } },
+        }),
+      );
+    expect(looseKey(events(100))).toBe(looseKey(events(250)));
+    expect(looseKey(tapeKey("GET", URL, null))).toBeUndefined();
+    expect(looseKey(tapeKey("POST", URL, '{"query":"x"}'))).toBeUndefined();
+  });
+
+  test("a replay serves successes first, exact then any endpoint, failures last", () => {
+    const body = call(1);
+    const here = tapeKey("POST", URL, body);
+    const there = tapeKey("POST", "https://other.example/rpc", body);
+    const ok = { status: 200, contentType: "application/json", body: '{"result":"0x1"}' };
+    const limited = { status: 429, contentType: "text/plain", body: "slow down" };
+    const pick = (tape: Record<string, (typeof ok)[]>) =>
+      answersFor(tape, looseIndex(tape), here).answers.map((a) => a.status);
+
+    expect(pick({ [here]: [limited, ok] })).toEqual([200]);
+    expect(pick({ [here]: [limited], [there]: [ok] })).toEqual([200]);
+    expect(pick({ [here]: [limited] })).toEqual([429]);
+    expect(pick({ [there]: [limited] })).toEqual([429]);
+    expect(pick({})).toEqual([]);
   });
 
   test("a non-JSON body keys on its raw text", () => {

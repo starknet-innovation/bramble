@@ -63,10 +63,15 @@ extension.
   a recorded tape as the `sepolia-verification` artifact.
 - `BRAMBLE_SEPOLIA_RECORD=<tape.json>` records every network answer of a live
   run; `BRAMBLE_SEPOLIA_REPLAY=<tape.json>` (without `BRAMBLE_E2E_LIVE_NETWORK`)
-  replays it fully offline, so a check can be rerun in seconds against the same
-  chain state (`sepolia-tape.ts`). A tape holds addresses and node answers only,
-  and is refused if it would carry a registered secret. Download a nightly's
-  tape to replay a failure locally. Replay still types the seeds into the UI,
-  so it runs locally and in the nightly only, never in PR CI.
+  replays it fully offline against the same chain state (`sepolia-tape.ts`):
+  about 90 seconds instead of the live run's 15 minutes, because a replay has
+  no rate limit to pace around. It tolerates the wallet taking a different
+  path than the live run did (another RPC endpoint, another block), and lists
+  any request the tape cannot answer. A tape holds addresses and node answers
+  only, and is refused if it would carry a registered secret. Download a
+  nightly's tape to replay a failure locally:
+  `BRAMBLE_DATASET_NETWORK=sepolia BRAMBLE_SEPOLIA_REPLAY=tape.json bun tools/vendor-dataset/verify-sepolia.ts`.
+  Replay still types the seeds into the UI, so it runs locally only, never in
+  PR CI; the nightly records the tape.
 - Derivation uses `@scure/bip32`/`@scure/bip39` directly, never Krusty, so the
   dataset stays independent of the wallet code it measures.

@@ -18,7 +18,7 @@ import {
   row,
   same,
 } from "./verify-sepolia-score";
-import type { Session } from "./verify-sepolia-ui";
+import { pace, type Session } from "./verify-sepolia-ui";
 
 // Every secret the run may type is registered up front, so no error text can
 // carry one out; the keys derived from them are registered as they are made.
@@ -59,7 +59,7 @@ const phraseGroup = async (
   manual: readonly (RowCard & { readonly index: number })[] = [],
 ): Promise<void> => {
   // A pause between phrases keeps the run under the public node's rate limit.
-  await new Promise((done) => setTimeout(done, 15_000));
+  await pace(15_000);
   let scan: Awaited<ReturnType<Session["scan"]>> | null = null;
   await attempt(rows, async () => {
     scan = await session.scan(phrase);

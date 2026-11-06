@@ -10,8 +10,20 @@
  * `writeTape` still refuses a tape the redactor would change. JSON-RPC ids are
  * dropped from the key and written back on replay, so a replay matches however
  * the wallet numbers its calls. Repeated identical requests are answered in the
- * order recorded, the last answer repeating. A request the tape lacks is
- * aborted as unresolvable, as the blackhole would, and listed in `missing`.
+ * order recorded, the last answer repeating.
+ *
+ * A replay cannot steer the wallet exactly as the live run went, in two ways:
+ * the wallet fails over between RPC endpoints when one rate-limits or refuses,
+ * so a call can reach a different endpoint; and a call pinned to a block
+ * (`block_id`, or an event range's `from_block`/`to_block`, by number or hash)
+ * names whichever block the node last reported, which can come back in a
+ * different order. A JSON-RPC call the tape lacks is
+ * therefore answered from the same call recorded at any endpoint and any block
+ * (`looseKey`); the blocks of one run are minutes apart, so the state read is
+ * the same. Where a request ever succeeded, only its successful answers are
+ * served, since a replay has no rate limit to reproduce. Anything else the
+ * tape lacks is aborted as unresolvable, as the blackhole would, and listed in
+ * `missing`.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import type { BrowserContext, Route } from "@playwright/test";
@@ -71,6 +83,18 @@ export const withRequestIds = (request: string | null, answer: string): string =
   return answer;
 };
 
+const PIN = /"(block_id|from_block|to_block)":\{"block_(?:hash|number)":[^}]*\}/g;
+
+/**
+ * The fallback key for a JSON-RPC POST: the same call at any endpoint and any
+ * block. `undefined` for anything else, which only ever matches exactly.
+ */
+export const looseKey = (key: string): string | undefined => {
+  const body = /^POST \S+ (.*)$/s.exec(key)?.[1];
+  if (!body?.includes('"jsonrpc"')) return undefined;
+  return `POST * ${body.replace(PIN, '"$1":"pinned"')}`;
+};
+
 const keyOfRoute = (route: Route): string => {
   const request = route.request();
   return tapeKey(request.method(), request.url(), request.postData());
@@ -104,6 +128,39 @@ export const recordTape = async (context: BrowserContext): Promise<Tape> => {
   return tape;
 };
 
+const succeeded = (answers: readonly TapeAnswer[] = []): readonly TapeAnswer[] =>
+  answers.filter((answer) => answer.status === 200);
+
+/** Every JSON-RPC answer on `tape`, grouped by {@link looseKey}. */
+export const looseIndex = (tape: Tape): Map<string, TapeAnswer[]> => {
+  const index = new Map<string, TapeAnswer[]>();
+  for (const [key, answers] of Object.entries(tape)) {
+    const loose = looseKey(key);
+    if (loose) index.set(loose, [...(index.get(loose) ?? []), ...answers]);
+  }
+  return index;
+};
+
+/**
+ * The answers a replay serves for request `exact`, and the key its position
+ * is counted under. A replay has no rate limit, so successes come first: the
+ * exact request's, then the same call's at any endpoint and block. Recorded
+ * failures are served only when the call never succeeded. Empty when the tape
+ * has nothing for it.
+ */
+export const answersFor = (
+  tape: Tape,
+  index: ReadonlyMap<string, readonly TapeAnswer[]>,
+  exact: string,
+): { readonly key: string; readonly answers: readonly TapeAnswer[] } => {
+  const loose = looseKey(exact);
+  const anywhere = loose ? index.get(loose) : undefined;
+  if (succeeded(tape[exact]).length) return { key: exact, answers: succeeded(tape[exact]) };
+  if (loose && succeeded(anywhere).length) return { key: loose, answers: succeeded(anywhere) };
+  if (tape[exact]?.length) return { key: exact, answers: tape[exact] };
+  return { key: loose ?? exact, answers: anywhere ?? [] };
+};
+
 /**
  * Answers every request from `tape` and never reaches the network. Returns the
  * keys the tape could not answer, which grows as the run goes on.
@@ -111,11 +168,12 @@ export const recordTape = async (context: BrowserContext): Promise<Tape> => {
 export const replayTape = async (context: BrowserContext, tape: Tape): Promise<Set<string>> => {
   const missing = new Set<string>();
   const served = new Map<string, number>();
+  const index = looseIndex(tape);
   await context.route(NETWORK, async (route) => {
-    const key = keyOfRoute(route);
-    const answers = tape[key];
-    if (!answers?.length) {
-      missing.add(key);
+    const exact = keyOfRoute(route);
+    const { key, answers } = answersFor(tape, index, exact);
+    if (!answers.length) {
+      missing.add(exact);
       await route.abort("namenotresolved");
       return;
     }

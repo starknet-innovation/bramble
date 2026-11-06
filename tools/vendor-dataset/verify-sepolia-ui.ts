@@ -76,12 +76,20 @@ const text = async (locator: Locator): Promise<string> =>
 const TRANSIENT = /rate limit|refused this request|Couldn.t check this account|Try again\.$/;
 const RETRIES = 3;
 const BACKOFF_MS = 20_000;
+// A replay (BRAMBLE_SEPOLIA_REPLAY) answers from a tape at once and has no
+// rate limit, so its pauses are dropped and a repeated answer settles quickly.
+const REPLAY = Boolean(process.env["BRAMBLE_SEPOLIA_REPLAY"]);
+const SETTLE_MS = REPLAY ? 5_000 : STEP_TIMEOUT_MS;
+
+/** Waits `ms` on a live run, to stay under the public node's rate limit; returns at once on a replay. */
+export const pace = (ms: number): Promise<void> =>
+  REPLAY ? Promise.resolve() : new Promise((done) => setTimeout(done, ms));
 
 /**
  * Presses `search` and returns the final answer `locator` shows: past the
  * "Checking…" stage, and changed from `before` (a repeated answer reads the
- * same, so after 15 s the current text is taken). A rate-limit answer is
- * retried after a pause, up to RETRIES times.
+ * same, so after SETTLE_MS the current text is taken: 60 s live, 5 s on a
+ * replay). A rate-limit answer is retried after a pause, up to RETRIES times.
  */
 const answer = async (locator: Locator, search: () => Promise<void>): Promise<string> => {
   let last = "";
@@ -94,13 +102,13 @@ const answer = async (locator: Locator, search: () => Promise<void>): Promise<st
           const now = await text(locator);
           return now !== "" && !now.startsWith("Checking") && now !== before;
         },
-        { timeout: STEP_TIMEOUT_MS },
+        { timeout: SETTLE_MS },
       )
       .toBe(true)
       .catch(() => undefined);
     last = await text(locator);
     if (!TRANSIENT.test(last)) return last;
-    await new Promise((done) => setTimeout(done, BACKOFF_MS));
+    await pace(BACKOFF_MS);
   }
   return last;
 };
@@ -217,7 +225,7 @@ export async function openSession(
         )
         .toBe(true);
       if ((await text(status)).includes("Search complete") || attempt === RETRIES) break;
-      await new Promise((done) => setTimeout(done, BACKOFF_MS));
+      await pace(BACKOFF_MS);
       await page.locator("#recovery-scan-retry").click();
     }
     const outcome = await text(status);
