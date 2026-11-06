@@ -248,7 +248,13 @@ export class SpeculosScreen {
 
   /** Taps (or holds, with `delay` seconds) a touchscreen point. */
   async touch(x: number, y: number, delay = 0.5): Promise<void> {
-    await this.post("/finger", { action: "press-and-release", delay, x, y });
+    // Speculos answers 400 to a fractional coordinate.
+    await this.post("/finger", {
+      action: "press-and-release",
+      delay,
+      x: Math.round(x),
+      y: Math.round(y),
+    });
   }
 
   /** Swipes left from a point, as Ragger's `SWIPE_CENTER_TO_LEFT` does. */

@@ -62,6 +62,28 @@ describe("SpeculosScreen", () => {
     ]);
   });
 
+  test("taps whole pixels, since Speculos refuses a fractional point", async () => {
+    const screen = new SpeculosScreen(endpoints(startApi()));
+    await screen.touch(239.5, 463.6);
+    expect(posts).toEqual([
+      { body: { action: "press-and-release", delay: 0.5, x: 240, y: 464 }, path: "/finger" },
+    ]);
+  });
+
+  test("keeps a transcript of distinct screens and inputs", async () => {
+    screens = [["Starknet"], ["Starknet"], ["Review hash"]];
+    const screen = new SpeculosScreen(endpoints(startApi()));
+    await screen.text();
+    await screen.text();
+    await screen.press("right");
+    await screen.text();
+    expect(screen.transcript()).toEqual([
+      "screen: Starknet@10,0",
+      'input: /button/right {"action":"press-and-release"}',
+      "screen: Review hash@10,0",
+    ]);
+  });
+
   test("waits for screen text and reports the last screen on timeout", async () => {
     screens = [["Starknet"], ["Review", "hash"]];
     const screen = new SpeculosScreen(endpoints(startApi()));

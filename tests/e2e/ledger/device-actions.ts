@@ -143,11 +143,14 @@ export const rejectHashReview = async (
   const layout = TOUCH[model];
   await screen.touch(...layout.centeredFooter);
   await screen.touch(...layout.lowerLeft);
-  // NBGL asks to confirm a rejection; tap the confirming label where it is drawn.
-  const confirm = (await screen.texts()).find((event) => /yes, reject|reject/i.test(event.text));
-  if (confirm) {
-    await screen.touch(confirm.x + (confirm.w ?? 8) / 2, confirm.y + (confirm.h ?? 8) / 2);
+  // NBGL asks "Reject message?"; tap its "Yes, reject" where it is drawn. The
+  // title also says "Reject", so match the confirming label exactly.
+  await screen.waitFor(/yes, reject/i);
+  const confirm = (await screen.texts()).find((event) => /^\s*yes, reject\s*$/i.test(event.text));
+  if (!confirm) {
+    throw new Error("The device's reject confirmation has no Yes, reject label");
   }
+  await screen.touch(confirm.x + (confirm.w ?? 8) / 2, confirm.y + (confirm.h ?? 8) / 2);
 };
 
 /**
