@@ -23,6 +23,7 @@ import {
   readSetGroupIconInput,
   readSetNostrRelayUrlInput,
   readSetRpcOverrideInput,
+  readSetSelectedMultisigInput,
   readSetStrk20NetworkConfigInput,
   readTypeOnlyInput,
 } from "../routing/message-inputs";
@@ -132,6 +133,11 @@ const PREFERENCE_HANDLERS: Readonly<Record<string, PreferenceHandler>> = {
     readSetRpcOverrideInput,
     "invalid rpc override request",
     (store, input) => store.setRpcOverride(input),
+  ),
+  "wallet.setSelectedMultisig": parseThen(
+    readSetSelectedMultisigInput,
+    "invalid multisig selection",
+    (store, input) => store.setSelectedMultisig(input),
   ),
   "wallet.setStrk20NetworkConfig": parseThen(
     readSetStrk20NetworkConfigInput,

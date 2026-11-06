@@ -93,6 +93,8 @@ export type ApprovalQueue = {
     readonly context: ApprovalContext;
     readonly fee: InvokeFeeReview;
     readonly flags: readonly ApprovalRiskFlag[];
+    /** Set when the multisig threshold is above 1 and approval saves an intent. */
+    readonly multisigThreshold?: number;
     readonly origin: string;
     readonly proof?: Strk20Proof;
     readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;

@@ -22,6 +22,7 @@ import { icon } from "../../shared/icons";
 import { type WalletView, walletViewLabel } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { approvalCard } from "./approval-cards";
+import type { ConnectPicker } from "./approval-connect-card";
 
 /**
  * Pending approvals that should take the screen: everything not snoozed this
@@ -44,6 +45,7 @@ export const approvalTakeover = (
   status: WalletStatus,
   pausedView: WalletView,
   preferences: WalletPreferences | null = null,
+  picker?: ConnectPicker,
 ): string => {
   const first = actionable[0];
   if (!first) {
@@ -67,7 +69,7 @@ export const approvalTakeover = (
       <span class="takeover-continuity-mark">${icon("shield")}</span>
       <span><strong>${escapeHtml(pausedTask)} paused</strong></span>
     </section>
-    <ul class="request-list">${approvalCard(first, status, preferences)}</ul>
+    <ul class="request-list">${approvalCard(first, status, preferences, picker)}</ul>
     <section class="approval-live" id="approval-live" role="status" aria-live="polite" hidden>
       <span class="approval-live-mark">${liquidDots("approval", true)}${liquidDotsFilter("approval")}</span>
       <div>

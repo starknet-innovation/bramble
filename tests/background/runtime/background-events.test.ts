@@ -205,6 +205,15 @@ describe("walletEventBroadcasts", () => {
     }
   });
 
+  test("announces removal of a multisig so pages drop that account", () => {
+    expect(walletEventBroadcasts({ type: "wallet.removeMultisig" }, { ok: true })).toEqual([
+      accountsChanged,
+    ]);
+    expect(
+      walletEventBroadcasts({ type: "wallet.removeMultisig" }, { error: "wallet locked" }),
+    ).toEqual([]);
+  });
+
   test("announces lock and unlock so pages drop or regain accounts", () => {
     expect(walletEventBroadcasts({ type: "wallet.lock" }, { hasVault: true })).toEqual([
       accountsChanged,
