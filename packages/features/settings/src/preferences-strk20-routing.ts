@@ -17,7 +17,6 @@
 import { isRecord } from "@bramble/core/json";
 import {
   DEFAULT_STRK20_NETWORKS,
-  STRK20_MAINNET_POOL,
   type Strk20NetworkConfig,
   type Strk20NetworkConfigs,
 } from "@bramble/privacy/config";
@@ -56,6 +55,8 @@ export const dropRetiredStrk20RoutingKeys = (strk20Networks: unknown): unknown =
 };
 
 const RETIRED_STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";
+// The Mainnet pool both pinned snapshots below shipped with.
+const SHIPPED_MAINNET_POOL = "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a";
 
 // The Vercel-era bundled Mainnet snapshot. Requiring every field preserves
 // custom routing and an empty-map opt-out.
@@ -66,32 +67,32 @@ const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined)
   config.ohttpRelayUrl === undefined &&
   config.paymaster?.feeToken === STRK_TOKEN_ADDRESS &&
   config.paymaster.url === `${RETIRED_STRK20_GATEWAY_BASE}/paymaster` &&
-  config.poolAddress === STRK20_MAINNET_POOL &&
+  config.poolAddress === SHIPPED_MAINNET_POOL &&
   config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
   config.shadowAccountAnonymizerAddress === undefined;
 
-// The bundled Mainnet snapshot from before the default anonymizer (#666): the
-// current bundled routing, field for field, with no anonymizer at all. A user
-// who set any anonymizer, or changed any endpoint, is not this snapshot.
-const isPreAnonymizerBundledMainnetRouting = (
-  config: Strk20NetworkConfig | undefined,
-  bundled: Strk20NetworkConfig,
-): boolean =>
+// The bundled Mainnet snapshot from before the default anonymizer (#666),
+// pinned as shipped (v0.10.8): a later change to the bundled gateway, pool or
+// fee token must not stop an install upgrading straight from it. Requiring
+// every field, and no anonymizer at all, keeps a user who changed any of them.
+const PRE_ANONYMIZER_GATEWAY_BASE = "https://wallet.nodes.starknet.org/api/strk20";
+
+const isPreAnonymizerBundledMainnetRouting = (config: Strk20NetworkConfig | undefined): boolean =>
   config !== undefined &&
-  config.discoveryUrl === bundled.discoveryUrl &&
-  config.ohttpEnabled === bundled.ohttpEnabled &&
-  config.ohttpRelayUrl === bundled.ohttpRelayUrl &&
-  config.paymaster?.feeToken === bundled.paymaster?.feeToken &&
-  config.paymaster?.url === bundled.paymaster?.url &&
-  config.poolAddress === bundled.poolAddress &&
-  config.proverUrl === bundled.proverUrl &&
+  config.discoveryUrl === `${PRE_ANONYMIZER_GATEWAY_BASE}/discovery` &&
+  config.ohttpEnabled === false &&
+  config.ohttpRelayUrl === undefined &&
+  config.paymaster?.feeToken === STRK_TOKEN_ADDRESS &&
+  config.paymaster.url === `${PRE_ANONYMIZER_GATEWAY_BASE}/paymaster` &&
+  config.poolAddress === SHIPPED_MAINNET_POOL &&
+  config.proverUrl === `${PRE_ANONYMIZER_GATEWAY_BASE}/prover` &&
   config.shadowAccountAnonymizerAddress === undefined;
 
 /**
  * Brings stored STRK20 routing to the current bundled defaults, or returns the
  * same reference when nothing changes. Only two exact bundled Mainnet
- * snapshots are rebased: the Vercel-era one (to today's defaults) and the one
- * from before the default anonymizer (gains the bundled anonymizer). Custom
+ * snapshots, each pinned as it shipped, are rebased to today's defaults: the
+ * Vercel-era one and the one from before the default anonymizer (#666). Custom
  * routing, a user-set anonymizer, other networks, and an empty-map opt-out are
  * kept as stored. An absent map reads as the bundled defaults.
  *
@@ -109,9 +110,8 @@ export const withCurrentStrk20Defaults = (
   if (isRetiredBundledMainnetRouting(strk20Networks.SN_MAIN)) {
     return { ...strk20Networks, ...DEFAULT_STRK20_NETWORKS };
   }
-  const bundled = DEFAULT_STRK20_NETWORKS.SN_MAIN;
-  if (bundled && isPreAnonymizerBundledMainnetRouting(strk20Networks.SN_MAIN, bundled)) {
-    return { ...strk20Networks, SN_MAIN: bundled };
+  if (isPreAnonymizerBundledMainnetRouting(strk20Networks.SN_MAIN)) {
+    return { ...strk20Networks, ...DEFAULT_STRK20_NETWORKS };
   }
   return strk20Networks;
 };

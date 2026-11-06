@@ -20,7 +20,7 @@ import {
   PREFERENCES_STORE_KEY,
 } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
-import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { canonicalFelt, STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 
 const PINNED_ANONYMIZER = "0x4f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
 const USER_ANONYMIZER = `0x${"7".repeat(63)}`;
@@ -31,11 +31,18 @@ const bundledMainnet = () => {
   return config;
 };
 
-// The bundled Mainnet routing as builds before #666 persisted it.
-const preAnonymizerMainnet = () => {
-  const { shadowAccountAnonymizerAddress: _none, ...routing } = bundledMainnet();
-  return routing;
-};
+// The bundled Mainnet routing as v0.10.8 and earlier persisted it, written out
+// literally so a later change to the bundled defaults cannot move it.
+const preAnonymizerMainnet = () => ({
+  discoveryUrl: "https://wallet.nodes.starknet.org/api/strk20/discovery",
+  ohttpEnabled: false,
+  paymaster: {
+    feeToken: STRK_TOKEN_ADDRESS,
+    url: "https://wallet.nodes.starknet.org/api/strk20/paymaster",
+  },
+  poolAddress: "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a",
+  proverUrl: "https://wallet.nodes.starknet.org/api/strk20/prover",
+});
 
 const storedWith = async (strk20Networks: unknown) => {
   const store = createMemoryStore();
