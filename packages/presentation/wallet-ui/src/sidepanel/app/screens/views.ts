@@ -21,6 +21,7 @@ import {
   type AllowanceListing,
   type DiscoveredNft,
   EMPTY_ALLOWANCE_LISTING,
+  type NftCoverage,
   type PendingApproval,
   type SignabilityVerdict,
   type TokenBalance,
@@ -87,6 +88,7 @@ type JourneyContext = {
   readonly chart: readonly number[];
   readonly currency: DisplayCurrency;
   readonly discoveredNfts: readonly DiscoveredNft[];
+  readonly nftCoverage: NftCoverage;
   readonly multisigClassDeclared: boolean | "error" | null;
   readonly multisigPortfolio: MultisigPortfolioData;
   readonly multisigIntents: readonly ArgentMultisigSigningIntent[];
@@ -186,6 +188,7 @@ const collectibleJourneyScreen = (
       context.account,
       context.preferences,
       context.discoveredNfts,
+      context.nftCoverage,
     );
   }
   if (activeView === "nft-watch") {
@@ -312,6 +315,7 @@ export const dashboard = (
   signability: SignabilityVerdict | null = null,
   relays: readonly RelaySignature[] = [],
   privateTotalWaitOver = false,
+  nftCoverage: NftCoverage = "none",
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -328,6 +332,7 @@ export const dashboard = (
     currency,
     fundedForFees,
     discoveredNfts,
+    nftCoverage,
     multisigClassDeclared,
     multisigPortfolio: {
       balances: selectedPortfolioBalances,

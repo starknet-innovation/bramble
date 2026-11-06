@@ -2,7 +2,7 @@
  * The collectibles preview switch and, while it is on, the NFT indexer field
  * on the advanced-endpoints screen. The gallery has been parked since v0.10.1;
  * the preview reopens it for people who opt in, and the indexer stays empty
- * until they choose one.
+ * until they choose one: their own, or Starkscan through the SNF gateway.
  */
 
 import { escapeHtml } from "@bramble/core/html";
@@ -13,18 +13,25 @@ import { checkboxField, textField } from "@bramble/ui-kit/fields";
 
 type Disclosure = (id: string, title: string, state: string, body: string) => string;
 
-// Offered only when a Bramble-run indexer exists and none is configured: one
-// click stores it as the indexer, after the line saying what it learns.
+// Offered only when the SNF gateway route to Starkscan exists and no indexer
+// is configured: one click stores it, after the line saying what it covers
+// and who learns the account's address (accepted by the owner, 2026-11-06).
 const defaultIndexerOffer = (configured: string, defaultIndexer: string | null): string =>
   defaultIndexer && !configured
-    ? `<p class="hint">The Bramble indexer at ${escapeHtml(new URL(defaultIndexer).host)} sees this account's address when it lists its NFTs.</p>
+    ? `<p class="hint">Finds ERC-721 NFTs on Mainnet. Starkscan and ${escapeHtml(new URL(defaultIndexer).host)} see this account's address. Watch ERC-1155 NFTs by contract.</p>
       ${button({
         attributes: { "data-indexer-default": defaultIndexer },
         icon: "check",
-        label: "Use the Bramble indexer",
+        label: "Use Starkscan",
         variant: "secondary",
       })}`
     : "";
+
+// The disclosure's state names Starkscan when the saved indexer is its route.
+const indexerState = (configured: string, defaultIndexer: string | null): string => {
+  if (!configured) return "Off";
+  return defaultIndexer !== null && configured === defaultIndexer ? "Starkscan" : "Configured";
+};
 
 /**
  * Renders the preview switch, then the indexer form when the preview is on.
@@ -53,7 +60,7 @@ export const collectiblesSettings = (
     ${disclosure(
       "nft-indexer",
       "NFT indexer",
-      configured ? "Configured" : "Off",
+      indexerState(configured, defaultIndexer),
       `<form id="nft-indexer-form">
         ${textField({
           autocomplete: "off",

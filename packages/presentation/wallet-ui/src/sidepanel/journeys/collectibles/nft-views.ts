@@ -19,7 +19,7 @@ import { button, iconButton } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { sameFelt } from "@bramble/wallet-model/networks";
-import type { DiscoveredNft, WalletStatus } from "../../../popup/responses/responses";
+import type { DiscoveredNft, NftCoverage, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
   accountLabel,
@@ -29,6 +29,7 @@ import {
   noAccountEmpty,
   walletMenuRow,
 } from "../../shared/parts";
+import { nftCoverageNote } from "./nft-coverage";
 
 /**
  * One display-safe collectible normalized from discovery metadata or a saved
@@ -248,7 +249,9 @@ export const nftGalleryFlow = (
   account: AccountRef | null,
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[] = [],
+  coverage: NftCoverage = "none",
 ): string => {
+  const note = nftCoverageNote(coverage);
   const watched = preferences?.nfts ?? [];
   const visible = visibleNftItems(
     watched,
@@ -271,9 +274,11 @@ export const nftGalleryFlow = (
         ${
           visible.length === 0
             ? emptyState(
-                "No collectibles found for this account yet. Watch one you own to see it here.",
+                note ??
+                  "No collectibles found for this account yet. Watch one you own to see it here.",
+                note ? "status" : undefined,
               )
-            : `<ul class="nft-grid">${visible.map((nft, index) => nftGalleryCard(nft, index < 4)).join("")}</ul>`
+            : `${note ? `<p class="hint" role="status">${escapeHtml(note)}</p>` : ""}<ul class="nft-grid">${visible.map((nft, index) => nftGalleryCard(nft, index < 4)).join("")}</ul>`
         }
       </section>`,
     )

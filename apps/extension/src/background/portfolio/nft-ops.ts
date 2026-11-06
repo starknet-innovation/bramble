@@ -25,6 +25,7 @@ import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
+import { enrichWatchedNfts, mergeNftCandidates, watchedCandidates } from "./nft-candidates";
 import {
   type NftTarget,
   readAddNftInput,
@@ -71,12 +72,14 @@ const ownedNftStandard = async (
 
 // Re-proves ownership of one discovery candidate on-chain, returning the NFT
 // when the active account still owns it and null when it does not or the read
-// faults — the indexer's ownership claim is never trusted on its own.
+// faults — the indexer's ownership claim is never trusted on its own. A fault
+// is reported through `onFault`, so discovery can say its list may be short.
 const verifyOwnedNft = async (
   deps: WalletOpsDeps,
   nft: DiscoveredNft,
   accountAddress: string,
   rpcUrls: readonly string[],
+  onFault: () => void,
 ): Promise<DiscoveredNft | null> => {
   try {
     const standard = await ownedNftStandard(
@@ -91,6 +94,7 @@ const verifyOwnedNft = async (
     );
     return standard === null ? null : nft;
   } catch {
+    onFault();
     return null;
   }
 };
@@ -104,100 +108,17 @@ const filterOwnedNfts = async (
   candidates: readonly DiscoveredNft[],
   accountAddress: string,
   rpcUrls: readonly string[],
+  onFault: () => void = () => undefined,
 ): Promise<DiscoveredNft[]> => {
   const owned: DiscoveredNft[] = [];
   for (let start = 0; start < candidates.length; start += OWNER_CHECK_CONCURRENCY) {
     const batch = candidates.slice(start, start + OWNER_CHECK_CONCURRENCY);
     const verified = await Promise.all(
-      batch.map((nft) => verifyOwnedNft(deps, nft, accountAddress, rpcUrls)),
+      batch.map((nft) => verifyOwnedNft(deps, nft, accountAddress, rpcUrls, onFault)),
     );
     owned.push(...verified.filter((nft): nft is DiscoveredNft => nft !== null));
   }
   return owned;
-};
-
-const watchedCandidates = (
-  preferences: Awaited<ReturnType<WalletOpsDeps["preferencesStore"]["read"]>>,
-  networkId: string,
-  ownerAddress: string,
-): readonly DiscoveredNft[] =>
-  (preferences.nfts ?? [])
-    .filter(
-      (nft) =>
-        nft.networkId === networkId &&
-        nft.spam !== true &&
-        (nft.owner === undefined || sameFelt(nft.owner, ownerAddress)),
-    )
-    .map((nft) => ({
-      collection: "",
-      contract: nft.contract,
-      id: nft.id,
-      image: "",
-      name: nft.label ?? "",
-      networkId: nft.networkId,
-      tokenId: nft.tokenId,
-    }));
-
-const mergeNftCandidates = (
-  indexed: readonly DiscoveredNft[],
-  watched: readonly DiscoveredNft[],
-): readonly DiscoveredNft[] => {
-  const merged = new Map(indexed.map((nft) => [nft.id, nft]));
-  for (const nft of watched) {
-    if (!merged.has(nft.id)) {
-      merged.set(nft.id, nft);
-    }
-  }
-  return [...merged.values()];
-};
-
-const enrichWatchedNft = async (
-  deps: WalletOpsDeps,
-  nft: DiscoveredNft,
-  watchedIds: ReadonlySet<string>,
-  rpcUrls: readonly string[],
-): Promise<DiscoveredNft> => {
-  if (!watchedIds.has(nft.id) || !deps.runtimeRpc.getNftMetadata) {
-    return nft;
-  }
-  try {
-    const metadata = await deps.runtimeRpc.getNftMetadata({
-      contractAddress: nft.contract,
-      rpcUrls,
-      tokenId: nft.tokenId,
-    });
-    return metadata === null
-      ? nft
-      : {
-          ...nft,
-          ...(metadata.animationUrl ? { animationUrl: metadata.animationUrl } : {}),
-          attributes: metadata.attributes,
-          collection: metadata.collection || nft.collection,
-          description: metadata.description,
-          externalUrl: metadata.externalUrl,
-          image: metadata.image || nft.image,
-          name: metadata.name || nft.name,
-        };
-  } catch {
-    return nft;
-  }
-};
-
-const enrichWatchedNfts = async (
-  deps: WalletOpsDeps,
-  owned: readonly DiscoveredNft[],
-  watchedIds: ReadonlySet<string>,
-  rpcUrls: readonly string[],
-): Promise<DiscoveredNft[]> => {
-  const enriched: DiscoveredNft[] = [];
-  for (let start = 0; start < owned.length; start += OWNER_CHECK_CONCURRENCY) {
-    const batch = owned.slice(start, start + OWNER_CHECK_CONCURRENCY);
-    const resolved = await Promise.all(
-      batch.map((nft) => enrichWatchedNft(deps, nft, watchedIds, rpcUrls)),
-    );
-    enriched.push(...resolved);
-  }
-  return enriched;
 };
 
 const loadWatchedNfts = async (
@@ -413,7 +334,7 @@ const handleDiscoverNfts = async (
       const preferences = await deps.preferencesStore.read();
       const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
       const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
-      const candidates = await indexer.listOwnedNfts({
+      const discovery = await indexer.listOwnedNfts({
         address: owner,
         // The gallery preview is the only surface that asks for discovery, so
         // with it off a saved indexer stays unused and no address leaves.
@@ -423,16 +344,28 @@ const handleDiscoverNfts = async (
       const watched = watchedCandidates(preferences, context.networkId, owner);
       const watchedIds = new Set(watched.map((nft) => nft.id));
       const candidatesToVerify = input.includeWatched
-        ? mergeNftCandidates(candidates, watched)
-        : candidates.filter((nft) => !watchedIds.has(nft.id));
+        ? mergeNftCandidates(discovery.nfts, watched)
+        : discovery.nfts.filter((nft) => !watchedIds.has(nft.id));
       // Indexer ownership remains untrusted: every fresh snapshot re-proves it.
-      const owned = await filterOwnedNfts(deps, candidatesToVerify, owner, rpcUrls);
+      // A failed read neither shows nor rules out a candidate, so a list that
+      // claimed to be whole becomes incomplete rather than silently shorter.
+      let readFailed = false;
+      const owned = await filterOwnedNfts(deps, candidatesToVerify, owner, rpcUrls, () => {
+        readFailed = true;
+      });
       // Unsolicited airdrops still never trigger attacker-controlled metadata.
-      return input.includeWatched ? enrichWatchedNfts(deps, owned, watchedIds, rpcUrls) : owned;
+      return {
+        coverage:
+          readFailed && discovery.coverage === "complete" ? "incomplete" : discovery.coverage,
+        nfts: input.includeWatched
+          ? await enrichWatchedNfts(deps, owned, watchedIds, rpcUrls)
+          : owned,
+      };
     },
     input.cached,
   );
-  return { nfts: hydrated, ok: true };
+  // Coverage says whether an empty or short list is the whole answer.
+  return { coverage: hydrated.coverage ?? "none", nfts: hydrated.nfts, ok: true };
 };
 
 const handleLoadWatchedNfts = async (
@@ -448,24 +381,24 @@ const handleLoadWatchedNfts = async (
   if (context.error !== undefined) {
     return { error: context.error };
   }
-  return {
-    nfts: await cachedNfts(
-      deps,
-      { accountId: context.account.id, lane: "watched", networkId: context.networkId },
-      async () => {
-        const preferences = await deps.preferencesStore.read();
-        return loadWatchedNfts(
+  const watched = await cachedNfts(
+    deps,
+    { accountId: context.account.id, lane: "watched", networkId: context.networkId },
+    async () => {
+      const preferences = await deps.preferencesStore.read();
+      return {
+        nfts: await loadWatchedNfts(
           deps,
           preferences,
           context.networkId,
           context.account.address,
           networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
-        );
-      },
-      input.cached,
-    ),
-    ok: true,
-  };
+        ),
+      };
+    },
+    input.cached,
+  );
+  return { nfts: watched.nfts, ok: true };
 };
 
 /**

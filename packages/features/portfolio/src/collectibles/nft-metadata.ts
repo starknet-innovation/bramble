@@ -67,6 +67,19 @@ export type DiscoveredNft = {
 };
 
 /**
+ * What one discovery run can say about the candidates it returns:
+ * - "none": no indexer ran (none configured, the preview is off, or the
+ *   Starkscan route on a network it does not serve); only watched NFTs show.
+ * - "complete": the indexer answered and claims its list is whole.
+ * - "incomplete": the list may be missing NFTs: Starkscan reports a partial
+ *   index or more positions than one page, an indexer listed more than the
+ *   wallet's discovery cap or records it could not read, or an on-chain
+ *   ownership read failed so a candidate could be neither shown nor ruled out.
+ * - "unavailable": the indexer failed or answered something malformed.
+ */
+export type NftCoverage = "complete" | "incomplete" | "none" | "unavailable";
+
+/**
  * One normalized NFT trait safe to render in the detail receipt.
  */
 export type NftAttribute = {

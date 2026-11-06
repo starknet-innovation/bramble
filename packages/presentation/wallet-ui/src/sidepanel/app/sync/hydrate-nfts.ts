@@ -62,7 +62,8 @@ export const hydrateNfts = (
   fill(
     () => wallet.discoverNfts(false, scope),
     (value) => {
-      cache.indexedNfts = value;
+      cache.indexedNfts = value.nfts;
+      cache.nftCoverage = value.coverage;
       cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
     },
   );

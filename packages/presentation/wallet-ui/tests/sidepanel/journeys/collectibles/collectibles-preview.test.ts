@@ -63,18 +63,28 @@ describe("collectibles preview entry point", () => {
     expect(on).toContain('id="collectibles-preview"');
   });
 
-  test("the Bramble indexer is offered only when one exists and none is set", () => {
+  test("Starkscan is offered only when its route exists and no indexer is set", () => {
     const preview = prefs({ collectiblesPreview: true });
     expect(collectiblesSettings(preview, disclosure, null)).not.toContain("data-indexer-default");
     const offered = collectiblesSettings(preview, disclosure, "https://nft.bramble.example/v1");
     expect(offered).toContain('data-indexer-default="https://nft.bramble.example/v1"');
-    expect(offered).toContain("nft.bramble.example sees this account's address");
+    expect(offered).toContain(
+      "Finds ERC-721 NFTs on Mainnet. Starkscan and nft.bramble.example see this account's address. Watch ERC-1155 NFTs by contract.",
+    );
+    expect(offered).toContain("Use Starkscan");
     const configured = collectiblesSettings(
       prefs({ collectiblesPreview: true, nftIndexerUrl: "https://mine.example" }),
       disclosure,
       "https://nft.bramble.example/v1",
     );
     expect(configured).not.toContain("data-indexer-default");
+    expect(configured).toContain("NFT indexer Configured");
+    const chosen = collectiblesSettings(
+      prefs({ collectiblesPreview: true, nftIndexerUrl: "https://nft.bramble.example/v1" }),
+      disclosure,
+      "https://nft.bramble.example/v1",
+    );
+    expect(chosen).toContain("NFT indexer Starkscan");
     expect(collectiblesSettings(prefs(), disclosure, "https://x.example")).not.toContain(
       "data-indexer-default",
     );
@@ -94,7 +104,7 @@ describe("collectibles preview hydration", () => {
     const wallet = {
       discoverNfts: async (includeWatched: boolean, scope: string) => {
         calls.push(`discover:${includeWatched}:${scope}`);
-        return [nft("1", "indexed"), nft("2", "indexed")];
+        return { coverage: "incomplete", nfts: [nft("1", "indexed"), nft("2", "indexed")] };
       },
       loadWatchedNfts: async (scope: string) => {
         calls.push(`watched:${scope}`);
@@ -142,6 +152,7 @@ describe("collectibles preview hydration", () => {
       "1:indexed",
       "2:watched",
     ]);
+    expect(cache.nftCoverage).toBe("incomplete");
     expect(nftSnapshot([], [])).toEqual([]);
   });
 });

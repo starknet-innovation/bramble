@@ -480,7 +480,8 @@ review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-
 exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
 Parked unless the opt-in `collectiblesPreview` preference is on (gallery, indexer field, gated site watch cards; see PR #840);
-otherwise no NFT data loads and no indexer URL is used. `DEFAULT_NFT_INDEXER_URL` is unset.
+otherwise no NFT data loads and no indexer URL is used. The default indexer is Starkscan (Mainnet ERC-721 only) behind an SNF gateway route holding the key; `STARKSCAN_NFT_ROUTE` is null until it exists, so `DEFAULT_NFT_INDEXER_URL` is unset.
+A partial or failed index is reported as such, never as "no NFTs"; ERC-1155 stays watch-only.
 Ownership proofs stay untrusted-first whenever discovery runs: concurrent refreshes for the same account
 share the in-flight request, account switches remain isolated, and the first visible watched
 images are fetched eagerly so the gallery is warm when opened.

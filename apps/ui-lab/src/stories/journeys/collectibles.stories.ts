@@ -18,6 +18,12 @@ export default meta;
 
 export const MetadataLoading = checkpointStory("Metadata loading", "nft", "metadata-loading");
 export const Gallery = checkpointStory("Gallery", "nft", "gallery");
+export const GalleryIncomplete = checkpointStory("Index incomplete", "nft", "gallery-incomplete");
+export const GalleryUnavailable = checkpointStory(
+  "Index unavailable",
+  "nft",
+  "gallery-unavailable",
+);
 export const Detail = checkpointStory("NFT detail", "nft", "detail");
 export const Watch = checkpointStory("Watch by contract", "nft", "watch");
 export const Hidden = checkpointStory("Hidden collectibles", "nft", "hidden");

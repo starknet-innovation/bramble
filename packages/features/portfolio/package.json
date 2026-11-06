@@ -10,6 +10,7 @@
     "./nft-metadata": "./src/collectibles/nft-metadata.ts",
     "./nft-token-metadata": "./src/collectibles/nft-token-metadata.ts",
     "./prices": "./src/tokens/prices.ts",
+    "./starkscan-nft-positions": "./src/collectibles/starkscan-nft-positions.ts",
     "./token-logos": "./src/tokens/token-logos.ts",
     "./token-registry": "./src/tokens/token-registry.ts",
     "./watched-nft": "./src/collectibles/watched-nft.ts"
