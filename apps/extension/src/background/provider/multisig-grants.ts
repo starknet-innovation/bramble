@@ -42,6 +42,16 @@ export type MultisigOriginGrantStore = {
     readonly origin: string;
   }) => Promise<void>;
   readonly idsFor: (origin: string, credential: string) => Promise<readonly string[]>;
+  /**
+   * Drops a removed multisig from every site, so re-adding it later does not
+   * reconnect anything. Throws, changing nothing, when the ledger can't be read.
+   */
+  readonly removeAccount: (input: {
+    readonly credential: string;
+    readonly isAuthorized: () => boolean;
+    readonly multisigId: string;
+  }) => Promise<void>;
+  /** Throws, changing nothing, when the ledger can't be read. */
   readonly revoke: (origin: string, credential: string) => Promise<void>;
   readonly sites: (credential: string) => Promise<readonly ConnectedSite[]>;
 };
@@ -83,6 +93,23 @@ const withGrantedId = (
   return { grants: [...rest, { multisigIds, origin }], schemaVersion: 1 };
 };
 
+/** What a grant or revoke reports when the ledger can't be read. */
+export const GRANTS_UNREADABLE = "Couldn't read your connected sites. Try again.";
+
+const withoutId = (current: GrantDocument, multisigId: string): GrantDocument => ({
+  grants: current.grants
+    .map((grant) => ({
+      ...grant,
+      multisigIds: grant.multisigIds.filter((id) => id !== multisigId),
+    }))
+    .filter((grant) => grant.multisigIds.length > 0),
+  schemaVersion: 1,
+});
+
+// withoutId only removes, so an unchanged count means nothing to write.
+const idCount = (document: GrantDocument): number =>
+  document.grants.reduce((total, grant) => total + grant.multisigIds.length, 0);
+
 const byOrigin = (left: ConnectedSite, right: ConnectedSite): number =>
   left.origin < right.origin ? -1 : left.origin > right.origin ? 1 : 0;
 
@@ -117,6 +144,9 @@ export const memoryMultisigGrantStore = (): MultisigOriginGrantStore => {
     async idsFor(origin) {
       return read().grants.find((grant) => grant.origin === origin)?.multisigIds ?? [];
     },
+    async removeAccount(input) {
+      write(withoutId(read(), input.multisigId), input.isAuthorized);
+    },
     async revoke(origin) {
       ledger = {
         grants: ledger.grants.filter((grant) => grant.origin !== origin),
@@ -131,17 +161,23 @@ export const memoryMultisigGrantStore = (): MultisigOriginGrantStore => {
   };
 };
 
-const readEncrypted = async (store: EncryptedStore, credential: string): Promise<GrantDocument> => {
+// No blob, or one that doesn't parse, grants nothing. A read or decrypt
+// failure throws: a write built from it could claim a revoke it never stored,
+// or drop every other site's grant.
+const readForWrite = async (store: EncryptedStore, credential: string): Promise<GrantDocument> => {
+  let value: unknown;
   try {
-    const value = await store.read(credential);
-    if (value === undefined) return emptyDocument();
-    return parseDocument(value) ?? emptyDocument();
+    value = await store.read(credential);
   } catch {
-    // An unreadable blob (a previous vault's ciphertext, a torn write) grants
-    // nothing. The next successful grant replaces it.
-    return emptyDocument();
+    throw new WalletError(GRANTS_UNREADABLE);
   }
+  if (value === undefined) return emptyDocument();
+  return parseDocument(value) ?? emptyDocument();
 };
+
+// Read-only callers fail closed: an unreadable ledger grants nothing.
+const readEncrypted = (store: EncryptedStore, credential: string): Promise<GrantDocument> =>
+  readForWrite(store, credential).catch(() => emptyDocument());
 
 /**
  * Encrypts the ledger with the vault unlock secret. `clearKeys` drops the
@@ -165,7 +201,7 @@ export const encryptedMultisigGrantStore = (store: EncryptedStore): MultisigOrig
         if (!isWalletOrigin(input.origin) || !isAccountId(input.multisigId)) {
           throw new WalletError("Invalid multisig grant");
         }
-        const current = await readEncrypted(store, input.credential);
+        const current = await readForWrite(store, input.credential);
         requireAuthorized(input.isAuthorized);
         const next = withGrantedId(current, input.origin, input.multisigId);
         // Re-checked after encryption, right before the commit starts. A lock during
@@ -182,9 +218,20 @@ export const encryptedMultisigGrantStore = (store: EncryptedStore): MultisigOrig
       const ledger = await readEncrypted(store, credential);
       return ledger.grants.find((grant) => grant.origin === origin)?.multisigIds ?? [];
     },
+    removeAccount: (input) =>
+      serialize(async () => {
+        requireAuthorized(input.isAuthorized);
+        const current = await readForWrite(store, input.credential);
+        requireAuthorized(input.isAuthorized);
+        const next = withoutId(current, input.multisigId);
+        if (idCount(next) === idCount(current)) return;
+        await store.write(next, input.credential, () => {
+          requireAuthorized(input.isAuthorized);
+        });
+      }),
     revoke: (origin, credential) =>
       serialize(async () => {
-        const current = await readEncrypted(store, credential);
+        const current = await readForWrite(store, credential);
         const grants = current.grants.filter((grant) => grant.origin !== origin);
         if (grants.length === current.grants.length) return;
         await store.write({ grants, schemaVersion: 1 }, credential);

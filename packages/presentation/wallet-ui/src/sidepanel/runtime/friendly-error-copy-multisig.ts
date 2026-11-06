@@ -236,6 +236,10 @@ export const MULTISIG_ERROR_COPY: readonly (readonly [string, string])[] = [
     "The network fee was not reviewed. Nothing was submitted — review the transaction again.",
   ],
   ["invalid multisig grant", "Couldn't connect this multisig."],
+  [
+    "couldn't read your connected sites. try again.",
+    "Couldn't read your connected sites. Try again.",
+  ],
   ["argent multisig threshold is above 1", "This multisig needs more than one signer."],
   [
     "this multisig changed since this request was reviewed.",

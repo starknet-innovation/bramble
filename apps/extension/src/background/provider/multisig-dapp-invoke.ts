@@ -17,6 +17,7 @@ import { exceedsReviewedFee, type FeeEstimate } from "@bramble/starknet/fee-boun
 import { preparedArgentMultisigFee } from "@bramble/starknet/multisig-invoke";
 import { REVIEWED_FEE_EXCEEDED, REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
 import { activityOrigin } from "@bramble/transactions/activity";
+import { standingAllowanceTotals } from "@bramble/transactions/allowances";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
@@ -101,7 +102,14 @@ const queueMultisigDappInvoke = async (
     await vaultAccountAddresses(deps.wallet, input.credential),
   );
   const trusted = verificationContext(record, preferences);
-  const report = verifyCalls(input.calls, trusted);
+  // Judged against the allowances this multisig already granted, as the
+  // single-signer queue does, so split increases still flag a cumulative cap.
+  const standing = standingAllowanceTotals(
+    await deps.allowanceStore.list().catch(() => []),
+    allowanceOwner(record),
+    trusted,
+  );
+  const report = verifyCalls(input.calls, trusted, standing);
   const refusal = refuseOnAccountSelfCall(input.calls, record.address);
   if (refusal) return refusal;
   const threshold = record.currentConfig?.threshold;

@@ -83,6 +83,7 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
 const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
   multisigDeploymentReviews: ctx.multisigDeploymentReviews,
+  multisigGrants: ctx.multisigGrants,
   multisigStore: ctx.multisigStore,
   nostrCoordinationStore: ctx.nostrCoordinationStore,
   ...(ctx.nostrRelayTransport ? { nostrRelayTransport: ctx.nostrRelayTransport } : {}),
@@ -303,11 +304,10 @@ const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
     : { error: "invalid diagnostics request" };
 };
 
-// `wallet.unlockUnverified` is the recovery screen's "Unlock anyway". The
-// passphrase and recovery state are checked before any multisig connection is
-// dropped, and those connections are dropped before the vault is accepted, so
-// a mistyped passphrase leaves them in place. The service refuses a vault that
-// verifies, so this cannot skip the freshness check on a healthy wallet.
+// `wallet.unlockUnverified` is the recovery screen's "Unlock anyway". Passphrase and
+// recovery state are checked before multisig connections are dropped, and those are
+// dropped before the vault is accepted, so a mistyped passphrase leaves them in place.
+// The service refuses a vault that verifies, so this cannot skip the freshness check.
 const acceptUnverifiedVault = async (
   wallet: WalletStatusReader,
   grants: { readonly clear: () => Promise<void> },

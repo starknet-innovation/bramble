@@ -167,6 +167,12 @@ const removeMultisig = async (
   if (!(await clearRemovedSelection(deps, context.record.id, authorized.isCurrent))) {
     return { error: "wallet locked" };
   }
+  // Sites lose it before the record goes, so a failed read keeps both.
+  await deps.multisigGrants?.removeAccount({
+    credential: context.active.vaultPassphrase,
+    isAuthorized: authorized.isCurrent,
+    multisigId: context.record.id,
+  });
   return (await deps.multisigStore.removeMultisig(context.record.id, authorized.isCurrent)) ===
     "removed"
     ? { ok: true }
