@@ -262,8 +262,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     (value["typedData"] !== undefined && !isJson(value["typedData"])) ||
     (value["existingGrant"] !== undefined && typeof value["existingGrant"] !== "boolean") ||
     !isOptionalMultisigThreshold(value["multisigThreshold"]) ||
-    (value["kind"] !== "add-chain" &&
-      value["kind"] !== "connect" &&
+    (value["kind"] !== "connect" &&
       value["kind"] !== "declare" &&
       value["kind"] !== "invoke" &&
       value["kind"] !== "sign-typed-data" &&

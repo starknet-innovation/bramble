@@ -1,12 +1,18 @@
 /**
- * wallet_addStarknetChain held-approval gate: a custom chain is never persisted
- * without an explicit user approval. The request is queued as an "add-chain"
- * approval and held; it persists only on approve, is dropped on deny (mapping to
- * USER_REFUSED_OP on the wire), and an already-listed chain returns true with no
- * prompt.
+ * wallet_addStarknetChain is answered at once, never held (issue 852). The
+ * wallet supports only its built-in networks, so a built-in chain id is
+ * already added (true, no prompt, per spec) and any other chain is refused as
+ * unsupported (CHAIN_ID_NOT_SUPPORTED on the wire). Before this, an unknown
+ * chain was approved and stored though nothing could switch to it, and a
+ * re-add of a stored chain reported success without a prompt or a write.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@bramble/settings/preferences";
+import type { Json } from "@bramble/core/json";
+import {
+  createPreferencesStore,
+  defaultWalletPreferences,
+  PREFERENCES_STORE_KEY,
+} from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
@@ -14,7 +20,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { testExtension } from "../../support/background-wallet-stub";
-import { flushHeld, latestApprovalId } from "../../support/held";
+import { flushHeld } from "../../support/held";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",
@@ -91,16 +97,32 @@ const walletStub = () => ({
   },
 });
 
-const makeHarness = () => {
+const makeHarness = (stored?: Json) => {
   const session = createUnlockSession();
   const approvals = createApprovalQueue();
-  const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+  const memory = createMemoryStore();
+  if (stored !== undefined) void memory.set(PREFERENCES_STORE_KEY, stored);
+  const writes: unknown[] = [];
+  const recording = {
+    ...memory,
+    set: (key: string, value: Json) => {
+      writes.push(value);
+      return memory.set(key, value);
+    },
+  };
+  const preferencesStore = createPreferencesStore({ store: recording });
   const handler = createMessageHandler(walletStub(), testExtension, {
     approvals,
     preferencesStore,
     session,
   });
-  return { handler, preferencesStore };
+  const pendingCount = async () =>
+    (
+      (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
+        pending: readonly unknown[];
+      }
+    ).pending.length;
+  return { handler, pendingCount, preferencesStore, writes };
 };
 
 const addChainMessage = (overrides: Record<string, unknown> = {}) => ({
@@ -109,142 +131,118 @@ const addChainMessage = (overrides: Record<string, unknown> = {}) => ({
   type: "wallet.addStarknetChain" as const,
 });
 
-describe("wallet_addStarknetChain held approval", () => {
-  test("queues an add-chain approval without persisting", async () => {
-    const { handler, preferencesStore } = makeHarness();
+describe("wallet_addStarknetChain", () => {
+  test("refuses an unknown chain as unsupported: no prompt, nothing stored", async () => {
+    const { handler, pendingCount, preferencesStore, writes } = makeHarness();
 
-    const held = handler(addChainMessage(), contentSender);
+    const response = handler(addChainMessage(), contentSender);
     await flushHeld();
-    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-    const pending = (
-      listed as {
-        pending: readonly { kind?: string; origin?: string; summaries?: readonly string[] }[];
-      }
-    ).pending.at(-1);
-    expect(pending).toMatchObject({ kind: "add-chain", origin });
-    expect(pending?.summaries).toContain("Katana");
+    expect(await pendingCount()).toBe(0);
+    await expect(response).resolves.toEqual({ error: "unsupported chain" });
+    expect(writes).toHaveLength(0);
     expect((await preferencesStore.read()).customNetworks ?? []).toHaveLength(0);
-
-    const id = await latestApprovalId(handler, extensionSender);
-    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
-    await expect(held).resolves.toEqual({ error: "request rejected" });
+    // Control: the recorder does see a real preferences write.
+    await preferencesStore.setDisplay({ theme: "dark" });
+    expect(writes).toHaveLength(1);
   });
 
-  test("persists the chain only after the user approves", async () => {
-    const { handler, preferencesStore } = makeHarness();
+  test("refuses a chain an earlier build stored, whatever RPC the re-add carries", async () => {
+    const { handler, pendingCount, preferencesStore, writes } = makeHarness({
+      ...defaultWalletPreferences(),
+      customNetworks: [
+        {
+          chainId: chain.chainId,
+          id: "katana",
+          name: "Katana",
+          rpcUrls: ["https://rpc-a.example"],
+        },
+      ],
+    } as unknown as Json);
 
-    const held = handler(addChainMessage(), contentSender);
-    await flushHeld();
-    const id = await latestApprovalId(handler, extensionSender);
-
-    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
-      ok: true,
-      pending: [],
-    });
-    await expect(held).resolves.toEqual({ added: true, ok: true });
-    const stored = (await preferencesStore.read()).customNetworks ?? [];
-    expect(stored).toHaveLength(1);
-    expect(stored[0]?.chainId).toBe(chain.chainId);
-  });
-
-  test("drops the chain when the user denies", async () => {
-    const { handler, preferencesStore } = makeHarness();
-
-    const held = handler(addChainMessage(), contentSender);
-    await flushHeld();
-    const id = await latestApprovalId(handler, extensionSender);
-
-    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
-    await expect(held).resolves.toEqual({ error: "request rejected" });
-    expect((await preferencesStore.read()).customNetworks ?? []).toHaveLength(0);
-  });
-
-  test("returns true without a prompt for an already-listed chain", async () => {
-    const { handler, preferencesStore } = makeHarness();
-
-    // SN_MAIN's built-in chain id is already listed.
     await expect(
-      handler(addChainMessage({ chainId: "0x534e5f4d41494e" }), contentSender),
-    ).resolves.toEqual({ added: true, ok: true });
-    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-    expect((listed as { pending: readonly unknown[] }).pending).toHaveLength(0);
-    expect((await preferencesStore.read()).customNetworks ?? []).toHaveLength(0);
+      handler(addChainMessage({ rpcUrls: ["https://rpc-b.example"] }), contentSender),
+    ).resolves.toEqual({ error: "unsupported chain" });
+    expect(await pendingCount()).toBe(0);
+    expect(writes).toHaveLength(0);
+    // Control: the earlier build's record really is there to be matched.
+    expect((await preferencesStore.read()).customNetworks).toHaveLength(1);
+  });
+
+  test("returns true without a prompt for a built-in chain", async () => {
+    const { handler, pendingCount, writes } = makeHarness();
+
+    for (const chainId of ["0x534e5f4d41494e", "0x534e5f5345504f4c4941"]) {
+      await expect(handler(addChainMessage({ chainId }), contentSender)).resolves.toEqual({
+        added: true,
+        ok: true,
+      });
+    }
+    expect(await pendingCount()).toBe(0);
+    expect(writes).toHaveLength(0);
+  });
+
+  test("accepts another spelling of a built-in chain id, as the switch does", async () => {
+    // A chain id is a felt: a zero-padded or upper-case spelling of SN_MAIN
+    // names the same chain, so it is already added. The switch resolves the
+    // same felt (it then asks for a grant rather than refusing the chain).
+    const { handler, pendingCount, writes } = makeHarness();
+
+    for (const chainId of ["0x0534e5f4d41494e", "0x000534e5f4d41494e", "0x534E5F4D41494E"]) {
+      await expect(handler(addChainMessage({ chainId }), contentSender)).resolves.toEqual({
+        added: true,
+        ok: true,
+      });
+    }
+    await expect(
+      handler({ chainId: "0x0534e5f4d41494e", origin, type: "wallet.switchChain" }, contentSender),
+    ).resolves.toEqual({ error: "origin not connected" });
+    expect(await pendingCount()).toBe(0);
+    expect(writes).toHaveLength(0);
+  });
+
+  test("refuses a felt one away from a built-in chain id, add and switch alike", async () => {
+    const { handler, pendingCount } = makeHarness();
+    const chainId = "0x0534e5f4d41494f";
+
+    await expect(handler(addChainMessage({ chainId }), contentSender)).resolves.toEqual({
+      error: "unsupported chain",
+    });
+    await expect(
+      handler({ chainId, origin, type: "wallet.switchChain" }, contentSender),
+    ).resolves.toEqual({ error: "unsupported chain" });
+    expect(await pendingCount()).toBe(0);
   });
 
   test("rejects an oversized chain label crossed on a runtime message", async () => {
     // MCW-V09-130: the background re-validation once measured the trimmed label,
-    // so a megabytes-long padded name passed `isProviderChain` and reached the
-    // preferences store on approval. The bound is on the raw string now.
-    const { handler, preferencesStore } = makeHarness();
-
+    // so a megabytes-long padded name passed `isProviderChain`. The bound is on
+    // the raw string now.
+    const { handler } = makeHarness();
     await expect(
       handler(addChainMessage({ chainName: `${" ".repeat(10_000_000)}a` }), contentSender),
     ).resolves.toEqual({ error: "invalid add chain request" });
-    expect((await preferencesStore.read()).customNetworks ?? []).toHaveLength(0);
   });
 
-  test("persists a padded chain label in its canonical trimmed form", async () => {
-    const { handler, preferencesStore } = makeHarness();
-
-    const held = handler(
-      addChainMessage({ chainName: "  Katana  ", id: "  katana  " }),
-      contentSender,
-    );
-    await flushHeld();
-    const id = await latestApprovalId(handler, extensionSender);
-    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
-    await expect(held).resolves.toEqual({ added: true, ok: true });
-
-    const stored = (await preferencesStore.read()).customNetworks ?? [];
-    expect(stored[0]).toMatchObject({ id: "katana", name: "Katana" });
-  });
-
-  test("refuses an oversized URL list before any approval is queued", async () => {
-    // Sherlock audit 153: 80 RPC URLs of about 2 KB each, nearly the whole
-    // 1 MiB preferences budget in one card.
-    const { handler, preferencesStore } = makeHarness();
+  test("refuses an oversized URL list as malformed", async () => {
+    // Sherlock audit 153: 80 RPC URLs of about 2 KB each.
+    const { handler } = makeHarness();
     const rpcUrls = Array.from(
       { length: 80 },
       (_, index) => `https://rpc.example/${index}/${"a".repeat(2000)}`,
     );
-    const response = handler(addChainMessage({ rpcUrls }), contentSender);
-    await flushHeld();
-    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-    expect((listed as { pending: readonly unknown[] }).pending).toHaveLength(0);
-    await expect(response).resolves.toEqual({ error: "invalid add chain request" });
-    expect((await preferencesStore.read()).customNetworks ?? []).toHaveLength(0);
-  });
-
-  test("an approved chain stores one RPC URL and no explorer or icon lists", async () => {
-    const { handler, preferencesStore } = makeHarness();
-    const held = handler(
-      addChainMessage({
-        blockExplorerUrls: ["https://explorer.katana.example"],
-        iconUrls: ["https://icons.katana.example/a.png", "https://icons.katana.example/b.png"],
-        rpcUrls: ["https://rpc.katana.example", "https://rpc2.katana.example"],
-      }),
-      contentSender,
-    );
-    await flushHeld();
-    const id = await latestApprovalId(handler, extensionSender);
-    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
-    await expect(held).resolves.toEqual({ added: true, ok: true });
-
-    expect((await preferencesStore.read()).customNetworks).toEqual([
-      {
-        chainId: chain.chainId,
-        id: "katana",
-        name: "Katana",
-        rpcUrls: ["https://rpc.katana.example"],
-      },
-    ]);
+    await expect(handler(addChainMessage({ rpcUrls }), contentSender)).resolves.toEqual({
+      error: "invalid add chain request",
+    });
   });
 
   test("rejects a malformed chain payload", async () => {
     const { handler } = makeHarness();
-    await expect(handler(addChainMessage({ chainId: "not-hex" }), contentSender)).resolves.toEqual({
-      error: "invalid add chain request",
-    });
+    // Decimal SN_MAIN is the same number but not a hex chain id.
+    for (const chainId of ["not-hex", "0x0", "23448594291968334", `0x${"0".repeat(64)}1`]) {
+      await expect(handler(addChainMessage({ chainId }), contentSender)).resolves.toEqual({
+        error: "invalid add chain request",
+      });
+    }
   });
 
   test("rejects an add-chain from a blocklisted origin", async () => {

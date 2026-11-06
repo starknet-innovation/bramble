@@ -42,7 +42,6 @@ const VAULT_PASSPHRASE = "correct horse battery staple";
  * cannot go uncounted (Sherlock 208).
  */
 export type MutationSpy = {
-  addCustomNetwork: number;
   addDerivedAccount: number;
   createAccount: number;
   ensureNetworkAccount: number;
@@ -150,10 +149,6 @@ const preferencesStub = (bump: Bump) => {
     async read() {
       return preferences;
     },
-    async addCustomNetwork() {
-      bump("addCustomNetwork");
-      return preferences;
-    },
     async setActiveNetwork() {
       bump("setActiveNetwork");
       return preferences;
@@ -235,7 +230,6 @@ const rpcStub = (bump: Bump): RuntimeRpc => ({
  */
 export const buildHarness = (): Harness => {
   const spy: MutationSpy = {
-    addCustomNetwork: 0,
     addDerivedAccount: 0,
     createAccount: 0,
     ensureNetworkAccount: 0,

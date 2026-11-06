@@ -62,7 +62,6 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Claim-time session view: wraps the session's credential accessors so a
   // deferred executor cannot adopt a later unlock; it reads no value itself.
   "apps/extension/src/background/approvals/approval-session.ts",
-  "apps/extension/src/background/provider/add-chain-ops.ts",
   "apps/extension/src/background/approvals/approval-decisions.ts",
   // Names the signature-waiter collaborator by its module path only. It holds
   // no secret material and touches no key operations.

@@ -24,7 +24,6 @@ import {
 import { normalizeAccountGroups } from "./groups";
 import { selectedMultisigPreference, withAccountHidden } from "./preferences-accounts";
 import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
-import { withCustomNetwork } from "./preferences-custom-networks";
 import { displayFlags, isValidDisplayInput } from "./preferences-display";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
@@ -170,11 +169,6 @@ export const createPreferencesStore = ({
 
   return serializeStoreMutations<WalletPreferencesStore>(
     {
-      async addCustomNetwork(network) {
-        const next = withCustomNetwork(await read(), network);
-        await writePreferences(store, next);
-        return next;
-      },
       async addNft(nft) {
         const nextNft = withNftId(nft);
         if (!isWatchedNft(nextNft)) {

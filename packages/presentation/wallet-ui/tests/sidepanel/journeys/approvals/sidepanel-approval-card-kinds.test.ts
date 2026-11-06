@@ -1,7 +1,7 @@
 /**
  * Approval-card rendering per kind: exercises every renderer reached through
  * `approvalCard` — connection, sign-typed-data, strk20-invoke,
- * switch-chain, add-chain, declare — plus the watch-asset empty-token guard.
+ * switch-chain, declare — plus the watch-asset empty-token guard.
  * Complements sidepanel-approval-card.test.ts, which covers invoke and
  * watch-asset (with token) only.
  */
@@ -324,23 +324,6 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("asking to change the wallet's active network");
     expect(html).toContain("Switch to Starknet Sepolia");
     expect(html).toContain("Switch network");
-  });
-
-  test("add-chain request shows the add-network copy with an always-enabled Approve", () => {
-    const approval: PendingApproval = {
-      id: ID,
-      kind: "add-chain",
-      origin: ORIGIN,
-      summaries: ["Add network Custom Devnet"],
-    };
-    // Even a locked wallet leaves add-network enabled (addChainCard passes false).
-    const html = approvalCard(approval, lockedStatus);
-
-    expect(html).toContain("Add network request");
-    expect(html).toContain("asking to add a custom Starknet network");
-    expect(html).toContain("Add network Custom Devnet");
-    expect(html).toContain("Add network");
-    expect(html).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
   });
 
   test("declare request shows the declare-contract copy and locks Declare while locked", () => {

@@ -102,7 +102,6 @@ export type WalletPreferences = {
  * Plain preferences store methods exposed to the background worker.
  */
 export type WalletPreferencesStore = {
-  readonly addCustomNetwork: (network: CustomNetwork) => Promise<WalletPreferences>;
   readonly addNft: (nft: Omit<WatchedNft, "id">) => Promise<WalletPreferences>;
   readonly createGroup: (input: {
     readonly icon: AccountGroupIcon;
