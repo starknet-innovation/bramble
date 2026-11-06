@@ -84,7 +84,9 @@ const envelope = (body: Record<string, unknown>): Response =>
 type Harness = {
   readonly asked: Record<string, unknown>[];
   readonly handler: ReturnType<typeof buildStrk20Handler>;
+  readonly activations: (true | undefined)[];
   readonly prepared: unknown[];
+  readonly registered: { value: boolean };
   readonly sponsored: Strk20SponsoredShieldSubmissionInput[];
 };
 
@@ -100,13 +102,19 @@ const harness = (
   const asked: Record<string, unknown>[] = [];
   const prepared: unknown[] = [];
   const sponsored: Strk20SponsoredShieldSubmissionInput[] = [];
+  const activations: (true | undefined)[] = [];
+  const registered = { value: options.registered ?? true };
   const base = makeStrk20WalletService({
-    registered: { value: options.registered ?? true },
+    registered,
     registrations: { value: 0 },
     submissions: [],
   });
   const strk20: Strk20Service = {
     ...base,
+    async prepareAccountActions(input) {
+      activations.push(input.activate);
+      return (await base.prepareAccountActions?.(input)) as never;
+    },
     async submitPrepared(input) {
       prepared.push(input);
       return base.submitPrepared(input);
@@ -130,7 +138,7 @@ const harness = (
     },
     strk20,
   });
-  return { asked, handler, prepared, sponsored };
+  return { activations, asked, handler, prepared, registered, sponsored };
 };
 
 type Review = {
@@ -192,6 +200,7 @@ describe("sponsored first shield", () => {
     const review = (await shield(run.handler)).strk20Preparation;
     expect(review.route).toBe("sponsored-relay");
     expect(review.summaries[0]).toBe(`Activate private balances and shield 1.5 ${token.symbol}`);
+    expect(run.activations).toEqual([true]);
     await expect(executeStrk20Preparation(run.handler, review.id)).resolves.toMatchObject({
       ok: true,
       transactionHash: "0x333",
@@ -202,6 +211,18 @@ describe("sponsored first shield", () => {
       feePayer: "sponsor",
       summary: `Activate private balances and shield 1.5 ${token.symbol}`,
     });
+  });
+
+  test("a sponsored first shield refuses at execution if the account registered meanwhile", async () => {
+    const run = harness({ registered: false });
+    const review = (await shield(run.handler)).strk20Preparation;
+    expect(review.route).toBe("sponsored-relay");
+    run.registered.value = true;
+    await expect(executeStrk20Preparation(run.handler, review.id)).resolves.toMatchObject({
+      error: "Private balances changed. Review the shield again.",
+    });
+    expect(run.sponsored).toHaveLength(0);
+    expect(run.prepared).toHaveLength(0);
   });
 
   test("a sponsor's refusal or silence leaves the self-paid route, unannounced", async () => {
