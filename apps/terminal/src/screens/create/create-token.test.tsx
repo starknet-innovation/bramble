@@ -173,6 +173,38 @@ describe("Create", () => {
   });
 });
 
+describe("Create tools", () => {
+  beforeEach(() => {
+    wallet.value.chainId = "0x534e5f5345504f4c4941";
+    wallet.requestTransaction.mockResolvedValue({ transaction_hash: "0xabc" });
+    runtime.confirmTokenDeployment.mockResolvedValue(undefined);
+  });
+
+  test("NFT standards get metadata authoring from the form's base URI; ERC-20 does not", () => {
+    renderCreate();
+    expect(screen.queryByRole("region", { name: "Token metadata" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "ERC-721" }));
+    fill("Base URI", "ipfs://bafy/");
+    fill("Token ids", "4, 5");
+    fill("Token name", "Garden #4");
+    fill("Image URI", "ipfs://bafyimage/4.png");
+    expect(screen.getByRole("region", { name: "Token metadata" }).textContent).toContain("ipfs://bafy/4");
+    fireEvent.click(screen.getByRole("tab", { name: "ERC-1155" }));
+    expect(screen.getByRole("region", { name: "Token metadata" })).toBeTruthy();
+  });
+
+  test("a finished create fills the ownership contract field", async () => {
+    renderCreate();
+    fill("Name", "Bramble Test");
+    fill("Symbol", "BRT");
+    fill("Supply", "1");
+    fireEvent.click(await screen.findByRole("button", { name: "Review create" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Created at"));
+    const created = document.querySelector(".create-review__address")?.textContent;
+    expect((screen.getByLabelText("Contract") as HTMLInputElement).value).toBe(created);
+  });
+});
+
 describe("Create links", () => {
   test("keep the network the create was sent on after the wallet switches", async () => {
     wallet.value.chainId = "0x534e5f5345504f4c4941";

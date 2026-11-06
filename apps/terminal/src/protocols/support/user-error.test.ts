@@ -69,6 +69,17 @@ const READER_SENTENCES = new Set([
   "Connect a wallet before submitting a transaction.",
   "Connect a wallet first.",
   "Create works on x only.",
+  "An ERC-721 base URI can't contain {id}. The token id is added to the end.",
+  "Base URI must be a public https:// or ipfs:// address, with no spaces, up to x characters.",
+  "Check the contract first.", // unreachable: guard, the actions show only after a check
+  "No account is deployed at the new owner address.",
+  "No contract is deployed at this address.",
+  "Ownership changes work on x only.",
+  "The contract doesn't show the expected owner after this transaction.", // a fact: shown as written
+  "The contract returned an unexpected owner.", // a fact: shown as written
+  "This contract doesn't run an OpenZeppelin preset that Create deploys.", // a fact: shown as written
+  "Your account doesn't own this contract.",
+  "Your account no longer owns this contract.",
   "Connect a wallet that supports contract declarations.",
   "Connect a wallet that supports token tracking.",
   "Ekubo sell amount must be greater than zero",

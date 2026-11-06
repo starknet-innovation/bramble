@@ -9,14 +9,13 @@
 import { byteArray, cairo, CallData, constants, hash, type Call } from "starknet";
 import { isFelt } from "../nft/punk-contract";
 import { ERC20_PRESET_DECIMALS, TOKEN_PRESETS } from "./token-presets";
+import { readBaseUri } from "./token-uri";
 
 const U256_LIMIT = 1n << 256n;
 const MAX_NAME_LENGTH = 48;
-const MAX_URI_LENGTH = 200;
 const MAX_TOKEN_IDS = 50;
 const PRINTABLE_ASCII = /^[\x20-\x7e]+$/;
 const SYMBOL_PATTERN = /^[A-Za-z0-9]{1,11}$/;
-const URI_PATTERN = /^(?:https|ipfs):\/\/[\x21-\x7e]+$/;
 const INTEGER_PATTERN = /^(?:0|[1-9][0-9]*)$/;
 
 /** Raw form values for an ERC-20 create. */
@@ -83,14 +82,6 @@ const readAddress = (value: string, label: string): string => {
   return address;
 };
 
-const readUri = (value: string): string => {
-  const uri = value.trim();
-  if (uri.length > MAX_URI_LENGTH || !URI_PATTERN.test(uri)) {
-    fail(`Base URI must start with https:// or ipfs://, with no spaces, up to ${MAX_URI_LENGTH} characters.`);
-  }
-  return uri;
-};
-
 /**
  * Parses whole tokens with up to 18 decimal places into base units. Refuses
  * zero, signs, exponents, and anything at or above 2^256.
@@ -110,6 +101,15 @@ const readU256 = (part: string, label: string): bigint => {
   const value = BigInt(part);
   if (value >= U256_LIMIT) fail(`${label} must fit in a u256.`);
   return value;
+};
+
+/** Parses one token id: a whole number below 2^256. */
+export const readTokenId = (value: string): bigint => {
+  const part = value.trim();
+  if (!INTEGER_PATTERN.test(part)) return fail("Token id must be a whole number.");
+  const id = BigInt(part);
+  if (id >= U256_LIMIT) fail("Token id must fit in a u256.");
+  return id;
 };
 
 /** Parses a comma- or space-separated list of 1–50 whole numbers below 2^256. */
@@ -166,7 +166,7 @@ const erc20 = (draft: Erc20Draft, owner: string): Built => {
 const erc721 = (draft: Erc721Draft, owner: string): Built => {
   const name = readName(draft.name);
   const symbol = readSymbol(draft.symbol);
-  const baseUri = readUri(draft.baseUri);
+  const baseUri = readBaseUri(draft.baseUri, "erc721");
   const recipient = readAddress(draft.recipient, "recipient");
   const ids = readTokenIds(draft.tokenIds);
   return {
@@ -182,7 +182,7 @@ const erc721 = (draft: Erc721Draft, owner: string): Built => {
 };
 
 const erc1155 = (draft: Erc1155Draft, owner: string): Built => {
-  const baseUri = readUri(draft.baseUri);
+  const baseUri = readBaseUri(draft.baseUri, "erc1155");
   const recipient = readAddress(draft.recipient, "recipient");
   const ids = readTokenIds(draft.tokenIds);
   const amounts = parseU256List(draft.amounts, "Amounts");
