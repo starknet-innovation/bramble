@@ -2,12 +2,12 @@
  * The background half of the sponsored first shield (#789): whether to ask the
  * network's sponsor, and the frozen route a shield takes when it answers yes.
  *
- * Off by default: the bundled relay table is empty
- * (`SPONSORED_SHIELD_NETWORKS`), so production never asks and every shield is
- * self-paid as before. With a relay configured, only a self-credit shield asks,
- * and only at preparation: a refusal, an outage, or any answer outside the
- * contract silently becomes the self-paid route the user would have had
- * anyway, before anything is reviewed. After review there is no fallback; the
+ * The relay table is `SPONSORED_SHIELD_NETWORKS` in
+ * `@bramble/privacy/sponsored-shield`; the gateway behind it is the on/off
+ * switch, and while it answers 404 every shield is self-paid as before. Only a
+ * self-credit shield asks, and only at preparation: a refusal, an outage, or
+ * any answer outside the contract silently becomes the self-paid route the
+ * user would have had anyway, before anything is reviewed. After review there is no fallback; the
  * route the user approved is the one submitted.
  */
 
