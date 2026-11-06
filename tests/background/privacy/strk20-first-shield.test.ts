@@ -42,6 +42,8 @@ const harness = (
     readonly activity?: ReturnType<typeof memoryActivityLog>;
     readonly deployed?: boolean;
     readonly registered?: boolean;
+    /** The account registers elsewhere between preparation and the proof. */
+    readonly registersBeforeProof?: boolean;
   } = {},
 ) => {
   const registered = { value: options.registered ?? false };
@@ -52,6 +54,10 @@ const harness = (
     ...base,
     async prepareAccountActions(input) {
       activations.push(input.activate);
+      if (options.registersBeforeProof) {
+        registered.value = true;
+        await input.beforeProof?.();
+      }
       return (await base.prepareAccountActions?.(input)) as never;
     },
   };
@@ -144,6 +150,14 @@ describe("first shield activates in the same transaction", () => {
     const review = await shield(run.handler);
     expect(review.error).toBe(PRIVACY_DEPLOY_REQUIRED);
     expect(run.activations).toEqual([]);
+  });
+
+  test("refuses before the proof when the account registered meanwhile", async () => {
+    const run = harness({ registersBeforeProof: true });
+    await expect(shield(run.handler)).resolves.toMatchObject({
+      error: "Private balances changed. Review the shield again.",
+    });
+    expect(run.submissions).toHaveLength(0);
   });
 
   test("refuses at execution when the account registered meanwhile", async () => {
