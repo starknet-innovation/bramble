@@ -207,8 +207,27 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
   requireText(
     failures,
     execute,
-    'if [ "$expected" -eq 0 ]; then',
+    `[[ "$v" =~ ^[0-9]{1,6}$ ]] || { echo "::error::Playwright mainnet report is malformed." >&2; exit 1; }; echo "$v"; }`,
+    "mainnet execution must fail on a malformed Playwright report",
+  );
+  // Each check keeps its `exit 1`; without it the step reports passed.
+  requireText(
+    failures,
+    execute,
+    'if [ "$expected" -eq 0 ]; then\n            echo "::error::Playwright mainnet executed no passing test."; exit 1\n          fi',
     "mainnet execution must fail when Playwright executed no test",
+  );
+  requireText(
+    failures,
+    execute,
+    'if [ "$status" -ne 0 ] || [ "$unexpected" -ne 0 ] || [ "$flaky" -ne 0 ]; then\n            echo "::error::Playwright mainnet failed. Output is withheld in CI; rerun locally for details."; exit 1\n          fi',
+    "mainnet execution must fail when a Playwright test fails or is flaky",
+  );
+  requireText(
+    failures,
+    execute,
+    'if [ "$status" -ne 0 ] || [ "$available" -ne 1 ] || [ "$succeeded" -ne 1 ] || [ "$skipped" -ne 0 ]; then\n            echo "::error::Gasless mainnet failed. Output is withheld in CI; rerun locally for details."; exit 1\n          fi',
+    "mainnet execution must fail unless the gasless send succeeded",
   );
   for (const [name, job] of [
     ["preflight", preflight],

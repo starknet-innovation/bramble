@@ -3,6 +3,10 @@
  * the workflow text, so a dropped guard fails here rather than in production.
  */
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { MAINNET_E2E_WORKFLOW_NAME } from "../../scripts/mainnet-e2e-guard";
 import { rpcUrlSha256 } from "../../scripts/mainnet-e2e-rpc";
 import { mainnetE2eWorkflowFailures } from "../../scripts/mainnet-e2e-workflow-policy";
@@ -144,6 +148,31 @@ describe("mainnet E2E workflow policy", () => {
     expect(mainnetE2eWorkflowFailures(zero[WORKFLOW] ?? "")).toContain(
       "mainnet execution must fail when Playwright executed no test",
     );
+    const lenient = mutate(
+      sources,
+      '[[ "$v" =~ ^[0-9]{1,6}$ ]] || { echo "::error::Playwright mainnet report is malformed." >&2; exit 1; }; ',
+      "",
+    );
+    expect(mainnetE2eWorkflowFailures(lenient[WORKFLOW] ?? "")).toContain(
+      "mainnet execution must fail on a malformed Playwright report",
+    );
+    for (const [message, expected] of [
+      [
+        '"::error::Playwright mainnet executed no passing test."; exit 1',
+        "mainnet execution must fail when Playwright executed no test",
+      ],
+      [
+        '"::error::Playwright mainnet failed. Output is withheld in CI; rerun locally for details."; exit 1',
+        "mainnet execution must fail when a Playwright test fails or is flaky",
+      ],
+      [
+        '"::error::Gasless mainnet failed. Output is withheld in CI; rerun locally for details."; exit 1',
+        "mainnet execution must fail unless the gasless send succeeded",
+      ],
+    ] as const) {
+      const stripped = mutate(sources, message, message.replace("; exit 1", ""));
+      expect(mainnetE2eWorkflowFailures(stripped[WORKFLOW] ?? "")).toContain(expected);
+    }
     const printed = mutate(
       sources,
       "          set +e\n          bun run test:mainnet",
@@ -283,6 +312,83 @@ describe("mainnet E2E workflow policy", () => {
       expect(refused.stdout.toString()).not.toContain("TESTS_WOULD_RUN");
       expect(refused.stdout.toString()).toContain("not the one preflight validated");
       expect(refused.stdout.toString()).not.toContain("other-rpc");
+    }
+  });
+
+  test("the Playwright and gasless wrappers never report passed without a real pass", async () => {
+    const source = (await readWorkflowSources())[WORKFLOW] ?? "";
+    const runOf = (step: string): string => {
+      const at = source.indexOf(`      - name: ${step}\n`);
+      const start = source.indexOf("        run: |\n", at) + "        run: |\n".length;
+      const end = source.indexOf("\n\n", start);
+      const next = source.indexOf("      - name: ", start);
+      expect(at).toBeGreaterThan(0);
+      return source
+        .slice(start, next > 0 && next < end ? next : end)
+        .split("\n")
+        .map((line) => line.slice(10))
+        .join("\n");
+    };
+    const dir = await mkdtemp(join(tmpdir(), "mainnet-wrapper-"));
+    // `bun` is stubbed: it writes the fixture and exits with FAKE_STATUS.
+    const wrapper = (step: string, stub: string, fixture: string, status: number) => {
+      const output = join(dir, `output-${Math.random().toString(16).slice(2)}`);
+      const run = Bun.spawnSync(
+        ["bash", "-c", `bun() { ${stub}; return "$FAKE_STATUS"; }\n${runOf(step)}`],
+        {
+          env: {
+            FAKE_FIXTURE: fixture,
+            FAKE_STATUS: String(status),
+            GITHUB_OUTPUT: output,
+            PATH: process.env["PATH"] ?? "",
+            RUNNER_TEMP: dir,
+          },
+        },
+      );
+      const outputs = run.exitCode === null ? "" : readFileSync(output, "utf8");
+      return { code: run.exitCode, passed: outputs.includes("result=passed") };
+    };
+    const playwright = (stats: string, status: number) =>
+      wrapper(
+        "Playwright mainnet",
+        'printf "%s" "$FAKE_FIXTURE" > "$PLAYWRIGHT_JSON_OUTPUT_FILE"',
+        `{"stats":${stats}}`,
+        status,
+      );
+    expect(playwright('{"expected":1,"unexpected":0,"flaky":0,"skipped":0}', 0)).toEqual({
+      code: 0,
+      passed: true,
+    });
+    for (const [stats, status] of [
+      ['{"expected":0,"unexpected":0,"flaky":0,"skipped":0}', 0],
+      ['{"expected":0,"unexpected":0,"flaky":0,"skipped":3}', 0],
+      ['{"expected":1,"unexpected":1,"flaky":0,"skipped":0}', 0],
+      ['{"expected":1,"unexpected":0,"flaky":1,"skipped":0}', 0],
+      ['{"expected":1,"unexpected":0,"flaky":0,"skipped":0}', 1],
+      // Malformed counts must not slip past the integer tests.
+      ['{"expected":"0\\n0","unexpected":0,"flaky":0,"skipped":0}', 0],
+      ['{"expected":"1\\n1","unexpected":0,"flaky":0,"skipped":0}', 0],
+      ['{"expected":-1,"unexpected":0,"flaky":0,"skipped":0}', 0],
+      ['{"expected":1,"unexpected":"x","flaky":0,"skipped":0}', 0],
+    ] as const) {
+      const result = playwright(stats, status);
+      expect(result.code).not.toBe(0);
+      expect(result.passed).toBe(false);
+    }
+    const gasless = (log: string, status: number) =>
+      wrapper("Gasless mainnet", 'printf "%s\\n" "$FAKE_FIXTURE"', log, status);
+    const sent = "paymaster_isAvailable: true\nSuccess. Fee 5232 0x1. No STRK fee.";
+    expect(gasless(sent, 0)).toEqual({ code: 0, passed: true });
+    for (const [log, status] of [
+      ["Skipping gasless mainnet test: no account", 0],
+      ["paymaster_isAvailable: true", 0],
+      ["Success. Fee 5232 0x1. No STRK fee.", 0],
+      [`${sent}\nSkipping gasless mainnet test`, 0],
+      [sent, 1],
+    ] as const) {
+      const result = gasless(log, status);
+      expect(result.code).not.toBe(0);
+      expect(result.passed).toBe(false);
     }
   });
 });

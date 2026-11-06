@@ -322,7 +322,7 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE="$report" bun run test:e2e:mainnet --reporter=json >/dev/null 2>&1
           status=$?
           set -e
-          count() { jq -r ".stats.$1 // 0" "$report" 2>/dev/null | grep -E '^[0-9]{1,6}$' || echo 0; }
+          count() { local v; v="$(jq -r ".stats.$1 // 0" "$report" 2>/dev/null)" || v=""; [[ "$v" =~ ^[0-9]{1,6}$ ]] || { echo "::error::Playwright mainnet report is malformed." >&2; exit 1; }; echo "$v"; }
           expected="$(count expected)"
           unexpected="$(count unexpected)"
           flaky="$(count flaky)"
