@@ -9,7 +9,12 @@
   },
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.ts", "tests/**/*.test.ts", "tools/vendor-dataset/*.ts"],
+      "entry": [
+        "scripts/*.ts",
+        "tests/**/*.test.ts",
+        "tests/e2e/ledger/*.speculos.ts",
+        "tools/vendor-dataset/*.ts"
+      ],
       "project": ["scripts/**/*.ts", "tests/**/*.ts", "tools/**/*.ts"]
     },
     "apps/extension": {
