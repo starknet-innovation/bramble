@@ -358,3 +358,21 @@ export const readSetStrk20NetworkConfigInput = (
   }
   return { config: message["config"], networkId: message["networkId"] };
 };
+
+/**
+ * Parses which multisig sites should see. Null returns to the active
+ * single-signer account. Any other value must be a canonical account id.
+ */
+export const readSetSelectedMultisigInput = (
+  message: unknown,
+): { readonly multisigId: string | null } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["multisigId", "type"]) ||
+    message["type"] !== "wallet.setSelectedMultisig"
+  ) {
+    return null;
+  }
+  if (message["multisigId"] === null) return { multisigId: null };
+  return isAccountId(message["multisigId"]) ? { multisigId: message["multisigId"] } : null;
+};

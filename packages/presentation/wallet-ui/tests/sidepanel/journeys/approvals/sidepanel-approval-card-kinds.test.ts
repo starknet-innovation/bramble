@@ -6,6 +6,8 @@
  * watch-asset (with token) only.
  */
 import { describe, expect, test } from "bun:test";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { ArgentMultisigView } from "../../../../src/popup/responses/multisig-responses";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 import { accountDisplayName } from "../../../../src/sidepanel/shared/parts";
@@ -90,6 +92,36 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("Unlock the wallet to see which account will be shared.");
     expect(html).not.toContain("data-approval-account=");
     expect(html).toContain("disabled");
+  });
+
+  test("a selected multisig is named when it is the only visible account", () => {
+    const multisigId = "SN_MAIN:0xabc123";
+    const view = {
+      authorityStatus: "available",
+      config: null,
+      record: {
+        accountContractType: "argent-multisig",
+        address: "0xabc123",
+        classHash: "0x1",
+        id: multisigId,
+        name: "Treasury",
+        networkId: "SN_MAIN",
+      },
+      unsupportedSigners: [],
+    } as ArgentMultisigView;
+    const html = approvalCard(
+      { id: ID, kind: "connect", origin: ORIGIN },
+      status,
+      { hiddenAccountIds: [account.id] } as unknown as WalletPreferences,
+      { multisigs: [view], selectedMultisigId: multisigId },
+    );
+    expect(html).toContain("Treasury");
+    expect(html).toContain(`data-connect-choice="${multisigId}"`);
+    expect(html).toContain('data-connect-kind="multisig"');
+    expect(html).toContain(`data-approval-account="${multisigId}"`);
+    expect(html).not.toContain("<dt>Account</dt>");
+    expect(html).not.toContain(accountDisplayName(account, null));
+    expect(html).not.toContain(account.address);
   });
 
   test("sign-typed-data request decodes the SNIP-12 payload", () => {

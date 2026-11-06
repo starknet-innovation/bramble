@@ -24,6 +24,7 @@ import {
   type Strk20DisclosureApprovalKind,
 } from "../privacy/strk20-approval-types";
 import { executeAddChainApproval } from "../provider/add-chain-ops";
+import { MULTISIG_PROPOSAL_SAVED } from "../provider/multisig-dapp-invoke";
 import { executeInvokeApproval } from "../provider/provider-ops";
 import { readApprovalIdInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -35,6 +36,7 @@ import { type ApplyResult, type ApproveDecision, reject, settleExecutor } from "
 import { settleClaimError, validateClaimContext } from "./approval-claim-context";
 import type { ApprovalDecisionDeps } from "./approval-decision-deps";
 import { pendingFeeRefusal, pendingGaslessRefusal } from "./approval-fee-refusal";
+import { heldInvoke, invokeExecutionDeps } from "./approval-invoke-execution";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
 import {
@@ -44,6 +46,7 @@ import {
 } from "./approval-watch-asset";
 import type { ApprovalClaim, ApprovalKind, PendingApproval } from "./approvals";
 import { applyGaslessInvoke } from "./gasless-approval";
+import { grantPresentedMultisig } from "./multisig-connect";
 import { DROPPED_APPROVAL_RESPONSE } from "./signature-waiters";
 
 /**
@@ -82,26 +85,16 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
   if (feeRefusal) return reject(feeRefusal);
   if (!approval.fee) return reject(FEE_REVIEW_REQUIRED);
   const result = await executeInvokeApproval(
-    {
-      activity: deps.activity,
-      allowanceStore: deps.allowanceStore,
-      preferencesStore: deps.preferencesStore,
-      runtimeRpc: deps.runtimeRpc,
-      session: deps.session,
-      wallet: deps.wallet,
-      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
-      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
-    },
-    {
-      ...(approval.context === undefined ? {} : { context: approval.context }),
-      origin: approval.origin,
-      payload,
-      reviewedFee: approval.fee,
-      ...(approval.requiresDeployment === true && approval.deploymentFee
-        ? { reviewedDeploymentFee: approval.deploymentFee }
-        : {}),
-    },
+    invokeExecutionDeps(deps),
+    heldInvoke(approval, payload, approval.fee),
   );
+  if ("error" in result && result.error === MULTISIG_PROPOSAL_SAVED) {
+    return {
+      respond: (listPending) => ({ ok: true, pending: listPending() }),
+      settle: result,
+      status: "settle",
+    };
+  }
   return settleExecutor(result);
 };
 
@@ -185,8 +178,10 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigGrants ? { multisigGrants: deps.multisigGrants } : {}),
       ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
       ...(deps.relaySignatures ? { relaySignatures: deps.relaySignatures } : {}),
+      runtimeRpc: deps.runtimeRpc,
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -209,6 +204,8 @@ const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => 
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,
+      ...(deps.multisigGrants ? { multisigGrants: deps.multisigGrants } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     { networkId: payload.networkId, origin: approval.origin },
   );
@@ -249,6 +246,8 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }, decisio
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigGrants ? { multisigGrants: deps.multisigGrants } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -269,6 +268,14 @@ const applyConnect: ApproveApplier = async (deps, { approval }, decision) => {
     if (!passphrase || !authorized.isCurrent()) {
       return reject({ error: "wallet locked" });
     }
+    const presented = await grantPresentedMultisig(
+      deps,
+      approval.origin,
+      decision.reviewedAccountId,
+      passphrase,
+      authorized.isCurrent,
+    );
+    if (presented) return presented;
     // The grant goes to the account the card named, never to whichever account
     // happens to be active when the click lands: the user can switch accounts
     // in the panel while a prompt is open, and a grant that followed the switch

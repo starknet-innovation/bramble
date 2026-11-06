@@ -64,6 +64,10 @@ import {
   createStrk20WalletPreparationStore,
   type Strk20WalletPreparationStore,
 } from "../privacy/strk20-wallet-preparations";
+import {
+  type MultisigOriginGrantStore,
+  memoryMultisigGrantStore,
+} from "../provider/multisig-grants";
 import { createWatchAssetAdmission, type WatchAssetAdmission } from "../provider/watch-asset";
 import { defaultRuntimeRpc, type RuntimeRpc } from "../runtime/runtime-rpc";
 import {
@@ -93,6 +97,7 @@ export type RouterContext = {
   readonly ledgerSignQueue: LedgerSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
+  readonly multisigGrants: MultisigOriginGrantStore;
   readonly nostrCoordinationStore: NostrCoordinationStore;
   readonly nftSnapshots?: NftSnapshotStore;
   readonly nostrRelayTransport?: NostrRelayTransport;
@@ -131,6 +136,7 @@ export type MessageHandlerOptions = {
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
+  readonly multisigGrants?: MultisigOriginGrantStore;
   readonly nostrCoordinationStore?: NostrCoordinationStore;
   readonly nftSnapshots?: NftSnapshotStore;
   readonly nostrRelayTransport?: NostrRelayTransport;
@@ -305,6 +311,7 @@ export const routerContext = (
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
+    multisigGrants: options.multisigGrants ?? memoryMultisigGrantStore(),
     nostrCoordinationStore: nostrCoordinationStoreFor(options.nostrCoordinationStore),
     ...nftSnapshotsFor(options.nftSnapshots),
     ...nostrRelayTransportFor(options.nostrRelayTransport),

@@ -83,6 +83,15 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/routing/messages.ts",
   "apps/extension/src/background/provider/provider-grant.ts",
   "apps/extension/src/background/provider/provider-ops.ts",
+  // Multisig dapp signing and submission. They read the vault to find the
+  // local signer and return the account aggregate. The credential is only
+  // forwarded to the existing hash signer.
+  "apps/extension/src/background/provider/multisig-dapp-sign.ts",
+  "apps/extension/src/background/provider/multisig-dapp-invoke.ts",
+  // Re-resolves the granted account before a typed-data signature. It peeks
+  // the session only to read grants, then forwards that credential to the
+  // existing signer. Nothing here is logged, persisted, or returned.
+  "apps/extension/src/background/transactions/sign-grant.ts",
   "apps/extension/src/background/settings/origins-ops.ts",
   "apps/extension/src/background/privacy/strk20-account-context.ts",
   // Approved-request execution split out of strk20-ops.ts: it re-resolves the
