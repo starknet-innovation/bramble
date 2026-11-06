@@ -3,6 +3,7 @@
  * accounts. RPC errors must not echo the URL.
  */
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +13,7 @@ import {
   dedicatedMainnetRpcUrl,
   type RpcFetch,
   readHotWalletBalances,
+  rpcUrlSha256,
 } from "../../scripts/mainnet-e2e-rpc";
 import {
   judgeBalances,
@@ -104,6 +106,52 @@ describe("mainnet spend policy", () => {
     expect(held.kind).toBe("ok");
   });
 
+  test("post-run checks the spend cap, not the preflight minimum", () => {
+    // A normal STRK20 lifecycle: start at 25 STRK, spend about 16.
+    const strk20Run = judgeBalances({
+      after: { strk: 9n * STRK, usdc: USDC },
+      before: { strk: 25n * STRK, usdc: USDC },
+      phase: "post",
+      tier: "strk20",
+    });
+    expect(strk20Run.kind).toBe("ok");
+    expect(strk20Run.strkDelta).toBe(16n * STRK);
+
+    // Standard tier: a run inside the cap that ends below the minimum passes
+    // post; the next preflight asks for a top-up.
+    const standardRun = judgeBalances({
+      after: { strk: STRK / 100n, usdc: USDC / 100n },
+      before: { strk: STRK / 10n, usdc: USDC / 20n },
+      phase: "post",
+      tier: "standard",
+    });
+    expect(standardRun.kind).toBe("ok");
+    const nextPreflight = judgeBalances({
+      after: { strk: STRK / 100n, usdc: USDC / 100n },
+      before: { strk: STRK / 100n, usdc: USDC / 100n },
+      phase: "preflight",
+      tier: "standard",
+    });
+    expect(nextPreflight.kind).toBe("below-minimum");
+
+    // The cap still binds after the run, and so does the maximum.
+    const strk20Over = judgeBalances({
+      after: { strk: 2n * STRK, usdc: USDC },
+      before: { strk: 25n * STRK, usdc: USDC },
+      phase: "post",
+      tier: "strk20",
+    });
+    expect(strk20Over.kind).toBe("over-cap");
+    expect(strk20Over.message).not.toContain("minimum");
+    const grew = judgeBalances({
+      after: { strk: 3n * STRK, usdc: USDC },
+      before: { strk: STRK, usdc: USDC },
+      phase: "post",
+      tier: "standard",
+    });
+    expect(grew.kind).toBe("above-maximum");
+  });
+
   test("the runbook names the same ceilings and secrets", async () => {
     const doc = await Bun.file("docs/MAINNET_E2E_CI.md").text();
     for (const amount of [
@@ -178,6 +226,10 @@ describe("mainnet balance command", () => {
       expect(ok).toContain("strk_before=1");
       expect(ok).toContain(`strk_before_raw=${STRK}`);
       expect(ok).toContain(`usdc_before_raw=${USDC}`);
+      // Execute compares this hash with its own RPC URL; the URL never leaves.
+      const digest = createHash("sha256").update(SECRET_RPC).digest("hex");
+      expect(rpcUrlSha256(SECRET_RPC)).toBe(digest);
+      expect(ok).toContain(`rpc_sha256=${digest}\n`);
       expect(ok).not.toContain("super-secret-key");
 
       // The baseline arrives as job outputs from the trusted preflight job,
@@ -202,6 +254,7 @@ describe("mainnet balance command", () => {
       expect(await runBalanceCommand("post", post, balances(STRK / 2n, USDC))).toBe(1);
       const over = await Bun.file(env.MAINNET_E2E_REPORT_FILE).text();
       expect(over).toContain("verdict=over-cap");
+      expect(over).not.toContain("rpc_sha256=");
       expect(over).toContain("strk_delta=0.5");
       expect(errors.join("\n")).not.toContain("super-secret-key");
 

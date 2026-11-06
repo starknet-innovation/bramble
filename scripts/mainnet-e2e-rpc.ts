@@ -6,6 +6,7 @@
  * hosts are refused so this job cannot put load on the wallet's own RPC.
  */
 
+import { createHash } from "node:crypto";
 import { isRecord } from "@bramble/core/json";
 import { isServiceUrl, normalizeHostname } from "@bramble/core/service-url";
 import {
@@ -60,6 +61,14 @@ export const dedicatedMainnetRpcUrl = (value: string | undefined): string => {
   }
   return value;
 };
+
+/**
+ * Lowercase hex SHA-256 of the exact URL text. Preflight publishes it as a job
+ * output so `execute` can prove it holds the same endpoint without the URL
+ * itself appearing in an output or a log.
+ */
+export const rpcUrlSha256 = (rpcUrl: string): string =>
+  createHash("sha256").update(rpcUrl, "utf8").digest("hex");
 
 /**
  * Canonical non-zero account address, or a static error that does not echo
@@ -134,6 +143,21 @@ const readUint256 = async (
 };
 
 /**
+ * Returns `value` only when it passes {@link dedicatedMainnetRpcUrl} and
+ * answers `starknet_chainId` with mainnet. Throws otherwise, including when the
+ * endpoint is unreachable or redirects. Never substitutes another endpoint and
+ * never includes `value` in the thrown message.
+ */
+export const assertDedicatedMainnetRpc = async (
+  value: string | undefined,
+  fetchImpl: RpcFetch = fetch,
+): Promise<string> => {
+  const rpcUrl = dedicatedMainnetRpcUrl(value);
+  await assertMainnet(fetchImpl, rpcUrl);
+  return rpcUrl;
+};
+
+/**
  * Reads the hot wallet's STRK and native USDC balances. Fails closed when the
  * RPC is not dedicated mainnet or either balance is not a uint256. `rpcUrl`
  * is not included in any thrown message.
@@ -143,10 +167,9 @@ export const readHotWalletBalances = async (input: {
   readonly fetchImpl?: RpcFetch;
   readonly rpcUrl: string;
 }): Promise<HotWalletBalances> => {
-  const rpcUrl = dedicatedMainnetRpcUrl(input.rpcUrl);
   const address = starknetAddress(input.address);
   const fetchImpl = input.fetchImpl ?? fetch;
-  await assertMainnet(fetchImpl, rpcUrl);
+  const rpcUrl = await assertDedicatedMainnetRpc(input.rpcUrl, fetchImpl);
   const strk = await readUint256(fetchImpl, rpcUrl, STRK_TOKEN_ADDRESS, address);
   const usdc = await readUint256(fetchImpl, rpcUrl, USDC_TOKEN_ADDRESS, address);
   return { strk, usdc };

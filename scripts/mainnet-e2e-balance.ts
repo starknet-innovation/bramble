@@ -12,14 +12,21 @@
  * hosted jobs that never hold the signing key or the release commit. The
  * preflight's raw balances travel to `post` as job outputs
  * (MAINNET_E2E_STRK_BEFORE_RAW, MAINNET_E2E_USDC_BEFORE_RAW), so code under
- * test cannot rewrite the baseline its spend is measured against.
+ * test cannot rewrite the baseline its spend is measured against. Preflight
+ * also reports `rpc_sha256`, the SHA-256 of the RPC URL it validated, so
+ * `execute` can refuse any other endpoint without the URL leaving the secret.
  *
  * Requires MAINNET_E2E_ADDRESS, MAINNET_E2E_RPC_URL, and
  * MAINNET_E2E_REPORT_FILE. MAINNET_E2E_SPEND_TIER is `standard` or `strk20`.
  */
 
 import { writeFile } from "node:fs/promises";
-import { type RpcFetch, readHotWalletBalances, starknetAddress } from "./mainnet-e2e-rpc";
+import {
+  type RpcFetch,
+  readHotWalletBalances,
+  rpcUrlSha256,
+  starknetAddress,
+} from "./mainnet-e2e-rpc";
 import {
   type BalanceJudgement,
   type BalancePair,
@@ -63,6 +70,7 @@ const reportText = (input: {
   readonly after: BalancePair;
   readonly before: BalancePair;
   readonly judgement: BalanceJudgement;
+  readonly rpcSha256: string | null;
   readonly tier: SpendTier;
 }): string => {
   const ceilings = spendCeilings(input.tier);
@@ -79,6 +87,7 @@ const reportText = (input: {
     `strk_before_raw=${input.before.strk.toString()}`,
     `usdc_before_raw=${input.before.usdc.toString()}`,
   ];
+  if (input.rpcSha256 !== null) lines.push(`rpc_sha256=${input.rpcSha256}`);
   return `${lines.join("\n")}\n`;
 };
 
@@ -110,15 +119,18 @@ export const runBalanceCommand = async (
       throw new Error("MAINNET_E2E_REPORT_FILE is required");
     }
     const stored = phase === "post" ? readBefore(env) : null;
+    const validatedRpcUrl = envValue(env, "MAINNET_E2E_RPC_URL");
     const balances = await readHotWalletBalances({
       address,
-      rpcUrl: envValue(env, "MAINNET_E2E_RPC_URL"),
+      rpcUrl: validatedRpcUrl,
       ...(fetchImpl ? { fetchImpl } : {}),
     });
     const before = stored ?? balances;
     const after = balances;
     const judgement = judgeBalances({ after, before, phase, tier });
-    await writeText(reportPath, reportText({ address, after, before, judgement, tier }));
+    // Reached only after the URL passed the dedicated-HTTPS and chain-id checks.
+    const rpcSha256 = phase === "preflight" ? rpcUrlSha256(validatedRpcUrl) : null;
+    await writeText(reportPath, reportText({ address, after, before, judgement, rpcSha256, tier }));
     if (judgement.kind !== "ok") {
       console.error(judgement.message);
       return 1;

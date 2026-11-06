@@ -36,6 +36,8 @@ reach.
   never shares a runner with the key.
 - `preflight` reads the balances before the run and passes them to `post` as
   job outputs. The code under test cannot rewrite that baseline.
+- `preflight` also passes `rpc_sha256`, the SHA-256 of the RPC URL it
+  validated, as a job output. See [One RPC endpoint](#one-rpc-endpoint).
 - Test output is never printed. `execute` reports counts and verdicts from the
   workflow's own inline code (Playwright's JSON stats, fixed markers from the
   gasless script). Rerun locally to see the full output.
@@ -43,6 +45,26 @@ reach.
 The release code in `execute` still runs with the key. That is the point of
 the test, and why the [maintainer setup](#maintainer-setup) restricts who can
 write a release branch and who approves a run.
+
+## One RPC endpoint
+
+`execute` uses exactly the RPC endpoint `preflight` validated, or it stops
+before any test signs. Before the tests, its **Check the RPC matches
+preflight** step:
+
+- hashes its own `MAINNET_E2E_RPC_URL` and compares it with preflight's
+  `rpc_sha256`. A missing hash or a different URL (for example, different
+  values in `mainnet-e2e` and `mainnet-e2e-balance`) fails the run;
+- applies preflight's rules again: HTTPS only, not
+  `wallet.nodes.starknet.org` or `mainnet.nodes.starknet.org`, and
+  `starknet_chainId` must answer mainnet. An endpoint that is down, redirects
+  or answers another chain fails the run.
+
+The gasless script applies the same rules again in CI (`requireCiMainnetRpc`
+in `scripts/gasless-mainnet-rpc.ts`). In CI it never falls back to the
+wallet's shared RPC or an sncast URL; local runs keep the fallback.
+
+The URL is compared by hash and never printed or passed as an output.
 
 ## When it runs
 
@@ -102,12 +124,14 @@ the run.
 | Secret | Environment | Purpose |
 | --- | --- | --- |
 | `MAINNET_E2E_PRIVATE_KEY` | `mainnet-e2e` | The hot wallet's signing key |
-| `MAINNET_E2E_RPC_URL` | `mainnet-e2e` and `mainnet-e2e-balance` | Dedicated HTTPS mainnet RPC. Not `wallet.nodes.starknet.org` or `mainnet.nodes.starknet.org` |
+| `MAINNET_E2E_RPC_URL` | `mainnet-e2e` and `mainnet-e2e-balance` | Dedicated HTTPS mainnet RPC. Not `wallet.nodes.starknet.org` or `mainnet.nodes.starknet.org`. Must be the same value in both environments |
 | `MAINNET_E2E_DISCOVERY_URL` | `mainnet-e2e`, STRK20 tier only | STRK20 discovery service |
 | `MAINNET_E2E_PROVER_URL` | `mainnet-e2e`, STRK20 tier only | STRK20 proving service |
 
 `vars.MAINNET_E2E_STRK20=true` opts into the STRK20 lifecycle. Leave it unset
-for the standard tier.
+for the standard tier. **Keep the STRK20 tier off** until every STRK20 signing
+path charges the per-send budget before signing (see [The real cap is the
+balance](#the-real-cap-is-the-balance)).
 
 ### What `execute` exports
 
@@ -164,7 +188,12 @@ Two checks bound a run's spend:
   run's budget. A token other than STRK or native USDC, or a fee that would
   take the run over its cap, is refused before signing.
 - After the run, `post` compares the balances with the preflight baseline and
-  fails when the delta exceeds the per-run cap.
+  fails when the delta exceeds the per-run cap, or when a balance ends above
+  the maximum.
+
+The minimum is a preflight rule only. A normal run spends, so the ending
+balance may fall below the minimum; `post` does not fail for that. The next
+preflight does, and asks for a top-up.
 
 Both guard against a buggy test. Neither stops hostile code that holds the
 key; only the balance does.
@@ -178,8 +207,13 @@ secrets, and fund about **25 STRK** (minimum **21 STRK**, maximum **30 STRK**,
 per-run cap **22 STRK**). The lifecycle deposits 0.05 STRK. At the pool fee
 documented in [STRK20_PRIVACY.md](STRK20_PRIVACY.md) the run spends about
 12–16 STRK and leaves part of the deposit private. USDC limits stay on the
-standard tier. The lifecycle spec does not yet charge the per-send budget;
-until it does, only the post-run check and the balance bound it.
+standard tier. After a normal STRK20 run the balance is below 21 STRK; that
+passes `post` and the next preflight asks for a top-up.
+
+**The STRK20 tier must stay off.** Leave `vars.MAINNET_E2E_STRK20` unset
+until every STRK20 signing path, including the lifecycle spec, charges the
+per-send budget before it signs. Today the lifecycle spec does not, so only
+the post-run check and the balance would bound it.
 
 ## Rotate the key
 
@@ -198,6 +232,8 @@ The next run picks up the new secret. No workflow edit is required.
 | `MAINNET_E2E_CONFIGURED` is not `true` | Green skip. No runner, no secret read |
 | Enabled, any variable or secret missing | Red. The missing names are listed, not the values |
 | Balance below the minimum or above the maximum | Red, before any test, and a tracking issue |
+| `execute`'s RPC differs from preflight's, is not dedicated HTTPS, is down, or is not mainnet | Red, before any test. No fallback |
 | A send would exceed the per-run cap | Red, refused before signing |
 | Playwright runs and executes no test | Red |
 | A test fails, or the spend exceeds the cap | Red, with before/after/spent in the summary and the issue |
+| A run ends below the minimum, inside the cap | Green. The next preflight asks for a top-up |

@@ -9,7 +9,9 @@
  * no secret. `execute` holds the key and may not install, build, check out,
  * or print raw test output. `preflight` and `post` run trusted `main` code
  * without the key or the release commit, and pass the spend baseline as a
- * job output the code under test cannot write.
+ * job output the code under test cannot write. `execute` uses exactly the RPC
+ * preflight validated: it compares a SHA-256 job output, re-checks HTTPS, the
+ * shared hosts and the mainnet chain id, and never falls back.
  * Parsing is left to the website-deploy policy, which already fails closed
  * when any workflow is not YAML.
  */
@@ -281,6 +283,42 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
     "::add-mask::",
     "mainnet execution must mask the hot-wallet secrets",
   );
+  requireText(
+    failures,
+    preflight,
+    `rpc_sha256: ${GITHUB_EXPRESSION} steps.balance.outputs.rpc_sha256 }}`,
+    "the preflight must publish the hash of the RPC it validated",
+  );
+  for (const control of [
+    `PREFLIGHT_RPC_SHA256: ${GITHUB_EXPRESSION} needs.preflight.outputs.rpc_sha256 }}`,
+    '[ "$actual" != "$PREFLIGHT_RPC_SHA256" ]; then',
+  ]) {
+    requireText(
+      failures,
+      execute,
+      control,
+      "mainnet execution must use exactly the RPC preflight validated",
+    );
+  }
+  for (const control of [
+    '[[ "$MAINNET_E2E_RPC_URL" == https://* ]] || {',
+    "--proto '=https'",
+    'case "${host,,}" in wallet.nodes.starknet.org|mainnet.nodes.starknet.org) echo',
+    'if [ "${chain,,}" != "0x534e5f4d41494e" ]; then',
+  ]) {
+    requireText(
+      failures,
+      execute,
+      control,
+      "mainnet execution must refuse a non-HTTPS, shared, unavailable or non-mainnet RPC",
+    );
+  }
+  const rpcCheck = execute.indexOf('if [ "${chain,,}" != "0x534e5f4d41494e" ]; then');
+  const firstTest = execute.indexOf("      - name: Playwright mainnet");
+  const secretsStep = execute.indexOf("        id: secrets\n");
+  if (rpcCheck < 0 || firstTest < 0 || !(secretsStep < rpcCheck && rpcCheck < firstTest)) {
+    failures.push("mainnet execution must check the RPC in the secrets step, before any live test");
+  }
   if (
     occurrences(source, "actions/upload-artifact") !== occurrences(build, "actions/upload-artifact")
   ) {

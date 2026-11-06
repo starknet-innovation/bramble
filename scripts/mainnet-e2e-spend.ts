@@ -30,7 +30,11 @@ const USDC_DECIMALS = nativeUsdc.decimals;
 /** Which ceiling set a run is judged against. */
 export type SpendTier = "standard" | "strk20";
 
-/** One token's preflight window and per-run spend cap, in raw units. */
+/**
+ * One token's preflight window and per-run spend cap, in raw units. `minRaw`
+ * is a preflight-only requirement; the post-run check uses `capRaw` and
+ * `maxRaw`.
+ */
 export type TokenCeiling = {
   readonly capRaw: bigint;
   readonly decimals: number;
@@ -142,9 +146,13 @@ export const formatSignedAmount = (raw: bigint, decimals: number): string =>
 
 type Problem = { readonly kind: Exclude<BalanceVerdictKind, "ok">; readonly message: string };
 
-const holdingProblem = (raw: bigint, ceiling: TokenCeiling): Problem | null => {
+const holdingProblem = (
+  raw: bigint,
+  ceiling: TokenCeiling,
+  rule: "maximum-only" | "minimum-and-maximum",
+): Problem | null => {
   const rendered = formatTokenAmount(raw, ceiling.decimals);
-  if (raw < ceiling.minRaw) {
+  if (rule === "minimum-and-maximum" && raw < ceiling.minRaw) {
     return {
       kind: "below-minimum",
       message: `Hot wallet ${ceiling.symbol} balance ${rendered} is below the ${formatTokenAmount(ceiling.minRaw, ceiling.decimals)} minimum. Fund this account before rerunning.`,
@@ -178,9 +186,14 @@ const spendProblem = (
 };
 
 /**
- * Judges a preflight reading, or a post-run pair, against `tier`. Preflight
- * ignores deltas. Post-run checks the ending balance and the spend. The first
- * problem's kind is the verdict; every problem is included in `message`.
+ * Judges a preflight reading, or a post-run pair, against `tier`.
+ *
+ * Preflight checks the starting balance against the minimum and maximum and
+ * ignores deltas. Post-run checks the spend against the per-run cap and that
+ * the ending balance is not above the maximum. It does not apply the starting
+ * minimum: a normal run spends, so the ending balance may fall below the
+ * minimum the next preflight requires. The first problem's kind is the
+ * verdict; every problem is included in `message`.
  */
 export const judgeBalances = (input: {
   readonly after: BalancePair;
@@ -191,8 +204,9 @@ export const judgeBalances = (input: {
   const ceilings = spendCeilings(input.tier);
   const observed = input.phase === "preflight" ? input.before : input.after;
   const problems: Problem[] = [];
-  const strkHolding = holdingProblem(observed.strk, ceilings.strk);
-  const usdcHolding = holdingProblem(observed.usdc, ceilings.usdc);
+  const holdingRule = input.phase === "preflight" ? "minimum-and-maximum" : "maximum-only";
+  const strkHolding = holdingProblem(observed.strk, ceilings.strk, holdingRule);
+  const usdcHolding = holdingProblem(observed.usdc, ceilings.usdc, holdingRule);
   if (strkHolding) problems.push(strkHolding);
   if (usdcHolding) problems.push(usdcHolding);
   let strkDelta = 0n;

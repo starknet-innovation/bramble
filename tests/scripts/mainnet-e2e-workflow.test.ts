@@ -162,4 +162,75 @@ describe("mainnet E2E workflow policy", () => {
     );
     expect(failures).toContain("mainnet execution must fail when any hot-wallet secret is missing");
   });
+
+  test("uses exactly the RPC preflight validated, with no fallback", async () => {
+    const sources = await readWorkflowSources();
+    const failuresAfter = (search: string, replacement: string): string[] =>
+      mainnetE2eWorkflowFailures(mutate(sources, search, replacement)[WORKFLOW] ?? "");
+    const same = "mainnet execution must use exactly the RPC preflight validated";
+    const refused =
+      "mainnet execution must refuse a non-HTTPS, shared, unavailable or non-mainnet RPC";
+    expect(
+      failuresAfter(`      rpc_sha256: ${EXPRESSION} steps.balance.outputs.rpc_sha256 }}\n`, ""),
+    ).toContain("the preflight must publish the hash of the RPC it validated");
+    expect(
+      failuresAfter(
+        `PREFLIGHT_RPC_SHA256: ${EXPRESSION} needs.preflight.outputs.rpc_sha256 }}`,
+        `PREFLIGHT_RPC_SHA256: ${EXPRESSION} needs.build.outputs.rpc_sha256 }}`,
+      ),
+    ).toContain(same);
+    expect(
+      failuresAfter('[ "$actual" != "$PREFLIGHT_RPC_SHA256" ]; then', "false; then"),
+    ).toContain(same);
+    expect(failuresAfter('[[ "$MAINNET_E2E_RPC_URL" == https://* ]] || {', "true || {")).toContain(
+      refused,
+    );
+    expect(failuresAfter("--proto '=https' ", "")).toContain(refused);
+    expect(
+      failuresAfter(
+        "wallet.nodes.starknet.org|mainnet.nodes.starknet.org) echo",
+        "wallet.nodes.starknet.org) echo",
+      ),
+    ).toContain(refused);
+    expect(
+      failuresAfter('if [ "${chain,,}" != "0x534e5f4d41494e" ]; then', "if false; then"),
+    ).toContain(refused);
+    const source = sources[WORKFLOW] ?? "";
+    const chainCheck = source.indexOf('          if [ "${chain,,}" != "0x534e5f4d41494e" ]; then');
+    const chainEnd = source.indexOf("          fi\n", chainCheck) + "          fi\n".length;
+    const gasless = source.indexOf("      - name: Gasless mainnet\n");
+    expect(chainCheck).toBeGreaterThan(0);
+    const moved = `${source.slice(0, chainCheck)}${source.slice(chainEnd, gasless)}      - name: Late RPC check\n        run: |\n${source.slice(chainCheck, chainEnd)}${source.slice(gasless)}`;
+    expect(mainnetE2eWorkflowFailures(moved)).toContain(
+      "mainnet execution must check the RPC in the secrets step, before any live test",
+    );
+  });
+
+  test("the RPC chain-id probe fails closed on redirects, errors and bad JSON", async () => {
+    const source = (await readWorkflowSources())[WORKFLOW] ?? "";
+    const start = source.indexOf('          body="$(printf');
+    const end = source.indexOf("          fi\n", start) + "          fi\n".length;
+    expect(start).toBeGreaterThan(0);
+    // The workflow's own probe, with curl stubbed: no network is reached.
+    const script = [
+      "set -euo pipefail",
+      'curl() { cat >/dev/null; printf "%s" "$FAKE_BODY"; return "$FAKE_STATUS"; }',
+      "MAINNET_E2E_RPC_URL=https://rpc.example/v0_10",
+      source.slice(start, end),
+      "echo PROBE_PASSED",
+    ].join("\n");
+    const probe = (body: string, status: number): boolean => {
+      const run = Bun.spawnSync(["bash", "-c", script], {
+        env: { FAKE_BODY: body, FAKE_STATUS: String(status), PATH: process.env["PATH"] ?? "" },
+      });
+      return run.exitCode === 0 && run.stdout.toString().includes("PROBE_PASSED");
+    };
+    const mainnet = '{"jsonrpc":"2.0","id":1,"result":"0x534e5f4d41494e"}';
+    expect(probe(`${mainnet}\n200`, 0)).toBe(true);
+    expect(probe(`${mainnet}\n302`, 0)).toBe(false);
+    expect(probe(`${mainnet}\n200`, 18)).toBe(false);
+    expect(probe(`${mainnet} trailing\n200`, 0)).toBe(false);
+    expect(probe('{"result":"0x534e5f5345504f4c4941"}\n200', 0)).toBe(false);
+    expect(probe("", 7)).toBe(false);
+  });
 });
