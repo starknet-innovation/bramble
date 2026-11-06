@@ -1,6 +1,6 @@
 /**
- * Home's staking bindings (issue 750): the Tokens and Staking tabs (click, and
- * the arrow, Home and End keys), the "Staked" line that opens the Staking tab,
+ * Home's staking bindings (issue 750): the Tokens, NFTs and Staking tabs
+ * (click, and the arrow, Home and End keys, over the tabs offered), the "Staked" line that opens the Staking tab,
  * the Stake button that opens the validator list, and the position rows that
  * open their validator. Opening a validator records only its staker address
  * and any directory name; the staking screen reads everything on chain again.
@@ -9,7 +9,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { StakingState } from "./staking-directory-client";
 import type { HomeTab } from "./staking-home";
 
-const TABS: readonly HomeTab[] = ["tokens", "staking"];
+const TABS: readonly HomeTab[] = ["tokens", "nfts", "staking"];
 
 /**
  * Dependencies the Home staking bindings close over. `state` and `setState`
@@ -43,16 +43,20 @@ export const bindHomeStaking = (deps: HomeStakingUiDeps): void => {
       if (value) select(value);
     });
     tab.addEventListener("keydown", (event) => {
-      const index = TABS.findIndex((item) => item === tab.dataset["homeTab"]);
+      // Only the tabs on screen: NFTs and Staking are each offered only where
+      // they apply.
+      const tabs = TABS.filter((item) => app?.querySelector(`[data-home-tab="${item}"]`));
+      if (tabs.length === 0) return;
+      const index = tabs.findIndex((item) => item === tab.dataset["homeTab"]);
       const next =
         event.key === "ArrowRight"
-          ? TABS[(index + 1) % TABS.length]
+          ? tabs[(index + 1) % tabs.length]
           : event.key === "ArrowLeft"
-            ? TABS[(index + TABS.length - 1) % TABS.length]
+            ? tabs[(index + tabs.length - 1) % tabs.length]
             : event.key === "Home"
-              ? TABS[0]
+              ? tabs[0]
               : event.key === "End"
-                ? TABS[TABS.length - 1]
+                ? tabs[tabs.length - 1]
                 : undefined;
       if (index < 0 || next === undefined) return;
       event.preventDefault();

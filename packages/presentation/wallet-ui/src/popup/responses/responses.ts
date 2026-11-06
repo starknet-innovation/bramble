@@ -57,6 +57,7 @@ export {
   type DiscoveredNft,
   type DiscoverNftsResponse,
   isDiscoverNftsResponse,
+  type NftCoverage,
 } from "./responses-nft";
 /**
  * Re-exported fiat price and token chart validators for one import path.

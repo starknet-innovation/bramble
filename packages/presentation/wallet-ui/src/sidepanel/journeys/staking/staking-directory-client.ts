@@ -59,7 +59,7 @@ export type StakingState = {
   readonly sort: StakingSort;
   readonly validator: StakingValidatorState;
   /** Home's open portfolio tab, kept for this account and network. */
-  readonly homeTab?: "staking" | "tokens";
+  readonly homeTab?: "nfts" | "staking" | "tokens";
 };
 
 /** The state before the first read. */

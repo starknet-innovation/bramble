@@ -336,12 +336,18 @@ describe("home portfolio section", () => {
     document.body.replaceChildren();
   });
 
-  test("renders Tokens and Staking tabs on Mainnet, and no Collectibles tab while it is parked", () => {
+  test("on Mainnet with NFTs on (the default), tabs read Tokens · NFTs · Staking, Tokens open", () => {
     const h = mount();
     const section = el(h.app, ".home-tabs");
-    const tabs = [...section.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
-    expect(tabs).toEqual(["Tokens", "Staking"]);
-    expect(section.innerHTML).not.toContain("Collectibles");
+    const tabs = [...section.querySelectorAll<HTMLElement>('[role="tab"]')];
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Tokens", "NFTs", "Staking"]);
+    expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual([
+      "true",
+      "false",
+      "false",
+    ]);
+    expect(el(section, "#home-panel-nfts").hidden).toBe(true);
+    expect(section.innerHTML).not.toContain(">Collectibles<");
     expect(section.querySelector(".tab-panel")).toBeNull();
   });
 });
