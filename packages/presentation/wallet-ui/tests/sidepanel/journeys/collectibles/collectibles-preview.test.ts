@@ -64,7 +64,8 @@ const home = (preferences: WalletPreferences | null): string =>
     { error: null, loading: false, value: null },
     null,
     false,
-    { coverage: "none", discovered: [], selected: "nfts" },
+    null,
+    { coverage: "none", discovered: [] },
   );
 
 describe("NFTs on Home", () => {
@@ -77,20 +78,37 @@ describe("NFTs on Home", () => {
   });
 
   test("the tab replaces the Collectibles item in the Portfolio actions menu", () => {
-    const html = homeTabs({ balances: [] }, prefs(), {}, {}, "usd", undefined, null, true, {
-      panel: "<p>nfts</p>",
-      selected: "tokens",
-    });
+    const html = homeTabs(
+      { balances: [] },
+      prefs(),
+      {},
+      {},
+      "usd",
+      undefined,
+      null,
+      true,
+      null,
+      "<p>nfts</p>",
+    );
     expect(html).not.toContain(">Collectibles<");
     expect(html).not.toMatch(/data-view="nfts"[^>]*role="menuitem"/);
     expect(html.match(/role="menuitem"/g)).toHaveLength(2);
   });
 
   test("the open tab is shown and the other panel is hidden", () => {
-    const nftsOpen = homeTabs({ balances: [] }, prefs(), {}, {}, "usd", undefined, null, true, {
-      panel: "<p>gallery</p>",
-      selected: "nfts",
-    });
+    const nftsOpen = homeTabs(
+      { balances: [] },
+      prefs(),
+      {},
+      {},
+      "usd",
+      undefined,
+      null,
+      true,
+      null,
+      "<p>gallery</p>",
+      "nfts",
+    );
     expect(nftsOpen).toContain(
       'id="home-tab-nfts" data-home-tab="nfts" type="button" role="tab" aria-controls="home-panel-nfts" aria-selected="true"',
     );
@@ -180,7 +198,8 @@ describe("NFT hydration", () => {
   }) => {
     const cache = emptyRenderCache();
     cache.preferences = overrides.preferences === undefined ? prefs() : overrides.preferences;
-    cache.homeTab = overrides.homeTab ?? "tokens";
+    // Home's open tab is remembered in the staking state, as in production.
+    cache.staking = { ...cache.staking, homeTab: overrides.homeTab ?? "tokens" };
     const calls: string[] = [];
     const jobs: Array<Promise<unknown>> = [];
     const wallet = {

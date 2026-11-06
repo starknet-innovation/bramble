@@ -10,6 +10,7 @@ import {
   nftsShown,
   type WalletPreferences,
 } from "@bramble/settings/preferences";
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import { type AccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type {
@@ -43,8 +44,9 @@ import {
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
+import type { StakingState } from "../staking/staking-directory-client";
+import { stakedLine } from "../staking/staking-home";
 import { heroChange } from "./hero-change";
-import type { HomeTab } from "./home-tab-bar";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
 import { readOnlyNotice } from "./recovery-view";
 import { vipEligible, vipNotice } from "./vip-notice";
@@ -84,11 +86,10 @@ export const privateTotalPending = (
   privacyIneligibleKind(privacy) === null &&
   deploymentKnownFromPrivacy(deployment, privacy) !== false;
 
-/** What the Home NFTs tab shows: the gallery lanes and the open tab. */
+/** What the Home NFTs tab shows: the gallery lanes and their coverage. */
 export type HomeNfts = {
   readonly coverage: NftCoverage;
   readonly discovered: readonly DiscoveredNft[];
-  readonly selected: HomeTab;
 };
 
 /**
@@ -109,15 +110,15 @@ export const homeScreen = (
   privacy: PrivacyDisclosureState,
   signability: SignabilityVerdict | null = null,
   privateTotalWaitOver = false,
+  stakingState: StakingState | null = null,
   nfts: HomeNfts | null = null,
 ): string => {
+  // The Staking tab and the "Staked" line exist only where staking is on.
+  const staking = account !== null && stakingNetwork(status.networkId) ? stakingState : null;
   // The NFTs tab exists only while NFTs are turned on (the default).
-  const nftsTab =
+  const nftsPanel =
     nfts && nftsShown(preferences)
-      ? {
-          panel: homeNftsPanel(status, account, preferences, nfts.discovered, nfts.coverage),
-          selected: nfts.selected,
-        }
+      ? homeNftsPanel(status, account, preferences, nfts.discovered, nfts.coverage)
       : null;
   // Read-only until proven otherwise never — the flag is advisory UX; the
   // transaction path enforces. Null (unknown) renders as a normal account.
@@ -159,6 +160,7 @@ export const homeScreen = (
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${totalKnown ? heroChange(unified, prices, changes, currency, !showTotal) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
+      ${staking ? stakedLine(staking, preferences?.tokens ?? []) : ""}
       ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
       ${account ? vipNotice(vipEligible({ currency, preferences, showTotal, total })) : noAccountEmpty(status)}
     </section>
@@ -177,6 +179,6 @@ export const homeScreen = (
         )}
       </div>
     </section>
-    ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment, fundedForFees, nftsTab)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment, fundedForFees, staking, nftsPanel, stakingState?.homeTab ?? "tokens")}`,
   );
 };

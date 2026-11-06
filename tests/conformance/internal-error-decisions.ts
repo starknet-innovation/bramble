@@ -135,6 +135,7 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Ready multisig request failed",
   "Recovery phrase failed",
   "Signer key lookup failed",
+  "Staking failed",
   "Sync Ready multisig failed",
   "That request didn't go through",
   "The transfer didn't go through",

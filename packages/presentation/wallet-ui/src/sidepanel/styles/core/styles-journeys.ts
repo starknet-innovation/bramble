@@ -10,7 +10,51 @@ import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/to
  */
 export const JOURNEY_STYLES = `
   #deploy-review { display: grid; gap: ${SPACE.sm}; width: 100%; }
-  .allowance-review {
+  /* Staking rows reuse the allowance group; actions and amount fields sit
+     under the position lines, full width, so nothing crowds the row. */
+  .staking-actions { display: flex; flex-wrap: wrap; gap: ${SPACE.sm}; margin-top: ${SPACE.xs}; }
+  .staking-form {
+    align-items: center;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin-top: ${SPACE.xs};
+  }
+  .staking-form input { min-width: 0; }
+  /* The paste field and the opened validator: the address wraps, never clips. */
+  .staking-paste { margin-bottom: ${SPACE.sm}; }
+  .staking-validator { display: grid; gap: ${SPACE.xs}; justify-items: start; margin-bottom: ${SPACE.sm}; }
+  .staking-validator code { max-width: 100%; }
+  .staking-more { display: flex; justify-content: center; margin-top: ${SPACE.sm}; }
+  /* A validator card or position row is one button: inline text, left-aligned,
+     the row's own padding, a hover fill and the shared focus ring. */
+  .staking-card-row { padding: 0; }
+  button.staking-card {
+    background: transparent;
+    border-radius: ${RADIUS.lg};
+    color: var(--bramble-text);
+    font-weight: ${WEIGHT.regular};
+    justify-content: space-between;
+    padding: ${SPACE.md} ${SPACE.lg};
+    text-align: left;
+    width: 100%;
+  }
+  button.staking-card .staking-copy > * { display: block; }
+  @media (hover: hover) and (pointer: fine) {
+    button.staking-card:not(:disabled):hover { background: var(--bramble-hover); }
+  }
+  .staking-paste-label { margin-top: ${SPACE.md}; }
+  .home-staking { display: grid; gap: ${SPACE.sm}; }
+  button.hero-staked {
+    background: transparent;
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.xs};
+    min-height: 32px;
+    padding: 0 ${SPACE.xs};
+  }
+  button.hero-staked .icon { height: 13px; width: 13px; }
+  .allowance-review, .staking-review {
     color: var(--bramble-text);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};

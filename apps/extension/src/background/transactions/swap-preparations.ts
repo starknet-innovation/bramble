@@ -40,13 +40,21 @@ export type SwapPreparation = {
 /**
  * Public review subset returned to the extension side panel.
  */
-export type SwapPreparationReview = {
+type SwapPreparationReview = {
   readonly flags: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly minBuyAmount: string;
   readonly payloadDigest: string;
   readonly reviewedFee: FeeEstimate;
   readonly summaries: readonly string[];
+};
+
+/**
+ * Frozen executable swap review returned before the final one-time confirm.
+ */
+export type SwapPreparationResponse = {
+  readonly ok: true;
+  readonly swapPreparation: SwapPreparationReview;
 };
 
 const clonePreparation = (preparation: SwapPreparation): SwapPreparation =>

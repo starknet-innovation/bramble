@@ -41,6 +41,7 @@ import {
   strk20ViewingKeyRecord,
 } from "./key-boundary-fixtures";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
+import { makeStakingChain, stakingReader } from "./staking-chain";
 import { makeStrk20Service } from "./strk20-background";
 
 /** The tracked mainnet ETH record the doubles quote balances and calls in. */
@@ -175,8 +176,7 @@ export const walletStub = {
   async grantOrigin() {
     return [account];
   },
-  // Recorded through the vault's own merge, so the scan exercises the real
-  // record shape; the records are not secret but must stay privileged.
+  // Recorded through the vault's own merge: real record shape, still privileged.
   async recordShadowAccountScope({
     vaultPassphrase,
     ...input
@@ -199,8 +199,7 @@ export const walletStub = {
     }
     return vault;
   },
-  // Confirms the passphrase without writing, so a wrong one never reaches the
-  // grant clear. The correct one continues into recovery below.
+  // Checks the passphrase without writing; a wrong one never reaches the grant clear.
   async assertRecoverableVault(passphrase: string) {
     if (passphrase !== SECRET_PASSPHRASE) {
       throw new Error("bad passphrase");
@@ -488,6 +487,7 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
         return input.prepared.transactionHash;
       },
     },
+    readAtPinnedBlock: stakingReader(makeStakingChain()),
     strk20: strk20ServiceFor(state),
     async verifyAccountClassHash() {
       return { onChainClassHash: account.classHash, status: "verified" };

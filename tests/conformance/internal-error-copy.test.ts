@@ -188,7 +188,7 @@ const KEPT_VISIBLE = new Set([
   "Argent multisig intent x",
   "Argent multisig submission claim x",
   "Declared Argent multisig class is malformed",
-  "Invalid Argent multisig accepted block response",
+  "Invalid accepted block response",
   "Invalid Argent multisig call",
   "Invalid Argent multisig calls",
   "Invalid Argent multisig calldata length",

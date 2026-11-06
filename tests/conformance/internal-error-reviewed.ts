@@ -390,6 +390,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "This review no longer matches what was prepared. Review it again.",
   ],
   [
+    "invalid staking preparation commitment",
+    "This review no longer matches what was prepared. Review it again.",
+  ],
+  [
     "argent account class hash does not match the pinned release",
     "This contract doesn't match the version Bramble expects, so nothing was submitted.",
   ],

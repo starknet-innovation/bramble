@@ -45,6 +45,7 @@ import {
   type SubmitPreparedArgentMultisigInvokeV3Input,
   submitPreparedArgentMultisigInvokeV3,
 } from "@bramble/starknet/multisig-invoke";
+import { readAtPinnedBlock } from "@bramble/starknet/pinned-block";
 import { createRpcProvider, withRpcFallback } from "@bramble/starknet/provider";
 import {
   type AccountOwnerInput,
@@ -95,7 +96,11 @@ import {
   scanExternalAllowances,
   type TrackedAllowanceScan,
 } from "@bramble/transactions/allowance-scan";
-import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions/starkscan";
+import {
+  createStarkscanClient,
+  type StarkscanClient,
+  type StarkscanHttp,
+} from "@bramble/transactions/starkscan";
 import { createStarkscanNftSource } from "@bramble/transactions/starkscan-nfts";
 import {
   createExplorerFirstHistory,
@@ -265,6 +270,22 @@ export type RuntimeRpc = {
    */
   readonly getNftMetadata?: (input: NftTokenUriInput) => Promise<NftTokenMetadata | null>;
   readonly getTokenBalances: (input: BalanceInput) => ReturnType<typeof getTokenBalances>;
+  /**
+   * Runs a group of read-only contract calls at one accepted block (staking
+   * pool verification). Optional so existing RPC stubs stay valid; staking
+   * refuses when it is absent.
+   */
+  readonly readAtPinnedBlock?: typeof readAtPinnedBlock;
+  /**
+   * The explorer lane's Starkscan client for a network (same base, per-network
+   * override and hardened transport), for the staking directory and "Your
+   * stakes". Optional so existing stubs stay valid; without it those reads are
+   * off and staking is paste-only.
+   */
+  readonly starkscanFor?: (
+    networkId: StarknetNetworkId,
+    preferences: ExplorerLanePreferences,
+  ) => Pick<StarkscanClient, "getStakingAddress" | "getStakingValidators">;
   readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
   /**
    * Reads the account's recent on-chain transaction history for the activity
@@ -448,7 +469,9 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
       readPreferences,
     }),
   ),
+  readAtPinnedBlock,
   resolveStarkName,
+  starkscanFor: configuredStarkscanClient,
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,

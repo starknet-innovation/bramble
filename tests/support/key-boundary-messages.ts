@@ -30,6 +30,7 @@ import {
 import { LOOKUP_KEY_BOUNDARY_MESSAGES } from "./key-boundary-lookup-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
 import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
+import { STAKING_KEY_BOUNDARY_MESSAGES } from "./key-boundary-staking-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
 import { TOKEN_KEY_BOUNDARY_MESSAGES } from "./key-boundary-token-messages";
 import type { KeyBoundaryMessage } from "./key-boundary-types";
@@ -39,8 +40,7 @@ const STRK_TOKEN_ID = KEY_BOUNDARY_TOKENS.strk.id;
 const ETH_TOKEN_ADDRESS = KEY_BOUNDARY_TOKENS.eth.address;
 const NFT_CONTRACT = KEY_BOUNDARY_NFT_CONTRACT;
 
-// A well-formed SNIP-12 typed message that hashes cleanly, so the sign path
-// reaches its approval instead of stopping at the hash.
+// A well-formed SNIP-12 message that hashes cleanly, so signing reaches its approval.
 const TYPED_DATA = {
   domain: { chainId: "0x534e5f4d41494e", name: "Example", revision: "1", version: "1" },
   message: { contents: "hello" },
@@ -55,8 +55,7 @@ const TYPED_DATA = {
   },
 };
 
-// Broadcast event envelope: emitted by the background, never handled as an
-// inbound request, so it has no scan entry.
+// Broadcast event envelope: emitted by the background, never handled, so no scan entry.
 const OUTBOUND_ONLY = new Set(["wallet.event"]);
 
 /**
@@ -340,6 +339,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: contentSender,
   },
   ...TOKEN_KEY_BOUNDARY_MESSAGES,
+  ...STAKING_KEY_BOUNDARY_MESSAGES,
   { message: { type: "wallet.discoverNfts" }, sender: extensionSender },
   { message: { type: "wallet.loadWatchedNfts" }, sender: extensionSender },
   {

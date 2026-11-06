@@ -113,15 +113,14 @@ describe("sidepanel home", () => {
     expect(html).toContain('id="starkscan-button"');
   });
 
-  test("with NFTs off the portfolio has a Tokens heading, no tablist, and one menu", () => {
+  test("without staking or NFTs, portfolio has a Tokens heading, no tablist, and one menu", () => {
+    // Sepolia (staking off) with NFTs turned off: Tokens is the only section.
     const html = dashboard(
       "home",
-      status,
+      { ...status, networkId: "SN_SEPOLIA" },
       [],
       { ...preferences, collectiblesPreview: false },
-      {
-        balances: [],
-      },
+      { balances: [] },
     );
 
     const portfolio = html.slice(

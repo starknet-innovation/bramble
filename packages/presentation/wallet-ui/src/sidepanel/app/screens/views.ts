@@ -28,13 +28,7 @@ import {
   type WalletStatus,
 } from "../../../popup/responses/responses";
 import { actionableApprovals, approvalTakeover } from "../../journeys/approvals/approval-screen";
-import { nftSendFlow } from "../../journeys/collectibles/nft-send-view";
-import {
-  nftDetailFlow,
-  nftGalleryFlow,
-  nftHiddenFlow,
-  nftWatchFlow,
-} from "../../journeys/collectibles/nft-views";
+import { collectibleJourneyScreen } from "../../journeys/collectibles/nft-screens";
 import {
   multisigAddFlow,
   multisigReceiveFlow,
@@ -51,7 +45,6 @@ import {
 } from "../../journeys/multisig/multisig-views";
 import { activityContacts } from "../../journeys/portfolio/activity-filter";
 import { activityScreen, requestsFlow } from "../../journeys/portfolio/activity-views";
-import type { HomeTab } from "../../journeys/portfolio/home-tab-bar";
 import { homeScreen, strkAvailableForFees } from "../../journeys/portfolio/home-view";
 import { tokenCatalogFlow } from "../../journeys/portfolio/token-catalog-view";
 import {
@@ -69,6 +62,11 @@ import { privacyFlow } from "../../journeys/privacy/privacy-views";
 import type { SendIntent } from "../../journeys/send/send-model";
 import { revealFlow } from "../../journeys/settings/reveal-ui";
 import { settingsScreen } from "../../journeys/settings/settings-views";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
+import { canStakeToken } from "../../journeys/staking/staking-entry";
 import type { BalanceState } from "../../runtime/runtime";
 import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
@@ -100,6 +98,7 @@ type JourneyContext = {
   readonly prices: Readonly<Record<string, number>>;
   readonly privacy: PrivacyDisclosureState;
   readonly privacyJourney: PrivacyJourneyState;
+  readonly staking: StakingState;
   /** A pre-configured send from a shield or unshield shortcut. */
   readonly sendIntent?: SendIntent | null;
   readonly selectedMultisigId: string | null;
@@ -179,50 +178,6 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
     : multisigProposeFlow(context.status, selected, context.preferences, context.multisigPortfolio);
 };
 
-const collectibleJourneyScreen = (
-  activeView: WalletView,
-  context: JourneyContext,
-): string | null => {
-  if (activeView === "nfts") {
-    return nftGalleryFlow(
-      context.status,
-      context.account,
-      context.preferences,
-      context.discoveredNfts,
-      context.nftCoverage,
-    );
-  }
-  if (activeView === "nft-watch") {
-    return nftWatchFlow(context.status, context.account);
-  }
-  if (activeView === "nft-hidden") {
-    return nftHiddenFlow(
-      context.status,
-      context.preferences,
-      context.account,
-      context.discoveredNfts,
-    );
-  }
-  if (activeView === "nft-detail") {
-    return nftDetailFlow(
-      context.status,
-      context.account,
-      context.preferences,
-      context.selectedNftId,
-      context.discoveredNfts,
-    );
-  }
-  return activeView === "nft-send"
-    ? nftSendFlow(
-        context.status,
-        context.account,
-        context.preferences,
-        context.selectedNftId,
-        context.discoveredNfts,
-      )
-    : null;
-};
-
 const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): string | null => {
   if (activeView === "tokens") {
     return tokensFlow(
@@ -265,6 +220,7 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.currency,
     context.privacy,
     context.deployment,
+    canStakeToken(context.status.networkId, token, context.staking),
   );
 };
 
@@ -316,8 +272,8 @@ export const dashboard = (
   signability: SignabilityVerdict | null = null,
   relays: readonly RelaySignature[] = [],
   privateTotalWaitOver = false,
+  staking: StakingState = STAKING_LOADING,
   nftCoverage: NftCoverage = "none",
-  homeTab: HomeTab = "tokens",
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -354,6 +310,7 @@ export const dashboard = (
     selectedNftId,
     selectedTokenId,
     ...(sendIntent ? { sendIntent } : {}),
+    staking,
     status,
     trackedBalances,
   };
@@ -371,6 +328,7 @@ export const dashboard = (
   const simpleFlow = simpleFlowScreen(activeView, {
     account,
     allowances,
+    staking,
     balances: trackedBalances,
     changes,
     classHashVerification,
@@ -475,7 +433,8 @@ export const dashboard = (
               privacy,
               signability,
               privateTotalWaitOver,
-              { coverage: nftCoverage, discovered: discoveredNfts, selected: homeTab },
+              staking,
+              { coverage: nftCoverage, discovered: discoveredNfts },
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}

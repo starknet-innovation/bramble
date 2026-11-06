@@ -90,7 +90,7 @@ export const sceneContent = (cache: RenderData, state: SceneContentState): strin
     cache.signability,
     cache.relays,
     state.privateTotalWaitOver,
+    cache.staking,
     cache.nftCoverage,
-    cache.homeTab,
   );
 };

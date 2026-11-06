@@ -11,10 +11,14 @@ import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { homeNftsPanel } from "../../../../src/sidepanel/journeys/collectibles/nft-home";
 import {
-  bindHomeTabs,
+  STAKING_LOADING,
+  type StakingState,
+} from "../../../../src/sidepanel/journeys/staking/staking-directory-client";
+import {
   type HomeTab,
   homeTabPanels,
-} from "../../../../src/sidepanel/journeys/portfolio/home-tab-bar";
+} from "../../../../src/sidepanel/journeys/staking/staking-home";
+import { bindHomeStaking } from "../../../../src/sidepanel/journeys/staking/staking-home-ui";
 import { COMPONENT_STYLES } from "../../../../src/sidepanel/styles/core/styles-components";
 import { JOURNEY_STYLES } from "../../../../src/sidepanel/styles/core/styles-journeys";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -100,67 +104,98 @@ describe("Home NFTs tab panel", () => {
   });
 });
 
-describe("Home tabs", () => {
-  const mount = (selected: HomeTab) => {
+describe("Home tabs (#845's tab mechanism, with NFTs between Tokens and Staking)", () => {
+  // Mounts the tabs and #845's bindings; each selection repaints, as the
+  // shell's render does, and is recorded from the remembered-tab state.
+  const mount = (selected: HomeTab, staking: StakingState | null, nfts: string | null) => {
     const app = document.createElement("div");
-    const { bar, panels } = homeTabPanels(selected, [
-      { body: "<p>tokens</p>", label: "Tokens", tab: "tokens" },
-      { body: "<p>nfts</p>", label: "NFTs", tab: "nfts" },
-    ]);
-    app.innerHTML = `${bar}${panels}`;
     document.body.append(app);
-    const selections: HomeTab[] = [];
-    bindHomeTabs(app, async (tab) => {
-      selections.push(tab);
-    });
+    let state: StakingState = { ...STAKING_LOADING, homeTab: selected };
+    const selections: Array<HomeTab | undefined> = [];
+    const paint = (): void => {
+      const { bar, panels } = homeTabPanels(
+        state.homeTab ?? "tokens",
+        "<p>tokens</p>",
+        staking,
+        nfts,
+      );
+      app.innerHTML = `${bar}${panels}`;
+      bindHomeStaking({
+        app,
+        navigate: () => undefined,
+        render: async () => paint(),
+        setState: (next) => {
+          state = next;
+          selections.push(next.homeTab);
+        },
+        state: () => state,
+        status: () => ({}) as WalletStatus,
+      });
+    };
+    paint();
     return { app, selections };
   };
-
-  test("tabs read Tokens · NFTs in order, and a click opens a tab", async () => {
-    const { app, selections } = mount("tokens");
-    const tabs = [...app.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["Tokens", "NFTs"]);
-    tabs[1]?.click();
+  const settle = async (): Promise<void> => {
     await Promise.resolve();
-    expect(selections).toEqual(["nfts"]);
+    await Promise.resolve();
+  };
+
+  test("tabs read exactly Tokens · NFTs · Staking, and NFTs is left out when off", () => {
+    const all = mount("tokens", STAKING_LOADING, "<p>nfts</p>");
+    expect([...all.app.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+      "Tokens",
+      "NFTs",
+      "Staking",
+    ]);
+    document.body.replaceChildren();
+    const off = mount("tokens", STAKING_LOADING, null);
+    expect([...off.app.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+      "Tokens",
+      "Staking",
+    ]);
+    document.body.replaceChildren();
+    const noStaking = mount("tokens", null, "<p>nfts</p>");
+    expect(
+      [...noStaking.app.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
+    ).toEqual(["Tokens", "NFTs"]);
   });
 
-  test("arrow, Home and End keys move through the tabs", async () => {
-    const { app, selections } = mount("tokens");
-    const tokens = app.querySelector<HTMLButtonElement>("#home-tab-tokens");
-    const nfts = app.querySelector<HTMLButtonElement>("#home-tab-nfts");
-    tokens?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
-    nfts?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
-    nfts?.dispatchEvent(new KeyboardEvent("keydown", { key: "Home" }));
-    tokens?.dispatchEvent(new KeyboardEvent("keydown", { key: "End" }));
-    tokens?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-    await Promise.resolve();
-    expect(selections).toEqual(["nfts", "tokens", "tokens", "nfts"]);
-  });
-
-  test("activating a tab keeps focus on it across the repaint", async () => {
-    const app = document.createElement("div");
-    document.body.append(app);
-    const paint = (selected: HomeTab): void => {
-      const { bar, panels } = homeTabPanels(selected, [
-        { body: "", label: "Tokens", tab: "tokens" },
-        { body: "", label: "NFTs", tab: "nfts" },
-      ]);
-      // A repaint replaces the tab buttons, as the shell's does.
-      app.innerHTML = `${bar}${panels}`;
-      bindHomeTabs(app, async (tab) => paint(tab));
-    };
-    paint("tokens");
+  test("a click opens NFTs, keeps focus on it, and the choice is remembered", async () => {
+    const { app, selections } = mount("tokens", STAKING_LOADING, "<p>nfts</p>");
     app.querySelector<HTMLButtonElement>("#home-tab-nfts")?.click();
-    await Promise.resolve();
-    await Promise.resolve();
+    await settle();
+    expect(selections).toEqual(["nfts"]);
     expect(document.activeElement?.id).toBe("home-tab-nfts");
-    expect(app.querySelector("#home-tab-nfts")?.getAttribute("aria-selected")).toBe("true");
+    expect(app.querySelector("#home-panel-nfts")?.hasAttribute("hidden")).toBe(false);
   });
 
-  test("a tab that is not offered falls back to the first", () => {
-    const { bar } = homeTabPanels("nfts", [{ body: "", label: "Tokens", tab: "tokens" }]);
-    expect(bar).toContain('aria-selected="true"');
+  test("arrow, Home and End keys move through the offered tabs only", async () => {
+    const { app, selections } = mount("tokens", STAKING_LOADING, "<p>nfts</p>");
+    const key = async (key: string): Promise<void> => {
+      document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key }));
+      await settle();
+    };
+    app.querySelector<HTMLButtonElement>("#home-tab-tokens")?.focus();
+    await key("ArrowRight");
+    await key("ArrowRight");
+    await key("ArrowRight");
+    await key("End");
+    await key("Home");
+    expect(selections).toEqual(["nfts", "staking", "tokens", "staking", "tokens"]);
+    document.body.replaceChildren();
+    // With NFTs off the keys skip straight from Tokens to Staking.
+    const off = mount("tokens", STAKING_LOADING, null);
+    off.app.querySelector<HTMLButtonElement>("#home-tab-tokens")?.focus();
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+    await settle();
+    expect(off.selections).toEqual(["staking"]);
+  });
+
+  test("a remembered tab that is not offered falls back to Tokens", () => {
+    const { bar } = homeTabPanels("nfts", "", STAKING_LOADING, null);
+    expect(bar).toContain(
+      'id="home-tab-tokens" data-home-tab="tokens" type="button" role="tab" aria-controls="home-panel-tokens" aria-selected="true"',
+    );
   });
 });
 

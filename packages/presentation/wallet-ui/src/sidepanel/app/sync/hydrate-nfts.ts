@@ -51,7 +51,8 @@ export const hydrateNfts = (
 ): void => {
   const { activeView, cache, status, wallet } = input;
   if (input.ambient || !nftsShown(cache.preferences)) return;
-  const homeNfts = activeView === "home" && cache.homeTab === "nfts";
+  // Home's open tab is remembered with the staking state (`homeTab`).
+  const homeNfts = activeView === "home" && cache.staking.homeTab === "nfts";
   if (!homeNfts && !NFT_DATA_VIEWS.has(activeView)) return;
   const scope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
   fill(

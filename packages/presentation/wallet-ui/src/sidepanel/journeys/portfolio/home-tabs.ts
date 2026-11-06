@@ -1,7 +1,8 @@
 /**
  * Portfolio section on the home screen: Tokens, plus an NFTs tab while NFTs
- * are turned on (the default); with NFTs off the section renders a heading
- * rather than a one-item tablist (./home-tab-bar). Activity
+ * are turned on (the default) and a Staking tab where staking is switched on,
+ * reading Tokens · NFTs · Staking (../staking/staking-home); with neither the
+ * section renders a heading rather than a one-item tablist. Activity
  * remains a top-level dock destination rather than appearing twice. A single
  * overflow menu progressively discloses asset management, refresh, and
  * settings actions.
@@ -30,10 +31,11 @@ import {
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
+import type { StakingState } from "../staking/staking-directory-client";
+import { type HomeTab, homeTabPanels } from "../staking/staking-home";
 import { activityRecordFacts, counterpartyFact } from "./activity-detail";
 import { type ActivityContact, activityRowAttributes } from "./activity-filter";
 import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
-import { type HomeTab, homeTabPanels } from "./home-tab-bar";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import {
   type PrivateBreakdown,
@@ -388,10 +390,11 @@ export const activityEmptyCopy = (historyUnavailable: boolean): string =>
     : "No activity yet. Transactions for this account appear here.";
 
 /**
- * Renders the portfolio section. With `nfts` given (NFTs turned on), Tokens and
- * NFTs are tabs with `nfts.selected` open; otherwise the section title is a
- * plain heading rather than a one-item tablist, and the token list needs no
- * panel wrapper.
+ * Renders the portfolio section. With an NFTs panel (NFTs turned on) or
+ * staking on, the offered tabs read Tokens · NFTs · Staking with `selected`
+ * open (the remembered tab, `StakingState.homeTab`); otherwise the section
+ * title is a plain heading rather than a one-item tablist, and the token list
+ * needs no panel wrapper.
  */
 export const homeTabs = (
   state: BalanceState,
@@ -406,7 +409,9 @@ export const homeTabs = (
   },
   deployment: boolean | null = null,
   fundedForFees: boolean | null = true,
-  nfts: { readonly panel: string; readonly selected: HomeTab } | null = null,
+  staking: StakingState | null = null,
+  nfts: string | null = null,
+  selected: HomeTab = staking?.homeTab ?? "tokens",
 ): string => {
   const tokens = tokensPanel(
     state,
@@ -418,12 +423,8 @@ export const homeTabs = (
     deployment,
     fundedForFees,
   );
-  const tabs = nfts
-    ? homeTabPanels(nfts.selected, [
-        { body: tokens, label: "Tokens", tab: "tokens" },
-        { body: nfts.panel, label: "NFTs", tab: "nfts" },
-      ])
-    : null;
+  // Tokens · NFTs · Staking, each tab offered only where it applies.
+  const tabs = staking || nfts !== null ? homeTabPanels(selected, tokens, staking, nfts) : null;
   return `
   <section class="home-tabs" aria-label="Portfolio">
     <div class="tab-bar">

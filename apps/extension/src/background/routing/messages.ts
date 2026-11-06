@@ -37,6 +37,7 @@ import { captureSessionAuthorization, createUnlockSession } from "../runtime/ses
 import { handleUpdateOps } from "../runtime/update-ready";
 import { handleOriginOps } from "../settings/origins-ops";
 import { handlePreferenceOps } from "../settings/preference-ops";
+import { handleStakingOps } from "../staking/staking-ops";
 import { supportDiagnosticsResponse } from "../support/diagnostics";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
@@ -386,6 +387,8 @@ const HANDLERS: readonly RouterHandler[] = [
       message,
     ),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
+  (ctx, messageType, message) =>
+    handleStakingOps(buildOpsDeps(ctx), messageType, message, ctx.staking),
   (ctx, messageType, message) => handleNftOps(buildOpsDeps(ctx), messageType, message),
   handleMultisig,
   handlePreferences,

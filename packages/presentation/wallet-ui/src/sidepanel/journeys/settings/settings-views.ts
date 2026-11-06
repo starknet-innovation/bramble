@@ -6,6 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import { button, segmentedControl } from "@bramble/ui-kit/controls";
 import { checkboxField, selectField, textField } from "@bramble/ui-kit/fields";
 import { menuLink } from "@bramble/ui-kit/navigation";
@@ -50,6 +51,7 @@ export const settingsScreen = (
       <div class="menu-list" role="group" aria-label="This account">
         ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
         ${walletMenuRow("privacy-unlock", PRIVACY_UNLOCK_TITLE, "lock")}
+        ${stakingNetwork(status.networkId) ? walletMenuRow("staking", "Staking", "trendingUp") : ""}
       </div>
     </section>
     <section class="section">
