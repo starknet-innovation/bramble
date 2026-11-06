@@ -41,10 +41,10 @@
     "test:e2e:build": "bun run build && bun run test:e2e",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
-    "verify:sepolia": "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts",
     "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
     "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
-    "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts"
+    "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
+    "verify:sepolia": "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
