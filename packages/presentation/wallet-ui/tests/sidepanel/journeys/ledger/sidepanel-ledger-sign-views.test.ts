@@ -65,10 +65,10 @@ describe("ledgerSignScreen", () => {
       code: "rejected-or-blind-signing-off",
       kind: "error",
       message:
-        "Rejected on your Ledger. If you didn't reject it, turn on Blind signing in the Starknet app settings, then retry.",
+        "Signing couldn't be completed. You may have rejected the request, or Blind signing may be off. Check your Ledger and its connection before retrying.",
     });
     expect(html).toContain("Ledger needs attention");
-    expect(html).toContain("If you didn&#39;t reject it, turn on Blind signing");
+    expect(html).toContain("You may have rejected the request, or Blind signing may be off.");
     expect(html).toContain("data-ledger-retry");
     expect(html).toContain("data-ledger-cancel");
     expect(html).not.toContain('data-liquid-dots="ledger"');

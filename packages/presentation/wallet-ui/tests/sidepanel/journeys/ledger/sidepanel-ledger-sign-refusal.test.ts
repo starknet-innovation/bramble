@@ -16,7 +16,7 @@ import {
 } from "../../../../src/sidepanel/journeys/ledger/sign-session";
 
 const COMBINED_COPY =
-  "Rejected on your Ledger. If you didn't reject it, turn on Blind signing in the Starknet app settings, then retry.";
+  "Signing couldn't be completed. You may have rejected the request, or Blind signing may be off. Check your Ledger and its connection before retrying.";
 const REJECTED_COPY = "You rejected the request on your Ledger. Nothing was submitted.";
 
 const REQUEST: LedgerSignRequestSummary = {

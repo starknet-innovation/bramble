@@ -65,7 +65,7 @@ describe("a refused sign-hash from the Starknet app", () => {
     const { error } = await refusalCode(SW_USER_CANCELLED);
     expect(error).toMatchObject({ code: "rejected-or-blind-signing-off", statusWord: 0x6f00 });
     expect(ledgerMessage("rejected-or-blind-signing-off")).toBe(
-      "Rejected on your Ledger. If you didn't reject it, turn on Blind signing in the Starknet app settings, then retry.",
+      "Signing couldn't be completed. You may have rejected the request, or Blind signing may be off. Check your Ledger and its connection before retrying.",
     );
   });
 

@@ -46,10 +46,11 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "app-below-minimum":
     "Your Ledger's Starknet app needs an update. Update it in Ledger Live, then reconnect and open Starknet.",
   // The Starknet app (2.4.0 to 2.4.3) answers a sign-hash refusal with the same
-  // status whether the user rejected it or Blind signing is off, so this copy
-  // names neither as fact.
+  // status whether the user rejected it or Blind signing is off (and a
+  // mid-sign transport failure looks the same), so this copy names no cause
+  // as fact. Owner-approved wording (mc-wallet 877, 2026-11-06).
   "rejected-or-blind-signing-off":
-    "Rejected on your Ledger. If you didn't reject it, turn on Blind signing in the Starknet app settings, then retry.",
+    "Signing couldn't be completed. You may have rejected the request, or Blind signing may be off. Check your Ledger and its connection before retrying.",
   "chain-failed": "Your transaction was submitted but failed on-chain.",
   "dashboard-restore-failed":
     "Your Ledger didn't return to its home screen. Unlock it, leave it on the Starknet app, then try again.",
