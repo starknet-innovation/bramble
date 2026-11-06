@@ -16,6 +16,7 @@ import { dynamicExecutionFailures } from "./vendor-pin-policy";
 import { websiteDeployFailures } from "./website-deploy-policy";
 import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
 import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
+import { sepoliaSeedsFailures } from "./workflow-sepolia-policy";
 
 const NODE_SETUP_ACTION = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1";
 const GITHUB_EXPRESSION = "$" + "{{";
@@ -124,41 +125,6 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
   );
   if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 3) {
     failures.push(`${path} must reference the Chromatic token only in its scoped step environment`);
-  }
-  return failures;
-};
-
-// The issue-821 Sepolia seed file is testnet-only, but it still controls the
-// funded test accounts. Only the nightly's one live Sepolia step may see it.
-const SEPOLIA_SEEDS_STEP = `      - name: Sepolia import paths (live)
-        id: sepolia
-        continue-on-error: true
-        env:
-          BRAMBLE_SEPOLIA_SEEDS: ${GITHUB_EXPRESSION} secrets.BRAMBLE_SEPOLIA_SEEDS }}
-`;
-
-const sepoliaSeedsFailures = (name: string, source: string): string[] => {
-  const path = workflowPath(name);
-  // Ways to hand every secret over at once would reach the seeds too.
-  // ...and a recorded Sepolia tape is network traffic not fit to publish.
-  const failures = ["toJSON(secrets)", "secrets: inherit", "BRAMBLE_SEPOLIA_RECORD"]
-    .filter((form) => source.includes(form))
-    .map((form) => `${path} must not use ${form}`);
-  const uses = source.match(/secrets(?:\.|\[\s*['"])BRAMBLE_SEPOLIA_SEEDS/g)?.length ?? 0;
-  if (uses === 0) return failures;
-  if (name !== "nightly.yml")
-    return [...failures, `${path} must not reference the Sepolia seed secret`];
-  requireText(
-    failures,
-    source,
-    SEPOLIA_SEEDS_STEP,
-    `${path} must scope the Sepolia seeds to its live Sepolia step`,
-  );
-  if (uses !== 1) failures.push(`${path} must reference the Sepolia seed secret exactly once`);
-  const at = source.indexOf(SEPOLIA_SEEDS_STEP);
-  const step = at < 0 ? "" : source.slice(at, source.indexOf("\n      - ", at + 1));
-  if (/GITHUB_(?:ENV|OUTPUT|PATH|STEP_SUMMARY)/.test(step)) {
-    failures.push(`${path} must not let the live Sepolia step write to later steps`);
   }
   return failures;
 };

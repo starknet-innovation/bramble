@@ -56,7 +56,9 @@ extension.
 - The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts`, without
   the Ledger, on the active release branch against the newest committed
   scorecard, so a failing import path blocks the release like any other nightly
-  gate. It reads the seed file from the `BRAMBLE_SEPOLIA_SEEDS` repository
+  gate. Until the `BRAMBLE_SEPOLIA_SEEDS` repository secret exists the gate is
+  skipped and the summary lists it under "Not run", never as passed. It reads
+  the seed file from the `BRAMBLE_SEPOLIA_SEEDS` repository
   secret, which holds only the eleven lines the runner reads:
   `BRAMBLE_DATASET_SEED_S_{BRM,SCR,BRV,RDY,XVS,W15,W18,W21}` and
   `BRAMBLE_DATASET_KEY_K_{OZ,ROT_A,SNC}`. Leave everything else out, the

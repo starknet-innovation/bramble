@@ -1,6 +1,6 @@
 /**
  * The issue-821 Sepolia seed file reaches CI as one secret, and only the
- * nightly's live Sepolia step may see it (scripts/workflow-security-policy.ts).
+ * nightly's live Sepolia step may see it (scripts/workflow-sepolia-policy.ts).
  * Each case mutates one control in the real workflows and expects the policy to
  * name it.
  */
@@ -31,6 +31,25 @@ describe("Sepolia seed secret policy", () => {
     const ci = `${sources["ci.yml"] ?? ""}\n# $\{{ secrets['BRAMBLE_SEPOLIA_SEEDS'] }}\n`;
     expect(workflowSecurityPolicyFailures({ ...sources, "ci.yml": ci })).toContain(
       ".github/workflows/ci.yml must not reference the Sepolia seed secret",
+    );
+  });
+
+  test("a lower-case reference still counts", async () => {
+    const sources = await readWorkflowSources();
+    const ci = `${sources["ci.yml"] ?? ""}\n# $\{{ secrets.bramble_sepolia_seeds }}\n`;
+    expect(workflowSecurityPolicyFailures({ ...sources, "ci.yml": ci })).toContain(
+      ".github/workflows/ci.yml must not reference the Sepolia seed secret",
+    );
+  });
+
+  test("the live step runs only when the seeds are configured", async () => {
+    const sources = await readWorkflowSources();
+    const nightly = (sources["nightly.yml"] ?? "").replace(
+      "        if: steps.sepolia_seeds.outputs.configured == 'true'\n",
+      "",
+    );
+    expect(workflowSecurityPolicyFailures({ ...sources, "nightly.yml": nightly })).toContain(
+      ".github/workflows/nightly.yml must scope the Sepolia seeds to its live Sepolia step",
     );
   });
 
@@ -66,14 +85,14 @@ describe("Sepolia seed secret policy", () => {
     );
   });
 
-  test("a second reference in the nightly fails", async () => {
+  test("an extra reference in the nightly fails", async () => {
     const sources = await readWorkflowSources();
     const nightly = (sources["nightly.yml"] ?? "").replace(
       "    runs-on:\n      - codebuild",
       `    env:\n      LEAK: $\{{ ${SECRET} }}\n    runs-on:\n      - codebuild`,
     );
     expect(workflowSecurityPolicyFailures({ ...sources, "nightly.yml": nightly })).toContain(
-      ".github/workflows/nightly.yml must reference the Sepolia seed secret exactly once",
+      ".github/workflows/nightly.yml must reference the Sepolia seed secret exactly twice",
     );
   });
 

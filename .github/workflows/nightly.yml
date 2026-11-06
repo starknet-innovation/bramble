@@ -180,8 +180,17 @@ jobs:
       # redactor keeps seeds and derived keys out of every line it prints. It
       # records no tape and uploads nothing: this is a public repository, and
       # a run's network traffic is not for publishing (replay is local-only).
+      # Until the secret is configured the gate is skipped, and the summary and
+      # tracking issue say "not run", never "passed". Only a boolean leaves
+      # this step; the secret itself reaches the live step alone.
+      - name: Sepolia seeds configured
+        id: sepolia_seeds
+        env:
+          CONFIGURED: ${{ secrets.BRAMBLE_SEPOLIA_SEEDS != '' }}
+        run: echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
       - name: Sepolia import paths (live)
         id: sepolia
+        if: steps.sepolia_seeds.outputs.configured == 'true'
         continue-on-error: true
         env:
           BRAMBLE_SEPOLIA_SEEDS: ${{ secrets.BRAMBLE_SEPOLIA_SEEDS }}
@@ -241,6 +250,12 @@ jobs:
           )
           failing=()
           passing=()
+          not_run=()
+          # The Sepolia gate is skipped only while its secret is unconfigured.
+          if [ "$SEPOLIA" = "skipped" ]; then
+            unset 'GATES[Sepolia import paths (live)]'
+            not_run+=("Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured")
+          fi
           for name in "${!GATES[@]}"; do
             if [ "${GATES[$name]}" = "success" ]; then passing+=("$name"); else failing+=("$name (${GATES[$name]})"); fi
           done
@@ -257,6 +272,11 @@ jobs:
             echo "### Passing"
             if [ "${#passing[@]}" -eq 0 ]; then echo "_None._"; else for p in "${passing[@]}"; do echo "- ${p}"; done; fi
             echo ""
+            if [ "${#not_run[@]}" -gt 0 ]; then
+              echo "### Not run"
+              for n in "${not_run[@]}"; do echo "- ${n}"; done
+              echo ""
+            fi
             echo "### Known failures"
             echo "_Not auto-classified. A failure is only 'known' once triaged against"
             echo "the nightly tracking issue below; treat everything under 'Newly"
@@ -296,13 +316,15 @@ jobs:
           SEPOLIA: ${{ steps.sepolia.outcome }}
         run: |
           set -euo pipefail
+          # A skipped Sepolia gate (secret not configured) is reported as not run, not failed.
+          if [ "$SEPOLIA" = "skipped" ]; then SEPOLIA=success; fi
           for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E" "$SEPOLIA"; do
             if [ "$o" != "success" ]; then
               echo "At least one nightly gate did not pass — failing the job."
               exit 1
             fi
           done
-          echo "All nightly gates passed."
+          echo "All nightly gates that ran passed."
 
   # Source and dependencies execute only in the read-only self-hosted job above.
   # This hosted job receives issue write permission and runs trusted workflow
@@ -339,7 +361,12 @@ jobs:
               ["Full E2E (Playwright)", process.env.E2E],
               ["Sepolia import paths (live)", process.env.SEPOLIA],
             ];
-            const failing = gates.filter(([, outcome]) => outcome !== "success");
+            // A skipped Sepolia gate means its secret is not configured: not run, not failed.
+            const failing = gates.filter(
+              ([name, outcome]) =>
+                outcome !== "success" &&
+                !(name === "Sepolia import paths (live)" && outcome === "skipped"),
+            );
             const title = `Nightly: ${branch} — failing checks`;
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 

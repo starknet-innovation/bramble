@@ -222,7 +222,8 @@ nightly re-runs it against the live advisory database so a newly-published
 advisory is caught even without a code change), the extension **build**, the
 live **Sepolia import-path run** (`tools/vendor-dataset/verify-sepolia.ts`, issue
 821; its seeds come from the `BRAMBLE_SEPOLIA_SEEDS` secret, scoped to that one
-step, and it records and uploads nothing), and a
+step; it is skipped and reported as "Not run" while that secret is unset, and it
+records and uploads nothing), and a
 clearly-labeled **placeholder**
 for perf / regression suites (none exist in-repo yet — the step is an explicit
 no-op and must not be read as a passing gate).
