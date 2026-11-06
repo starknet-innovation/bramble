@@ -93,6 +93,8 @@ export const BASE_STYLES = `
     width: 380px;
   }
   body.popup-surface #app { min-height: 600px; }
+  /* Safari has no wallet panel; choices that only matter with one are hidden. */
+  body.panelless-browser [data-requires-panel] { display: none; }
   h1, h2, h3, p, ul { margin: 0; }
   /* Visually hidden, still read aloud. The box is pinned to its containing
      block's top corner rather than left at its static position: the scope

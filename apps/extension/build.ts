@@ -2,20 +2,23 @@
  * Builds the MV3 extension with Bun and copies static extension assets into each
  * target's output directory.
  *
- * One bundle set serves both browsers; the manifest and the shipped page set
- * differ. `--target=firefox` writes the Gecko output to `dist-firefox/`, and
- * `--target=all` writes both from one run of the prerequisite gates — those
- * gates check the sources, which no target changes, so running them per target
- * would only make a two-browser build twice as slow to fail. The two emissions
- * then run concurrently: their output directories are disjoint and every input
- * they read is read-only, so neither can observe the other.
+ * One bundle set serves every browser; the manifest and the shipped page set
+ * differ. `--target=firefox` writes the Gecko output to `dist-firefox/`,
+ * `--target=safari` writes `dist-safari/`, and `--target=all` writes every
+ * target from one run of the prerequisite gates — those gates check the
+ * sources, which no target changes, so running them per target would only make
+ * a multi-browser build slower to fail. The emissions then run concurrently:
+ * their output directories are disjoint and every input they read is
+ * read-only, so none can observe another.
  *
- * See `./firefox-manifest.ts` for what the Gecko target changes, and why.
+ * See `./firefox-manifest.ts` and `./safari-manifest.ts` for what each target
+ * changes, and why.
  */
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { type BuildTarget, nameLimit, outputDirectory, requestedTargets } from "./build-target";
 import { shipsSandboxedRenderer, toFirefoxManifest } from "./firefox-manifest";
+import { toSafariManifest } from "./safari-manifest";
 
 const repositoryRoot = join(import.meta.dir, "../..");
 process.chdir(repositoryRoot);
@@ -192,17 +195,22 @@ const emit = async (target: BuildTarget): Promise<void> => {
   // branch into `name` and `version_name` (Chrome shows `version_name` in place of
   // `version` when present) so a side-by-side load is unambiguous. `version` stays
   // the numeric manifest value Chrome requires, and released builds — main, or a
-  // detached tag checkout — are copied through untouched. Firefox does not
-  // implement `version_name`, so the Gecko build carries the branch in `name`
+  // detached tag checkout — are copied through untouched. Firefox and Safari
+  // do not implement `version_name`, so those builds carry the branch in `name`
   // only; an unknown key there is a packaging warning, not an identity.
   const chromeManifest = JSON.parse(
     await readFile(join(publicRoot, "manifest.json"), "utf8"),
   ) as Record<string, unknown>;
-  const targetManifest = target === "firefox" ? toFirefoxManifest(chromeManifest) : chromeManifest;
+  const targetManifest =
+    target === "firefox"
+      ? toFirefoxManifest(chromeManifest)
+      : target === "safari"
+        ? toSafariManifest(chromeManifest)
+        : chromeManifest;
   const developmentIdentity = (manifest: Record<string, unknown>): Record<string, unknown> => ({
     ...manifest,
     name: `${String(manifest["name"] ?? "Bramble")} · ${devBranch}`.slice(0, nameLimit(target)),
-    ...(target === "firefox"
+    ...(target !== "chrome"
       ? {}
       : { version_name: `${manifestVersion ?? ""} · ${devBranch}`.slice(0, 75) }),
   });

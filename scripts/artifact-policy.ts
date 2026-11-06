@@ -69,13 +69,13 @@ export const artifactPolicyFailures = (
   const packageTouch = packageScript.indexOf('await run(["touch", "-t", reproducibleZipTime');
   const packageZip = packageScript.indexOf('await run(["zip", "-X", "-q", zipPath');
   const packageRuntimeImport = packageScript.indexOf(
-    'import { EXPECTED_RUNTIME_FILES, FIREFOX_RUNTIME_FILES } from "./extension-runtime-files";',
+    'import { runtimeFilesFor } from "./extension-runtime-files";',
   );
   // The packaged set is selected per target, so the selection itself is pinned:
-  // both lists must come from the reviewed module above, and neither target may
-  // be packaged against a set assembled anywhere else.
+  // every list must come from the reviewed module above, and no target may be
+  // packaged against a set assembled anywhere else.
   const packageRuntimeSelection = packageScript.indexOf(
-    'const expectedFiles = target === "firefox" ? FIREFOX_RUNTIME_FILES : EXPECTED_RUNTIME_FILES;',
+    "const expectedFiles = runtimeFilesFor(target);",
   );
   const packageRuntimeCheck = packageScript.indexOf(
     'files.join("\\n") !== expectedFiles.join("\\n")',
@@ -102,12 +102,16 @@ export const artifactPolicyFailures = (
   const packageFirefoxZipName = packageScript.indexOf(
     "`bramble-firefox-$" + '{manifest["version"]}.zip`',
   );
+  const packageSafariZipName = packageScript.indexOf(
+    "`bramble-safari-$" + '{manifest["version"]}.zip`',
+  );
   const packageZipNameVersion = packageScript.indexOf('manifest["version"]', packageZipNamePrefix);
   const packageZipNameSuffix = packageScript.indexOf(".zip`;", packageZipNameVersion);
   const packageZipPath = packageScript.indexOf("const zipPath = resolve(artifactDir, zipName);");
   if (
     packageZipNamePrefix === -1 ||
     packageFirefoxZipName === -1 ||
+    packageSafariZipName === -1 ||
     packageZipNameVersion === -1 ||
     packageZipNameSuffix === -1 ||
     packageZipPath === -1 ||

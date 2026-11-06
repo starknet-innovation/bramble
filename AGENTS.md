@@ -14,7 +14,8 @@ bun run check                # types + lint + standards + manifest + vendored pi
 bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
 bun run build:firefox        # writes dist-firefox/ (loadable in Firefox via about:debugging)
-bun run build:all            # both targets, from one run of the prerequisite gates
+bun run build:safari         # writes dist-safari/ (input to Apple's safari-web-extension-converter)
+bun run build:all            # every target, from one run of the prerequisite gates
 bun run test:e2e             # Playwright extension E2E (requires dist/; egress blocked)
 bun run check:firefox        # Mozilla's validator over dist-firefox/ (needs build:firefox first)
 bun run package:extension    # writes artifacts/*.zip + .sha256

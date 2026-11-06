@@ -1,7 +1,8 @@
 /**
  * Exact runtime file sets allowed in each packaged extension build.
  */
-import { FIREFOX_EXCLUDED_FILES } from "../apps/extension/firefox-manifest";
+import type { BuildTarget } from "../apps/extension/build-target";
+import { SANDBOXED_RENDERER_FILES } from "../apps/extension/firefox-manifest";
 
 /**
  * Exact runtime files allowed in the packaged MV3 extension.
@@ -38,5 +39,23 @@ export const EXPECTED_RUNTIME_FILES = [
  * `apps/extension/firefox-manifest.ts`.
  */
 export const FIREFOX_RUNTIME_FILES: readonly string[] = EXPECTED_RUNTIME_FILES.filter(
-  (file) => !FIREFOX_EXCLUDED_FILES.includes(file),
+  (file) => !SANDBOXED_RENDERER_FILES.includes(file),
 );
+
+/**
+ * Exact runtime files allowed in the packaged Safari extension. Safari has no
+ * `sandbox` manifest key, so it withholds the collectible renderer for the same
+ * reason Firefox does, and the two sets are the same today. They stay separate
+ * names because each is pinned to its own target's decision.
+ */
+export const SAFARI_RUNTIME_FILES: readonly string[] = EXPECTED_RUNTIME_FILES.filter(
+  (file) => !SANDBOXED_RENDERER_FILES.includes(file),
+);
+
+/** The pinned packaged file set for one build target. */
+export const runtimeFilesFor = (target: BuildTarget): readonly string[] =>
+  target === "firefox"
+    ? FIREFOX_RUNTIME_FILES
+    : target === "safari"
+      ? SAFARI_RUNTIME_FILES
+      : EXPECTED_RUNTIME_FILES;

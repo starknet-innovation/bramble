@@ -7,6 +7,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { toFirefoxManifest } from "../apps/extension/firefox-manifest";
+import { toSafariManifest } from "../apps/extension/safari-manifest";
 import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
 
 /**
@@ -477,15 +478,16 @@ if (import.meta.main) {
     await requireFile(`${sourceRoot}/${providerPath?.toString().replace(/\.js$/, ".ts")}`);
   }
 
-  // The Gecko manifest is derived from this one rather than written beside it,
-  // and the transform refuses to guess: a top-level key nobody has classified
-  // for Firefox throws. Deriving it here means that decision is forced when the
-  // Chrome manifest changes — the gate that runs in CI and before every build —
-  // rather than the next time somebody happens to build the Firefox target.
-  try {
-    toFirefoxManifest(manifest);
-  } catch (error) {
-    failures.push(error instanceof Error ? error.message : String(error));
+  // The Gecko and Safari manifests are derived from this one, and each transform
+  // refuses to guess: an unclassified top-level key throws. Deriving them here
+  // forces that decision when the Chrome manifest changes, in the gate that runs
+  // in CI and before every build, not when somebody next builds that target.
+  for (const derive of [toFirefoxManifest, toSafariManifest]) {
+    try {
+      derive(manifest);
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error));
+    }
   }
 
   if (failures.length > 0) {

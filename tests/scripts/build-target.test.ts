@@ -28,6 +28,10 @@ describe("build output directories", () => {
     expect(outputDirectory("firefox")).toBe("dist-firefox");
   });
 
+  test("safari writes its own directory, the converter's input", () => {
+    expect(outputDirectory("safari")).toBe("dist-safari");
+  });
+
   // `--target=all` emits concurrently; two targets sharing a directory would
   // mean each run deleting the other's output mid-build.
   test("no two targets share an output directory", () => {
@@ -55,6 +59,7 @@ describe("requested build targets", () => {
 
   test("names one target", () => {
     expect(requestedTargets(["--target=firefox"])).toEqual(["firefox"]);
+    expect(requestedTargets(["--target=safari"])).toEqual(["safari"]);
   });
 
   test("all expands to every target", () => {
@@ -67,11 +72,12 @@ describe("requested build targets", () => {
     expect(requestedTargets(["--target=all", "--target=chrome", "--target=chrome"])).toEqual([
       "chrome",
       "firefox",
+      "safari",
     ]);
   });
 
   test("refuses a target it does not know rather than defaulting to chrome", () => {
-    expect(() => requestedTargets(["--target=safari"])).toThrow(/unknown build target safari/);
+    expect(() => requestedTargets(["--target=edge"])).toThrow(/unknown build target edge/);
     expect(() => requestedTargets(["--target="])).toThrow(/unknown build target/);
   });
 

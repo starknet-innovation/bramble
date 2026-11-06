@@ -76,6 +76,7 @@ export const EXCLUDED_DIRECTORIES = new Set([
   "artifacts",
   "dist",
   "dist-firefox",
+  "dist-safari",
   "node_modules",
   "output",
   "playwright-report",

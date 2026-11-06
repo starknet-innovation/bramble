@@ -17,6 +17,7 @@ const EXCLUDED = new Set([
   "bun.lock",
   "dist",
   "dist-firefox",
+  "dist-safari",
   "node_modules",
   "output",
   "playwright-report",

@@ -382,6 +382,23 @@ export const hiddenOverlayMount = (className: string): HTMLDivElement => {
   return mount;
 };
 
+/** Body class set on a browser that offers no wallet panel at all. */
+export const PANELLESS_BROWSER_CLASS = "panelless-browser";
+
+/**
+ * Marks the document when the browser has neither Chromium's `sidePanel` nor
+ * Firefox's `sidebarAction` (Safari). The popup is then the only surface the
+ * background ever serves, and anything marked `data-requires-panel` (the
+ * request-display choice) is hidden rather than offered and ignored. Absent
+ * a browser API (tests, UI Lab) nothing is marked.
+ */
+export const markPanelSupport = (
+  browser: { readonly sidePanel?: unknown; readonly sidebarAction?: unknown } | undefined,
+): void => {
+  const panelless = browser !== undefined && !browser.sidePanel && !browser.sidebarAction;
+  document.body.classList.toggle(PANELLESS_BROWSER_CLASS, panelless);
+};
+
 /**
  * Whether this UI is running in the toolbar popup rather than the side panel or
  * the full-page onboarding surface. `popup.html` is the only entry that sets
