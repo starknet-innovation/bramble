@@ -166,10 +166,10 @@ describe("wallet_addStarknetChain", () => {
     expect((await preferencesStore.read()).customNetworks).toHaveLength(1);
   });
 
-  test("returns true without a prompt for a built-in chain, in any felt spelling", async () => {
+  test("returns true without a prompt for a built-in chain", async () => {
     const { handler, pendingCount, writes } = makeHarness();
 
-    for (const chainId of ["0x534e5f4d41494e", "0x0534e5f4d41494e", "0x534e5f5345504f4c4941"]) {
+    for (const chainId of ["0x534e5f4d41494e", "0x534e5f5345504f4c4941"]) {
       await expect(handler(addChainMessage({ chainId }), contentSender)).resolves.toEqual({
         added: true,
         ok: true,
@@ -177,6 +177,21 @@ describe("wallet_addStarknetChain", () => {
     }
     expect(await pendingCount()).toBe(0);
     expect(writes).toHaveLength(0);
+  });
+
+  test("agrees with wallet_switchStarknetChain on a padded built-in chain id", async () => {
+    // A leading-zero spelling of SN_MAIN passes both readers' hex check, but
+    // the switch matches chain ids exactly and refuses it. Answering `added`
+    // here would promise a network the follow-up switch rejects (issue 852).
+    const { handler } = makeHarness();
+    const chainId = "0x0534e5f4d41494e";
+
+    await expect(handler(addChainMessage({ chainId }), contentSender)).resolves.toEqual({
+      error: "unsupported chain",
+    });
+    await expect(
+      handler({ chainId, origin, type: "wallet.switchChain" }, contentSender),
+    ).resolves.toEqual({ error: "unsupported chain" });
   });
 
   test("rejects an oversized chain label crossed on a runtime message", async () => {

@@ -8,8 +8,7 @@
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { normalizeWalletOrigin } from "@bramble/core/origin";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
-import { normalizeChainId } from "@bramble/wallet-model/custom-network";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { networkIdForChainId } from "@bramble/wallet-model/networks";
 import { isProviderChain, type ProviderChain } from "@bramble/wallet-protocol/add-chain";
 import {
   type ExtensionIdentity,
@@ -44,17 +43,6 @@ const readAddStarknetChainInput = (
 };
 
 /**
- * Whether a chain id names one of the wallet's built-in networks, the only
- * networks it can switch to or route traffic through.
- */
-const isBuiltInChain = (chainId: string): boolean => {
-  const key = normalizeChainId(chainId);
-  return Object.values(STARKNET_NETWORKS).some(
-    (network) => normalizeChainId(network.chainId) === key,
-  );
-};
-
-/**
  * Handles a dapp add-chain message; returns null for other message types. A
  * built-in chain is a no-op success with no prompt, per spec. Any other chain
  * is refused as unsupported (CHAIN_ID_NOT_SUPPORTED on the dapp wire) rather
@@ -81,7 +69,9 @@ export const handleAddChainOps = async (
   if (guard.isBlocked(input.origin)) {
     return { error: "origin blocked" };
   }
-  return isBuiltInChain(input.chain.chainId)
+  // The same exact-match lookup wallet_switchStarknetChain uses, so a chain
+  // reported as added is always one the follow-up switch accepts.
+  return networkIdForChainId(input.chain.chainId) !== null
     ? { added: true, ok: true }
     : { error: "unsupported chain" };
 };
