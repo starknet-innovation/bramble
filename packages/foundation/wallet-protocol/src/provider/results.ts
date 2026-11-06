@@ -20,6 +20,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
+import { type DappMultisigAccount, isDappMultisigAccount } from "./dapp-account";
 import { errorForMessage, unknownError, type WalletRpcError } from "./rpc-errors";
 
 /**
@@ -35,6 +36,10 @@ export {
   providerInvokeCalls,
   providerInvokeRequest,
 } from "../transactions/invoke";
+/** Public multisig account a site may be shown. */
+export type { DappMultisigAccount };
+/** Type guard for that public multisig account. */
+export { isDappMultisigAccount };
 
 import {
   providerStrk20Balances,
@@ -342,9 +347,19 @@ const signaturePayload: ResultMapper = (result) => {
     signature.slice(2).every(isCanonicalSignatureFelt);
   return isOz || isArgent ? { result: [...signature] } : failed();
 };
+// A site list is either vault accounts or a multisig projection. Both expose
+// an address; the multisig projection carries no key material.
+const isListedDappAccount = (
+  value: unknown,
+): value is {
+  readonly address: string;
+  readonly id: string;
+  readonly networkId: StarknetNetworkId;
+} => isAccountRef(value) || isDappMultisigAccount(value);
+
 // Validates the trusted account list (dapps never see indices or public keys).
 const readAccountRefs = (result: unknown) =>
-  parseAccountsResult(result, isAccountRef, (account) => account.id);
+  parseAccountsResult(result, isListedDappAccount, (account) => account.id);
 const accountsViewPayload: ResultMapper = (result) => {
   const accounts = readAccountRefs(result);
   return accounts ? { result: { accounts: accounts.map(toPublicAccount), ok: true } } : failed();

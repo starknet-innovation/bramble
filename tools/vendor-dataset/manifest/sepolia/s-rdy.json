@@ -1,0 +1,100 @@
+{
+  "s-rdy/TA-09": {
+    "id": "s-rdy/TA-09",
+    "seed": "BRAMBLE_DATASET_SEED_S_RDY",
+    "vendorDerivation": "ready-double",
+    "index": 0,
+    "address": "0x73b0d3c48c479d4b2ba27293e7630bbf60077e104fdf76c15e1fddc4e9c4a57",
+    "pubkey": "0x7e244a4750be3a6705f44d1ebb7f9622060eed44b31ffd6bcd564b74e0c5be8",
+    "expected": "plain Ready 0.4.0, deployed by the Ready app: listed and signable",
+    "detectability": "D1",
+    "backedBy": "none",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "state": {
+      "deployed": true,
+      "deployedBy": "Ready app",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": ["funded STRK 0x7e78a3dbcbedea376f0d67d896f136c391c6aa8f0034dfb0261e779008f64df"]
+  },
+  "s-rdy/TA-10": {
+    "id": "s-rdy/TA-10",
+    "seed": "BRAMBLE_DATASET_SEED_S_RDY",
+    "vendorDerivation": "ready-double",
+    "index": 1,
+    "address": "0x55cb2e5e2b589b4eda13031a189d3983b4c751370bc9122a978067c9514ab90",
+    "pubkey": "0x22a8a6aec25a13178d97900740e1037863137e79c1fd867f46102e21ca7ebc6",
+    "expected": "Ready funded counterfactual: 'Not deployed · holds 1 STRK'",
+    "detectability": "D1",
+    "backedBy": "none",
+    "classAtDeploy": null,
+    "state": {
+      "deployed": false,
+      "funded": "STRK"
+    },
+    "log": ["funded STRK 0x5c19ff5ebbd25561b344291dd05540f325539b7bc922450d46964f8bbc33c40"]
+  },
+  "s-rdy/TA-11": {
+    "id": "s-rdy/TA-11",
+    "seed": "BRAMBLE_DATASET_SEED_S_RDY",
+    "vendorDerivation": "ready-double",
+    "index": 2,
+    "address": "0x30b63dd71454bf0b160d85d82704a4cb8defd8fa1c3d1ea662d242696c7aaf5",
+    "pubkey": "0x18afdfaedb91ea3e00c4cc17ffe141a8dd8d48be54246fb15a5588023669347",
+    "expected": "holds only a test ERC-20 (not ETH/STRK): the Sepolia scan does not probe it",
+    "detectability": "D2",
+    "backedBy": "none",
+    "classAtDeploy": null,
+    "state": {
+      "deployed": false,
+      "token": "0x79bd671a0cfc3368bc19ddc33b6bbabb2e6b00220434fdc3fa3611f28dfff90",
+      "tokenBalance": "0xde0b6b3a7640000"
+    },
+    "log": ["token-deployed 0x59cc45984993992623a3639a1c2fb9be757dd05f0ea382a04e1b926d18ab476"]
+  },
+  "s-rdy/TA-12": {
+    "id": "s-rdy/TA-12",
+    "seed": "BRAMBLE_DATASET_SEED_S_RDY",
+    "vendorDerivation": "ready-double",
+    "index": 3,
+    "address": "0x5e09546f510b784e5e80ee5f8b9a0242bdcc44be8a5492b275711ffe502c74e",
+    "pubkey": "0xedb6751861388b40ebff581a8c17cf8f68b52845ec7650009b718172911425",
+    "expected": "guardian set: signing must be refused",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "guardian": "0x1d14b8b0b3fabf65e1805322d19b037466d86454d0cf78d170aee6bad20909b"
+    },
+    "log": [
+      "funded STRK 0xe1acc77a50825d43b4e6855bd7cc0c2b7724457664d0f19f7791e4a4885747",
+      "deployed 0x295725b56e03e8f5f6bed19509fc6906e28038e4ae305568c4d9252fb155618",
+      "change_guardian 0x12a45ca12be4f65b5e3e37bf5b72502a0b3c9eb2a351a655efaa4b0b6d0710"
+    ]
+  },
+  "s-rdy/TA-13": {
+    "id": "s-rdy/TA-13",
+    "seed": "BRAMBLE_DATASET_SEED_S_RDY",
+    "vendorDerivation": "ready-double",
+    "index": 4,
+    "address": "0x72a49e883c2428956d5db7d2632b9a5153d432706dc35c5be409ff591718e41",
+    "pubkey": "0x3e238566263dd396e7cf0e5d1de0c12a1fe915c938d3b669c6cd6650af43d91",
+    "expected": "guardian removed: usable again",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "guardian": null
+    },
+    "log": [
+      "funded STRK 0x10e9345dec5c36567db8a86c45f73a6a77a39ec826fa3ba373f7a3d6ac42db2",
+      "deployed 0x6a5daff9751921eb530c48868a8e1ba46e89706e34f151f24902f5a4070f725",
+      "change_guardian 0x59d3adc88a48b904c809d836c899659cb9a22732a9b5e187ae1967a50bf23bf",
+      "change_guardian 0x7d749b68df8b37379623d3e65f6c9c7b18eb42438ee00bbcb6a082cef35efec"
+    ]
+  }
+}

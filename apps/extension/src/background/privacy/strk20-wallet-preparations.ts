@@ -12,6 +12,10 @@ import type {
   Strk20FeeAsset,
   Strk20SubmissionPlan,
 } from "@bramble/privacy/service";
+import type {
+  SponsoredShieldConfig,
+  Strk20SponsoredShieldPlan,
+} from "@bramble/privacy/sponsored-shield";
 import type { TokenConfig } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
@@ -84,15 +88,26 @@ export type Strk20RegistrationPreparation = BasePreparation &
  * digest so the credited party cannot change between review and submission.
  */
 export type Strk20DepositPreparation = BasePreparation &
-  PublicAccountPreparation & {
+  PreparedStrk20AccountSubmission & {
     readonly actions: readonly Strk20Action[];
     /** The batch also registers this account (#789): a first shield. */
     readonly activates?: true;
     readonly amount: string;
     readonly amountRaw: string;
     readonly kind: "deposit";
+    /** The user's own network-fee ceiling; absent exactly when sponsored. */
+    readonly networkFee?: FeeEstimate;
     readonly plan: Strk20SubmissionPlan;
     readonly recipient: string;
+    /**
+     * Present when a sponsor pays the pool fee and gas (#789): the frozen plan
+     * and relay. `calls` then hold the deposit approvals and `apply_actions`
+     * only, and `plan.poolFeeFri` is the charge the sponsor pays.
+     */
+    readonly sponsorship?: {
+      readonly plan: Strk20SponsoredShieldPlan;
+      readonly relay: SponsoredShieldConfig;
+    };
   };
 
 /**
@@ -170,7 +185,14 @@ export type Strk20WalletPreparationReview = {
   readonly poolAddress: string;
   readonly poolFeeFri?: string;
   readonly recipient?: string;
-  readonly route: "private-relay" | "public-account";
+  readonly route: "private-relay" | "public-account" | "sponsored-relay";
+  /**
+   * Who pays a sponsored shield's pool fee and gas, and the relay's own gas
+   * estimate (informational: the user pays none of it). Only on
+   * `sponsored-relay`, which carries `poolFeeFri` as the charge the sponsor
+   * pays and no `networkFee` of the user's.
+   */
+  readonly sponsor?: { readonly estimatedNetworkFeeFri?: string; readonly name: string };
   readonly relayFee?: {
     readonly amount: string;
     /**
@@ -186,6 +208,29 @@ export type Strk20WalletPreparationReview = {
   readonly symbol: string;
   readonly tokenId: string;
 };
+
+// A deposit's committed fields. The fee and sponsorship are each present only
+// on the route that has them, so a self-paid deposit commits exactly what it
+// did before sponsorship existed.
+const depositPayload = (
+  preparation: Omit<Strk20DepositPreparation, "context" | "id">,
+): unknown => ({
+  actions: preparation.actions,
+  ...(preparation.activates ? { activates: true } : {}),
+  allowanceGrants: preparation.allowanceGrants,
+  amount: preparation.amount,
+  amountRaw: preparation.amountRaw,
+  calls: preparation.calls,
+  kind: preparation.kind,
+  ...(preparation.networkFee ? { networkFee: preparation.networkFee } : {}),
+  plan: preparation.plan,
+  poolAddress: preparation.poolAddress,
+  proof: preparation.proof,
+  recipient: preparation.recipient,
+  ...(preparation.sponsorship ? { sponsorship: preparation.sponsorship } : {}),
+  summaries: preparation.summaries,
+  token: preparation.token,
+});
 
 /**
  * Exact JSON-shaped payload committed by the preparation digest.
@@ -220,22 +265,7 @@ export const strk20WalletPreparationPayload = (
           token: preparation.token,
         }
       : preparation.kind === "deposit"
-        ? {
-            actions: preparation.actions,
-            ...(preparation.activates ? { activates: true } : {}),
-            allowanceGrants: preparation.allowanceGrants,
-            amount: preparation.amount,
-            amountRaw: preparation.amountRaw,
-            calls: preparation.calls,
-            kind: preparation.kind,
-            networkFee: preparation.networkFee,
-            plan: preparation.plan,
-            poolAddress: preparation.poolAddress,
-            proof: preparation.proof,
-            recipient: preparation.recipient,
-            summaries: preparation.summaries,
-            token: preparation.token,
-          }
+        ? depositPayload(preparation)
         : {
             actions: preparation.actions,
             amount: preparation.amount,
@@ -251,9 +281,30 @@ export const strk20WalletPreparationPayload = (
 const reviewedNetworkFee = (
   preparation: Strk20WalletPreparation,
 ): { readonly networkFee?: FeeEstimate } =>
-  preparation.kind === "register" || preparation.kind === "deposit"
+  (preparation.kind === "register" || preparation.kind === "deposit") && preparation.networkFee
     ? { networkFee: preparation.networkFee }
     : {};
+
+// A sponsored shield's review: the sponsor and the amounts it pays, the typed
+// data's capability summary, and no fee of the user's.
+// Overrides the route fields of a sponsored deposit's review; empty otherwise.
+const sponsoredReview = (
+  preparation: Strk20WalletPreparation,
+): Partial<Strk20WalletPreparationReview> => {
+  if (preparation.kind !== "deposit" || !preparation.sponsorship) return {};
+  const { plan } = preparation.sponsorship;
+  return {
+    authorization: plan.authorization,
+    ...(preparation.plan.mode === "account" ? { poolFeeFri: preparation.plan.poolFeeFri } : {}),
+    route: "sponsored-relay",
+    sponsor: {
+      ...(plan.estimatedNetworkFeeFri === undefined
+        ? {}
+        : { estimatedNetworkFeeFri: plan.estimatedNetworkFeeFri }),
+      name: plan.sponsor,
+    },
+  };
+};
 
 const relayFeeReview = (
   token: TokenConfig,
@@ -298,6 +349,7 @@ const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparation
   summaries: [...preparation.summaries],
   symbol: preparation.token.symbol,
   tokenId: preparation.token.id,
+  ...sponsoredReview(preparation),
 });
 
 /**

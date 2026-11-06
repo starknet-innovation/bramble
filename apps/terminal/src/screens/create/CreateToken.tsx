@@ -16,6 +16,8 @@ import {
   FIELDS_BY_STANDARD,
   STANDARD_TABS,
 } from "./create-parts";
+import TokenMetadata from "./TokenMetadata";
+import TokenOwnership from "./TokenOwnership";
 
 type CreateTokenProps = {
   readonly onNavigate: (screen: ScreenId) => void;
@@ -214,6 +216,12 @@ export default function CreateToken({ makeSalt = randomSalt }: CreateTokenProps)
           </form>
         </section>
         <CreateReview deployment={preview.deployment} problem={preview.problem} />
+      </div>
+      <div className="create-tools">
+        {standard === "erc20" ? null : (
+          <TokenMetadata baseUri={fields.baseUri} standard={standard} tokenIds={fields.tokenIds} />
+        )}
+        <TokenOwnership createdAddress={operation?.tone === "success" ? operation.address : null} />
       </div>
     </section>
   );

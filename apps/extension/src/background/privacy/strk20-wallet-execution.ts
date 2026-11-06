@@ -58,6 +58,7 @@ import {
 } from "./strk20-op-context";
 import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
 import { submitShadowSweep } from "./strk20-shadow-sweep";
+import { assertSponsoredDepositAffordable } from "./strk20-sponsored-shield";
 import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
@@ -225,13 +226,18 @@ const submitPreparedDeposit = async (
   if (preparation.plan.mode !== "account") {
     throw new WalletError("Shielding route changed");
   }
+  const sponsorship = preparation.sponsorship;
   context.accountContext.onPhase?.({ phase: "checking the public balance" });
-  await assertPublicPoolSpendAffordable(
-    deps,
-    context,
-    preparation.plan.poolFeeFri,
-    preparation.amountRaw,
-  );
+  if (sponsorship) {
+    await assertSponsoredDepositAffordable(deps, context, preparation.amountRaw);
+  } else {
+    await assertPublicPoolSpendAffordable(
+      deps,
+      context,
+      preparation.plan.poolFeeFri,
+      preparation.amountRaw,
+    );
+  }
   context.accountContext.onPhase?.({ phase: "checking registration" });
   const registration = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
@@ -248,6 +254,24 @@ const submitPreparedDeposit = async (
   }
   await assertRecipientRegistration(service, preparation.recipient, context);
   await assertCurrentRecipientPolicy(deps, preparation, context);
+  // The route the user reviewed is the one sent: a sponsored shield is never
+  // re-routed to self-paid here, and a self-paid one never asks a sponsor.
+  if (sponsorship) {
+    if (!service.submitSponsoredShield) {
+      throw new WalletError("Shielding route unavailable");
+    }
+    const relayed = await service.submitSponsoredShield({
+      ...context.accountContext,
+      calls: preparation.calls,
+      plan: sponsorship.plan,
+      proof: preparation.proof,
+      relay: sponsorship.relay,
+    });
+    return { allowanceGrants: preparation.allowanceGrants, ...relayed };
+  }
+  if (!preparation.networkFee) {
+    throw new WalletError("Shielding route changed");
+  }
   const result = await service.submitPrepared({
     ...context.accountContext,
     calls: preparation.calls,
@@ -349,6 +373,9 @@ const executionWork = async (
         ? {}
         : { amount: preparation.amount }),
       ...counterpartyOf(otherParty(preparation, context)),
+      ...(preparation.kind === "deposit" && preparation.sponsorship
+        ? { feePayer: "sponsor" as const }
+        : {}),
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.accountContext.account.networkId,

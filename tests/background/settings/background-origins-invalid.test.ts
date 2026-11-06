@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
+import type { MultisigOriginGrantStore } from "../../../apps/extension/src/background/provider/multisig-grants";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
   handleOriginOps,
@@ -33,6 +34,38 @@ describe("handleOriginOps invalid/locked branches", () => {
         type: "wallet.connectedSites",
       }),
     ).resolves.toEqual({ error: "invalid connected sites request" });
+  });
+
+  test("returns nothing when the wallet locks during the multisig site read", async () => {
+    const session = createUnlockSession();
+    session.unlock("correct horse battery staple");
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const pending = handleOriginOps(
+      {
+        multisigGrants: {
+          async sites() {
+            await gate;
+            return [{ accountCount: 1, origin: "https://multi.example" }];
+          },
+        } as unknown as MultisigOriginGrantStore,
+        session,
+        wallet: {
+          async readVault() {
+            return {
+              originGrants: [{ accountIds: ["SN_MAIN:0x1"], origin: "https://alpha.example" }],
+            };
+          },
+        } as unknown as OriginOpsDeps["wallet"],
+      },
+      "wallet.connectedSites",
+      { type: "wallet.connectedSites" },
+    );
+    session.lock();
+    release();
+    await expect(pending).resolves.toEqual({ error: "wallet locked" });
   });
 
   test("rejects a non-record connected-sites request", async () => {

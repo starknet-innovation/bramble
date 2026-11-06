@@ -8,12 +8,13 @@
 import { createECDH } from "node:crypto";
 import { HDKey } from "@scure/bip32";
 import { mnemonicToSeedSync } from "@scure/bip39";
-import { Account, constants, ec, hash, num, Signer, uint256 } from "starknet";
+import { Account, ec, hash, num, uint256 } from "starknet";
 import { envLines } from "./dataset-env";
 import {
   argentAddress,
   argentConstructor,
   braavosKeypair,
+  CHAIN_ID,
   CLASSES,
   classAt,
   deployerAccount,
@@ -27,16 +28,14 @@ import {
   saveManifest,
   tokenBalance,
   transfer,
+  UDC,
 } from "./matrix-lib";
+import { BraavosDeploySigner } from "./matrix-signers";
 
-const { grindKey, getStarkKey, poseidonHashMany } = ec.starkCurve;
+const { grindKey, getStarkKey } = ec.starkCurve;
 
 const IMPL = "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
-const CHAIN_ID = constants.StarknetChainId.SN_MAIN;
-const UDC = "0x041a78e741e5af2fec34b695679bc6891742439f7afb8484ecd7766661ad02bf";
 const STRK_FLOAT = 2n * 10n ** 18n;
-
-type KP = { priv: string; pub: string };
 
 const deployer = deployerAccount();
 const manifest = loadManifest();
@@ -66,21 +65,6 @@ const u256felts = (v: bigint): [string, string] => {
   const u = uint256.bnToUint256(v);
   return [num.toHex(u.low), num.toHex(u.high)];
 };
-
-class BraavosDeploySigner extends Signer {
-  constructor(
-    private kp: KP,
-    private params: string[],
-  ) {
-    super(kp.priv);
-  }
-  override async signRaw(msgHash: string): Promise<string[]> {
-    const tx = ec.starkCurve.sign(msgHash, this.kp.priv);
-    const auxHash = `0x${poseidonHashMany(this.params.map(BigInt)).toString(16)}`;
-    const aux = ec.starkCurve.sign(auxHash, this.kp.priv);
-    return [num.toHex(tx.r), num.toHex(tx.s), ...this.params, num.toHex(aux.r), num.toHex(aux.s)];
-  }
-}
 
 const twoFaParams = (): string[] => [
   IMPL,

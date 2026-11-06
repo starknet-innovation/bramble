@@ -412,6 +412,7 @@ export {
   readSetGroupIconInput,
   readSetNostrRelayUrlInput,
   readSetRpcOverrideInput,
+  readSetSelectedMultisigInput,
   readSetStrk20NetworkConfigInput,
 } from "../settings/preference-inputs";
 /**
