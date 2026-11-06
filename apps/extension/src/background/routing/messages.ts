@@ -373,7 +373,6 @@ const handlePreferences: RouterHandler = async (ctx, messageType, message) => {
 };
 
 // Ordered handlers own disjoint message types and return null otherwise.
-//
 // Deliberately absent (MCW-V09-124): there is no `wallet.signHash` message. An
 // arbitrary field element signed with the account key, under no approval and no
 // domain separation, is a signing oracle; hash signing is reachable only from
