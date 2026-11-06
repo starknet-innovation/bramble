@@ -9,6 +9,10 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
 import { type BalanceLoadingState, emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
 import type { ConnectedSitesState } from "../screens/support-flows";
 
@@ -30,6 +34,7 @@ type LoadedMultisigs = Exclude<Awaited<ReturnType<MultisigClient["loadMultisigs"
  */
 export type RenderData = {
   allowances: Awaited<ReturnType<SidepanelWallet["loadAllowances"]>>;
+  staking: StakingState;
   multisigs: LoadedMultisigs;
   multisigsError: boolean;
   multisigsNetworkId: string | null;
@@ -108,6 +113,7 @@ export const updateRenderScope = (
           ...emptyActivityCache(),
           ...emptyNftCache(),
           balances: { loading: true },
+          staking: STAKING_LOADING,
           multisigBalanceId: null,
           multisigBalances: { loading: true },
           deployment: null,
@@ -131,6 +137,7 @@ export const updateRenderScope = (
 export const emptyRenderCache = (): RenderData => ({
   // Not yet read: the screen shows no count and no "none found".
   allowances: { entries: [], loading: true, notices: [], unavailable: false },
+  staking: STAKING_LOADING,
   multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
   multisigsNetworkId: null,

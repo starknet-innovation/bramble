@@ -12,6 +12,7 @@
     "./fee-bounds": "./src/rpc/fee-bounds.ts",
     "./multisig-dapp-invoke": "./src/rpc/multisig-dapp-invoke.ts",
     "./multisig-invoke": "./src/rpc/multisig-invoke.ts",
+    "./pinned-block": "./src/rpc/pinned-block.ts",
     "./provider": "./src/rpc/provider.ts",
     "./rpc-diagnostics": "./src/rpc/rpc-diagnostics.ts",
     "./rpc-transport": "./src/rpc/rpc-transport.ts",

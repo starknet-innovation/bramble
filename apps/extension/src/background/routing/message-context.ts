@@ -23,6 +23,7 @@ import {
   memoryRelaySignatureLog,
   type RelaySignatureLog,
 } from "@bramble/transactions/relay-signatures";
+import type { StakingNetworkTable } from "@bramble/transactions/staking-networks";
 import {
   guardDeployments,
   memoryPendingDeployments,
@@ -78,6 +79,8 @@ import {
 } from "../runtime/runtime-state";
 import type { UnlockSession } from "../runtime/session";
 import { inertUpdateReady, type UpdateReady } from "../runtime/update-ready";
+import type { StakingRouting } from "../staking/staking-ops";
+import { createStakingPreparationStore } from "../staking/staking-preparations";
 import {
   createSwapPreparationStore,
   type SwapPreparationStore,
@@ -113,6 +116,7 @@ export type RouterContext = {
   readonly relaySignatures: RelaySignatureLog;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
+  readonly staking: StakingRouting;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
   readonly strk20Jobs: Strk20JobRegistry;
@@ -160,6 +164,8 @@ export type MessageHandlerOptions = {
   readonly relaySignatures?: RelaySignatureLog;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
+  /** Staking table override for tests; production uses the bundled one. */
+  readonly stakingNetworks?: StakingNetworkTable;
   readonly swap?: SwapService;
   readonly swapPreparations?: SwapPreparationStore;
   /**
@@ -201,6 +207,12 @@ const runtimeLedgerSignQueue = (
   createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, () =>
     session.isUnlocked() ? session.generation() : null,
   );
+
+// The staking table is overridden only in tests; production uses the bundled one.
+const stakingRoutingFor = (networks: StakingNetworkTable | undefined): StakingRouting => ({
+  ...(networks ? { networks } : {}),
+  preparations: createStakingPreparationStore(),
+});
 
 const strk20PreparationsFor = (
   provided: Strk20WalletPreparationStore | undefined,
@@ -333,6 +345,7 @@ export const routerContext = (
     relaySignatures: relaySignaturesFor(options.relaySignatures),
     runtimeRpc,
     session,
+    staking: stakingRoutingFor(options.stakingNetworks),
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     strk20Jobs: strk20JobsFor(options.strk20Jobs, now),

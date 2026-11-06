@@ -67,6 +67,11 @@ import { privacyFlow } from "../../journeys/privacy/privacy-views";
 import type { SendIntent } from "../../journeys/send/send-model";
 import { revealFlow } from "../../journeys/settings/reveal-ui";
 import { settingsScreen } from "../../journeys/settings/settings-views";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
+import { canStakeToken } from "../../journeys/staking/staking-entry";
 import type { BalanceState } from "../../runtime/runtime";
 import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
@@ -97,6 +102,7 @@ type JourneyContext = {
   readonly prices: Readonly<Record<string, number>>;
   readonly privacy: PrivacyDisclosureState;
   readonly privacyJourney: PrivacyJourneyState;
+  readonly staking: StakingState;
   /** A pre-configured send from a shield or unshield shortcut. */
   readonly sendIntent?: SendIntent | null;
   readonly selectedMultisigId: string | null;
@@ -261,6 +267,7 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.currency,
     context.privacy,
     context.deployment,
+    canStakeToken(context.status.networkId, token, context.staking),
   );
 };
 
@@ -312,6 +319,7 @@ export const dashboard = (
   signability: SignabilityVerdict | null = null,
   relays: readonly RelaySignature[] = [],
   privateTotalWaitOver = false,
+  staking: StakingState = STAKING_LOADING,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -347,6 +355,7 @@ export const dashboard = (
     selectedNftId,
     selectedTokenId,
     ...(sendIntent ? { sendIntent } : {}),
+    staking,
     status,
     trackedBalances,
   };
@@ -364,6 +373,7 @@ export const dashboard = (
   const simpleFlow = simpleFlowScreen(activeView, {
     account,
     allowances,
+    staking,
     balances: trackedBalances,
     changes,
     classHashVerification,
@@ -468,6 +478,7 @@ export const dashboard = (
               privacy,
               signability,
               privateTotalWaitOver,
+              staking,
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}

@@ -394,6 +394,23 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // on-chain allowance revoke has its own code (copy review bf07).
   ["revoke failed", REQUEST_UNKNOWN],
   ["allowance revoke failed", SUBMISSION_UNKNOWN("The revoke")],
+  // --- Staking (issue 750) ---------------------------------------------------
+  // A staking action signs a transaction: its unknown outcome says so. The
+  // background's own refusals are already reader sentences, kept as written.
+  ["staking action failed", SUBMISSION_UNKNOWN("The staking transaction")],
+  ["staking preparation failed", "Couldn't prepare this staking action. Try again."],
+  ["review this staking action again.", "Review this staking action again."],
+  ["staking isn't available on this network.", "Staking isn't available on this network."],
+  ["staking option unavailable.", "Staking option unavailable."],
+  [
+    "couldn't read staking on this network. try again.",
+    "Couldn't read staking on this network. Try again.",
+  ],
+  [
+    "couldn't load the validator list. paste a validator address instead.",
+    "Couldn't load the validator list. Paste a validator address instead.",
+  ],
+  ["couldn't load your stakes.", "Couldn't load your stakes."],
   [
     "switch to the account that granted this allowance",
     "Switch to the account that granted this allowance.",

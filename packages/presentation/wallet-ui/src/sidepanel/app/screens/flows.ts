@@ -62,6 +62,11 @@ import {
   backupRestoreFlow,
   requestSettingsFlow,
 } from "../../journeys/settings/settings-views";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
+import { stakingFlow } from "../../journeys/staking/staking-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
 import { outcomeReceiptSection } from "../../shared/outcome-receipt";
@@ -331,6 +336,7 @@ export const simpleFlowScreen = (
   ctx: {
     readonly account: AccountRef | null;
     readonly allowances: AllowanceListing;
+    readonly staking?: StakingState;
     readonly balances: readonly TokenBalance[];
     readonly changes: Readonly<Record<string, number>>;
     readonly classHashVerification: ClassHashVerification | null;
@@ -398,6 +404,8 @@ export const simpleFlowScreen = (
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":
       return connectedSitesFlow(ctx.status, ctx.connectedSites);
+    case "staking":
+      return stakingFlow(ctx.status, ctx.account, ctx.staking ?? STAKING_LOADING);
     case "allowances":
       return allowancesFlow(ctx.status, ctx.account, ctx.allowances, ctx.preferences);
     case "shadow-accounts":

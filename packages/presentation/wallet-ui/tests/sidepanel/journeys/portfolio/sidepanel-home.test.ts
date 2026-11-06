@@ -113,8 +113,11 @@ describe("sidepanel home", () => {
     expect(html).toContain('id="starkscan-button"');
   });
 
-  test("portfolio has a Tokens heading, no tablist, and one accessible quick-actions menu", () => {
-    const html = dashboard("home", status, [], preferences, { balances: [] });
+  test("without staking, portfolio has a Tokens heading, no tablist, and one accessible quick-actions menu", () => {
+    // Sepolia: staking is off, so Tokens is the only section (no Staking tab).
+    const html = dashboard("home", { ...status, networkId: "SN_SEPOLIA" }, [], preferences, {
+      balances: [],
+    });
 
     const portfolio = html.slice(
       html.indexOf('<section class="home-tabs"'),
