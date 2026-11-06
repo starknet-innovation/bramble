@@ -439,7 +439,7 @@ describe("background wallet STRK20 operations", () => {
     expect(capture.submissions).toEqual([]);
   });
 
-  test("blocks shielding before registration and rejects malformed requests", async () => {
+  test("blocks shielding into another balance before registration and rejects malformed requests", async () => {
     const capture = {
       registered: { value: false },
       registrations: { value: 0 },
@@ -454,7 +454,9 @@ describe("background wallet STRK20 operations", () => {
     await expect(
       prepareStrk20Deposit(handler, {
         amount: "1",
-        recipient: account.address,
+        // A self-credit registers in the same transaction (mc-wallet 789); a
+        // third-party credit still needs the registration first.
+        recipient: STRK20_RECIPIENT,
         tokenId: token.id,
         type: "wallet.strk20PrepareDeposit",
       }),

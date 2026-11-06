@@ -18,6 +18,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { contextHelp, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { strk20ServicesForm } from "../privacy/privacy-settings-view";
+import { collectiblesSettings } from "./collectibles-settings-view";
 
 const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   preferences && isStarknetNetworkId(status.networkId)
@@ -155,7 +156,8 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
 /**
  * Renders the security-sensitive custom service endpoint editor: expert RPC,
  * prover, and explorer-fallback settings, away from the primary network picker.
- * The NFT-indexer field is withheld while the collectibles journey is parked. Read-only — every field submits a privileged message and the
+ * The NFT-indexer field appears only with the collectibles preview on.
+ * Read-only — every field submits a privileged message and the
  * rendered state always comes from the preferences the background returned.
  */
 export const advancedNetworkFlow = (
@@ -236,6 +238,7 @@ export const advancedNetworkFlow = (
             <p id="nostr-relay-result" role="status"></p>
           </form>`,
         )}
+        ${collectiblesSettings(preferences, endpointDisclosure)}
         ${endpointDisclosure(
           "product-analytics",
           "Product analytics",

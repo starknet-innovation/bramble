@@ -50,6 +50,26 @@ describe("provider permission surface", () => {
     ).toEqual({ id: requestId, method: "wallet_getPermissions" });
   });
 
+  test("accepts unset optional members as starknet.js's WalletAccountV6 sends them", () => {
+    // starknet.js `strk20PrepareInvoke(actions)` / `strk20Balances(tokens)` pass
+    // `simulate` / `valid_until` through as `undefined` when the caller omits them.
+    const actions = [
+      { amount: "0x1", recipient: tokenAddress, token: tokenAddress, type: "transfer" },
+    ];
+    expect(
+      readProviderRequestArguments({
+        params: { actions, simulate: undefined },
+        type: "wallet_strk20PrepareInvoke",
+      }),
+    ).toEqual({ method: "wallet_strk20PrepareInvoke", params: { actions } });
+    expect(
+      readProviderRequestArguments({
+        params: { tokens: [tokenAddress], valid_until: undefined },
+        type: "wallet_strk20Balances",
+      }),
+    ).toEqual({ method: "wallet_strk20Balances", params: { tokens: [tokenAddress] } });
+  });
+
   test("maps permission queries only for secure origins", () => {
     expect(
       toRuntimeMessage({ id: "1", method: "wallet_getPermissions" }, "https://a.test"),

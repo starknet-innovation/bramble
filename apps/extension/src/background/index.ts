@@ -19,7 +19,7 @@ import {
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import { createPreferencesStore, type WalletPreferences } from "@bramble/settings/preferences";
 import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnostics";
-import { createActivityLog, systemClock } from "@bramble/transactions/activity";
+import { systemClock } from "@bramble/transactions/activity";
 import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
 import { createRelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
@@ -72,6 +72,7 @@ import {
 import { createBackgroundUnlockSession } from "./runtime/unlock-session-boot";
 import { createUpdateReady } from "./runtime/update-ready";
 import { createBackgroundPreferences } from "./settings/preferences-adapter";
+import { createPricedActivityLog } from "./transactions/activity-valuation";
 import { startTransactionMonitor } from "./transactions/tx-monitor";
 
 const extensionApi = resolveExtensionApi<BackgroundBrowser>();
@@ -233,13 +234,10 @@ const gatewayAnalytics = createGatewayAnalytics({
 // shared boundary for it and starknet.js; every non-gateway request is passed
 // through unchanged.
 globalThis.fetch = gatewayAnalytics.fetch as typeof globalThis.fetch;
-const activityLog = (() => {
-  try {
-    return createActivityLog({ store: createBrowserLocalStore() });
-  } catch {
-    return undefined;
-  }
-})();
+const activityLog = createPricedActivityLog(createBrowserLocalStore(), {
+  prices: () => priceService,
+  readPreferences,
+});
 // Public chain data only. The adapter is restricted to trusted extension
 // contexts at startup; wallet secrets remain exclusively in the encrypted vault.
 const balanceSnapshots = createBalanceSnapshotStore(createBrowserLocalStore());

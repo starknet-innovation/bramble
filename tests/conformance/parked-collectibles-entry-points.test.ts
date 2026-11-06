@@ -15,7 +15,12 @@
  * `data-nft-open` tile hook — because navigation into those views is reachable
  * from nothing else while no such markup exists.
  *
- * Delete this file when the journey is un-parked.
+ * The opt-in collectibles preview (Settings → Advanced) is the one sanctioned
+ * way back in. Its entry point lives in the files listed in
+ * `PREVIEW_GATED_ENTRY_POINTS`, each of which renders it only when
+ * `collectiblesPreview` is on; the behavioural tests below pin that gate.
+ *
+ * Delete this file when the journey is un-parked for everyone.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -28,6 +33,15 @@ const WALLET_UI_SRC = join(import.meta.dir, "../../packages/presentation/wallet-
 // The journey's own modules are exempt: they are the parked code, and they are
 // the files a future un-park edits back into reach.
 const PARKED_JOURNEY_DIR = join("sidepanel", "journeys", "collectibles");
+
+// Entry points rendered only while the collectibles preview is on. Adding a
+// file here is a reviewed decision, and its gate needs a test below.
+const PREVIEW_GATED_ENTRY_POINTS: ReadonlySet<string> = new Set([
+  join("sidepanel", "journeys", "portfolio", "home-tabs.ts"),
+  // The gallery tiles' open callback; `navigate` itself refuses every parked
+  // view unless the preview is on.
+  join("sidepanel", "app", "start.ts"),
+]);
 
 const sourceFiles = (root: string): readonly string[] =>
   readdirSync(root, { recursive: true, withFileTypes: true }).flatMap((entry) =>
@@ -51,7 +65,10 @@ describe("parked collectibles entry points", () => {
       "nft-detail",
       "nft-send",
     ]);
-    expect(PARKED_COLLECTIBLE_VIEWS.every(isParkedCollectibleView)).toBe(true);
+    expect(PARKED_COLLECTIBLE_VIEWS.every((view) => isParkedCollectibleView(view))).toBe(true);
+    expect(PARKED_COLLECTIBLE_VIEWS.some((view) => isParkedCollectibleView(view, true))).toBe(
+      false,
+    );
     expect(isParkedCollectibleView("home")).toBe(false);
   });
 
@@ -61,7 +78,7 @@ describe("parked collectibles entry points", () => {
     expect(files.length).toBeGreaterThan(100);
 
     const offenders = files.flatMap((file) => {
-      if (file.startsWith(`${PARKED_JOURNEY_DIR}${sep}`)) {
+      if (file.startsWith(`${PARKED_JOURNEY_DIR}${sep}`) || PREVIEW_GATED_ENTRY_POINTS.has(file)) {
         return [];
       }
       const source = readFileSync(join(WALLET_UI_SRC, file), "utf8");

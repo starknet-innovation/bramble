@@ -22,7 +22,6 @@ import {
   readStrk20RegistrationStatus,
 } from "@bramble/privacy/service";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
-import { systemClock } from "@bramble/transactions/activity";
 import {
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
@@ -40,6 +39,7 @@ import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
+import { hasPendingRegistration } from "./strk20-activity";
 import { createStrk20FeeReference } from "./strk20-fee-reference";
 import {
   type ActivePrivacyContext,
@@ -52,7 +52,7 @@ import {
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
 import { handleStrk20SendOps } from "./strk20-send-ops";
-import { executePreparation, STRK20_REGISTRATION_SUMMARY } from "./strk20-wallet-execution";
+import { executePreparation } from "./strk20-wallet-execution";
 import { readStrk20WalletExecuteInput } from "./strk20-wallet-inputs";
 import { strk20WalletPreparationPayload } from "./strk20-wallet-preparations";
 
@@ -65,36 +65,6 @@ export type { Strk20WalletOpsDeps } from "./strk20-op-context";
  * the derivation that matches on it.
  */
 export { STRK20_REGISTRATION_SUMMARY } from "./strk20-wallet-execution";
-
-/**
- * How long a broadcast registration is trusted over the privacy indexer. The
- * indexer reflects a registration seconds to minutes after Starknet accepts it;
- * past this window a still-invisible registration reads as absent again, so an
- * attempt that truly never landed leaves the user able to retry rather than
- * locked out of the flow forever.
- */
-const REGISTRATION_PENDING_WINDOW_MS = 30 * 60_000;
-
-// A registration the privacy indexer cannot see yet. Derived from the activity
-// log rather than stored separately: the registration is already recorded there
-// with its hash, and background reconciliation already advances that entry, so a
-// rejected or reverted attempt drops out of this check on its own.
-const hasPendingRegistration = async (
-  deps: Strk20WalletOpsDeps,
-  context: ActivePrivacyContext,
-): Promise<boolean> => {
-  const now = (deps.now ?? systemClock)();
-  const entries = await deps.activity.list();
-  return entries.some(
-    (entry) =>
-      entry.summary === STRK20_REGISTRATION_SUMMARY &&
-      entry.accountId === context.accountContext.account.id &&
-      entry.networkId === context.accountContext.account.networkId &&
-      entry.status !== "rejected" &&
-      entry.status !== "reverted" &&
-      now - entry.submittedAt < REGISTRATION_PENDING_WINDOW_MS,
-  );
-};
 
 /**
  * The bounded converted pool fee for each held token the wallet can price,

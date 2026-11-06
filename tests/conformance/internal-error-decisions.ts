@@ -96,6 +96,7 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Analytics preference failed",
   "Backup export failed",
   "Backup restore failed",
+  "Collectibles preference failed",
   "Complete signer setup failed",
   "Contact removal failed",
   "Contact save failed",

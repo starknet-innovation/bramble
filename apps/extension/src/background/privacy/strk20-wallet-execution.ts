@@ -43,7 +43,11 @@ import { afterBroadcast, recordSubmittedActivity } from "../transactions/activit
 import { withTrustedRecipients } from "../transactions/trusted-recipients";
 import type { Strk20WalletExecuteResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
-import { STRK20_REGISTRATION_SUMMARY } from "./strk20-activity";
+import {
+  hasPendingRegistration,
+  STRK20_REGISTRATION_SUMMARY,
+  strk20FirstShieldSummary,
+} from "./strk20-activity";
 import {
   type ActivePrivacyContext,
   assertPublicPoolSpendAffordable,
@@ -122,6 +126,9 @@ const activitySummary = (
   const value = `${preparation.amount} ${preparation.token.symbol}`;
   if (preparation.kind === "transfer") {
     return `Send ${value} privately`;
+  }
+  if (preparation.kind === "deposit" && preparation.activates) {
+    return strk20FirstShieldSummary(value);
   }
   const verb = preparation.kind === "withdraw" ? "Unshield" : "Shield";
   const payee = otherParty(preparation, context);
@@ -230,7 +237,13 @@ const submitPreparedDeposit = async (
     ...context.accountContext,
     token: context.token.address,
   });
-  if (registration !== "registered") {
+  if (preparation.activates) {
+    // A first shield registers inside its own batch (#789). One that landed
+    // meanwhile, or is still on its way, would make this one revert.
+    if (registration === "registered" || (await hasPendingRegistration(deps, context))) {
+      throw new WalletError("Private balances changed. Review the shield again.");
+    }
+  } else if (registration !== "registered") {
     throw new WalletError("Private registration is no longer active");
   }
   await assertRecipientRegistration(service, preparation.recipient, context);
