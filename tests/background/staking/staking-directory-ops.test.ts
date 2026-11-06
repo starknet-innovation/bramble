@@ -1,14 +1,14 @@
 /**
- * The validator directory from the background (issue 750): read only through
- * the configured SNF gateway route, never with a key, bounded and strictly
+ * The validator directory from the background (issue 750): read through the
+ * explorer lane's Starkscan client, never with a key, bounded and strictly
  * validated, hidden when Starkscan's coverage is incomplete, filtered to
  * active validators with an active pool for a tracked token, and never a
  * shortcut past on-chain verification. Fixtures are schema-derived, not live.
  */
 import { describe, expect, test } from "bun:test";
-import type { BoundedHttpFetch } from "@bramble/core/http-json";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
+import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions/starkscan";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -27,12 +27,14 @@ import {
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 import {
   makeStakingChain,
+  offStakingNetworks,
   STAKER,
   stakingReader,
   testStakingNetworks,
 } from "../../support/staking-chain";
 
-const ROUTE = "https://gateway.test/staking/validators/mainnet";
+const BASE = "https://starkscan.test/v1";
+const ROUTE = `${BASE}/SN_MAIN/staking/validators`;
 const UNREADABLE = {
   error: "Couldn't load the validator list. Paste a validator address instead.",
 };
@@ -43,12 +45,12 @@ const harness = async (
   options: {
     readonly enabled?: boolean;
     readonly reply?: Reply;
-    readonly route?: string | null;
+    readonly starkscan?: boolean;
   } = {},
 ) => {
   const requests: { readonly init: RequestInit; readonly url: string }[] = [];
   const reply = options.reply ?? { body: directoryPage([directoryValidator(STAKER)]) };
-  const http: BoundedHttpFetch = async (url, init) => {
+  const http: StarkscanHttp = async (url, init) => {
     requests.push({ init, url });
     if (reply instanceof Error) throw reply;
     return new Response(JSON.stringify(reply.body), { status: reply.status ?? 200 });
@@ -66,17 +68,12 @@ const harness = async (
         return { overallFee: "1", unit: "FRI" };
       },
       readAtPinnedBlock: stakingReader(chain),
+      ...(options.starkscan === false
+        ? {}
+        : { starkscanFor: () => createStarkscanClient({ baseUrl: BASE, http }) }),
     }),
     session,
-    stakingDirectory: {
-      http,
-      urls: {
-        SN_DEVNET: null,
-        SN_MAIN: options.route === undefined ? ROUTE : options.route,
-        SN_SEPOLIA: null,
-      },
-    },
-    ...(options.enabled === false ? {} : { stakingNetworks: testStakingNetworks }),
+    stakingNetworks: options.enabled === false ? offStakingNetworks : testStakingNetworks,
   });
   const send = (message: Record<string, unknown>) => handler(message, invokeExtensionSender);
   return { chain, estimated, requests, send };
@@ -85,8 +82,8 @@ const harness = async (
 const directory = { type: "wallet.stakingDirectory" } as const;
 
 describe("staking directory", () => {
-  test("is off, with no request, while no gateway route is configured", async () => {
-    const { requests, send } = await harness({ route: null });
+  test("is off, with no request, without a Starkscan client", async () => {
+    const { requests, send } = await harness({ starkscan: false });
     expect(await send(directory)).toEqual({ ok: true, stakingDirectory: { state: "off" } });
     expect(requests).toEqual([]);
   });
@@ -97,7 +94,7 @@ describe("staking directory", () => {
     expect(requests).toEqual([]);
   });
 
-  test("reads one bounded page from the route, hardened and with no key", async () => {
+  test("reads one bounded page through the Starkscan client, hardened and with no key", async () => {
     const { requests, send } = await harness();
     const response = await send({ ...directory, cursor: "next/page=2" });
     expect(response).toMatchObject({
@@ -123,8 +120,9 @@ describe("staking directory", () => {
     expect(url.searchParams.get("limit")).toBe("50");
     expect(url.searchParams.get("cursor")).toBe("next/page=2");
     expect(requests[0]?.init).toMatchObject({ credentials: "omit", redirect: "error" });
-    expect(requests[0]?.init.headers).toBeUndefined();
-    expect(JSON.stringify(requests[0]?.init ?? {})).not.toContain("Starkscan");
+    expect(requests[0]?.init).toMatchObject({ referrerPolicy: "no-referrer" });
+    // The explorer lane's own headers: JSON only, no key, no account.
+    expect(requests[0]?.init.headers).toEqual({ accept: "application/json" });
   });
 
   test("offers only active validators with an active pool for a tracked token", async () => {
@@ -160,15 +158,16 @@ describe("staking directory", () => {
     }
   });
 
-  test("fails closed on a failed, malformed, oversized or wrong-chain answer", async () => {
+  test("fails closed on a failed (403 included), malformed, oversized or wrong-chain answer", async () => {
     const replies: readonly Reply[] = [
       new Error("offline"),
+      { body: "Forbidden", status: 403 },
       { body: { code: "unauthorized" }, status: 401 },
       { body: { code: "staking_directory_capacity_exceeded" }, status: 503 },
       { body: directoryPage([directoryValidator(STAKER)], { chainId: "SN_SEPOLIA" }) },
       { body: directoryPage([directoryValidator(STAKER, { name: "x".repeat(65) })]) },
       { body: directoryPage([directoryValidator(STAKER, { address: "0x0" })]) },
-      { body: { padding: "x".repeat(1024 * 1024 + 1) } },
+      { body: { padding: "x".repeat(2 * 1024 * 1024 + 1) } },
     ];
     for (const reply of replies) {
       const { send } = await harness({ reply });

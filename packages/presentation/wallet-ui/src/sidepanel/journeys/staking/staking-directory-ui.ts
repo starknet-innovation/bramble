@@ -70,7 +70,13 @@ export const bindStakingDirectory = (deps: StakingDirectoryUiDeps): void => {
     });
   });
   app?.querySelector<HTMLButtonElement>("[data-staking-back]")?.addEventListener("click", () => {
-    repaint({ ...state(), selected: null, validator: { loading: true } });
+    // "Your stakes" is read again: an action on that screen may have changed it.
+    repaint({
+      ...state(),
+      positions: { loading: true },
+      selected: null,
+      validator: { loading: true },
+    });
   });
   const sort = app?.querySelector<HTMLSelectElement>("[data-staking-sort]");
   sort?.addEventListener("change", () => {

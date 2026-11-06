@@ -10,15 +10,15 @@
  *   staker comes from the directory or is pasted; either way it is only a
  *   candidate until the staking contract lists its pool. Both reads are
  *   panel-poll traffic, so they read the session without renewing it.
+ * - `wallet.stakingPositions` is "Your stakes" (./staking-positions-ops):
+ *   Starkscan's candidates for the active account, each confirmed on chain.
  * - `wallet.stakingPrepare` / `wallet.stakingExecute` are ./staking-action.
  *
  * Failure behaviour: anything unverifiable is an error or an "unavailable"
  * row, and nothing is signed.
  */
-import { formatTokenAmount } from "@bramble/starknet/rpc";
-import { stakingPositionState } from "@bramble/transactions/staking-calls";
 import type { StakingNetworkTable } from "@bramble/transactions/staking-networks";
-import { canonicalFelt, STRK_TOKEN_DECIMALS, sameFelt } from "@bramble/wallet-model/networks";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { executeStakingResponse, prepareStakingResponse } from "./staking-action";
 import {
@@ -28,55 +28,19 @@ import {
   type StakingOpsDeps,
   stakingContext,
 } from "./staking-context";
+import { stakingDirectoryResponse } from "./staking-directory-ops";
 import {
-  DEFAULT_STAKING_DIRECTORY,
-  type StakingDirectoryRouting,
-  stakingDirectoryResponse,
-} from "./staking-directory-ops";
-import {
+  isStakingPositionsInput,
   readStakingDirectoryInput,
   readStakingExecuteInput,
   readStakingOverviewInput,
   readStakingPrepareInput,
 } from "./staking-inputs";
+import { stakingPositionsResponse } from "./staking-positions-ops";
 import type { StakingPreparationStore } from "./staking-preparations";
-import { readStakingChainFacts, readStakingPool, type StakingPoolReading } from "./staking-reads";
+import { readStakingChainFacts, readStakingPool } from "./staking-reads";
+import { rowView } from "./staking-row-view";
 import type { StakingRowView } from "./staking-view";
-
-const percent = (basisPoints: number): string =>
-  `${(basisPoints / 100).toFixed(2).replace(/\.?0+$/, "")}%`;
-
-const rowView = (
-  reading: StakingPoolReading,
-  token: { readonly decimals: number; readonly id: string; readonly symbol: string },
-  account: string,
-  now: number,
-): StakingRowView => {
-  const base = { staker: reading.staker, symbol: token.symbol, tokenId: token.id };
-  if ("refusal" in reading) return { ...base, refusal: reading.refusal };
-  const member = reading.member === "none" ? null : reading.member;
-  const format = (value: bigint): string => formatTokenAmount(value, token.decimals);
-  // Rewards follow the membership's on-chain reward address, which another
-  // app may have set; the row says so rather than implying this account.
-  const rewardsTo =
-    member && !sameFelt(member.rewardAddress, account)
-      ? (canonicalFelt(member.rewardAddress) ?? undefined)
-      : undefined;
-  return {
-    ...base,
-    accepting: reading.pool.accepting,
-    commission: percent(reading.pool.commission),
-    delegated: format(reading.pool.delegated),
-    ...(rewardsTo ? { rewardsTo } : {}),
-    staked: format(member?.amount ?? 0n),
-    state: stakingPositionState(reading.member, now),
-    // Rewards are STRK whatever the staked token (checked in the chain facts).
-    rewardSymbol: "STRK",
-    unclaimed: formatTokenAmount(member?.unclaimedRewards ?? 0n, STRK_TOKEN_DECIMALS),
-    unpoolAmount: format(member?.unpoolAmount ?? 0n),
-    ...(member?.unpoolTime == null ? {} : { unpoolTime: member.unpoolTime }),
-  };
-};
 
 const overviewResponse = async (deps: StakingOpsDeps, staker: string): Promise<RuntimeResponse> => {
   const context = await stakingContext(deps, true);
@@ -112,10 +76,9 @@ const overviewResponse = async (deps: StakingOpsDeps, staker: string): Promise<R
 
 /**
  * Router-supplied staking collaborators: the one-time preparation store and,
- * in tests only, a staking table and directory override.
+ * in tests only, a staking table.
  */
 export type StakingRouting = {
-  readonly directory?: StakingDirectoryRouting;
   readonly networks?: StakingNetworkTable;
   readonly preparations: StakingPreparationStore;
 };
@@ -138,13 +101,13 @@ export const handleStakingOps = async (
     case "wallet.stakingDirectory": {
       const input = readStakingDirectoryInput(message);
       return input
-        ? stakingDirectoryResponse(
-            deps,
-            routing.directory ?? DEFAULT_STAKING_DIRECTORY,
-            input.cursor,
-          )
+        ? stakingDirectoryResponse(deps, input.cursor)
         : { error: "invalid staking request" };
     }
+    case "wallet.stakingPositions":
+      return isStakingPositionsInput(message)
+        ? stakingPositionsResponse(deps)
+        : { error: "invalid staking request" };
     case "wallet.stakingOverview": {
       const input = readStakingOverviewInput(message);
       return input ? overviewResponse(deps, input.staker) : { error: "invalid staking request" };

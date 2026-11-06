@@ -1,9 +1,12 @@
 /**
- * Staking screen checkpoints (issue 750): the validator list from Starkscan
- * with the paste field, the list while Starkscan reports it incomplete, one
+ * Staking screen checkpoints (issue 750): Mainnet when Starkscan can't be
+ * read (the paste field, with one short line each and no error page), the
+ * validator list from Starkscan with "Your stakes" and the paste field, both
+ * while Starkscan reports them incomplete, one
  * validator opened (a new position, a staked position with rewards and an exit
  * pending, and a pool that could not be verified), and the two-tap review. The
- * directory entries are schema-derived fixtures, not a live capture. The
+ * directory entries and positions are schema-derived fixtures, not a live
+ * capture; positions show only chain-read figures. The
  * bindings run against fixture clients, so no checkpoint reaches a network.
  */
 import { bindStaking, bindStakingDirectory, type StakingState } from "@bramble/wallet-ui/lab";
@@ -37,6 +40,18 @@ const ENTRY = {
   website: "validator.example",
 };
 
+const SECOND_STAKER = "0x71b2e4c6a8d0f2b4c6e8a0d2f4b6c8e0a2c4e6f8b0d2f4a6c8e0b2d4f6a8c0e";
+
+const pasteOnly: StakingState = {
+  directory: {
+    unavailable: "Couldn't load the validator list. Paste a validator address instead.",
+  },
+  positions: { unavailable: "Couldn't load your stakes." },
+  selected: null,
+  sort: "stake",
+  validator: { loading: true },
+};
+
 const list: StakingState = {
   directory: {
     entries: [
@@ -50,7 +65,7 @@ const list: StakingState = {
           { delegated: "1,204,551", symbol: "STRK" },
           { delegated: "212.08", symbol: "WBTC" },
         ],
-        staker: "0x71b2e4c6a8d0f2b4c6e8a0d2f4b6c8e0a2c4e6f8b0d2f4a6c8e0b2d4f6a8c0e",
+        staker: SECOND_STAKER,
         website: null,
       },
       {
@@ -67,12 +82,32 @@ const list: StakingState = {
     ],
     nextCursor: "fixture-cursor",
   },
+  positions: {
+    complete: true,
+    rows: [
+      { ...ROW, staked: "1,250", state: "staked", unclaimed: "18.4421" },
+      {
+        ...ROW,
+        staked: "0",
+        staker: SECOND_STAKER,
+        state: "exit-pending",
+        symbol: "WBTC",
+        tokenId: "SN_MAIN:WBTC",
+        unpoolAmount: "0.5",
+        unpoolTime: 1_800_000_000,
+      },
+    ],
+  },
   selected: null,
   sort: "stake",
   validator: { loading: true },
 };
 
-const incomplete: StakingState = { ...list, directory: { incomplete: true } };
+const incomplete: StakingState = {
+  ...list,
+  directory: { incomplete: true },
+  positions: { complete: false, rows: [{ ...ROW, staked: "1,250", state: "staked" }] },
+};
 
 const opened: StakingState = {
   ...list,
@@ -138,21 +173,30 @@ const review = async ({ app }: FrameContext): Promise<void> => {
 /** The staking checkpoints, grouped with the settings journey. */
 export const stakingCheckpoints: readonly ScenarioCheckpoint[] = [
   {
+    content: () => walletDashboard({ staking: pasteOnly, view: "staking" }),
+    id: "staking-paste-only",
+    label: "Staking, Starkscan unavailable",
+    narrative:
+      'Starkscan can\'t be read: "Your stakes" says it couldn\'t load, the list says to paste an address, and the paste field works. Never an error page or "no stakes".',
+    prepare: bindList,
+    state: { directory: "unavailable", positions: "unavailable" },
+  },
+  {
     content: () => walletDashboard({ staking: list, view: "staking" }),
     id: "staking",
     label: "Staking",
     narrative:
-      "Validators from Starkscan's directory (schema-derived fixtures), with their addresses, commission, 30-day uptime and delegated totals; unknown figures say unknown. A pasted address always works.",
+      '"Your stakes" first: each position Starkscan listed and the chain confirmed, with chain-read figures and a View button. Then validators from Starkscan\'s directory (schema-derived fixtures), with their addresses, commission, 30-day uptime and delegated totals; unknown figures say unknown. A pasted address always works.',
     prepare: bindList,
-    state: { directory: "ready", validators: 3 },
+    state: { directory: "ready", positions: 2, validators: 3 },
   },
   {
     content: () => walletDashboard({ staking: incomplete, view: "staking" }),
     id: "staking-incomplete",
     label: "Staking list incomplete",
     narrative:
-      "Starkscan reports its snapshot incomplete, so no validator is offered; pasting still works.",
-    state: { directory: "incomplete" },
+      'Starkscan reports its snapshots incomplete: no validator is offered, and "Your stakes" shows what the chain confirmed and says some may not be listed, never "none". Pasting still works.',
+    state: { directory: "incomplete", positions: "incomplete" },
   },
   {
     content: () => walletDashboard({ staking: opened, view: "staking" }),

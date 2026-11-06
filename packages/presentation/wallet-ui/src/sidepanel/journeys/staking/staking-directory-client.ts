@@ -14,6 +14,7 @@ import {
 import { stakerAddress } from "@bramble/transactions/staking-networks";
 import { refusalText } from "../../runtime/runtime-errors";
 import type { StakingValidatorState } from "./staking-client";
+import type { StakingPositionsState } from "./staking-positions-client";
 
 const MAX_TEXT = 120;
 const MAX_POOLS = 32;
@@ -51,6 +52,8 @@ export type StakingSort = "commission" | "stake" | "uptime";
 /** The whole staking screen. */
 export type StakingState = {
   readonly directory: StakingDirectoryState;
+  /** "Your stakes": the account's positions the chain confirmed. */
+  readonly positions: StakingPositionsState;
   /** The validator the user opened, or null for the list. */
   readonly selected: { readonly name: string | null; readonly staker: string } | null;
   readonly sort: StakingSort;
@@ -60,6 +63,7 @@ export type StakingState = {
 /** The state before the first read. */
 export const STAKING_LOADING: StakingState = {
   directory: { loading: true },
+  positions: { loading: true },
   selected: null,
   sort: "stake",
   validator: { loading: true },

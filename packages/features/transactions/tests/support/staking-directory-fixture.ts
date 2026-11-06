@@ -5,8 +5,8 @@
  * `StakingValidator`, `StakingPool`, `StakingTokenAmount`, `StakingRatio` and
  * `StakingCoverage` (read 2026-11-06). Live replies can differ from a schema,
  * for example `null` against an absent field (PR 850), so these must be
- * replaced or joined by a verbatim capture once the gateway route and its
- * Starkscan key exist. Every required key is present, with the schema's
+ * replaced or joined by a verbatim capture (a plain read-only GET) before
+ * release. Every required key is present, with the schema's
  * `null` where a figure is unavailable.
  */
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";

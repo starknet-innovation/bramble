@@ -55,8 +55,7 @@ const TYPED_DATA = {
   },
 };
 
-// Broadcast event envelope: emitted by the background, never handled as an
-// inbound request, so it has no scan entry.
+// Broadcast event envelope: emitted by the background, never handled, so no scan entry.
 const OUTBOUND_ONLY = new Set(["wallet.event"]);
 
 /**

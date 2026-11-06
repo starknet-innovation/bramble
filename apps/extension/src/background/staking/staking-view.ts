@@ -49,7 +49,7 @@ type StakingOverview = {
 /**
  * `wallet.stakingOverview` success.
  */
-export type StakingOverviewResponse = {
+type StakingOverviewResponse = {
   readonly ok: true;
   readonly staking: StakingOverview;
 };
@@ -69,7 +69,35 @@ export type StakingDirectoryView =
 /**
  * `wallet.stakingDirectory` success.
  */
-export type StakingDirectoryResponse = {
+type StakingDirectoryResponse = {
   readonly ok: true;
   readonly stakingDirectory: StakingDirectoryView;
 };
+
+/**
+ * What `wallet.stakingPositions` answers: no route ("off"), or the account's
+ * positions that the chain confirmed. `complete` is false whenever Starkscan's
+ * list was incomplete or truncated, or a listed position could not be checked;
+ * the screen then never reads an empty list as "no stakes".
+ */
+export type StakingPositionsView =
+  | { readonly state: "off" }
+  | {
+      readonly complete: boolean;
+      readonly rows: readonly StakingRowView[];
+      readonly state: "ready";
+    };
+
+/**
+ * `wallet.stakingPositions` success.
+ */
+type StakingPositionsResponse = {
+  readonly ok: true;
+  readonly stakingPositions: StakingPositionsView;
+};
+
+/** Every read-only staking success the background answers. */
+export type StakingResponse =
+  | StakingDirectoryResponse
+  | StakingOverviewResponse
+  | StakingPositionsResponse;

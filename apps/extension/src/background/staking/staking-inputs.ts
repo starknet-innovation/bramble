@@ -95,7 +95,7 @@ export const readStakingOverviewInput = (message: unknown): { readonly staker: s
 
 /**
  * Parses `wallet.stakingDirectory`: an optional opaque cursor from the
- * previous page, bounded before it is echoed to the gateway.
+ * previous page, bounded before it is echoed to Starkscan.
  */
 export const readStakingDirectoryInput = (
   message: unknown,
@@ -106,3 +106,12 @@ export const readStakingDirectoryInput = (
   (message["cursor"] === undefined || isDirectoryCursor(message["cursor"]))
     ? { cursor: typeof message["cursor"] === "string" ? message["cursor"] : null }
     : null;
+
+/**
+ * Parses `wallet.stakingPositions`: no fields beyond the type. The address is
+ * always the active account's, never one the panel names.
+ */
+export const isStakingPositionsInput = (message: unknown): boolean =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["type"]) &&
+  message["type"] === "wallet.stakingPositions";

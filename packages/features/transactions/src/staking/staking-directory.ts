@@ -1,7 +1,7 @@
 /**
  * Strict reader for Starkscan's staking validator directory
  * (`GET /v1/{chain}/staking/validators`, schema `StakingValidatorPage`), as
- * the SNF gateway passes it through unchanged.
+ * read directly from Starkscan's keyless API.
  *
  * Trust boundary: the directory is untrusted third-party data. It only helps
  * the user find a staker address; it never supplies a pool, calldata, or any
@@ -19,7 +19,7 @@ import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
 import { stakerAddress } from "./staking-networks";
 
-/** Validators requested per page; the gateway must not return more. */
+/** Validators requested per page; a page with more is refused. */
 export const STAKING_DIRECTORY_PAGE_SIZE = 50;
 /** Longest opaque cursor accepted from, or sent back to, the directory. */
 export const MAX_DIRECTORY_CURSOR_LENGTH = 1024;
@@ -83,7 +83,8 @@ export const isDirectoryCursor = (value: unknown): value is string =>
   value.length <= MAX_DIRECTORY_CURSOR_LENGTH &&
   /^[\x21-\x7e]+$/.test(value);
 
-const feltOf = (value: unknown): string | null =>
+/** A Starkscan address field as a lowercase felt, or null when malformed. Pure. */
+export const starkscanFelt = (value: unknown): string | null =>
   typeof value === "string" &&
   value.length <= 66 &&
   /^0x[0-9a-fA-F]+$/.test(value) &&
@@ -91,7 +92,11 @@ const feltOf = (value: unknown): string | null =>
     ? value.toLowerCase()
     : null;
 
-const rawOf = (value: unknown, positive = false): bigint | null | undefined => {
+/**
+ * A Starkscan raw figure: null stays null (unknown), a bounded digit string is
+ * a bigint, anything else is undefined (malformed). Pure.
+ */
+export const starkscanRaw = (value: unknown, positive = false): bigint | null | undefined => {
   if (value === null) return null;
   if (typeof value !== "string" || value.length > MAX_RAW_DIGITS || !/^[0-9]+$/.test(value)) {
     return undefined;
@@ -107,8 +112,8 @@ const ratioPpm = (value: unknown): number | null | undefined => {
   if (!isRecord(value) || !hasOnlyKnownKeys(value, ["denominatorRaw", "numeratorRaw"])) {
     return undefined;
   }
-  const numerator = rawOf(value["numeratorRaw"]);
-  const denominator = rawOf(value["denominatorRaw"], true);
+  const numerator = starkscanRaw(value["numeratorRaw"]);
+  const denominator = starkscanRaw(value["denominatorRaw"], true);
   if (typeof numerator !== "bigint" || typeof denominator !== "bigint") return undefined;
   return numerator > denominator ? undefined : Number((numerator * PPM) / denominator);
 };
@@ -140,10 +145,10 @@ const boundedArray = (value: unknown): readonly unknown[] | null =>
 
 const poolOf = (value: unknown): DirectoryPool | null => {
   if (!isRecord(value)) return null;
-  const token = feltOf(value["tokenAddress"]);
+  const token = starkscanFelt(value["tokenAddress"]);
   const status = value["status"];
   return token &&
-    feltOf(value["address"]) &&
+    starkscanFelt(value["address"]) &&
     typeof status === "string" &&
     POOL_STATUSES.includes(status)
     ? { active: status === "active", token }
@@ -152,8 +157,8 @@ const poolOf = (value: unknown): DirectoryPool | null => {
 
 const stakeOf = (value: unknown): DirectoryValidator["delegated"][number] | null => {
   if (!isRecord(value)) return null;
-  const token = feltOf(value["tokenAddress"]);
-  const raw = rawOf(value["delegatedStakeRaw"]);
+  const token = starkscanFelt(value["tokenAddress"]);
+  const raw = starkscanRaw(value["delegatedStakeRaw"]);
   return token && raw !== undefined ? { raw, token } : null;
 };
 
@@ -169,7 +174,7 @@ const allOf = <T>(values: readonly unknown[], read: (value: unknown) => T | null
 
 const validatorOf = (value: unknown): DirectoryValidator | null => {
   if (!isRecord(value)) return null;
-  const staker = stakerAddress(feltOf(value["address"]));
+  const staker = stakerAddress(starkscanFelt(value["address"]));
   const name = textOf(value["name"], MAX_NAME_LENGTH);
   const website = websiteOf(value["website"]);
   const status = value["status"];

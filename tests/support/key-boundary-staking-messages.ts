@@ -18,6 +18,7 @@ export const STAKING_PREPARE_MESSAGE = {
  */
 export const STAKING_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.stakingDirectory" }, sender: extensionSender },
+  { message: { type: "wallet.stakingPositions" }, sender: extensionSender },
   { message: { staker: STAKER, type: "wallet.stakingOverview" }, sender: extensionSender },
   { message: { ...STAKING_PREPARE_MESSAGE }, sender: extensionSender },
   {

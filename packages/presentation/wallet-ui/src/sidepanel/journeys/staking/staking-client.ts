@@ -71,7 +71,11 @@ const isText = (value: unknown): value is string =>
 const optional = (value: unknown, check: (item: unknown) => boolean): boolean =>
   value === undefined || check(value);
 
-const isRow = (value: unknown): value is StakingRow =>
+/**
+ * Checks one background row key by key (display strings, a canonical staker,
+ * bounded numbers); anything else is not a row. Pure.
+ */
+export const isStakingRow = (value: unknown): value is StakingRow =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ROW_KEYS) &&
   isText(value["symbol"]) &&
@@ -108,7 +112,7 @@ export const stakingValidatorFrom = (response: unknown, staker: string): Staking
     (staking["exitWindowSeconds"] as number) >= 0 &&
     Array.isArray(staking["rows"]) &&
     staking["rows"].length <= MAX_ROWS &&
-    staking["rows"].every((row) => isRow(row) && row.staker === staker)
+    staking["rows"].every((row) => isStakingRow(row) && row.staker === staker)
   ) {
     return {
       exitWindowSeconds: staking["exitWindowSeconds"] as number,

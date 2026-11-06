@@ -1,7 +1,6 @@
 /**
  * Native Starknet staking (delegation pools) per network: the staking
- * contract the wallet trusts, whether the feature is switched on, and the
- * gateway route that serves the validator directory.
+ * contract the wallet trusts and whether the feature is switched on.
  *
  * Trust boundary: the staking contract below is the ONLY one the wallet will
  * build calls for. A validator (staker address) may come from the directory or
@@ -10,9 +9,12 @@
  * ./staking-decode `verifyStakingPool`). A pool address is never taken from
  * the directory, the UI, or an API. Nothing here is read from storage.
  *
- * Off by default on every network. Turning a network on is a product decision
- * (issue 750); until then the feature has no entry point and the background
- * refuses every staking message.
+ * On for Mainnet only (product decision, 2026-11-06). The pasted address always
+ * works; Starkscan's directory and "Your stakes" come through the explorer
+ * lane's Starkscan client and degrade to "couldn't load" on any failure. Every
+ * other network is off: the
+ * feature has no entry point there and the background refuses every staking
+ * message.
  */
 import {
   canonicalFelt,
@@ -45,26 +47,13 @@ export type StakingNetworkTable = Readonly<Record<StarknetNetworkId, StakingNetw
 export const STAKING_NETWORKS: StakingNetworkTable = {
   SN_DEVNET: null,
   SN_MAIN: {
-    enabled: false,
+    enabled: true,
     stakingContract: "0x00ca1702e64c81d9a07b86bd2c540188d92a2c73cf5cc0e508d949015e7e84a7",
   },
   SN_SEPOLIA: {
     enabled: false,
     stakingContract: "0x03745ab04a431fc02871a139be6b93d9260b0ff3e779ad9c8b377183b23109f1",
   },
-};
-
-/**
- * The SNF gateway route that serves Starkscan's validator directory for each
- * network, or null where there is none. The Starkscan API key lives only in
- * the gateway; the extension never holds it. Null everywhere until the route
- * exists: the screen then offers only a pasted validator address. Starkscan
- * does not serve Sepolia (it answers 404), so Sepolia stays null.
- */
-export const STAKING_DIRECTORY_URLS: Readonly<Record<StarknetNetworkId, string | null>> = {
-  SN_DEVNET: null,
-  SN_MAIN: null,
-  SN_SEPOLIA: null,
 };
 
 /**

@@ -96,7 +96,11 @@ import {
   scanExternalAllowances,
   type TrackedAllowanceScan,
 } from "@bramble/transactions/allowance-scan";
-import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions/starkscan";
+import {
+  createStarkscanClient,
+  type StarkscanClient,
+  type StarkscanHttp,
+} from "@bramble/transactions/starkscan";
 import {
   createExplorerFirstHistory,
   createRpcFirstBalances,
@@ -271,6 +275,16 @@ export type RuntimeRpc = {
    * refuses when it is absent.
    */
   readonly readAtPinnedBlock?: typeof readAtPinnedBlock;
+  /**
+   * The explorer lane's Starkscan client for a network (same base, per-network
+   * override and hardened transport), for the staking directory and "Your
+   * stakes". Optional so existing stubs stay valid; without it those reads are
+   * off and staking is paste-only.
+   */
+  readonly starkscanFor?: (
+    networkId: StarknetNetworkId,
+    preferences: ExplorerLanePreferences,
+  ) => Pick<StarkscanClient, "getStakingAddress" | "getStakingValidators">;
   readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
   /**
    * Reads the account's recent on-chain transaction history for the activity
@@ -436,6 +450,7 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   nftIndexer: createHttpNftIndexer(nftIndexerHttp),
   readAtPinnedBlock,
   resolveStarkName,
+  starkscanFor: configuredStarkscanClient,
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,

@@ -81,6 +81,7 @@ const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
   "wallet.loadActivity": "wallet.activity",
   "wallet.loadAllowances": "wallet.allowances",
   "wallet.loadStakingDirectory": "wallet.stakingDirectory",
+  "wallet.loadStakingPositions": "wallet.stakingPositions",
   "wallet.loadStakingValidator": "wallet.stakingOverview",
   "wallet.loadBalances": "wallet.getBalances",
   "wallet.loadClassHashVerification": "wallet.verifyClassHash",

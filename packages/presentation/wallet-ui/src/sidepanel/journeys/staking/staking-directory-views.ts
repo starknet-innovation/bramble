@@ -1,7 +1,7 @@
 /**
  * The staking screen with no validator open (issue 750): a field to paste a
  * validator address, always shown, and Starkscan's validator directory when
- * the gateway serves one.
+ * it can be read (a failure leaves the paste field and one short line).
  *
  * Every directory string is third-party text: it is escaped, a website is
  * shown only as its hostname and never as a link, nothing remote is loaded,

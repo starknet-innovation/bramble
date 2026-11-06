@@ -16,11 +16,12 @@ import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
-import { flowHeader, flowScreen, accountLabel as shortAddress } from "../../shared/parts";
-import { formatUtcClock, formatUtcDate } from "../../shared/timestamp";
+import { flowHeader, flowScreen } from "../../shared/parts";
 import type { StakingAction, StakingRow, StakingValidatorState } from "./staking-client";
 import type { StakingState } from "./staking-directory-client";
 import { stakingDirectorySection } from "./staking-directory-views";
+import { positionLines } from "./staking-position-lines";
+import { stakingPositionsSection } from "./staking-positions-views";
 
 const UNIT_SECONDS: readonly (readonly [number, string])[] = [
   [86_400, "day"],
@@ -41,10 +42,6 @@ export const exitWindowText = (seconds: number): string => {
   }
   return `${seconds} seconds`;
 };
-
-// Fixed UTC, like the recovery timelines: no implicit clock or locale.
-const unlockText = (seconds: number): string =>
-  `${formatUtcDate(seconds * 1000) ?? ""}, ${formatUtcClock(seconds * 1000) ?? ""}`;
 
 const rowKey = (row: StakingRow): string => `${row.staker}|${row.tokenId}`;
 
@@ -72,23 +69,6 @@ const amountForm = (row: StakingRow, action: "stake" | "unstake", label: string)
     })}
     ${actionButton(row, action, label, action === "stake" ? "primary" : "ghost")}
   </div>`;
-
-const positionLines = (row: StakingRow): string => {
-  const lines: string[] = [];
-  if (row.staked && row.staked !== "0") lines.push(`Staked ${row.staked} ${row.symbol}`);
-  if (row.unclaimed && row.unclaimed !== "0")
-    lines.push(`Rewards ${row.unclaimed} ${row.rewardSymbol ?? "STRK"}`);
-  if (row.rewardsTo) lines.push(`Rewards are paid to ${shortAddress(row.rewardsTo)}`);
-  if (row.state === "exit-pending" && row.unpoolTime !== undefined) {
-    lines.push(
-      `Unstaking ${row.unpoolAmount ?? ""} ${row.symbol} · withdraw from ${unlockText(row.unpoolTime)}`,
-    );
-  }
-  if (row.state === "withdrawable") {
-    lines.push(`${row.unpoolAmount ?? ""} ${row.symbol} ready to withdraw`);
-  }
-  return lines.map((line) => `<p class="hint">${escapeHtml(line)}</p>`).join("");
-};
 
 const rowActions = (row: StakingRow): string => {
   const parts: string[] = [];
@@ -159,7 +139,7 @@ export const stakingFlow = (
           ? emptyState("Unlock an account on this network to stake.")
           : state.selected
             ? validatorSection(state.selected, state.validator)
-            : stakingDirectorySection(state)
+            : `${stakingPositionsSection(state)}${stakingDirectorySection(state)}`
       }
     </section>`,
   );

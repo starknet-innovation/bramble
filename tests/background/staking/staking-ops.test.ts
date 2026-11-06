@@ -29,6 +29,7 @@ import {
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 import {
   makeStakingChain,
+  offStakingNetworks,
   STAKER,
   STAKING_POOL,
   type StakingChainState,
@@ -77,7 +78,7 @@ const harness = async (
     preferencesStore,
     runtimeRpc,
     session,
-    ...(options.enabled === false ? {} : { stakingNetworks: testStakingNetworks }),
+    stakingNetworks: options.enabled === false ? offStakingNetworks : testStakingNetworks,
   });
   const preferences = await preferencesStore.read();
   const strk = preferences.tokens.find(

@@ -11,7 +11,6 @@ import {
 } from "../../src/staking/staking-calls";
 import type { PoolMember } from "../../src/staking/staking-decode";
 import {
-  STAKING_DIRECTORY_URLS,
   STAKING_NETWORKS,
   stakerAddress,
   stakingNetwork,
@@ -137,17 +136,13 @@ describe("stakingActivitySummary", () => {
 });
 
 describe("staking network table", () => {
-  test("ships switched off on every network", () => {
-    expect(stakingNetwork("SN_MAIN")).toBeNull();
+  test("ships switched on for Mainnet only (paste-only), off elsewhere", () => {
+    expect(stakingNetwork("SN_MAIN")).toBe(STAKING_NETWORKS.SN_MAIN);
     expect(stakingNetwork("SN_SEPOLIA")).toBeNull();
     expect(stakingNetwork("SN_DEVNET")).toBeNull();
     expect(STAKING_NETWORKS.SN_MAIN?.stakingContract).toBe(
       "0x00ca1702e64c81d9a07b86bd2c540188d92a2c73cf5cc0e508d949015e7e84a7",
     );
-  });
-
-  test("no directory route is bundled: the key stays in the gateway, which does not exist yet", () => {
-    expect(STAKING_DIRECTORY_URLS).toEqual({ SN_DEVNET: null, SN_MAIN: null, SN_SEPOLIA: null });
   });
 
   test("a switched-on network needs no validator list", () => {

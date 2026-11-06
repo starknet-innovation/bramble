@@ -30,6 +30,8 @@ export type StakingChainState = {
   /** The staking contract's own token, in which rewards are paid. */
   rewardToken: string;
   stakerLeaving: boolean;
+  /** More verified validators, each with its own STRK pool (see `poolFor`). */
+  extraStakers: string[];
   reads: string[];
 };
 
@@ -39,6 +41,7 @@ const hex = (value: bigint | number): string => `0x${value.toString(16)}`;
 export const makeStakingChain = (): StakingChainState => ({
   activeTokens: [STRK_TOKEN_ADDRESS],
   commission: 1000,
+  extraStakers: [],
   member: null,
   poolStaker: STAKER,
   reads: [],
@@ -53,6 +56,25 @@ export const testStakingNetworks: StakingNetworkTable = {
   SN_SEPOLIA: null,
 };
 
+/** Every network switched off: the "staking is off here" refusals. */
+export const offStakingNetworks: StakingNetworkTable = {
+  SN_DEVNET: null,
+  SN_MAIN: { enabled: false, stakingContract: STAKING_CONTRACT },
+  SN_SEPOLIA: null,
+};
+
+/** The STRK pool of `staker`: STAKING_POOL for STAKER, one each for the extras. */
+const poolFor = (state: StakingChainState, staker: unknown): string | null => {
+  if (sameFelt(staker, STAKER)) return STAKING_POOL;
+  const index = state.extraStakers.findIndex((extra) => sameFelt(extra, staker));
+  return index < 0 ? null : hex(0x5b00 + index);
+};
+
+const stakerOfPool = (state: StakingChainState, pool: string): string | null =>
+  sameFelt(pool, STAKING_POOL)
+    ? state.poolStaker
+    : (state.extraStakers.find((extra) => sameFelt(poolFor(state, extra), pool)) ?? null);
+
 const answer = (
   state: StakingChainState,
   contract: string,
@@ -65,27 +87,26 @@ const answer = (
         return [hex(state.activeTokens.length), ...state.activeTokens];
       case "contract_parameters_v1":
         return ["0x1", state.rewardToken, "0x7", "0x8", "0x9", hex(604_800)];
-      case "staker_pool_info":
-        return sameFelt(calldata[0], STAKER)
-          ? ["0x0", hex(state.commission), "0x1", STAKING_POOL, STRK_TOKEN_ADDRESS, hex(10n ** 21n)]
+      case "staker_pool_info": {
+        const pool = poolFor(state, calldata[0]);
+        return pool
+          ? ["0x0", hex(state.commission), "0x1", pool, STRK_TOKEN_ADDRESS, hex(10n ** 21n)]
           : ["0x1", "0x0"];
-      case "get_staker_info_v1":
-        if (!sameFelt(calldata[0], STAKER)) return ["0x1"];
+      }
+      case "get_staker_info_v1": {
+        const staker = calldata[0] ?? "";
+        if (!poolFor(state, staker)) return ["0x1"];
         return state.stakerLeaving
-          ? ["0x0", STAKER, STAKER, "0x0", hex(2_000_000_000), "0x0", "0x0", "0x1"]
-          : ["0x0", STAKER, STAKER, "0x1", "0x0", "0x0", "0x1"];
+          ? ["0x0", staker, staker, "0x0", hex(2_000_000_000), "0x0", "0x0", "0x1"]
+          : ["0x0", staker, staker, "0x1", "0x0", "0x0", "0x1"];
+      }
     }
   }
-  if (sameFelt(contract, STAKING_POOL)) {
+  const poolStaker = stakerOfPool(state, contract);
+  if (poolStaker) {
     switch (entrypoint) {
       case "contract_parameters_v1":
-        return [
-          state.poolStaker,
-          "0x0",
-          STAKING_CONTRACT,
-          STRK_TOKEN_ADDRESS,
-          hex(state.commission),
-        ];
+        return [poolStaker, "0x0", STAKING_CONTRACT, STRK_TOKEN_ADDRESS, hex(state.commission)];
       case "get_pool_member_info_v1": {
         const member = state.member;
         if (!member) return ["0x1"];
