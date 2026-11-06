@@ -6,6 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { reviewedInvokeTotal } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import { sameFelt } from "@bramble/wallet-model/networks";
@@ -24,6 +25,7 @@ import {
   inlineCopyButton,
 } from "../../shared/parts";
 import {
+  type ReviewFeeState,
   reviewCallsList,
   reviewConstraints,
   reviewCostNote,
@@ -183,6 +185,23 @@ const gaslessChoiceAllowed = (approval: PendingApproval, status: WalletStatus): 
   approval.feeEstimateFailed !== true &&
   approval.fee != null;
 
+// The deployment half of the Cost section. A Ledger account signs the
+// deployment and the calls separately, so the card says so before the click.
+const invokeDeploymentReview = (
+  approval: PendingApproval,
+  status: WalletStatus,
+): Partial<ReviewFeeState> => {
+  if (approval.requiresDeployment !== true || approval.deploymentFeeEstimateFailed === undefined) {
+    return {};
+  }
+  const account = status.accounts.find((entry) => entry.id === approval.context?.accountId);
+  return {
+    ...(approval.deploymentFee ? { deploymentFee: approval.deploymentFee } : {}),
+    deploymentFeeEstimateFailed: approval.deploymentFeeEstimateFailed,
+    ...(account?.derivation.kind === "ledger" ? { signsTwice: true } : {}),
+  };
+};
+
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => {
   const offerGasless = gaslessChoiceAllowed(approval, status);
   return `
@@ -204,6 +223,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
           feeEstimateFailed: approval.feeEstimateFailed === true,
           feeEstimatePending: approval.feeEstimatePending === true,
           ...(offerGasless && approval.gaslessFees ? { gaslessFees: approval.gaslessFees } : {}),
+          ...invokeDeploymentReview(approval, status),
           requiresDeployment: approval.requiresDeployment === true,
         },
         { "data-approval-retry-fee": approval.id },
@@ -228,11 +248,10 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     ${paymentDecisionRow(
       approval,
       "Approve",
-      status.locked ||
-        approval.feeEstimatePending === true ||
-        approval.feeEstimateFailed === true ||
-        approval.fee == null,
-      approval.fee ?? undefined,
+      // Approve echoes the total the Cost section showed — the same helper the
+      // background refusal reads — and is withheld while no total exists.
+      status.locked || reviewedInvokeTotal(approval) === null,
+      reviewedInvokeTotal(approval) ?? undefined,
     )}
   </li>`;
 };

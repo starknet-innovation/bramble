@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import { DEFAULT_ORIGIN_GUARD } from "@bramble/permissions/blocklist";
 import { memoryOriginHistory } from "@bramble/permissions/origin-history";
 import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import {
   type ApprovalDecisionDeps,
   handleApprovalDecision,
@@ -356,5 +357,22 @@ describe("pendingGaslessRefusal", () => {
         amount: "2",
       }),
     ).toEqual(MOVED_FEE);
+  });
+
+  test("an undeployed account is refused even if an offer matches (issue 851)", () => {
+    // The review never offers gasless fees to an undeployed account; this pins
+    // the decision-time refusal should a review ever attach both.
+    expect(
+      pendingGaslessRefusal(
+        pending("invoke", { gaslessFees: [GASLESS_OFFER], requiresDeployment: true }),
+        GASLESS_OFFER,
+      ),
+    ).toEqual({ error: UNDEPLOYED_BRAAVOS_REFUSAL });
+    expect(
+      pendingGaslessRefusal(
+        pending("invoke", { gaslessFees: [GASLESS_OFFER], requiresDeployment: false }),
+        GASLESS_OFFER,
+      ),
+    ).toBeNull();
   });
 });

@@ -1,10 +1,11 @@
 /**
  * The further facts an expanded Activity row shows (mc-wallet issue 480): the
  * full counterparty address, the fee the account paid, the network, and the
- * token's contract. Each fact comes from the stored record alone. A fact the
- * record does not hold, such as the fee on an older or discovered row, is left
- * out rather than estimated, and no row shows a fiat value: today's price is
- * not what the transaction was worth.
+ * token's contract, and what a send was worth when it was submitted. Each fact
+ * comes from the stored record alone. A fact the record does not hold, such as
+ * the fee on an older or discovered row, is left out rather than estimated:
+ * fiat is shown only at the price the row captured on submission, never at
+ * today's price.
  */
 import { escapeHtml } from "@bramble/core/html";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
@@ -15,6 +16,7 @@ import {
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
+import { formatFiat } from "../../shared/fiat";
 import { formatFri, inlineCopyButton } from "../../shared/parts";
 
 const fact = (term: string, value: string): string =>
@@ -69,12 +71,25 @@ export const activityFeeText = (
   return null;
 };
 
+/**
+ * The amount's worth at the unit price captured when the row was submitted, in
+ * the currency it was priced in. Null when no price was captured, or when the
+ * amount is not a plain positive number.
+ */
+const submittedValueText = (entry: ActivityEntry): string | null => {
+  const price = entry.submittedPrice;
+  const amount = Number(entry.amount?.trim() || Number.NaN);
+  if (!price || !Number.isFinite(amount) || amount <= 0) return null;
+  return formatFiat(amount * price.unitPrice, price.currency);
+};
+
 /** The counterparty fact, with the whole address on screen and copyable. */
 export const counterpartyFact = (role: string, address: string): string =>
   fact(role, identifier(address, `Copy ${role.toLowerCase()} address`));
 
 /**
- * The fee, network and token contract facts, each only when recorded.
+ * The value at submission, fee, network and token contract facts, each only
+ * when recorded.
  * `tracked` lends a gasless fee token its scale when it is not a built-in.
  */
 export const activityRecordFacts = (
@@ -83,7 +98,9 @@ export const activityRecordFacts = (
 ): string => {
   const fee = activityFeeText(entry, tracked);
   const network = STARKNET_NETWORKS[entry.networkId]?.name;
+  const value = submittedValueText(entry);
   return [
+    value === null ? "" : fact("Value at submission", escapeHtml(value)),
     fee === null ? "" : fact("Network fee", escapeHtml(fee)),
     network === undefined ? "" : fact("Network", escapeHtml(network)),
     entry.tokenAddress === undefined
