@@ -104,8 +104,11 @@ Per the Braavos engineer's forum post: master node straight from the mnemonic
 - Ready standard: `DEPLOY_ACCOUNT`, deployer 0, **salt = stark pubkey**; constructor
   per era exactly as `account-families.ts` documents (0.3.x `[owner, 0]`, 0.4.0
   `[signer, owner, guardian: None]`). Class constants in argent-x stop at 0.4.0 —
-  0.5.0 (known to Krusty) is not in the extension's creation path; treat as
-  specimen/verify. Cairo 0 era: proxy `0x25ec026…` over impls 0.2.1–0.2.4, salt =
+  0.5.0 (`0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2`)
+  is not known to the pinned Krusty 0.11.0 (it arrives with 0.12.0) and is not in
+  the extension's creation path; treat as specimen. Its constructor is
+  `[0, pk, 1]`, like 0.4.0 (Krusty 0.12.0 typings); the class is declared on
+  Sepolia and live there as TA-62. Cairo 0 era: proxy `0x25ec026…` over impls 0.2.1–0.2.4, salt =
   pubkey, cairo0 constructor shape.
 - Ready smart (email guardian): the **backend chooses both the salt and the
   address** (`addSmartAccountResponse.address/.salt`, guardian in the constructor).
@@ -134,8 +137,12 @@ against Argent's backend** (`ARGENT_SMART_ACCOUNT_DISCOVERY_URL`,
   UDC call on current mainnet? Decides whether Cairo 0 cells are scriptable or
   specimen-only.
 - Ready mobile vs extension derivation parity (Phase 1, same seed in both).
-- Argent 0.5.0: deployed by any Ready surface yet, and its constructor shape.
-- Braavos 1.1.0 implementation: does `isKnownAccountClass` reject it live?
+- Argent 0.5.0: deployed by any Ready surface yet? (Constructor shape answered
+  above: `[0, pk, 1]`.)
+- Braavos 1.1.0 implementation: answered, it is rejected live. Sepolia TA-61 runs
+  implementation `0x02c8c7e6fbcfb3e8e15a46648e8914c6aa1fc506fc1e7fb3d1e19630716174bc`;
+  the scan lists it as "unsupported release · view only", and pasting the address
+  gives "Bramble doesn't support this account's contract version yet."
 - Braavos withdrawal-limit / deferred-removal state surfaces for the manifest.
 
 ## Phase 2 status — calibration PASSED (2026-10-02)
@@ -147,8 +154,10 @@ seeds' recorded addresses on the first run:
 - **Braavos**: all four recorded accounts match the vendor derivation at indices 0–3,
   with deploy class `0x03d16c7a…` (the table's "braavos 1.0.0") — the current app
   does **not** use the `0x13bfe…` base class for its counterfactual addresses. Live
-  class of the two deployed accounts: `0x3957f9f5…` ("braavos current"). The
-  funded-undeployed account is confirmed undeployed on chain.
+  class of the two deployed accounts: `0x3957f9f5…` ("braavos current"), which is
+  Braavos account 1.2.0 in the Krusty 0.12.0 registry, not a newer class; the
+  current Braavos app deploys it. The funded-undeployed account is confirmed
+  undeployed on chain.
 - **Ready**: recorded accounts 1/3/4/5 match the **double derivation** at indices
   0/2/4/5 (live class 0.4.0 for the deployed one). The smart (email-guardian)
   account consumed index 1 and its backend-salted address matches no computed shape,
