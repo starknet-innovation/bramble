@@ -54,6 +54,18 @@ export const scanRows = async (page: Page): Promise<Row[]> => {
   return rows;
 };
 
+/**
+ * Types a seed, phrase or key into `field`. A failure is replaced by one that
+ * names the field only: Playwright's own error may echo the value it typed.
+ */
+const fillSecret = async (locator: Locator, value: string, field: string): Promise<void> => {
+  try {
+    await locator.fill(value);
+  } catch {
+    throw new Error(`could not enter the ${field}`);
+  }
+};
+
 const text = async (locator: Locator): Promise<string> =>
   ((await locator.textContent()) ?? "").replace(/\s+/g, " ").trim();
 
@@ -127,7 +139,7 @@ export async function openSession(mnemonic: string): Promise<Session> {
   await onboarding.goto(`${base}/onboarding.html`);
   await onboarding.getByRole("button", { name: "Add an existing wallet" }).click();
   await onboarding.getByRole("button", { name: "Recovery phrase" }).click();
-  await onboarding.locator('input[name="import-word-0"]').fill(mnemonic);
+  await fillSecret(onboarding.locator('input[name="import-word-0"]'), mnemonic, "recovery phrase");
   await onboarding.getByRole("button", { name: "Continue" }).click();
   await onboarding.locator('input[name="vaultPassphrase"]').fill(PASSPHRASE);
   await onboarding.locator('input[name="vaultPassphraseConfirm"]').fill(PASSPHRASE);
@@ -165,7 +177,7 @@ export async function openSession(mnemonic: string): Promise<Session> {
   const scan: Session["scan"] = async (phrase) => {
     const page = await open(["import", phrase === null ? "find-accounts" : "import-phrase"]);
     if (phrase !== null) {
-      await page.locator('input[name="import-word-0"]').fill(phrase);
+      await fillSecret(page.locator('input[name="import-word-0"]'), phrase, "recovery phrase");
       await page.locator("#import-phrase-search").click();
     }
     if (phrase === null) await page.locator("#find-accounts-search").click();
@@ -221,7 +233,7 @@ export async function openSession(mnemonic: string): Promise<Session> {
     const page = await open(["import", "import-key"]);
     const before = await accountsOf(page);
     await page.locator('select[name="accountContractType"]').selectOption(type);
-    await page.locator('textarea[name="rawKey"]').fill(raw);
+    await fillSecret(page.locator('textarea[name="rawKey"]'), raw, "private key");
     if (salt) await page.locator('input[name="deploymentSalt"]').fill(salt);
     await page.locator('#import-key-form button[type="submit"]').click();
     const result = page.locator("#import-key-result");
@@ -270,7 +282,7 @@ export async function openSession(mnemonic: string): Promise<Session> {
 
   const phraseEntry: Session["phraseEntry"] = async (phrase) => {
     const page = await open(["import", "import-phrase"]);
-    await page.locator('input[name="import-word-0"]').fill(phrase);
+    await fillSecret(page.locator('input[name="import-word-0"]'), phrase, "recovery phrase");
     await page.waitForTimeout(500);
     return {
       message: await text(page.locator("#recovery-result")),

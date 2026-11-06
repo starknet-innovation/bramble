@@ -3,10 +3,11 @@
  * import path, each holding the scope doc's "Now" expectation as fields that
  * are scored (listed, hint, selectable, message, imported) and its "Desired"
  * line as unscored context. Groups share one scan per phrase, so P4 pastes and
- * P5 indices run on the scan they belong to. Errors are redacted of every
- * secret the run types.
+ * P5 indices run on the scan they belong to. Errors and printed text are
+ * redacted of every secret the run types and every key it derives.
  */
 import { braavosKeypair, brambleKeypair, loadManifest, readyKeypair } from "./matrix-lib";
+import { redact, secret } from "./sepolia-redact";
 import { type SepoliaSecret, sepoliaSecret } from "./sepolia-seeds";
 import type { Row, Session } from "./verify-sepolia-ui";
 
@@ -24,30 +25,27 @@ const same = (a: string, b: string): boolean => {
   }
 };
 
-// Every secret the run may type, so no error text can carry one out.
-const secrets = (
-  [
-    "S-BRM",
-    "S-SCR",
-    "S-BRV",
-    "S-RDY",
-    "S-XVS",
-    "S-W15",
-    "S-W18",
-    "S-W21",
-    "K-OZ",
-    "K-ROT-A",
-    "K-SNC",
-  ] as const
-).flatMap((name) => {
+// Every secret the run may type is registered up front, so no error text can
+// carry one out; the keys derived from them are registered as they are made.
+for (const name of [
+  "S-BRM",
+  "S-SCR",
+  "S-BRV",
+  "S-RDY",
+  "S-XVS",
+  "S-W15",
+  "S-W18",
+  "S-W21",
+  "K-OZ",
+  "K-ROT-A",
+  "K-SNC",
+] as const) {
   try {
-    return [sepoliaSecret(name)];
+    secret(sepoliaSecret(name));
   } catch {
-    return [];
+    // Absent from the seed file: its cards are skipped or error without it.
   }
-});
-const redact = (message: string): string =>
-  secrets.reduce((m, s) => m.split(s).join("[redacted]"), message).slice(0, 300);
+}
 const have = (name: SepoliaSecret): boolean => {
   try {
     sepoliaSecret(name);
@@ -108,7 +106,7 @@ const score = (card: Card, observed: Observed): void => {
   results.push({ ...card, observed, verdict, mismatches });
   const shown = observed.message ?? observed.hint ?? (observed.listed ? "listed" : "not listed");
   console.log(
-    `${verdict.toUpperCase().padEnd(6)} ${card.ta.padEnd(15)} ${card.path.padEnd(4)} ${shown}`,
+    `${verdict.toUpperCase().padEnd(6)} ${card.ta.padEnd(15)} ${card.path.padEnd(4)} ${redact(shown)}`,
   );
 };
 
@@ -124,7 +122,7 @@ const attempt = async (cards: readonly Card[], step: () => Promise<Observed[]>):
     for (const [i, card] of cards.entries()) score(card, observed[i] ?? {});
   } catch (error) {
     for (const card of cards) {
-      const message = redact(String(error));
+      const message = redact(String(error)).slice(0, 300);
       results.push({ ...card, observed: { message }, verdict: "error", mismatches: [] });
       console.log(`ERROR  ${card.ta.padEnd(15)} ${card.path.padEnd(4)} ${message.slice(0, 120)}`);
     }
@@ -146,7 +144,7 @@ const phraseGroup = async (
   let scan: Awaited<ReturnType<Session["scan"]>> | null = null;
   await attempt(rows, async () => {
     scan = await session.scan(phrase);
-    console.log(`   scan: ${scan.status}`);
+    console.log(`   scan: ${redact(scan.status)}`);
     const found = scan.rows;
     return rows.map((card) => fromRows(found, addressOf(card.id)));
   });
@@ -180,7 +178,7 @@ const FOUND = /^Found/;
 /** Every card, run against one session. Returns the scored results in run order. */
 export async function runChecks(session: Session): Promise<Result[]> {
   results = [];
-  const scr = (i: number): string => readyKeypair(sepoliaSecret("S-SCR"), i).priv;
+  const scr = (i: number): string => secret(readyKeypair(sepoliaSecret("S-SCR"), i).priv);
 
   console.log("\n## S-BRM: own-phrase rescan (P3), manual index (P5), pasted address (P4)");
   await phraseGroup(
@@ -365,7 +363,7 @@ export async function runChecks(session: Session): Promise<Result[]> {
       { imported: false },
       "found",
     ),
-    brambleKeypair(sepoliaSecret("S-BRM"), 2).priv,
+    secret(brambleKeypair(sepoliaSecret("S-BRM"), 2).priv),
     "s-brm/TA-06",
   );
   await p6(
@@ -412,7 +410,7 @@ export async function runChecks(session: Session): Promise<Result[]> {
         { listed: true, hint: /^Deployed/ },
         "shows the guardian reason",
       ),
-      readyKeypair(sepoliaSecret("S-RDY"), 3).priv,
+      secret(readyKeypair(sepoliaSecret("S-RDY"), 3).priv),
       "s-rdy/TA-12",
     );
   }
@@ -437,7 +435,7 @@ export async function runChecks(session: Session): Promise<Result[]> {
       row("s-rdy/TA-12", "P8", "'Found your account. It's view only until you recover it.'", {
         message: /view only until you recover it/,
       }),
-      readyKeypair(sepoliaSecret("S-RDY"), 3).priv,
+      secret(readyKeypair(sepoliaSecret("S-RDY"), 3).priv),
       "s-rdy/TA-12",
     );
   }
@@ -445,7 +443,7 @@ export async function runChecks(session: Session): Promise<Result[]> {
     row("s-brv/TA-27", "P8", "'can't import a Braavos account from a private key yet'", {
       message: /Braavos account from a private key/,
     }),
-    braavosKeypair(sepoliaSecret("S-BRV"), 0).priv,
+    secret(braavosKeypair(sepoliaSecret("S-BRV"), 0).priv),
     "s-brv/TA-27",
   );
 
