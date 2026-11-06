@@ -1,6 +1,5 @@
 /** RPC-backed wallet operations dispatched from the background message handler. */
 
-import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { systemClock } from "@bramble/transactions/activity";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
@@ -54,22 +53,6 @@ export const signerForContext = (
   deps: WalletOpsDeps,
   context: { readonly account: AccountRef; readonly vaultPassphrase: string },
 ) => accountHashSigner(deps, context.account, context.vaultPassphrase);
-
-/**
- * Classifies a transfer review's fee outcome so callers can tell an intentional
- * "no fee yet because the account still needs deployment" apart from a genuine
- * estimate failure. For an undeployed account the fee is intentionally null and
- * `feeEstimateFailed` stays false; for a deployed account that produced no
- * estimate the failure flag is set so the UI can surface a retry instead of a
- * dead "unavailable" string.
- */
-export const resolveReviewFee = (input: {
-  readonly deployed: boolean;
-  readonly fee: FeeEstimate | null;
-}): { readonly fee: FeeEstimate | null; readonly feeEstimateFailed: boolean } =>
-  input.deployed
-    ? { fee: input.fee, feeEstimateFailed: input.fee === null }
-    : { fee: null, feeEstimateFailed: false };
 
 type WalletOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
