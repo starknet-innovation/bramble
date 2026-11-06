@@ -42,11 +42,19 @@ extension.
   Read-only, about 15 minutes, retries the public node's rate limits:
   `BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts [out.json] [previous.json]`.
   Passing a previous scorecard lists the verdicts that changed; keep a release's
-  run as a dated `verification-sepolia-*.json`. Ledger (TA-32…TA-38) needs the
-  device and is checked by hand.
-  It exits non-zero when any check fails or errors.
-- The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts` on the
-  active release branch against the newest committed scorecard, so a failing
+  run as a dated `verification-sepolia-*.json`. It exits non-zero when any
+  check fails or errors.
+- The test Ledger is optional. By default TA-32…TA-37 are skipped, so the run
+  needs no device. With `BRAMBLE_SEPOLIA_LEDGER=1` the browser opens visibly and,
+  after the other checks, asks you to plug in and unlock the test Ledger, open
+  the Starknet app and pick it in the device prompt, once for "Ledger account"
+  and once for "Ready Ledger account" (`verify-sepolia-ledger.ts`). The wallet
+  reads public keys from the device itself, which is why no seed file can stand
+  in for it; nothing is signed. TA-38 (the first-run Ledger screen) stays manual,
+  and automating the device with Ledger's emulator is tracked in #861:
+  `BRAMBLE_SEPOLIA_LEDGER=1 BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts`.
+- The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts`, without
+  the Ledger, on the active release branch against the newest committed scorecard, so a failing
   import path blocks the release like any other nightly gate. It reads the seed
   file from the `BRAMBLE_SEPOLIA_SEEDS` repository secret: the Sepolia lines of
   `.env.vendor-seeds.local` pasted whole, with `S-LDG` left out (the runner

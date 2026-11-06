@@ -6,7 +6,12 @@
  * Read-only: no deploy, send or signature. Secrets are typed into the UI only;
  * the output carries addresses and visible text, and everything printed or
  * written, a failure included, is redacted (sepolia-redact).
- * Ledger (TA-32…TA-38) needs the device and stays a manual check.
+ *
+ * The test Ledger (TA-32…TA-37, path P9) is opt-in: BRAMBLE_SEPOLIA_LEDGER=1
+ * shows the browser and adds those checks after the rest, asking in the
+ * terminal for the device (verify-sepolia-ledger.ts). Without it they are
+ * skipped, so the run needs no Ledger; the nightly never sets it. TA-38 stays
+ * a manual check.
  *
  * Run from the repository root after `bun run build`:
  *   BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia \
@@ -28,7 +33,9 @@ import { NETWORK } from "./matrix-lib";
 import { guarded, redact, secret } from "./sepolia-redact";
 import { sepoliaSecret } from "./sepolia-seeds";
 import { readTape, recordTape, replayTape, type Tape, writeTape } from "./sepolia-tape";
-import { type Result, runChecks, type Verdict } from "./verify-sepolia-checks";
+import { runChecks } from "./verify-sepolia-checks";
+import { runLedgerChecks } from "./verify-sepolia-ledger";
+import { allResults, type Result, type Verdict } from "./verify-sepolia-score";
 import { openSession } from "./verify-sepolia-ui";
 
 if (NETWORK !== "sepolia") throw new Error("set BRAMBLE_DATASET_NETWORK=sepolia");
@@ -41,6 +48,7 @@ const defaultOutPath = (): string =>
 const PREVIOUS = process.argv[3];
 const RECORD = process.env["BRAMBLE_SEPOLIA_RECORD"];
 const REPLAY = process.env["BRAMBLE_SEPOLIA_REPLAY"];
+const LEDGER = process.env["BRAMBLE_SEPOLIA_LEDGER"] === "1";
 if (RECORD && REPLAY)
   throw new Error("set BRAMBLE_SEPOLIA_RECORD or BRAMBLE_SEPOLIA_REPLAY, not both");
 
@@ -58,10 +66,13 @@ const ok = await guarded(async () => {
           tape = await recordTape(context);
         }
       : undefined;
-  const session = await openSession(secret(sepoliaSecret("S-BRM")), network);
-  let results: Result[];
+  const session = await openSession(secret(sepoliaSecret("S-BRM")), network, LEDGER);
+  let results: readonly Result[];
   try {
-    results = await runChecks(session);
+    await runChecks(session);
+    if (LEDGER) await runLedgerChecks(session);
+    else console.log("\n## Test Ledger (TA-32…TA-37): skipped; set BRAMBLE_SEPOLIA_LEDGER=1");
+    results = allResults();
   } finally {
     await session.close();
     // A partial tape is still worth keeping; writeTape refuses one carrying a secret.

@@ -219,7 +219,11 @@ accepted here only so the audit suite can keep testing a shipped hotfix line.
 Runs the full **E2E (Playwright)** suite, the **dependency audit** (`bun audit`,
 via `bun run check:audit` — also run in the PR CI `release-validation` job;
 nightly re-runs it against the live advisory database so a newly-published
-advisory is caught even without a code change), the extension **build**, and a
+advisory is caught even without a code change), the extension **build**, the
+live **Sepolia import-path run** (`tools/vendor-dataset/verify-sepolia.ts`, issue
+821; its seeds come from the `BRAMBLE_SEPOLIA_SEEDS` secret, scoped to that one
+step, and its scorecard and replay tape are uploaded as the
+`sepolia-verification` artifact), and a
 clearly-labeled **placeholder**
 for perf / regression suites (none exist in-repo yet — the step is an explicit
 no-op and must not be read as a passing gate).

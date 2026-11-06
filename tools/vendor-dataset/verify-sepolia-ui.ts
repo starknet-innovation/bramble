@@ -2,7 +2,8 @@
  * Browser driving for the Sepolia verification run (verify-sepolia.ts): one
  * fresh extension profile, onboarded with S-BRM on mainnet (first run is
  * mainnet only), then switched to Sepolia, where every in-wallet import path
- * (P2…P8, P10) is driven through the side panel exactly as a person would.
+ * (P2…P8, P10, and the opt-in Ledger path P9) is driven through the side panel
+ * exactly as a person would.
  * Read-only: nothing here deploys, sends or signs. Secrets are typed into the
  * UI and never returned; scraped rows carry addresses and visible text only.
  */
@@ -12,6 +13,8 @@ import { sendRuntimeMessage } from "../../tests/e2e/wallet-helpers";
 
 const PASSPHRASE = "dataset verification passphrase";
 const SCAN_TIMEOUT_MS = 300_000;
+// Time for a person to plug in, unlock, open Starknet and pick the device.
+const LEDGER_CONNECT_TIMEOUT_MS = 300_000;
 const STEP_TIMEOUT_MS = 60_000;
 
 /** One account row as the UI lists it (scan groups and the Ready key picker share the markup). */
@@ -120,6 +123,12 @@ export type Session = {
   }) => Promise<{ message: string; rows: Row[]; finder?: string; imported: string[] }>;
   /** P10: add a multisig by address. */
   readonly multisig: (address: string) => Promise<{ message: string }>;
+  /**
+   * The Ledger picker's rows, read from a real device a person connects: `own`
+   * is "Ledger account" (Bramble's path), `ready` is "Ready Ledger account".
+   * Needs a headed session; waits for the person to choose the device.
+   */
+  readonly ledger: (route: "own" | "ready") => Promise<Row[]>;
   /** What the phrase screen says when `mnemonic` is entered (for 15/18/21 words). */
   readonly phraseEntry: (mnemonic: string) => Promise<{ message: string; searchable: boolean }>;
 };
@@ -134,13 +143,15 @@ const accountsOf = async (page: Page): Promise<string[]> => {
 /**
  * Onboards `mnemonic` on mainnet, keeping Bramble account 0, then switches to
  * Sepolia. `tap`, when given, is installed on the browser context before
- * any page opens (sepolia-tape's record or replay).
+ * any page opens (sepolia-tape's record or replay). `headed` shows the
+ * browser, which the Ledger checks need for the device prompt.
  */
 export async function openSession(
   mnemonic: string,
   tap?: (context: BrowserContext) => Promise<unknown>,
+  headed = false,
 ): Promise<Session> {
-  const loaded: LoadedExtension = await launchExtension({ headless: true });
+  const loaded: LoadedExtension = await launchExtension({ headless: !headed });
   await tap?.(loaded.context);
   const base = `chrome-extension://${loaded.extensionId}`;
   const onboarding = await loaded.context.newPage();
@@ -298,8 +309,38 @@ export async function openSession(
     };
   };
 
+  const ledger: Session["ledger"] = async (route) => {
+    const page = await open(route === "own" ? ["ledger"] : ["import", "restore-ready-ledger"]);
+    await page.locator("[data-ledger-onboard-connect]").click();
+    const name = route === "own" ? "Ledger account" : "Ready Ledger account";
+    console.log(
+      `   ${name}: plug in and unlock the test Ledger, open the Starknet app, and in the tab that opens connect it (pick it in the device prompt if the browser asks).`,
+    );
+    const picker = page.locator(".onboard-picker");
+    await expect(picker.locator("li.allowance-row").first()).toBeVisible({
+      timeout: LEDGER_CONNECT_TIMEOUT_MS,
+    });
+    // Each row reads "Checking…" until its on-chain status resolves.
+    await expect(picker.locator("span.hint", { hasText: "Checking…" })).toHaveCount(0, {
+      timeout: SCAN_TIMEOUT_MS,
+    });
+    const rows: Row[] = [];
+    for (const group of await picker.locator("details[data-account-group]").all()) {
+      if (!(await group.evaluate((el) => (el as HTMLDetailsElement).open))) {
+        await group.locator("summary").click();
+      }
+      rows.push(
+        ...(await scrapeRows(group, (await group.getAttribute("data-account-group")) ?? "")),
+      );
+    }
+    const ready = picker.locator("[data-ready-accounts]");
+    if ((await ready.count()) > 0) rows.push(...(await scrapeRows(ready, "ready")));
+    return rows;
+  };
+
   return {
     close: () => loaded.close(),
+    ledger,
     scan,
     paste,
     manualIndex,

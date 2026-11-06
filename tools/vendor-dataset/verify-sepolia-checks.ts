@@ -6,24 +6,19 @@
  * P5 indices run on the scan they belong to. Errors and printed text are
  * redacted of every secret the run types and every key it derives.
  */
-import { braavosKeypair, brambleKeypair, loadManifest, readyKeypair } from "./matrix-lib";
+import { braavosKeypair, brambleKeypair, readyKeypair } from "./matrix-lib";
 import { redact, secret } from "./sepolia-redact";
 import { type SepoliaSecret, sepoliaSecret } from "./sepolia-seeds";
-import type { Row, Session } from "./verify-sepolia-ui";
-
-const manifest = loadManifest();
-const addressOf = (id: string): string => {
-  const entry = manifest[id];
-  if (!entry) throw new Error(`${id} is not in manifest/sepolia/`);
-  return entry.address;
-};
-const same = (a: string, b: string): boolean => {
-  try {
-    return BigInt(a) === BigInt(b);
-  } catch {
-    return false;
-  }
-};
+import {
+  addressOf,
+  attempt,
+  type Card,
+  fromRows,
+  type RowCard,
+  row,
+  same,
+} from "./verify-sepolia-score";
+import type { Session } from "./verify-sepolia-ui";
 
 // Every secret the run may type is registered up front, so no error text can
 // carry one out; the keys derived from them are registered as they are made.
@@ -54,82 +49,6 @@ const have = (name: SepoliaSecret): boolean => {
     return false;
   }
 };
-
-/** What the scope doc says v0.10.8 does; each field present is scored. */
-type Expect = {
-  readonly listed?: boolean;
-  readonly hint?: RegExp;
-  readonly selectable?: boolean;
-  readonly message?: RegExp;
-  readonly imported?: boolean;
-};
-type Observed = {
-  listed?: boolean;
-  hint?: string;
-  selectable?: boolean;
-  message?: string;
-  imported?: boolean;
-};
-export type Verdict = "pass" | "fail" | "review" | "error";
-export type Result = {
-  readonly ta: string;
-  readonly path: string;
-  readonly now: string;
-  readonly desired?: string;
-  readonly observed: Observed;
-  readonly verdict: Verdict;
-  readonly mismatches: string[];
-};
-type Card = {
-  readonly ta: string;
-  readonly path: string;
-  readonly now: string;
-  readonly desired?: string;
-  readonly expect: Expect;
-};
-
-let results: Result[] = [];
-
-const score = (card: Card, observed: Observed): void => {
-  const mismatches: string[] = [];
-  const { expect: want } = card;
-  if (want.listed !== undefined && observed.listed !== want.listed) mismatches.push("listed");
-  if (want.hint && !want.hint.test(observed.hint ?? "")) mismatches.push("hint");
-  if (want.selectable !== undefined && observed.selectable !== want.selectable) {
-    mismatches.push("selectable");
-  }
-  if (want.message && !want.message.test(observed.message ?? "")) mismatches.push("message");
-  if (want.imported !== undefined && observed.imported !== want.imported)
-    mismatches.push("imported");
-  const verdict: Verdict =
-    Object.keys(want).length === 0 ? "review" : mismatches.length ? "fail" : "pass";
-  results.push({ ...card, observed, verdict, mismatches });
-  const shown = observed.message ?? observed.hint ?? (observed.listed ? "listed" : "not listed");
-  console.log(
-    `${verdict.toUpperCase().padEnd(6)} ${card.ta.padEnd(15)} ${card.path.padEnd(4)} ${redact(shown)}`,
-  );
-};
-
-const fromRows = (rows: readonly Row[], address: string): Observed => {
-  const row = rows.find((r) => same(r.address, address));
-  return row ? { listed: true, hint: row.hint, selectable: row.selectable } : { listed: false };
-};
-
-/** Runs `step`, scoring its observation, or records the error against every card it covers. */
-const attempt = async (cards: readonly Card[], step: () => Promise<Observed[]>): Promise<void> => {
-  try {
-    const observed = await step();
-    for (const [i, card] of cards.entries()) score(card, observed[i] ?? {});
-  } catch (error) {
-    for (const card of cards) {
-      const message = redact(String(error)).slice(0, 300);
-      results.push({ ...card, observed: { message }, verdict: "error", mismatches: [] });
-      console.log(`ERROR  ${card.ta.padEnd(15)} ${card.path.padEnd(4)} ${message.slice(0, 120)}`);
-    }
-  }
-};
-
-type RowCard = Card & { readonly id: string };
 
 /** P2/P3 rows for one phrase, then its P4 pastes and P5 manual indices on the same scan. */
 const phraseGroup = async (
@@ -164,20 +83,10 @@ const phraseGroup = async (
   }
 };
 
-const row = (id: string, path: string, now: string, expect: Expect, desired?: string): RowCard => ({
-  id,
-  ta: id,
-  path,
-  now,
-  expect,
-  ...(desired && { desired }),
-});
-
 const FOUND = /^Found/;
 
-/** Every card, run against one session. Returns the scored results in run order. */
-export async function runChecks(session: Session): Promise<Result[]> {
-  results = [];
+/** Every card, run against one session; the results collect in verify-sepolia-score. */
+export async function runChecks(session: Session): Promise<void> {
   const scr = (i: number): string => secret(readyKeypair(sepoliaSecret("S-SCR"), i).priv);
 
   console.log("\n## S-BRM: own-phrase rescan (P3), manual index (P5), pasted address (P4)");
@@ -463,5 +372,4 @@ export async function runChecks(session: Session): Promise<Result[]> {
   ]) {
     await attempt([card], async () => [await session.multisig(addressOf(card.ta))]);
   }
-  return results;
 }

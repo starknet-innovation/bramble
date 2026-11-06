@@ -52,9 +52,11 @@ step relies on.
 5. **Release candidate (when appropriate).** Tag `vX.Y.0-rc.1` on the release
    branch and run a final validation pass — build + package + `sha256sum -c`
    (section 2), load the unpacked build, confirm E2E. Dispatch the nightly on
-   the release branch for a fresh Sepolia import-path scorecard, check TA-32…TA-38
-   on the test Ledger by hand, and commit the run as
-   `tools/vendor-dataset/verification-sepolia-<date>.json`. Iterate `-rc.2`, … if the
+   the release branch for a fresh Sepolia import-path scorecard, run
+   `verify-sepolia.ts` locally with `BRAMBLE_SEPOLIA_LEDGER=1` and the test Ledger
+   for TA-32…TA-37, check TA-38 by hand, and commit the run as
+   `tools/vendor-dataset/verification-sepolia-<date>.json`
+   (`tools/vendor-dataset/README.md`). Iterate `-rc.2`, … if the
    RC turns up blockers. RC tags are validation only; they do not publish.
 6. **Full validation.** Confirm the RC against the acceptance criteria.
 7. **Promote to `main`.** Merge `release/vX.Y` → `main` as a **merge commit**
