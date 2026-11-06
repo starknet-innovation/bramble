@@ -2,6 +2,9 @@ import { type Call, CallData } from "starknet";
 import { WalletError } from "../../protocols/support/errors";
 import { userErrorMessage } from "../../protocols/support/user-error";
 
+/** Why a request built for one account or network is refused on another. */
+export const WALLET_IDENTITY_CHANGED = "Wallet account or network changed before approval.";
+
 /** A concise fact shown before the terminal hands a request to the wallet. */
 type WalletRequestDetail = {
   readonly label: string;

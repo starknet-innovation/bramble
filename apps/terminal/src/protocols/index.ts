@@ -15,6 +15,7 @@ export {
   buildVesuVaultRedeemCalls,
   VESU_VAULT_DEPOSITS_PAUSED,
 } from "./vesu/vesu-actions";
+export { verifyCuratedVesuVault } from "./vesu/vesu-vaults";
 export {
   recheckVesuLendingQuote,
   registeredVesuVToken,

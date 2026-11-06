@@ -9,8 +9,10 @@ import { enrichApprovals } from "../approvals/approval-insights";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { handleSidePanelNoticeOps } from "../approvals/side-panel-notice-ops";
 import { handleLedgerOps } from "../ledger/ledger-ops";
+import { MULTISIG_ACTIVE_STATE_MESSAGES } from "../multisig/multisig-active-messages";
 import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
 import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
+import { handleMultisigStrk20Actions } from "../multisig/multisig-strk20-actions";
 import { handleMultisigTxOps } from "../multisig/multisig-tx-ops";
 import { handleOnboardingOps } from "../onboarding/onboarding-ops";
 import { handleAllowanceOps } from "../portfolio/allowance-ops";
@@ -86,27 +88,16 @@ const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   multisigGrants: ctx.multisigGrants,
   multisigStore: ctx.multisigStore,
   nostrCoordinationStore: ctx.nostrCoordinationStore,
+  ...(ctx.strk20MultisigStore ? { strk20MultisigStore: ctx.strk20MultisigStore } : {}),
   ...(ctx.nostrRelayTransport ? { nostrRelayTransport: ctx.nostrRelayTransport } : {}),
   now: ctx.now,
 });
-
-const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
-  "wallet.addMultisig",
-  "wallet.deployArgentMultisig",
-  "wallet.importArgentMultisigIntent",
-  "wallet.importArgentMultisigSignature",
-  "wallet.prepareArgentMultisigIntent",
-  "wallet.removeArgentMultisigIntent",
-  "wallet.removeMultisig",
-  "wallet.reviewArgentMultisigDeployment",
-  "wallet.signArgentMultisigIntent",
-  "wallet.submitArgentMultisigIntent",
-]);
 
 const handleMultisig: RouterHandler = async (ctx, messageType, message) => {
   const handle = async (): Promise<RuntimeResponse | null> => {
     const deps = buildMultisigDeps(ctx);
     return (
+      (await handleMultisigStrk20Actions(deps, messageType, message)) ??
       (await handleMultisigOps(deps, messageType, message)) ??
       (await handleMultisigTxOps(deps, messageType, message)) ??
       handleMultisigCoordinationOps(deps, messageType, message)

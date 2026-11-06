@@ -36,6 +36,7 @@ import {
 import { heroChange } from "./hero-change";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
 import { readOnlyNotice } from "./recovery-view";
+import { vipEligible, vipNotice } from "./vip-notice";
 
 /**
  * Whether the active account's private discovery has landed: a reading for
@@ -132,7 +133,7 @@ export const homeScreen = (
       ${totalKnown ? heroChange(unified, prices, changes, currency, !showTotal) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
       ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
-      ${account ? "" : noAccountEmpty(status)}
+      ${account ? vipNotice(vipEligible({ currency, preferences, showTotal, total })) : noAccountEmpty(status)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">
       <div class="action-row">

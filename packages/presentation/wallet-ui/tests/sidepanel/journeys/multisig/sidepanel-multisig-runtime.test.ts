@@ -168,7 +168,7 @@ describe("createMultisigClient", () => {
           };
         }
         if (type === "wallet.syncArgentMultisigIntents") {
-          return { imported: 0, intentIds: [], ok: true, received: 0 };
+          return { imported: 0, intentIds: [], ok: true, received: 0, strk20Key: "none" };
         }
         if (type === "wallet.shareArgentMultisigIntent") {
           return { ok: true, recipients: 1, relays: 2, totalRecipients: 1 };
@@ -216,6 +216,7 @@ describe("createMultisigClient", () => {
       imported: 0,
       intentIds: [],
       received: 0,
+      strk20Key: "none",
     });
     await expect(client.shareIntent(fixture.intent.id)).resolves.toEqual({
       recipients: 1,

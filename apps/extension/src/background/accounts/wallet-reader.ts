@@ -13,6 +13,14 @@
 
 import type { AccountDerivationInput } from "@bramble/vault/accounts";
 import type { NostrApplicationData } from "@bramble/vault/kms-port";
+import type {
+  MultisigStrk20KeyAccept,
+  MultisigStrk20KeyAuthorization,
+  MultisigStrk20KeyOffer,
+  MultisigStrk20KeyRemoval,
+  MultisigStrk20KeyRequest,
+  MultisigStrk20KeyState,
+} from "@bramble/vault/multisig-strk20-key";
 import type { Vault } from "@bramble/vault/schema";
 import type {
   AddDerivedAccountInput,
@@ -50,6 +58,26 @@ import type { StarkSignature } from "@bramble/wallet-model/signing";
  */
 export type WalletStatusReader = {
   readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
+  /** Stores a co-owner's multisig viewing key. Optional only for partial test stubs. */
+  readonly acceptMultisigStrk20Key?: (
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyOffer,
+  ) => Promise<MultisigStrk20KeyAccept>;
+  /** Creates the multisig viewing key when absent. Optional only for partial test stubs. */
+  readonly createMultisigStrk20Key?: (
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyRequest,
+  ) => Promise<"created" | "held">;
+  /** Forgets this wallet's copy of a multisig viewing key. Optional for partial stubs. */
+  readonly forgetMultisigStrk20Key?: (
+    input: MultisigStrk20KeyAuthorization & MultisigStrk20KeyRequest,
+  ) => Promise<boolean>;
+  /** Forgets every key and conflict mark for one multisig. Optional for partial stubs. */
+  readonly forgetMultisigStrk20Keys?: (input: MultisigStrk20KeyRemoval) => Promise<boolean>;
+  /** Reports whether the multisig viewing key is held. The key is not returned. */
+  readonly multisigStrk20KeyStatus?: (
+    input: MultisigStrk20KeyRequest,
+  ) => Promise<MultisigStrk20KeyState>;
+  /** Gift-wrap plaintext for the stored key. Callers must not log or return it. */
+  readonly packageMultisigStrk20Key?: (input: MultisigStrk20KeyRequest) => Promise<string | null>;
   /** Stores a keyless Ledger account; optional only for partial test stubs. */
   readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
@@ -175,8 +203,26 @@ export const createWalletReader = (
     return resolved;
   };
   return {
+    async acceptMultisigStrk20Key(input) {
+      return (await required()).acceptMultisigStrk20Key(input);
+    },
     async addDerivedAccount(input) {
       return (await required()).addDerivedAccount(input);
+    },
+    async createMultisigStrk20Key(input) {
+      return (await required()).createMultisigStrk20Key(input);
+    },
+    async forgetMultisigStrk20Key(input) {
+      return (await required()).forgetMultisigStrk20Key(input);
+    },
+    async forgetMultisigStrk20Keys(input) {
+      return (await required()).forgetMultisigStrk20Keys(input);
+    },
+    async multisigStrk20KeyStatus(input) {
+      return (await required()).multisigStrk20KeyStatus(input);
+    },
+    async packageMultisigStrk20Key(input) {
+      return (await required()).packageMultisigStrk20Key(input);
     },
     async addLedgerAccount(input) {
       return (await required()).addLedgerAccount(input);
