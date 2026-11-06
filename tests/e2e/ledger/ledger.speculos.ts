@@ -82,17 +82,23 @@ const withRig = async (run: (rig: Rig) => Promise<void>): Promise<void> => {
     await bridge.install(extension.context);
     await run({ apdu, bridge, extension, screen, speculos });
   } finally {
-    // What the device showed and what was pressed, for reading a failure.
-    await test.info().attach("speculos-screens", {
-      body: screen.transcript().join("\n"),
-      contentType: "text/plain",
-    });
-    await test.info().attach("apdu-log", {
-      body: JSON.stringify(bridge.log),
-      contentType: "application/json",
-    });
-    await extension.close();
-    apdu.close();
+    try {
+      // What the device showed and what was pressed, for reading a failure.
+      // Best effort: it must never replace the test's own error.
+      await test.info().attach("speculos-screens", {
+        body: screen.transcript().join("\n"),
+        contentType: "text/plain",
+      });
+      await test.info().attach("apdu-log", {
+        body: JSON.stringify(bridge.log),
+        contentType: "application/json",
+      });
+    } catch (error) {
+      console.warn(`Could not attach the Speculos transcript: ${String(error)}`);
+    } finally {
+      await extension.close();
+      apdu.close();
+    }
   }
 };
 
