@@ -54,7 +54,10 @@ const TOUCH: Readonly<Record<"flex" | "stax", TouchLayout>> = {
   },
 };
 
-const REVIEW = /review hash|blind sign/i;
+// The first screen of a hash review: with Blind signing on, the app opens it
+// with its "Blind signing ahead" warning (Flex, Stax) or "Review hash". The
+// settings page reads "Blind signing" too, so the pattern must not match that.
+const REVIEW = /review hash|blind signing ahead/i;
 // The Nano breaks a hyphenated word across lines ("clear-" / "signed"), and
 // screen text joins lines with a space, so the break may be whitespace.
 const BLIND_SIGNING_OFF = /cannot be clear-\s*signed|enable blind-\s*signing/i;
@@ -87,6 +90,8 @@ export const enableBlindSigning = async (
     await screen.press("right");
     await screen.press("both");
     await screen.press("both");
+    // The toggle flips the setting; prove it is now on, not flipped back off.
+    await screen.waitFor(/\bEnabled\b/);
     return;
   }
   const layout = TOUCH[model];
