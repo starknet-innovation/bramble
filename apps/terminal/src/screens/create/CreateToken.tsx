@@ -1,6 +1,7 @@
 import { Hammer, ShieldCheck } from "lucide-react";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { confirmTokenDeployment, createNetworkFor, createNetworkNames } from "../../create/create-runtime";
+import { assertErc1155Recipient } from "../../create/recipient-check";
 import { buildTokenDeployment, type TokenDeployment } from "../../create/token-create";
 import { TOKEN_PRESETS, type TokenStandard } from "../../create/token-presets";
 import { userErrorMessage } from "../../protocols/support/user-error";
@@ -15,6 +16,8 @@ import {
   FIELDS_BY_STANDARD,
   STANDARD_TABS,
 } from "./create-parts";
+import TokenMetadata from "./TokenMetadata";
+import TokenOwnership from "./TokenOwnership";
 
 type CreateTokenProps = {
   readonly onNavigate: (screen: ScreenId) => void;
@@ -104,6 +107,12 @@ export default function CreateToken({ makeSalt = randomSalt }: CreateTokenProps)
       if (network === null) throw new Error(`Switch your wallet to ${createNetworkNames()}.`);
       const deployment = buildTokenDeployment(draftFor(standard, fields, recipient), address, salt);
       const preset = TOKEN_PRESETS[standard];
+      if (standard === "erc1155") {
+        // The preset's constructor mint reverts for a recipient that can't
+        // receive ERC-1155, and the fee would still be paid.
+        setOperation({ chainId, message: "Checking…", tone: "busy" });
+        await assertErc1155Recipient(chainId, recipient.trim().toLowerCase());
+      }
       setOperation({ chainId, message: "Review in your wallet…", tone: "busy" });
       const result = await requestTransaction({
         calls: [deployment.call],
@@ -207,6 +216,12 @@ export default function CreateToken({ makeSalt = randomSalt }: CreateTokenProps)
           </form>
         </section>
         <CreateReview deployment={preview.deployment} problem={preview.problem} />
+      </div>
+      <div className="create-tools">
+        {standard === "erc20" ? null : (
+          <TokenMetadata baseUri={fields.baseUri} standard={standard} tokenIds={fields.tokenIds} />
+        )}
+        <TokenOwnership createdAddress={operation?.tone === "success" ? operation.address : null} />
       </div>
     </section>
   );
