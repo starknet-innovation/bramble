@@ -141,5 +141,6 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Theme update failed",
   "Token update failed",
   "Unlock failed",
+  "VIP preference failed",
   "Wallet request preference failed",
 ]);

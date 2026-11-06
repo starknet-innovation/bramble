@@ -88,6 +88,8 @@ export type WalletPreferences = {
   readonly strk20ProverUrl?: string;
   readonly theme?: ThemeChoice;
   readonly tokens: readonly TokenConfig[];
+  /** False once the user turns off the Home VIP eligibility notice; absent means shown. */
+  readonly vipNotice?: boolean;
 };
 
 /**
@@ -163,6 +165,7 @@ export type WalletPreferencesStore = {
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: ThemeChoice;
+    readonly vipNotice?: boolean;
   }) => Promise<WalletPreferences>;
   readonly setRpcOverride: (input: {
     readonly networkId: StarknetNetworkId;
