@@ -7,10 +7,27 @@ from the repository root and are held to the same gates: `tsc`, Biome, file
 standards, workspace architecture and knip. Nothing here is bundled into the
 extension.
 
-- Seeds are read at run time from the git-ignored `.env.vendor-seeds.local` at
-  the repository root. Set `BRAMBLE_DATASET_ENV_FILE` to read another path.
-  Seeds are never stored in this repository.
-- `manifest/` is the dataset ledger, with one file per fixture group. It records
+- `BRAMBLE_DATASET_NETWORK` picks the chain: `mainnet` (default) or `sepolia`.
+  It sets the RPC node, chain id, token addresses, deployer and manifest folder.
+- Seeds and keys, mainnet and Sepolia alike, are read at run time from the
+  git-ignored `.env.vendor-seeds.local` at the repository root and shared
+  through the password manager. Set `BRAMBLE_DATASET_ENV_FILE` to read another
+  path. They are never stored in this repository. `sepolia-seeds.ts` maps each
+  Sepolia seed's scope-doc id (`S-BRM`, …) to its variable.
+- The Sepolia deployer is TA-01, Bramble's account 0 on `S-BRM` with salt 0. Print its address with
+  `BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/deployer-address.ts`,
+  fund it from the faucet, then run `deploy-deployer.ts` the same way.
+- `matrix-stage-sepolia.ts` builds the scripted TA fixtures from those seeds
+  and keys (one `sepolia-stage-*.ts` file per seed group, sharing
+  `sepolia-fixtures.ts`). It is idempotent; pass a TA id to run one fixture:
+  `BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/matrix-stage-sepolia.ts TA-08`.
+  The app-made fixtures in `sepolia-stage-rdy.ts` (S-RDY: TA-09…TA-13; S-XVS:
+  TA-26) run only once their phrase is in the seed file
+  (`BRAMBLE_DATASET_SEED_S_RDY`, `BRAMBLE_DATASET_SEED_S_XVS`).
+  The test-Ledger fixtures (`sepolia-stage-ldg.ts`, S-LDG: TA-32…) derive the
+  device's keys from its phrase (`ledgerKeypair`); that phrase must belong to a
+  test-only device that has never held real funds.
+- `manifest/<network>/` is the dataset ledger, with one file per fixture group. It records
   every account's provenance, expected import outcome and transaction log
   (addresses and transaction hashes only, no key material). The matrix stages
   rewrite it in place, so run `bun run format` after a stage.
@@ -18,5 +35,14 @@ extension.
   through onboarding against live mainnet:
   `BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json]`.
   The `verification*.json` files are dated scorecard snapshots from earlier runs.
+- `verify-sepolia.ts` is the Sepolia counterpart: one fresh profile onboarded
+  with S-BRM, switched to Sepolia, then every in-wallet import path (P2…P8, P10)
+  driven against the fixtures and scored against the scope doc's "Now" line per
+  TA card (`verify-sepolia-checks.ts`; "Desired" rides along unscored).
+  Read-only, about 15 minutes, retries the public node's rate limits:
+  `BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts [out.json] [previous.json]`.
+  Passing a previous scorecard lists the verdicts that changed; keep a release's
+  run as a dated `verification-sepolia-*.json`. Ledger (TA-32…TA-38) needs the
+  device and is checked by hand.
 - Derivation uses `@scure/bip32`/`@scure/bip39` directly, never Krusty, so the
   dataset stays independent of the wallet code it measures.
