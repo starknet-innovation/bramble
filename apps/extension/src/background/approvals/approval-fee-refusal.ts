@@ -34,16 +34,19 @@ const pendingDeclareFeeRefusal = (
 
 /**
  * Refuses a gasless choice that is not one of the offers on the card. Null
- * means that offer is still the one the queue holds.
+ * means that offer is still the one the queue holds, or that the queue has no
+ * such approval. A missing approval is not a fee-review failure: the claim
+ * answers not-found, the same as a fee-bearing decision with nothing pending.
  */
 export const pendingGaslessRefusal = (
   pending: PendingApproval | null,
   choice: GaslessFeeOffer,
 ): RuntimeResponse | null => {
-  if (pending?.deployFirst === true) {
+  if (pending === null) return null;
+  if (pending.deployFirst === true) {
     return { error: UNDEPLOYED_BRAAVOS_REFUSAL };
   }
-  if (pending?.kind !== "invoke") {
+  if (pending.kind !== "invoke") {
     return FEE_REVIEW_REQUIRED;
   }
   const match = pending.gaslessFees?.some(
