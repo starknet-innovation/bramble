@@ -57,7 +57,7 @@ import {
 import { sceneDirection, sceneFor } from "./rendering/scene-transition";
 import { bindClusterScreens } from "./screens/cluster-ui";
 import { adoptStoredMultisig, bindConnectChoice } from "./screens/connect-account";
-import { multisigNav, persistChoice } from "./screens/multisig-nav";
+import { multisigNav, multisigSelection, whenSaved } from "./screens/multisig-nav";
 import { sceneContent } from "./screens/scene-content";
 import type { WalletView } from "./screens/views";
 import { createDeploymentCache } from "./sync/deployment-cache";
@@ -82,17 +82,13 @@ export const startWalletUi = async (
   const swapClient = createSwapClient(mutationRuntime);
   let activeView: WalletView = "home";
   let selectedNftId: string | null = null;
-  const selection = { hydrated: false, id: null as string | null };
   let selectedMultisigId: string | null = null;
-  const showSelection = (id: string | null): void => {
-    selection.hydrated = true;
-    selectedMultisigId = selection.id = id;
-  };
-  const rememberMultisig = persistChoice({
-    assign: showSelection,
+  const multisigChoice = multisigSelection({
     notify: () => showNoticeToast("Couldn't switch accounts.", app),
+    onShow: (id) => (selectedMultisigId = id),
     write: (id) => wallet.setSelectedMultisig(id),
   });
+  const { remember: rememberMultisig, selection, show: showSelection } = multisigChoice;
   let selectedMultisigIntentId: string | null = null;
   let lastNetworkId = "SN_MAIN";
   let lastScene = "";
@@ -166,8 +162,7 @@ export const startWalletUi = async (
           activeView = view;
           return;
         }
-        void rememberMultisig(null).then((saved) => {
-          if (!saved) return;
+        whenSaved(rememberMultisig, null, () => {
           activeView = view;
           paint();
         });
@@ -191,8 +186,7 @@ export const startWalletUi = async (
       networkId: () => lastNetworkId,
       render,
       selectPortfolio: (id: string | null) => {
-        void rememberMultisig(id).then((saved) => {
-          if (!saved) return;
+        whenSaved(rememberMultisig, id, () => {
           activeView = id ? "multisig-home" : "home";
           viewHistory = [];
           forcedDirection = "swap";
@@ -434,8 +428,7 @@ export const startWalletUi = async (
     cache.preferences = nextPreferences;
     const loaded = status.hasVault && nextPreferences === null ? undefined : nextPreferences;
     const adopted = adoptStoredMultisig(selection, status.networkId, loaded, activeView);
-    selection.hydrated = adopted.hydrated;
-    selectedMultisigId = selection.id = adopted.id;
+    multisigChoice.adopt(adopted.hydrated, adopted.id);
     activeView = adopted.view as WalletView;
     if (!status.hasVault || status.locked) {
       privacy.reset();

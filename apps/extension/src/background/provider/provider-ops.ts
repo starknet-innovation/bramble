@@ -5,11 +5,9 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blo
 import type { PriceService } from "@bramble/portfolio/prices";
 import { unavailableStrk20Service } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
-import type { FeeEstimate } from "@bramble/starknet/rpc";
 import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
-import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
@@ -20,7 +18,7 @@ import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import { recordAutoDeployment } from "../accounts/deployment-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
+import { createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalPayload, ApprovalQueue, PendingApproval } from "../approvals/approvals";
@@ -31,7 +29,12 @@ import {
 } from "../approvals/invoke-fee-review";
 import { gaslessFeeSummary } from "../transactions/gasless-review";
 import { grantedDappAccounts } from "./dapp-account";
-import { type InvokeExecuteDeps, submitHeldInvoke } from "./held-invoke-submit";
+import {
+  type InvokeExecuteDeps,
+  type ReviewedInvokeApproval,
+  reviewedCeiling,
+  submitHeldInvoke,
+} from "./held-invoke-submit";
 import {
   maybeQueueMultisigInvoke,
   maybeRetryMultisigFee,
@@ -355,29 +358,6 @@ export const handleProviderOps = async (
     : undefined;
   return handler ? handler(deps, message, sender) : null;
 };
-
-type ReviewedInvokeApproval = {
-  readonly context?: ApprovalContext;
-  readonly gaslessFee?: GaslessFeeOffer;
-  readonly origin: string;
-  readonly payload: ApprovalPayload;
-  readonly reviewedFee?: FeeEstimate;
-  /** The reviewed deployment half, when the account deploys before the calls. */
-  readonly reviewedDeploymentFee?: FeeEstimate;
-  readonly reviewedThreshold?: number;
-};
-
-// The reviewed figures, each the ceiling at its own submit boundary: the invoke
-// fee, and the deployment fee when the account deploys before the calls.
-const reviewedCeiling = (approval: {
-  readonly reviewedDeploymentFee?: FeeEstimate;
-  readonly reviewedFee?: FeeEstimate;
-}) => ({
-  ...(approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {}),
-  ...(approval.reviewedDeploymentFee
-    ? { reviewedDeploymentFee: approval.reviewedDeploymentFee }
-    : {}),
-});
 
 /**
  * Executes a user-approved invoke. `reviewedFee` is the ceiling the card showed;

@@ -4,11 +4,38 @@
  */
 
 import type { SendIntent } from "../../journeys/send/send-model";
+import { persistChoice } from "./connect-account";
 import type { WalletView } from "./views";
 
-export { persistChoice } from "./connect-account";
-
 type Remember = (id: string | null) => Promise<boolean>;
+
+/**
+ * The panel's presented-multisig selection. `adopt` sets what the stored
+ * preference says; `show` marks it hydrated and reports the id; `remember`
+ * stores the choice first and shows it only once the write succeeds,
+ * notifying (and keeping the old choice) when it fails.
+ */
+export const multisigSelection = (deps: {
+  readonly notify: () => void;
+  readonly onShow: (id: string | null) => void;
+  readonly write: (id: string | null) => Promise<void>;
+}) => {
+  const selection = { hydrated: false, id: null as string | null };
+  const adopt = (hydrated: boolean, id: string | null): void => {
+    selection.hydrated = hydrated;
+    selection.id = id;
+    deps.onShow(id);
+  };
+  const show = (id: string | null): void => adopt(true, id);
+  return { adopt, remember: persistChoice({ ...deps, assign: show }), selection, show };
+};
+
+/** Runs `next` only after the presented account `id` is stored. */
+export const whenSaved = (remember: Remember, id: string | null, next: () => void): void => {
+  void remember(id).then((saved) => {
+    if (saved) next();
+  });
+};
 
 /**
  * Multisig screen callbacks. Each waits for the presented account to be

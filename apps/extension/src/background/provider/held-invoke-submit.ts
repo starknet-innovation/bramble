@@ -17,6 +17,7 @@ import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-famili
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalPayload } from "../approvals/approvals";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
@@ -58,6 +59,35 @@ export type InvokeExecuteDeps = {
   readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
 };
+
+/**
+ * A user-approved invoke as execution receives it. The fees are the figures the
+ * card bound; `reviewedThreshold` is the multisig threshold the card reviewed.
+ */
+export type ReviewedInvokeApproval = {
+  readonly context?: ApprovalContext;
+  readonly gaslessFee?: GaslessFeeOffer;
+  readonly origin: string;
+  readonly payload: ApprovalPayload;
+  readonly reviewedFee?: FeeEstimate;
+  /** The reviewed deployment half, when the account deploys before the calls. */
+  readonly reviewedDeploymentFee?: FeeEstimate;
+  readonly reviewedThreshold?: number;
+};
+
+/**
+ * The reviewed figures, each the ceiling at its own submit boundary: the invoke
+ * fee, and the deployment fee when the account deploys before the calls.
+ */
+export const reviewedCeiling = (approval: {
+  readonly reviewedDeploymentFee?: FeeEstimate;
+  readonly reviewedFee?: FeeEstimate;
+}) => ({
+  ...(approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {}),
+  ...(approval.reviewedDeploymentFee
+    ? { reviewedDeploymentFee: approval.reviewedDeploymentFee }
+    : {}),
+});
 
 /**
  * Submits the held calls on the lane the approval selected.
