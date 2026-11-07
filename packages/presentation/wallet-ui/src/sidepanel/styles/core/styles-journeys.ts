@@ -21,6 +21,12 @@ export const JOURNEY_STYLES = `
     margin-top: ${SPACE.xs};
   }
   .staking-form input { min-width: 0; }
+  /* An action under review stacks one item per line: the typed amount stays
+     full width, its review sentence sits directly above its confirm, and the
+     confirm (which carries the fee) takes the full width. */
+  .staking-form[data-staking-open] { grid-template-columns: minmax(0, 1fr); }
+  .staking-actions[data-staking-open] { display: grid; justify-items: start; }
+  [data-staking-open] > .staking-review { margin-top: 0; }
   /* The paste field and the opened validator: the address wraps, never clips. */
   .staking-paste { margin-bottom: ${SPACE.sm}; }
   .staking-validator { display: grid; gap: ${SPACE.xs}; justify-items: start; margin-bottom: ${SPACE.sm}; }
@@ -60,6 +66,8 @@ export const JOURNEY_STYLES = `
     line-height: ${TYPE.caption.line};
     margin-top: ${SPACE.xs};
   }
+  .staking-review[data-severity="error"] { color: var(--bramble-danger); }
+  .staking-review[data-severity="warning"] { color: var(--bramble-warning); }
   .approval-live {
     align-items: center;
     background: var(--bramble-panel);
