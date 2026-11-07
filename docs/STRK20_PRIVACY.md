@@ -415,7 +415,10 @@ transfer to self, and withdrawal to self. It prepares real proofs, but deliberat
 from the public account instead of a relayer. This validates the protocol without AVNU while
 publicly linking the account to every action; it is not a privacy-preserving production route.
 
-The suite is deliberately excluded from `bun run test:e2e` and CI. Its Playwright configuration
+The suite is deliberately excluded from `bun run test:e2e` and pull-request CI.
+The mainnet workflow runs it only when `vars.MAINNET_E2E_STRK20` is true,
+because the pool fee does not fit the standard hot-wallet cap
+(`docs/MAINNET_E2E_CI.md`). Its Playwright configuration
 disables traces, screenshots, video, retries, and parallel workers so entered signing material
 cannot enter a browser artifact. It also refuses deposits above 1 STRK. Build first, then export
 the values in the current shell without putting them in a repository file or shell history:

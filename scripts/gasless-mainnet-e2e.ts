@@ -3,7 +3,11 @@
  * Uses the wallet's quote, ceiling, typed-data check, and submit. Signs with
  * the configured account key. Prints the transaction hash and explorer links,
  * and the reason each curated token was skipped. Skips with exit 0 when no
- * account is configured.
+ * account is configured. Generic CI is refused; the Mainnet E2E workflow is
+ * the only opt-in, and it passes the hot wallet with GASLESS_E2E_ADDRESS and
+ * GASLESS_E2E_PRIVATE_KEY rather than an sncast file. In that workflow the
+ * RPC must be GASLESS_E2E_RPC_URL, dedicated HTTPS and mainnet; there is no
+ * fallback to the wallet's shared RPC.
  */
 
 import { RpcProvider } from "starknet";
@@ -29,7 +33,9 @@ import {
 } from "../packages/foundation/wallet-model/src/networks/networks";
 import { type LoadedMainnetAccount, loadProcessAccount } from "./gasless-mainnet-account";
 import { payWithToken, recordingHttp } from "./gasless-mainnet-attempt";
-import { displayRpcUrl, selectMainnetRpc } from "./gasless-mainnet-rpc";
+import { displayRpcUrl, requireCiMainnetRpc, selectMainnetRpc } from "./gasless-mainnet-rpc";
+import { assertLiveMainnetAllowed } from "./mainnet-e2e-guard";
+import { sendBudgetFor } from "./mainnet-e2e-send-budget";
 
 const PIN = "0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f";
 
@@ -77,13 +83,12 @@ const refusal = async (run: () => Promise<unknown>): Promise<GaslessRefusal> => 
  * Runs the live mainnet path for one configured account. Throws on failure.
  * Each curated token prints why it was skipped before the next one is tried.
  */
-const runGaslessMainnet = async (account: LoadedMainnetAccount): Promise<void> => {
+const runGaslessMainnet = async (account: LoadedMainnetAccount, ci: boolean): Promise<void> => {
   const route = requireRoute();
   const transport = recordingHttp();
-  const rpc = await selectMainnetRpc({
-    configuredSource: account.rpcSource,
-    configuredUrl: account.rpcUrl,
-  });
+  const configured = { configuredSource: account.rpcSource, configuredUrl: account.rpcUrl };
+  // CI uses exactly the endpoint preflight validated, or stops before signing.
+  const rpc = ci ? await requireCiMainnetRpc(configured) : await selectMainnetRpc(configured);
   console.log(`Account ${account.label}`);
   console.log(`RPC ${displayRpcUrl(rpc.url)}`);
   console.log(`RPC source ${rpc.source}`);
@@ -136,9 +141,11 @@ const runGaslessMainnet = async (account: LoadedMainnetAccount): Promise<void> =
   );
   const usdc = known.find((token) => token.symbol === "USDC");
   const ordered = usdc === undefined ? known : [usdc, ...known.filter((token) => token !== usdc)];
+  const budget = sendBudgetFor(process.env);
   for (const token of ordered) {
     const paid = await payWithToken({
       account,
+      budget,
       classHash,
       family,
       listed: supported,
@@ -153,6 +160,13 @@ const runGaslessMainnet = async (account: LoadedMainnetAccount): Promise<void> =
 };
 
 const main = async (): Promise<number> => {
+  let ci: boolean;
+  try {
+    ci = assertLiveMainnetAllowed(process.env).kind === "allowed";
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "The live-mainnet suite is local-only");
+    return 1;
+  }
   const loaded = await loadProcessAccount();
   if (loaded.kind === "skip") {
     console.log(loaded.message);
@@ -163,7 +177,7 @@ const main = async (): Promise<number> => {
     return 1;
   }
   try {
-    await runGaslessMainnet(loaded.account);
+    await runGaslessMainnet(loaded.account, ci);
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : "gasless mainnet test failed";

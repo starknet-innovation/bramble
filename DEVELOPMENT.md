@@ -150,6 +150,8 @@ The pull-request template captures items 1–4 as fields and item 5 as a checkbo
 
 Three tiers, each with a different speed/breadth trade-off. Files:
 `.github/workflows/ci.yml`, `release-integration.yml`, `nightly.yml`.
+Live mainnet tests are a separate scheduled workflow, `mainnet-e2e.yml`
+([docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md)); they are not a merge gate.
 
 ### 1. PR CI — fast gates + a gated full validation (`ci.yml`)
 
@@ -240,6 +242,19 @@ On failure it creates-or-updates **one** tracking issue titled
 to the matching milestone when one exists. Source and dependencies execute in a
 read-only self-hosted job; a separate hosted job receives the narrow
 `issues: write` capability and never checks out release-branch code.
+
+### 4. Mainnet E2E — live wallet (`mainnet-e2e.yml`)
+
+Trigger: **scheduled** (`cron: 0 6 * * *`, after nightly) and manual
+`workflow_dispatch` from `main`, against the same active release branch as
+nightly, once `vars.MAINNET_E2E_CONFIGURED` is `true`. A keyless job installs
+and builds the release commit; a separate CodeBuild job in the `mainnet-e2e`
+environment unpacks that build and runs `bun run test:mainnet` (plus
+`bun run test:e2e:mainnet` in the STRK20 tier) without printing test output.
+Hosted jobs running `main`'s code check the balance before and after. Once
+enabled, missing secrets or zero executed tests fail. Spend is capped before
+each signature and after the run, and a failure upserts one `ci-cd` issue.
+Setup is in [docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md).
 
 ### What runs where
 

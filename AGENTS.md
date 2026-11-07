@@ -34,7 +34,8 @@ bun run verify:sepolia       # live Sepolia import scorecard (needs dist/ + seed
 
 - The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
   via `BRAMBLE_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
-  flag is set.
+  flag is set. Live mainnet CI is `.github/workflows/mainnet-e2e.yml`
+  (`docs/MAINNET_E2E_CI.md`), not this suite and not pull-request CI.
 - `bun run test:e2e:mainnet:wallet` is a local-only mainnet UI suite (sncast account, dedicated RPC,
   spend caps). It is not part of `bun run check` or CI. Unconfigured, it prints a skip and exits 0.
   See `docs/MAINNET_E2E.md`.
