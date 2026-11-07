@@ -63,17 +63,25 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
   }
+  /* The value's flex basis is a readable measure, not zero: with a zero basis
+     the row could never wrap, so beside a long label ("Maximum network fee" at
+     the 320px panel) the value shrank to a sliver and its text spilled left
+     over the label. Now a value that cannot get 10ch beside its label drops to
+     its own line, still flush right (the auto start margin keeps a value with a
+     max-width there); a word longer than the value's line breaks as a last
+     resort. */
   .receipt-row dd {
     align-items: center;
     color: var(--bramble-text);
     display: flex;
-    flex: 1 1 0;
+    flex: 1 1 10ch;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
     gap: 6px;
     justify-content: flex-end;
-    margin: 0;
+    margin: 0 0 0 auto;
     min-width: 0;
+    overflow-wrap: anywhere;
     text-align: right;
   }
   /* Identifiers stay whole while they fit; only when the panel is narrower
@@ -301,8 +309,11 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     line-height: ${TYPE.caption.line};
   }
   .approval-takeover .review-flag .icon { color: var(--bramble-danger); flex: none; }
+  /* The decline column never drops below its own label: with a zero floor
+     the 320px panel squeezed "Cancel" and "Deny" to a 44px pill they spilled
+     out of while the primary kept its one-line width. */
   .approval-takeover .button-row {
-    grid-template-columns: minmax(0, 1fr) minmax(104px, auto);
+    grid-template-columns: minmax(min-content, 1fr) minmax(104px, auto);
     margin-top: auto;
     padding-top: ${SPACE.sm};
   }

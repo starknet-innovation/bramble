@@ -18,7 +18,7 @@ export const MULTISIG_STYLES = `
   .flow-header:has(+ [id^="wallet-screen-multisig-"]) > .pill {
     grid-column: 2;
   }
-  .flow-header:has(+ [id^="wallet-screen-multisig-"]) > .pill { justify-self: start; }
+  .flow-header:has(+ [id^="wallet-screen-multisig-"]) > .pill { justify-self: start; margin-left: 0; }
   /* Titles and setup choices wrap rather than truncate: at the default side
      panel width "Create a multisig account" does not fit one line, and a cut
      title hides what the screen or choice is. */
