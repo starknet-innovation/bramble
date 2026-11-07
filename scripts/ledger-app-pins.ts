@@ -12,9 +12,12 @@
  * - `test:e2e:ledger` (`tests/e2e/ledger/run-speculos.ts`) refuses to start
  *   Speculos on a binary whose hash is not recorded here.
  *
- * Binary hashes start unrecorded (null): the first build on a machine with
- * Docker prints them, and a reviewed commit records them. Until then the
- * Speculos suite cannot run, by design.
+ * Binary hashes are null while unrecorded, and then the Speculos suite cannot
+ * run, by design. The values below were recorded on 2026-11-06 from two
+ * independent GitHub-hosted record-mode builds that agreed byte for byte:
+ * runs 42302387248 (`ci/ledger-speculos-e2e` at 3fbb73b1) and 42305128799
+ * (`release/v0.10.9` at a9465305). See tests/e2e/ledger/README.md, "Recording
+ * the app hashes".
  */
 
 /** Ledger's official Starknet app repository. */
@@ -54,9 +57,18 @@ export const LEDGER_APP_BINARIES: Readonly<
     { readonly cargoDevice: string; readonly sha256: string | null }
   >
 > = {
-  flex: { cargoDevice: "flex", sha256: null },
-  nanosp: { cargoDevice: "nanosplus", sha256: null },
-  stax: { cargoDevice: "stax", sha256: null },
+  flex: {
+    cargoDevice: "flex",
+    sha256: "bd9691425d7831ef858c48562e66c7d7c13d59b1902389d2addc0543a8e41d12",
+  },
+  nanosp: {
+    cargoDevice: "nanosplus",
+    sha256: "8f15435c3a8c0a539b7a2c38dbce52e63fa60bb5c9b8872869490a73c820131e",
+  },
+  stax: {
+    cargoDevice: "stax",
+    sha256: "ac814bde97068696fbc359e524145fe450017029f35ccf95200645de25392f1c",
+  },
 };
 
 /** Path of one model's built app binary. */

@@ -128,8 +128,21 @@ export const requestLedgerSignature = async (
   return { dapp, hash: shown ?? "", overlay, server };
 };
 
-/** Normalises a hex hash for comparison with device text (no 0x, no leading zeros). */
-export const comparableHash = (value: string): string => BigInt(value).toString(16).toLowerCase();
+/**
+ * Normalises a hex hash for comparison with device text: no 0x, lowercase,
+ * zero-padded to the 64 digits the app displays. At full width a substring
+ * match is an exact match: a different 64-digit hash cannot contain it.
+ */
+export const comparableHash = (value: string): string =>
+  BigInt(value).toString(16).toLowerCase().padStart(64, "0");
 
-/** Device screen text flattened for a substring hash comparison. */
-export const comparableScreen = (text: string): string => text.replace(/\s+/g, "").toLowerCase();
+/**
+ * Device screen text flattened for a substring hash comparison. The Nano pages
+ * a long hash under "Hash (1/2)", "Hash (2/2)" titles; those titles are
+ * dropped so the pages' digits join into the one hash the device showed.
+ */
+export const comparableScreen = (text: string): string =>
+  text
+    .replace(/\bhash\s*\(\d+\/\d+\)/gi, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
