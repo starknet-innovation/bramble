@@ -10,7 +10,12 @@ import { describe, expect, test } from "bun:test";
 import { mainnetE2eWorkflowFailures } from "../../scripts/mainnet-e2e-workflow-policy";
 import { readWorkflowSources } from "../../scripts/workflow-inventory";
 import { workflowSecurityPolicyFailures } from "../../scripts/workflow-security-policy";
-import { EQUIVALENT, FAIL_WITHOUT, STILL_REJECTED } from "./mainnet-e2e-policy-mutations";
+import {
+  DIFFERENTIAL,
+  EQUIVALENT,
+  FAIL_WITHOUT,
+  STILL_REJECTED,
+} from "./mainnet-e2e-policy-mutations";
 
 const WORKFLOW = "mainnet-e2e.yml";
 const PATH = `.github/workflows/${WORKFLOW}`;
@@ -43,6 +48,21 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
       }
     }
     expect(new Set(FAIL_WITHOUT.map(({ item }) => item.split(" ")[0])).size).toBe(10);
+  });
+
+  test("refuses directives and scalars another YAML reader could type differently", async () => {
+    const source = await workflow();
+    for (const { label, prefix, edits, failure } of DIFFERENTIAL) {
+      const changed = edits.reduce(
+        (text, [search, replacement]) => mutated(text, search, replacement),
+        `${prefix}${source}`,
+      );
+      const failures = mainnetE2eWorkflowFailures(changed);
+      if (!failures.includes(failure)) throw new Error(`accepted ${label}: ${failures.join("\n")}`);
+    }
+    // A plain decimal, a plain boolean and the root `on:` key stay accepted.
+    expect(mainnetE2eWorkflowFailures(`\uFEFF# reviewed\n${source}`)).toEqual([]);
+    expect(mainnetE2eWorkflowFailures(`---\n${source}`)).toEqual([]);
   });
 
   test("spellings that decode to the reviewed workflow still pass", async () => {

@@ -340,6 +340,97 @@ export const STILL_REJECTED: readonly Weakening[] = [
   },
 ];
 
+const DIRECTIVE = `${PATH} must not use YAML directives (%YAML, %TAG or any % line)`;
+const DECIMAL = `${PATH} must write every number as a plain decimal integer`;
+const BOOLEAN = `${PATH} must write every boolean as plain true or false`;
+const TIMEOUT = "    timeout-minutes: 120\n";
+const CANCEL = "  cancel-in-progress: false\n";
+/** A parser-differential spelling: a `prefix` for the file, then edits in order. */
+export type Differential = {
+  readonly label: string;
+  readonly prefix: string;
+  readonly edits: readonly (readonly [search: string, replacement: string])[];
+  readonly failure: string;
+};
+
+// Under YAML 1.1 a plain `on:` key reads as `true`; quoting keeps it `on`.
+const QUOTED_ON = ["on:\n  schedule:", '"on":\n  schedule:'] as const;
+
+const quoted = (word: string): string =>
+  `${PATH} must quote ${word}, which another YAML reader types as a number or boolean`;
+
+/** Spellings this parser and GitHub's may type differently; each must fail as named. */
+export const DIFFERENTIAL: readonly Differential[] = [
+  {
+    label: "%YAML 1.1, quoted on, timeout 0170 (octal 120 under 1.1)",
+    prefix: "%YAML 1.1\n---\n",
+    edits: [QUOTED_ON, [TIMEOUT, "    timeout-minutes: 0170\n"]],
+    failure: DIRECTIVE,
+  },
+  {
+    label: "%TAG directive",
+    prefix: "%TAG !e! tag:example.com,2000:\n---\n",
+    edits: [],
+    failure: DIRECTIVE,
+  },
+  {
+    label: "%YAML 1.2 after a byte-order mark",
+    prefix: "\uFEFF%YAML 1.2\n---\n",
+    edits: [],
+    failure: DIRECTIVE,
+  },
+  {
+    label: "%YAML 1.1 after a comment, CRLF",
+    prefix: "# reviewed\r\n%YAML 1.1\r\n---\r\n",
+    edits: [QUOTED_ON],
+    failure: DIRECTIVE,
+  },
+  {
+    label: "%YAML 1.1 and cancel-in-progress written no (false under 1.1)",
+    prefix: "%YAML 1.1\n---\n",
+    edits: [QUOTED_ON, [CANCEL, "  cancel-in-progress: no\n"]],
+    failure: DIRECTIVE,
+  },
+  ...["0x78", "0o170", "1.2e2", "+120", "0170"].map(
+    (value): Differential => ({
+      label: `execute timeout written ${value}`,
+      prefix: "",
+      edits: [[TIMEOUT, `    timeout-minutes: ${value}\n`]],
+      failure: DECIMAL,
+    }),
+  ),
+  {
+    label: "execute timeout written 1_20",
+    prefix: "",
+    edits: [[TIMEOUT, "    timeout-minutes: 1_20\n"]],
+    failure: quoted("1_20"),
+  },
+  {
+    label: "cancel-in-progress written False",
+    prefix: "",
+    edits: [[CANCEL, "  cancel-in-progress: False\n"]],
+    failure: BOOLEAN,
+  },
+  {
+    label: "cancel-in-progress written no",
+    prefix: "",
+    edits: [[CANCEL, "  cancel-in-progress: no\n"]],
+    failure: quoted("no"),
+  },
+  {
+    label: "persist-credentials written yes",
+    prefix: "",
+    edits: [["          persist-credentials: false\n", "          persist-credentials: yes\n"]],
+    failure: quoted("yes"),
+  },
+  {
+    label: "plain on as a job-level key",
+    prefix: "",
+    edits: [["  gate:\n    needs: resolve\n", "  gate:\n    on: x\n    needs: resolve\n"]],
+    failure: quoted("on"),
+  },
+];
+
 /** Spellings that decode to the reviewed workflow, or add only comments. */
 export const EQUIVALENT: readonly Edit[] = [
   {
