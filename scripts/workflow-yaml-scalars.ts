@@ -16,6 +16,9 @@
  *   boolean (YAML 1.1 words such as `yes`/`off`, underscored, binary or
  *   sexagesimal numbers), except the root `on:` key GitHub defines.
  * Anything else must be quoted, which every reader decodes as a string.
+ * Plain and quoted scalars must fit on one line, and multi-line text must be
+ * a literal block headed exactly `|` or `|-`: readers disagree on folded
+ * blocks and on escaped line breaks and empty lines inside quoted scalars.
  */
 import { type Document, Parser, type Scalar, visit } from "yaml";
 
@@ -44,7 +47,21 @@ export const hasDirective = (source: string): boolean =>
 const sourceOf = (node: Scalar, source: string): string =>
   node.range ? source.slice(node.range[0], node.range[1]) : "";
 
+// Multi-line text only as a literal block with the default or strip chomp
+// and no indentation indicator: parsers disagree on folding, escaped line
+// breaks in quoted scalars, and empty lines in multi-line flow scalars.
+const lineFailure = (node: Scalar, text: string): string | null => {
+  if (node.type === "BLOCK_FOLDED") return "must not use folded (>) block scalars";
+  if (node.type === "BLOCK_LITERAL") {
+    const [header] = text.split(/\r?\n/);
+    return header === "|" || header === "|-" ? null : `must not use the block header ${header}`;
+  }
+  return text.includes("\n") ? "must keep every plain or quoted scalar on one line" : null;
+};
+
 const scalarFailure = (node: Scalar, text: string, rootKey: boolean): string | null => {
+  const multiLine = lineFailure(node, text);
+  if (multiLine !== null) return multiLine;
   const plain = node.type === "PLAIN";
   if (typeof node.value === "number" && !(plain && DECIMAL.test(text))) {
     return "must write every number as a plain decimal integer";

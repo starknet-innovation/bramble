@@ -57,3 +57,56 @@ export const CHARACTER_CONTROLS: readonly Omit<CharacterEdit, "codePoint">[] = [
     insert: "      # %YAML 1.1 is not used\n",
   },
 ];
+
+const GUARD_RUN = `        run: '[ "$GASLESS" = passed ] || { echo "::error::The gasless mainnet send did not pass."; exit 1; }'\n`;
+
+// The guard as a double-quoted scalar with an escaped line break and then a
+// blank line: `yaml` decodes the reviewed one-line guard, YamlDotNet keeps a
+// newline after `{`, so GitHub would run a different script.
+const escapedBreak = (blank: string): string =>
+  `        run: "[ \\"$GASLESS\\" = passed ] || {\\\n${blank}\n          echo \\"::error::The gasless mainnet send did not pass.\\"; exit 1; }"\n`;
+
+const replaced = (source: string, search: string, replacement: string): string => {
+  if (!source.includes(search)) throw new Error(`missing: ${search}`);
+  return source.replace(search, () => replacement);
+};
+
+/** A whole-workflow edit the pin must refuse, and the structural failure it raises, if any. */
+export type PinEdit = {
+  readonly label: string;
+  readonly edit: (source: string) => string;
+  /** The structural layer's failure, or "" when only the pin catches the edit. */
+  readonly structural: string;
+};
+
+const PATH = ".github/workflows/mainnet-e2e.yml";
+const ONE_LINE = `${PATH} must keep every plain or quoted scalar on one line`;
+
+/** Parser differentials and plain edits that the exact-bytes pin refuses. */
+export const PIN_EDITS: readonly PinEdit[] = [
+  {
+    label: "guard as double-quoted escaped break + empty line (LF)",
+    edit: (source) => replaced(source, GUARD_RUN, escapedBreak("")),
+    structural: ONE_LINE,
+  },
+  {
+    label: "guard as double-quoted escaped break + empty line (CRLF file)",
+    edit: (source) => replaced(source, GUARD_RUN, escapedBreak("")).replaceAll("\n", "\r\n"),
+    structural: ONE_LINE,
+  },
+  {
+    label: "guard as double-quoted escaped break + whitespace-only line",
+    edit: (source) => replaced(source, GUARD_RUN, escapedBreak("   ")),
+    structural: ONE_LINE,
+  },
+  {
+    label: "final block scalar with no final LF",
+    edit: (source) => source.replace(/\n$/, ""),
+    structural: `${PATH} must end with a line feed`,
+  },
+  {
+    label: "one-byte comment edit",
+    edit: (source) => replaced(source, "# Live mainnet E2E", "# live mainnet E2E"),
+    structural: "",
+  },
+];
