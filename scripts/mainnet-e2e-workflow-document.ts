@@ -16,6 +16,9 @@
  */
 
 import { isAlias, isScalar, parseDocument, visit } from "yaml";
+import { EXECUTE_CONDITION, jobFailures, rootFailures } from "./mainnet-e2e-workflow-jobs";
+import { mainnetE2eSecretFailures } from "./mainnet-e2e-workflow-secrets";
+import { isRecord, record } from "./mainnet-e2e-workflow-shape";
 
 const PATH = ".github/workflows/mainnet-e2e.yml";
 
@@ -26,10 +29,6 @@ export const GASLESS_CONDITION =
 /** Failure text when the gasless step or its condition is not the reviewed one. */
 export const GASLESS_CONDITION_FAILURE =
   "mainnet execution must run the gasless send only after the secrets step passed";
-
-/** The execute job's reviewed `if:`, compared as a decoded string. */
-export const EXECUTE_CONDITION =
-  "needs.gate.outputs.run == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && github.repository == 'starknet-innovation/bramble' && github.event.repository.fork != true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 
 /** Which environment each secret-holding job reads; any other job reads none. */
 const ENVIRONMENTS: Readonly<Record<string, string>> = {
@@ -43,11 +42,6 @@ const ENVIRONMENTS: Readonly<Record<string, string>> = {
 const STATUS_FUNCTION = /\b(?:always|cancelled|failure)\s*\(/;
 
 type Node = Record<string, unknown>;
-
-const isRecord = (value: unknown): value is Node =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const record = (value: unknown): Node => (isRecord(value) ? value : {});
 
 /** Anchors, aliases, explicit tags and `<<` merge keys anywhere in the document. */
 const indirections = (document: ReturnType<typeof parseDocument>): number => {
@@ -86,8 +80,9 @@ export const mainnetE2eDocumentFailures = (source: string): string[] => {
   if (indirections(document) > 0) {
     return [`${PATH} must not use YAML anchors, aliases, tags or merge keys`];
   }
-  const failures: string[] = [];
-  const jobs = record(record(document.toJS())["jobs"]);
+  const root = record(document.toJS());
+  const jobs = record(root["jobs"]);
+  const failures = [...rootFailures(root), ...jobFailures(jobs), ...mainnetE2eSecretFailures(root)];
   const condition = record(jobs["execute"])["if"];
   if (typeof condition !== "string" || STATUS_FUNCTION.test(condition)) {
     failures.push("mainnet execution must not run after a failed or cancelled job it needs");
@@ -111,5 +106,5 @@ export const mainnetE2eDocumentFailures = (source: string): string[] => {
   if (only?.job !== "execute" || only.step["if"] !== GASLESS_CONDITION) {
     failures.push(GASLESS_CONDITION_FAILURE);
   }
-  return failures;
+  return [...new Set(failures)];
 };

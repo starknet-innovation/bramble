@@ -14,8 +14,8 @@ import {
   NIGHTLY_TARGET_STEP,
 } from "./ledger-e2e-nightly-target";
 import { isPinnedActionReference } from "./workflow-inventory";
+import { documentStrings, expressionBodies, secretReferences } from "./workflow-secret-references";
 
-const EXPRESSION = /\$\{\{([\s\S]*?)\}\}/g;
 const GITHUB_TOKEN = /\bgithub\s*(?:\.\s*token\b|\[\s*['"]token['"]\s*\])/i;
 const ROOT_KEYS = ["concurrency", "jobs", "name", "on", "permissions", "run-name"];
 const JOB_KEYS = ["if", "name", "runs-on", "steps", "timeout-minutes"];
@@ -112,27 +112,14 @@ const same = (left: unknown, right: unknown): boolean =>
 const extraKeys = (node: Node, allowed: readonly string[]): string[] =>
   Object.keys(node).filter((key) => !allowed.includes(key));
 
-const strings = (node: unknown, found: string[] = []): string[] => {
-  if (typeof node === "string") {
-    found.push(node);
-  } else if (Array.isArray(node)) {
-    for (const item of node) strings(item, found);
-  } else if (isRecord(node)) {
-    for (const [key, value] of Object.entries(node)) {
-      found.push(key);
-      strings(value, found);
-    }
-  }
-  return found;
-};
-
 const credentialFailures = (document: unknown, path: string): string[] => {
   const failures = new Set<string>();
-  for (const text of strings(document)) {
-    for (const match of text.matchAll(EXPRESSION)) {
-      const body = match[1] ?? "";
-      if (/\bsecrets\b/i.test(body)) failures.add(`${path} must not use any repository secret`);
-      if (GITHUB_TOKEN.test(body)) failures.add(`${path} must not hand the GitHub token to a step`);
+  if (secretReferences(document).length > 0) {
+    failures.add(`${path} must not use any repository secret`);
+  }
+  for (const { text } of documentStrings(document)) {
+    if (expressionBodies(text).some((body) => GITHUB_TOKEN.test(body))) {
+      failures.add(`${path} must not hand the GitHub token to a step`);
     }
   }
   return [...failures];

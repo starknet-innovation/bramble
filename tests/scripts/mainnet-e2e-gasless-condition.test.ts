@@ -136,8 +136,12 @@ describe("mainnet E2E gasless step condition", () => {
     expect(mainnetE2eDocumentFailures(mutated(source, step, flow))).toContain(
       GASLESS_CONDITION_FAILURE,
     );
+    // The reviewed condition in flow style passes this check; the rest of the
+    // step is no longer the reviewed one, so the step allowlist still fails.
     const exact = `      - { id: gasless, if: "${GASLESS_CONDITION}", run: "true" }\n`;
-    expect(mainnetE2eDocumentFailures(mutated(source, step, exact))).toEqual([]);
+    const failures = mainnetE2eDocumentFailures(mutated(source, step, exact));
+    expect(failures).not.toContain(GASLESS_CONDITION_FAILURE);
+    expect(failures).toContain("mainnet execution must fail unless the gasless send succeeded");
   });
 
   test("rejects duplicate gasless steps, or one in another job", async () => {
