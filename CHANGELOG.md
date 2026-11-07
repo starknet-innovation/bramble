@@ -11,11 +11,76 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+## [0.10.9] - Unreleased
+
+Staking, NFTs on Home, private balances for Argent multisigs, a first shield
+in one transaction, and fixes from user and QA reports.
+
+> **Before you upgrade:** this release moves the encrypted vault to a new
+> format (v13). After you unlock v0.10.9, v0.10.8 can no longer open the vault,
+> so going back to v0.10.8 means restoring from your recovery phrase.
+
+### Added
+- Stake STRK and BTC on Mainnet. Pick a validator from the list or paste its
+  address, then stake, add stake, claim rewards, unstake, cancel an unstake and
+  withdraw. Home has a Staking tab with your positions, each checked on chain
+  (#750, #845, #880).
+- NFTs are a Home tab, on by default. Bramble finds your Mainnet ERC-721 NFTs
+  through Starkscan and shows each one only after the chain confirms you own
+  it. Turn it off in Settings → Appearance & currency (#164, #840, #871).
+- An Argent multisig can connect to a site and approve its requests (#824,
+  #825), and can hold private balances: co-owners share a viewing key and
+  co-sign register, deposit, transfer and withdraw (#827).
+- A first shield activates private balances and deposits in one transaction,
+  so you pay one pool fee instead of two (#849, #862).
+- A first shield can be sponsored through the wallet gateway. When it isn't
+  offered, you pay the fee as before (#789, #842, #873).
+- An expanded Activity row shows the network fee, network, token contract,
+  full address and the value at submission. The CSV export gains the value
+  columns (#480, #838, #848).
+- A Starknet VIP eligibility notice on Home for accounts worth $10,000 or more,
+  decided on this device (#688, #839).
+
 ### Changed
 - Shadow accounts are on by default on Mainnet: the bundled configuration now
   names the Mainnet shadow-account anonymizer, and an existing Mainnet
-  configuration that is still the bundled one picks it up. A custom
-  configuration or an anonymizer you set yourself is kept (#666).
+  configuration that is still the bundled one picks it up once. A custom
+  configuration, an anonymizer you set yourself, or one you cleared is kept
+  (#666, #870).
+- Wallet screens say "NFT" instead of "collectible" (#881).
+- A Ledger sign refusal says it may be a rejection or Blind signing being off,
+  since the device reports both the same way (#876, #877).
+
+### Fixed
+- Undeployed accounts can approve dapp transactions; the review prices the
+  deployment too (#851, #853).
+- Private swaps on AVNU open the approval card instead of failing with
+  `signing-failed` (#860).
+- Sponsored account deployment works with the live gateway instead of always
+  falling back to self-paid (#850).
+- A wrong passphrase when revealing secrets says "Incorrect passphrase" (#834,
+  #835).
+- A failed Ledger setup or recovery keeps your network instead of switching it
+  (#822, #874).
+- A privacy-service outage reads as services down, with the diagnostic kept
+  (#837). A node's non-JSON error reply shows the refusal message (#857, #859).
+- Labels and values no longer overlap at the narrowest side panel, including
+  Settings, multisig review, Manage tokens, screen titles and approval buttons
+  (#882, #883). Staking keeps the amount and fee visible during review (#880).
+
+### Security
+- `wallet_addStarknetChain` refuses chains the wallet can't use instead of
+  answering `added` for a network that never appears (#852, #854).
+- CodeQL `security-extended` findings closed (#829), and v0.10.8 review
+  follow-ups (#820).
+
+### Terminal
+The terminal is a separate web app, deployed on its own; it doesn't change the
+extension.
+- Create ERC-20, ERC-721 and ERC-1155 contracts on Sepolia, with NFT metadata
+  authoring and ownership transfer or renounce (#841, #865, #869).
+- Private swaps use a pinned AVNU executor (#269, #872). Vault deposits stay
+  off; when they're turned on, only curated Vesu vaults are allowed (#270).
 
 ## [0.10.8] - 2026-10-30
 
