@@ -27,8 +27,11 @@ import { sourcePinFailures } from "./workflow-source-pin";
 export const LEDGER_E2E_WORKFLOW = "ledger-e2e.yml";
 
 /**
- * SHA-256 of the reviewed `ledger-e2e.yml`, byte for byte. Change it only
- * together with a reviewed change to the workflow.
+ * SHA-256 of the reviewed `.github/workflows/ledger-e2e.yml` bytes.
+ *
+ * To update after changing the workflow: review the YAML diff itself (the
+ * decoded checks must also pass), then set this to the output of
+ * `sha256sum .github/workflows/ledger-e2e.yml` in the same pull request.
  */
 export const LEDGER_E2E_SHA256 = "ac18b8d27d1fa97fd80bf96ab0e24f274e563a003e68df4be6d816aa4e1fe715";
 
@@ -41,7 +44,12 @@ export const LEDGER_E2E_SHA256 = "ac18b8d27d1fa97fd80bf96ab0e24f274e563a003e68df
 export const ledgerE2eWorkflowFailures = (source: string): string[] => {
   const path = workflowPath(LEDGER_E2E_WORKFLOW);
   return [
-    ...sourcePinFailures(source, path, LEDGER_E2E_SHA256, "LEDGER_E2E_SHA256"),
+    ...sourcePinFailures(
+      source,
+      path,
+      LEDGER_E2E_SHA256,
+      "LEDGER_E2E_SHA256 in scripts/ledger-e2e-workflow-policy.ts",
+    ),
     ...ledgerE2eDocumentFailures(source, path),
   ];
 };

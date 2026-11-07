@@ -16,7 +16,7 @@ export type StrictYamlMutation = {
   readonly prefix: string;
   /** Replacements applied in order, each to the first occurrence of its search text. */
   readonly edits: readonly (readonly [string, string])[];
-  /** The end of a failure the gate must report (every failure starts with the file path). */
+  /** Text a failure the gate reports must contain (every failure starts with the file path). */
   readonly failure: string;
 };
 
@@ -28,10 +28,10 @@ const WEBSITE = "website-deploy.yml";
 export const FAILURE = {
   boolean: "must write every boolean as plain true or false",
   directive: "must not use YAML directives (%YAML, %TAG or any % line)",
-  doubleQuoted: "must keep every double-quoted string on one line",
+  doubleQuoted: "must keep every plain or quoted scalar on one line",
   indirection: "must not use YAML anchors, aliases, tags or merge keys",
   number: "must write every number as a plain decimal integer",
-  pin: "a reviewed change updates LEDGER_E2E_SHA256",
+  pin: "update LEDGER_E2E_SHA256 in scripts/ledger-e2e-workflow-policy.ts",
   quote: (text: string) =>
     `must quote ${text}, which another YAML reader types as a number or boolean`,
 } as const;

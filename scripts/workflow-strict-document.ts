@@ -7,15 +7,14 @@
  * duplicate keys and resolves aliases and merge keys, so none of these can be
  * seen after parsing; GitHub does not resolve merge keys at all. This reader
  * runs, in order, and stops at the first group that fails:
- * - the raw-source character allowlist (`workflow-source-characters.ts`), so
- *   no line break one parser sees and the other does not can hide content;
- * - a final line feed, so the last line is read the same by every lexer;
+ * - the raw-source character allowlist and final line feed
+ *   (`workflow-source-characters.ts`), so no line break one parser sees and
+ *   the other does not can hide content;
  * - a `yaml` parse under the YAML 1.2 core schema, duplicate keys refused and
  *   merge keys left literal (`STRICT_YAML`); any parse error fails;
  * - no anchor, alias, explicit tag or `<<` key anywhere;
- * - no double-quoted scalar spanning lines, whose escaped and folded line
- *   breaks are where YAML readers have disagreed;
- * - no directive, and no scalar another YAML reader could type differently
+ * - no directive, no scalar another YAML reader could type differently, and
+ *   no plain or quoted scalar spanning lines nor folded block
  *   (`workflow-yaml-scalars.ts`).
  *
  * Only then is the document decoded. Anything the reader cannot read exactly
@@ -48,18 +47,6 @@ const hasIndirection = (document: Document): boolean => {
   return found;
 };
 
-/** Whether any double-quoted scalar's source text runs over more than one line. */
-const hasMultilineDoubleQuoted = (document: Document, source: string): boolean => {
-  let found = false;
-  visit(document, {
-    Scalar(_key, node) {
-      const text = node.range ? source.slice(node.range[0], node.range[1]) : "";
-      if (node.type === "QUOTE_DOUBLE" && /[\r\n]/.test(text)) found = true;
-    },
-  });
-  return found;
-};
-
 const refused = (failures: readonly string[]): StrictWorkflow => ({ failures, value: undefined });
 
 /**
@@ -76,14 +63,10 @@ export const readWorkflowStrictly = (
   // could hide a step or a directive from everything below.
   const characters = sourceCharacterFailures(source, path);
   if (characters.length > 0) return refused(characters);
-  if (!source.endsWith("\n")) return refused([`${path} must end with a line feed`]);
   const document = parseDocument(source, STRICT_YAML);
   if (document.errors.length > 0) return refused([unreadable]);
   if (hasIndirection(document)) {
     return refused([`${path} must not use YAML anchors, aliases, tags or merge keys`]);
-  }
-  if (hasMultilineDoubleQuoted(document, source)) {
-    return refused([`${path} must keep every double-quoted string on one line`]);
   }
   const differentials = yamlDifferentialFailures(source, document, path);
   if (differentials.length > 0) return refused(differentials);

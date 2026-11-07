@@ -11,8 +11,8 @@
  * The document is read the way GitHub's runner reads it, or not at all
  * (`workflow-strict-document.ts`): characters the parsers split lines on
  * differently, directives, duplicate keys, anchors, aliases, tags, merge keys,
- * multi-line double-quoted strings and scalars another YAML reader would type
- * differently all fail closed before any value is compared. `Bun.YAML` is not
+ * multi-line plain or quoted scalars, folded blocks and scalars another YAML
+ * reader would type differently all fail closed before any value is compared. `Bun.YAML` is not
  * used: it types values as YAML 1.1, honours `%YAML`, and silently resolves
  * duplicate keys, aliases and merge keys, so the policy could pass a workflow
  * GitHub reads differently.

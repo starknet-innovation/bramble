@@ -45,7 +45,7 @@ const expectRejected = async (rows: readonly StrictYamlMutation[]): Promise<void
     const failures = await gateAfter(row);
     const path = `.github/workflows/${row.workflow} `;
     const named = failures.some(
-      (failure) => failure.startsWith(path) && failure.endsWith(row.failure),
+      (failure) => failure.startsWith(path) && failure.includes(row.failure),
     );
     if (!named) throw new Error(`accepted ${row.label}:\n${failures.join("\n")}`);
   }
@@ -64,7 +64,12 @@ describe("Ledger E2E policy reads the workflow as GitHub does", () => {
   test("decodes equivalent spellings as the reviewed workflow; only the pin moves", async () => {
     const source = (await readWorkflowSources())["ledger-e2e.yml"] ?? "";
     const pin = (text: string) =>
-      sourcePinFailures(text, LEDGER, LEDGER_E2E_SHA256, "LEDGER_E2E_SHA256");
+      sourcePinFailures(
+        text,
+        LEDGER,
+        LEDGER_E2E_SHA256,
+        "LEDGER_E2E_SHA256 in scripts/ledger-e2e-workflow-policy.ts",
+      );
     const variants = [
       ...LEDGER_CONTROLS.map((control) => [control.label, applyEdits(source, control)] as const),
       ["CRLF line endings", source.replaceAll("\n", "\r\n")] as const,
@@ -84,7 +89,7 @@ describe("Ledger E2E policy reads the workflow as GitHub does", () => {
     expect(sourceSha256(bytes.toString("utf8"))).toBe(LEDGER_E2E_SHA256);
     expect(sourcePinFailures("x\n", "w", sourceSha256("x\n"), "PIN")).toEqual([]);
     expect(sourcePinFailures("x\r\n", "w", sourceSha256("x\n"), "PIN")).toEqual([
-      `w must be byte for byte the reviewed file (SHA-256 ${sourceSha256("x\n")}); a reviewed change updates PIN`,
+      `w is not the reviewed file (SHA-256 ${sourceSha256("x\n")}): review the diff, then update PIN (now ${sourceSha256("x\r\n")})`,
     ]);
   });
 });

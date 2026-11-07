@@ -26,12 +26,15 @@
  * token, any whose decoded document references it, and any holding a line
  * break the parsers disagree on) is read strictly
  * (`workflow-strict-document.ts`): a character allowlist first, then no
- * directive, anchor, alias, tag, merge key, multi-line double-quoted string or
- * YAML 1.1-ambiguous scalar. The other workflows keep their freedom to use
+ * directive, anchor, alias, tag, merge key, multi-line plain or quoted scalar,
+ * folded block or YAML 1.1-ambiguous scalar. The other workflows keep their freedom to use
  * anchors and any printable character; only the four line breaks one parser
  * sees and the other does not (bare CR, U+0085, U+2028, U+2029) pull a
  * workflow into the strict read, because they could hide a binding or a
- * context dump from the scan below.
+ * context dump from the scan below. (The mainnet boundary,
+ * `mainnet-e2e-boundary.ts`, independently refuses those line breaks and any
+ * whole-context or computed secret read in every other workflow; this policy
+ * keeps its own checks so the deploy token's rules do not depend on it.)
  *
  * The policy runs over every workflow, so it holds no exact-bytes pin: the
  * token rules select a workflow by content, not by name.

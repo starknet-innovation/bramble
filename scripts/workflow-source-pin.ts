@@ -1,7 +1,9 @@
 /**
  * Exact-bytes pin of a reviewed workflow file.
  *
- * Structural checks judge what a parser reads, so they are only as strong as
+ * The pattern of the Mainnet E2E pin (`mainnet-e2e-workflow-pin.ts`), shared
+ * so any reviewed workflow can be pinned the same way. Structural checks
+ * judge what a parser reads, so they are only as strong as
  * the agreement between that parser and GitHub's runner. A pin needs no
  * parser: the policy states the SHA-256 of the reviewed file, and any change,
  * however it would be read, fails until the policy is updated with it. The
@@ -12,7 +14,9 @@
  * The digest is taken over the UTF-8 encoding of the source text, which is
  * the file's exact bytes for any file the character allowlist accepts
  * (`workflow-source-characters.ts`); a test compares it with the raw bytes on
- * disk.
+ * disk. Nothing is normalised, so a BOM, CRLF or a missing final LF changes
+ * the digest; `.gitattributes` marks each pinned file `-text` so git never
+ * converts its line endings.
  */
 import { createHash } from "node:crypto";
 
@@ -24,16 +28,18 @@ export const sourceSha256 = (source: string): string =>
  * A single failure, prefixed with `path`, when `source` is not byte for byte
  * the reviewed file whose SHA-256 is `expected`; otherwise none. `constant`
  * names where the pin is kept, so the failure says what a reviewed change must
- * update. Pure.
+ * update, and the failure names the actual digest. Pure.
  */
 export const sourcePinFailures = (
   source: string,
   path: string,
   expected: string,
   constant: string,
-): string[] =>
-  sourceSha256(source) === expected
+): string[] => {
+  const actual = sourceSha256(source);
+  return actual === expected
     ? []
     : [
-        `${path} must be byte for byte the reviewed file (SHA-256 ${expected}); a reviewed change updates ${constant}`,
+        `${path} is not the reviewed file (SHA-256 ${expected}): review the diff, then update ${constant} (now ${actual})`,
       ];
+};
