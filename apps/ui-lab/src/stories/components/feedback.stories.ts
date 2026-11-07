@@ -1,4 +1,5 @@
 import { badge, callout, emptyState, pill, toast } from "@bramble/ui-kit/content";
+import { icon } from "@bramble/ui-kit/icons";
 import type { Meta } from "@storybook/html-vite";
 import {
   CATALOG_META,
@@ -63,7 +64,7 @@ export const PillsAndBadges: CatalogStory = {
           ${pill("Starknet Mainnet", { dot: true })}
           ${pill("Hardware", { icon: "shield", tone: "hardware" })}
           ${pill("Deployed")}
-          <span class="tab-icon">Activity${badge(3)}</span>
+          <span class="tab-icon">${icon("activity")}${badge(3)}</span>
         </div>`,
       ),
       args.theme,

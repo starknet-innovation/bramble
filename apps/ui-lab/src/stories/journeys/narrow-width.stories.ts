@@ -13,7 +13,8 @@ import {
  * a value that runs past the right edge is simply unreachable. These stories are
  * the regression guard: each renders an existing journey checkpoint through the
  * review bench's own 320 x 760 surface and fails if the panel scrolls
- * horizontally or a named amount or address is clipped.
+ * horizontally, any text overlaps other text or is cut off by its container,
+ * or a named amount or address is clipped.
  */
 const meta: LabMeta = {
   ...LAB_META,
@@ -58,6 +59,28 @@ export const PrivacyPortfolio = narrowSidepanelStory(
 export const Receive = narrowSidepanelStory("Receive · 320px", "assets", "receive", [
   (document) => assertValueFits(document, "[data-receive-address-text]"),
 ]);
+
+export const ManageTokens = narrowSidepanelStory("Manage tokens · 320px", "assets", "tokens");
+
+export const SettingsAppearance = narrowSidepanelStory(
+  "Settings flow header · 320px",
+  "settings-security",
+  "appearance",
+);
+
+export const LedgerApproval = narrowSidepanelStory("Ledger approval · 320px", "ledger", "connect");
+
+export const ConnectRequest = narrowSidepanelStory(
+  "Connect request · 320px",
+  "approvals",
+  "connect",
+);
+
+export const MultisigReview = narrowSidepanelStory(
+  "Multisig fee review · 320px",
+  "multisig",
+  "intent-fee-replacement",
+);
 
 export const StakingUnstakeReview = narrowSidepanelStory(
   "Staking unstake review · 320px",
