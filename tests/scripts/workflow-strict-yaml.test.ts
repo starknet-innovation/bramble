@@ -13,7 +13,7 @@ import {
   LEDGER_E2E_SHA256,
   ledgerE2eWorkflowFailures,
 } from "../../scripts/ledger-e2e-workflow-policy";
-import { websiteDeployFailures } from "../../scripts/website-deploy-policy";
+import { WEBSITE_DEPLOY_SHA256, websiteDeployFailures } from "../../scripts/website-deploy-policy";
 import { readWorkflowSources } from "../../scripts/workflow-inventory";
 import { workflowSecurityPolicyFailures } from "../../scripts/workflow-security-policy";
 import { sourcePinFailures, sourceSha256 } from "../../scripts/workflow-source-pin";
@@ -102,7 +102,12 @@ describe("website-deploy policy reads workflows as GitHub does", () => {
   test("accepts equivalent spellings, and leaves other workflows their freedom", async () => {
     for (const control of WEBSITE_CONTROLS) {
       const failures = await gateAfter(control);
-      if (failures.length > 0) throw new Error(`rejected ${control.label}: ${failures.join("\n")}`);
+      // The deploy workflow's bytes are pinned, so only the pin may move.
+      const allowed = control.workflow === "website-deploy.yml" ? 1 : 0;
+      const pinOnly = failures.every((failure) => failure.includes(FAILURE.websitePin));
+      if (failures.length !== allowed || !pinOnly) {
+        throw new Error(`rejected ${control.label}: ${failures.join("\n")}`);
+      }
     }
   });
 
@@ -111,6 +116,7 @@ describe("website-deploy policy reads workflows as GitHub does", () => {
     expect(source).not.toContain("→");
     expect(websiteDeployFailures("website-deploy.yml", source)).toEqual([]);
     expect(websiteDeployFailures("website-deploy.yml", `${source}# a → b\n`)).toEqual([
+      expect.stringContaining(FAILURE.websitePin),
       expect.stringMatching(
         /^\.github\/workflows\/website-deploy\.yml line \d+ must not contain U\+2192$/,
       ),
@@ -147,6 +153,27 @@ describe("website-deploy policy reads workflows as GitHub does", () => {
     expect(websiteDeployFailures("bomb.yml", `${aliases.join("\n")}\n`)).toEqual([
       ".github/workflows/bomb.yml must be parseable YAML so its trust boundaries can be checked",
     ]);
+  });
+
+  test("pins the deploy workflow's exact bytes: the guard's exit 0 and a one-byte edit fail", async () => {
+    const source = (await readWorkflowSources())["website-deploy.yml"] ?? "";
+    const bytes = await readFile(".github/workflows/website-deploy.yml");
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(WEBSITE_DEPLOY_SHA256);
+    expect(bytes.toString("utf8")).not.toContain("→");
+    // The decoded checks accept both edits; only the pin catches them.
+    const exitZero = source.replace(
+      '(got $TRIGGER_REF)."\n            exit 1\n',
+      '(got $TRIGGER_REF)."\n            exit 0\n',
+    );
+    expect(exitZero).not.toBe(source);
+    const oneByte = `${source.slice(0, -1)} \n`;
+    for (const changed of [exitZero, oneByte]) {
+      expect(websiteDeployFailures("website-deploy.yml", changed)).toEqual([
+        `.github/workflows/website-deploy.yml is not the reviewed file (SHA-256 ${WEBSITE_DEPLOY_SHA256}): review the diff, then ${FAILURE.websitePin} (now ${sourceSha256(changed)})`,
+      ]);
+    }
+    // Another workflow with the same text is not pinned.
+    expect(websiteDeployFailures("copy.yml", exitZero)).toEqual([]);
   });
 
   test("checks the deploy job's environment, triggers, branch and guard on decoded values", async () => {

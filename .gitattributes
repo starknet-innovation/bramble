@@ -4,3 +4,5 @@ bun.lock -diff linguist-generated=true
 .github/workflows/mainnet-e2e.yml -text
 # The Ledger E2E policy pins this file's exact bytes (SHA-256); never convert its line endings.
 .github/workflows/ledger-e2e.yml -text
+# The website-deploy policy pins this file's exact bytes (SHA-256); never convert its line endings.
+.github/workflows/website-deploy.yml -text

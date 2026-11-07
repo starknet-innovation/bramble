@@ -36,17 +36,33 @@
  * whole-context or computed secret read in every other workflow; this policy
  * keeps its own checks so the deploy token's rules do not depend on it.)
  *
- * The policy runs over every workflow, so it holds no exact-bytes pin: the
- * token rules select a workflow by content, not by name.
+ * `website-deploy.yml` itself is also pinned to its exact bytes
+ * ({@link WEBSITE_DEPLOY_SHA256}, `workflow-source-pin.ts`), so any edit,
+ * including one these checks would accept (the dispatch guard's `exit 1`
+ * turned into `exit 0`), fails until a reviewed change updates the hash. The
+ * pin is applied here, keyed by file name, rather than through the named
+ * policies in `workflow-security-policy.ts`: membership there would exempt
+ * the workflow from the baseline runner and trigger rules.
  */
 import { parseDocument } from "yaml";
 import { workflowPath } from "./workflow-policy-text";
 import { ANY_SECRET, expressionBodies, secretNames } from "./workflow-secret-references";
+import { sourcePinFailures } from "./workflow-source-pin";
 import { readWorkflowStrictly, type StrictWorkflow } from "./workflow-strict-document";
 import { STRICT_YAML } from "./workflow-yaml-scalars";
 
 /** File name of the workflow that deploys the public website. */
 export const WEBSITE_DEPLOY_WORKFLOW = "website-deploy.yml";
+
+/**
+ * SHA-256 of the reviewed `.github/workflows/website-deploy.yml` bytes.
+ *
+ * To update after changing the workflow: review the YAML diff itself (the
+ * decoded checks must also pass), then set this to the output of
+ * `sha256sum .github/workflows/website-deploy.yml` in the same pull request.
+ */
+export const WEBSITE_DEPLOY_SHA256 =
+  "14efc081b2e5b0711ea515a0753558a069cfd62233b6e4af233b136a9d7a3706";
 
 const PRODUCTION_ENVIRONMENT = "bramble-production";
 const DEPLOY_STEP_NAME = "Deploy to Cloudflare Workers";
@@ -192,20 +208,8 @@ const deployJobFailures = (document: unknown, deploy: DeployStep, path: string):
   return failures;
 };
 
-/**
- * Every website-deploy policy violation in one workflow source, keyed by the
- * workflow's file name. Safe to run over the whole inventory: a workflow that
- * neither names the Cloudflare credential nor serialises the secrets context
- * yields an empty list.
- *
- * The context-dump rule deliberately applies to every workflow, because a dump
- * exposes this credential without naming it — selecting on the name first would
- * return an empty list and leave such a workflow unexamined. A secret read by
- * a computed name (`secrets[format(…)]`) is refused everywhere for the same
- * reason. The workflows this policy reads strictly (see the module comment)
- * yield only the strict reader's failures when they cannot be read exactly.
- */
-export const websiteDeployFailures = (name: string, source: string): readonly string[] => {
+// The content-selected checks behind websiteDeployFailures.
+const contentFailures = (name: string, source: string): readonly string[] => {
   const path = workflowPath(name);
   const unreadable = `${path} must be parseable YAML so its trust boundaries can be checked`;
   const namesToken = NAMES_THE_TOKEN.test(source);
@@ -261,3 +265,30 @@ export const websiteDeployFailures = (name: string, source: string): readonly st
   failures.push(...deployJobFailures(document, deploy, path));
   return failures;
 };
+
+/**
+ * Every website-deploy policy violation in one workflow source, keyed by the
+ * workflow's file name. Safe to run over the whole inventory: a workflow that
+ * neither names the Cloudflare credential nor serialises the secrets context
+ * yields an empty list, and only `website-deploy.yml` is checked against
+ * {@link WEBSITE_DEPLOY_SHA256}. The pin failure is reported alongside the
+ * decoded checks, so an edit names the control it breaks as well.
+ *
+ * The context-dump rule deliberately applies to every workflow, because a dump
+ * exposes this credential without naming it — selecting on the name first would
+ * return an empty list and leave such a workflow unexamined. A secret read by
+ * a computed name (`secrets[format(…)]`) is refused everywhere for the same
+ * reason. The workflows this policy reads strictly (see the module comment)
+ * yield only the strict reader's failures when they cannot be read exactly.
+ */
+export const websiteDeployFailures = (name: string, source: string): readonly string[] => [
+  ...(name === WEBSITE_DEPLOY_WORKFLOW
+    ? sourcePinFailures(
+        source,
+        workflowPath(name),
+        WEBSITE_DEPLOY_SHA256,
+        "WEBSITE_DEPLOY_SHA256 in scripts/website-deploy-policy.ts",
+      )
+    : []),
+  ...contentFailures(name, source),
+];

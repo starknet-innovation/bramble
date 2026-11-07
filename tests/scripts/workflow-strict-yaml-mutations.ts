@@ -32,6 +32,7 @@ export const FAILURE = {
   indirection: "must not use YAML anchors, aliases, tags or merge keys",
   number: "must write every number as a plain decimal integer",
   pin: "update LEDGER_E2E_SHA256 in scripts/ledger-e2e-workflow-policy.ts",
+  websitePin: "update WEBSITE_DEPLOY_SHA256 in scripts/website-deploy-policy.ts",
   quote: (text: string) =>
     `must quote ${text}, which another YAML reader types as a number or boolean`,
 } as const;
@@ -229,6 +230,17 @@ export const WEBSITE_ROWS: readonly StrictYamlMutation[] = [
     `not at jobs.deploy.steps[3].env.LEAK_${E} secrets.CLOUDFLARE_API_TOKEN }} (key)`,
   ),
   website(
+    "dispatch guard exits 0 instead of 1",
+    [
+      [
+        'refs/heads/main (got $TRIGGER_REF)."\n            exit 1\n',
+        'refs/heads/main (got $TRIGGER_REF)."\n            exit 0\n',
+      ],
+    ],
+    FAILURE.websitePin,
+  ),
+  website("one comment line added at the top", [], FAILURE.websitePin, "#\n"),
+  website(
     "quoted pull_request trigger key",
     [["  workflow_dispatch:\n", '  "pull_request":\n  workflow_dispatch:\n']],
     "must never run on a pull-request revision",
@@ -281,7 +293,7 @@ export const LEDGER_CONTROLS: readonly StrictYamlControl[] = [
   },
 ];
 
-/** Website and other-workflow spellings the full gate accepts. */
+/** Website and other-workflow spellings the decoded checks accept; only the website pin rejects them. */
 export const WEBSITE_CONTROLS: readonly StrictYamlControl[] = [
   {
     workflow: WEBSITE,
