@@ -49,7 +49,7 @@ const owned: DiscoveredNft = {
   tokenId: "5",
 };
 
-const NONE_FOUND = "No collectibles found for this account yet. Watch one you own to see it here.";
+const NONE_FOUND = "No NFTs found for this account yet. Watch one you own to see it here.";
 
 describe("Home NFTs tab panel", () => {
   test("with NFTs: cards that open the detail screen, plus Watch and Hidden", () => {
@@ -59,7 +59,7 @@ describe("Home NFTs tab panel", () => {
     expect(html).toContain('data-view="nft-watch"');
     expect(html).toContain("Watch by contract");
     expect(html).toContain('data-view="nft-hidden"');
-    expect(html).toContain("Hidden collectibles");
+    expect(html).toContain("Hidden NFTs");
     expect(html).not.toContain(NONE_FOUND);
   });
 

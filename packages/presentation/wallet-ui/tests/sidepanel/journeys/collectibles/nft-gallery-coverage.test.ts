@@ -32,7 +32,7 @@ const owned: DiscoveredNft = {
   tokenId: "5",
 };
 
-const NONE_FOUND = "No collectibles found for this account yet.";
+const NONE_FOUND = "No NFTs found for this account yet.";
 const MISSING = "This list may be missing some NFTs.";
 const FAILED = "Couldn't load the NFT list. Only NFTs you watch are shown.";
 
