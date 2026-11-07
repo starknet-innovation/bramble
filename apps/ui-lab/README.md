@@ -77,7 +77,7 @@ and its tests drive.
 
 ## Journey coverage
 
-The lab has 226 deterministic checkpoints across 15 scenario families:
+The lab has 274 deterministic checkpoints across 15 scenario families:
 
 | Family | Review surface |
 | --- | --- |
@@ -95,7 +95,7 @@ The lab has 226 deterministic checkpoints across 15 scenario families:
 | Assets and permissions | Receive, focused add/detect token journeys, token detail, address book, and ERC20 allowances. |
 | NFT loading and send | Metadata loading, gallery, hidden/watch management, recipient-first review, blocking, submission, and a reverted transfer. |
 | Argent multisig | Empty/setup, deployment availability, shared portfolio, collecting/ready/stale intents, signer-authority drift, exact review, and sync recovery. |
-| Settings and security | Focused appearance, request, network/endpoint, account/import, connected-site, backup/export/restore, and security boundaries. |
+| Settings and security | Focused appearance, request, network/endpoint, account/import, connected-site, backup/export/restore, staking (stake, unstake, withdraw and claim rewards), and security boundaries. |
 
 The `ProductionViewCoverage` interaction test derives its assertion from the production
 `WALLET_VIEWS` constant. A new production view fails the UI Lab suite until at least one scenario

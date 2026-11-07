@@ -81,3 +81,24 @@ export const MultisigReview = narrowSidepanelStory(
   "multisig",
   "intent-fee-replacement",
 );
+
+export const StakingUnstakeReview = narrowSidepanelStory(
+  "Staking unstake review · 320px",
+  "settings-security",
+  "staking-unstake-review",
+  [(document) => assertInsidePanel(document, ".staking-review")],
+);
+
+export const StakingExitPending = narrowSidepanelStory(
+  "Staking unstake waiting · 320px",
+  "settings-security",
+  "staking-exit-pending",
+  [(document) => assertInsidePanel(document, ".staking-copy .hint")],
+);
+
+export const StakingClaimElsewhere = narrowSidepanelStory(
+  "Staking claim paid elsewhere · 320px",
+  "settings-security",
+  "staking-claim-elsewhere",
+  [(document) => assertInsidePanel(document, ".staking-review")],
+);

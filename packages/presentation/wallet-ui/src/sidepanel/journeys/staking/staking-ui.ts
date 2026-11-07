@@ -8,6 +8,12 @@
  * another action in the row, or editing an amount, disarms the others. The
  * confirm therefore always signs the action whose review is on screen, even
  * when two preparations overlap.
+ *
+ * The review line moves to sit directly above the control it belongs to, and
+ * that control's group (its amount form, or the row's action buttons) is
+ * marked open, so the styles stack it: the typed amount, then the sentence and
+ * fee, then the confirm. A refusal or an unknown outcome is marked with its
+ * severity, so it never reads like the neutral review sentence.
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -39,6 +45,9 @@ export type StakingUiDeps = {
   readonly wallet: Pick<SidepanelWallet, "executeStaking" | "prepareStaking">;
 };
 
+const GROUP = ".staking-form, .staking-actions";
+const OPEN = "data-staking-open";
+
 const isAction = (value: string | undefined): value is StakingAction =>
   ACTIONS.some((action) => action === value);
 
@@ -47,6 +56,9 @@ const isAction = (value: string | undefined): value is StakingAction =>
 const disarmRow = (row: Element | null): number => {
   const generation = (row ? (LATEST.get(row) ?? 0) : 0) + 1;
   if (row) LATEST.set(row, generation);
+  row?.querySelectorAll(`[${OPEN}]`).forEach((group) => {
+    group.removeAttribute(OPEN);
+  });
   row?.querySelectorAll<HTMLButtonElement>("[data-staking-action]").forEach((control) => {
     ARMED.delete(control);
     const label = LABELS.get(control);
@@ -77,6 +89,15 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
       disarmRow(row ?? null);
       if (review) review.hidden = true;
     });
+    // Puts the review line directly above this control and opens its group.
+    const show = (text: string): void => {
+      if (!review) return;
+      button.before(review);
+      button.closest(GROUP)?.setAttribute(OPEN, "");
+      delete review.dataset["severity"];
+      review.hidden = false;
+      review.textContent = text;
+    };
     // A superseded request only releases its control; it shows nothing.
     const release = (): void => {
       buttonBusy(button, false);
@@ -84,7 +105,10 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
     };
     const fail = (error: unknown): void => {
       showToast(errorDetails(error, "Staking failed"), failureTone(error), button);
-      if (review) review.textContent = errorLine(error, "Staking failed");
+      if (review) {
+        review.textContent = errorLine(error, "Staking failed");
+        review.dataset["severity"] = failureTone(error);
+      }
       // A confirm whose reply was lost may be on chain: the control stays down
       // until the screen repaints, so it cannot invite a blind resend.
       if (!isOutcomeUnknown(error)) {
@@ -103,10 +127,7 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
       generation = disarmRow(row ?? null);
       buttonBusy(button, true);
       if (field) field.readOnly = true;
-      if (review) {
-        review.hidden = false;
-        review.textContent = armed ? "Submitting…" : "Estimating the maximum fee…";
-      }
+      show(armed ? "Submitting…" : "Estimating the maximum fee…");
       if (armed) {
         void wallet.executeStaking(armed).then(() => {
           showToast("Staking transaction submitted", "success", button);
