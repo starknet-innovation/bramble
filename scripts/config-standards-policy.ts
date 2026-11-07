@@ -40,6 +40,11 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   // the same rules before a human uploads it; the same tool later signs and
   // submits. Pinned exact and never shipped — it is a build-time gate only.
   "web-ext": "10.7.0",
+  // YAML document model for the Mainnet E2E workflow policy, which must
+  // refuse duplicate keys, anchors, aliases, tags and merge keys that
+  // `Bun.YAML` resolves silently. Development scripts only; the version is
+  // the one bun.lock already resolved for knip, so nothing new is downloaded.
+  yaml: "2.9.1",
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
