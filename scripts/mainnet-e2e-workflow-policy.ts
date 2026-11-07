@@ -12,7 +12,10 @@
  * preflight validated: it compares a SHA-256 job output, re-checks HTTPS, the
  * shared hosts and the mainnet chain id, and never falls back.
  *
- * Every control is judged on the parsed document, so a comment, an inert
+ * The primary control is an exact-bytes pin (`mainnet-e2e-workflow-pin.ts`):
+ * any edit fails until its reviewed SHA-256 is updated. Behind it, as defence
+ * in depth and as the statement of what was reviewed, every control is
+ * judged on the parsed document, so a comment, an inert
  * string, a step that never runs, or a respelling cannot satisfy or evade it:
  * - `mainnet-e2e-workflow-document.ts` parses strictly and fails closed;
  * - `mainnet-e2e-workflow-jobs.ts` pins the top level and each job's settings;
@@ -25,11 +28,14 @@
  */
 
 import { mainnetE2eDocumentFailures } from "./mainnet-e2e-workflow-document";
+import { mainnetE2ePinFailures } from "./mainnet-e2e-workflow-pin";
 
 /**
- * Violations of the mainnet E2E workflow's reviewed controls. `source` is the
- * workflow text. The function does not read the filesystem; a workflow that
- * does not parse exactly reports that and nothing else.
+ * Violations of the mainnet E2E workflow's reviewed controls: the exact-bytes
+ * pin, then every structural check. `source` is the workflow text. The
+ * function does not read the filesystem.
  */
-export const mainnetE2eWorkflowFailures = (source: string): string[] =>
-  mainnetE2eDocumentFailures(source);
+export const mainnetE2eWorkflowFailures = (source: string): string[] => [
+  ...mainnetE2ePinFailures(source),
+  ...mainnetE2eDocumentFailures(source),
+];

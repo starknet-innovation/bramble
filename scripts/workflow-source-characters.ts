@@ -29,7 +29,8 @@ const codePoint = (code: number): string => `U+${code.toString(16).toUpperCase()
 
 /**
  * Every character in `source` outside the allowlist, as failures naming the
- * 1-based line (counted by LF) and the code point, prefixed with `path`.
+ * 1-based line (counted by LF) and the code point, prefixed with `path`; and
+ * a failure when the source does not end with a line feed.
  * Reads the original text, code point by code point; nothing is normalised
  * first. Pure.
  */
@@ -45,5 +46,8 @@ export const sourceCharacterFailures = (source: string, path: string): string[] 
     if (code === 0x0a) line += 1;
     index += character.length;
   }
+  // Read as-is, not with a newline appended: parsers disagree on whether a
+  // block scalar at the end of an unterminated file keeps its final newline.
+  if (!source.endsWith("\n")) failures.push(`${path} must end with a line feed`);
   return failures;
 };

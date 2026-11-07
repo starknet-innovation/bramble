@@ -7,7 +7,7 @@
  * shape the policy cannot read must fail closed.
  */
 import { describe, expect, test } from "bun:test";
-import { mainnetE2eWorkflowFailures } from "../../scripts/mainnet-e2e-workflow-policy";
+import { mainnetE2eDocumentFailures } from "../../scripts/mainnet-e2e-workflow-document";
 import { readWorkflowSources } from "../../scripts/workflow-inventory";
 import { workflowSecurityPolicyFailures } from "../../scripts/workflow-security-policy";
 import {
@@ -57,21 +57,21 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
         (text, [search, replacement]) => mutated(text, search, replacement),
         `${prefix}${source}`,
       );
-      const failures = mainnetE2eWorkflowFailures(changed);
+      const failures = mainnetE2eDocumentFailures(changed);
       if (!failures.includes(failure)) throw new Error(`accepted ${label}: ${failures.join("\n")}`);
     }
     // A plain decimal, a plain boolean and the root `on:` key stay accepted.
-    expect(mainnetE2eWorkflowFailures(`\uFEFF# reviewed\n${source}`)).toEqual([]);
-    expect(mainnetE2eWorkflowFailures(`---\n${source}`)).toEqual([]);
+    expect(mainnetE2eDocumentFailures(`\uFEFF# reviewed\n${source}`)).toEqual([]);
+    expect(mainnetE2eDocumentFailures(`---\n${source}`)).toEqual([]);
   });
 
   test("spellings that decode to the reviewed workflow still pass", async () => {
     const source = await workflow();
     for (const { label, search, replacement } of EQUIVALENT) {
-      const failures = mainnetE2eWorkflowFailures(mutated(source, search, replacement));
+      const failures = mainnetE2eDocumentFailures(mutated(source, search, replacement));
       if (failures.length > 0) throw new Error(`rejected ${label}: ${failures.join("\n")}`);
     }
-    expect(mainnetE2eWorkflowFailures(source.replaceAll("\n", "\r\n"))).toEqual([]);
+    expect(mainnetE2eDocumentFailures(source.replaceAll("\n", "\r\n"))).toEqual([]);
   });
 
   test("fails closed on a document it cannot read as the reviewed shape", async () => {
@@ -79,17 +79,17 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
     const order = "the resolve job must run exactly the reviewed steps, in order";
     const jobSet = `${PATH} must define exactly the jobs build, execute, gate, post, preflight, report, resolve`;
     const jobs = [order, jobSet];
-    expect(mainnetE2eWorkflowFailures("[]\n")).toEqual(
+    expect(mainnetE2eDocumentFailures("[]\n")).toEqual(
       expect.arrayContaining([`${PATH} must keep the name Mainnet E2E`, ...jobs]),
     );
     const listSteps = mutated(source, "  report:\n", "  extra:\n    steps: run\n  report:\n");
-    expect(mainnetE2eWorkflowFailures(listSteps)).toContain(jobSet);
+    expect(mainnetE2eDocumentFailures(listSteps)).toContain(jobSet);
     const notList = mutated(
       source,
       "    steps:\n      - name: Resolve active release branch",
       "    steps: {}\n    x-steps:\n      - name: Resolve active release branch",
     );
-    expect(mainnetE2eWorkflowFailures(notList)).toEqual(
+    expect(mainnetE2eDocumentFailures(notList)).toEqual(
       expect.arrayContaining([
         order,
         "the resolve job must not declare x-steps",
@@ -97,7 +97,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
       ]),
     );
     const listTriggers = mutated(source, "on:\n  schedule:", "on: [push]\nx-on:\n  schedule:");
-    expect(mainnetE2eWorkflowFailures(listTriggers)).toEqual(
+    expect(mainnetE2eDocumentFailures(listTriggers)).toEqual(
       expect.arrayContaining([
         `${PATH} must schedule at 06:00 UTC, offset from nightly`,
         `${PATH} must allow manual dispatch with only the branch input`,
@@ -105,7 +105,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
       ]),
     );
     const renamed = mutated(source, "name: Mainnet E2E\n", "name: Mainnet E2E (copy)\n");
-    expect(mainnetE2eWorkflowFailures(renamed)).toEqual([`${PATH} must keep the name Mainnet E2E`]);
+    expect(mainnetE2eDocumentFailures(renamed)).toEqual([`${PATH} must keep the name Mainnet E2E`]);
   });
 
   test("a script that is not a string or does not stop on errors fails every control", async () => {
@@ -117,7 +117,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
       step,
       '        run: [x]\n        x: |\n          bundle="$RUNNER_TEMP/bundle/',
     );
-    expect(mainnetE2eWorkflowFailures(notString)).toContain(
+    expect(mainnetE2eDocumentFailures(notString)).toContain(
       "mainnet execution must verify the build bundle it runs",
     );
     const lenient = mutated(
@@ -125,7 +125,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
       step,
       '        run: |\n          set -uo pipefail\n          bundle="$RUNNER_TEMP/bundle/',
     );
-    expect(mainnetE2eWorkflowFailures(lenient)).toEqual([
+    expect(mainnetE2eDocumentFailures(lenient)).toEqual([
       "mainnet execution must verify the build bundle it runs",
     ]);
   });
@@ -137,7 +137,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
       "        id: secrets\n",
       "        id: secrets\n        shell: sh {0}\n",
     );
-    expect(mainnetE2eWorkflowFailures(shell)).toContain(
+    expect(mainnetE2eDocumentFailures(shell)).toContain(
       "mainnet execution must keep the reviewed secrets step (id, env bindings and position) that later steps depend on",
     );
     const anonymous = mutated(
@@ -145,7 +145,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
       "      - name: Unpack the build\n",
       "      - run: 'true'\n      - name: Unpack the build\n",
     );
-    expect(mainnetE2eWorkflowFailures(anonymous)).toContain(
+    expect(mainnetE2eDocumentFailures(anonymous)).toContain(
       "mainnet execution must run exactly the reviewed steps, in order: no install, build or checkout, and the RPC check before any live test",
     );
     const scalar = mutated(
@@ -153,42 +153,42 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
       "      - name: Unpack the build\n",
       "      - 7\n      - name: Unpack the build\n",
     );
-    expect(mainnetE2eWorkflowFailures(scalar).length).toBeGreaterThan(0);
+    expect(mainnetE2eDocumentFailures(scalar).length).toBeGreaterThan(0);
   });
 
   test("each reviewed secret binding is required, once, under its own name", async () => {
     const source = await workflow();
     const binding = `          GASLESS_E2E_PRIVATE_KEY: ${E} secrets.MAINNET_E2E_PRIVATE_KEY }}\n          GASLESS_E2E_RPC_URL: ${E} secrets.MAINNET_E2E_RPC_URL }}\n          GASLESS_E2E_NETWORK: mainnet\n        run: |\n          set -euo pipefail\n          log=`;
     const dropped = mutated(source, binding, binding.replace(/^.*PRIVATE_KEY.*\n/, ""));
-    expect(mainnetE2eWorkflowFailures(dropped)).toContain(KEY_COUNT);
+    expect(mainnetE2eDocumentFailures(dropped)).toContain(KEY_COUNT);
     const discovery = `          MAINNET_E2E_DISCOVERY_URL: ${E} secrets.MAINNET_E2E_DISCOVERY_URL }}\n`;
-    expect(mainnetE2eWorkflowFailures(mutated(source, discovery, ""))).toContain(OTHER);
+    expect(mainnetE2eDocumentFailures(mutated(source, discovery, ""))).toContain(OTHER);
     const respelled = mutated(source, discovery, discovery.replace(`${E} secrets`, `${E}secrets`));
-    expect(mainnetE2eWorkflowFailures(respelled)).toContain(OTHER);
+    expect(mainnetE2eDocumentFailures(respelled)).toContain(OTHER);
     const other = mutated(
       source,
       "          BUNDLE_SHA256:",
       `          TOKEN: ${E} secrets.GITHUB_TOKEN }}\n          BUNDLE_SHA256:`,
     );
-    expect(mainnetE2eWorkflowFailures(other)).toContain(OTHER);
+    expect(mainnetE2eDocumentFailures(other)).toContain(OTHER);
     const inKey = mutated(
       source,
       "    env:\n      PLAYWRIGHT",
       `    env:\n      "${E} secrets.MAINNET_E2E_PRIVATE_KEY }}": x\n      PLAYWRIGHT`,
     );
-    expect(mainnetE2eWorkflowFailures(inKey)).toContain(KEY_PLACE);
+    expect(mainnetE2eDocumentFailures(inKey)).toContain(KEY_PLACE);
     const inCondition = mutated(
       source,
       "        if: vars.MAINNET_E2E_STRK20 == 'true'\n",
       "        if: secrets.MAINNET_E2E_PRIVATE_KEY != ''\n",
     );
-    expect(mainnetE2eWorkflowFailures(inCondition)).toContain(KEY_PLACE);
+    expect(mainnetE2eDocumentFailures(inCondition)).toContain(KEY_PLACE);
     const build = mutated(
       source,
       `          PLAYWRIGHT_BROWSERS_PATH: ${E} github.workspace }}/.playwright-browsers\n        run: bun run test:e2e:install`,
       `          PLAYWRIGHT_BROWSERS_PATH: ${E} github.workspace }}/.playwright-browsers\n          X: ${E} secrets.MAINNET_E2E_DISCOVERY_URL }}\n        run: bun run test:e2e:install`,
     );
-    expect(mainnetE2eWorkflowFailures(build)).toContain(
+    expect(mainnetE2eDocumentFailures(build)).toContain(
       "the mainnet build runs release code and must not receive any secret",
     );
   });
@@ -197,7 +197,7 @@ describe("mainnet E2E policy reads the parsed workflow", () => {
     const source = await workflow();
     const balance = `      - name: Post-run balance\n        id: balance\n        env:\n          MAINNET_E2E_ADDRESS: ${E} vars.MAINNET_E2E_ADDRESS }}\n          MAINNET_E2E_RPC_URL: ${E} secrets.MAINNET_E2E_RPC_URL }}\n`;
     const twice = mutated(source, balance, `${balance}        run: "true"\n${balance}`);
-    expect(mainnetE2eWorkflowFailures(twice)).toContain(
+    expect(mainnetE2eDocumentFailures(twice)).toContain(
       `${PATH} must bind the mainnet RPC URL only in its reviewed step env values`,
     );
   });
