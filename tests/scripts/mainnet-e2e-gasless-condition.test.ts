@@ -22,6 +22,9 @@ const IF_LINE = `        if: ${GASLESS_CONDITION}\n`;
 const ID_LINE = "        id: gasless\n";
 const HEAD = `      - name: Gasless mainnet\n${ID_LINE}`;
 const EXPRESSION = "$" + "{{";
+const ONE_LINE =
+  ".github/workflows/mainnet-e2e.yml must keep every plain or quoted scalar on one line";
+const FOLDED = ".github/workflows/mainnet-e2e.yml must not use folded (>) block scalars";
 
 const workflow = async (): Promise<string> => (await readWorkflowSources())[WORKFLOW] ?? "";
 
@@ -58,7 +61,9 @@ const WEAKENED: readonly Mutation[] = [
     "",
   ],
   ["renamed id", ID_LINE, "        id: gasless2\n", ""],
-  ["folded continuation", IF_LINE, `${IF_LINE}          || always()\n`, ""],
+  ["folded continuation", IF_LINE, `${IF_LINE}          || always()\n`, ONE_LINE],
+  // Folding differs between parsers, so a folded block is refused outright.
+  ["folded block", IF_LINE, `        if: >-\n          ${GASLESS_CONDITION}\n`, FOLDED],
   ["literal block", IF_LINE, `        if: |\n          ${GASLESS_CONDITION}\n`, ""],
   [
     "next-line value, weakened",
@@ -90,7 +95,6 @@ const WEAKENED: readonly Mutation[] = [
 const EQUIVALENT: readonly (readonly [label: string, search: string, replacement: string])[] = [
   ["double-quoted", IF_LINE, `        if: "${GASLESS_CONDITION}"\n`],
   ["trailing comment", IF_LINE, `        if: ${GASLESS_CONDITION} # reviewed\n`],
-  ["folded block", IF_LINE, `        if: >-\n          ${GASLESS_CONDITION}\n`],
   ["next-line value", IF_LINE, `        if:\n          ${GASLESS_CONDITION}\n`],
   ["quoted id", ID_LINE, `        id: "gasless"\n`],
 ];
@@ -126,7 +130,7 @@ describe("mainnet E2E gasless step condition", () => {
     const source = await workflow();
     expect(mainnetE2eDocumentFailures(crlf(source))).toEqual([]);
     const folded = mutated(source, IF_LINE, `${IF_LINE}          || always()\n`);
-    expect(mainnetE2eDocumentFailures(crlf(folded))).toContain(GASLESS_CONDITION_FAILURE);
+    expect(mainnetE2eDocumentFailures(crlf(folded))).toContain(ONE_LINE);
   });
 
   test("rejects a flow-mapping gasless step that weakens the condition", async () => {
@@ -136,8 +140,12 @@ describe("mainnet E2E gasless step condition", () => {
     expect(mainnetE2eDocumentFailures(mutated(source, step, flow))).toContain(
       GASLESS_CONDITION_FAILURE,
     );
+    // The reviewed condition in flow style passes this check; the rest of the
+    // step is no longer the reviewed one, so the step allowlist still fails.
     const exact = `      - { id: gasless, if: "${GASLESS_CONDITION}", run: "true" }\n`;
-    expect(mainnetE2eDocumentFailures(mutated(source, step, exact))).toEqual([]);
+    const failures = mainnetE2eDocumentFailures(mutated(source, step, exact));
+    expect(failures).not.toContain(GASLESS_CONDITION_FAILURE);
+    expect(failures).toContain("mainnet execution must fail unless the gasless send succeeded");
   });
 
   test("rejects duplicate gasless steps, or one in another job", async () => {

@@ -89,6 +89,23 @@ issue titled `Mainnet E2E: release/vX.Y.Z — failing checks`.
   spec is the STRK20 lifecycle, which does not fit the standard cap. When it
   runs, zero executed tests fail the job.
 
+## Changing the workflow
+
+The workflow holds the hot-wallet key, so its exact bytes are pinned.
+`MAINNET_E2E_WORKFLOW_SHA256` in `scripts/mainnet-e2e-workflow-pin.ts` is the
+SHA-256 of the reviewed `mainnet-e2e.yml`, and `bun run check` fails on any
+other bytes, including a comment, CRLF, a byte-order mark or a missing final
+line feed. To change the workflow:
+
+1. Edit `mainnet-e2e.yml` and the structural policy it must still pass
+   (`scripts/mainnet-e2e-workflow-*.ts`).
+2. Review the YAML diff itself, not only the decoded values.
+3. Set `MAINNET_E2E_WORKFLOW_SHA256` to the output of
+   `sha256sum .github/workflows/mainnet-e2e.yml` in the same pull request, so
+   code owners review the hash with the workflow.
+
+`.gitattributes` marks the file `-text`, so git never converts its line endings.
+
 ## Maintainer setup
 
 Do this once, in order. The workflow cannot create environments, rulesets or

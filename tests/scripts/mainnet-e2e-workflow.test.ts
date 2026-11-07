@@ -9,7 +9,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MAINNET_E2E_WORKFLOW_NAME } from "../../scripts/mainnet-e2e-guard";
 import { rpcUrlSha256 } from "../../scripts/mainnet-e2e-rpc";
+import { EXECUTE_ORDER, SECRETS_STEP_FAILURE } from "../../scripts/mainnet-e2e-workflow-execute";
+import { REPORT_ORDER } from "../../scripts/mainnet-e2e-workflow-jobs";
 import { mainnetE2eWorkflowFailures } from "../../scripts/mainnet-e2e-workflow-policy";
+import { CHECKOUT_FAILURE } from "../../scripts/mainnet-e2e-workflow-steps";
 import { readWorkflowSources, type WorkflowSources } from "../../scripts/workflow-inventory";
 import { workflowSecurityPolicyFailures } from "../../scripts/workflow-security-policy";
 
@@ -50,17 +53,13 @@ describe("mainnet E2E workflow policy", () => {
   test("rejects a checkout that keeps the token or takes a caller ref", async () => {
     const sources = await readWorkflowSources();
     const persisted = mutate(sources, "          persist-credentials: false\n", "");
-    expect(mainnetE2eWorkflowFailures(persisted[WORKFLOW] ?? "")).toContain(
-      ".github/workflows/mainnet-e2e.yml must not leave a checkout token in .git/config",
-    );
+    expect(mainnetE2eWorkflowFailures(persisted[WORKFLOW] ?? "")).toContain(CHECKOUT_FAILURE);
     const ref = mutate(
       sources,
       "          persist-credentials: false\n",
       "          persist-credentials: false\n          ref: release/v0.10.9\n",
     );
-    expect(mainnetE2eWorkflowFailures(ref[WORKFLOW] ?? "")).toContain(
-      ".github/workflows/mainnet-e2e.yml must not pass configured refs to checkout",
-    );
+    expect(mainnetE2eWorkflowFailures(ref[WORKFLOW] ?? "")).toContain(CHECKOUT_FAILURE);
   });
 
   test("rejects an extra or hoisted hot-wallet key binding", async () => {
@@ -75,8 +74,8 @@ describe("mainnet E2E workflow policy", () => {
     );
     const hoisted = mutate(
       sources,
-      "  execute:\n",
-      `  execute:\n    env:\n      MAINNET_E2E_PRIVATE_KEY: ${EXPRESSION} secrets.MAINNET_E2E_PRIVATE_KEY }}\n`,
+      "    env:\n      PLAYWRIGHT_BROWSERS_PATH:",
+      `    env:\n      MAINNET_E2E_PRIVATE_KEY: ${EXPRESSION} secrets.MAINNET_E2E_PRIVATE_KEY }}\n      PLAYWRIGHT_BROWSERS_PATH:`,
     );
     expect(mainnetE2eWorkflowFailures(hoisted[WORKFLOW] ?? "")).toContain(
       ".github/workflows/mainnet-e2e.yml must bind the hot-wallet private key only as a step env value",
@@ -91,15 +90,14 @@ describe("mainnet E2E workflow policy", () => {
       "    steps:\n      - uses: actions/upload-artifact@0000000000000000000000000000000000000000\n",
     );
     expect(mainnetE2eWorkflowFailures(uploaded[WORKFLOW] ?? "")).toContain(
-      ".github/workflows/mainnet-e2e.yml may upload artifacts only from the keyless build job",
+      "the resolve job must run exactly the reviewed steps, in order",
     );
-    const report = sources[WORKFLOW]?.indexOf("  report:\n") ?? -1;
-    expect(report).toBeGreaterThan(0);
-    const source = sources[WORKFLOW] ?? "";
-    const withCheckout = `${source.slice(0, report)}  report:\n    steps:\n      - uses: actions/checkout@0000000000000000000000000000000000000000\n${source.slice(report + "  report:\n".length)}`;
-    expect(mainnetE2eWorkflowFailures(withCheckout)).toContain(
-      "the hosted mainnet reporter must not check out or execute release-branch source",
+    const withCheckout = mutate(
+      sources,
+      "      - name: Upsert mainnet tracking issue\n",
+      "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          persist-credentials: false\n      - name: Upsert mainnet tracking issue\n",
     );
+    expect(mainnetE2eWorkflowFailures(withCheckout[WORKFLOW] ?? "")).toContain(REPORT_ORDER);
   });
 
   test("keeps install and build off the runner that holds the key", async () => {
@@ -109,9 +107,7 @@ describe("mainnet E2E workflow policy", () => {
       "      - name: Check and mask mainnet secrets\n",
       "      - run: bun install --frozen-lockfile\n      - name: Check and mask mainnet secrets\n",
     );
-    expect(mainnetE2eWorkflowFailures(install[WORKFLOW] ?? "")).toContain(
-      "mainnet execution must not run bun install; install and build in the keyless build job",
-    );
+    expect(mainnetE2eWorkflowFailures(install[WORKFLOW] ?? "")).toContain(EXECUTE_ORDER);
     const keyed = mutate(
       sources,
       "      - name: Install dependencies\n        run: bun install --frozen-lockfile\n",
@@ -178,8 +174,9 @@ describe("mainnet E2E workflow policy", () => {
       "          set +e\n          bun run test:mainnet",
       '          cat "$RUNNER_TEMP/x"\n          set +e\n          bun run test:mainnet',
     );
+    // Scripts are compared whole, so no printer can join one.
     expect(mainnetE2eWorkflowFailures(printed[WORKFLOW] ?? "")).toContain(
-      "mainnet execution must not print raw test output; report counts only",
+      "mainnet execution must fail unless the gasless send succeeded",
     );
     const skipped = mutate(
       sources,
@@ -187,9 +184,6 @@ describe("mainnet E2E workflow policy", () => {
       `if [ "\${#missing[@]}" -eq 3 ]; then echo "ready=false"; fi\n          if false; then`,
     );
     const failures = mainnetE2eWorkflowFailures(skipped[WORKFLOW] ?? "");
-    expect(failures).toContain(
-      ".github/workflows/mainnet-e2e.yml must fail, not skip green, when it is enabled without its secrets",
-    );
     expect(failures).toContain("mainnet execution must fail when any hot-wallet secret is missing");
   });
 
@@ -208,7 +202,7 @@ describe("mainnet E2E workflow policy", () => {
         `PREFLIGHT_RPC_SHA256: ${EXPRESSION} needs.preflight.outputs.rpc_sha256 }}`,
         `PREFLIGHT_RPC_SHA256: ${EXPRESSION} needs.build.outputs.rpc_sha256 }}`,
       ),
-    ).toContain(same);
+    ).toContain(SECRETS_STEP_FAILURE);
     expect(
       failuresAfter('[ "$actual" != "$PREFLIGHT_RPC_SHA256" ]; then', "false; then"),
     ).toContain(same);
@@ -243,9 +237,7 @@ describe("mainnet E2E workflow policy", () => {
     const gasless = source.indexOf("      - name: Gasless mainnet\n");
     expect(chainCheck).toBeGreaterThan(0);
     const moved = `${source.slice(0, chainCheck)}${source.slice(chainEnd, gasless)}      - name: Late RPC check\n        run: |\n${source.slice(chainCheck, chainEnd)}${source.slice(gasless)}`;
-    expect(mainnetE2eWorkflowFailures(moved)).toContain(
-      "mainnet execution must check the RPC in the secrets step, before any live test",
-    );
+    expect(mainnetE2eWorkflowFailures(moved)).toContain(EXECUTE_ORDER);
   });
 
   test("the RPC chain-id probe fails closed on redirects, errors and bad JSON", async () => {
@@ -321,12 +313,8 @@ describe("mainnet E2E workflow policy", () => {
       mainnetE2eWorkflowFailures(mutate(sources, search, replacement)[WORKFLOW] ?? "");
     for (const renamed of ["        id: check\n", "        id: secrets2\n", ""]) {
       const failures = failuresAfter("        id: secrets\n", renamed);
-      expect(failures).toContain(
-        "mainnet execution must keep the secrets step id that later steps depend on",
-      );
-      expect(failures).toContain(
-        "mainnet execution must check the RPC in the secrets step, before any live test",
-      );
+      expect(failures).toContain(SECRETS_STEP_FAILURE);
+      expect(failures).toContain(EXECUTE_ORDER);
     }
     expect(
       failuresAfter(

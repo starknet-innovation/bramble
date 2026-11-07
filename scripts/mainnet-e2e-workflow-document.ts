@@ -5,10 +5,14 @@
  * A text match can be kept in place while it stops applying: a plain scalar
  * continued on the next line, a block scalar, a flow mapping, a comment, an
  * alias or a duplicate key all change what GitHub executes without removing
- * the matched text. Here the workflow is parsed with duplicate keys refused
- * and merge keys left literal; anchors, aliases, explicit tags and `<<` keys
- * are refused anywhere in it; and the decoded values are compared. Anything
- * the parser reports fails closed.
+ * the matched text. Here the raw source must first pass a character
+ * allowlist (`workflow-source-characters.ts`); the workflow is then parsed
+ * under the YAML 1.2 core
+ * schema with duplicate keys refused and merge keys left literal; anchors,
+ * aliases, explicit tags and `<<` keys are refused anywhere in it; any
+ * directive, and any scalar another YAML reader could type differently, is
+ * refused (`workflow-yaml-scalars.ts`); and the decoded values are compared.
+ * Anything the parser reports fails closed.
  *
  * Uses the `yaml` package rather than `Bun.YAML`, which silently keeps the
  * last of two duplicate keys and resolves aliases and merge keys, so neither
@@ -16,6 +20,11 @@
  */
 
 import { isAlias, isScalar, parseDocument, visit } from "yaml";
+import { EXECUTE_CONDITION, jobFailures, rootFailures } from "./mainnet-e2e-workflow-jobs";
+import { mainnetE2eSecretFailures } from "./mainnet-e2e-workflow-secrets";
+import { isRecord, record } from "./mainnet-e2e-workflow-shape";
+import { sourceCharacterFailures } from "./workflow-source-characters";
+import { STRICT_YAML, yamlDifferentialFailures } from "./workflow-yaml-scalars";
 
 const PATH = ".github/workflows/mainnet-e2e.yml";
 
@@ -26,10 +35,6 @@ export const GASLESS_CONDITION =
 /** Failure text when the gasless step or its condition is not the reviewed one. */
 export const GASLESS_CONDITION_FAILURE =
   "mainnet execution must run the gasless send only after the secrets step passed";
-
-/** The execute job's reviewed `if:`, compared as a decoded string. */
-export const EXECUTE_CONDITION =
-  "needs.gate.outputs.run == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && github.repository == 'starknet-innovation/bramble' && github.event.repository.fork != true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 
 /** Which environment each secret-holding job reads; any other job reads none. */
 const ENVIRONMENTS: Readonly<Record<string, string>> = {
@@ -43,11 +48,6 @@ const ENVIRONMENTS: Readonly<Record<string, string>> = {
 const STATUS_FUNCTION = /\b(?:always|cancelled|failure)\s*\(/;
 
 type Node = Record<string, unknown>;
-
-const isRecord = (value: unknown): value is Node =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const record = (value: unknown): Node => (isRecord(value) ? value : {});
 
 /** Anchors, aliases, explicit tags and `<<` merge keys anywhere in the document. */
 const indirections = (document: ReturnType<typeof parseDocument>): number => {
@@ -79,15 +79,23 @@ const allSteps = (jobs: Node): { readonly job: string; readonly step: Node }[] =
  * skipped, so a document that cannot be read exactly never passes.
  */
 export const mainnetE2eDocumentFailures = (source: string): string[] => {
-  const document = parseDocument(source, { merge: false, uniqueKeys: true });
+  // Before any parsing: a character the parsers split lines on differently
+  // could hide a step or a directive from everything below.
+  const characters = sourceCharacterFailures(source, PATH);
+  if (characters.length > 0) return characters;
+  const document = parseDocument(source, STRICT_YAML);
   if (document.errors.length > 0) {
     return [`${PATH} must parse as YAML with no duplicate keys`];
   }
   if (indirections(document) > 0) {
     return [`${PATH} must not use YAML anchors, aliases, tags or merge keys`];
   }
-  const failures: string[] = [];
-  const jobs = record(record(document.toJS())["jobs"]);
+  // A value GitHub could type differently from this parser is never compared.
+  const differentials = yamlDifferentialFailures(source, document, PATH);
+  if (differentials.length > 0) return differentials;
+  const root = record(document.toJS());
+  const jobs = record(root["jobs"]);
+  const failures = [...rootFailures(root), ...jobFailures(jobs), ...mainnetE2eSecretFailures(root)];
   const condition = record(jobs["execute"])["if"];
   if (typeof condition !== "string" || STATUS_FUNCTION.test(condition)) {
     failures.push("mainnet execution must not run after a failed or cancelled job it needs");
@@ -111,5 +119,5 @@ export const mainnetE2eDocumentFailures = (source: string): string[] => {
   if (only?.job !== "execute" || only.step["if"] !== GASLESS_CONDITION) {
     failures.push(GASLESS_CONDITION_FAILURE);
   }
-  return failures;
+  return [...new Set(failures)];
 };
