@@ -46,6 +46,10 @@ byte-order mark or a missing final line feed. To change the workflow:
 
 `.gitattributes` marks the file `-text`, so git never converts its line endings.
 
+The token and the `bramble-production` environment are confined to this file name by
+`scripts/workflow-credential-boundary.ts`: any other workflow that names them, in any spelling or
+letter case, fails the gate. Renaming the workflow means updating that table in the same review.
+
 ### Configuration that lives outside this repository
 
 Three things the deploy depends on are Cloudflare or GitHub settings, so no diff here shows them

@@ -12,11 +12,13 @@
  * checked without anyone remembering to list it — which is the whole point: the
  * previous hand-maintained list had already fallen three workflows behind.
  */
+
 import { LEDGER_E2E_WORKFLOW, ledgerE2eWorkflowFailures } from "./ledger-e2e-workflow-policy";
 import { mainnetE2eBoundaryFailures } from "./mainnet-e2e-boundary";
 import { mainnetE2eWorkflowFailures } from "./mainnet-e2e-workflow-policy";
 import { dynamicExecutionFailures } from "./vendor-pin-policy";
 import { websiteDeployFailures } from "./website-deploy-policy";
+import { credentialBoundaryFailures } from "./workflow-credential-boundary";
 import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
 import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
 import { sepoliaSeedsFailures } from "./workflow-sepolia-policy";
@@ -454,6 +456,7 @@ export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string
     failures.push(...scopedServiceSecretFailures(name, source));
     failures.push(...sepoliaSeedsFailures(name, source));
     failures.push(...websiteDeployFailures(name, source));
+    failures.push(...credentialBoundaryFailures(name, source));
     failures.push(...vendoringFailures(name, source));
     failures.push(...mainnetE2eBoundaryFailures(name, source));
     failures.push(...(named?.(source) ?? []));
