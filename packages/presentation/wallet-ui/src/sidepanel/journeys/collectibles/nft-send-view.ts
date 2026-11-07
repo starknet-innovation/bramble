@@ -34,17 +34,17 @@ export const nftSendFlow = (
   );
   if (!nft) {
     return (
-      flowHeader("Send collectible", status) +
+      flowHeader("Send NFT", status) +
       flowScreen(
         "nft-send",
-        `<section class="section">${emptyState("This collectible is no longer available.")}</section>`,
+        `<section class="section">${emptyState("This NFT is no longer available.")}</section>`,
       )
     );
   }
   const contacts =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return (
-    flowHeader("Send collectible", status, nft.title) +
+    flowHeader("Send NFT", status, nft.title) +
     flowScreen(
       "nft-send",
       `<section class="section nft-send-identity">
@@ -53,7 +53,7 @@ export const nftSendFlow = (
           ${icon("image")}
         </div>
         ${receipt([
-          { label: "Collectible", value: nft.title },
+          { label: "NFT", value: nft.title },
           {
             action: {
               attributes: { "data-copy": nft.contract },

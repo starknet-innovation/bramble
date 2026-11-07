@@ -133,7 +133,7 @@ describe("sidepanel home", () => {
     expect(portfolio).not.toContain('role="tab');
     expect(portfolio).not.toContain("data-home-tab=");
     expect(portfolio).not.toContain("tab-panel");
-    expect(html).not.toContain("Collectibles");
+    expect(html).not.toContain("NFTs");
     expect(html).not.toContain('class="tab-indicator"');
     const menuTrigger = html.match(/<button[^>]*id="portfolio-menu-trigger"[^>]*>/)?.[0] ?? "";
     expect(menuTrigger).toContain('aria-haspopup="menu"');

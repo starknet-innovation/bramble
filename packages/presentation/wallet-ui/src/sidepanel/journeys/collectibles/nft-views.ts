@@ -147,7 +147,7 @@ const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
 const nftTilePlay = (item: NftGalleryItem): string =>
   item.animationUrl
     ? `<button class="nft-play-tile" data-nft-play="${escapeHtml(item.animationUrl)}" type="button" aria-label="Play animation">${icon("gamepad")}<span>Play animation</span></button>
-      <iframe class="nft-animation nft-animation--tile" title="Collectible animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>`
+      <iframe class="nft-animation nft-animation--tile" title="NFT animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>`
     : "";
 
 // The Hide control: a watched entry toggles its stored spam flag; a
@@ -261,17 +261,16 @@ export const nftGalleryBody = (
   );
   const hidden = hiddenNftsForAccount(watched, discoveredNfts, status.networkId, account);
   const html = `<section class="section">
-        <div class="menu-list" role="group" aria-label="Collectible actions">
+        <div class="menu-list" role="group" aria-label="NFT actions">
           ${walletMenuRow("nft-watch", "Watch by contract", "plus")}
-          ${walletMenuRow("nft-hidden", "Hidden collectibles", "image", String(hidden.length))}
+          ${walletMenuRow("nft-hidden", "Hidden NFTs", "image", String(hidden.length))}
         </div>
       </section>
       <section class="section">
         ${
           visible.length === 0
             ? emptyState(
-                note ??
-                  "No collectibles found for this account yet. Watch one you own to see it here.",
+                note ?? "No NFTs found for this account yet. Watch one you own to see it here.",
                 note ? "status" : undefined,
               )
             : `${note ? `<p class="hint" role="status">${escapeHtml(note)}</p>` : ""}<ul class="nft-grid">${visible.map((nft, index) => nftGalleryCard(nft, index < 4)).join("")}</ul>`
@@ -296,7 +295,7 @@ export const nftGalleryFlow = (
  * Renders manual NFT watch as an isolated ownership-verification task.
  */
 export const nftWatchFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Watch collectible", status, "Add one token you already own") +
+  flowHeader("Watch NFT", status, "Add one token you already own") +
   flowScreen(
     "nft-watch",
     `<section class="section">
@@ -333,7 +332,7 @@ export const nftWatchFlow = (status: WalletStatus, account: AccountRef | null): 
         ${button({
           disabled: account === null,
           icon: "check",
-          label: "Check and add collectible",
+          label: "Check and add NFT",
           type: "submit",
         })}
         <p id="nft-result" role="status"></p>
@@ -357,14 +356,14 @@ export const nftHiddenFlow = (
     account,
   );
   return (
-    flowHeader("Hidden collectibles", status, `${hidden.length} hidden`) +
+    flowHeader("Hidden NFTs", status, `${hidden.length} hidden`) +
     flowScreen(
       "nft-hidden",
       `<section class="section">
         <p class="hint">Unhide only tokens you recognize.</p>
         ${
           hidden.length === 0
-            ? emptyState("No collectibles are hidden on this network.")
+            ? emptyState("No NFTs are hidden on this network.")
             : `<ul class="address-book">${hidden.map(hiddenRow).join("")}</ul>`
         }
       </section>`,
@@ -422,9 +421,9 @@ const nftAnimationSection = (item: NftGalleryItem): string =>
   item.animationUrl
     ? `<section class="section">
         <h2>Animation</h2>
-        <span class="hint">This collectible draws its own animation. Press play to load it.</span>
+        <span class="hint">This NFT draws its own animation. Press play to load it.</span>
         <button class="secondary small" data-nft-play="${escapeHtml(item.animationUrl)}" type="button">${icon("gamepad")}Play animation</button>
-        <iframe class="nft-animation" title="Collectible animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
+        <iframe class="nft-animation" title="NFT animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
       </section>`
     : "";
 
@@ -446,11 +445,11 @@ export const nftDetailFlow = (
     account?.address ?? null,
   );
   return (
-    flowHeader("Collectible", status, nft ? nft.title : "") +
+    flowHeader("NFT", status, nft ? nft.title : "") +
     flowScreen(
       "nft-detail",
       nft === null
-        ? `<section class="section">${emptyState("This collectible is no longer watched.")}</section>`
+        ? `<section class="section">${emptyState("This NFT is no longer watched.")}</section>`
         : `<section class="section">
             ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft, true, true)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
             ${nft.description ? `<p class="lede">${escapeHtml(nft.description)}</p>` : ""}
@@ -488,7 +487,7 @@ export const nftDetailFlow = (
               attributes: { "data-view": "nft-send" },
               disabled: account === null,
               icon: "send",
-              label: "Send this collectible",
+              label: "Send this NFT",
             })}
           </section>`,
     )

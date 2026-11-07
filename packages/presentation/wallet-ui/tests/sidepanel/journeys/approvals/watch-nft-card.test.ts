@@ -64,12 +64,12 @@ describe("watch-collectible card", () => {
     const { collectiblesPreview: _unset, ...defaults } = defaultWalletPreferences();
     const html = approvalCard(card as never, status, defaults);
     expect(html).not.toContain("data-approval-notice");
-    expect(html).toContain("Watch collectible request");
+    expect(html).toContain("Watch NFT request");
     expect(html).toContain(CONTRACT);
     expect(html).toContain(">42<");
     expect(html).toContain("Starknet Mainnet");
     expect(html).toContain("Show this NFT on Home once Bramble confirms this account owns it.");
-    expect(html).toContain("Watch collectible");
+    expect(html).toContain("Watch NFT");
     expect(html).not.toContain("Add token");
   });
 });

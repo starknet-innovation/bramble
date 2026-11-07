@@ -417,20 +417,20 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ],
   [
     "this contract is an nft collection, not a token; revoke it from the dapp",
-    "That's a collectible contract, not a token. Revoke it from the site that asked.",
+    "That's an NFT contract, not a token. Revoke it from the site that asked.",
   ],
 
   // --- Collectibles --------------------------------------------------------
-  ["this account does not own that nft", "This account doesn't own that collectible."],
+  ["this account does not own that nft", "This account doesn't own that NFT."],
   ["nfts are turned off", "Turn on Show NFTs on Home in Appearance & currency to watch NFTs."],
   [
     "switch to the nft's network first",
-    "This collectible is on another network. Switch networks to move it.",
+    "This NFT is on another network. Switch networks to move it.",
   ],
   ["invalid watch asset metadata", "That site sent token details this wallet can't read."],
-  ["add nft failed", "Couldn't add that collectible. Check the contract address and try again."],
-  ["remove nft failed", "Couldn't remove that collectible. Try again."],
-  ["nft update failed", "Couldn't update that collectible. Try again."],
+  ["add nft failed", "Couldn't add that NFT. Check the contract address and try again."],
+  ["remove nft failed", "Couldn't remove that NFT. Try again."],
+  ["nft update failed", "Couldn't update that NFT. Try again."],
   ["nft transfer review failed", "Couldn't prepare this transfer. Try again."],
   ["nft transfer failed", SUBMISSION_UNKNOWN("The transfer")],
 
