@@ -259,7 +259,7 @@ export const importKeyFlow = (status: WalletStatus): string =>
           label: "Account contract",
           name: "accountContractType",
           options: [
-            { label: "Bramble Account — Recommended", value: "openzeppelin" },
+            { label: "Bramble (recommended)", value: "openzeppelin" },
             { label: "Ready Account", value: "argent" },
           ],
           selected: "openzeppelin",

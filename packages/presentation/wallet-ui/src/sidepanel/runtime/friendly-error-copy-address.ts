@@ -41,7 +41,7 @@ export const ADDRESS_IMPORT_ERROR_COPY: readonly (readonly [string, string])[] =
   [KEY_ADDRESS_IMPORT_REFUSALS.noMatch, "This private key doesn't control that account."],
   [
     KEY_ADDRESS_IMPORT_REFUSALS.brambleAccount,
-    "This is a Bramble account. Choose Bramble Account to import it.",
+    "This is a Bramble account. Choose Bramble to import it.",
   ],
   [
     KEY_ADDRESS_IMPORT_REFUSALS.braavosAccount,
