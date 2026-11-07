@@ -10,20 +10,27 @@
  * module keys each credential to exact file names. Every other workflow is
  * refused when it:
  * - names a confined secret or environment anywhere in its source text, in
- *   any letter case (a comment included: these names appear nowhere else);
- * - references a confined secret in its decoded document, however escaped,
- *   in any key or string value (the shared scanner);
+ *   any letter case (a comment included: these names appear nowhere else),
+ *   or in any decoded key or string value, however escaped (a reusable
+ *   call's `secrets:` or `with:`, a matrix value, an output);
+ * - references a confined secret in its decoded document, in any key or
+ *   string value (the shared scanner), or reads the whole `secrets` context
+ *   or a computed name, or passes `secrets: inherit`: each of these reaches
+ *   every confined secret;
  * - gives a job a confined environment, matched as GitHub matches it
  *   (trimmed, case-insensitive), whether written as a string or `{name:}`;
  * - gives a job an environment name it cannot check: an expression, or any
- *   character outside `[A-Za-z0-9._-]`.
- * A workflow that does not parse is reported, not skipped. The environments'
+ *   character outside `[A-Za-z0-9._-]` (surrounding spaces included).
+ * Even an owner file may not pass a confined secret to a reusable workflow
+ * through a job's `secrets:` or `with:`; no reviewed call does today. A
+ * workflow that does not parse, or whose root, `jobs` or job bodies are not
+ * mappings, is reported, not skipped. The environments'
  * own protection rules remain the primary control; this is the policy layer
  * in front of them.
  */
 import { parseDocument } from "yaml";
 import { workflowPath } from "./workflow-policy-text";
-import { secretReferences } from "./workflow-secret-references";
+import { ANY_SECRET, documentStrings, secretReferences } from "./workflow-secret-references";
 import { STRICT_YAML } from "./workflow-yaml-scalars";
 
 /** One credential boundary: the files allowed to hold it, and what it covers. */
@@ -59,8 +66,10 @@ const ENVIRONMENT_NAME = /^[A-Za-z0-9._-]+$/;
 
 type Node = Record<string, unknown>;
 
-const record = (value: unknown): Node =>
-  typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Node) : {};
+const isRecord = (value: unknown): value is Node =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const record = (value: unknown): Node => (isRecord(value) ? value : {});
 
 const covers = (pattern: string, secret: string): boolean =>
   pattern.endsWith("_") ? secret.startsWith(pattern) : secret === pattern;
@@ -72,10 +81,12 @@ const environmentFailures = (path: string, root: Node, foreign: readonly Boundar
     const environment = record(body)["environment"];
     if (environment === undefined) return [];
     const name = typeof environment === "string" ? environment : record(environment)["name"];
-    if (typeof name !== "string" || !ENVIRONMENT_NAME.test(name.trim())) {
+    // The decoded name as written: GitHub trims it, so a padded name is refused
+    // rather than compared.
+    if (typeof name !== "string" || !ENVIRONMENT_NAME.test(name)) {
       return [`${path} job ${job} must name its environment plainly, with no expression`];
     }
-    const lower = name.trim().toLowerCase();
+    const lower = name.toLowerCase();
     return foreign
       .filter((boundary) => boundary.environments.includes(lower))
       .map(
@@ -89,31 +100,95 @@ const environmentFailures = (path: string, root: Node, foreign: readonly Boundar
  * confined to other files by {@link CREDENTIAL_BOUNDARIES}, or cannot be read
  * well enough to tell. Pure: it reads only `source`.
  */
+// Whether `value` is a workflow root with a `jobs` mapping of job mappings.
+const isWorkflowShape = (value: unknown): value is Node =>
+  isRecord(value) && isRecord(value["jobs"]) && Object.values(value["jobs"]).every(isRecord);
+
+const nameFailures = (path: string, texts: readonly string[], foreign: readonly Boundary[]) =>
+  foreign.flatMap((boundary) =>
+    [...boundary.secrets, ...boundary.environments]
+      .filter((word) => texts.some((text) => text.toUpperCase().includes(word.toUpperCase())))
+      .map((word) => `${path} must not name ${word}; only ${owners(boundary)} may`),
+  );
+
+// A reusable-workflow call may not hand any confined secret on, even from
+// its owner file: no reviewed call does.
+const callFailures = (path: string, jobs: Node): string[] =>
+  Object.entries(jobs).flatMap(([job, body]) => {
+    const passed = Object.hasOwn(record(body), "uses")
+      ? secretReferences([record(body)["secrets"], record(body)["with"]])
+      : [];
+    return passed
+      .filter(({ secret }) =>
+        CREDENTIAL_BOUNDARIES.some((b) => b.secrets.some((s) => covers(s, secret))),
+      )
+      .map(({ secret }) => `${path} job ${job} must not pass ${secret} to a reusable workflow`);
+  });
+
+const contextFailures = (path: string, root: Node, jobs: Node): string[] => {
+  const failures: string[] = [];
+  if (secretReferences(root).some(({ secret }) => secret === ANY_SECRET)) {
+    failures.push(
+      `${path} must not read the whole secrets context or a computed secret name; it holds confined credentials`,
+    );
+  }
+  for (const [job, body] of Object.entries(jobs)) {
+    if (typeof record(body)["secrets"] === "string") {
+      failures.push(`${path} job ${job} must not pass secrets: ${String(record(body)["secrets"])}`);
+    }
+  }
+  return failures;
+};
+
+/**
+ * Failures when workflow `name` could reach a credential or environment
+ * confined to other files by {@link CREDENTIAL_BOUNDARIES}, or cannot be read
+ * well enough to tell. Pure: it reads only `source`.
+ */
 export const credentialBoundaryFailures = (name: string, source: string): string[] => {
   const path = workflowPath(name);
   const foreign = CREDENTIAL_BOUNDARIES.filter((boundary) => !boundary.files.includes(name));
-  const failures: string[] = [];
-  const text = source.toUpperCase();
-  for (const boundary of foreign) {
-    for (const word of [...boundary.secrets, ...boundary.environments]) {
-      if (text.includes(word.toUpperCase())) {
-        failures.push(`${path} must not name ${word}; only ${owners(boundary)} may`);
-      }
-    }
-  }
-  let root: Node;
+  const failures = nameFailures(path, [source], foreign);
+  let root: unknown;
   try {
     const document = parseDocument(source, STRICT_YAML);
     if (document.errors.length > 0) throw new SyntaxError("unreadable");
-    root = record(document.toJS());
+    root = document.toJS();
   } catch {
     return [...failures, `${path} must parse so its credential boundaries can be checked`];
   }
+  if (!isWorkflowShape(root)) {
+    return [...failures, `${path} must be a mapping with a jobs mapping of job mappings`];
+  }
+  const jobs = record(root["jobs"]);
+  failures.push(
+    ...nameFailures(
+      path,
+      documentStrings(root).map(({ text }) => text),
+      foreign,
+    ),
+  );
   for (const { secret } of secretReferences(root)) {
     for (const boundary of foreign.filter((b) => b.secrets.some((s) => covers(s, secret)))) {
       failures.push(`${path} must not reference ${secret}; only ${owners(boundary)} may`);
     }
   }
-  failures.push(...environmentFailures(path, root, foreign));
+  failures.push(
+    ...contextFailures(path, root, jobs),
+    ...callFailures(path, jobs),
+    ...environmentFailures(path, root, foreign),
+  );
   return [...new Set(failures)];
 };
+
+/** Workflows whose exact bytes a policy pins; each must exist, or its pin is silently gone. */
+export const PINNED_WORKFLOWS: readonly string[] = ["ledger-e2e.yml", "website-deploy.yml"];
+
+/**
+ * A failure for each of {@link PINNED_WORKFLOWS} missing from `sources`,
+ * independent of which named policies exist. Pure.
+ */
+export const pinnedWorkflowPresenceFailures = (sources: Readonly<Record<string, string>>) =>
+  PINNED_WORKFLOWS.filter((file) => !Object.hasOwn(sources, file)).map(
+    (file) => `${workflowPath(file)} is missing; its exact-bytes pin cannot be enforced`,
+  );

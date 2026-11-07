@@ -221,6 +221,12 @@ const contentFailures = (name: string, source: string): readonly string[] => {
     return read.failures;
   }
   const document = read.value;
+  // An empty, comment-only, list or scalar root, or a misshapen `jobs`, would
+  // otherwise read as an empty workflow with nothing to check.
+  const jobs = record(document)["jobs"];
+  if (!isRecord(document) || !isRecord(jobs) || !Object.values(jobs).every(isRecord)) {
+    return [`${path} must be a mapping with a jobs mapping of job mappings`];
+  }
 
   const uses: SecretUse[] = [];
   collectSecretUses(document, "", uses);

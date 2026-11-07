@@ -75,7 +75,7 @@ export const BOUNDARY_CASES: readonly BoundaryCase[] = [
     label: "environment { name: ' BRAMBLE-PRODUCTION ' }",
     file: "other.yml",
     source: job("    environment:\n      name: ' BRAMBLE-PRODUCTION '\n"),
-    failure: useEnv("bramble-production", "website-deploy.yml"),
+    failure: "job run must name its environment plainly, with no expression",
   },
   {
     label: "environment name escaped so the text never spells it",
@@ -143,6 +143,88 @@ export const BOUNDARY_CASES: readonly BoundaryCase[] = [
     source: () => `# reads BRAMBLE_SEPOLIA_SEEDS\n${plainWorkflow()}`,
     failure: only("BRAMBLE_SEPOLIA_SEEDS", "nightly.yml"),
   },
+  {
+    label: "padded unconfined environment ' preview'",
+    file: "other.yml",
+    source: job("    environment: ' preview'\n"),
+    failure: "job run must name its environment plainly, with no expression",
+  },
+  {
+    label: "confined secret name as an escaped plain env value",
+    file: "other.yml",
+    source: job('    env:\n      LABEL: "\\u0043WS_CLIENT_SECRET"\n'),
+    failure: only("CWS_", "release.yml"),
+  },
+  {
+    label: "confined secret name as an escaped reusable-call secrets key",
+    file: "other.yml",
+    source: () =>
+      plainWorkflow().replace(
+        "  run:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - run: echo hi\n",
+        '  run:\n    uses: ./.github/workflows/release-build.yml\n    secrets:\n      "CHROMATIC_PROJECT_\\u0054OKEN": x\n',
+      ),
+    failure: only("CHROMATIC_PROJECT_TOKEN", "ui-lab.yml"),
+  },
+  {
+    label: "confined environment as an escaped matrix value",
+    file: "other.yml",
+    source: job('    strategy:\n      matrix:\n        target: ["github\\x2Dpages"]\n'),
+    failure: only("github-pages", "ui-lab.yml"),
+  },
+  {
+    label: "lower-case escaped secret reference",
+    file: "other.yml",
+    source: job(`    env:\n      T: "${E} secrets.\\u0063ws_client_secret }}"\n`),
+    failure: "must not reference CWS_CLIENT_SECRET; only release.yml may",
+  },
+  {
+    label: "whole secrets context in a step",
+    file: "other.yml",
+    source: job(`    env:\n      ALL: "${E} toJSON(secr\\u0065ts) }}"\n`),
+    failure: "must not read the whole secrets context or a computed secret name",
+  },
+  {
+    label: "computed secret name",
+    file: "other.yml",
+    source: job(`    env:\n      T: ${E} secrets[format('{0}', 'X')] }}\n`),
+    failure: "must not read the whole secrets context or a computed secret name",
+  },
+  {
+    label: "secrets: inherit to a reusable workflow",
+    file: "other.yml",
+    source: () =>
+      plainWorkflow().replace(
+        "  run:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - run: echo hi\n",
+        "  run:\n    uses: ./.github/workflows/release-build.yml\n    secrets: inherit\n",
+      ),
+    failure: "job run must not pass secrets: inherit",
+  },
+  {
+    label: "owner file passes its own secret to a reusable call",
+    file: "release.yml",
+    source: (sources) =>
+      (sources["release.yml"] ?? "").replace(
+        "    uses: ./.github/workflows/release-build.yml\n",
+        `    uses: ./.github/workflows/release-build.yml\n    secrets:\n      token: ${E} secrets.CWS_REFRESH_TOKEN }}\n`,
+      ),
+    failure: "job build-release must not pass CWS_REFRESH_TOKEN to a reusable workflow",
+  },
+  ...[
+    "",
+    "# only a comment\n",
+    "null\n",
+    "[]\n",
+    "just text\n",
+    "jobs: [a]\n",
+    "jobs:\n  a: 1\n",
+  ].map(
+    (text): BoundaryCase => ({
+      label: `not a workflow mapping: ${JSON.stringify(text)}`,
+      file: "other.yml",
+      source: () => text,
+      failure: "must be a mapping with a jobs mapping of job mappings",
+    }),
+  ),
 ];
 
 /** Workflows the boundary must leave alone. */

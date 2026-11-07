@@ -5,6 +5,7 @@
  * fails the gate, while the real workflows pass.
  */
 import { describe, expect, test } from "bun:test";
+import { websiteDeployFailures } from "../../scripts/website-deploy-policy";
 import {
   CREDENTIAL_BOUNDARIES,
   credentialBoundaryFailures,
@@ -58,5 +59,26 @@ describe("credential boundary", () => {
     expect(credentialBoundaryFailures("bad.yml", `${plainWorkflow()}  bad: [\n`)).toEqual([
       ".github/workflows/bad.yml must parse so its credential boundaries can be checked",
     ]);
+  });
+
+  test("a deleted pinned workflow fails rather than dropping its pin", async () => {
+    const sources = await readWorkflowSources();
+    for (const file of ["website-deploy.yml", "ledger-e2e.yml"]) {
+      const { [file]: _removed, ...rest } = sources;
+      expect(workflowSecurityPolicyFailures(rest)).toContain(
+        `.github/workflows/${file} is missing; its exact-bytes pin cannot be enforced`,
+      );
+    }
+  });
+
+  test("the website policy refuses a root that is not a workflow mapping", () => {
+    for (const text of ["", "# only a comment\n", "null\n", "[]\n", "jobs: [a]\n"]) {
+      expect(websiteDeployFailures("other.yml", text)).toEqual([
+        ".github/workflows/other.yml must be a mapping with a jobs mapping of job mappings",
+      ]);
+    }
+    expect(websiteDeployFailures("website-deploy.yml", "null\n")).toContain(
+      ".github/workflows/website-deploy.yml must be a mapping with a jobs mapping of job mappings",
+    );
   });
 });
