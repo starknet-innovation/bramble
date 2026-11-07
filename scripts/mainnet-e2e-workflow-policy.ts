@@ -38,6 +38,33 @@ const UNTRUSTED_SETUP = [
   "git checkout",
 ] as const;
 
+/** The exact `if:` the gasless step must carry, compared as a whole value. */
+export const GASLESS_CONDITION =
+  "steps.secrets.outcome == 'success' && steps.playwright.outcome != 'failure'";
+
+/** A job body's steps, each starting at its `      - ` line. */
+const stepsOf = (job: string): string[] => job.split(/\n(?= {6}- )/).slice(1);
+
+/** Values of `key` set directly on `step` (not in `env:`, `with:` or `run:`). */
+const stepValues = (step: string, key: string): string[] =>
+  step.split("\n").flatMap((line) => {
+    const match = new RegExp(`^(?: {6}- | {8})${key}:(.*)$`).exec(line);
+    return match?.[1] === undefined ? [] : [match[1].trim()];
+  });
+
+/**
+ * The `if:` value of the one step whose id is `gasless`, or `null` when there
+ * is no such step, more than one, or that step has no single `if:` line. The
+ * caller compares the whole value, so an appended `|| always()`, a prefix, a
+ * quoted form, a trailing comment or a block scalar does not match.
+ */
+export const gaslessCondition = (execute: string): string | null => {
+  const gasless = stepsOf(execute).filter((step) => stepValues(step, "id").includes("gasless"));
+  const only = gasless.length === 1 ? gasless[0] : undefined;
+  const conditions = only === undefined ? [] : stepValues(only, "if");
+  return conditions.length === 1 ? (conditions[0] ?? null) : null;
+};
+
 /**
  * Violations of the mainnet E2E workflow's reviewed controls. `source` is the
  * workflow text. The function does not read the filesystem.
@@ -350,12 +377,9 @@ export const mainnetE2eWorkflowFailures = (source: string): string[] => {
     "      - name: Check and mask mainnet secrets\n        id: secrets\n",
     "mainnet execution must keep the secrets step id that later steps depend on",
   );
-  requireText(
-    failures,
-    execute,
-    "if: steps.secrets.outcome == 'success' && steps.playwright.outcome != 'failure'",
-    "mainnet execution must run the gasless send only after the secrets step passed",
-  );
+  if (gaslessCondition(execute) !== GASLESS_CONDITION) {
+    failures.push("mainnet execution must run the gasless send only after the secrets step passed");
+  }
   // The last step: execute is green only when the gasless send passed.
   const guard = `      - name: Require the gasless send
         if: always()
