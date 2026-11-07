@@ -10,7 +10,7 @@
  * the lexer, so a byte-order mark, comments or CRLF cannot hide one), and
  * then requires every scalar to be written in the one form all readers type
  * the same way:
- * - a number only as a plain decimal integer (`0` or `[1-9][0-9]*`);
+ * - a number only as a plain decimal integer of at most 15 digits;
  * - a boolean only as plain `true` or `false`;
  * - no plain string that another YAML reader would read as a number or
  *   boolean (YAML 1.1 words such as `yes`/`off`, underscored, binary or
@@ -27,7 +27,9 @@ export const STRICT_YAML = {
   version: "1.2",
 } as const;
 
-const DECIMAL = /^(?:0|[1-9][0-9]*)$/;
+// At most 15 digits, so every accepted number is a safe integer that any
+// reader holds exactly.
+const DECIMAL = /^(?:0|[1-9][0-9]{0,14})$/;
 const YAML_11_BOOLEAN = /^(?:y|Y|yes|Yes|YES|n|N|no|No|NO|on|On|ON|off|Off|OFF)$/;
 // YAML 1.1 int and float forms the core schema leaves as strings.
 const YAML_11_NUMBER =

@@ -5,7 +5,9 @@
  * A text match can be kept in place while it stops applying: a plain scalar
  * continued on the next line, a block scalar, a flow mapping, a comment, an
  * alias or a duplicate key all change what GitHub executes without removing
- * the matched text. Here the workflow is parsed under the YAML 1.2 core
+ * the matched text. Here the raw source must first pass a character
+ * allowlist (`workflow-source-characters.ts`); the workflow is then parsed
+ * under the YAML 1.2 core
  * schema with duplicate keys refused and merge keys left literal; anchors,
  * aliases, explicit tags and `<<` keys are refused anywhere in it; any
  * directive, and any scalar another YAML reader could type differently, is
@@ -21,6 +23,7 @@ import { isAlias, isScalar, parseDocument, visit } from "yaml";
 import { EXECUTE_CONDITION, jobFailures, rootFailures } from "./mainnet-e2e-workflow-jobs";
 import { mainnetE2eSecretFailures } from "./mainnet-e2e-workflow-secrets";
 import { isRecord, record } from "./mainnet-e2e-workflow-shape";
+import { sourceCharacterFailures } from "./workflow-source-characters";
 import { STRICT_YAML, yamlDifferentialFailures } from "./workflow-yaml-scalars";
 
 const PATH = ".github/workflows/mainnet-e2e.yml";
@@ -76,6 +79,10 @@ const allSteps = (jobs: Node): { readonly job: string; readonly step: Node }[] =
  * skipped, so a document that cannot be read exactly never passes.
  */
 export const mainnetE2eDocumentFailures = (source: string): string[] => {
+  // Before any parsing: a character the parsers split lines on differently
+  // could hide a step or a directive from everything below.
+  const characters = sourceCharacterFailures(source, PATH);
+  if (characters.length > 0) return characters;
   const document = parseDocument(source, STRICT_YAML);
   if (document.errors.length > 0) {
     return [`${PATH} must parse as YAML with no duplicate keys`];
