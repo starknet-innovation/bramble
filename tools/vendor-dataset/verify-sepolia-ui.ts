@@ -73,7 +73,9 @@ const text = async (locator: Locator): Promise<string> =>
   ((await locator.textContent()) ?? "").replace(/\s+/g, " ").trim();
 
 // The public Sepolia node rate-limits bursts; these answers mean "ask again".
-const TRANSIENT = /rate limit|refused this request|Couldn.t check this account|Try again\.$/;
+const TRANSIENT = /rate limit|refused this request|Couldn.t check this account/;
+const isTransient = (answer: string): boolean =>
+  TRANSIENT.test(answer) || answer.endsWith("Try again.");
 const RETRIES = 3;
 const BACKOFF_MS = 20_000;
 // A replay (BRAMBLE_SEPOLIA_REPLAY) answers from a tape at once and has no
@@ -107,7 +109,7 @@ const answer = async (locator: Locator, search: () => Promise<void>): Promise<st
       .toBe(true)
       .catch(() => undefined);
     last = await text(locator);
-    if (!TRANSIENT.test(last)) return last;
+    if (!isTransient(last)) return last;
     await pace(BACKOFF_MS);
   }
   return last;

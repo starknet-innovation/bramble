@@ -17,7 +17,7 @@ import { hydrateView } from "../../../../src/sidepanel/app/sync/hydrate";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
   type MultisigPortfolioData,
-} from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
+} from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio-data";
 import { multisigDetailFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-views";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 

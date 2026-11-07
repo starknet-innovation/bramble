@@ -36,7 +36,7 @@ import {
   multisigTrackFlow,
   multisigWatchFlow,
 } from "../../journeys/multisig/multisig-management-views";
-import type { MultisigPortfolioData } from "../../journeys/multisig/multisig-portfolio";
+import type { MultisigPortfolioData } from "../../journeys/multisig/multisig-portfolio-data";
 import {
   multisigDeployFlow,
   multisigDetailFlow,

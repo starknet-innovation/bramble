@@ -8,7 +8,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { selectField, textField } from "@bramble/ui-kit/fields";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { sendAssets, sendBalanceLabel } from "../send/send-model";
-import { EMPTY_MULTISIG_PORTFOLIO, type MultisigPortfolioData } from "./multisig-portfolio";
+import type { MultisigPortfolioData } from "./multisig-portfolio-data";
 
 /**
  * Renders the private-balance section when this network has a pool configured.
@@ -17,7 +17,7 @@ import { EMPTY_MULTISIG_PORTFOLIO, type MultisigPortfolioData } from "./multisig
 export const multisigStrk20KeyPanel = (
   networkId: StarknetNetworkId,
   preferences: WalletPreferences | null,
-  portfolio: MultisigPortfolioData = EMPTY_MULTISIG_PORTFOLIO,
+  portfolio: MultisigPortfolioData,
 ): string => {
   if (!preferences?.strk20Networks?.[networkId]?.poolAddress) return "";
   const balances = "balances" in portfolio.balances ? portfolio.balances.balances : [];
