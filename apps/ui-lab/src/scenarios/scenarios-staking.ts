@@ -15,9 +15,11 @@ import { journeyBalances, journeyPreferences, STRK_TOKEN } from "../fixtures/jou
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { FrameContext, ScenarioCheckpoint } from "../runtime/types";
 
-const STAKER = "0x3a5c1f0e9b2d47a8c6e1f3b5d7a9c2e4f6b8d0a1c3e5f7a9b2c4d6e8f0a1b3c";
+/** The fixture validator's staker address, shared with the exit checkpoints. */
+export const STAKER = "0x3a5c1f0e9b2d47a8c6e1f3b5d7a9c2e4f6b8d0a1c3e5f7a9b2c4d6e8f0a1b3c";
 
-const ROW = {
+/** A STRK pool row with no position, shared with the exit checkpoints. */
+export const ROW = {
   accepting: true,
   commission: "10%",
   delegated: "7,438,192.55",
