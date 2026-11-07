@@ -145,7 +145,7 @@ describe("Ledger E2E workflow policy", () => {
 
   test("rejects an unpinned action", async () => {
     expect(await failuresAfter(CHECKOUT, "actions/checkout@v7")).toContain(
-      `${PATH} line ${((await readWorkflowSources())[WORKFLOW] ?? "").split("\n").findIndex((line) => line.includes(CHECKOUT)) + 1} must pin its action to a commit SHA`,
+      `${PATH} job speculos must pin actions/checkout@v7 to a commit SHA`,
     );
   });
 

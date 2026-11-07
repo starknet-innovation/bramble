@@ -4,8 +4,18 @@
  * escapes (`"uses"`), comments and inert strings, so a control matched
  * only as text can be kept in place while it stops applying. Here the event
  * map, jobs, step order, commands, conditions, shells and action references
- * are compared with the reviewed shape, and every decoded string is searched
- * for credential expressions. An unparseable workflow fails closed.
+ * are compared with the reviewed shape, the named controls are checked on the
+ * decoded values (`ledger-e2e-workflow-controls.ts`), and every decoded
+ * string is searched for credential expressions.
+ *
+ * The document is read the way GitHub's runner reads it, or not at all
+ * (`workflow-strict-document.ts`): characters the parsers split lines on
+ * differently, directives, duplicate keys, anchors, aliases, tags, merge keys,
+ * multi-line double-quoted strings and scalars another YAML reader would type
+ * differently all fail closed before any value is compared. `Bun.YAML` is not
+ * used: it types values as YAML 1.1, honours `%YAML`, and silently resolves
+ * duplicate keys, aliases and merge keys, so the policy could pass a workflow
+ * GitHub reads differently.
  */
 import {
   NIGHTLY_TARGET_CHECKOUT_USES,
@@ -13,8 +23,10 @@ import {
   NIGHTLY_TARGET_SCRIPT,
   NIGHTLY_TARGET_STEP,
 } from "./ledger-e2e-nightly-target";
+import { ledgerE2eControlFailures, record, same } from "./ledger-e2e-workflow-controls";
 import { isPinnedActionReference } from "./workflow-inventory";
 import { documentStrings, expressionBodies, secretReferences } from "./workflow-secret-references";
+import { readWorkflowStrictly } from "./workflow-strict-document";
 
 const GITHUB_TOKEN = /\bgithub\s*(?:\.\s*token\b|\[\s*['"]token['"]\s*\])/i;
 const ROOT_KEYS = ["concurrency", "jobs", "name", "on", "permissions", "run-name"];
@@ -88,26 +100,6 @@ const JOBS: Readonly<Record<string, JobShape>> = {
 };
 
 type Node = Record<string, unknown>;
-
-const isRecord = (value: unknown): value is Node =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const record = (value: unknown): Node => (isRecord(value) ? value : {});
-
-// Key order is not meaning in YAML; arrays keep their order.
-const canonical = (value: unknown): unknown =>
-  Array.isArray(value)
-    ? value.map(canonical)
-    : isRecord(value)
-      ? Object.fromEntries(
-          Object.keys(value)
-            .sort()
-            .map((key) => [key, canonical(value[key])]),
-        )
-      : value;
-
-const same = (left: unknown, right: unknown): boolean =>
-  JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 
 const extraKeys = (node: Node, allowed: readonly string[]): string[] =>
   Object.keys(node).filter((key) => !allowed.includes(key));
@@ -268,19 +260,20 @@ const jobFailures = (jobs: Node, path: string): string[] => {
 };
 
 /**
- * Structural violations of the Ledger E2E workflow's reviewed shape. Pure: it
- * parses only the text it is given.
+ * Structural violations of the Ledger E2E workflow's reviewed shape and named
+ * controls. Pure: it parses only the text it is given. A source that cannot be
+ * read exactly as GitHub reads it yields only the reason, and no value of it
+ * is compared.
  */
 export const ledgerE2eDocumentFailures = (source: string, path: string): string[] => {
-  let document: unknown;
-  try {
-    document = Bun.YAML.parse(source);
-  } catch {
-    return [`${path} must be parseable YAML so its controls can be checked`];
-  }
-  // YAML 1.1 reads the bare key `on` as the boolean true; GitHub reads `on`.
-  const { true: events, ...rest } = record(document);
-  const root: Node = events === undefined ? rest : { on: events, ...rest };
+  const read = readWorkflowStrictly(
+    source,
+    path,
+    `${path} must be parseable YAML so its controls can be checked`,
+  );
+  if (read.failures.length > 0) return [...read.failures];
+  const document = read.value;
+  const root = record(document);
   const failures = extraKeys(root, ROOT_KEYS).map(
     (key) => `${path} must not declare workflow-level ${key}`,
   );
@@ -304,6 +297,7 @@ export const ledgerE2eDocumentFailures = (source: string, path: string): string[
     ...eventFailures(record(root["on"]), path),
     ...jobFailures(record(root["jobs"]), path),
     ...credentialFailures(document, path),
+    ...ledgerE2eControlFailures(root, path),
   );
   return failures;
 };
