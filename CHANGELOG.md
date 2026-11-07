@@ -74,14 +74,6 @@ in one transaction, and fixes from user and QA reports.
 - CodeQL `security-extended` findings closed (#829), and v0.10.8 review
   follow-ups (#820).
 
-### Terminal
-The terminal is a separate web app, deployed on its own; it doesn't change the
-extension.
-- Create ERC-20, ERC-721 and ERC-1155 contracts on Sepolia, with NFT metadata
-  authoring and ownership transfer or renounce (#841, #865, #869).
-- Private swaps use a pinned AVNU executor (#269, #872). Vault deposits stay
-  off; when they're turned on, only curated Vesu vaults are allowed (#270).
-
 ## [0.10.8] - 2026-10-30
 
 Import accounts the recovery phrase can't find, pay network fees in other
