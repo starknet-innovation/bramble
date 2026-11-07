@@ -20,6 +20,7 @@ import { inputControl, selectField } from "@bramble/ui-kit/fields";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { approvalCard } from "../approvals/approval-cards";
+import type { ConnectPicker } from "../approvals/approval-connect-card";
 import {
   type ActivityContact,
   type ActivityFilter,
@@ -205,6 +206,7 @@ export const requestsFlow = (
   pending: readonly PendingApproval[],
   status: WalletStatus,
   preferences: WalletPreferences | null = null,
+  picker?: ConnectPicker,
 ): string =>
   flowHeader(
     "Wallet requests",
@@ -217,7 +219,7 @@ export const requestsFlow = (
       ${
         pending.length === 0
           ? emptyState("No wallet requests are waiting.")
-          : `<ul class="request-list">${pending.map((approval) => approvalCard(approval, status, preferences)).join("")}</ul>`
+          : `<ul class="request-list">${pending.map((approval) => approvalCard(approval, status, preferences, picker)).join("")}</ul>`
       }
       <p id="approval-result" role="status"></p>
     </section>`,

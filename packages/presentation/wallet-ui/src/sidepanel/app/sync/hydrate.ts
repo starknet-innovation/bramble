@@ -6,6 +6,7 @@
  * `./index.ts` so the app shell stays within the file-length standard.
  */
 
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -13,6 +14,8 @@ import type { RenderData } from "../rendering/render-cache";
 import type { ConnectedSitesState } from "../screens/support-flows";
 import type { WalletView } from "../screens/views";
 import type { DeploymentCache } from "./deployment-cache";
+import { hydrateNfts } from "./hydrate-nfts";
+import { hydrateStaking } from "./hydrate-staking";
 import type { RefreshReason } from "./refresh-scheduler";
 import type { SignabilityCache } from "./signability-cache";
 
@@ -376,14 +379,18 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       },
     );
   }
+  if (activeView === "staking" && refreshReason !== "ambient")
+    hydrateStaking({ cache, wallet }, fill);
+  // Home's Staking tab and "Staked" line, where staking is on.
+  if (activeView === "home" && refreshReason !== "ambient" && stakingNetwork(status.networkId))
+    hydrateStaking({ cache, home: true, wallet }, fill);
   if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;
     });
   }
-  // The collectibles journey is parked: no view can reach the gallery, so the
-  // wallet never runs watched-NFT metadata or indexer discovery. Restoring the
-  // gallery restores these lanes with it.
+  // The collectibles journey is parked unless its preview is on.
+  hydrateNfts({ activeView, ambient: refreshReason === "ambient", cache, status, wallet }, fill);
   if (registryView) {
     primaryJobs.push(
       hydrateMultisigs(cache.multisigs, multisig, status.networkId).then((value) => {

@@ -87,6 +87,8 @@ describe("home hydration priority", () => {
           cached
             ? Promise.resolve({ asOf: 1, changes: {}, prices: { "0x1": 1 }, stale: true })
             : prices.promise,
+
+        loadStakingPositions: async () => ({ off: true }),
       },
     } as never);
 
@@ -133,6 +135,7 @@ describe("home hydration priority", () => {
           networkId: "SN_MAIN",
         }),
         loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+        loadStakingPositions: async () => ({ off: true }),
         loadWatchedNfts: async () => {
           reads.push("watched");
           return [];

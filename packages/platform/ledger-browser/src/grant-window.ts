@@ -255,8 +255,8 @@ const isSignatureBytes = (value: unknown): value is Uint8Array =>
 // when the device returns only 65 data bytes). `v` is accepted and dropped:
 // the host verifies `(r, s)` itself. Any other unknown key still fails closed.
 // A non-OK status is forwarded with empty `r`/`s` so the shared signing
-// helper classifies it (rejected on device, blind signing disabled) instead
-// of reporting a generic device error.
+// helper classifies it (a reject, or a refusal that may be Blind signing off)
+// instead of reporting a generic device error.
 const requireSignatureResponse = (value: unknown) => {
   const { v, ...response } = requireBaseResponse(value);
   if (!hasOnlyKnownKeys(response, SIGNATURE_RESPONSE_KEYS) || !isRecoveryByte(v)) {

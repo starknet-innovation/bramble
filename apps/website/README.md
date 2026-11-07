@@ -28,6 +28,28 @@ served by **Cloudflare DNS**. The domain's nameservers therefore point at Cloudf
 which stays the registrar only. A deploy fails at the domain-attach step while the zone is served
 anywhere else, so the DNS move has to land before the first deploy on a new hostname.
 
+### Changing the deploy workflow
+
+The workflow holds the production deploy credential, so its exact bytes are pinned.
+`WEBSITE_DEPLOY_SHA256` in `scripts/website-deploy-policy.ts` is the SHA-256 of the reviewed
+`website-deploy.yml`, and `bun run check` fails on any other bytes, including a comment, CRLF, a
+byte-order mark or a missing final line feed. To change the workflow:
+
+1. Edit `website-deploy.yml`. It must still pass the decoded checks in
+   `scripts/website-deploy-policy.ts` (token binding, environment, triggers, dispatch guard), which
+   read it as GitHub's runner does: no directives, anchors, aliases, tags, merge keys, multi-line
+   quoted scalars or characters outside the allowlist.
+2. Review the YAML diff itself, not only the decoded values. The pin is what catches an edit the
+   decoded checks accept, such as the dispatch guard's `exit 1` turned into `exit 0`.
+3. Set `WEBSITE_DEPLOY_SHA256` to the output of `sha256sum .github/workflows/website-deploy.yml`
+   in the same pull request, so code owners review the hash with the workflow.
+
+`.gitattributes` marks the file `-text`, so git never converts its line endings.
+
+The token and the `bramble-production` environment are confined to this file name by
+`scripts/workflow-credential-boundary.ts`: any other workflow that names them, in any spelling or
+letter case, fails the gate. Renaming the workflow means updating that table in the same review.
+
 ### Configuration that lives outside this repository
 
 Three things the deploy depends on are Cloudflare or GitHub settings, so no diff here shows them

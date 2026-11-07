@@ -150,6 +150,8 @@ The pull-request template captures items 1–4 as fields and item 5 as a checkbo
 
 Three tiers, each with a different speed/breadth trade-off. Files:
 `.github/workflows/ci.yml`, `release-integration.yml`, `nightly.yml`.
+Live mainnet tests are a separate scheduled workflow, `mainnet-e2e.yml`
+([docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md)); they are not a merge gate.
 
 ### 1. PR CI — fast gates + a gated full validation (`ci.yml`)
 
@@ -219,7 +221,11 @@ accepted here only so the audit suite can keep testing a shipped hotfix line.
 Runs the full **E2E (Playwright)** suite, the **dependency audit** (`bun audit`,
 via `bun run check:audit` — also run in the PR CI `release-validation` job;
 nightly re-runs it against the live advisory database so a newly-published
-advisory is caught even without a code change), the extension **build**, and a
+advisory is caught even without a code change), the extension **build**, the
+live **Sepolia import-path run** (`tools/vendor-dataset/verify-sepolia.ts`, issue
+821; its seeds come from the `BRAMBLE_SEPOLIA_SEEDS` secret, scoped to that one
+step; it is skipped and reported as "Not run" while that secret is unset, and it
+records and uploads nothing), and a
 clearly-labeled **placeholder**
 for perf / regression suites (none exist in-repo yet — the step is an explicit
 no-op and must not be read as a passing gate).
@@ -236,6 +242,19 @@ On failure it creates-or-updates **one** tracking issue titled
 to the matching milestone when one exists. Source and dependencies execute in a
 read-only self-hosted job; a separate hosted job receives the narrow
 `issues: write` capability and never checks out release-branch code.
+
+### 4. Mainnet E2E — live wallet (`mainnet-e2e.yml`)
+
+Trigger: **scheduled** (`cron: 0 6 * * *`, after nightly) and manual
+`workflow_dispatch` from `main`, against the same active release branch as
+nightly, once `vars.MAINNET_E2E_CONFIGURED` is `true`. A keyless job installs
+and builds the release commit; a separate CodeBuild job in the `mainnet-e2e`
+environment unpacks that build and runs `bun run test:mainnet` (plus
+`bun run test:e2e:mainnet` in the STRK20 tier) without printing test output.
+Hosted jobs running `main`'s code check the balance before and after. Once
+enabled, missing secrets or zero executed tests fail. Spend is capped before
+each signature and after the run, and a failure upserts one `ci-cd` issue.
+Setup is in [docs/MAINNET_E2E_CI.md](docs/MAINNET_E2E_CI.md).
 
 ### What runs where
 

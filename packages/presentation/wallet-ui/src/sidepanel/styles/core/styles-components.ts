@@ -25,10 +25,12 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .section { display: grid; gap: ${SPACE.md}; }
   #deploy-button { width: 100%; }
   /* Callout: a neutral panel card; the accent lives only in the leading icon
-     chip, so a waiting request draws the eye without tinting the surface. */
+     chip, so a waiting request draws the eye without tinting the surface.
+     Copy keeps a 12ch basis: a crowding action wraps beneath, not over it. */
   .callout {
     background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
+    flex-wrap: wrap;
     padding: ${SPACE.md} ${SPACE.lg};
   }
   .callout-icon {
@@ -42,7 +44,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     justify-content: center;
     width: 34px;
   }
-  .callout-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
+  .callout-copy { display: grid; flex: 1 1 12ch; gap: 1px; min-width: 0; }
   .callout-copy strong { font-size: ${TYPE.body.size}; }
   .callout-copy p { font-size: ${TYPE.caption.size}; }
 
@@ -104,6 +106,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     align-items: center;
     border-radius: ${RADIUS.md};
     display: flex;
+    flex-wrap: wrap;
     gap: ${SPACE.md};
     margin: 0 -${SPACE.sm};
     padding: ${SPACE.md} ${SPACE.sm}; position: relative;
@@ -154,19 +157,16 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     object-fit: cover;
     width: 40px;
   }
-  .token-copy { display: grid; flex: 1; gap: 2px; min-width: 0; }
-  .token-copy strong { font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.semibold}; }
-  .token-copy p {
-    font-size: ${TYPE.caption.size};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
+  /* Symbol and name keep an 8ch basis: at 320px a zero basis let the symbol
+     spill over the amount in Manage tokens. The amount and controls wrap. */
+  .token-copy { display: grid; flex: 1 1 8ch; gap: 2px; min-width: 0; }
+  .token-copy strong { font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.semibold}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .token-copy p { font-size: ${TYPE.caption.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .token-amount {
     font-variant-numeric: tabular-nums;
     font-weight: ${WEIGHT.bold};
   }
-  .token-side { align-items: flex-end; display: grid; flex: none; gap: 2px; text-align: right; }
+  .token-side { align-items: flex-end; display: grid; flex: none; gap: 2px; margin-left: auto; text-align: right; }
   .token-fiat { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; font-variant-numeric: tabular-nums; }
   .token-change { font-size: ${TYPE.caption.size}; font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.semibold}; }
   .token-change.up { color: var(--bramble-positive); }
@@ -225,7 +225,7 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     gap: ${SPACE.sm};
     padding: ${SPACE.md} ${SPACE.lg};
   }
-  .review-panel p { color: var(--bramble-text); font-size: ${TYPE.label.size}; }
+  .review-panel p { color: var(--bramble-text); font-size: ${TYPE.label.size}; overflow-wrap: anywhere; }
   .review-panel .decision-label { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
 ${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; }
@@ -313,11 +313,11 @@ ${SIGN_REQUEST_STYLES}
   .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 ${SPACE.xxs}; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .nft-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  /* Compact two-up ghost actions; the danger Remove stays borderless like Hide
-     (red ink carries the signal, not a box), with danger-soft hover feedback. */
+  /* Compact two-up secondary actions with a real button shape. Remove is two
+     taps: the first arms it ("Tap again to remove") in the danger hue. */
   .nft-actions { display: grid; gap: 6px; grid-template-columns: 1fr 1fr; }
   .nft-actions button { min-width: 0; padding: 0 ${SPACE.sm}; }
-  .nft-actions button.danger { background: transparent; }
+  .nft-actions button.is-confirming { background: var(--bramble-danger-soft); }
   /* dApp approval/sign prompts are a solid panel card — a hairline edge plus a
      gentle low shadow lift a consequential request above the request list. */
   .request-card {

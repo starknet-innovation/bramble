@@ -74,7 +74,7 @@ describe("friendlyError", () => {
       "This private key doesn't control that account.",
     );
     expect(friendlyError(KEY_ADDRESS_IMPORT_REFUSALS.brambleAccount).message).toBe(
-      "This is a Bramble account. Choose Bramble Account to import it.",
+      "This is a Bramble account. Choose Bramble to import it.",
     );
     expect(friendlyError(KEY_ADDRESS_IMPORT_REFUSALS.braavosAccount).message).toBe(
       "Bramble can't import a Braavos account from a private key yet.",

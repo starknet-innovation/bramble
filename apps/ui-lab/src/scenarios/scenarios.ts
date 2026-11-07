@@ -27,6 +27,7 @@ import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, WalletScenario } from "../runtime/types";
 import { approvalsScenario } from "./scenarios-approvals";
 import { multisigScenario } from "./scenarios-multisig";
+import { nftHomeScenario } from "./scenarios-nft-home";
 import { ledgerOnboardingScenario, onboardingScenario } from "./scenarios-onboarding";
 import { privacyScenario } from "./scenarios-privacy";
 import { settingsScenario } from "./scenarios-settings";
@@ -327,6 +328,23 @@ const nftScenario: WalletScenario = {
     },
     {
       content: () =>
+        nftGalleryFlow(statusFor(), softwareAccount, preferences, [discoveredNft], "incomplete"),
+      id: "gallery-incomplete",
+      label: "Index incomplete",
+      narrative:
+        "Starkscan's index is partial or longer than one page, so the gallery says it may be missing NFTs instead of implying the rest are gone.",
+      state: { coverage: "incomplete", tokenId: "342" },
+    },
+    {
+      content: () => nftGalleryFlow(statusFor(), softwareAccount, preferences, [], "unavailable"),
+      id: "gallery-unavailable",
+      label: "Index unavailable",
+      narrative:
+        "The indexer failed or answered something malformed: the empty gallery says only watched NFTs are shown, never that the account has none.",
+      state: { coverage: "unavailable", shown: 0 },
+    },
+    {
+      content: () =>
         nftDetailFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
       id: "detail",
       label: "NFT detail",
@@ -392,7 +410,7 @@ const nftScenario: WalletScenario = {
     },
   ],
   description:
-    "NFT metadata arrival, gallery and detail quality, guarded transfer review, blocking, submission, and a reverted transfer.",
+    "NFT metadata arrival, gallery and detail quality, an incomplete or unavailable index, guarded transfer review, blocking, submission, and a reverted transfer.",
   id: "nft",
   surface: "sidepanel",
   title: "NFT loading and send",
@@ -413,6 +431,7 @@ export const walletScenarios: readonly WalletScenario[] = [
   activityScenario,
   assetsScenario,
   nftScenario,
+  nftHomeScenario,
   multisigScenario,
   settingsScenario,
 ];

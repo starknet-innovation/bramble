@@ -16,6 +16,11 @@ export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/testkit": "workspace:*",
   "@biomejs/biome": "2.5.14",
+  // The Speculos Ledger E2E bridge (tests/e2e/ledger) frames HID packets with
+  // this package's own framing module, so the fake device speaks exactly the
+  // wire format the shipped transport does. Same exact version the extension's
+  // ledger-browser workspace pins; test-only, never imported by shipped code.
+  "@ledgerhq/hw-transport-webhid": "6.36.0",
   "@playwright/test": "1.63.0",
   // BIP-32/BIP-39 for the vendor-import dataset tooling in tools/vendor-dataset,
   // which reimplements the vendors' own derivation so the dataset stays
@@ -35,6 +40,11 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   // the same rules before a human uploads it; the same tool later signs and
   // submits. Pinned exact and never shipped — it is a build-time gate only.
   "web-ext": "10.7.0",
+  // YAML document model for the Mainnet E2E workflow policy, which must
+  // refuse duplicate keys, anchors, aliases, tags and merge keys that
+  // `Bun.YAML` resolves silently. Development scripts only; the version is
+  // the one bun.lock already resolved for knip, so nothing new is downloaded.
+  yaml: "2.9.1",
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
@@ -132,7 +142,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "build:all": "bun run --filter @bramble/extension build:all",
   "build:firefox": "bun run --filter @bramble/extension build:firefox",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:ledger-app && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
   // Warns only, never fails: wording is a judgement call. See docs/COPY_STYLE.md.
   "check:copy": "bun run scripts/check-copy.ts",
@@ -143,8 +153,10 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:firefox": "web-ext lint --source-dir dist-firefox",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
-  "check:imports": "bun run scripts/check-workspace-architecture.ts",
+  "check:imports":
+    "bun run scripts/check-workspace-architecture.ts && bun run scripts/check-test-bridge-boundary.ts",
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
+  "check:ledger-app": "bun run scripts/check-ledger-app.ts",
   "check:lint": "biome check .",
   "check:argent": "bun run scripts/check-argent-contracts.ts",
   "check:privacy": "bun run scripts/check-privacy-sdk.ts",
@@ -162,10 +174,17 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e": "playwright test",
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
+  "test:e2e:ledger": "bun run tests/e2e/ledger/run-speculos.ts",
   "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
+  "test:e2e:mainnet:setup": "bun run scripts/mainnet-e2e-setup.ts",
+  "test:e2e:mainnet:wallet": "bun run scripts/mainnet-wallet-e2e.ts",
   "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
+  "vendor:ledger-app": "bun run scripts/vendor-ledger-app.ts",
   "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
+  // Live Sepolia scorecard: needs the git-ignored seed file, so never a gate.
+  "verify:sepolia":
+    "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts",
 };
 
 export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {

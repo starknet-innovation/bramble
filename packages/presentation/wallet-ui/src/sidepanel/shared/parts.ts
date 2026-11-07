@@ -3,7 +3,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import type { WalletPreferences } from "@bramble/settings/preferences";
+import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
 import { shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState, pill } from "@bramble/ui-kit/content";
 import { iconButton } from "@bramble/ui-kit/controls";
@@ -52,6 +52,7 @@ export const WALLET_VIEWS = [
   "privacy",
   "shadow-accounts",
   "allowances",
+  "staking",
   "multisigs",
   "multisig-add",
   "multisig-watch",
@@ -89,17 +90,21 @@ export const PARKED_COLLECTIBLE_VIEWS = [
 ] as const satisfies readonly WalletView[];
 
 /**
- * Returns whether a valid screen route is deliberately unavailable while the
- * collectibles journey is parked.
+ * Returns whether a collectible screen route is unavailable: the user turned
+ * NFTs off (`collectiblesPreview: false`, "Show NFTs on Home"), or preferences
+ * are not loaded yet, so a stored "off" is never bypassed (`nftsShown`).
  */
-export const isParkedCollectibleView = (view: WalletView): boolean =>
-  PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
+export const isParkedCollectibleView = (
+  view: WalletView,
+  preferences: Parameters<typeof nftsShown>[0],
+): boolean => !nftsShown(preferences) && PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
 
 const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   account: "Accounts",
   activity: "Activity",
   "address-book": "Address book",
   allowances: "Token allowances",
+  staking: "Staking",
   "advanced-network": "Network services",
   appearance: "Appearance",
   backup: "Backup and restore",
@@ -123,11 +128,11 @@ const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
   "multisig-track": "Import transaction",
   "multisig-watch": "Add multisig account",
   network: "Networks",
-  nfts: "Collectibles",
-  "nft-detail": "Collectible details",
-  "nft-hidden": "Hidden collectibles",
-  "nft-send": "Send collectible",
-  "nft-watch": "Watch collectible",
+  nfts: "NFTs",
+  "nft-detail": "NFT details",
+  "nft-hidden": "Hidden NFTs",
+  "nft-send": "Send NFT",
+  "nft-watch": "Watch NFT",
   privacy: "Private balances",
   "shadow-accounts": SHADOW_ACCOUNTS_TITLE,
   receive: "Receive",

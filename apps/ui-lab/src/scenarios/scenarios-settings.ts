@@ -3,6 +3,8 @@ import { ledgerAccount, softwareAccount, statusFor } from "../fixtures/fixtures"
 import { connectedSites, importedStatus, journeyPreferences } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { FrameContext, WalletScenario } from "../runtime/types";
+import { stakingCheckpoints } from "./scenarios-staking";
+import { stakingExitCheckpoints } from "./scenarios-staking-exit";
 
 const openAdvancedEndpoint = (context: FrameContext): void => {
   const disclosure = context.app.querySelector<HTMLDetailsElement>('[data-disclosure="rpc"]');
@@ -270,6 +272,8 @@ export const settingsScenario: WalletScenario = {
       narrative: "Hardware accounts never fabricate a wallet phrase or private-key reveal path.",
       state: { accountKind: "ledger", keysLeaveDevice: false },
     },
+    ...stakingCheckpoints,
+    ...stakingExitCheckpoints,
   ],
   description:
     "Settings, networks, accounts/groups, connected origins, backup, and recovery boundaries.",
@@ -278,6 +282,7 @@ export const settingsScenario: WalletScenario = {
   title: "Settings and security",
   views: [
     "settings",
+    "staking",
     "appearance",
     "request-settings",
     "privacy-unlock",

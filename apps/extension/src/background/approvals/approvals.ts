@@ -1,10 +1,4 @@
-/**
- * Background-only dapp approval queue. Requests are intentionally not persisted.
- * Admission is bounded globally and per origin, and unanswered prompts expire,
- * so an untrusted page cannot hold the wallet's consent surface hostage — see
- * `./approval-limits` for those rules and `./approval-snapshot` for what a
- * queued approval is allowed to show its readers.
- */
+/** Unpersisted dapp approval queue. Admission is bounded and unanswered prompts expire. */
 
 import { WalletError } from "@bramble/core/errors";
 import { isUuid } from "@bramble/core/ids";
@@ -29,6 +23,7 @@ import {
   type ApprovalRequest,
   approvalSnapshot,
   type InvokeFeeReview,
+  invokeFeeReviewFields,
   type PendingApproval,
 } from "./approval-snapshot";
 
@@ -61,6 +56,7 @@ import type {
   ApprovalQueueOptions,
 } from "./approval-queue-types";
 import { requireRenderableSummaries } from "./approval-summary-bound";
+import { sameWatchTarget, watchTarget } from "./approval-watch-target";
 
 /**
  * The queue contract, re-exported so existing wiring keeps one import site.
@@ -69,21 +65,17 @@ export type { ApprovalClaim, ApprovalQueue, ApprovalQueueOptions } from "./appro
 
 type ApprovalEntry = ApprovalRequest & { readonly feeRevision: number; readonly queuedAt: number };
 
-// A fresh fee review replaces deploy-first and any previous gasless offers.
+// A fresh fee review replaces deploy-first, the deployment half, and any
+// previous gasless offers.
 const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): ApprovalEntry => {
-  const { deployFirst: _stale, gaslessFees: _previous, ...current } = approval;
-  return {
-    ...current,
-    ...(review.deployFirst === true ? { deployFirst: true } : {}),
-    fee: review.fee && { ...review.fee },
-    feeAffordability: review.feeAffordability,
-    feeEstimateFailed: review.feeEstimateFailed,
-    feeEstimatePending: review.feeEstimatePending,
-    ...(review.gaslessFees === undefined
-      ? {}
-      : { gaslessFees: review.gaslessFees.map((fee) => ({ ...fee })) }),
-    requiresDeployment: review.requiresDeployment,
-  };
+  const {
+    deployFirst: _stale,
+    deploymentFee: _deployment,
+    deploymentFeeEstimateFailed: _deploymentFailed,
+    gaslessFees: _previous,
+    ...current
+  } = approval;
+  return { ...current, ...invokeFeeReviewFields(review) };
 };
 
 const copyReviewAssets = (assets: NonNullable<PendingApproval["reviewAssets"]>) =>
@@ -274,27 +266,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         origin,
       });
     },
-    requestAddChain({ chain, origin, summaries }) {
-      if (!isWalletOrigin(origin)) {
-        throw new WalletError("Invalid origin");
-      }
-      const existing = queued().find(
-        (approval) =>
-          approval.kind === "add-chain" &&
-          approval.origin === origin &&
-          approval.chain?.chainId === chain.chainId,
-      );
-      if (existing) {
-        return approvalSnapshot(existing);
-      }
-      return enqueue({
-        chain,
-        id: crypto.randomUUID(),
-        kind: "add-chain",
-        origin,
-        summaries: [...summaries],
-      });
-    },
     requestDeclare({ context, declaration, declare, origin, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
@@ -321,18 +292,16 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         ...(input.activitySummary === undefined ? {} : { activitySummary: input.activitySummary }),
         calls: input.calls.map(cloneApprovalCall),
         context: { ...input.context },
-        ...(input.fee.deployFirst === true ? { deployFirst: true } : {}),
-        fee: input.fee.fee && { ...input.fee.fee },
-        feeAffordability: input.fee.feeAffordability,
-        feeEstimateFailed: input.fee.feeEstimateFailed,
-        feeEstimatePending: input.fee.feeEstimatePending,
+        ...invokeFeeReviewFields(input.fee),
         flags: input.flags.map((flag) => ({ ...flag })),
+        ...(input.multisigThreshold === undefined
+          ? {}
+          : { multisigThreshold: input.multisigThreshold }),
         id: crypto.randomUUID(),
         kind: "invoke",
         origin: input.origin,
         ...(input.proof === undefined ? {} : { proof: cloneApprovalValue(input.proof) }),
         ...copyReviewAssets(input.reviewAssets ?? []),
-        requiresDeployment: input.fee.requiresDeployment,
         summaries: [...input.summaries],
       });
     },
@@ -452,7 +421,8 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [summary],
       });
     },
-    requestWatchAsset({ alreadyTracked, origin, token }) {
+    requestWatchAsset(request) {
+      const { origin } = request;
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
@@ -460,18 +430,16 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         (approval) =>
           approval.kind === "watch-asset" &&
           approval.origin === origin &&
-          approval.token?.address === token.address &&
-          approval.token?.networkId === token.networkId,
+          sameWatchTarget(approval, request),
       );
       if (existing) {
         return approvalSnapshot(existing);
       }
       return enqueue({
-        ...(alreadyTracked === true ? { alreadyTracked } : {}),
+        ...watchTarget(request),
         id: crypto.randomUUID(),
         kind: "watch-asset",
         origin,
-        token: { ...token },
       });
     },
     updateFee({ id, revision }, update) {

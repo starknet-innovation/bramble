@@ -14,7 +14,7 @@
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
 import { isWatchedNft } from "@bramble/portfolio/watched-nft";
 import { isStrk20NetworkConfigs } from "@bramble/privacy/config";
-import { canonicalAccountId } from "@bramble/wallet-model/accounts";
+import { canonicalAccountId, isAccountId } from "@bramble/wallet-model/accounts";
 import {
   isCustomNetwork,
   isCustomRpcUrl,
@@ -56,6 +56,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "activeNetworkId",
   "approvalSurface",
   "addressBook",
+  "collectiblesPreview",
   "customNetworks",
   "dappTokenIds",
   "displayCurrency",
@@ -69,13 +70,16 @@ const PREFERENCE_KEYS: readonly string[] = [
   "nostrRelayUrl",
   "productAnalytics",
   "removedTokens",
+  "selectedMultisigId",
   "rpcOverrides",
   "reliabilityDiagnostics",
   "schemaVersion",
+  "strk20DefaultsVersion",
   "strk20Networks",
   "strk20ProverUrl",
   "theme",
   "tokens",
+  "vipNotice",
 ];
 
 // Optional-section guards, each pure, keeping the main guard a single `&&` chain.
@@ -92,7 +96,8 @@ const hasValidIdKeyedEntries = (value: Record<string, unknown>): boolean =>
   (value["hiddenAccountIds"] === undefined || isHiddenAccountIds(value["hiddenAccountIds"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
   (value["dappTokenIds"] === undefined || isHiddenTokens(value["dappTokenIds"])) &&
-  (value["removedTokens"] === undefined || isHiddenTokens(value["removedTokens"]));
+  (value["removedTokens"] === undefined || isHiddenTokens(value["removedTokens"])) &&
+  (value["selectedMultisigId"] === undefined || isAccountId(value["selectedMultisigId"]));
 // Optional display and routing preferences written from the settings screens.
 const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["approvalSurface"] === undefined ||
@@ -102,18 +107,26 @@ const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["explorerFallback"] === undefined || isExplorerFallback(value["explorerFallback"])) &&
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
+  (value["vipNotice"] === undefined || typeof value["vipNotice"] === "boolean") &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
 const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
   hasValidIdKeyedEntries(value) && hasValidDisplayEntries(value);
 const hasValidTelemetryEntries = (value: Record<string, unknown>): boolean =>
+  (value["collectiblesPreview"] === undefined ||
+    typeof value["collectiblesPreview"] === "boolean") &&
   (value["productAnalytics"] === undefined || typeof value["productAnalytics"] === "boolean") &&
   (value["reliabilityDiagnostics"] === undefined ||
     typeof value["reliabilityDiagnostics"] === "boolean");
 const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   hasValidGeneralOptionalEntries(value) && hasValidTelemetryEntries(value);
+// A recorded migration step: absent, or a positive integer (a later build's
+// higher step still validates here).
+const isOptionalMigrationVersion = (value: unknown): boolean =>
+  value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 1);
 const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>
   (value["strk20ProverUrl"] === undefined ||
     (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&
+  isOptionalMigrationVersion(value["strk20DefaultsVersion"]) &&
   (value["strk20Networks"] === undefined || isStrk20NetworkConfigs(value["strk20Networks"])) &&
   (value["nftIndexerUrl"] === undefined ||
     (typeof value["nftIndexerUrl"] === "string" && isCustomRpcUrl(value["nftIndexerUrl"]))) &&

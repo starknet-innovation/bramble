@@ -166,6 +166,7 @@ describe("settings UI bindings", () => {
        <select id="currency-select"><option value="eur" selected>EUR</option></select>
        <input id="product-analytics" type="checkbox" checked />
        <input id="reliability-diagnostics" type="checkbox" checked />
+       <input id="vip-notice-toggle" type="checkbox" />
        <p id="display-result"></p>`,
       {
         setDisplay: async (input) => {
@@ -184,6 +185,7 @@ describe("settings UI bindings", () => {
     app
       .querySelector<HTMLInputElement>("#reliability-diagnostics")
       ?.dispatchEvent(new Event("change"));
+    app.querySelector<HTMLInputElement>("#vip-notice-toggle")?.dispatchEvent(new Event("change"));
     await tick();
 
     expect(updates).toEqual([
@@ -192,8 +194,9 @@ describe("settings UI bindings", () => {
       { displayCurrency: "eur" },
       { productAnalytics: true },
       { reliabilityDiagnostics: true },
+      { vipNotice: false },
     ]);
-    expect(calls.render).toBe(5);
+    expect(calls.render).toBe(6);
   });
 
   test("restores display controls when each preference mutation rejects", async () => {
@@ -203,6 +206,7 @@ describe("settings UI bindings", () => {
        <select id="currency-select"><option value="gbp" selected>GBP</option></select>
        <input id="product-analytics" type="checkbox" checked />
        <input id="reliability-diagnostics" type="checkbox" checked />
+       <input id="vip-notice-toggle" type="checkbox" checked />
        <p id="display-result"></p>`,
       {
         setDisplay: async () => {
@@ -217,6 +221,7 @@ describe("settings UI bindings", () => {
     const currency = app.querySelector<HTMLSelectElement>("#currency-select");
     const analytics = app.querySelector<HTMLInputElement>("#product-analytics");
     const diagnostics = app.querySelector<HTMLInputElement>("#reliability-diagnostics");
+    const vip = app.querySelector<HTMLInputElement>("#vip-notice-toggle");
     approval?.click();
     theme?.click();
     currency?.dispatchEvent(new Event("change"));
@@ -224,6 +229,8 @@ describe("settings UI bindings", () => {
     analytics?.dispatchEvent(new Event("change"));
     if (diagnostics) diagnostics.checked = false;
     diagnostics?.dispatchEvent(new Event("change"));
+    if (vip) vip.checked = false;
+    vip?.dispatchEvent(new Event("change"));
     await tick();
 
     expect(approval?.disabled).toBe(false);
@@ -233,6 +240,8 @@ describe("settings UI bindings", () => {
     expect(analytics?.disabled).toBe(false);
     expect(diagnostics?.checked).toBe(true);
     expect(diagnostics?.disabled).toBe(false);
+    expect(vip?.checked).toBe(true);
+    expect(vip?.disabled).toBe(false);
     expect(app.querySelector("#display-result")?.textContent).toBe("Display service unavailable");
   });
 

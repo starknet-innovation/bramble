@@ -18,7 +18,7 @@ const ALL_CODES: readonly LedgerRejectionCode[] = [
   "no-app-open",
   "app-below-minimum",
   "firmware-below-minimum",
-  "blind-signing-disabled",
+  "rejected-or-blind-signing-off",
   "device-busy",
   "replug",
   "multiple-devices",

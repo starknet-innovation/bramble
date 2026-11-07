@@ -41,6 +41,7 @@ import {
   strk20ViewingKeyRecord,
 } from "./key-boundary-fixtures";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
+import { makeStakingChain, stakingReader } from "./staking-chain";
 import { makeStrk20Service } from "./strk20-background";
 
 /** The tracked mainnet ETH record the doubles quote balances and calls in. */
@@ -58,7 +59,9 @@ const vault = {
   importedSeeds: [],
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 12,
+  schemaVersion: 13,
+  multisigStrk20KeyConflicts: [],
+  multisigStrk20ViewingKeys: [],
   shadowAccountScopes: [],
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
@@ -99,9 +102,15 @@ const recordedScopes: { value: readonly ShadowAccountScopeRef[] } = { value: [] 
 
 /** The salted stub vault service the scan runs the router against. */
 export const walletStub = {
+  acceptMultisigStrk20Key: async () => "stored" as const,
   async addDerivedAccount() {
     return account;
   },
+  createMultisigStrk20Key: async () => "created" as const,
+  forgetMultisigStrk20Key: async () => false,
+  forgetMultisigStrk20Keys: async () => false,
+  multisigStrk20KeyStatus: async () => "absent" as const,
+  packageMultisigStrk20Key: async () => null,
   async addLedgerAccount(): Promise<LedgerAccountRef> {
     return ledgerAccount;
   },
@@ -167,8 +176,7 @@ export const walletStub = {
   async grantOrigin() {
     return [account];
   },
-  // Recorded through the vault's own merge, so the scan exercises the real
-  // record shape; the records are not secret but must stay privileged.
+  // Recorded through the vault's own merge: real record shape, still privileged.
   async recordShadowAccountScope({
     vaultPassphrase,
     ...input
@@ -190,6 +198,12 @@ export const walletStub = {
       throw new Error("bad passphrase");
     }
     return vault;
+  },
+  // Checks the passphrase without writing; a wrong one never reaches the grant clear.
+  async assertRecoverableVault(passphrase: string) {
+    if (passphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
   },
   // Accepts like a vault awaiting recovery, so the scan reads the unlocked
   // status that "Unlock anyway" returns rather than a refusal.
@@ -473,6 +487,7 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
         return input.prepared.transactionHash;
       },
     },
+    readAtPinnedBlock: stakingReader(makeStakingChain()),
     strk20: strk20ServiceFor(state),
     async verifyAccountClassHash() {
       return { onChainClassHash: account.classHash, status: "verified" };

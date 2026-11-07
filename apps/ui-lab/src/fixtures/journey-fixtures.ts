@@ -188,12 +188,6 @@ const approvalContext = {
 const approvalId = (suffix: string): string => `00000000-0000-4000-8000-000000000${suffix}`;
 
 export const approvalFixtures: Readonly<Record<string, PendingApproval>> = {
-  addChain: {
-    id: approvalId("141"),
-    kind: "add-chain",
-    origin: "https://network.example",
-    summaries: ["Add Starknet Research Network", "RPC https://rpc.example"],
-  },
   blocked: {
     blocked: true,
     id: approvalId("142"),

@@ -74,7 +74,7 @@ export const sceneContent = (cache: RenderData, state: SceneContentState): strin
     state.expandedGroupId,
     cache.priceStale,
     cache.priceAsOf,
-    [],
+    cache.discoveredNfts,
     state.addFolderOpen,
     verificationForAccount(cache.classHashVerification, status.activeAccountId),
     cache.historyUnavailable,
@@ -90,5 +90,7 @@ export const sceneContent = (cache: RenderData, state: SceneContentState): strin
     cache.signability,
     cache.relays,
     state.privateTotalWaitOver,
+    cache.staking,
+    cache.nftCoverage,
   );
 };

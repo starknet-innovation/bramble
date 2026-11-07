@@ -24,9 +24,11 @@ import {
 } from "../../support/strk20-background";
 
 const defaults = defaultWalletPreferences();
-const mainnet = defaults.strk20Networks?.SN_MAIN;
-if (!mainnet) throw new Error("missing bundled Mainnet STRK20 config");
-// The bundled config, which ships without the opt-in anonymizer.
+const bundledMainnet = defaults.strk20Networks?.SN_MAIN;
+if (!bundledMainnet) throw new Error("missing bundled Mainnet STRK20 config");
+// Bundled routing with its anonymizer (#666) removed, so the "not configured"
+// cases really take the unconfigured path.
+const { shadowAccountAnonymizerAddress: _bundledAnonymizer, ...mainnet } = bundledMainnet;
 const withoutAnonymizer = {
   ...defaults,
   activeNetworkId: "SN_SEPOLIA" as const,

@@ -156,3 +156,36 @@ export type StarkscanPageOptions = {
   readonly cursor?: string;
   readonly limit?: number;
 };
+
+/**
+ * One current ERC-721 position from `address/{address}/nft-positions`. The
+ * collection name is the token deployer's own text: callers sanitise it.
+ */
+export type StarkscanNftPosition = {
+  readonly tokenAddress: string;
+  readonly tokenId: string;
+  readonly collectionName: string | null;
+  readonly collectionIndexed: boolean;
+};
+
+/**
+ * Coverage Starkscan declares for one NFT positions page. It is never global:
+ * ERC-1155 and history before the indexed floor are outside its scope.
+ */
+export type StarkscanNftCoverage = {
+  readonly status: "partial" | "ready";
+  readonly declaredScope: string;
+  readonly completeWithinScope: boolean;
+  readonly reasonCodes: readonly string[];
+};
+
+/**
+ * One snapshot-pinned page of current ERC-721 ownership for an address.
+ */
+export type StarkscanNftPositions = {
+  readonly chainId: string;
+  readonly ownerAddress: string;
+  readonly items: readonly StarkscanNftPosition[];
+  readonly hasMore: boolean;
+  readonly coverage: StarkscanNftCoverage;
+};

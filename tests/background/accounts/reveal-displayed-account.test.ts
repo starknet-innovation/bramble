@@ -63,7 +63,9 @@ const wallet = {
       importedSeeds: [],
       mnemonic,
       originGrants: [],
-      schemaVersion: 12 as const,
+      schemaVersion: 13 as const,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
       shadowAccountScopes: [],
       signingKeys: accounts.map((stored) => ({
         accountId: stored.id,

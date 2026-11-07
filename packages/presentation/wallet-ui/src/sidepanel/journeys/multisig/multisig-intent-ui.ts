@@ -239,6 +239,12 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
           if (!multisigId) throw new Error("Select a multisig first");
           const result = await deps.multisig.syncIntents(multisigId);
           updatedIntentIds = result.intentIds;
+          if (result.imported === 0 && result.strk20Key === "stored") {
+            return "A co-owner's viewing key arrived.";
+          }
+          if (result.imported === 0 && result.strk20Key === "conflict") {
+            return "A co-owner sent a different viewing key. This wallet kept its own.";
+          }
           return result.imported === 0
             ? "No new co-signer updates"
             : `${result.imported} signing intent${result.imported === 1 ? "" : "s"} updated${result.imported === 1 ? "" : ". Review them in Intents"}`;

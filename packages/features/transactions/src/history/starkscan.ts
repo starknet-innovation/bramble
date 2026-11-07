@@ -1,5 +1,8 @@
 /**
  * Authenticated or relay-backed Starkscan HTTP client and endpoint surface.
+ * Staking (issue 750) adds the validator directory and one address's staking
+ * positions; both are strictly validated by ../staking parsers and are only
+ * candidates that the chain must confirm.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -14,12 +17,19 @@ import { trimTrailingSlashes } from "@bramble/core/service-url";
 import { type ExplorerOutcome, recordExplorerDiagnostic } from "@bramble/starknet/rpc-diagnostics";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import {
+  parseStakingDirectoryPage,
+  STAKING_DIRECTORY_PAGE_SIZE,
+  type StakingDirectoryPage,
+} from "../staking/staking-directory";
+import { parseStakingPositions, type StakingPositionsPage } from "../staking/staking-positions";
+import {
   parseStarkscanAddress,
   parseStarkscanAddressActivity,
   parseStarkscanAddressTransaction,
   parseStarkscanBlock,
   parseStarkscanContract,
   parseStarkscanEvent,
+  parseStarkscanNftPositions,
   parseStarkscanPage,
   parseStarkscanTokenBalance,
   parseStarkscanTransfer,
@@ -32,6 +42,7 @@ import type {
   StarkscanChainId,
   StarkscanContractEvent,
   StarkscanContractMetadata,
+  StarkscanNftPositions,
   StarkscanPage,
   StarkscanPageOptions,
   StarkscanTokenBalance,
@@ -128,6 +139,12 @@ export type StarkscanClient = {
     address: string,
     options?: StarkscanPageOptions,
   ) => Promise<StarkscanPage<StarkscanTransfer>>;
+  /** One page (at most 100) of an address's current ERC-721 positions. */
+  readonly getAddressNftPositions: (
+    chainId: StarkscanChainId,
+    address: string,
+    limit?: number,
+  ) => Promise<StarkscanNftPositions>;
   readonly getTokenBalance: (
     chainId: StarkscanChainId,
     tokenAddress: string,
@@ -151,6 +168,26 @@ export type StarkscanClient = {
     chainId: StarkscanChainId,
     options?: StarkscanPageOptions,
   ) => Promise<StarkscanPage<StarkscanContractEvent>>;
+  /** One page (at most 50) of the staking validator directory. */
+  readonly getStakingValidators: (
+    chainId: StarkscanChainId,
+    cursor?: string,
+  ) => Promise<StakingDirectoryPage>;
+  /**
+   * One address's staking positions. `limit=1` bounds the history page, which
+   * the wallet doesn't read; positions come whole (with a truncation flag).
+   */
+  readonly getStakingAddress: (
+    chainId: StarkscanChainId,
+    address: string,
+  ) => Promise<StakingPositionsPage>;
+};
+
+// The staking readers answer null for anything malformed; that is an invalid
+// response like any other parse failure here.
+const strict = <T>(value: T | null): T => {
+  if (value === null) throw new Error("Invalid Starkscan response");
+  return value;
 };
 
 const inputAddress = (value: string): string => {
@@ -364,6 +401,17 @@ export const createStarkscanClient = ({
         query,
       );
     },
+    getAddressNftPositions: (chainId, address, limit = 100) => {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+        throw new StarkscanError("Invalid Starkscan page limit", null);
+      }
+      return request(
+        chainId,
+        `address/${inputAddress(address)}/nft-positions`,
+        parseStarkscanNftPositions,
+        new URLSearchParams({ limit: String(limit) }),
+      );
+    },
     getTokenBalance: (chainId, tokenAddress, ownerAddress, blockTag = "latest") => {
       if (blockTag.length === 0 || blockTag.length > 80) {
         throw new StarkscanError("Invalid Starkscan block tag", null);
@@ -399,5 +447,24 @@ export const createStarkscanClient = ({
         (value) => parseStarkscanPage(value, parseStarkscanEvent),
         pageQuery(options),
       ),
+    getStakingValidators: (chainId, cursor) =>
+      request(
+        chainId,
+        "staking/validators",
+        (value) => strict(parseStakingDirectoryPage(value, chainId)),
+        pageQuery({
+          limit: STAKING_DIRECTORY_PAGE_SIZE,
+          ...(cursor === undefined ? {} : { cursor }),
+        }),
+      ),
+    getStakingAddress: (chainId, address) => {
+      const canonical = inputAddress(address);
+      return request(
+        chainId,
+        `staking/address/${canonical}`,
+        (value) => strict(parseStakingPositions(value, chainId, canonical)),
+        new URLSearchParams({ limit: "1" }),
+      );
+    },
   };
 };

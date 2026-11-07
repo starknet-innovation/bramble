@@ -113,8 +113,15 @@ describe("sidepanel home", () => {
     expect(html).toContain('id="starkscan-button"');
   });
 
-  test("portfolio has a Tokens heading, no tablist, and one accessible quick-actions menu", () => {
-    const html = dashboard("home", status, [], preferences, { balances: [] });
+  test("without staking or NFTs, portfolio has a Tokens heading, no tablist, and one menu", () => {
+    // Sepolia (staking off) with NFTs turned off: Tokens is the only section.
+    const html = dashboard(
+      "home",
+      { ...status, networkId: "SN_SEPOLIA" },
+      [],
+      { ...preferences, collectiblesPreview: false },
+      { balances: [] },
+    );
 
     const portfolio = html.slice(
       html.indexOf('<section class="home-tabs"'),
@@ -126,7 +133,7 @@ describe("sidepanel home", () => {
     expect(portfolio).not.toContain('role="tab');
     expect(portfolio).not.toContain("data-home-tab=");
     expect(portfolio).not.toContain("tab-panel");
-    expect(html).not.toContain("Collectibles");
+    expect(html).not.toContain("NFTs");
     expect(html).not.toContain('class="tab-indicator"');
     const menuTrigger = html.match(/<button[^>]*id="portfolio-menu-trigger"[^>]*>/)?.[0] ?? "";
     expect(menuTrigger).toContain('aria-haspopup="menu"');
@@ -322,6 +329,26 @@ describe("shield tile", () => {
       expect(html).toContain('aria-label="Activate private balances"');
       expect(html).not.toContain("data-send-shield");
     }
+  });
+
+  test("opens Shield directly for a deployed, unregistered account (#789)", () => {
+    // Its first shield registers in the same transaction, so there is no
+    // separate activation step to route through.
+    const html = homeScreen(
+      status,
+      account,
+      { balances: [] },
+      0,
+      true,
+      defaultWalletPreferences(),
+      {},
+      {},
+      "usd",
+      disclosure("unregistered"),
+    );
+
+    expect(html).toMatch(/class="action-tile" data-send-shield="SN_MAIN:STRK:[^"]+"/);
+    expect(html).not.toContain('data-privacy-open="SN_MAIN:STRK');
   });
 
   test("is disabled rather than hidden when no token is tracked", () => {
