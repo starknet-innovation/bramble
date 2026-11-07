@@ -365,6 +365,9 @@ Activity is not protected the same way: an older build drops activity rows it
 can't parse, and its next activity write (status reconciliation runs without an
 unlock) stores the list without them.
 
+v0.10.9 is one of these: it moves the vault to schema v13 (#827), so v0.10.8
+must not be republished after it.
+
 So never republish, re-tag or attach an older version, on any channel. To pull
 a bad release, ship a patch with a higher version (vX.Y.Z+1) that contains the
 fix or the last good code. The Chrome Web Store refuses a lower version, but
