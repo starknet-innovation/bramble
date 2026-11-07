@@ -7,10 +7,8 @@ import { describe, expect, test } from "bun:test";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import type { TokenBalance } from "../../../../src/popup/responses/responses";
-import {
-  type MultisigPortfolioData,
-  multisigPortfolio,
-} from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
+import { multisigPortfolio } from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
+import type { MultisigPortfolioData } from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio-data";
 
 const record: ArgentMultisigRecord = {
   accountContractType: "argent-multisig",

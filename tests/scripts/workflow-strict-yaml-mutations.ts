@@ -139,7 +139,7 @@ export const LEDGER_MORE_ROWS: readonly StrictYamlMutation[] = [
   ledger(
     "anchor and alias share the branch filter",
     [
-      [BRANCHES, BRANCHES.replace("[", "&branches [")],
+      [BRANCHES, 'branches: &branches [main, "release/**"]'],
       [BRANCHES, "branches: *branches"],
     ],
     FAILURE.indirection,

@@ -45,7 +45,7 @@ describe("NFT gallery coverage", () => {
 
   test("an empty failed list says so, not that there are none", () => {
     const html = nftGalleryFlow(status, account, preferences, [], "unavailable");
-    expect(html).toContain(FAILED.replace("'", "&#39;"));
+    expect(html).toContain(FAILED.replaceAll("'", "&#39;"));
     expect(html).not.toContain(NONE_FOUND);
   });
 

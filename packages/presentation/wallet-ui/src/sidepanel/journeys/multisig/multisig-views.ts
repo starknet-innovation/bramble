@@ -44,11 +44,8 @@ import {
   isFeeReplacementIntent,
   multisigDisplayName,
 } from "./multisig-model";
-import {
-  EMPTY_MULTISIG_PORTFOLIO,
-  type MultisigPortfolioData,
-  multisigPortfolio,
-} from "./multisig-portfolio";
+import { multisigPortfolio } from "./multisig-portfolio";
+import { EMPTY_MULTISIG_PORTFOLIO, type MultisigPortfolioData } from "./multisig-portfolio-data";
 import { multisigStrk20KeyPanel } from "./multisig-strk20-key-view";
 
 export { multisigDeployFlow } from "./multisig-deploy-view";
@@ -428,7 +425,6 @@ export const multisigDetailFlow = (
         preferences,
         record,
         signerKnown: options.length > 0,
-        strk20KeyPanel: multisigStrk20KeyPanel(record.networkId, preferences, portfolio),
       })}
       <p id="multisig-detail-result" role="status"></p>`,
   );
