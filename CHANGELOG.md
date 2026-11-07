@@ -16,9 +16,8 @@ See DEVELOPMENT.md and RELEASING.md.
 Staking, NFTs on Home, private balances for Argent multisigs, a first shield
 in one transaction, and fixes from user and QA reports.
 
-> **Before you upgrade:** this release moves the encrypted vault to a new
-> format (v13). After you unlock v0.10.9, v0.10.8 can no longer open the vault,
-> so going back to v0.10.8 means restoring from your recovery phrase.
+> This release updates how the wallet stores your data. Older versions of
+> Bramble can't open it after you unlock this one.
 
 ### Added
 - Stake STRK and BTC on Mainnet. Pick a validator from the list or paste its
