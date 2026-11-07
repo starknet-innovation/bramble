@@ -22,7 +22,8 @@ type ExitAction = "claim" | "unstake" | "withdraw";
 type Step = "estimating" | "ready" | "refused" | "review" | "submitted" | "submitting" | "unknown";
 type Row = Extract<StakingState["validator"], { readonly rows: unknown }>["rows"][number];
 
-const OTHER_REWARDS = "0x05e1d3c7b9a2f4e6d8c0b2a4f6e8d0c2b4a6f8e0d2c4b6a8f0e2d4c6b8a0f2e4";
+// The canonical spelling the background sends: no leading zeros.
+const OTHER_REWARDS = "0x5e1d3c7b9a2f4e6d8c0b2a4f6e8d0c2b4a6f8e0d2c4b6a8f0e2d4c6b8a0f2e4";
 
 const stakedRow: Row = { ...ROW, staked: "1250", state: "staked" };
 const exitPendingRow: Row = {
