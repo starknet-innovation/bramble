@@ -474,7 +474,10 @@ describe("workflow security policy", () => {
       `      - run: echo "no secrets are printed here"
       - name: Deployment summary`,
     );
-    expect(workflowSecurityPolicyFailures(changed)).toEqual([]);
+    // Only the exact-bytes pin moves; no secret reference is reported.
+    expect(workflowSecurityPolicyFailures(changed)).toEqual([
+      expect.stringContaining("update WEBSITE_DEPLOY_SHA256"),
+    ]);
   });
 
   test("rejects a website deploy whose ref guard drifts from its push filter", async () => {

@@ -8,117 +8,48 @@
  * before anything is built, and the hash-recording mode runs no test.
  *
  * Membership in the reviewed policies exempts a workflow from the baseline
- * runner and trigger rules, so this module restates them more strictly. What
- * GitHub executes is checked on the parsed document
- * (`ledger-e2e-workflow-document.ts`); the textual checks here name each
- * control a diff can drop, so a failure says which one went.
+ * runner and trigger rules, so this module restates them more strictly, in
+ * two independent layers:
+ * - an exact-bytes SHA-256 pin of the file (`workflow-source-pin.ts`): any
+ *   edit fails until {@link LEDGER_E2E_SHA256} is updated in a reviewed change,
+ *   however a parser would read it;
+ * - the decoded document, read as GitHub reads it
+ *   (`ledger-e2e-workflow-document.ts`, `ledger-e2e-workflow-controls.ts`):
+ *   the reviewed shape and each named control, so a pin update cannot admit a
+ *   workflow that drops one, and a failure says which control went.
+ * No control is matched as text in the source.
  */
 import { ledgerE2eDocumentFailures } from "./ledger-e2e-workflow-document";
-import { actionReferences, isPinnedActionReference } from "./workflow-inventory";
-import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
+import { workflowPath } from "./workflow-policy-text";
+import { sourcePinFailures } from "./workflow-source-pin";
 
 /** File name of the Speculos Ledger E2E workflow. */
 export const LEDGER_E2E_WORKFLOW = "ledger-e2e.yml";
 
-const GITHUB_EXPRESSION = "$" + "{{";
-const SUITE_STEP = "        run: BRAMBLE_SPECULOS_REQUIRED=1 bun run test:e2e:ledger";
-const ARTIFACT_STEP = `      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: failure()
-        with:
-          name: ledger-e2e-traces
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-`;
-
-const occurrences = (source: string, text: string): number => source.split(text).length - 1;
-
-const sourceLines = (source: string): string[] =>
-  source.split("\n").filter((line) => !line.trimStart().startsWith("#"));
-
-const credentialFailures = (source: string, path: string): string[] => {
-  const failures: string[] = [];
-  forbidText(failures, source, "write-all", `${path} must not request write permissions`);
-  if (sourceLines(source).some((line) => /:\s*write\b/.test(line))) {
-    failures.push(`${path} must not request write permissions`);
-  }
-  if (/self-hosted|codebuild/i.test(source)) {
-    failures.push(`${path} must not name a self-hosted runner`);
-  }
-  for (const trigger of ["pull_request_target", "workflow_run", "workflow_call"]) {
-    forbidText(failures, source, trigger, `${path} must not trigger on ${trigger}`);
-  }
-  for (const { line, reference } of actionReferences(source)) {
-    if (!isPinnedActionReference(reference)) {
-      failures.push(`${path} line ${line} must pin its action to a commit SHA`);
-    }
-  }
-  return failures;
-};
-
-const modeFailures = (source: string, path: string): string[] => {
-  const failures: string[] = [];
-  const speculos = jobBody(source, "speculos");
-  const record = jobBody(source, "record-hashes");
-  requireText(
-    failures,
-    speculos,
-    `    if: ${GITHUB_EXPRESSION} !inputs.record_hashes }}\n`,
-    `${path} must skip the test job in record mode`,
-  );
-  requireText(
-    failures,
-    speculos,
-    "        run: bun run scripts/ledger-app-hashes.ts require nanosp flex\n",
-    `${path} must fail while the Ledger app hashes are unrecorded`,
-  );
-  requireText(
-    failures,
-    speculos,
-    `${SUITE_STEP}\n`,
-    `${path} must run the suite with BRAMBLE_SPECULOS_REQUIRED=1`,
-  );
-  const suiteLines = sourceLines(source).filter((line) =>
-    /test:e2e:ledger|BRAMBLE_SPECULOS_REQUIRED/.test(line),
-  );
-  if (suiteLines.some((line) => line !== SUITE_STEP)) {
-    failures.push(`${path} must run the suite only as \`${SUITE_STEP.trim()}\``);
-  }
-  forbidText(failures, source, "continue-on-error", `${path} must not tolerate a failed step`);
-  requireText(
-    failures,
-    record,
-    "    if: github.event_name == 'workflow_dispatch' && inputs.record_hashes\n",
-    `${path} must run record mode only on a dispatch that asks for it`,
-  );
-  requireText(
-    failures,
-    record,
-    `        shell: bash\n        run: bun run scripts/ledger-app-hashes.ts record | tee -a "$GITHUB_STEP_SUMMARY"\n`,
-    `${path} must report the recorded hashes and fail when one is missing`,
-  );
-  forbidText(failures, record, "test:e2e", `${path} record mode must not run tests`);
-  if (occurrences(source, "actions/upload-artifact@") !== 1) {
-    failures.push(`${path} must upload one artifact, the failure traces`);
-  }
-  requireText(
-    failures,
-    speculos,
-    ARTIFACT_STEP,
-    `${path} must upload only Playwright output, only on failure, kept 7 days`,
-  );
-  return failures;
-};
+/**
+ * SHA-256 of the reviewed `.github/workflows/ledger-e2e.yml` bytes.
+ *
+ * To update after changing the workflow: review the YAML diff itself (the
+ * decoded checks must also pass), then set this to the output of
+ * `sha256sum .github/workflows/ledger-e2e.yml` in the same pull request.
+ */
+export const LEDGER_E2E_SHA256 = "ac18b8d27d1fa97fd80bf96ab0e24f274e563a003e68df4be6d816aa4e1fe715";
 
 /**
  * Violations of the Ledger E2E workflow's reviewed controls. Pure: it reads
- * only the text it is given, so tests can mutate one control at a time.
+ * only the text it is given, so tests can mutate one control at a time. The
+ * pin and the decoded checks both always run, so a mutation names the control
+ * it breaks as well as the changed bytes.
  */
 export const ledgerE2eWorkflowFailures = (source: string): string[] => {
   const path = workflowPath(LEDGER_E2E_WORKFLOW);
   return [
+    ...sourcePinFailures(
+      source,
+      path,
+      LEDGER_E2E_SHA256,
+      "LEDGER_E2E_SHA256 in scripts/ledger-e2e-workflow-policy.ts",
+    ),
     ...ledgerE2eDocumentFailures(source, path),
-    ...credentialFailures(source, path),
-    ...modeFailures(source, path),
   ];
 };

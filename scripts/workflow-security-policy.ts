@@ -12,11 +12,16 @@
  * checked without anyone remembering to list it — which is the whole point: the
  * previous hand-maintained list had already fallen three workflows behind.
  */
+
 import { LEDGER_E2E_WORKFLOW, ledgerE2eWorkflowFailures } from "./ledger-e2e-workflow-policy";
 import { mainnetE2eBoundaryFailures } from "./mainnet-e2e-boundary";
 import { mainnetE2eWorkflowFailures } from "./mainnet-e2e-workflow-policy";
 import { dynamicExecutionFailures } from "./vendor-pin-policy";
 import { websiteDeployFailures } from "./website-deploy-policy";
+import {
+  credentialBoundaryFailures,
+  pinnedWorkflowPresenceFailures,
+} from "./workflow-credential-boundary";
 import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
 import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
 import { sepoliaSeedsFailures } from "./workflow-sepolia-policy";
@@ -442,7 +447,7 @@ const NAMED_POLICIES: Readonly<Record<string, (source: string) => string[]>> = {
  * inventory is itself a failure: its rules would otherwise vanish with it.
  */
 export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string[] => {
-  const failures: string[] = [];
+  const failures: string[] = [...pinnedWorkflowPresenceFailures(sources)];
   for (const name of Object.keys(NAMED_POLICIES)) {
     if (!Object.hasOwn(sources, name)) {
       failures.push(`${workflowPath(name)} is missing; its reviewed policy cannot be enforced`);
@@ -454,6 +459,7 @@ export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string
     failures.push(...scopedServiceSecretFailures(name, source));
     failures.push(...sepoliaSeedsFailures(name, source));
     failures.push(...websiteDeployFailures(name, source));
+    failures.push(...credentialBoundaryFailures(name, source));
     failures.push(...vendoringFailures(name, source));
     failures.push(...mainnetE2eBoundaryFailures(name, source));
     failures.push(...(named?.(source) ?? []));
