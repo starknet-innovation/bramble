@@ -49,7 +49,7 @@ const actionButton = (
   row: StakingRow,
   action: StakingAction,
   label: string,
-  variant: "ghost" | "primary" | "secondary" = "ghost",
+  variant: "primary" | "secondary",
 ): string =>
   button({
     attributes: { "data-staking-action": action, "data-staking-row": rowKey(row) },
@@ -67,7 +67,7 @@ const amountForm = (row: StakingRow, action: "stake" | "unstake", label: string)
       maxlength: 40,
       placeholder: `0 ${row.symbol}`,
     })}
-    ${actionButton(row, action, label, action === "stake" ? "primary" : "ghost")}
+    ${actionButton(row, action, label, action === "stake" ? "primary" : "secondary")}
   </div>`;
 
 const rowActions = (row: StakingRow): string => {

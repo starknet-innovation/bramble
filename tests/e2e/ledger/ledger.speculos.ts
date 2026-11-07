@@ -75,14 +75,30 @@ const withRig = async (run: (rig: Rig) => Promise<void>): Promise<void> => {
   const speculos: SpeculosEndpoints = endpoints;
   const apdu = new SpeculosApdu(speculos);
   const bridge = new LedgerHidBridge({ backend: apdu, model: speculos.model });
+  const screen = new SpeculosScreen(speculos);
   const extension = await launchExtension();
   try {
     // Before any wallet page opens, so every page (grant tab included) gets it.
     await bridge.install(extension.context);
-    await run({ apdu, bridge, extension, screen: new SpeculosScreen(speculos), speculos });
+    await run({ apdu, bridge, extension, screen, speculos });
   } finally {
-    await extension.close();
-    apdu.close();
+    try {
+      // What the device showed and what was pressed, for reading a failure.
+      // Best effort: it must never replace the test's own error.
+      await test.info().attach("speculos-screens", {
+        body: screen.transcript().join("\n"),
+        contentType: "text/plain",
+      });
+      await test.info().attach("apdu-log", {
+        body: JSON.stringify(bridge.log),
+        contentType: "application/json",
+      });
+    } catch (error) {
+      console.warn(`Could not attach the Speculos transcript: ${String(error)}`);
+    } finally {
+      await extension.close();
+      apdu.close();
+    }
   }
 };
 

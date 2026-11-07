@@ -55,7 +55,7 @@ const paintNftReceipt = async (
     outcomeReceiptFor(
       outcome,
       {
-        confirmedDescription: "The collectible is now held by the recipient.",
+        confirmedDescription: "The NFT is now held by the recipient.",
         confirmedTitle: "Transfer complete",
         failedTitle: "Transfer failed",
         submittedTitle: "Transfer submitted",

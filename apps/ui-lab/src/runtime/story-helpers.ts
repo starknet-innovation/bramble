@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/html-vite";
 import { expect, userEvent, waitFor } from "storybook/test";
 import { createUiLab } from "./lab-runtime";
+import { textCollisions } from "./text-overlap";
 
 type LabArgs = {
   readonly checkpointId: string;
@@ -193,7 +194,8 @@ export type NarrowStoryCheck = (document: Document, body: HTMLElement) => void;
 
 /**
  * Renders one checkpoint at the browser side panel's minimum width and asserts
- * the panel neither scrolls horizontally nor loses the values the caller names.
+ * the panel neither scrolls horizontally, nor paints text over text or clips it
+ * (see ./text-overlap.ts), nor loses the values the caller names.
  * It drives the review bench's own surface control, so the check exercises the
  * same rendering path a reviewer sees rather than a bespoke fixture width.
  */
@@ -223,6 +225,7 @@ export const narrowSidepanelStory = (
       "the review bench does not render the minimum side-panel width",
     ).toBe(MINIMUM_SIDEPANEL_WIDTH);
     assertNoHorizontalOverflow(document);
+    expect(textCollisions(document), "text collides at the minimum side-panel width").toEqual([]);
     for (const check of checks) {
       check(document, body);
     }

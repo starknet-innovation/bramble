@@ -27,7 +27,7 @@ describe("NFT send rejections", () => {
     submit(app);
     await flush();
     expect(app.querySelector("#nft-send-result")?.textContent).toBe(
-      "This account doesn't own that collectible. Nothing was submitted; review the recipient and try again.",
+      "This account doesn't own that NFT. Nothing was submitted; review the recipient and try again.",
     );
   });
 

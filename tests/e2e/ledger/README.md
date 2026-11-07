@@ -30,7 +30,11 @@ emulator fails every test. Without Docker or a vendored binary the runner prints
 `.github/workflows/ledger-e2e.yml` runs the suite on a GitHub-hosted
 `ubuntu-latest` runner (Docker included) for pull requests and pushes into
 `main` and `release/**` that touch Ledger code, nightly at 04:30 UTC, and on
-manual dispatch. It holds no repository secret and a read-only token, so fork
+manual dispatch. The nightly run tests the active release branch, resolved as
+`nightly.yml` does: `vars.ACTIVE_RELEASE_BRANCH`, else the highest
+`release/vX.Y[.Z]`, checked against that pattern and against the repository's
+branches, and checked out at the commit it resolved to. A scheduled run uses
+the workflow file on `main`, so this applies once the workflow reaches `main`. It holds no repository secret and a read-only token, so fork
 pull requests run it as they are. It builds the extension, builds the pinned
 app for `nanosp` and `flex`, runs `BRAMBLE_SPECULOS_REQUIRED=1 bun run
 test:e2e:ledger`, and then requires each model's Playwright JSON report to show
@@ -39,8 +43,8 @@ failure it keeps the Playwright traces (`test-results/ledger-<model>/`) for 7
 days; they show only the wallet driven with the public test phrase.
 `scripts/ledger-e2e-workflow-policy.ts` pins these controls.
 
-While a tested model's hash is `null`, the job fails in its first step and
-says to record the hashes. That red run is intended: it must never report
+While a tested model's hash is `null`, the job fails before it builds anything
+and says to record the hashes. That red run is intended: it must never report
 green without running the suite.
 
 ## Recording the app hashes
@@ -55,14 +59,25 @@ request, and the procedure runs again:
    (`gh workflow run ledger-e2e.yml --ref <branch> -f record_hashes=true`). It
    builds every model, prints each ELF's SHA-256 to the job summary, and runs
    no test. The test job is skipped in that run.
-2. That maintainer reproduces the hashes with an independent local build
-   (`bun run vendor:ledger-app` with Docker) and opens a pull request that sets
-   `LEDGER_APP_BINARIES` to them, linking the record run.
-3. A second maintainer reviews it: same commit and builder digest as the
-   record run, and both builds agree byte for byte. A mismatch is not
-   recorded; it is investigated.
+2. That maintainer reproduces the hashes with a second, independent build:
+   either another record-mode run (a separate dispatch, so a fresh
+   GitHub-hosted runner builds from scratch) or a local build
+   (`bun run vendor:ledger-app` with Docker). They open a pull request that
+   sets `LEDGER_APP_BINARIES` to the hashes and links both builds.
+3. A second maintainer reviews it: both builds used the same app commit and
+   builder digest, and they agree byte for byte. A mismatch is not recorded;
+   it is investigated.
 4. Once merged, the workflow's test mode runs the suite against those hashes,
    and `vendor:ledger-app` fails on any build that does not match.
+
+Current hashes (app-starknet 2.4.3 at `f87210cd`, builder 5.5.1 at
+`sha256:0e7eac1c…`), recorded on 2026-11-06 from two independent
+GitHub-hosted record runs that printed identical values:
+[42302387248](https://github.com/starknet-innovation/bramble/actions/runs/42302387248)
+(`ci/ledger-speculos-e2e` at `3fbb73b1`) and
+[42305128799](https://github.com/starknet-innovation/bramble/actions/runs/42305128799)
+(`release/v0.10.9` at `a9465305`). The second CI run stood in for the local
+Docker reproduction, with the owner's approval.
 
 ## What it covers
 

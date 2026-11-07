@@ -60,7 +60,7 @@ const watchNftCard = (
 ): string => `
   <li class="request-card"${preview ? "" : " data-approval-notice"}>
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Watch collectible request")}
+      ${requestIdentity(approval.origin, "Watch NFT request")}
       <dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(nft.contract)}</code>${inlineCopyButton(nft.contract, "Copy contract address")}</dd></div><div><dt>Token ID</dt><dd><code>${escapeHtml(nft.tokenId)}</code></dd></div><div><dt>Network</dt><dd>${escapeHtml(STARKNET_NETWORKS[nft.networkId].name)}</dd></div></dl>
       ${
         preview
@@ -72,7 +72,7 @@ const watchNftCard = (
       preview
         ? `${reviewPanel(approval.insights ?? [])}
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(approval, "Watch collectible", false)}`
+    ${decisionRow(approval, "Watch NFT", false)}`
         : `<div class="button-row">${denyButton(approval, "Close")}</div>`
     }
   </li>`;

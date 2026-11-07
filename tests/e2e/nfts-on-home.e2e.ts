@@ -47,11 +47,11 @@ test("NFTs are on Home by default and can be turned off", async ({ extension }) 
     await dapp.goto(dappServer.url);
     await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
-    // On by default: Tokens · NFTs · Staking, and no Collectibles item in the menu.
+    // On by default: Tokens · NFTs · Staking, and no NFTs item in the menu.
     const tabs = sidepanel.locator(".home-tabs [role='tab']");
     await expect(tabs).toHaveText(["Tokens", "NFTs", "Staking"]);
     await sidepanel.getByRole("button", { name: "Portfolio actions" }).click();
-    await expect(sidepanel.getByRole("menuitem", { name: "Collectibles" })).toHaveCount(0);
+    await expect(sidepanel.getByRole("menuitem", { exact: true, name: "NFTs" })).toHaveCount(0);
     await sidepanel.keyboard.press("Escape");
     await sidepanel.getByRole("tab", { name: "NFTs" }).click();
     const panel = sidepanel.locator("#home-panel-nfts");
@@ -60,11 +60,11 @@ test("NFTs are on Home by default and can be turned off", async ({ extension }) 
     await expect(
       panel.getByText("Couldn't load the NFT list. Only NFTs you watch are shown."),
     ).toBeVisible();
-    await expect(panel.getByText("No collectibles found for this account yet")).toHaveCount(0);
+    await expect(panel.getByText("No NFTs found for this account yet")).toHaveCount(0);
 
     // A site's NFT watch is an approvable card while NFTs are on.
     const held = watchCollectible(dapp);
-    await resolvePendingApproval(sidepanel, "Watch collectible request", dappServer.origin, "deny");
+    await resolvePendingApproval(sidepanel, "Watch NFT request", dappServer.origin, "deny");
     expect(await held).toMatch(/^rejected:/u);
 
     // Turn NFTs off in Appearance & currency.

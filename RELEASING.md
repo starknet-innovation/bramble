@@ -64,10 +64,11 @@ step relies on.
    device (TA-32…TA-38). The Speculos suite (`bun run test:e2e:ledger`) answers
    the dashboard steps with canned replies and fakes WebHID, so it does not
    replace real firmware. Its CI run is `.github/workflows/ledger-e2e.yml`,
-   which fails by design until the Ledger app hashes are recorded. They are
+   which fails by design while a Ledger app hash is unrecorded. They are
    re-recorded only when the pinned app commit or builder image changes: one
-   maintainer records them with the workflow's `record_hashes` mode and a local
-   build, and a second reviews that pull request
+   maintainer records them with the workflow's `record_hashes` mode and a
+   second independent build (another record run or a local build), and a
+   second maintainer reviews that pull request
    (`tests/e2e/ledger/README.md`, "Recording the app hashes").
 7. **Promote to `main`.** Merge `release/vX.Y` → `main` as a **merge commit**
    (not squash — preserve release history), done explicitly by a maintainer.

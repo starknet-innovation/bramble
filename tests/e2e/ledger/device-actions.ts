@@ -54,8 +54,13 @@ const TOUCH: Readonly<Record<"flex" | "stax", TouchLayout>> = {
   },
 };
 
-const REVIEW = /review hash|blind sign/i;
-const BLIND_SIGNING_OFF = /cannot be clear-signed|enable blind-signing/i;
+// The first screen of a hash review: with Blind signing on, the app opens it
+// with its "Blind signing ahead" warning (Flex, Stax) or "Review hash". The
+// settings page reads "Blind signing" too, so the pattern must not match that.
+const REVIEW = /review hash|blind signing ahead/i;
+// The Nano breaks a hyphenated word across lines ("clear-" / "signed"), and
+// screen text joins lines with a space, so the break may be whitespace.
+const BLIND_SIGNING_OFF = /cannot be clear-\s*signed|enable blind-\s*signing/i;
 const MAX_NANO_STEPS = 12;
 
 /** Presses right until `pattern` is on screen, collecting every screen seen. */
@@ -85,6 +90,8 @@ export const enableBlindSigning = async (
     await screen.press("right");
     await screen.press("both");
     await screen.press("both");
+    // The toggle flips the setting; prove it is now on, not flipped back off.
+    await screen.waitFor(/\bEnabled\b/);
     return;
   }
   const layout = TOUCH[model];
@@ -136,11 +143,14 @@ export const rejectHashReview = async (
   const layout = TOUCH[model];
   await screen.touch(...layout.centeredFooter);
   await screen.touch(...layout.lowerLeft);
-  // NBGL asks to confirm a rejection; tap the confirming label where it is drawn.
-  const confirm = (await screen.texts()).find((event) => /yes, reject|reject/i.test(event.text));
-  if (confirm) {
-    await screen.touch(confirm.x + (confirm.w ?? 8) / 2, confirm.y + (confirm.h ?? 8) / 2);
+  // NBGL asks "Reject message?"; tap its "Yes, reject" where it is drawn. The
+  // title also says "Reject", so match the confirming label exactly.
+  await screen.waitFor(/yes, reject/i);
+  const confirm = (await screen.texts()).find((event) => /^\s*yes, reject\s*$/i.test(event.text));
+  if (!confirm) {
+    throw new Error("The device's reject confirmation has no Yes, reject label");
   }
+  await screen.touch(confirm.x + (confirm.w ?? 8) / 2, confirm.y + (confirm.h ?? 8) / 2);
 };
 
 /**
