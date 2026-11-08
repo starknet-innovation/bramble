@@ -6,7 +6,8 @@
  * tokens auto-discovery does not surface. Each entry renders a collection/token-id
  * caption; its remote image loads immediately only for solicited (manually
  * watched) NFTs, while unsolicited auto-discovered ones show a placeholder until
- * the user opens them — so an airdropped tile cannot phone home on gallery paint.
+ * the user opens them or presses "Show art" (which watches the NFT) — so an
+ * airdropped tile cannot phone home on gallery paint.
  * Detail sends through the verified invoke path.
  */
 
@@ -29,6 +30,7 @@ import {
   noAccountEmpty,
   walletMenuRow,
 } from "../../shared/parts";
+import { nftCardActions } from "./nft-card-actions";
 import { nftCoverageNote } from "./nft-coverage";
 
 /**
@@ -150,29 +152,6 @@ const nftTilePlay = (item: NftGalleryItem): string =>
       <iframe class="nft-animation nft-animation--tile" title="NFT animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>`
     : "";
 
-// The Hide control: a watched entry toggles its stored spam flag; a
-// discovered-only entry is persisted-as-spam by nft-ui using the data-* target.
-const hideButton = (item: NftGalleryItem): string =>
-  item.watched
-    ? button({
-        attributes: { "data-nft-spam": item.id, "data-nft-spam-value": "true" },
-        label: "Hide",
-        size: "small",
-        variant: "secondary",
-      })
-    : button({
-        attributes: {
-          "data-nft-hide": item.id,
-          "data-nft-hide-contract": item.contract,
-          "data-nft-hide-name": item.title,
-          "data-nft-hide-network": item.networkId,
-          "data-nft-hide-token": item.tokenId,
-        },
-        label: "Hide",
-        size: "small",
-        variant: "secondary",
-      });
-
 /**
  * Renders one production gallery card, including privacy-aware art loading and
  * watched/hidden actions.
@@ -187,20 +166,7 @@ export const nftGalleryCard = (item: NftGalleryItem, eager: boolean): string => 
       </span>
     </button>
     ${nftTilePlay(item)}
-    <div class="nft-actions">
-      ${hideButton(item)}
-      ${
-        item.watched
-          ? button({
-              attributes: { "data-remove-nft": item.id },
-              label: "Remove",
-              size: "small",
-              tone: "danger",
-              variant: "secondary",
-            })
-          : ""
-      }
-    </div>
+    ${nftCardActions(item)}
   </li>`;
 
 const hiddenRow = (nft: WatchedNft): string => `

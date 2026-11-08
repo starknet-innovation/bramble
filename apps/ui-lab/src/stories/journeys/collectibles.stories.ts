@@ -48,6 +48,11 @@ export const TransferFailed = failedReceiptStory("Transfer failed", "nft", "fail
 
 // NFTs on Home (the "nft-home" scenario).
 export const HomeNfts = checkpointStory("Home NFTs tab", "nft-home", "home-nfts");
+export const HomeNftsDiscovered = checkpointStory(
+  "Home NFTs, discovered",
+  "nft-home",
+  "home-nfts-discovered",
+);
 export const HomeNftsEmpty = checkpointStory("Home NFTs empty", "nft-home", "home-nfts-empty");
 export const HomeNftsIncomplete = checkpointStory(
   "Home NFTs incomplete",

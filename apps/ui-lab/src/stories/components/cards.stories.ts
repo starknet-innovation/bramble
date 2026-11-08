@@ -1,6 +1,12 @@
 import { approvalCard, nftGalleryCard, reviewPanel, visibleNftItems } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
-import { discoveredNft, invokeApproval, preferences, statusFor } from "../../fixtures/fixtures";
+import {
+  discoveredNft,
+  discoveredOnlyNft,
+  invokeApproval,
+  preferences,
+  statusFor,
+} from "../../fixtures/fixtures";
 import {
   CATALOG_META,
   type CatalogArgs,
@@ -16,8 +22,12 @@ const meta = {
 
 export default meta;
 
-const collectible = visibleNftItems(preferences.nfts ?? [], [discoveredNft], "SN_MAIN")[0];
-if (!collectible) {
+const [collectible, discoveredOnly] = visibleNftItems(
+  preferences.nfts ?? [],
+  [discoveredNft, discoveredOnlyNft],
+  "SN_MAIN",
+);
+if (!collectible || !discoveredOnly) {
   throw new Error("Missing UI Lab collectible fixture");
 }
 
@@ -47,6 +57,7 @@ export const CollectibleCards: CatalogStory = {
         "The specimen is the exact production renderer.",
         `<div class="catalog-grid wide">
           ${catalogSample("Gallery card", `<ul class="nft-grid catalog-nft-limit">${nftGalleryCard(collectible, true)}</ul>`)}
+          ${catalogSample("Discovered card", `<ul class="nft-grid catalog-nft-limit">${nftGalleryCard(discoveredOnly, true)}</ul>`)}
         </div>`,
       ),
       args.theme,
