@@ -10,6 +10,7 @@ import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { homeNftsPanel } from "../../../../src/sidepanel/journeys/collectibles/nft-home";
+import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
 import {
   STAKING_LOADING,
   type StakingState,
@@ -104,7 +105,7 @@ describe("Home NFTs tab panel", () => {
   });
 });
 
-describe("Home tabs (#845's tab mechanism, with NFTs between Tokens and Staking)", () => {
+describe("Home tabs (#845's tab mechanism, with Staking between Tokens and NFTs)", () => {
   // Mounts the tabs and #845's bindings; each selection repaints, as the
   // shell's render does, and is recorded from the remembered-tab state.
   const mount = (selected: HomeTab, staking: StakingState | null, nfts: string | null) => {
@@ -140,12 +141,12 @@ describe("Home tabs (#845's tab mechanism, with NFTs between Tokens and Staking)
     await Promise.resolve();
   };
 
-  test("tabs read exactly Tokens · NFTs · Staking, and NFTs is left out when off", () => {
+  test("tabs read exactly Tokens · Staking · NFTs, and NFTs is left out when off", () => {
     const all = mount("tokens", STAKING_LOADING, "<p>nfts</p>");
     expect([...all.app.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
       "Tokens",
-      "NFTs",
       "Staking",
+      "NFTs",
     ]);
     document.body.replaceChildren();
     const off = mount("tokens", STAKING_LOADING, null);
@@ -158,6 +159,38 @@ describe("Home tabs (#845's tab mechanism, with NFTs between Tokens and Staking)
     expect(
       [...noStaking.app.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent),
     ).toEqual(["Tokens", "NFTs"]);
+  });
+
+  test("the menu offers Manage tokens on the Tokens tab only, and Refresh on every tab", () => {
+    const menu = (selected: HomeTab, staking: StakingState | null, nfts: string | null) => {
+      const app = document.createElement("div");
+      app.innerHTML = homeTabs(
+        { balances: [] },
+        preferences,
+        {},
+        {},
+        "usd",
+        undefined,
+        null,
+        true,
+        staking,
+        nfts,
+        selected,
+      );
+      return [...app.querySelectorAll('#portfolio-menu [role="menuitem"]')].map((item) =>
+        item.textContent?.trim(),
+      );
+    };
+    expect(menu("tokens", STAKING_LOADING, "<p>nfts</p>")).toEqual([
+      "Manage tokens",
+      "Refresh portfolio",
+    ]);
+    expect(menu("staking", STAKING_LOADING, "<p>nfts</p>")).toEqual(["Refresh portfolio"]);
+    expect(menu("nfts", STAKING_LOADING, "<p>nfts</p>")).toEqual(["Refresh portfolio"]);
+    // A tab that is not offered falls back to Tokens, and so does the menu.
+    expect(menu("staking", null, "<p>nfts</p>")).toEqual(["Manage tokens", "Refresh portfolio"]);
+    // With no tabs at all the section is the token list, so Manage tokens stays.
+    expect(menu("tokens", null, null)).toEqual(["Manage tokens", "Refresh portfolio"]);
   });
 
   test("a click opens NFTs, keeps focus on it, and the choice is remembered", async () => {
@@ -181,7 +214,7 @@ describe("Home tabs (#845's tab mechanism, with NFTs between Tokens and Staking)
     await key("ArrowRight");
     await key("End");
     await key("Home");
-    expect(selections).toEqual(["nfts", "staking", "tokens", "staking", "tokens"]);
+    expect(selections).toEqual(["staking", "nfts", "tokens", "nfts", "tokens"]);
     document.body.replaceChildren();
     // With NFTs off the keys skip straight from Tokens to Staking.
     const off = mount("tokens", STAKING_LOADING, null);

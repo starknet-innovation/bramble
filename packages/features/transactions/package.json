@@ -31,6 +31,7 @@
     "./relay-signatures": "./src/activity/relay-signatures.ts",
     "./send-routes": "./src/routing/send-routes.ts",
     "./staking-calls": "./src/staking/staking-calls.ts",
+    "./staking-coverage": "./src/staking/staking-coverage.ts",
     "./staking-decode": "./src/staking/staking-decode.ts",
     "./staking-directory": "./src/staking/staking-directory.ts",
     "./staking-networks": "./src/staking/staking-networks.ts",

@@ -1,10 +1,10 @@
 /**
  * Checkpoints for NFTs on Home (Derek, 2026-11-06): the Home NFTs tab with
- * NFTs, empty, incomplete and unavailable; Home with NFTs turned off; a site's
+ * NFTs, a discovered NFT offering Show art, empty, incomplete and unavailable; Home with NFTs turned off; a site's
  * NFT watch request with NFTs on and off; and the Appearance toggle.
  */
 import type { PendingApproval } from "@bramble/wallet-ui/lab";
-import { preferences } from "../fixtures/fixtures";
+import { discoveredNft, discoveredOnlyNft, preferences } from "../fixtures/fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
 import type { WalletScenario } from "../runtime/types";
 
@@ -30,8 +30,21 @@ export const nftHomeScenario: WalletScenario = {
       id: "home-nfts",
       label: "Home NFTs tab",
       narrative:
-        "Home reads Tokens · NFTs · Staking. The NFTs tab shows Watch by contract, Hidden collectibles, and each owned NFT as a card that opens its detail screen.",
+        "Home reads Tokens · Staking · NFTs. The NFTs tab shows Watch by contract, Hidden collectibles, and each owned NFT as a card that opens its detail screen.",
       state: { coverage: "complete", homeTab: "nfts", shown: 1 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          discoveredNfts: [discoveredNft, discoveredOnlyNft],
+          homeTab: "nfts",
+          nftCoverage: "complete",
+        }),
+      id: "home-nfts-discovered",
+      label: "Home NFTs, discovered",
+      narrative:
+        "An NFT the indexer found but the user never chose shows no art and offers Show art before Hide. Show art watches it after an on-chain ownership check; only then is its metadata and art loaded. A watched NFT offers Hide and Remove.",
+      state: { coverage: "complete", discovered: 1, homeTab: "nfts", shown: 2 },
     },
     {
       content: () =>

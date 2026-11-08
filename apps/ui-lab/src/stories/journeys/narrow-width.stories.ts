@@ -82,6 +82,27 @@ export const MultisigReview = narrowSidepanelStory(
   "intent-fee-replacement",
 );
 
+export const StakingList = narrowSidepanelStory(
+  "Staking list · 320px",
+  "settings-security",
+  "staking",
+  [(document) => assertInsidePanel(document, ".staking-card")],
+);
+
+export const StakingListIncomplete = narrowSidepanelStory(
+  "Staking list incomplete · 320px",
+  "settings-security",
+  "staking-incomplete",
+  [(document) => assertInsidePanel(document, "[data-staking-paste]")],
+);
+
+export const StakingListUnreadable = narrowSidepanelStory(
+  "Staking list couldn't load · 320px",
+  "settings-security",
+  "staking-paste-only",
+  [(document) => assertInsidePanel(document, "[data-staking-paste]")],
+);
+
 export const StakingUnstakeReview = narrowSidepanelStory(
   "Staking unstake review · 320px",
   "settings-security",
@@ -101,4 +122,11 @@ export const StakingClaimElsewhere = narrowSidepanelStory(
   "settings-security",
   "staking-claim-elsewhere",
   [(document) => assertInsidePanel(document, ".staking-review")],
+);
+
+export const HomeNftsDiscovered = narrowSidepanelStory(
+  "Home NFTs, discovered · 320px",
+  "nft-home",
+  "home-nfts-discovered",
+  [(document) => assertInsidePanel(document, ".nft-actions button")],
 );

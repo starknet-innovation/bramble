@@ -1,18 +1,22 @@
 /**
  * The validator directory from the background (issue 750): read through the
  * explorer lane's Starkscan client, never with a key, bounded and strictly
- * validated, hidden when Starkscan's coverage is incomplete, filtered to
+ * validated, listed while Starkscan is catching up only just behind and
+ * hidden when its coverage is incomplete, filtered to
  * active validators with an active pool for a tracked token, and never a
  * shortcut past on-chain verification. Fixtures are schema-derived, not live.
  */
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
+import { MAX_CATCHING_UP_LAG_BLOCKS } from "@bramble/transactions/staking-coverage";
 import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions/starkscan";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import {
+  CATCHING_UP_COVERAGE,
+  directoryCoverage,
   directoryPage,
   directoryParts,
   directoryValidator,
@@ -146,10 +150,30 @@ describe("staking directory", () => {
     expect(entries.map((entry) => entry.staker)).toEqual(["0x1"]);
   });
 
+  test("lists exactly as for prepared while Starkscan is catching up only just behind", async () => {
+    const { send } = await harness({
+      reply: {
+        body: directoryPage([directoryValidator(STAKER)], { coverage: CATCHING_UP_COVERAGE }),
+      },
+    });
+    const answer = await send(directory);
+    expect(answer).toMatchObject({
+      ok: true,
+      stakingDirectory: { entries: [{ staker: STAKER, uptime: "99.5%" }], state: "ready" },
+    });
+    const prepared = await harness();
+    expect(answer).toEqual(await prepared.send(directory));
+  });
+
   test("offers no validators while Starkscan reports its snapshot incomplete", async () => {
-    for (const status of ["catching_up", "unavailable"]) {
-      const body = directoryPage([directoryValidator(STAKER)]);
-      body["coverage"] = { ...(body["coverage"] as object), status };
+    for (const coverage of [
+      directoryCoverage({ status: "unavailable" }),
+      { ...CATCHING_UP_COVERAGE, lagBlocks: MAX_CATCHING_UP_LAG_BLOCKS + 1 },
+      { ...CATCHING_UP_COVERAGE, gapIntervals: [{}] },
+      { ...CATCHING_UP_COVERAGE, outstandingMaterializationIntervals: [{}] },
+      { ...CATCHING_UP_COVERAGE, finalizedOnly: false },
+    ]) {
+      const body = directoryPage([directoryValidator(STAKER)], { coverage });
       const { send } = await harness({ reply: { body } });
       expect(await send(directory)).toEqual({
         ok: true,
@@ -167,6 +191,12 @@ describe("staking directory", () => {
       { body: directoryPage([directoryValidator(STAKER)], { chainId: "SN_SEPOLIA" }) },
       { body: directoryPage([directoryValidator(STAKER, { name: "x".repeat(65) })]) },
       { body: directoryPage([directoryValidator(STAKER, { address: "0x0" })]) },
+      { body: directoryPage([directoryValidator(STAKER)], { coverage: { status: "prepared" } }) },
+      {
+        body: directoryPage([directoryValidator(STAKER)], {
+          coverage: { ...CATCHING_UP_COVERAGE, lagBlocks: -1 },
+        }),
+      },
       { body: { padding: "x".repeat(2 * 1024 * 1024 + 1) } },
     ];
     for (const reply of replies) {
@@ -176,21 +206,28 @@ describe("staking directory", () => {
   });
 
   test("a validator picked from the list is still verified on chain before anything is built", async () => {
-    const { chain, estimated, send } = await harness();
-    chain.poolStaker = "0x999";
-    const preferences = await createPreferencesStore({ store: createMemoryStore() }).read();
-    const strk = preferences.tokens.find(
-      (token) => token.networkId === "SN_MAIN" && sameFelt(token.address, STRK_TOKEN_ADDRESS),
-    );
-    expect(await send(directory)).toMatchObject({ stakingDirectory: { state: "ready" } });
-    const review = await send({
-      action: "stake",
-      amount: "1",
-      staker: STAKER,
-      tokenId: strk?.id ?? "",
-      type: "wallet.stakingPrepare",
-    });
-    expect(review).toEqual({ error: "Couldn't verify this validator on chain." });
-    expect(estimated).toEqual([]);
+    // Prepared or catching up, a listed validator takes the pasted address's path.
+    for (const coverage of [directoryCoverage(), CATCHING_UP_COVERAGE]) {
+      const { chain, estimated, send } = await harness({
+        reply: { body: directoryPage([directoryValidator(STAKER)], { coverage }) },
+      });
+      chain.poolStaker = "0x999";
+      const preferences = await createPreferencesStore({ store: createMemoryStore() }).read();
+      const strk = preferences.tokens.find(
+        (token) => token.networkId === "SN_MAIN" && sameFelt(token.address, STRK_TOKEN_ADDRESS),
+      );
+      expect(await send(directory)).toMatchObject({
+        stakingDirectory: { entries: [{ staker: STAKER }], state: "ready" },
+      });
+      const review = await send({
+        action: "stake",
+        amount: "1",
+        staker: STAKER,
+        tokenId: strk?.id ?? "",
+        type: "wallet.stakingPrepare",
+      });
+      expect(review).toEqual({ error: "Couldn't verify this validator on chain." });
+      expect(estimated).toEqual([]);
+    }
   });
 });

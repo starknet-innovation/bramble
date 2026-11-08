@@ -87,8 +87,10 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
   const buttonFor = (action: string): HTMLButtonElement | undefined =>
     buttons.find((button) => button.dataset["msStrk20Key"] === action);
   let dropArmed = false;
+  const loading = panel.querySelector<HTMLElement>("[data-ms-strk20-key-loading]");
 
   const apply = (state: "absent" | "conflict" | "held"): void => {
+    loading?.remove();
     const create = buttonFor("create");
     const share = buttonFor("share");
     const drop = buttonFor("drop");
@@ -206,9 +208,14 @@ export const bindMultisigStrk20Key = (deps: MultisigUiDeps): void => {
       () => undefined,
     );
   };
+  if (!multisigId) loading?.remove();
   if (multisigId) {
-    void deps.multisig.strk20KeyStatus(multisigId).then(apply, () => {
-      setStatus(panel, "Couldn't update this multisig's key.");
+    // A failed read replaces the loading line with its reason, as an alert, so
+    // the section never sits blank with no action and no explanation.
+    void deps.multisig.strk20KeyStatus(multisigId).then(apply, (error: unknown) => {
+      if (!loading) return;
+      loading.textContent = errorLine(error, "Couldn't load private balances. Try again.");
+      loading.setAttribute("role", "alert");
     });
     reloadAuthorizations();
   }

@@ -315,7 +315,7 @@ ${SIGN_REQUEST_STYLES}
   .nft-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   /* Compact two-up secondary actions with a real button shape. Remove is two
      taps: the first arms it ("Tap again to remove") in the danger hue. */
-  .nft-actions { display: grid; gap: 6px; grid-template-columns: 1fr 1fr; }
+  .nft-actions { display: grid; gap: 6px; grid-template-columns: 1fr 1fr; } .nft-actions--discovered { grid-template-columns: auto auto; }
   .nft-actions button { min-width: 0; padding: 0 ${SPACE.sm}; }
   .nft-actions button.is-confirming { background: var(--bramble-danger-soft); }
   /* dApp approval/sign prompts are a solid panel card — a hairline edge plus a

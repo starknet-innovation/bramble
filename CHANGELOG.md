@@ -11,7 +11,39 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
-## [0.10.9] - Unreleased
+## [0.10.10] - Unreleased
+
+Quick fixes from the v0.10.9 review: the validator list on Mainnet, the Home
+tab order, NFT art, and clearer review screens.
+
+### Added
+- A Show art button on NFTs Bramble found for you. It checks on chain that you
+  own the NFT, then loads its art. Bramble doesn't fetch art for an NFT until
+  you choose it (#896, #897).
+
+### Changed
+- Home tabs read Tokens, Staking, NFTs. Manage tokens is in the Tokens tab's
+  menu only; Refresh portfolio stays on every tab (#894).
+- The validator list keeps Starkscan's order, most STRK staked first, and Show
+  more loads 50 at a time. Sort by is gone: it only sorted the validators
+  already loaded (#895).
+- Staking reviews confirm with the primary button. Claim, withdraw and
+  cancel-unstake reviews hide the row's other controls and add Cancel (#898).
+- A multisig approval has one "What will happen" section (#898).
+- Settings → Import private key offers "Bramble (recommended)" and "Ready"
+  (#898).
+
+### Fixed
+- The validator list opens on Mainnet instead of saying Starkscan's list is
+  incomplete. Your stakes follow the same rule (#893, #895).
+- A staking row can't start another review while a transaction is being
+  submitted or its outcome is unknown (#898).
+- Multisig private balances show "Loading…" until ready, and "Couldn't load
+  private balances. Try again." if the read fails (#898).
+- At 320px, multisig review values no longer split mid-identifier, approval
+  cards reach the right edge, and Ledger setup steps line up (#898).
+
+## [0.10.9] - 2026-11-08
 
 Staking, NFTs on Home, private balances for Argent multisigs, a first shield
 in one transaction, and fixes from user and QA reports.
@@ -57,8 +89,8 @@ in one transaction, and fixes from user and QA reports.
   `signing-failed` (#860).
 - Sponsored account deployment works with the live gateway instead of always
   falling back to self-paid (#850).
-- A wrong passphrase when revealing secrets says "Incorrect passphrase" (#834,
-  #835).
+- A wrong passphrase when revealing secrets says "That passphrase is wrong."
+  (#834, #835).
 - A failed Ledger setup or recovery keeps your network instead of switching it
   (#822, #874).
 - A privacy-service outage reads as services down, with the diagnostic kept

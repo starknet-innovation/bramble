@@ -273,3 +273,17 @@ describe("Import private key form", () => {
     );
   });
 });
+
+describe("Settings private-key import contract choice", () => {
+  test("names the two contracts the same way: Bramble (recommended) and Ready", () => {
+    const fragment = document.createRange().createContextualFragment(importKeyFlow(status));
+    const options = [
+      ...(fragment.querySelector<HTMLSelectElement>('select[name="accountContractType"]')
+        ?.options ?? []),
+    ].map((option) => [option.textContent?.trim(), option.value]);
+    expect(options).toEqual([
+      ["Bramble (recommended)", "openzeppelin"],
+      ["Ready", "argent"],
+    ]);
+  });
+});

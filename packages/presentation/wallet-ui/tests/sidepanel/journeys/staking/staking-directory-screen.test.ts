@@ -16,7 +16,6 @@ import {
   type StakingDirectoryEntry,
   type StakingDirectoryState,
   type StakingState,
-  sortedEntries,
   stakingDirectoryFrom,
 } from "../../../../src/sidepanel/journeys/staking/staking-directory-client";
 import { bindStakingDirectory } from "../../../../src/sidepanel/journeys/staking/staking-directory-ui";
@@ -44,12 +43,10 @@ const STAKER = `0x5a2${"0".repeat(56)}beef`;
 
 const entry = (overrides: Partial<StakingDirectoryEntry> = {}): StakingDirectoryEntry => ({
   commission: "5%",
-  commissionPpm: 50_000,
   name: "Validator One",
   pools: [{ delegated: "1,500", symbol: "STRK" }],
   staker: STAKER,
   uptime: "99.5%",
-  uptimePpm: 995_000,
   website: "validator.example",
   ...overrides,
 });
@@ -87,8 +84,9 @@ describe("stakingDirectoryFrom", () => {
       ready([entry({ staker: "0x05a2" })]),
       ready([entry({ staker: "0x0" })]),
       ready([entry({ pools: [] })]),
-      ready([entry({ commissionPpm: 1_000_001 })]),
-      ready([entry({ uptimePpm: -1 })]),
+      // Figures are display strings only; a raw number is an unknown key.
+      ready([{ ...entry(), commissionPpm: 50_000 }]),
+      ready([{ ...entry(), uptimePpm: 995_000 }]),
       ready([entry({ name: "" })]),
       ready([entry({ name: "n".repeat(121) })]),
       ready(Array.from({ length: 51 }, () => entry())),
@@ -100,17 +98,9 @@ describe("stakingDirectoryFrom", () => {
 });
 
 describe("list helpers", () => {
-  const a = entry({ commissionPpm: 100_000, staker: "0xa", uptimePpm: 900_000 });
-  const b = entry({ commissionPpm: null, staker: "0xb", uptimePpm: null });
-  const c = entry({ commissionPpm: 0, staker: "0xc", uptimePpm: 999_000 });
-
-  test("sorting keeps the directory's order for stake and puts unknown figures last", () => {
-    const order = (sort: StakingState["sort"]) =>
-      sortedEntries([a, b, c], sort).map((item) => item.staker);
-    expect(order("stake")).toEqual(["0xa", "0xb", "0xc"]);
-    expect(order("commission")).toEqual(["0xc", "0xa", "0xb"]);
-    expect(order("uptime")).toEqual(["0xc", "0xa", "0xb"]);
-  });
+  const a = entry({ staker: "0xa" });
+  const b = entry({ staker: "0xb" });
+  const c = entry({ staker: "0xc" });
 
   test("a next page appends new validators only, up to the cap", () => {
     const first = { entries: [a, b], nextCursor: "c1" };
@@ -186,11 +176,9 @@ describe("the list screen", () => {
       listed([
         entry({
           commission: null,
-          commissionPpm: null,
           name: null,
           pools: [{ delegated: null, symbol: "STRK" }],
           uptime: null,
-          uptimePpm: null,
           website: null,
         }),
       ]),
@@ -289,13 +277,14 @@ describe("bindStakingDirectory", () => {
     expect(view.state().directory).toEqual({ entries: [entry()], nextCursor: null });
   });
 
-  test("the order can be changed", () => {
-    const view = mount(listed([entry()]));
-    const select = view.app.querySelector<HTMLSelectElement>("[data-staking-sort]");
-    if (!select) throw new Error("not rendered");
-    select.value = "commission";
-    select.dispatchEvent(new Event("change"));
-    expect(view.state().sort).toBe("commission");
+  test("the list keeps Starkscan's order and offers no other", () => {
+    const stakers = ["0xc3", "0xa1", "0xb2"];
+    const view = mount(listed(stakers.map((staker) => entry({ staker }))));
+    const shown = [...view.app.querySelectorAll<HTMLElement>("[data-staking-entry]")].map(
+      (row) => row.dataset["stakingEntry"],
+    );
+    expect(shown).toEqual(stakers);
+    expect(view.app.querySelector("select")).toBeNull();
   });
 
   test("Show more sends the cursor and appends the next page", async () => {

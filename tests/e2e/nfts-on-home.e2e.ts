@@ -1,6 +1,6 @@
 /**
  * NFTs on Home end to end (Derek, 2026-11-06): with nothing chosen, Home reads
- * Tokens · NFTs · Staking and the NFTs tab shows the gallery content, and a site's ERC721
+ * Tokens · Staking · NFTs and the NFTs tab shows the gallery content, and a site's ERC721
  * wallet_watchAsset shows an approvable card. Turning off "Show NFTs on Home"
  * in Appearance & currency removes the tab, and a site's watch then waits on a
  * close-only notice whose Close rejects it (the site cannot read the setting).
@@ -47,9 +47,9 @@ test("NFTs are on Home by default and can be turned off", async ({ extension }) 
     await dapp.goto(dappServer.url);
     await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
-    // On by default: Tokens · NFTs · Staking, and no NFTs item in the menu.
+    // On by default: Tokens · Staking · NFTs, and no NFTs item in the menu.
     const tabs = sidepanel.locator(".home-tabs [role='tab']");
-    await expect(tabs).toHaveText(["Tokens", "NFTs", "Staking"]);
+    await expect(tabs).toHaveText(["Tokens", "Staking", "NFTs"]);
     await sidepanel.getByRole("button", { name: "Portfolio actions" }).click();
     await expect(sidepanel.getByRole("menuitem", { exact: true, name: "NFTs" })).toHaveCount(0);
     await sidepanel.keyboard.press("Escape");
