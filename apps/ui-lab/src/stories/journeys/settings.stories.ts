@@ -99,6 +99,11 @@ export const StakingUnavailable = checkpointStory(
   "staking-paste-only",
 );
 export const Staking = checkpointStory("Staking", "settings-security", "staking");
+export const StakingIncomplete = checkpointStory(
+  "Staking list incomplete",
+  "settings-security",
+  "staking-incomplete",
+);
 export const StakingHome = checkpointStory("Home Staking tab", "settings-security", "staking-home");
 export const StakingHomeEmpty = checkpointStory(
   "Home Staking, no stakes",

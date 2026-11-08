@@ -263,7 +263,7 @@ export const stakingCheckpoints: readonly ScenarioCheckpoint[] = [
     id: "staking",
     label: "Staking",
     narrative:
-      '"Your stakes" first: each position Starkscan listed and the chain confirmed, with chain-read figures, as one button. Then validators from Starkscan\'s directory (schema-derived fixtures), each card one button, with their addresses, commission, 30-day uptime and delegated totals; unknown figures say unknown. The paste field sits below the list as the fallback.',
+      '"Your stakes" first: each position Starkscan listed and the chain confirmed, with chain-read figures, as one button. Then validators from Starkscan\'s directory (schema-derived fixtures), shown alike whether Starkscan reports it prepared or catching up only just behind, each card one button, with their addresses, commission, 30-day uptime and delegated totals; unknown figures say unknown. The paste field sits below the list as the fallback.',
     prepare: bindList,
     state: { directory: "ready", positions: 2, validators: 3 },
   },
@@ -272,7 +272,7 @@ export const stakingCheckpoints: readonly ScenarioCheckpoint[] = [
     id: "staking-incomplete",
     label: "Staking list incomplete",
     narrative:
-      'Starkscan reports its snapshots incomplete: no validator is offered, and "Your stakes" shows what the chain confirmed and says some may not be listed, never "none". Pasting still works.',
+      'Starkscan reports its snapshots incomplete (unavailable, or catching up with a gap or stalled): no validator is offered, and "Your stakes" shows what the chain confirmed and says some may not be listed, never "none". Pasting still works.',
     state: { directory: "incomplete", positions: "incomplete" },
   },
   {

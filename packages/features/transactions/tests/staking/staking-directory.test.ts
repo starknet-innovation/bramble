@@ -15,7 +15,9 @@ import {
   type StakingDirectoryPage,
 } from "../../src/staking/staking-directory";
 import {
+  CATCHING_UP_COVERAGE,
   DIRECTORY_BTC_TOKEN,
+  directoryCoverage,
   directoryPage,
   directoryParts,
   directoryValidator,
@@ -43,7 +45,7 @@ describe("parseStakingDirectoryPage", () => {
         nextCursor: "opaque:cursor_1",
       }),
     );
-    expect(page.coverage).toBe("prepared");
+    expect(page.coverage).toBe("usable");
     expect(page.nextCursor).toBe("opaque:cursor_1");
     expect(page.validators.map((validator) => validator.staker)).toEqual(["0xa1", "0xb2"]);
     expect(page.validators[0]).toMatchObject({
@@ -71,12 +73,12 @@ describe("parseStakingDirectoryPage", () => {
     });
   });
 
-  test("reports coverage other than prepared as such", () => {
-    for (const status of ["catching_up", "unavailable"] as const) {
-      const page = directoryPage([directoryValidator(A)]);
-      page["coverage"] = { ...(page["coverage"] as object), status };
-      expect(parse(page)?.coverage).toBe(status);
-    }
+  test("reads coverage through the shared rule: catching up just behind is usable", () => {
+    const coverageOf = (coverage: unknown) =>
+      parse(directoryPage([directoryValidator(A)], { coverage }))?.coverage;
+    expect(coverageOf(CATCHING_UP_COVERAGE)).toBe("usable");
+    expect(coverageOf(directoryCoverage({ status: "unavailable" }))).toBe("incomplete");
+    expect(coverageOf({ ...CATCHING_UP_COVERAGE, lagBlocks: 101 })).toBe("incomplete");
   });
 
   test("a website is only ever an https hostname", () => {
@@ -107,7 +109,8 @@ describe("parseStakingDirectoryPage", () => {
       [],
       directoryPage([directoryValidator(A)], { chainId: "SN_SEPOLIA" }),
       directoryPage([directoryValidator(A)], { source: "live" }),
-      directoryPage([directoryValidator(A)], { coverage: { status: "done" } }),
+      directoryPage([directoryValidator(A)], { coverage: directoryCoverage({ status: "done" }) }),
+      directoryPage([directoryValidator(A)], { coverage: directoryCoverage({ lagBlocks: "0" }) }),
       directoryPage([directoryValidator(A)], { coverage: null }),
       directoryPage([directoryValidator(A)], { nextCursor: "has space" }),
       directoryPage([directoryValidator(A)], { nextCursor: "c".repeat(1025) }),
