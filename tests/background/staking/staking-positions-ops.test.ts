@@ -12,12 +12,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
+import { MAX_CATCHING_UP_LAG_BLOCKS } from "@bramble/transactions/staking-coverage";
 import { MAX_CHECKED_POSITIONS } from "@bramble/transactions/staking-positions";
 import { createStarkscanClient, type StarkscanHttp } from "@bramble/transactions/starkscan";
 import { canonicalAddress, canonicalFelt } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createDefaultRuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import {
+  CATCHING_UP_COVERAGE,
+  directoryCoverage,
+} from "../../../packages/features/transactions/tests/support/staking-directory-fixture";
 import {
   position,
   positionsView,
@@ -199,14 +204,29 @@ describe("staking positions", () => {
     });
   });
 
+  test("Starkscan catching up just behind is read as the directory reads it: complete", async () => {
+    const coverage = CATCHING_UP_COVERAGE;
+    const { send } = await harness({
+      chain: staked(),
+      reply: { body: positionsView(ACCOUNT, [position(ACCOUNT, STAKER)], { coverage }) },
+    });
+    expect(ready(await send(POSITIONS))).toMatchObject({
+      complete: true,
+      rows: [{ staked: "5", staker: STAKER }],
+    });
+    const empty = await harness({ reply: { body: positionsView(ACCOUNT, [], { coverage }) } });
+    expect(ready(await empty.send(POSITIONS))).toEqual({
+      complete: true,
+      rows: [],
+      state: "ready",
+    });
+  });
+
   test("incomplete coverage or a truncated list is incomplete, never 'no stakes'", async () => {
     for (const overrides of [
-      {
-        coverage: { ...(positionsView(ACCOUNT, [])["coverage"] as object), status: "catching_up" },
-      },
-      {
-        coverage: { ...(positionsView(ACCOUNT, [])["coverage"] as object), status: "unavailable" },
-      },
+      { coverage: { ...CATCHING_UP_COVERAGE, lagBlocks: MAX_CATCHING_UP_LAG_BLOCKS + 1 } },
+      { coverage: { ...CATCHING_UP_COVERAGE, gapIntervals: [{}] } },
+      { coverage: directoryCoverage({ status: "unavailable" }) },
       { positionsTruncated: true },
     ]) {
       const { send } = await harness({

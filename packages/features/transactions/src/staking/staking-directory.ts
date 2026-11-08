@@ -11,12 +11,14 @@
  * than showing a partial or shifted list. Fields the wallet does not read are
  * ignored, so an added Starkscan field cannot take the list down.
  *
- * Coverage: only `coverage.status === "prepared"` is complete. Any other
- * status is reported as such and its validators are not offered. A null
- * metric is "unknown", never zero.
+ * Coverage is read by `stakingCoverage` (./staking-coverage): a `prepared`
+ * snapshot, or a `catching_up` one that is only just behind, is usable and its
+ * validators are offered; anything else is reported as incomplete with no
+ * validators offered. A null metric is "unknown", never zero.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
+import { type StakingCoverage, stakingCoverage } from "./staking-coverage";
 import { stakerAddress } from "./staking-networks";
 
 /** Validators requested per page; a page with more is refused. */
@@ -31,9 +33,6 @@ const PPM = 1_000_000n;
 
 /** The Starkscan chain ids the directory may answer for. */
 export type StakingDirectoryChain = "SN_MAIN" | "SN_SEPOLIA";
-
-/** How complete Starkscan says this snapshot is. */
-export type DirectoryCoverage = "catching_up" | "prepared" | "unavailable";
 
 /** One pool as listed: a token and whether it is taking stake. */
 type DirectoryPool = { readonly active: boolean; readonly token: string };
@@ -56,12 +55,11 @@ export type DirectoryValidator = {
 
 /** One validated directory page. */
 export type StakingDirectoryPage = {
-  readonly coverage: DirectoryCoverage;
+  readonly coverage: StakingCoverage;
   readonly nextCursor: string | null;
   readonly validators: readonly DirectoryValidator[];
 };
 
-const COVERAGES: readonly string[] = ["catching_up", "prepared", "unavailable"];
 const STATUSES: readonly string[] = ["active", "exiting", "inactive"];
 const POOL_STATUSES: readonly string[] = ["active", "retired"];
 // C0/C1 controls, and the bidi overrides and isolates that can reorder an
@@ -219,14 +217,13 @@ export const parseStakingDirectoryPage = (
   limit: number = STAKING_DIRECTORY_PAGE_SIZE,
 ): StakingDirectoryPage | null => {
   if (!isRecord(value)) return null;
-  const coverage = isRecord(value["coverage"]) ? value["coverage"]["status"] : undefined;
+  const coverage = stakingCoverage(value["coverage"]);
   const items = value["items"];
   const cursor = value["nextCursor"];
   if (
     value["chainId"] !== chain ||
     value["source"] !== "finalized_prepared_staking_snapshot" ||
-    typeof coverage !== "string" ||
-    !COVERAGES.includes(coverage) ||
+    coverage === null ||
     !(cursor === null || isDirectoryCursor(cursor)) ||
     !Array.isArray(items) ||
     items.length > limit
@@ -239,9 +236,7 @@ export const parseStakingDirectoryPage = (
     (validator, index) =>
       validators.findIndex((other) => sameFelt(other.staker, validator.staker)) === index,
   );
-  return unique
-    ? { coverage: coverage as DirectoryCoverage, nextCursor: cursor, validators }
-    : null;
+  return unique ? { coverage, nextCursor: cursor, validators } : null;
 };
 
 /** A tracked token, as the directory filter needs it. */
@@ -252,20 +247,18 @@ type DirectoryToken = {
 };
 
 /**
- * One validator as the screen lists it: display strings plus the numbers it
- * sorts by. Nothing here is signed or used to build a call.
+ * One validator as the screen lists it: display strings only. Nothing here is
+ * signed or used to build a call.
  */
 export type StakingDirectoryEntry = {
   /** Commission, e.g. "10%"; null when unknown. */
   readonly commission: string | null;
-  readonly commissionPpm: number | null;
   readonly name: string | null;
   /** Each tracked token with an active pool, and its total delegated. */
   readonly pools: readonly { readonly delegated: string | null; readonly symbol: string }[];
   readonly staker: string;
   /** 30-day liveness, e.g. "99.5%"; null when unknown. */
   readonly uptime: string | null;
-  readonly uptimePpm: number | null;
   readonly website: string | null;
 };
 
@@ -301,12 +294,10 @@ export const directoryEntries = (
     return [
       {
         commission: validator.commissionPpm === null ? null : ppmPercent(validator.commissionPpm),
-        commissionPpm: validator.commissionPpm,
         name: validator.name,
         pools,
         staker: validator.staker,
         uptime: validator.liveness30dPpm === null ? null : ppmPercent(validator.liveness30dPpm),
-        uptimePpm: validator.liveness30dPpm,
         website: validator.website,
       },
     ];

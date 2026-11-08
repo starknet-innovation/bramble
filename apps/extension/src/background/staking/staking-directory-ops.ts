@@ -11,10 +11,12 @@
  * build a call: a validator picked from this list is verified on chain like a
  * pasted address.
  *
- * Failure behaviour: no client, or a network other than Mainnet, is "off"; a
- * coverage status other than `prepared` is "incomplete" with no validators;
- * any transport, status, size, deadline or schema failure is one refusal. The
- * screen then offers the pasted address, which always works.
+ * Failure behaviour: no client, or a network other than Mainnet, is "off". A
+ * `prepared` snapshot, or a `catching_up` one that is only just behind (see
+ * `stakingCoverage`), is "ready" and listed alike; any other coverage is
+ * "incomplete" with no validators. Any transport, status, size, deadline or
+ * schema failure is one refusal. The screen then offers the pasted address,
+ * which always works.
  */
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import { directoryEntries } from "@bramble/transactions/staking-directory";
@@ -52,7 +54,7 @@ export const stakingDirectoryResponse = async (
   } catch {
     return STAKING_DIRECTORY_UNREADABLE;
   }
-  if (page.coverage !== "prepared") return view({ state: "incomplete" });
+  if (page.coverage === "incomplete") return view({ state: "incomplete" });
   const tokens = preferences.tokens.filter((token) => token.networkId === networkId);
   return view({
     entries: directoryEntries(page, tokens, formatTokenAmount),

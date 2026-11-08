@@ -32,7 +32,6 @@ const NO_STAKES: StakingState = {
   directory: { loading: true },
   positions: { complete: true, rows: [] },
   selected: null,
-  sort: "stake",
   validator: { loading: true },
 };
 

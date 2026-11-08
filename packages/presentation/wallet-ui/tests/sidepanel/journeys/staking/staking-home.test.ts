@@ -66,12 +66,10 @@ const row = (overrides: Partial<StakingRow> = {}): StakingRow => ({
 
 const ENTRY: StakingDirectoryEntry = {
   commission: "5%",
-  commissionPpm: 50_000,
   name: "<b>Validator One</b>",
   pools: [{ delegated: "1", symbol: "STRK" }],
   staker: A,
   uptime: "99.5%",
-  uptimePpm: 995_000,
   website: null,
 };
 

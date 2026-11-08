@@ -1,10 +1,10 @@
 /**
- * The staking screen's state (issue 750): the validator directory, the sort
- * the user chose, and the one validator they opened (picked from the list or
- * pasted). The directory is Starkscan data relayed by the background and is
- * re-validated here key by key; it is display data only. Opening a validator
- * keeps only its staker address and the directory name to show beside it;
- * every figure on the validator's own screen is read on chain.
+ * The staking screen's state (issue 750): the validator directory, in
+ * Starkscan's own order, and the one validator the user opened (picked from
+ * the list or pasted). The directory is Starkscan data relayed by the
+ * background and is re-validated here key by key; it is display data only.
+ * Opening a validator keeps only its staker address and the directory name to
+ * show beside it; every figure on the validator's own screen is read on chain.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
@@ -24,12 +24,10 @@ export const MAX_LISTED_VALIDATORS = 500;
 /** One validator as listed, mirroring the background's entry. */
 export type StakingDirectoryEntry = {
   readonly commission: string | null;
-  readonly commissionPpm: number | null;
   readonly name: string | null;
   readonly pools: readonly { readonly delegated: string | null; readonly symbol: string }[];
   readonly staker: string;
   readonly uptime: string | null;
-  readonly uptimePpm: number | null;
   readonly website: string | null;
 };
 
@@ -46,9 +44,6 @@ export type StakingDirectoryState =
       readonly nextCursor: string | null;
     };
 
-/** How the list is ordered. "stake" keeps the directory's own order. */
-export type StakingSort = "commission" | "stake" | "uptime";
-
 /** The whole staking screen. */
 export type StakingState = {
   readonly directory: StakingDirectoryState;
@@ -56,7 +51,6 @@ export type StakingState = {
   readonly positions: StakingPositionsState;
   /** The validator the user opened, or null for the list. */
   readonly selected: { readonly name: string | null; readonly staker: string } | null;
-  readonly sort: StakingSort;
   readonly validator: StakingValidatorState;
   /** Home's open portfolio tab, kept for this account and network. */
   readonly homeTab?: "nfts" | "staking" | "tokens";
@@ -67,7 +61,6 @@ export const STAKING_LOADING: StakingState = {
   directory: { loading: true },
   positions: { loading: true },
   selected: null,
-  sort: "stake",
   validator: { loading: true },
 };
 
@@ -76,9 +69,6 @@ const UNREADABLE = "Couldn't load the validator list. Paste a validator address 
 const isText = (value: unknown, max = MAX_TEXT): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= max;
 const isNullableText = (value: unknown): boolean => value === null || isText(value);
-const isPpm = (value: unknown): boolean =>
-  value === null ||
-  (Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= 1_000_000);
 
 const isPool = (value: unknown): boolean =>
   isRecord(value) &&
@@ -88,23 +78,12 @@ const isPool = (value: unknown): boolean =>
 
 const isEntry = (value: unknown): value is StakingDirectoryEntry =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, [
-    "commission",
-    "commissionPpm",
-    "name",
-    "pools",
-    "staker",
-    "uptime",
-    "uptimePpm",
-    "website",
-  ]) &&
+  hasOnlyKnownKeys(value, ["commission", "name", "pools", "staker", "uptime", "website"]) &&
   stakerAddress(value["staker"]) === value["staker"] &&
   isNullableText(value["name"]) &&
   isNullableText(value["website"]) &&
   isNullableText(value["commission"]) &&
   isNullableText(value["uptime"]) &&
-  isPpm(value["commissionPpm"]) &&
-  isPpm(value["uptimePpm"]) &&
   Array.isArray(value["pools"]) &&
   value["pools"].length > 0 &&
   value["pools"].length <= MAX_POOLS &&
@@ -163,29 +142,6 @@ export const appendDirectoryPage = (
     nextCursor: full ? null : next.nextCursor,
   };
 };
-
-// Unknown figures sort last whichever way the list is ordered.
-const byFigure =
-  (key: "commissionPpm" | "uptimePpm", direction: 1 | -1) =>
-  (a: StakingDirectoryEntry, b: StakingDirectoryEntry): number => {
-    const [x, y] = [a[key], b[key]];
-    if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
-    return (x - y) * direction;
-  };
-
-/**
- * The listed validators in the chosen order. "stake" is the directory's own
- * order (most STRK staked first); the others are stable sorts over it. Pure.
- */
-export const sortedEntries = (
-  entries: readonly StakingDirectoryEntry[],
-  sort: StakingSort,
-): readonly StakingDirectoryEntry[] =>
-  sort === "stake"
-    ? entries
-    : [...entries].sort(
-        sort === "commission" ? byFigure("commissionPpm", 1) : byFigure("uptimePpm", -1),
-      );
 
 /**
  * Creates the directory half of the staking client over the panel's sender.

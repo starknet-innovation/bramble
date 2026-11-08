@@ -1,22 +1,14 @@
 /**
  * Staking list bindings (issue 750): paste a validator address, open one from
- * the directory, go back to the list, change the order, and load the next
- * page. Opening a validator only records its staker address (and the
- * directory name to show beside it); the validator screen then reads and
- * verifies everything on chain, and an action there is prepared by the
+ * the directory, go back to the list, and load the next page. Opening a
+ * validator only records its staker address (and the directory name to show
+ * beside it); the validator screen then reads and verifies everything on chain, and an action there is prepared by the
  * background from that address alone.
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy } from "../../shared/dom";
-import {
-  appendDirectoryPage,
-  pastedStaker,
-  type StakingSort,
-  type StakingState,
-} from "./staking-directory-client";
-
-const SORTS: readonly StakingSort[] = ["commission", "stake", "uptime"];
+import { appendDirectoryPage, pastedStaker, type StakingState } from "./staking-directory-client";
 
 /**
  * Dependencies the list bindings close over. `state` and `setState` read and
@@ -33,7 +25,7 @@ export type StakingDirectoryUiDeps = {
 };
 
 /**
- * Binds the staking list: paste, open, back, sort and "Show more".
+ * Binds the staking list: paste, open, back and "Show more".
  */
 export const bindStakingDirectory = (deps: StakingDirectoryUiDeps): void => {
   const { app, render, setState, state, status, wallet } = deps;
@@ -77,11 +69,6 @@ export const bindStakingDirectory = (deps: StakingDirectoryUiDeps): void => {
       selected: null,
       validator: { loading: true },
     });
-  });
-  const sort = app?.querySelector<HTMLSelectElement>("[data-staking-sort]");
-  sort?.addEventListener("change", () => {
-    const value = SORTS.find((option) => option === sort.value);
-    if (value) repaint({ ...state(), sort: value });
   });
   const more = app?.querySelector<HTMLButtonElement>("[data-staking-more]");
   more?.addEventListener("click", () => {

@@ -34,12 +34,10 @@ export const ROW = {
 
 const ENTRY = {
   commission: "10%",
-  commissionPpm: 100_000,
   name: "Fixture Validator",
   pools: [{ delegated: "7,438,192.55", symbol: "STRK" }],
   staker: STAKER,
   uptime: "99.82%",
-  uptimePpm: 998_200,
   website: "validator.example",
 };
 
@@ -51,7 +49,6 @@ const pasteOnly: StakingState = {
   },
   positions: { unavailable: "Couldn't load your stakes." },
   selected: null,
-  sort: "stake",
   validator: { loading: true },
 };
 
@@ -62,7 +59,6 @@ const list: StakingState = {
       {
         ...ENTRY,
         commission: "5%",
-        commissionPpm: 50_000,
         name: "Second Fixture Validator With A Long Name",
         pools: [
           { delegated: "1,204,551", symbol: "STRK" },
@@ -74,12 +70,10 @@ const list: StakingState = {
       {
         ...ENTRY,
         commission: null,
-        commissionPpm: null,
         name: null,
         pools: [{ delegated: null, symbol: "STRK" }],
         staker: "0x2c4e6a8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4",
         uptime: null,
-        uptimePpm: null,
         website: null,
       },
     ],
@@ -102,7 +96,6 @@ const list: StakingState = {
     ],
   },
   selected: null,
-  sort: "stake",
   validator: { loading: true },
 };
 
@@ -263,7 +256,7 @@ export const stakingCheckpoints: readonly ScenarioCheckpoint[] = [
     id: "staking",
     label: "Staking",
     narrative:
-      '"Your stakes" first: each position Starkscan listed and the chain confirmed, with chain-read figures, as one button. Then validators from Starkscan\'s directory (schema-derived fixtures), each card one button, with their addresses, commission, 30-day uptime and delegated totals; unknown figures say unknown. The paste field sits below the list as the fallback.',
+      '"Your stakes" first: each position Starkscan listed and the chain confirmed, with chain-read figures, as one button. Then validators from Starkscan\'s directory (schema-derived fixtures), shown alike whether Starkscan reports it prepared or catching up only just behind, each card one button, with their addresses, commission, 30-day uptime and delegated totals; unknown figures say unknown. The paste field sits below the list as the fallback.',
     prepare: bindList,
     state: { directory: "ready", positions: 2, validators: 3 },
   },
@@ -272,7 +265,7 @@ export const stakingCheckpoints: readonly ScenarioCheckpoint[] = [
     id: "staking-incomplete",
     label: "Staking list incomplete",
     narrative:
-      'Starkscan reports its snapshots incomplete: no validator is offered, and "Your stakes" shows what the chain confirmed and says some may not be listed, never "none". Pasting still works.',
+      'Starkscan reports its snapshots incomplete (unavailable, or catching up with a gap or stalled): no validator is offered, and "Your stakes" shows what the chain confirmed and says some may not be listed, never "none". Pasting still works.',
     state: { directory: "incomplete", positions: "incomplete" },
   },
   {

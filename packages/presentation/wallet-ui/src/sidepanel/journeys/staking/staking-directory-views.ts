@@ -13,20 +13,9 @@ import { escapeHtml } from "@bramble/core/html";
 import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
-import { inputControl, selectField } from "@bramble/ui-kit/fields";
+import { inputControl } from "@bramble/ui-kit/fields";
 import { icon } from "../../shared/icons";
-import {
-  type StakingDirectoryEntry,
-  type StakingSort,
-  type StakingState,
-  sortedEntries,
-} from "./staking-directory-client";
-
-const SORTS: readonly { readonly label: string; readonly value: StakingSort }[] = [
-  { label: "Most staked", value: "stake" },
-  { label: "Lowest commission", value: "commission" },
-  { label: "Highest uptime", value: "uptime" },
-];
+import type { StakingDirectoryEntry, StakingState } from "./staking-directory-client";
 
 // Below a listed directory the paste field is the fallback, so it says so.
 const pasteForm = (listed: boolean): string => `
@@ -69,22 +58,15 @@ const entryRow = (entry: StakingDirectoryEntry): string => `
     </button>
   </li>`;
 
+// Starkscan's own order (most STRK staked first), as loaded page by page.
 const listed = (
   directory: Extract<StakingState["directory"], { readonly entries: unknown }>,
-  sort: StakingSort,
 ): string => `
   <p class="hint">Listed by Starkscan. Check the address before you stake.</p>
-  ${selectField({
-    attributes: { "data-staking-sort": "" },
-    label: "Sort by",
-    name: "staking-sort",
-    options: SORTS,
-    selected: sort,
-  })}
   ${
     directory.entries.length === 0
       ? emptyState("No validators with a pool for tokens you track.")
-      : `<ul class="allowance-list staking-list">${sortedEntries(directory.entries, sort).map(entryRow).join("")}</ul>`
+      : `<ul class="allowance-list staking-list">${directory.entries.map(entryRow).join("")}</ul>`
   }
   ${directory.moreError ? `<p class="hint" role="alert">${escapeHtml(directory.moreError)}</p>` : ""}
   ${
@@ -108,6 +90,6 @@ export const stakingDirectorySection = (state: StakingState): string => {
           ? emptyState("Starkscan's validator list is incomplete right now.", "alert")
           : "unavailable" in directory
             ? emptyState(directory.unavailable, "alert")
-            : listed(directory, state.sort)
+            : listed(directory)
   }${pasteForm("entries" in directory)}`;
 };
