@@ -204,3 +204,63 @@ describe("incoming multisig CallSet review", () => {
     expect(shared).toEqual(["auth-1"]);
   });
 });
+
+describe("multisig private balances key state", () => {
+  const panel = () =>
+    multisigStrk20KeyPanel("SN_MAIN", defaultWalletPreferences(), {
+      balances: { balances: [] },
+      changes: {},
+      currency: "usd",
+      prices: {},
+    });
+  const loadingLine = (app: ParentNode) =>
+    app.querySelector<HTMLElement>("[data-ms-strk20-key-loading]");
+  const shownKeyButtons = (app: ParentNode) =>
+    [...app.querySelectorAll<HTMLButtonElement>("[data-ms-strk20-key]")]
+      .filter((button) => !button.hidden)
+      .map((button) => button.dataset["msStrk20Key"]);
+
+  test("says it is loading until the key state arrives, with no action offered", () => {
+    const html = panel();
+    expect(html).toContain("Loading…");
+    expect(html).toContain('role="status"');
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    expect(shownKeyButtons(host)).toEqual([]);
+  });
+
+  test("replaces the loading line with the actions the key state allows", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    let answer: (state: "absent") => void = () => undefined;
+    const client = await makeMultisigUiClient({
+      strk20KeyStatus: () => new Promise((resolve) => (answer = resolve)),
+    });
+    const app = mountMultisigUi(panel(), client, fixture.status, {
+      selectedMultisigId: () => fixture.record.id,
+    });
+    await flushMultisigUi();
+    expect(loadingLine(app)?.textContent).toBe("Loading…");
+    answer("absent");
+    await flushMultisigUi();
+    expect(loadingLine(app)).toBeNull();
+    expect(shownKeyButtons(app)).toEqual(["create"]);
+  });
+
+  test("a failed read shows its reason as an alert instead of staying blank", async () => {
+    const fixture = await makeArgentMultisigFixture();
+    const client = await makeMultisigUiClient({
+      strk20KeyStatus: async () => {
+        throw new Error("strk20 key status unavailable");
+      },
+    });
+    const app = mountMultisigUi(panel(), client, fixture.status, {
+      selectedMultisigId: () => fixture.record.id,
+    });
+    await flushMultisigUi();
+    const line = loadingLine(app);
+    expect(line?.getAttribute("role")).toBe("alert");
+    expect(line?.textContent).not.toBe("Loading…");
+    expect(line?.textContent?.length ?? 0).toBeGreaterThan(0);
+    expect(shownKeyButtons(app)).toEqual([]);
+  });
+});

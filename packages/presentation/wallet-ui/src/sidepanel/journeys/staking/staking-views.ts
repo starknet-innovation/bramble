@@ -79,6 +79,18 @@ const rowActions = (row: StakingRow): string => {
   if (row.state === "exit-pending" || row.state === "withdrawable") {
     parts.push(actionButton(row, "cancel-unstake", "Cancel unstake", "secondary"));
   }
+  // Cancel closes a claim, withdraw or cancel-unstake review: those reviews
+  // hide the row's other controls, so it is the way back to them.
+  if (parts.length > 0) {
+    parts.push(
+      button({
+        attributes: { "data-staking-cancel": rowKey(row), hidden: true },
+        label: "Cancel",
+        size: "small",
+        variant: "ghost",
+      }),
+    );
+  }
   return `${parts.length > 0 ? `<div class="staking-actions">${parts.join("")}</div>` : ""}
     ${row.accepting ? amountForm(row, "stake", "Stake") : `<p class="hint">${escapeHtml("This validator is leaving staking.")}</p>`}
     ${row.state === "staked" ? amountForm(row, "unstake", "Unstake") : ""}`;

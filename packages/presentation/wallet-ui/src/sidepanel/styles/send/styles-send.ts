@@ -314,7 +314,10 @@ export const SEND_STYLES = `
     padding: ${SPACE.md};
     text-align: center;
   }
+  /* Steps align from the top, so a two-line label ("Verify account") keeps its
+     number on the same line as the others instead of centring higher. */
   .ledger-task-list li {
+    align-content: start;
     align-items: center;
     color: var(--bramble-muted);
     display: grid;

@@ -4,6 +4,7 @@
  */
 
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textField } from "@bramble/ui-kit/fields";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
@@ -12,7 +13,9 @@ import type { MultisigPortfolioData } from "./multisig-portfolio-data";
 
 /**
  * Renders the private-balance section when this network has a pool configured.
- * Buttons stay hidden until the background reports whether the key is held.
+ * Buttons stay hidden until the background reports whether the key is held;
+ * until then the section says it is loading, and the binding replaces that
+ * line with the actions, or with the reason if the read fails.
  */
 export const multisigStrk20KeyPanel = (
   networkId: StarknetNetworkId,
@@ -25,6 +28,7 @@ export const multisigStrk20KeyPanel = (
   return `<section class="review-panel" data-ms-strk20-key-panel aria-label="Private balances">
     <p><strong>Private balances</strong></p>
     <p class="hint">Anyone with the viewing key can see all of this multisig's private activity.</p>
+    ${emptyState("Loading…", "status", { "data-ms-strk20-key-loading": true })}
     <div class="action-row">
       ${button({
         attributes: { "data-ms-strk20-key": "create", hidden: true },

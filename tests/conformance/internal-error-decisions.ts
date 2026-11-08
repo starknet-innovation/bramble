@@ -120,6 +120,7 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Couldn't update that folder",
   "Couldn't prepare this private action.",
   "Couldn't update this multisig's key.",
+  "Couldn't load private balances. Try again.",
   "Currency update failed",
   "Deployment review failed",
   "Diagnostic preference failed",

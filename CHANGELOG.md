@@ -57,8 +57,8 @@ in one transaction, and fixes from user and QA reports.
   `signing-failed` (#860).
 - Sponsored account deployment works with the live gateway instead of always
   falling back to self-paid (#850).
-- A wrong passphrase when revealing secrets says "Incorrect passphrase" (#834,
-  #835).
+- A wrong passphrase when revealing secrets says "That passphrase is wrong."
+  (#834, #835).
 - A failed Ledger setup or recovery keeps your network instead of switching it
   (#822, #874).
 - A privacy-service outage reads as services down, with the diagnostic kept

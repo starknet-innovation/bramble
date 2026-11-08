@@ -21,11 +21,13 @@ import { icon } from "../../shared/icons";
 import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
 import {
   type ReviewFeeState,
+  reviewCallItems,
   reviewCallsList,
   reviewConstraints,
   reviewCostNote,
   reviewFeeSection,
   reviewOutcome,
+  reviewOutcomeSection,
   reviewPanel,
   riskFlagMessages,
 } from "../../shared/review-render";
@@ -159,6 +161,18 @@ const invokeDeploymentReview = (
   };
 };
 
+// One "What will happen" section: the decoded calls (or, with none, the plain
+// sign-and-submit sentence), then, for a multisig proposal, that it is saved for
+// the other signers and not sent yet. Every line is the same consequence.
+const invokeOutcome = (approval: PendingApproval, proposal: boolean): string =>
+  reviewOutcomeSection(
+    (reviewCallItems(approval.summaries ?? [], approval.reviewAssets ?? []) ||
+      `<p>${escapeHtml("Sign and submit the decoded transaction from the active account.")}</p>`) +
+      (proposal
+        ? `<p>${escapeHtml("Saves this for the other signers. It is not sent yet.")}</p>`
+        : ""),
+  );
+
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => {
   const offerGasless = gaslessChoiceAllowed(approval, status);
   const proposal = (approval.multisigThreshold ?? 0) > 1;
@@ -167,8 +181,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Transaction request")}
       ${status.locked ? '<p class="hint">Unlock the wallet to review and approve this transaction.</p>' : ""}
-      ${approvalCalls(approval) || reviewOutcome("Sign and submit the decoded transaction from the active account.")}
-      ${proposal ? reviewOutcome("Saves this for the other signers. It is not sent yet.") : ""}
+      ${invokeOutcome(approval, proposal)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
     ${
