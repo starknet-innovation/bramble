@@ -115,6 +115,7 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
   "Couldn't prepare that signer change",
   "Couldn't remove that NFT",
   "Couldn't remove that token",
+  "Couldn't show the art",
   "Couldn't update that NFT",
   "Couldn't update that folder",
   "Couldn't prepare this private action.",

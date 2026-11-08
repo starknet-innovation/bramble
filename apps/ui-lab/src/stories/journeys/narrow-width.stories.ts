@@ -102,3 +102,10 @@ export const StakingClaimElsewhere = narrowSidepanelStory(
   "staking-claim-elsewhere",
   [(document) => assertInsidePanel(document, ".staking-review")],
 );
+
+export const HomeNftsDiscovered = narrowSidepanelStory(
+  "Home NFTs, discovered · 320px",
+  "nft-home",
+  "home-nfts-discovered",
+  [(document) => assertInsidePanel(document, ".nft-actions button")],
+);
