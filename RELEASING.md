@@ -45,15 +45,31 @@ step relies on.
 2. **Version metadata.** Bump `package.json` **and** `apps/extension/public/manifest.json` to
    `X.Y.0` in lockstep (section 1) and run the single-source guard.
 3. **Gates green.** Required PR CI is green on the release-branch tip; the
-   nightly / full suite (E2E, dependency audit, build — `.github/workflows/nightly.yml`)
-   is green on `release/vX.Y`.
+   nightly / full suite (E2E, live Sepolia import paths, dependency audit, build —
+   `.github/workflows/nightly.yml`) is green on `release/vX.Y`.
 4. **Release notes.** Draft the notes (CHANGELOG section once #60 lands;
    otherwise the tag's auto-generated notes).
 5. **Release candidate (when appropriate).** Tag `vX.Y.0-rc.1` on the release
    branch and run a final validation pass — build + package + `sha256sum -c`
-   (section 2), load the unpacked build, confirm E2E. Iterate `-rc.2`, … if the
+   (section 2), load the unpacked build, confirm E2E. Dispatch the nightly on
+   the release branch and check its Sepolia import-path verdicts in the job
+   summary (it uploads nothing). Then run `verify-sepolia.ts` locally with
+   `BRAMBLE_SEPOLIA_LEDGER=1` and the test Ledger for TA-32…TA-37, check TA-38 by
+   hand, and commit that local run's scorecard as
+   `tools/vendor-dataset/verification-sepolia-<date>.json`
+   (`tools/vendor-dataset/README.md`). Iterate `-rc.2`, … if the
    RC turns up blockers. RC tags are validation only; they do not publish.
 6. **Full validation.** Confirm the RC against the acceptance criteria.
+   The physical test Ledger check stays: import and blind-sign on the real
+   device (TA-32…TA-38). The Speculos suite (`bun run test:e2e:ledger`) answers
+   the dashboard steps with canned replies and fakes WebHID, so it does not
+   replace real firmware. Its CI run is `.github/workflows/ledger-e2e.yml`,
+   which fails by design while a Ledger app hash is unrecorded. They are
+   re-recorded only when the pinned app commit or builder image changes: one
+   maintainer records them with the workflow's `record_hashes` mode and a
+   second independent build (another record run or a local build), and a
+   second maintainer reviews that pull request
+   (`tests/e2e/ledger/README.md`, "Recording the app hashes").
 7. **Promote to `main`.** Merge `release/vX.Y` → `main` as a **merge commit**
    (not squash — preserve release history), done explicitly by a maintainer.
 8. **Automatic release.** The merge triggers `auto-release.yml`: it derives the
@@ -348,6 +364,9 @@ again over the old one reopens them; removing the extension deletes them.
 Activity is not protected the same way: an older build drops activity rows it
 can't parse, and its next activity write (status reconciliation runs without an
 unlock) stores the list without them.
+
+v0.10.9 is one of these: it moves the vault to schema v13 (#827), so v0.10.8
+must not be republished after it.
 
 So never republish, re-tag or attach an older version, on any channel. To pull
 a bad release, ship a patch with a higher version (vX.Y.Z+1) that contains the

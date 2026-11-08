@@ -13,11 +13,14 @@ import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
 import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
+import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalPayload } from "../approvals/approvals";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { PassiveUnlockSession } from "../runtime/session";
 import { executeReviewedGasless } from "../transactions/gasless-review";
@@ -38,7 +41,8 @@ export type InvokeExecuteDeps = {
    * Watched shared accounts, read into the trusted set for the execution-time
    * lookalike check (Sherlock 140). Omitted, that check skips them.
    */
-  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs" | "upsertIntent">;
   readonly preferencesStore: WalletPreferencesStore;
   /** Fiat prices for a gasless fee the user chose. Absent in narrow test doubles. */
   readonly prices?: PriceService;
@@ -57,6 +61,35 @@ export type InvokeExecuteDeps = {
 };
 
 /**
+ * A user-approved invoke as execution receives it. The fees are the figures the
+ * card bound; `reviewedThreshold` is the multisig threshold the card reviewed.
+ */
+export type ReviewedInvokeApproval = {
+  readonly context?: ApprovalContext;
+  readonly gaslessFee?: GaslessFeeOffer;
+  readonly origin: string;
+  readonly payload: ApprovalPayload;
+  readonly reviewedFee?: FeeEstimate;
+  /** The reviewed deployment half, when the account deploys before the calls. */
+  readonly reviewedDeploymentFee?: FeeEstimate;
+  readonly reviewedThreshold?: number;
+};
+
+/**
+ * The reviewed figures, each the ceiling at its own submit boundary: the invoke
+ * fee, and the deployment fee when the account deploys before the calls.
+ */
+export const reviewedCeiling = (approval: {
+  readonly reviewedDeploymentFee?: FeeEstimate;
+  readonly reviewedFee?: FeeEstimate;
+}) => ({
+  ...(approval.reviewedFee ? { reviewedFee: approval.reviewedFee } : {}),
+  ...(approval.reviewedDeploymentFee
+    ? { reviewedDeploymentFee: approval.reviewedDeploymentFee }
+    : {}),
+});
+
+/**
  * Submits the held calls on the lane the approval selected.
  */
 export const submitHeldInvoke = async (input: {
@@ -67,7 +100,10 @@ export const submitHeldInvoke = async (input: {
     readonly reviewedFee?: FeeEstimate;
   };
   readonly calls: readonly Call[];
-  readonly ceiling: { readonly reviewedFee?: FeeEstimate };
+  readonly ceiling: {
+    readonly reviewedDeploymentFee?: FeeEstimate;
+    readonly reviewedFee?: FeeEstimate;
+  };
   readonly context: { readonly signHash: StarkHashSigner };
   readonly deps: InvokeExecuteDeps;
   readonly poolProof: ApprovalPayload["proof"];
@@ -95,6 +131,11 @@ export const submitHeldInvoke = async (input: {
   // would be dropped, so a choice on a proof-bearing invoke is refused.
   if (gaslessFee && (input.poolProof !== undefined || input.approval.payload.proof !== undefined)) {
     throw new WalletError("Paying the network fee in another token is unavailable.");
+  }
+  // Only the public lane deploys an account before its calls. A reviewed
+  // deployment on the pool or gasless lane would be dropped, so it is refused.
+  if (input.ceiling.reviewedDeploymentFee && (input.poolProof || gaslessFee)) {
+    throw new WalletError(UNDEPLOYED_BRAAVOS_REFUSAL);
   }
   if (input.poolProof) {
     return input.strk20.submitPrepared({

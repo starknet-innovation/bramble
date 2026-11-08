@@ -114,6 +114,9 @@ by construction — never send real funds to an address it shows, and read the h
 `tests/e2e/dev-session.ts` before pointing `BRAMBLE_DEV_MNEMONIC` at a phrase of your own. The wallet it
 creates is kept in a git-ignored `.dev-profile/`; delete that directory to start over.
 
+Opt-in mainnet UI tests against an sncast account on your machine are
+`bun run test:e2e:mainnet:wallet`. They are not part of CI. See `docs/MAINNET_E2E.md`.
+
 ### Offline checks
 
 After `bun install --frozen-lockfile`, the fast PR gates below need only Bun and the checked-out
@@ -181,7 +184,8 @@ access only the validated provider protocol. The package graph and its enforced 
 - **[Wallet store architecture](docs/WALLET_STORE.md)** — persistence layout, account scoping, Chrome update migrations, and Ledger viewing-key custody.
 - **[Operations](docs/OPERATIONS.md)** — gateway monitoring, support diagnostics, and incident response.
 - **[STRK20 privacy](docs/STRK20_PRIVACY.md)** — pinned Privacy SDK, privileged data flow, and failure boundaries.
-- **[Gasless mainnet test](docs/GASLESS_MAINNET.md)** — opt-in `bun run test:mainnet` against the live paymaster. Not part of CI.
+- **[Gasless mainnet test](docs/GASLESS_MAINNET.md)** — opt-in `bun run test:mainnet` against the live paymaster.
+- **[Mainnet E2E in CI](docs/MAINNET_E2E_CI.md)** — scheduled live mainnet run on a capped hot wallet. Not part of pull-request CI.
 - **[Security audit](docs/security-audit/index.md)** — baseline, threat model, review sequence, and sanitized findings ledger.
 - **[Source package audit](docs/security-audit/src-package-audit.md)** — package-by-package controls, resolved findings, and validation evidence.
 - **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Releasing](RELEASING.md)** · **[Building from source](BUILDING.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**

@@ -101,7 +101,7 @@ describe("NFT detail animation", () => {
     // CSP does not govern WebRTC, and DNS prefetching differs by browser, so
     // the hint must not claim the sandbox has no network access. Copy review
     // #385 shortened it to what the reader does: nothing loads before play.
-    expect(hint).toBe("This collectible draws its own animation. Press play to load it.");
+    expect(hint).toBe("This NFT draws its own animation. Press play to load it.");
     expect(hint.toLowerCase()).not.toContain("network");
   });
 

@@ -217,30 +217,6 @@ describe("Ledger sign controller", () => {
     expect(h.reports).toEqual([]);
   });
 
-  test("a blind-signing-disabled refusal shows the one-time unblock copy", async () => {
-    // The real library folds a blind-signing refusal into ExecutionError (0x6f00)
-    // on signHash — never a distinct status word — so the classifier keys off it.
-    const h = harness({
-      openConnected: () =>
-        Promise.resolve(
-          fakeClient(() =>
-            Promise.resolve({
-              errorMessage: "Execution Error",
-              r: new Uint8Array(),
-              returnCode: 0x6f00,
-              s: new Uint8Array(),
-            }),
-          ),
-        ),
-      request: () => Promise.reject(new Error("unused")),
-    });
-    controllerFor(h).present(REQUEST);
-    await tick();
-
-    const last = h.views.at(-1);
-    expect(last?.phase.kind === "error" && last.phase.code).toBe("blind-signing-disabled");
-  });
-
   test("a thrown transport error on the pre-check (device locked) maps to device-locked", async () => {
     // getAppVersion lets transport throws propagate (signHash swallows them), so
     // the shared pre-check's version read is where a locked device is detected.

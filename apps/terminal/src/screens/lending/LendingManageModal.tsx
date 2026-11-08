@@ -18,6 +18,7 @@ import {
   recheckVesuMultiplyQuote,
   registeredVesuVToken,
   VESU_VAULT_DEPOSITS_ENABLED,
+  verifyCuratedVesuVault,
   type VesuMultiplyAnchoredQuote,
   verifyVesuMultiplyPool,
 } from "../../protocols/index";
@@ -273,6 +274,8 @@ export const LendingManageModal = ({
 
   const vaultCalls = (): readonly import("starknet").Call[] => {
     if (address === null || raw === null) throw new Error("Enter a valid amount.");
+    // The vault's class is read again right before the wallet sees the calls (#270).
+    handoffCheck.current = () => verifyCuratedVesuVault(position.poolId);
     return action === "redeem"
       ? buildVesuVaultRedeemCalls(position.poolId, BigInt(raw), address)
       : buildVesuVaultDepositCalls(

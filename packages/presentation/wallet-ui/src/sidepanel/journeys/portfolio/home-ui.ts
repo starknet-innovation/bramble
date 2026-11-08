@@ -13,6 +13,7 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { prefersReducedMotion, projectMomentum } from "../../shared/motion";
 import { bindRecoverAccount } from "./recovery-ui";
+import { bindVipNotice } from "./vip-notice-ui";
 
 /**
  * State accessors and services the home bindings close over. State lives in
@@ -369,9 +370,10 @@ const bindPortfolioMenu = (deps: HomeUiDeps): void => {
   }
 };
 
-/** Wires the Home drawer, portfolio menu, and the read-only recover-account entry. */
+/** Wires the Home drawer, portfolio menu, the read-only recover-account entry and the VIP notice. */
 export const bindHomeUi = (deps: HomeUiDeps): void => {
   bindDrawer(deps);
   bindPortfolioMenu(deps);
   bindRecoverAccount(deps);
+  bindVipNotice(deps);
 };

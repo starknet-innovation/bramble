@@ -52,6 +52,7 @@ const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => 
     const account = await runVaultCreationWithNetwork(
       ctx.session,
       ctx.preferencesStore,
+      ctx.wallet,
       networkId,
       () => ctx.wallet.createAccount(input),
     );
@@ -139,18 +140,27 @@ const handleCreateKeyVault: RouterHandler = async (ctx, messageType, message) =>
   if (!createKeyVault) {
     return { error: "wallet unavailable" };
   }
+  // The Ready proof reads the chain at the pasted key's addresses. With a vault
+  // already present the write is refused anyway, so those reads never leave.
+  if (input.accountContractType === "argent" && (await ctx.wallet.status()).hasVault) {
+    throw new WalletError("Wallet already exists");
+  }
   const pick = await provedReadyPick(ctx, input);
   return ctx.activeStateCoordinator.run(async () => {
-    // The proof read the chain for a wallet that did not exist yet; one
-    // created meanwhile (or queued ahead of this task) was never this
-    // request's to write into. Refused inside the coordinator, before the
-    // network preference or the session is touched.
-    if (pick.address !== undefined && (await ctx.wallet.status()).hasVault) {
+    // A key vault is only ever created over a fresh store. The proof read the
+    // chain for a wallet that did not exist yet, and one created meanwhile (or
+    // queued ahead of this task) was never this request's to write into. A
+    // wrong passphrase fails decryption rather than refusing, and under an
+    // unlocked session that failure would also switch the network and lock
+    // the wallet, so any existing vault is refused here, before the network
+    // preference or the session is touched.
+    if ((await ctx.wallet.status()).hasVault) {
       throw new WalletError("Wallet already exists");
     }
     const account = await runVaultCreationWithNetwork(
       ctx.session,
       ctx.preferencesStore,
+      ctx.wallet,
       input.networkId,
       () => createKeyVault({ ...input, ...pick }),
     );

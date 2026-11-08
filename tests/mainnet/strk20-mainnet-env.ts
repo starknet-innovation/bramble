@@ -4,23 +4,21 @@
  * the browser under test.
  */
 
-import { isServiceUrl, normalizeHostname } from "@bramble/core/service-url";
+import { isServiceUrl } from "@bramble/core/service-url";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   isNonZeroStarkFieldElement,
   isStarkPrivateKey,
   normalizeFeltInput,
 } from "@bramble/wallet-model/networks";
+import { assertLiveMainnetAllowed, assertStrk20CiAllowed } from "../../scripts/mainnet-e2e-guard";
+import { dedicatedHttpsRpcUrl, MAINNET_WRITE_ACK } from "./mainnet-safety";
 
-const MAINNET_ACK = "I_UNDERSTAND_THIS_WRITES_TO_MAINNET";
+const MAINNET_ACK = MAINNET_WRITE_ACK;
 const PUBLIC_CALLER_ACK = "I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS";
 const RESUME_AFTER_DEPOSIT_ACK = "I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED";
 const STRK_DECIMALS = 18;
 const MAX_DEPOSIT_RAW = 10n ** 18n;
-const SHARED_MAINNET_RPC_HOSTS = new Set([
-  "mainnet.nodes.starknet.org",
-  "wallet.nodes.starknet.org",
-]);
 
 /**
  * Validated live-test inputs. `privateKey` must remain process-local and may be
@@ -49,24 +47,21 @@ const httpsServiceUrl = (value: string | undefined, name: string): string => {
   return url.toString();
 };
 
-const dedicatedRpcUrl = (value: string | undefined): string => {
-  const rpcUrl = httpsServiceUrl(value, "BRAMBLE_STRK20_E2E_RPC_URL");
-  if (SHARED_MAINNET_RPC_HOSTS.has(normalizeHostname(new URL(rpcUrl).hostname))) {
-    throw new Error("BRAMBLE_STRK20_E2E_RPC_URL must be a dedicated test RPC endpoint");
-  }
-  return rpcUrl;
-};
+const dedicatedRpcUrl = (value: string | undefined): string =>
+  dedicatedHttpsRpcUrl(value, "BRAMBLE_STRK20_E2E_RPC_URL");
 
 /**
- * Reads the explicit mainnet-write opt-in and bounded test amount. It rejects
- * CI and malformed inputs without echoing any supplied value.
+ * Reads the explicit mainnet-write opt-in and bounded test amount. Generic CI
+ * is refused, and so is the Mainnet E2E workflow until the STRK20 signing
+ * paths charge the per-send budget (`assertStrk20CiAllowed`). The 1 STRK
+ * deposit cap and the dedicated-RPC rule always apply. Malformed inputs are
+ * rejected without echoing any supplied value.
  */
 export const readStrk20MainnetEnvironment = (
   env: Readonly<Record<string, string | undefined>>,
 ): Strk20MainnetEnvironment => {
-  if (env["CI"]) {
-    throw new Error("The STRK20 live-mainnet suite is local-only");
-  }
+  assertLiveMainnetAllowed(env);
+  assertStrk20CiAllowed(env);
   if (env["BRAMBLE_STRK20_E2E_MAINNET_ACK"] !== MAINNET_ACK) {
     throw new Error(`Set BRAMBLE_STRK20_E2E_MAINNET_ACK=${MAINNET_ACK} to permit mainnet writes`);
   }

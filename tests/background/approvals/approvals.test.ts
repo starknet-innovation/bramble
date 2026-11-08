@@ -186,13 +186,6 @@ describe("createApprovalQueue payload discrimination", () => {
     expect(queue.payload(id)).toEqual({ chainId: "0x534e5f4d41494e", networkId: "SN_MAIN" });
   });
 
-  test("reconstructs an add-chain payload", () => {
-    const queue = createApprovalQueue();
-    const chain = { chainId: "0x1", chainName: "Custom" } as never;
-    const { id } = queue.requestAddChain({ chain, origin: ORIGIN, summaries: ["Add"] });
-    expect(queue.payload(id)).toEqual({ chain });
-  });
-
   test("reconstructs a declare payload", () => {
     const queue = createApprovalQueue();
     const declare = { compiledClassHash: "0x1", contract: {} } as never;
@@ -291,37 +284,13 @@ describe("createApprovalQueue payload discrimination", () => {
 });
 
 // The per-kind request builders each reject a non-wallet origin, and the
-// add-chain / switch-chain builders dedupe an in-flight prompt so a dapp that
+// switch-chain builders dedupe an in-flight prompt so a dapp that
 // re-issues the same request never stacks a second card.
 describe("createApprovalQueue per-kind origin guards and dedup", () => {
   const ORIGIN = "https://guard.example";
   const BAD_ORIGIN = "http://insecure.example";
-  const chain = { chainId: "0x1", chainName: "Custom" } as never;
   const declare = { compiledClassHash: "0x1", contract: {} } as never;
   const actions = [{ amount: "1", kind: "transfer", to: "0x2", token: "0x3" }] as never;
-
-  test("rejects add-chain requests from an invalid origin", () => {
-    const queue = createApprovalQueue();
-    expect(() => queue.requestAddChain({ chain, origin: BAD_ORIGIN, summaries: ["Add"] })).toThrow(
-      "Invalid origin",
-    );
-    expect(queue.list()).toEqual([]);
-  });
-
-  test("dedupes an add-chain request by origin and chain id", () => {
-    const queue = createApprovalQueue();
-    const first = queue.requestAddChain({ chain, origin: ORIGIN, summaries: ["Add"] });
-    const repeat = queue.requestAddChain({ chain, origin: ORIGIN, summaries: ["Add again"] });
-    const otherChain = queue.requestAddChain({
-      chain: { chainId: "0x2", chainName: "Other" } as never,
-      origin: ORIGIN,
-      summaries: ["Add other"],
-    });
-
-    expect(repeat).toEqual(first);
-    expect(otherChain.id).not.toBe(first.id);
-    expect(queue.list()).toHaveLength(2);
-  });
 
   test("rejects declare requests from an invalid origin", () => {
     const queue = createApprovalQueue();

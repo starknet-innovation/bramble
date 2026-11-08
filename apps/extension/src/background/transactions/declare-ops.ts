@@ -11,6 +11,7 @@
 import { walletErrorMessage } from "@bramble/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { normalizeWalletOrigin } from "@bramble/core/origin";
+import type { MultisigStore } from "@bramble/multisig/repository";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
@@ -30,6 +31,8 @@ import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { presentedVaultAccount } from "../provider/dapp-account";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import { readRetryApprovalFeeInput } from "../provider/provider-inputs";
 import {
   type ExtensionIdentity,
@@ -50,6 +53,8 @@ export type DeclareOpsDeps = {
   readonly approvals: ApprovalQueue;
   readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   /**
@@ -79,6 +84,8 @@ export type DeclareExecuteDeps = {
    * stubs stay valid; a Ledger declare with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   /**
@@ -255,14 +262,16 @@ const retryDeclarationFee = async (
   if (preferences.activeNetworkId !== approval.context.networkId) {
     return { error: "approval context changed" };
   }
-  const granted = await deps.wallet.getGrantedAccounts(approval.origin, passphrase);
-  const account = granted.find(
+  const account = await presentedVaultAccount(
+    deps,
+    approval.origin,
+    passphrase,
     (stored) =>
       stored.id === approval.context?.accountId &&
       stored.networkId === approval.context.networkId &&
       stored.networkId === preferences.activeNetworkId,
   );
-  if (!account) return { error: "origin not connected" };
+  if ("error" in account) return account;
   const declaration = await declarationReview(
     deps,
     account,
@@ -286,7 +295,7 @@ const queueDeclare = async (
   input: NonNullable<ReturnType<typeof readAddDeclareTransactionInput>>,
   release: () => void,
 ): Promise<{ readonly approval: PendingApproval } | RuntimeResponse> => {
-  const { approvals, preferencesStore, session, wallet } = deps;
+  const { approvals, preferencesStore, session } = deps;
   // Captured before the first read and re-checked after every await, so a
   // lock that lands mid-request admits no card under the unlock the user just
   // revoked (Sherlock 166).
@@ -296,14 +305,16 @@ const queueDeclare = async (
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  const account = await presentedVaultAccount(
+    deps,
+    input.origin,
+    passphrase,
+    (stored) => stored.networkId === preferences.activeNetworkId,
+  );
   if (!authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
+  if ("error" in account) return account;
   const context = await createApprovalContext(account, { declare: input.declare });
   const declaration = await declarationReview(
     deps,
@@ -393,7 +404,7 @@ export const executeDeclareApproval = async (
     readonly reviewedFee?: FeeEstimate;
   },
 ): Promise<RuntimeResponse> => {
-  const { preferencesStore, runtimeRpc, session, wallet } = deps;
+  const { preferencesStore, runtimeRpc, session } = deps;
   if (!input.reviewedFee) {
     return FEE_REVIEW_REQUIRED;
   }
@@ -406,18 +417,14 @@ export const executeDeclareApproval = async (
   if (input.context && preferences.activeNetworkId !== input.context.networkId) {
     return { error: "approval context changed" };
   }
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  const account = input.context
-    ? granted.find(
-        (stored) =>
-          stored.id === input.context?.accountId &&
-          stored.networkId === input.context.networkId &&
-          stored.networkId === preferences.activeNetworkId,
-      )
-    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
+  const account = await presentedVaultAccount(deps, input.origin, passphrase, (stored) =>
+    input.context
+      ? stored.id === input.context.accountId &&
+        stored.networkId === input.context.networkId &&
+        stored.networkId === preferences.activeNetworkId
+      : stored.networkId === preferences.activeNetworkId,
+  );
+  if ("error" in account) return account;
   // A keyless Ledger account signs on the device (verified against publicKeyX),
   // every other account through the vault — the same seam wallet-initiated txns
   // use. A device rejection/timeout/verify-failure, or a Ledger account with no

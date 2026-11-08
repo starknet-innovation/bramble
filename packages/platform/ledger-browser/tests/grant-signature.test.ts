@@ -141,7 +141,7 @@ describe("grant-tab signHash replies", () => {
   test("keeps an on-device rejection and a blind-signing refusal classifiable", async () => {
     for (const [returnCode, code] of [
       [0x6e04, "rejected-on-device"],
-      [0x6f00, "blind-signing-disabled"],
+      [0x6f00, "rejected-or-blind-signing-off"],
     ] as const) {
       const session = await openSession(async () => ({
         errorMessage: "refused",

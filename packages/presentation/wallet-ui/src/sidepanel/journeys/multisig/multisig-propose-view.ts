@@ -19,7 +19,7 @@ import {
 import { tokenGlyph } from "../portfolio/token-row";
 import { type SendAsset, sendAssets, sendBalanceLabel } from "../send/send-model";
 import { multisigDisplayName } from "./multisig-model";
-import type { MultisigPortfolioData } from "./multisig-portfolio";
+import type { MultisigPortfolioData } from "./multisig-portfolio-data";
 
 type ProposeRecipient = {
   readonly address: string;

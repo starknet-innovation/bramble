@@ -6,6 +6,7 @@
 
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { confirmSecondTap } from "../../shared/two-tap-confirm";
 import { bindNftSendForm, type NftSendDeps } from "./nft-send-ui";
 
 /**
@@ -42,13 +43,13 @@ const bindAddForm = (deps: NftUiDeps): void => {
       )
       .then(
         async () => {
-          showToast("Collectible added", "success", deps.app);
+          showToast("NFT added", "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't add that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't add that NFT"), "error", deps.app);
           if (result) {
-            result.textContent = errorLine(error, "Couldn't add that collectible");
+            result.textContent = errorLine(error, "Couldn't add that NFT");
           }
           buttonBusy(submitButton, false);
         },
@@ -117,11 +118,11 @@ const bindHideDiscovered = (deps: NftUiDeps): void => {
         .then(() => deps.wallet.setNftSpam(id, true))
         .then(
           async () => {
-            showToast("Collectible hidden", "success", deps.app);
+            showToast("NFT hidden", "success", deps.app);
             await rerender(deps);
           },
           (error: unknown) => {
-            showToast(errorDetails(error, "Couldn't update that collectible"), "error", deps.app);
+            showToast(errorDetails(error, "Couldn't update that NFT"), "error", deps.app);
             buttonBusy(button, false);
           },
         );
@@ -151,7 +152,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't update that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't update that NFT"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -164,14 +165,26 @@ const bindRowActions = (deps: NftUiDeps): void => {
       if (!id) {
         return;
       }
+      // Two taps, like deleting a folder: the first arms the control and says
+      // so; only a second tap on the same control removes.
+      // A text button shows the confirm label; an icon button keeps its icon
+      // and carries the label as its accessible name.
+      if (
+        !confirmSecondTap(button, {
+          label: "Tap again to remove",
+          replaceContent: !button.classList.contains("icon-button"),
+        })
+      ) {
+        return;
+      }
       buttonBusy(button, true);
       void deps.wallet.removeNft(id).then(
         async () => {
-          showToast("Collectible removed", "success", deps.app);
+          showToast("NFT removed", "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't remove that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't remove that NFT"), "error", deps.app);
           buttonBusy(button, false);
         },
       );

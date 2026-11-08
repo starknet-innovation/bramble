@@ -103,12 +103,6 @@ export const approvalsScenario: WalletScenario = {
       requiredApproval("switchChain"),
     ),
     approvalCheckpoint(
-      "add-chain",
-      "Add custom network",
-      "A dApp cannot silently persist custom network infrastructure.",
-      requiredApproval("addChain"),
-    ),
-    approvalCheckpoint(
       "declare",
       "Declare contract class",
       "Class identity, code shape, account deployment, and fee facts precede declaration.",

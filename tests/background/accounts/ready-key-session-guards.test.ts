@@ -133,7 +133,9 @@ describe("wallet.importAccount across the verification reads", () => {
 
 // A wallet whose recovery replaces the vault: every write is recorded against
 // the vault in place when it landed. The recovery parks inside its
-// coordinator task until released, so the import queues right behind it.
+// coordinator task until released, so the import queues right behind it. The
+// store reports no vault, as the recovery's own existing-vault refusal (issue
+// 822) would otherwise stop it before it parks.
 const replacingWallet = (writes: Array<{ readonly vault: string }>) => {
   let vault = "original";
   let entered: () => void = () => undefined;
@@ -148,7 +150,7 @@ const replacingWallet = (writes: Array<{ readonly vault: string }>) => {
     inside,
     release,
     wallet: {
-      ...capturingWallet([]),
+      ...capturingWallet([], false),
       async importRawKeyAccount(_request: ImportRawKeyAccountInput) {
         writes.push({ vault });
         return account;

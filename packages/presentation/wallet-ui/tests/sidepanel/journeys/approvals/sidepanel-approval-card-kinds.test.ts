@@ -1,11 +1,13 @@
 /**
  * Approval-card rendering per kind: exercises every renderer reached through
  * `approvalCard` — connection, sign-typed-data, strk20-invoke,
- * switch-chain, add-chain, declare — plus the watch-asset empty-token guard.
+ * switch-chain, declare — plus the watch-asset empty-token guard.
  * Complements sidepanel-approval-card.test.ts, which covers invoke and
  * watch-asset (with token) only.
  */
 import { describe, expect, test } from "bun:test";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { ArgentMultisigView } from "../../../../src/popup/responses/multisig-responses";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 import { accountDisplayName } from "../../../../src/sidepanel/shared/parts";
@@ -90,6 +92,36 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("Unlock the wallet to see which account will be shared.");
     expect(html).not.toContain("data-approval-account=");
     expect(html).toContain("disabled");
+  });
+
+  test("a selected multisig is named when it is the only visible account", () => {
+    const multisigId = "SN_MAIN:0xabc123";
+    const view = {
+      authorityStatus: "available",
+      config: null,
+      record: {
+        accountContractType: "argent-multisig",
+        address: "0xabc123",
+        classHash: "0x1",
+        id: multisigId,
+        name: "Treasury",
+        networkId: "SN_MAIN",
+      },
+      unsupportedSigners: [],
+    } as ArgentMultisigView;
+    const html = approvalCard(
+      { id: ID, kind: "connect", origin: ORIGIN },
+      status,
+      { hiddenAccountIds: [account.id] } as unknown as WalletPreferences,
+      { multisigs: [view], selectedMultisigId: multisigId },
+    );
+    expect(html).toContain("Treasury");
+    expect(html).toContain(`data-connect-choice="${multisigId}"`);
+    expect(html).toContain('data-connect-kind="multisig"');
+    expect(html).toContain(`data-approval-account="${multisigId}"`);
+    expect(html).not.toContain("<dt>Account</dt>");
+    expect(html).not.toContain(accountDisplayName(account, null));
+    expect(html).not.toContain(account.address);
   });
 
   test("sign-typed-data request decodes the SNIP-12 payload", () => {
@@ -292,23 +324,6 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("asking to change the wallet's active network");
     expect(html).toContain("Switch to Starknet Sepolia");
     expect(html).toContain("Switch network");
-  });
-
-  test("add-chain request shows the add-network copy with an always-enabled Approve", () => {
-    const approval: PendingApproval = {
-      id: ID,
-      kind: "add-chain",
-      origin: ORIGIN,
-      summaries: ["Add network Custom Devnet"],
-    };
-    // Even a locked wallet leaves add-network enabled (addChainCard passes false).
-    const html = approvalCard(approval, lockedStatus);
-
-    expect(html).toContain("Add network request");
-    expect(html).toContain("asking to add a custom Starknet network");
-    expect(html).toContain("Add network Custom Devnet");
-    expect(html).toContain("Add network");
-    expect(html).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
   });
 
   test("declare request shows the declare-contract copy and locks Declare while locked", () => {

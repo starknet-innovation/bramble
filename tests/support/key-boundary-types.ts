@@ -65,6 +65,8 @@ export type KeyBoundaryLiveIds = {
    * settled review, the reply that now carries the preparation.
    */
   readonly strk20PreparationJobId: () => Promise<string>;
+  /** Runs a staking preparation and returns its one-time id. */
+  readonly stakingPreparationId: () => Promise<string>;
   /** Runs a swap preparation and returns its one-time id. */
   readonly swapPreparationId: () => Promise<string>;
   /** Id of a token tracked for the active network. */

@@ -5,9 +5,10 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import type { WalletPreferences } from "@bramble/settings/preferences";
+import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import { button, segmentedControl } from "@bramble/ui-kit/controls";
-import { selectField, textField } from "@bramble/ui-kit/fields";
+import { checkboxField, selectField, textField } from "@bramble/ui-kit/fields";
 import { menuLink } from "@bramble/ui-kit/navigation";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
@@ -50,6 +51,7 @@ export const settingsScreen = (
       <div class="menu-list" role="group" aria-label="This account">
         ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
         ${walletMenuRow("privacy-unlock", PRIVACY_UNLOCK_TITLE, "lock")}
+        ${stakingNetwork(status.networkId) ? walletMenuRow("staking", "Staking", "trendingUp") : ""}
       </div>
     </section>
     <section class="section">
@@ -130,6 +132,22 @@ export const appearanceFlow = (
         })),
         selected: preferences?.displayCurrency ?? "usd",
       })}
+    </section>
+    <section class="section">
+      <p class="eyebrow">Home</p>
+      ${checkboxField({
+        attributes: { id: "vip-notice-toggle" },
+        checked: preferences?.vipNotice !== false,
+        name: "vipNotice",
+        text: "Show when an account is eligible for Starknet VIP",
+      })}
+      ${checkboxField({
+        attributes: { id: "nfts-on-home" },
+        checked: nftsShown(preferences),
+        name: "collectiblesPreview",
+        text: "Show NFTs on Home",
+      })}
+      <p class="hint">On Mainnet, Starkscan finds this account's ERC-721 NFTs and sees its address. Every NFT shown is checked on-chain.</p>
     </section>
     <p id="display-result" role="status"></p>`,
   );
