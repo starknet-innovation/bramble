@@ -21,7 +21,7 @@ import type { StakingRow } from "./staking-client";
 import type { StakingState } from "./staking-directory-client";
 import { positionLines } from "./staking-position-lines";
 
-/** The Home portfolio tabs, in order: Tokens · NFTs · Staking. */
+/** The Home portfolio tabs, in order: Tokens · Staking · NFTs. */
 export type HomeTab = "nfts" | "staking" | "tokens";
 
 const stakeButton = (): string =>
@@ -85,21 +85,21 @@ const homeStakingPanel = (state: StakingState): string => {
 };
 
 /**
- * Home's tab bar and panels: Tokens, then NFTs when an NFTs panel is given
- * (NFTs turned on), then Staking when staking is on, with `selected` open (or
- * Tokens when `selected` is not offered). The other panels are rendered hidden
- * so the tabs switch without a read.
+ * Home's tab bar and panels: Tokens, then Staking when staking is on, then
+ * NFTs when an NFTs panel is given (NFTs turned on), with `selected` open (or
+ * Tokens when `selected` is not offered); `open` names the tab shown. The other
+ * panels are rendered hidden so the tabs switch without a read.
  */
 export const homeTabPanels = (
   selected: HomeTab,
   tokens: string,
   staking: StakingState | null,
   nfts: string | null = null,
-): { readonly bar: string; readonly panels: string } => {
+): { readonly bar: string; readonly open: HomeTab; readonly panels: string } => {
   const offered: ReadonlyArray<readonly [HomeTab, string, string]> = [
     ["tokens", "Tokens", tokens],
-    ...(nfts === null ? [] : [["nfts", "NFTs", nfts] as const]),
     ...(staking ? [["staking", "Staking", homeStakingPanel(staking)] as const] : []),
+    ...(nfts === null ? [] : [["nfts", "NFTs", nfts] as const]),
   ];
   const open = offered.some(([value]) => value === selected) ? selected : "tokens";
   const tab = (value: HomeTab, label: string): string =>
@@ -107,6 +107,7 @@ export const homeTabPanels = (
   const panel = (value: HomeTab, body: string): string =>
     `<div id="home-panel-${value}" role="tabpanel" aria-labelledby="home-tab-${value}"${value === open ? "" : " hidden"}>${body}</div>`;
   return {
+    open,
     bar: `<div class="tab-set" role="tablist" aria-label="Portfolio sections">${offered.map(([value, label]) => tab(value, label)).join("")}</div>`,
     panels: offered.map(([value, , body]) => panel(value, body)).join(""),
   };

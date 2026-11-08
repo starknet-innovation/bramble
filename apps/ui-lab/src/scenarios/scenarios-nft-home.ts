@@ -30,7 +30,7 @@ export const nftHomeScenario: WalletScenario = {
       id: "home-nfts",
       label: "Home NFTs tab",
       narrative:
-        "Home reads Tokens · NFTs · Staking. The NFTs tab shows Watch by contract, Hidden collectibles, and each owned NFT as a card that opens its detail screen.",
+        "Home reads Tokens · Staking · NFTs. The NFTs tab shows Watch by contract, Hidden collectibles, and each owned NFT as a card that opens its detail screen.",
       state: { coverage: "complete", homeTab: "nfts", shown: 1 },
     },
     {

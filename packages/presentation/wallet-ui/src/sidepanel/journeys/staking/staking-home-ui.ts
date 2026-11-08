@@ -1,5 +1,5 @@
 /**
- * Home's staking bindings (issue 750): the Tokens, NFTs and Staking tabs
+ * Home's staking bindings (issue 750): the Tokens, Staking and NFTs tabs
  * (click, and the arrow, Home and End keys, over the tabs offered), the "Staked" line that opens the Staking tab,
  * the Stake button that opens the validator list, and the position rows that
  * open their validator. Opening a validator records only its staker address
@@ -9,7 +9,7 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import type { StakingState } from "./staking-directory-client";
 import type { HomeTab } from "./staking-home";
 
-const TABS: readonly HomeTab[] = ["tokens", "nfts", "staking"];
+const TABS: readonly HomeTab[] = ["tokens", "staking", "nfts"];
 
 /**
  * Dependencies the Home staking bindings close over. `state` and `setState`
@@ -43,7 +43,7 @@ export const bindHomeStaking = (deps: HomeStakingUiDeps): void => {
       if (value) select(value);
     });
     tab.addEventListener("keydown", (event) => {
-      // Only the tabs on screen: NFTs and Staking are each offered only where
+      // Only the tabs on screen: Staking and NFTs are each offered only where
       // they apply.
       const tabs = TABS.filter((item) => app?.querySelector(`[data-home-tab="${item}"]`));
       if (tabs.length === 0) return;
