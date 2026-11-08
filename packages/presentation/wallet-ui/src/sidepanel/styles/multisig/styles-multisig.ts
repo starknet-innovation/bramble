@@ -466,8 +466,24 @@ export const MULTISIG_STYLES = `
   .multisig-intent-assets > * + * { margin-left: calc(-1 * ${SPACE.sm}); }
   .multisig-intent-assets .token-logo, .multisig-intent-assets .token-mark { height: 28px; width: 28px; }
   .multisig-intent-assets .token-mark { font-size: 8px; }
-  [data-ms-exact-identity] .receipt-row dd { max-width: 70%; }
-  [data-ms-exact-identity] .receipt-row dd code { overflow-wrap: anywhere; text-align: left; word-break: break-word; }
+  /* Private balances: rows whose actions are all hidden, and an empty status
+     line, take no space, so the section is only as tall as what it says. */
+  [data-ms-strk20-key-panel] .action-row:not(:has(> :not([hidden]))),
+  [data-ms-strk20-key-panel] [data-ms-strk20-authorizations]:empty,
+  #multisig-strk20-key-status:empty { display: none; }
+  /* Exact identity at the narrowest panel. A value that drops below its label
+     takes the full line, so a shortened identifier (0x1eb8…f55a, the one with
+     a copy button or a full-value title) always fits and never splits. A full
+     hex value (the chain id) breaks between any two digits, balanced so no
+     line is left holding a single character. */
+  [data-ms-exact-identity] .receipt-row dd code {
+    text-align: left;
+    text-wrap: balance;
+    word-break: break-all;
+  }
+  [data-ms-exact-identity] .receipt-row dd:has(.icon-button) { flex: none; }
+  [data-ms-exact-identity] .receipt-row dd:has(.icon-button) code,
+  .multisig-intent code[title] { text-wrap: nowrap; word-break: normal; }
   .drawer-multisig .account-groups-line {
     color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};

@@ -267,7 +267,9 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     text-wrap: nowrap;
   }
   .approval-takeover { gap: ${SPACE.md}; grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 0; }
-  .approval-takeover .request-list { min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+  /* both-edges, as on html (issue 795): a classic scrollbar's reserved gutter
+     is mirrored on the left, so the cards sit centred, not short of the right. */
+  .approval-takeover .request-list { min-height: 0; overflow-y: auto; scrollbar-gutter: stable both-edges; }
   .approval-takeover .request-card {
     background: transparent;
     border-radius: 0;

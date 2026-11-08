@@ -25,7 +25,10 @@ export const JOURNEY_STYLES = `
      full width, its review sentence sits directly above its confirm, and the
      confirm (which carries the fee) takes the full width. */
   .staking-form[data-staking-open] { grid-template-columns: minmax(0, 1fr); }
-  .staking-actions[data-staking-open] { display: grid; justify-items: start; }
+  /* An action button under review is the only control left in its row (the
+     others are held hidden), so it stacks like a form's: sentence, then the
+     full-width confirm, then Cancel. */
+  .staking-actions[data-staking-open] { display: grid; }
   [data-staking-open] > .staking-review { margin-top: 0; }
   /* The paste field and the opened validator: the address wraps, never clips. */
   .staking-paste { margin-bottom: ${SPACE.sm}; }
