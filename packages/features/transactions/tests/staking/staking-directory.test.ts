@@ -195,12 +195,16 @@ describe("directoryEntries", () => {
       uptime: "99.5%",
       website: "validator.example",
     });
-    expect(unknown).toMatchObject({
-      commission: null,
-      commissionPpm: null,
-      uptime: null,
-      uptimePpm: null,
-    });
+    expect(unknown).toMatchObject({ commission: null, uptime: null });
+    // Entries carry display strings only.
+    expect(Object.keys(known ?? {}).sort()).toEqual([
+      "commission",
+      "name",
+      "pools",
+      "staker",
+      "uptime",
+      "website",
+    ]);
   });
 
   test("percentages round down, so 99.996% never reads as 100%", () => {

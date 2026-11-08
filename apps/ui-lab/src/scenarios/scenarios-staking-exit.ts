@@ -47,7 +47,6 @@ const opened = (row: Row): StakingState => ({
   directory: { entries: [], nextCursor: null },
   positions: { complete: true, rows: [row] },
   selected: { name: "Fixture Validator", staker: STAKER },
-  sort: "stake",
   validator: { exitWindowSeconds: 604_800, rows: [row] },
 });
 

@@ -34,12 +34,10 @@ export const ROW = {
 
 const ENTRY = {
   commission: "10%",
-  commissionPpm: 100_000,
   name: "Fixture Validator",
   pools: [{ delegated: "7,438,192.55", symbol: "STRK" }],
   staker: STAKER,
   uptime: "99.82%",
-  uptimePpm: 998_200,
   website: "validator.example",
 };
 
@@ -51,7 +49,6 @@ const pasteOnly: StakingState = {
   },
   positions: { unavailable: "Couldn't load your stakes." },
   selected: null,
-  sort: "stake",
   validator: { loading: true },
 };
 
@@ -62,7 +59,6 @@ const list: StakingState = {
       {
         ...ENTRY,
         commission: "5%",
-        commissionPpm: 50_000,
         name: "Second Fixture Validator With A Long Name",
         pools: [
           { delegated: "1,204,551", symbol: "STRK" },
@@ -74,12 +70,10 @@ const list: StakingState = {
       {
         ...ENTRY,
         commission: null,
-        commissionPpm: null,
         name: null,
         pools: [{ delegated: null, symbol: "STRK" }],
         staker: "0x2c4e6a8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a2c4e6b8d0f2a4",
         uptime: null,
-        uptimePpm: null,
         website: null,
       },
     ],
@@ -102,7 +96,6 @@ const list: StakingState = {
     ],
   },
   selected: null,
-  sort: "stake",
   validator: { loading: true },
 };
 

@@ -247,20 +247,18 @@ type DirectoryToken = {
 };
 
 /**
- * One validator as the screen lists it: display strings plus the numbers it
- * sorts by. Nothing here is signed or used to build a call.
+ * One validator as the screen lists it: display strings only. Nothing here is
+ * signed or used to build a call.
  */
 export type StakingDirectoryEntry = {
   /** Commission, e.g. "10%"; null when unknown. */
   readonly commission: string | null;
-  readonly commissionPpm: number | null;
   readonly name: string | null;
   /** Each tracked token with an active pool, and its total delegated. */
   readonly pools: readonly { readonly delegated: string | null; readonly symbol: string }[];
   readonly staker: string;
   /** 30-day liveness, e.g. "99.5%"; null when unknown. */
   readonly uptime: string | null;
-  readonly uptimePpm: number | null;
   readonly website: string | null;
 };
 
@@ -296,12 +294,10 @@ export const directoryEntries = (
     return [
       {
         commission: validator.commissionPpm === null ? null : ppmPercent(validator.commissionPpm),
-        commissionPpm: validator.commissionPpm,
         name: validator.name,
         pools,
         staker: validator.staker,
         uptime: validator.liveness30dPpm === null ? null : ppmPercent(validator.liveness30dPpm),
-        uptimePpm: validator.liveness30dPpm,
         website: validator.website,
       },
     ];
