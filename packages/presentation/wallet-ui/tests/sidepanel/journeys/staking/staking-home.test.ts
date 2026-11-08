@@ -103,11 +103,11 @@ const home = (staking: StakingState, networkId: "SN_MAIN" | "SN_SEPOLIA" = "SN_M
 const panel = (app: Element) => app.querySelector("#home-panel-staking");
 
 describe("the Home Staking tab", () => {
-  test("is the last tab on Mainnet (Tokens · NFTs · Staking), absent where staking is off", () => {
+  test("is the second tab on Mainnet (Tokens · Staking · NFTs), absent where staking is off", () => {
     const main = home(STAKING_LOADING);
     expect(
       [...main.querySelectorAll('.home-tabs [role="tab"]')].map((tab) => tab.textContent),
-    ).toEqual(["Tokens", "NFTs", "Staking"]);
+    ).toEqual(["Tokens", "Staking", "NFTs"]);
     const sepolia = home(STAKING_LOADING, "SN_SEPOLIA");
     expect(sepolia.querySelector("#home-tab-staking")).toBeNull();
     expect(sepolia.textContent).not.toContain("Staked");
@@ -291,13 +291,19 @@ describe("Home staking bindings", () => {
       .querySelector<HTMLButtonElement>("#home-tab-staking")
       ?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }));
     await tick();
+    expect(view.state().homeTab).toBe("nfts");
+    expect(document.activeElement?.id).toBe("home-tab-nfts");
+    view.app
+      .querySelector<HTMLButtonElement>("#home-tab-nfts")
+      ?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }));
+    await tick();
     expect(view.state().homeTab).toBe("tokens");
     expect(document.activeElement?.id).toBe("home-tab-tokens");
     view.app
       .querySelector<HTMLButtonElement>("#home-tab-tokens")
       ?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "End" }));
     await tick();
-    expect(view.state().homeTab).toBe("staking");
+    expect(view.state().homeTab).toBe("nfts");
   });
 
   test("the Staked line opens the Staking tab", async () => {
