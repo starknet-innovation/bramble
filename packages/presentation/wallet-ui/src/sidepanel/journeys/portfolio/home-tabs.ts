@@ -1,11 +1,11 @@
 /**
- * Portfolio section on the home screen: Tokens, plus an NFTs tab while NFTs
- * are turned on (the default) and a Staking tab where staking is switched on,
- * reading Tokens · NFTs · Staking (../staking/staking-home); with neither the
+ * Portfolio section on the home screen: Tokens, plus a Staking tab where
+ * staking is switched on and an NFTs tab while NFTs are turned on (the default),
+ * reading Tokens · Staking · NFTs (../staking/staking-home); with neither the
  * section renders a heading rather than a one-item tablist. Activity
  * remains a top-level dock destination rather than appearing twice. A single
- * overflow menu progressively discloses asset management, refresh, and
- * settings actions.
+ * overflow menu offers Refresh on every tab and Manage tokens on the Tokens
+ * tab only.
  */
 
 import { escapeHtml } from "@bramble/core/html";
@@ -391,7 +391,7 @@ export const activityEmptyCopy = (historyUnavailable: boolean): string =>
 
 /**
  * Renders the portfolio section. With an NFTs panel (NFTs turned on) or
- * staking on, the offered tabs read Tokens · NFTs · Staking with `selected`
+ * staking on, the offered tabs read Tokens · Staking · NFTs with `selected`
  * open (the remembered tab, `StakingState.homeTab`); otherwise the section
  * title is a plain heading rather than a one-item tablist, and the token list
  * needs no panel wrapper.
@@ -423,7 +423,7 @@ export const homeTabs = (
     deployment,
     fundedForFees,
   );
-  // Tokens · NFTs · Staking, each tab offered only where it applies.
+  // Tokens · Staking · NFTs, each tab offered only where it applies.
   const tabs = staking || nfts !== null ? homeTabPanels(selected, tokens, staking, nfts) : null;
   return `
   <section class="home-tabs" aria-label="Portfolio">
@@ -443,13 +443,18 @@ export const homeTabs = (
           variant: "ghost",
         })}
         <div class="portfolio-menu" id="portfolio-menu" role="menu" aria-label="Portfolio actions" hidden>
-          ${button({
-            attributes: { "data-view": "tokens", role: "menuitem", tabindex: "-1" },
-            className: "portfolio-menu-item",
-            icon: "coins",
-            label: "Manage tokens",
-            variant: "ghost",
-          })}
+          ${
+            // Manage tokens acts on the Tokens tab only; Refresh covers every tab.
+            !tabs || tabs.open === "tokens"
+              ? button({
+                  attributes: { "data-view": "tokens", role: "menuitem", tabindex: "-1" },
+                  className: "portfolio-menu-item",
+                  icon: "coins",
+                  label: "Manage tokens",
+                  variant: "ghost",
+                })
+              : ""
+          }
           ${button({
             attributes: {
               "data-reload-balances": true,

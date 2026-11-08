@@ -336,11 +336,11 @@ describe("home portfolio section", () => {
     document.body.replaceChildren();
   });
 
-  test("on Mainnet with NFTs on (the default), tabs read Tokens · NFTs · Staking, Tokens open", () => {
+  test("on Mainnet with NFTs on (the default), tabs read Tokens · Staking · NFTs, Tokens open", () => {
     const h = mount();
     const section = el(h.app, ".home-tabs");
     const tabs = [...section.querySelectorAll<HTMLElement>('[role="tab"]')];
-    expect(tabs.map((tab) => tab.textContent)).toEqual(["Tokens", "NFTs", "Staking"]);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Tokens", "Staking", "NFTs"]);
     expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual([
       "true",
       "false",
