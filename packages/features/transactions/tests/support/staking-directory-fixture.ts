@@ -89,26 +89,49 @@ export const directoryValidator = (
 /** Builders for the nested items, for tests that vary one pool or stake. */
 export const directoryParts = { pool, ratio, stake };
 
+/** One prepared `StakingCoverage` with every key; override any of them. */
+export const directoryCoverage = (
+  overrides: Readonly<Record<string, unknown>> = {},
+): Record<string, unknown> => ({
+  activityHistoryTruncated: false,
+  finalizedOnly: true,
+  gapIntervals: [],
+  lagBlocks: 0,
+  lastSuccessfulRunAtIso: "2026-11-06T00:00:00Z",
+  materializedThroughBlock: 100,
+  materializedThroughHash: "0x1",
+  metricDefinitionVersion: "1",
+  outstandingMaterializationIntervals: [],
+  reasonCode: "ok",
+  sourceLatestFinalizedBlock: 100,
+  status: "prepared",
+  ...overrides,
+});
+
+/**
+ * Coverage in the shape Starkscan's Mainnet endpoint served on 2026-11-08
+ * (a plain read-only GET): `catching_up` as its steady state, finalized-only,
+ * no gap or outstanding interval, a few dozen blocks behind and the activity
+ * window truncated. Block numbers and the hash are stand-ins, not the capture.
+ */
+export const CATCHING_UP_COVERAGE: Readonly<Record<string, unknown>> = directoryCoverage({
+  activityHistoryTruncated: true,
+  lagBlocks: 28,
+  materializedThroughBlock: 1_000,
+  materializedThroughHash: "0x2",
+  metricDefinitionVersion: "staking_prepared_v1",
+  reasonCode: "bounded_materialization_and_activity_window",
+  sourceLatestFinalizedBlock: 1_028,
+  status: "catching_up",
+});
+
 /** One `StakingValidatorPage`; override any top-level key. */
 export const directoryPage = (
   items: readonly unknown[],
   overrides: Readonly<Record<string, unknown>> = {},
 ): Record<string, unknown> => ({
   chainId: "SN_MAIN",
-  coverage: {
-    activityHistoryTruncated: false,
-    finalizedOnly: true,
-    gapIntervals: [],
-    lagBlocks: 0,
-    lastSuccessfulRunAtIso: "2026-11-06T00:00:00Z",
-    materializedThroughBlock: 100,
-    materializedThroughHash: "0x1",
-    metricDefinitionVersion: "1",
-    outstandingMaterializationIntervals: [],
-    reasonCode: "ok",
-    sourceLatestFinalizedBlock: 100,
-    status: "prepared",
-  },
+  coverage: directoryCoverage(),
   items,
   nextCursor: null,
   source: "finalized_prepared_staking_snapshot",

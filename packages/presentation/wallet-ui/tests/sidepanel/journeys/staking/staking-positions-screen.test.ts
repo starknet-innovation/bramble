@@ -161,12 +161,10 @@ describe("Your stakes section", () => {
             entries: [
               {
                 commission: "5%",
-                commissionPpm: 50_000,
                 name: "<img src=x>",
                 pools: [{ delegated: "1", symbol: "STRK" }],
                 staker: STAKER,
                 uptime: null,
-                uptimePpm: null,
                 website: null,
               },
             ],

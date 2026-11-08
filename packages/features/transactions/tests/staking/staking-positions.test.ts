@@ -2,12 +2,15 @@
  * The "Your stakes" reader: Starkscan's positions for one address are
  * untrusted, so every field the wallet reads is checked, a malformed answer is
  * refused whole, it must answer for this chain and this address, and anything
- * short of prepared, untruncated coverage is incomplete, never "no stakes".
+ * short of usable (prepared, or catching up just behind), untruncated coverage
+ * is incomplete, never "no stakes".
  * Fixtures are schema-derived, not live (see ../support/staking-positions-fixture).
  */
 import { describe, expect, test } from "bun:test";
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { MAX_CATCHING_UP_LAG_BLOCKS } from "../../src/staking/staking-coverage";
 import { MAX_STAKING_POSITIONS, parseStakingPositions } from "../../src/staking/staking-positions";
+import { CATCHING_UP_COVERAGE, directoryCoverage } from "../support/staking-directory-fixture";
 import { position, positionsView } from "../support/staking-positions-fixture";
 
 const ACCOUNT = `0x0${"1".repeat(63)}`;
@@ -44,18 +47,29 @@ describe("parseStakingPositions", () => {
     ).toMatchObject({ complete: true });
   });
 
-  test("an empty list is complete only with prepared, untruncated coverage", () => {
+  test("an empty list is complete only with usable, untruncated coverage", () => {
     expect(parse(positionsView(ACCOUNT, []))).toEqual({ complete: true, positions: [] });
-    const coverage = (status: string) => ({
-      ...(positionsView(ACCOUNT, [])["coverage"] as object),
-      status,
+    // Catching up but only just behind: the directory's rule, so complete.
+    expect(parse(positionsView(ACCOUNT, [], { coverage: CATCHING_UP_COVERAGE }))).toEqual({
+      complete: true,
+      positions: [],
     });
-    for (const status of ["catching_up", "unavailable"]) {
-      expect(parse(positionsView(ACCOUNT, [], { coverage: coverage(status) }))).toEqual({
+    for (const coverage of [
+      directoryCoverage({ status: "unavailable" }),
+      { ...CATCHING_UP_COVERAGE, lagBlocks: MAX_CATCHING_UP_LAG_BLOCKS + 1 },
+      { ...CATCHING_UP_COVERAGE, gapIntervals: [{ fromBlock: 1, toBlock: 2 }] },
+      { ...CATCHING_UP_COVERAGE, finalizedOnly: false },
+    ]) {
+      expect(parse(positionsView(ACCOUNT, [], { coverage }))).toEqual({
         complete: false,
         positions: [],
       });
     }
+    expect(
+      parse(
+        positionsView(ACCOUNT, [], { coverage: CATCHING_UP_COVERAGE, positionsTruncated: true }),
+      ),
+    ).toEqual({ complete: false, positions: [] });
     expect(
       parse(positionsView(ACCOUNT, [position(ACCOUNT, A)], { positionsTruncated: true })),
     ).toMatchObject({ complete: false, positions: [{ staker: "0xa1" }] });
@@ -70,7 +84,8 @@ describe("parseStakingPositions", () => {
       { ...base, source: "live" },
       { ...base, address: `0x${"2".repeat(63)}` },
       { ...base, address: "not-a-felt" },
-      { ...base, coverage: { status: "done" } },
+      { ...base, coverage: directoryCoverage({ status: "done" }) },
+      { ...base, coverage: directoryCoverage({ lagBlocks: -1 }) },
       { ...base, coverage: null },
       { ...base, positionsTruncated: "false" },
       { ...base, positionsTruncated: undefined },
