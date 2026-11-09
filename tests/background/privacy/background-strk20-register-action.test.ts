@@ -6,6 +6,7 @@
  * mixed with other actions as INVALID_REQUEST_PAYLOAD (114).
  */
 import { describe, expect, test } from "bun:test";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { toProviderPayload } from "@bramble/wallet-protocol/bridge";
 import { STRK20_PREPARE_REGISTER_SUMMARY } from "@bramble/wallet-protocol/strk20";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
@@ -90,6 +91,46 @@ describe("strk20 register action", () => {
         proof: { data: "", output: [], proof_facts: [] },
       },
       ok: true,
+    });
+    expect(proveCalls.value).toBe(0);
+  });
+
+  // Approves the single held card and returns the settled result.
+  const approveOnly = async (handler: ReturnType<typeof buildStrk20Handler>, message: object) => {
+    const held = handler(message, STRK20_CONTENT_SENDER);
+    await flushHeld();
+    const listed = await waitForPendingApprovals<Listed>(handler, STRK20_EXTENSION_SENDER);
+    expect(listed.map((approval) => approval.kind)).toEqual(["strk20-register"]);
+    const id = await latestApprovalId(handler, STRK20_EXTENSION_SENDER);
+    await handler({ id, type: "wallet.approveOrigin" }, STRK20_EXTENSION_SENDER);
+    return held;
+  };
+
+  test("prepare register needs no tracked token on the network", async () => {
+    const defaults = defaultWalletPreferences();
+    const pool = defaults.strk20Networks?.SN_MAIN;
+    if (!pool) throw new Error("missing default STRK20 config");
+    // A configured pool on the active network, but no tracked token at all.
+    const handler = buildStrk20Handler({
+      preferences: {
+        ...defaults,
+        activeNetworkId: "SN_SEPOLIA",
+        strk20Networks: { ...defaults.strk20Networks, SN_SEPOLIA: pool },
+        tokens: [],
+      },
+      registered: false,
+    });
+    expect(await approveOnly(handler, prepareRegister(false))).toEqual({
+      callAndProof: STRK20_CALL_AND_PROOF,
+      ok: true,
+    });
+  });
+
+  test("prepare register refuses an undeployed account after approval, before proving", async () => {
+    const proveCalls = { value: 0 };
+    const handler = buildStrk20Handler({ deployed: false, proveCalls, registered: false });
+    expect(await approveOnly(handler, prepareRegister(false))).toEqual({
+      error: "Deploy this account before activating private balances",
     });
     expect(proveCalls.value).toBe(0);
   });

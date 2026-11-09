@@ -83,24 +83,25 @@ export type Strk20RegistrationMode =
   | { readonly kind: "prepare"; readonly simulate: boolean }
   | { readonly kind: "submit"; readonly spec: boolean };
 
-// The reviewed pool fee for "submit" ("" for "prepare", where the site pays),
-// or null when the register action meets an already registered account.
-// Throws the service's mapped error on a failed read or unaffordable fee.
+// The reviewed pool fee for "submit" ("" for "prepare", where the site pays
+// and no token is needed), or null when the register action meets an already
+// registered account. Throws the service's mapped error on a failed read or
+// unaffordable fee.
 const registrationFee = async (
   deps: Strk20OpsDeps,
   resolved: ResolvedAccount,
-  token: TokenConfig,
+  token: TokenConfig | undefined,
   mode: Strk20RegistrationMode,
   poolFee: Strk20Service["poolFee"],
 ): Promise<string | null> => {
   const accountContext = strk20AccountContext(deps, resolved);
   if (
     (mode.kind === "prepare" || mode.spec) &&
-    (await isStrk20AccountRegistered(deps.runtimeRpc, accountContext, token.address))
+    (await isStrk20AccountRegistered(deps.runtimeRpc, accountContext))
   ) {
     return null;
   }
-  if (mode.kind === "prepare" || !poolFee) {
+  if (mode.kind === "prepare" || !poolFee || !token) {
     return "";
   }
   const poolFeeFri = await poolFee(accountContext);
@@ -150,14 +151,16 @@ const registrationSetup = async (
     (candidate) => candidate.networkId === resolved.account.networkId,
   );
   const poolFee = strk20ServiceForRuntime(deps.runtimeRpc).poolFee;
-  if (!config || !token || (mode.kind === "submit" && !poolFee)) {
+  // Only the wallet-submitted registration pays (and so reviews) a pool fee in
+  // a tracked token; prepare-register needs just the account and pool.
+  if (!config || (mode.kind === "submit" && (!token || !poolFee))) {
     return hold(STRK20_SERVICE_UNAVAILABLE);
   }
   try {
     const poolFeeFri = await registrationFee(deps, resolved, token, mode, poolFee);
     return poolFeeFri === null
       ? hold(STRK20_ALREADY_REGISTERED, "request-failed")
-      : { poolAddress: config.poolAddress, poolFeeFri, resolved, token: token.address };
+      : { poolAddress: config.poolAddress, poolFeeFri, resolved, token: token?.address ?? "" };
   } catch (error) {
     return hold(strk20ErrorMessage(error), "request-failed");
   }

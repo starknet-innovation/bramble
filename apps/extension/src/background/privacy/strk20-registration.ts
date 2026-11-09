@@ -8,7 +8,7 @@
 import { readStrk20RegistrationStatus, STRK20_SERVICE_UNAVAILABLE } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
@@ -35,17 +35,21 @@ type Strk20RegistrationContext = Omit<
 export const isStrk20AccountRegistered = async (
   runtimeRpc: RuntimeRpc,
   context: Strk20RegistrationContext,
-  token: string,
 ): Promise<boolean> =>
   (await readStrk20RegistrationStatus(strk20ServiceForRuntime(runtimeRpc), {
     ...context,
     subject: context.account.address,
-    token,
+    // The registry read keyed by `subject` does not consult a token; the
+    // field is required by the shared input type only.
+    token: STRK_TOKEN_ADDRESS,
   })) === "registered";
 
 /**
  * After user approval, re-checks that the account, pool, and registration
- * state still match the reviewed request, then builds the registration call
+ * state still match the reviewed request and that the account is deployed (a
+ * registration proof needs the account class at the proving block, so an
+ * undeployed account is refused instead of stalling in the maturity wait),
+ * then builds the registration call
  * and proof (empty when simulating) for the site to submit. Nothing is signed
  * or broadcast; the pool-fee approve is left to the submitter. A service
  * without registration-call support fails closed.
@@ -59,19 +63,23 @@ export const executeApprovedStrk20RegistrationCall = async (
   context: Strk20RegistrationContext,
   request: Extract<Strk20DisclosureRequest, { readonly type: "prepare-register" }>,
 ): Promise<RuntimeResponse> => {
-  const token = resolved.preferences.tokens.find(
-    (candidate) => candidate.networkId === resolved.account.networkId,
-  );
   if (
     resolved.account.derivation.kind === "ledger" ||
     !context.config ||
-    !sameFelt(context.config.poolAddress, request.poolAddress) ||
-    !token
+    !sameFelt(context.config.poolAddress, request.poolAddress)
   ) {
     return { error: "approval context changed" };
   }
-  if (await isStrk20AccountRegistered(runtimeRpc, context, token.address)) {
+  if (await isStrk20AccountRegistered(runtimeRpc, context)) {
     return { error: STRK20_ALREADY_REGISTERED };
+  }
+  if (
+    !(await runtimeRpc.getDeploymentStatus({
+      accountAddress: resolved.account.address,
+      rpcUrls: context.rpcUrls,
+    }))
+  ) {
+    return { error: "Deploy this account before activating private balances" };
   }
   const service = strk20ServiceForRuntime(runtimeRpc);
   if (!service.prepareRegistrationCall) {
