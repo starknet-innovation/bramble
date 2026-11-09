@@ -133,13 +133,20 @@ describe("mobile core parity", () => {
 
   // The extension stays on its own Krusty release until it adopts the shared core, so the two
   // pins are no longer compared; the parity fixtures hold the releases to the same output.
-  test("the Rust core reports the Krusty release it pins", async () => {
+  // The version the core reports is `wallet_core::KRUSTY_VERSION`, which wallet-core holds to its
+  // own lockfile. Mobile names Krusty directly too, so its pin has to resolve to that one copy.
+  test("the Rust core pins one Krusty release, the shared core's", async () => {
     const cargo = await readFile("mobile/core/Cargo.toml", "utf8");
     const pin = /^krusty-kms = \{ version = "=(\d+\.\d+\.\d+)"/m.exec(cargo)?.[1];
     expect(pin).toBeDefined();
     expect(cargo).toContain(`krusty-kms-common = { version = "=${pin}"`);
+    const lock = await readFile("mobile/core/Cargo.lock", "utf8");
+    const resolved = [...lock.matchAll(/^name = "krusty-kms"\nversion = "([^"]+)"/gm)].map(
+      (match) => match[1],
+    );
+    expect(resolved).toEqual([pin]);
     const lib = await readFile("mobile/core/src/lib.rs", "utf8");
-    expect(lib).toContain(`krusty_version: "${pin}".into()`);
+    expect(lib).toContain("krusty_version: wallet_core::KRUSTY_VERSION.into()");
   });
 });
 

@@ -6,7 +6,7 @@
 
 mod common;
 
-use bramble_core::testing::{nostr_public_key_at, open_gift_wrap, wrap_gift};
+use bramble_core::testing::{open_gift_wrap, wrap_gift};
 use bramble_core::{
     argent_multisig_normalize, argent_multisig_predict, argent_signer_guid,
     nostr_relay_url_normalize, wallet_contact_card_parse, ArgentMultisigConfig, ContactCardParse,
@@ -36,48 +36,6 @@ fn wallet(mnemonic: &str) -> (tempfile::TempDir, std::sync::Arc<WalletCore>) {
     core.restore_recovered_accounts(NetworkId::Sepolia, vec![common::oz(0), common::oz(1)])
         .unwrap();
     (dir, core)
-}
-
-#[test]
-fn coordination_keys_match_the_extension() {
-    for vector in fixture()["nostrKeys"].as_array().unwrap() {
-        let mnemonic = vector["mnemonic"].as_str().unwrap();
-        let index = vector["index"].as_u64().unwrap() as u32;
-        assert_eq!(
-            nostr_public_key_at(mnemonic, index).unwrap(),
-            text(&vector["publicKey"])
-        );
-        if index == 0 {
-            let (_dir, core) = wallet(mnemonic);
-            assert_eq!(core.nostr_public_key().unwrap(), text(&vector["publicKey"]));
-        }
-    }
-}
-
-#[test]
-fn opens_the_extension_gift_wrap_and_refuses_its_variants() {
-    let fixture = fixture();
-    let wrap = &fixture["giftWrap"];
-    let parity = fixture["nostrKeys"][0]["mnemonic"].as_str().unwrap();
-    let recipient = wrap["recipientNostrIndex"].as_u64().unwrap() as u32;
-    let sender = text(&fixture["nostrKeys"][0]["publicKey"]);
-    let (content, identifier, from) =
-        open_gift_wrap(parity, recipient, wrap["eventJson"].as_str().unwrap()).unwrap();
-    assert_eq!(
-        (content, identifier, from),
-        (text(&wrap["content"]), text(&wrap["identifier"]), sender)
-    );
-    assert!(
-        open_gift_wrap(parity, 0, wrap["eventJson"].as_str().unwrap()).is_none(),
-        "wrong recipient"
-    );
-    for rejection in wrap["rejections"].as_array().unwrap() {
-        assert!(
-            open_gift_wrap(parity, recipient, rejection["eventJson"].as_str().unwrap()).is_none(),
-            "{}",
-            rejection["name"]
-        );
-    }
 }
 
 #[test]

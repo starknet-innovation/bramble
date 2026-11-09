@@ -26,7 +26,11 @@ bindgen = ["uniffi/cli"]
 testing = []
 
 [dependencies]
-# Wallet cryptography. Pinned exactly; `lib.rs` reports the same release
+# The shared Rust core (felt grammar, key custody, Nostr identity), pinned to a tag; Cargo.lock
+# records the commit. Plain Rust with no UniFFI, so the binary holds one scaffolding.
+wallet-core = { git = "https://github.com/starknet-innovation/wallet-core", tag = "v0.1.0" }
+# Wallet cryptography, still named directly by the account, multisig and send modules. Pinned
+# exactly, at the release wallet-core pins, so the lockfile resolves one copy
 # (tests/conformance/mobile-generated.test.ts). The extension's
 # `@starknetfoundation/krusty-kms-wasm` stays on 0.11; the parity fixtures hold the two together.
 # `parallel` (rayon) is only used by proof generation, which this core never runs.
@@ -40,7 +44,7 @@ uniffi = { version = "=0.29.5" }
 # Vault envelope: the extension's EncryptedEnvelope v3 (PBKDF2-SHA-256 -> AES-256-GCM).
 aes-gcm = { version = "=0.11.1", features = ["zeroize"] }
 pbkdf2 = { version = "=0.13.0", default-features = false, features = ["hmac"] }
-sha2 = { version = "=0.11.0", default-features = false }
+sha2 = { version = "=0.11.1", default-features = false }
 getrandom = { version = "=0.4.3" }
 base64 = { version = "=0.22.1" }
 serde = { version = "=1.0.229", features = ["derive"] }

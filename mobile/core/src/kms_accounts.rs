@@ -1,4 +1,4 @@
-//! Account-family derivation through Krusty KMS, beside `kms.rs` (the other Krusty caller).
+//! Account-family derivation through Krusty KMS. Keys come from `kms.rs`, over the shared core.
 //! Mirrors the extension's `deriveAccountContractAddress`: OpenZeppelin through Krusty's own OZ
 //! derivation (salt `0x0`, class per network); Argent and Braavos through Krusty's
 //! `ArgentAccount` / `BraavosAccount` presets at a class from the generated catalog, with the
