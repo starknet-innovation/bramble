@@ -11,11 +11,11 @@ import type { Call, RpcProvider } from "starknet";
 import { num } from "starknet";
 import { submitStrk20PaymasterPlan } from "../paymaster/paymaster";
 import { quoteStrk20RelayPlan } from "../paymaster/relay-quote";
-import type { Strk20FeeReference } from "../policy/fee-policy";
-import type {
-  Strk20MaturityScope,
-  Strk20MaturityStore,
-  Strk20SubmissionRoute,
+import {
+  memoryStrk20MaturityStore,
+  STRK20_PRIOR_WRITE_UNRESOLVED,
+  type Strk20MaturityScope,
+  type Strk20SubmissionRoute,
 } from "../policy/maturity";
 import { reportStrk20Phase } from "../policy/phases";
 import { relayClaimSlots } from "../policy/relay-claim-slots";
@@ -31,15 +31,13 @@ import {
   STRK20_WAIT_BUDGETS,
   type Strk20WaitBudgets,
   type Strk20Waits,
-  type WaitScheduler,
 } from "./official-sdk-budget";
 import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
 import { mapStrk20StageError } from "./official-sdk-errors";
 import { createStrk20MaturityRuntime, type Strk20SubmissionJournal } from "./official-sdk-maturity";
+import type { OfficialServiceOptions } from "./official-sdk-options";
 import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
 import { strk20ReadMethods } from "./official-sdk-reads";
-import type { ServiceRetryPause } from "./official-sdk-retry";
-import type { PrivacySdkRuntime } from "./official-sdk-runtime";
 import { strk20ShadowAccountReads } from "./official-sdk-shadow-accounts";
 import { accountTypedDataSigner, sponsoredShieldSubmitter } from "./official-sdk-sponsored";
 import {
@@ -54,28 +52,6 @@ import {
  * Re-exported vendored SDK boundary for production wiring and test doubles.
  */
 export type { PrivacySdkRuntime } from "./official-sdk-runtime";
-
-type OfficialServiceOptions = {
-  /**
-   * Independent price used only to bound a converted (non-STRK) relay fee.
-   * Omitting it leaves the converted route refused; the STRK route never
-   * consults it, because the pool's own charge bounds that one on-chain.
-   */
-  readonly feeReference?: Strk20FeeReference;
-  readonly http?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-  readonly maturityStore?: Strk20MaturityStore;
-  readonly nowSeconds?: () => number;
-  readonly pauseForMaturity?: () => Promise<void>;
-  readonly pauseForServiceRetry?: ServiceRetryPause;
-  readonly providerFor?: (nodeUrl: string) => RpcProvider;
-  readonly sdk: PrivacySdkRuntime;
-  readonly submitInvoke?: typeof submitInvokeTransaction;
-  /** Wall-clock ceilings per phase; see ./official-sdk-budget. */
-  readonly waitBudgets?: Partial<Strk20WaitBudgets>;
-  readonly waitForAccepted?: (provider: RpcProvider, transactionHash: string) => Promise<number>;
-  /** Timer seam for the wait budgets; tests inject a manual scheduler. */
-  readonly waitScheduler?: WaitScheduler;
-};
 
 /**
  * Creates the production STRK20 service backed by the pinned official SDK.
@@ -100,9 +76,10 @@ export const createOfficialStrk20Service = ({
 }: OfficialServiceOptions): Strk20Service => {
   const budgets: Strk20WaitBudgets = { ...STRK20_WAIT_BUDGETS, ...waitBudgets };
   const waits: Strk20Waits = { budgets, ...(waitScheduler ? { schedule: waitScheduler } : {}) };
+  const journal = maturityStore ?? memoryStrk20MaturityStore();
   const maturity = createStrk20MaturityRuntime({
     maturityBudgetMs: budgets.maturity,
-    ...(maturityStore ? { store: maturityStore } : {}),
+    store: journal,
     ...(pauseForMaturity ? { pause: pauseForMaturity } : {}),
     ...(waitScheduler ? { schedule: waitScheduler } : {}),
     ...(waitForAccepted ? { waitForAccepted } : {}),
@@ -171,6 +148,24 @@ export const createOfficialStrk20Service = ({
     async releasePendingWrite(input) {
       const config = requireStrk20Config(input);
       return maturity.releasePendingWrite(maturityScope(input, config.poolAddress));
+    },
+    async submitAcceptedRelay(input) {
+      const config = requireStrk20Config(input);
+      const scope = maturityScope(input, config.poolAddress);
+      return submission(
+        input,
+        "relay",
+        async () => {
+          // Inside the scope queue, so a second send cannot pass this read
+          // before the first claim is durable.
+          if ((await journal.read(scope))?.state === "submitting") {
+            throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+          }
+          return undefined;
+        },
+        async () => input.broadcast(),
+        () => input.relaySlots,
+      );
     },
     async prepareRegistration(input) {
       const config = requireStrk20Config(input);

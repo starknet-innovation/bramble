@@ -7,7 +7,6 @@
 
 import type { Strk20SubmissionPlan } from "@bramble/privacy/service";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import type { ProviderChain } from "@bramble/wallet-protocol/add-chain";
 import type { ProviderDeclare } from "@bramble/wallet-protocol/declare";
 import type { Strk20NoticeReason } from "@bramble/wallet-protocol/extension-responses";
 import type { Strk20Action, Strk20Proof } from "@bramble/wallet-protocol/strk20";
@@ -81,11 +80,6 @@ export type ApprovalQueue = {
     origin: string,
     options?: { readonly existingGrant?: boolean },
   ) => PendingApproval;
-  readonly requestAddChain: (input: {
-    readonly chain: ProviderChain;
-    readonly origin: string;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
   readonly requestDeclare: (input: {
     readonly context: ApprovalContext;
     readonly declare: ProviderDeclare;
@@ -99,6 +93,8 @@ export type ApprovalQueue = {
     readonly context: ApprovalContext;
     readonly fee: InvokeFeeReview;
     readonly flags: readonly ApprovalRiskFlag[];
+    /** Set when the multisig threshold is above 1 and approval saves an intent. */
+    readonly multisigThreshold?: number;
     readonly origin: string;
     readonly proof?: Strk20Proof;
     readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;

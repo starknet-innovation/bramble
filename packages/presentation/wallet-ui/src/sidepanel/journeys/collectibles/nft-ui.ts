@@ -1,11 +1,13 @@
 /**
  * NFT gallery bindings: add a watched NFT after on-chain ownership is proven,
- * open a collectible's detail screen, toggle spam-hide, and remove. The detail
+ * open a collectible's detail screen, show a discovered NFT's art by watching
+ * it, toggle spam-hide, and remove. The detail
  * screen's send journey lives in ./nft-send-ui.
  */
 
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { confirmSecondTap } from "../../shared/two-tap-confirm";
 import { bindNftSendForm, type NftSendDeps } from "./nft-send-ui";
 
 /**
@@ -42,13 +44,13 @@ const bindAddForm = (deps: NftUiDeps): void => {
       )
       .then(
         async () => {
-          showToast("Collectible added", "success", deps.app);
+          showToast("NFT added", "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't add that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't add that NFT"), "error", deps.app);
           if (result) {
-            result.textContent = errorLine(error, "Couldn't add that collectible");
+            result.textContent = errorLine(error, "Couldn't add that NFT");
           }
           buttonBusy(submitButton, false);
         },
@@ -96,35 +98,85 @@ const bindAnimation = (deps: NftUiDeps): void => {
   });
 };
 
+// A discovered-only card's target, read from the `data-nft-<action>-*`
+// attributes nft-card-actions writes. The background re-validates every field
+// and re-proves ownership, so these are only a request, never evidence.
+type DiscoveredTarget = {
+  readonly contract: string;
+  readonly id: string;
+  readonly label: string;
+  readonly networkId: string;
+  readonly tokenId: string;
+};
+
+const discoveredTarget = (
+  button: HTMLButtonElement,
+  action: "Hide" | "Show",
+): DiscoveredTarget | null => {
+  const id = button.dataset[`nft${action}`];
+  const contract = button.dataset[`nft${action}Contract`];
+  const tokenId = button.dataset[`nft${action}Token`];
+  const networkId = button.dataset[`nft${action}Network`];
+  const name = button.dataset[`nft${action}Name`] ?? "";
+  if (!id || !contract || !tokenId || !networkId) {
+    return null;
+  }
+  const label = name.length > 0 && name.length <= 64 ? name : "";
+  return { contract, id, label, networkId, tokenId };
+};
+
+const watchDiscovered = (deps: NftUiDeps, target: DiscoveredTarget): Promise<void> =>
+  deps.wallet.addNft(target.contract, target.tokenId, target.networkId, target.label);
+
 // Hides an auto-discovered NFT as spam persistently: it is watched (re-proving
 // ownership on-chain) and then flagged hidden, so it moves to the Hidden section
 // and stays hidden across sessions like a manually watched spam NFT.
 const bindHideDiscovered = (deps: NftUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-hide]").forEach((button) => {
     button.addEventListener("click", () => {
-      const id = button.dataset["nftHide"];
-      const contract = button.dataset["nftHideContract"];
-      const tokenId = button.dataset["nftHideToken"];
-      const networkId = button.dataset["nftHideNetwork"];
-      const name = button.dataset["nftHideName"] ?? "";
-      if (!id || !contract || !tokenId || !networkId) {
+      const target = discoveredTarget(button, "Hide");
+      if (!target) {
         return;
       }
-      const label = name.length > 0 && name.length <= 64 ? name : "";
       buttonBusy(button, true);
-      void deps.wallet
-        .addNft(contract, tokenId, networkId, label)
-        .then(() => deps.wallet.setNftSpam(id, true))
+      void watchDiscovered(deps, target)
+        .then(() => deps.wallet.setNftSpam(target.id, true))
         .then(
           async () => {
-            showToast("Collectible hidden", "success", deps.app);
+            showToast("NFT hidden", "success", deps.app);
             await rerender(deps);
           },
           (error: unknown) => {
-            showToast(errorDetails(error, "Couldn't update that collectible"), "error", deps.app);
+            showToast(errorDetails(error, "Couldn't update that NFT"), "error", deps.app);
             buttonBusy(button, false);
           },
         );
+    });
+  });
+};
+
+// Shows a discovered-only NFT's art by watching it through the same path as
+// Hide and the watch form (the background re-proves ownership on chain). Only
+// a watched NFT has its metadata and image read, so this click is the user's
+// choice to contact the NFT's own links; the re-render then shows it as
+// watched (Hide and Remove) and the watched lane fetches its art.
+const bindShowArt = (deps: NftUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-show]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = discoveredTarget(button, "Show");
+      if (!target) {
+        return;
+      }
+      buttonBusy(button, true);
+      void watchDiscovered(deps, target).then(
+        async () => {
+          await rerender(deps);
+        },
+        (error: unknown) => {
+          showToast(errorDetails(error, "Couldn't show the art"), "error", deps.app);
+          buttonBusy(button, false);
+        },
+      );
     });
   });
 };
@@ -151,7 +203,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't update that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't update that NFT"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -164,14 +216,26 @@ const bindRowActions = (deps: NftUiDeps): void => {
       if (!id) {
         return;
       }
+      // Two taps, like deleting a folder: the first arms the control and says
+      // so; only a second tap on the same control removes.
+      // A text button shows the confirm label; an icon button keeps its icon
+      // and carries the label as its accessible name.
+      if (
+        !confirmSecondTap(button, {
+          label: "Tap again to remove",
+          replaceContent: !button.classList.contains("icon-button"),
+        })
+      ) {
+        return;
+      }
       buttonBusy(button, true);
       void deps.wallet.removeNft(id).then(
         async () => {
-          showToast("Collectible removed", "success", deps.app);
+          showToast("NFT removed", "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't remove that collectible"), "error", deps.app);
+          showToast(errorDetails(error, "Couldn't remove that NFT"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -187,6 +251,7 @@ export const bindNfts = (deps: NftUiDeps): void => {
   bindNftSendForm(deps);
   bindRowActions(deps);
   bindHideDiscovered(deps);
+  bindShowArt(deps);
   bindImages(deps);
   bindAnimation(deps);
 };

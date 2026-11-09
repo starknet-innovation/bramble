@@ -15,6 +15,7 @@ import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { ActiveStateCoordinator } from "../runtime/runtime-state";
 import type { UnlockSession } from "../runtime/session";
@@ -33,7 +34,8 @@ export type ApprovalDecisionDeps = {
   readonly guard: OriginGuard;
   readonly ledgerSignQueue?: LedgerSignQueue;
   /** Watched shared accounts, trusted by the execution-time lookalike check (Sherlock 140). */
-  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs" | "upsertIntent">;
   readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
   /** Fiat prices for a gasless fee the user chose. Absent in narrow test doubles. */

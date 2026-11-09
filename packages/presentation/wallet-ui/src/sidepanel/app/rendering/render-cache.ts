@@ -9,6 +9,10 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
 import { type BalanceLoadingState, emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
 import type { ConnectedSitesState } from "../screens/support-flows";
 
@@ -30,6 +34,7 @@ type LoadedMultisigs = Exclude<Awaited<ReturnType<MultisigClient["loadMultisigs"
  */
 export type RenderData = {
   allowances: Awaited<ReturnType<SidepanelWallet["loadAllowances"]>>;
+  staking: StakingState;
   multisigs: LoadedMultisigs;
   multisigsError: boolean;
   multisigsNetworkId: string | null;
@@ -47,10 +52,12 @@ export type RenderData = {
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
   connectedSites: ConnectedSitesState;
   deployment: boolean | null;
-  // Collectibles preview lanes: indexer candidates and explicit watches, each
+  // NFT lanes: indexer candidates and explicit watches, each
   // re-proved on-chain, merged into the gallery snapshot.
-  discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
-  indexedNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
+  discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["nfts"];
+  indexedNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["nfts"];
+  // How complete the indexer said its list was; "none" until it answers.
+  nftCoverage: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["coverage"];
   watchedNfts: Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>;
   signability: SignabilityVerdict | null;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
@@ -82,9 +89,13 @@ const emptyActivityCache = (): Pick<
  * Empty account-scoped NFT lanes used on account/network switches so an old
  * gallery never flashes while fresh ownership proofs are in flight.
  */
-const emptyNftCache = (): Pick<RenderData, "discoveredNfts" | "indexedNfts" | "watchedNfts"> => ({
+const emptyNftCache = (): Pick<
+  RenderData,
+  "discoveredNfts" | "indexedNfts" | "nftCoverage" | "watchedNfts"
+> => ({
   discoveredNfts: [],
   indexedNfts: [],
+  nftCoverage: "none",
   watchedNfts: [],
 });
 
@@ -108,6 +119,7 @@ export const updateRenderScope = (
           ...emptyActivityCache(),
           ...emptyNftCache(),
           balances: { loading: true },
+          staking: STAKING_LOADING,
           multisigBalanceId: null,
           multisigBalances: { loading: true },
           deployment: null,
@@ -131,6 +143,7 @@ export const updateRenderScope = (
 export const emptyRenderCache = (): RenderData => ({
   // Not yet read: the screen shows no count and no "none found".
   allowances: { entries: [], loading: true, notices: [], unavailable: false },
+  staking: STAKING_LOADING,
   multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
   multisigsNetworkId: null,

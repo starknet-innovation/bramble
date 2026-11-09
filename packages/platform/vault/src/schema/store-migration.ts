@@ -6,7 +6,7 @@
 import { WalletError } from "@bramble/core/errors";
 import type { EncryptedStore } from "../encrypted-store";
 import { migrateVault } from "./migrations";
-import { isVaultV12, type Vault } from "./schema";
+import { isVaultV13, type Vault } from "./schema";
 
 /**
  * Browser storage key for the primary encrypted wallet vault.
@@ -35,7 +35,7 @@ const readVerified = async (
   expected: Vault,
 ): Promise<Vault> => {
   const candidate = await store.read(vaultPassphrase);
-  if (!isVaultV12(candidate) || !sameVault(candidate, expected)) {
+  if (!isVaultV13(candidate) || !sameVault(candidate, expected)) {
     throw new WalletError("Vault migration verification failed");
   }
   return candidate;
@@ -70,7 +70,7 @@ const recoverStagedVault = async (
     return null;
   }
   const staged = await stores.staging.read(vaultPassphrase);
-  if (!isVaultV12(staged)) {
+  if (!isVaultV13(staged)) {
     return null;
   }
   // The staged copy verified against its own records, so it is the current
@@ -118,7 +118,7 @@ export const readMigratedVault = async (
   if (stored === undefined) {
     return vault;
   }
-  if (isVaultV12(stored)) {
+  if (isVaultV13(stored)) {
     if (await stores.staging.exists()) {
       await removeVerified(stores.staging);
     }

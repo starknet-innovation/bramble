@@ -248,6 +248,39 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     );
   });
 
+  const vipToggle = deps.app?.querySelector<HTMLInputElement>("#vip-notice-toggle");
+  vipToggle?.addEventListener("change", () => {
+    vipToggle.disabled = true;
+    void deps.wallet.setDisplay({ vipNotice: vipToggle.checked }).then(
+      async () => {
+        showToast(vipToggle.checked ? "VIP notice on" : "VIP notice off", "success", vipToggle);
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        vipToggle.checked = !vipToggle.checked;
+        showToast(errorDetails(error, "VIP preference failed"), "error", vipToggle);
+        vipToggle.disabled = false;
+      },
+    );
+  });
+
+  const nftsToggle = deps.app?.querySelector<HTMLInputElement>("#nfts-on-home");
+  nftsToggle?.addEventListener("change", () => {
+    nftsToggle.disabled = true;
+    // The literal state is written, so turning NFTs off is remembered as off.
+    void deps.wallet.setDisplay({ collectiblesPreview: nftsToggle.checked }).then(
+      async () => {
+        showToast(nftsToggle.checked ? "NFTs on Home" : "NFTs off", "success", nftsToggle);
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        nftsToggle.checked = !nftsToggle.checked;
+        showToast(errorDetails(error, "NFT preference failed"), "error", nftsToggle);
+        nftsToggle.disabled = false;
+      },
+    );
+  });
+
   const diagnosticsToggle = deps.app?.querySelector<HTMLInputElement>("#reliability-diagnostics");
   const analyticsToggle = deps.app?.querySelector<HTMLInputElement>("#product-analytics");
   analyticsToggle?.addEventListener("change", () => {

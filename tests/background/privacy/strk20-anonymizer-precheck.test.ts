@@ -31,8 +31,11 @@ const MISSING =
   "strk20 services unavailable: no shadow account anonymizer is configured for this network";
 
 const defaults = defaultWalletPreferences();
-const mainnet = defaults.strk20Networks?.SN_MAIN;
-if (!mainnet) throw new Error("missing bundled Mainnet STRK20 config");
+const bundledMainnet = defaults.strk20Networks?.SN_MAIN;
+if (!bundledMainnet) throw new Error("missing bundled Mainnet STRK20 config");
+// Bundled Mainnet routing without its anonymizer (#666), the network setup
+// these tests run on.
+const { shadowAccountAnonymizerAddress: _bundledAnonymizer, ...mainnet } = bundledMainnet;
 // The bundled config, which ships without the opt-in module.
 const withoutAnonymizer = {
   ...defaults,

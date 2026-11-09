@@ -161,7 +161,8 @@ the route on and the gateway mocked
 `gasless-approval-e2e.test.ts`). Fetch cannot leave the process.
 
 `bun run test:mainnet` (`scripts/gasless-mainnet-e2e.ts`) is opt-in and not part
-of `bun run check` or CI; setup is in `docs/GASLESS_MAINNET.md`. On 28 October
+of `bun run check` or pull-request CI. The scheduled mainnet workflow can run
+it; setup is in `docs/GASLESS_MAINNET.md` and `docs/MAINNET_E2E_CI.md`. On 28 October
 2026 it ran on mainnet: transaction
 `0x3419215ccbdd7c7fbfa641eabb64e57e84d89a1eb3204198f3514b48f94860b` sent 7078
 USDC base units to the forwarder, which refunded 1846, so the fee was 5232

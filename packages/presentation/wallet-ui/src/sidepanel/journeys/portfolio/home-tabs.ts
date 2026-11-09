@@ -1,10 +1,11 @@
 /**
- * Portfolio section on the home screen. Only Tokens is shown today: the
- * Collectibles tab is parked until the NFT journey is ready, so the section
- * renders a heading rather than a tablist and no tab runtime exists. Activity
+ * Portfolio section on the home screen: Tokens, plus a Staking tab where
+ * staking is switched on and an NFTs tab while NFTs are turned on (the default),
+ * reading Tokens · Staking · NFTs (../staking/staking-home); with neither the
+ * section renders a heading rather than a one-item tablist. Activity
  * remains a top-level dock destination rather than appearing twice. A single
- * overflow menu progressively discloses asset management, refresh, and
- * settings actions.
+ * overflow menu offers Refresh on every tab and Manage tokens on the Tokens
+ * tab only.
  */
 
 import { escapeHtml } from "@bramble/core/html";
@@ -30,6 +31,8 @@ import {
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
+import type { StakingState } from "../staking/staking-directory-client";
+import { type HomeTab, homeTabPanels } from "../staking/staking-home";
 import { activityRecordFacts, counterpartyFact } from "./activity-detail";
 import { type ActivityContact, activityRowAttributes } from "./activity-filter";
 import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
@@ -387,9 +390,11 @@ export const activityEmptyCopy = (historyUnavailable: boolean): string =>
     : "No activity yet. Transactions for this account appear here.";
 
 /**
- * Renders the portfolio section. With only Tokens visible there is no tab
- * switching: the section title is a plain heading rather than a one-item
- * tablist, and the token list needs no panel wrapper.
+ * Renders the portfolio section. With an NFTs panel (NFTs turned on) or
+ * staking on, the offered tabs read Tokens · Staking · NFTs with `selected`
+ * open (the remembered tab, `StakingState.homeTab`); otherwise the section
+ * title is a plain heading rather than a one-item tablist, and the token list
+ * needs no panel wrapper.
  */
 export const homeTabs = (
   state: BalanceState,
@@ -404,12 +409,26 @@ export const homeTabs = (
   },
   deployment: boolean | null = null,
   fundedForFees: boolean | null = true,
-): string => `
+  staking: StakingState | null = null,
+  nfts: string | null = null,
+  selected: HomeTab = staking?.homeTab ?? "tokens",
+): string => {
+  const tokens = tokensPanel(
+    state,
+    preferences,
+    prices,
+    changes,
+    currency,
+    privacy,
+    deployment,
+    fundedForFees,
+  );
+  // Tokens · Staking · NFTs, each tab offered only where it applies.
+  const tabs = staking || nfts !== null ? homeTabPanels(selected, tokens, staking, nfts) : null;
+  return `
   <section class="home-tabs" aria-label="Portfolio">
     <div class="tab-bar">
-      <div class="tab-set">
-        <h2>Tokens</h2>
-      </div>
+      ${tabs ? tabs.bar : '<div class="tab-set"><h2>Tokens</h2></div>'}
       <div class="portfolio-actions">
         ${iconButton({
           attributes: {
@@ -424,22 +443,14 @@ export const homeTabs = (
           variant: "ghost",
         })}
         <div class="portfolio-menu" id="portfolio-menu" role="menu" aria-label="Portfolio actions" hidden>
-          ${button({
-            attributes: { "data-view": "tokens", role: "menuitem", tabindex: "-1" },
-            className: "portfolio-menu-item",
-            icon: "coins",
-            label: "Manage tokens",
-            variant: "ghost",
-          })}
           ${
-            // The parked gallery's only way back in, and only with the opt-in
-            // collectibles preview on (Settings → Advanced).
-            preferences?.collectiblesPreview
+            // Manage tokens acts on the Tokens tab only; Refresh covers every tab.
+            !tabs || tabs.open === "tokens"
               ? button({
-                  attributes: { "data-view": "nfts", role: "menuitem", tabindex: "-1" },
+                  attributes: { "data-view": "tokens", role: "menuitem", tabindex: "-1" },
                   className: "portfolio-menu-item",
-                  icon: "image",
-                  label: "Collectibles",
+                  icon: "coins",
+                  label: "Manage tokens",
                   variant: "ghost",
                 })
               : ""
@@ -459,5 +470,6 @@ export const homeTabs = (
         </div>
       </div>
     </div>
-    ${tokensPanel(state, preferences, prices, changes, currency, privacy, deployment, fundedForFees)}
+    ${tabs ? tabs.panels : tokens}
   </section>`;
+};

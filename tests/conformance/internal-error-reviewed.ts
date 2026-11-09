@@ -205,6 +205,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "argent multisig intent already has its threshold signatures",
     "This transaction already has every signature it needs.",
   ],
+  [
+    "argent multisig intent is not collecting signatures",
+    "This transaction isn't waiting for a signature.",
+  ],
   ["this argent multisig signer already signed the intent", "This signer has already signed."],
   [
     "signature is not valid for this exact argent multisig intent",
@@ -291,6 +295,30 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "save a co-signer wallet card before sharing securely",
     "Save a co-signer's wallet card before sharing securely.",
   ],
+  ["this multisig can't submit a private proof.", "This multisig can't submit a private proof."],
+  [
+    "this transaction could not be saved for the signers.",
+    "This transaction could not be saved for the signers.",
+  ],
+  ["this multisig isn't the pinned account.", "This multisig isn't the pinned account."],
+  ["this multisig needs more than one signer.", "This multisig needs more than one signer."],
+  [
+    "this multisig's signers aren't available yet.",
+    "This multisig's signers aren't available yet.",
+  ],
+  ["argent multisig private proof is missing", "Argent multisig private proof is missing"],
+  ["couldn't prepare this private action.", "Couldn't prepare this private action."],
+  ["invalid argent multisig private proof", "Invalid Argent multisig private proof"],
+  ["invalid multisig private action", "invalid multisig private action"],
+  ["strk20 private submission unavailable", "strk20 private submission unavailable"],
+  [
+    "amount exceeds this multisig's private balance.",
+    "Amount exceeds this multisig's private balance.",
+  ],
+  [
+    "this wallet doesn't hold a signer for this multisig.",
+    "This wallet doesn't hold a signer for this multisig.",
+  ],
   ["invalid private key", "Couldn't import that account. Check what you pasted and try again."],
   ["insufficient private balance", "Insufficient private balance"],
   [
@@ -359,6 +387,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
   ],
   [
     "invalid privacy preparation commitment",
+    "This review no longer matches what was prepared. Review it again.",
+  ],
+  [
+    "invalid staking preparation commitment",
     "This review no longer matches what was prepared. Review it again.",
   ],
   [

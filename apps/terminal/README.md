@@ -38,14 +38,23 @@ holds that request for an explicit review and binds it to the origin, account,
 network, configured pool, tracked token, and payload digest before submitting
 the public one-time transaction.
 
-AVNU private swaps are currently unavailable pending independent verification of the
-executor deployment. `shared/privacy.ts` holds a null `PRIVATE_SWAP_EXECUTOR` anchor;
-the client and server refuse route planning while it is unset. Enabling this path
-requires a reviewed mainnet address, source/deployment provenance and upgrade-authority
-assessment committed with the pin. A quote response is not an independent source for it.
-Core private balances, shield, withdraw and private transfers are unaffected.
+AVNU private swaps use a pinned executor (#269). `shared/privacy.ts` holds
+`PRIVATE_SWAP_EXECUTOR` (AVNU PrivacySwapHelper,
+`0x0426dcd1ab5fa2f852f138d07cb37708b00a4db999677fe2d0c9a440702dbe5e`) and the class
+hash it must run (`0x3ff37c9dc8c2ea3930fbf27f62d7b9bdd6f0a63c8e77b11c64be4a69230fcee`),
+with their provenance. The server route and the browser both read the executor's live
+class hash before planning a route, and again before relaying a proof (server) or
+asking the wallet to prove (browser); a different class or a failed read refuses. A
+build response that names any other executor is refused. A quote response is never a
+source for the pin.
 
-Once a reviewed executor is pinned, the AVNU private-swap flow is split:
+**Runbook:** if AVNU rotates the executor or upgrades its class, private swaps refuse
+until the pin is updated by PR, with the new address and class hash re-verified against
+the STRK20 contract-addresses page, AVNU's build response and a mainnet
+`starknet_getClassHashAt` read. Setting `PRIVATE_SWAP_EXECUTOR` to `null` turns private
+swaps off. Core private balances, shield, withdraw and private transfers are unaffected.
+
+The AVNU private-swap flow is split:
 
 1. A same-origin server function asks the pinned AVNU SDK for the exact private
    route and paymaster fee. The browser receives a bounded action plan and
@@ -178,6 +187,12 @@ and Vesu delegation are revoked in that same transaction, and all calls flow
 through the terminal review before the wallet opens. Multiply wind/unwind
 reviews show the target multiplier or full debt, route slippage, LTV, and
 delegation lifecycle.
+
+Vault deposits, redemption requests and claims may only target the curated vaults
+pinned in `VESU_CURATED_VAULTS` (`src/protocols/constants.ts`: address, class hash and
+asset; #270). The vault's class hash is read again right before the wallet sees the
+calls, and a different class or a failed read refuses. The Vesu API's vault list only
+decides what is shown. A new curated vault is added by PR after the same checks.
 
 The data boundary only accepts `protocolVersion=v2`, Vesu-verified,
 non-deprecated pools. API JSON is validated and normalized before rendering;

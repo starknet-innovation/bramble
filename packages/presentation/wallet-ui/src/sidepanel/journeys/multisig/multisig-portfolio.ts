@@ -6,39 +6,18 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
-import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { explorerAccountUrl } from "@bramble/wallet-model/networks";
-import type { BalanceState } from "../../runtime/runtime";
 import { formatFiat, portfolioTotal } from "../../shared/fiat";
 import { actionTile, explorerTile } from "../../shell/wallet-shell";
 import { heroChange } from "../portfolio/hero-change";
 import { visibleHomeBalances } from "../portfolio/home-tabs";
 import { balanceRow } from "../portfolio/token-row";
 import { type CompactIntentList, compactIntentListView } from "./multisig-intent-list";
-
-/**
- * Public portfolio data resolved for one watched multisig address.
- */
-export type MultisigPortfolioData = {
-  readonly balances: BalanceState;
-  readonly changes: Readonly<Record<string, number>>;
-  readonly currency: DisplayCurrency;
-  readonly prices: Readonly<Record<string, number>>;
-};
-
-/**
- * Honest loading state used until the selected multisig's own balance request
- * returns. It renders no cached signer assets, and reads as loading rather
- * than as a failed read (issue 795).
- */
-export const EMPTY_MULTISIG_PORTFOLIO: MultisigPortfolioData = {
-  balances: { loading: true },
-  changes: {},
-  currency: "usd",
-  prices: {},
-};
+import type { MultisigPortfolioData } from "./multisig-portfolio-data";
+import { multisigStrk20KeyPanel } from "./multisig-strk20-key-view";
 
 const portfolioHero = (
   record: ArgentMultisigRecord,
@@ -129,6 +108,7 @@ export const multisigPortfolio = (input: {
                   : '<p class="hint multisig-action-note">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'
     }
   </section>
+  ${multisigStrk20KeyPanel(input.record.networkId, input.preferences, input.data)}
   <section class="home-tabs multisig-portfolio-tabs" aria-label="Multisig account">
     <div class="tab-bar">
       <div class="tab-set" role="tablist" aria-label="Multisig sections">

@@ -26,7 +26,13 @@ import {
   serviceUrl,
 } from "../_lib/security.js";
 
-import { PRIVATE_SWAP_EXECUTOR, PRIVATE_SWAP_SLIPPAGE_BPS } from "../../shared/privacy.js";
+import {
+  checkPinnedExecutorClass,
+  PRIVATE_SWAP_EXECUTOR,
+  PRIVATE_SWAP_EXECUTOR_CLASS_HASH,
+  PRIVATE_SWAP_SLIPPAGE_BPS,
+} from "../../shared/privacy.js";
+import { readMainnetClassHash } from "../_lib/starknet-class.js";
 
 export const config = { maxDuration: 120 };
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -198,6 +204,24 @@ export default async function handler(
   const avnuOptions = options();
   if (!body || !feeMode || !avnuOptions) {
     return reject(response, 400, "invalid_private_swap_request");
+  }
+  // The pinned executor must still run the pinned class before a route is
+  // planned and again before a proof is relayed (#269). A failed read refuses.
+  if (action !== "fee") {
+    const executorClass = await checkPinnedExecutorClass(
+      readMainnetClassHash,
+      PRIVATE_SWAP_EXECUTOR,
+      PRIVATE_SWAP_EXECUTOR_CLASS_HASH,
+    );
+    if (executorClass !== "ok") {
+      return reject(
+        response,
+        503,
+        executorClass === "class_mismatch"
+          ? "private_swap_executor_class_mismatch"
+          : "private_swap_executor_class_unavailable",
+      );
+    }
   }
   const paymasterApiKey = process.env.AVNU_PAYMASTER_API_KEY;
   try {

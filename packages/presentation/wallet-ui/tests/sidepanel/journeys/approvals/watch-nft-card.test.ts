@@ -47,25 +47,29 @@ describe("watch-collectible card", () => {
     expect(accepts({ ...tokenCard, token })).toBe(true);
   });
 
-  test("with the preview off it is a close-only notice", () => {
-    const html = approvalCard(card as never, status, null);
-    expect(html).toContain("Turn on Collectibles preview");
+  test("with NFTs turned off it is a close-only notice naming the setting", () => {
+    const off = { ...defaultWalletPreferences(), collectiblesPreview: false };
+    const html = approvalCard(card as never, status, off);
+    expect(html).toContain(
+      "NFTs are turned off. Turn on Show NFTs on Home in Appearance &amp; currency to watch one.",
+    );
     expect(html).toContain("data-approval-notice");
     expect(html).not.toContain('data-approval-action="approve"');
     expect(html).toContain(CONTRACT);
+    // Preferences not loaded yet: fail closed to the notice.
+    expect(approvalCard(card as never, status, null)).toContain("data-approval-notice");
   });
 
-  test("shows the full contract, token id and network, and promises the ownership check", () => {
-    const html = approvalCard(card as never, status, {
-      ...defaultWalletPreferences(),
-      collectiblesPreview: true,
-    });
-    expect(html).toContain("Watch collectible request");
+  test("on by default: shows the contract, token id and network, and promises the ownership check", () => {
+    const { collectiblesPreview: _unset, ...defaults } = defaultWalletPreferences();
+    const html = approvalCard(card as never, status, defaults);
+    expect(html).not.toContain("data-approval-notice");
+    expect(html).toContain("Watch NFT request");
     expect(html).toContain(CONTRACT);
     expect(html).toContain(">42<");
     expect(html).toContain("Starknet Mainnet");
-    expect(html).toContain("once Bramble confirms this account owns it");
-    expect(html).toContain("Watch collectible");
+    expect(html).toContain("Show this NFT on Home once Bramble confirms this account owns it.");
+    expect(html).toContain("Watch NFT");
     expect(html).not.toContain("Add token");
   });
 });

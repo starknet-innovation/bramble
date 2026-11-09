@@ -124,12 +124,44 @@ export const VESU_ADDRESSES = {
  */
 export const VESU_LENDING_ENABLED = true;
 
+/** A curated Vesu vault the terminal may call, pinned with its class and asset. */
+export type CuratedVesuVault = {
+  readonly address: string;
+  readonly assetAddress: string;
+  readonly classHash: string;
+  readonly symbol: string;
+};
+
 /**
- * Gate for curated Vesu vault deposits. Off: a deposit approves and pays the
- * vault address the Vesu API names, and nothing on chain or pinned here proves
- * that address is a Vesu vault (Sherlock 169). Redeem and claim stay available,
- * since they only move the user's own shares out and approve nothing. Turn
- * this on only with a pinned or on-chain-verified vault list.
+ * The only Vesu vaults a deposit, `request_redeem` or `claim_redeem` may target
+ * (#270). The Vesu API's vault list only decides what is shown; it never
+ * authorizes. Each entry's class hash is read again right before the wallet
+ * sees the calls. Changes only by PR.
+ *
+ * Provenance, verified 2026-11-06 at mainnet block 17546459: both are the
+ * complete `api.vesu.xyz/vaults?onlyVerified=true` list (curated by Noon);
+ * `starknet_getClassHashAt` and `asset()` on https://mainnet.nodes.starknet.org
+ * return the class and asset below.
+ */
+export const VESU_CURATED_VAULTS: readonly CuratedVesuVault[] = [
+  {
+    address: "0x023ccbaf0f70e8dcb29520ab4ea12e2e916fb71204677321e91e525062279e35",
+    assetAddress: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac",
+    classHash: "0x0225ca31b59b9f0e72dbbe72696aae6cf3431c68a2b993e9ecc10a62dd91ea04",
+    symbol: "nWBTC",
+  },
+  {
+    address: "0x04424dec8280f518b35be33139f44ef9fa0855b117f16cda2a30f1b64c27864a",
+    assetAddress: "0x04daa17763b286d1e59b97c283c0b8c949994c361e426a28f743c67bdfe9a32f",
+    classHash: "0x0225ca31b59b9f0e72dbbe72696aae6cf3431c68a2b993e9ecc10a62dd91ea04",
+    symbol: "ntBTC",
+  },
+];
+
+/**
+ * Gate for curated Vesu vault deposits (Sherlock 169). Deposits, redeems and
+ * claims are limited to `VESU_CURATED_VAULTS` and re-check the vault's class at
+ * handoff; this switch still keeps deposits paused until that is reviewed.
  */
 export const VESU_VAULT_DEPOSITS_ENABLED: boolean = false;
 

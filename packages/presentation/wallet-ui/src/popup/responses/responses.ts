@@ -57,6 +57,7 @@ export {
   type DiscoveredNft,
   type DiscoverNftsResponse,
   isDiscoverNftsResponse,
+  type NftCoverage,
 } from "./responses-nft";
 /**
  * Re-exported fiat price and token chart validators for one import path.
@@ -106,6 +107,7 @@ import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-mode
 import { isReadOnlyReason, type ReadOnlyReason } from "@bramble/wallet-model/recovery";
 import { isVaultRecovery } from "@bramble/wallet-model/vault-recovery";
 import type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
+import { isDappMultisigAccount } from "@bramble/wallet-protocol/results";
 import { type PendingApprovalsResponse, readPendingApprovals } from "./approvals-responses";
 import { isRecoveryState, type RecoveryState } from "./responses-recovery";
 
@@ -335,6 +337,17 @@ export const isTransferResponse = (value: unknown): value is TransferResponse =>
   typeof value["transactionHash"] === "string" &&
   isStarkFieldElement(value["transactionHash"]);
 
+const isMultisigAccountsResponse = (value: unknown): boolean =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["accounts", "ok"]) &&
+  value["ok"] === true &&
+  Array.isArray(value["accounts"]) &&
+  value["accounts"].every(isDappMultisigAccount) &&
+  hasUniqueStrings(
+    value["accounts"].map((account) => (isRecord(account) ? String(account["id"]) : "")),
+  );
+
 /**
  * Checks an approve/deny reply — the granted-account list or a pending-approval
  * envelope — before the caller treats the decision as applied. The pending
@@ -346,6 +359,7 @@ export const isTransferResponse = (value: unknown): value is TransferResponse =>
  */
 export const isApprovalDecisionResponse = (value: unknown): boolean =>
   isAccountsResponse(value) ||
+  isMultisigAccountsResponse(value) ||
   readPendingApprovals(value) !== null ||
   // No whole-envelope budget here either: each queued approval carries its own
   // through `readPendingApprovals`, and a budget over the whole switch-chain

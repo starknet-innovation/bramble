@@ -11,6 +11,9 @@ import { bindTokenCatalog } from "../../journeys/portfolio/token-catalog-ui";
 import { bindTokens } from "../../journeys/portfolio/tokens-ui";
 import { bindShadowAccounts } from "../../journeys/privacy/shadow-accounts-ui";
 import { bindConnectedSites } from "../../journeys/settings/origins-ui";
+import { bindStakingDirectory } from "../../journeys/staking/staking-directory-ui";
+import { bindHomeStaking } from "../../journeys/staking/staking-home-ui";
+import { bindStaking } from "../../journeys/staking/staking-ui";
 import type { SwapClient } from "../../journeys/swap/swap-client";
 import { bindSwap } from "../../journeys/swap/swap-ui";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -33,18 +36,27 @@ export type ClusterUiDeps = {
    */
   readonly openWithToken: (view: "send" | "swap", tokenId: string) => void;
   readonly openToken: (tokenId: string) => void;
-  /** Opens a collectible's detail screen (collectibles preview only). */
+  /** Opens a collectible's detail screen (while NFTs are turned on). */
   readonly openNft: (id: string) => void;
-  /** Leaves a finished collectible transfer for a dock screen. */
-  readonly navigate: (view: "activity" | "home") => void;
+  /** Leaves a finished collectible transfer, or opens staking from a token. */
+  readonly navigate: (view: "activity" | "home" | "staking") => void;
   readonly render: (status: RenderData["status"]) => Promise<void>;
   readonly swap: SwapClient;
   readonly wallet: SidepanelWallet;
 };
 
-// The token detail screen's own Send and Swap. Each seeds the asset and hands
-// over to that journey; neither prepares anything itself.
+// The token detail screen's own Send, Swap and Stake. Send and Swap carry the
+// asset and hand over to that journey; Stake opens the staking list. None of
+// them prepares anything itself.
 const bindTokenDetailActions = (deps: ClusterUiDeps): void => {
+  const { cache } = deps;
+  deps.app
+    ?.querySelector<HTMLButtonElement>("[data-stake-token]")
+    ?.addEventListener("click", () => {
+      // The staking list, not whichever validator was open last.
+      cache.staking = { ...cache.staking, selected: null, validator: { loading: true } };
+      deps.navigate("staking");
+    });
   for (const [attribute, key, view] of [
     ["data-send-token", "sendToken", "send"],
     ["data-swap-token", "swapToken", "swap"],
@@ -60,8 +72,7 @@ const bindTokenDetailActions = (deps: ClusterUiDeps): void => {
 
 /**
  * Binds the swap, connected-sites, tokens, catalog, and allowance screens. The
- * NFT bindings remain in their journey while it is parked, but no live screen
- * installs their handlers.
+ * NFT bindings install on the NFTs screens and the Home NFTs tab.
  */
 export const bindClusterScreens = (deps: ClusterUiDeps): void => {
   const { app, cache, render, wallet } = deps;
@@ -98,8 +109,29 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
     wallet,
   });
   bindAllowances({ app, render, wallet });
-  // Gallery markup exists only while the collectibles preview is on, so on
-  // every other paint these bindings find nothing to install.
+  bindStaking({ app, render, wallet });
+  bindHomeStaking({
+    app,
+    navigate: deps.navigate,
+    render,
+    setState: (state) => {
+      cache.staking = state;
+    },
+    state: () => cache.staking,
+    status: () => cache.status,
+  });
+  bindStakingDirectory({
+    app,
+    render,
+    setState: (state) => {
+      cache.staking = state;
+    },
+    state: () => cache.staking,
+    status: () => cache.status,
+    wallet,
+  });
+  // Gallery markup (the NFTs screens and the Home NFTs tab) exists only while
+  // NFTs are turned on, so on every other paint these find nothing to install.
   bindNfts({ app, navigate: deps.navigate, openDetail: deps.openNft, render, wallet });
   bindShadowAccounts({ app, wallet });
 };

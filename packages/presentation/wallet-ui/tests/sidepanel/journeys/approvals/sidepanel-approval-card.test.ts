@@ -60,6 +60,35 @@ describe("invoke approval card (A-H1)", () => {
     expect(html).toContain('data-approval-kind="invoke" data-approval-action="approve"');
   });
 
+  // A multisig proposal says what the calls do and that they are saved for the
+  // other signers under one "What will happen" heading, not two in a row.
+  const headings = (html: string): number => html.split(">What will happen</p>").length - 1;
+  const SAVED = "Saves this for the other signers. It is not sent yet.";
+
+  test("a multisig proposal keeps every line under one What will happen", () => {
+    const html = activity([{ ...invoke, multisigThreshold: 2 }]);
+    expect(headings(html)).toBe(1);
+    expect(html).toContain("Send 1000 units to 0x0005…0005");
+    expect(html).toContain(SAVED);
+    expect(html.indexOf("Send 1000 units")).toBeLessThan(html.indexOf(SAVED));
+  });
+
+  test("a multisig proposal with no decoded calls keeps both sentences under one heading", () => {
+    const { summaries: _summaries, ...bare } = invoke;
+    const html = activity([{ ...bare, multisigThreshold: 2 }]);
+    expect(headings(html)).toBe(1);
+    expect(html).toContain("Sign and submit the decoded transaction from the active account.");
+    expect(html).toContain(SAVED);
+  });
+
+  test("a single-owner invoke reads as before, without the multisig line", () => {
+    const html = activity([invoke]);
+    expect(headings(html)).toBe(1);
+    expect(html).not.toContain(SAVED);
+    const one = activity([{ ...invoke, multisigThreshold: 1 }]);
+    expect(one).not.toContain(SAVED);
+  });
+
   test("disables approve while the wallet is locked", () => {
     const locked = dashboard("activity", { ...status, locked: true }, [invoke], preferences, {
       balances: [],

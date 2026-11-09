@@ -129,11 +129,15 @@ export const ACTIVITY_STYLES = `
   }
   /* Filter, sort and search controls: a wrapping grid on the page's text
      column, the search box on its own full-width row so a pasted address is
-     never cramped. Each control keeps the kit's own field and segment skins. */
+     never cramped. Each control keeps the kit's own field and segment skins.
+     The column floor fits the widest default choice ("All statuses") beside
+     the select's chevron; a native select cannot ellipsize, so a narrower
+     column cut the label off, and below two such columns (the 320px minimum
+     panel) the controls stack instead. */
   .activity-toolbar {
     display: grid;
     gap: ${SPACE.sm};
-    grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
     margin-bottom: ${SPACE.md};
   }
   .activity-toolbar > * { min-width: 0; }

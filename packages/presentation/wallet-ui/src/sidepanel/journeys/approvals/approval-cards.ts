@@ -5,7 +5,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import type { WalletPreferences } from "@bramble/settings/preferences";
+import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
 import { reviewedInvokeTotal } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
@@ -18,19 +18,16 @@ import {
 } from "@bramble/wallet-protocol/privacy-blocker";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import {
-  accountDisplayName,
-  accountIdAddress,
-  accountLabel,
-  inlineCopyButton,
-} from "../../shared/parts";
+import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
 import {
   type ReviewFeeState,
+  reviewCallItems,
   reviewCallsList,
   reviewConstraints,
   reviewCostNote,
   reviewFeeSection,
   reviewOutcome,
+  reviewOutcomeSection,
   reviewPanel,
   riskFlagMessages,
 } from "../../shared/review-render";
@@ -41,6 +38,7 @@ import {
 } from "../../shared/sign-request";
 import { invokeCallReview, strk20ActionReview } from "./approval-call-parameters";
 import { decisionRow, denyButton, requestIdentity } from "./approval-card-parts";
+import { type ConnectPicker, connectCard } from "./approval-connect-card";
 import {
   declarationDetails,
   declarationFeeUnavailable,
@@ -68,10 +66,11 @@ const paymentDecisionRow = (
   label: string,
   locked: boolean,
   reviewedFee?: PendingApproval["fee"],
+  extra: Readonly<Record<string, string>> = {},
 ): string =>
   paysLookalike(approval)
     ? `<p class="hint">Bramble won't send this payment.</p>${denyOnlyRow(approval)}`
-    : decisionRow(approval, label, locked, reviewedFee);
+    : decisionRow(approval, label, locked, reviewedFee, extra);
 
 // The signing account is identified by its `<network>:<address>` id; the row
 // shows the address half truncated and copies it whole.
@@ -127,46 +126,6 @@ const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[
 const approvalCalls = (approval: PendingApproval): string =>
   reviewCallsList(approval.summaries ?? [], approval.reviewAssets ?? []);
 
-// The account that approving will share is the active one, named on the card
-// face — not behind a disclosure — and echoed back with the decision so the
-// background can refuse if it moved. The grant delta is stated only when the
-// queue knows a grant already exists; otherwise the plain first-share copy.
-const connectIdentity = (status: WalletStatus, preferences: WalletPreferences | null): string => {
-  const account = status.accounts.find((candidate) => candidate.id === status.activeAccountId);
-  if (!account) {
-    return `<p class="hint">${status.locked ? "Unlock the wallet to see which account will be shared." : "Select an account on this network to share it."}</p>`;
-  }
-  return `<dl class="request-detail"><div><dt>Account</dt><dd class="request-account"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong><span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy account address")}</span></dd></div><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
-};
-
-const connectCard = (
-  approval: PendingApproval,
-  status: WalletStatus,
-  preferences: WalletPreferences | null,
-): string => `
-  <li class="request-card">
-    <div class="request-copy">
-      ${requestIdentity(approval.origin, "Connection request")}
-      ${status.locked ? '<p class="hint">Unlock the wallet to approve this site.</p>' : ""}
-      ${connectIdentity(status, preferences)}
-      ${reviewOutcome(
-        approval.existingGrant
-          ? "Adds this account to the ones already shared with this site, until you disconnect it."
-          : "Shares this account's address with this site until you disconnect it.",
-      )}
-    </div>
-    ${reviewPanel(approval.insights ?? [])}
-    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(
-      approval,
-      "Connect account",
-      status.locked || status.activeAccountId === null,
-      undefined,
-      status.activeAccountId === null ? {} : { "data-approval-account": status.activeAccountId },
-      "Cancel",
-    )}
-  </li>`;
-
 // Fixed copy per spam reason (audit 171): the card the user decides on says why
 // the token looks wrong, and that the wallet will store it hidden.
 // Everything is inlined into the template (template contents are not re-wrapped)
@@ -202,14 +161,27 @@ const invokeDeploymentReview = (
   };
 };
 
+// One "What will happen" section: the decoded calls (or, with none, the plain
+// sign-and-submit sentence), then, for a multisig proposal, that it is saved for
+// the other signers and not sent yet. Every line is the same consequence.
+const invokeOutcome = (approval: PendingApproval, proposal: boolean): string =>
+  reviewOutcomeSection(
+    (reviewCallItems(approval.summaries ?? [], approval.reviewAssets ?? []) ||
+      `<p>${escapeHtml("Sign and submit the decoded transaction from the active account.")}</p>`) +
+      (proposal
+        ? `<p>${escapeHtml("Saves this for the other signers. It is not sent yet.")}</p>`
+        : ""),
+  );
+
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => {
   const offerGasless = gaslessChoiceAllowed(approval, status);
+  const proposal = (approval.multisigThreshold ?? 0) > 1;
   return `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Transaction request")}
       ${status.locked ? '<p class="hint">Unlock the wallet to review and approve this transaction.</p>' : ""}
-      ${approvalCalls(approval) || reviewOutcome("Sign and submit the decoded transaction from the active account.")}
+      ${invokeOutcome(approval, proposal)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
     ${
@@ -247,11 +219,12 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     ${contextDisclosure(approval)}
     ${paymentDecisionRow(
       approval,
-      "Approve",
+      proposal ? "Save for signers" : "Approve",
       // Approve echoes the total the Cost section showed — the same helper the
       // background refusal reads — and is withheld while no total exists.
       status.locked || reviewedInvokeTotal(approval) === null,
       reviewedInvokeTotal(approval) ?? undefined,
+      proposal ? { "data-multisig-proposal": "true" } : {},
     )}
   </li>`;
 };
@@ -356,21 +329,6 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
     ${decisionRow(approval, "Switch network", status.locked)}
   </li>`;
 
-const addChainCard = (approval: PendingApproval): string => `
-  <li class="request-card">
-    <div class="request-copy">
-      ${requestIdentity(approval.origin, "Add network request")}
-      <p class="hint">This site is asking to add a custom Starknet network.</p>
-      ${approvalCalls(approval) || reviewOutcome("Add the requested custom Starknet network to the wallet.")}
-    </div>
-    ${reviewPanel([
-      "Custom network endpoints can observe requests sent through them. Review the network details before use.",
-      ...(approval.insights ?? []),
-    ])}
-    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(approval, "Add network", false)}
-  </li>`;
-
 const declareCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -400,10 +358,11 @@ export const approvalCard = (
   approval: PendingApproval,
   status: WalletStatus,
   preferences: WalletPreferences | null = null,
+  picker?: ConnectPicker,
 ): string => {
   switch (approval.kind) {
     case "watch-asset":
-      return watchAssetCard(approval, preferences?.collectiblesPreview === true);
+      return watchAssetCard(approval, nftsShown(preferences));
     case "invoke":
       return invokeCard(approval, status);
     case "sign-typed-data":
@@ -445,11 +404,9 @@ export const approvalCard = (
       return strk20UnavailableCard(approval);
     case "switch-chain":
       return switchCard(approval, status);
-    case "add-chain":
-      return addChainCard(approval);
     case "declare":
       return declareCard(approval, status);
     case "connect":
-      return connectCard(approval, status, preferences);
+      return connectCard(approval, status, preferences, picker);
   }
 };

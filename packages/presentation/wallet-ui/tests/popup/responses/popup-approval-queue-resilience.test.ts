@@ -201,31 +201,3 @@ describe("pending approval queue envelope bounds (MCW-V09-106)", () => {
     expect(isPendingApprovalsResponse({ ok: true, pending })).toBe(false);
   });
 });
-
-describe("add-chain prompt summaries (MCW-V09-106)", () => {
-  // `addChainSummaries` emits the RPC host verbatim and the dapp controls it:
-  // `isHttpUrl` bounds the URL at 2048 characters with no bound on the host, so
-  // the popup's 300-character summary cap can reject the add-chain entry. That
-  // entry is dropped, but the honest prompt queued beside it stays reviewable.
-  test("an over-long add-chain host drops only its own prompt", () => {
-    const honest = { id: ids[0], kind: "connect" as const, origin: "https://honest.example" };
-    const longHost = {
-      id: ids[1],
-      kind: "add-chain",
-      origin: ORIGIN,
-      summaries: ["Evil Chain", "0x534e5f5345504f4c4941", `${"a".repeat(400)}.example.com`],
-    };
-    expect(readPendingApprovals(queue(longHost, honest))).toEqual([honest]);
-    expect(isPendingApprovalsResponse(queue(longHost, honest))).toBe(false);
-  });
-
-  test("an add-chain prompt with a summary inside the cap is kept", () => {
-    const addChain: PendingApproval = {
-      id: ids[1],
-      kind: "add-chain",
-      origin: ORIGIN,
-      summaries: ["Evil Chain", "0x534e5f5345504f4c4941", "rpc.example.com"],
-    };
-    expect(readPendingApprovals(queue(addChain))).toEqual([addChain]);
-  });
-});

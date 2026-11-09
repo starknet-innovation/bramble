@@ -55,16 +55,22 @@ const v12 = (shadowAccountScopes: readonly unknown[]) => ({
   shadowAccountScopes,
 });
 
-describe("schema v12 (current)", () => {
-  test("is the current version, reached by exactly one adjacent step", () => {
-    expect(CURRENT_SCHEMA_VERSION).toBe(12);
-    const step = VAULT_MIGRATIONS.at(-1);
-    expect(step).toMatchObject({ fromVersion: 11, toVersion: 12 });
+describe("schema v12 (one step below current)", () => {
+  test("is one step below the current version", () => {
+    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+    expect(VAULT_MIGRATIONS.some((step) => step.fromVersion === 11 && step.toVersion === 12)).toBe(
+      true,
+    );
   });
 
   test("old: a v11 vault migrates to an empty scope collection and nothing else", () => {
     expect(isVaultV11(v11)).toBe(true);
-    expect(migrateVault(v11) as unknown).toEqual(v12([]));
+    expect(migrateVault(v11) as unknown).toEqual({
+      ...v12([]),
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
+      schemaVersion: 13,
+    });
     // Deterministic: migrating twice from the same input gives the same vault.
     expect(migrateVault(structuredClone(v11))).toEqual(migrateVault(v11));
     // A v11 vault cannot already hold the v12 collection.
@@ -75,7 +81,12 @@ describe("schema v12 (current)", () => {
     expect(isVaultV12(v12([]))).toBe(true);
     expect(isVaultV12(v12([scope]))).toBe(true);
     expect(isVaultV12(v12([scope, { ...scope, label: "Other", nonces: [] }]))).toBe(true);
-    expect(migrateVault(v12([scope])) as unknown).toEqual(v12([scope]));
+    expect(migrateVault(v12([scope])) as unknown).toEqual({
+      ...v12([scope]),
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
+      schemaVersion: 13,
+    });
   });
 
   test("current: a v12 vault without the collection is refused", () => {

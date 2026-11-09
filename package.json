@@ -1,6 +1,6 @@
 {
   "name": "bramble",
-  "version": "0.10.9",
+  "version": "0.10.10",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "build": "bun run --filter @bramble/extension build",
     "build:firefox": "bun run --filter @bramble/extension build:firefox",
     "build:all": "bun run --filter @bramble/extension build:all",
-    "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
+    "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:ledger-app && bun run test && bun run check:workspaces",
     "check:audit": "bun audit --audit-level=high",
     "check:copy": "bun run scripts/check-copy.ts",
     "check:coverage": "bun run scripts/check-coverage.ts",
@@ -22,7 +22,8 @@
     "check:extension": "bun run scripts/check-extension-manifest.ts",
     "check:files": "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
     "check:firefox": "web-ext lint --source-dir dist-firefox",
-    "check:imports": "bun run scripts/check-workspace-architecture.ts",
+    "check:imports": "bun run scripts/check-workspace-architecture.ts && bun run scripts/check-test-bridge-boundary.ts",
+    "check:ledger-app": "bun run scripts/check-ledger-app.ts",
     "check:krusty": "bun run scripts/check-krusty-adapter.ts",
     "check:lint": "biome check .",
     "check:argent": "bun run scripts/check-argent-contracts.ts",
@@ -42,15 +43,21 @@
     "test": "bun test ./tests",
     "test:e2e": "playwright test",
     "test:e2e:build": "bun run build && bun run test:e2e",
+    "test:e2e:ledger": "bun run tests/e2e/ledger/run-speculos.ts",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
+    "test:e2e:mainnet:setup": "bun run scripts/mainnet-e2e-setup.ts",
+    "test:e2e:mainnet:wallet": "bun run scripts/mainnet-wallet-e2e.ts",
     "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
     "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
-    "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts"
+    "vendor:ledger-app": "bun run scripts/vendor-ledger-app.ts",
+    "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
+    "verify:sepolia": "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@bramble/testkit": "workspace:*",
+    "@ledgerhq/hw-transport-webhid": "6.36.0",
     "@playwright/test": "1.63.0",
     "@scure/bip32": "1.7.0",
     "@scure/bip39": "1.6.0",
@@ -60,7 +67,8 @@
     "knip": "6.37.0",
     "madge": "8.0.0",
     "typescript": "6.0.3",
-    "web-ext": "10.7.0"
+    "web-ext": "10.7.0",
+    "yaml": "2.9.1"
   },
   "dependencies": {
     "@bramble/core": "workspace:*",

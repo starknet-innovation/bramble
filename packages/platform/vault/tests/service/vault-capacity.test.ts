@@ -14,7 +14,7 @@ import type { Json } from "@bramble/core/json";
 import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
 import { fakeKms } from "@bramble/testkit/fake-kms";
 import { createEncryptedStore } from "@bramble/vault/encrypted-store";
-import { isVaultV12 } from "@bramble/vault/schema";
+import { isVaultV13 } from "@bramble/vault/schema";
 import { createWalletVaultService } from "@bramble/vault/service";
 import { writeVault } from "../../src/service/service-creation";
 import { VAULT_FULL } from "../../src/service/vault-capacity";
@@ -28,7 +28,7 @@ const snapshot = async (store: KeyValueStore, keys: readonly string[]) =>
 
 describe("vault capacity", () => {
   test("is the shared JSON budget, a couple of hundred accounts", () => {
-    expect(isVaultV12(vaultWith(2))).toBe(true);
+    expect(isVaultV13(vaultWith(2))).toBe(true);
     // Measured at 243 derived accounts before any connected sites, imported
     // phrases or retained secrets share the budget. The storage budget used to
     // refuse the envelope first, at 184.

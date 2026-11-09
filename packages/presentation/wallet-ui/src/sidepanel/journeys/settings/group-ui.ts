@@ -8,6 +8,7 @@
 import { DEFAULT_GROUP_IDS, isAccountGroupIcon } from "@bramble/settings/groups";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
+import { confirmSecondTap } from "../../shared/two-tap-confirm";
 
 /**
  * State the group controls close over: the wallet client, a re-render callback
@@ -113,12 +114,9 @@ const bindRemoveButtons = (root: Element, deps: GroupControlDeps): void => {
       if (!id) {
         return;
       }
-      // First tap arms the delete; a second tap on the same control confirms.
-      if (el.dataset["confirm"] !== "true") {
-        el.dataset["confirm"] = "true";
-        el.classList.add("is-confirming");
-        el.setAttribute("title", "Tap again to delete");
-        el.setAttribute("aria-label", "Tap again to delete");
+      // First tap arms the delete; a second tap on the same, still-armed
+      // control confirms. The icon stays; CSS adds the visible "Delete?".
+      if (!confirmSecondTap(el, { label: "Tap again to delete", replaceContent: false })) {
         return;
       }
       buttonBusy(el, true);

@@ -54,6 +54,9 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
       color ${MOTION.pressMs}ms ${MOTION.ease},
       transform ${MOTION.liftMs}ms var(--ease-out);
   }
+  /* A label that wraps in a narrow button (the approval decision at the 320px
+     panel) must not squeeze the glyph beside it. */
+  :where(button, a.icon-button) > .icon { flex: none; }
   :where(button:not(:disabled):active), a.icon-button:active { background: var(--bramble-accent-press); transform: scale(0.98); }
   button.secondary {
     background: var(--bramble-elevated);

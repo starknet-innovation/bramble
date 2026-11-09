@@ -1,10 +1,4 @@
-/**
- * Background-only dapp approval queue. Requests are intentionally not persisted.
- * Admission is bounded globally and per origin, and unanswered prompts expire,
- * so an untrusted page cannot hold the wallet's consent surface hostage — see
- * `./approval-limits` for those rules and `./approval-snapshot` for what a
- * queued approval is allowed to show its readers.
- */
+/** Unpersisted dapp approval queue. Admission is bounded and unanswered prompts expire. */
 
 import { WalletError } from "@bramble/core/errors";
 import { isUuid } from "@bramble/core/ids";
@@ -272,27 +266,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         origin,
       });
     },
-    requestAddChain({ chain, origin, summaries }) {
-      if (!isWalletOrigin(origin)) {
-        throw new WalletError("Invalid origin");
-      }
-      const existing = queued().find(
-        (approval) =>
-          approval.kind === "add-chain" &&
-          approval.origin === origin &&
-          approval.chain?.chainId === chain.chainId,
-      );
-      if (existing) {
-        return approvalSnapshot(existing);
-      }
-      return enqueue({
-        chain,
-        id: crypto.randomUUID(),
-        kind: "add-chain",
-        origin,
-        summaries: [...summaries],
-      });
-    },
     requestDeclare({ context, declaration, declare, origin, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
@@ -321,6 +294,9 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         context: { ...input.context },
         ...invokeFeeReviewFields(input.fee),
         flags: input.flags.map((flag) => ({ ...flag })),
+        ...(input.multisigThreshold === undefined
+          ? {}
+          : { multisigThreshold: input.multisigThreshold }),
         id: crypto.randomUUID(),
         kind: "invoke",
         origin: input.origin,

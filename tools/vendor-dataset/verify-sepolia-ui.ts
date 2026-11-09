@@ -2,16 +2,19 @@
  * Browser driving for the Sepolia verification run (verify-sepolia.ts): one
  * fresh extension profile, onboarded with S-BRM on mainnet (first run is
  * mainnet only), then switched to Sepolia, where every in-wallet import path
- * (P2…P8, P10) is driven through the side panel exactly as a person would.
+ * (P2…P8, P10, and the opt-in Ledger path P9) is driven through the side panel
+ * exactly as a person would.
  * Read-only: nothing here deploys, sends or signs. Secrets are typed into the
  * UI and never returned; scraped rows carry addresses and visible text only.
  */
-import { expect, type Locator, type Page } from "@playwright/test";
+import { type BrowserContext, expect, type Locator, type Page } from "@playwright/test";
 import { type LoadedExtension, launchExtension } from "../../tests/e2e/extension-fixture";
 import { sendRuntimeMessage } from "../../tests/e2e/wallet-helpers";
 
 const PASSPHRASE = "dataset verification passphrase";
 const SCAN_TIMEOUT_MS = 300_000;
+// Time for a person to plug in, unlock, open Starknet and pick the device.
+const LEDGER_CONNECT_TIMEOUT_MS = 300_000;
 const STEP_TIMEOUT_MS = 60_000;
 
 /** One account row as the UI lists it (scan groups and the Ready key picker share the markup). */
@@ -70,15 +73,25 @@ const text = async (locator: Locator): Promise<string> =>
   ((await locator.textContent()) ?? "").replace(/\s+/g, " ").trim();
 
 // The public Sepolia node rate-limits bursts; these answers mean "ask again".
-const TRANSIENT = /rate limit|refused this request|Couldn.t check this account|Try again\.$/;
+const TRANSIENT = /rate limit|refused this request|Couldn.t check this account/;
+const isTransient = (answer: string): boolean =>
+  TRANSIENT.test(answer) || answer.endsWith("Try again.");
 const RETRIES = 3;
 const BACKOFF_MS = 20_000;
+// A replay (BRAMBLE_SEPOLIA_REPLAY) answers from a tape at once and has no
+// rate limit, so its pauses are dropped and a repeated answer settles quickly.
+const REPLAY = Boolean(process.env["BRAMBLE_SEPOLIA_REPLAY"]);
+const SETTLE_MS = REPLAY ? 5_000 : STEP_TIMEOUT_MS;
+
+/** Waits `ms` on a live run, to stay under the public node's rate limit; returns at once on a replay. */
+export const pace = (ms: number): Promise<void> =>
+  REPLAY ? Promise.resolve() : new Promise((done) => setTimeout(done, ms));
 
 /**
  * Presses `search` and returns the final answer `locator` shows: past the
  * "Checking…" stage, and changed from `before` (a repeated answer reads the
- * same, so after 15 s the current text is taken). A rate-limit answer is
- * retried after a pause, up to RETRIES times.
+ * same, so after SETTLE_MS the current text is taken: 60 s live, 5 s on a
+ * replay). A rate-limit answer is retried after a pause, up to RETRIES times.
  */
 const answer = async (locator: Locator, search: () => Promise<void>): Promise<string> => {
   let last = "";
@@ -91,13 +104,13 @@ const answer = async (locator: Locator, search: () => Promise<void>): Promise<st
           const now = await text(locator);
           return now !== "" && !now.startsWith("Checking") && now !== before;
         },
-        { timeout: STEP_TIMEOUT_MS },
+        { timeout: SETTLE_MS },
       )
       .toBe(true)
       .catch(() => undefined);
     last = await text(locator);
-    if (!TRANSIENT.test(last)) return last;
-    await new Promise((done) => setTimeout(done, BACKOFF_MS));
+    if (!isTransient(last)) return last;
+    await pace(BACKOFF_MS);
   }
   return last;
 };
@@ -120,6 +133,12 @@ export type Session = {
   }) => Promise<{ message: string; rows: Row[]; finder?: string; imported: string[] }>;
   /** P10: add a multisig by address. */
   readonly multisig: (address: string) => Promise<{ message: string }>;
+  /**
+   * The Ledger picker's rows, read from a real device a person connects: `own`
+   * is "Ledger account" (Bramble's path), `ready` is "Ready Ledger account".
+   * Needs a headed session; waits for the person to choose the device.
+   */
+  readonly ledger: (route: "own" | "ready") => Promise<Row[]>;
   /** What the phrase screen says when `mnemonic` is entered (for 15/18/21 words). */
   readonly phraseEntry: (mnemonic: string) => Promise<{ message: string; searchable: boolean }>;
 };
@@ -131,9 +150,19 @@ const accountsOf = async (page: Page): Promise<string[]> => {
   return (status?.accounts ?? []).map(({ address }) => `0x${BigInt(address).toString(16)}`);
 };
 
-/** Onboards `mnemonic` on mainnet, keeping Bramble account 0, then switches to Sepolia. */
-export async function openSession(mnemonic: string): Promise<Session> {
-  const loaded: LoadedExtension = await launchExtension({ headless: true });
+/**
+ * Onboards `mnemonic` on mainnet, keeping Bramble account 0, then switches to
+ * Sepolia. `tap`, when given, is installed on the browser context before
+ * any page opens (sepolia-tape's record or replay). `headed` shows the
+ * browser, which the Ledger checks need for the device prompt.
+ */
+export async function openSession(
+  mnemonic: string,
+  tap?: (context: BrowserContext) => Promise<unknown>,
+  headed = false,
+): Promise<Session> {
+  const loaded: LoadedExtension = await launchExtension({ headless: !headed });
+  await tap?.(loaded.context);
   const base = `chrome-extension://${loaded.extensionId}`;
   const onboarding = await loaded.context.newPage();
   await onboarding.goto(`${base}/onboarding.html`);
@@ -198,7 +227,7 @@ export async function openSession(mnemonic: string): Promise<Session> {
         )
         .toBe(true);
       if ((await text(status)).includes("Search complete") || attempt === RETRIES) break;
-      await new Promise((done) => setTimeout(done, BACKOFF_MS));
+      await pace(BACKOFF_MS);
       await page.locator("#recovery-scan-retry").click();
     }
     const outcome = await text(status);
@@ -290,8 +319,38 @@ export async function openSession(mnemonic: string): Promise<Session> {
     };
   };
 
+  const ledger: Session["ledger"] = async (route) => {
+    const page = await open(route === "own" ? ["ledger"] : ["import", "restore-ready-ledger"]);
+    await page.locator("[data-ledger-onboard-connect]").click();
+    const name = route === "own" ? "Ledger account" : "Ready Ledger account";
+    console.log(
+      `   ${name}: plug in and unlock the test Ledger, open the Starknet app, and in the tab that opens connect it (pick it in the device prompt if the browser asks).`,
+    );
+    const picker = page.locator(".onboard-picker");
+    await expect(picker.locator("li.allowance-row").first()).toBeVisible({
+      timeout: LEDGER_CONNECT_TIMEOUT_MS,
+    });
+    // Each row reads "Checking…" until its on-chain status resolves.
+    await expect(picker.locator("span.hint", { hasText: "Checking…" })).toHaveCount(0, {
+      timeout: SCAN_TIMEOUT_MS,
+    });
+    const rows: Row[] = [];
+    for (const group of await picker.locator("details[data-account-group]").all()) {
+      if (!(await group.evaluate((el) => (el as HTMLDetailsElement).open))) {
+        await group.locator("summary").click();
+      }
+      rows.push(
+        ...(await scrapeRows(group, (await group.getAttribute("data-account-group")) ?? "")),
+      );
+    }
+    const ready = picker.locator("[data-ready-accounts]");
+    if ((await ready.count()) > 0) rows.push(...(await scrapeRows(ready, "ready")));
+    return rows;
+  };
+
   return {
     close: () => loaded.close(),
+    ledger,
     scan,
     paste,
     manualIndex,

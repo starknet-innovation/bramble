@@ -25,7 +25,6 @@ export type Strk20NoticeReason = "other-wallet" | "record-limit" | "request-fail
  * Every approval kind that may cross the background-to-UI boundary.
  */
 export type ApprovalKind =
-  | "add-chain"
   | "connect"
   | "declare"
   | "invoke"
@@ -169,6 +168,11 @@ export type PendingApproval = {
   readonly id: string;
   readonly insights?: readonly string[];
   readonly kind: ApprovalKind;
+  /**
+   * Invoke from a multisig whose threshold is above 1. Approving saves an
+   * intent for the other signers and does not broadcast.
+   */
+  readonly multisigThreshold?: number;
   /**
    * `strk20-unavailable` only: why the private request is held on a notice.
    * Absent means the network has no private services for it. Wallet-chosen,

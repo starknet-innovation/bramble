@@ -2,12 +2,7 @@
 import { WalletError } from "@bramble/core/errors";
 import { isJson } from "@bramble/core/json";
 import { isWatchedNft, withNftId } from "@bramble/portfolio/watched-nft";
-import {
-  DEFAULT_STRK20_NETWORKS,
-  isStrk20NetworkConfig,
-  STRK20_MAINNET_POOL,
-  type Strk20NetworkConfig,
-} from "@bramble/privacy/config";
+import { DEFAULT_STRK20_NETWORKS, isStrk20NetworkConfig } from "@bramble/privacy/config";
 import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
@@ -17,7 +12,6 @@ import {
   DEFAULT_NETWORK,
   DEFAULT_TRACKED_TOKENS,
   isStarknetNetworkId,
-  STRK_TOKEN_ADDRESS,
 } from "@bramble/wallet-model/networks";
 
 import {
@@ -28,9 +22,8 @@ import {
   withTokenId,
 } from "@bramble/wallet-model/preferences";
 import { normalizeAccountGroups } from "./groups";
-import { withAccountHidden } from "./preferences-accounts";
+import { selectedMultisigPreference, withAccountHidden } from "./preferences-accounts";
 import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
-import { withCustomNetwork } from "./preferences-custom-networks";
 import { displayFlags, isValidDisplayInput } from "./preferences-display";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
@@ -46,6 +39,7 @@ import {
   normalizeStoredPreferences,
   pickImportablePreferences,
 } from "./preferences-stored";
+import { withCurrentStrk20Defaults } from "./preferences-strk20-routing";
 import { withoutToken, withUpsertedToken } from "./preferences-tokens";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
@@ -89,6 +83,7 @@ type WalletPreferencesStoreOptions = {
  * Stored-shape guard, re-exported so existing importers keep one entry point
  * for the store and the record it validates.
  */
+export { nftsShown } from "./preferences-display";
 export { isWalletPreferences } from "./preferences-stored";
 
 /**
@@ -116,34 +111,15 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   tokens: DEFAULT_TRACKED_TOKENS.map(withTokenId),
 });
 
-const RETIRED_STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";
-
-// The old bundled Mainnet snapshot is the only configuration rebased on read.
-// Requiring every default field preserves custom routing and an empty-map opt-out.
-const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined): boolean =>
-  config !== undefined &&
-  config.discoveryUrl === `${RETIRED_STRK20_GATEWAY_BASE}/discovery` &&
-  config.ohttpEnabled === true &&
-  config.ohttpRelayUrl === undefined &&
-  config.paymaster?.feeToken === STRK_TOKEN_ADDRESS &&
-  config.paymaster.url === `${RETIRED_STRK20_GATEWAY_BASE}/paymaster` &&
-  config.poolAddress === STRK20_MAINNET_POOL &&
-  config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
-  config.shadowAccountAnonymizerAddress === undefined;
-
-const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => {
-  const current = { ...preferences, productAnalytics: preferences.productAnalytics ?? true };
-  if (current.strk20Networks === undefined) {
-    return { ...current, strk20Networks: DEFAULT_STRK20_NETWORKS };
-  }
-  if (!isRetiredBundledMainnetRouting(current.strk20Networks.SN_MAIN)) {
-    return current;
-  }
-  return {
-    ...current,
-    strk20Networks: { ...current.strk20Networks, ...DEFAULT_STRK20_NETWORKS },
-  };
-};
+// Also stamps the STRK20 defaults migration, so a fresh install's first write
+// records it and a later anonymizer clear is never taken for an old snapshot.
+// Not part of `defaultWalletPreferences`: the backup file is built from those,
+// and an older build must still restore it.
+const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => ({
+  ...preferences,
+  productAnalytics: preferences.productAnalytics ?? true,
+  ...withCurrentStrk20Defaults(preferences),
+});
 
 const writePreferences = async (
   store: KeyValueStore,
@@ -155,9 +131,7 @@ const writePreferences = async (
   await store.set(PREFERENCES_STORE_KEY, preferences);
 };
 
-/**
- * Creates the plain preferences store with capability checks.
- */
+/** Creates the plain preferences store with capability checks. */
 export const createPreferencesStore = ({
   actor = "background",
   store,
@@ -170,7 +144,7 @@ export const createPreferencesStore = ({
     // failing the strict entry guards and locking the user out of preferences.
     const stored = normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY));
     if (stored === undefined) {
-      return defaultWalletPreferences();
+      return withCurrentDefaults(defaultWalletPreferences());
     }
     if (!isWalletPreferences(stored)) {
       throw new WalletError("Invalid stored preferences");
@@ -192,15 +166,10 @@ export const createPreferencesStore = ({
   const readImportBase = async (): Promise<WalletPreferences> =>
     isWalletPreferences(normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY)))
       ? await read()
-      : defaultWalletPreferences();
+      : withCurrentDefaults(defaultWalletPreferences());
 
   return serializeStoreMutations<WalletPreferencesStore>(
     {
-      async addCustomNetwork(network) {
-        const next = withCustomNetwork(await read(), network);
-        await writePreferences(store, next);
-        return next;
-      },
       async addNft(nft) {
         const nextNft = withNftId(nft);
         if (!isWatchedNft(nextNft)) {
@@ -378,6 +347,8 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
+      setSelectedMultisig: ({ multisigId }) =>
+        selectedMultisigPreference(read, (next) => writePreferences(store, next), multisigId),
       async setRpcOverride({ networkId, rpcUrl }) {
         if (!isStarknetNetworkId(networkId)) {
           throw new WalletError("Invalid Starknet network");

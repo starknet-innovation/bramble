@@ -42,7 +42,49 @@ extension.
   Read-only, about 15 minutes, retries the public node's rate limits:
   `BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts [out.json] [previous.json]`.
   Passing a previous scorecard lists the verdicts that changed; keep a release's
-  run as a dated `verification-sepolia-*.json`. Ledger (TA-32…TA-38) needs the
-  device and is checked by hand.
+  run as a dated `verification-sepolia-*.json`. It exits non-zero when any
+  check fails or errors.
+- The test Ledger is optional. By default TA-32…TA-37 are skipped, so the run
+  needs no device. With `BRAMBLE_SEPOLIA_LEDGER=1` the browser opens visibly and,
+  after the other checks, asks you to plug in and unlock the test Ledger, open
+  the Starknet app and pick it in the device prompt, once for "Ledger account"
+  and once for "Ready Ledger account" (`verify-sepolia-ledger.ts`). The wallet
+  reads public keys from the device itself, which is why no seed file can stand
+  in for it; nothing is signed. TA-38 (the first-run Ledger screen) stays manual
+  here; the offline Speculos suite in `tests/e2e/ledger/` (see its README)
+  drives first-run import and blind-sign with the public test phrase (#861):
+  `BRAMBLE_SEPOLIA_LEDGER=1 BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts`.
+- The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts`, without
+  the Ledger, on the active release branch against the newest committed
+  scorecard, so a failing import path blocks the release like any other nightly
+  gate. Until the `BRAMBLE_SEPOLIA_SEEDS` repository secret exists the gate is
+  skipped and the summary lists it under "Not run", never as passed. It reads
+  the seed file from the `BRAMBLE_SEPOLIA_SEEDS` repository
+  secret, which holds only the eleven lines the runner reads:
+  `BRAMBLE_DATASET_SEED_S_{BRM,SCR,BRV,RDY,XVS,W15,W18,W21}` and
+  `BRAMBLE_DATASET_KEY_K_{OZ,ROT_A,SNC}`. Leave everything else out, the
+  Ledger seed and the guardian, 2FA and rotation keys included. Only that one
+  step sees the secret, and it masks each value in the log
+  (`scripts/workflow-sepolia-policy.ts` holds it there). The secret reaches
+  whatever code is on the release branch, so release branches must stay
+  protected. It records no tape and uploads nothing, since the repository is
+  public; the verdicts are in the job log and summary.
+- `BRAMBLE_SEPOLIA_RECORD=<tape.json>` records the network answers of a live
+  run; `BRAMBLE_SEPOLIA_REPLAY=<tape.json>` (without `BRAMBLE_E2E_LIVE_NETWORK`)
+  replays it fully offline against the same chain state (`sepolia-tape.ts`):
+  about 90 seconds instead of the live run's 15 minutes, because a replay has
+  no rate limit to pace around. It tolerates the wallet taking a different
+  path than the live run did (another RPC endpoint, another block), and lists
+  any request the tape cannot answer. A replay reproduces what the wallet did
+  with that chain state, so a wallet regression shows; a live failure caused
+  by the node (a rate limit, a failover) does not, since a replay serves
+  successful answers first.
+- A tape holds addresses and node answers only. The privacy service (any
+  `/strk20/` path) is never recorded, because its requests carry the account's
+  viewing key; secret-named request fields are stored as `[omitted]`; and a
+  tape that still carries a seed, key or secret-named field is not written.
+  Record and replay are local-only, and a tape stays on the machine that made
+  it; never commit or upload one. Replay with
+  `BRAMBLE_DATASET_NETWORK=sepolia BRAMBLE_SEPOLIA_REPLAY=tape.json bun tools/vendor-dataset/verify-sepolia.ts`.
 - Derivation uses `@scure/bip32`/`@scure/bip39` directly, never Krusty, so the
   dataset stays independent of the wallet code it measures.

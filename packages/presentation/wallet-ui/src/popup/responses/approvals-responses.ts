@@ -113,6 +113,10 @@ const isApprovalReviewAsset = (value: unknown): boolean =>
   typeof value["symbol"] === "string" &&
   isTokenSymbol(value["symbol"]);
 
+const isOptionalMultisigThreshold = (value: unknown): boolean =>
+  value === undefined ||
+  (typeof value === "number" && Number.isSafeInteger(value) && value > 1 && value <= 32);
+
 const isInsightText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
 
@@ -240,6 +244,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "id",
       "insights",
       "kind",
+      "multisigThreshold",
       "nft",
       "notice",
       "origin",
@@ -256,8 +261,8 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     !isWalletOrigin(value["origin"]) ||
     (value["typedData"] !== undefined && !isJson(value["typedData"])) ||
     (value["existingGrant"] !== undefined && typeof value["existingGrant"] !== "boolean") ||
-    (value["kind"] !== "add-chain" &&
-      value["kind"] !== "connect" &&
+    !isOptionalMultisigThreshold(value["multisigThreshold"]) ||
+    (value["kind"] !== "connect" &&
       value["kind"] !== "declare" &&
       value["kind"] !== "invoke" &&
       value["kind"] !== "sign-typed-data" &&

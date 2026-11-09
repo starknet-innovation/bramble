@@ -62,12 +62,13 @@ describe("ledgerSignScreen", () => {
 
   test("error phase renders the escaped catalog message with retry and cancel", () => {
     const html = render({
-      code: "blind-signing-disabled",
+      code: "rejected-or-blind-signing-off",
       kind: "error",
-      message: "Turn on Blind signing in the Starknet app settings on your Ledger, then retry.",
+      message:
+        "Signing couldn't be completed. You may have rejected the request, or Blind signing may be off. Check your Ledger and its connection before retrying.",
     });
     expect(html).toContain("Ledger needs attention");
-    expect(html).toContain("Turn on Blind signing");
+    expect(html).toContain("You may have rejected the request, or Blind signing may be off.");
     expect(html).toContain("data-ledger-retry");
     expect(html).toContain("data-ledger-cancel");
     expect(html).not.toContain('data-liquid-dots="ledger"');
