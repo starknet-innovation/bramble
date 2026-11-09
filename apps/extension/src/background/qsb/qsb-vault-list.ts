@@ -57,12 +57,6 @@ type Local = {
   readonly withdrawals: readonly QsbWithdrawalRecord[];
 };
 
-type Confirmation = {
-  readonly confirmations: number;
-  readonly funding: QsbFunding;
-  readonly v: number;
-};
-
 type Remote = {
   readonly confirmations: readonly Confirmation[];
   readonly funds: QsbOwnerFunds;
@@ -79,9 +73,22 @@ const readLocal = async (access: QsbVaultAccess): Promise<Local> => {
   };
 };
 
-// The deposit `/funding` proves confirmed for `record`, or null.
-const confirmedFunding = (
-  record: QsbVaultRecord,
+// A deposit `/funding` proved confirmed for vault `v`.
+type Confirmation = {
+  readonly confirmations: number;
+  readonly funding: QsbFunding;
+  readonly v: number;
+};
+
+/**
+ * The deposit `/funding` proves confirmed for `record`, or null: confirmed,
+ * for the coordinator vault `server` holding `record`'s script hash, at
+ * output 0, its previous transaction hashing to its txid and output 0 paying
+ * `record`'s script exactly its amount. The one funding check every flow
+ * that records funding uses.
+ */
+export const qsbConfirmedFunding = (
+  record: Pick<QsbVaultRecord, "scriptHash" | "scriptPubKey" | "v">,
   server: QsbPublicVault,
   status: QsbFundingStatus,
 ): Confirmation | null => {
@@ -116,7 +123,7 @@ const readConfirmations = async (
     const status = await session
       .call((token) => deps.coordinator.funding(token, server.id))
       .catch(() => null);
-    const confirmed = status ? confirmedFunding(record, server, status) : null;
+    const confirmed = status ? qsbConfirmedFunding(record, server, status) : null;
     if (confirmed) confirmations.push(confirmed);
   }
   return confirmations;

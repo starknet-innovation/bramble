@@ -111,6 +111,7 @@ const journey = async (extension: LoadedExtension): Promise<void> => {
     await sendRuntimeMessage(sidepanel, {
       accountId,
       digest: createHash("sha256").update("not reviewed").digest("hex"),
+      emergency: false,
       passphrase: VAULT_PASSPHRASE,
       type: "wallet.releaseQsbWithdrawal",
       v: 0,

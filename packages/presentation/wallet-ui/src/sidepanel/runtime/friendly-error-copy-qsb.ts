@@ -42,6 +42,7 @@ export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
     "Only a QSB vault created here, with its phrase backed up, can take new deposits.",
   ],
   [QSB_VAULT_REFUSALS.quoteChanged, "The cost changed. Review the new quote."],
+  [QSB_VAULT_REFUSALS.recoveryNotNeeded, "This QSB vault's deposits don't need recovering."],
   [QSB_VAULT_REFUSALS.runtimeUnavailable, "Couldn't prepare the deposit. Try again."],
   [QSB_VAULT_REFUSALS.scriptTaken, "This deposit can't be used. Create a new one."],
   [QSB_VAULT_REFUSALS.signInRefused, "Couldn't sign in to the QSB service."],
@@ -51,6 +52,10 @@ export const QSB_ERROR_COPY: readonly (readonly [string, string])[] = [
   [
     QSB_WITHDRAWAL_REFUSALS.bindingRefused,
     "This withdrawal doesn't check out, so Bramble released nothing.",
+  ],
+  [
+    QSB_WITHDRAWAL_REFUSALS.custodyChanged,
+    "This QSB vault changed since the review, so Bramble released nothing. Review it again.",
   ],
   [QSB_WITHDRAWAL_REFUSALS.destinationInvalid, "Enter a Bitcoin mainnet address."],
   [QSB_WITHDRAWAL_REFUSALS.dustOutput, "This deposit is too small to withdraw after fees."],

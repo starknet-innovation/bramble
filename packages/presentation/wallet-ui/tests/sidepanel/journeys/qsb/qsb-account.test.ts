@@ -135,7 +135,7 @@ describe("a QSB account", () => {
 
   test("an account that cannot make vaults gets a line instead, and no Deposit", async () => {
     for (const [account, line] of [
-      [QSB_VIEWS.readOnly, "An imported phrase can't take new deposits here."],
+      [QSB_VIEWS.readOnly, "An imported phrase can't take new deposits here. Recover deposits"],
       [QSB_VIEWS.backupNeeded, "Back up this QSB vault's phrase to take new deposits."],
       [QSB_VIEWS.historyUnavailable, "Bramble can't read this QSB vault's history right now."],
     ] as const) {

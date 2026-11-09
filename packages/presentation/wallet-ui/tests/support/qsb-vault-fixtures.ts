@@ -145,6 +145,15 @@ export const withdrawingVault = (
         },
 });
 
+/**
+ * A deposit a read-only QSB vault recovered: its history `unknown`, its
+ * withdrawal in `status` as {@link withdrawingVault} has it.
+ */
+export const recoveredVault = (v: number, status: QsbWithdrawalStatus): QsbVaultView => ({
+  ...withdrawingVault(v, status),
+  state: "unknown",
+});
+
 /** A quote withdrawing the 0.001 BTC deposit plus 10,000 sat to {@link DESTINATION}. */
 export const WITHDRAWAL_QUOTE: QsbWithdrawalQuote = {
   destination: DESTINATION,
@@ -156,9 +165,16 @@ export const WITHDRAWAL_QUOTE: QsbWithdrawalQuote = {
   vsize: 225,
 };
 
-/** The release review of deposit `v`'s withdrawal at {@link WITHDRAWAL_QUOTE}'s terms. */
-export const withdrawalReview = (v: number): QsbWithdrawalReview => ({
+/**
+ * The release review of deposit `v`'s withdrawal at {@link WITHDRAWAL_QUOTE}'s
+ * terms: the writer's (`conformant`) unless `custody` says otherwise.
+ */
+export const withdrawalReview = (
+  v: number,
+  custody: QsbWithdrawalReview["custody"] = "conformant",
+): QsbWithdrawalReview => ({
   binding: "unverified",
+  custody,
   destination: DESTINATION,
   digest: DIGEST,
   feeSat: 900,

@@ -1,13 +1,15 @@
 /**
  * Where a QSB preimage can leave Krusty. The BIP releases no secret before
- * its `exposed` record is durable, so the reveal is reachable from exactly
- * one place: the vault service's `releasePreimages`, which records the
- * exposure, awaits that write and only then reveals, all in one queue slot.
+ * its disclosure is durable — the writer's `exposed` record, or a read-only
+ * account's emergency disclosure on its `unknown` record — so the reveal is
+ * reachable from exactly one place: the vault service's `releasePreimages`,
+ * which records the disclosure, awaits that write and only then reveals, all
+ * in one queue slot.
  * Every shipped source and script is scanned: Krusty's `revealQsbPreimages`
  * is called only by the Krusty adapter that wraps it and that one vault
  * method; `releasePreimages` is called only by the release flow; and
- * inside the vault method the exposure, its durable write and the reveal come
- * in that order.
+ * inside the vault method both transitions, the durable write and the reveal
+ * come in that order.
  */
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -48,14 +50,23 @@ describe("the QSB preimage reveal", () => {
     ]);
   });
 
-  test("the vault method reveals only after recording and writing the exposure", () => {
+  test("the vault method reveals only after recording and writing the disclosure", () => {
     const text = readFileSync(VAULT_METHOD, "utf8");
     const reveals = [...text.matchAll(/\bkms\.revealQsbPreimages\(/g)];
     expect(reveals).toHaveLength(1);
     const recorded = text.indexOf("recordQsbExposure(binding");
+    const emergency = text.indexOf("recordQsbEmergencyExposure(binding");
     const written = text.indexOf("await writeQsbJournal(");
     const revealed = reveals[0]?.index ?? -1;
-    expect(recorded).toBeGreaterThan(0);
-    expect([recorded < written, written < revealed]).toEqual([true, true]);
+    expect([recorded > 0, emergency > 0]).toEqual([true, true]);
+    expect([recorded < written, emergency < written, written < revealed]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  test("the emergency transition is called only by the vault method", () => {
+    expect(naming(/\brecordQsbEmergencyExposure\(/)).toEqual([VAULT_METHOD]);
   });
 });

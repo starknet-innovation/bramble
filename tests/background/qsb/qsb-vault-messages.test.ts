@@ -1,5 +1,5 @@
 /**
- * The five QSB vault messages and the five QSB withdrawal messages at the
+ * The six QSB vault messages and the five QSB withdrawal messages at the
  * background router: extension pages only
  * (no content script or page reaches one, and none is dapp-reachable);
  * strict input parsing that refuses a malformed request before the wallet is
@@ -59,6 +59,7 @@ const WITHDRAWAL_REQUESTS = {
 const RELEASE = {
   accountId: "qsb-1",
   digest: "ab".repeat(32),
+  emergency: false,
   passphrase: "the password re-entered here",
   type: "wallet.releaseQsbWithdrawal",
   v: 0,
@@ -76,6 +77,7 @@ const REQUESTS = {
   },
   list: { accountId: "qsb-1", type: "wallet.qsbVaults" },
   quote: { accountId: "qsb-1", amountSat: 50_000, type: "wallet.quoteQsbDeposit", v: 0 },
+  recover: { accountId: "qsb-1", type: "wallet.recoverQsbVaults" },
   resend: { accountId: "qsb-1", type: "wallet.resendQsbDeposit", v: 0 },
 } as const;
 
@@ -100,6 +102,7 @@ const notUnderTest = async (): Promise<never> => {
   throw new Error("not under test");
 };
 const withdrawalsNotUnderTest = {
+  adoptWithdrawal: notUnderTest,
   holdWithdrawal: notUnderTest,
   keepSignedWithdrawal: notUnderTest,
   markWithdrawalJob: notUnderTest,
@@ -255,6 +258,7 @@ describe("QSB vault message parsing", () => {
     ["an extra key", { ...REQUESTS.list, extra: 1 }],
     ["a malformed account id", { ...REQUESTS.create, accountId: "qsb-01" }],
     ["no account id", { type: "wallet.qsbVaults" }],
+    ["an extra key on a recovery", { ...REQUESTS.recover, v: 0 }],
     ["a negative vault", { ...REQUESTS.resend, v: -1 }],
     ["a vault past 2^31", { ...REQUESTS.quote, v: 2 ** 31 }],
     ["a fractional amount", { ...REQUESTS.quote, amountSat: 1.5 }],
@@ -316,6 +320,8 @@ describe("QSB withdrawal messages", () => {
     ["an upper-case digest", { ...RELEASE, digest: "AB".repeat(32) }],
     ["a short digest", { ...RELEASE, digest: "ab" }],
     ["no password", { ...RELEASE, passphrase: undefined }],
+    ["no custody on the release", { ...RELEASE, emergency: undefined }],
+    ["a textual custody on the release", { ...RELEASE, emergency: "false" }],
     ["an extra key on the release", { ...RELEASE, preimages: [] }],
     ["a vault past 2^31", { ...WITHDRAWAL_REQUESTS.resendWithdrawal, v: 2 ** 31 }],
   ])("refuses %s before the wallet is touched", async (_label, request) => {

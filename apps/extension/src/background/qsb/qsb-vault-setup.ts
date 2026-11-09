@@ -127,7 +127,11 @@ const isSetupShape = (value: unknown): value is QsbVaultSetup =>
   isQsbHash32(value["scriptHash"]) &&
   isLowercaseHexBytes(value["scriptHex"], 1, QSB_MAX_SCRIPT_BYTES);
 
-const scriptHashOf = async (scriptHex: string): Promise<string | null> => {
+/**
+ * SHA-256 of a script given as lowercase hex, as lowercase hex: the script
+ * hash the coordinator binds a vault to. Null for anything that is not hex.
+ */
+export const qsbScriptHash = async (scriptHex: string): Promise<string | null> => {
   const script = hexToBytes(scriptHex);
   return script === null
     ? null
@@ -160,7 +164,7 @@ export const readQsbVaultSetup = async (
   if (!isSetupShape(reply)) {
     throw new Error("QSB commitments setup returned an unexpected shape");
   }
-  if ((await scriptHashOf(reply.scriptHex)) !== reply.scriptHash) {
+  if ((await qsbScriptHash(reply.scriptHex)) !== reply.scriptHash) {
     throw new Error("QSB vault script does not match its hash");
   }
   if (!describesVault(parsedJson(reply.publicStateJson), request, reply.scriptHex)) {

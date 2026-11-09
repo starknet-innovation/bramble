@@ -30,7 +30,11 @@ export type QsbWithdrawalHarness = QsbVaultHarness & {
   /** The withdrawal's one job id, once started. */
   readonly jobId: () => string;
   readonly quote: (destination?: string) => Promise<QsbWithdrawalQuote>;
-  readonly release: (digest: string, passphrase?: string) => Promise<Record<string, unknown>>;
+  readonly release: (
+    digest: string,
+    passphrase?: string,
+    emergency?: boolean,
+  ) => Promise<Record<string, unknown>>;
   readonly review: () => Promise<QsbWithdrawalReview>;
   readonly solve: (solution?: Record<string, unknown>) => void;
   readonly start: (feeSat: number, destination?: string) => Promise<Record<string, unknown>>;
@@ -76,10 +80,11 @@ export const qsbWithdrawalHarness = async (
           v: 0,
         })) as { readonly quote: QsbWithdrawalQuote }
       ).quote,
-    release: async (digest, passphrase = QSB_HARNESS_PASSPHRASE) =>
+    release: async (digest, passphrase = QSB_HARNESS_PASSPHRASE, emergency = false) =>
       (await harness.send({
         accountId: "qsb-1",
         digest,
+        emergency,
         passphrase,
         type: "wallet.releaseQsbWithdrawal",
         v: 0,

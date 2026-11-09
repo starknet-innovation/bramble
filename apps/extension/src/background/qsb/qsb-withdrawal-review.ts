@@ -17,6 +17,12 @@
  * Every failure but an unreachable coordinator is `bindingRefused`, and
  * nothing is disclosed. `binding` is always `unverified`: Bramble checks `T`,
  * but not the QSB puzzle that ties the indices to it.
+ *
+ * `custody` is the account's: `conformant` for the writer, whose deposit must
+ * be `allocated` (or `exposed`, for an exact retry); `emergency` for a
+ * read-only account, whose deposit must be `unknown` (a recovered one, with
+ * or without its own emergency disclosure, for an exact retry). The release
+ * must echo it.
  */
 import { bytesToHex } from "@bramble/core/hex";
 import { QsbCoordinatorFailure } from "@bramble/qsb/client";
@@ -43,10 +49,16 @@ import type { QsbWithdrawalRecord } from "@bramble/vault/qsb-withdrawal-store";
 import type { QsbVaultAccess } from "@bramble/vault/service-types";
 import {
   QSB_DISCLOSED_SECRETS,
+  type QsbCustody,
   type QsbWithdrawalReview,
 } from "@bramble/wallet-model/qsb-withdrawals";
 import type { QsbDepositContext } from "./qsb-vault-prepare";
-import { coordinatorRefusal, failClosedWith, withdrawalRefusal } from "./qsb-vault-refusals";
+import {
+  coordinatorRefusal,
+  failClosedWith,
+  journalUnavailable,
+  withdrawalRefusal,
+} from "./qsb-vault-refusals";
 import { rebuildQsbVault } from "./qsb-vault-script";
 import { QSB_FRESH_SESSION_MS, type QsbVaultDeps } from "./qsb-vault-session";
 import type { QsbPreparedWithdrawal } from "./qsb-withdrawal-assembly";
@@ -213,8 +225,10 @@ const reviewOf = (
   held: QsbWithdrawalRecord,
   manifest: QsbWithdrawalManifest,
   digest: string,
+  custody: QsbCustody,
 ): QsbWithdrawalReview => ({
   binding: "unverified",
+  custody,
   destination: manifest.destination,
   digest,
   feeSat: Number(manifest.fee),
@@ -227,9 +241,17 @@ const reviewOf = (
   vsize: qsbWithdrawalVsize(manifest.outputScript.length / 2),
 });
 
+// The account's custody: emergency exactly when it is not the writer.
+const custodyOf = async (access: QsbVaultAccess): Promise<QsbCustody> => {
+  const journal = await access.journal();
+  if (journal.status !== "bound") throw journalUnavailable();
+  return journal.writer ? "conformant" : "emergency";
+};
+
 /**
  * Builds and checks deposit `v`'s release review. The journal record may be
- * `exposed` already, for an exact retry of a release that did not finish.
+ * `exposed` already (or, for a read-only account, carry its emergency
+ * disclosure already), for an exact retry of a release that did not finish.
  */
 export const reviewedWithdrawal = async (
   deps: QsbVaultDeps,
@@ -237,7 +259,12 @@ export const reviewedWithdrawal = async (
   v: number,
 ): Promise<QsbReviewedWithdrawal> => {
   const context = await withdrawalContext(deps, access, QSB_FRESH_SESSION_MS);
-  const record = await withdrawableRecord(access, v, ["allocated", "exposed"]);
+  const custody = await custodyOf(access);
+  const record = await withdrawableRecord(
+    access,
+    v,
+    custody === "conformant" ? ["allocated", "exposed"] : ["unknown"],
+  );
   const held = (await keptWithdrawals(access)).find((entry) => entry.v === v);
   if (!held || held.signed !== null || held.outcome === "refused") {
     throw withdrawalRefusal("notReady");
@@ -267,7 +294,7 @@ export const reviewedWithdrawal = async (
       manifest,
       prepared,
       record,
-      review: reviewOf(held, manifest, digest),
+      review: reviewOf(held, manifest, digest, custody),
       solution,
     };
   } catch (error) {

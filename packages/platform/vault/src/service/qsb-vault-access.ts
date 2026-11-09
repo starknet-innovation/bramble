@@ -41,6 +41,7 @@ import {
 } from "../qsb/qsb-journal";
 import { isQsbWriter, type QsbJournalBinding } from "../qsb/qsb-journal-record";
 import { writeQsbJournal } from "../qsb/qsb-journal-store";
+import { mergeImportedQsbJournal } from "../qsb/qsb-merge";
 import type { Vault } from "../schema/schema";
 import type { QsbAccountWiring } from "./qsb-account-types";
 import { currentQsbSlot, type QsbSlot, qsbSlotBinding, qsbSlotRefusal } from "./qsb-vault-slot";
@@ -76,6 +77,15 @@ type BoundState = Extract<QsbJournalState, { readonly status: "bound" }>;
 const refused = qsbSlotRefusal;
 const currentSlot = currentQsbSlot;
 
+// A merge always builds a new journal; one equal to the stored journal is
+// handed back as that same journal, so recovering again writes nothing.
+const unchangedIfSame = (binding: QsbJournalBinding, result: QsbJournalResult): QsbJournalResult =>
+  result.ok &&
+  binding.status === "bound" &&
+  JSON.stringify(result.journal) === JSON.stringify(binding.journal)
+    ? { journal: binding.journal, ok: true }
+    : result;
+
 const transition = (binding: QsbJournalBinding, change: QsbJournalChange): QsbJournalResult => {
   switch (change.kind) {
     case "allocate":
@@ -86,6 +96,8 @@ const transition = (binding: QsbJournalBinding, change: QsbJournalChange): QsbJo
       return recordQsbFunding(binding, change);
     case "mark-unknown":
       return markQsbVaultUnknown(binding, change.v);
+    case "recover":
+      return unchangedIfSame(binding, mergeImportedQsbJournal(binding, change.journal));
   }
 };
 

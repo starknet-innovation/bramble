@@ -31,6 +31,7 @@ import { ledgerOnboardingScenario, onboardingScenario } from "./scenarios-onboar
 import { privacyScenario } from "./scenarios-privacy";
 import { qsbScenario } from "./scenarios-qsb";
 import { qsbDepositScenario } from "./scenarios-qsb-deposit";
+import { qsbRecoverScenario } from "./scenarios-qsb-recover";
 import { qsbVaultsScenario } from "./scenarios-qsb-vaults";
 import { qsbWithdrawScenario } from "./scenarios-qsb-withdraw";
 import { settingsScenario } from "./scenarios-settings";
@@ -423,6 +424,7 @@ export const walletScenarios: readonly WalletScenario[] = [
   qsbVaultsScenario,
   qsbDepositScenario,
   qsbWithdrawScenario,
+  qsbRecoverScenario,
 ];
 
 export const walletScenario = (id: string): WalletScenario =>

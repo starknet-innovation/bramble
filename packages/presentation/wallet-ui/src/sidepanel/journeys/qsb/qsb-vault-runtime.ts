@@ -360,6 +360,18 @@ export const createQsbVaultClient = (sendMessage: (message: unknown) => Promise<
     // Its copy says the outcome is unknown: the write may have run.
     throw responseError(response, "wallet request failed");
   },
+  /**
+   * Recovers a read-only account's deposits from the QSB service, recording
+   * each as `unknown` (outside custody conformance), and reads the account
+   * again. The reply is read as `wallet.qsbVaults`'s is.
+   */
+  async recoverQsbVaults(accountId: string): Promise<QsbVaultsReading> {
+    const response = await sendMessage({ accountId, type: "wallet.recoverQsbVaults" });
+    const reading = readQsbVaults(response);
+    if (reading) return reading;
+    // Its copy says the outcome is unknown: the write may have run.
+    throw responseError(response, "wallet request failed");
+  },
   /** Sends vault `v`'s pending deposit again: the same signed bytes, never new ones. */
   async resendQsbDeposit(accountId: string, v: number): Promise<QsbDepositResult> {
     const response = await sendMessage({ accountId, type: "wallet.resendQsbDeposit", v });

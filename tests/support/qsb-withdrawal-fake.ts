@@ -26,7 +26,7 @@ import type { QsbPreparedWithdrawal } from "../../apps/extension/src/background/
 type Answer = { readonly body: unknown; readonly status: number };
 
 /** One job as the fake keeps it: the server's record, with its solution once found. */
-type FakeJob = Record<string, unknown> & {
+export type FakeJob = Record<string, unknown> & {
   readonly id: string;
   manifest: Record<string, unknown>;
   readonly manifestHash: string;

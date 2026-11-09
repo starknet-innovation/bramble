@@ -74,7 +74,8 @@ const DIGEST = /^[0-9a-f]{64}$/;
 
 /**
  * Whether `value` is exactly one {@link QsbWithdrawalReview}: an unverified
- * binding (the only kind the contract has), Bitcoin mainnet, exactly
+ * binding (the only kind the contract has), a `conformant` or `emergency`
+ * custody, Bitcoin mainnet, exactly
  * `QSB_DISCLOSED_SECRETS` secrets, a 64-hex digest, a destination address,
  * satoshi amounts that add up as the quote's do, and a positive size.
  */
@@ -82,6 +83,7 @@ export const isQsbWithdrawalReview = (value: unknown): value is QsbWithdrawalRev
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
     "binding",
+    "custody",
     "destination",
     "digest",
     "feeSat",
@@ -94,6 +96,7 @@ export const isQsbWithdrawalReview = (value: unknown): value is QsbWithdrawalRev
     "vsize",
   ]) &&
   value["binding"] === "unverified" &&
+  (value["custody"] === "conformant" || value["custody"] === "emergency") &&
   value["network"] === "bitcoin-mainnet" &&
   value["secrets"] === QSB_DISCLOSED_SECRETS &&
   typeof value["digest"] === "string" &&
@@ -230,16 +233,20 @@ export const createQsbWithdrawalClient = (sendMessage: (message: unknown) => Pro
   /**
    * Authorizes the release of exactly what `digest` names, against the
    * wallet passphrase the user just typed, and submits the withdrawal.
+   * `emergency` must be true exactly when the review shown was an emergency
+   * one (`custody: "emergency"`); the background refuses any other pairing.
    */
   async releaseQsbWithdrawal(
     accountId: string,
     v: number,
     digest: string,
     passphrase: string,
+    emergency: boolean,
   ): Promise<QsbWithdrawalResult> {
     const response = await sendMessage({
       accountId,
       digest,
+      emergency,
       passphrase,
       type: "wallet.releaseQsbWithdrawal",
       v,

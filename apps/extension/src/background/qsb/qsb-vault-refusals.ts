@@ -93,6 +93,8 @@ export const journalRefusal = (refusal: QsbJournalRefusal): RefusedBeforeWrite =
       return qsbRefusal("notWriter");
     case "unknown-vault":
       return qsbRefusal("unknownVault");
+    case "writer-journal":
+      return qsbRefusal("recoveryNotNeeded");
     default:
       return qsbRefusal("runtimeUnavailable");
   }

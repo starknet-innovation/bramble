@@ -55,6 +55,7 @@ const QSB_VAULT_MESSAGES: ReadonlySet<unknown> = new Set([
   "wallet.qsbVaults",
   "wallet.quoteQsbDeposit",
   "wallet.quoteQsbWithdrawal",
+  "wallet.recoverQsbVaults",
   "wallet.releaseQsbWithdrawal",
   "wallet.resendQsbDeposit",
   "wallet.resendQsbWithdrawal",
@@ -77,7 +78,7 @@ export const SECRET_QSB_PREIMAGES: readonly string[] = await krusty.revealQsbPre
 /** The destination the catalog's withdrawal pays: BIP-84's published vector. */
 export const KEY_BOUNDARY_QSB_DESTINATION = "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu";
 
-/** Whether `message` is one of the ten QSB vault and withdrawal requests. */
+/** Whether `message` is one of the eleven QSB vault and withdrawal requests. */
 export const isQsbVaultMessage = (message: Record<string, unknown>): boolean =>
   QSB_VAULT_MESSAGES.has(message["type"]);
 

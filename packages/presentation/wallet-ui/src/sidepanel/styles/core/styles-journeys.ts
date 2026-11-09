@@ -118,6 +118,7 @@ export const JOURNEY_STYLES = `
     line-height: ${TYPE.label.line};
     padding: ${SPACE.sm} ${SPACE.md};
   }
+  .qsb-binding-warning[hidden] { display: none; }
   .qsb-binding-warning .icon { flex: none; height: 18px; width: 18px; }
   .qsb-binding-warning p { color: inherit; margin: 0; min-width: 0; }
   .qsb-binding-warning strong { font-weight: ${WEIGHT.semibold}; }

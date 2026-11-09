@@ -123,6 +123,7 @@ describe("before a withdrawal starts", () => {
       { type: "wallet.reviewQsbWithdrawal" },
       {
         digest: "00".repeat(32),
+        emergency: false,
         passphrase: "correct horse battery staple",
         type: "wallet.releaseQsbWithdrawal",
       },

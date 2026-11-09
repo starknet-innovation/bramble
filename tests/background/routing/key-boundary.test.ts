@@ -106,6 +106,7 @@ describe("key boundary", () => {
       "wallet.confirmQsbBackup",
       "wallet.depositQsbVault",
       "wallet.qsbVaults",
+      "wallet.recoverQsbVaults",
       "wallet.releaseQsbWithdrawal",
       "wallet.releaseQsbWithdrawal",
       "wallet.removeMultisig",

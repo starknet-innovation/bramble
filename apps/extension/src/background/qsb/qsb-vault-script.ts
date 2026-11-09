@@ -11,6 +11,7 @@
  * Every failure is the caller's refusal (`mismatch`) or `runtimeUnavailable`.
  */
 import { isQsbPublicState } from "@bramble/qsb/registration";
+import type { QsbCommitments } from "@bramble/vault/kms-port";
 import type { QsbVaultAccess } from "@bramble/vault/service-types";
 import { type QsbVaultRefusal, qsbRefusal } from "./qsb-vault-refusals";
 import type { QsbVaultDeps } from "./qsb-vault-session";
@@ -37,6 +38,19 @@ export const rebuildQsbVault = async (
   if (derived.root !== record.root) {
     throw qsbRefusal(mismatch);
   }
+  return buildQsbVault(deps, derived);
+};
+
+/**
+ * Builds the script of Krusty's `derived` commitments for one vault, with no
+ * journal root to check them against (recovery, where the journal is what is
+ * being rebuilt). Refuses with `runtimeUnavailable` when the runtime fails or
+ * returns a public state the coordinator would refuse.
+ */
+export const buildQsbVault = async (
+  deps: QsbVaultDeps,
+  derived: QsbCommitments,
+): Promise<QsbBuiltVault> => {
   const commitments: QsbHorsCommitments = [derived.round0, derived.round1];
   let script: QsbVaultSetup;
   try {

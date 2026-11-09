@@ -2,7 +2,8 @@
  * Templates for one QSB vault: the static screen shell, then the regions its
  * binding fills once `wallet.qsbVaults` answers — the confirmed balance and
  * one row per deposit (the contract's vault) with its deposit or withdrawal
- * state and its one action. Pure: every dynamic value is escaped here or comes
+ * state and its one action — and the Recover deposits step a read-only QSB
+ * vault offers, under the warning that it is outside custody conformance. Pure: every dynamic value is escaped here or comes
  * from a validated view, and the only links are built by `qsbDepositLink` and
  * `qsbWithdrawalLink` from a validated txid.
  */
@@ -20,11 +21,15 @@ import {
   QSB_ADDRESS_HINT,
   QSB_ALLOW_ACCESS,
   QSB_FUNDS_UNAVAILABLE,
+  QSB_RECOVER_BODY,
+  QSB_RECOVER_LABEL,
+  QSB_RECOVERING,
   QSB_TX_LINK_LABEL,
   QSB_VAULT_CONFIRM,
   QSB_VAULT_CREATING,
   QSB_VAULTS_EMPTY,
   QSB_VAULTS_LOADING,
+  type QsbRecoverOffer,
   qsbDepositable,
   qsbDepositLabel,
   qsbDepositLink,
@@ -32,6 +37,7 @@ import {
   qsbVaultStatusText,
 } from "./qsb-vault-model";
 import {
+  QSB_CUSTODY_TITLE,
   qsbWithdrawable,
   qsbWithdrawalDisplay,
   qsbWithdrawalHint,
@@ -40,7 +46,14 @@ import {
 } from "./qsb-withdrawal-model";
 
 /** The steps the account screen moves between; see {@link bindQsbAccount}. */
-export type QsbAccountStep = "confirm" | "creating" | "detail" | "loading" | "unavailable";
+export type QsbAccountStep =
+  | "confirm"
+  | "creating"
+  | "detail"
+  | "loading"
+  | "recover"
+  | "recovering"
+  | "unavailable";
 
 /**
  * Renders the QSB vault screen shell, every step but loading hidden. Its
@@ -81,6 +94,16 @@ export const qsbAccountFlow = (status: WalletStatus): string =>
         ${button({ attributes: { id: "qsb-vault-cancel" }, label: "Cancel", variant: "ghost" })}
       </section>
       <section class="section" data-qsb-account-step="creating" hidden>${emptyState(QSB_VAULT_CREATING, "status")}</section>
+      <section class="section stack" data-qsb-account-step="recover" hidden>
+        <h2>${escapeHtml(QSB_RECOVER_LABEL)}</h2>
+        <div class="qsb-binding-warning" role="note">
+          ${icon("alert")}
+          <p><strong>${escapeHtml(QSB_CUSTODY_TITLE)}:</strong> ${escapeHtml(QSB_RECOVER_BODY)}</p>
+        </div>
+        ${button({ attributes: { id: "qsb-recover-start" }, label: QSB_RECOVER_LABEL })}
+        ${button({ attributes: { id: "qsb-recover-cancel" }, label: "Cancel", variant: "ghost" })}
+      </section>
+      <section class="section" data-qsb-account-step="recovering" hidden>${emptyState(QSB_RECOVERING, "status")}</section>
     </div>`,
   );
 
@@ -103,7 +126,11 @@ export const qsbBalanceMarkup = (funds: QsbOwnerFunds | null, accessHeld: boolea
 
 /** Which of a vault row's actions to offer, and which are running now. */
 export type QsbVaultRowOptions = {
-  /** Whether the account may fund, withdraw and release (a writer). */
+  /**
+   * Whether the account may fund, withdraw and release (a writer). A
+   * read-only account may only review a recovered deposit's withdrawal, as
+   * an emergency release.
+   */
   readonly writer: boolean;
   /** Whether vault `v` has a write in flight (funding, resend, start or release). */
   readonly busy: (v: number) => boolean;
@@ -113,9 +140,14 @@ export type QsbVaultRowOptions = {
 // screen-reader verb ("Fund deposit 1").
 type RowAction = { readonly attribute: string; readonly label: string; readonly verb: string };
 
+// A found withdrawal the account may review: the writer's own, or a read-only
+// account's recovered one, whose deposit stays `unknown`.
+const reviewable = (vault: QsbVaultView, writer: boolean): boolean =>
+  writer ? vault.state !== "unknown" : vault.state === "unknown";
+
 const rowAction = (vault: QsbVaultView, writer: boolean): RowAction | null => {
   const withdrawal = qsbWithdrawalDisplay(vault);
-  if (withdrawal === "ready" && writer) {
+  if (withdrawal === "ready" && reviewable(vault, writer)) {
     return { attribute: "data-qsb-review", label: "Review", verb: "Review the withdrawal of" };
   }
   if (withdrawal === "uncertain") {
@@ -198,9 +230,16 @@ export const qsbVaultRows = (
     ? emptyState(QSB_VAULTS_EMPTY)
     : `<ul class="allowance-list">${vaults.map((vault) => vaultRow(vault, options)).join("")}</ul>`;
 
-/** Below the list: New deposit for a writer, otherwise the line saying why not. */
-export const qsbVaultActionMarkup = (noVaultLine: string | null, busy: boolean): string =>
-  noVaultLine === null
+/**
+ * Below the list: New deposit for a writer, otherwise the line saying why
+ * not, then Recover deposits when `recover` offers it.
+ */
+export const qsbVaultActionMarkup = (
+  noVaultLine: string | null,
+  busy: boolean,
+  recover: QsbRecoverOffer = "none",
+): string =>
+  (noVaultLine === null
     ? button({
         attributes: { id: "qsb-vault-new" },
         disabled: busy,
@@ -208,4 +247,12 @@ export const qsbVaultActionMarkup = (noVaultLine: string | null, busy: boolean):
         label: "New deposit",
         variant: "secondary",
       })
-    : `<p class="hint">${escapeHtml(noVaultLine)}</p>`;
+    : `<p class="hint">${escapeHtml(noVaultLine)}</p>`) +
+  (recover === "none"
+    ? ""
+    : button({
+        attributes: { id: "qsb-recover-open" },
+        disabled: busy,
+        label: QSB_RECOVER_LABEL,
+        variant: recover === "main" ? "primary" : "secondary",
+      }));

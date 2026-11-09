@@ -24,6 +24,12 @@
  *   deposit that would now cost anything else is refused as `quoteChanged`.
  * - `wallet.resendQsbDeposit` `{ accountId, v }`: sends a pending deposit's
  *   same signed bytes again, never new ones.
+ * - `wallet.recoverQsbVaults` `{ accountId }`: for a read-only account only
+ *   (an imported phrase), finds the coordinator's vaults this phrase built
+ *   and records each as `unknown`, with its deposit once verified, adopting a
+ *   withdrawal still waiting for release. Outside the BIP's custody
+ *   conformance: it never records a key set as unused. Answers as
+ *   `wallet.qsbVaults` does.
  */
 
 import type { QsbWithdrawalView } from "./qsb-withdrawals";
@@ -124,6 +130,7 @@ export const QSB_VAULT_REFUSALS = {
   notDepositable: "qsb vault cannot take a deposit",
   notWriter: "qsb account cannot create vaults",
   quoteChanged: "qsb deposit quote changed",
+  recoveryNotNeeded: "qsb account does not need recovery",
   runtimeUnavailable: "qsb runtime unavailable",
   scriptTaken: "qsb vault script is already used",
   signInRefused: "qsb sign-in refused",

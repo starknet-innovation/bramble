@@ -111,6 +111,7 @@ export type QsbScript = {
   quote?: Scripted<QsbDepositQuote>;
   deposit?: Scripted<QsbDepositResult>;
   resend?: Scripted<QsbDepositResult>;
+  recover?: Scripted<QsbVaultsReading>;
   withdrawalQuote?: Scripted<QsbWithdrawalQuote>;
   withdrawalStart?: Scripted<QsbVaultView>;
   withdrawalReview?: Scripted<QsbWithdrawalReview>;
@@ -133,8 +134,9 @@ export type QsbCalls = {
   readonly withdrawalQuote: (readonly [string, number, string])[];
   readonly withdrawalStart: (readonly [string, number, string, number])[];
   readonly withdrawalReview: (readonly [string, number])[];
-  /** Each release as sent: account, deposit, digest and the passphrase typed. */
-  readonly release: (readonly [string, number, string, string])[];
+  /** Each release as sent: account, deposit, digest, the passphrase typed and `emergency`. */
+  readonly release: (readonly [string, number, string, string, boolean])[];
+  readonly recover: string[];
   readonly withdrawalResend: (readonly [string, number])[];
 };
 
@@ -155,6 +157,7 @@ export const scriptedQsbWallet = (
     import: [],
     list: [],
     quote: [],
+    recover: [],
     release: [],
     resend: [],
     reveal: [],
@@ -191,8 +194,12 @@ export const scriptedQsbWallet = (
       calls.withdrawalQuote.push([id, v, destination]);
       return answer(script.withdrawalQuote);
     },
-    releaseQsbWithdrawal: (id, v, digest, typed) => {
-      calls.release.push([id, v, digest, typed]);
+    recoverQsbVaults: (id) => {
+      calls.recover.push(id);
+      return answer(script.recover);
+    },
+    releaseQsbWithdrawal: (id, v, digest, typed, emergency) => {
+      calls.release.push([id, v, digest, typed, emergency]);
       return answer(script.release);
     },
     resendQsbWithdrawal: (id, v) => {

@@ -38,6 +38,15 @@ export const withdrawing = (v: number, status: QsbWithdrawalStatus): QsbVaultVie
   },
 });
 
+/**
+ * A deposit a read-only QSB vault recovered: its history `unknown`, its
+ * withdrawal in `status` (`none` for a deposit recovered without one).
+ */
+export const recovered = (v: number, status: QsbWithdrawalStatus): QsbVaultView =>
+  status === "none"
+    ? { ...deposited(v, "confirmed"), state: "unknown" }
+    : { ...withdrawing(v, status), state: "unknown" };
+
 /** One deposit per withdrawal state, in index order. */
 export const EVERY_WITHDRAWAL: readonly QsbVaultView[] = (
   [
@@ -64,9 +73,16 @@ export const WITHDRAWAL_QUOTE: QsbLabWithdrawalQuote = {
   vsize: 225,
 };
 
-/** The release review of deposit `v`'s withdrawal at that quote's terms. */
-export const labReview = (v: number): QsbLabReview => ({
+/**
+ * The release review of deposit `v`'s withdrawal at that quote's terms: the
+ * writer's (`conformant`), or a read-only QSB vault's (`emergency`).
+ */
+export const labReview = (
+  v: number,
+  custody: QsbLabReview["custody"] = "conformant",
+): QsbLabReview => ({
   binding: "unverified",
+  custody,
   destination: LAB_DESTINATION,
   digest: "ab".repeat(32),
   feeSat: 900,

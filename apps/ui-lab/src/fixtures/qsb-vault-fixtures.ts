@@ -137,6 +137,7 @@ export type QsbLabScript = {
   readonly deposit?: () => Promise<QsbLabResult>;
   readonly quote?: () => Promise<QsbDepositQuote>;
   readonly reading?: () => Promise<QsbLabReading>;
+  readonly recover?: () => Promise<QsbLabReading>;
   readonly release?: () => Promise<QsbLabWithdrawalResult>;
   readonly resend?: () => Promise<QsbLabResult>;
   readonly review?: () => Promise<QsbLabReview>;
@@ -156,6 +157,7 @@ export const qsbLabWallet = (script: QsbLabScript): QsbLabWallet => ({
   loadQsbVaults: script.reading ?? (async () => labReading(EVERY_VAULT)),
   quoteQsbDeposit: script.quote ?? (async () => QUOTE),
   quoteQsbWithdrawal: script.withdrawalQuote ?? never,
+  recoverQsbVaults: script.recover ?? never,
   releaseQsbWithdrawal: script.release ?? never,
   resendQsbDeposit: script.resend ?? never,
   resendQsbWithdrawal: script.withdrawalResend ?? never,

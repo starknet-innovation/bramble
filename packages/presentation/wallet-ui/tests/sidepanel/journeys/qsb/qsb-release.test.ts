@@ -97,9 +97,13 @@ describe("the release review", () => {
     expect(text(warning)).toBe(
       "Unverified: Bramble cannot independently confirm that these 15 keys allow only this withdrawal.",
     );
-    // Prominent: first in the review, in the warning style, never a hint.
+    // Prominent: first shown in the review, in the warning style, never a hint.
+    // Only the custody warning of an emergency review may sit above it, and
+    // the writer's review hides that one.
     expect(warning?.classList.contains("qsb-binding-warning")).toBe(true);
-    expect(warning?.parentElement?.firstElementChild).toBe(warning ?? null);
+    const custody = warning?.previousElementSibling as HTMLElement | null | undefined;
+    expect([custody?.id, custody?.hidden]).toEqual(["qsb-custody-warning", true]);
+    expect(custody?.previousElementSibling ?? null).toBe(null);
     expect(text(find(panel, '[data-qsb-release-step="review"]'))).not.toMatch(
       /verified signature/i,
     );
@@ -169,7 +173,7 @@ describe("releasing", () => {
     // Leaving and coming back reattaches to the same release.
     panel.paint("qsb-release");
     expect(step(panel)).toBe("sending");
-    expect(panel.calls.release).toEqual([["qsb-2", 3, DIGEST, "correct horse battery"]]);
+    expect(panel.calls.release).toEqual([["qsb-2", 3, DIGEST, "correct horse battery", false]]);
     released.resolve(withdrawalResult(3, "submitted"));
     await flush();
     expect(step(panel)).toBe("outcome");

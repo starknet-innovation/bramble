@@ -1,9 +1,12 @@
 /**
  * Release one found QSB withdrawal: the review the BIP requires (network,
  * deposit, the 15 one-time keys, the full destination, what it receives, the
- * fee and size) under the prominent unverified-binding statement, then the
+ * fee and size) under the prominent unverified-binding statement — and, for a
+ * read-only QSB vault's recovered deposit (`custody: "emergency"`), above it
+ * the statement that this release is outside custody conformance — then the
  * wallet passphrase and Release and send, which echoes the review's digest so
- * only what was reviewed is released. Then the outcome: sent, not confirmed
+ * only what was reviewed is released, and sends `emergency` only from an
+ * emergency review. Then the outcome: sent, not confirmed
  * yet (with Resend), mined, or a conflict; a review that changed is fetched
  * again and shown again.
  *
@@ -47,6 +50,8 @@ import {
 import type { QsbVaultWallet } from "./qsb-vault-runtime";
 import type { QsbVaultWrites } from "./qsb-vault-writes";
 import {
+  QSB_CUSTODY_TITLE,
+  QSB_EMERGENCY_RELEASE_BODY,
   QSB_RELEASE_UNKNOWN_TITLE,
   QSB_REVIEW_LOADING,
   QSB_UNVERIFIED_BODY,
@@ -75,6 +80,10 @@ export const qsbReleaseFlow = (status: WalletStatus): string =>
       </section>
       <section class="section" data-qsb-release-step="review" hidden>
         <form id="qsb-release-form" class="stack" novalidate>
+          <div class="qsb-binding-warning" id="qsb-custody-warning" role="note" hidden>
+            ${icon("alert")}
+            <p><strong>${escapeHtml(QSB_CUSTODY_TITLE)}:</strong> ${escapeHtml(QSB_EMERGENCY_RELEASE_BODY)}</p>
+          </div>
           <div class="qsb-binding-warning" id="qsb-binding-warning" role="note">
             ${icon("alert")}
             <p><strong>${escapeHtml(QSB_UNVERIFIED_TITLE)}:</strong> ${escapeHtml(QSB_UNVERIFIED_BODY)}</p>
@@ -249,6 +258,8 @@ export const bindQsbRelease = (deps: QsbReleaseDeps): QsbReleaseSession => {
         return unavailable(refusal(QSB_WITHDRAWAL_REFUSALS.bindingRefused), "none");
       }
       review = next;
+      const custody = find<HTMLElement>("#qsb-custody-warning");
+      if (custody) custody.hidden = next.custody !== "emergency";
       const rows = find<HTMLElement>("#qsb-release-review");
       if (rows) renderFragment(rows, qsbReleaseReviewRows(next));
       say(line, refused);
@@ -304,10 +315,11 @@ export const bindQsbRelease = (deps: QsbReleaseDeps): QsbReleaseSession => {
     clearPassphrase();
     if (target === null || review === null || typed.length === 0) return;
     const { digest } = review;
+    const emergency = review.custody === "emergency";
     attach(
       guarded(() =>
         writes.release(target.accountId, target.v, () =>
-          wallet.releaseQsbWithdrawal(target.accountId, target.v, digest, typed),
+          wallet.releaseQsbWithdrawal(target.accountId, target.v, digest, typed, emergency),
         ),
       ),
       "release",

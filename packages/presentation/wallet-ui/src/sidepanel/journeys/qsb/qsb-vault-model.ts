@@ -184,6 +184,23 @@ export const qsbNoVaultLine = (account: QsbAccountView): string | null => {
   }
 };
 
+/**
+ * How a QSB vault offers Recover deposits: `main` (a read-only QSB vault
+ * with no deposits yet, where it is the screen's action), `secondary` (a
+ * read-only one that already shows deposits), or `none` (any other, the
+ * writer included: its own history needs no recovery).
+ */
+export type QsbRecoverOffer = "main" | "none" | "secondary";
+
+/** The offer for `account` showing `vaults`; see {@link QsbRecoverOffer}. */
+export const qsbRecoverOffer = (
+  account: QsbAccountView,
+  vaults: readonly QsbVaultView[],
+): QsbRecoverOffer => {
+  if (qsbAccountState(account) !== "read-only") return "none";
+  return vaults.length === 0 ? "main" : "secondary";
+};
+
 /** Under the owner address. */
 export const QSB_ADDRESS_HINT = "Send bitcoin here before you fund a deposit.";
 /** In place of the balance when the coordinator could not be reached. */
@@ -201,6 +218,16 @@ export const QSB_VAULT_CONFIRM =
   "Bramble sets up a new deposit with the QSB service. It can be funded once.";
 /** While the background signs in and registers the deposit. */
 export const QSB_VAULT_CREATING = "Creating deposit…";
+/** The control that recovers a read-only QSB vault's deposits, and its screen's button. */
+export const QSB_RECOVER_LABEL = "Recover deposits";
+/**
+ * The Recover deposits screen's warning body, under the custody title. A
+ * warning: no contractions.
+ */
+export const QSB_RECOVER_BODY =
+  "Bramble cannot know whether another install already released keys for these deposits. Recover only if the install that created this QSB vault is gone.";
+/** While the background recovers the deposits. */
+export const QSB_RECOVERING = "Recovering…";
 /** While a funding or a resend is in flight. */
 export const QSB_DEPOSIT_SENDING = "Sending…";
 

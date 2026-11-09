@@ -13,10 +13,14 @@
  * and drops every reply still in flight; the journey calls it whenever this
  * screen is left or repainted.
  *
+ * A read-only QSB vault offers Recover deposits (the screen's main action
+ * while it shows no deposits): a step under the outside-custody-conformance
+ * warning, then the recovery, whose reply is the QSB vault read again.
+ *
  * The coordinator origin is granted at runtime. Until it is, the balance gives
- * way to Allow access, and New deposit, Fund, Withdraw, Review and both
- * Resends ask for it in their own click before going on; a denial sends
- * nothing. A withdrawal's searching, sending or unconfirmed state keeps the
+ * way to Allow access, and New deposit, Recover deposits, Fund, Withdraw,
+ * Review and both Resends ask for it in their own click before going on; a
+ * denial sends nothing. A withdrawal's searching, sending or unconfirmed state keeps the
  * poll running as a deposit's does.
  */
 import { QSB_ACCOUNT_REFUSALS, type QsbAccountView } from "@bramble/wallet-model/qsb";
@@ -34,7 +38,12 @@ import {
 } from "./qsb-account-view";
 import { qsbAccountLabel, qsbWriteFailure } from "./qsb-model";
 import type { QsbWallet } from "./qsb-runtime";
-import { qsbDepositInFlight, qsbNoVaultLine, qsbSubmissionLine } from "./qsb-vault-model";
+import {
+  qsbDepositInFlight,
+  qsbNoVaultLine,
+  qsbRecoverOffer,
+  qsbSubmissionLine,
+} from "./qsb-vault-model";
 import { createQsbVaultPoll } from "./qsb-vault-poll";
 import {
   isQsbVaultIndex,
@@ -95,7 +104,8 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
   let ticket = 0;
   let account: QsbAccountView | null = null;
   let reading: QsbVaultsReading | null = null;
-  let confirming = false;
+  // The confirm step on screen, if any: New deposit's or Recover deposits'.
+  let confirming: "create" | "recover" | null = null;
   let notice = "";
   // The coordinator grant as last checked or answered; false until checked.
   let accessHeld = false;
@@ -206,24 +216,21 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     return flight;
   };
 
-  const attachCreate = (flight: Promise<QsbVaultView>): void => {
-    if (attached.has("create")) return;
-    attached.add("create");
+  // Waits on one write this screen started or found running, once per `key`.
+  // A reply after `wipe` is dropped; a confirm step ends as its write settles;
+  // a refusal or lost reply becomes the status line.
+  const attachWrite = <T>(key: string, flight: Promise<T>, done: (value: T) => void): void => {
+    if (attached.has(key)) return;
+    attached.add(key);
     const attempt = generation;
     const settle = (next: () => void): void => {
-      attached.delete("create");
+      attached.delete(key);
       if (attempt !== generation) return;
-      confirming = false;
+      if (key === "create" || key === "recover") confirming = null;
       next();
     };
     flight.then(
-      (vault) =>
-        settle(() => {
-          if (reading === null) return load();
-          reading = withVault(reading, vault);
-          notice = "";
-          paint();
-        }),
+      (value) => settle(() => done(value)),
       (error: unknown) =>
         settle(() => {
           notice = qsbWriteFailure(error, "wallet request failed");
@@ -232,49 +239,37 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     );
   };
 
-  const attachDeposit = (v: number, flight: Promise<QsbDepositResult>): void => {
-    const key = `vault:${v}`;
-    if (attached.has(key)) return;
-    attached.add(key);
-    const attempt = generation;
-    flight.then(
-      ({ submission, vault }) => {
-        attached.delete(key);
-        if (attempt !== generation || reading === null) return;
-        reading = withVault(reading, vault);
-        notice = qsbSubmissionLine(submission);
-        paint();
-      },
-      (error: unknown) => {
-        attached.delete(key);
-        if (attempt !== generation) return;
-        notice = qsbWriteFailure(error, "wallet request failed");
-        paint();
-      },
-    );
-  };
+  const attachCreate = (flight: Promise<QsbVaultView>): void =>
+    attachWrite("create", flight, (vault) => {
+      if (reading === null) return load();
+      reading = withVault(reading, vault);
+      notice = "";
+      paint();
+    });
 
-  const attachWithdrawal = (v: number, flight: Promise<QsbWithdrawalResult>): void => {
-    const key = `withdrawal:${v}`;
-    if (attached.has(key)) return;
-    attached.add(key);
-    const attempt = generation;
-    flight.then(
-      ({ submission, vault }) => {
-        attached.delete(key);
-        if (attempt !== generation || reading === null) return;
-        reading = withVault(reading, vault);
-        notice = qsbWithdrawalLine(submission);
-        paint();
-      },
-      (error: unknown) => {
-        attached.delete(key);
-        if (attempt !== generation) return;
-        notice = qsbWriteFailure(error, "wallet request failed");
-        paint();
-      },
-    );
-  };
+  // A recovery's reply is the QSB vault read again.
+  const attachRecover = (flight: Promise<QsbVaultsReading>): void =>
+    attachWrite("recover", flight, (next) => {
+      reading = next;
+      notice = "";
+      paint();
+    });
+
+  const attachDeposit = (v: number, flight: Promise<QsbDepositResult>): void =>
+    attachWrite(`vault:${v}`, flight, ({ submission, vault }) => {
+      if (reading === null) return;
+      reading = withVault(reading, vault);
+      notice = qsbSubmissionLine(submission);
+      paint();
+    });
+
+  const attachWithdrawal = (v: number, flight: Promise<QsbWithdrawalResult>): void =>
+    attachWrite(`withdrawal:${v}`, flight, ({ submission, vault }) => {
+      if (reading === null) return;
+      reading = withVault(reading, vault);
+      notice = qsbWithdrawalLine(submission);
+      paint();
+    });
 
   // A row action that opens another screen needing the grant: opens it at
   // once when held, otherwise asks in this click and opens it only once granted.
@@ -331,6 +326,41 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     }
   };
 
+  // Below the list: New deposit or the line saying why not, and Recover
+  // deposits for a read-only QSB vault, each opening its confirm step.
+  const paintAction = (id: string, held: QsbAccountView, current: QsbVaultsReading): void => {
+    const writing = writes.pendingCreate(id) !== null || writes.pendingRecover(id) !== null;
+    const offer = qsbRecoverOffer(held, current.vaults);
+    if (!region(action, qsbVaultActionMarkup(qsbNoVaultLine(held), writing, offer))) return;
+    find<HTMLButtonElement>("#qsb-vault-new")?.addEventListener("click", () => {
+      confirming = "create";
+      show("confirm");
+      find<HTMLButtonElement>("#qsb-vault-create")?.focus();
+    });
+    find<HTMLButtonElement>("#qsb-recover-open")?.addEventListener("click", () => {
+      confirming = "recover";
+      show("recover");
+      find<HTMLButtonElement>("#qsb-recover-start")?.focus();
+    });
+  };
+
+  // Reattaches to the account's creation or recovery in flight, and names the
+  // step to show: that write's progress, the confirm step open, or the detail.
+  const accountWrites = (id: string): QsbAccountStep => {
+    const creating = writes.pendingCreate(id);
+    const recovering = writes.pendingRecover(id);
+    if (creating) {
+      attachCreate(creating);
+      return "creating";
+    }
+    if (recovering) {
+      attachRecover(recovering);
+      return "recovering";
+    }
+    if (confirming === "create") return "confirm";
+    return confirming ?? "detail";
+  };
+
   const paint = (): void => {
     const id = deps.accountId();
     if (id === null || account === null || reading === null) return;
@@ -364,14 +394,7 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     ) {
       bindRows(vaultList, id);
     }
-    const creating = writes.pendingCreate(id);
-    if (region(action, qsbVaultActionMarkup(qsbNoVaultLine(account), creating !== null))) {
-      find<HTMLButtonElement>("#qsb-vault-new")?.addEventListener("click", () => {
-        confirming = true;
-        show("confirm");
-        find<HTMLButtonElement>("#qsb-vault-create")?.focus();
-      });
-    }
+    paintAction(id, account, current);
     if (result) result.textContent = notice;
     for (const vault of current.vaults) {
       const flight = writes.pendingDeposit(id, vault.v);
@@ -379,8 +402,7 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
       const withdrawal = writes.pendingWithdrawal(id, vault.v);
       if (withdrawal) attachWithdrawal(vault.v, withdrawal);
     }
-    if (creating) attachCreate(creating);
-    show(creating ? "creating" : confirming ? "confirm" : "detail");
+    show(accountWrites(id));
     poll.sync(qsbDepositInFlight(current.vaults) || qsbWithdrawalInFlight(current.vaults));
   };
 
@@ -424,9 +446,21 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
   });
   find<HTMLButtonElement>("#qsb-account-retry")?.addEventListener("click", () => load());
   find<HTMLButtonElement>("#qsb-vault-cancel")?.addEventListener("click", () => {
-    confirming = false;
+    confirming = null;
     show("detail");
     find<HTMLButtonElement>("#qsb-vault-new")?.focus();
+  });
+  find<HTMLButtonElement>("#qsb-recover-cancel")?.addEventListener("click", () => {
+    confirming = null;
+    show("detail");
+    find<HTMLButtonElement>("#qsb-recover-open")?.focus();
+  });
+  find<HTMLButtonElement>("#qsb-recover-start")?.addEventListener("click", () => {
+    const current = deps.accountId();
+    if (current === null || account === null || account.writer) return;
+    notice = "";
+    attachRecover(guarded(() => writes.recover(current)));
+    paint();
   });
   find<HTMLButtonElement>("#qsb-vault-create")?.addEventListener("click", () => {
     const current = deps.accountId();

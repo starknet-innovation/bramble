@@ -16,6 +16,7 @@
 import type { QsbCommitments, QsbRevealDigest } from "../kms-port";
 import type { QsbPendingDeposit } from "../qsb/qsb-deposit-store";
 import type { QsbJournalRefusal } from "../qsb/qsb-journal";
+import type { ImportedQsbJournal } from "../qsb/qsb-merge";
 import type { QsbFunding, QsbVaultRecord } from "../qsb/qsb-vault-record";
 import type {
   QsbSignedWithdrawalRecord,
@@ -46,8 +47,11 @@ export type QsbJournalState =
 /**
  * One journal transition a session may ask for, by name: allocate the next
  * vault with Krusty's root, associate its checked script, record its
- * confirmed funding, or mark its history unknown. Each is the journal's own
- * pure transition (`../qsb/qsb-journal`), applied inside the vault service.
+ * confirmed funding, mark its history unknown, or merge the `unknown`
+ * records a read-only account recovered from the coordinator. Each is the
+ * journal's own pure transition (`../qsb/qsb-journal`, `../qsb/qsb-merge`),
+ * applied inside the vault service. A merge that changes no field writes
+ * nothing.
  */
 export type QsbJournalChange =
   | { readonly kind: "allocate"; readonly root: string; readonly v: number }
@@ -58,7 +62,8 @@ export type QsbJournalChange =
       readonly v: number;
     }
   | { readonly funding: QsbFunding; readonly kind: "fund"; readonly v: number }
-  | { readonly kind: "mark-unknown"; readonly v: number };
+  | { readonly kind: "mark-unknown"; readonly v: number }
+  | { readonly journal: ImportedQsbJournal; readonly kind: "recover" };
 
 /** The journal after a change, or why the change was refused. */
 export type QsbJournalChangeResult =
@@ -118,11 +123,14 @@ export type QsbVaultAccess = QsbWithdrawalAccess & {
 
 /**
  * One disclosure the release is asked for: vault `v`, the transaction `T` as
- * lowercase hex, the 8 round-0 and 7 round-1 indices in signing order, and
- * the digest `D` the user reviewed.
+ * lowercase hex, the 8 round-0 and 7 round-1 indices in signing order, the
+ * digest `D` the user reviewed, and whether the user reviewed it as an
+ * emergency release (outside custody conformance), which must match the
+ * account: false for the writer, true for a read-only account.
  */
 export type QsbReleaseRequest = {
   readonly digest: string;
+  readonly emergency: boolean;
   readonly round0: readonly number[];
   readonly round1: readonly number[];
   readonly transaction: string;
@@ -135,6 +143,17 @@ export type QsbReleaseRequest = {
  */
 export type QsbWithdrawalAccess = {
   /**
+   * Keeps a withdrawal a read-only account recovered from the coordinator,
+   * durably: its job already created (`jobCreated` true), nothing signed and
+   * no outcome. Refused unless the account is not the writer
+   * (`recoveryNotNeeded`) and vault `v` is `unknown`, scripted, funded and not
+   * yet disclosed (`notWithdrawable`); the same withdrawal again changes
+   * nothing, any other for `v` is `notWithdrawable`, a helper another
+   * withdrawal holds is `helperNeeded`, and a full or invalid record is
+   * `vaultLimit`.
+   */
+  readonly adoptWithdrawal: (record: QsbWithdrawalRecord) => Promise<void>;
+  /**
    * Keeps a withdrawal's intent, durably, before its job is created: refused
    * unless the account is the writer, vault `v` is allocated, funded and
    * scripted, and no other intent exists for `v` (the same intent again
@@ -145,7 +164,9 @@ export type QsbWithdrawalAccess = {
   readonly markWithdrawalJob: (v: number) => Promise<void>;
   /**
    * Keeps a withdrawal's signed bytes, durably, before they are submitted,
-   * with the outcome `pending`; only once vault `v` is exposed. The same
+   * with the outcome `pending`; only once vault `v`'s release is recorded
+   * under the account's custody: `exposed` for the writer, `unknown` with
+   * this install's emergency disclosure for a read-only account. The same
    * bytes again change nothing; any others are refused.
    */
   readonly keepSignedWithdrawal: (v: number, signed: QsbSignedWithdrawalRecord) => Promise<void>;
@@ -153,11 +174,14 @@ export type QsbWithdrawalAccess = {
   readonly recordWithdrawalOutcome: (v: number, outcome: QsbWithdrawalOutcome) => Promise<void>;
   /**
    * The ONE way a preimage leaves the vault service. In a single slot: re-reads
-   * the bound journal, has Krusty compute `D` from the parsed `T`, refuses
-   * unless it is the reviewed digest, records vault `v`'s exposure (from
-   * `allocated`, or an exact retry of an exposure already recorded) and makes
-   * it durable, and only then has Krusty reveal the 15 preimages. Any refusal
-   * releases nothing.
+   * the bound journal, refuses a request whose `emergency` does not match the
+   * account (the writer releases conformantly, a read-only account only as an
+   * emergency), has Krusty compute `D` from the parsed `T`, refuses unless it
+   * is the reviewed digest, records the disclosure and makes it durable, and
+   * only then has Krusty reveal the 15 preimages. The writer records vault
+   * `v`'s exposure (from `allocated`, or an exact retry); a read-only account
+   * attaches it to the `unknown` record, which stays `unknown` (or retries it
+   * exactly). Any refusal releases nothing.
    */
   readonly releasePreimages: (request: QsbReleaseRequest) => Promise<readonly string[]>;
   /** Krusty's disclosure digest of `T` and the indices; reveals nothing. */
@@ -166,8 +190,12 @@ export type QsbWithdrawalAccess = {
     round0: readonly number[],
     round1: readonly number[],
   ) => Promise<QsbRevealDigest>;
-  /** The owner key's SIGHASH_ALL partial signature on input 0 of a withdrawal PSBT only. */
-  readonly signWithdrawal: (psbt: Uint8Array) => Promise<Uint8Array>;
+  /**
+   * The owner key's SIGHASH_ALL partial signature on input 0 of vault `v`'s
+   * withdrawal PSBT only, refused (signing nothing) until `v`'s release is
+   * recorded under the account's custody, as for `keepSignedWithdrawal`.
+   */
+  readonly signWithdrawal: (v: number, psbt: Uint8Array) => Promise<Uint8Array>;
   /** The withdrawals, or null when the record cannot be read. */
   readonly withdrawals: () => Promise<readonly QsbWithdrawalRecord[] | null>;
 };

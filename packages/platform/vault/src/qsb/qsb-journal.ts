@@ -49,7 +49,8 @@ import {
  * - `state-conflict`: the transition is not allowed from the record's state;
  * - `unknown-vault`: no record for that index (a missing index below `nextV`
  *   is reserved for good and can never be allocated or disclosed);
- * - `writer-journal`: a merge into a journal this vault is the writer of.
+ * - `writer-journal`: a merge into, or an emergency disclosure on, a journal
+ *   this vault is the writer of (./qsb-merge, ./qsb-journal-emergency).
  */
 export type QsbJournalRefusal =
   | "allocation-exhausted"
@@ -283,7 +284,10 @@ export const retireQsbVault = (binding: QsbJournalBinding, v: number): QsbJourna
 /**
  * Marks a key set's history uncertain, keeping every recorded field. Nothing
  * leaves `unknown` but retirement: recovering it needs trustworthy history,
- * which this layer cannot establish. A retired set stays retired
+ * which this layer cannot establish. The one change an `unknown` record still
+ * takes is a read-only account's emergency disclosure
+ * (`recordQsbEmergencyExposure`, outside custody conformance), which attaches
+ * the disclosure and leaves the state `unknown`. A retired set stays retired
  * (`state-conflict`); an unknown one is a no-op.
  */
 export const markQsbVaultUnknown = (binding: QsbJournalBinding, v: number): QsbJournalResult => {

@@ -1,5 +1,5 @@
 /**
- * Replies of the five QSB vault messages and the five QSB withdrawal
+ * Replies of the six QSB vault messages and the five QSB withdrawal
  * messages, split from ./runtime-types by the size budget. Every one is public data in the shared contract's shapes
  * (`@bramble/wallet-model/qsb-vaults`): the owner address, its confirmed
  * funds, vault views, a deposit quote and a submission outcome. None carries
@@ -18,7 +18,8 @@ import type {
 } from "@bramble/wallet-model/qsb-withdrawals";
 
 /**
- * `wallet.qsbVaults` (address, funds or null, vaults), `wallet.createQsbVault`
+ * `wallet.qsbVaults` and `wallet.recoverQsbVaults` (address, funds or null,
+ * vaults), `wallet.createQsbVault`
  * (the vault), `wallet.quoteQsbDeposit` (the quote), and
  * `wallet.depositQsbVault` and `wallet.resendQsbDeposit` (the vault and how
  * the coordinator answered).

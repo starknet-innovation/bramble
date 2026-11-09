@@ -24,10 +24,12 @@
  * - `wallet.reviewQsbWithdrawal` `{ accountId, v }`: once the search is done,
  *   the release review computed from `T` and its verified previous
  *   transactions. Discloses nothing.
- * - `wallet.releaseQsbWithdrawal` `{ accountId, v, digest }` plus the wallet
- *   password, re-entered in the request and never taken from the session:
- *   the user's authorization. `digest` is the review's, so only what was
- *   reviewed is released. Records the disclosure, releases the 15 secrets,
+ * - `wallet.releaseQsbWithdrawal` `{ accountId, v, digest, emergency }` plus
+ *   the wallet password, re-entered in the request and never taken from the
+ *   session: the user's authorization. `digest` is the review's, so only what
+ *   was reviewed is released. `emergency` is true exactly when the review's
+ *   `custody` was `emergency`; any other combination is refused before
+ *   anything is recorded. Records the disclosure, releases the 15 secrets,
  *   builds, signs and submits the withdrawal.
  * - `wallet.resendQsbWithdrawal` `{ accountId, v }`: sends the same signed
  *   withdrawal again, never a new one.
@@ -101,15 +103,29 @@ export type QsbWithdrawalQuote = {
 };
 
 /**
+ * Whose history a release rests on. `conformant`: the account is the QSB
+ * vault's one writer, so its journal says whether these keys were ever
+ * released. `emergency`: the account is read-only (an imported phrase whose
+ * writer is gone), its record of the deposit stays `unknown`, and Bramble
+ * cannot know whether another install already released keys for it. The
+ * release is then outside the BIP's custody conformance and the UI must say
+ * so before it.
+ */
+export type QsbCustody = "conformant" | "emergency";
+
+/**
  * The release review the BIP requires before any secret leaves. Every value is
  * computed by the background from `T` and the previous transactions it
  * verified, never taken from the coordinator. `binding` is `unverified`:
  * Bramble checks `T` but does not independently verify that the released
  * secrets authorize only this transaction, and the UI must say so
- * prominently. `digest` is the disclosure digest `D` the release must echo.
+ * prominently. `custody` is `emergency` exactly when the account is not the
+ * writer (see {@link QsbCustody}). `digest` is the disclosure digest `D` the
+ * release must echo.
  */
 export type QsbWithdrawalReview = {
   readonly binding: "unverified";
+  readonly custody: QsbCustody;
   readonly destination: string;
   readonly digest: string;
   readonly feeSat: number;
@@ -137,6 +153,7 @@ export type QsbWithdrawalSubmission = "conflict" | "confirmed" | "submitted" | "
  */
 export const QSB_WITHDRAWAL_REFUSALS = {
   bindingRefused: "qsb withdrawal transaction does not check out",
+  custodyChanged: "qsb withdrawal custody changed",
   destinationInvalid: "invalid qsb withdrawal destination",
   dustOutput: "qsb withdrawal output is too small",
   floorRisen: "qsb withdrawal fee is below the miner floor",

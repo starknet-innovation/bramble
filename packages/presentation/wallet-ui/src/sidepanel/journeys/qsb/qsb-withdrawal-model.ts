@@ -31,11 +31,12 @@ export type QsbWithdrawalDisplay =
   | "withdrawn";
 
 /**
- * The withdrawal state a row shows, or null when none has started or the
- * deposit's history is not trusted (its row then says Unavailable).
+ * The withdrawal state a row shows, or null when none has started. A deposit
+ * whose history is not trusted (`unknown`) shows one only when a withdrawal
+ * was recovered for it (its row otherwise says Unavailable): the state stays
+ * `unknown` throughout, so the row never claims the history is trusted.
  */
 export const qsbWithdrawalDisplay = (vault: QsbVaultView): QsbWithdrawalDisplay | null => {
-  if (vault.state === "unknown") return null;
   switch (vault.withdrawal.status) {
     case "none":
       return null;
@@ -133,6 +134,17 @@ export const QSB_REVIEW_LOADING = "Loading the withdrawal…";
 export const QSB_UNVERIFIED_TITLE = "Unverified";
 /** The statement's body; see {@link QSB_UNVERIFIED_TITLE}. */
 export const QSB_UNVERIFIED_BODY = `Bramble cannot independently confirm that these ${QSB_DISCLOSED_SECRETS} keys allow only this withdrawal.`;
+
+/**
+ * The title of the warning every emergency step carries (recovering a read-only
+ * QSB vault's deposits, and releasing one): the BIP requires the emergency path
+ * to identify itself as outside custody conformance. A warning: no
+ * contractions.
+ */
+export const QSB_CUSTODY_TITLE = "Outside custody conformance";
+/** The emergency release review's warning body; see {@link QSB_CUSTODY_TITLE}. */
+export const QSB_EMERGENCY_RELEASE_BODY =
+  "Bramble cannot confirm that no other install released keys for this deposit.";
 
 /** The release review's "keys released" value. */
 export const QSB_KEYS_RELEASED = `${QSB_DISCLOSED_SECRETS} one-time keys`;

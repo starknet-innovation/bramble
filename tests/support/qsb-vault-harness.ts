@@ -73,10 +73,18 @@ const realKrusty = async (): Promise<KmsPort> => ({
 
 /**
  * A wallet with one confirmed QSB writer account `qsb-1`, its owner funded
- * with `funds` (in satoshis, one output each), and an unlocked session.
+ * with `funds` (in satoshis, one output each), and an unlocked session. With
+ * `imported`, `qsb-1` is the same phrase imported instead (a read-only
+ * account, as a fresh install after the writer was lost has it); with
+ * `state`, the coordinator is that world, shared with another harness.
  */
 export const qsbVaultHarness = async (
-  options: { readonly funds?: readonly number[]; readonly kms?: (kms: KmsPort) => KmsPort } = {},
+  options: {
+    readonly funds?: readonly number[];
+    readonly imported?: boolean;
+    readonly kms?: (kms: KmsPort) => KmsPort;
+    readonly state?: FakeCoordinatorState;
+  } = {},
 ): Promise<QsbVaultHarness> => {
   const memory = createMemoryStore();
   const events: string[] = [];
@@ -105,20 +113,29 @@ export const qsbVaultHarness = async (
       journals: createQsbJournalStores((key) => createEncryptedStore(backend, key)),
     },
   });
-  await service.createQsbAccount(QSB_HARNESS_PASSPHRASE);
-  const words = QSB_HARNESS_PHRASE.split(" ");
-  await service.confirmQsbBackup({
-    accountId: "qsb-1",
-    vaultPassphrase: QSB_HARNESS_PASSPHRASE,
-    words: [0, 11, 23].map((index) => ({ index, word: words[index] ?? "" })),
-  });
+  if (options.imported) {
+    await service.importQsbAccount({
+      mnemonic: QSB_HARNESS_PHRASE,
+      vaultPassphrase: QSB_HARNESS_PASSPHRASE,
+    });
+  } else {
+    await service.createQsbAccount(QSB_HARNESS_PASSPHRASE);
+    const words = QSB_HARNESS_PHRASE.split(" ");
+    await service.confirmQsbBackup({
+      accountId: "qsb-1",
+      vaultPassphrase: QSB_HARNESS_PASSPHRASE,
+      words: [0, 11, 23].map((index) => ({ index, word: words[index] ?? "" })),
+    });
+  }
   const { address: owner } = await kms.deriveBitcoinP2wpkhKeypair(QSB_HARNESS_PHRASE, 0, 0, 0);
-  const state = fakeCoordinatorState(
-    owner,
-    (options.funds ?? []).flatMap((value, index) =>
-      paymentToAddress(owner, [value], `funds ${index}`),
-    ),
-  );
+  const state =
+    options.state ??
+    fakeCoordinatorState(
+      owner,
+      (options.funds ?? []).flatMap((value, index) =>
+        paymentToAddress(owner, [value], `funds ${index}`),
+      ),
+    );
   let now = Date.UTC(2026, 10, 4, 12, 0, 0);
   const clock = () => now;
   let drawn = 0;

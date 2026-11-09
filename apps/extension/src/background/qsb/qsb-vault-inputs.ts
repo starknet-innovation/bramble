@@ -1,5 +1,5 @@
 /**
- * Pure parsers for the five QSB vault messages, which only extension pages
+ * Pure parsers for the six QSB vault messages, which only extension pages
  * may send. Each reads own data properties, accepts only the keys its
  * message defines, a well-formed QSB account id, a vault index below 2^31
  * and satoshi amounts as safe integers within 21 million BTC, and returns
@@ -44,7 +44,10 @@ const accountMessage = (
     ? message
     : null;
 
-/** Parses `wallet.qsbVaults` or `wallet.createQsbVault`: `{ accountId }`. */
+/**
+ * Parses `wallet.qsbVaults`, `wallet.createQsbVault` or
+ * `wallet.recoverQsbVaults`: `{ accountId }`.
+ */
 export const readQsbAccountInput = (message: unknown, type: string): QsbAccountInput | null => {
   const parsed = accountMessage(message, type, []);
   return parsed ? { accountId: parsed["accountId"] as string } : null;

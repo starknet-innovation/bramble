@@ -24,7 +24,7 @@ import {
 } from "../../../support/qsb-vault-fixtures";
 
 describe("withdrawal rows", () => {
-  test("each status has one display, and untrusted history shows none", () => {
+  test("each status has one display; untrusted history shows only a recovered withdrawal", () => {
     expect(
       (
         [
@@ -52,7 +52,13 @@ describe("withdrawal rows", () => {
       "withdrawn",
       "conflict",
     ]);
-    expect(qsbWithdrawalDisplay({ ...withdrawingVault(0, "ready"), state: "unknown" })).toBe(null);
+    // A recovered withdrawal shows on its `unknown` deposit; nothing else does.
+    expect(qsbWithdrawalDisplay({ ...withdrawingVault(0, "ready"), state: "unknown" })).toBe(
+      "ready",
+    );
+    expect(qsbWithdrawalDisplay({ ...depositedVault(0, "confirmed"), state: "unknown" })).toBe(
+      null,
+    );
   });
 
   test("only a funded deposit with nothing started may be withdrawn", () => {

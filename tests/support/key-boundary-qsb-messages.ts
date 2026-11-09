@@ -1,7 +1,7 @@
 /**
  * Key-boundary catalog slice for the QSB account, vault and withdrawal
  * messages, split from ./key-boundary-messages by the size budget. All
- * fifteen are extension-page only. `wallet.revealQsbPhrase` is the one reply sanctioned to carry a QSB
+ * sixteen are extension-page only. `wallet.revealQsbPhrase` is the one reply sanctioned to carry a QSB
  * phrase; the scan holds every other QSB reply to carrying no phrase, no
  * journal id, no `qsbAccounts` record, no owner key and no coordinator token.
  * The withdrawal entries run after the deposit's, over the same vault, and
@@ -9,7 +9,8 @@
  * negative entries are here because a refusal must leak nothing: a wrong
  * password on the reveal or the release, a wrong word on the backup check, a
  * deposit or withdrawal at a fee other than the quoted one, a release of a
- * digest other than the reviewed one, and an unknown account's vaults.
+ * digest other than the reviewed one, an unknown account's vaults, and a
+ * recovery asked of the writer, which needs none.
  */
 import {
   extensionSender,
@@ -112,6 +113,11 @@ export const QSB_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   {
+    message: { accountId: qsbAccount.id, type: "wallet.recoverQsbVaults" },
+    negative: "a recovery asked of the writer is refused without signing in or naming a vault",
+    sender: extensionSender,
+  },
+  {
     message: { accountId: "qsb-9", type: "wallet.qsbVaults" },
     negative: "an unknown account is refused without opening any vault or naming one",
     sender: extensionSender,
@@ -148,6 +154,7 @@ export const QSB_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: {
       ...vaultOf,
       digest: "00".repeat(32),
+      emergency: false,
       passphrase: SECRET_PASSPHRASE,
       type: "wallet.releaseQsbWithdrawal",
     },
@@ -159,6 +166,7 @@ export const QSB_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: {
       ...vaultOf,
       digest: "00".repeat(32),
+      emergency: false,
       passphrase: "wrong passphrase!!",
       type: "wallet.releaseQsbWithdrawal",
     },
@@ -170,6 +178,7 @@ export const QSB_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: {
       ...vaultOf,
       digest: "00".repeat(32),
+      emergency: false,
       passphrase: SECRET_PASSPHRASE,
       type: "wallet.releaseQsbWithdrawal",
     },

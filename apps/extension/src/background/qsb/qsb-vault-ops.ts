@@ -1,5 +1,5 @@
 /**
- * Background handlers for the five Quantum Safe Bitcoin (QSB) vault messages.
+ * Background handlers for the six Quantum Safe Bitcoin (QSB) vault messages.
  *
  * Trust boundary: none of these types is in `DAPP_MESSAGES`, so the sender
  * gate turns every content script and page away before they get here. Inputs
@@ -30,6 +30,7 @@ import {
   readQsbVaultInput,
 } from "./qsb-vault-inputs";
 import { listQsbVaults } from "./qsb-vault-list";
+import { recoverQsbVaults } from "./qsb-vault-recover";
 import type { QsbVaultDeps } from "./qsb-vault-session";
 
 /** One QSB message handler. */
@@ -128,16 +129,26 @@ const resend: QsbVaultHandler = async (ctx, message) => {
   }));
 };
 
+const recover: QsbVaultHandler = async (ctx, message) => {
+  const input = readQsbAccountInput(message, "wallet.recoverQsbVaults");
+  if (!input) return { error: "invalid recover qsb vaults request" };
+  return asUser(ctx, input.accountId, async ({ deps }, open) => ({
+    ok: true,
+    ...(await open((access) => recoverQsbVaults(deps, access))),
+  }));
+};
+
 const QSB_VAULT_HANDLERS: ReadonlyMap<string, QsbVaultHandler> = new Map([
   ["wallet.createQsbVault", createVault],
   ["wallet.depositQsbVault", deposit],
   ["wallet.qsbVaults", listVaults],
   ["wallet.quoteQsbDeposit", quoteDeposit],
+  ["wallet.recoverQsbVaults", recover],
   ["wallet.resendQsbDeposit", resend],
 ]);
 
 /**
- * Routes the five QSB vault messages; null for every other type, so the
+ * Routes the six QSB vault messages; null for every other type, so the
  * router moves on to the next handler.
  */
 export const handleQsbVaultOps = async (

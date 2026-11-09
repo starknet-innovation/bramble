@@ -135,11 +135,16 @@ describe("quotes and reviews", () => {
     }
   });
 
-  test("a review is unverified, on mainnet, names 15 secrets and a 64-hex digest, and adds up", () => {
+  test("a review is unverified, names its custody, is on mainnet, names 15 secrets and a 64-hex digest, and adds up", () => {
     expect(isQsbWithdrawalReview(withdrawalReview(2))).toBe(true);
+    expect(isQsbWithdrawalReview(withdrawalReview(2, "emergency"))).toBe(true);
     const review = withdrawalReview(2);
+    const { custody: _custody, ...noCustody } = review;
     for (const bad of [
       { ...review, binding: "verified" },
+      { ...review, custody: "unknown" },
+      { ...review, custody: true },
+      noCustody,
       { ...review, network: "bitcoin-testnet" },
       { ...review, secrets: 16 },
       { ...review, digest: DIGEST.toUpperCase() },
@@ -185,12 +190,14 @@ describe("createQsbWithdrawalClient", () => {
 
     const released = answering({ ok: true, ...withdrawalResult(3, "submitted") });
     expect(
-      (await released.client.releaseQsbWithdrawal("qsb-2", 3, DIGEST, "correct horse")).submission,
+      (await released.client.releaseQsbWithdrawal("qsb-2", 3, DIGEST, "correct horse", true))
+        .submission,
     ).toBe("submitted");
     expect(released.sent).toEqual([
       {
         accountId: "qsb-2",
         digest: DIGEST,
+        emergency: true,
         passphrase: "correct horse",
         type: "wallet.releaseQsbWithdrawal",
         v: 3,
@@ -238,7 +245,7 @@ describe("createQsbWithdrawalClient", () => {
   test("a release or resend reply is that deposit, in the status its outcome implies", async () => {
     for (const submission of ["conflict", "confirmed", "submitted", "uncertain"] as const) {
       const { client } = answering({ ok: true, ...withdrawalResult(1, submission) });
-      expect((await client.releaseQsbWithdrawal("qsb-2", 1, DIGEST, "pw")).submission).toBe(
+      expect((await client.releaseQsbWithdrawal("qsb-2", 1, DIGEST, "pw", false)).submission).toBe(
         submission,
       );
     }
@@ -268,7 +275,8 @@ describe("createQsbWithdrawalClient", () => {
     ]) {
       const { client } = answering(reply);
       expect(
-        (await rejection(() => client.releaseQsbWithdrawal("qsb-2", 1, DIGEST, "pw"))).message,
+        (await rejection(() => client.releaseQsbWithdrawal("qsb-2", 1, DIGEST, "pw", false)))
+          .message,
       ).toBe("wallet request failed");
       expect((await rejection(() => client.resendQsbWithdrawal("qsb-2", 1))).message).toBe(
         "wallet request failed",
@@ -289,7 +297,7 @@ describe("createQsbWithdrawalClient", () => {
       ],
       [(c: Client) => c.reviewQsbWithdrawal("qsb-2", 0), QSB_WITHDRAWAL_REFUSALS.notReady],
       [
-        (c: Client) => c.releaseQsbWithdrawal("qsb-2", 0, DIGEST, "pw"),
+        (c: Client) => c.releaseQsbWithdrawal("qsb-2", 0, DIGEST, "pw", false),
         QSB_WITHDRAWAL_REFUSALS.reviewChanged,
       ],
       [(c: Client) => c.resendQsbWithdrawal("qsb-2", 0), QSB_VAULT_REFUSALS.accessNeeded],
@@ -324,7 +332,7 @@ describe("lost replies", () => {
     );
     for (const write of [
       () => wallet.startQsbWithdrawal("qsb-2", 0, DESTINATION, 900),
-      () => wallet.releaseQsbWithdrawal("qsb-2", 0, DIGEST, "pw"),
+      () => wallet.releaseQsbWithdrawal("qsb-2", 0, DIGEST, "pw", false),
       () => wallet.resendQsbWithdrawal("qsb-2", 0),
     ]) {
       expect(await rejection(write)).toBeInstanceOf(SubmissionUnknownError);

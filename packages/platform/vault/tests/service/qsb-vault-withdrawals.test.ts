@@ -8,84 +8,35 @@
  * and signed bytes are kept once, never replaced, with distinct helpers.
  */
 import { describe, expect, test } from "bun:test";
-import { createHash } from "node:crypto";
-import { FAKE_GENERATED_MNEMONIC_24, fakeKms } from "@bramble/testkit/fake-kms";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import type { KmsPort } from "@bramble/vault/kms-port";
 import type { QsbJournal } from "@bramble/vault/qsb-journal-record";
 import { readQsbJournal } from "@bramble/vault/qsb-journal-store";
-import type { QsbWithdrawalRecord } from "@bramble/vault/qsb-withdrawal-store";
-import type { QsbReleaseRequest, QsbVaultAccess } from "@bramble/vault/service-types";
+import type { QsbVaultAccess } from "@bramble/vault/service-types";
 import { QSB_VAULT_REFUSALS } from "@bramble/wallet-model/qsb-vaults";
 import { QSB_WITHDRAWAL_REFUSALS } from "@bramble/wallet-model/qsb-withdrawals";
+import {
+  FUNDING_TXID,
+  intent,
+  ROUND0,
+  ROUND1,
+  request,
+  transaction,
+  words,
+} from "./qsb-release-fixtures";
 import { journalIdFor, journalKeyOf, PASSPHRASE, qsbServiceHarness } from "./qsb-service-harness";
 
 const JOURNAL = journalIdFor("vault withdrawals");
 const WITHDRAWAL_KEY = `bramble:qsb-withdrawal:${JOURNAL}`;
-const words = FAKE_GENERATED_MNEMONIC_24.split(" ");
-const FUNDING_TXID = "aa".repeat(32);
-const HELPER_TXID = "bb".repeat(32);
-const ROUND0 = [5, 55, 66, 72, 75, 78, 110, 125];
-const ROUND1 = [14, 28, 65, 81, 87, 95, 128];
-
-const le = (hex: string): string => hex.match(/../g)?.reverse().join("") ?? "";
-
-// T: version 1, the helper then the funding, one P2WPKH output, a locktime.
-const transaction = (outputSat = 92_000, locktime = 950_229_240): string =>
-  [
-    "01000000",
-    "02",
-    le(HELPER_TXID),
-    "01000000",
-    "00",
-    "feffffff",
-    le(FUNDING_TXID),
-    "00000000",
-    "00",
-    "a1070080",
-    "01",
-    le(outputSat.toString(16).padStart(16, "0")),
-    "16",
-    `0014${"33".repeat(20)}`,
-    le(locktime.toString(16).padStart(8, "0")),
-  ].join("");
-
-const digestOf = async (t: string, round0 = ROUND0, round1 = ROUND1) =>
-  (await fakeKms().qsbRevealDigest(t, round0, round1)).digest;
-
-const request = async (fields: Partial<QsbReleaseRequest> = {}): Promise<QsbReleaseRequest> => {
-  const t = fields.transaction ?? transaction();
-  return {
-    digest: await digestOf(t, [...(fields.round0 ?? ROUND0)], [...(fields.round1 ?? ROUND1)]),
-    round0: ROUND0,
-    round1: ROUND1,
-    transaction: t,
-    v: 0,
-    ...fields,
-  };
-};
-
-const intent = (fields: Partial<QsbWithdrawalRecord> = {}): QsbWithdrawalRecord => ({
-  destination: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu",
-  feeSat: 9_449,
-  helper: { txid: HELPER_TXID, valueSat: 1_449, vout: 1 },
-  jobCreated: false,
-  jobId: "0b8f7f9e-1c2d-4e3f-8a9b-0c1d2e3f4a5b",
-  manifestHash: createHash("sha256").update("manifest").digest("hex"),
-  manifestJson: '{"vaultId":"x"}',
-  outcome: null,
-  outputSat: 92_000,
-  signed: null,
-  v: 0,
-  ...fields,
-});
-
 // A writer whose vault 0 is allocated, scripted and funded; `reveals` counts reveals.
-const fundedHarness = async () => {
+const fundedHarness = async (overrides: Partial<KmsPort> = {}) => {
   const reveals: string[] = [];
   let atReveal: (() => Promise<void>) | undefined;
   const kms = fakeKms();
   const harness = await qsbServiceHarness({
     journalIds: [JOURNAL],
     kms: {
+      ...overrides,
       async revealQsbPreimages(mnemonic, v, round0, round1) {
         await atReveal?.();
         reveals.push(`${v}:${round0.join()}|${round1.join()}`);
@@ -294,22 +245,29 @@ describe("the withdrawal record", () => {
     });
   });
 
-  test("the helper is signed at input 0 only", async () => {
+  test("the helper is signed at input 0 only, and only once the vault is exposed", async () => {
     const indices: (readonly number[])[] = [];
-    const harness = await qsbServiceHarness({
-      journalIds: [journalIdFor("signing")],
-      kms: {
-        async signBitcoinPsbtInputs(_key, psbt, inputIndices) {
-          indices.push(inputIndices);
-          return psbt;
-        },
+    const { within } = await fundedHarness({
+      async signBitcoinPsbtInputs(_key, psbt, inputIndices) {
+        indices.push(inputIndices);
+        return psbt;
       },
     });
-    await harness.service.createQsbAccount(PASSPHRASE);
-    await harness.service.withQsbVaultAccount(
-      { accountId: "qsb-1", vaultPassphrase: PASSPHRASE },
-      (access) => access.signWithdrawal(Uint8Array.from([0x70, 0x73, 0x62, 0x74, 0xff])),
+    const psbt = Uint8Array.from([0x70, 0x73, 0x62, 0x74, 0xff]);
+    await expect(within((access) => access.signWithdrawal(0, psbt))).rejects.toThrow(
+      QSB_WITHDRAWAL_REFUSALS.notReady,
     );
+    expect(indices).toEqual([]);
+    await within(async (access) => access.releasePreimages(await request()));
+    await within((access) => access.signWithdrawal(0, psbt));
     expect(indices).toEqual([[0]]);
+  });
+
+  test("the writer's release refuses an emergency request before anything is recorded", async () => {
+    const { harness, reveals, within } = await fundedHarness();
+    await expect(
+      within(async (access) => access.releasePreimages(await request({ emergency: true }))),
+    ).rejects.toThrow(QSB_WITHDRAWAL_REFUSALS.custodyChanged);
+    expect([reveals, harness.writes]).toEqual([[], []]);
   });
 });

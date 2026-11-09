@@ -65,6 +65,7 @@ const fixtureWallet = (fixture: Fixture): QsbWallet => ({
   loadQsbVaults: never,
   quoteQsbDeposit: never,
   quoteQsbWithdrawal: never,
+  recoverQsbVaults: never,
   releaseQsbWithdrawal: never,
   resendQsbDeposit: never,
   resendQsbWithdrawal: never,

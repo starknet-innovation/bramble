@@ -1,6 +1,6 @@
 /**
- * The QSB vault writes the journey allows in flight: one deposit creation per
- * QSB vault, one funding or resend per deposit, one withdrawal start per
+ * The QSB vault writes the journey allows in flight: one deposit creation and
+ * one recovery per QSB vault, one funding or resend per deposit, one withdrawal start per
  * deposit, and one release or withdrawal resend per deposit. A second request
  * while one runs gets the same promise back, so a double tap, a repaint or
  * leaving and coming back can never send a second write; the screen only
@@ -10,7 +10,7 @@
  * never kept here.
  */
 import type { QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
-import type { QsbDepositResult, QsbVaultWallet } from "./qsb-vault-runtime";
+import type { QsbDepositResult, QsbVaultsReading, QsbVaultWallet } from "./qsb-vault-runtime";
 import type { QsbWithdrawalResult, QsbWithdrawalWallet } from "./qsb-withdrawal-runtime";
 
 /** The guarded writes, and what is in flight now. */
@@ -24,6 +24,10 @@ export type QsbVaultWrites = {
     amountSat: number,
     feeSat: number,
   ) => Promise<QsbDepositResult>;
+  /** The account's recovery in flight, or null. */
+  readonly pendingRecover: (accountId: string) => Promise<QsbVaultsReading> | null;
+  /** Recovers a read-only account's deposits, or returns the recovery already running. */
+  readonly recover: (accountId: string) => Promise<QsbVaultsReading>;
   /** The account's vault creation in flight, or null. */
   readonly pendingCreate: (accountId: string) => Promise<QsbVaultView> | null;
   /** Vault `v`'s deposit or resend in flight, or null. */
@@ -61,11 +65,15 @@ const vaultKey = (accountId: string, v: number): string => `${accountId}:${v}`;
  * settles, whichever way, so the next request after that is a new write.
  */
 export const createQsbVaultWrites = (
-  wallet: Pick<QsbVaultWallet, "createQsbVault" | "depositQsbVault" | "resendQsbDeposit"> &
+  wallet: Pick<
+    QsbVaultWallet,
+    "createQsbVault" | "depositQsbVault" | "recoverQsbVaults" | "resendQsbDeposit"
+  > &
     Pick<QsbWithdrawalWallet, "resendQsbWithdrawal" | "startQsbWithdrawal">,
 ): QsbVaultWrites => {
   const creations = new Map<string, Promise<QsbVaultView>>();
   const deposits = new Map<string, Promise<QsbDepositResult>>();
+  const recoveries = new Map<string, Promise<QsbVaultsReading>>();
   const starts = new Map<string, Promise<QsbVaultView>>();
   const withdrawals = new Map<string, Promise<QsbWithdrawalResult>>();
 
@@ -89,8 +97,10 @@ export const createQsbVaultWrites = (
       ),
     pendingCreate: (accountId) => creations.get(accountId) ?? null,
     pendingDeposit: (accountId, v) => deposits.get(vaultKey(accountId, v)) ?? null,
+    pendingRecover: (accountId) => recoveries.get(accountId) ?? null,
     pendingStart: (accountId, v) => starts.get(vaultKey(accountId, v)) ?? null,
     pendingWithdrawal: (accountId, v) => withdrawals.get(vaultKey(accountId, v)) ?? null,
+    recover: (accountId) => once(recoveries, accountId, () => wallet.recoverQsbVaults(accountId)),
     release: (accountId, v, send) => once(withdrawals, vaultKey(accountId, v), send),
     resend: (accountId, v) =>
       once(deposits, vaultKey(accountId, v), () => wallet.resendQsbDeposit(accountId, v)),

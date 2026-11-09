@@ -6,10 +6,13 @@
  * Before the disclosure every check may refuse and nothing leaves: the
  * password re-entered in the message has opened the vault (the caller);
  * the review is run again on a session that lives at least 15 more minutes,
- * and its digest must be the one the user approved (`reviewChanged`); the fee
- * over the size bound must still clear MARA's floor (`floorRisen`); then the
- * vault service's one release records the exposure durably and only then
- * reveals the 15 preimages.
+ * and its digest must be the one the user approved (`reviewChanged`) and its
+ * custody the one the user reviewed (`custodyChanged`: `emergency` exactly
+ * when the request says so); the fee over the size bound must still clear
+ * MARA's floor (`floorRisen`); then the vault service's one release records
+ * the disclosure durably — the writer's exposure, or a read-only account's
+ * emergency disclosure on its `unknown` record — and only then reveals the
+ * 15 preimages.
  *
  * After it, nothing refuses: `finish` assembles the QSB input, its bytes must
  * commit to the intent, Krusty signs the helper alone, its sig is
@@ -143,7 +146,7 @@ const signHelper = async (
       rawHex: raw,
     });
   if (!psbt) return null;
-  const returned = await access.signWithdrawal(psbt.toPSBT());
+  const returned = await access.signWithdrawal(reviewed.held.v, psbt.toPSBT());
   return finalizeQsbWithdrawal(psbt, returned, owner.publicKey);
 };
 
@@ -176,7 +179,9 @@ const afterDisclosure = async (
 ): Promise<QsbWithdrawalReply> => {
   const { access, deps } = reviewed.context;
   const { held } = reviewed;
-  const basis: ReplyBasis = { access, held, record: { ...reviewed.record, state: "exposed" } };
+  // An emergency release leaves its record `unknown`; only the writer's exposes it.
+  const state = reviewed.review.custody === "conformant" ? "exposed" : reviewed.record.state;
+  const basis: ReplyBasis = { access, held, record: { ...reviewed.record, state } };
   const raw = await finished(reviewed, preimages);
   const txid = parseQsbTransaction(raw)?.id;
   if (!txid) throw outcomeUnknown();
@@ -194,17 +199,21 @@ const afterDisclosure = async (
 };
 
 /**
- * Releases deposit `v`'s withdrawal as reviewed (`digest`), signs and submits
- * it. The vault session is over the password the user re-entered.
+ * Releases deposit `v`'s withdrawal as reviewed (`digest`, and `emergency`
+ * exactly when the review's custody was `emergency`), signs and submits it.
+ * The vault session is over the password the user re-entered.
  */
 export const releaseQsbWithdrawal = async (
   deps: QsbVaultDeps,
   access: QsbVaultAccess,
-  request: { readonly digest: string; readonly v: number },
+  request: { readonly digest: string; readonly emergency: boolean; readonly v: number },
 ): Promise<QsbWithdrawalReply> => {
   const bindingRefused = () => withdrawalRefusal("bindingRefused");
   const { reviewed, preimages } = await failClosedWith(bindingRefused, async () => {
     const checked = await reviewedWithdrawal(deps, access, request.v);
+    if ((checked.review.custody === "emergency") !== request.emergency) {
+      throw withdrawalRefusal("custodyChanged");
+    }
     if (checked.review.digest !== request.digest) throw withdrawalRefusal("reviewChanged");
     const floor = await minerFloorMsat(deps);
     if (rateMsat(checked.held.feeSat, checked.review.vsize) < floor) {
@@ -212,6 +221,7 @@ export const releaseQsbWithdrawal = async (
     }
     const released = await access.releasePreimages({
       digest: request.digest,
+      emergency: request.emergency,
       round0: checked.prepared.round0,
       round1: checked.prepared.round1,
       transaction: checked.prepared.transaction,
