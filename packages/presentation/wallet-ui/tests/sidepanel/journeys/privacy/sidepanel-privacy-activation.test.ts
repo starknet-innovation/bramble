@@ -5,7 +5,9 @@
  * reports deployed, and never before the deployment is submitted.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { bindDeployAndRegister } from "../../../../src/sidepanel/journeys/privacy/privacy-activation-ui";
+import { SUBMISSION_UNKNOWN } from "../../../../src/sidepanel/runtime/friendly-error-shared";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
@@ -147,5 +149,65 @@ describe("deploy then register", () => {
     await flush();
 
     expect(started).toEqual([]);
+  });
+
+  // Errors audit F4: a deployment whose reply was lost may be on chain, so it
+  // is not shown as failed and the control is not re-armed for a second one.
+  test("a lost deployment reply keeps the control down", async () => {
+    const app = mount();
+    const { started } = bind(app, {
+      async deployAccount() {
+        throw new SubmissionUnknownError("Account deployment status is unknown.", null);
+      },
+    });
+    app.querySelector<HTMLButtonElement>("[data-privacy-deploy-register]")?.click();
+    await flush();
+    expect(started).toEqual([]);
+    expect(app.querySelector<HTMLButtonElement>("[data-privacy-deploy-register]")?.disabled).toBe(
+      true,
+    );
+  });
+  // Errors audit C3: once the fee is reviewed, the second press submits. Its
+  // control is re-armed only for a refusal known to come before anything was
+  // sent; any other error may be on chain, so it is amber and stays down.
+  const submitWith = async (failure: Error): Promise<HTMLElement> => {
+    // Nothing here polls, and the toasts need the real timer to stay up.
+    (globalThis as { setTimeout: unknown }).setTimeout = originalSetTimeout;
+    const app = mount();
+    let presses = 0;
+    bind(app, {
+      async deployAccount(reviewedFee) {
+        presses += 1;
+        if (!reviewedFee) return { overallFee: "1000", unit: "FRI" };
+        throw failure;
+      },
+    });
+    const control = () => app.querySelector<HTMLButtonElement>("[data-privacy-deploy-register]");
+    control()?.click();
+    await flush();
+    expect(control()?.disabled).toBe(false);
+    control()?.click();
+    await flush();
+    expect(presses).toBe(2);
+    return app;
+  };
+
+  test("an unplaced submit error is amber and keeps the control down", async () => {
+    const app = await submitWith(new Error("relay answered 502"));
+    expect(document.querySelector(".toast.warning .toast-text")?.textContent).toContain(
+      SUBMISSION_UNKNOWN("The deployment"),
+    );
+    expect(document.querySelector(".toast.error")).toBeNull();
+    expect(app.querySelector<HTMLButtonElement>("[data-privacy-deploy-register]")?.disabled).toBe(
+      true,
+    );
+  });
+
+  test("a known pre-submit refusal stays red and re-arms the control", async () => {
+    const app = await submitWith(new Error("wallet locked"));
+    expect(document.querySelector(".toast.error")).not.toBeNull();
+    expect(app.querySelector<HTMLButtonElement>("[data-privacy-deploy-register]")?.disabled).toBe(
+      false,
+    );
   });
 });

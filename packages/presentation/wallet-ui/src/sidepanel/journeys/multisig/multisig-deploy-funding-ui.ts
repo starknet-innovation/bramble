@@ -1,7 +1,8 @@
 /** Local and external funding controls for a predicted Argent multisig address. */
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
-import { bindCopyButtons, errorMessage, showToast } from "../../shared/dom";
+import { bindCopyButtons, errorDetails, showToast } from "../../shared/dom";
 import type { SendIntent } from "../send/send-model";
+import { deploymentFundingMinimum } from "./multisig-deploy-view";
 
 type FundingDeps = {
   readonly openFunding: (intent: SendIntent) => Promise<void>;
@@ -28,20 +29,24 @@ export const bindDeploymentFunding = (
         showToast("A local STRK funding account is unavailable", "error", form);
         return;
       }
+      // Prefills the STRK minimum the Fund step names, in exact FRI; Send
+      // still lets the user change it and asks them to review and confirm.
+      const minimum = deploymentFundingMinimum(review);
       void deps
         .openFunding({
           accountId: source,
+          ...(minimum === null ? {} : { amount: minimum.toString() }),
           completeMultisigId: `${review.networkId}:${review.address}`,
           completeTo: "multisig-deploy",
           destination: "public",
           networkId: review.networkId,
           recipient: review.address,
-          recipientLabel: review.name ?? "New Argent multisig",
+          recipientLabel: review.name ?? "New multisig",
           source: "public",
           tokenId,
         })
         .catch((error: unknown) =>
-          showToast(errorMessage(error, "Open funding transfer failed"), "error", form),
+          showToast(errorDetails(error, "Open funding transfer failed"), "error", form),
         );
     });
   form

@@ -1,16 +1,19 @@
 /**
  * Counterfactual account deployment: address-proven DEPLOY_ACCOUNT parameters
- * plus status reads and submissions for OpenZeppelin accounts.
+ * plus status reads and submissions for OpenZeppelin, Argent, and Braavos.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
 import {
-  canonicalFelt,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  XVERSE_ARGENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import {
   isNonZeroStarkFieldElement,
   STARKNET_NETWORKS,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import { type Account, CallData, hash, type RpcProvider } from "starknet";
 import {
   ARGENT_ACCOUNT_CONTRACT,
@@ -38,6 +41,13 @@ import {
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
+import { isCompatibleAccountDeployed } from "./account-compatibility";
+import { BRAAVOS_DEPLOYMENT_UNSUPPORTED, refuseUndeployedBraavos } from "./braavos-deployment-gate";
+
+export { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
+export { requireLiveAuthorizableClass } from "./account-compatibility";
+export { refuseUndeployedBraavos, UndeployedBraavosError } from "./braavos-deployment-gate";
+export { isCompatibleAccountDeployed };
 
 /**
  * DEPLOY_ACCOUNT parameters for a counterfactual wallet account.
@@ -75,13 +85,23 @@ const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
       }
     : {};
 
-/**
- * Reconstructs pinned DEPLOY_ACCOUNT inputs only when they reproduce the stored address.
- * Throws on invalid class/configuration or an address-commitment mismatch.
- */
-export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
-  let constructorCalldata: readonly string[];
-  let addressSalts: readonly string[];
+// The Argent classes this wallet deploys: the pinned 0.4.0 release, and Xverse's
+// build of it (issue 734). Xverse's class is byte-identical to 0.4.0 apart from
+// its name constant, with the same `(owner: Signer, guardian: Option<Signer>)`
+// constructor, so a funded Xverse account deploys with the same calldata at its
+// own class. An explicit list of reviewed classes, never "any class with this
+// constructor shape".
+const DEPLOYABLE_ARGENT_CLASSES = [ARGENT_ACCOUNT_CONTRACT.classHash, XVERSE_ARGENT_CLASS_HASH];
+
+// The constructor arguments and candidate salts one family deploys with. Split
+// from accountDeployment so each family's rule reads on its own, and so a family
+// this wallet never deploys fails here rather than reaching the address check.
+const deploymentInputs = (
+  account: DeployableAccount,
+): {
+  readonly addressSalts: readonly string[];
+  readonly constructorCalldata: readonly string[];
+} => {
   if (account.accountContractType === "argent-multisig") {
     if (!sameFelt(account.classHash, ARGENT_MULTISIG_CONTRACT.classHash)) {
       throw new WalletError("Argent multisig class hash does not match the pinned release");
@@ -90,21 +110,49 @@ export const accountDeployment = (account: DeployableAccount): AccountDeployment
     if (!deployment) {
       throw new WalletError("Imported Argent multisig has no counterfactual deployment parameters");
     }
-    constructorCalldata = argentMultisigConstructorCalldata({
-      signerPublicKeys: deployment.signerPublicKeys,
-      threshold: deployment.threshold,
-    });
-    addressSalts = [deployment.salt];
-  } else if (account.accountContractType === "argent") {
-    if (!sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)) {
+    return {
+      addressSalts: [deployment.salt],
+      constructorCalldata: argentMultisigConstructorCalldata({
+        signerPublicKeys: deployment.signerPublicKeys,
+        threshold: deployment.threshold,
+      }),
+    };
+  }
+  if (account.accountContractType === "argent") {
+    if (!DEPLOYABLE_ARGENT_CLASSES.some((classHash) => sameFelt(account.classHash, classHash))) {
       throw new WalletError("Argent account class hash does not match the pinned release");
     }
-    constructorCalldata = argentAccountConstructorCalldata(account.publicKeyX);
-    addressSalts = [account.deploymentSalt];
-  } else {
-    constructorCalldata = CallData.compile([account.publicKeyX]);
-    addressSalts = ["0x0", account.publicKeyX];
+    return {
+      addressSalts: [account.deploymentSalt],
+      constructorCalldata: argentAccountConstructorCalldata(account.publicKeyX),
+    };
   }
+  if (account.accountContractType === "openzeppelin") {
+    return {
+      addressSalts: ["0x0", account.publicKeyX],
+      constructorCalldata: CallData.compile([account.publicKeyX]),
+    };
+  }
+  // Only the deployment class the current Braavos app pins addresses to: the
+  // signer carries the implementation out-of-band in the extended deploy
+  // signature, and that layout has only been established for this class. An
+  // older base-class counterfactual is refused rather than deployed with a
+  // signature its constructor may not accept.
+  if (sameFelt(account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH)) {
+    return {
+      addressSalts: [account.publicKeyX],
+      constructorCalldata: CallData.compile([account.publicKeyX]),
+    };
+  }
+  throw new WalletError(BRAAVOS_DEPLOYMENT_UNSUPPORTED);
+};
+
+/**
+ * Reconstructs pinned DEPLOY_ACCOUNT inputs only when they reproduce the stored address.
+ * Throws on invalid class/configuration or an address-commitment mismatch.
+ */
+export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
+  const { addressSalts, constructorCalldata } = deploymentInputs(account);
   for (const addressSalt of addressSalts) {
     const computed = hash.calculateContractAddressFromHash(
       addressSalt,
@@ -141,83 +189,6 @@ export const isAccountDeployed = async (
     }
     throw error;
   }
-};
-
-const requireCompatibleArgentSigner = async (
-  provider: RpcProvider,
-  account: Extract<DeployableAccount, { readonly accountContractType: "argent" }>,
-  blockIdentifier: string,
-): Promise<void> => {
-  const readSignerState = (entrypoint: "get_guardian" | "get_owner" | "get_owner_type") =>
-    provider.callContract(
-      { calldata: [], contractAddress: account.address, entrypoint },
-      blockIdentifier,
-    );
-  const [owner, ownerType] = await Promise.all([
-    readSignerState("get_owner"),
-    readSignerState("get_owner_type"),
-  ]);
-  const [ownerPublicKey] = owner;
-  if (
-    owner.length !== 1 ||
-    typeof ownerPublicKey !== "string" ||
-    !isNonZeroStarkFieldElement(ownerPublicKey) ||
-    !sameFelt(ownerPublicKey, account.publicKeyX)
-  ) {
-    throw new WalletError("Deployed Argent account owner does not match the wallet signer");
-  }
-  if (ownerType.length !== 1 || !sameFelt(ownerType[0], "0x0")) {
-    throw new WalletError("Deployed Argent account owner type is not supported by this wallet");
-  }
-
-  const guardian = await readSignerState("get_guardian");
-  if (guardian.length !== 1 || !sameFelt(guardian[0], "0x0")) {
-    throw new WalletError("Deployed Argent account guardian is not supported by this wallet");
-  }
-};
-
-/**
- * Verifies pinned Argent class and supported signer state at one accepted block.
- * Rejects malformed/incompatible state before signing or broadcast; OZ is existence-only.
- */
-export const isCompatibleAccountDeployed = async (
-  provider: RpcProvider,
-  account: DeployableAccount,
-): Promise<boolean> => {
-  let classHash: string;
-  let blockIdentifier = "latest";
-  if (account.accountContractType === "argent") {
-    const latest = await provider.getBlockLatestAccepted();
-    const blockHash = canonicalFelt(latest.block_hash);
-    if (blockHash === null || !isNonZeroStarkFieldElement(blockHash)) {
-      throw new WalletError("RPC returned an invalid accepted Starknet block hash");
-    }
-    blockIdentifier = blockHash;
-  }
-  try {
-    classHash = await provider.getClassHashAt(account.address, blockIdentifier);
-  } catch (error) {
-    if (isContractNotFoundError(error)) {
-      return false;
-    }
-    throw error;
-  }
-  if (account.accountContractType === "openzeppelin") {
-    return true;
-  }
-  if (sameFelt(classHash, "0x0")) {
-    return false;
-  }
-  if (!isNonZeroStarkFieldElement(classHash)) {
-    throw new WalletError("RPC returned an invalid Argent account class hash");
-  }
-  if (!sameFelt(classHash, account.classHash)) {
-    throw new WalletError("Deployed Argent account class does not match the pinned release");
-  }
-  if (account.accountContractType === "argent") {
-    await requireCompatibleArgentSigner(provider, account, blockIdentifier);
-  }
-  return true;
 };
 
 /**
@@ -316,18 +287,23 @@ export const ensureAccountDeployed = async (
   if (await isCompatibleAccountDeployed(provider, account)) {
     return null;
   }
+  // `expectedTransactionHash` names the first hash signed, which for Braavos
+  // would be the deploy signature's parameters hash, never the broadcast one.
+  refuseUndeployedBraavos(account, false);
   let submitted: DeploySubmission | null = null;
   try {
-    const validateArgent = account.accountContractType !== "openzeppelin";
-    const estimatingAccount = validateArgent
-      ? argentQueryAccount(provider, account, signerOptions(account))
-      : starknetAccount;
+    // Argent accepts a mock query signature; OpenZeppelin skips validation
+    // (see submitAccountDeployment). Braavos was refused above.
+    const estimatingAccount =
+      account.accountContractType === "openzeppelin"
+        ? starknetAccount
+        : argentQueryAccount(provider, account, signerOptions(account));
     submitted = await deployAccountContract(
       starknetAccount,
       account,
       reviewedFee,
       estimatingAccount,
-      !validateArgent,
+      account.accountContractType === "openzeppelin",
       isAuthorized,
       expectedTransactionHash,
     );
@@ -416,9 +392,9 @@ export const getDeploymentStatus = async (
 };
 
 /**
- * Estimates counterfactual deployment without private signing or broadcast.
- * Argent uses a shape-correct query signature with validation enabled; OZ
- * skips validation so a Ledger review never prompts the device.
+ * Estimates counterfactual deployment without broadcast. Argent validates on a
+ * mock query signature and OZ skips validation (no Ledger prompt); Braavos signs
+ * its query-version deploy for real with the account key, never submittable.
  */
 export const estimateAccountDeploymentFee = async (
   { account, rpcUrls, signHash }: DeployAccountInput,
@@ -432,10 +408,10 @@ export const estimateAccountDeploymentFee = async (
         await isCompatibleAccountDeployed(provider, account);
       }
       const deployment = accountDeployment(account);
-      const validateArgent = account.accountContractType !== "openzeppelin";
-      const estimatingAccount = validateArgent
-        ? argentQueryAccount(provider, account, signerOptions(account))
-        : makeAccount(provider, account, signHash, signerOptions(account));
+      const estimatingAccount =
+        account.accountContractType === "openzeppelin" || account.accountContractType === "braavos"
+          ? makeAccount(provider, account, signHash, signerOptions(account))
+          : argentQueryAccount(provider, account, signerOptions(account));
       const estimate = await estimatingAccount.estimateAccountDeployFee(
         {
           addressSalt: deployment.addressSalt,
@@ -443,7 +419,7 @@ export const estimateAccountDeploymentFee = async (
           constructorCalldata: [...deployment.constructorCalldata],
           contractAddress: deployment.contractAddress,
         },
-        { skipValidate: !validateArgent, tip: "0x0" },
+        { skipValidate: account.accountContractType === "openzeppelin", tip: "0x0" },
       );
       return reviewedSpendFor(estimate, "standard");
     },
@@ -481,15 +457,21 @@ export const submitAccountDeployment = async (
         authorizedSigner,
         signerOptions(account),
       );
-      const validateArgent = account.accountContractType !== "openzeppelin";
+      // Argent skips signature checks on query-version transactions, so a mock
+      // query signer estimates with validation on; Braavos validates the deploy
+      // signature in its constructor unconditionally, so its estimate must be
+      // signed for real — a query-version hash can never be submitted, so the
+      // pre-flight signature spends nothing. OpenZeppelin skips validation.
+      const estimating =
+        account.accountContractType === "openzeppelin" || account.accountContractType === "braavos"
+          ? starknetAccount
+          : argentQueryAccount(provider, account, signerOptions(account));
       const submitted = await deployAccountContract(
         starknetAccount,
         account,
         reviewedFee,
-        validateArgent
-          ? argentQueryAccount(provider, account, signerOptions(account))
-          : starknetAccount,
-        !validateArgent,
+        estimating,
+        account.accountContractType === "openzeppelin",
         isAuthorized,
         () => signedHash,
       );

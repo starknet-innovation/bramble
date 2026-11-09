@@ -6,8 +6,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { ec } from "starknet";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createSignatureWaiters } from "../../../apps/extension/src/background/approvals/signature-waiters";
@@ -22,6 +22,7 @@ import {
   executeDeclareApproval,
   handleDeclareOps,
 } from "../../../apps/extension/src/background/transactions/declare-ops";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const origin = "https://dapp.example";
 const passphrase = "correct horse battery staple";
@@ -105,7 +106,7 @@ const opsDeps = (
   }
   return {
     approvals: createApprovalQueue(),
-    extensionId: "extension-id",
+    extension: testExtension,
     preferencesStore: unavailablePreferencesStore,
     runtimeRpc: {} as RuntimeRpc,
     session,

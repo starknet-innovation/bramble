@@ -12,7 +12,7 @@
  * palette. `"system"` survives only as a legacy stored value and resolves to
  * the default dark skin.
  */
-import type { ThemeChoice } from "@mc-wallet/wallet-model/preferences";
+import type { ThemeChoice } from "@bramble/wallet-model/preferences";
 import { darkSkin } from "./dark-skin";
 import { defaultSkin } from "./default-skin";
 import type { Skin } from "./skin";

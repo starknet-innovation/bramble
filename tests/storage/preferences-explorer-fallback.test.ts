@@ -13,9 +13,9 @@ import {
   defaultWalletPreferences,
   isWalletPreferences,
   PREFERENCES_STORE_KEY,
-} from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { explorerFallbackAllowed, isExplorerFallback } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import { explorerFallbackAllowed, isExplorerFallback } from "@bramble/wallet-model/preferences";
 
 const MY_NODE = "https://my-node.example/rpc";
 const MY_EXPLORER = "https://explorer.example/v1";

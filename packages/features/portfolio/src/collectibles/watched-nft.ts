@@ -4,14 +4,14 @@
  * store and its validators share one definition. Ownership is proven over RPC
  * before an NFT is watched; this module only shapes and validates the data.
  */
-import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
-import { nftId } from "@mc-wallet/portfolio/nft-metadata";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@bramble/core/json";
+import { nftId } from "@bramble/portfolio/nft-metadata";
 
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 const MAX_TOKEN_ID_DIGITS = 78;
 

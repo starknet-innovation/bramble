@@ -11,10 +11,10 @@ import {
   isStringArray,
   type JsonBudget,
   normalizeFeltBigints,
-} from "@mc-wallet/core/json";
+} from "@bramble/core/json";
 
 test("isRecord accepts only plain JSON records", () => {
-  const inherited = Object.assign(Object.create({ target: "mc-wallet:content" }), {
+  const inherited = Object.assign(Object.create({ target: "bramble:content" }), {
     id: "123e4567-e89b-42d3-a456-426614174000",
     method: "mc_accounts",
   });
@@ -114,6 +114,23 @@ test("bounded normalization never executes accessors and rejects cycles", () => 
   expect(normalizeFeltBigints(accessor)).toBeUndefined();
   expect(normalizeFeltBigints(cyclic)).toBeUndefined();
   expect(getterCalls).toBe(0);
+});
+
+test("provider normalization omits undefined members the way JSON serialization does", () => {
+  // starknet.js sends `{ actions, simulate }` with `simulate` unset when the
+  // dapp omits the optional argument; the request must not fail as a whole.
+  const normalized = normalizeFeltBigints({
+    actions: [],
+    nested: { a: undefined, b: 1n },
+    simulate: undefined,
+  });
+
+  expect(normalized).toEqual({ actions: [], nested: { b: "0x1" } });
+  expect(Object.hasOwn(normalized as object, "simulate")).toBe(false);
+  // Array holes and undefined items have no JSON object-member equivalent.
+  expect(normalizeFeltBigints({ list: [undefined] })).toBeUndefined();
+  // The strict validator is unchanged.
+  expect(isJson({ simulate: undefined })).toBe(false);
 });
 
 test("bounded normalization preserves hostile property names without changing prototypes", () => {

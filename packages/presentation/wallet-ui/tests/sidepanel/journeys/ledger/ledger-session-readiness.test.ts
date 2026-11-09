@@ -5,8 +5,8 @@
  * account-key check and device signature operation.
  */
 import { describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { LedgerSignRequestSummary } from "../../../../src/popup/responses/responses";
 import { enumerateLedgerPubKeys } from "../../../../src/sidepanel/journeys/ledger/onboard-session";
 import {

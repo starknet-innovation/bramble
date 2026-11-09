@@ -4,9 +4,9 @@
  * re-query what their origin may see before telling any page.
  */
 
-import { isRecord } from "@mc-wallet/core/json";
-import { isStarknetNetworkId, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+import { isRecord } from "@bramble/core/json";
+import { isStarknetNetworkId, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { WalletEventMessage } from "@bramble/wallet-protocol/events";
 
 const accountsChanged: WalletEventMessage = { event: "accountsChanged", type: "wallet.event" };
 const approvalsChanged: WalletEventMessage = { event: "approvalsChanged", type: "wallet.event" };
@@ -41,6 +41,22 @@ const approveOriginBroadcast: BroadcastFactory = (response) =>
     ? [accountsChanged, approvalsChanged, networkChanged(response["chainId"])]
     : [accountsChanged, approvalsChanged];
 
+// A restored backup carries its own active network, applied as is, and the
+// import then re-selects the active account on it (Sherlock 188). The chain id
+// a page holds changes only on `networkChanged`, so both are announced.
+const importPreferencesBroadcast: BroadcastFactory = (response) => {
+  const preferences = isRecord(response["preferences"]) ? response["preferences"] : null;
+  return withNetwork(preferences ? networkChangedForId(preferences["activeNetworkId"]) : null);
+};
+
+// A backup restored while locked moves the network without any page hearing
+// it, because a locked wallet shows no addresses and the content script
+// forwards `networkChanged` only to an origin that can see one. Unlocking,
+// normally or through "Unlock anyway", announces the active network so a page
+// reconnects on the right chain (Sherlock 188).
+const unlockBroadcast: BroadcastFactory = (response) =>
+  withNetwork(networkChangedForId(response["networkId"]));
+
 const switchChainBroadcast: BroadcastFactory = (response) =>
   withNetwork(typeof response["chainId"] === "string" ? networkChanged(response["chainId"]) : null);
 
@@ -52,7 +68,10 @@ const switchChainBroadcast: BroadcastFactory = (response) =>
  * appear here: an origin only ever sees the active account, so changing it can
  * connect or disconnect a page, and a page told nothing keeps showing an
  * address the wallet will refuse to sign for. Adding, importing, or attaching
- * an account all select the new one, so they broadcast like a switch. The
+ * an account all select the new one, so they broadcast like a switch, and so
+ * does selecting an account on another network, which moves the active
+ * network with it (Sherlock 215). Restoring a preferences backup can move
+ * both. The
  * events carry no addresses, so a message with key material in it (raw-key
  * import) still puts nothing sensitive on the wire —
  * `tests/background/runtime/background-events.test.ts` enforces both properties.
@@ -62,15 +81,23 @@ const BROADCAST_FACTORIES: Readonly<Record<string, BroadcastFactory>> = {
   "wallet.addLedgerAccount": createAccountBroadcast,
   "wallet.approveOrigin": approveOriginBroadcast,
   "wallet.createAccount": createAccountBroadcast,
+  "wallet.createKeyVault": createAccountBroadcast,
   "wallet.createLedgerVault": createAccountBroadcast,
   "wallet.denyOrigin": () => [approvalsChanged],
   "wallet.importAccount": createAccountBroadcast,
+  "wallet.importOwnAccounts": createAccountBroadcast,
+  "wallet.importPreferences": importPreferencesBroadcast,
+  "wallet.importSeedAccounts": createAccountBroadcast,
   "wallet.lock": () => [accountsChanged],
+  "wallet.removeMultisig": () => [accountsChanged],
   "wallet.revokeOrigin": () => [accountsChanged],
-  "wallet.setActiveAccount": () => [accountsChanged],
+  "wallet.setAccountHidden": () => [accountsChanged],
+  "wallet.setActiveAccount": createAccountBroadcast,
   "wallet.setActiveNetwork": (response) => withNetwork(networkChangedForId(response["networkId"])),
+  "wallet.setSelectedMultisig": () => [accountsChanged],
   "wallet.switchChain": switchChainBroadcast,
-  "wallet.unlock": () => [accountsChanged],
+  "wallet.unlock": unlockBroadcast,
+  "wallet.unlockUnverified": unlockBroadcast,
 };
 
 /**
@@ -90,3 +117,15 @@ export const walletEventBroadcasts = (
   const factory = BROADCAST_FACTORIES[message["type"]];
   return factory ? factory(response) : [];
 };
+
+/**
+ * Whether a broadcast batch reports that the pending-approval queue changed.
+ *
+ * Approve and deny remove entries through the queue's `claim`, which does not
+ * run the enqueue notifier — their signal reaches surfaces through these
+ * broadcasts instead. Anything mirroring the queue's size, such as the toolbar
+ * badge, has to watch this path too or it keeps showing a count for approvals
+ * the user has already answered.
+ */
+export const announcesApprovalsChange = (events: readonly WalletEventMessage[]): boolean =>
+  events.some((event) => event.event === "approvalsChanged");

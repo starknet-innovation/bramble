@@ -9,16 +9,16 @@
  * extension-page senders; no dapp origin can reach the device or the vault.
  */
 
-import { knownTokensForNetwork } from "@mc-wallet/portfolio/token-registry";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
+  refuseExistingVault,
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
 } from "../runtime/active-network-mutation";
-import { networkRpcUrls, runActiveStateMutation } from "../runtime/runtime-state";
+import { runActiveStateMutation } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { ledgerStoreRefusal, readLedgerAccountState } from "./ledger-activity";
 import {
   readAddLedgerAccountInput,
   readCompleteLedgerSignInput,
@@ -29,27 +29,6 @@ import {
 
 type LedgerOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
-// Best-effort STRK balance for a candidate address, formatted as "<amount> STRK".
-// Reuses the shared token registry and the same balance RPC the home screen uses;
-// a null result degrades the picker to "balance unavailable" rather than blocking.
-const ledgerStrkBalance = async (
-  deps: WalletOpsDeps,
-  address: string,
-  networkId: StarknetNetworkId,
-  rpcUrls: readonly string[],
-): Promise<string | null> => {
-  const strk = knownTokensForNetwork(networkId).find((token) => token.symbol === "STRK");
-  if (!strk) {
-    return null;
-  }
-  const [balance] = await deps.runtimeRpc.getTokenBalances({
-    accountAddress: address,
-    rpcUrls,
-    tokens: [strk],
-  });
-  return balance ? `${balance.formatted} ${balance.symbol}` : null;
-};
-
 const handleCreateLedgerVault: LedgerOpsHandler = async (deps, message) => {
   const input = readCreateLedgerVaultInput(message);
   if (!input) {
@@ -59,10 +38,16 @@ const handleCreateLedgerVault: LedgerOpsHandler = async (deps, message) => {
   if (!createLedgerVault) {
     return { error: "wallet unavailable" };
   }
+  const refusal = await ledgerStoreRefusal(deps, input);
+  if (refusal) {
+    return refusal;
+  }
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
+    await refuseExistingVault(deps.session, deps.wallet, input.vaultPassphrase);
     const account = await runVaultCreationWithNetwork(
       deps.session,
       deps.preferencesStore,
+      deps.wallet,
       input.networkId,
       () => createLedgerVault(input),
     );
@@ -76,15 +61,8 @@ const handleLedgerAccountStatus: LedgerOpsHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid ledger account status request" };
   }
-  const preferences = await deps.preferencesStore.read();
-  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
-  const [deployed, balance] = await Promise.all([
-    deps.runtimeRpc
-      .getDeploymentStatus({ accountAddress: input.address, rpcUrls })
-      .catch(() => null),
-    ledgerStrkBalance(deps, input.address, input.networkId, rpcUrls).catch(() => null),
-  ]);
-  return { balance, deployed, ok: true };
+  const state = await readLedgerAccountState(deps, input.address, input.networkId);
+  return { ...state, ok: true };
 };
 
 const handleAddLedgerAccount: LedgerOpsHandler = async (deps, message) => {
@@ -95,6 +73,12 @@ const handleAddLedgerAccount: LedgerOpsHandler = async (deps, message) => {
   const addLedgerAccount = deps.wallet.addLedgerAccount;
   if (!addLedgerAccount) {
     return { error: "wallet unavailable" };
+  }
+  // Bramble never creates a Braavos account: a Braavos Ledger row the picker
+  // should have disabled is refused here too, before anything is stored.
+  const refusal = await ledgerStoreRefusal(deps, input);
+  if (refusal) {
+    return refusal;
   }
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
     const account = await runUnlockedNetworkMutation(

@@ -1,5 +1,7 @@
 /** Full-scene transition metadata remains owned by the newest navigation. */
 import { describe, expect, test } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { createSceneRenderer } from "../../../../src/sidepanel/app/rendering/scene-renderer";
 import { transitionScene } from "../../../../src/sidepanel/app/rendering/scene-transition";
 
 const deferred = (): { readonly promise: Promise<void>; readonly resolve: () => void } => {
@@ -40,4 +42,32 @@ describe("transitionScene", () => {
     await Promise.resolve();
     expect(dataset["navDirection"]).toBeUndefined();
   });
+});
+
+test("a delayed navigation paint cannot overwrite freshly loaded activity", async () => {
+  GlobalRegistrator.register();
+  try {
+    const callbacks: Array<() => void> = [];
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: (callback: () => void) => {
+        callbacks.push(callback);
+        return { finished: Promise.resolve() };
+      },
+    });
+    const mount = document.createElement("main");
+    document.body.append(mount);
+    let bindings = 0;
+    const render = createSceneRenderer(mount, () => {
+      bindings += 1;
+    });
+    render("<p>No activity yet</p>", true, "forward");
+    render("<p>History unavailable</p>", false, "forward");
+    expect(mount.querySelector("p")?.textContent).toBe("History unavailable");
+    callbacks[0]?.();
+    expect(mount.querySelector("p")?.textContent).toBe("History unavailable");
+    expect(bindings).toBe(1);
+  } finally {
+    await GlobalRegistrator.unregister();
+  }
 });

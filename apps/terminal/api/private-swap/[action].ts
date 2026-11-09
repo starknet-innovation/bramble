@@ -26,6 +26,14 @@ import {
   serviceUrl,
 } from "../_lib/security.js";
 
+import {
+  checkPinnedExecutorClass,
+  PRIVATE_SWAP_EXECUTOR,
+  PRIVATE_SWAP_EXECUTOR_CLASS_HASH,
+  PRIVATE_SWAP_SLIPPAGE_BPS,
+} from "../../shared/privacy.js";
+import { readMainnetClassHash } from "../_lib/starknet-class.js";
+
 export const config = { maxDuration: 120 };
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const TIPS = new Set(["fast", "normal", "slow"]);
@@ -37,8 +45,8 @@ const feeModeFrom = (value: unknown): PrivateFeeMode | null => {
     !hasOnlyKeys(value, ["poolFeeToken", "tip"]) ||
     !isNonZeroFelt(value["poolFeeToken"]) ||
     BigInt(value["poolFeeToken"]) !== BigInt(PRIVATE_SWAP_FEE_TOKEN) ||
-    (value["tip"] !== undefined || Object.hasOwn(value, "tip")) &&
-      (typeof value["tip"] !== "string" || !TIPS.has(value["tip"]))
+    ((value["tip"] !== undefined || Object.hasOwn(value, "tip")) &&
+      (typeof value["tip"] !== "string" || !TIPS.has(value["tip"])))
   ) {
     return null;
   }
@@ -90,9 +98,7 @@ const options = (): {
   readonly paymasterBaseUrl: string;
 } | null => {
   const paymasterBaseUrl = serviceUrl("STRK20_PAYMASTER_UPSTREAM", AVNU_PAYMASTER_URL);
-  return paymasterBaseUrl
-    ? { abortSignal: AbortSignal.timeout(110_000), paymasterBaseUrl }
-    : null;
+  return paymasterBaseUrl ? { abortSignal: AbortSignal.timeout(110_000), paymasterBaseUrl } : null;
 };
 
 const sameFelt = (left: string, right: string): boolean => {
@@ -186,11 +192,36 @@ export default async function handler(
   if (action !== "fee" && action !== "plan" && action !== "submit") {
     return reject(response, 404, "route_not_allowed");
   }
+  // Private swaps stay off until an executor is reviewed, and every action
+  // spends the operator's paymaster credential, so all three are refused while
+  // it is off, not only `plan` (Sherlock 195). The origin check above is a
+  // browser control that any HTTP client can satisfy.
+  if (PRIVATE_SWAP_EXECUTOR === null) {
+    return reject(response, 503, "private_swap_executor_not_verified");
+  }
   const body = readJsonBody<Record<string, unknown>>(request, MAX_BODY_BYTES);
   const feeMode = body ? feeModeFrom(body["feeMode"]) : null;
   const avnuOptions = options();
   if (!body || !feeMode || !avnuOptions) {
     return reject(response, 400, "invalid_private_swap_request");
+  }
+  // The pinned executor must still run the pinned class before a route is
+  // planned and again before a proof is relayed (#269). A failed read refuses.
+  if (action !== "fee") {
+    const executorClass = await checkPinnedExecutorClass(
+      readMainnetClassHash,
+      PRIVATE_SWAP_EXECUTOR,
+      PRIVATE_SWAP_EXECUTOR_CLASS_HASH,
+    );
+    if (executorClass !== "ok") {
+      return reject(
+        response,
+        503,
+        executorClass === "class_mismatch"
+          ? "private_swap_executor_class_mismatch"
+          : "private_swap_executor_class_unavailable",
+      );
+    }
   }
   const paymasterApiKey = process.env.AVNU_PAYMASTER_API_KEY;
   try {
@@ -260,7 +291,7 @@ export default async function handler(
         return reject(response, 502, "invalid_private_swap_plan");
       }
       const built = await quoteToCalls(
-        { private: true, quoteId: quote.quoteId, slippage: 0.005 },
+        { private: true, quoteId: quote.quoteId, slippage: PRIVATE_SWAP_SLIPPAGE_BPS / 10_000 },
         { abortSignal: AbortSignal.timeout(25_000) },
       );
       const executorCalls = executorCallsFrom(built.calls);
@@ -269,6 +300,8 @@ export default async function handler(
         !/^[\x21-\x7e]{1,128}$/.test(quote.quoteId) ||
         !built.executorAddress ||
         !isNonZeroFelt(built.executorAddress) ||
+        PRIVATE_SWAP_EXECUTOR === null ||
+        !sameFelt(built.executorAddress, PRIVATE_SWAP_EXECUTOR) ||
         !executorCalls ||
         !isMainnetChain(built.chainId)
       ) {

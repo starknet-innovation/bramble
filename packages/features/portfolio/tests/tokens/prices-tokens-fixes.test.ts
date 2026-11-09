@@ -4,13 +4,9 @@
  * stay bounded and only retain a short retry marker for an empty series (A-L10).
  */
 import { describe, expect, test } from "bun:test";
-import {
-  CHARTS_STORE_KEY,
-  createPriceService,
-  type HttpResponse,
-} from "@mc-wallet/portfolio/prices";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { CHARTS_STORE_KEY, createPriceService, type HttpResponse } from "@bramble/portfolio/prices";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 const UNPRICED = "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

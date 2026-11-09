@@ -4,29 +4,44 @@
  * sign, submit, or touch browser state.
  */
 import { type Call, CallData, cairo } from "starknet";
-import { VESU_ADDRESSES } from "../constants";
+import { VESU_ADDRESSES, VESU_VAULT_DEPOSITS_ENABLED } from "../constants";
 import { CAIRO_U256_MAX } from "../support/cairo-integers";
 import { WalletError } from "../support/errors";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
+  sameAddress,
 } from "../support/networks";
 import { buildErc20ApproveCall } from "../support/rpc-assets";
+import { curatedVesuVault, VESU_VAULT_NOT_CURATED } from "./vesu-vaults";
 
 const assertAddress = (value: string, label: string): void => {
   if (!isNonZeroStarkFieldElement(value)) throw new WalletError(`Invalid ${label}`);
 };
 
-/** Builds an ERC-4626 vault deposit and immediately revokes its allowance. */
+/** Refusal while vault deposits are paused (see `VESU_VAULT_DEPOSITS_ENABLED`). */
+export const VESU_VAULT_DEPOSITS_PAUSED =
+  "Vesu vault deposits are paused until vault addresses can be verified on chain";
+
+/**
+ * Builds an ERC-4626 vault deposit and immediately revokes its allowance.
+ * Refuses while `VESU_VAULT_DEPOSITS_ENABLED` is off (Sherlock 169), and for a
+ * vault or asset outside `VESU_CURATED_VAULTS` (#270).
+ */
 export const buildVesuVaultDepositCalls = (
   vaultAddress: string,
   assetAddress: string,
   amountRaw: bigint,
   receiver: string,
+  depositsEnabled: boolean = VESU_VAULT_DEPOSITS_ENABLED,
 ): readonly Call[] => {
+  if (!depositsEnabled) throw new WalletError(VESU_VAULT_DEPOSITS_PAUSED);
   assertAddress(vaultAddress, "Vesu vault");
   assertAddress(assetAddress, "Vesu vault asset");
   assertAddress(receiver, "Vesu vault receiver");
+  if (!sameAddress(curatedVesuVault(vaultAddress).assetAddress, assetAddress)) {
+    throw new WalletError(VESU_VAULT_NOT_CURATED);
+  }
   if (amountRaw <= 0n || amountRaw > CAIRO_U256_MAX) {
     throw new WalletError("Vesu vault amount must be a positive u256");
   }
@@ -41,13 +56,17 @@ export const buildVesuVaultDepositCalls = (
   ];
 };
 
-/** Starts an asynchronous vault redemption for an exact share amount. */
+/**
+ * Starts an asynchronous vault redemption for an exact share amount. Refuses a
+ * vault outside `VESU_CURATED_VAULTS` (#270).
+ */
 export const buildVesuVaultRedeemCalls = (
   vaultAddress: string,
   sharesRaw: bigint,
   accountAddress: string,
 ): readonly Call[] => {
   assertAddress(vaultAddress, "Vesu vault");
+  curatedVesuVault(vaultAddress);
   assertAddress(accountAddress, "Vesu vault owner");
   if (sharesRaw <= 0n || sharesRaw > CAIRO_U256_MAX) {
     throw new WalletError("Vesu redeem shares must be a positive u256");
@@ -65,12 +84,16 @@ export const buildVesuVaultRedeemCalls = (
   ];
 };
 
-/** Claims a completed asynchronous vault redemption by request id. */
+/**
+ * Claims a completed asynchronous vault redemption by request id. Refuses a
+ * vault outside `VESU_CURATED_VAULTS` (#270).
+ */
 export const buildVesuVaultClaimCalls = (
   vaultAddress: string,
   redemptionId: bigint,
 ): readonly Call[] => {
   assertAddress(vaultAddress, "Vesu vault");
+  curatedVesuVault(vaultAddress);
   if (redemptionId < 0n || redemptionId > CAIRO_U256_MAX) {
     throw new WalletError("Invalid Vesu redemption id");
   }

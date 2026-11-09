@@ -2,9 +2,10 @@
  * Bindings for personalization journeys: account labels, contact removal,
  * appearance (theme and currency), and non-secret backup export/restore.
  */
+import { exportablePreferences } from "@bramble/settings/preferences-backup";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { buildInfo } from "../../shell/build-info";
 import { bindGroupControls } from "./group-ui";
 
@@ -12,15 +13,14 @@ import { bindGroupControls } from "./group-ui";
  * Dependencies the settings bindings close over.
  */
 export type SettingsUiDeps = {
-  readonly activeAccountId: () => string | null;
   readonly app: Element | null;
+  /** Ids of accounts already in the vault; phrase-import scan rows matching them lock. */
+  readonly existingAccountIds?: () => ReadonlySet<string>;
   readonly expandedGroup: () => string | null;
   readonly networkId: () => string;
-  readonly openAssign: () => string | null;
   readonly refresh: () => Promise<WalletStatus>;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly setExpandedGroup: (id: string | null) => void;
-  readonly setOpenAssign: (id: string | null) => void;
   readonly startAddAccount: () => void;
   readonly wallet: SidepanelWallet;
 };
@@ -30,34 +30,92 @@ const rerender = async (deps: SettingsUiDeps): Promise<void> => {
 };
 
 /**
- * Binds the account label form on the account flow.
+ * Binds every account-name form in the account flow's "Account names" section.
+ * Each form carries the account it renames (`data-account-name-form`), so the
+ * write targets the row the user submitted rather than whichever account is
+ * active — the screen lists them all. An empty name clears the stored label and
+ * the account falls back to its generated name.
  */
 export const bindAccountLabel = (deps: SettingsUiDeps): void => {
-  const form = deps.app?.querySelector<HTMLFormElement>("#label-form");
   const result = deps.app?.querySelector<HTMLElement>("#label-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
 
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const accountId = deps.activeAccountId();
-    if (!accountId) {
-      return;
-    }
-    const label = String(new FormData(form).get("label") ?? "").trim();
-    buttonBusy(submitButton, true);
-    void deps.wallet.setAccountLabel(accountId, label).then(
-      async () => {
-        showToast(label ? "Label saved" : "Label cleared", "success", form);
-        await rerender(deps);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Label update failed"), "error", form);
-        if (result) {
-          result.textContent = errorMessage(error, "Label update failed");
-        }
-        buttonBusy(submitButton, false);
-      },
-    );
+  deps.app?.querySelectorAll<HTMLFormElement>("[data-account-name-form]").forEach((form) => {
+    const accountId = form.dataset["accountNameForm"];
+    const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!accountId) {
+        return;
+      }
+      const label = String(new FormData(form).get("label") ?? "").trim();
+      buttonBusy(submitButton, true);
+      void deps.wallet.setAccountLabel(accountId, label).then(
+        async () => {
+          showToast(label ? "Name saved" : "Name cleared", "success", form);
+          await rerender(deps);
+        },
+        (error: unknown) => {
+          showToast(errorDetails(error, "Name update failed"), "error", form);
+          if (result) {
+            result.textContent = errorLine(error, "Name update failed");
+          }
+          buttonBusy(submitButton, false);
+        },
+      );
+    });
+  });
+};
+
+/**
+ * Binds the account hide and show controls. Each row carries its own account id,
+ * so the write targets the row the user pressed rather than the active account.
+ * The background refuses hiding the last account a network still shows; that
+ * refusal lands in the section's status line.
+ */
+const writeAccountVisibility = (
+  deps: SettingsUiDeps,
+  accountId: string,
+  hidden: boolean,
+  control: HTMLButtonElement,
+): void => {
+  buttonBusy(control, true);
+  void deps.wallet.setAccountHidden(accountId, hidden).then(
+    async () => {
+      showToast(hidden ? "Account hidden" : "Account shown", "success", control);
+      await rerender(deps);
+    },
+    (error: unknown) => {
+      showToast(errorDetails(error, "Account update failed"), "error", control);
+      const result = deps.app?.querySelector<HTMLElement>("#account-visibility-result");
+      if (result) {
+        result.textContent = errorLine(error, "Account update failed");
+      }
+      buttonBusy(control, false);
+    },
+  );
+};
+
+/**
+ * Binds the per-row "Hide" controls and the "Show" controls in the manage
+ * screen's "Hidden accounts" section.
+ */
+export const bindAccountVisibility = (deps: SettingsUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-hide-account]").forEach((control) => {
+    const accountId = control.dataset["hideAccount"];
+    control.addEventListener("click", () => {
+      if (accountId) {
+        writeAccountVisibility(deps, accountId, true, control);
+      }
+    });
+  });
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-reveal-account]").forEach((control) => {
+    const accountId = control.dataset["revealAccount"];
+    control.addEventListener("click", () => {
+      if (accountId) {
+        writeAccountVisibility(deps, accountId, false, control);
+      }
+    });
   });
 };
 
@@ -73,17 +131,14 @@ export const bindAddAccount = (deps: SettingsUiDeps): void => {
 };
 
 /**
- * Binds the account-groups controls wherever they appear in the panel — the
- * manage-accounts "Groups" section, the per-account assignment panels, and the
- * left drawer's assignment panels — so both entry points share one wiring.
+ * Binds the account-groups controls wherever they appear in the panel — today
+ * the manage-accounts "Groups" section — through one wiring.
  */
 export const bindGroups = (deps: SettingsUiDeps): void => {
   bindGroupControls(deps.app, {
     expandedGroup: deps.expandedGroup,
-    openAssign: deps.openAssign,
     rerender: () => rerender(deps),
     setExpandedGroup: deps.setExpandedGroup,
-    setOpenAssign: deps.setOpenAssign,
     wallet: deps.wallet,
   });
 };
@@ -105,7 +160,7 @@ export const bindContacts = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Contact removal failed"), "error", button);
+          showToast(errorDetails(error, "Contact removal failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -141,7 +196,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Wallet request preference failed"), "error", button);
+          showToast(errorDetails(error, "Wallet request preference failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -164,7 +219,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Theme update failed"), "error", button);
+          showToast(errorDetails(error, "Theme update failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -184,16 +239,69 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Currency update failed"), "error", currencySelect);
+        showToast(errorDetails(error, "Currency update failed"), "error", currencySelect);
         if (result) {
-          result.textContent = errorMessage(error, "Currency update failed");
+          result.textContent = errorLine(error, "Currency update failed");
         }
         currencySelect.disabled = false;
       },
     );
   });
 
+  const vipToggle = deps.app?.querySelector<HTMLInputElement>("#vip-notice-toggle");
+  vipToggle?.addEventListener("change", () => {
+    vipToggle.disabled = true;
+    void deps.wallet.setDisplay({ vipNotice: vipToggle.checked }).then(
+      async () => {
+        showToast(vipToggle.checked ? "VIP notice on" : "VIP notice off", "success", vipToggle);
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        vipToggle.checked = !vipToggle.checked;
+        showToast(errorDetails(error, "VIP preference failed"), "error", vipToggle);
+        vipToggle.disabled = false;
+      },
+    );
+  });
+
+  const nftsToggle = deps.app?.querySelector<HTMLInputElement>("#nfts-on-home");
+  nftsToggle?.addEventListener("change", () => {
+    nftsToggle.disabled = true;
+    // The literal state is written, so turning NFTs off is remembered as off.
+    void deps.wallet.setDisplay({ collectiblesPreview: nftsToggle.checked }).then(
+      async () => {
+        showToast(nftsToggle.checked ? "NFTs on Home" : "NFTs off", "success", nftsToggle);
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        nftsToggle.checked = !nftsToggle.checked;
+        showToast(errorDetails(error, "NFT preference failed"), "error", nftsToggle);
+        nftsToggle.disabled = false;
+      },
+    );
+  });
+
   const diagnosticsToggle = deps.app?.querySelector<HTMLInputElement>("#reliability-diagnostics");
+  const analyticsToggle = deps.app?.querySelector<HTMLInputElement>("#product-analytics");
+  analyticsToggle?.addEventListener("change", () => {
+    analyticsToggle.disabled = true;
+    void deps.wallet.setDisplay({ productAnalytics: analyticsToggle.checked }).then(
+      async () => {
+        showToast(
+          analyticsToggle.checked ? "Product analytics enabled" : "Product analytics disabled",
+          "success",
+          analyticsToggle,
+        );
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        analyticsToggle.checked = !analyticsToggle.checked;
+        showToast(errorDetails(error, "Analytics preference failed"), "error", analyticsToggle);
+        analyticsToggle.disabled = false;
+      },
+    );
+  });
+
   diagnosticsToggle?.addEventListener("change", () => {
     diagnosticsToggle.disabled = true;
     void deps.wallet.setDisplay({ reliabilityDiagnostics: diagnosticsToggle.checked }).then(
@@ -207,7 +315,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       },
       (error: unknown) => {
         diagnosticsToggle.checked = !diagnosticsToggle.checked;
-        showToast(errorMessage(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
+        showToast(errorDetails(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
         diagnosticsToggle.disabled = false;
       },
     );
@@ -224,14 +332,14 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         const url = URL.createObjectURL(blob);
         const anchor = diagnosticsExport.ownerDocument.createElement("a");
         anchor.href = url;
-        anchor.download = "mc-wallet-diagnostics.json";
+        anchor.download = "bramble-diagnostics.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         showToast("Diagnostics downloaded", "success", diagnosticsExport);
         buttonBusy(diagnosticsExport, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Diagnostic export failed"), "error", diagnosticsExport);
+        showToast(errorDetails(error, "Diagnostic export failed"), "error", diagnosticsExport);
         buttonBusy(diagnosticsExport, false);
       },
     );
@@ -251,20 +359,22 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
     buttonBusy(exportButton, true);
     void deps.wallet.loadPreferences().then(
       (preferences) => {
-        const blob = new Blob([JSON.stringify(preferences, null, 2)], {
+        // Only what a restore reapplies: the contact graph and endpoints stay
+        // in the wallet (Sherlock 213).
+        const blob = new Blob([JSON.stringify(exportablePreferences(preferences), null, 2)], {
           type: "application/json",
         });
         const url = URL.createObjectURL(blob);
         const anchor = exportButton.ownerDocument.createElement("a");
         anchor.href = url;
-        anchor.download = "mc-wallet-backup.json";
+        anchor.download = "bramble-backup.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
         showToast("Backup downloaded", "success", exportButton);
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Backup export failed"), "error", exportButton);
+        showToast(errorDetails(error, "Backup export failed"), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );
@@ -286,9 +396,9 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Backup restore failed"), "error", importButton);
+          showToast(errorDetails(error, "Backup restore failed"), "error", importButton);
           if (result) {
-            result.textContent = errorMessage(error, "Backup restore failed");
+            result.textContent = errorLine(error, "Backup restore failed");
           }
           buttonBusy(importButton, false);
         },

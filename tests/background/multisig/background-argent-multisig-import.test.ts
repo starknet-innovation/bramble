@@ -2,7 +2,7 @@
  * Cross-wallet intent import and destructive-removal guards.
  */
 import { describe, expect, test } from "bun:test";
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import {
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,
@@ -98,6 +98,50 @@ describe("Argent multisig intent import", () => {
     ).resolves.toMatchObject({ ok: true });
   });
 
+  test("clears the presented multisig when that account is removed", async () => {
+    const harness = await makeMultisigHarness({ deploymentStatus: true });
+    await harness.preferencesStore.setSelectedMultisig({ multisigId: HARNESS_MULTISIG_ID });
+    await expect(
+      harness.handler(
+        { multisigId: HARNESS_MULTISIG_ID, type: "wallet.removeMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ ok: true });
+    expect((await harness.preferencesStore.read()).selectedMultisigId).toBeUndefined();
+  });
+
+  test("keeps another presented account when a different multisig is removed", async () => {
+    const harness = await makeMultisigHarness({ deploymentStatus: true });
+    await harness.preferencesStore.setSelectedMultisig({ multisigId: harnessAccountA.id });
+    await expect(
+      harness.handler(
+        { multisigId: HARNESS_MULTISIG_ID, type: "wallet.removeMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ ok: true });
+    expect((await harness.preferencesStore.read()).selectedMultisigId).toBe(harnessAccountA.id);
+  });
+
+  test("does not clear the presented multisig when removal is refused", async () => {
+    const harness = await makeMultisigHarness();
+    await harness.preferencesStore.setSelectedMultisig({ multisigId: HARNESS_MULTISIG_ID });
+    await harness.handler(
+      {
+        calls: [{ calldata: [], contractAddress: HARNESS_TARGET, entrypoint: "transfer" }],
+        multisigId: HARNESS_MULTISIG_ID,
+        type: "wallet.prepareArgentMultisigIntent",
+      },
+      harnessExtensionSender,
+    );
+    await expect(
+      harness.handler(
+        { multisigId: HARNESS_MULTISIG_ID, type: "wallet.removeMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ error: "Argent multisig has a pending or unresolved operation" });
+    expect((await harness.preferencesStore.read()).selectedMultisigId).toBe(HARNESS_MULTISIG_ID);
+  });
+
   test("cannot remove an account with a collecting intent", async () => {
     const harness = await makeMultisigHarness();
     await harness.handler(
@@ -147,7 +191,7 @@ describe("Argent multisig intent import", () => {
         state: "accepted",
         summary: "Harmless unsigned note",
       },
-      kind: "mc-wallet.argent-multisig-intent",
+      kind: "bramble.argent-multisig-intent",
       version: 1,
     };
     const target = await makeMultisigHarness();
@@ -197,7 +241,7 @@ describe("Argent multisig intent import", () => {
         ),
       );
     }
-    const readyPackage = { intent: signed, kind: "mc-wallet.argent-multisig-intent", version: 1 };
+    const readyPackage = { intent: signed, kind: "bramble.argent-multisig-intent", version: 1 };
     const completed = await target.handler(
       { package: readyPackage, type: "wallet.importArgentMultisigIntent" },
       harnessExtensionSender,

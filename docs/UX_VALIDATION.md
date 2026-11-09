@@ -6,12 +6,12 @@ permalink: /ux-validation/
 
 # Observed UX validation
 
-Use this protocol with reviewers who do not work on MC Wallet. The UI Lab contains synthetic
+Use this protocol with reviewers who do not work on Bramble. The UI Lab contains synthetic
 fixtures only; never enter a real recovery phrase, private key, address, or transaction payload.
 Serve the extracted static build over HTTP rather than opening `index.html` directly:
 
 ```sh
-python3 -m http.server 8080 --directory mc-wallet-ui-lab/storybook-static
+python3 -m http.server 8080 --directory bramble-ui-lab/storybook-static
 ```
 
 Open `http://localhost:8080`, choose **Wallet journeys**, and keep the event log visible. The

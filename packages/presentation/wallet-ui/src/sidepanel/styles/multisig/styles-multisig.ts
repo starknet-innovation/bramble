@@ -1,5 +1,5 @@
 /** Argent multisig portfolio styles. */
-import { EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Stylesheet fragment for current Argent multisig surfaces.
@@ -18,20 +18,11 @@ export const MULTISIG_STYLES = `
   .flow-header:has(+ [id^="wallet-screen-multisig-"]) > .pill {
     grid-column: 2;
   }
-  .flow-header:has(+ [id^="wallet-screen-multisig-"]) > .pill { justify-self: start; }
-  .flow-header:has(+ [id^="wallet-screen-multisig-"]) .flow-title h1,
-  .flow-header:has(+ [id^="wallet-screen-multisig-"]) .flow-title p {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
+  .flow-header:has(+ [id^="wallet-screen-multisig-"]) > .pill { justify-self: start; margin-left: 0; }
+  /* Titles and setup choices wrap rather than truncate: at the default side
+     panel width "Create a multisig account" does not fit one line, and a cut
+     title hides what the screen or choice is. */
   .multisig-setup-options { display: grid; gap: ${SPACE.md}; }
-  .multisig-setup-option .add-account-option-copy strong,
-  .multisig-setup-option .add-account-option-copy span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
   .multisig-deploy-section,
   #multisig-deploy-form,
   #multisig-deploy-form > label,
@@ -47,7 +38,7 @@ export const MULTISIG_STYLES = `
   }
   .multisig-deploy-progress li {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: grid;
     font-size: ${TYPE.micro.size};
     gap: 4px;
@@ -56,7 +47,7 @@ export const MULTISIG_STYLES = `
     text-align: center;
   }
   .multisig-deploy-progress li::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     left: calc(-50% + 12px);
@@ -67,7 +58,7 @@ export const MULTISIG_STYLES = `
   .multisig-deploy-progress li:first-child::before { display: none; }
   .multisig-deploy-progress li > span {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
     display: flex;
     font-variant-numeric: tabular-nums;
@@ -76,14 +67,14 @@ export const MULTISIG_STYLES = `
     position: relative;
     width: 22px;
   }
-  .multisig-deploy-progress li[data-state="active"] { color: var(--mc-text); }
+  .multisig-deploy-progress li[data-state="active"] { color: var(--bramble-text); }
   .multisig-deploy-progress li[data-state="active"] > span {
-    background: var(--mc-accent);
-    color: var(--mc-accent-text);
+    background: var(--bramble-accent);
+    color: var(--bramble-accent-text);
   }
   .multisig-deploy-progress li[data-state="complete"] > span {
-    background: var(--mc-positive-soft);
-    color: var(--mc-positive);
+    background: var(--bramble-positive-soft);
+    color: var(--bramble-positive);
   }
   .multisig-deploy-advanced .disclosure-body { display: grid; gap: ${SPACE.md}; }
   .multisig-deploy-stage-frame {
@@ -97,7 +88,8 @@ export const MULTISIG_STYLES = `
   .multisig-deploy-step-pane { display: grid; gap: ${SPACE.md}; min-width: 0; }
   #multisig-deploy-form[data-deployment-stage="participants"] .multisig-deploy-approval-step,
   #multisig-deploy-form[data-deployment-stage="approval"] .multisig-deploy-signers-step,
-  #multisig-deploy-form:not([data-deployment-stage="participants"]):not([data-deployment-stage="approval"]) .multisig-deploy-stage-frame > .multisig-deploy-setup {
+  #multisig-deploy-form[data-deployment-stage="deploy"] .multisig-deploy-signers-step,
+  #multisig-deploy-form:not([data-deployment-stage="participants"]):not([data-deployment-stage="approval"]):not([data-deployment-stage="deploy"]) .multisig-deploy-stage-frame > .multisig-deploy-setup {
     display: none;
   }
   .multisig-deploy-actions {
@@ -121,10 +113,10 @@ export const MULTISIG_STYLES = `
     animation-duration: ${MOTION.enterMs}ms;
     animation-timing-function: ${EASE.out};
   }
-  html[data-multisig-deploy-transition="forward"]::view-transition-old(multisig-deploy-stage) { animation: mc-vt-out-left ${MOTION.pressMs}ms ${EASE.out} both; }
-  html[data-multisig-deploy-transition="forward"]::view-transition-new(multisig-deploy-stage) { animation: mc-vt-in-right ${MOTION.enterMs}ms ${EASE.out} both; }
-  html[data-multisig-deploy-transition="back"]::view-transition-old(multisig-deploy-stage) { animation: mc-vt-out-right ${MOTION.pressMs}ms ${EASE.out} both; }
-  html[data-multisig-deploy-transition="back"]::view-transition-new(multisig-deploy-stage) { animation: mc-vt-in-left ${MOTION.enterMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="forward"]::view-transition-old(multisig-deploy-stage) { animation: bramble-vt-out-left ${MOTION.pressMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="forward"]::view-transition-new(multisig-deploy-stage) { animation: bramble-vt-in-right ${MOTION.enterMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="back"]::view-transition-old(multisig-deploy-stage) { animation: bramble-vt-out-right ${MOTION.pressMs}ms ${EASE.out} both; }
+  html[data-multisig-deploy-transition="back"]::view-transition-new(multisig-deploy-stage) { animation: bramble-vt-in-left ${MOTION.enterMs}ms ${EASE.out} both; }
   #multisig-deploy-review > *,
   #multisig-deploy-form button { max-width: 100%; }
   .multisig-deployment-target {
@@ -133,7 +125,7 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.sm};
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
-  .multisig-deployment-target > span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .multisig-deployment-target > span { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
   .multisig-deployment-target code {
     min-width: 0;
     overflow: hidden;
@@ -149,10 +141,10 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.md};
     justify-content: space-between;
   }
-  .multisig-funding-head h2 { margin: 2px 0 0; }
+  .multisig-funding-head h2 { margin: ${SPACE.xxs} 0 0; }
   .multisig-funding-token {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
     display: flex;
     font-size: ${TYPE.micro.size};
@@ -178,9 +170,9 @@ export const MULTISIG_STYLES = `
   .multisig-deployment-success { display: grid; gap: ${SPACE.lg}; justify-items: center; text-align: center; }
   .multisig-deployment-success-mark {
     align-items: center;
-    background: var(--mc-positive-soft);
+    background: var(--bramble-positive-soft);
     border-radius: ${RADIUS.full};
-    color: var(--mc-positive);
+    color: var(--bramble-positive);
     display: flex;
     height: 56px;
     justify-content: center;
@@ -190,9 +182,9 @@ export const MULTISIG_STYLES = `
   .multisig-deployment-success-actions { display: grid; gap: ${SPACE.sm}; width: 100%; }
   .multisig-deployment-success-actions > a {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     justify-content: center;
     min-height: ${SIZE.control};
@@ -202,7 +194,7 @@ export const MULTISIG_STYLES = `
     .multisig-deployment-success { gap: ${SPACE.sm}; }
   }
   .multisig-signer-set {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     min-width: 0;
     overflow: hidden;
@@ -225,23 +217,19 @@ export const MULTISIG_STYLES = `
     position: relative;
   }
   .multisig-selected-signer:not([hidden]) ~ .multisig-selected-signer:not([hidden])::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto ${SPACE.lg};
     position: absolute;
   }
-  .multisig-selected-signer .option-copy strong,
-  .multisig-selected-signer .option-sub {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
+  /* The signer's name and its source-and-key line wrap: truncated, the row read
+     "Bramble account · Key 0…" and lost the key it exists to show. */
   .multisig-selected-signer .icon-button:disabled { opacity: 0; pointer-events: none; }
   .multisig-signer-set > .multisig-signer-sources {
     background: transparent;
     border-radius: 0;
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
   }
   .multisig-deployment-signer-field { display: grid; gap: 6px; min-width: 0; }
   .multisig-deployment-signer-picker > summary > [data-deployment-signer-current-avatar] { display: inline-flex; flex: none; }
@@ -279,22 +267,25 @@ export const MULTISIG_STYLES = `
   }
   .multisig-authority-summary { display: grid; gap: ${SPACE.lg}; }
   .multisig-signer-roster {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     overflow: hidden;
   }
+  /* Avatar, identity, then the signer key's copy control and the manage
+     disclosure as two quiet trailing columns; the identity column alone
+     shrinks, so both controls stay inside the roster at 256px. */
   .multisig-signer-identity {
     align-items: center;
     display: grid;
     gap: ${SPACE.sm};
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     min-height: ${SIZE.row};
     padding: ${SPACE.sm} ${SPACE.md};
     position: relative;
   }
   .multisig-signer-identity + .multisig-signer-identity::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto ${SPACE.lg};
@@ -325,11 +316,11 @@ export const MULTISIG_STYLES = `
   .multisig-authority-actions,
   .multisig-authority-actions .disclosure-body { display: grid; gap: ${SPACE.md}; }
   .multisig-signer-manage form + form {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
     padding-top: ${SPACE.md};
   }
   .multisig-signer-recovery-list {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     overflow: hidden;
@@ -346,7 +337,7 @@ export const MULTISIG_STYLES = `
   .multisig-signer-recovery-field + .multisig-signer-recovery-field,
   .multisig-signer-recovery-row + .multisig-signer-recovery-field,
   .multisig-signer-recovery-field + .multisig-signer-recovery-row {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
   }
   .multisig-signer-recovery-row .option-copy strong,
   .multisig-signer-recovery-row .option-sub {
@@ -355,8 +346,8 @@ export const MULTISIG_STYLES = `
     text-wrap: nowrap;
   }
   .multisig-signer-recovery-field { padding: ${SPACE.md}; }
-  .multisig-signer-match { color: var(--mc-positive); display: inline-flex; }
-  .multisig-config-note { color: var(--mc-muted); font-size: ${TYPE.caption.size}; margin: 0; }
+  .multisig-signer-match { color: var(--bramble-positive); display: inline-flex; }
+  .multisig-config-note { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; }
   .multisig-deployment-success .request-detail dd { align-items: center; display: flex; gap: ${SPACE.xs}; }
   .multisig-authority-actions > .ghost { justify-self: start; }
   .multisig-portfolio-hero { padding-top: ${SPACE.md}; }
@@ -368,11 +359,6 @@ export const MULTISIG_STYLES = `
     display: grid;
     gap: ${SPACE.xl};
     min-width: 0;
-  }
-  .multisig-compose-intro {
-    color: var(--mc-muted);
-    line-height: ${TYPE.body.line};
-    margin: 0;
   }
   .multisig-compose-form {
     display: grid;
@@ -396,9 +382,10 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.md};
     max-height: 280px;
     overflow-y: auto;
+    scrollbar-gutter: stable;
   }
   .multisig-recipient-picker .send-recipient-row,
-  .multisig-asset-picker .send-asset-row { background: var(--mc-elevated); }
+  .multisig-asset-picker .send-asset-row { background: var(--bramble-elevated); }
   .multisig-asset-picker { min-width: 0; }
   .multisig-asset-picker > summary.send-token-trigger {
     align-items: center;
@@ -411,14 +398,14 @@ export const MULTISIG_STYLES = `
   .multisig-asset-picker > summary.send-token-trigger::-webkit-details-marker { display: none; }
   .multisig-asset-picker[open] > summary .icon { transform: rotate(180deg); }
   .multisig-asset-picker > .disclosure-body {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
     margin-top: ${SPACE.md};
     padding-top: ${SPACE.md};
   }
   .multisig-compose-form .send-amount-card { min-width: 0; }
   .multisig-compose-form .send-amount-field input { min-width: 0; }
   .multisig-compose-form #multisig-amount-guidance {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     margin: -${SPACE.sm} 0 0;
     text-align: right;
   }
@@ -428,7 +415,7 @@ export const MULTISIG_STYLES = `
   }
   .multisig-advanced-call .multisig-compose-form { padding-top: ${SPACE.xs}; }
   .home-tab-count {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     font-variant-numeric: tabular-nums;
     margin-left: ${SPACE.xs};
@@ -437,9 +424,9 @@ export const MULTISIG_STYLES = `
   .multisig-portfolio-tabs .tab-set { gap: ${SPACE.lg}; }
   .multisig-portfolio-tabs [data-ms-home-panel] { min-width: 0; }
   .multisig-intent-stack { display: grid; gap: ${SPACE.md}; }
-  .multisig-intent-sync { align-items: center; border-bottom: 1px solid var(--mc-hairline); display: flex; gap: ${SPACE.md}; justify-content: space-between; margin-bottom: ${SPACE.md}; padding-bottom: ${SPACE.md}; }
+  .multisig-intent-sync { align-items: center; border-bottom: 1px solid var(--bramble-hairline); display: flex; gap: ${SPACE.md}; justify-content: space-between; margin-bottom: ${SPACE.md}; padding-bottom: ${SPACE.md}; }
   .multisig-intent-sync > div { display: grid; gap: ${SPACE.xs}; min-width: 0; }
-  .multisig-intent-sync span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .multisig-intent-sync span { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
   .multisig-intent-sync button { flex: 0 0 auto; }
   .multisig-intent { align-items: stretch; display: grid; gap: ${SPACE.md}; min-width: 0; overflow: hidden; }
   .multisig-intent .decision-head .pill { margin-left: auto; }
@@ -447,7 +434,7 @@ export const MULTISIG_STYLES = `
   .multisig-intent-action { display: grid; gap: ${SPACE.sm}; }
   .multisig-intent-action > button { width: 100%; }
   .multisig-action-note {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
   }
@@ -455,7 +442,7 @@ export const MULTISIG_STYLES = `
   .multisig-collaboration .disclosure-body { display: grid; gap: ${SPACE.md}; }
   .multisig-handoff-section { display: grid; gap: ${SPACE.sm}; min-width: 0; }
   .multisig-handoff-section + .multisig-handoff-section {
-    border-top: 1px solid var(--mc-hairline);
+    border-top: 1px solid var(--bramble-hairline);
     padding-top: ${SPACE.md};
   }
   .multisig-handoff-copy { display: grid; gap: ${SPACE.xs}; }
@@ -476,15 +463,29 @@ export const MULTISIG_STYLES = `
   .multisig-intent-row { position: relative; }
   .multisig-intent-row.has-assets .menu-icon { visibility: hidden; }
   .multisig-intent-assets { display: inline-flex; inset-inline-start: calc(${SPACE.lg} - 4px); pointer-events: none; position: absolute; top: 50%; transform: translateY(-50%); }
-  .multisig-intent-assets > * + * { margin-left: -6px; }
+  .multisig-intent-assets > * + * { margin-left: calc(-1 * ${SPACE.sm}); }
   .multisig-intent-assets .token-logo, .multisig-intent-assets .token-mark { height: 28px; width: 28px; }
   .multisig-intent-assets .token-mark { font-size: 8px; }
-  [data-ms-exact-identity] .receipt-row { align-items: flex-start; }
-  [data-ms-exact-identity] .receipt-row dd { max-width: 70%; }
-  [data-ms-exact-identity] .receipt-row dd code { overflow-wrap: anywhere; text-align: left; word-break: break-word; }
-  .shared-collectible-card { cursor: default; }
+  /* Private balances: rows whose actions are all hidden, and an empty status
+     line, take no space, so the section is only as tall as what it says. */
+  [data-ms-strk20-key-panel] .action-row:not(:has(> :not([hidden]))),
+  [data-ms-strk20-key-panel] [data-ms-strk20-authorizations]:empty,
+  #multisig-strk20-key-status:empty { display: none; }
+  /* Exact identity at the narrowest panel. A value that drops below its label
+     takes the full line, so a shortened identifier (0x1eb8…f55a, the one with
+     a copy button or a full-value title) always fits and never splits. A full
+     hex value (the chain id) breaks between any two digits, balanced so no
+     line is left holding a single character. */
+  [data-ms-exact-identity] .receipt-row dd code {
+    text-align: left;
+    text-wrap: balance;
+    word-break: break-all;
+  }
+  [data-ms-exact-identity] .receipt-row dd:has(.icon-button) { flex: none; }
+  [data-ms-exact-identity] .receipt-row dd:has(.icon-button) code,
+  .multisig-intent code[title] { text-wrap: nowrap; word-break: normal; }
   .drawer-multisig .account-groups-line {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
   }
   @media (prefers-reduced-motion: reduce) {

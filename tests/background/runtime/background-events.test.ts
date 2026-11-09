@@ -9,7 +9,10 @@
 
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { walletEventBroadcasts } from "../../../apps/extension/src/background/runtime/events";
+import {
+  announcesApprovalsChange,
+  walletEventBroadcasts,
+} from "../../../apps/extension/src/background/runtime/events";
 
 const MAIN_CHAIN_ID = "0x534e5f4d41494e";
 const accountsChanged = { event: "accountsChanged", type: "wallet.event" } as const;
@@ -21,24 +24,39 @@ const networkChanged = (chainId: string) =>
     type: "wallet.event",
   }) as const;
 
-// Members of the vault service object literal start at four-space indent.
-const SERVICE_MEMBER = /^ {4}(?:async )?([a-zA-Z0-9]+)[(:,]/gm;
+// Members of the vault service object literals: four-space indent in the main
+// factory, two-space indent in its size-budget creation split.
+const SERVICE_MEMBERS = [
+  {
+    file: "packages/platform/vault/src/service/service.ts",
+    member: /^ {4}(?:async )?([a-zA-Z0-9]+)[(:,]/gm,
+  },
+  {
+    file: "packages/platform/vault/src/service/service-creation.ts",
+    member: /^ {2}(?:async )?([a-zA-Z0-9]+)[(:,]/gm,
+  },
+];
 
 // Vault-service methods that persist a new activeAccountId, read out of the
 // source rather than listed by hand — the list can never silently go stale.
 const activeAccountMutators = async (): Promise<readonly string[]> => {
-  const source = await readFile("packages/platform/vault/src/service/service.ts", "utf8");
-  const members = [...source.matchAll(SERVICE_MEMBER)].map((match) => ({
-    at: match.index ?? 0,
-    name: match[1] ?? "",
-  }));
-  return members
-    .filter(({ at }, position) => {
-      const body = source.slice(at, members[position + 1]?.at ?? source.length);
-      return body.includes("writeVault(") && body.includes("activeAccountId:");
-    })
-    .map(({ name }) => name)
-    .sort();
+  const names: string[] = [];
+  for (const { file, member } of SERVICE_MEMBERS) {
+    const source = await readFile(file, "utf8");
+    const members = [...source.matchAll(member)].map((match) => ({
+      at: match.index ?? 0,
+      name: match[1] ?? "",
+    }));
+    names.push(
+      ...members
+        .filter(({ at }, position) => {
+          const body = source.slice(at, members[position + 1]?.at ?? source.length);
+          return body.includes("writeVault(") && body.includes("activeAccountId:");
+        })
+        .map(({ name }) => name),
+    );
+  }
+  return names.sort();
 };
 
 // The message types that reach each of those mutators. switchActiveNetwork
@@ -48,11 +66,14 @@ const MUTATOR_MESSAGE_TYPES: Readonly<Record<string, readonly string[]>> = {
   addDerivedAccount: ["wallet.addAccount"],
   addLedgerAccount: ["wallet.addLedgerAccount"],
   createAccount: ["wallet.createAccount"],
+  createKeyVault: ["wallet.createKeyVault"],
   createLedgerVault: ["wallet.createLedgerVault"],
   ensureNetworkAccount: ["wallet.approveOrigin", "wallet.setActiveNetwork", "wallet.switchChain"],
   importRawKeyAccount: ["wallet.importAccount"],
   setActiveAccount: [
     "wallet.approveOrigin",
+    "wallet.importPreferences",
+    "wallet.setAccountHidden",
     "wallet.setActiveAccount",
     "wallet.setActiveNetwork",
     "wallet.switchChain",
@@ -73,6 +94,12 @@ describe("walletEventBroadcasts", () => {
       walletEventBroadcasts(
         { type: "wallet.createAccount" },
         { account: { networkId: "SN_MAIN" }, ok: true },
+      ),
+    ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
+    expect(
+      walletEventBroadcasts(
+        { type: "wallet.unlockUnverified" },
+        { hasVault: true, networkId: "SN_MAIN" },
       ),
     ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
   });
@@ -107,6 +134,18 @@ describe("walletEventBroadcasts", () => {
     expect(
       walletEventBroadcasts({ type: "wallet.setActiveAccount" }, { account: {}, ok: true }),
     ).toEqual([accountsChanged]);
+    expect(
+      walletEventBroadcasts(
+        { type: "wallet.setActiveAccount" },
+        { account: { networkId: "SN_MAIN" }, ok: true },
+      ),
+    ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
+    expect(
+      walletEventBroadcasts(
+        { type: "wallet.importPreferences" },
+        { ok: true, preferences: { activeNetworkId: "SN_MAIN" } },
+      ),
+    ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
     expect(
       walletEventBroadcasts({ type: "wallet.setActiveNetwork" }, { networkId: "SN_MAIN" }),
     ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
@@ -166,6 +205,15 @@ describe("walletEventBroadcasts", () => {
     }
   });
 
+  test("announces removal of a multisig so pages drop that account", () => {
+    expect(walletEventBroadcasts({ type: "wallet.removeMultisig" }, { ok: true })).toEqual([
+      accountsChanged,
+    ]);
+    expect(
+      walletEventBroadcasts({ type: "wallet.removeMultisig" }, { error: "wallet locked" }),
+    ).toEqual([]);
+  });
+
   test("announces lock and unlock so pages drop or regain accounts", () => {
     expect(walletEventBroadcasts({ type: "wallet.lock" }, { hasVault: true })).toEqual([
       accountsChanged,
@@ -173,5 +221,37 @@ describe("walletEventBroadcasts", () => {
     expect(walletEventBroadcasts({ type: "wallet.unlock" }, { hasVault: true })).toEqual([
       accountsChanged,
     ]);
+  });
+
+  test("announces the active network on unlock, so a page reconnects on the right chain (Sherlock 188)", () => {
+    expect(
+      walletEventBroadcasts({ type: "wallet.unlock" }, { hasVault: true, networkId: "SN_MAIN" }),
+    ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
+  });
+});
+
+// The toolbar badge mirrors the queue size, and approve/deny clear entries
+// through `claim` rather than the enqueue notifier — their only signal is this
+// broadcast. Without watching it, denying a request left a badge reading "1"
+// over an empty queue.
+describe("approval queue change announcements", () => {
+  test("reports a queue change for an approval decision", () => {
+    expect(
+      announcesApprovalsChange(
+        walletEventBroadcasts({ id: "a", type: "wallet.approveOrigin" }, { ok: true }),
+      ),
+    ).toBe(true);
+    expect(
+      announcesApprovalsChange(
+        walletEventBroadcasts({ id: "a", type: "wallet.denyOrigin" }, { ok: true }),
+      ),
+    ).toBe(true);
+  });
+
+  test("reports no queue change for an unrelated broadcast", () => {
+    expect(announcesApprovalsChange([])).toBe(false);
+    expect(
+      announcesApprovalsChange([{ chainId: "0x1", event: "networkChanged", type: "wallet.event" }]),
+    ).toBe(false);
   });
 });

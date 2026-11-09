@@ -13,7 +13,8 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { DEPLOY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-deploy-messages";
 import {
   account,
   contentSender,
@@ -26,9 +27,12 @@ import {
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
+import { LOOKUP_KEY_BOUNDARY_MESSAGES } from "./key-boundary-lookup-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
 import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
+import { STAKING_KEY_BOUNDARY_MESSAGES } from "./key-boundary-staking-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
+import { TOKEN_KEY_BOUNDARY_MESSAGES } from "./key-boundary-token-messages";
 import type { KeyBoundaryMessage } from "./key-boundary-types";
 
 const ETH_TOKEN_ID = KEY_BOUNDARY_TOKENS.eth.id;
@@ -36,8 +40,7 @@ const STRK_TOKEN_ID = KEY_BOUNDARY_TOKENS.strk.id;
 const ETH_TOKEN_ADDRESS = KEY_BOUNDARY_TOKENS.eth.address;
 const NFT_CONTRACT = KEY_BOUNDARY_NFT_CONTRACT;
 
-// A well-formed SNIP-12 typed message that hashes cleanly, so the sign path
-// reaches its approval instead of stopping at the hash.
+// A well-formed SNIP-12 message that hashes cleanly, so signing reaches its approval.
 const TYPED_DATA = {
   domain: { chainId: "0x534e5f4d41494e", name: "Example", revision: "1", version: "1" },
   message: { contents: "hello" },
@@ -52,8 +55,7 @@ const TYPED_DATA = {
   },
 };
 
-// Broadcast event envelope: emitted by the background, never handled as an
-// inbound request, so it has no scan entry.
+// Broadcast event envelope: emitted by the background, never handled, so no scan entry.
 const OUTBOUND_ONLY = new Set(["wallet.event"]);
 
 /**
@@ -99,14 +101,17 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { type: "wallet.unlock", vaultPassphrase: SECRET_PASSPHRASE },
     sender: extensionSender,
   },
+  {
+    message: { type: "wallet.unlockUnverified", vaultPassphrase: SECRET_PASSPHRASE },
+    sender: extensionSender,
+  },
   { message: { type: "wallet.getBalances" }, sender: extensionSender },
-  { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
-  { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
+  ...LOOKUP_KEY_BOUNDARY_MESSAGES,
   {
     message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.deploymentData" },
     sender: contentSender,
   },
-  { message: { type: "wallet.deployAccount" }, sender: extensionSender },
+  ...DEPLOY_KEY_BOUNDARY_MESSAGES,
   { message: { type: "wallet.pendingApprovals" }, sender: extensionSender },
   {
     live: async (ids) => ({ id: await ids.invokeApprovalId() }),
@@ -333,8 +338,8 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     },
     sender: contentSender,
   },
-  { message: { address: NFT_CONTRACT, type: "wallet.addToken" }, sender: extensionSender },
-  { message: { type: "wallet.detectTokens" }, sender: extensionSender },
+  ...TOKEN_KEY_BOUNDARY_MESSAGES,
+  ...STAKING_KEY_BOUNDARY_MESSAGES,
   { message: { type: "wallet.discoverNfts" }, sender: extensionSender },
   { message: { type: "wallet.loadWatchedNfts" }, sender: extensionSender },
   {
@@ -345,16 +350,16 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { relayUrl: "wss://relay.example", type: "wallet.setNostrRelayUrl" },
     sender: extensionSender,
   },
-  { message: { type: "wallet.prices" }, sender: extensionSender },
-  {
-    message: { address: ETH_TOKEN_ADDRESS, type: "wallet.tokenChart" },
-    sender: extensionSender,
-  },
   {
     message: { accountId: account.id, label: "Main", type: "wallet.setAccountLabel" },
     sender: extensionSender,
   },
+  {
+    message: { accountId: account.id, hidden: false, type: "wallet.setAccountHidden" },
+    sender: extensionSender,
+  },
   { message: { displayCurrency: "usd", type: "wallet.setDisplay" }, sender: extensionSender },
+  { message: { multisigId: null, type: "wallet.setSelectedMultisig" }, sender: extensionSender },
   {
     message: { icon: "folder", name: "Savings", type: "wallet.createGroup" },
     sender: extensionSender,
@@ -465,11 +470,6 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: { networkId: "SN_MAIN", rpcUrl: "https://rpc.example", type: "wallet.setRpcOverride" },
-    sender: extensionSender,
-  },
-  {
-    live: async (ids) => ({ tokenId: ids.tokenId }),
-    message: { hidden: true, tokenId: "", type: "wallet.setTokenHidden" },
     sender: extensionSender,
   },
   ...MULTISIG_KEY_BOUNDARY_MESSAGES,

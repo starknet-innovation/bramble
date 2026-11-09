@@ -6,15 +6,15 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { UI_COMPONENTS, UI_FOUNDATIONS } from "@mc-wallet/ui-kit/catalog";
-import { emptyState, pill, receipt } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { selectField, textField } from "@mc-wallet/ui-kit/fields";
-import { uiAttributes } from "@mc-wallet/ui-kit/html-attributes";
-import { ICON_NAMES } from "@mc-wallet/ui-kit/icons";
-import type { WalletStatus } from "@mc-wallet/wallet-ui/lab";
-import { onboarding } from "@mc-wallet/wallet-ui/lab";
+import { UI_COMPONENTS, UI_FOUNDATIONS } from "@bramble/ui-kit/catalog";
+import { emptyState, pill, receipt } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { selectField, textField } from "@bramble/ui-kit/fields";
+import { uiAttributes } from "@bramble/ui-kit/html-attributes";
+import { ICON_NAMES } from "@bramble/ui-kit/icons";
+import type { WalletStatus } from "@bramble/wallet-ui/lab";
+import { onboarding } from "@bramble/wallet-ui/lab";
 import {
   COMPONENT_STORY_COVERAGE,
   FOUNDATION_STORY_COVERAGE,
@@ -50,48 +50,49 @@ describe("design system", () => {
     expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
   });
 
-  test("keeps review chrome on the production monochrome palette", () => {
+  test("keeps review chrome on the production palette", () => {
     const emittedColors = [...LAB_STYLES.matchAll(/#[0-9a-fA-F]{6}\b/g)].map(([color]) =>
       color.toLowerCase(),
     );
     const expectedColors = [
-      "--mc-accent",
-      "--mc-accent-text",
-      "--mc-bg",
-      "--mc-border",
-      "--mc-danger",
-      "--mc-elevated",
-      "--mc-muted",
-      "--mc-panel",
-      "--mc-sunken",
-      "--mc-text",
+      "--bramble-accent",
+      "--bramble-accent-text",
+      "--bramble-bg",
+      "--bramble-border",
+      "--bramble-danger",
+      "--bramble-elevated",
+      "--bramble-muted",
+      "--bramble-panel",
+      "--bramble-sunken",
+      "--bramble-text",
     ].map((name) => darkSkin.tokens[name as keyof typeof darkSkin.tokens]);
     expect(new Set(emittedColors)).toEqual(new Set(expectedColors));
   });
 
-  test("keeps the provider test bench achromatic outside status semantics", () => {
+  test("keeps the provider test bench on the production dark palette", () => {
     const source = readFileSync(
       join(import.meta.dir, "../../examples/provider-tester/index.html"),
       "utf8",
     );
-    for (const name of [
-      "bg",
-      "panel",
-      "elevated",
-      "border",
-      "text",
-      "muted",
-      "accent",
-      "accent-ink",
-    ]) {
-      const match = source.match(new RegExp(`--${name}: #([0-9a-fA-F]{6})`));
-      expect(match, `missing --${name}`).not.toBeNull();
-      const value = match?.[1] ?? "";
-      expect(value.slice(0, 2), `--${name} must not carry a hue`).toBe(value.slice(2, 4));
-      expect(value.slice(2, 4), `--${name} must not carry a hue`).toBe(value.slice(4, 6));
+    // The bench is a standalone page, so its palette is hand-copied from the
+    // default skin; this pins every role to the skin token it mirrors.
+    const roles: ReadonlyArray<[string, keyof typeof darkSkin.tokens]> = [
+      ["bg", "--bramble-bg"],
+      ["panel", "--bramble-panel"],
+      ["elevated", "--bramble-elevated"],
+      ["border", "--bramble-border"],
+      ["text", "--bramble-text"],
+      ["muted", "--bramble-muted"],
+      ["accent", "--bramble-accent"],
+      ["accent-ink", "--bramble-accent-text"],
+      ["danger", "--bramble-danger"],
+      ["ok", "--bramble-positive"],
+    ];
+    for (const [name, tokenName] of roles) {
+      expect(source, `--${name} must mirror ${tokenName}`).toContain(
+        `--${name}: ${darkSkin.tokens[tokenName]};`,
+      );
     }
-    expect(source).toContain("--ok: #4ade80");
-    expect(source).toContain("--danger: #ff7474");
   });
 
   test("escapes dynamic text across controls, fields, and content", () => {
@@ -142,7 +143,7 @@ describe("design system", () => {
     expect(violations).toEqual([]);
   });
 
-  test("full-screen onboarding consumes shared controls and defaults to Mainnet", () => {
+  test("full-screen onboarding consumes shared controls and pins the Bramble account", () => {
     const markup = onboarding(status);
     expect(markup).toContain(
       button({
@@ -150,13 +151,23 @@ describe("design system", () => {
         label: "Create a new wallet",
       }),
     );
-    expect(markup).toContain('role="group" aria-label="Account contract"');
-    expect(markup).toContain('data-account-contract="argent"');
-    expect(markup).toContain('data-account-contract="openzeppelin"');
-    expect(markup).toMatch(/data-account-contract="openzeppelin"[^>]*aria-pressed="true"/);
-    expect(markup).toContain("OpenZeppelin is the recommended default");
-    expect(markup).toContain("Argent Account");
-    expect(markup).toContain("OpenZeppelin Account");
-    expect(markup).toContain("Starknet Mainnet");
+    // Creation flows pin the Bramble account: no contract chooser remains.
+    expect(markup).not.toContain('aria-label="Account contract"');
+    expect(markup).not.toContain("data-account-contract=");
+    expect(markup).toContain('name="accountContractType" type="hidden" value="openzeppelin"');
+    // The private-key import keeps the contract choice for existing accounts.
+    expect(markup).toContain('id="key-method-button"');
+    expect(markup).toContain("Ready Account");
+    expect(markup).toContain("Bramble Account");
+    // The real-funds tickbox is gone, but its consequence is stated instead, on
+    // every step that creates, imports or restores accounts on Mainnet (the
+    // binder pins onboarding to DEFAULT_NETWORK).
+    expect(markup).not.toContain('type="checkbox" name="mainnetAck"');
+    const consequence = "This wallet is on Starknet Mainnet and holds real funds.";
+    for (const step of ["import-key", "recovery-accounts", "accounts", "ledger"]) {
+      const section =
+        markup.split(`data-onboarding-step="${step}"`)[1]?.split("</section>")[0] ?? "";
+      expect(section).toContain(consequence);
+    }
   });
 });

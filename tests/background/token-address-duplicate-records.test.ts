@@ -14,17 +14,18 @@
  * cannot be created in the first place.
  */
 import { describe, expect, test } from "bun:test";
-import type { PriceService } from "@mc-wallet/portfolio/prices";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { DEFAULT_TOKENS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { withTokenId } from "@mc-wallet/wallet-model/preferences";
+import type { PriceService } from "@bramble/portfolio/prices";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { DEFAULT_TOKENS, sameFelt } from "@bramble/wallet-model/networks";
+import { withTokenId } from "@bramble/wallet-model/preferences";
 import { readAddTokenInput } from "../../apps/extension/src/background/portfolio/token-inputs";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 
 // The seeded Mainnet ETH spelling, and the spelling the Add-token field's
 // normalizeFeltInput produces for the very same address.
@@ -84,7 +85,7 @@ const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const handler = createMessageHandler(walletStub as never, "extension-id", {
+  const handler = createMessageHandler(walletStub as never, testExtension, {
     preferencesStore,
     prices,
     runtimeRpc: {
@@ -134,6 +135,33 @@ describe("token address canonicalization", () => {
     // are numerically equal. No pair of tracked addresses may collide.
     const numeric = mainnet.map((token) => BigInt(token.address));
     expect(new Set(numeric).size).toBe(numeric.length);
+  });
+
+  test("re-adding a tracked address that now reports another symbol changes nothing", async () => {
+    // A token contract can rename itself, or a dapp-supplied symbol can differ
+    // from the chain's. Either way the id differs, so only an address check
+    // stops a second record, and a hide flag for a record that never existed.
+    const { handler, preferencesStore } = makeHandler();
+    const ADDRESS = "0x0000000000000000000000000000000000000000000000000000000000000abc";
+    await preferencesStore.upsertToken(
+      {
+        address: ADDRESS,
+        decimals: 18,
+        name: "Prize Token",
+        networkId: "SN_MAIN",
+        symbol: "PRZ",
+      },
+      "user",
+    );
+    const before = await preferencesStore.read();
+
+    await expect(
+      handler({ address: ADDRESS, type: "wallet.addToken" }, sender),
+    ).resolves.toMatchObject({ ok: true });
+
+    const after = await preferencesStore.read();
+    expect(after.tokens).toEqual(before.tokens);
+    expect(after.hiddenTokens ?? []).toEqual(before.hiddenTokens ?? []);
   });
 
   test("derives the stored hide id from the shared builder", async () => {

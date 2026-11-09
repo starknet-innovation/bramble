@@ -3,14 +3,19 @@
  * sending builds a transfer_from call through the verified invoke path.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { NftOwnership } from "@mc-wallet/starknet/rpc-assets";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import type { NftOwnership } from "@bramble/starknet/rpc-assets";
+import { postDeploymentFailure } from "@bramble/starknet/rpc-submit";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createActivityLog } from "@bramble/transactions/activity";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const CONTRACT = "0x0511a2b3";
@@ -25,58 +30,86 @@ const account: AccountRef = {
   publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
-const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
+const ledgerAccount: AccountRef = {
+  ...account,
+  derivation: {
+    accountIndex: 0,
+    eip2645application: LEDGER_EIP2645_APPLICATION,
+    kind: "ledger",
+    path: ledgerAccountPath(0),
+  },
+};
 const vaultPassphrase = "correct horse battery staple";
 const sender: RuntimeSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
 };
 
-const walletStub = {
+const stubFor = (acct: AccountRef) => ({
   async addDerivedAccount() {
-    return account;
+    return acct;
   },
   async createAccount() {
-    return account;
+    return acct;
   },
   async ensureNetworkAccount() {
-    return account;
+    return acct;
   },
   async getGrantedAccounts() {
-    return [account];
+    return [acct];
   },
   async generateMnemonic() {
     return "unused";
   },
   async grantOrigin() {
-    return [account];
+    return [acct];
   },
   async readVault() {
-    return vault;
+    return { accounts: [acct], activeAccountId: acct.id } as unknown as Vault;
   },
   async setActiveAccount() {
-    return account;
+    return acct;
   },
   async signHash() {
-    return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+    return { publicKey: acct.publicKeyX, r: "0x1", s: "0x2" };
   },
   async status() {
     return {
       accountCount: 1,
-      activeAccountId: account.id,
+      activeAccountId: acct.id,
       hasVault: true,
       locked: false,
       ready: false,
     };
   },
-};
-
-const makeHarness = (options?: { readonly owner?: string; readonly ownership?: NftOwnership }) => {
+});
+const makeHarness = (options?: {
+  readonly account?: AccountRef;
+  readonly deployed?: boolean;
+  readonly owner?: string;
+  readonly ownership?: NftOwnership;
+  readonly submit?: (input: {
+    readonly onSigned?: (signed: {
+      readonly nonce: string;
+      readonly senderAddress: string;
+      readonly transactionHash: string;
+    }) => Promise<void>;
+  }) => Promise<{ readonly deploymentTransactionHash?: string; readonly transactionHash: string }>;
+}) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const invokeCalls: (readonly unknown[])[] = [];
   const ownership = options?.ownership;
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  let tick = 0;
+  const activity = createActivityLog({
+    now: () => {
+      tick += 1000;
+      return tick;
+    },
+    store: createMemoryStore(),
+  });
+  const handler = createMessageHandler(stubFor(options?.account ?? account), testExtension, {
+    activity,
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     runtimeRpc: makeRuntimeRpc({
       ...(ownership
@@ -86,17 +119,27 @@ const makeHarness = (options?: { readonly owner?: string; readonly ownership?: N
             },
           }
         : {}),
+      ...(options?.deployed === false
+        ? {
+            async getDeploymentStatus() {
+              return false;
+            },
+          }
+        : {}),
       async getNftOwner() {
         return options?.owner ?? account.address;
       },
       async submitInvokeTransaction(input) {
         invokeCalls.push(input.calls);
+        if (options?.submit) {
+          return { calls: input.calls, ...(await options.submit(input)) };
+        }
         return { calls: input.calls, transactionHash: "0x7cd" };
       },
     }),
     session,
   });
-  return { handler, invokeCalls };
+  return { activity, handler, invokeCalls };
 };
 
 describe("NFT gallery messages", () => {
@@ -181,12 +224,36 @@ describe("NFT gallery messages", () => {
         feeEstimateFailed: false,
         flags: [],
         requiresDeployment: false,
+        signsTwice: false,
       },
     });
     const summaries = (response as { review: { summaries: readonly string[] } }).review.summaries;
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toContain("Send NFT #5");
     expect(invokeCalls).toHaveLength(0);
+  });
+
+  test("tells a Ledger user the NFT send signs twice when it also deploys the account", async () => {
+    // The ERC-20 review already says so; the NFT review feeds the same renderer
+    // and must not leave the second device prompt as a surprise.
+    const review = { contract: CONTRACT, networkId: "SN_MAIN", recipient: "0x777", tokenId: "5" };
+    const ledger = await makeHarness({ account: ledgerAccount, deployed: false }).handler(
+      { ...review, type: "wallet.reviewNftTransfer" },
+      sender,
+    );
+    expect(ledger).toMatchObject({
+      ok: true,
+      review: { requiresDeployment: true, signsTwice: true },
+    });
+
+    const software = await makeHarness({ deployed: false }).handler(
+      { ...review, type: "wallet.reviewNftTransfer" },
+      sender,
+    );
+    expect(software).toMatchObject({
+      ok: true,
+      review: { requiresDeployment: true, signsTwice: false },
+    });
   });
 
   test("watches and sends an ERC1155 edition through safe_transfer_from", async () => {
@@ -226,5 +293,133 @@ describe("NFT gallery messages", () => {
     expect(call.calldata.slice(2)).toEqual(["342", "0", "1", "0", "0"]);
     expect(BigInt(call.calldata[0] ?? "0")).toBe(BigInt(account.address));
     expect(BigInt(call.calldata[1] ?? "0")).toBe(0x777n);
+  });
+});
+
+// Same outcome rules as the token send (audit #173, errors audit F1): a lost
+// broadcast reply is status unknown, never a plain error, and the signed hash
+// is kept as a pending Activity row.
+describe("an NFT send whose broadcast reply was lost", () => {
+  const SIGNED = "0x5eed";
+  const send = {
+    contract: CONTRACT,
+    networkId: "SN_MAIN",
+    recipient: "0x777",
+    reviewedFee,
+    tokenId: "5",
+    type: "wallet.transferNft",
+  };
+  const signed = { nonce: "0x1", senderAddress: account.address, transactionHash: SIGNED };
+
+  test("is status unknown with the signed hash, recorded as pending", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async (input) => {
+        await input.onSigned?.(signed);
+        throw new IndeterminateRpcWriteError("Transaction submission status is unknown.");
+      },
+    });
+    expect(await handler(send, sender)).toEqual({
+      error: "Transaction submission status is unknown.",
+      submissionUnknown: true,
+      transactionHash: SIGNED,
+    });
+    const rows = await activity.list();
+    expect(rows.map((row) => [row.hash, row.status, row.counterparty])).toEqual([
+      [SIGNED, "pending", "0x777"],
+    ]);
+  });
+
+  test("is status unknown without a hash when nothing was signed", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async () => {
+        throw new IndeterminateRpcWriteError("Account deployment status is unknown.");
+      },
+    });
+    expect(await handler(send, sender)).toEqual({
+      error: "Account deployment status is unknown.",
+      submissionUnknown: true,
+    });
+    expect(await activity.list()).toEqual([]);
+  });
+
+  test("a determinate refusal stays a plain error with no row", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async (input) => {
+        await input.onSigned?.(signed);
+        throw new Error("RPC refused the transaction");
+      },
+    });
+    expect(await handler(send, sender)).toEqual({ error: "RPC refused the transaction" });
+    expect(await activity.list()).toEqual([]);
+  });
+
+  test("an accepted send records the accepted hash", async () => {
+    const { activity, handler } = makeHarness();
+    expect(await handler(send, sender)).toEqual({ ok: true, transactionHash: "0x7cd" });
+    expect((await activity.list()).map((row) => row.hash)).toEqual(["0x7cd"]);
+  });
+});
+
+// mc-wallet 719: an NFT send from an undeployed account deploys it first. That
+// accepted deployment is recorded beside the send, and still recorded when the
+// send after it is refused or loses its reply, since its fee is spent.
+describe("an NFT send that deploys the account first", () => {
+  const DEPLOY = "0xd3a1";
+  const SIGNED = "0x5eed";
+  const send = {
+    contract: CONTRACT,
+    networkId: "SN_MAIN",
+    recipient: "0x777",
+    reviewedFee,
+    tokenId: "5",
+    type: "wallet.transferNft",
+  };
+  const rowsOf = async (activity: ReturnType<typeof makeHarness>["activity"]) =>
+    (await activity.list()).map((row) => [row.kind, row.hash]);
+
+  test("records the deployment beside the send", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async () => ({ deploymentTransactionHash: DEPLOY, transactionHash: SIGNED }),
+    });
+    expect(await handler(send, sender)).toEqual({ ok: true, transactionHash: SIGNED });
+    const rows = await rowsOf(activity);
+    expect(rows).toContainEqual(["deploy", DEPLOY]);
+    expect(rows).toContainEqual(["invoke", SIGNED]);
+  });
+
+  test("still records the deployment when the send after it is refused", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async () => {
+        throw postDeploymentFailure(DEPLOY, new Error("invoke rejected"));
+      },
+    });
+    expect(await handler(send, sender)).toHaveProperty("error");
+    expect(await rowsOf(activity)).toEqual([["deploy", DEPLOY]]);
+  });
+
+  test("still records the deployment when the reply is lost, and stays unknown", async () => {
+    const { activity, handler } = makeHarness({
+      submit: async (input) => {
+        await input.onSigned?.({
+          nonce: "0x1",
+          senderAddress: account.address,
+          transactionHash: SIGNED,
+        });
+        throw postDeploymentFailure(DEPLOY, new IndeterminateRpcWriteError("reply lost"));
+      },
+    });
+    expect(await handler(send, sender)).toMatchObject({
+      submissionUnknown: true,
+      transactionHash: SIGNED,
+    });
+    const rows = await rowsOf(activity);
+    expect(rows).toContainEqual(["deploy", DEPLOY]);
+    expect(rows).toContainEqual(["invoke", SIGNED]);
+  });
+
+  test("records no deployment when none was sent", async () => {
+    const { activity, handler } = makeHarness();
+    await handler(send, sender);
+    expect((await rowsOf(activity)).some(([kind]) => kind === "deploy")).toBe(false);
   });
 });

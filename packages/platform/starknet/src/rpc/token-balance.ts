@@ -1,6 +1,6 @@
 /** Strict token-balance shape shared by RPC, persistence, and UI boundaries. */
-import { hasOnlyKnownKeys, isBaseUnitsAmount, isJson, isRecord } from "@mc-wallet/core/json";
-import { isTokenConfig, type TokenConfig } from "@mc-wallet/wallet-model/preferences";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isJson, isRecord } from "@bramble/core/json";
+import { isTokenConfig, type TokenConfig } from "@bramble/wallet-model/preferences";
 
 /**
  * One tracked token with its latest public on-chain balance.

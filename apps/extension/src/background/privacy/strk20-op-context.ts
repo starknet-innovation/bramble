@@ -5,23 +5,61 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
-import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { withTokenId } from "@mc-wallet/wallet-model/preferences";
-import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import { WalletError, walletErrorMessage } from "@bramble/core/errors";
+import type { PriceService } from "@bramble/portfolio/prices";
+import type { Strk20PhaseSink } from "@bramble/privacy/phases";
+import { canonicalStrk20PoolFee, type Strk20AccountContext } from "@bramble/privacy/service";
+import type { SponsoredShieldNetworks } from "@bramble/privacy/sponsored-shield";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { withTokenId } from "@bramble/wallet-model/preferences";
+import {
+  PRIVACY_DEPLOY_REQUIRED,
+  PRIVACY_PUBLIC_BALANCE_UNCONFIRMED,
+  PrivacyBlockerError,
+  type PrivacyBlockerKind,
+  privacyShortfall,
+} from "@bramble/wallet-protocol/privacy-blocker";
+import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { type ActiveAccountContext, networkRpcUrls } from "../runtime/runtime-state";
+import {
+  type TrustedRecipientSources,
+  withTrustedRecipients,
+} from "../transactions/trusted-recipients";
 import { strk20AccountContext } from "./strk20-account-context";
+import type { Strk20JobRegistry } from "./strk20-preparation-jobs";
+import { strk20RegistrationBlock } from "./strk20-registration-owner";
 import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations";
 
 /**
- * Extension-owned privacy dependencies, including the one-time preparation
- * store that keeps executable payloads out of the side panel.
+ * Relay table, transport and clock for the sponsored shield. Production leaves
+ * it unset: the bundled table (off everywhere), `fetch`, and the system clock.
+ */
+export type SponsoredShieldDeps = {
+  readonly http?: PaymasterHttp;
+  readonly networks?: SponsoredShieldNetworks;
+  readonly nowSeconds?: () => number;
+};
+
+/**
+ * Extension-owned privacy dependencies: the one-time preparation store that
+ * keeps executable payloads out of the side panel, and the job registry that
+ * lets a proof outlive the runtime request that asked for it.
  */
 export type Strk20WalletOpsDeps = WalletOpsDeps & {
+  /**
+   * Fiat price feed used to bound a converted pool fee. Optional so partial test
+   * stubs stay valid; a missing feed prices nothing, which leaves the Send gate
+   * on the fee token exactly as the relay quote would fall back.
+   */
+  readonly prices?: PriceService;
+  /** Sponsored first-shield seam (#789); production uses the bundled table, off. */
+  readonly sponsoredShield?: SponsoredShieldDeps;
+  readonly strk20Jobs: Strk20JobRegistry;
   readonly strk20Preparations: Strk20WalletPreparationStore;
 };
 
@@ -29,16 +67,32 @@ export type Strk20WalletOpsDeps = WalletOpsDeps & {
  * Resolved active account, its privacy configuration, and the selected token.
  */
 export type ActivePrivacyContext = {
-  readonly accountContext: ReturnType<typeof strk20AccountContext>;
-  readonly preferences: WalletPreferences;
+  readonly accountContext: Strk20AccountContext;
+  /** Carries the address-poisoning trust inputs (audit #163) for the pool routes. */
+  readonly preferences: WalletPreferences & TrustedRecipientSources;
   readonly token: TokenConfig;
 };
 
 /**
- * Shortens an unknown error to a displayable message with a stable fallback.
+ * The same context with a phase sink attached, for the service calls a tracked
+ * job makes. The sink is the only addition: the account, its signer, and the
+ * viewing-key thunk stay bound to the unlock that resolved the context, so a
+ * lock during the job still revokes them.
+ */
+export const reportingPrivacyContext = (
+  context: ActivePrivacyContext,
+  onPhase: Strk20PhaseSink,
+): ActivePrivacyContext => ({
+  ...context,
+  accountContext: { ...context.accountContext, onPhase },
+});
+
+/**
+ * Returns only wallet-authored errors to the UI. SDK, RPC, and service errors
+ * collapse to a stable fallback so internal diagnostics never reach toast copy.
  */
 export const errorText = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message.length > 0 ? error.message : fallback;
+  walletErrorMessage(error, fallback);
 
 const firstNetworkToken = (preferences: WalletPreferences, networkId: string): TokenConfig | null =>
   preferences.tokens.find((token) => token.networkId === networkId) ?? null;
@@ -101,22 +155,22 @@ export const assertPublicPoolSpendAffordable = async (
   const balanceOf = (address: string): bigint => {
     const entry = balances.find((balance) => sameFelt(balance.address, address));
     if (!entry || !/^\d+$/.test(entry.balance)) {
-      throw new Error("Could not confirm the public balance required by this transaction");
+      throw new WalletError(PRIVACY_PUBLIC_BALANCE_UNCONFIRMED);
     }
     return BigInt(entry.balance);
   };
   const amount = depositAmountRaw === undefined ? 0n : BigInt(depositAmountRaw);
   if (depositIsStrk) {
     if (balanceOf(STRK_TOKEN_ADDRESS) < amount + fee) {
-      throw new Error("Not enough STRK for the amount and pool fee");
+      throw new PrivacyBlockerError("fund", "Not enough STRK for the amount and pool fee");
     }
     return;
   }
   if (depositAmountRaw !== undefined && balanceOf(context.token.address) < amount) {
-    throw new Error(`Not enough ${context.token.symbol}`);
+    throw new WalletError(privacyShortfall(context.token.symbol, "public"));
   }
   if (balanceOf(STRK_TOKEN_ADDRESS) < fee) {
-    throw new Error("Not enough STRK for the pool fee");
+    throw new PrivacyBlockerError("fund", "Not enough STRK for the pool fee");
   }
 };
 
@@ -130,14 +184,7 @@ export const estimatePublicStrk20Fee = async (
   calls: readonly Call[],
   proof: Strk20Proof,
 ): Promise<FeeEstimate> => {
-  if (
-    !(await deps.runtimeRpc.getDeploymentStatus({
-      accountAddress: context.accountContext.account.address,
-      rpcUrls: context.accountContext.rpcUrls,
-    }))
-  ) {
-    throw new Error("Deploy this account before using public privacy transactions");
-  }
+  await assertPrivacyAccountDeployed(deps, context);
   return deps.runtimeRpc.estimateInvokeFee({
     account: context.accountContext.account,
     calls,
@@ -145,6 +192,21 @@ export const estimatePublicStrk20Fee = async (
     rpcUrls: context.accountContext.rpcUrls,
     signHash: context.accountContext.signHash,
   });
+};
+
+/** Checks chain deployment before any registration discovery, fee read, or proof. RPC failures fail closed. */
+export const assertPrivacyAccountDeployed = async (
+  deps: Pick<Strk20WalletOpsDeps, "runtimeRpc">,
+  context: ActivePrivacyContext,
+): Promise<void> => {
+  if (
+    !(await deps.runtimeRpc.getDeploymentStatus({
+      accountAddress: context.accountContext.account.address,
+      rpcUrls: context.accountContext.rpcUrls,
+    }))
+  ) {
+    throw new PrivacyBlockerError("deploy", PRIVACY_DEPLOY_REQUIRED);
+  }
 };
 
 /**
@@ -163,19 +225,44 @@ export const estimatePublicStrk20Fee = async (
 export const resolvePrivacyContext = async (
   deps: Strk20WalletOpsDeps,
   input: { readonly active: ActiveAccountContext; readonly tokenId?: string },
-): Promise<ActivePrivacyContext | { readonly error: string }> => {
+): Promise<
+  ActivePrivacyContext | { readonly error: string; readonly privacyBlocker?: PrivacyBlockerKind }
+> => {
   const { active, tokenId } = input;
   if (active.error !== undefined) {
     return { error: active.error };
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    active.accounts,
+  );
   const config = preferences.strk20Networks?.[active.networkId] ?? null;
   if (!config) {
-    return { error: "Private balances are not configured for this network" };
+    return {
+      error: "Private balances are not configured for this network",
+      privacyBlocker: "network",
+    };
   }
   if (active.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
+    // TODO: Ledger provisioning retains a viewing key (`ledger-strk20-typed-data-v1`
+    // in account-secrets.ts). Once that ships, compare the pool key with the
+    // public key of that retained key instead of refusing every Ledger account
+    // here. This blocker stays first so a pool read never reclassifies one.
+    return {
+      error: "Private balances are not available for Ledger accounts",
+      privacyBlocker: "ledger",
+    };
   }
+  const registration = await strk20RegistrationBlock({
+    account: active.account,
+    passphrase: active.vaultPassphrase,
+    preferences,
+    readRegistered: deps.runtimeRpc.getStrk20PublicKey,
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[active.networkId], preferences),
+    wallet: deps.wallet,
+  });
+  if (registration) return registration;
   const token = tokenId
     ? preferences.tokens.find(
         (stored) => stored.id === tokenId && stored.networkId === active.networkId,

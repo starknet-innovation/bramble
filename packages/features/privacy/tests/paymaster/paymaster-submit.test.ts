@@ -1,12 +1,13 @@
 /** Submission-side privacy-paymaster contract tests. */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "@mc-wallet/privacy/paymaster";
-import { STRK20_SUBMISSION_UNAVAILABLE } from "@mc-wallet/privacy/service";
+import { WalletError } from "@bramble/core/errors";
+import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "@bramble/privacy/paymaster";
+import { STRK20_SUBMISSION_UNAVAILABLE } from "@bramble/privacy/service";
 import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
-} from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/provider";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import {
   paymasterCall as call,
   paymasterChainId as chainId,
@@ -17,6 +18,9 @@ import {
 
 // The injected transport shape both paymaster entry points accept.
 type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+// A fee token other than the configured `0x3`: the converted route.
+const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 
 describe("STRK20 paymaster submission boundary", () => {
   test("submits the frozen proof and validates the returned transaction hash", async () => {
@@ -29,6 +33,7 @@ describe("STRK20 paymaster submission boundary", () => {
         requests.push(JSON.parse(String(init?.body)));
         return response({ transaction_hash: "0x123" });
       },
+      isAuthorized: () => true,
       nowSeconds: 2,
       plan: {
         feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
@@ -40,6 +45,63 @@ describe("STRK20 paymaster submission boundary", () => {
     });
     expect(result).toEqual({ transactionHash: "0x123" });
     expect(requests[0]?.["method"]).toBe("paymaster_executeTransaction");
+  });
+
+  // #355: the quote may convert the fee into the token being sent, so the
+  // configured default is not the route the user reviewed. The relay must be
+  // told to collect the fee in the plan's token, or its validation checks a
+  // route that was never shown.
+  test("names the plan's fee token in the fee mode, not the configured default", async () => {
+    let feeToken: string | undefined;
+    await submitStrk20PaymasterPlan({
+      accountAddress: "0x1",
+      call,
+      config,
+      http: async (_url, init) => {
+        const body = JSON.parse(String(init?.body)) as {
+          readonly params: {
+            readonly parameters: { readonly fee_mode: { readonly pool_fee_token: string } };
+          };
+        };
+        feeToken = body.params.parameters.fee_mode.pool_fee_token;
+        return response({ transaction_hash: "0x123" });
+      },
+      isAuthorized: () => true,
+      nowSeconds: 2,
+      plan: {
+        feeAction: { amount: "0x5", recipient: "0x4", token: USDC, type: "withdraw" },
+        feeCeiling: { ceiling: "0x6", reference: "0x5" },
+      },
+      proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+      signTypedData: async () => {
+        throw new Error("no public approval signature expected");
+      },
+    });
+    // The relay receives the canonical felt, so compare numerically.
+    expect(sameFelt(feeToken ?? "", USDC)).toBe(true);
+  });
+
+  test("refuses a plan in another token that carries no ceiling before contacting the relay", async () => {
+    let contacted = false;
+    await expect(
+      submitStrk20PaymasterPlan({
+        accountAddress: "0x1",
+        call,
+        config,
+        http: async () => {
+          contacted = true;
+          return response({ transaction_hash: "0x123" });
+        },
+        isAuthorized: () => true,
+        nowSeconds: 2,
+        plan: { feeAction: { amount: "0x5", recipient: "0x4", token: USDC, type: "withdraw" } },
+        proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+        signTypedData: async () => {
+          throw new Error("no public approval signature expected");
+        },
+      }),
+    ).rejects.toThrow(STRK20_SUBMISSION_UNAVAILABLE);
+    expect(contacted).toBe(false);
   });
 
   test("signs exactly the frozen typed data for public token approvals", async () => {
@@ -54,6 +116,7 @@ describe("STRK20 paymaster submission boundary", () => {
         submitted = JSON.parse(String(init?.body));
         return response({ transaction_hash: "0x123" });
       },
+      isAuthorized: () => true,
       nowSeconds: 2,
       plan: {
         authorization: {
@@ -108,6 +171,7 @@ describe("STRK20 paymaster submission boundary", () => {
             submitted = true;
             return response({ transaction_hash: "0x123" });
           },
+          isAuthorized: () => true,
           nowSeconds: 2,
           plan,
           proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
@@ -134,6 +198,7 @@ describe("STRK20 paymaster submission boundary", () => {
           submitted = true;
           return response({ transaction_hash: "0x123" });
         },
+        isAuthorized: () => true,
         nowSeconds: 250,
         plan: {
           authorization: {
@@ -174,6 +239,7 @@ describe("STRK20 paymaster submission boundary", () => {
       call,
       config,
       http,
+      isAuthorized: () => true,
       nowSeconds: 2,
       plan: {
         feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
@@ -197,18 +263,50 @@ describe("STRK20 paymaster submission boundary", () => {
       async () => new Response("not json", { status: 200 }),
       // A JSON-RPC envelope the client cannot interpret.
       async () =>
-        new Response(JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0", surprise: 1 }), {
+        new Response(JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0", surprise: 1 }), {
           status: 200,
         }),
       // A well-formed envelope carrying neither a result nor an error.
       async () =>
-        new Response(JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0" }), { status: 200 }),
+        new Response(JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0" }), { status: 200 }),
       // A result the relay accepted, with no usable handle on it.
       async () => response({ transaction_hash: "not-a-hash" }),
       // This client's own deadline ended the exchange after the request went out.
       async () => {
         throw new DOMException("The operation timed out.", "TimeoutError");
       },
+      // Sherlock 159: the STRK20 gateway sits between the wallet and the relay
+      // and answers a 5xx when its own upstream deadline expires or the relay's
+      // reply breaks off. That is the gateway reporting a lost answer, not the
+      // relay refusing, so every 5xx is ambiguous on a broadcast.
+      async () => new Response(JSON.stringify({ error: "upstream_unavailable" }), { status: 502 }),
+      async () => new Response("unavailable", { status: 503 }),
+      async () => new Response(JSON.stringify({ error: "upstream_timeout" }), { status: 504 }),
+      // Audit M1: Chrome reports a connection reset or an empty reply after the
+      // request was written as the same `TypeError` as a DNS failure, so no
+      // transport rejection proves the relay never received the broadcast.
+      async () => {
+        throw new TypeError("Failed to fetch");
+      },
+      async () => {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      },
+      // An error that is not a JSON-RPC error object, or one beside a result,
+      // does not say the relay stopped.
+      ...[
+        { error: null },
+        { error: "failed" },
+        { error: { code: -32_000 } },
+        { error: { message: "failed" } },
+        { error: { code: 1.5, message: "failed" } },
+        { error: { code: -32_000, message: 7 } },
+        { error: { code: -32_000, message: "failed" }, result: { transaction_hash: "0x1" } },
+      ].map(
+        (fields) => async () =>
+          new Response(JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0", ...fields }), {
+            status: 200,
+          }),
+      ),
     ];
     for (const http of lost) {
       const rejected = await submitWith(http);
@@ -221,22 +319,19 @@ describe("STRK20 paymaster submission boundary", () => {
     // The counterweight: over-correcting into "hold the scope on every relay
     // failure" would strand a caller behind a stale `submitting` guard after an
     // ordinary refusal, so a relay that answers for itself stays determinate.
+    // A 4xx is a refusal: the request was rejected, not lost.
     const stated: readonly PaymasterHttp[] = [
-      async () => new Response("unavailable", { status: 503 }),
+      async () => new Response("bad request", { status: 400 }),
+      async () => new Response(JSON.stringify({ error: "upstream_rejected" }), { status: 429 }),
       async () =>
         new Response(
           JSON.stringify({
             error: { code: -32_000, message: "failed" },
-            id: "mc-wallet-strk20",
+            id: "bramble-strk20",
             jsonrpc: "2.0",
           }),
           { status: 200 },
         ),
-      // No exchange took place at all: DNS, a refused connection, a refused
-      // redirect. Nothing was broadcast.
-      async () => {
-        throw new TypeError("Failed to fetch");
-      },
     ];
     for (const http of stated) {
       const rejected = await submitWith(http);
@@ -257,13 +352,14 @@ describe("STRK20 paymaster submission boundary", () => {
           status: 200,
         }),
       async () => new Response("not json", { status: 200 }),
+      async () => new Response(JSON.stringify({ error: "upstream_unavailable" }), { status: 502 }),
     ] satisfies readonly PaymasterHttp[]) {
       const rejected = await buildStrk20PaymasterPlan({
         accountAddress: "0x1",
         approveCalls: [],
         chainId,
         config,
-        expectedFeeAmount: 5n,
+        feeBound: { amount: 5n, kind: "exact" as const },
         http,
         nowSeconds: 2,
         poolAddress: "0x2",
@@ -275,6 +371,25 @@ describe("STRK20 paymaster submission boundary", () => {
       expect(rejected).not.toBeInstanceOf(IndeterminateRpcWriteError);
       expect((rejected as Error).message).toBe(STRK20_SUBMISSION_UNAVAILABLE);
     }
+    // The broadcast's stricter error check does not reach a quote.
+    const malformed = await buildStrk20PaymasterPlan({
+      accountAddress: "0x1",
+      approveCalls: [],
+      chainId,
+      config,
+      feeBound: { amount: 5n, kind: "exact" as const },
+      http: async () =>
+        new Response(JSON.stringify({ error: null, id: "bramble-strk20", jsonrpc: "2.0" }), {
+          status: 200,
+        }),
+      nowSeconds: 2,
+      poolAddress: "0x2",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(malformed).toBeInstanceOf(WalletError);
+    expect(malformed).not.toBeInstanceOf(IndeterminateRpcWriteError);
   });
 
   test("never exposes proof material echoed by the relay", async () => {
@@ -290,11 +405,12 @@ describe("STRK20 paymaster submission boundary", () => {
               data: { execution_error: "proof proof_facts 0x2" },
               message: "rejected proof",
             },
-            id: "mc-wallet-strk20",
+            id: "bramble-strk20",
             jsonrpc: "2.0",
           }),
           { status: 200 },
         ),
+      isAuthorized: () => true,
       nowSeconds: 2,
       plan: {
         feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },

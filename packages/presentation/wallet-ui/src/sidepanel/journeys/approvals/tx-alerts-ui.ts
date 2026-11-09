@@ -9,7 +9,7 @@
  * reaches the user on next open rather than only appearing as a changed row in
  * the activity feed.
  */
-import { showToast } from "../../shared/dom";
+import { showNoticeToast } from "../../shared/dom";
 
 /**
  * The runtime surface this needs. Declared structurally so the binding does not
@@ -38,7 +38,9 @@ export const withTransactionAlerts =
   async () => {
     await refresh();
     const alerts = await wallet.loadTransactionAlerts().catch(() => []);
+    // Each alert is a sentence the background wrote, quoting the entry's
+    // summary, so it is shown as written rather than mapped by its words.
     for (const alert of alerts) {
-      showToast(alert, "error", context);
+      showNoticeToast(alert, context);
     }
   };

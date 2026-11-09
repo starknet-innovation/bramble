@@ -6,11 +6,11 @@
  * account to the actions and is not a privacy-preserving production route.
  */
 
-import { STRK20_MAINNET_POOL } from "@mc-wallet/privacy/config";
-import { sanitizeStrk20Detail } from "@mc-wallet/privacy/official-sdk-errors";
-import { buildErc20ApproveCall } from "@mc-wallet/starknet/rpc-assets";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { isStrk20CallAndProof, type Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
+import { sanitizeStrk20Detail } from "@bramble/privacy/official-sdk-errors";
+import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { isStrk20CallAndProof, type Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { Page } from "@playwright/test";
 import { RpcProvider } from "starknet";
 import { expect, test } from "../e2e/fixtures";
@@ -348,15 +348,6 @@ test("runs the STRK20 core lifecycle through an acknowledged public caller", asy
       rpcActivity.push(activity);
     }
   });
-  const sidepanel = await extension.openExtensionPage("sidepanel.html");
-  await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
-  await test.step("Import and verify the env-gated funded account", async () => {
-    await importFundedAccount(sidepanel);
-    const selected = await activeAddress(sidepanel);
-    expect(selected).not.toBeNull();
-    expect(sameFelt(selected ?? "0x0", environment.accountAddress)).toBe(true);
-  });
-
   const serviceProxy = await startStrk20ServiceProxy({
     discoveryUpstream: environment.discoveryUrl,
     proverUpstream: environment.proverUrl,
@@ -364,17 +355,25 @@ test("runs the STRK20 core lifecycle through an acknowledged public caller", asy
   });
   const dappServer = await startLiveDapp();
   try {
-    const provider = new RpcProvider({ nodeUrl: environment.rpcUrl });
-    const protocolFee = await readProtocolFee(provider);
+    const sidepanel = await extension.openExtensionPage("sidepanel.html");
     await configureLocalServices(sidepanel, {
       discoveryUrl: serviceProxy.discoveryUrl,
       poolAddress: STRK20_MAINNET_POOL,
       proverUrl: serviceProxy.proverUrl,
       rpcUrl: serviceProxy.rpcUrl,
     });
+    await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
+    await test.step("Import and verify the env-gated funded account", async () => {
+      await importFundedAccount(sidepanel);
+      const selected = await activeAddress(sidepanel);
+      expect(selected).not.toBeNull();
+      expect(sameFelt(selected ?? "0x0", environment.accountAddress)).toBe(true);
+    });
+    const provider = new RpcProvider({ nodeUrl: environment.rpcUrl });
+    const protocolFee = await readProtocolFee(provider);
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
     await test.step("Connect only the funded account", async () => {
       const connection = connectLiveProvider(dapp);

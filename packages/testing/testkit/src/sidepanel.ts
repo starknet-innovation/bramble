@@ -6,8 +6,8 @@
  * stay single-sourced.
  */
 
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 
 /**
  * Canonical active mainnet account.

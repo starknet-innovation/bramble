@@ -23,15 +23,16 @@ sandboxes:
 Without the package and vendored outputs, `check:krusty`, `check:argent`, `check:privacy`, and `build` fail;
 that is expected offline. Run the rest of the gates and say so.
 
-Contributors can enable the local pre-push hook to run the offline-fast checks
-(types, lint, file/config standards, extension manifest, unit tests) before
-every push:
+Contributors can enable the local hooks — a pre-push hook running the
+offline-fast checks (types, lint, file/config standards, extension manifest,
+unit tests), plus the release-branch immutability guard that refuses commits and
+pushes on a `release/v*` branch already integrated into `main`:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-Bypass a single push with `git push --no-verify`.
+Bypass a single commit or push with `--no-verify`.
 
 ## Required Gates
 
@@ -109,6 +110,8 @@ history.
   popup boundary modules enforced by `bun run check`.
 - Krusty KMS owns wallet cryptography. Do not add fallback signing, key derivation, or mnemonic
   validation code.
+  Off-wallet dev tooling that never ships (`tools/vendor-dataset`, which records vendor import
+  fixtures) may derive test keys itself; no shipped workspace may import it.
 - Krusty KMS must stay pinned to an exact published version in `package.json` and `bun.lock`.
   `scripts/check-krusty-adapter.ts` verifies the installed package metadata and both runtime-file
   digests before importing it. Update the version and both digests together, and only with the full
@@ -116,7 +119,7 @@ history.
 - The official Privacy SDK source is pinned in `scripts/vendor-privacy-sdk.ts`; the browser bundle
   and its source map are digest-pinned in `scripts/check-privacy-sdk.ts`, which reads the revision
   back out of the vendor script rather than keeping a second copy. Do not replace its proving,
-  note-discovery, or sub-account cryptography with local implementations.
+  note-discovery, or shadow-account cryptography with local implementations.
 - Every vendored checkout is verified through `scripts/vendor-pin-policy.ts`: pinned revision,
   clean worktree, and a reviewed digest for every artifact that ships. Add a new vendored source
   through those helpers, never with a private copy of the checks.

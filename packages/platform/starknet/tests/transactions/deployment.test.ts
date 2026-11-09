@@ -12,10 +12,10 @@ import {
   estimateAccountDeploymentFee,
   getDeploymentStatus,
   submitAccountDeployment,
-} from "@mc-wallet/starknet/deployment";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/starknet/deployment";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import type { FeeEstimate } from "@bramble/starknet/rpc";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { type Account, CallData, hash, logger, type RpcProvider } from "starknet";
 
 logger.setLogLevel("FATAL");

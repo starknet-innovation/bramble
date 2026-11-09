@@ -8,9 +8,9 @@
  * single-flight guard ignores a second concurrent request.
  */
 import { describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { LedgerSignRequestSummary } from "../../../../src/popup/responses/responses";
 import type { LedgerSignOutcome } from "../../../../src/sidepanel/journeys/ledger/runtime-client";
 import {
@@ -215,30 +215,6 @@ describe("Ledger sign controller", () => {
     }
     // Nothing was reported: the request stays parked, nothing submitted.
     expect(h.reports).toEqual([]);
-  });
-
-  test("a blind-signing-disabled refusal shows the one-time unblock copy", async () => {
-    // The real library folds a blind-signing refusal into ExecutionError (0x6f00)
-    // on signHash — never a distinct status word — so the classifier keys off it.
-    const h = harness({
-      openConnected: () =>
-        Promise.resolve(
-          fakeClient(() =>
-            Promise.resolve({
-              errorMessage: "Execution Error",
-              r: new Uint8Array(),
-              returnCode: 0x6f00,
-              s: new Uint8Array(),
-            }),
-          ),
-        ),
-      request: () => Promise.reject(new Error("unused")),
-    });
-    controllerFor(h).present(REQUEST);
-    await tick();
-
-    const last = h.views.at(-1);
-    expect(last?.phase.kind === "error" && last.phase.code).toBe("blind-signing-disabled");
   });
 
   test("a thrown transport error on the pre-check (device locked) maps to device-locked", async () => {

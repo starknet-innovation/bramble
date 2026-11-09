@@ -1,8 +1,8 @@
 /** Validated runtime client for privileged Argent multisig operations. */
-import type { ArgentMultisigCall } from "@mc-wallet/multisig/chain";
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { ArgentMultisigCall } from "@bramble/multisig/chain";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import {
   type ArgentMultisigDeploymentReview,
   type ArgentMultisigIntentPackage,
@@ -11,17 +11,47 @@ import {
   isArgentMultisigDeploymentReviewResponse,
   isArgentMultisigDeployResponse,
   isArgentMultisigIntentResponse,
-  isArgentMultisigResponse,
-  isArgentMultisigsResponse,
   isMultisigSignerResponse,
+  isMultisigStrk20KeyResponse,
   isNostrShareResponse,
   isNostrSyncResponse,
   isOkResponse,
   type MultisigSignerAccount,
+  readArgentMultisig,
+  readArgentMultisigs,
 } from "../../../popup/responses/multisig-responses";
-import { isBalancesResponse, isErrorResponse } from "../../../popup/responses/responses";
+import { isBalancesResponse } from "../../../popup/responses/responses";
 import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
-import { responseError } from "../../runtime/runtime-errors";
+import { lostReplySend, refusalText, responseError } from "../../runtime/runtime-errors";
+import { isStrk20Panel, type Strk20PanelState } from "./multisig-strk20-panel";
+
+const isRecordPhase = (
+  value: unknown,
+): value is {
+  readonly id: string;
+  readonly ok: true;
+  readonly phase: "authorization" | "fresh" | "relay";
+} => {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as {
+    readonly id?: unknown;
+    readonly ok?: unknown;
+    readonly phase?: unknown;
+  };
+  return (
+    record.ok === true &&
+    typeof record.id === "string" &&
+    (record.phase === "authorization" || record.phase === "fresh" || record.phase === "relay")
+  );
+};
+
+const isTransactionHash = (
+  value: unknown,
+): value is { readonly ok: true; readonly transactionHash: string } => {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as { readonly ok?: unknown; readonly transactionHash?: unknown };
+  return record.ok === true && typeof record.transactionHash === "string";
+};
 
 /**
  * Address and active network required to sync an existing Argent multisig.
@@ -64,7 +94,7 @@ export type MultisigClient = ReturnType<typeof createMultisigClient>;
  * Creates a runtime client that rejects every malformed background response.
  */
 export const createMultisigClient = (runtime?: RuntimeApi) => {
-  const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
+  const sendMessage = lostReplySend(runtime);
   type RefreshResult =
     | {
         readonly intents: readonly ArgentMultisigSigningIntent[];
@@ -95,29 +125,30 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
     async addMultisig(input: ArgentMultisigSetup): Promise<ArgentMultisigView> {
       invalidateRefreshes();
       const response = await sendMessage({ ...input, type: "wallet.addMultisig" });
-      if (!isArgentMultisigResponse(response)) {
-        throw responseError(response, "add Argent multisig failed");
+      const added = readArgentMultisig(response);
+      if (!added) {
+        throw responseError(response, "add Ready multisig failed");
       }
-      return response.multisig;
+      return added.multisig;
     },
     async deployMultisig(review: ArgentMultisigDeploymentReview) {
       invalidateRefreshes();
       const response = await sendMessage({ review, type: "wallet.deployArgentMultisig" });
       if (!isArgentMultisigDeployResponse(response)) {
-        throw responseError(response, "deploy Argent multisig failed");
+        throw responseError(response, "deploy Ready multisig failed");
       }
       return response;
     },
     async importIntent(intentPackage: ArgentMultisigIntentPackage) {
       return intentResult(
         { package: intentPackage, type: "wallet.importArgentMultisigIntent" },
-        "import Argent multisig intent failed",
+        "import Ready multisig intent failed",
       );
     },
     async importSignature(intentId: string, signature: StarkSignature) {
       return intentResult(
         { intentId, signature, type: "wallet.importArgentMultisigSignature" },
-        "import Argent multisig signature failed",
+        "import Ready multisig signature failed",
       );
     },
     async loadBalances(
@@ -140,9 +171,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
           ...(response.stale === undefined ? {} : { stale: response.stale }),
         };
       }
-      return {
-        error: isErrorResponse(response) ? response.error : "multisig balances unavailable",
-      };
+      return { error: refusalText(response, "multisig balances unavailable") };
     },
     async loadClassStatus(): Promise<boolean | "error"> {
       try {
@@ -164,16 +193,24 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
           ...(cached ? { cached: true } : {}),
           type: "wallet.multisigs",
         });
-        if (!isArgentMultisigsResponse(response)) return "error";
-        return { intents: response.intents, multisigs: response.multisigs };
+        return readArgentMultisigs(response) ?? "error";
       } catch {
         return "error";
       }
     },
-    async prepareIntent(multisigId: string, calls: readonly ArgentMultisigCall[]) {
+    async prepareIntent(
+      multisigId: string,
+      calls: readonly ArgentMultisigCall[],
+      confirmResend = false,
+    ) {
       return intentResult(
-        { calls, multisigId, type: "wallet.prepareArgentMultisigIntent" },
-        "prepare Argent multisig intent failed",
+        {
+          calls,
+          ...(confirmResend ? { confirmResend: true } : {}),
+          multisigId,
+          type: "wallet.prepareArgentMultisigIntent",
+        },
+        "prepare Ready multisig intent failed",
       );
     },
     async resolveSigner(address: string, networkId: string): Promise<MultisigSignerAccount> {
@@ -192,12 +229,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       const existing = refreshes.get(multisigId);
       if (existing) return existing;
       const refresh = sendMessage({ multisigId, type: "wallet.refreshMultisig" })
-        .then(
-          (response): RefreshResult =>
-            isArgentMultisigResponse(response)
-              ? { intents: response.intents, multisig: response.multisig }
-              : "error",
-        )
+        .then((response): RefreshResult => readArgentMultisig(response) ?? "error")
         .catch((): RefreshResult => "error");
       refreshes.set(multisigId, refresh);
       // A successful confirmed authority is stable until a multisig action.
@@ -220,14 +252,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         type: "wallet.removeMultisig",
       });
       if (!isOkResponse(response)) {
-        throw responseError(response, "remove Argent multisig failed");
+        throw responseError(response, "remove Ready multisig failed");
       }
     },
     async removeIntent(intentId: string): Promise<void> {
       invalidateRefreshes();
       const response = await sendMessage({ intentId, type: "wallet.removeArgentMultisigIntent" });
       if (!isOkResponse(response)) {
-        throw responseError(response, "remove Argent multisig intent failed");
+        throw responseError(response, "remove Ready multisig intent failed");
       }
     },
     async reviewDeployment(
@@ -239,15 +271,127 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         type: "wallet.reviewArgentMultisigDeployment",
       });
       if (!isArgentMultisigDeploymentReviewResponse(response)) {
-        throw responseError(response, "review Argent multisig deployment failed");
+        throw responseError(response, "review Ready multisig deployment failed");
       }
       return response.deploymentReview;
     },
     async signIntent(intentId: string, signerAccountId: string) {
       return intentResult(
         { intentId, signerAccountId, type: "wallet.signArgentMultisigIntent" },
-        "sign Argent multisig intent failed",
+        "sign Ready multisig intent failed",
       );
+    },
+    async strk20KeyStatus(multisigId: string): Promise<"absent" | "conflict" | "held"> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.argentMultisigStrk20KeyStatus",
+      });
+      if (!isMultisigStrk20KeyResponse(response) || response.state === "created") {
+        throw responseError(response, "Couldn't update this multisig's key.");
+      }
+      return response.state;
+    },
+    async createStrk20Key(multisigId: string): Promise<"created" | "held"> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.createArgentMultisigStrk20Key",
+      });
+      if (
+        !isMultisigStrk20KeyResponse(response) ||
+        (response.state !== "created" && response.state !== "held")
+      ) {
+        throw responseError(response, "Couldn't update this multisig's key.");
+      }
+      return response.state;
+    },
+    async shareStrk20Key(
+      multisigId: string,
+    ): Promise<{ readonly recipients: number; readonly totalRecipients: number }> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.shareArgentMultisigStrk20Key",
+      });
+      if (!isNostrShareResponse(response)) {
+        throw responseError(response, "secure co-signer share failed");
+      }
+      return { recipients: response.recipients, totalRecipients: response.totalRecipients };
+    },
+    async prepareStrk20(input: {
+      readonly amount?: string;
+      readonly kind: "deposit" | "register" | "transfer" | "withdraw";
+      readonly multisigId: string;
+      readonly recipient?: string;
+      readonly tokenId?: string;
+    }): Promise<{
+      readonly id: string;
+      readonly phase: "authorization" | "fresh" | "intent" | "relay";
+    }> {
+      const response = await sendMessage({ ...input, type: "wallet.prepareArgentMultisigStrk20" });
+      if (isRecordPhase(response)) return { id: response.id, phase: response.phase };
+      if (isArgentMultisigIntentResponse(response)) {
+        return { id: response.intent.id, phase: "intent" };
+      }
+      throw responseError(response, "Couldn't prepare this private action.");
+    },
+    async shareStrk20Authorization(
+      id: string,
+    ): Promise<{ readonly recipients: number; readonly totalRecipients: number }> {
+      const response = await sendMessage({
+        id,
+        type: "wallet.shareArgentMultisigStrk20Authorization",
+      });
+      if (!isNostrShareResponse(response)) {
+        throw responseError(response, "secure co-signer share failed");
+      }
+      return { recipients: response.recipients, totalRecipients: response.totalRecipients };
+    },
+    async signStrk20Authorization(
+      id: string,
+    ): Promise<{ readonly id: string; readonly phase: string }> {
+      const response = await sendMessage({
+        id,
+        type: "wallet.signArgentMultisigStrk20Authorization",
+      });
+      if (!isRecordPhase(response))
+        throw responseError(response, "Couldn't prepare this private action.");
+      return { id: response.id, phase: response.phase };
+    },
+    async refreshStrk20(id: string): Promise<{ readonly id: string; readonly phase: string }> {
+      const response = await sendMessage({ id, type: "wallet.refreshArgentMultisigStrk20" });
+      if (isRecordPhase(response)) return response;
+      if (isArgentMultisigIntentResponse(response))
+        return { id: response.intent.id, phase: "intent" };
+      throw responseError(response, "Couldn't prepare this private action.");
+    },
+    async submitStrk20Relay(id: string): Promise<{ readonly transactionHash: string }> {
+      const response = await sendMessage({ id, type: "wallet.submitArgentMultisigStrk20Relay" });
+      if (!isTransactionHash(response)) {
+        throw responseError(response, "Couldn't prepare this private action.");
+      }
+      return { transactionHash: response.transactionHash };
+    },
+    async strk20Panel(multisigId: string): Promise<Strk20PanelState> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.argentMultisigStrk20Panel",
+      });
+      if (!isStrk20Panel(response)) {
+        throw responseError(response, "Couldn't prepare this private action.");
+      }
+      return {
+        authorizations: response.authorizations,
+        balances: response.balances,
+        relays: response.relays,
+      };
+    },
+    async forgetStrk20Key(multisigId: string): Promise<void> {
+      const response = await sendMessage({
+        multisigId,
+        type: "wallet.forgetArgentMultisigStrk20Key",
+      });
+      if (!isOkResponse(response)) {
+        throw responseError(response, "Couldn't update this multisig's key.");
+      }
     },
     async shareIntent(
       intentId: string,
@@ -265,6 +409,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       readonly imported: number;
       readonly intentIds: readonly string[];
       readonly received: number;
+      readonly strk20Key: "conflict" | "held" | "none" | "stored";
     }> {
       invalidateRefreshes();
       const response = await sendMessage({ multisigId, type: "wallet.syncArgentMultisigIntents" });
@@ -275,12 +420,13 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         imported: response.imported,
         intentIds: response.intentIds,
         received: response.received,
+        strk20Key: response.strk20Key,
       };
     },
     async submitIntent(intentId: string) {
       return intentResult(
         { intentId, type: "wallet.submitArgentMultisigIntent" },
-        "submit Argent multisig intent failed",
+        "submit Ready multisig intent failed",
       );
     },
   };

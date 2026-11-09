@@ -4,8 +4,8 @@
  * per-method validation returns.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const store = () => createPreferencesStore({ store: createMemoryStore() });
 
@@ -66,7 +66,13 @@ describe("preferences store validation guards", () => {
     );
   });
 
+  test("setAccountHidden rejects a malformed account id", async () => {
+    await expect(
+      store().setAccountHidden({ accountId: "not-an-account", hidden: true }),
+    ).rejects.toThrow("Invalid account");
+  });
+
   test("upsertToken rejects a malformed token", async () => {
-    await expect(store().upsertToken({} as never)).rejects.toThrow("Invalid token");
+    await expect(store().upsertToken({} as never, "user")).rejects.toThrow("Invalid token");
   });
 });

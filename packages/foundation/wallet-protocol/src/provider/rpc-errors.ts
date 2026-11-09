@@ -6,6 +6,11 @@
  * string errors; this module is only for the dapp boundary.
  */
 
+import {
+  STRK20_BATCH_REFUSAL_PREFIX,
+  STRK20_SHADOW_ACCOUNT_REFUSAL_PREFIX,
+} from "../privacy/strk20-batch";
+
 /**
  * A Starknet wallet JSON-RPC error object as defined by wallet_rpc.json.
  */
@@ -72,20 +77,21 @@ export const apiVersionNotSupported = make(162, "The requested API version is no
  */
 export const unknownError = make(163, "The wallet request failed");
 
-// Ordered message patterns: the first match wins. Wallet API 0.10.5 makes a
-// register action for an already registered account INVALID_REQUEST_PAYLOAD, so
-// that pattern precedes NOT_REGISTERED.
-const MESSAGE_ERRORS: readonly (readonly [RegExp, () => WalletRpcError])[] = [
-  [/unsupported chain|chain (?:id )?not supported|unlisted network/i, chainIdNotSupported],
-  [/unsupported api|api version/i, apiVersionNotSupported],
-  [/already deployed/i, accountAlreadyDeployed],
-  [/deployment data/i, deploymentDataNotAvailable],
-  [/already (?:registered|active)/i, invalidRequestPayload],
-  [/not registered/i, notRegistered],
-  [/insufficient private balance/i, insufficientPrivateBalance],
-  [/privacy leak|would leak/i, privacyLeak],
-  [/^invalid\b|malformed|origin mismatch/i, invalidRequestPayload],
-];
+// Malformed inputs. A refused STRK20 batch or shadow-account request names its
+// rule as `data`, so the site can tell which one it broke.
+const invalidPayloadFor = (message: string): WalletRpcError | null => {
+  for (const prefix of [STRK20_BATCH_REFUSAL_PREFIX, STRK20_SHADOW_ACCOUNT_REFUSAL_PREFIX]) {
+    if (message.startsWith(prefix)) {
+      return invalidRequestPayload(message.slice(prefix.length));
+    }
+  }
+  // Wallet API 0.10.5: a register action for an already registered account is
+  // INVALID_REQUEST_PAYLOAD (neither phrase contains "not registered").
+  return /^invalid\b/i.test(message) ||
+    /malformed|origin mismatch|already (?:registered|active)/i.test(message)
+    ? invalidRequestPayload()
+    : null;
+};
 
 /**
  * Maps an internal background error string to its spec error object. Denials
@@ -97,12 +103,44 @@ export const errorForMessage = (message: string): WalletRpcError => {
   if (message === "request rejected" || message === "connection rejected") {
     return userRefusedOp();
   }
-  const mapped = MESSAGE_ERRORS.find(([pattern]) => pattern.test(message));
-  if (mapped) {
-    return mapped[1]();
+  if (/unsupported chain|chain (?:id )?not supported|unlisted network/i.test(message)) {
+    return chainIdNotSupported();
   }
+  if (/unsupported api|api version/i.test(message)) {
+    return apiVersionNotSupported();
+  }
+  if (/already deployed/i.test(message)) {
+    return accountAlreadyDeployed();
+  }
+  if (/deployment data/i.test(message)) {
+    return deploymentDataNotAvailable();
+  }
+  if (/not registered/i.test(message)) {
+    return notRegistered();
+  }
+  if (/insufficient private balance/i.test(message)) {
+    return insufficientPrivateBalance();
+  }
+  if (/privacy leak|would leak/i.test(message)) {
+    return privacyLeak();
+  }
+  const invalid = invalidPayloadFor(message);
+  if (invalid) {
+    return invalid;
+  }
+  return siteError(message) ?? unknownError();
+};
+
+const siteError = (message: string): WalletRpcError | null => {
   if (/^strk20 (?:services unavailable|private submission unavailable)/i.test(message)) {
     return unknownError(message);
   }
-  return unknownError();
+  if (
+    message.startsWith("Multisig proposal saved") ||
+    message.startsWith("This multisig") ||
+    message.startsWith("This wallet doesn't hold a signer")
+  ) {
+    return { code: 163, message };
+  }
+  return null;
 };

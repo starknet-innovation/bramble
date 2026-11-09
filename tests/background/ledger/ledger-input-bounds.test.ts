@@ -1,6 +1,6 @@
 /** Privileged Ledger enumeration input stays bounded to one UI page. */
 import { expect, test } from "bun:test";
-import { MAX_LEDGER_ACCOUNT_BATCH } from "@mc-wallet/wallet-model/ledger-path";
+import { MAX_LEDGER_ACCOUNT_BATCH } from "@bramble/wallet-model/ledger-path";
 import { readDeriveLedgerAccountsInput } from "../../../apps/extension/src/background/ledger/ledger-inputs";
 
 test("rejects Ledger enumeration batches larger than the shared page bound", () => {

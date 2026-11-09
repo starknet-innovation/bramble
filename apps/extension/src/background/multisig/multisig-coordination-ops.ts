@@ -1,18 +1,18 @@
 /** Explicit Nostr share and sync operations for existing Argent multisig intents. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
+} from "@bramble/multisig/repository";
+import type { NostrApplicationData } from "@bramble/vault/kms-port";
+import { isMultisigStrk20CapacityRefusal } from "@bramble/vault/service";
 import {
   isNostrApplicationData,
   isNostrPublicKey,
   type NostrEvent,
-} from "@mc-wallet/wallet-model/nostr";
-import type { AddressBookEntry } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/nostr";
+import type { AddressBookEntry } from "@bramble/wallet-model/preferences";
 import { runActiveStateMutation } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
@@ -22,22 +22,25 @@ import {
   readImportIntentInput,
   readMultisigIdInput,
 } from "./multisig-inputs";
-import { handleMultisigTxOps } from "./multisig-tx-ops";
 import {
-  MULTISIG_NOSTR_RELAYS,
-  type NostrRelayTransport,
-  nativeNostrRelayTransport,
-} from "./nostr-relay";
+  coordinationRecipients,
+  coordinationRelayUrls,
+  isCoordinationSigner,
+  publishForRecipients,
+} from "./multisig-nostr-publish";
+import { importSharedStrk20Authorization } from "./multisig-strk20-import";
+import {
+  handleMultisigStrk20KeyOps,
+  importSharedStrk20Key,
+  type Strk20KeyImport,
+} from "./multisig-strk20-key-ops";
+import { isWrapPastRetry, nostrSyncSince, retryableSyncedAt } from "./multisig-sync-window";
+import { handleMultisigTxOps } from "./multisig-tx-ops";
+import { type NostrRelayTransport, nativeNostrRelayTransport } from "./nostr-relay";
 
-const MULTISIG_NOSTR_IDENTIFIER = "mc-wallet.multisig";
-const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
-// NIP-59 backdates gift wraps by up to two days. The extra day preserves a
-// safe overlap while cutting subsequent relay scans from 30 days to three.
-const NOSTR_INCREMENTAL_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
+export { coordinationRelayUrls } from "./multisig-nostr-publish";
 
-/** One custom relay replaces the reviewed defaults; it never expands the broadcast set. */
-export const coordinationRelayUrls = (preferences: WalletPreferences): readonly string[] =>
-  preferences.nostrRelayUrl ? [preferences.nostrRelayUrl] : MULTISIG_NOSTR_RELAYS;
+const MULTISIG_NOSTR_IDENTIFIER = "bramble.multisig";
 
 const readIntentId = (message: unknown): string | null =>
   isRecord(message) &&
@@ -51,40 +54,6 @@ const readIntentId = (message: unknown): string | null =>
 
 const isTypeOnly = (message: unknown, type: string): boolean =>
   isRecord(message) && hasOnlyKnownKeys(message, ["type"]) && message["type"] === type;
-
-const signerContact = (
-  contacts: readonly AddressBookEntry[],
-  senderPublicKey: string,
-  networkId: string,
-  signerGuids: readonly string[],
-): AddressBookEntry | null =>
-  contacts.find(
-    (contact) =>
-      contact.networkId === networkId &&
-      contact.nostrPublicKey === senderPublicKey &&
-      !!contact.publicKeyX &&
-      signerGuids.includes(argentSignerGuid(contact.publicKeyX)),
-  ) ?? null;
-
-const coordinationRecipients = (
-  contacts: readonly AddressBookEntry[],
-  networkId: string,
-  ownPublicKey: string,
-  signerGuids: readonly string[],
-): readonly (AddressBookEntry & { readonly nostrPublicKey: string })[] => [
-  ...new Map(
-    contacts
-      .filter(
-        (contact): contact is AddressBookEntry & { readonly nostrPublicKey: string } =>
-          contact.networkId === networkId &&
-          contact.nostrPublicKey !== ownPublicKey &&
-          !!contact.nostrPublicKey &&
-          !!contact.publicKeyX &&
-          signerGuids.includes(argentSignerGuid(contact.publicKeyX)),
-      )
-      .map((contact) => [contact.nostrPublicKey, contact]),
-  ).values(),
-];
 
 const parseSharedIntent = (content: string) => {
   let packageMessage: unknown;
@@ -142,7 +111,7 @@ export const trustedSharedIntent = (
   const record = records.find((candidate) => candidate.id === input?.package.intent.accountId);
   return input &&
     record &&
-    signerContact(
+    isCoordinationSigner(
       contacts,
       opened.senderPublicKey,
       record.networkId,
@@ -163,108 +132,163 @@ export const sharedIntentHasUpdate = (
       (signature) => !current.signatures.some((stored) => stored.publicKey === signature.publicKey),
     ));
 
-const publishForRecipients = async (
-  recipients: readonly (AddressBookEntry & { readonly nostrPublicKey: string })[],
-  content: string,
-  vaultPassphrase: string,
-  isAuthorized: () => boolean,
-  relayUrls: readonly string[],
-  transport: NostrRelayTransport,
-  wrap: NonNullable<MultisigOpsDeps["wallet"]["wrapNostrApplicationData"]>,
-  wrapMany: MultisigOpsDeps["wallet"]["wrapNostrApplicationDataBatch"],
-): Promise<{
-  readonly recipients: number;
-  readonly relays: number;
-  readonly totalRecipients: number;
-} | null> => {
-  const wrapped = wrapMany
-    ? await wrapMany({
-        isAuthorized,
-        items: recipients.map((recipient) => ({
-          content,
-          identifier: MULTISIG_NOSTR_IDENTIFIER,
-          recipientPublicKey: recipient.nostrPublicKey,
-        })),
-        vaultPassphrase,
-      })
-    : await Promise.all(
-        recipients.map(async (recipient) => {
-          if (!isAuthorized()) return null;
-          try {
-            return await wrap({
-              content,
-              identifier: MULTISIG_NOSTR_IDENTIFIER,
-              recipientPublicKey: recipient.nostrPublicKey,
-              vaultPassphrase,
-            });
-          } catch {
-            return null;
-          }
-        }),
-      );
-  if (!isAuthorized()) return null;
-  const deliveries = wrapped.flatMap((eventJson, index) => {
-    const recipient = recipients[index];
-    return eventJson && recipient
-      ? [{ eventJson, recipientPublicKey: recipient.nostrPublicKey }]
-      : [];
-  });
-  if (deliveries.length === 0) throw new Error("Nostr relays are unavailable");
-  const relayCounts = transport.publishMany
-    ? await transport.publishMany(deliveries, relayUrls)
-    : await Promise.all(
-        deliveries.map(({ eventJson, recipientPublicKey }) =>
-          transport.publish(eventJson, recipientPublicKey, relayUrls).catch(() => 0),
-        ),
-      );
-  if (!isAuthorized()) return null;
-  const relays = relayCounts.reduce((sum, count) => sum + count, 0);
-  if (relays === 0) throw new Error("Nostr relays are unavailable");
-  return {
-    recipients: relayCounts.filter((count) => count > 0).length,
-    relays,
-    totalRecipients: recipients.length,
-  };
-};
-
 const recentGiftWraps = async (
   publicKey: string,
   since: number,
   relayUrls: readonly string[],
   transport: NostrRelayTransport,
+  seenEventIds: ReadonlySet<string>,
 ): Promise<readonly NostrEvent[] | null> => {
   try {
-    return await transport.sync(publicKey, since, relayUrls);
+    return await transport.sync(publicKey, since, relayUrls, seenEventIds);
   } catch {
     return null;
   }
 };
 
-const nostrSyncSince = (nowSeconds: number, syncedAt: number | undefined): number =>
-  Math.max(
-    0,
-    syncedAt !== undefined && syncedAt <= nowSeconds
-      ? syncedAt - NOSTR_INCREMENTAL_LOOKBACK_SECONDS
-      : nowSeconds - NOSTR_SYNC_LOOKBACK_SECONDS,
-  );
+const FINAL_IMPORT_REFUSALS: ReadonlySet<string> = new Set([
+  "Argent multisig intent conflict",
+  "Argent multisig intent invalid",
+  "Argent multisig intent is stale after a configuration change",
+  "Argent multisig intent nonce is no longer current",
+  "Argent multisig not found",
+  "conflicting Argent multisig intent id",
+  "invalid Argent multisig intent package",
+]);
+
+type SharedIntentImport = {
+  readonly final: boolean;
+  readonly intentId?: string;
+  readonly strk20Key?: Strk20KeyImport["strk20Key"];
+};
+
+type OpenedWraps = {
+  readonly intentIds: string[];
+  readonly oldestRetryableAt: number | null;
+  readonly strk20Key: "conflict" | "held" | "none" | "stored";
+  readonly verifiedEventIds: string[];
+};
 
 const importSharedIntent = async (
   deps: MultisigOpsDeps,
   opened: NostrApplicationData,
   contacts: readonly AddressBookEntry[],
   records: readonly ArgentMultisigRecord[],
-): Promise<string | null> => {
+  vaultPassphrase: string,
+  isAuthorized: () => boolean,
+): Promise<SharedIntentImport> => {
+  const key = await importSharedStrk20Key(
+    deps,
+    opened,
+    contacts,
+    records,
+    vaultPassphrase,
+    isAuthorized,
+  );
+  if (key) return key;
+  const authorization = await importSharedStrk20Authorization(
+    deps,
+    opened,
+    contacts,
+    records,
+    vaultPassphrase,
+    isAuthorized,
+  );
+  if (authorization) return authorization;
   const input = trustedSharedIntent(opened, contacts, records);
-  if (!input) return null;
-  const current = await deps.multisigStore.getIntent(input.package.intent.id);
-  if (!sharedIntentHasUpdate(current, input.package.intent)) return null;
+  if (!input) return { final: true };
+  const incoming = input.package.intent;
+  const current = await deps.multisigStore.getIntent(incoming.id);
+  // A relay can serve a removed intent again under any event id, so the
+  // removal itself is what keeps it out (Sherlock 168, 237).
+  const removed =
+    !current &&
+    (await deps.nostrCoordinationStore.isRemovedIntent(incoming.accountId, incoming.id));
+  if (removed || !sharedIntentHasUpdate(current, incoming)) return { final: true };
   const response = await runActiveStateMutation(deps.activeStateCoordinator, () =>
     handleMultisigTxOps(deps, "wallet.importArgentMultisigIntent", {
       package: input.package,
       type: "wallet.importArgentMultisigIntent",
     }),
   );
-  return response && !("error" in response) ? input.package.intent.id : null;
+  if (!response) return { final: false };
+  if (!("error" in response)) return { final: true, intentId: input.package.intent.id };
+  const refusal = response.error;
+  return { final: typeof refusal === "string" && FINAL_IMPORT_REFUSALS.has(refusal) };
+};
+
+// One wrap can never stop the rest of a sync (Sherlock 141). The call-safety
+// validators throw a `WalletError` for a call set that can never become valid,
+// which is final; any other throw is treated as a failure worth retrying.
+const importSharedIntentSafely = async (
+  ...args: Parameters<typeof importSharedIntent>
+): Promise<SharedIntentImport> => {
+  try {
+    return await importSharedIntent(...args);
+  } catch (error) {
+    if (error instanceof WalletError && error.message === "wallet locked") throw error;
+    return { final: error instanceof WalletError && !isMultisigStrk20CapacityRefusal(error) };
+  }
+};
+
+const keyRank = (value: "conflict" | "held" | "none" | "stored"): number =>
+  value === "conflict" ? 3 : value === "stored" ? 2 : value === "held" ? 1 : 0;
+
+const noteWrap = (
+  imported: Set<string>,
+  verifiedEventIds: Set<string>,
+  strk20Key: "conflict" | "held" | "none" | "stored",
+  result: SharedIntentImport,
+  event: NostrEvent | undefined,
+): "conflict" | "held" | "none" | "stored" => {
+  if (result.intentId) imported.add(result.intentId);
+  if (event && result.final) verifiedEventIds.add(event.id);
+  return result.strk20Key && keyRank(result.strk20Key) > keyRank(strk20Key)
+    ? result.strk20Key
+    : strk20Key;
+};
+
+const recordOpenedWraps = async (
+  deps: MultisigOpsDeps,
+  events: readonly NostrEvent[],
+  opened: readonly (NostrApplicationData | null)[],
+  contacts: readonly AddressBookEntry[],
+  records: readonly ArgentMultisigRecord[],
+  vaultPassphrase: string,
+  isAuthorized: () => boolean,
+): Promise<OpenedWraps | null> => {
+  const imported = new Set<string>();
+  const verifiedEventIds = new Set<string>();
+  let oldestRetryableAt: number | null = null;
+  let strk20Key: "conflict" | "held" | "none" | "stored" = "none";
+  for (const index of events.keys()) {
+    if (!isAuthorized()) return null;
+    const content = opened[index];
+    if (!content) continue;
+    const result = await importSharedIntentSafely(
+      deps,
+      content,
+      contacts,
+      records,
+      vaultPassphrase,
+      isAuthorized,
+    );
+    const event = events[index];
+    const settled =
+      event && isWrapPastRetry(event.created_at, deps.now() / 1_000)
+        ? { ...result, final: true }
+        : result;
+    if (!settled.final && event) {
+      oldestRetryableAt = Math.min(oldestRetryableAt ?? event.created_at, event.created_at);
+    }
+    strk20Key = noteWrap(imported, verifiedEventIds, strk20Key, settled, event);
+  }
+  return {
+    intentIds: [...imported],
+    oldestRetryableAt,
+    strk20Key,
+    verifiedEventIds: [...verifiedEventIds],
+  };
 };
 
 const importGiftWraps = async (
@@ -276,25 +300,14 @@ const importGiftWraps = async (
   isAuthorized: () => boolean,
   open: NonNullable<MultisigOpsDeps["wallet"]["openNostrApplicationData"]>,
   openMany: MultisigOpsDeps["wallet"]["openNostrApplicationDataBatch"],
-): Promise<{
-  readonly intentIds: readonly string[];
-  readonly verifiedEventIds: readonly string[];
-} | null> => {
-  const imported = new Set<string>();
-  const verifiedEventIds = new Set<string>();
-  if (events.length === 0) return { intentIds: [], verifiedEventIds: [] };
+): Promise<OpenedWraps | null> => {
+  if (events.length === 0) {
+    return { intentIds: [], oldestRetryableAt: null, strk20Key: "none", verifiedEventIds: [] };
+  }
   const opened = await openGiftWraps(events, vaultPassphrase, isAuthorized, open, openMany);
   if (!opened) return null;
-  for (const index of events.keys()) {
-    if (!isAuthorized()) return null;
-    const content = opened[index];
-    if (!content) continue;
-    const event = events[index];
-    if (event) verifiedEventIds.add(event.id);
-    const intentId = await importSharedIntent(deps, content, contacts, records);
-    if (intentId) imported.add(intentId);
-  }
-  return { intentIds: [...imported], verifiedEventIds: [...verifiedEventIds] };
+  // A receipt only for a wrap this sync finished with. A passing refusal is opened again.
+  return recordOpenedWraps(deps, events, opened, contacts, records, vaultPassphrase, isAuthorized);
 };
 
 const publicKey = async (deps: MultisigOpsDeps): Promise<RuntimeResponse> => {
@@ -345,6 +358,7 @@ const shareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
     published = await publishForRecipients(
       recipients,
       content,
+      MULTISIG_NOSTR_IDENTIFIER,
       passphrase,
       authorized.isCurrent,
       coordinationRelayUrls(preferences),
@@ -359,8 +373,41 @@ const shareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Run
   return { ok: true, ...published };
 };
 
+const openUnseenWraps = async (
+  deps: MultisigOpsDeps,
+  events: readonly NostrEvent[],
+  record: ArgentMultisigRecord,
+  contacts: readonly AddressBookEntry[],
+  vaultPassphrase: string,
+  isAuthorized: () => boolean,
+  open: NonNullable<MultisigOpsDeps["wallet"]["openNostrApplicationData"]>,
+): Promise<OpenedWraps | { readonly error: string }> => {
+  try {
+    const imported = await importGiftWraps(
+      deps,
+      events,
+      contacts,
+      [record],
+      vaultPassphrase,
+      isAuthorized,
+      open,
+      deps.wallet.openNostrApplicationDataBatch,
+    );
+    if (imported) return imported;
+    return isAuthorized()
+      ? { error: "Secure co-signer updates could not be verified. Try again shortly" }
+      : { error: "wallet locked" };
+  } catch (error) {
+    if (error instanceof WalletError && error.message === "wallet locked") {
+      return { error: "wallet locked" };
+    }
+    throw error;
+  }
+};
+
 const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<RuntimeResponse> => {
-  if (!deps.wallet.nostrPublicKey || !deps.wallet.openNostrApplicationData) {
+  const open = deps.wallet.openNostrApplicationData;
+  if (!deps.wallet.nostrPublicKey || !open) {
     return { error: "Secure co-signer coordination is unavailable for this wallet" };
   }
   const record = (await deps.multisigStore.listMultisigs()).find(
@@ -368,7 +415,6 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
   );
   if (!record) return { error: "Argent multisig not found" };
   const nostrPublicKeyFor = deps.wallet.nostrPublicKey;
-  const open = deps.wallet.openNostrApplicationData;
   const passphrase = deps.session.getPassphrase();
   const authorized = captureSessionAuthorization(deps.session);
   if (!passphrase || !authorized.isCurrent()) return { error: "wallet locked" };
@@ -377,39 +423,34 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
   const relayUrls = coordinationRelayUrls(preferences);
   const nowSeconds = Math.floor(deps.now() / 1_000);
   const checkpoint = await deps.nostrCoordinationStore.getCheckpoint(record.id, relayUrls);
+  const seenEventIds = new Set(checkpoint?.eventIds ?? []);
   const events = await recentGiftWraps(
     nostrPublicKey,
     nostrSyncSince(nowSeconds, checkpoint?.syncedAt),
     relayUrls,
     deps.nostrRelayTransport ?? nativeNostrRelayTransport,
+    seenEventIds,
   );
   if (!events) {
     return { error: "Secure co-signer updates are unavailable. Try again shortly" };
   }
-  const seenEventIds = new Set(checkpoint?.eventIds ?? []);
-  const unseenEvents = events.filter((event) => !seenEventIds.has(event.id));
-  const imported = await importGiftWraps(
+  const imported = await openUnseenWraps(
     deps,
-    unseenEvents,
+    events.filter((event) => !seenEventIds.has(event.id)),
+    record,
     preferences.addressBook,
-    [record],
     passphrase,
     authorized.isCurrent,
     open,
-    deps.wallet.openNostrApplicationDataBatch,
   );
-  if (imported === null) {
-    return authorized.isCurrent()
-      ? { error: "Secure co-signer updates could not be verified. Try again shortly" }
-      : { error: "wallet locked" };
-  }
+  if ("error" in imported) return imported;
   await deps.nostrCoordinationStore
     .recordSync(
       {
         accountId: record.id,
         eventIds: imported.verifiedEventIds,
         relayUrls,
-        syncedAt: nowSeconds,
+        syncedAt: retryableSyncedAt(nowSeconds, imported.oldestRetryableAt),
       },
       authorized.isCurrent,
     )
@@ -420,6 +461,7 @@ const syncIntents = async (deps: MultisigOpsDeps, multisigId: string): Promise<R
     intentIds: imported.intentIds,
     ok: true,
     received: imported.verifiedEventIds.length,
+    strk20Key: imported.strk20Key,
   };
 };
 
@@ -434,6 +476,8 @@ export const handleMultisigCoordinationOps = async (
       ? publicKey(deps)
       : { error: "invalid Nostr identity request" };
   }
+  const key = await handleMultisigStrk20KeyOps(deps, messageType, message);
+  if (key) return key;
   if (messageType === "wallet.shareArgentMultisigIntent") return shareIntent(deps, message);
   if (messageType === "wallet.syncArgentMultisigIntents") {
     const input = readMultisigIdInput(message, messageType);

@@ -11,10 +11,10 @@
 import {
   ARGENT_MULTISIG_CONTRACT,
   argentMultisigAddress,
-} from "@mc-wallet/starknet/account-contracts";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
-import { type TokenConfig, withTokenId } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/starknet/account-contracts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
+import { type TokenConfig, withTokenId } from "@bramble/wallet-model/preferences";
 import { CallData, ec, hash } from "starknet";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 

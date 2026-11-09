@@ -7,16 +7,16 @@
  * Re-deriving the same wallet from the same phrase stays allowed.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import type { KmsPort } from "@mc-wallet/vault/kms-port";
-import { createWalletVaultService } from "@mc-wallet/vault/service";
+import { createMemoryStore } from "@bramble/store/kv";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { createEncryptedStore } from "@bramble/vault/encrypted-store";
+import type { KmsPort } from "@bramble/vault/kms-port";
+import { createWalletVaultService } from "@bramble/vault/service";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const otherMnemonic = "legal winner thank year wave sausage worth useful legal winner thank yellow";
-const vaultKey = "mc-wallet:vault";
-const migrationKey = "mc-wallet:vault-migration";
+const vaultKey = "bramble:vault";
+const migrationKey = "bramble:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 
 // The shared fake returns one constant keypair for every phrase, which would
@@ -107,5 +107,20 @@ describe("createAccount seed guard", () => {
     const vault = await service.readVault(vaultPassphrase);
     expect(vault.mnemonic).toBe(mnemonic);
     expect(vault.accounts).toEqual([mainnet, sepolia]);
+  });
+});
+
+describe("createKeyVault seed guard", () => {
+  test("refuses to write over a seeded wallet before deriving anything", async () => {
+    const service = makeService();
+    await service.createAccount({ accountContractType: "openzeppelin", mnemonic, vaultPassphrase });
+    await expect(
+      service.createKeyVault({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        privateKey: "0xfeedface",
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("Wallet already exists");
   });
 });

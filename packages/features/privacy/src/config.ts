@@ -4,24 +4,35 @@
  * preferences store; credentials are deliberately unsupported because an MV3
  * bundle cannot keep a shared API secret.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isServiceUrl } from "@mc-wallet/core/service-url";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isServiceUrl } from "@bramble/core/service-url";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 /**
  * Public same-origin gateway exposed to released wallet builds.
  */
 export const STRK20_GATEWAY_BASE = "https://wallet.nodes.starknet.org/api/strk20";
+
 /**
  * Canonical Starknet Mainnet privacy-pool address.
  */
 export const STRK20_MAINNET_POOL =
   "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a";
+
+/**
+ * Bundled Mainnet shadow-account anonymizer, paired with
+ * {@link STRK20_MAINNET_POOL} (screening policy `Delegated`), in canonical felt
+ * spelling. It is an input to every shadow-account identity: changing it moves
+ * every user's shadow accounts, and funds made under the old value stay
+ * reachable only through the old value. Pick it once and never change it (#666).
+ */
+export const STRK20_MAINNET_SHADOW_ACCOUNT_ANONYMIZER =
+  "0x4f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
 
 /**
  * Sponsored-private paymaster configuration. The fee token funds the
@@ -43,10 +54,10 @@ export type Strk20NetworkConfig = {
   readonly poolAddress: string;
   readonly proverUrl: string;
   /**
-   * Optional SDK sub-account module used only by `subaccount_invoke`. Dapp
+   * Optional SDK shadow account module used only by `shadow_account_invoke`. Dapp
    * anonymizers/executors are separate reviewed invoke targets.
    */
-  readonly subaccountAnonymizerAddress?: string;
+  readonly shadowAccountAnonymizerAddress?: string;
 };
 
 /**
@@ -76,7 +87,7 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
     "paymaster",
     "poolAddress",
     "proverUrl",
-    "subaccountAnonymizerAddress",
+    "shadowAccountAnonymizerAddress",
   ]) &&
   typeof value["discoveryUrl"] === "string" &&
   isServiceUrl(value["discoveryUrl"]) &&
@@ -88,9 +99,9 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
   typeof value["proverUrl"] === "string" &&
   isServiceUrl(value["proverUrl"]) &&
-  (value["subaccountAnonymizerAddress"] === undefined ||
-    (typeof value["subaccountAnonymizerAddress"] === "string" &&
-      isNonZeroStarkFieldElement(value["subaccountAnonymizerAddress"])));
+  (value["shadowAccountAnonymizerAddress"] === undefined ||
+    (typeof value["shadowAccountAnonymizerAddress"] === "string" &&
+      isNonZeroStarkFieldElement(value["shadowAccountAnonymizerAddress"])));
 
 /**
  * Bundled mainnet routing uses the wallet-owned AWS gateway so private upstream
@@ -107,6 +118,7 @@ export const DEFAULT_STRK20_NETWORKS: Strk20NetworkConfigs = {
     },
     poolAddress: STRK20_MAINNET_POOL,
     proverUrl: `${STRK20_GATEWAY_BASE}/prover`,
+    shadowAccountAnonymizerAddress: STRK20_MAINNET_SHADOW_ACCOUNT_ANONYMIZER,
   },
 };
 

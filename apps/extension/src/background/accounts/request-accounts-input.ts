@@ -1,8 +1,8 @@
 /**
  * Account-request parser at the untrusted content-script boundary.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { normalizeWalletOrigin } from "@bramble/core/origin";
 
 /**
  * Parses dapp account requests from content-script traffic. Silent requests

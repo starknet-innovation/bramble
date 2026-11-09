@@ -24,7 +24,7 @@ export const liquidDots = (id: LiquidDotsId, compact = false): string => `
 export const liquidDotsFilter = (id: LiquidDotsId): string => `
   <svg class="liquid-dots-defs" aria-hidden="true">
     <defs>
-      <filter id="mc-liquid-dots-${id}">
+      <filter id="bramble-liquid-dots-${id}">
         <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
         <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7" result="goo" />
         <feBlend in="SourceGraphic" in2="goo" />

@@ -1,3 +1,4 @@
+import { isTokenDecimals } from "../../protocols/constants";
 import type { SwapQuote } from "../../protocols/index";
 
 export type PickerTarget = "pay" | "receive";
@@ -10,7 +11,7 @@ export type QuoteState =
 
 export const toSmallestUnit = (amount: string, decimals: number): string | null => {
   const trimmed = amount.trim();
-  if (trimmed === "" || !/^\d*\.?\d*$/.test(trimmed)) {
+  if (!isTokenDecimals(decimals) || trimmed === "" || !/^\d*\.?\d*$/.test(trimmed)) {
     return null;
   }
   const [intPart = "0", fracRaw = ""] = trimmed.split(".");

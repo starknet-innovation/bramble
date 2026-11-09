@@ -5,14 +5,15 @@
  * Complements background-token-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import type { PriceService } from "@mc-wallet/portfolio/prices";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { PriceService } from "@bramble/portfolio/prices";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const sender: RuntimeSender = {
@@ -103,7 +104,7 @@ const makeHandler = (unlocked: boolean) => {
   if (unlocked) {
     session.unlock(vaultPassphrase);
   }
-  return createMessageHandler(wallet, "extension-id", {
+  return createMessageHandler(wallet, testExtension, {
     preferencesStore: sepoliaPreferencesStore,
     prices,
     runtimeRpc: makeRuntimeRpc(),

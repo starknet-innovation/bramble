@@ -1,4 +1,5 @@
 import { Box, ExternalLink, Fingerprint, Image, ShieldCheck } from "lucide-react";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import type { InvokeFunctionResponse } from "starknet";
 import { PunkPortrait } from "../../nft/PunkPortrait";
@@ -32,7 +33,7 @@ const responseTransactionHash = (value: InvokeFunctionResponse): string => {
 };
 
 const operationError = (cause: unknown): string =>
-  cause instanceof Error ? cause.message : "The wallet could not complete this operation.";
+  userErrorMessage(cause, "The wallet could not complete this operation.");
 
 const isMainnetChain = (chainId: string | null): boolean =>
   chainId?.toUpperCase() === "SN_MAIN" ||

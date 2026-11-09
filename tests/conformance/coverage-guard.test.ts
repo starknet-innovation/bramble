@@ -7,9 +7,9 @@
  * updating the spec table fails to compile or fails an assertion here.
  */
 import { describe, expect, test } from "bun:test";
-import type { ProviderMethod, ProviderRequest } from "@mc-wallet/wallet-protocol/bridge";
-import { readProviderRequestArguments, toRuntimeMessage } from "@mc-wallet/wallet-protocol/bridge";
-import type { ProviderResultMethod } from "@mc-wallet/wallet-protocol/results";
+import type { ProviderMethod, ProviderRequest } from "@bramble/wallet-protocol/bridge";
+import { readProviderRequestArguments, toRuntimeMessage } from "@bramble/wallet-protocol/bridge";
+import type { ProviderResultMethod } from "@bramble/wallet-protocol/results";
 import { ORIGIN, SPEC_METHOD_NAMES, SPEC_METHODS } from "./wallet-rpc-spec";
 
 // The 16 spec method names, written out literally so the table itself cannot
@@ -29,7 +29,7 @@ const REQUIRED_SPEC_METHODS: readonly ProviderMethod[] = [
   "wallet_strk20InvokeTransaction",
   "wallet_strk20PrepareInvoke",
   "wallet_strk20Balances",
-  "wallet_strk20SubaccountCommitment",
+  "wallet_strk20ShadowAccountCommitment",
   "wallet_signTypedData",
 ];
 
@@ -51,7 +51,7 @@ const METHOD_CLASSIFICATION: Record<ProviderMethod, "legacy" | "spec"> = {
   wallet_strk20Balances: "spec",
   wallet_strk20InvokeTransaction: "spec",
   wallet_strk20PrepareInvoke: "spec",
-  wallet_strk20SubaccountCommitment: "spec",
+  wallet_strk20ShadowAccountCommitment: "spec",
   wallet_supportedSpecs: "spec",
   wallet_supportedWalletApi: "spec",
   wallet_switchStarknetChain: "spec",
@@ -76,7 +76,7 @@ const RESULT_METHOD_CLASSIFICATION: Record<ProviderResultMethod, "legacy" | "spe
   wallet_strk20Balances: "spec",
   wallet_strk20InvokeTransaction: "spec",
   wallet_strk20PrepareInvoke: "spec",
-  wallet_strk20SubaccountCommitment: "spec",
+  wallet_strk20ShadowAccountCommitment: "spec",
   wallet_supportedSpecs: "spec",
   wallet_supportedWalletApi: "spec",
   wallet_switchStarknetChain: "spec",

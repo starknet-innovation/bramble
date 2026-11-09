@@ -7,14 +7,14 @@
  * predicate maps to "unknown" — a missing balance never blocks a transaction.
  */
 
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import {
   STARKNET_NETWORKS,
   STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { tokenConfigId } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/networks";
+import { tokenConfigId } from "@bramble/wallet-model/preferences";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 

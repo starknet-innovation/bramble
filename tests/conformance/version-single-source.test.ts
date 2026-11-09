@@ -6,7 +6,7 @@
  * spec version the bundled starknet client actually targets (0.10.0).
  */
 import { describe, expect, test } from "bun:test";
-import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@mc-wallet/wallet-protocol/versions";
+import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@bramble/wallet-protocol/versions";
 import { buildHarness, CONTENT_SENDER } from "./harness";
 import { API_VERSION, ORIGIN } from "./spec-fixtures";
 import { specMethod } from "./wallet-rpc-spec";

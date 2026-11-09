@@ -14,45 +14,69 @@ export const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
 export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
-  "@mc-wallet/testkit": "workspace:*",
-  "@biomejs/biome": "2.5.8",
-  "@playwright/test": "1.62.1",
-  "@types/bun": "1.3.14",
-  "@types/node": "26.2.0",
-  "fast-check": "4.9.0",
-  knip: "6.32.2",
+  "@bramble/testkit": "workspace:*",
+  "@biomejs/biome": "2.5.14",
+  // The Speculos Ledger E2E bridge (tests/e2e/ledger) frames HID packets with
+  // this package's own framing module, so the fake device speaks exactly the
+  // wire format the shipped transport does. Same exact version the extension's
+  // ledger-browser workspace pins; test-only, never imported by shipped code.
+  "@ledgerhq/hw-transport-webhid": "6.36.0",
+  "@playwright/test": "1.63.0",
+  // BIP-32/BIP-39 for the vendor-import dataset tooling in tools/vendor-dataset,
+  // which reimplements the vendors' own derivation so the dataset stays
+  // independent of the Krusty code it measures. Development scripts only: the
+  // workspace-architecture gate keeps every shipped workspace from importing a
+  // root devDependency. Both versions are the ones bun.lock already resolved.
+  "@scure/bip32": "1.7.0",
+  "@scure/bip39": "1.6.0",
+  "@types/bun": "1.4.2",
+  "@types/node": "26.6.2",
+  "fast-check": "4.10.2",
+  knip: "6.37.0",
   madge: "8.0.0",
   typescript: "6.0.3",
+  // Mozilla's own add-on tooling. `web-ext lint` wraps the exact validator
+  // addons.mozilla.org runs at submission, so the Gecko artifact is judged by
+  // the same rules before a human uploads it; the same tool later signs and
+  // submits. Pinned exact and never shipped — it is a build-time gate only.
+  "web-ext": "10.7.0",
+  // YAML document model for the Mainnet E2E workflow policy, which must
+  // refuse duplicate keys, anchors, aliases, tags and merge keys that
+  // `Bun.YAML` resolves silently. Development scripts only; the version is
+  // the one bun.lock already resolved for knip, so nothing new is downloaded.
+  yaml: "2.9.1",
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
-  "@mc-wallet/core": "workspace:*",
-  "@mc-wallet/kms-krusty": "workspace:*",
-  "@mc-wallet/ledger-protocol": "workspace:*",
-  "@mc-wallet/multisig": "workspace:*",
-  "@mc-wallet/permissions": "workspace:*",
-  "@mc-wallet/privacy": "workspace:*",
-  "@mc-wallet/portfolio": "workspace:*",
-  "@mc-wallet/starknet": "workspace:*",
-  "@mc-wallet/store": "workspace:*",
-  "@mc-wallet/settings": "workspace:*",
-  "@mc-wallet/transactions": "workspace:*",
-  "@mc-wallet/ui-kit": "workspace:*",
-  "@mc-wallet/vault": "workspace:*",
-  "@mc-wallet/wallet-ui": "workspace:*",
-  "@mc-wallet/wallet-model": "workspace:*",
-  "@mc-wallet/wallet-protocol": "workspace:*",
-  "@starknetfoundation/krusty-kms-wasm": "0.10.0",
-  starknet: "10.0.2",
+  "@bramble/core": "workspace:*",
+  "@bramble/kms-krusty": "workspace:*",
+  "@bramble/ledger-protocol": "workspace:*",
+  "@bramble/multisig": "workspace:*",
+  "@bramble/permissions": "workspace:*",
+  "@bramble/privacy": "workspace:*",
+  "@bramble/portfolio": "workspace:*",
+  "@bramble/starknet": "workspace:*",
+  "@bramble/store": "workspace:*",
+  "@bramble/settings": "workspace:*",
+  "@bramble/transactions": "workspace:*",
+  "@bramble/ui-kit": "workspace:*",
+  "@bramble/vault": "workspace:*",
+  "@bramble/wallet-ui": "workspace:*",
+  "@bramble/wallet-model": "workspace:*",
+  "@bramble/wallet-protocol": "workspace:*",
+  "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+  starknet: "10.8.0",
 };
 
 export const PINNED_RUNTIME_FILES = [
   "background/index.js",
+  "brand/onboarding-landscape.webp",
   "content/index.js",
   "dependencies/krusty-kms/krusty_kms_wasm.js",
   "dependencies/krusty-kms/krusty_kms_wasm_bg.wasm",
   "icons/icon-128.png",
   "icons/icon-16.png",
+  "icons/icon-24.png",
   "icons/icon-32.png",
   "icons/icon-48.png",
   "ledger-grant.html",
@@ -72,11 +96,12 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   ".claude/*",
   ".dev-profile/",
   // Bun auto-loads a bare `.env`, which makes it the natural place a developer
-  // puts MC_DEV_MNEMONIC. Keeping it ignored is what stops a recovery phrase
+  // puts BRAMBLE_DEV_MNEMONIC. Keeping it ignored is what stops a recovery phrase
   // reaching a commit.
   ".env",
   "artifacts/",
   "dist/",
+  "dist-firefox/",
   "node_modules/",
   "playwright-report/",
   "test-results/",
@@ -113,37 +138,53 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 ] as const;
 
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
-  build: "bun run --filter @mc-wallet/extension build",
+  build: "bun run --filter @bramble/extension build",
+  "build:all": "bun run --filter @bramble/extension build:all",
+  "build:firefox": "bun run --filter @bramble/extension build:firefox",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run test && bun run check:workspaces",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:ledger-app && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
+  // Warns only, never fails: wording is a judgement call. See docs/COPY_STYLE.md.
+  "check:copy": "bun run scripts/check-copy.ts",
   "check:coverage": "bun run scripts/check-coverage.ts",
   "check:cycles": "madge --circular --extensions ts apps/extension/src packages",
   "check:deadcode": "knip",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
+  "check:firefox": "web-ext lint --source-dir dist-firefox",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
-  "check:imports": "bun run scripts/check-workspace-architecture.ts",
+  "check:imports":
+    "bun run scripts/check-workspace-architecture.ts && bun run scripts/check-test-bridge-boundary.ts",
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
+  "check:ledger-app": "bun run scripts/check-ledger-app.ts",
   "check:lint": "biome check .",
   "check:argent": "bun run scripts/check-argent-contracts.ts",
   "check:privacy": "bun run scripts/check-privacy-sdk.ts",
   "check:release-version": "bun run scripts/release-version.ts",
   "check:types": "tsc --noEmit",
   "check:workspaces":
-    "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @mc-wallet/extension check && bun run --filter @mc-wallet/terminal check && bun run --filter @mc-wallet/ui-lab check:static",
+    "bun run --filter './packages/foundation/**' check && bun run --filter './packages/platform/**' check && bun run --filter './packages/features/**' check && bun run --filter './packages/presentation/**' check && bun run --filter './packages/testing/**' check && bun run --filter @bramble/extension check && bun run --filter @bramble/terminal check && bun run --filter @bramble/ui-lab check:static && bun run --filter @bramble/website check",
   changelog: "bun run scripts/generate-changelog.ts",
   "dev:session": "bun run tests/e2e/dev-session.ts",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
+  "package:extension:firefox": "bun run scripts/package-extension.ts --target=firefox",
   "release:publish": "bun run scripts/publish-chrome-web-store.ts",
   test: "bun test ./tests",
   "test:e2e": "playwright test",
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
+  "test:e2e:ledger": "bun run tests/e2e/ledger/run-speculos.ts",
   "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
+  "test:e2e:mainnet:setup": "bun run scripts/mainnet-e2e-setup.ts",
+  "test:e2e:mainnet:wallet": "bun run scripts/mainnet-wallet-e2e.ts",
+  "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
+  "vendor:ledger-app": "bun run scripts/vendor-ledger-app.ts",
   "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
+  // Live Sepolia scorecard: needs the git-ignored seed file, so never a gate.
+  "verify:sepolia":
+    "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts",
 };
 
 export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {

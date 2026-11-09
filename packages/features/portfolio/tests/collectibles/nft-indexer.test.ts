@@ -1,7 +1,8 @@
 /**
  * HTTP NFT indexer checks: a null endpoint skips the network, a configured one
  * parses both response envelopes and dedupes, and a non-ok/malformed response or
- * transport error degrades to an empty list rather than throwing.
+ * transport error resolves to an empty list marked unavailable rather than
+ * throwing or claiming an empty account.
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -9,7 +10,7 @@ import {
   MAX_DISCOVERED_NFTS,
   type NftIndexerHttp,
   unavailableNftIndexer,
-} from "@mc-wallet/portfolio/nft-indexer";
+} from "@bramble/portfolio/nft-indexer";
 
 const address = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const indexerUrl = "https://indexer.example/api/";
@@ -42,7 +43,7 @@ describe("createHttpNftIndexer", () => {
       indexerUrl: null,
       networkId: "SN_MAIN",
     });
-    expect(nfts).toEqual([]);
+    expect(nfts).toEqual({ coverage: "none", nfts: [] });
     expect(calls).toEqual([]);
   });
 
@@ -53,7 +54,8 @@ describe("createHttpNftIndexer", () => {
       indexerUrl,
       networkId: "SN_MAIN",
     });
-    expect(nfts.map((nft) => nft.tokenId)).toEqual(["1", "2"]);
+    expect(nfts.coverage).toBe("complete");
+    expect(nfts.nfts.map((nft) => nft.tokenId)).toEqual(["1", "2"]);
     expect(calls[0]).toBe(`https://indexer.example/api/accounts/${address}/nfts?network=SN_MAIN`);
   });
 
@@ -74,20 +76,36 @@ describe("createHttpNftIndexer", () => {
       indexerUrl,
       networkId: "SN_MAIN",
     });
-    expect(nfts.map((nft) => nft.tokenId)).toEqual(["1"]);
+    expect(nfts.nfts.map((nft) => nft.tokenId)).toEqual(["1"]);
+    // A record the wallet could not read means the list may be short.
+    expect(nfts.coverage).toBe("incomplete");
   });
 
-  test("degrades to empty on a non-ok response, a bad body, or a transport error", async () => {
+  test("a list of only unreadable records is incomplete, not an empty account", async () => {
+    const { http } = httpReturning([null]);
+    expect(
+      await createHttpNftIndexer(http).listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" }),
+    ).toEqual({ coverage: "incomplete", nfts: [] });
+  });
+
+  test("reports unavailable on a non-ok response, a bad body, or a transport error", async () => {
+    const unavailable = { coverage: "unavailable", nfts: [] } as const;
     const notOk = createHttpNftIndexer(httpReturning([record("1")], false).http);
-    expect(await notOk.listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" })).toEqual([]);
+    expect(await notOk.listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" })).toEqual(
+      unavailable,
+    );
 
     const badBody = createHttpNftIndexer(httpReturning("not-json-shaped").http);
-    expect(await badBody.listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" })).toEqual([]);
+    expect(await badBody.listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" })).toEqual(
+      unavailable,
+    );
 
     const throwing = createHttpNftIndexer(async () => {
       throw new Error("network down");
     });
-    expect(await throwing.listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" })).toEqual([]);
+    expect(await throwing.listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" })).toEqual(
+      unavailable,
+    );
   });
 
   test("caps an oversized response at MAX_DISCOVERED_NFTS to bound owner_of fan-out", async () => {
@@ -102,12 +120,57 @@ describe("createHttpNftIndexer", () => {
       indexerUrl,
       networkId: "SN_MAIN",
     });
-    expect(nfts).toHaveLength(MAX_DISCOVERED_NFTS);
+    expect(nfts.nfts).toHaveLength(MAX_DISCOVERED_NFTS);
+    // A trimmed list is never claimed to be whole.
+    expect(nfts.coverage).toBe("incomplete");
   });
 
-  test("the unavailable indexer always returns an empty list", async () => {
+  test("the unavailable indexer always returns an empty list with no coverage", async () => {
     expect(
       await unavailableNftIndexer.listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" }),
-    ).toEqual([]);
+    ).toEqual({ coverage: "none", nfts: [] });
+  });
+
+  test("Starkscan answers only when asked for and no indexer URL is saved", async () => {
+    const asked: string[] = [];
+    const source = async ({ address: owner }: { readonly address: string }) => {
+      asked.push(owner);
+      return { coverage: "incomplete", nfts: [] } as const;
+    };
+    const { http, calls } = httpReturning([record("1")]);
+    const indexer = createHttpNftIndexer(http, source);
+    // Not asked for (the preview is off), or the flag left out: nothing runs.
+    expect(
+      await indexer.listOwnedNfts({ address, indexerUrl: null, networkId: "SN_MAIN" }),
+    ).toEqual({ coverage: "none", nfts: [] });
+    expect(
+      await indexer.listOwnedNfts({
+        address,
+        indexerUrl: null,
+        networkId: "SN_MAIN",
+        starkscan: false,
+      }),
+    ).toEqual({ coverage: "none", nfts: [] });
+    expect(asked).toEqual([]);
+    // Asked for: Starkscan's own answer, coverage included.
+    expect(
+      await indexer.listOwnedNfts({
+        address,
+        indexerUrl: null,
+        networkId: "SN_MAIN",
+        starkscan: true,
+      }),
+    ).toEqual({ coverage: "incomplete", nfts: [] });
+    expect(asked).toEqual([address]);
+    // A saved URL is the user's own choice and replaces Starkscan.
+    const own = await indexer.listOwnedNfts({
+      address,
+      indexerUrl,
+      networkId: "SN_MAIN",
+      starkscan: true,
+    });
+    expect(own.nfts.map((nft) => nft.tokenId)).toEqual(["1"]);
+    expect(asked).toEqual([address]);
+    expect(calls).toHaveLength(1);
   });
 });

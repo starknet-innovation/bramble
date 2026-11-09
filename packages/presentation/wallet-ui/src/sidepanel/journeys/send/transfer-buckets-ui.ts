@@ -13,8 +13,8 @@
  * rather than only as a hover title.
  */
 
-import type { SendRouteResolution, ValueBucket } from "@mc-wallet/transactions/send-routes";
-import { compactAmount } from "../portfolio/token-row";
+import type { SendRouteResolution, ValueBucket } from "@bramble/transactions/send-routes";
+import { sendBalanceLine } from "./send-model";
 import { sendFormInput } from "./transfer-compose-ui";
 
 /**
@@ -35,13 +35,8 @@ export type TransferBucketsDeps = {
   readonly route: () => SendRouteResolution;
 };
 
-const LABELS: Readonly<Record<ValueBucket, string>> = {
-  private: "Private",
-  public: "Public",
-};
-
-// The button states which balance is in use; its title states what pressing it
-// does, since a self-labelling toggle cannot show both at once.
+// The switch is labelled "Private" and carries its state in aria-checked, so
+// its title only has to say what pressing it does.
 const HINTS: Readonly<Record<ValueBucket, string>> = {
   private: "Switch to the public balance",
   public: "Switch to the private balance",
@@ -82,11 +77,7 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
     if (formattedField) formattedField.value = balance.formatted ?? "";
     const label = form.querySelector<HTMLElement>("#send-balance-label");
     if (label) {
-      const scope = source === "private" ? "Private balance" : "Balance";
-      label.textContent =
-        balance.formatted === null
-          ? `${scope} unavailable`
-          : `${scope} ${compactAmount(balance.formatted)} ${symbol}`;
+      label.textContent = sendBalanceLine(source, balance.formatted, symbol);
     }
   };
 
@@ -96,8 +87,9 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
     const blocked = incomplete ? undefined : view.blocked;
     for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
       const bucket = readBucket(form, legOf(button));
-      button.textContent = LABELS[bucket];
       button.dataset["bucket"] = bucket;
+      button.setAttribute("aria-checked", String(bucket === "private"));
+      button.dataset["checked"] = String(bucket === "private");
       button.title = HINTS[bucket];
     }
     container?.classList.toggle("muted", blocked !== undefined);
@@ -128,10 +120,33 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
   }
   retry?.addEventListener("click", () => deps.retry?.());
 
+  // An asset pick writes the picker row's *public* figures into the balance
+  // fields, because the row only knows that bucket. When the send spends from
+  // the private balance that left the amount card naming the public balance as
+  // private, and left Max's fallback reading the wrong pot — so every pick is
+  // re-measured against the source bucket here, and the state re-read, before
+  // the gate runs. The row's own handler runs first (the click bubbles up), so
+  // by the time this fires the picked token is already in the form. The pick
+  // arrives as a dropdown option; the hidden fact rows are matched too so a
+  // surface that still renders them as buttons keeps the same behaviour.
+  const followAsset = (event: Event): void => {
+    if (
+      !(event.target instanceof Element) ||
+      event.target.closest("[data-send-asset], [data-token-option]") === null
+    ) {
+      return;
+    }
+    showBalance();
+    deps.onRouteChange();
+  };
+
   // Recipient edits, asset switches, and stage moves all surface as input or
   // click activity on the form; re-gating is cheap and idempotent.
   form.addEventListener("input", applyGate);
-  form.addEventListener("click", () => applyGate());
+  form.addEventListener("click", (event) => {
+    followAsset(event);
+    applyGate();
+  });
   showBalance();
   applyGate();
 };

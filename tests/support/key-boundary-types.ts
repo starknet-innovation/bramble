@@ -8,7 +8,7 @@
  * without depending on each other.
  */
 
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigIntentPackage,
@@ -53,10 +53,20 @@ export type KeyBoundaryLiveIds = {
   readonly multisigSubmitIntentId: string;
   /** Id of the watched NFT seeded into the preferences store. */
   readonly nftId: string;
+  /** Tracks a fresh non-default token and returns its id, for removal. */
+  readonly removableTokenId: () => Promise<string>;
   /** Queues an unanswered dapp invoke approval and returns its id. */
   readonly invokeApprovalId: () => Promise<string>;
   /** Runs a private-send preparation and returns its one-time id. */
   readonly strk20PreparationId: () => Promise<string>;
+  /**
+   * Starts a shield preparation, waits for its tracked job to settle, and
+   * returns the job id — so the status poll under scan answers with the
+   * settled review, the reply that now carries the preparation.
+   */
+  readonly strk20PreparationJobId: () => Promise<string>;
+  /** Runs a staking preparation and returns its one-time id. */
+  readonly stakingPreparationId: () => Promise<string>;
   /** Runs a swap preparation and returns its one-time id. */
   readonly swapPreparationId: () => Promise<string>;
   /** Id of a token tracked for the active network. */

@@ -13,7 +13,7 @@
  * open") — advice that is actively wrong when the wallet itself is the thing
  * that closed the app, and which hides which step actually broke.
  */
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
 
 /**
  * The step a transition is currently on, emitted for progress display only.

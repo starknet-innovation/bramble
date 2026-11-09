@@ -1,16 +1,16 @@
-import type { AccountGroups } from "@mc-wallet/settings/groups";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import { allowanceId } from "@mc-wallet/transactions/allowance-store";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
-import { withTokenId } from "@mc-wallet/wallet-model/preferences";
+import type { AccountGroups } from "@bramble/settings/groups";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
+import { allowanceId } from "@bramble/transactions/allowance-store";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
+import { withTokenId } from "@bramble/wallet-model/preferences";
 import type {
   ConnectedSite,
   PendingApproval,
   TokenBalance,
   WalletStatus,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import { ledgerAccount, preferences, softwareAccount, statusFor, USDC_ADDRESS } from "./fixtures";
 
 const mainnetToken = (symbol: "ETH" | "STRK") => {
@@ -25,6 +25,12 @@ const mainnetToken = (symbol: "ETH" | "STRK") => {
 
 export const ETH_TOKEN = mainnetToken("ETH");
 export const STRK_TOKEN = mainnetToken("STRK");
+/**
+ * The pool's action fee in STRK base units (6 STRK), the value the STRK20
+ * checkpoints render. Kept in one place so the activation review and the
+ * dapp-registration review cannot disagree about it.
+ */
+export const POOL_FEE_FRI = "0x53444835ec580000";
 const SPAM_TOKEN = withTokenId({
   address: "0x099999",
   decimals: 6,
@@ -99,7 +105,7 @@ export const journeyChanges: Readonly<Record<string, number>> = {
 };
 
 export const connectedSites: readonly ConnectedSite[] = [
-  { accountCount: 2, origin: "https://terminal.mcwallet.dev" },
+  { accountCount: 2, origin: "https://terminal.bramble.test" },
   { accountCount: 1, origin: "https://app.vesu.xyz" },
 ];
 
@@ -182,18 +188,12 @@ const approvalContext = {
 const approvalId = (suffix: string): string => `00000000-0000-4000-8000-000000000${suffix}`;
 
 export const approvalFixtures: Readonly<Record<string, PendingApproval>> = {
-  addChain: {
-    id: approvalId("141"),
-    kind: "add-chain",
-    origin: "https://network.example",
-    summaries: ["Add Starknet Research Network", "RPC https://rpc.example"],
-  },
   blocked: {
     blocked: true,
     id: approvalId("142"),
     insights: ["This origin resembles a frequently used wallet site."],
     kind: "connect",
-    origin: "https://mcwa11et.example",
+    origin: "https://bramb1e.example",
   },
   connect: {
     id: approvalId("143"),
@@ -216,15 +216,15 @@ export const approvalFixtures: Readonly<Record<string, PendingApproval>> = {
     },
     id: approvalId("144"),
     kind: "declare",
-    origin: "https://terminal.mcwallet.dev",
+    origin: "https://terminal.bramble.test",
   },
   sign: {
     context: approvalContext,
     id: approvalId("145"),
     kind: "sign-typed-data",
-    origin: "https://terminal.mcwallet.dev",
+    origin: "https://terminal.bramble.test",
     typedData: {
-      domain: { chainId: "SN_MAIN", name: "MC Terminal", revision: "1" },
+      domain: { chainId: "SN_MAIN", name: "Bramble Terminal", revision: "1" },
       message: { action: "Follow market", market: "ETH-USD" },
       primaryType: "Intent",
       types: {
@@ -236,6 +236,44 @@ export const approvalFixtures: Readonly<Record<string, PendingApproval>> = {
           { name: "name", type: "felt" },
           { name: "revision", type: "felt" },
           { name: "chainId", type: "felt" },
+        ],
+      },
+    },
+  },
+  // A nested order whose composed keys are wider than the card (Sherlock 257).
+  signNested: {
+    context: approvalContext,
+    id: approvalId("211"),
+    kind: "sign-typed-data",
+    origin: "https://market.bramble.test",
+    typedData: {
+      domain: { chainId: "SN_MAIN", name: "Marketplace", revision: "1", version: "1" },
+      message: {
+        authorization: {
+          settlementInstruction: {
+            outboundTransfer: {
+              beneficiaryAddress: `0x05${"f1e2c3b4".repeat(7)}a59687`,
+              replayNonce: "7",
+              transferAmount: "250000000000000000000",
+            },
+          },
+        },
+      },
+      primaryType: "Order",
+      types: {
+        Authorization: [{ name: "settlementInstruction", type: "Settlement" }],
+        Order: [{ name: "authorization", type: "Authorization" }],
+        Settlement: [{ name: "outboundTransfer", type: "Transfer" }],
+        StarknetDomain: [
+          { name: "name", type: "shortstring" },
+          { name: "version", type: "shortstring" },
+          { name: "chainId", type: "shortstring" },
+          { name: "revision", type: "shortstring" },
+        ],
+        Transfer: [
+          { name: "beneficiaryAddress", type: "ContractAddress" },
+          { name: "transferAmount", type: "u128" },
+          { name: "replayNonce", type: "felt" },
         ],
       },
     },

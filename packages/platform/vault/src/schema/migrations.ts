@@ -1,14 +1,14 @@
 /**
  * Pure vault migrations. Every branch must be deterministic and tested.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
 import {
   canonicalAccountId,
   canonicalLegacyAccountRef,
   type LegacyAccountRef,
-} from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/accounts";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 import {
   CURRENT_SCHEMA_VERSION,
   isVaultV1,
@@ -18,6 +18,12 @@ import {
   isVaultV5,
   isVaultV6,
   isVaultV7,
+  isVaultV8,
+  isVaultV9,
+  isVaultV10,
+  isVaultV11,
+  isVaultV12,
+  isVaultV13,
   type Vault,
   type VaultV4,
   type VaultV5,
@@ -125,7 +131,7 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
   },
   {
     fromVersion: 6,
-    // MC Wallet's first Argent account release derived every address with the
+    // Bramble's first Argent account release derived every address with the
     // public key as its salt. Retain that exact historical convention while
     // allowing later imports to carry an explicit upstream deployment salt.
     migrate(value) {
@@ -135,6 +141,99 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
       return withArgentDeploymentSalts(value);
     },
     toVersion: 7,
+  },
+  {
+    fromVersion: 7,
+    // Multi-seed support: the vault gains an (initially empty) imported-seeds
+    // collection; every existing HD account keeps deriving from the founding
+    // phrase, so no account record changes.
+    migrate(value) {
+      if (!isVaultV7(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, importedSeeds: [], schemaVersion: 8 };
+    },
+    toVersion: 8,
+  },
+  {
+    fromVersion: 8,
+    // v9 admits Ready's `argentx` Ledger path scheme beside Bramble's `LedgerW`.
+    // No v8 writer ever produced such a record and the v8 validator refuses one,
+    // so this rewrites nothing but the version stamp.
+    migrate(value) {
+      if (!isVaultV8(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, schemaVersion: 9 };
+    },
+    toVersion: 9,
+  },
+  {
+    fromVersion: 9,
+    // v10 admits Braavos accounts, and Argent accounts at any release they could
+    // have been deployed with. No v9 writer ever produced either and the v9
+    // validator refuses both, so this rewrites nothing but the version stamp —
+    // what the bump buys is that an older build meeting a v10 vault refuses it
+    // instead of misreading records it cannot validate.
+    migrate(value) {
+      if (!isVaultV9(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, schemaVersion: 10 };
+    },
+    toVersion: 10,
+  },
+  {
+    fromVersion: 10,
+    // v11 admits accounts derived with Ready's ETH-seeded scheme (issue 505).
+    // No v10 writer ever produced the kind and the v10 validator refuses it, so
+    // this rewrites nothing but the version stamp — the bump buys an older
+    // build refusing a v11 vault instead of misreading records it cannot
+    // validate.
+    migrate(value) {
+      if (!isVaultV10(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, schemaVersion: 11 };
+    },
+    toVersion: 11,
+  },
+  {
+    fromVersion: 11,
+    // v12 keeps an encrypted record of the shadow-account scopes each account
+    // used (#443). No v11 vault recorded any, so the only deterministic
+    // migration is an empty collection. Shadow accounts from before this build
+    // are not in it and are not reachable from it at all: this build derives
+    // every scope under the new `bramble/strk20-shadow-account/v1` domain and
+    // drops the old `subaccountAnonymizerAddress` setting, so neither a site
+    // nor this wallet can name an old-domain account again. Only users who set
+    // an anonymizer by hand on v0.8.0–v0.10.5 (none was bundled) can have
+    // funded one; recovering it needs an old build plus that old anonymizer.
+    migrate(value) {
+      if (!isVaultV11(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, schemaVersion: 12, shadowAccountScopes: [] };
+    },
+    toVersion: 12,
+  },
+  {
+    fromVersion: 12,
+    // v13 retains one shared STRK20 viewing key per multisig, chain, and pool
+    // (#826). No v12 vault had one: the key is created on this build and shared
+    // over Nostr, so the only deterministic migration is two empty collections.
+    migrate(value) {
+      if (!isVaultV12(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return {
+        ...value,
+        multisigStrk20KeyConflicts: [],
+        multisigStrk20ViewingKeys: [],
+        schemaVersion: 13,
+      };
+    },
+    toVersion: 13,
   },
 ];
 
@@ -219,7 +318,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV7(value)) {
+  if (isVaultV13(value)) {
     return value;
   }
 
@@ -237,7 +336,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV7(migrated)) {
+  if (!isVaultV13(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

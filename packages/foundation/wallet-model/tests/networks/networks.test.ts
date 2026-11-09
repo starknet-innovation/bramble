@@ -12,7 +12,7 @@ import {
   networkIdForChainId,
   paddedFelt,
   STARKNET_NETWORKS,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 test("validates bounded Stark field elements", () => {
   expect(isStarkFieldElement("0x1")).toBe(true);
@@ -41,6 +41,15 @@ test("resolves each configured chain id deterministically to its network", () =>
   expect(networkIdForChainId(STARKNET_NETWORKS.SN_SEPOLIA.chainId)).toBe("SN_SEPOLIA");
   expect(networkIdForChainId(STARKNET_NETWORKS.SN_DEVNET.chainId)).toBe("SN_DEVNET");
   expect(networkIdForChainId("0xdeadbeef")).toBeNull();
+  // Matched by felt value: another spelling of a built-in id resolves, and a
+  // different felt or a non-number does not.
+  expect(networkIdForChainId("0x0534e5f4d41494e")).toBe("SN_MAIN");
+  expect(networkIdForChainId("0x534E5F5345504F4C4941")).toBe("SN_SEPOLIA");
+  expect(networkIdForChainId("0x534e5f4d41494f")).toBeNull();
+  expect(networkIdForChainId("SN_MAIN")).toBeNull();
+  expect(networkIdForChainId("23448594291968334")).toBeNull();
+  expect(networkIdForChainId(`0x${"0".repeat(50)}534e5f4d41494e`)).toBe("SN_MAIN");
+  expect(networkIdForChainId(`0x${"0".repeat(51)}534e5f4d41494e`)).toBeNull();
 });
 
 test("links transactions to each network's explorer, and never to a missing one", () => {

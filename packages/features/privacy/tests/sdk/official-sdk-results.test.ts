@@ -11,8 +11,8 @@ import {
   mapStrk20StageError,
   sanitizeStrk20Detail,
   strk20RetryAfterMilliseconds,
-} from "@mc-wallet/privacy/official-sdk-errors";
-import { assertNoSdkWarnings } from "@mc-wallet/privacy/official-sdk-results";
+} from "@bramble/privacy/official-sdk-errors";
+import { assertNoSdkWarnings } from "@bramble/privacy/official-sdk-results";
 
 const rpcError = (code: number, data: unknown, message = "Transaction execution error") =>
   Object.assign(new Error("RPC: starknet_addInvokeTransaction with params {...}"), {
@@ -67,6 +67,13 @@ describe("STRK20 detail sanitizer", () => {
     );
     expect(sanitizeStrk20Detail("note 0x04f3a1b2c3d4e5f60718 spent")).toBe("note [value] spent");
     expect(sanitizeStrk20Detail(`proof ${"A".repeat(64)} attached`)).toBe("proof [value] attached");
+  });
+
+  test("keeps a known screening reason that is as long as an opaque token", () => {
+    expect(sanitizeStrk20Detail("Transaction rejected: screening_policy_unavailable")).toBe(
+      "Transaction rejected: screening_policy_unavailable",
+    );
+    expect(sanitizeStrk20Detail(`reason ${"a".repeat(28)}`)).toBe("reason [value]");
   });
 
   test("keeps a short revert reason intact and bounds the result", () => {

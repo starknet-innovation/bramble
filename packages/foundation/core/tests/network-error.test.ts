@@ -3,7 +3,7 @@
  */
 import { expect, test } from "bun:test";
 
-import { friendlyNetworkError, NETWORK_ERROR_MESSAGE } from "@mc-wallet/core/network-error";
+import { friendlyNetworkError, NETWORK_ERROR_MESSAGE } from "@bramble/core/network-error";
 
 test("friendlyNetworkError maps fetch/RPC transport failures", () => {
   expect(friendlyNetworkError("Failed to fetch")).toBe(NETWORK_ERROR_MESSAGE);

@@ -11,8 +11,8 @@
  * response stream cancelled rather than left open.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { fetchBoundedJson, HTTP_REQUEST_TIMEOUT_MS } from "@mc-wallet/core/http-json";
+import { WalletError } from "@bramble/core/errors";
+import { fetchBoundedJson, HTTP_REQUEST_TIMEOUT_MS } from "@bramble/core/http-json";
 
 const DEADLINE_MS = 25;
 const BUDGET = 4096;

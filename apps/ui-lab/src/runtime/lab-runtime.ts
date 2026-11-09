@@ -16,10 +16,10 @@ const scenarioOptions = (selectedId: string): string =>
 
 const labMarkup = (selectedId: string): string => `
   <style>${LAB_STYLES}</style>
-  <section class="ui-lab" aria-label="MC Wallet UI Lab">
+  <section class="ui-lab" aria-label="Bramble UI Lab">
     <header class="lab-topbar">
       <div class="lab-brand">
-        <span class="lab-mark" aria-hidden="true">MC</span>
+        <span class="lab-mark" aria-hidden="true">B</span>
         <span class="lab-brand-copy">
           <strong>Wallet UI Lab</strong>
           <span>Production UI · deterministic fixture runtime</span>
@@ -49,7 +49,7 @@ const labMarkup = (selectedId: string): string => `
               data-lab-frame
               referrerpolicy="no-referrer"
               sandbox="allow-forms allow-same-origin"
-              title="MC Wallet production UI fixture"
+              title="Bramble production UI fixture"
             ></iframe>
             <span class="device-label" data-lab-device-label></span>
           </div>
@@ -74,6 +74,7 @@ const labMarkup = (selectedId: string): string => `
               <div class="lab-segment" data-lab-surface>
                 <button data-surface="fullpage" type="button">960 × 800</button>
                 <button data-surface="sidepanel" type="button">400 × 760</button>
+                <button data-surface="sidepanel-min" type="button">320 × 760</button>
                 <button data-surface="popup" type="button">380 × 600</button>
               </div>
             </div>
@@ -231,7 +232,9 @@ export const createUiLab = (options: UiLabOptions): HTMLElement => {
         ? "ONBOARDING TAB · 960 × 800"
         : surface === "popup"
           ? "TOOLBAR POPUP · 380 × 600"
-          : "SIDE PANEL · 400 × 760";
+          : surface === "sidepanel-min"
+            ? "SIDE PANEL · 320 × 760"
+            : "SIDE PANEL · 400 × 760";
   };
 
   const renderCheckpointList = (): void => {
@@ -384,7 +387,12 @@ export const createUiLab = (options: UiLabOptions): HTMLElement => {
       return;
     }
     const nextSurface = target.dataset["surface"];
-    if (nextSurface === "fullpage" || nextSurface === "popup" || nextSurface === "sidepanel") {
+    if (
+      nextSurface === "fullpage" ||
+      nextSurface === "popup" ||
+      nextSurface === "sidepanel" ||
+      nextSurface === "sidepanel-min"
+    ) {
       surface = nextSurface;
       void render();
       return;

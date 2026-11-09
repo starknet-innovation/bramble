@@ -6,13 +6,18 @@
  * `./index.ts` so the app shell stays within the file-length standard.
  */
 
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { RenderData } from "../rendering/render-cache";
+import type { ConnectedSitesState } from "../screens/support-flows";
 import type { WalletView } from "../screens/views";
 import type { DeploymentCache } from "./deployment-cache";
+import { hydrateNfts } from "./hydrate-nfts";
+import { hydrateStaking } from "./hydrate-staking";
 import type { RefreshReason } from "./refresh-scheduler";
+import type { SignabilityCache } from "./signability-cache";
 
 /**
  * Inputs `hydrateView` needs: the current status/view, the shared render cache,
@@ -28,6 +33,7 @@ export type HydrateDeps = {
   readonly wallet: SidepanelWallet;
   readonly multisig: MultisigClient;
   readonly deployment: DeploymentCache;
+  readonly signability: SignabilityCache;
   readonly paint: () => void;
   readonly refreshReason?: RefreshReason;
 };
@@ -92,19 +98,6 @@ const hydrateSelectedMultisig = async (
   };
 };
 
-const nftSnapshot = (
-  indexed: RenderData["indexedNfts"],
-  watched: RenderData["watchedNfts"],
-): RenderData["discoveredNfts"] => {
-  const combined = new Map(indexed.map((nft) => [nft.id, nft]));
-  // Explicitly watched metadata wins a same-id indexer record: it comes from
-  // the wallet's privacy-gated on-chain metadata path rather than the directory.
-  for (const nft of watched) {
-    combined.set(nft.id, nft);
-  }
-  return [...combined.values()];
-};
-
 const SELECTED_MULTISIG_VIEWS = new Set<WalletView>([
   "multisig-home",
   "multisig-detail",
@@ -130,6 +123,22 @@ const shouldRefreshSelectedMultisig = (
   multisigsNetworkId === networkId &&
   SELECTED_MULTISIG_VIEWS.has(activeView);
 
+// A paint that throws on the data it was given must not stop hydration: the
+// live jobs that follow are what replace bad cached data, so aborting before
+// they start would leave the panel stuck on the value that broke it
+// (Sherlock 239). The failed paint leaves the previous screen in place, and
+// the next successful paint replaces it.
+const paintIfCurrent = (isCurrent: () => boolean, paint: () => void): void => {
+  if (!isCurrent()) {
+    return;
+  }
+  try {
+    paint();
+  } catch {
+    // Kept on the previous screen; the next paint retries with fresh data.
+  }
+};
+
 const hydrateCachedView = async (
   deps: HydrateDeps,
   walletBalanceView: boolean,
@@ -137,8 +146,6 @@ const hydrateCachedView = async (
   activityView: boolean,
   registryView: boolean,
   multisigBalanceView: boolean,
-  walletNftView: boolean,
-  multisigNftView: boolean,
 ): Promise<void> => {
   const {
     status,
@@ -159,16 +166,6 @@ const hydrateCachedView = async (
         })
         .catch(() => undefined),
     );
-  };
-  const cachedStream = <T>(load: Promise<T>, assign: (value: T) => void): void => {
-    void load
-      .then((value) => {
-        if (isCurrent()) {
-          assign(value);
-          paint();
-        }
-      })
-      .catch(() => undefined);
   };
   if (walletBalanceView) {
     cached(wallet.loadBalances(true), (value) => {
@@ -196,6 +193,7 @@ const hydrateCachedView = async (
       ),
       (value) => {
         cache.transactions = value.entries;
+        cache.relays = value.relays;
       },
     );
   }
@@ -216,27 +214,9 @@ const hydrateCachedView = async (
       }
     });
   }
-  if (walletNftView) {
-    const scope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
-    cachedStream(wallet.loadWatchedNfts(scope, true), (value) => {
-      cache.watchedNfts = value;
-      cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
-    });
-    cachedStream(wallet.discoverNfts(false, scope, undefined, true), (value) => {
-      cache.indexedNfts = value;
-      cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
-    });
-  }
-  if (multisigNftView && selectedMultisigId) {
-    const scope = `${status.networkId}:${selectedMultisigId}`;
-    cachedStream(wallet.discoverNfts(true, scope, selectedMultisigId, true), (value) => {
-      cache.multisigNftId = selectedMultisigId;
-      cache.multisigNfts = value;
-    });
-  }
   if (jobs.length > 0) {
     await Promise.all(jobs);
-    if (isCurrent()) paint();
+    paintIfCurrent(isCurrent, paint);
   }
 };
 
@@ -255,6 +235,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     wallet,
     multisig,
     deployment,
+    signability,
     refreshReason,
     isCurrent = () => true,
     paint,
@@ -275,13 +256,6 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     (activeView === "multisig-home" ||
       activeView === "multisig-propose" ||
       activeView === "multisig-receive");
-  const walletNftView =
-    activeView === "home" ||
-    activeView === "nfts" ||
-    activeView === "nft-hidden" ||
-    activeView === "nft-detail" ||
-    activeView === "nft-send";
-  const multisigNftView = activeView === "multisig-home" && selectedMultisigId !== null;
   const authorityCriticalView =
     activeView === "multisig-detail" ||
     activeView === "multisig-signers" ||
@@ -301,12 +275,9 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     activityView,
     registryView,
     multisigBalanceView,
-    walletNftView,
-    multisigNftView,
   );
   const primaryJobs: Promise<unknown>[] = [];
   const deferredJobs: Array<() => Promise<unknown>> = [];
-  const streamingJobs: Promise<unknown>[] = [];
   const fill = <T>(
     load: Promise<T> | (() => Promise<T>),
     assign: (value: T) => void,
@@ -323,30 +294,19 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     if (deferred) deferredJobs.push(start);
     else primaryJobs.push(start());
   };
-  const stream = <T>(load: Promise<T>, assign: (value: T) => void): void => {
-    streamingJobs.push(
-      load
-        .then((value) => {
-          if (isCurrent()) {
-            assign(value);
-            paint();
-          }
-        })
-        .catch(() => undefined),
-    );
-  };
   if (priceView) {
     if (walletBalanceView) {
       fill(wallet.loadBalances(false, refreshReason === "action"), (value) => {
         if ("balances" in value) {
-          cache.balances =
-            value.accountId !== status.activeAccountId || value.networkId !== status.networkId
-              ? { error: "balances unavailable" }
-              : value;
-        } else if (!("error" in cache.balances)) {
-          cache.balances = { ...cache.balances, stale: true };
-        } else {
+          // An answer for another account or network is a reply racing a
+          // switch, not a failure: drop it and keep what this scope shows.
+          if (value.accountId === status.activeAccountId && value.networkId === status.networkId)
+            cache.balances = value;
+        } else if ("loading" in cache.balances || "error" in cache.balances) {
+          // No snapshot to fall back on: the failure is the answer.
           cache.balances = value;
+        } else {
+          cache.balances = { ...cache.balances, stale: true };
         }
       });
     }
@@ -357,11 +317,29 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.priceStale = value.stale;
     });
   }
-  if (activeView === "home") {
+  // The deploy screen reads deployment fresh, before it paints Deploy: Home's
+  // 60-second undeployed snapshot can outlive a send that deployed the account
+  // (mc-wallet 712).
+  if (activeView === "deploy-account") {
     fill(
-      () => deployment.load(status, activeView),
+      () => deployment.load(status, activeView, true),
       (value) => {
         cache.deployment = value;
+      },
+    );
+  }
+  if (activeView === "home") {
+    fill(
+      () => deployment.load(status, activeView, refreshReason === "action"),
+      (value) => {
+        cache.deployment = value;
+      },
+      true,
+    );
+    fill(
+      () => signability.load(status, activeView, refreshReason === "action"),
+      (value) => {
+        cache.signability = value;
       },
       true,
     );
@@ -377,45 +355,42 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       (value) => {
         cache.transactions = value.entries;
         cache.historyUnavailable = value.historyUnavailable;
+        cache.relays = value.relays;
       },
       activeView !== "activity",
     );
   }
-  if (activeView === "account") {
+  if (activeView === "receive") {
     fill(wallet.loadClassHashVerification(), (value) => {
       cache.classHashVerification = value;
     });
   }
   if (activeView === "connected-sites") {
-    fill(wallet.connectedSites(), (value) => {
-      cache.connectedSites = value;
-    });
+    // A failed read keeps a list already shown (revoking still validates on
+    // the background) and otherwise shows the failure, never an empty list.
+    fill(
+      wallet.connectedSites().then(
+        (sites): ConnectedSitesState => sites,
+        (): ConnectedSitesState =>
+          Array.isArray(cache.connectedSites) ? cache.connectedSites : "error",
+      ),
+      (value) => {
+        cache.connectedSites = value;
+      },
+    );
   }
+  if (activeView === "staking" && refreshReason !== "ambient")
+    hydrateStaking({ cache, wallet }, fill);
+  // Home's Staking tab and "Staked" line, where staking is on.
+  if (activeView === "home" && refreshReason !== "ambient" && stakingNetwork(status.networkId))
+    hydrateStaking({ cache, home: true, wallet }, fill);
   if (activeView === "allowances" && refreshReason !== "ambient") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;
     });
   }
-  // Home paints the last verified NFT snapshot from the cached phase above.
-  // Full indexer discovery can fan out into many ownership proofs, so only NFT
-  // surfaces refresh it live instead of turning an idle dashboard into a scan.
-  if (walletNftView && activeView !== "home" && refreshReason !== "ambient") {
-    const nftScope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
-    // Explicitly watched NFTs take the fast lane: no indexer wait, immediate
-    // repaint when their verified metadata lands, and no wait for balances,
-    // prices, activity, or auto-discovery.
-    stream(wallet.loadWatchedNfts(nftScope), (value) => {
-      cache.watchedNfts = value;
-      cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
-    });
-    fill(
-      () => wallet.discoverNfts(false, nftScope),
-      (value) => {
-        cache.indexedNfts = value;
-        cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
-      },
-    );
-  }
+  // The collectibles journey is parked unless its preview is on.
+  hydrateNfts({ activeView, ambient: refreshReason === "ambient", cache, status, wallet }, fill);
   if (registryView) {
     primaryJobs.push(
       hydrateMultisigs(cache.multisigs, multisig, status.networkId).then((value) => {
@@ -449,24 +424,35 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (multisigBalanceView && selectedMultisigId) {
     fill(multisig.loadBalances(selectedMultisigId, false, refreshReason === "action"), (value) => {
+      // A failed read keeps only this account's own last balances, marked
+      // stale. Another account's balances must never be relabelled as this
+      // one's (Sherlock 209).
+      const previous = cache.multisigBalances;
+      const ownPrevious =
+        cache.multisigBalanceId === selectedMultisigId &&
+        !("loading" in previous) &&
+        "balances" in previous &&
+        previous.accountId === selectedMultisigId &&
+        previous.networkId === status.networkId;
+      // This account's own failed read stays an error; a racing reply for
+      // another account does not turn it back into loading.
+      const sameScope = cache.multisigBalanceId === selectedMultisigId;
       cache.multisigBalanceId = selectedMultisigId;
       if ("balances" in value) {
+        // An answer naming another account is a racing reply, not a failure:
+        // keep this account's own balances, else stay loading. Never shown
+        // under this account (Sherlock 209).
         cache.multisigBalances =
-          value.accountId !== selectedMultisigId || value.networkId !== status.networkId
-            ? { error: "multisig balances unavailable" }
-            : value;
-      } else if (!("error" in cache.multisigBalances)) {
-        cache.multisigBalances = { ...cache.multisigBalances, stale: true };
+          value.accountId === selectedMultisigId && value.networkId === status.networkId
+            ? value
+            : ownPrevious || (sameScope && "error" in previous)
+              ? previous
+              : { loading: true };
+      } else if (ownPrevious) {
+        cache.multisigBalances = { ...previous, stale: true };
       } else {
         cache.multisigBalances = value;
       }
-    });
-  }
-  if (activeView === "multisig-home" && selectedMultisigId && refreshReason !== "ambient") {
-    const multisigNftScope = `${status.networkId}:${selectedMultisigId}`;
-    stream(wallet.discoverNfts(true, multisigNftScope, selectedMultisigId), (value) => {
-      cache.multisigNftId = selectedMultisigId;
-      cache.multisigNfts = value;
     });
   }
   if (activeView === "multisig-deploy") {
@@ -479,18 +465,16 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     if (selected) {
       fill(wallet.loadTokenChart(selected.address), (value) => {
         cache.chart = value;
+        cache.chartTokenId = selected.id;
       });
     }
   }
   const flush = async (jobs: readonly Promise<unknown>[]): Promise<void> => {
     if (jobs.length > 0) {
       await Promise.all(jobs);
-      if (isCurrent()) {
-        paint();
-      }
+      paintIfCurrent(isCurrent, paint);
     }
   };
   await flush(primaryJobs);
   await flush(deferredJobs.map((start) => start()));
-  await Promise.all(streamingJobs);
 };

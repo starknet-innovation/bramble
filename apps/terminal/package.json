@@ -1,9 +1,9 @@
 {
-  "name": "@mc-wallet/terminal",
+  "name": "@bramble/terminal",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "MC Wallet Trade Terminal — a standalone Starknet trade terminal that connects to the MC Wallet browser extension as a dApp.",
+  "description": "Bramble Trade Terminal — a standalone Starknet trade terminal that connects to the Bramble browser extension as a dApp.",
   "scripts": {
     "dev": "vite",
     "dev:full": "bunx vercel@58.9.1 dev",
@@ -20,24 +20,26 @@
   },
   "dependencies": {
     "@avnu/avnu-sdk": "4.2.0",
+    "@bramble/wallet-model": "workspace:*",
     "lightweight-charts": "5.2.1",
-    "lucide-react": "1.31.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "starknet": "10.0.2"
+    "lucide-react": "1.47.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "starknet": "10.8.0"
   },
   "devDependencies": {
-    "@testing-library/dom": "10.4.1",
-    "@testing-library/react": "16.3.2",
-    "@types/node": "26.2.0",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4",
+    "@bramble/testkit": "workspace:*",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "26.6.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@types/ws": "8.18.1",
-    "@vitejs/plugin-react": "6.0.5",
-    "jsdom": "30.0.1",
+    "@vitejs/plugin-react": "6.1.1",
+    "jsdom": "30.1.0",
     "typescript": "6.0.3",
-    "vite": "8.2.1",
-    "vitest": "4.1.10",
+    "vite": "8.3.3",
+    "vitest": "4.1.11",
     "ws": "8.21.3"
   }
 }

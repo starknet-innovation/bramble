@@ -5,11 +5,12 @@
  * configuration, and a missing config or RPC URL fails closed.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { Signature } from "starknet";
 import { Strk20CallSetSigner } from "../policy/call-set-signer";
 import { STRK20_SERVICE_UNAVAILABLE, type Strk20AccountContext } from "../service";
+import { STRK20_PROVER_REQUEST } from "./official-sdk-budget";
 import type { PrivacySdkRuntime, SdkTransfers } from "./official-sdk-runtime";
 import { requireStrk20Config } from "./official-sdk-values";
 
@@ -39,7 +40,12 @@ export const transfersFor = (
   const signer = new Strk20CallSetSigner({
     accountAddress: context.account.address,
     chainId,
-    sign: (messageHash) => signatureFor(context, messageHash),
+    // A multisig supplies the threshold aggregate. Everyone else still signs
+    // one Stark pair from signHash; that path is unchanged.
+    sign: async (messageHash, calls) =>
+      context.signCallSet
+        ? [...(await context.signCallSet(messageHash, calls ?? []))]
+        : signatureFor(context, messageHash),
   });
   const ohttp =
     config.ohttpEnabled || config.ohttpRelayUrl
@@ -62,10 +68,14 @@ export const transfersFor = (
       chainId,
       nodeUrl,
       ...(ohttp ? { ohttp } : {}),
+      // The prover budget is the wallet's, not the SDK default's: see
+      // ./official-sdk-budget for how it fits inside the proving wait.
+      requestTimeoutMs: STRK20_PROVER_REQUEST.requestTimeoutMs,
+      retry: { maxRetries: STRK20_PROVER_REQUEST.retries },
       url: config.proverUrl,
     },
-    ...(config.subaccountAnonymizerAddress
-      ? { subAccountAnonymizerAddress: config.subaccountAnonymizerAddress }
+    ...(config.shadowAccountAnonymizerAddress
+      ? { shadowAccountAnonymizerAddress: config.shadowAccountAnonymizerAddress }
       : {}),
     viewingKeyProvider: {
       async getViewingKey() {

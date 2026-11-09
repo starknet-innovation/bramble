@@ -1,6 +1,6 @@
 /** Versioned wallet cards carry only validated public contact material. */
 import { describe, expect, test } from "bun:test";
-import { parseWalletContactCard, walletContactCard } from "@mc-wallet/wallet-model/preferences";
+import { parseWalletContactCard, walletContactCard } from "@bramble/wallet-model/preferences";
 
 const CARD = {
   address: "0x123",

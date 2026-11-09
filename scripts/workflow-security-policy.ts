@@ -12,14 +12,24 @@
  * checked without anyone remembering to list it — which is the whole point: the
  * previous hand-maintained list had already fallen three workflows behind.
  */
-import { escapeRegExp } from "./regexp";
-import { dynamicExecutionFailures } from "./vendor-pin-policy";
-import { readWorkflowSources, WORKFLOW_DIR, type WorkflowSources } from "./workflow-inventory";
 
-const NODE_SETUP_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
+import { LEDGER_E2E_WORKFLOW, ledgerE2eWorkflowFailures } from "./ledger-e2e-workflow-policy";
+import { mainnetE2eBoundaryFailures } from "./mainnet-e2e-boundary";
+import { mainnetE2eWorkflowFailures } from "./mainnet-e2e-workflow-policy";
+import { dynamicExecutionFailures } from "./vendor-pin-policy";
+import { websiteDeployFailures } from "./website-deploy-policy";
+import {
+  credentialBoundaryFailures,
+  pinnedWorkflowPresenceFailures,
+} from "./workflow-credential-boundary";
+import { readWorkflowSources, type WorkflowSources } from "./workflow-inventory";
+import { forbidText, jobBody, requireText, workflowPath } from "./workflow-policy-text";
+import { sepoliaSeedsFailures } from "./workflow-sepolia-policy";
+
+const NODE_SETUP_ACTION = "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1";
 const GITHUB_EXPRESSION = "$" + "{{";
 const SHELL_EXPANSION = "$" + "{";
-const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.0.0
+const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.1.0
         with:
           node-version: 24`;
 
@@ -31,39 +41,6 @@ const VENDOR_STEPS = [
   { command: "bun run vendor:argent", failure: "must verify the pinned Argent account contracts" },
   { command: "bun run vendor:privacy", failure: "must vendor the pinned privacy SDK" },
 ] as const;
-
-const workflowPath = (name: string): string => `${WORKFLOW_DIR}/${name}`;
-
-const jobBody = (workflow: string, job: string): string => {
-  const bounded = `${workflow}\n  __workflow_policy_end__:\n`;
-  const escaped = escapeRegExp(job);
-  return (
-    bounded.match(new RegExp(`^  ${escaped}:\\n[\\s\\S]*?(?=^  [a-zA-Z0-9_-]+:\\n)`, "m"))?.[0] ??
-    ""
-  );
-};
-
-const requireText = (
-  failures: string[],
-  source: string,
-  expected: string,
-  failure: string,
-): void => {
-  if (!source.includes(expected)) {
-    failures.push(failure);
-  }
-};
-
-const forbidText = (
-  failures: string[],
-  source: string,
-  forbidden: string,
-  failure: string,
-): void => {
-  if (source.includes(forbidden)) {
-    failures.push(failure);
-  }
-};
 
 // Applies to any workflow that vendors a pinned source, selected by content.
 // The privacy SDK build depends on the exact Node runtime, so the pin travels
@@ -151,7 +128,7 @@ const scopedServiceSecretFailures = (name: string, source: string): string[] => 
             echo "::notice::Chromatic is not configured; GitHub Pages remains the published UI Lab."
             exit 0
           fi
-          bun run --filter @mc-wallet/ui-lab chromatic`,
+          bun run --filter @bramble/ui-lab chromatic`,
     `${path} must expose the Chromatic token only to the main-push publish step`,
   );
   if (source.split("CHROMATIC_PROJECT_TOKEN").length - 1 !== 3) {
@@ -220,6 +197,30 @@ const releaseBuildFailures = (source: string): string[] => {
   );
   requireText(
     failures,
+    build,
+    "persist-credentials: false",
+    "self-hosted release builds must not leave the checkout token in .git/config",
+  );
+  // Supply audit F2: the checksum step reads a file this job wrote, so it can
+  // claim self-consistency only, never identity with another build.
+  forbidText(
+    failures,
+    build,
+    "byte-identical",
+    "release builds must not claim a byte-identical artifact they never compare against",
+  );
+  // v0.10.6 shipped with only the Chromium zip (#684): AMO needs the Gecko
+  // package built from the tagged commit, and validated before it is published.
+  for (const step of ["bun run package:extension:firefox", "bun run check:firefox"]) {
+    requireText(
+      failures,
+      build,
+      `- run: ${step}`,
+      "release builds must package and validate the Firefox target",
+    );
+  }
+  requireText(
+    failures,
     publish,
     "runs-on: ubuntu-latest",
     "GitHub Release publication must use a hosted runner",
@@ -239,7 +240,7 @@ const releaseBuildFailures = (source: string): string[] => {
   requireText(
     failures,
     publish,
-    "actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131",
+    "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
     "the hosted release publisher must consume the pinned build artifact",
   );
   return failures;
@@ -361,6 +362,12 @@ const nightlyFailures = (source: string): string[] => {
   );
   requireText(
     failures,
+    nightly,
+    "persist-credentials: false",
+    "self-hosted nightly execution must not leave the checkout token in .git/config",
+  );
+  requireText(
+    failures,
     report,
     "runs-on: ubuntu-latest",
     "nightly issue reporting must use a hosted runner",
@@ -411,29 +418,11 @@ const releaseIntegrationFailures = (source: string): string[] => {
     "\n          ref:",
     "self-hosted release integration must not pass caller-controlled refs to checkout",
   );
-  return failures;
-};
-
-const roadmapFailures = (source: string): string[] => {
-  const failures: string[] = [];
-  const verify = jobBody(source, "verify");
   requireText(
     failures,
-    source,
-    "pull_request_target:",
-    "roadmap token verification must execute the trusted base workflow",
-  );
-  forbidText(
-    failures,
-    source,
-    "\n  pull_request:\n",
-    "roadmap token verification must not execute a pull-request workflow revision",
-  );
-  forbidText(
-    failures,
-    verify,
-    "actions/checkout@",
-    "roadmap token verification must never check out pull-request code",
+    integration,
+    "persist-credentials: false",
+    "self-hosted release integration must not leave the checkout token in .git/config",
   );
   return failures;
 };
@@ -443,11 +432,12 @@ const roadmapFailures = (source: string): string[] => {
 // is also what lets it hold a self-hosted runner or a privileged trigger.
 const NAMED_POLICIES: Readonly<Record<string, (source: string) => string[]>> = {
   "ci.yml": ciFailures,
+  [LEDGER_E2E_WORKFLOW]: ledgerE2eWorkflowFailures,
+  "mainnet-e2e.yml": mainnetE2eWorkflowFailures,
   "nightly.yml": nightlyFailures,
   "release-build.yml": releaseBuildFailures,
   "release-integration.yml": releaseIntegrationFailures,
   "release.yml": releaseFailures,
-  "roadmap-project-sync.yml": roadmapFailures,
 };
 
 /**
@@ -457,7 +447,7 @@ const NAMED_POLICIES: Readonly<Record<string, (source: string) => string[]>> = {
  * inventory is itself a failure: its rules would otherwise vanish with it.
  */
 export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string[] => {
-  const failures: string[] = [];
+  const failures: string[] = [...pinnedWorkflowPresenceFailures(sources)];
   for (const name of Object.keys(NAMED_POLICIES)) {
     if (!Object.hasOwn(sources, name)) {
       failures.push(`${workflowPath(name)} is missing; its reviewed policy cannot be enforced`);
@@ -467,7 +457,11 @@ export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string
     const named = NAMED_POLICIES[name];
     failures.push(...baselineFailures(name, source, named !== undefined));
     failures.push(...scopedServiceSecretFailures(name, source));
+    failures.push(...sepoliaSeedsFailures(name, source));
+    failures.push(...websiteDeployFailures(name, source));
+    failures.push(...credentialBoundaryFailures(name, source));
     failures.push(...vendoringFailures(name, source));
+    failures.push(...mainnetE2eBoundaryFailures(name, source));
     failures.push(...(named?.(source) ?? []));
   }
   return failures;

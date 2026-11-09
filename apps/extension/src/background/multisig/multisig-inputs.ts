@@ -1,31 +1,31 @@
 /**
  * Strict parsers for privileged Argent multisig runtime messages.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   type ArgentMultisigCall,
   isArgentMultisigCalls,
   MULTISIG_LIMITS,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import {
   type ArgentMultisigDeployConfig,
   canonicalArgentMultisigDeployConfig,
-} from "@mc-wallet/multisig/deploy";
+} from "@bramble/multisig/deploy";
 import {
   type ArgentMultisigSigningIntent,
   isArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/multisig/repository";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { FeeAffordability } from "@bramble/transactions/fee-funds";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+} from "@bramble/wallet-model/networks";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 
 const isCanonicalNonZeroFelt = (value: unknown): value is string =>
   typeof value === "string" && isNonZeroStarkFieldElement(value) && canonicalFelt(value) === value;
@@ -193,21 +193,25 @@ export const readRemoveMultisigInput = (
     : null;
 
 /**
- * Parses preparation of one exact call batch.
+ * Parses preparation of one exact call batch. `confirmResend` is the user's
+ * say-so for calls a stale version may already have sent (Sherlock 177).
  */
 export const readPrepareIntentInput = (
   message: unknown,
 ): {
   readonly calls: readonly ArgentMultisigCall[];
+  readonly confirmResend: boolean;
   readonly multisigId: string;
 } | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["calls", "multisigId", "type"]) &&
+  hasOnlyKnownKeys(message, ["calls", "confirmResend", "multisigId", "type"]) &&
+  (message["confirmResend"] === undefined || message["confirmResend"] === true) &&
   message["type"] === "wallet.prepareArgentMultisigIntent" &&
   isAccountId(message["multisigId"]) &&
   isArgentMultisigCalls(message["calls"])
     ? {
         calls: message["calls"],
+        confirmResend: message["confirmResend"] === true,
         multisigId: message["multisigId"],
       }
     : null;
@@ -254,7 +258,7 @@ export const readImportIntentSignatureInput = (
  */
 export type ArgentMultisigIntentPackage = {
   readonly intent: ArgentMultisigSigningIntent;
-  readonly kind: "mc-wallet.argent-multisig-intent";
+  readonly kind: "bramble.argent-multisig-intent";
   readonly version: 1;
 };
 
@@ -263,11 +267,11 @@ export type ArgentMultisigIntentPackage = {
  */
 export const argentMultisigIntentPackage = (
   intent: ArgentMultisigSigningIntent,
-): ArgentMultisigIntentPackage => ({
-  intent,
-  kind: "mc-wallet.argent-multisig-intent",
-  version: 1,
-});
+): ArgentMultisigIntentPackage => {
+  // The stale reason is local (mc-wallet 673); older co-signers refuse unknown keys.
+  const { staleOutcome: _localOutcome, staleReason: _local, ...shared } = intent;
+  return { intent: shared, kind: "bramble.argent-multisig-intent", version: 1 };
+};
 
 /**
  * Discards untrusted remote lifecycle claims and derives local authority only
@@ -276,7 +280,12 @@ export const argentMultisigIntentPackage = (
 export const locallyDerivedImportedIntent = (
   intent: ArgentMultisigSigningIntent,
 ): ArgentMultisigSigningIntent => {
-  const { broadcastTransactionHash: _remoteBroadcast, ...imported } = intent;
+  const {
+    broadcastTransactionHash: _remoteBroadcast,
+    staleOutcome: _remoteOutcome,
+    staleReason: _remote,
+    ...imported
+  } = intent;
   return {
     ...imported,
     state:
@@ -297,7 +306,9 @@ export const sortedArgentMultisigSignatures = (
 /**
  * Merges a re-import of the same frozen hash without regressing local state.
  * Terminal local outcomes remain authoritative; open intents gain only new,
- * already-validated signer fragments.
+ * already-validated signer fragments. The stored summary is kept: it is local
+ * display text that a token or contact added since would word differently,
+ * and the frozen hash already pins what is signed (Sherlock 178).
  */
 export const mergeImportedArgentMultisigIntent = (
   current: ArgentMultisigSigningIntent,
@@ -315,6 +326,7 @@ export const mergeImportedArgentMultisigIntent = (
     ...incoming,
     signatures: sorted,
     state: sorted.length === incoming.configSnapshot.threshold ? "ready" : "collecting",
+    summary: current.summary,
   };
 };
 
@@ -330,7 +342,7 @@ export const readImportIntentInput = (
     message["type"] !== "wallet.importArgentMultisigIntent" ||
     !isRecord(message["package"]) ||
     !hasOnlyKnownKeys(message["package"], ["intent", "kind", "version"]) ||
-    message["package"]["kind"] !== "mc-wallet.argent-multisig-intent" ||
+    message["package"]["kind"] !== "bramble.argent-multisig-intent" ||
     message["package"]["version"] !== 1 ||
     !isArgentMultisigSigningIntent(message["package"]["intent"])
   ) {

@@ -4,12 +4,29 @@
  * escaped controls and never reads or stores wallet material.
  */
 
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { checkboxField, inputControl, textField } from "@mc-wallet/ui-kit/fields";
-import { RECOVERY_SCAN_LIMITS } from "@mc-wallet/wallet-model/recovery";
+import { BRAMBLE_WORDMARK } from "@bramble/ui-kit/brand-mark";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { inputControl, selectField, textareaField, textField } from "@bramble/ui-kit/fields";
+import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
+import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
+import { addressFinderFields } from "./address-finder-view";
+import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "./backup-verify";
+
+/**
+ * The consequence of the network every first-run wallet is created on. The
+ * binder pins onboarding to DEFAULT_NETWORK, so the line follows it: on Starknet
+ * Mainnet it says the wallet holds real funds; on a testnet default there is no
+ * such consequence to state. It replaces the old acknowledgement tickbox with a
+ * stated fact on each step that creates, imports or restores accounts.
+ */
+const MAINNET_CONSEQUENCE = "This wallet is on Starknet Mainnet and holds real funds.";
+const networkConsequence = (): string =>
+  DEFAULT_NETWORK.id === "SN_MAIN"
+    ? `<p class="hint onboarding-network-consequence">${MAINNET_CONSEQUENCE}</p>`
+    : "";
 
 const flowBack = (label: string): string =>
   iconButton({
@@ -20,54 +37,31 @@ const flowBack = (label: string): string =>
     variant: "ghost",
   });
 
-const stepHead = (iconName: "book" | "lock" | "shield" | "wallet", title: string, lede: string) => `
+const stepHead = (
+  iconName: "book" | "lock" | "shield" | "wallet",
+  title: string,
+  lede?: string,
+) => `
   <div class="onboarding-step-head">
     <div class="onboarding-step-icon">${icon(iconName)}</div>
     <h1>${title}</h1>
-    <p class="lede">${lede}</p>
+    ${lede ? `<p class="lede">${lede}</p>` : ""}
   </div>`;
-
-const mainnetAcknowledgement = (name: string, id: string, text: string): string =>
-  checkboxField({
-    containerAttributes: { id },
-    name,
-    text,
-  });
 
 const option = (
   id: string,
-  iconName: "book" | "shield",
+  iconName: "book" | "link" | "shield",
   title: string,
-  description: string,
+  description?: string,
 ): string => `
   <button class="onboarding-option" id="${id}" type="button">
     <span class="onboarding-option-icon">${icon(iconName)}</span>
     <span class="onboarding-option-copy">
       <strong>${title}</strong>
-      <span>${description}</span>
+      ${description ? `<span>${description}</span>` : ""}
     </span>
     ${icon("chevronRight")}
   </button>`;
-
-const accountContractChoices = (kind: "ledger" | "software"): string => {
-  const attribute = kind === "ledger" ? "data-ledger-account-contract" : "data-account-contract";
-  return `<div class="onboarding-contract-options" role="group" aria-label="Account contract">
-    <button class="onboarding-contract" ${attribute}="openzeppelin" type="button" aria-pressed="true">
-      <span class="onboarding-contract-copy">
-        <span class="onboarding-contract-title"><strong>OpenZeppelin Account</strong><span>Recommended</span></span>
-        <span>${kind === "ledger" ? "Ledger keeps the signer key; OpenZeppelin defines the on-chain account." : "The recommended account model for new MC Wallet accounts."}</span>
-      </span>
-      <span class="onboarding-contract-check">${icon("check")}</span>
-    </button>
-    <button class="onboarding-contract" ${attribute}="argent" type="button" aria-pressed="false">
-      <span class="onboarding-contract-copy">
-        <span class="onboarding-contract-title"><strong>Argent Account</strong><span>Supported</span></span>
-        <span>${kind === "ledger" ? "Use the same Ledger signer with the Argent account model." : "Choose the Argent account model when you prefer it."}</span>
-      </span>
-      <span class="onboarding-contract-check">${icon("check")}</span>
-    </button>
-  </div>`;
-};
 
 /**
  * Renders both recovery grids. Each cell states its 1-based position as content,
@@ -78,7 +72,7 @@ const accountContractChoices = (kind: "ledger" | "software"): string => {
  * `[hidden] { display: none !important }` outranks any cell rule, so it could
  * never be shown again. `:has(> input[hidden])` follows the input instead.
  */
-const recoveryWordInputs = (kind: "generated" | "import"): string =>
+export const recoveryWordInputs = (kind: "generated" | "import"): string =>
   Array.from(
     { length: 24 },
     (_, index) =>
@@ -101,8 +95,11 @@ const recoveryWordInputs = (kind: "generated" | "import"): string =>
       )}</label>`,
   ).join("");
 
+// Labelled from the default positions so the static markup is coherent on its
+// own; `bindOnboarding` relabels each field to the positions actually asked as
+// soon as a phrase is generated.
 const backupVerifyInputs = (): string =>
-  BACKUP_VERIFY_POSITIONS.map((position, index) =>
+  DEFAULT_BACKUP_VERIFY_POSITIONS.map((position, index) =>
     textField({
       autocomplete: "off",
       autocapitalize: "off",
@@ -120,18 +117,24 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   return `
   ${textField({
     autocomplete: "new-password",
-    hint: "Use at least 12 characters. This unlocks the encrypted vault on this device.",
     label: "Vault passphrase",
-    minlength: 12,
+    minlength: MIN_VAULT_PASSPHRASE_LENGTH,
     name: passphraseName,
-    placeholder: "At least 12 characters",
+    placeholder: `At least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
     required: true,
+    trailing: iconButton({
+      attributes: { "data-passphrase-reveal": true },
+      className: "field-action",
+      icon: "eye",
+      label: "Show passphrase",
+      variant: "ghost",
+    }),
     type: "password",
   })}
   ${textField({
     autocomplete: "new-password",
     label: "Confirm passphrase",
-    minlength: 12,
+    minlength: MIN_VAULT_PASSPHRASE_LENGTH,
     name: confirmationName,
     placeholder: "Enter it again",
     required: true,
@@ -139,46 +142,13 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   })}
   <div class="password-requirement" aria-live="polite">
     <span class="password-requirement-bar"><span></span></span>
-    <span data-password-result>Enter at least 12 characters</span>
+    <span data-password-result>Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters</span>
   </div>`;
 };
 
 const welcomeStep = (ready: boolean): string => `
   <section class="onboarding-step onboarding-welcome" data-onboarding-step="welcome">
-    <div class="onboarding-orbit" aria-hidden="true">
-      <div class="orbit-field">
-        <span class="orbit-ring orbit-ring-outer"></span>
-        <span class="orbit-ring orbit-ring-wide"></span>
-        <span class="orbit-ring orbit-ring-middle"></span>
-        <span class="orbit-ring orbit-ring-inner"></span>
-        <span class="orbit-ring orbit-ring-core"></span>
-        <span class="orbit-pulse orbit-pulse-a"></span>
-        <span class="orbit-pulse orbit-pulse-b"></span>
-        <span class="orbit-pulse orbit-pulse-c"></span>
-        <span class="orbit-track orbit-track-outer-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("shield")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-outer-b">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("send")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-wide orbit-track-reverse orbit-track-wide-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("activity")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-middle orbit-track-middle-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("image")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-middle orbit-track-middle-b">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("globe")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-inner orbit-track-reverse orbit-track-inner-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("link")}</span></span>
-        </span>
-        <span class="orbit-track orbit-track-core orbit-track-core-a">
-          <span class="orbit-node"><span class="orbit-node-surface">${icon("coins")}</span></span>
-        </span>
-        <span class="orbit-core"><strong>MC</strong><span>Wallet</span></span>
-      </div>
-    </div>
+    <div class="onboarding-lockup">${BRAMBLE_WORDMARK}</div>
     <div class="onboarding-welcome-actions">
       ${button({
         attributes: { id: "create-new-button" },
@@ -192,25 +162,25 @@ const welcomeStep = (ready: boolean): string => `
         variant: "secondary",
       })}
     </div>
-    <p class="onboarding-local-note">${icon("lock")} Encrypted locally on this device</p>
   </section>`;
 
-const methodStep = (): string => `
+const methodStep = (ledgerAvailable = true): string => `
   <section class="onboarding-step" data-onboarding-step="method" hidden>
     ${flowBack("Back to welcome")}
-    ${stepHead("wallet", "Choose how to add your wallet", "Bring an existing Starknet wallet into MC Wallet.")}
+    ${stepHead("wallet", "Import wallet")}
     <div class="onboarding-options">
       ${option(
         "recovery-method-button",
         "book",
         "Recovery phrase",
-        "Import 12 or 24 recovery words from another wallet.",
+        "Import a recovery phrase from a Bramble, Ready or Braavos wallet.",
       )}
+      ${ledgerAvailable ? option("ledger-method-button", "shield", "Ledger hardware wallet") : ""}
       ${option(
-        "ledger-method-button",
-        "shield",
-        "Ledger hardware wallet",
-        "Connect a Ledger and choose accounts without exposing keys.",
+        "key-method-button",
+        "link",
+        "Private key",
+        "Import a single account from its raw Starknet key.",
       )}
     </div>
   </section>`;
@@ -218,10 +188,13 @@ const methodStep = (): string => `
 const recoveryStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery" hidden>
     ${flowBack("Back to wallet methods")}
-    ${stepHead("book", "Enter your recovery phrase", "Type each word, or paste the complete phrase into the first field. Unknown words are flagged as you go.")}
+    ${stepHead("book", "Enter your recovery phrase")}
     <div class="onboarding-fields recovery-fields">
       <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
-      <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+      <div class="recovery-actions">
+        <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+        <button class="onboarding-inline-action" id="phrase-clear" type="button">Clear</button>
+      </div>
       <p id="recovery-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -244,13 +217,22 @@ const generatedStep = (): string => `
         aria-hidden="true"
         inert
       >${recoveryWordInputs("generated")}</div>
-      ${button({
-        attributes: { id: "phrase-toggle" },
-        icon: "book",
-        label: "Show recovery phrase",
-        variant: "secondary",
-      })}
-      <p class="hint">Anyone with these words controls the wallet. MC Wallet cannot recover them for you.</p>
+      <div class="button-row">
+        ${button({
+          attributes: { "aria-label": "Show recovery phrase", id: "phrase-toggle" },
+          icon: "book",
+          label: "Show",
+          variant: "secondary",
+        })}
+        ${button({
+          attributes: { "aria-label": "Copy recovery phrase", id: "generated-copy-phrase" },
+          disabled: true,
+          icon: "copy",
+          label: "Copy",
+          variant: "ghost",
+        })}
+      </div>
+      <p class="hint" id="generated-copy-note">Anyone with these words controls the wallet and its funds. Bramble cannot recover them for you.</p>
       <p id="generate-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
@@ -265,64 +247,115 @@ const generatedStep = (): string => `
 const verifyStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="verify" hidden>
     ${flowBack("Back to recovery phrase")}
-    ${stepHead("shield", "Confirm your backup", "Enter the requested words to make sure your offline copy is accurate.")}
+    ${stepHead("shield", "Confirm your backup")}
     <div class="onboarding-fields">
       <div class="verify-grid">${backupVerifyInputs()}</div>
       <p id="verify-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
-      ${button({
-        attributes: { id: "verify-continue" },
-        disabled: true,
-        label: "Continue",
-      })}
+      <div class="verify-continue-hit">
+        ${button({
+          attributes: { id: "verify-continue" },
+          disabled: true,
+          label: "Continue",
+        })}
+      </div>
     </div>
   </section>`;
 
 const passwordStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="password" hidden>
     ${flowBack("Back")}
-    ${stepHead("lock", "Create your vault passphrase", "You will use this to unlock MC Wallet on this device.")}
+    ${stepHead("lock", "Create your vault passphrase")}
     <div class="onboarding-fields">
+      <input name="accountContractType" type="hidden" value="openzeppelin" />
       ${passwordFields()}
       <p id="passphrase-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
-        attributes: { id: "choose-account-contract-button" },
+        attributes: { id: "password-continue-button" },
         disabled: true,
-        label: "Choose account contract",
+        label: "Continue",
       })}
     </div>
   </section>`;
 
-const accountContractStep = (): string => `
-  <section class="onboarding-step" data-onboarding-step="account-contract" hidden>
-    ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Choose your account contract", "This determines the account deployed on Starknet. Your recovery phrase and local vault protection stay the same.")}
+const importKeyStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="import-key" hidden>
+    ${flowBack("Back to wallet methods")}
+    ${stepHead("wallet", "Import from a private key")}
     <div class="onboarding-fields">
-      <input name="accountContractType" type="hidden" value="openzeppelin" />
-      ${accountContractChoices("software")}
-      <p class="hint">MC Wallet supports both account models. OpenZeppelin is the recommended default.</p>
+      <p class="review-flag" role="note">Anyone with this key controls the account.</p>
+      ${selectField({
+        label: "Account type",
+        name: "importKeyContractType",
+        options: [
+          { label: "Bramble Account", value: "openzeppelin" },
+          { label: "Ready Account", value: "argent" },
+        ],
+        selected: "openzeppelin",
+      })}
+      ${textareaField({
+        autocomplete: "off",
+        hint: "This key is stored encrypted in Bramble's key store.",
+        label: "Raw Starknet private key",
+        name: "importKeyRaw",
+        placeholder: "0x…",
+        required: true,
+        spellcheck: false,
+      })}
+      <div id="import-key-salt-field" hidden>
+        ${textField({
+          autocomplete: "off",
+          label: "Ready deployment salt (optional)",
+          name: "importKeySalt",
+          placeholder: "0x…",
+          spellcheck: false,
+        })}
+      </div>
+      ${networkConsequence()}
+      <p id="import-key-result" role="status"></p>
+      ${addressFinderFields("key", { hidden: true })}
     </div>
     <div class="onboarding-step-cta">
       ${button({
-        attributes: { id: "review-account-button" },
-        label: "Review OpenZeppelin account",
+        attributes: { id: "import-key-continue" },
+        disabled: true,
+        label: "Continue",
       })}
     </div>
   </section>`;
 
-const recoveryAccountsStep = (): string => `
-  <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
-    ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Find your accounts", "MC Wallet checks the first 20 account indices for both OpenZeppelin and Argent accounts. Accounts with on-chain activity are selected automatically.")}
-    <div class="onboarding-fields">
+/**
+ * The grouped account-scan controls shared by first-run recovery and the
+ * in-wallet "Import a recovery phrase" flow, so both surfaces render the same
+ * detection and selection semantics for one binder (`bindRecoveryAccountUi`).
+ * Each family's count is filled in by that binder, never rendered here.
+ */
+export const recoveryScanFields = (): string => `
       <div class="section-head">
         <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
         ${iconButton({ attributes: { id: "recovery-scan-retry" }, icon: "refresh", label: "Retry account search" })}
       </div>
-      <ul class="allowance-list" id="recovery-account-list" aria-label="Recovered accounts"></ul>
+      <details class="disclosure account-group" data-recovery-group="openzeppelin">
+        <summary>Bramble accounts<span class="eyebrow" data-detected></span></summary>
+        <div class="disclosure-body">
+          <ul class="allowance-list" aria-label="Recovered Bramble accounts"></ul>
+        </div>
+      </details>
+      <details class="disclosure account-group" data-recovery-group="argent">
+        <summary>Ready accounts<span class="eyebrow" data-detected></span></summary>
+        <div class="disclosure-body">
+          <ul class="allowance-list" aria-label="Recovered Ready accounts"></ul>
+        </div>
+      </details>
+      <details class="disclosure account-group" data-recovery-group="braavos">
+        <summary>Braavos accounts<span class="eyebrow" data-detected></span></summary>
+        <div class="disclosure-body">
+          <ul class="allowance-list" aria-label="Recovered Braavos accounts"></ul>
+        </div>
+      </details>${addressFinderFields("recovery")}
       <details class="disclosure">
         <summary>Advanced manual index</summary>
         <div class="disclosure-body onboarding-fields">
@@ -330,12 +363,15 @@ const recoveryAccountsStep = (): string => `
           ${button({ attributes: { id: "recovery-manual-search" }, label: "Check this index", variant: "secondary" })}
         </div>
       </details>
-      ${mainnetAcknowledgement(
-        "recoveryMainnetAck",
-        "recovery-mainnet-ack",
-        "I checked these account types and indices and want to restore the selected accounts on Starknet Mainnet.",
-      )}
-      <p id="recovery-accounts-result" role="status"></p>
+      <p id="recovery-accounts-result" role="status"></p>`;
+
+const recoveryAccountsStep = (): string => `
+  <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
+    ${flowBack("Back to passphrase")}
+    ${stepHead("wallet", "Find your accounts")}
+    <div class="onboarding-fields">
+${recoveryScanFields()}
+      ${networkConsequence()}
     </div>
     <div class="onboarding-step-cta">
       ${button({
@@ -348,68 +384,40 @@ const recoveryAccountsStep = (): string => `
 
 const accountStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="accounts" hidden>
-    ${flowBack("Back to account contract")}
-    ${stepHead("wallet", "Review your account", "Confirm the derived public address, then add it to this wallet.")}
+    ${flowBack("Back to passphrase")}
+    ${stepHead("wallet", "Review your account")}
     <div class="onboarding-fields">
-      <button
-        class="onboarding-account"
-        id="account-preview"
-        type="button"
-        aria-pressed="false"
-      >
+      <div class="onboarding-account" id="account-preview">
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
-          <strong data-preview-label>Primary OpenZeppelin account</strong>
+          <strong data-preview-label></strong>
           <span data-preview-address>Deriving account…</span>
         </span>
-        <span class="onboarding-account-check">${icon("check")}</span>
-      </button>
-      ${mainnetAcknowledgement(
-        "mainnetAck",
-        "mainnet-ack",
-        "I understand this wallet can hold real funds on Starknet Mainnet.",
-      )}
+        <span class="onboarding-account-check" aria-hidden="true">${icon("check")}</span>
+      </div>
+      ${networkConsequence()}
       <p id="form-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
         attributes: { id: "create-wallet-button" },
         disabled: true,
-        label: "Add selected account",
+        label: "Finish setup",
         type: "submit",
       })}
     </div>
   </section>`;
 
-const ledgerContractStep = (): string => `
-  <section class="onboarding-step" data-onboarding-step="ledger-contract" hidden>
-    ${flowBack("Back to wallet methods")}
-    ${stepHead("shield", "Choose the Ledger account contract", "Your signing key stays on Ledger in either case. This choice only changes the account contract deployed on Starknet.")}
-    <div class="onboarding-fields">
-      ${accountContractChoices("ledger")}
-      <p class="hint">MC Wallet supports both account models. OpenZeppelin is the recommended default.</p>
-    </div>
-    <div class="onboarding-step-cta">
-      ${button({
-        attributes: { id: "ledger-contract-continue" },
-        label: "Continue with OpenZeppelin",
-      })}
-    </div>
-  </section>`;
-
-const ledgerStep = (status: WalletStatus): string => `
+const ledgerStep = (status: WalletStatus, ledgerAvailable = true): string =>
+  ledgerAvailable
+    ? `
   <section class="onboarding-step" data-onboarding-step="ledger" hidden>
-    ${flowBack("Back to account contract")}
-    ${stepHead("lock", "Protect the Ledger registry", "Create the local vault passphrase used to unlock account labels and settings on this device.")}
+    ${flowBack("Back to wallet methods")}
+    ${stepHead("lock", "Choose a password")}
     <form id="ledger-setup-form" class="onboarding-fields">
-      <input name="ledgerAccountContractType" type="hidden" value="openzeppelin" />
       ${passwordFields("ledger")}
+      ${networkConsequence()}
       <p id="ledger-passphrase-result" role="status"></p>
-      ${mainnetAcknowledgement(
-        "ledgerMainnetAck",
-        "ledger-mainnet-ack",
-        "I understand this wallet can hold real funds on Starknet Mainnet.",
-      )}
       <div class="onboarding-step-cta">
         ${button({
           attributes: { "data-ledger-first-run": true, id: "ledger-setup-button" },
@@ -418,32 +426,37 @@ const ledgerStep = (status: WalletStatus): string => `
         })}
       </div>
     </form>
-  </section>`;
+  </section>`
+    : "";
 
 /**
- * First-run wizard. It preserves MC Wallet's real creation and Ledger paths
+ * First-run wizard. It preserves Bramble's real creation and Ledger paths
  * while presenting each decision as one focused, reversible step.
+ *
+ * `ledgerAvailable` false omits the Ledger method and its passphrase step
+ * entirely, so a runtime with no Web Bluetooth, WebUSB or WebHID (Gecko) is
+ * never offered a flow it cannot finish. It defaults to true so a caller that
+ * does not report capability keeps the offered state.
  */
-export const onboardingWizard = (status: WalletStatus): string => `
+export const onboardingWizard = (status: WalletStatus, ledgerAvailable = true): string => `
   <!--
   THESIS: First-run security is a short sequence of explicit choices, never one long form.
-  OWN-WORLD: Achromatic panel, generous dark field, crisp controls, orbital linework, semantic green/red only.
+  OWN-WORLD: Neutral panel over the brand landscape, the wordmark lockup at its centre, one accent for the primary action, semantic green/red only.
   STORY: Choose a wallet path, supply only the required credential, protect it, select the account, finish.
-  FIRST VIEWPORT: One centered wallet stage; an orbiting MC mark leads to two full-width actions at the foot.
-  FORM: Staged wallet setup based on the supplied reference flow, adapted to MC Wallet trust boundaries.
+  FIRST VIEWPORT: One centered wallet stage; the Bramble wordmark leads to two full-width actions at the foot.
+  FORM: Staged wallet setup based on the supplied reference flow, adapted to Bramble trust boundaries.
   -->
-  <main class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
-    <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready}" novalidate>
+  <section class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
+    <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready === true ? "true" : "false"}" novalidate>
       ${welcomeStep(status.ready)}
-      ${methodStep()}
+      ${methodStep(ledgerAvailable)}
       ${recoveryStep()}
       ${generatedStep()}
       ${verifyStep()}
+      ${importKeyStep()}
       ${passwordStep()}
       ${recoveryAccountsStep()}
-      ${accountContractStep()}
       ${accountStep()}
     </form>
-    ${ledgerContractStep()}
-    ${ledgerStep(status)}
-  </main>`;
+    ${ledgerStep(status, ledgerAvailable)}
+  </section>`;

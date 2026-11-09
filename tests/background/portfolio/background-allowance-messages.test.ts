@@ -4,12 +4,13 @@
  * verified send path.
  */
 import { describe, expect, test } from "bun:test";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { flushHeld, latestApprovalId, reviewedApprovalFee } from "../../support/held";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
@@ -80,7 +81,7 @@ const makeHarness = () => {
   session.unlock(vaultPassphrase);
   const allowanceStore = memoryAllowanceStore();
   const invokeCalls: (readonly unknown[])[] = [];
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     allowanceStore,
     runtimeRpc: makeRuntimeRpc({
       async submitInvokeTransaction(input) {
@@ -151,10 +152,12 @@ describe("allowance manager messages", () => {
     expect(revokeCall.entrypoint).toBe("approve");
     expect(revokeCall.calldata).toEqual([`0x${BigInt(SPENDER).toString(16)}`, "0x0", "0x0"]);
 
+    // Until a chain reading of zero confirms it, the submitted revoke leaves
+    // the grant listed and revokable: it may still revert (Sherlock 192).
     const after = (await handler({ type: "wallet.allowances" }, extensionSender)) as {
       allowances: readonly unknown[];
     };
-    expect(after.allowances).toEqual([]);
+    expect(after.allowances).toMatchObject([{ id, revoking: true }]);
   });
 
   test("rejects revoking an unknown allowance", async () => {

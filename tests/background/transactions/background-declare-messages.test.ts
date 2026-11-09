@@ -6,16 +6,17 @@
  * the large CONTRACT_CLASS is never surfaced in the approval snapshot.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { DeclareInput } from "@mc-wallet/starknet/rpc";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { DeclareInput } from "@bramble/starknet/rpc";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
 
 const account: AccountRef = {
@@ -69,9 +70,13 @@ const walletStub = (connected: readonly AccountRef[]) => ({
       accounts: [account],
       accountSecrets: [],
       activeAccountId: account.id,
+      importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 7 as const,
+      schemaVersion: 13 as const,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -123,7 +128,7 @@ const makeHarness = (
       return { classHash: "0x7ce", transactionHash: "0x7cd" };
     },
   } as unknown as RuntimeRpc;
-  const handler = createMessageHandler(walletStub(connected), "extension-id", {
+  const handler = createMessageHandler(walletStub(connected), testExtension, {
     approvals,
     preferencesStore: unavailablePreferencesStore,
     runtimeRpc: rpc,
@@ -369,7 +374,7 @@ const makeThrowingSignHarness = () => {
       throw new WalletError("device rejected the declare");
     },
   };
-  const handler = createMessageHandler(wallet, "extension-id", {
+  const handler = createMessageHandler(wallet, testExtension, {
     approvals,
     preferencesStore: unavailablePreferencesStore,
     runtimeRpc: rpc,

@@ -3,7 +3,7 @@
  * set the aggregator returned is the swap the user reviewed.
  *
  * Trust boundary: `built` is UNTRUSTED — it is whatever /swap/v3/build replied,
- * narrowed to felts and entrypoint identifiers by `@mc-wallet/transactions/avnu` and
+ * narrowed to felts and entrypoint identifiers by `@bramble/transactions/avnu` and
  * nothing more — while `intent` is wallet-side throughout: the pair comes from
  * the user's TRACKED token registry, the beneficiary from the unlocked account,
  * the counterparty from the network's pin, and the minimum from the reviewed
@@ -13,19 +13,19 @@
  * with its DECODED route so the confirm receipt can state what was bound rather
  * than what was hoped for.
  */
-import { isAvnuSwapEntrypoint, MAX_SWAP_CALLS } from "@mc-wallet/transactions/avnu";
+import { isAvnuSwapEntrypoint, MAX_SWAP_CALLS } from "@bramble/transactions/avnu";
 import {
   type AvnuRoute,
   avnuRouteIntentError,
   decodeAvnuRoute,
-} from "@mc-wallet/transactions/avnu-route";
-import type { DecodedCall } from "@mc-wallet/transactions/verify";
-import { isApproveEntrypoint } from "@mc-wallet/transactions/verify-selectors";
-import { sameFelt, uint256Felts } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/avnu-route";
+import type { DecodedCall } from "@bramble/transactions/verify";
+import { isApproveEntrypoint } from "@bramble/transactions/verify-selectors";
+import { sameFelt, uint256Felts } from "@bramble/wallet-model/networks";
 
 /**
  * One call exactly as the aggregator returned it, already narrowed to felts and
- * an entrypoint identifier by `@mc-wallet/transactions/avnu`.
+ * an entrypoint identifier by `@bramble/transactions/avnu`.
  */
 export type BuiltCall = {
   readonly calldata: readonly string[];
@@ -96,11 +96,11 @@ const approvalCallPolicyError = (call: BuiltCall, intent: SwapIntent): string | 
 // burn, upgrade, and every other selector.
 const routeCounterpartyError = (call: BuiltCall, intent: SwapIntent): string | null => {
   if (!sameFelt(call.contractAddress, intent.routerAddress)) {
-    return "swap build called a contract that is not the AVNU router";
+    return "swap build called a contract that is not the avnu router";
   }
   return isAvnuSwapEntrypoint(call.entrypoint)
     ? null
-    : "swap build called an entrypoint that is not an AVNU swap";
+    : "swap build called an entrypoint that is not an avnu swap";
 };
 
 // The half that makes the review mean something: the admitted call's CALLDATA,
@@ -161,7 +161,7 @@ const approvalSetError = (
  * The build-output policy gate. The aggregator's response is UNTRUSTED and the
  * wallet asked it for ONE swap of one exact amount, so the COMPLETE returned
  * call set is judged against that intent: the approval set above, plus exactly
- * one swap call, on the network's PINNED router (`@mc-wallet/transactions/avnu`), through
+ * one swap call, on the network's PINNED router (`@bramble/transactions/avnu`), through
  * its pinned entry point, whose calldata DECODES against the pinned exchange
  * ABI and names the reviewed sell token and amount, the reviewed buy token,
  * this account as the beneficiary, and a minimum output no worse than the

@@ -1,7 +1,7 @@
 /** Atomic explorer endpoint and disclosure-preference mutation. */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isCustomRpcUrl } from "@mc-wallet/wallet-model/custom-network";
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
+import { isStarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { WalletPreferences } from "./preferences-types";
 
 /** Returns preferences with one network's explorer API and fallback consent updated together. */

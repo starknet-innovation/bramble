@@ -2,12 +2,12 @@
  * Boundary validation for the invoke approval's fee review (#189): `fee`,
  * `feeEstimateFailed`, and `requiresDeployment` travel on `PendingApproval`,
  * are validated by the existing fee predicate, stay internally consistent with
- * `resolveReviewFee`'s classification, and never leak onto other approval
+ * the background's classification, and never leak onto other approval
  * kinds. Extension messages are untrusted — a malformed fee rejects the whole
  * response rather than rendering.
  */
 import { describe, expect, test } from "bun:test";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { isPendingApprovalsResponse } from "../../../src/popup/responses/approvals-responses";
 
 const INVOKE_ID = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
@@ -32,6 +32,13 @@ const invokeApproval = (overrides: Record<string, unknown> = {}): Record<string,
   ...overrides,
 });
 
+const usdcOffer = {
+  amount: "1000",
+  decimals: 6,
+  label: "USDC",
+  tokenAddress: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+};
+
 const response = (approval: Record<string, unknown>): unknown => ({
   ok: true,
   pending: [approval],
@@ -53,13 +60,64 @@ describe("PendingApproval fee review validation (#189)", () => {
     );
   });
 
-  test("accepts the undeployed and estimate-failed states", () => {
-    expect(
-      isPendingApprovalsResponse(response(invokeApproval({ fee: null, requiresDeployment: true }))),
-    ).toBe(true);
+  test("accepts a deploy-first review only in its one consistent shape", () => {
+    const deployFirst = { deployFirst: true, fee: null, requiresDeployment: true };
+    expect(isPendingApprovalsResponse(response(invokeApproval(deployFirst)))).toBe(true);
+    for (const contradiction of [
+      { deployFirst: false },
+      { ...deployFirst, fee: { overallFee: "1", unit: "FRI" } },
+      { ...deployFirst, requiresDeployment: false },
+      { ...deployFirst, feeEstimateFailed: true },
+      { ...deployFirst, feeEstimatePending: true },
+    ]) {
+      expect(isPendingApprovalsResponse(response(invokeApproval(contradiction)))).toBe(false);
+    }
+    const connect = { id: INVOKE_ID, kind: "connect", origin: "https://dapp.example" };
+    expect(isPendingApprovalsResponse(response({ ...connect, deployFirst: true }))).toBe(false);
+  });
+
+  test("accepts the estimate-failed state", () => {
     expect(
       isPendingApprovalsResponse(response(invokeApproval({ fee: null, feeEstimateFailed: true }))),
     ).toBe(true);
+  });
+
+  // Issue 851: an undeployed account reviews its invoke and its deployment.
+  test("accepts an undeployed review only with both halves consistent", () => {
+    const undeployed = {
+      deploymentFee: { overallFee: "900", unit: "FRI" },
+      deploymentFeeEstimateFailed: false,
+      requiresDeployment: true,
+    };
+    for (const shape of [
+      undeployed,
+      { ...undeployed, deploymentFee: null, deploymentFeeEstimateFailed: true },
+      { ...undeployed, fee: null, feeEstimateFailed: true },
+    ]) {
+      expect(isPendingApprovalsResponse(response(invokeApproval(shape)))).toBe(true);
+    }
+    for (const contradiction of [
+      // No deployment half at all.
+      { fee: null, requiresDeployment: true },
+      { requiresDeployment: true },
+      // A failure flag that disagrees with the amount.
+      { ...undeployed, deploymentFeeEstimateFailed: true },
+      { ...undeployed, deploymentFee: null },
+      { ...undeployed, deploymentFee: { overallFee: "x", unit: "FRI" } },
+      // A deployment half where no deployment happens.
+      { ...undeployed, requiresDeployment: false },
+      { ...undeployed, deployFirst: true, fee: null },
+      // The relay cannot deploy, so no gasless offer rides along.
+      { ...undeployed, gaslessFees: [usdcOffer] },
+    ]) {
+      expect(isPendingApprovalsResponse(response(invokeApproval(contradiction)))).toBe(false);
+    }
+    // Control: the same offer is valid on a deployed review.
+    expect(isPendingApprovalsResponse(response(invokeApproval({ gaslessFees: [usdcOffer] })))).toBe(
+      true,
+    );
+    const connect = { id: INVOKE_ID, kind: "connect", origin: "https://dapp.example" };
+    expect(isPendingApprovalsResponse(response({ ...connect, deploymentFee: null }))).toBe(false);
   });
 
   test("accepts an invoke approval with no fee review at all", () => {
@@ -84,8 +142,8 @@ describe("PendingApproval fee review validation (#189)", () => {
   });
 
   test("rejects inconsistent combinations", () => {
-    // An amount alongside a failure, or alongside a pending deployment,
-    // contradicts resolveReviewFee's classification.
+    // An amount alongside a failure, or a deployment with no deployment half,
+    // contradicts the background's classification.
     expect(isPendingApprovalsResponse(response(invokeApproval({ feeEstimateFailed: true })))).toBe(
       false,
     );
@@ -134,6 +192,30 @@ describe("PendingApproval fee review validation (#189)", () => {
 
   test("still rejects genuinely unknown keys", () => {
     expect(isPendingApprovalsResponse(response(invokeApproval({ surprise: true })))).toBe(false);
+  });
+
+  test("accepts only bounded exact-call review data on invoke approvals", () => {
+    const callReviews = [
+      { calldata: ["0x1", "0x2", "0x0"], contractAddress: "0x123", entrypoint: "transfer" },
+    ];
+    expect(isPendingApprovalsResponse(response(invokeApproval({ callReviews })))).toBe(true);
+    expect(
+      isPendingApprovalsResponse(
+        response(
+          invokeApproval({ callReviews: [{ ...callReviews[0], calldata: ["not-a-felt"] }] }),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse(
+        response({
+          callReviews,
+          id: INVOKE_ID,
+          kind: "connect",
+          origin: "https://dapp.example",
+        }),
+      ),
+    ).toBe(false);
   });
 });
 

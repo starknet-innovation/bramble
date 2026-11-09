@@ -3,12 +3,13 @@
  * fiat conversion, and account-scoped recipient choices.
  */
 import { describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
 import {
   balanceShortcut,
   fiatInputToken,
   sendAssets,
+  sendBalanceLine,
   sendRecipientAccounts,
   tokenInputFiat,
 } from "../../../../src/sidepanel/journeys/send/send-model";
@@ -68,6 +69,18 @@ describe("Send view model", () => {
     expect(balanceShortcut("invalid", 6, "max")).toBe("");
   });
 
+  test("renders the balance line compact for every bucket, never at token precision", () => {
+    // Every writer of the amount card's balance line goes through here; a
+    // full-precision figure from a later writer once widened the card past the
+    // narrowest side panel after the compact first paint.
+    expect(sendBalanceLine("public", "1.234567890123456789", "ETH")).toBe("Balance 1.23456 ETH");
+    expect(sendBalanceLine("private", "2845.123456789012345678", "STRK")).toBe(
+      "Private balance 2,845.12345 STRK",
+    );
+    expect(sendBalanceLine("private", null, "STRK")).toBe("Private balance unavailable");
+    expect(sendBalanceLine("public", "", "ETH")).toBe("Balance — ETH");
+  });
+
   test("converts fiat entry into a visible token amount and rejects unusable prices", () => {
     expect(fiatInputToken("100", 4_000, 18)).toBe("0.025");
     expect(fiatInputToken("100", 0, 18)).toBeNull();
@@ -80,6 +93,11 @@ describe("Send view model", () => {
     // it; the model does not hide it.
     const second = { ...account, id: `${account.id}:second`, publicKeyX: "0x999" };
     expect(sendRecipientAccounts([account, second], "SN_MAIN")).toEqual([account, second]);
+  });
+
+  test("drops hidden accounts from the recipient list", () => {
+    const second = { ...account, id: `${account.id}:second`, publicKeyX: "0x999" };
+    expect(sendRecipientAccounts([account, second], "SN_MAIN", [second.id])).toEqual([account]);
   });
 
   test("still keeps recipients to the active network", () => {

@@ -1,6 +1,6 @@
 /**
  * Pure spring solver that turns a designer-friendly spring preset
- * (response/damping, see @mc-wallet/ui-kit/tokens.ts `SPRING`) into a native CSS/WAAPI
+ * (response/damping, see @bramble/ui-kit/tokens.ts `SPRING`) into a native CSS/WAAPI
  * `linear()` easing string plus a settle duration.
  *
  * Springs are sampled analytically (no per-frame physics loop, no dependency)

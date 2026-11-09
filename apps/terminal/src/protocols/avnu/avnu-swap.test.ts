@@ -24,7 +24,7 @@ describe("AVNU v3 swap boundary", () => {
     expect(url.searchParams.get("sellAmount")).toBe("0x3e8");
   });
 
-  it("accepts one verified exchange call from the v3 calls envelope", () => {
+  it("parses a bounded v3 exchange payload before separate intent validation", () => {
     expect(
       parseBuildResponse({
         chainId: "0x534e5f4d41494e",
@@ -48,22 +48,29 @@ describe("AVNU v3 swap boundary", () => {
       parseQuoteResponse([
         {
           buyAmount: "990",
+          buyTokenAddress: "0x2",
           gasFees: "0xde0b6b3a7640000",
           gasFeesInUsd: 0.08,
           priceImpact: 12,
           quoteId: "quote-1",
-          routes: [{ name: "Ekubo", percent: 0.7 }, { name: "Hashstack", percent: 0.3 }],
+          routes: [
+            { name: "Ekubo", percent: 0.7 },
+            { name: "Hashstack", percent: 0.3 },
+          ],
           sellAmount: "1000",
+          sellTokenAddress: "0x1",
         },
       ]),
     ).toEqual({
       buyAmount: "990",
+      buyToken: "0x2",
       gasFeesInStrk: "1000000000000000000",
       gasFeesInUsd: 0.08,
       priceImpactBps: 12,
       quoteId: "quote-1",
       routeLabels: ["Ekubo 70%", "Hashstack 30%"],
       sellAmount: "1000",
+      sellToken: "0x1",
     });
   });
 
@@ -73,8 +80,13 @@ describe("AVNU v3 swap boundary", () => {
       contractAddress: AVNU_ADDRESSES.exchange,
       entrypoint: "multi_route_swap",
     };
-    expect(() => parseBuildResponse({ calls: [{ ...call, contractAddress: "0x1" }] })).toThrow();
-    expect(() => parseBuildResponse({ calls: [{ ...call, entrypoint: "transfer" }] })).toThrow();
-    expect(() => parseBuildResponse({ calls: [call, call] })).toThrow();
+    const chainId = "0x534e5f4d41494e";
+    expect(() =>
+      parseBuildResponse({ chainId, calls: [{ ...call, contractAddress: "0x1" }] }),
+    ).toThrow();
+    expect(() =>
+      parseBuildResponse({ chainId, calls: [{ ...call, entrypoint: "transfer" }] }),
+    ).toThrow();
+    expect(() => parseBuildResponse({ chainId, calls: [call, call] })).toThrow();
   });
 });

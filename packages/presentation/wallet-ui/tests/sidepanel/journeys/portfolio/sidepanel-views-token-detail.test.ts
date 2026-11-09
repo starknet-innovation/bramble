@@ -4,8 +4,8 @@
  * looks the token up and threads its chart-derived price into tokenDetailFlow.
  */
 import { describe, expect, test } from "bun:test";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
 import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 import { tokenDetailFlow } from "../../../../src/sidepanel/journeys/portfolio/token-flows";
@@ -134,6 +134,29 @@ describe("dashboard token-detail arm", () => {
     expect(html).toContain('title="Register to start shielding"');
     expect(html).toContain("Go private");
     expect(html).not.toContain('class="private-balance-summary"\n');
+  });
+
+  test("a deployed, unregistered account shields directly, activating in the same transaction", () => {
+    // #789: the first shield carries the registration, so the token offers
+    // Shield itself rather than a separate activation step first.
+    const privacy: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
+        registration: "unregistered",
+      },
+    };
+
+    const html = tokenDetailFlow(status, token, balance, [10, 20, 30], 2_000, "usd", privacy, true);
+
+    expect(html).toContain(`data-send-shield="${token.id}"`);
+    expect(html).not.toContain("Go private");
+    expect(html).not.toContain("data-send-unshield");
   });
 
   test("a pending registration replaces the activation call with its own state", () => {

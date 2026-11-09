@@ -1,12 +1,17 @@
 /** Sanitized, local-only support diagnostics for trusted extension pages. */
 
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { PhishingFeedHealth } from "@bramble/permissions/phishing-feed";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   type ExplorerDiagnosticRow,
   explorerDiagnosticsSnapshot,
+  type PrivacyDiagnosticRow,
+  privacyDiagnosticsSnapshot,
   type RpcDiagnosticRow,
   rpcDiagnosticsSnapshot,
-} from "@mc-wallet/starknet/rpc-diagnostics";
+  type StorageDiagnosticRow,
+  storageDiagnosticsSnapshot,
+} from "@bramble/starknet/rpc-diagnostics";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { statusResponse } from "../runtime/runtime-state";
 import type { UnlockSession } from "../runtime/session";
@@ -19,8 +24,22 @@ type SupportDiagnostics = {
   readonly hasVault: boolean;
   readonly locked: boolean;
   readonly networkId: string;
+  /**
+   * How current the live phishing list is: domain count, age in whole hours,
+   * failed fetches since the last success, whether the cache write failed, and
+   * whether it is stale. Null when the feed is not running.
+   */
+  readonly phishingFeed: PhishingFeedHealth | null;
+  /**
+   * Tracked privacy jobs by kind, phase, and outcome class with average
+   * duration — where a shield, activation, or private send spent its time and
+   * how it ended. Fixed labels only; no account, note, amount, or error text.
+   */
+  readonly privacy: readonly PrivacyDiagnosticRow[];
   readonly ready: boolean;
   readonly rpc: readonly RpcDiagnosticRow[];
+  /** Local store writes that trimmed rows to fit their budget, or failed. */
+  readonly storage: readonly StorageDiagnosticRow[];
 };
 
 /** Successful diagnostic response returned only to a trusted extension page. */
@@ -34,6 +53,7 @@ export const supportDiagnosticsResponse = async (
   wallet: WalletStatusReader,
   session: UnlockSession,
   preferencesStore: WalletPreferencesStore,
+  phishingFeedHealth?: () => PhishingFeedHealth,
 ): Promise<SupportDiagnosticsResponse> => {
   const [status, preferences] = await Promise.all([
     statusResponse(wallet, session, preferencesStore),
@@ -47,8 +67,11 @@ export const supportDiagnosticsResponse = async (
       hasVault: status.hasVault,
       locked: status.locked,
       networkId: status.networkId,
+      phishingFeed: phishingFeedHealth?.() ?? null,
+      privacy: privacyDiagnosticsSnapshot(),
       ready: status.ready,
       rpc: rpcDiagnosticsSnapshot(),
+      storage: storageDiagnosticsSnapshot(),
     },
     ok: true,
   };

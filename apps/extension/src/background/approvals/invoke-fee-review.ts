@@ -15,24 +15,31 @@
  * and every failure degrades to a retryable state rather than a guess.
  */
 
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import type { PriceService } from "@bramble/portfolio/prices";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { UndeployedBraavosError } from "@bramble/starknet/deployment";
+import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import type { StarkHashSigner } from "@bramble/starknet/provider";
+import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { gaslessStrkAffordability } from "@bramble/transactions/gasless-request";
+import { isDeployableBraavos } from "@bramble/wallet-model/account-families";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
-import { resolveReviewFee } from "../accounts/wallet-ops";
+import { isPoolShapedBatch } from "../privacy/strk20-account-context";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import { readStrkBalance } from "../transactions/fee-guard";
+import { reviewGaslessOffers } from "../transactions/gasless-review";
+import { estimateInvokeAndDeployment } from "../transactions/transfer-fee-review";
 import type { InvokeFeeReview } from "./approvals";
 
 /**
  * Dependencies needed to estimate the fee for a queued dapp invoke.
  */
 export type InvokeFeeReviewDeps = {
+  readonly prices?: PriceService;
   readonly runtimeRpc: RuntimeRpc;
 };
 
@@ -56,8 +63,8 @@ export type InvokeFeeReviewTarget = {
    * Builds the signer, on demand. A thunk and not a value for two reasons:
    * building one can throw (a keyless Ledger account with no panel queue
    * wired), and that is an estimate failure the card can offer a retry for, not
-   * a crash in the message handler; and an undeployed account never estimates
-   * at all, so it must never pay for a signer it will not use.
+   * a crash in the message handler; and an undeployed Braavos account never
+   * estimates at all, so it must never pay for a signer it will not use.
    */
   readonly signer: () => StarkHashSigner;
 };
@@ -89,53 +96,157 @@ export const FAILED_INVOKE_FEE: InvokeFeeReview = {
 };
 
 /**
- * Estimates the fee for a queued dapp invoke, mirroring the Send review's shape
- * (deployment status → estimate → `resolveReviewFee`) so both journeys classify
- * fee outcomes identically. Nothing is broadcast or signed because the RPC
- * estimate skips account validation. Any failure — transport, RPC, or signer
+ * The review of an invoke that an undeployed account cannot send with its own
+ * deployment — a Braavos account, which deploys only through its own reviewed
+ * step, or a proof-bearing invoke — so the card says to deploy first instead of
+ * offering a fee or a retry, and Approve stays disabled (there is no fee to bind).
+ */
+const DEPLOY_FIRST_INVOKE_FEE: InvokeFeeReview = {
+  deployFirst: true,
+  fee: null,
+  feeAffordability: "unknown",
+  feeEstimateFailed: false,
+  feeEstimatePending: false,
+  requiresDeployment: true,
+};
+
+const gaslessOffersFor = async (
+  deps: InvokeFeeReviewDeps,
+  input: {
+    readonly account: InvokeFeeReviewTarget["account"];
+    readonly calls: InvokeFeeReviewTarget["calls"];
+    readonly fee: InvokeFeeReview["fee"];
+    readonly feeAffordability: InvokeFeeReview["feeAffordability"];
+    readonly preferences: InvokeFeeReviewTarget["preferences"];
+    readonly proof?: InvokeFeeReviewTarget["proof"];
+  },
+): Promise<NonNullable<InvokeFeeReview["gaslessFees"]>> => {
+  const prices = deps.prices;
+  // A proof is not representable on the gasless relay. Pool batches are the
+  // same refusal: they belong on the STRK20 lane.
+  if (
+    prices === undefined ||
+    input.proof !== undefined ||
+    isPoolShapedBatch(input.calls, input.preferences, input.account.networkId)
+  ) {
+    return [];
+  }
+  return reviewGaslessOffers({
+    account: input.account,
+    calls: [...input.calls],
+    preferences: input.preferences,
+    prices,
+    runtimeRpc: deps.runtimeRpc,
+    strkAffordability: input.feeAffordability,
+    strkFee: input.fee,
+  }).catch(() => []);
+};
+
+const reviewedGaslessFees = async (
+  deps: InvokeFeeReviewDeps,
+  review: InvokeFeeReviewTarget,
+  balance: string | null,
+  fee: FeeEstimate | null,
+): Promise<{ readonly gaslessFees: NonNullable<InvokeFeeReview["gaslessFees"]> } | undefined> => {
+  const gaslessFees = await gaslessOffersFor(deps, {
+    account: review.account,
+    calls: review.calls,
+    fee,
+    feeAffordability: gaslessStrkAffordability(review.calls, balance, fee),
+    preferences: review.preferences,
+    ...(review.proof ? { proof: review.proof } : {}),
+  });
+  return gaslessFees.length > 0 ? { gaslessFees } : undefined;
+};
+
+type PricedComponents = {
+  readonly deployed: boolean;
+  readonly deploymentFee: FeeEstimate | null;
+  readonly fee: FeeEstimate | null;
+};
+
+// The fee components for this invoke, or the finished review when there is
+// nothing to price: an unreadable deployment status or an unbuildable signer
+// (retry), or an undeployed account that must deploy first.
+const priceComponents = async (
+  deps: InvokeFeeReviewDeps,
+  review: InvokeFeeReviewTarget,
+  rpcUrls: readonly string[],
+): Promise<PricedComponents | InvokeFeeReview> => {
+  const { account } = review;
+  // An unreadable deployment status fails closed to a retry, as the Send review
+  // does: guessing "deployed" would quote an invoke-only figure for an account
+  // that may need deploying, and guessing "undeployed" would quote a deployment
+  // it may not need.
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
+    .catch(() => null);
+  if (deployed === null) return FAILED_INVOKE_FEE;
+  if (!deployed && (isDeployableBraavos(account) || review.proof !== undefined)) {
+    return DEPLOY_FIRST_INVOKE_FEE;
+  }
+  let signHash: StarkHashSigner;
+  try {
+    signHash = review.signer();
+  } catch {
+    return FAILED_INVOKE_FEE;
+  }
+  try {
+    const components = await estimateInvokeAndDeployment(deps.runtimeRpc, {
+      account,
+      calls: review.calls,
+      deployed,
+      ...(review.proof ? { proof: review.proof } : {}),
+      rpcUrls,
+      signHash,
+    });
+    return { ...components, deployed };
+  } catch (error) {
+    if (error instanceof UndeployedBraavosError) return DEPLOY_FIRST_INVOKE_FEE;
+    throw error;
+  }
+};
+
+/**
+ * Estimates the fee for a queued dapp invoke with the Send review's estimates
+ * (`estimateInvokeAndDeployment`), so both journeys price a transaction the
+ * same way. Nothing is broadcast; the estimates sign nothing private (Argent
+ * validates on a mock query authorization, other families skip validation).
+ * Any failure — an unreadable deployment status, transport, RPC, or signer
  * construction — degrades to a retryable "estimate failed" state rather than
- * throwing, so a queued approval never dies of a fee it could not price.
+ * throwing, so a queued approval never dies of a fee it could not price and
+ * never binds a total it could not complete. An undeployed account reviews both
+ * its invoke and its deployment, and approval binds their sum. Two undeployed
+ * cases are answered deploy-first instead: a deployable Braavos account (by
+ * account state, or by the platform's typed refusal), and any proof-bearing
+ * invoke, since a proof cannot ride the deploy-then-invoke submission.
  */
 export const estimateInvokeApprovalFee = async (
   deps: InvokeFeeReviewDeps,
   review: InvokeFeeReviewTarget,
 ): Promise<InvokeFeeReview> => {
-  const { account, calls, preferences } = review;
+  const { account, preferences } = review;
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
-  // An unreadable deployment status must not block the review, so it fails open
-  // to "deployed": the estimate is then attempted and its own failure is what
-  // degrades the card, rather than a transport error silently reporting the
-  // account as undeployed and demanding a deployment the user does not need.
-  const deployed = await deps.runtimeRpc
-    .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
-    .catch(() => true);
-  let estimated: FeeEstimate | null = null;
-  if (deployed) {
-    try {
-      estimated = await deps.runtimeRpc.estimateInvokeFee({
-        account,
-        calls: [...calls],
-        ...(review.proof ? { proof: review.proof } : {}),
-        rpcUrls,
-        signHash: review.signer(),
-      });
-    } catch {
-      estimated = null;
-    }
-  }
-  const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
-  // Fee-affordability guard (issue 191): compare the estimate against the
+  const priced = await priceComponents(deps, review, rpcUrls);
+  if (!("deployed" in priced)) return priced;
+  const { deployed, deploymentFee, fee } = priced;
+  const total = deployed ? fee : fee && deploymentFee && sumFeeEstimates(fee, deploymentFee);
+  // Fee-affordability guard (issue 191): compare the reviewed total against the
   // account's STRK balance via the shared predicate. Warn-only and fail-open —
   // an unreadable balance yields "unknown" and never blocks the approval.
-  const feeAffordability = resolveFeeAffordability({
-    balance: fee === null ? null : await readStrkBalance(deps, account, preferences),
-    fee,
-  });
+  const balance = total ? await readStrkBalance(deps, account, preferences) : null;
+  const feeAffordability = resolveFeeAffordability({ balance, fee: total ?? null });
+  // STRK the calls spend counts toward the shortfall the offer uses. The card's
+  // own verdict stays fee-only. Proofs and pool batches are omitted inside the
+  // helper. The relay cannot deploy an account, so an undeployed one gets none.
+  const gasless = deployed ? await reviewedGaslessFees(deps, review, balance, fee) : undefined;
   return {
+    ...(deployed ? {} : { deploymentFee, deploymentFeeEstimateFailed: deploymentFee === null }),
     fee,
     feeAffordability,
-    feeEstimateFailed,
+    feeEstimateFailed: fee === null,
     feeEstimatePending: false,
+    ...gasless,
     requiresDeployment: !deployed,
   };
 };

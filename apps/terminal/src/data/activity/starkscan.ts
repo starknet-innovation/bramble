@@ -1,15 +1,12 @@
 import { useCallback } from "react";
-import { canonicalAddress } from "../../protocols/support/networks";
 import { isRecord } from "../../protocols/support/json";
 import { fetchJson } from "../core/client";
 import { STARKSCAN_BASE } from "../core/endpoints";
-import { formatTokenAmount } from "../core/format";
-import type { Resource, TokenBalance } from "../core/types";
+import type { Resource } from "../core/types";
 import { useAsyncResource } from "../core/useAsyncResource";
 
 const POLL_MS = 5_000;
 const MAX_ITEMS = 200;
-const DECIMAL_PATTERN = /^(?:0|[1-9][0-9]*)$/;
 
 /** Recent block summary displayed in the Discover chain pulse. */
 type ChainBlock = {
@@ -81,10 +78,6 @@ const text = (value: unknown, maxLength: number): string | null =>
   typeof value === "string" && value.length > 0 && value.length <= maxLength ? value : null;
 const integer = (value: unknown, max = Number.MAX_SAFE_INTEGER): number | null =>
   Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= max ? Number(value) : null;
-const decimal = (value: unknown): string | null => {
-  const parsed = text(value, 256);
-  return parsed !== null && DECIMAL_PATTERN.test(parsed) ? parsed : null;
-};
 const timestamp = (value: unknown): number | null => {
   const parsed = typeof value === "string" ? Date.parse(value) : Number.NaN;
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
@@ -170,56 +163,6 @@ export const parseWalletActivity = (value: unknown): readonly WalletActivity[] =
       },
     ];
   });
-};
-
-/**
- * Parses an exact, complete token-holdings snapshot into terminal balances.
- * Incomplete snapshots throw so the caller can use latest-state RPC instead of
- * turning absent rows into a misleading zero-dollar portfolio.
- */
-export const parseStarkscanBalances = (
-  value: unknown,
-  expectedOwner: string,
-): readonly TokenBalance[] => {
-  if (!isRecord(value) || !Array.isArray(value["items"]) || value["items"].length > 10_000) {
-    throw new Error("Starkscan returned invalid holdings");
-  }
-  const completeness = value["completeness"];
-  if (
-    value["chainId"] !== "SN_MAIN" ||
-    canonicalAddress(String(value["ownerAddress"])) !== canonicalAddress(expectedOwner) ||
-    value["exact"] !== true ||
-    value["truncated"] !== false ||
-    !isRecord(completeness) ||
-    completeness["exact"] !== true ||
-    completeness["truncated"] !== false ||
-    completeness["complete"] !== true ||
-    completeness["reasonCode"] !== "complete"
-  ) {
-    throw new Error("Starkscan holdings are not complete");
-  }
-  const balances: TokenBalance[] = [];
-  for (const item of value["items"]) {
-    if (!isRecord(item)) continue;
-    const address = text(item["tokenAddress"], 68);
-    const symbol = text(item["symbol"], 64);
-    const name = text(item["name"], 128);
-    const decimals = integer(item["decimals"], 36);
-    const rawText = decimal(item["indexedBalanceRaw"]);
-    if (address === null || symbol === null || decimals === null || rawText === null) continue;
-    const raw = BigInt(rawText);
-    const { amount, display } = formatTokenAmount(raw, decimals);
-    balances.push({
-      address,
-      symbol,
-      name: name ?? symbol,
-      decimals,
-      raw,
-      display,
-      amount,
-    });
-  }
-  return balances;
 };
 
 const parseBlock = (value: unknown): ChainBlock | null => {
@@ -384,19 +327,6 @@ export const parseChainPulse = (
       .filter((row): row is ChainTransaction => row !== null),
   };
 };
-
-/** Fetches an exact indexed portfolio snapshot for one connected owner. */
-export const fetchStarkscanBalances = async (
-  owner: string,
-  signal: AbortSignal,
-): Promise<readonly TokenBalance[]> =>
-  parseStarkscanBalances(
-    await fetchJson<unknown>(
-      `${STARKSCAN_BASE}/address/${encodeURIComponent(owner)}/token-holdings`,
-      { signal },
-    ),
-    owner,
-  );
 
 /** Fetches the newest indexed transactions attributed to one connected wallet. */
 const fetchWalletActivity = async (

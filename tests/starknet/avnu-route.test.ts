@@ -21,7 +21,7 @@ import {
   avnuRouteIntentError,
   decodeAvnuRoute,
   reviewedMinBuyAmount,
-} from "@mc-wallet/transactions/avnu-route";
+} from "@bramble/transactions/avnu-route";
 import { avnuDirectRoute, avnuRouteCalldata } from "../support/avnu-route-fixture";
 
 const ETH = "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";

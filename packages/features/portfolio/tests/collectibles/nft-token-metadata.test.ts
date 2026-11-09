@@ -4,10 +4,7 @@
  * metadata remains opt-in, byte-bounded, credentialless, and public-HTTPS only.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  type NftMetadataHttp,
-  resolveNftMetadataUri,
-} from "@mc-wallet/portfolio/nft-token-metadata";
+import { type NftMetadataHttp, resolveNftMetadataUri } from "@bramble/portfolio/nft-token-metadata";
 
 const metadata = {
   attributes: [

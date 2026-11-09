@@ -1,38 +1,48 @@
 /** Persistent recipient, review, authorization, confirmation, and receipt bindings. */
 
-import type { SendRouteResolution } from "@mc-wallet/transactions/send-routes";
+import type { SendRouteResolution } from "@bramble/transactions/send-routes";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { errorMessage, showToast } from "../../shared/dom";
+import { errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { watchDeployment } from "../../shell/shell-bindings";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import { transitionSendStage } from "./send-transition";
 import { bindTransferBuckets } from "./transfer-buckets-ui";
-import { bindTransferCompose, sendFormInput } from "./transfer-compose-ui";
-import type { TransferState } from "./transfer-model";
+import { createComposeFee } from "./transfer-compose-fee";
+import { bindTransferCompose, clearSendRecipient, sendFormInput } from "./transfer-compose-ui";
+import { bindTransferConfirmation } from "./transfer-confirm-ui";
+import { bindTransferExits } from "./transfer-exits-ui";
+import { bindGaslessFeeChoice } from "./transfer-gasless-choice";
+import { transferMaxSpendable } from "./transfer-max";
+import type { TransferExitView, TransferState } from "./transfer-model";
 import {
-  CONFIRMATION_DELAYS_MS,
-  confirmationOutcome,
-  confirmationStatus,
+  acceptsTransferSubmit,
   friendlyReviewError,
   initialTransferState,
+  isTransferInFlight,
   recipientFieldError,
   type TransferStage,
   transferFields,
   transferKey,
 } from "./transfer-model";
 import { createRecipientStatus } from "./transfer-recipient-status";
-import { applyTransferUi } from "./transfer-render";
+import { applyTransferProgress, applyTransferUi } from "./transfer-render";
 import {
   balanceInBucket,
   resolveTransferRoute,
   type TransferRouteContext,
   transferRoute,
-  transferSpendable,
 } from "./transfer-route";
-import { preparationFailure, preparationFor, preparedReview } from "./transfer-submit";
+import {
+  preparationFailure,
+  preparationFor,
+  preparedState,
+  reviewedState,
+  submitRejection,
+} from "./transfer-submit";
 
-export { activityExportToast, bindActivity } from "../portfolio/activity-ui";
+export { type ActivityUiDeps, activityExportToast, bindActivity } from "../portfolio/activity-ui";
 export { friendlyReviewError, recipientFieldError } from "./transfer-model";
 export { reviewPanelHtml } from "./transfer-review-markup";
 
@@ -47,10 +57,19 @@ const EMPTY_BALANCES: readonly TokenBalance[] = [];
 export type TransferUiDeps = {
   readonly app: Element | null;
   readonly back?: () => void;
+  /** Overrides the shield STRK-shortfall Confirm policy; tests only (issue 665). */
+  readonly blockShieldStrkShort?: boolean;
   readonly confirmationDelaysMs?: readonly number[];
-  readonly navigate?: (view: "activity" | "home" | "multisig-deploy") => void;
+  readonly navigate?: (view: TransferExitView) => void;
   /** Invalidates the cached private balance once a private send is accepted. */
   readonly onPrivateSendSettled?: () => void;
+  /**
+   * Arms the bounded privacy re-read once a private send's confirmation lands.
+   * The chain accepts a shield before the privacy indexer reflects the moved
+   * note, so the cached reading can predate the move; this watches the settled
+   * state so the home shows the shielded balance.
+   */
+  readonly onPrivateSendConfirmed?: () => void;
   readonly privacy?: () => PrivacyDisclosureState;
   /** The account's public token balances, for bucket display and fee gating. */
   readonly publicBalances?: () => readonly TokenBalance[];
@@ -66,6 +85,9 @@ export type TransferUiDeps = {
 let transferState: TransferState<Review> = initialTransferState();
 let transferEpoch = 0;
 let repaintActiveTransfer: (() => void) | null = null;
+// A failed review returns the form mounted now, not the one that started it: a
+// re-render while preparing replaces it, and the live one stayed "reviewing".
+let returnActiveTransferToDetails: (() => void) | null = null;
 let transferApp: Element | null = null;
 
 /**
@@ -78,6 +100,13 @@ export const markTransferLedgerAuthorized = (): void => {
   repaintActiveTransfer?.();
 };
 
+// Starts over, unless kept for a send in flight, which still goes out (Sherlock 164, M2).
+const resetTransfer = (keepInFlight = true): void => {
+  if (keepInFlight && isTransferInFlight(transferState.stage)) return;
+  transferEpoch += 1;
+  transferState = initialTransferState();
+};
+
 /**
  * Binds the recipient-first Send journey and observes the submitted hash until
  * Starknet reports a pre-confirmation, acceptance, rejection, reversion, or a
@@ -88,15 +117,15 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const { app, back, navigate, render, wallet } = deps;
   const form = app?.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
-    transferEpoch += 1;
-    transferState = initialTransferState();
+    resetTransfer();
     repaintActiveTransfer = null;
+    returnActiveTransferToDetails = null;
     transferApp = app;
     return;
   }
+  // A new root is a new host with its own wallet: never carry a send into it.
   if (transferApp !== app) {
-    transferEpoch += 1;
-    transferState = initialTransferState();
+    resetTransfer(false);
     transferApp = app;
   }
   const accountId = sendFormInput(form, "accountId")?.value ?? "";
@@ -106,10 +135,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     if (completionTarget === "multisig-deploy" && back) back();
     else navigate?.(completionTarget);
   };
-  if (transferState.fields && transferState.fields.accountId !== accountId) {
-    transferEpoch += 1;
-    transferState = initialTransferState();
-  }
+  if (transferState.fields && transferState.fields.accountId !== accountId) resetTransfer();
   // A shortcut arrives with the recipient, the asset, and both buckets already
   // in the form, so the recipient step has nothing left to ask: open on the
   // amount. Only on a fresh journey, or a repaint would drag the user back here
@@ -126,11 +152,12 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   const goTo = (stage: TransferStage): void => {
     transferState = { ...transferState, fields: transferFields(form), stage };
     repaint();
+    composeFee.refresh();
   };
-  // Leaving the review discards it. `reviewedKey` is what the submit handler
-  // reads to tell "show me the review" from "I have read it, send it", so a
-  // return to the amount step that kept it made the next Review send button
-  // submit immediately. Every path out of review goes through here.
+  // Leaving the review discards it: `reviewedKey` tells "show me the review"
+  // from "send it", so keeping it made the next Review press submit at once.
+  // Every path out of review comes here; the epoch bump discards a review still
+  // being prepared, which is safe because nothing is signed before the confirm.
   const editDetails = (): void => {
     transferEpoch += 1;
     transferState = {
@@ -141,33 +168,29 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       reviewedKey: null,
       stage: "details",
     };
-    repaint();
+    goTo("details");
     form.querySelector<HTMLInputElement>("#send-amount-input")?.focus();
   };
-  // Closing Send abandons what was composed. Without this, the module-level
-  // journey survived the close and the next visit resumed mid-flow — a cancelled
-  // shield reopened as a half-filled shield. A submitted transaction is kept, so
-  // its receipt or pending screen is still reachable on return.
+  // Closing Send abandons what was composed, so a cancelled shield does not
+  // reopen half-filled. A send past the confirm is kept, hash or not: the
+  // background still broadcasts it, so its outcome must show on return (audit
+  // M2; the rule `bindTransfer` applies to a takeover, Sherlock 164).
   const exit = (): void => {
-    if (transferState.transactionHash === null) {
-      transferEpoch += 1;
-      transferState = initialTransferState();
-    }
+    if (transferState.transactionHash === null) resetTransfer();
     if (transferState.transactionHash && completionTarget === "multisig-deploy") {
       complete();
       return;
     }
-    if (back) {
-      back();
-      return;
-    }
-    navigate?.("home");
+    if (back) back();
+    else navigate?.("home");
   };
   form.ownerDocument.querySelector("#send-close")?.addEventListener("click", exit);
   form.ownerDocument.querySelector("#send-header-back")?.addEventListener("click", () => {
-    if (transferState.stage === "asset") goTo("details");
-    else if (transferState.stage === "details") goTo("recipient");
-    else if (transferState.stage === "review") editDetails();
+    if (transferState.stage === "details") {
+      clearSendRecipient(form);
+      goTo("recipient");
+    } else if (transferState.stage === "review" || transferState.stage === "reviewing")
+      editDetails();
     else exit();
   });
   const recipients = createRecipientStatus({
@@ -193,6 +216,20 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     }
     return resolveTransferRoute(context);
   };
+  // The Amount screen prices the send from the same route the form composes into.
+  const composeFee = createComposeFee({
+    context: routeContext,
+    form,
+    stage: () => transferState.stage,
+    wallet,
+  });
+  returnActiveTransferToDetails = (): void => {
+    repaint();
+    composeFee.refresh();
+  };
+  // A bucket flip or an asset pick changes the route, so the cached review goes
+  // and the screen is repainted: the header and actions name the operation the
+  // buckets now describe (a shield flipped back to public reads as a send).
   const dropReview = (): void => {
     transferState = {
       ...transferState,
@@ -201,14 +238,19 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       review: null,
       reviewedKey: null,
     };
+    repaint();
+    composeFee.refresh();
   };
   bindTransferCompose({
     form,
     goTo,
     onFields: (fields) => {
       transferState = { ...transferState, fields };
+      composeFee.refresh();
     },
-    spendable: () => transferSpendable(routeContext()),
+    navigate: (view) => deps.navigate?.(view),
+    resolveName: (name, networkId) => wallet.resolveStarkName(name, networkId),
+    spendable: () => transferMaxSpendable(routeContext(), composeFee.review()),
   });
   bindTransferBuckets({
     balanceIn: (bucket) => balanceInBucket(bucket, routeContext()),
@@ -225,70 +267,42 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     route,
   });
 
-  form.querySelector("#send-edit")?.addEventListener("click", editDetails);
   form.querySelector("#send-failure-edit")?.addEventListener("click", editDetails);
-  const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
-  if (homeButton) {
-    homeButton.textContent =
-      completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back to home";
-    homeButton.addEventListener("click", complete);
-  }
-  form
-    .querySelector("#send-view-activity")
-    ?.addEventListener("click", () => navigate?.("activity"));
-  form
-    .querySelector("#send-pending-activity")
-    ?.addEventListener("click", () => navigate?.("activity"));
+  bindTransferExits(form, { complete, completionTarget, navigate });
 
-  const wait =
-    deps.waitForConfirmation ??
-    ((delayMs: number): Promise<void> =>
-      new Promise((resolve) => {
-        setTimeout(resolve, delayMs);
-      }));
-  // Polls to CONFIRMATION_DELAYS_MS, then hands over to "Check again".
-  const confirmSubmitted = async (epoch: number): Promise<void> => {
-    const hash = transferState.transactionHash;
-    if (!hash) return;
-    for (const delay of deps.confirmationDelaysMs ?? CONFIRMATION_DELAYS_MS) {
-      await wait(delay);
-      if (epoch !== transferEpoch) return;
-      try {
-        const activity = await wallet.loadActivity();
-        if (epoch !== transferEpoch) return;
-        const outcome = confirmationOutcome(confirmationStatus(activity.entries, hash));
-        if (outcome) {
-          transferState =
-            outcome.kind === "succeeded"
-              ? { ...transferState, error: "", stage: "submitted" }
-              : { ...transferState, error: outcome.message, stage: "failed" };
-          repaintActiveTransfer?.();
-          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error", form);
-          return;
-        }
-      } catch {
-        // A transient activity read is retried at the next scheduled checkpoint.
-      }
-    }
-    if (epoch === transferEpoch) {
-      transferState = { ...transferState, stage: "pending" };
+  // Polls to the last checkpoint, then hands over to "Check again".
+  const confirmSubmitted = bindTransferConfirmation<Review>({
+    deps,
+    form,
+    nextEpoch: () => ++transferEpoch,
+    readEpoch: () => transferEpoch,
+    readState: () => transferState,
+    // A remount replaces the form; the watch must paint whichever one is live.
+    repaint: () => {
       repaintActiveTransfer?.();
-    }
-  };
-  form.querySelector("#send-check-again")?.addEventListener("click", () => {
-    const epoch = ++transferEpoch;
-    transferState = { ...transferState, stage: "confirming" };
-    repaint();
-    void confirmSubmitted(epoch);
+    },
+    writeState: (state) => {
+      transferState = state;
+    },
   });
+  // Every failure has dropped the review, so this submit starts a new one.
   form.querySelector("#send-retry")?.addEventListener("click", () => {
-    transferState = { ...transferState, error: "", stage: "review" };
-    repaint();
+    transferState = { ...transferState, error: "" };
     form.requestSubmit();
   });
+  const settleRejection = (epoch: number, error: unknown): void => {
+    const rejection = submitRejection(transferState, error);
+    transferState = rejection.state;
+    repaintActiveTransfer?.();
+    if (rejection.toast) showToast(rejection.toast.message, "error", form, rejection.toast.details);
+    if (rejection.follow) void confirmSubmitted(epoch);
+  };
 
+  const gaslessChoice = bindGaslessFeeChoice(form);
   form.addEventListener("submit", (event) => {
+    const chosenGasless = gaslessChoice.take();
     event.preventDefault();
+    if (!acceptsTransferSubmit(transferState.stage)) return;
     const fields = transferFields(form);
     const recipientError = recipientFieldError(fields.recipient);
     const visibleAmount = form.querySelector<HTMLInputElement>("#send-amount-input");
@@ -315,10 +329,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     // review and the final confirm, because both arrive through this handler.
     const gate = route().blocked;
     if (gate) {
-      // A final confirm can reach this branch after the state behind the review
-      // changed (balance refresh, registration loss, relay removal). Invalidate
-      // every reviewed artifact and its async epoch before returning to edit;
-      // if the gate later clears, the next click must build a fresh review.
+      // A confirm can land here after the state behind the review changed:
+      // drop every reviewed artifact and its epoch, so a later click re-reviews.
       transferEpoch += 1;
       transferState = {
         ...initialTransferState<Review>(),
@@ -326,38 +338,47 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         fields,
         stage: "details",
       };
-      repaint();
+      goTo("details");
       return;
     }
     const key = transferKey(fields);
+    // A preparation already running for exactly these fields is not restarted:
+    // a second proof for the same send is a minute of wasted work.
+    if (
+      transferState.stage === "reviewing" &&
+      transferState.fields !== null &&
+      transferKey(transferState.fields) === key
+    ) {
+      return;
+    }
+    // A job's progress poll: rewrite only the liveness line, only for the epoch that started it.
+    const progressFor =
+      (epoch: number) =>
+      (progress: PreparationProgress): void => {
+        if (epoch !== transferEpoch) return;
+        transferState = { ...transferState, progress };
+        applyTransferProgress(form, transferState);
+      };
     if (transferState.reviewedKey !== key) {
       const epoch = ++transferEpoch;
       transferState = { ...initialTransferState<Review>(), fields, stage: "reviewing" };
       repaint();
       const composed = transferRoute(fields);
-      const preparing = preparationFor(composed, fields, wallet);
+      const preparing = preparationFor(composed, fields, wallet, progressFor(epoch));
       if (preparing) {
         void preparing.then(
           (preparation) => {
             if (epoch !== transferEpoch) return;
-            transferState = {
-              error: "",
-              fields,
-              privatePreparation: preparation,
-              requiresDeployment: false,
-              review: preparedReview(preparation),
-              reviewedKey: key,
-              stage: "review",
-              transactionHash: null,
-            };
+            transferState = preparedState(preparation, fields, key, deps);
             repaintActiveTransfer?.();
           },
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = errorMessage(error, preparationFailure(composed));
-            showToast(message, "error", form);
-            transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
-            repaintActiveTransfer?.();
+            showToast(message, "error", form, errorDetails(error, preparationFailure(composed)));
+            const line = errorLine(error, preparationFailure(composed));
+            transferState = { ...initialTransferState(), error: line, fields, stage: "details" };
+            returnActiveTransferToDetails?.();
           },
         );
         return;
@@ -373,35 +394,15 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         .then(
           (review) => {
             if (epoch !== transferEpoch) return;
-            const feeFailed =
-              review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true;
-            // Address poisoning is a refusal here, not a notice, matching the
-            // NFT send screen (nft-ui.ts) and the background's own refusal on
-            // submit: leaving the key unreviewed means the next click re-reviews
-            // instead of confirming, so the flag cannot be clicked past.
-            const blocked = review.flags.some((flag) => flag.code === "address-poisoning");
-            transferState = {
-              error: blocked
-                ? "This recipient closely mimics a saved address. Change it and review again."
-                : feeFailed
-                  ? "Fee estimate unavailable. Retry before authorizing this transaction."
-                  : "",
-              fields,
-              privatePreparation: null,
-              requiresDeployment: review.requiresDeployment,
-              review,
-              reviewedKey: blocked || feeFailed ? null : key,
-              stage: "review",
-              transactionHash: null,
-            };
+            transferState = reviewedState(review, fields, key);
             repaintActiveTransfer?.();
           },
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
             const message = friendlyReviewError(error);
-            showToast(message, "error", form);
+            showToast(message, "error", form, errorDetails(error, "Transfer review failed"));
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
-            repaintActiveTransfer?.();
+            returnActiveTransferToDetails?.();
           },
         );
       return;
@@ -411,7 +412,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     const reviewedFee = transferState.review?.fee ?? null;
     const reviewedDeploymentFee = transferState.review?.deploymentFee ?? null;
     const privatePreparation = transferState.privatePreparation;
-    transferState = { ...transferState, error: "", fields, stage: "authorizing" };
+    transferState = { ...transferState, error: "", fields, progress: null, stage: "authorizing" };
     repaint();
     if (transferRoute(fields).id !== "public-public") {
       if (!privatePreparation) {
@@ -423,7 +424,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         repaint();
         return;
       }
-      void wallet.executePrivacyPreparation(privatePreparation.id).then(
+      void wallet.executePrivacyPreparation(privatePreparation.id, progressFor(epoch)).then(
         (transactionHash) => {
           if (epoch !== transferEpoch) return;
           transferState = {
@@ -438,17 +439,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           void confirmSubmitted(epoch);
         },
         (error: unknown) => {
-          if (epoch !== transferEpoch) return;
-          const message = errorMessage(error, "Private send failed");
-          transferState = {
-            ...transferState,
-            error: `The transaction was not sent. ${message}`,
-            privatePreparation: null,
-            reviewedKey: null,
-            stage: "failed",
-          };
-          repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error", form);
+          if (epoch === transferEpoch) settleRejection(epoch, error);
         },
       );
       return;
@@ -460,16 +451,21 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         fields.recipient,
         fields.amount,
         fields.speed,
-        // Exactly what the review step rendered. Sending it back is what lets
-        // the background refuse a send whose fee has moved since the user read
-        // it, instead of signing at a price they never saw.
+        // The reviewed figures, so a fee that moved since this was read is refused.
         reviewedFee,
         reviewedDeploymentFee,
+        chosenGasless ?? undefined,
       )
       .then(
         (transactionHash) => {
           if (epoch !== transferEpoch) return;
-          transferState = { ...transferState, stage: "confirming", transactionHash };
+          // The review is spent: like the private route, drop its key (audit L5).
+          transferState = {
+            ...transferState,
+            reviewedKey: null,
+            stage: "confirming",
+            transactionHash,
+          };
           repaintActiveTransfer?.();
           if (requiresDeployment) {
             void watchDeployment(
@@ -480,15 +476,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           void confirmSubmitted(epoch);
         },
         (error: unknown) => {
-          if (epoch !== transferEpoch) return;
-          const message = errorMessage(error, "Transfer failed");
-          transferState = {
-            ...transferState,
-            error: `The transaction was not sent. ${message}`,
-            stage: "failed",
-          };
-          repaintActiveTransfer?.();
-          showToast("Transaction was not sent", "error", form);
+          if (epoch === transferEpoch) settleRejection(epoch, error);
         },
       );
   });

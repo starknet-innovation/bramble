@@ -16,16 +16,16 @@
  * covered in tests/starknet/http-bounded-fetch.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { type BoundedHttpFetch, HTTP_BODY_LIMITS } from "@mc-wallet/core/http-json";
-import { createHttpNftIndexer, type NftIndexerHttp } from "@mc-wallet/portfolio/nft-indexer";
-import { createPriceService, type HttpResponse } from "@mc-wallet/portfolio/prices";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { createSwapService } from "@mc-wallet/transactions/avnu";
+import { type BoundedHttpFetch, HTTP_BODY_LIMITS } from "@bramble/core/http-json";
+import { createHttpNftIndexer, type NftIndexerHttp } from "@bramble/portfolio/nft-indexer";
+import { createPriceService, type HttpResponse } from "@bramble/portfolio/prices";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createSwapService } from "@bramble/transactions/avnu";
 import {
   createStarkscanClient,
   StarkscanError,
   type StarkscanHttp,
-} from "@mc-wallet/transactions/starkscan";
+} from "@bramble/transactions/starkscan";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 const NFT_ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
@@ -121,12 +121,15 @@ describe("NFT indexer response bounds", () => {
 
   test("refuses an endless indexer body and degrades to an empty gallery", async () => {
     const { chunkBytes, emitted, response } = endlessBody();
-    expect(await listOwned(async () => response)).toEqual([]);
+    expect(await listOwned(async () => response)).toEqual({ coverage: "unavailable", nfts: [] });
     expect(emitted.bytes).toBeLessThanOrEqual(HTTP_BODY_LIMITS.nftIndexer + 2 * chunkBytes);
   });
 
   test("refuses a body whose declared length is already over budget", async () => {
-    expect(await listOwned(async () => declaredHugeBody())).toEqual([]);
+    expect(await listOwned(async () => declaredHugeBody())).toEqual({
+      coverage: "unavailable",
+      nfts: [],
+    });
   });
 
   test("still reads a normal indexer body", async () => {
@@ -136,7 +139,7 @@ describe("NFT indexer response bounds", () => {
           JSON.stringify([{ contract_address: "0x0511a2b3", name: "Punk #1", token_id: "1" }]),
         ),
     );
-    expect(nfts).toHaveLength(1);
+    expect(nfts.nfts).toHaveLength(1);
   });
 });
 

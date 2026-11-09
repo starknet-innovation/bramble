@@ -1,6 +1,7 @@
 /**
  * Enforces repository file-size and TypeScript doc-comment standards.
  */
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { actionReferences, isPinnedActionReference, WORKFLOW_DIR } from "./workflow-inventory";
@@ -15,6 +16,7 @@ const EXCLUDED = new Set([
   "artifacts",
   "bun.lock",
   "dist",
+  "dist-firefox",
   "node_modules",
   "output",
   "playwright-report",
@@ -31,10 +33,12 @@ const EXCLUDED = new Set([
  * and browser-global boundaries. Skipping by path keeps the extension scanned.
  */
 const EXCLUDED_PATHS = new Set(["apps/terminal", "apps/ui-lab"]);
-const BINARY_EXTENSIONS = [".jpg", ".png", ".wasm", ".webp", ".zip"] as const;
+const BINARY_EXTENSIONS = [".jpg", ".otf", ".png", ".wasm", ".webp", ".woff2", ".zip"] as const;
 const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/background/index.ts",
+  "apps/extension/src/extension-api.ts",
   "apps/extension/src/content/index.ts",
+  "apps/extension/src/ledger-grant/dom.ts",
   "apps/extension/src/ledger-grant/index.ts",
   "apps/extension/src/provider/inpage.ts",
   "apps/extension/src/sandbox/render.ts",
@@ -55,6 +59,7 @@ const ENCRYPTED_STORE_WIRING_FILES = new Set([
   "packages/platform/vault/src/encrypted-store.ts",
 ]);
 const RANDOM_UUID_FILES = new Set([
+  "apps/extension/src/background/analytics/gateway-analytics.ts",
   "apps/extension/src/background/approvals/approvals.ts",
   "apps/extension/src/provider/inpage.ts",
   "packages/platform/ledger-browser/src/grant-window.ts",
@@ -63,161 +68,9 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
   "apps/extension/src/background/index.ts",
   "apps/extension/src/content/index.ts",
 ]);
-const SECRET_MATERIAL_FILES = new Set([
-  "apps/extension/src/background/ledger/account-hash-signer.ts",
-  "apps/extension/src/background/accounts/account-creation-inputs.ts",
-  // Privileged first-run boundary: the phrase is validated through Krusty and
-  // only the boolean verdict returns; the phrase is never logged or persisted.
-  "apps/extension/src/background/onboarding/onboarding-ops.ts",
-  // Keeps the unlocked vault credential inside the privileged worker while
-  // coordinating fail-closed network/vault commits; never persists or emits it.
-  "apps/extension/src/background/runtime/active-network-mutation.ts",
-  "apps/extension/src/background/provider/add-chain-ops.ts",
-  "apps/extension/src/background/approvals/approval-decisions.ts",
-  "apps/extension/src/background/transactions/chain-ops.ts",
-  "apps/extension/src/background/portfolio/discovery-ops.ts",
-  "apps/extension/src/background/transactions/declare-ops.ts",
-  "apps/extension/src/background/accounts/import-inputs.ts",
-  "apps/extension/src/background/ledger/ledger-ops.ts",
-  "apps/extension/src/background/ledger/ledger-sign-queue.ts",
-  "apps/extension/src/background/ledger/ledger-signer.ts",
-  "apps/extension/src/background/approvals/signature-waiters.ts",
-  "apps/extension/src/background/index.ts",
-  "apps/extension/src/background/routing/message-inputs.ts",
-  // Wires collaborators by name only. Its sole match is the `./signature-waiters`
-  // import path; it holds no secret material and touches no key operations.
-  "apps/extension/src/background/routing/message-context.ts",
-  "apps/extension/src/background/routing/messages.ts",
-  "apps/extension/src/background/provider/provider-ops.ts",
-  "apps/extension/src/background/settings/origins-ops.ts",
-  "apps/extension/src/background/privacy/strk20-account-context.ts",
-  // Approved-request execution split out of strk20-ops.ts: it re-resolves the
-  // granted account behind a non-renewing session peek and hands the unlocked
-  // vault credential straight to the protected signer wiring. Same boundary,
-  // same rule — never logged, persisted, or returned across a message.
-  "apps/extension/src/background/privacy/strk20-approval-execution.ts",
-  // Queues approvals only. Since the execution half moved out, its sole match
-  // is the `./signature-waiters` import path; no secret material transits here.
-  "apps/extension/src/background/privacy/strk20-ops.ts",
-  // Active-account context split from strk20-wallet-ops; the vault passphrase
-  // only transits into the protected signer wiring, never logged or stored.
-  "apps/extension/src/background/privacy/strk20-op-context.ts",
-  "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
-  "apps/extension/src/background/runtime/runtime-state.ts",
-  "apps/extension/src/background/runtime/runtime-types.ts",
-  "apps/extension/src/background/runtime/session.ts",
-  "packages/platform/ledger-protocol/src/broker.ts",
-  "apps/extension/src/background/routing/unlock-errors.ts",
-  "apps/extension/src/background/accounts/wallet-ops.ts",
-  "apps/extension/src/background/accounts/wallet-reader.ts",
-  "apps/extension/src/background/ledger/ledger-inputs.ts",
-  "packages/platform/kms-krusty/src/adapter.ts",
-  "packages/foundation/wallet-model/src/accounts/signing.ts",
-  // Pure length policy only; carries no passphrase value across a boundary.
-  "packages/foundation/wallet-model/src/preferences/passphrase.ts",
-  "packages/testing/testkit/src/fake-kms.ts",
-  "packages/presentation/wallet-ui/src/popup/responses/responses.ts",
-  "packages/presentation/wallet-ui/src/popup/responses/responses-ledger.ts",
-  "packages/foundation/wallet-protocol/src/provider/results.ts",
-  "packages/foundation/wallet-protocol/src/provider/bridge.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/gate-views.ts",
-  "packages/platform/ledger-protocol/src/client.ts",
-  "packages/platform/ledger-protocol/src/errors.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/first-run.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/onboard-entry.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/runtime-client.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-runtime.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-session.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-views.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
-  // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
-  "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
-  "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
-  // Recovery discovery keeps the phrase and vault credential only in the
-  // first-run DOM closure and forwards them to the privileged background.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-account-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-import-bind.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-word-assist.ts",
-  // Locked-gate UI forwards the passphrase to the privileged background and
-  // neither persists it nor renders it.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/unlock-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
-  // Privileged UI message client: credentials transit directly to the
-  // background and are never retained or rendered here.
-  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime-accounts.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-runtime.ts",
-  // Public Argent multisig packages and verified signature fragments cross
-  // these UI boundaries; no private signing material is ever present.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-model.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-runtime.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-ui.ts",
-  // Public intent packages and verified public signature fragments only; all
-  // private signing remains inside the privileged background/Krusty boundary.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-intent-ui.ts",
-  // Renders public signature-fragment transport controls only; private signing
-  // remains behind the privileged background accountHashSigner boundary.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-intent-actions.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-views.ts",
-  "packages/features/transactions/src/routing/ledger-verify.ts",
-  // Pure public-key verification consolidated for Ledger and KMS probe
-  // callers; it receives no private key or vault credential.
-  "packages/platform/starknet/src/transactions/signature-verify.ts",
-  // Public account ABI serialization and signer façades. These files carry
-  // public keys/signature fragments; private-key operations remain in Krusty.
-  "packages/platform/starknet/src/accounts/account-contracts.ts",
-  "packages/platform/starknet/src/rpc/account-signer.ts",
-  "packages/platform/starknet/src/rpc/multisig-invoke.ts",
-  "packages/platform/starknet/src/rpc/rpc-estimate.ts",
-  "packages/platform/starknet/src/transactions/declare.ts",
-  "packages/platform/starknet/src/transactions/deployment.ts",
-  "packages/platform/starknet/src/rpc/provider.ts",
-  "packages/platform/starknet/src/rpc/rpc.ts",
-  "packages/features/privacy/src/policy/call-set-signer.ts",
-  "packages/features/privacy/src/sdk/official-sdk-service.ts",
-  // CallSet signing and viewing-key wiring extracted from official-sdk-service;
-  // same Krusty-delegated boundary, no secret ever stored or logged here.
-  "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
-  "packages/features/privacy/src/paymaster/paymaster.ts",
-  "packages/features/privacy/src/service.ts",
-  // Argent multisig stores public signer identifiers and verified public
-  // signature fragments only. Private signing remains behind Krusty and the
-  // privileged background accountHashSigner boundary.
-  "packages/features/multisig/src/chain.ts",
-  "packages/features/multisig/src/deploy.ts",
-  "packages/features/multisig/src/repository-schema.ts",
-  "apps/extension/src/background/multisig/multisig-deploy-ops.ts",
-  "apps/extension/src/background/multisig/multisig-inputs.ts",
-  // Explicit user-triggered coordination keeps the vault credential inside the
-  // privileged worker while Krusty opens or wraps payloads; it is never stored.
-  "apps/extension/src/background/multisig/multisig-coordination-ops.ts",
-  "apps/extension/src/background/multisig/multisig-tx-ops.ts",
-  "packages/platform/vault/src/accounts/account-secrets.ts",
-  "packages/platform/vault/src/encrypted-store.ts",
-  "packages/platform/vault/src/kms-port.ts",
-  "packages/platform/vault/src/schema/migrations.ts",
-  "packages/platform/vault/src/schema/schema.ts",
-  "packages/platform/vault/src/schema/store-migration.ts",
-  "packages/platform/vault/src/accounts/accounts.ts",
-  "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
-  "packages/platform/vault/src/accounts/network-account.ts",
-  "packages/platform/vault/src/service/reveal.ts",
-  // Atomic recovery re-derives selected accounts and writes their protected
-  // keys directly into the encrypted vault; no secret is returned or logged.
-  "packages/platform/vault/src/service/recovery.ts",
-  // Wallet-level Nostr derivation and application-data crypto stay behind the
-  // same encrypted-vault/Krusty boundary and never return private material.
-  "packages/platform/vault/src/service/nostr.ts",
-  "packages/platform/vault/src/service/service.ts",
-  "packages/platform/vault/src/service/service-types.ts",
-]);
-const SECRET_MATERIAL_PATTERN =
-  /\b(?:accountSecrets|mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
+
+import { SECRET_MATERIAL_FILES, SECRET_MATERIAL_PATTERN } from "./file-standards-policy";
+
 const SUPPRESSION_MARKERS = [
   "@ts-" + "expect-error",
   "@ts-" + "ignore",
@@ -246,6 +99,11 @@ const HTML_SINK_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/tokens-ui.ts",
+  // AVNU catalog rows, written into the tokens screen's list region as the
+  // fetched list arrives: symbol and name pass through escapeHtml, the address
+  // through tokenGlyph, and the actions through the ui-kit button helper — the
+  // same profile as the detected-token rows in tokens-ui.ts.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/token-catalog-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-ui.ts",
   // Send-screen rendering split out of transfer-ui.ts; the review panels it
   // writes come from the same escaped markup helpers that file used.
@@ -273,8 +131,17 @@ const VAULT_SERVICE_WIRING_FILES = new Set([
 
 const failures: string[] = [];
 
-const isProductionTypeScript = (file: string): boolean =>
+const isProductionSource = (file: string): boolean =>
   file.startsWith("apps/extension/src/") || /^packages\/[^/]+\/[^/]+\/src\//.test(file);
+
+// A module every source rule applies to: any TypeScript file, and any
+// JavaScript file on a production source path. Shipped `.js` modules (the
+// ledger-browser transport) sit outside `tsc`, so this gate is the only
+// check that holds them to the security rules (Sherlock 235). Other `.js`
+// files (website, configuration) are not wallet source and keep only the
+// generic rules.
+const isSourceModule = (file: string): boolean =>
+  file.endsWith(".ts") || (file.endsWith(".js") && isProductionSource(file));
 
 const hasExportDoc = (lines: readonly string[], index: number): boolean => {
   for (let previous = index - 1; previous >= 0; previous -= 1) {
@@ -319,15 +186,26 @@ for (const file of await walk(".")) {
     failures.push(`${file} has ${lineCount} lines; max is ${MAX_LINES}`);
   }
 
-  if (file.endsWith(".ts") && !text.trimStart().startsWith("/**")) {
+  if (isSourceModule(file) && !text.trimStart().startsWith("/**")) {
     failures.push(`${file} must start with a doc comment`);
   }
 
-  if (file.endsWith(".ts") && hasControlByte(text)) {
+  if (isSourceModule(file) && hasControlByte(text)) {
     failures.push(`${file} must not contain raw control bytes (use a \\u escape)`);
   }
 
-  if (isProductionTypeScript(file) && file.endsWith(".ts")) {
+  // A production `.js` module's API is typed and documented in its sibling
+  // declaration file, which this rule checks as `.ts`; the module itself must
+  // have one.
+  if (
+    isProductionSource(file) &&
+    file.endsWith(".js") &&
+    !existsSync(`${file.slice(0, -3)}.d.ts`)
+  ) {
+    failures.push(`${file} must declare and document its API in a sibling .d.ts`);
+  }
+
+  if (isProductionSource(file) && file.endsWith(".ts")) {
     lines.forEach((line, index) => {
       if (
         /^export (?:\{|class|const|function|interface|type)\b/.test(line) &&
@@ -338,11 +216,11 @@ for (const file of await walk(".")) {
     });
   }
 
-  if (file.endsWith(".ts") && SUPPRESSION_MARKERS.some((marker) => text.includes(marker))) {
+  if (isSourceModule(file) && SUPPRESSION_MARKERS.some((marker) => text.includes(marker))) {
     failures.push(`${file} must not suppress TypeScript or lint rules`);
   }
 
-  if (file.endsWith(".ts") && /\b(?:describe|test|it)\.(?:only|skip)\s*\(/.test(text)) {
+  if (isSourceModule(file) && /\b(?:describe|test|it)\.(?:only|skip)\s*\(/.test(text)) {
     failures.push(`${file} must not commit focused or skipped tests`);
   }
 
@@ -360,21 +238,21 @@ for (const file of await walk(".")) {
     }
   }
 
-  if (file.endsWith(".ts") && /\.postMessage\([\s\S]{0,400},\s*["']\*["']/.test(text)) {
+  if (isSourceModule(file) && /\.postMessage\([\s\S]{0,400},\s*["']\*["']/.test(text)) {
     failures.push(`${file} must not use wildcard postMessage targets`);
   }
 
-  if (file.endsWith(".ts") && DYNAMIC_CODE_PATTERN.test(text)) {
+  if (isSourceModule(file) && DYNAMIC_CODE_PATTERN.test(text)) {
     failures.push(`${file} must not use eval-style dynamic code execution`);
   }
 
-  if (isProductionTypeScript(file) && /\bconsole\./.test(text)) {
+  if (isProductionSource(file) && /\bconsole\./.test(text)) {
     failures.push(`${file} must not log from production wallet code`);
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !HTML_SINK_FILES.has(file) &&
     HTML_SINK_PATTERN.test(text)
   ) {
@@ -386,8 +264,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !SECRET_MATERIAL_FILES.has(file) &&
     SECRET_MATERIAL_PATTERN.test(text)
   ) {
@@ -403,8 +281,9 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
+    isProductionSource(file) &&
     file !== "apps/extension/src/background/runtime/session.ts" &&
+    file !== "apps/extension/src/sidepanel/index.ts" && // side-panel root injects the clock
     file !== "packages/features/portfolio/src/tokens/prices.ts" &&
     file !== "packages/features/transactions/src/activity/activity.ts" &&
     file !== "packages/features/permissions/src/phishing-feed.ts" &&
@@ -413,12 +292,12 @@ for (const file of await walk(".")) {
     failures.push(`${file} must keep clock access behind an explicit boundary`);
   }
 
-  if (isProductionTypeScript(file) && /\b(?:new Date|Math\.random)\b/.test(text)) {
+  if (isProductionSource(file) && /\b(?:new Date|Math\.random)\b/.test(text)) {
     failures.push(`${file} must not use implicit clock or random sources`);
   }
 
   if (
-    isProductionTypeScript(file) &&
+    isProductionSource(file) &&
     file !== "packages/platform/vault/src/encrypted-store.ts" &&
     /\bcrypto\.getRandomValues\b/.test(text)
   ) {
@@ -426,7 +305,7 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
+    isProductionSource(file) &&
     !RANDOM_UUID_FILES.has(file) &&
     /\bcrypto\.randomUUID\b/.test(text)
   ) {
@@ -434,7 +313,7 @@ for (const file of await walk(".")) {
   }
 
   if (
-    file.endsWith(".ts") &&
+    isSourceModule(file) &&
     file !== "apps/extension/src/browser-storage.ts" &&
     /\b(?:chrome|browser)\.storage\b/.test(text)
   ) {
@@ -442,8 +321,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !BROWSER_GLOBAL_FILES.has(file) &&
     /\b(?:document|window|globalThis)\./.test(text)
   ) {
@@ -451,8 +330,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     file !== "apps/extension/src/background/index.ts" &&
     file !== "apps/extension/src/browser-storage.ts" &&
     /createBrowser(?:Local|Session)Store/.test(text)
@@ -461,8 +340,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !ENCRYPTED_STORE_WIRING_FILES.has(file) &&
     /\bcreateEncryptedStore\b/.test(text)
   ) {
@@ -470,8 +349,8 @@ for (const file of await walk(".")) {
   }
 
   if (
-    isProductionTypeScript(file) &&
-    file.endsWith(".ts") &&
+    isProductionSource(file) &&
+    isSourceModule(file) &&
     !VAULT_SERVICE_WIRING_FILES.has(file) &&
     /\b(?:createWalletVaultService|VAULT_STORE_KEY)\b/.test(text)
   ) {

@@ -1,6 +1,6 @@
 /** Transaction status polling never repeats an identical hash in one pass. */
 import { expect, test } from "bun:test";
-import { getTransactionStatuses } from "@mc-wallet/starknet/rpc";
+import { getTransactionStatuses } from "@bramble/starknet/rpc";
 import type { RpcProvider } from "starknet";
 
 test("deduplicates transaction status reads", async () => {

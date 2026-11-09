@@ -2,33 +2,41 @@
  * Encrypted store checks cover round trips and wrong-passphrase failure.
  */
 import { describe, expect, test } from "bun:test";
-import type { Json } from "@mc-wallet/core/json";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { Json } from "@bramble/core/json";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   createEncryptedStore,
   decryptJson,
   encryptJson,
   isEncryptedEnvelope,
-} from "@mc-wallet/vault/encrypted-store";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/vault/encrypted-store";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
+import { legacyEnvelope } from "./legacy-envelope";
 
-const vaultKey = "mc-wallet:vault";
-const preferencesKey = "mc-wallet:preferences";
+const vaultKey = "bramble:vault";
+const preferencesKey = "bramble:preferences";
 
 describe("createEncryptedStore", () => {
   test("validates vault passphrase length", () => {
     expect(isVaultPassphrase("correct horse battery staple")).toBe(true);
     expect(isVaultPassphrase("            ")).toBe(false);
-    expect(isVaultPassphrase("too short")).toBe(false);
+    expect(isVaultPassphrase("short")).toBe(false);
   });
 
-  test("gates the onboarding submit at the 12-character boundary", () => {
+  test("gates the onboarding submit at the minimum-length boundary", () => {
     // The create-wallet form gates on this predicate so the backend invariant
-    // never throws with an unsurfaced error; 11 chars is rejected, 12 accepted.
-    expect(isVaultPassphrase("a".repeat(11))).toBe(false);
-    expect(isVaultPassphrase("a".repeat(12))).toBe(true);
-    expect(isVaultPassphrase(`  ${"a".repeat(10)}  `)).toBe(false);
+    // never throws with an unsurfaced error. The floor is the shared constant,
+    // so the form, the vault service, and the KDF cannot disagree about it —
+    // the unlock and reveal fields read the same value, and a passphrase the
+    // setup screen accepted must never be refused when unlocking.
+    expect(isVaultPassphrase("a".repeat(MIN_VAULT_PASSPHRASE_LENGTH - 1))).toBe(false);
+    expect(isVaultPassphrase("a".repeat(MIN_VAULT_PASSPHRASE_LENGTH))).toBe(true);
+    // Below the recommended 12 but at or above the floor: accepted, and the
+    // meter warns rather than the validator refusing.
+    expect(isVaultPassphrase("Tr0ub4dor&3")).toBe(true);
+    // Padding does not buy length — the floor applies to the trimmed value.
+    expect(isVaultPassphrase(`  ${"a".repeat(MIN_VAULT_PASSPHRASE_LENGTH - 1)}  `)).toBe(false);
     expect(isVaultPassphrase(42)).toBe(false);
     expect(isVaultPassphrase(undefined)).toBe(false);
     expect(isVaultPassphrase("a".repeat(1_025))).toBe(false);
@@ -42,16 +50,16 @@ describe("createEncryptedStore", () => {
     const envelope = await encryptJson(
       { ok: true },
       "correct horse battery staple",
-      "mc-wallet:test",
+      "bramble:test",
     );
     await expect(
-      decryptJson(envelope, "correct horse battery staple", "mc-wallet:other"),
+      decryptJson(envelope, "correct horse battery staple", "bramble:other"),
     ).rejects.toThrow("Invalid encrypted store envelope");
   });
 
   test("rejects lossy JSON values before encryption", async () => {
     await expect(
-      encryptJson({ amount: Number.NaN }, "correct horse battery staple", "mc-wallet:test"),
+      encryptJson({ amount: Number.NaN }, "correct horse battery staple", "bramble:test"),
     ).rejects.toThrow("Invalid JSON value");
   });
 
@@ -94,7 +102,11 @@ describe("createEncryptedStore", () => {
   });
 
   test("recovers each interrupted commit point without losing the last committed value", async () => {
-    for (const failAt of [1, 2, 3]) {
+    // A commit over a separate freshness area writes, in order: the pending
+    // record's local mirror, the pending durable record, the envelope, the
+    // promoted mirror, the promoted durable record. Failing at any of them
+    // keeps the last value that reached the envelope readable.
+    for (const failAt of [1, 2, 3, 4, 5]) {
       const backend = createMemoryStore();
       const freshness = createMemoryStore();
       let writes = 0;
@@ -111,7 +123,13 @@ describe("createEncryptedStore", () => {
           await target.set(key, value);
         },
       });
-      const encrypted = createEncryptedStore(faulting(backend), vaultKey, faulting(freshness));
+      const encrypted = createEncryptedStore(
+        faulting(backend),
+        vaultKey,
+        faulting(freshness),
+        undefined,
+        true,
+      );
       await encrypted.write({ revision: 1 }, "correct horse battery staple");
       writes = 0;
       armed = true;
@@ -120,7 +138,7 @@ describe("createEncryptedStore", () => {
         encrypted.write({ revision: 2 }, "correct horse battery staple"),
       ).rejects.toThrow(`injected commit write ${failAt}`);
       const recovered = await encrypted.read("correct horse battery staple");
-      expect(recovered).toEqual({ revision: failAt === 3 ? 2 : 1 });
+      expect(recovered).toEqual({ revision: failAt > 3 ? 2 : 1 });
     }
   });
 
@@ -194,7 +212,7 @@ describe("createEncryptedStore", () => {
       iv: btoa("short"),
       kdf: "PBKDF2-SHA-256",
       salt: btoa("also-short"),
-      scope: "mc-wallet:encrypted-store:mc-wallet:vault",
+      scope: "bramble:encrypted-store:bramble:vault",
       version: 2,
     };
 
@@ -211,7 +229,7 @@ describe("createEncryptedStore", () => {
     const envelope = await encryptJson(
       { schemaVersion: 1 },
       "correct horse battery staple",
-      "mc-wallet:encrypted-store:mc-wallet:vault",
+      "bramble:encrypted-store:bramble:vault",
     );
     const unexpected = { ...envelope, debug: true };
     const hiddenUnexpected = { ...envelope };
@@ -271,57 +289,13 @@ describe("createEncryptedStore", () => {
     expect(isEncryptedEnvelope({ ...raw, iterations: 100_000 })).toBe(false);
   });
 
-  // Builds an envelope at the pre-bump legacy strength with raw Web Crypto,
-  // independent of the store's own encryptJson, to prove compatibility with
-  // envelopes produced before the KDF iteration raise.
-  const legacyEnvelope = async (value: unknown, passphrase: string, scope: string) => {
-    const encoder = new TextEncoder();
-    const iterations = 310_000;
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const baseKey = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(passphrase),
-      "PBKDF2",
-      false,
-      ["deriveKey"],
-    );
-    const key = await crypto.subtle.deriveKey(
-      { hash: "SHA-256", iterations, name: "PBKDF2", salt: salt.slice().buffer },
-      baseKey,
-      { length: 256, name: "AES-GCM" },
-      false,
-      ["encrypt"],
-    );
-    const data = await crypto.subtle.encrypt(
-      {
-        additionalData: encoder.encode(scope).slice().buffer,
-        iv: iv.slice().buffer,
-        name: "AES-GCM",
-      },
-      key,
-      encoder.encode(JSON.stringify(value)),
-    );
-    const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
-    return {
-      cipher: "AES-256-GCM",
-      data: toBase64(new Uint8Array(data)),
-      iterations,
-      iv: toBase64(iv),
-      kdf: "PBKDF2-SHA-256",
-      salt: toBase64(salt),
-      scope,
-      version: 2,
-    };
-  };
-
   test("reads legacy-strength envelopes and upgrades them explicitly", async () => {
     const store = createMemoryStore();
     const encrypted = createEncryptedStore(store, vaultKey);
     const legacy = await legacyEnvelope(
       { schemaVersion: 1 },
       "correct horse battery staple",
-      `mc-wallet:encrypted-store:${vaultKey}`,
+      `bramble:encrypted-store:${vaultKey}`,
     );
     expect(isEncryptedEnvelope(legacy)).toBe(true);
     await store.set(vaultKey, legacy as never);
@@ -351,7 +325,7 @@ describe("createEncryptedStore", () => {
     const store = createMemoryStore();
     const freshness = createMemoryStore();
     const encrypted = createEncryptedStore(store, vaultKey, freshness);
-    const scope = `mc-wallet:encrypted-store:${vaultKey}`;
+    const scope = `bramble:encrypted-store:${vaultKey}`;
     const earlier = await legacyEnvelope({ revision: 1 }, "correct horse battery staple", scope);
     const latest = await legacyEnvelope({ revision: 2 }, "correct horse battery staple", scope);
 
@@ -374,7 +348,7 @@ describe("createEncryptedStore", () => {
     const legacy = await legacyEnvelope(
       { revision: 1 },
       "correct horse battery staple",
-      `mc-wallet:encrypted-store:${vaultKey}`,
+      `bramble:encrypted-store:${vaultKey}`,
     );
 
     await encrypted.write({ revision: 2 }, "correct horse battery staple");
@@ -385,7 +359,10 @@ describe("createEncryptedStore", () => {
   });
 
   test("recovers every interrupted v2-to-v3 migration write", async () => {
-    for (const failAt of [1, 2, 3, 4]) {
+    // With the mirror on, a migration writes: the pending mirror, the pending
+    // durable record, the local legacy marker, the envelope, the promoted
+    // mirror, the promoted durable record.
+    for (const failAt of [1, 2, 3, 4, 5, 6]) {
       const backend = createMemoryStore();
       const freshnessBackend = createMemoryStore();
       let writes = 0;
@@ -406,11 +383,13 @@ describe("createEncryptedStore", () => {
         faulting(backend),
         vaultKey,
         faulting(freshnessBackend),
+        undefined,
+        true,
       );
       const legacy = await legacyEnvelope(
         { schemaVersion: 1 },
         "correct horse battery staple",
-        `mc-wallet:encrypted-store:${vaultKey}`,
+        `bramble:encrypted-store:${vaultKey}`,
       );
       await backend.set(vaultKey, legacy as never);
       armed = true;
@@ -431,7 +410,7 @@ describe("createEncryptedStore", () => {
     const legacy = await legacyEnvelope(
       { revision: 1 },
       "correct horse battery staple",
-      `mc-wallet:encrypted-store:${vaultKey}`,
+      `bramble:encrypted-store:${vaultKey}`,
     );
     await store.set(vaultKey, legacy as never);
     await encrypted.upgradeLegacyEnvelope("correct horse battery staple");

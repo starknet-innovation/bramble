@@ -1,8 +1,8 @@
 /**
  * Strict parsers for the Starkscan fields consumed by wallet read surfaces.
  */
-import { isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
-import { canonicalFelt, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { isBaseUnitsAmount, isRecord } from "@bramble/core/json";
+import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 import type {
   StarkscanAddressActivity,
@@ -11,10 +11,11 @@ import type {
   StarkscanBlock,
   StarkscanContractEvent,
   StarkscanContractMetadata,
+  StarkscanNftCoverage,
+  StarkscanNftPosition,
+  StarkscanNftPositions,
   StarkscanPage,
   StarkscanTokenBalance,
-  StarkscanTokenHolding,
-  StarkscanTokenHoldings,
   StarkscanTransfer,
 } from "./starkscan-types";
 
@@ -166,50 +167,6 @@ export const parseStarkscanTransfer = (value: unknown): StarkscanTransfer => {
   };
 };
 
-const parseHolding = (value: unknown): StarkscanTokenHolding => {
-  const row = recordValue(value);
-  return {
-    tokenAddress: feltValue(row["tokenAddress"]),
-    normalizedTokenAddress: feltValue(row["normalizedTokenAddress"]),
-    indexedBalanceRaw: decimalValue(row["indexedBalanceRaw"]),
-    symbol: nullableString(row["symbol"], 64),
-    name: nullableString(row["name"], 128),
-    decimals: nullableInteger(row["decimals"]),
-  };
-};
-
-/**
- * Parses a token-holdings snapshot and its completeness proof.
- */
-export const parseStarkscanHoldings = (value: unknown): StarkscanTokenHoldings => {
-  const row = recordValue(value);
-  const completeness = recordValue(row["completeness"]);
-  const chainId = stringValue(row["chainId"], 16);
-  if (chainId !== "SN_MAIN" && chainId !== "SN_SEPOLIA") {
-    return invalidResponse();
-  }
-  if (!Array.isArray(row["items"]) || row["items"].length > 10_000) {
-    return invalidResponse();
-  }
-  return {
-    chainId,
-    ownerAddress: feltValue(row["ownerAddress"]),
-    items: row["items"].map(parseHolding),
-    exact: booleanValue(row["exact"]),
-    truncated: booleanValue(row["truncated"]),
-    completeness: {
-      exact: booleanValue(completeness["exact"]),
-      truncated: booleanValue(completeness["truncated"]),
-      complete: booleanValue(completeness["complete"]),
-      reasonCode: stringValue(completeness["reasonCode"], 64),
-      reason: stringValue(completeness["reason"], 512),
-      lagBlocks: nullableInteger(completeness["lagBlocks"]),
-      capped: booleanValue(completeness["capped"]),
-      cap: nullableInteger(completeness["cap"]),
-    },
-  };
-};
-
 /**
  * Parses an exact token balance response.
  */
@@ -295,5 +252,73 @@ export const parseStarkscanBlock = (value: unknown): StarkscanBlock => {
     timestampIso: stringValue(row["timestampIso"]),
     txCount: integerValue(row["txCount"]),
     finalityStatus: stringValue(row["finalityStatus"], 64),
+  };
+};
+
+// Starkscan's NFT positions page size cap (`limit` maximum).
+const MAX_NFT_POSITIONS = 100;
+const NFT_SCHEMA_VERSION = "starkscan.nft_positions.v1";
+const tokenIdValue = (value: unknown): string => {
+  const parsed = stringValue(value, 80);
+  return /^(?:[0-9]{1,78}|0x[0-9a-fA-F]{1,64})$/.test(parsed) ? parsed : invalidResponse();
+};
+const enumValue = <T extends string>(value: unknown, allowed: readonly T[]): T =>
+  allowed.includes(value as T) ? (value as T) : invalidResponse();
+
+// The collection name is deployer-controlled text, so only its type is held
+// here; length and characters are judged by the caller, which drops a bad
+// name rather than letting one hostile token refuse the whole page.
+const parseNftPosition = (value: unknown): StarkscanNftPosition => {
+  const row = recordValue(value);
+  const collection = recordValue(row["collection"]);
+  const name = collection["name"];
+  if (name !== null && typeof name !== "string") return invalidResponse();
+  nullableString(collection["symbol"], Number.MAX_SAFE_INTEGER);
+  enumValue(row["standard"], ["erc721"]);
+  enumValue(row["evidenceSource"], ["indexed_erc721_ownership"]);
+  integerValue(row["observedAtBlock"]);
+  feltValue(row["lastTransferHash"]);
+  return {
+    tokenAddress: feltValue(row["tokenAddress"]),
+    tokenId: tokenIdValue(row["tokenId"]),
+    collectionName: name,
+    collectionIndexed:
+      enumValue(collection["metadataStatus"], ["indexed", "unavailable"]) === "indexed",
+  };
+};
+
+const parseNftCoverage = (value: unknown): StarkscanNftCoverage => {
+  const row = recordValue(value);
+  booleanValue(row["globallyComplete"]);
+  integerValue(row["indexedFromBlock"]);
+  integerValue(row["indexedThroughBlock"]);
+  return {
+    status: enumValue(row["status"], ["partial", "ready"]),
+    declaredScope: stringValue(row["declaredScope"], 128),
+    completeWithinScope: booleanValue(row["completeWithinScope"]),
+    reasonCodes: stringArray(row["reasonCodes"]),
+  };
+};
+
+/**
+ * Parses one `address/{address}/nft-positions` page (schema
+ * `AddressNftPositionsView`). The schema version must match and the page
+ * holds at most 100 positions; a malformed field anywhere refuses the page.
+ * Fields the wallet does not read are ignored.
+ */
+export const parseStarkscanNftPositions = (value: unknown): StarkscanNftPositions => {
+  const record = recordValue(value);
+  enumValue(record["schemaVersion"], [NFT_SCHEMA_VERSION]);
+  integerValue(record["snapshotBlock"]);
+  nullableString(record["nextCursor"], 2_048);
+  if (!Array.isArray(record["items"]) || record["items"].length > MAX_NFT_POSITIONS) {
+    return invalidResponse();
+  }
+  return {
+    chainId: stringValue(record["chainId"], 64),
+    ownerAddress: feltValue(record["ownerAddress"]),
+    items: record["items"].map(parseNftPosition),
+    hasMore: booleanValue(record["hasMore"]),
+    coverage: parseNftCoverage(record["coverage"]),
   };
 };

@@ -4,11 +4,22 @@
  * the signature returns through the request's own channel. Deny rejects it.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import type { Vault } from "@bramble/vault/schema";
+import {
+  BRAAVOS_BASE_CLASS_HASH,
+  BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
+import {
+  type AccountRef,
+  ARGENT_ACCOUNT_CLASS_HASH,
+  type LedgerAccountRef,
+} from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import type { RpcProvider } from "starknet";
 import { ec } from "starknet";
 import { setApprovalNotifier } from "../../../apps/extension/src/background/approvals/approval-notifier";
 import type { LedgerSignQueue } from "../../../apps/extension/src/background/ledger/ledger-sign-queue";
@@ -16,6 +27,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { executeSignApproval } from "../../../apps/extension/src/background/transactions/chain-ops";
+import { chromiumExtension } from "../../support/background-wallet-stub";
 import { flushHeld, waitForPendingApprovals } from "../../support/held";
 
 const PASSPHRASE = "correct horse battery staple";
@@ -33,9 +45,13 @@ const vault = {
   accounts: [account],
   accountSecrets: [],
   activeAccountId: account.id,
+  importedSeeds: [],
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 7,
+  schemaVersion: 13,
+  multisigStrk20KeyConflicts: [],
+  multisigStrk20ViewingKeys: [],
+  shadowAccountScopes: [],
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 
@@ -100,8 +116,17 @@ const makeHandler = () => {
   setApprovalNotifier(() => undefined);
   const session = createUnlockSession();
   session.unlock(PASSPHRASE);
-  return createMessageHandler(wallet, "ext", { session });
+  return createMessageHandler(wallet, chromiumExtension("ext"), { session });
 };
+
+const liveClass = (classHash: string): RpcProvider =>
+  ({
+    getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 1 }),
+    getClassHashAt: async () => classHash,
+  }) as unknown as RpcProvider;
+
+const argent030 = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
+if (!argent030) throw new Error("argent 0.3.0 missing from the class table");
 
 const signMessage = {
   origin: "https://dapp.example",
@@ -122,7 +147,9 @@ describe("signTypedData approval gate", () => {
     await expect(
       executeSignApproval(
         {
+          activity: memoryActivityLog(),
           preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+          rpcProviderFor: () => liveClass(ARGENT_ACCOUNT_CLASS_HASH),
           session,
           wallet: {
             ...wallet,
@@ -137,6 +164,107 @@ describe("signTypedData approval gate", () => {
       ok: true,
       signature: ["1", "0", account.publicKeyX, "0x1", "0x2"],
     });
+  });
+
+  test("refuses typed data for an Argent account that still runs 0.3.x", async () => {
+    let signed = 0;
+    const session = createUnlockSession();
+    session.unlock(PASSPHRASE);
+    const response = await executeSignApproval(
+      {
+        activity: memoryActivityLog(),
+        preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+        rpcProviderFor: () => liveClass(argent030.classHash),
+        session,
+        wallet: {
+          ...wallet,
+          async getGrantedAccounts() {
+            return [
+              {
+                ...account,
+                accountContractType: "argent" as const,
+                classHash: argent030.classHash,
+                deploymentSalt: account.publicKeyX,
+              },
+            ];
+          },
+          async signHash() {
+            signed += 1;
+            return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+          },
+        },
+      },
+      { origin: "https://dapp.example", typedData: MESSAGE },
+    );
+    expect(response).toEqual({
+      error: expect.stringContaining(
+        "expects an authorization format this wallet does not produce",
+      ),
+    });
+    expect(signed).toBe(0);
+  });
+
+  test("refuses typed data for a 2FA Braavos account before using the key", async () => {
+    // Stark-only Braavos signs; a strong signer refuses at the live check,
+    // before the key is ever touched (issue 542 family).
+    const run = async (
+      signers: readonly string[],
+      liveClass = BRAAVOS_CURRENT_IMPLEMENTATION_CLASS_HASH,
+    ) => {
+      let signed = 0;
+      const session = createUnlockSession();
+      session.unlock(PASSPHRASE);
+      const response = await executeSignApproval(
+        {
+          activity: memoryActivityLog(),
+          preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+          rpcProviderFor: () =>
+            ({
+              getBlock: async () => ({ block_hash: "0x9", timestamp: 1 }),
+              getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 1 }),
+              getClassHashAt: async () => liveClass,
+              callContract: async ({ entrypoint }: { readonly entrypoint: string }) => {
+                if (entrypoint === "get_signers") return [...signers];
+                if (entrypoint === "get_deferred_remove_signers") return ["0x0"];
+                throw new Error(`unexpected read: ${entrypoint}`);
+              },
+            }) as unknown as RpcProvider,
+          session,
+          wallet: {
+            ...wallet,
+            async getGrantedAccounts() {
+              return [
+                {
+                  ...account,
+                  accountContractType: "braavos" as const,
+                  deploymentSalt: account.publicKeyX,
+                },
+              ];
+            },
+            async signHash() {
+              signed += 1;
+              return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+            },
+          },
+        },
+        { origin: "https://dapp.example", typedData: MESSAGE },
+      );
+      return { response, signed };
+    };
+    const guarded = await run(["0x1", account.publicKeyX, "0x1", "0xaa", "0x0"]);
+    expect(guarded.response).toEqual({
+      error: expect.stringContaining("active 2FA signer"),
+    });
+    expect(guarded.signed).toBe(0);
+    const starkOnly = await run(["0x1", account.publicKeyX, "0x0", "0x0"]);
+    expect(starkOnly.signed).toBe(1);
+    // A live account reporting the base class is no implementation this
+    // wallet signs for, even with a clean stark-only signer list.
+    const onBase = await run(["0x1", account.publicKeyX, "0x0", "0x0"], BRAAVOS_BASE_CLASS_HASH);
+    expect(onBase.response).toEqual({
+      error: expect.stringContaining("not a release this wallet recognizes"),
+    });
+    expect(onBase.signed).toBe(0);
   });
 
   test("valid request never auto-signs — it queues and holds until approval", async () => {
@@ -165,6 +293,39 @@ describe("signTypedData approval gate", () => {
     });
   });
 
+  test("a long domain name is cut in the summary, so the panel still shows the approval (Sherlock 187)", async () => {
+    const handler = makeHandler();
+    const name = `Example ${"x".repeat(2_000)}`;
+    void handler(
+      {
+        ...signMessage,
+        typedData: {
+          ...MESSAGE,
+          domain: { ...MESSAGE.domain, name },
+          types: {
+            ...MESSAGE.types,
+            StarknetDomain: [
+              { name: "name", type: "string" },
+              { name: "version", type: "felt" },
+              { name: "chainId", type: "felt" },
+              { name: "revision", type: "felt" },
+            ],
+          },
+        },
+      },
+      content,
+    );
+    await flushHeld();
+    const pending = await waitForPendingApprovals<{
+      id: string;
+      kind: string;
+      summaries: string[];
+    }>(handler, page);
+    expect(pending.map((approval) => approval.kind)).toEqual(["sign-typed-data"]);
+    // The panel drops an approval whose summary is over 300 characters.
+    expect(pending[0]?.summaries[0]).toBe(`Mail · ${name.slice(0, 64)}…`);
+  });
+
   test("deny rejects the held request with an error", async () => {
     const handler = makeHandler();
     const held = handler(signMessage, content);
@@ -183,7 +344,7 @@ describe("signTypedData approval gate", () => {
     };
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);
-    const handler = createMessageHandler(lonely, "ext", { session });
+    const handler = createMessageHandler(lonely, chromiumExtension("ext"), { session });
     expect(await handler(signMessage, content)).toEqual({ error: "origin not connected" });
   });
 
@@ -232,7 +393,7 @@ describe("signTypedData approval gate", () => {
     setApprovalNotifier(() => undefined);
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);
-    const handler = createMessageHandler(ledgerWallet, "ext", {
+    const handler = createMessageHandler(ledgerWallet, chromiumExtension("ext"), {
       ledgerSignQueue: wrongKeyQueue,
       session,
     });
@@ -257,3 +418,51 @@ describe("signTypedData approval gate", () => {
     expect(decision).toEqual({ error: "Ledger signature verification failed" });
   });
 });
+
+for (const boundary of ["preferences", "grants"] as const) {
+  for (const replacement of [false, true]) {
+    test(`typed-data execution binds the session before ${boundary} (replacement: ${replacement})`, async () => {
+      const session = createUnlockSession();
+      session.unlock(PASSPHRASE);
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const pause = async () => {
+        entered.resolve();
+        await release.promise;
+      };
+      const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+      let signatures = 0;
+      const pending = executeSignApproval(
+        {
+          activity: memoryActivityLog(),
+          session,
+          preferencesStore: {
+            ...preferencesStore,
+            async read() {
+              if (boundary === "preferences") await pause();
+              return preferencesStore.read();
+            },
+          },
+          wallet: {
+            ...wallet,
+            async getGrantedAccounts() {
+              if (boundary === "grants") await pause();
+              return [account];
+            },
+            async signHash() {
+              signatures += 1;
+              return wallet.signHash();
+            },
+          },
+        },
+        { origin: "https://dapp.example", typedData: MESSAGE },
+      );
+      await entered.promise;
+      session.lock();
+      if (replacement) session.unlock(PASSPHRASE);
+      release.resolve();
+      await expect(pending).resolves.toEqual({ error: "wallet locked" });
+      expect(signatures).toBe(0);
+    });
+  }
+}

@@ -2,13 +2,14 @@
  * Pure popup response validators for background runtime data.
  */
 
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { type ActivityEntry, isActivityEntry } from "@mc-wallet/transactions/activity";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { type ActivityEntry, isActivityEntry } from "@bramble/transactions/activity";
+import { isRelaySignature, type RelaySignature } from "@bramble/transactions/relay-signatures";
 import {
   isHexChainId,
   isStarkFieldElement,
   isStarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 /**
  * Re-exported approval and connected-site validators for one import path.
@@ -32,6 +33,7 @@ export {
   type DetectTokensResponse,
   isBalancesResponse,
   isDetectTokensResponse,
+  readDetectedTokens,
   type TokenBalance,
 } from "./responses-balances";
 /**
@@ -55,7 +57,24 @@ export {
   type DiscoveredNft,
   type DiscoverNftsResponse,
   isDiscoverNftsResponse,
+  type NftCoverage,
 } from "./responses-nft";
+/**
+ * Re-exported fiat price and token chart validators for one import path.
+ */
+export {
+  isPricesResponse,
+  isTokenChartResponse,
+  type PricesResponse,
+  type TokenChartResponse,
+} from "./responses-prices";
+/**
+ * Re-exported Starknet name resolution validator for one import path.
+ */
+export {
+  isStarkNameResolutionResponse,
+  type StarkNameResolutionResponse,
+} from "./responses-stark-name";
 export {
   isTransactionAlertsResponse,
   type TransactionAlertsResponse,
@@ -77,16 +96,25 @@ export {
   isClassHashVerificationResponse,
 } from "./responses-verify";
 
-import { isWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import { type AllowanceView, isAllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import { type AccountRef, isAccountId, isAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
+import { isWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import {
+  type AllowanceNotice,
+  type AllowanceView,
+  isAllowanceNotices,
+  isAllowanceView,
+} from "@bramble/transactions/allowance-discovery";
+import { type AccountRef, isAccountId, isAccountRef } from "@bramble/wallet-model/accounts";
+import { isReadOnlyReason, type ReadOnlyReason } from "@bramble/wallet-model/recovery";
+import { isVaultRecovery } from "@bramble/wallet-model/vault-recovery";
+import type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
+import { isDappMultisigAccount } from "@bramble/wallet-protocol/results";
 import { type PendingApprovalsResponse, readPendingApprovals } from "./approvals-responses";
+import { isRecoveryState, type RecoveryState } from "./responses-recovery";
 
 /**
  * Shared wallet status and network response shapes after runtime validation.
  */
-export type { NetworkOption, WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
+export type { NetworkOption, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 
 /**
  * Popup account-import response accepted from the background boundary.
@@ -125,7 +153,8 @@ export type GenerateMnemonicResponse = {
 export type RevealSecretsResponse = {
   readonly mnemonic: string | null;
   readonly ok: true;
-  readonly privateKey: string;
+  /** `null` on a network with no account: only the recovery phrase is revealed. */
+  readonly privateKey: string | null;
 };
 
 /**
@@ -151,6 +180,31 @@ export type DeploymentStatusResponse = {
   readonly accountId: string;
   readonly deployed: boolean;
   readonly ok: true;
+};
+
+/** A recoverable account's on-chain recovery state, validated in ./responses-recovery. */
+export type { RecoveryState } from "./responses-recovery";
+
+/** The Home flag's input: signable, or read-only with its reason. */
+export type SignabilityVerdict =
+  | { readonly readOnly: false }
+  | {
+      readonly readOnly: true;
+      readonly reason: ReadOnlyReason;
+      readonly recovery?: RecoveryState;
+    };
+
+/**
+ * Active-account signability verdict for the Home read-only flag. `reason` is
+ * present exactly when `readOnly` is true; `recovery` accompanies an account
+ * the phrase can recover (Braavos 2FA, Ready guardian).
+ */
+export type AccountSignabilityResponse = {
+  readonly accountId: string;
+  readonly ok: true;
+  readonly readOnly: boolean;
+  readonly reason?: ReadOnlyReason;
+  readonly recovery?: RecoveryState;
 };
 
 /**
@@ -180,7 +234,9 @@ export const isWalletStatus = (value: unknown): value is WalletStatus =>
     "networkId",
     "networks",
     "ready",
+    "recovery",
   ]) &&
+  (value["recovery"] === undefined || isVaultRecovery(value["recovery"])) &&
   typeof value["accountCount"] === "number" &&
   Number.isSafeInteger(value["accountCount"]) &&
   value["accountCount"] >= 0 &&
@@ -252,8 +308,8 @@ export const isRevealSecretsResponse = (value: unknown): value is RevealSecretsR
   (value["mnemonic"] === null ||
     (typeof value["mnemonic"] === "string" &&
       value["mnemonic"].trim().split(/\s+/).length >= 12)) &&
-  typeof value["privateKey"] === "string" &&
-  isStarkFieldElement(value["privateKey"]);
+  (value["privateKey"] === null ||
+    (typeof value["privateKey"] === "string" && isStarkFieldElement(value["privateKey"])));
 
 /**
  * Checks plain preferences responses before rendering.
@@ -265,151 +321,10 @@ export const isPreferencesResponse = (value: unknown): value is PreferencesRespo
   value["ok"] === true &&
   isWalletPreferences(value["preferences"]);
 
-/** Identifier-free support report the user may download and share manually. */
-export type SupportDiagnostics = {
-  readonly accountCount: number;
-  readonly collectionEnabled: boolean;
-  readonly explorer: readonly {
-    readonly count: number;
-    readonly latencyMs: number;
-    readonly outcome:
-      | "http-error"
-      | "invalid-response"
-      | "ok"
-      | "rate-limited"
-      | "timeout"
-      | "transport-error";
-    readonly service: "starkscan";
-  }[];
-  readonly hasVault: boolean;
-  readonly locked: boolean;
-  readonly networkId: string;
-  readonly ready: boolean;
-  readonly rpc: readonly {
-    readonly count: number;
-    readonly endpoint: "custom" | "foundation" | "wallet-gateway";
-    readonly latencyMs: number;
-    readonly outcome: "ok" | "rate-limited" | "timeout" | "transport-error";
-  }[];
-};
-
-const isExplorerDiagnosticRow = (value: unknown): boolean =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["count", "latencyMs", "outcome", "service"]) &&
-  Number.isInteger(value["count"]) &&
-  Number.isInteger(value["latencyMs"]) &&
-  value["service"] === "starkscan" &&
-  ["http-error", "invalid-response", "ok", "rate-limited", "timeout", "transport-error"].includes(
-    String(value["outcome"]),
-  );
-
-const isRpcDiagnosticRow = (value: unknown): boolean =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["count", "endpoint", "latencyMs", "outcome"]) &&
-  Number.isInteger(value["count"]) &&
-  (value["endpoint"] === "custom" ||
-    value["endpoint"] === "foundation" ||
-    value["endpoint"] === "wallet-gateway") &&
-  Number.isInteger(value["latencyMs"]) &&
-  (value["outcome"] === "ok" ||
-    value["outcome"] === "rate-limited" ||
-    value["outcome"] === "timeout" ||
-    value["outcome"] === "transport-error");
-
-/** Validates the exact privacy-safe support diagnostic wire shape. */
-export const isSupportDiagnosticsResponse = (
-  value: unknown,
-): value is { readonly diagnostics: SupportDiagnostics; readonly ok: true } => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["diagnostics", "ok"]) ||
-    value["ok"] !== true ||
-    !isRecord(value["diagnostics"])
-  ) {
-    return false;
-  }
-  const diagnostics = value["diagnostics"];
-  return (
-    hasOnlyKnownKeys(diagnostics, [
-      "accountCount",
-      "collectionEnabled",
-      "explorer",
-      "hasVault",
-      "locked",
-      "networkId",
-      "ready",
-      "rpc",
-    ]) &&
-    Number.isInteger(diagnostics["accountCount"]) &&
-    typeof diagnostics["collectionEnabled"] === "boolean" &&
-    Array.isArray(diagnostics["explorer"]) &&
-    diagnostics["explorer"].every(isExplorerDiagnosticRow) &&
-    typeof diagnostics["hasVault"] === "boolean" &&
-    typeof diagnostics["locked"] === "boolean" &&
-    typeof diagnostics["networkId"] === "string" &&
-    typeof diagnostics["ready"] === "boolean" &&
-    Array.isArray(diagnostics["rpc"]) &&
-    diagnostics["rpc"].every(isRpcDiagnosticRow)
-  );
-};
-
 /**
- * Fiat prices keyed by contract address accepted from the background boundary.
+ * Re-exported support-diagnostics validator for one import path.
  */
-export type PricesResponse = {
-  readonly asOf?: number | null;
-  readonly changes?: Readonly<Record<string, number>>;
-  readonly currency: "eur" | "gbp" | "usd";
-  readonly ok: true;
-  readonly prices: Readonly<Record<string, number>>;
-  readonly stale?: boolean;
-};
-
-/**
- * Token price series accepted from the background boundary.
- */
-export type TokenChartResponse = {
-  readonly currency: "eur" | "gbp" | "usd";
-  readonly ok: true;
-  readonly points: readonly number[];
-};
-
-const isDisplayCurrencyValue = (value: unknown): value is "eur" | "gbp" | "usd" =>
-  value === "eur" || value === "gbp" || value === "usd";
-
-const isFiniteNumberValue = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-const isPriceMap = (value: unknown): value is Readonly<Record<string, number>> =>
-  isRecord(value) && Object.values(value).every(isFiniteNumberValue);
-
-const isNumberArray = (value: unknown): value is readonly number[] =>
-  Array.isArray(value) && value.every(isFiniteNumberValue);
-
-/**
- * Checks fiat price responses before applying values to balances.
- */
-export const isPricesResponse = (value: unknown): value is PricesResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["asOf", "changes", "currency", "ok", "prices", "stale"]) &&
-  value["ok"] === true &&
-  isDisplayCurrencyValue(value["currency"]) &&
-  isPriceMap(value["prices"]) &&
-  (value["changes"] === undefined || isPriceMap(value["changes"])) &&
-  (value["asOf"] === undefined || value["asOf"] === null || isFiniteNumberValue(value["asOf"])) &&
-  (value["stale"] === undefined || typeof value["stale"] === "boolean");
-
-/**
- * Checks token chart responses before drawing a sparkline.
- */
-export const isTokenChartResponse = (value: unknown): value is TokenChartResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["currency", "ok", "points"]) &&
-  value["ok"] === true &&
-  isDisplayCurrencyValue(value["currency"]) &&
-  isNumberArray(value["points"]);
+export { isSupportDiagnosticsResponse, type SupportDiagnostics } from "./responses-diagnostics";
 
 /**
  * Checks transfer submission responses before rendering.
@@ -422,6 +337,17 @@ export const isTransferResponse = (value: unknown): value is TransferResponse =>
   typeof value["transactionHash"] === "string" &&
   isStarkFieldElement(value["transactionHash"]);
 
+const isMultisigAccountsResponse = (value: unknown): boolean =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["accounts", "ok"]) &&
+  value["ok"] === true &&
+  Array.isArray(value["accounts"]) &&
+  value["accounts"].every(isDappMultisigAccount) &&
+  hasUniqueStrings(
+    value["accounts"].map((account) => (isRecord(account) ? String(account["id"]) : "")),
+  );
+
 /**
  * Checks an approve/deny reply — the granted-account list or a pending-approval
  * envelope — before the caller treats the decision as applied. The pending
@@ -433,9 +359,13 @@ export const isTransferResponse = (value: unknown): value is TransferResponse =>
  */
 export const isApprovalDecisionResponse = (value: unknown): boolean =>
   isAccountsResponse(value) ||
+  isMultisigAccountsResponse(value) ||
   readPendingApprovals(value) !== null ||
+  // No whole-envelope budget here either: each queued approval carries its own
+  // through `readPendingApprovals`, and a budget over the whole switch-chain
+  // reply reported an applied network switch as failed once the queue behind
+  // it was large (Sherlock 251).
   (isRecord(value) &&
-    isJson(value) &&
     hasOnlyKnownKeys(value, ["chainId", "ok", "pending"]) &&
     value["ok"] === true &&
     isHexChainId(value["chainId"]) &&
@@ -451,6 +381,8 @@ export type ActivityResponse = {
   readonly activity: readonly ActivityEntry[];
   readonly historyUnavailable?: boolean;
   readonly ok: true;
+  /** OutsideExecution messages signed on this device for relay (issue 299). */
+  readonly relays?: readonly RelaySignature[];
 };
 
 /**
@@ -459,17 +391,31 @@ export type ActivityResponse = {
 export const isActivityResponse = (value: unknown): value is ActivityResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["activity", "historyUnavailable", "ok"]) &&
+  hasOnlyKnownKeys(value, ["activity", "historyUnavailable", "ok", "relays"]) &&
   value["ok"] === true &&
   Array.isArray(value["activity"]) &&
   value["activity"].every(isActivityEntry) &&
-  (value["historyUnavailable"] === undefined || typeof value["historyUnavailable"] === "boolean");
+  (value["historyUnavailable"] === undefined || typeof value["historyUnavailable"] === "boolean") &&
+  (value["relays"] === undefined ||
+    (Array.isArray(value["relays"]) && value["relays"].every(isRelaySignature)));
 
 /**
- * Tracked allowances response accepted from the background boundary.
+ * The activity a panel loads: the feed, whether chain history was reachable,
+ * and the messages signed for relay, listed beside the feed.
+ */
+export type LoadedActivity = {
+  readonly entries: ActivityResponse["activity"];
+  readonly historyUnavailable: boolean;
+  readonly relays: readonly RelaySignature[];
+};
+
+/**
+ * Tracked allowances response accepted from the background boundary. `notices`
+ * names what the listing could not vouch for (see `ALLOWANCE_NOTICES`).
  */
 export type AllowancesResponse = {
   readonly allowances: readonly AllowanceView[];
+  readonly notices?: readonly AllowanceNotice[];
   readonly ok: true;
 };
 
@@ -479,10 +425,39 @@ export type AllowancesResponse = {
 export const isAllowancesResponse = (value: unknown): value is AllowancesResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["allowances", "ok"]) &&
+  hasOnlyKnownKeys(value, ["allowances", "notices", "ok"]) &&
   value["ok"] === true &&
   Array.isArray(value["allowances"]) &&
-  value["allowances"].every(isAllowanceView);
+  value["allowances"].every(isAllowanceView) &&
+  (value["notices"] === undefined || isAllowanceNotices(value["notices"]));
+
+/**
+ * The allowance manager's view of one listing. `unavailable` means the
+ * background answered with an error or an unreadable response, so the empty
+ * `entries` are not a statement that nothing is outstanding (Sherlock 190).
+ */
+export type AllowanceListing = {
+  readonly entries: readonly AllowanceView[];
+  readonly loading?: true; // Only before the first answer: nothing is claimed yet.
+  readonly notices: readonly AllowanceNotice[];
+  readonly unavailable: boolean;
+};
+
+/** An answered listing with nothing in it. */
+export const EMPTY_ALLOWANCE_LISTING: AllowanceListing = {
+  entries: [],
+  notices: [],
+  unavailable: false,
+};
+
+/**
+ * Turns a background answer into a listing, marking anything that is not a
+ * valid allowances response as unavailable rather than as an empty list.
+ */
+export const allowanceListingFrom = (response: unknown): AllowanceListing =>
+  isAllowancesResponse(response)
+    ? { entries: response.allowances, notices: response.notices ?? [], unavailable: false }
+    : { entries: [], notices: [], unavailable: true };
 
 /**
  * Checks account deployment status responses before rendering.
@@ -494,3 +469,16 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
   value["ok"] === true &&
   isAccountId(value["accountId"]) &&
   typeof value["deployed"] === "boolean";
+
+/** Validates the signability verdict (with any recovery state) before the flag renders. */
+export const isAccountSignabilityResponse = (value: unknown): value is AccountSignabilityResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["accountId", "ok", "readOnly", "reason", "recovery"]) &&
+  value["ok"] === true &&
+  isAccountId(value["accountId"]) &&
+  typeof value["readOnly"] === "boolean" &&
+  (value["readOnly"] === true
+    ? isReadOnlyReason(value["reason"])
+    : value["reason"] === undefined) &&
+  (value["recovery"] === undefined || isRecoveryState(value["recovery"]));

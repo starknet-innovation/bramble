@@ -3,32 +3,29 @@
  * sender's public account solely to pay the pool fee.
  */
 import { describe, expect, test } from "bun:test";
-import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
-import { buildErc20ApproveCall } from "@mc-wallet/starknet/rpc-assets";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { STRK20_FEE_CEILING_MULTIPLIER } from "@bramble/privacy/fee-policy";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
+import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { OutsideExecutionVersion, outsideExecution } from "starknet";
 import {
   officialBuilder as builder,
   STRK20_SDK_CONTEXT as context,
   executeResult,
+  STRK20_POOL_FEE_6_STRK as POOL_FEE_6_STRK,
   STRK20_POOL_ADDRESS as poolAddress,
+  STRK20_RELAY_CONTEXT as relayContext,
   sdkRuntime as runtime,
   strk20ProviderFor,
   STRK20_SDK_TOKEN as token,
 } from "../support/official-sdk";
 
-const POOL_FEE_6_STRK = "0x53444835ec580000";
 const depositApproval = buildErc20ApproveCall(STRK_TOKEN_ADDRESS, poolAddress, 0x64n);
-const relayContext = {
-  ...context,
-  config: {
-    discoveryUrl: "https://discovery.example",
-    paymaster: { feeToken: STRK_TOKEN_ADDRESS, url: "https://relay.example" },
-    poolAddress,
-    proverUrl: "https://prover.example",
-  },
-};
 
 const quotedTransaction = async (
   actions: readonly Strk20Action[],
@@ -42,7 +39,7 @@ const quotedTransaction = async (
     const type = transaction["type"];
     return new Response(
       JSON.stringify({
-        id: "mc-wallet-strk20",
+        id: "bramble-strk20",
         jsonrpc: "2.0",
         result: {
           fee: {
@@ -89,7 +86,7 @@ const quotedTransaction = async (
     nowSeconds: () => 1_000,
     providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
     sdk: runtime(() => ({
-      build: () => builder(executeResult()),
+      build: () => builder(),
       discoverNotes: async () => ({ notes: new Map() }),
       executeWithInvocation: async () => executeResult(),
     })),
@@ -114,7 +111,7 @@ describe("relay quote approvals", () => {
       if (body.method === "paymaster_executeTransaction") {
         submittedSignature = body.params.transaction.invoke?.signature;
         return Response.json({
-          id: "mc-wallet-strk20",
+          id: "bramble-strk20",
           jsonrpc: "2.0",
           result: { transaction_hash: "0xabc" },
         });
@@ -127,7 +124,7 @@ describe("relay quote approvals", () => {
         OutsideExecutionVersion.V2,
       );
       return Response.json({
-        id: "mc-wallet-strk20",
+        id: "bramble-strk20",
         jsonrpc: "2.0",
         result: {
           fee: {
@@ -158,9 +155,12 @@ describe("relay quote approvals", () => {
     const service = createOfficialStrk20Service({
       http,
       nowSeconds: () => 1_000,
-      providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
+      providerFor: strk20ProviderFor({
+        classHash: ARGENT_ACCOUNT_CLASS_HASH,
+        poolFee: POOL_FEE_6_STRK,
+      }),
       sdk: runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         discoverNotes: async () => ({ notes: new Map() }),
         executeWithInvocation: async () => executeResult(),
       })),
@@ -185,6 +185,77 @@ describe("relay quote approvals", () => {
     expect(submittedSignature).toEqual(["1", "0", "0x1", "0x2", "0x3"]);
   });
 
+  test("refuses a private relay signature for an unupgraded Argent 0.3.x account", async () => {
+    const earlier = deploymentClasses("argent").find((entry) => entry.label === "argent 0.3.0");
+    if (!earlier) throw new Error("argent 0.3.0 missing from the class table");
+    let signed = 0;
+    const typedData = outsideExecution.getTypedData(
+      "0x534e5f5345504f4c4941",
+      { caller: "0x99", execute_after: "0x3e7", execute_before: "0x7d0" },
+      "0x5",
+      [depositApproval],
+      OutsideExecutionVersion.V2,
+    );
+    const http = async (): Promise<Response> =>
+      Response.json({
+        id: "bramble-strk20",
+        jsonrpc: "2.0",
+        result: {
+          fee: {
+            estimated_fee_in_strk: "0x1",
+            gas_token_price_in_strk: "0x1",
+            suggested_max_fee_in_strk: "0x1",
+          },
+          fee_action: {
+            amount: POOL_FEE_6_STRK,
+            recipient: "0x99",
+            token: STRK_TOKEN_ADDRESS,
+            type: "withdraw",
+          },
+          parameters: {
+            fee_mode: {
+              mode: "sponsored_private",
+              pool_fee_token: STRK_TOKEN_ADDRESS,
+              tip: "normal",
+            },
+            time_bounds: null,
+            version: "0x1",
+          },
+          type: "invoke_and_apply_action",
+          typed_data: typedData,
+        },
+      });
+    const service = createOfficialStrk20Service({
+      http,
+      nowSeconds: () => 1_000,
+      providerFor: strk20ProviderFor({ classHash: earlier.classHash, poolFee: POOL_FEE_6_STRK }),
+      sdk: runtime(() => ({
+        build: () => builder(),
+        discoverNotes: async () => ({ notes: new Map() }),
+        executeWithInvocation: async () => executeResult(),
+      })),
+    });
+    const actions = [{ amount: "0x64", token: STRK_TOKEN_ADDRESS, type: "deposit" as const }];
+    const argentContext = {
+      ...relayContext,
+      account: {
+        ...relayContext.account,
+        accountContractType: "argent" as const,
+        classHash: earlier.classHash,
+        deploymentSalt: relayContext.account.publicKeyX,
+      },
+      signHash: async () => {
+        signed += 1;
+        return { publicKey: "0x1", r: "0x2", s: "0x3" };
+      },
+    };
+    const plan = await service.quoteActions({ ...argentContext, actions });
+    await expect(service.submitActions({ ...argentContext, actions, plan })).rejects.toThrow(
+      "expects an authorization format this wallet does not produce",
+    );
+    expect(signed).toBe(0);
+  });
+
   test("rejects an unpriceable non-STRK relay fee before contacting the paymaster", async () => {
     let requested = false;
     const service = createOfficialStrk20Service({
@@ -195,7 +266,7 @@ describe("relay quote approvals", () => {
       nowSeconds: () => 1_000,
       providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
       sdk: runtime(() => ({
-        build: () => builder(executeResult()),
+        build: () => builder(),
         discoverNotes: async () => ({ notes: new Map() }),
         executeWithInvocation: async () => executeResult(),
       })),
@@ -210,7 +281,7 @@ describe("relay quote approvals", () => {
           paymaster: { feeToken: token, url: "https://relay.example" },
         },
       }),
-    ).rejects.toThrow("strk20 private submission unavailable");
+    ).rejects.toThrow("strk20 converted fee could not be verified independently");
     expect(requested).toBe(false);
   });
 
@@ -239,5 +310,118 @@ describe("relay quote approvals", () => {
     expect(invoke.calls).toHaveLength(1);
     expect(invoke.calls[0]?.calldata).toEqual(["0x123", "0x64", "0x0"]);
     expect(sameFelt(invoke.calls[0]?.to ?? "", STRK_TOKEN_ADDRESS)).toBe(true);
+  });
+});
+
+/**
+ * A converted fee token has no on-chain value denominating it, so the relay's
+ * own number is admitted only under a bound the relay did not supply. These
+ * cases pin both directions of that bound and the record it leaves in the plan.
+ */
+describe("converted relay fee", () => {
+  const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+  // What an independent price says 6 STRK is worth, in USDC base units.
+  const REFERENCE = 1_200_000n;
+
+  const quoteConvertedFee = async (input: {
+    readonly quotedAmount: bigint;
+    readonly reference?: bigint | null;
+  }) => {
+    const service = createOfficialStrk20Service({
+      feeReference: async () => (input.reference === undefined ? REFERENCE : input.reference),
+      http: async () =>
+        new Response(
+          JSON.stringify({
+            id: "bramble-strk20",
+            jsonrpc: "2.0",
+            result: {
+              fee: {
+                estimated_fee_in_gas_token: "0x1",
+                estimated_fee_in_strk: "0x1",
+                gas_token_price_in_strk: "0x1",
+                suggested_max_fee_in_gas_token: "0x1",
+                suggested_max_fee_in_strk: "0x1",
+              },
+              fee_action: {
+                amount: `0x${input.quotedAmount.toString(16)}`,
+                recipient: "0x2",
+                token: USDC,
+                type: "withdraw",
+              },
+              parameters: {
+                fee_mode: { mode: "sponsored_private", pool_fee_token: USDC, tip: "normal" },
+                time_bounds: null,
+                version: "0x1",
+              },
+              type: "apply_action",
+            },
+          }),
+          { headers: { "content-type": "application/json" }, status: 200 },
+        ),
+      nowSeconds: () => 1_000,
+      providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
+      sdk: runtime(() => ({
+        build: () => builder(),
+        discoverNotes: async () => ({ notes: new Map() }),
+        executeWithInvocation: async () => executeResult(),
+      })),
+    });
+    // The batch spends USDC, so USDC is also the preferred fee token: this
+    // exercises the converted bound on a single quote, not the fallback.
+    return service.quoteActions({
+      ...relayContext,
+      actions: [{ amount: "0x1", recipient: "0x999", token: USDC, type: "transfer" }],
+      config: {
+        ...relayContext.config,
+        paymaster: { feeToken: USDC, url: "https://relay.example" },
+      },
+    });
+  };
+
+  test("admits a quote inside the ceiling and records the bound it was admitted under", async () => {
+    const plan = await quoteConvertedFee({ quotedAmount: REFERENCE });
+
+    expect(plan.mode).toBe("private-relay");
+    if (plan.mode === "account") {
+      throw new Error("expected the relay route");
+    }
+    expect(plan.feeAction).toEqual({
+      amount: `0x${REFERENCE.toString(16)}`,
+      recipient: "0x2",
+      token: USDC,
+      type: "withdraw",
+    });
+    // The reviewed ceiling travels with the plan so submission re-checks the
+    // same number, not one re-derived from a price that has since moved.
+    expect(plan.feeCeiling).toEqual({
+      ceiling: `0x${(REFERENCE * STRK20_FEE_CEILING_MULTIPLIER).toString(16)}`,
+      reference: `0x${REFERENCE.toString(16)}`,
+    });
+  });
+
+  test("admits a quote exactly at the ceiling", async () => {
+    const plan = await quoteConvertedFee({
+      quotedAmount: REFERENCE * STRK20_FEE_CEILING_MULTIPLIER,
+    });
+
+    expect(plan.mode).toBe("private-relay");
+  });
+
+  test("refuses a quote one unit above the ceiling", async () => {
+    await expect(
+      quoteConvertedFee({ quotedAmount: REFERENCE * STRK20_FEE_CEILING_MULTIPLIER + 1n }),
+    ).rejects.toThrow("the relay returned a fee outside the reviewed route");
+  });
+
+  test("refuses the drain a relay-set rate would otherwise allow", async () => {
+    await expect(quoteConvertedFee({ quotedAmount: 50_000_000_000n })).rejects.toThrow(
+      "the relay returned a fee outside the reviewed route",
+    );
+  });
+
+  test("refuses the route when the reference cannot price the token", async () => {
+    await expect(quoteConvertedFee({ quotedAmount: REFERENCE, reference: null })).rejects.toThrow(
+      "strk20 converted fee could not be verified independently",
+    );
   });
 });

@@ -2,10 +2,11 @@
  * Stable error mapping for untrusted official-SDK and service failures.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
-import { friendlyNetworkError } from "@mc-wallet/core/network-error";
-import { isTransportRpcError } from "@mc-wallet/starknet/provider";
+import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
+import { friendlyNetworkError } from "@bramble/core/network-error";
+import { redactEndpoints } from "@bramble/core/service-url";
+import { isTransportRpcError } from "@bramble/starknet/provider";
 import {
   STRK20_INSUFFICIENT_BALANCE,
   STRK20_NOT_REGISTERED,
@@ -149,18 +150,22 @@ const failureText = (error: unknown): string => {
   return [code, message, revertText(baseError["data"])].filter((part) => part !== "").join(" ");
 };
 
+// Screening reasons the proving service names in a rejection. They are fixed
+// words, not data, and one is long enough to read as an opaque token.
+const SCREENING_REASONS: ReadonlySet<string> = new Set(["screening_policy_unavailable"]);
+
 /**
  * Reduces failure text to something safe to display: service endpoints, felt
  * and hex blobs (note ids, proof facts, commitments, keys) and long opaque
- * tokens (base64 proof data) are replaced. Input is bounded before scanning and
- * output is bounded again before display.
+ * tokens (base64 proof data) are replaced, except a known screening reason.
+ * Input is bounded before scanning and output is bounded again before display.
  */
 export const sanitizeStrk20Detail = (text: string): string =>
-  text
-    .slice(0, DETAIL_SCAN_LIMIT)
-    .replace(/(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/\S+/gi, "[endpoint]")
+  redactEndpoints(text.slice(0, DETAIL_SCAN_LIMIT))
     .replace(/0x[0-9a-f]{8,}/gi, "[value]")
-    .replace(/(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{28,}/g, "[value]")
+    .replace(/(?<![A-Za-z0-9+/=_-])[A-Za-z0-9+/=_-]{28,}/g, (token) =>
+      SCREENING_REASONS.has(token) ? token : "[value]",
+    )
     .replace(/[^ -~]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -274,3 +279,19 @@ export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): 
   const label = `${base} (${stage}/${category})`;
   throw new WalletError(detail === "" ? label : `${label}: ${detail}`);
 };
+
+/**
+ * The relay refused the requested `pool_fee_token`.
+ *
+ * AVNU reports this as JSON-RPC code {@link TOKEN_NOT_SUPPORTED_CODE} and
+ * publishes no method to enumerate the accepted set for `sponsored_private`, so
+ * the quote itself is the only authority on what that mode accepts.
+ * Distinguished from every other refusal because it is the one a caller can
+ * recover from, by re-quoting in a different token.
+ */
+export class Strk20FeeTokenUnsupportedError extends WalletError {}
+
+/**
+ * JSON-RPC error code for an unsupported `pool_fee_token` (`TOKEN_NOT_SUPPORTED`).
+ */
+export const TOKEN_NOT_SUPPORTED_CODE = 151;

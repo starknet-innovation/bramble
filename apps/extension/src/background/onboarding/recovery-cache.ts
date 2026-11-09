@@ -1,18 +1,18 @@
 /** Session-only cache for public account-recovery discovery progress. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { createMemoryStore, type KeyValueStore } from "@mc-wallet/store/kv";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import {
   isRecoveryAccountCandidate,
   isRecoveryAccountIndex,
   type RecoveryAccountCandidate,
-} from "@mc-wallet/wallet-model/recovery";
+} from "@bramble/wallet-model/recovery";
 
-const RECOVERY_DISCOVERY_KEY = "mc-wallet:recovery-discovery";
+const RECOVERY_DISCOVERY_KEY = "bramble:recovery-discovery";
 
 /** Public progress retained across service-worker restarts, never across browser restarts. */
 type RecoveryDiscoverySnapshot = {

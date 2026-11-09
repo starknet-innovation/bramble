@@ -1,5 +1,5 @@
 /**
- * STRK20 schema checks prove strict, spec-0.10.5-rc.0 action validation and envelope
+ * STRK20 schema checks prove strict, spec-0.10.4 action validation and envelope
  * shape guards. These exercise the request/response conformance surface (the
  * `type`-discriminated action union, required recipient, "OPEN" transfer, flat
  * invoke with placeholder calldata) and result shapes — not a live
@@ -11,11 +11,10 @@ import {
   isStrk20CallAndProof,
   isStrk20Proof,
   readStrk20Action,
-  readStrk20ActionRequest,
   readStrk20Actions,
   readStrk20InvokeCall,
   readStrk20Tokens,
-} from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-protocol/strk20";
 
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const recipient = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -90,7 +89,7 @@ describe("strk20 action schemas", () => {
     });
   });
 
-  test("parses all sub-account collection policies and bounds their calls", () => {
+  test("parses all shadow account collection policies and bounds their calls", () => {
     const call = { calldata: ["0x1"], contract_address: token, entry_point: "swap" };
     for (const collect_policy of [
       { type: "all" },
@@ -101,37 +100,41 @@ describe("strk20 action schemas", () => {
         readStrk20Action({
           calls: [call],
           collect_policy,
-          dapp_name: "MC Terminal",
+          dapp_name: "Bramble Terminal",
           nonce: "0x1",
-          type: "subaccount_invoke",
+          type: "shadow_account_invoke",
         }),
-      ).toMatchObject({ collect_policy, dapp_name: "MC Terminal", type: "subaccount_invoke" });
+      ).toMatchObject({
+        collect_policy,
+        dapp_name: "Bramble Terminal",
+        type: "shadow_account_invoke",
+      });
     }
     expect(
       readStrk20Action({
         calls: [],
         collect_policy: { type: "all" },
-        dapp_name: "MC Terminal",
+        dapp_name: "Bramble Terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toBeNull();
     expect(
       readStrk20Action({
         calls: [call],
         collect_policy: { amount: "not-a-felt", type: "exact" },
-        dapp_name: "MC Terminal",
+        dapp_name: "Bramble Terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toBeNull();
     expect(
       readStrk20Action({
         calls: Array.from({ length: 17 }, () => call),
         collect_policy: { type: "all" },
-        dapp_name: "MC Terminal",
+        dapp_name: "Bramble Terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toBeNull();
   });
@@ -201,24 +204,6 @@ describe("strk20 action schemas", () => {
       ]),
     ).toBeNull();
     expect(readStrk20Actions([{ amount: "0x0a", token, type: "deposit" }])).toHaveLength(1);
-  });
-
-  test("parses a lone register action as its own request kind (Wallet API 0.10.5)", () => {
-    const deposit = { amount: "0x0a", token, type: "deposit" };
-    expect(readStrk20ActionRequest([{ type: "register" }])).toEqual({ kind: "register" });
-    expect(readStrk20ActionRequest([deposit])).toEqual({
-      actions: [{ amount: "0x0a", token, type: "deposit" }],
-      kind: "actions",
-    });
-    // Register must be the only action, carries no parameters, and never joins
-    // the proved-action union.
-    expect(readStrk20ActionRequest([{ type: "register" }, deposit])).toBeNull();
-    expect(readStrk20ActionRequest([deposit, { type: "register" }])).toBeNull();
-    expect(readStrk20ActionRequest([{ type: "register" }, { type: "register" }])).toBeNull();
-    expect(readStrk20ActionRequest([{ token, type: "register" }])).toBeNull();
-    expect(readStrk20ActionRequest([])).toBeNull();
-    expect(readStrk20Action({ type: "register" })).toBeNull();
-    expect(readStrk20Actions([{ type: "register" }])).toBeNull();
   });
 
   test("parses result-side INVOKE_CALLs and rejects bad calldata felts", () => {

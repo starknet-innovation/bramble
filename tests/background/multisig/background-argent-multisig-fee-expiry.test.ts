@@ -1,8 +1,8 @@
 /** Recovery when a collected Argent multisig intent outlives its fee prices. */
 
 import { describe, expect, test } from "bun:test";
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import { ArgentMultisigFeeExpiredError } from "@mc-wallet/starknet/multisig-invoke";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import { ArgentMultisigFeeExpiredError } from "@bramble/starknet/multisig-invoke";
 import {
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,

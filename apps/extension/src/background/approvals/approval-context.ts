@@ -3,17 +3,17 @@
  * exact account, network, chain, and a SHA-256 digest of the private execution
  * payload that was reviewed.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { bytesToHex } from "@mc-wallet/core/hex";
-import { JSON_BUDGETS, type Json, normalizeFeltBigints } from "@mc-wallet/core/json";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { ApprovalContext } from "@mc-wallet/wallet-protocol/extension-responses";
+import { WalletError } from "@bramble/core/errors";
+import { bytesToHex } from "@bramble/core/hex";
+import { JSON_BUDGETS, type Json, normalizeFeltBigints } from "@bramble/core/json";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { ApprovalContext } from "@bramble/wallet-protocol/extension-responses";
 
 /**
  * Exact account, network, chain, and payload digest frozen into an approval.
  */
-export type { ApprovalContext } from "@mc-wallet/wallet-protocol/extension-responses";
+export type { ApprovalContext } from "@bramble/wallet-protocol/extension-responses";
 
 const canonicalJson = (value: Json): string => {
   if (value === null || typeof value !== "object") {

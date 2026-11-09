@@ -7,7 +7,7 @@
  * capped, and private/local hosts refused. Every JSON field is normalized
  * before it can cross into the side panel.
  */
-import { isRecord } from "@mc-wallet/core/json";
+import { isRecord } from "@bramble/core/json";
 import {
   clampNftText,
   type NftAttribute,

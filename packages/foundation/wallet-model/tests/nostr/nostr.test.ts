@@ -4,7 +4,7 @@ import {
   isNostrApplicationData,
   isNostrEvent,
   parseNostrEventJson,
-} from "@mc-wallet/wallet-model/nostr";
+} from "@bramble/wallet-model/nostr";
 
 const event = (content = "ciphertext") => ({
   content,

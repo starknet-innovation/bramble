@@ -19,8 +19,8 @@
  *    what started printing them.
  */
 import { describe, expect, test } from "bun:test";
-import type { Json } from "@mc-wallet/core/json";
-import { isTypedDataShape } from "@mc-wallet/starknet/typed-data";
+import type { Json } from "@bramble/core/json";
+import { isTypedDataShape } from "@bramble/starknet/typed-data";
 import {
   SIGN_REQUEST_STYLES,
   signRequestView,

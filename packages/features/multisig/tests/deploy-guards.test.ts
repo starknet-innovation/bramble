@@ -7,8 +7,8 @@ import {
   canonicalArgentMultisigDeployConfig,
   isArgentMultisigClassDeclared,
   predictArgentMultisigAddress,
-} from "@mc-wallet/multisig/deploy";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/multisig/deploy";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
 import type { RpcProvider } from "starknet";
 
 const SIGNER_A = "0x123";

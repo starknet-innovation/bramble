@@ -1,6 +1,7 @@
 /** Durable-first account activity loading and background history refresh. */
-import type { MultisigStore } from "@mc-wallet/multisig/repository";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { MultisigStore } from "@bramble/multisig/repository";
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   type ActivityEntry,
   type ActivityHistoryState,
@@ -8,14 +9,18 @@ import {
   type ActivityScope,
   activityForScope,
   systemClock,
-} from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/activity";
+import type { RelaySignature, RelaySignatureLog } from "@bramble/transactions/relay-signatures";
+import { asUntrackedToken } from "@bramble/transactions/tx-history";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { RpcProvider } from "starknet";
 import { readActivityInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
+import { refreshRelaySignatures } from "../transactions/relay-status";
 import { mergeReconciledHistory, reconcileScope } from "../transactions/tx-reconcile";
 import type { WalletStatusReader } from "./wallet-reader";
 
@@ -24,6 +29,10 @@ type ActivityOpsDeps = {
   readonly multisigStore?: MultisigStore;
   readonly now?: () => number;
   readonly preferencesStore: WalletPreferencesStore;
+  /** Signed OutsideExecution messages for this device; absent lists none. */
+  readonly relaySignatures?: RelaySignatureLog;
+  /** Overrides endpoint construction for the relay status read (tests). */
+  readonly rpcProviderFor?: (nodeUrl: string) => RpcProvider;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
@@ -44,11 +53,31 @@ const historyRefreshDue = (sync: ActivityHistoryState | null, now: number): bool
   sync.syncedAt > now ||
   now - sync.syncedAt >= (sync.unavailable ? HISTORY_RETRY_MS : HISTORY_FRESH_MS);
 
+// A transaction recorded since the last scan means the chain moved because of
+// something this wallet did, so the cached scan is stale no matter how recently
+// it ran. Without this, a user who acts and then opens Activity sees the feed as
+// it was before their own transaction until the freshness window expires or they
+// press refresh — which is exactly the case they notice.
+//
+// Entries dated after `now` are ignored rather than trusted: a scan stamps
+// `syncedAt` with the same clock, so a future-dated row would otherwise stay
+// "newer than the last scan" forever and rescan on every read.
+const recordedSinceSync = (
+  local: readonly ActivityEntry[],
+  sync: ActivityHistoryState | null,
+  now: number,
+): boolean =>
+  sync !== null &&
+  local.some((entry) => entry.submittedAt > sync.syncedAt && entry.submittedAt <= now);
+
 const shouldScanHistory = (
   input: { readonly forceHistory: boolean; readonly refreshHistory: boolean },
   sync: ActivityHistoryState | null,
   now: number,
-): boolean => input.refreshHistory && (input.forceHistory || historyRefreshDue(sync, now));
+  local: readonly ActivityEntry[],
+): boolean =>
+  input.refreshHistory &&
+  (input.forceHistory || historyRefreshDue(sync, now) || recordedSinceSync(local, sync, now));
 
 const activityTarget = async (
   deps: ActivityOpsDeps,
@@ -78,33 +107,82 @@ const activityTarget = async (
     : null;
 };
 
+// Rows from the lane that answered.
+type AccountHistory = {
+  readonly onChain: readonly ActivityEntry[];
+  readonly unavailable: boolean;
+};
+
+const NO_HISTORY: AccountHistory = { onChain: [], unavailable: false };
+
 const accountHistory = async (
   deps: ActivityOpsDeps,
   target: ActivityTarget,
-): Promise<{ readonly onChain: readonly ActivityEntry[]; readonly unavailable: boolean }> => {
+): Promise<AccountHistory> => {
   const scan = deps.runtimeRpc.getTransactionHistory;
-  if (!scan) return { onChain: [], unavailable: false };
+  if (!scan) return NO_HISTORY;
   const preferences = await deps.preferencesStore.read();
-  const tokens = preferences.tokens.filter((token) => token.networkId === target.networkId);
-  if (tokens.length === 0) return { onChain: [], unavailable: false };
+  // A likely-spam token is scanned under the untracked identity, so a spoofed
+  // "USDC" contract never appears in Activity as USDC (Sherlock 249).
+  const tokens = preferences.tokens
+    .filter((token) => token.networkId === target.networkId)
+    .map((token) => (isLikelySpam(token) ? asUntrackedToken(token) : token));
+  if (tokens.length === 0) return NO_HISTORY;
   try {
-    return {
-      onChain: await scan({
-        account: target.address,
-        accountId: target.accountId,
-        networkId: target.networkId,
-        rpcUrls: networkRpcUrls(STARKNET_NETWORKS[target.networkId], preferences),
-        tokens,
-      }),
-      unavailable: false,
-    };
+    const discovered = await scan({
+      account: target.address,
+      accountId: target.accountId,
+      networkId: target.networkId,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[target.networkId], preferences),
+      tokens,
+    });
+    return { onChain: discovered.entries, unavailable: false };
   } catch {
-    return { onChain: [], unavailable: true };
+    return { ...NO_HISTORY, unavailable: true };
   }
+};
+
+const readRelaySignatures = async (
+  deps: ActivityOpsDeps,
+  log: RelaySignatureLog,
+  target: ActivityTarget,
+  refresh: boolean,
+  now: number,
+): Promise<readonly RelaySignature[]> =>
+  refresh
+    ? await refreshRelaySignatures(
+        { log, ...(deps.rpcProviderFor ? { rpcProviderFor: deps.rpcProviderFor } : {}) },
+        {
+          address: target.address,
+          rpcUrls: networkRpcUrls(
+            STARKNET_NETWORKS[target.networkId],
+            await deps.preferencesStore.read(),
+          ),
+          scope: target.scope,
+        },
+        now,
+      )
+    : await log.list(target.scope);
+
+// Signed-for-relay rows for the scope, read from chain when `refresh` is set.
+// They ride beside the transaction feed and never enter it (issue 299). Never
+// rejects: the refresh starts beside the history work and is awaited last, and
+// an unreadable log or preferences store only leaves the rows out.
+const relaySignatures = async (
+  deps: ActivityOpsDeps,
+  target: ActivityTarget,
+  refresh: boolean,
+  now: number,
+): Promise<{ readonly relays?: readonly RelaySignature[] }> => {
+  const log = deps.relaySignatures;
+  if (!log) return {};
+  const relays = await readRelaySignatures(deps, log, target, refresh, now).catch(() => []);
+  return relays.length > 0 ? { relays } : {};
 };
 
 /**
  * Returns the cached scope immediately when requested, otherwise refreshes it.
+ * Signed-for-relay records for the scope ride beside the feed as `relays`.
  */
 export const handleActivity = async (
   deps: ActivityOpsDeps,
@@ -117,9 +195,14 @@ export const handleActivity = async (
   const target = await activityTarget(deps, context, input.accountId);
   if (!target) return { error: "activity scope unavailable" };
   if (input.cached) {
-    return { activity: activityForScope(await deps.activity.list(), target.scope), ok: true };
+    return {
+      activity: activityForScope(await deps.activity.list(), target.scope),
+      ok: true,
+      ...(await relaySignatures(deps, target, false, 0)),
+    };
   }
   const now = (deps.now ?? systemClock)();
+  const relays = relaySignatures(deps, target, input.refreshHistory, now);
   // Ambient panel reads cover only unresolved transactions. L2-accepted rows
   // stay on the monitor's 15-minute lane unless the user opens or refreshes
   // Activity, avoiding a duplicate finality poll on every visible-panel tick.
@@ -128,10 +211,10 @@ export const handleActivity = async (
   // History discovery is intentionally screen-driven. Ambient Home refreshes
   // reconcile only transactions still under observation; entering Activity or
   // pressing its refresh control opts into the larger event scan explicitly.
-  const scanHistory = shouldScanHistory(input, previousSync ?? null, now);
+  const scanHistory = shouldScanHistory(input, previousSync ?? null, now, local);
   const history = scanHistory
     ? await accountHistory(deps, target)
-    : { onChain: [], unavailable: previousSync?.unavailable ?? false };
+    : { ...NO_HISTORY, unavailable: previousSync?.unavailable ?? false };
   const merged =
     scanHistory && !history.unavailable
       ? await mergeReconciledHistory(deps, target.scope, history.onChain)
@@ -145,5 +228,6 @@ export const handleActivity = async (
     activity: merged,
     ...(history.unavailable ? { historyUnavailable: true } : {}),
     ok: true,
+    ...(await relays),
   };
 };

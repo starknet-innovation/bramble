@@ -2,7 +2,7 @@
  * Shared feedback and data-display templates. All content is plain text and
  * escaped; registered icons are the only markup accepted by this boundary.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import { type ButtonProps, button, type IconButtonProps, iconButton } from "./controls";
 import { type UiAttributes, uiAttributes } from "./html-attributes";
 import { type IconName, icon } from "./icons";
@@ -39,8 +39,12 @@ export const emptyState = (
   message: string,
   role?: "alert" | "status",
   attributes?: UiAttributes,
-): string =>
-  `<p class="empty"${role ? ` role="${role}"` : ""}${uiAttributes(attributes)}>${escapeHtml(message)}</p>`;
+): string => {
+  // Only the two ARIA roles this control offers. Anything else is omitted so a
+  // caller cannot close the attribute and inject markup.
+  const ariaRole = role === "alert" ? ' role="alert"' : role === "status" ? ' role="status"' : "";
+  return `<p class="empty"${ariaRole}${uiAttributes(attributes)}>${escapeHtml(message)}</p>`;
+};
 
 /**
  * Shared informational callout configuration.

@@ -23,3 +23,14 @@ export const isUuid = (value: string): boolean => UUID_PATTERN.test(value);
  */
 export const isSha256Digest = (value: unknown): value is string =>
   typeof value === "string" && SHA256_DIGEST_PATTERN.test(value);
+
+const STRK20_JOB_ID_PATTERN = /^strk20job-[0-9a-z]{1,12}-[0-9]{1,9}$/;
+
+/**
+ * Checks the id of a tracked STRK20 background job: the worker-boot stamp and
+ * per-boot counter the background mints, e.g. `strk20job-1a2b3c-7`. One shared
+ * spelling for the background reader and the panel poll, so neither can drift
+ * into accepting an id the other never issues. A non-string is rejected.
+ */
+export const isStrk20JobId = (value: unknown): value is string =>
+  typeof value === "string" && STRK20_JOB_ID_PATTERN.test(value);

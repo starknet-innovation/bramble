@@ -1,7 +1,7 @@
 /** Argent multisig views expose exact frozen authority and fail closed without freshness. */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { UINT128_LIMIT } from "@bramble/wallet-model/networks";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import { multisigWatchFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
 import {
@@ -51,11 +51,11 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).toContain("transfer");
     expect(html).toContain("0xdef");
     expect(html).toContain("What will happen");
-    expect(html).toContain("Maximum cost and constraints");
+    expect(html).toContain("Cost");
     expect(html).toContain("Technical details");
     expect(html).not.toContain("Collaborator note");
     expect(html).toContain('data-ms-sign="');
-    expect(html).toContain("Copy full intent package");
+    expect(html).toContain("Copy full transaction package");
     expect(html).not.toContain('data-ms-submit="');
   });
 
@@ -143,7 +143,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(html).not.toContain('data-ms-sign="');
     expect(html).toContain("Co-signer handoff");
     expect(html).toContain("Share securely with co-signers");
-    expect(html).toContain("Copy full intent package");
+    expect(html).toContain("Copy full transaction package");
     expect(html).toContain("Individual signature fragments");
     expect(html).toContain("1 of 1");
   });
@@ -183,11 +183,11 @@ describe("Argent multisig list and exact-intent detail", () => {
     expect(home).toContain(`data-ms-open-intent="${fixture.readyIntent.id}"`);
     expect(home).toContain(`data-ms-intent-account="${fixture.record.id}"`);
     expect(home).toContain("Ready to submit · 1 of 1");
-    expect(home).toContain("Awaiting verification &amp; signature");
+    expect(home).toContain("Waiting for a signature");
     expect(home).toContain(`href="https://starkscan.co/contract/${fixture.record.address}"`);
     expect(home).toContain('aria-label="Open this account on the block explorer"');
     expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
-    expect(home).toContain("Import intent");
+    expect(home).toContain("Import transaction");
     expect(home).not.toContain('data-ms-submit="');
 
     const detail = multisigDetailFlow(
@@ -310,7 +310,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       "multisig-home",
     );
     expect(home).toContain('data-view="multisig-deploy"');
-    expect(home).toContain("Resume setup to verify and deploy this saved address");
+    expect(home).toContain("<strong>Deployment required.</strong> Complete setup before sending.");
     expect(home).not.toContain('data-view="multisig-propose"');
 
     const deployment = multisigDeployFlow(fixture.status, signer, true, null, undeployed);
@@ -364,7 +364,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       null,
       "multisig-home",
     );
-    expect(home).toContain("No intents are awaiting verification or signature");
+    expect(home).toContain("Nothing to sign");
     expect(home).toContain('class="ghost small tab-more" data-view="multisig-track"');
     expect(home.match(/data-view="multisig-track"/g)).toHaveLength(1);
   });
@@ -382,12 +382,12 @@ describe("Argent multisig list and exact-intent detail", () => {
       fixture.view,
       [accepted],
     );
-    expect(detail).toContain("No intents are awaiting verification or signature");
+    expect(detail).toContain("Nothing to sign");
     expect(detail).not.toContain("Transaction complete");
     expect(detail).not.toContain(accepted.summary);
   });
 
-  test("keeps a rejected fee attempt visible as not submitted", async () => {
+  test("keeps a rejected fee attempt visible as out of date", async () => {
     const fixture = await makeArgentMultisigFixture();
     const stale = { ...fixture.readyIntent, state: "stale" as const };
     const home = multisigDetailFlow(
@@ -401,7 +401,7 @@ describe("Argent multisig list and exact-intent detail", () => {
     );
 
     expect(home).toContain("Needs attention");
-    expect(home).toContain("Not submitted · ready to retry");
+    expect(home).toContain("Out of date · ready to retry");
     expect(home).toContain(`data-ms-open-intent="${stale.id}"`);
   });
 
@@ -421,7 +421,7 @@ describe("Argent multisig list and exact-intent detail", () => {
       [fixture.readyIntent],
     );
 
-    expect(html).toContain("does not exactly match this intent snapshot");
+    expect(html).toContain("no longer match this transaction");
     expect(html).not.toContain('data-ms-sign="');
     expect(html).not.toContain('data-ms-submit="');
     expect(html).not.toContain("Import signature fragment");
@@ -433,7 +433,6 @@ describe("Argent frozen-intent composer", () => {
     const fixture = await makeArgentMultisigFixture();
     const html = multisigWatchFlow(fixture.status, fixture.status.accounts[0] ?? null);
     expect(html).toContain('name="address"');
-    expect(html).toContain("If deployed, signer authority syncs from Starknet");
     expect(html).not.toContain('name="signerPublicKeys"');
     expect(html).not.toContain('name="signerAccountId"');
     expect(html).not.toContain('name="threshold"');
@@ -466,11 +465,11 @@ describe("Argent frozen-intent composer", () => {
       balances: { balances: [{ ...token, balance: "42000000000000000000", formatted: "42" }] },
       changes: {},
       currency: "usd",
-      nfts: [],
       prices: { [token.address]: 0.5 },
     });
     expect(html).toContain("New transaction");
-    expect(html).toContain("Nothing is signed or submitted");
+    // The compose screen opens on its controls, not an explainer paragraph.
+    expect(html).not.toContain("multisig-compose-intro");
     expect(html).toContain("<strong>Treasury</strong>");
     expect(html).toContain(`data-multisig-id="${fixture.record.id}"`);
     expect(html).toContain("Review transaction");

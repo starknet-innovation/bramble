@@ -3,10 +3,12 @@
  *
  * The production gateway keeps its discovery/prover upstream URLs in Vercel
  * env, so a fully local gateway cannot reach the privacy services directly.
- * This server instead chains to the deployed gateway: it accepts any request
- * from a locally loaded extension (no origin allowlist, permissive CORS) and
- * forwards it upstream with the privileged Fetch-Metadata shape the deployed
- * origin check requires. Bodies pass through untouched, so OHTTP envelopes
+ * This server instead chains to the deployed gateway: it accepts requests only
+ * from a locally loaded extension (an extension origin, or the privileged
+ * extension Fetch-Metadata shape) and forwards them upstream with that shape,
+ * which the deployed origin check requires. Every other caller, including web
+ * pages on a localhost dev server, is refused, because the shape vouches for
+ * the caller (Sherlock 244). Bodies pass through untouched, so OHTTP envelopes
  * survive the hop. Development only — never deploy this listener.
  *
  * The paymaster leg is different: the deployed gateway holds its own (currently
@@ -14,7 +16,9 @@
  * server forward paymaster calls straight to the relay upstream with that key
  * instead of chaining through production. The key is read from the environment
  * (Bun auto-loads `.env.local`, which is git-ignored), is never logged, and
- * never leaves this process except as the upstream request header.
+ * never leaves this process except as a request header to the configured relay
+ * origin: a paymaster path that could reach any other host is refused before
+ * the key is attached (Sherlock 199).
  *
  * Usage:
  *   bun run dev:gateway            # listens on http://127.0.0.1:8787
@@ -27,12 +31,31 @@
  *   paymaster  http://127.0.0.1:8787/api/strk20/paymaster
  */
 
-const upstreamBase = process.env["STRK20_DEV_UPSTREAM"] ?? "https://mc-wallet-terminal.vercel.app";
+import {
+  bareHttpsOrigin,
+  devGatewayCaller,
+  devGatewayCorsHeaders,
+  devGatewayPaymasterUrl,
+  isDevGatewayPaymasterPath,
+} from "../src/protocols/privacy/dev-gateway-policy";
+
+// Both upstreams must be bare https origins, so a request path is only ever
+// joined below a host fixed here. A misconfigured value stops the server.
+const requireOrigin = (name: string, fallback: string): string => {
+  const origin = bareHttpsOrigin(process.env[name] ?? fallback);
+  if (origin === null) {
+    throw new Error(`${name} must be a bare https:// origin`);
+  }
+  return origin;
+};
+
+const upstreamBase = requireOrigin("STRK20_DEV_UPSTREAM", "https://mc-wallet-terminal.vercel.app");
 const port = Number(process.env["PORT"] ?? 8787);
 const paymasterKey = process.env["AVNU_PAYMASTER_API_KEY"];
-const paymasterUpstream =
-  process.env["STRK20_PAYMASTER_UPSTREAM"] ?? "https://starknet.paymaster.avnu.fi";
-const PAYMASTER_PREFIX = "/api/strk20/paymaster";
+const paymasterUpstream = requireOrigin(
+  "STRK20_PAYMASTER_UPSTREAM",
+  "https://starknet.paymaster.avnu.fi",
+);
 const debugPaymaster = process.env["STRK20_DEBUG_PAYMASTER"] === "1";
 const DEBUG_WINDOW_CHARS = 80;
 
@@ -55,14 +78,28 @@ const explainRejection = (body: string, response: string): void => {
   console.error(`  around column ${column}: …${body.slice(from, column + DEBUG_WINDOW_CHARS)}…`);
 };
 
+const jsonError = (cors: Record<string, string>, status: number, error: string): Response =>
+  new Response(JSON.stringify({ error }), {
+    headers: { ...cors, "content-type": "application/json" },
+    status,
+  });
+
 // Forwards one paymaster JSON-RPC call directly to the relay with the local
 // credential. Returns null when no key is configured so the caller falls back
-// to chaining through the deployed gateway.
-const forwardToPaymaster = async (request: Request, url: URL): Promise<Response | null> => {
+// to chaining through the deployed gateway. The key is attached only after the
+// target URL is known to be on the relay origin.
+const forwardToPaymaster = async (
+  request: Request,
+  url: URL,
+  cors: Record<string, string>,
+): Promise<Response | null> => {
   if (paymasterKey === undefined || paymasterKey === "") {
     return null;
   }
-  const suffix = url.pathname.slice(PAYMASTER_PREFIX.length);
+  const target = devGatewayPaymasterUrl(paymasterUpstream, url.pathname, url.search);
+  if (target === null) {
+    return jsonError(cors, 404, "route_not_allowed");
+  }
   const headers = new Headers({ "content-type": "application/json" });
   headers.set("x-paymaster-api-key", paymasterKey);
   const accept = request.headers.get("accept");
@@ -71,7 +108,7 @@ const forwardToPaymaster = async (request: Request, url: URL): Promise<Response 
   }
   const body = request.method === "POST" ? await request.text() : undefined;
   try {
-    const upstream = await fetch(`${paymasterUpstream}${suffix}${url.search}`, {
+    const upstream = await fetch(target, {
       body,
       headers,
       method: request.method,
@@ -95,82 +132,80 @@ const forwardToPaymaster = async (request: Request, url: URL): Promise<Response 
   }
 };
 
-const corsHeaders = (request: Request): Record<string, string> => ({
-  "Access-Control-Allow-Headers": "content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Origin": request.headers.get("origin") ?? "*",
-});
-
-const server = Bun.serve({
-  hostname: "127.0.0.1",
-  port,
-  async fetch(request) {
-    const url = new URL(request.url);
-    const cors = corsHeaders(request);
-    if (request.method === "OPTIONS") {
-      return new Response(null, { headers: cors, status: 204 });
-    }
-    if (!url.pathname.startsWith("/api/strk20/")) {
-      return new Response(JSON.stringify({ error: "route_not_allowed" }), {
-        headers: { ...cors, "content-type": "application/json" },
-        status: 404,
-      });
-    }
-    if (url.pathname.startsWith(PAYMASTER_PREFIX)) {
-      const direct = await forwardToPaymaster(request, url);
-      if (direct !== null) {
-        console.log(`${request.method} ${url.pathname} -> paymaster ${direct.status} (local key)`);
-        const responseHeaders = new Headers(cors);
-        const type = direct.headers.get("content-type");
-        if (type !== null) {
-          responseHeaders.set("Content-Type", type);
-        }
-        return new Response(await direct.arrayBuffer(), {
-          headers: responseHeaders,
-          status: direct.status,
-        });
+/**
+ * Answers one request to the dev gateway. Exported so the routing and caller
+ * policy can be exercised without opening a socket; the listener below only
+ * starts when this file is run directly.
+ */
+export const handleDevGatewayRequest = async (request: Request): Promise<Response> => {
+  const url = new URL(request.url);
+  const caller = devGatewayCaller(request.headers);
+  if (!caller.allowed) {
+    return jsonError({}, 403, "origin_not_allowed");
+  }
+  const cors = devGatewayCorsHeaders(caller);
+  if (!url.pathname.startsWith("/api/strk20/")) {
+    return jsonError(cors, 404, "route_not_allowed");
+  }
+  if (request.method === "OPTIONS") {
+    return new Response(null, { headers: cors, status: 204 });
+  }
+  if (isDevGatewayPaymasterPath(url.pathname)) {
+    const direct = await forwardToPaymaster(request, url, cors);
+    if (direct !== null) {
+      console.log(`${request.method} ${url.pathname} -> paymaster ${direct.status} (local key)`);
+      const responseHeaders = new Headers(cors);
+      const type = direct.headers.get("content-type");
+      if (type !== null) {
+        responseHeaders.set("Content-Type", type);
       }
-    }
-    const headers = new Headers();
-    const accept = request.headers.get("accept");
-    const contentType = request.headers.get("content-type");
-    if (accept !== null) {
-      headers.set("Accept", accept);
-    }
-    if (contentType !== null) {
-      headers.set("Content-Type", contentType);
-    }
-    // The deployed gateway admits extension traffic by its Fetch-Metadata
-    // shape; server-side fetches carry none, so restore it explicitly.
-    headers.set("Sec-Fetch-Dest", "empty");
-    headers.set("Sec-Fetch-Mode", "cors");
-    headers.set("Sec-Fetch-Site", "none");
-    let upstream: Response;
-    try {
-      upstream = await fetch(`${upstreamBase}${url.pathname}${url.search}`, {
-        body: request.method === "POST" ? await request.arrayBuffer() : undefined,
-        headers,
-        method: request.method,
-        redirect: "error",
-      });
-    } catch (error) {
-      console.error(`${request.method} ${url.pathname} -> upstream unreachable:`, error);
-      return new Response(JSON.stringify({ error: "upstream_unavailable" }), {
-        headers: { ...cors, "content-type": "application/json" },
-        status: 502,
+      return new Response(await direct.arrayBuffer(), {
+        headers: responseHeaders,
+        status: direct.status,
       });
     }
-    console.log(`${request.method} ${url.pathname} -> ${upstream.status}`);
-    const responseHeaders = new Headers(cors);
-    const upstreamType = upstream.headers.get("content-type");
-    if (upstreamType !== null) {
-      responseHeaders.set("Content-Type", upstreamType);
-    }
-    return new Response(await upstream.arrayBuffer(), {
-      headers: responseHeaders,
-      status: upstream.status,
+  }
+  const headers = new Headers();
+  const accept = request.headers.get("accept");
+  const contentType = request.headers.get("content-type");
+  if (accept !== null) {
+    headers.set("Accept", accept);
+  }
+  if (contentType !== null) {
+    headers.set("Content-Type", contentType);
+  }
+  // The deployed gateway admits extension traffic by its Fetch-Metadata
+  // shape; server-side fetches carry none, so restore it explicitly. Only an
+  // admitted extension caller reaches this point, so the shape vouches for
+  // the caller it describes.
+  headers.set("Sec-Fetch-Dest", "empty");
+  headers.set("Sec-Fetch-Mode", "cors");
+  headers.set("Sec-Fetch-Site", "none");
+  let upstream: Response;
+  try {
+    upstream = await fetch(`${upstreamBase}${url.pathname}${url.search}`, {
+      body: request.method === "POST" ? await request.arrayBuffer() : undefined,
+      headers,
+      method: request.method,
+      redirect: "error",
     });
-  },
-});
+  } catch (error) {
+    console.error(`${request.method} ${url.pathname} -> upstream unreachable:`, error);
+    return jsonError(cors, 502, "upstream_unavailable");
+  }
+  console.log(`${request.method} ${url.pathname} -> ${upstream.status}`);
+  const responseHeaders = new Headers(cors);
+  const upstreamType = upstream.headers.get("content-type");
+  if (upstreamType !== null) {
+    responseHeaders.set("Content-Type", upstreamType);
+  }
+  return new Response(await upstream.arrayBuffer(), {
+    headers: responseHeaders,
+    status: upstream.status,
+  });
+};
 
-console.log(`STRK20 dev gateway on http://127.0.0.1:${server.port} -> ${upstreamBase}`);
+if (import.meta.main) {
+  const server = Bun.serve({ fetch: handleDevGatewayRequest, hostname: "127.0.0.1", port });
+  console.log(`STRK20 dev gateway on http://127.0.0.1:${server.port} -> ${upstreamBase}`);
+}

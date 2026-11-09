@@ -16,17 +16,19 @@
  * strings. The INVOKE_CALL used by the STRK20_CALL_AND_PROOF result is a
  * separate, prover-produced shape and keeps its `entry_point` field.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { STARK_FIELD_PRIME } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { STARK_FIELD_PRIME } from "@bramble/wallet-model/networks";
 
 const HEX_FELT_PATTERN = /^0x[0-9a-fA-F]+$/;
 // A calldata placeholder the wallet resolves during action assembly:
 // `${openNoteIds[N]}` (zero-based) or `${poolAddress}`.
 const CALLDATA_PLACEHOLDER_PATTERN = /^\$\{(?:openNoteIds\[[0-9]+\]|poolAddress)\}$/;
 const ENTRY_POINT_PATTERN = /^(?:0x[0-9a-fA-F]{1,64}|[A-Za-z_][A-Za-z0-9_]*)$/;
-// The literal transfer amount that requests a new open note instead of a fixed
-// transfer.
-const OPEN_AMOUNT = "OPEN";
+/**
+ * The literal transfer amount that requests a new open note instead of a fixed
+ * transfer.
+ */
+export const OPEN_AMOUNT = "OPEN";
 
 /**
  * Cross-layer STRK20 container limits shared by dapp params, prover responses,
@@ -42,7 +44,7 @@ export const STRK20_LIMITS = {
   proofFacts: 4_096,
   proofOutputFelts: 4_096,
   sdkWarnings: 64,
-  subaccountCalls: 16,
+  shadowAccountCalls: 16,
   tokens: 64,
 } as const;
 
@@ -174,7 +176,7 @@ export type Strk20InvokeAction = {
 };
 
 /**
- * How a sub-account invocation collects each open note created in the same
+ * How a shadow account invocation collects each open note created in the same
  * transaction.
  */
 export type Strk20CollectPolicy =
@@ -183,15 +185,15 @@ export type Strk20CollectPolicy =
   | { readonly amount: string; readonly type: "exact" };
 
 /**
- * STRK20_SUBACCOUNT_INVOKE_ACTION: executes calls through the dapp-scoped
+ * STRK20_SHADOW_ACCOUNT_INVOKE_ACTION: executes calls through the dapp-scoped
  * anonymizer and settles their proceeds into open notes in the same batch.
  */
-export type Strk20SubaccountInvokeAction = {
+export type Strk20ShadowAccountInvokeAction = {
   readonly calls: readonly Strk20InvokeCall[];
   readonly collect_policy: Strk20CollectPolicy;
   readonly dapp_name: string;
   readonly nonce: string;
-  readonly type: "subaccount_invoke";
+  readonly type: "shadow_account_invoke";
 };
 
 /**
@@ -201,7 +203,7 @@ export type Strk20SubaccountInvokeAction = {
 export type Strk20Action =
   | Strk20DepositAction
   | Strk20InvokeAction
-  | Strk20SubaccountInvokeAction
+  | Strk20ShadowAccountInvokeAction
   | Strk20TransferAction
   | Strk20WithdrawAction;
 
@@ -281,16 +283,16 @@ const readCollectPolicy = (value: unknown): Strk20CollectPolicy | null => {
     : null;
 };
 
-const readSubaccountInvokeAction = (
+const readShadowAccountInvokeAction = (
   value: Record<string, unknown>,
-): Strk20SubaccountInvokeAction | null => {
+): Strk20ShadowAccountInvokeAction | null => {
   if (
     !hasOnlyKnownKeys(value, ["calls", "collect_policy", "dapp_name", "nonce", "type"]) ||
     !isStrk20DappName(value["dapp_name"]) ||
     !isStrk20Felt(value["nonce"]) ||
     !Array.isArray(value["calls"]) ||
     value["calls"].length === 0 ||
-    value["calls"].length > STRK20_LIMITS.subaccountCalls
+    value["calls"].length > STRK20_LIMITS.shadowAccountCalls
   ) {
     return null;
   }
@@ -302,7 +304,7 @@ const readSubaccountInvokeAction = (
         collect_policy: collectPolicy,
         dapp_name: value["dapp_name"],
         nonce: value["nonce"],
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }
     : null;
 };
@@ -327,8 +329,8 @@ export const readStrk20Action = (value: unknown): Strk20Action | null => {
   if (value["type"] === "invoke") {
     return readInvokeAction(value);
   }
-  if (value["type"] === "subaccount_invoke") {
-    return readSubaccountInvokeAction(value);
+  if (value["type"] === "shadow_account_invoke") {
+    return readShadowAccountInvokeAction(value);
   }
   return null;
 };
@@ -377,6 +379,14 @@ export const readStrk20ActionRequest = (value: unknown): Strk20ActionRequest | n
   const actions = readStrk20Actions(value);
   return actions ? { actions, kind: "actions" } : null;
 };
+
+/**
+ * First summary line of a `wallet_strk20PrepareInvoke` register approval. The
+ * background writes it and the approval card keys its hint on it, so both
+ * read this one constant.
+ */
+export const STRK20_PREPARE_REGISTER_SUMMARY =
+  "Prepare private-balance activation for this site to submit";
 
 /**
  * Converts a validated request back to its wire action list, for forwarding

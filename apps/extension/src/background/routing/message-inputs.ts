@@ -1,33 +1,24 @@
 /** Pure parsers for untrusted background runtime messages. */
-import { isUuid } from "@mc-wallet/core/ids";
-import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@mc-wallet/core/json";
-import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { normalizeWalletOrigin } from "@bramble/core/origin";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import {
   type AccountContractType,
-  isAccountContractType,
   isAccountId,
-} from "@mc-wallet/wallet-model/accounts";
+  isCreatableAccountContractType,
+} from "@bramble/wallet-model/accounts";
 import {
   isHexChainId,
-  isStarkFieldElement,
   isStarknetNetworkId,
   STARK_FIELD_PRIME,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
-import { INVOKE_LIMITS } from "@mc-wallet/wallet-protocol/invoke-limits";
-import { isStrk20Proof, type Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-model/networks";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { INVOKE_LIMITS } from "@bramble/wallet-protocol/invoke-limits";
+import { isStrk20Proof, type Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 
 export { readCreateAccountInput } from "../accounts/account-creation-inputs";
-
-/**
- * Checks a human-entered decimal token amount string (shared by the transfer
- * and swap input readers; parsing/scaling happens later via parseTokenAmount).
- */
-export const isTransferAmount = (value: unknown): value is string =>
-  typeof value === "string" && isDecimalAmountText(value.trim());
 
 const isFeltLikeString = (value: unknown): value is string => {
   if (
@@ -71,6 +62,29 @@ const readInvokeCall = (value: unknown): Call | null => {
  */
 export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
   isRecord(message) && hasOnlyKnownKeys(message, ["type"]) && message["type"] === type;
+
+// A Starknet name is a dotted list of 1-48 character labels plus the `.stark`
+// suffix; the bound leaves comfortable room while keeping an untrusted string
+// out of the RPC call.
+const MAX_STARK_NAME_CHARACTERS = 128;
+
+/**
+ * Parses the name-resolution reader's typed Starknet name and the network it
+ * is being read on. The network travels with the request so the background can
+ * refuse a read the panel made for a different chain than its own active one.
+ */
+export const readStarkNameInput = (
+  message: unknown,
+): { readonly name: string; readonly networkId: StarknetNetworkId } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["name", "networkId", "type"]) &&
+  message["type"] === "wallet.resolveStarkName" &&
+  typeof message["name"] === "string" &&
+  message["name"].trim().length > 0 &&
+  message["name"].length <= MAX_STARK_NAME_CHARACTERS &&
+  isStarknetNetworkId(message["networkId"])
+    ? { name: message["name"], networkId: message["networkId"] }
+    : null;
 
 /**
  * Parses the balance reader's optional local-snapshot request.
@@ -185,36 +199,7 @@ export const readGetGrantedAccountsInput = (
   };
 };
 
-/**
- * Parses popup approval decisions by pending approval id, plus the optional fee
- * the deciding surface was displaying when the user clicked.
- *
- * The echo is what binds a fee-bearing approval to the figure that was actually
- * on screen: the queue's own copy can be replaced by a re-estimate from another
- * open surface between the paint and the click, so an approval that submitted
- * under whatever the queue held at claim time would enforce a ceiling nobody
- * read. Untrusted input like any other field — a malformed echo refuses the
- * whole message rather than being dropped, because a silently dropped ceiling is
- * an unbound submission wearing the appearance of a bound one.
- */
-export const readApprovalIdInput = (
-  message: unknown,
-): { readonly id: string; readonly reviewedFee?: FeeEstimate } | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["id", "reviewedFee", "type"]) ||
-    (message["type"] !== "wallet.approveOrigin" && message["type"] !== "wallet.denyOrigin") ||
-    typeof message["id"] !== "string" ||
-    !isUuid(message["id"]) ||
-    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"]))
-  ) {
-    return null;
-  }
-  return {
-    id: message["id"],
-    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
-  };
-};
+export { readApprovalIdInput } from "./approval-decision-inputs";
 
 /**
  * Parses an origin-bearing dapp message of a given type (`{ origin, type }`)
@@ -239,7 +224,8 @@ export const readOriginRequestInput = (
 export { readRequestAccountsInput } from "../accounts/request-accounts-input";
 
 /**
- * Parses dapp invoke transaction requests from content-script traffic.
+ * Parses dapp invoke transaction requests from content-script traffic. A proof
+ * must be submittable: a simulate-mode (all-empty) proof is refused here.
  */
 export const readAddInvokeTransactionInput = (
   message: unknown,
@@ -264,7 +250,7 @@ export const readAddInvokeTransactionInput = (
   const proof = message["proof"];
   return origin &&
     calls.every((call): call is Call => call !== null) &&
-    (proof === undefined || isStrk20Proof(proof))
+    (proof === undefined || (isStrk20Proof(proof) && proof.data.length > 0))
     ? { calls, origin, ...(proof === undefined ? {} : { proof }) }
     : null;
 };
@@ -323,7 +309,7 @@ export const readAddAccountInput = (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["accountContractType", "networkId", "type"]) ||
     message["type"] !== "wallet.addAccount" ||
-    !isAccountContractType(message["accountContractType"]) ||
+    !isCreatableAccountContractType(message["accountContractType"]) ||
     !isStarknetNetworkId(message["networkId"])
   ) {
     return null;
@@ -355,68 +341,6 @@ export const readSwitchChainInput = (
 };
 
 /**
- * Parses ERC20 transfer messages from extension pages.
- */
-const readTransferFields = (
-  message: unknown,
-  type: "wallet.reviewTransfer" | "wallet.transfer",
-): {
-  readonly accountId: string;
-  readonly amount: string;
-  readonly recipient: string;
-  /**
-   * The fee the review step displayed, echoed back by the panel on send. The
-   * background turns it into a signing ceiling (MCW-V09-119); absent means the
-   * caller reviewed no fee and the send is bounded only by the node's quote.
-   */
-  readonly reviewedDeploymentFee?: FeeEstimate;
-  readonly reviewedFee?: FeeEstimate;
-  readonly speed: "fast" | "standard";
-  readonly tokenId: string;
-} | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, [
-      "accountId",
-      "amount",
-      "recipient",
-      "reviewedDeploymentFee",
-      "reviewedFee",
-      "speed",
-      "tokenId",
-      "type",
-    ]) ||
-    message["type"] !== type ||
-    !isAccountId(message["accountId"]) ||
-    !isTransferAmount(message["amount"]) ||
-    typeof message["recipient"] !== "string" ||
-    !isStarkFieldElement(message["recipient"]) ||
-    typeof message["tokenId"] !== "string" ||
-    message["tokenId"].length === 0 ||
-    (message["reviewedDeploymentFee"] !== undefined &&
-      !isFeeEstimate(message["reviewedDeploymentFee"])) ||
-    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"])) ||
-    (message["speed"] !== undefined &&
-      message["speed"] !== "fast" &&
-      message["speed"] !== "standard")
-  ) {
-    return null;
-  }
-
-  return {
-    accountId: message["accountId"],
-    amount: message["amount"].trim(),
-    recipient: message["recipient"],
-    ...(isFeeEstimate(message["reviewedDeploymentFee"])
-      ? { reviewedDeploymentFee: message["reviewedDeploymentFee"] }
-      : {}),
-    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
-    speed: message["speed"] === "fast" ? "fast" : "standard",
-    tokenId: message["tokenId"],
-  };
-};
-
-/**
  * Parses dapp typed-data signing requests from the provider bridge.
  */
 export const readSignTypedDataInput = (
@@ -436,25 +360,17 @@ export const readSignTypedDataInput = (
 };
 
 /**
- * Parses side panel transfer requests before touching wallet state.
+ * Parses popup unlock messages carrying the vault passphrase: `wallet.unlock`,
+ * or `wallet.unlockUnverified` for a vault awaiting recovery.
  */
-export const readTransferInput = (message: unknown): ReturnType<typeof readTransferFields> =>
-  readTransferFields(message, "wallet.transfer");
-
-/**
- * Parses pre-sign transfer review requests from extension pages.
- */
-export const readReviewTransferInput = (message: unknown): ReturnType<typeof readTransferFields> =>
-  readTransferFields(message, "wallet.reviewTransfer");
-
-/**
- * Parses popup unlock messages carrying the vault passphrase.
- */
-export const readUnlockInput = (message: unknown): { readonly vaultPassphrase: string } | null => {
+export const readUnlockInput = (
+  message: unknown,
+  type: "wallet.unlock" | "wallet.unlockUnverified" = "wallet.unlock",
+): { readonly vaultPassphrase: string } | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["type", "vaultPassphrase"]) ||
-    message["type"] !== "wallet.unlock" ||
+    message["type"] !== type ||
     !isVaultPassphrase(message["vaultPassphrase"])
   ) {
     return null;
@@ -488,6 +404,7 @@ export {
   readRemoveGroupInput,
   readRenameGroupInput,
   readSaveAddressInput,
+  readSetAccountHiddenInput,
   readSetAccountInGroupInput,
   readSetAccountLabelInput,
   readSetDisplayInput,
@@ -495,5 +412,15 @@ export {
   readSetGroupIconInput,
   readSetNostrRelayUrlInput,
   readSetRpcOverrideInput,
+  readSetSelectedMultisigInput,
   readSetStrk20NetworkConfigInput,
 } from "../settings/preference-inputs";
+/**
+ * Transfer readers and the shared human-amount grammar. Callers keep importing
+ * them from this module.
+ */
+export {
+  isTransferAmount,
+  readReviewTransferInput,
+  readTransferInput,
+} from "./transfer-message-inputs";

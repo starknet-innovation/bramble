@@ -4,9 +4,9 @@
  * endpoint URL.
  */
 import { describe, expect, test } from "bun:test";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import { isDiscoverNftsResponse } from "../../../../src/popup/responses/responses";
 
 const nft: DiscoveredNft = {

@@ -4,7 +4,7 @@
  * declared under a given basic type, on a given revision.
  *
  * Both the hashing gate (`./typed-data-values`) and the approval card
- * (`@mc-wallet/wallet-ui`'s `sidepanel/shared/sign-request-decode`) resolve every scalar through this one
+ * (`@bramble/wallet-ui`'s `sidepanel/shared/sign-request-decode`) resolve every scalar through this one
  * function, so what the wallet agrees to hash and what the card says it is
  * hashing are the same reading rather than two guesses that can drift.
  *
@@ -41,7 +41,7 @@
  * as signed content.
  */
 
-import { canonicalFelt, STARK_FIELD_PRIME, UINT128_LIMIT } from "@mc-wallet/wallet-model/networks";
+import { canonicalFelt, STARK_FIELD_PRIME, UINT128_LIMIT } from "@bramble/wallet-model/networks";
 import { typedData as snip12 } from "starknet";
 import type { Snip12Revision } from "./snip12-vocabulary";
 
@@ -290,9 +290,11 @@ export const snip12Scalar = (
     case "i128":
       // A negative `i128` is only encodable on revision 1, where the encoder
       // wraps it into the field; revision 0 would emit the unparsable `0x-1`.
+      // Both revisions keep the `i128` ceiling (Sherlock 229): a larger value
+      // is not an `i128`, whatever the field could hold.
       return revision === "1"
         ? boundedInteger(value, type, revision, -I128_LIMIT, I128_LIMIT - 1n)
-        : boundedInteger(value, type, revision, 0n, STARK_FIELD_PRIME - 1n);
+        : boundedInteger(value, type, revision, 0n, I128_LIMIT - 1n);
     case "ClassHash":
     case "ContractAddress":
       return boundedFelt(value, type, revision);

@@ -4,12 +4,12 @@
  * handler must silently ignore the call rather than removing anything.
  */
 import { describe, expect, test } from "bun:test";
-import { PAGE_TARGET } from "@mc-wallet/wallet-protocol/bridge";
+import { PAGE_TARGET } from "@bramble/wallet-protocol/bridge";
 import {
   accountsChangedEvent,
   createProviderEventHub,
   networkChangedEvent,
-} from "@mc-wallet/wallet-protocol/events";
+} from "@bramble/wallet-protocol/events";
 
 const CHAIN_ID = "0x534e5f4d41494e";
 const ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";

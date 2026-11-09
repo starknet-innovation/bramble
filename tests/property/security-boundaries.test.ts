@@ -1,15 +1,15 @@
 /** Deterministic property checks for the wallet's highest-risk untrusted boundaries. */
 import { describe, expect, test } from "bun:test";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { migrateVault } from "@mc-wallet/vault/migrations";
-import { emptyVault, isVaultV7 } from "@mc-wallet/vault/schema";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { migrateVault } from "@bramble/vault/migrations";
+import { emptyVault, isVaultV7 } from "@bramble/vault/schema";
 import {
   canonicalFelt,
   isStarkFieldElement,
   isStarkPrivateKey,
   STARK_FIELD_PRIME,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import fc from "fast-check";
 import {
   readDiscoverRecoveryAccountsInput,
@@ -25,6 +25,7 @@ import {
   type RuntimeSender,
 } from "../../apps/extension/src/background/routing/senders";
 import { readSwapPrepareInput } from "../../apps/extension/src/background/transactions/swap-inputs";
+import { testExtension } from "../support/background-wallet-stub";
 
 const PROPERTY_OPTIONS = { numRuns: 300, seed: 2_026_08_25 } as const;
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
@@ -101,7 +102,7 @@ describe("background message property boundary", () => {
             origin: `https://${senderHost}`,
             url: `https://${senderHost}/app`,
           };
-          expect(isClaimedSenderOrigin(sender, "extension-id", `https://${claimedHost}`)).toBe(
+          expect(isClaimedSenderOrigin(sender, testExtension, `https://${claimedHost}`)).toBe(
             false,
           );
         },
@@ -141,6 +142,7 @@ describe("vault migration property boundary", () => {
 });
 
 const validModule = (overrides: Record<string, unknown> = {}) => ({
+  deriveArgentLegacyKeypair: () => ({ private_key: "0x321", public_key_x: "0xcba" }),
   deriveNostrPublicKey: () => ({ public_key: "11".repeat(32) }),
   deriveOzAccountAddress: () => "0xabc",
   deriveScopedStrk20ViewingKey: () => "0x456",
@@ -154,7 +156,7 @@ const validModule = (overrides: Record<string, unknown> = {}) => ({
   openNostrApplicationData: () =>
     JSON.stringify({
       content: "payload",
-      identifier: "mc-wallet.multisig",
+      identifier: "bramble.multisig",
       senderPublicKey: "22".repeat(32),
     }),
   signStarkHash: () => ({ publicKey: "0xabc", r: "0x1", s: "0x2" }),

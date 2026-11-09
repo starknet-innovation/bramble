@@ -2,12 +2,17 @@
 import {
   type ArgentMultisigConfigChange,
   argentMultisigConfigChangeCall,
-} from "@mc-wallet/multisig/chain";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { normalizeFeltInput, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+} from "@bramble/multisig/chain";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
-import { bindMultisigParticipantPicker, type MultisigParticipant } from "./multisig-participant";
+import {
+  bindMultisigParticipantPicker,
+  type MultisigParticipant,
+  participantContactSaver,
+} from "./multisig-participant";
+import { armResendConfirmation, resendConfirmed } from "./multisig-resend-confirm";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 const setResult = (deps: MultisigUiDeps, id: string, value: string): void => {
@@ -60,6 +65,13 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
         selectedKey.value = participant.publicKeyX;
         selectionName.textContent = participant.label;
         selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · Key ${accountLabel(participant.publicKeyX)}`;
+        const copy = selection.querySelector<HTMLButtonElement>(
+          "[data-participant-selection-copy]",
+        );
+        if (copy) {
+          copy.dataset["copy"] = participant.address ?? "";
+          copy.hidden = !participant.address;
+        }
         selection.hidden = false;
         button.disabled = false;
         return null;
@@ -69,18 +81,15 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
         {
           multisig: deps.multisig,
           onSelect: selectParticipant,
-          saveContact: (participant) =>
-            deps.wallet.saveAddress(
-              participant.label,
-              participant.address,
-              form
-                .closest<HTMLElement>("#wallet-screen-multisig-signers")
-                ?.querySelector<HTMLElement>("[data-participant-network]")?.dataset[
-                "participantNetwork"
-              ] ?? "",
-              participant.publicKeyX,
-              participant.nostrPublicKey,
-            ),
+          onUnselect: () => {
+            if (selectedKey) selectedKey.value = "";
+            if (selection) selection.hidden = true;
+            if (button) button.disabled = true;
+          },
+          saveContact: participantContactSaver(
+            deps.wallet,
+            form.closest<HTMLElement>("#wallet-screen-multisig-signers"),
+          ),
         },
       );
     }
@@ -92,17 +101,21 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
       buttonBusy(button, true);
       void Promise.resolve()
         .then(() => argentMultisigConfigChangeCall(address, signerChangeFrom(form)))
-        .then((call) => deps.multisig.prepareIntent(multisigId, [call]))
+        .then((call) => deps.multisig.prepareIntent(multisigId, [call], resendConfirmed(button)))
         .then(
           () => {
             showToast("Signer change ready for multisig review", "success", button ?? form);
             deps.openDetail(multisigId, "multisig-detail");
           },
           (error: unknown) => {
-            const message = errorMessage(error, "Prepare signer change failed");
-            setResult(deps, "multisig-signers-result", message);
-            showToast(message, "error", button ?? form);
+            setResult(
+              deps,
+              "multisig-signers-result",
+              errorLine(error, "Couldn't prepare that signer change"),
+            );
+            showToast(errorDetails(error, "Prepare signer change failed"), "error", button ?? form);
             buttonBusy(button, false);
+            armResendConfirmation(button, error);
           },
         );
     });
@@ -170,9 +183,12 @@ const bindCompleteSignerConfig = (deps: MultisigUiDeps): void => {
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          const message = errorMessage(error, "Complete signer setup failed");
-          setResult(deps, "multisig-complete-config-result", message);
-          showToast(message, "error", button ?? form);
+          setResult(
+            deps,
+            "multisig-complete-config-result",
+            errorLine(error, "Couldn't finish signer setup"),
+          );
+          showToast(errorDetails(error, "Complete signer setup failed"), "error", button ?? form);
           buttonBusy(button, false);
         },
       );

@@ -1,6 +1,6 @@
 /** Popup response validators reject malformed background data before rendering. */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import {
   isAccountsResponse,
   isApprovalDecisionResponse,
@@ -163,6 +163,8 @@ describe("popup response validators", () => {
     expect(isRevealSecretsResponse({ mnemonic: null, ok: true, privateKey })).toBe(true);
     expect(isRevealSecretsResponse({ mnemonic: "too short", ok: true, privateKey })).toBe(false);
     expect(isRevealSecretsResponse({ mnemonic, ok: true, privateKey: "nope" })).toBe(false);
+    expect(isRevealSecretsResponse({ mnemonic, ok: true, privateKey: null })).toBe(true);
+    expect(isRevealSecretsResponse({ mnemonic, ok: true })).toBe(false);
     expect(isRevealSecretsResponse({ mnemonic, ok: false, privateKey })).toBe(false);
     expect(isRevealSecretsResponse({ debug: true, mnemonic, ok: true, privateKey })).toBe(false);
   });
@@ -232,7 +234,7 @@ describe("popup response validators", () => {
       "strk20-balances",
       "strk20-prepare",
       "strk20-register",
-      "strk20-subaccount",
+      "strk20-shadow-account",
     ] as const) {
       const actionReviews =
         kind === "strk20-prepare"

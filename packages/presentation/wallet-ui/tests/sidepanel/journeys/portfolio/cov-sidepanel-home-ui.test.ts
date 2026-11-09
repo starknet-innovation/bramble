@@ -1,17 +1,16 @@
 /**
  * Home bindings behaviour under happy-dom: the account drawer (escape-to-close,
- * account switch success / no-op / failure, folder-filter chips, add-account
- * success and failure), the direct-manipulation dismiss gesture (reduced-motion
- * and animated release), the two-tab portfolio, and guards that skip binding
- * on non-home markup.
+ * account switch success / no-op / failure, add-account success and failure),
+ * the direct-manipulation dismiss gesture (reduced-motion and animated
+ * release), the two-tab portfolio, and guards that skip binding on non-home
+ * markup.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { AccountGroup } from "@mc-wallet/settings/groups";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
+import type { AccountGroup } from "@bramble/settings/groups";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
-import type { HomeTab } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
 import { bindHomeUi, type HomeUiDeps } from "../../../../src/sidepanel/journeys/portfolio/home-ui";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
@@ -58,7 +57,7 @@ type Handle = {
     renders: number;
     startAddAccount: number;
   };
-  readonly state: { open: boolean; filter: string | null; tab: HomeTab };
+  readonly state: { open: boolean };
   readonly paint: () => void;
 };
 
@@ -68,7 +67,7 @@ const mount = (options: MountOptions = {}): Handle => {
   app.id = "app";
   document.body.append(app);
 
-  const state: Handle["state"] = { filter: null, open: false, tab: "tokens" };
+  const state: Handle["state"] = { open: false };
   const calls: Handle["calls"] = {
     addAccount: [],
     renders: 0,
@@ -107,33 +106,25 @@ const mount = (options: MountOptions = {}): Handle => {
       {},
       [],
       null,
-      [],
+      { entries: [], notices: [], unavailable: false },
       null,
       {},
       [],
       [],
       null,
       null,
-      state.filter,
+      [],
     );
     app.replaceChildren(document.createRange().createContextualFragment(html));
     bindHomeUi({
       app,
-      drawerGroupFilter: () => state.filter,
       drawerOpen: () => state.open,
-      homeTab: () => state.tab,
       networkId: () => "SN_MAIN",
       render: async () => {
         paint();
       },
-      setDrawerGroupFilter: (filter) => {
-        state.filter = filter;
-      },
       setDrawerOpen: (open) => {
         state.open = open;
-      },
-      setHomeTab: (t) => {
-        state.tab = t;
       },
       startAddAccount: () => {
         calls.startAddAccount += 1;
@@ -205,21 +196,6 @@ describe("home drawer bindings", () => {
     expect(button.disabled).toBe(false);
   });
 
-  test("a folder-filter chip narrows the accounts and re-renders; re-clicking it is a no-op", async () => {
-    const h = mount();
-    const chip = el<HTMLButtonElement>(h.app, `[data-group-filter="${workGroup.id}"]`);
-    chip.click();
-    await tick();
-    expect(h.state.filter).toBe(workGroup.id);
-    const rendersAfterFilter = h.calls.renders;
-
-    // Re-clicking the same folder chip (now the active filter) is a no-op: no
-    // extra render happens.
-    el<HTMLButtonElement>(h.app, `[data-group-filter="${workGroup.id}"]`).click();
-    await tick();
-    expect(h.calls.renders).toBe(rendersAfterFilter);
-  });
-
   test("add-account closes the drawer and opens the shared account chooser", () => {
     const h = mount();
     h.state.open = true;
@@ -284,6 +260,36 @@ describe("home drawer dismiss gesture", () => {
     expect(h.state.open).toBe(true);
   });
 
+  test("a horizontal drag that starts on an account row does not dismiss the drawer", () => {
+    const h = mount();
+    el<HTMLButtonElement>(h.app, "#account-trigger").click();
+    const drawer = el<HTMLElement>(h.app, ".account-drawer");
+    // The press starts on the switch control inside the drag row, which is
+    // where a filing drag actually begins.
+    const row = el(h.app, "[data-drag-account] [data-switch-account]");
+
+    row.dispatchEvent(pointer("pointerdown", 200, 0));
+    row.dispatchEvent(pointer("pointermove", 180, 16));
+    row.dispatchEvent(pointer("pointermove", 60, 32));
+    row.dispatchEvent(pointer("pointerup", 40, 48));
+
+    expect(h.state.open).toBe(true);
+    expect(drawer.style.transform).toBe("");
+  });
+
+  test("a leftward drag from a folder heading still dismisses the drawer", () => {
+    const h = mount();
+    el<HTMLButtonElement>(h.app, "#account-trigger").click();
+    const head = el(h.app, ".drawer-folder-head");
+
+    head.dispatchEvent(pointer("pointerdown", 200, 0));
+    head.dispatchEvent(pointer("pointermove", 180, 16));
+    head.dispatchEvent(pointer("pointermove", 60, 32));
+    head.dispatchEvent(pointer("pointerup", 40, 48));
+
+    expect(h.state.open).toBe(false);
+  });
+
   test("with motion enabled, the release animates and the transitionend closes it", () => {
     const original = window.matchMedia;
     // Motion enabled: settle takes the animated (transition) path instead of the cut.
@@ -325,30 +331,24 @@ describe("home drawer dismiss gesture", () => {
   });
 });
 
-describe("home portfolio tabs", () => {
+describe("home portfolio section", () => {
   beforeEach(() => {
     document.body.replaceChildren();
   });
 
-  test("selecting a tab updates the selection, panels, and remembered tab", () => {
+  test("on Mainnet with NFTs on (the default), tabs read Tokens · Staking · NFTs, Tokens open", () => {
     const h = mount();
-    const tabsRoot = el(h.app, ".home-tabs");
-    el<HTMLButtonElement>(h.app, '[data-home-tab="collectibles"]').click();
-
-    expect(h.state.tab).toBe("collectibles");
-    expect(tabsRoot.getAttribute("data-active-tab")).toBe("collectibles");
-    expect(el(h.app, '[data-home-tab="collectibles"]').getAttribute("aria-selected")).toBe("true");
-    expect(el(h.app, '[data-home-tab="tokens"]').getAttribute("aria-selected")).toBe("false");
-    const panel = el(h.app, '[data-tab-panel="collectibles"]');
-    expect(panel.hidden).toBe(false);
-    expect(panel.classList.contains("is-entering")).toBe(false);
-    expect(el(h.app, '[data-tab-panel="tokens"]').hidden).toBe(true);
-  });
-
-  test("clicking the already-active tab is a no-op", () => {
-    const h = mount();
-    el<HTMLButtonElement>(h.app, '[data-home-tab="tokens"]').click();
-    expect(h.state.tab).toBe("tokens");
+    const section = el(h.app, ".home-tabs");
+    const tabs = [...section.querySelectorAll<HTMLElement>('[role="tab"]')];
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Tokens", "Staking", "NFTs"]);
+    expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual([
+      "true",
+      "false",
+      "false",
+    ]);
+    expect(el(section, "#home-panel-nfts").hidden).toBe(true);
+    expect(section.innerHTML).not.toContain(">Collectibles<");
+    expect(section.querySelector(".tab-panel")).toBeNull();
   });
 });
 
@@ -366,14 +366,10 @@ describe("home bindings guards on non-home markup", () => {
     expect(() =>
       bindHomeUi({
         app,
-        drawerGroupFilter: () => null,
         drawerOpen: () => false,
-        homeTab: () => "tokens",
         networkId: () => "SN_MAIN",
         render: async () => undefined,
-        setDrawerGroupFilter: () => undefined,
         setDrawerOpen: () => undefined,
-        setHomeTab: () => undefined,
         wallet: {} as WalletFake,
       }),
     ).not.toThrow();
@@ -396,14 +392,10 @@ describe("home bindings guards on non-home markup", () => {
     expect(() =>
       bindHomeUi({
         app,
-        drawerGroupFilter: () => null,
         drawerOpen: () => false,
-        homeTab: () => "tokens",
         networkId: () => "SN_MAIN",
         render: async () => undefined,
-        setDrawerGroupFilter: () => undefined,
         setDrawerOpen: () => undefined,
-        setHomeTab: () => undefined,
         wallet: {} as WalletFake,
       }),
     ).not.toThrow();
@@ -429,14 +421,10 @@ describe("home bindings guards on non-home markup", () => {
     const calls: string[] = [];
     bindHomeUi({
       app,
-      drawerGroupFilter: () => null,
       drawerOpen: () => false,
-      homeTab: () => "tokens",
       networkId: () => "SN_MAIN",
       render: async () => undefined,
-      setDrawerGroupFilter: () => undefined,
       setDrawerOpen: () => undefined,
-      setHomeTab: () => undefined,
       wallet: {
         setActiveAccount: (id: string) => {
           calls.push(id);
@@ -450,36 +438,27 @@ describe("home bindings guards on non-home markup", () => {
     expect(calls).toEqual([]);
   });
 
-  test("tab binding tolerates a minimal tabs region", () => {
+  test("home bindings tolerate a minimal portfolio region", () => {
     const app = document.createElement("div");
     app.id = "app";
     app.append(
       document
         .createRange()
-        .createContextualFragment(
-          '<div class="home-tabs" data-active-tab="tokens">' +
-            '<button data-home-tab="tokens" aria-selected="true"></button>' +
-            "</div>",
-        ),
+        .createContextualFragment('<div class="home-tabs"><h2>Tokens</h2></div>'),
     );
     document.body.append(app);
 
-    // A partial specimen with no panels or menu restores its tab without throwing.
+    // A partial specimen with no drawer or menu binds without throwing.
     expect(() =>
       bindHomeUi({
         app,
-        drawerGroupFilter: () => null,
         drawerOpen: () => false,
-        homeTab: () => "tokens",
         networkId: () => "SN_MAIN",
         render: async () => undefined,
-        setDrawerGroupFilter: () => undefined,
         setDrawerOpen: () => undefined,
-        setHomeTab: () => undefined,
         wallet: {} as WalletFake,
       }),
     ).not.toThrow();
-    expect(el(app, ".home-tabs").getAttribute("data-active-tab")).toBe("tokens");
   });
 });
 

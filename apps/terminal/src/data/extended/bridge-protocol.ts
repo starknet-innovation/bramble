@@ -1,6 +1,6 @@
 import type { StreamStatus } from "./ws";
 
-const BRIDGE_STATUS_KEY = "mcExtendedBridge";
+const BRIDGE_STATUS_KEY = "brambleExtendedBridge";
 
 /** Encodes an internal dev-bridge status frame for the browser stream client. */
 export const encodeBridgeStatus = (status: StreamStatus): string =>

@@ -3,18 +3,47 @@
  * handler: listing the origins with persisted grants and revoking one. Both
  * are privileged and require an unlocked session.
  */
-import { connectedSitesFromVault } from "@mc-wallet/vault/origin-grants";
+import { connectedSitesFromVault } from "@bramble/vault/origin-grants";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { type MultisigOriginGrantStore, mergeConnectedSites } from "../provider/multisig-grants";
 import { readRevokeOriginInput, readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { UnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
 
 /**
  * Dependencies shared by the connected-sites handlers.
  */
 export type OriginOpsDeps = {
+  readonly multisigGrants?: MultisigOriginGrantStore;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
+};
+
+const connectedSites = async (deps: OriginOpsDeps): Promise<RuntimeResponse> => {
+  // Peek, never renew: the panel re-reads this list on its ambient cadence.
+  const passphrase = deps.session.peekPassphrase();
+  const authorized = captureSessionAuthorization(deps.session);
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  const vault = await deps.wallet.readVault(passphrase);
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
+  const extra = (await deps.multisigGrants?.sites(passphrase)) ?? [];
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
+  return { ok: true, sites: mergeConnectedSites(connectedSitesFromVault(vault), extra) };
+};
+
+/**
+ * Drops a multisig that is being removed from every connected site, using the
+ * unlock that authorized the removal. Throws, changing nothing, when the grant
+ * ledger can't be read or the unlock lapses; absent a ledger it does nothing.
+ */
+export const dropMultisigFromSites = async (
+  grants: MultisigOriginGrantStore | undefined,
+  active: { readonly vaultPassphrase: string },
+  input: { readonly isAuthorized: () => boolean; readonly multisigId: string },
+): Promise<void> => {
+  await grants?.removeAccount({ ...input, credential: active.vaultPassphrase });
 };
 
 /**
@@ -30,13 +59,7 @@ export const handleOriginOps = async (
     if (!readTypeOnlyInput(message, "wallet.connectedSites")) {
       return { error: "invalid connected sites request" };
     }
-    // Peek, never renew: the panel re-reads this list on its ambient cadence.
-    const passphrase = deps.session.peekPassphrase();
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    const vault = await deps.wallet.readVault(passphrase);
-    return { ok: true, sites: connectedSitesFromVault(vault) };
+    return connectedSites(deps);
   }
 
   if (messageType === "wallet.revokeOrigin") {
@@ -55,7 +78,9 @@ export const handleOriginOps = async (
       origin: input.origin,
       vaultPassphrase: passphrase,
     });
-    return { ok: true, sites };
+    await deps.multisigGrants?.revoke(input.origin, passphrase);
+    const extra = (await deps.multisigGrants?.sites(passphrase)) ?? [];
+    return { ok: true, sites: mergeConnectedSites(sites, extra) };
   }
 
   return null;

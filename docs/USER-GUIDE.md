@@ -4,13 +4,13 @@ title: User guide
 permalink: /user-guide/
 ---
 
-# MC Wallet — User Guide
+# Bramble — User Guide
 
-MC Wallet is a Starknet wallet that lives in your browser's **side panel**. This
+Bramble is a Starknet wallet that lives in your browser's **side panel**. This
 guide is for people *using* the wallet. If you are building or contributing to
 it, start with the [engineering onboarding](../engineering/) instead.
 
-> **Mainnet moves real funds.** MC Wallet runs on Starknet Mainnet by default.
+> **Mainnet moves real funds.** Bramble runs on Starknet Mainnet by default.
 > Starknet Sepolia (testnet) and a local devnet are also available from the
 > network selector — use a testnet while you are learning.
 
@@ -20,17 +20,17 @@ it, start with the [engineering onboarding](../engineering/) instead.
 
 ### Install
 
-MC Wallet is a Manifest V3 browser extension. Download a published extension
+Bramble is a Manifest V3 browser extension. Download a published extension
 archive from the
-[GitHub Releases page](https://github.com/starknet-innovation/mc-wallet/releases),
+[GitHub Releases page](https://github.com/starknet-innovation/bramble/releases),
 verify it against the accompanying `.sha256` file, extract it, then open
 `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and
 select the extracted directory. Contributors can instead build `dist/` locally;
-see the [README](https://github.com/starknet-innovation/mc-wallet#quick-start).
+see the [README](https://github.com/starknet-innovation/bramble#quick-start).
 
 ### First run
 
-On a fresh installation, MC Wallet opens a dedicated full-browser onboarding
+On a fresh installation, Bramble opens a dedicated full-browser onboarding
 tab. It is used only for setup; normal wallet activity remains in the browser
 side panel. If you close the onboarding tab, click the toolbar icon and use
 **Open full-screen setup** to return to it.
@@ -46,12 +46,11 @@ side panel. If you close the onboarding tab, click the toolbar icon and use
    create the wallet until the words match.
 4. Set a **vault passphrase** of at least **12 characters**. This encrypts the
    wallet on *this* device; it is not your recovery phrase.
-5. Review and explicitly select the derived account. MC Wallet supports both
-   account models; **OpenZeppelin Account** is the recommended default and
-   **Argent Account** remains available. Setup defaults to Starknet Mainnet, so
-   tick the **real-funds acknowledgement**.
-6. Press **Add selected account**, then open the side-panel wallet from the
-   completion screen.
+5. Review the derived account. Bramble supports both account models;
+   **OpenZeppelin Account** is the recommended default and **Argent Account**
+   remains available. Setup defaults to Starknet Mainnet.
+6. Press **Finish setup**, then open the side-panel wallet from the completion
+   screen.
 
 ### Restore an existing wallet
 
@@ -59,20 +58,32 @@ side panel. If you close the onboarding tab, click the toolbar icon and use
 2. Enter the 12 or 24 words individually, or paste the complete phrase into the
    first field.
 3. Set and confirm a vault passphrase of at least 12 characters.
-4. Review and select the derived account, accept the Mainnet real-funds
-   acknowledgement, and press **Add selected account**. Invalid recovery data
-   fails closed and remains on the current step for correction.
+4. Select the accounts to restore and press **Restore selected accounts**.
+   Invalid recovery data fails closed and remains on the current step for
+   correction.
 
 ### Unlocking later
 
 When a wallet already exists, opening the panel shows the **"Welcome back"**
 unlock screen. Enter your vault passphrase to reach the dashboard.
 
+If Bramble cannot confirm that the stored wallet is the latest copy, it shows
+**"Check this wallet"** or, when it has a newer copy on record, **"This wallet is
+out of date"** instead. Restoring a browser or computer backup causes this; if you
+did not, someone may have changed this browser's data. **Unlock anyway** opens the
+stored copy with your password and disconnects every site, so a connection you had
+removed cannot come back. Accounts you added after that copy was saved are missing
+and can be added again. If the stored wallet is damaged (**"This wallet cannot be
+opened"**), or you would rather start over, reinstall Bramble and restore from your
+recovery phrase: accounts imported from a private key must be imported again, and a
+multisig must be re-added by its address, where any pending transactions and
+co-signer wallet cards are lost.
+
 ### Set up with a Ledger
 
 Choose **Add an existing wallet**, then **Ledger hardware wallet**. Ledger
-accounts are keyless in MC Wallet: the private key never leaves the device, and
-recovery is handled by the Ledger's own recovery phrase, not by an MC Wallet
+accounts are keyless in Bramble: the private key never leaves the device, and
+recovery is handled by the Ledger's own recovery phrase, not by an Bramble
 software recovery phrase. This is a trusted-testers preview until the physical
 device and transport matrix in issue #224 is complete; no model or connection
 method is advertised as production-validated yet.
@@ -91,17 +102,16 @@ ready. Use the dashboard to send transfers, receive (share your address), switch
 networks, and deploy.
 
 To attach an existing Argent Account 0.4 from a private key, enter its original
-deployment salt during import. Before signing, MC Wallet verifies the pinned
+deployment salt during import. Before signing, Bramble verifies the pinned
 account class, Stark owner, and absence of a guardian at one accepted block.
 Accounts using another signer type or a guardian are not supported and fail
 closed.
 
 ### Swap
 
-Choose **Swap** on Home, select the tokens, and enter what you want to sell. MC
-Wallet asks AVNU for a route, shows the estimated result and fee, and warns when
-the quoted value loss is unusually high. Before confirmation, the wallet builds
-and freezes the exact Starknet calls. Review **what will happen**, the
+Choose **Swap** on Home, select the tokens, and enter what you want to sell. Bramble asks AVNU for a
+route, shows the estimated result and fee, and warns when the quoted value loss is unusually high.
+Before confirmation, the wallet builds and freezes the exact Starknet calls. Review **what will happen**, the
 wallet-enforced minimum received, the maximum network fee, and any risk warning.
 Raw calls and the review digest remain available under **Technical details**.
 The route cannot change after this review.
@@ -112,8 +122,9 @@ preconfirmed, accepted, or failed network status in **Activity**.
 ### Private balances and STRK20
 
 Private-balance discovery is opt-in. Activating it publishes a one-time
-viewing-key commitment for the account so MC Wallet can discover private notes;
-it does **not** publish the viewing key or private balance. Activation may need a
+viewing-key commitment for the account so Bramble can discover private notes,
+and opens the account's own private channel; it does **not** publish the
+viewing key or private balance. Activation may need a
 proof, account authorization, network fee, and time for the indexer to catch up.
 The wallet keeps **submitted** and **discoverable** as separate states.
 
@@ -126,8 +137,8 @@ cannot use a privacy path that requires a viewing key the wallet cannot derive.
 
 ### Connect to a dApp
 
-MC Wallet injects `window.starknet_mcWallet` and is discoverable through
-get-starknet / starknetkit. On a Starknet site, choose to connect MC Wallet and
+Bramble injects `window.starknet_bramble` and is discoverable through
+get-starknet / starknetkit. On a Starknet site, choose to connect Bramble and
 approve the connection in the side panel. Grants are **per-origin**: each
 connected site sees only itself, never the sites you connected elsewhere.
 
@@ -142,16 +153,28 @@ Common tokens (ETH, STRK, USDC, USDT, DAI, WBTC) are auto-detected. Live prices
 come from CoinGecko with a 7-day sparkline, and likely spam tokens are filtered
 out.
 
-### NFT gallery (collectibles)
+### NFTs (collectibles)
 
-Add an ERC-721 or ERC-1155 collectible by contract address and token ID. MC
-Wallet proves that the active account owns it on-chain before saving it, then
+Home shows **Tokens** and **NFTs** tabs. NFT data loads only when you open the
+NFTs tab or an NFT screen. To hide NFTs, turn off **Show NFTs on Home** in
+Settings → Appearance & currency: the tab goes away, no NFT data loads, and a
+site's request to watch an NFT can only be closed. The NFT indexer field in
+Settings → Network → Advanced endpoints appears while NFTs are on.
+
+Add an ERC-721 or ERC-1155 collectible by contract address and token ID. Bramble proves that the active account owns it on-chain before saving it, then
 reads the name, image, description, and attributes from the token's `token_uri`
 / `uri`. Automatic discovery is also ownership-checked before an item appears.
+With NFTs on and no indexer of your own, Bramble asks Starkscan for the
+account's ERC-721 NFTs on Mainnet; Starkscan sees the account's address, as it
+does for Activity. ERC-1155 collectibles are still added by contract. When the
+list is incomplete or Starkscan can't be reached, the gallery says so.
+When a site asks you to watch a collectible, the request shows the contract,
+token ID and network; approving it runs the same ownership check before the
+collectible is saved.
 
 ### Multisig
 
-MC Wallet supports the pinned Argent Multisig account contract. You can deploy
+Bramble supports the pinned Argent Multisig account contract. You can deploy
 a new account or add an existing account by its address and current signer
 authority. The wallet verifies the live signer GUIDs and threshold, freezes the
 exact Starknet transaction and fee ceiling, and collects signatures from
@@ -166,16 +189,16 @@ proposal or confirmation state.
 For encrypted Nostr coordination, each participant first saves the other participant's complete
 wallet card so the Stark signer key and coordination key stay bound to one contact. The intent owner
 chooses **Share securely with co-signers**; the other participant opens the same shared account and
-chooses **Check for co-signer updates**. MC Wallet uses the reviewed relay defaults unless a user
+chooses **Check for co-signer updates**. Bramble uses the reviewed relay defaults unless a user
 sets **Settings → Network → Advanced endpoints → Multisig coordination relay**. A custom relay
 replaces the defaults, so participants must select infrastructure that can receive the same events.
 Relay access is one-shot and user initiated; manual copy-and-paste remains available as a fallback.
 
 ### Allowance manager
 
-The allowance manager lists **ERC-20 token approvals** submitted through MC
-Wallet — from a dApp, a swap, a privacy-pool deposit, or a multisig you sign for
-— plus live approvals it can discover on-chain, and lets you **revoke** one by
+The allowance manager lists **ERC-20 token approvals** submitted through Bramble — from a dApp, a
+swap, a privacy-pool deposit, or a multisig you sign for — plus live approvals it can discover
+on-chain, and lets you **revoke** one by
 setting that spender's allowance to zero. For every approval it tracks, the
 wallet re-reads the live on-chain amount, so a listed figure reflects the chain
 rather than only what this wallet saw. An allowance a multisig granted is shown
@@ -185,8 +208,16 @@ An amount shown as **"at least N"** is one the wallet can only bound from below:
 part of the allowance was granted somewhere else (or has aged out of the log) and
 no on-chain reading was available, so the spender's true reach is N or more.
 
-Two limits are worth knowing. Approvals for tokens you do not track and never
-approved here may not appear, so this view is not a complete chain index. And
+After you revoke, the row stays, marked "Revoke sent", until the chain reads the
+allowance as zero: a revoke that fails leaves the approval live, and it stays
+listed so you can try again.
+
+Three limits are worth knowing. Approvals for tokens you do not track and never
+approved here may not appear, so this view is not a complete chain index; when
+the on-chain search for a tracked token stops before reaching all of its
+approvals, or a watched multisig cannot be read, the screen says the list may be
+incomplete. The wallet keeps 50 approvals per account and, when full, forgets
+the smallest first, and the screen says so when that limit is reached. And
 **NFT collection approvals are not token allowances**: `set_approval_for_all`,
 which lets a marketplace move every item you own in a collection, is flagged
 loudly on the review screen before you sign but is not listed or revokable here —
@@ -201,22 +232,22 @@ periodically limits how much a compromised dApp contract can move.
 
 - Your recovery phrase is the master key. Write it on paper; never photograph it,
   paste it into a website, or store it in cloud notes.
-- MC Wallet never asks for your recovery phrase to "verify" or "sync" anything
+- Bramble never asks for your recovery phrase to "verify" or "sync" anything
   after setup. Any site or message that does is a scam.
 - The **vault passphrase** unlocks the wallet on one device only. Losing it means
-  re-restoring from the recovery phrase; losing the recovery phrase means the
-  funds are unrecoverable.
+  reinstalling Bramble and restoring from the recovery phrase; losing the recovery
+  phrase means the funds are unrecoverable.
 
 ### Recognising phishing
 
-MC Wallet flags sketchy sites before you connect: it checks a domain blocklist
+Bramble flags sketchy sites before you connect: it checks a domain blocklist
 and detects lookalike / punycode domains (e.g. a site spoofing a real one with
 swapped characters). It also keeps a per-origin connection history so you can see
 what you have connected to. If the wallet warns you about a site, stop.
 
 ### What "fails closed" means for you
 
-If the wallet's crypto core (Krusty KMS) is unavailable, MC Wallet **refuses to
+If the wallet's crypto core (Krusty KMS) is unavailable, Bramble **refuses to
 act** rather than falling back to a weaker path — onboarding buttons stay
 disabled and no wallet is created. There is no local signing fallback. This is
 deliberate: the wallet would rather do nothing than do something unsafe with your
@@ -225,7 +256,7 @@ keys.
 ### FAQ
 
 - **I closed the panel mid-setup — did I lose anything?** No. If you had not
-  pressed **Add selected account** successfully, no wallet was written. Reopen
+  pressed **Finish setup** successfully, no wallet was written. Reopen
   and start again; no draft phrase or passphrase is kept.
 - **Why is my new account "not deployed"?** Deployment is a separate on-chain
   step from the dashboard, done when you choose — creating the wallet does not
@@ -236,5 +267,5 @@ keys.
 ### Reporting a security issue
 
 Please report vulnerabilities privately — see the
-[security policy](https://github.com/starknet-innovation/mc-wallet/blob/main/SECURITY.md).
+[security policy](https://github.com/starknet-innovation/bramble/blob/main/SECURITY.md).
 Do not open a public issue for a security problem.

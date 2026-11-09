@@ -2,8 +2,9 @@
  * STRK20 response envelopes returned by privileged background handlers.
  */
 
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { Strk20BalanceEntry, Strk20CallAndProof } from "@mc-wallet/wallet-protocol/strk20";
+import type { Strk20Phase } from "@bramble/privacy/phases";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { Strk20BalanceEntry, Strk20CallAndProof } from "@bramble/wallet-protocol/strk20";
 import type { Strk20WalletPreparationReview } from "./strk20-wallet-preparations";
 
 /**
@@ -23,9 +24,9 @@ export type Strk20PrepareResponse = {
 };
 
 /**
- * Locally derived dapp-scoped STRK20 sub-account commitment.
+ * Locally derived dapp-scoped STRK20 shadow account commitment.
  */
-export type Strk20SubaccountCommitmentResponse = {
+export type Strk20ShadowAccountCommitmentResponse = {
   readonly commitment: string;
   readonly ok: true;
 };
@@ -40,11 +41,23 @@ export type Strk20WalletStateResponse = {
     readonly accountId: string;
     readonly balances: readonly {
       readonly balance: string;
+      /**
+       * The bounded converted pool fee in this token's base units, when an
+       * independent reference priced the pool's STRK charge in it. Absent when
+       * no bound exists, in which case a private batch falls back to the
+       * configured fee token.
+       */
+      readonly feeCeiling?: string;
       readonly formatted: string;
       readonly symbol: string;
       readonly token: string;
       readonly tokenId: string;
     }[];
+    /**
+     * The configured fee token a private relayed batch falls back to when the
+     * relay cannot quote its fee in the token being sent. Absent means STRK.
+     */
+    readonly feeToken?: string;
     readonly networkId: StarknetNetworkId;
     /** Pool action fee in FRI. A failed read rejects the state request. */
     readonly poolFeeFri: string;
@@ -60,13 +73,46 @@ export type Strk20WalletStateResponse = {
 };
 
 /**
- * Frozen registration, deposit, or private-send review returned to the
- * extension side panel.
+ * A tracked background job the side panel polls for, returned by the request
+ * that started it and by every poll while it still runs. A settled job answers
+ * its poll with the response the work itself produced instead.
+ *
+ * `phase` is the fixed label the job last reported (absent until it reports
+ * one); `attempt`/`attempts` name a bounded retry round; `elapsedMs` is how
+ * long the job has run. None of it derives from the account or its notes.
  */
-export type Strk20WalletPreparationResponse = {
+export type Strk20JobResponse = {
   readonly ok: true;
-  readonly strk20Preparation: Strk20WalletPreparationReview;
+  readonly strk20Job: {
+    readonly attempt?: number;
+    readonly attempts?: number;
+    readonly elapsedMs: number;
+    readonly id: string;
+    readonly phase?: Strk20Phase;
+    readonly state: "running";
+  };
 };
+
+/**
+ * Frozen registration, deposit, or private-send review returned to the
+ * extension side panel — or, for a route whose review is built by a tracked
+ * job (a shield or an activation), the running job the panel polls for it.
+ */
+export type Strk20WalletPreparationResponse =
+  | Strk20JobResponse
+  | {
+      readonly ok: true;
+      readonly strk20Preparation: Strk20WalletPreparationReview;
+    };
+
+/**
+ * Outcome of `wallet.strk20Execute`: the running job the panel polls, or —
+ * once the poll settles — the broadcast hash. Idempotent on repeated polls:
+ * the hash is the stored outcome of the one submission the claim allowed.
+ */
+export type Strk20WalletExecuteResponse =
+  | Strk20JobResponse
+  | { readonly ok: true; readonly transactionHash: string };
 
 /**
  * Pool-registration status of a prospective private-send recipient, returned
@@ -75,4 +121,53 @@ export type Strk20WalletPreparationResponse = {
 export type Strk20RecipientStatusResponse = {
   readonly ok: true;
   readonly strk20RecipientRegistration: "registered" | "unregistered";
+};
+
+/**
+ * The recorded shadow-account scopes of the active account (#443), read only
+ * from the encrypted vault and returned only to an extension-controlled page.
+ * `current` is false for a scope recorded under an anonymizer the network no
+ * longer routes through, which the wallet can list but not reach.
+ */
+export type Strk20ShadowAccountsResponse = {
+  readonly ok: true;
+  readonly strk20ShadowAccounts: {
+    readonly scopes: readonly {
+      readonly anonymizer: string;
+      readonly current: boolean;
+      readonly label: string;
+      readonly nonces: readonly string[];
+      readonly origin: string;
+    }[];
+  };
+};
+
+/**
+ * One scope's shadow accounts and their tracked-token balances, read from the
+ * network on the user's request. `unlisted` holds recorded nonces the
+ * anonymizer's view cannot address.
+ */
+export type Strk20ShadowAccountBalancesResponse = {
+  readonly ok: true;
+  readonly strk20ShadowAccountBalances: {
+    readonly accounts: readonly ShadowAccountEntry[];
+    readonly unlisted: readonly string[];
+  };
+};
+
+/** One token a shadow account holds, in the wallet's own display terms. */
+export type ShadowAccountBalance = {
+  readonly balance: string;
+  readonly formatted: string;
+  readonly symbol: string;
+  readonly tokenId: string;
+};
+
+/** One shadow account of a scope, as the view shows it. */
+export type ShadowAccountEntry = {
+  readonly address: string;
+  readonly balances: readonly ShadowAccountBalance[];
+  readonly deployed: boolean;
+  readonly nonce: string;
+  readonly recorded: boolean;
 };

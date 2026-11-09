@@ -2,7 +2,9 @@
  * Unlock session checks prove passphrases expire after real inactivity,
  * survive worker restarts through the session store, and never outlive lock.
  */
+
 import { describe, expect, test } from "bun:test";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import {
   createUnlockSession,
   type UnlockSessionMirrorEntry,
@@ -134,7 +136,11 @@ describe("createUnlockSession", () => {
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);
 
-    expect(() => session.unlock("too short")).toThrow("Invalid unlock session passphrase");
+    // Below the shared floor, so the session refuses it and keeps the value it
+    // already holds. Derived from the constant: if the floor moves, this keeps
+    // testing the boundary instead of quietly passing a now-valid string.
+    const belowFloor = "a".repeat(MIN_VAULT_PASSPHRASE_LENGTH - 1);
+    expect(() => session.unlock(belowFloor)).toThrow("Invalid unlock session passphrase");
     expect(session.getPassphrase()).toBe(PASSPHRASE);
   });
 

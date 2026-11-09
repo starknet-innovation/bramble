@@ -5,8 +5,9 @@
  * match.
  */
 
-import { isRecord } from "@mc-wallet/core/json";
-import { isNonZeroStarkFieldElement, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { isRecord } from "@bramble/core/json";
+import { isPaymasterAuthorizationLive } from "@bramble/transactions/outside-execution-window";
+import { isNonZeroStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
 import {
   type BigNumberish,
   type Call,
@@ -24,7 +25,6 @@ type OutsideFields = {
   readonly version: "1" | "2";
 };
 
-const MAX_U64 = (1n << 64n) - 1n;
 const MIN_QUOTE_LIFETIME_SECONDS = 30n;
 
 /**
@@ -44,32 +44,6 @@ export type PaymasterAuthorizationReview = {
 export type BoundPaymasterTypedData = {
   readonly review: PaymasterAuthorizationReview;
   readonly typedData: TypedData;
-};
-
-/**
- * Checks the SNIP-9 u64 execution window against an injected Unix clock.
- */
-export const isPaymasterAuthorizationLive = (
-  authorization: PaymasterAuthorizationReview,
-  nowSeconds: number,
-  minimumRemainingSeconds = 0n,
-): boolean => {
-  try {
-    const after = BigInt(authorization.executeAfter);
-    const before = BigInt(authorization.executeBefore);
-    const now = BigInt(nowSeconds);
-    return (
-      Number.isSafeInteger(nowSeconds) &&
-      nowSeconds >= 0 &&
-      after >= 0n &&
-      before <= MAX_U64 &&
-      after < now &&
-      now < before &&
-      before - now >= minimumRemainingSeconds
-    );
-  } catch {
-    return false;
-  }
 };
 
 const isJsonNumberish = (value: unknown): value is string | number =>

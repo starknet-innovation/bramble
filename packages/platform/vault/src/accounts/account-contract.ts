@@ -1,13 +1,11 @@
 /** Supported account-contract address derivation at the vault boundary. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
-import {
-  ARGENT_ACCOUNT_CONTRACT,
-  argentAccountAddress,
-} from "@mc-wallet/starknet/account-contracts";
-import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
+import { ARGENT_ACCOUNT_CONTRACT, familyAccountAddress } from "@bramble/starknet/account-contracts";
+import { accountClassEntry, deploymentClasses } from "@bramble/wallet-model/account-families";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import { isAccountContractType } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -15,7 +13,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { KmsPort } from "../kms-port";
 
 const OZ_ACCOUNT_VERSION = "3.0.0";
@@ -87,16 +85,32 @@ export const resolveAccountClassHash = async (
   if (!isAccountContractType(input.accountContractType)) {
     throw new WalletError("Invalid account contract type");
   }
-  if (input.accountContractType === "argent") {
-    if (
-      input.classHash !== undefined &&
-      !sameFelt(input.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)
-    ) {
-      throw new WalletError("Invalid Argent account class hash");
-    }
-    return ARGENT_ACCOUNT_CONTRACT.classHash;
+  if (input.accountContractType === "openzeppelin") {
+    return input.classHash ?? getOzAccountClassHash(kms, networkId);
   }
-  return input.classHash ?? getOzAccountClassHash(kms, networkId);
+  const family = input.accountContractType;
+  if (input.classHash === undefined) {
+    // Argent defaults to the release this wallet creates. Braavos has no
+    // default because this wallet never creates one: a Braavos account is only
+    // ever derived to find one that already exists, at the class it names.
+    if (family === "argent") {
+      return ARGENT_ACCOUNT_CONTRACT.classHash;
+    }
+    throw new WalletError("A Braavos account must name the class it was deployed with");
+  }
+  // Any class an account of this family can be DEPLOYED with is derivable, not
+  // only the one this wallet creates: an account keeps the address its deploy
+  // class fixed, whatever it upgrades to. Whether it can then be acted for is a
+  // separate decision, made against its live class.
+  const known = deploymentClasses(family).some((entry) =>
+    sameFelt(entry.classHash, input.classHash as string),
+  );
+  if (!known) {
+    throw new WalletError(
+      `Invalid ${family === "argent" ? "Argent" : "Braavos"} account class hash`,
+    );
+  }
+  return input.classHash;
 };
 
 const resolvedDeploymentSalt = (
@@ -106,13 +120,13 @@ const resolvedDeploymentSalt = (
 ): string | undefined => {
   if (accountContractType === "openzeppelin") {
     if (value !== undefined) {
-      throw new WalletError("OpenZeppelin accounts do not accept an Argent deployment salt");
+      throw new WalletError("OpenZeppelin accounts do not accept a deployment salt");
     }
     return undefined;
   }
   const salt = value ?? publicKeyX;
   if (!isStarkFieldElement(salt)) {
-    throw new WalletError("Invalid Argent deployment salt");
+    throw new WalletError("Invalid account deployment salt");
   }
   return canonicalFelt(salt) as string;
 };
@@ -152,15 +166,25 @@ export const deriveAccountContractAddress = async (
     input.deploymentSalt,
     publicKeyX,
   );
-  const addressInput =
-    input.accountContractType === "argent"
-      ? argentAccountAddress(publicKeyX, deploymentSalt)
-      : await kms.deriveOzAccountAddress(publicKeyX, classHash, "0x0");
+  // Argent and Braavos addresses come from the class table, with the constructor
+  // convention that belongs to the class; OpenZeppelin stays with Krusty's own
+  // derivation, as it always has.
+  const familyEntry =
+    input.accountContractType === "openzeppelin" ? null : accountClassEntry(classHash);
+  if (
+    input.accountContractType !== "openzeppelin" &&
+    (familyEntry === null || familyEntry.family !== input.accountContractType)
+  ) {
+    throw new WalletError("Account class hash does not belong to its account family");
+  }
+  const addressInput = familyEntry
+    ? familyAccountAddress(familyEntry, publicKeyX, deploymentSalt)
+    : await kms.deriveOzAccountAddress(publicKeyX, classHash, "0x0");
   if (!isNonZeroStarkFieldElement(addressInput)) {
     throw new WalletError(
-      input.accountContractType === "argent"
-        ? "Invalid Argent account address"
-        : "Krusty KMS returned invalid account address",
+      input.accountContractType === "openzeppelin"
+        ? "Krusty KMS returned invalid account address"
+        : "Invalid account address",
     );
   }
   return {

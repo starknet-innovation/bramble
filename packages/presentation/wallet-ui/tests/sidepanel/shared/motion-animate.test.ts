@@ -64,15 +64,15 @@ describe("animate (live motion branch)", () => {
   const frames: Keyframe[] = [{ opacity: 0 }, { opacity: 1 }];
 
   test("cancels only the same-id in-flight animation, starts a new one, and tags it", () => {
-    const { cancelled, el, started } = fakeElement([{ id: "mc-motion" }, { id: "other" }]);
+    const { cancelled, el, started } = fakeElement([{ id: "bramble-motion" }, { id: "other" }]);
 
     const anim = animate(el, frames, { duration: 200 });
 
     // A live Animation is returned (not the reduced-motion null).
     expect(anim).not.toBeNull();
-    // Only the animation sharing the default mc-motion id is cancelled; the
+    // Only the animation sharing the default bramble-motion id is cancelled; the
     // unrelated one is left running.
-    expect(cancelled).toEqual(["mc-motion"]);
+    expect(cancelled).toEqual(["bramble-motion"]);
     // A new animation was started with the caller's keyframes and the strong
     // ease-out defaults merged with the passed timing.
     expect(started).toHaveLength(1);
@@ -83,15 +83,15 @@ describe("animate (live motion branch)", () => {
       fill: "both",
     });
     // The returned animation is tagged with the default motion id.
-    expect(anim?.id).toBe("mc-motion");
+    expect(anim?.id).toBe("bramble-motion");
   });
 
   test("scopes interruption to a custom id and never cancels foreign ids", () => {
-    const { cancelled, el } = fakeElement([{ id: "mc-motion" }, { id: "drawer" }]);
+    const { cancelled, el } = fakeElement([{ id: "bramble-motion" }, { id: "drawer" }]);
 
     const anim = animate(el, frames, { id: "drawer", duration: 120 });
 
-    // With id "drawer" only the drawer animation is cancelled; mc-motion stays.
+    // With id "drawer" only the drawer animation is cancelled; bramble-motion stays.
     expect(cancelled).toEqual(["drawer"]);
     expect(anim?.id).toBe("drawer");
   });
@@ -103,6 +103,6 @@ describe("animate (live motion branch)", () => {
 
     expect(cancelled).toEqual([]);
     expect(started).toHaveLength(1);
-    expect(anim?.id).toBe("mc-motion");
+    expect(anim?.id).toBe("bramble-motion");
   });
 });

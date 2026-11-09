@@ -1,16 +1,16 @@
 /**
  * Bindings for the tokens flow and token detail navigation: add a custom
- * token, auto-detect held tokens with one-tap add, hide or reveal tracked
- * tokens, and open a token's detail screen from a balance row.
+ * token, auto-detect held tokens with one-tap add, hide, reveal or remove
+ * tracked tokens, and open a token's detail screen from a balance row.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { normalizeFeltInput } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { compactAmount, tokenGlyph } from "./token-row";
 
 /**
@@ -64,9 +64,9 @@ const bindAddToken = (deps: TokensUiDeps): void => {
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Add token failed"), "error", form);
+        showToast(errorDetails(error, "Add token failed"), "error", form);
         if (result) {
-          result.textContent = errorMessage(error, "Add token failed");
+          result.textContent = errorLine(error, "Add token failed");
         }
         buttonBusy(submitButton, false);
       },
@@ -88,7 +88,7 @@ const bindDetectAdd = (deps: TokensUiDeps, container: Element | null | undefined
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Add token failed"), "error", button);
+          showToast(errorDetails(error, "Add token failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -116,9 +116,9 @@ const bindDetect = (deps: TokensUiDeps): void => {
         buttonBusy(button, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Token detection failed"), "error", button);
+        showToast(errorDetails(error, "Token detection failed"), "error", button);
         if (status) {
-          status.textContent = errorMessage(error, "Token detection failed");
+          status.textContent = errorLine(error, "Token detection failed");
         }
         buttonBusy(button, false);
       },
@@ -141,7 +141,31 @@ const bindToggles = (deps: TokensUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Token update failed"), "error", button);
+          showToast(errorDetails(error, "Token update failed"), "error", button);
+          buttonBusy(button, false);
+        },
+      );
+    });
+  });
+};
+
+// Removal is the way out of a token a dapp added (Sherlock audit 134); the
+// background refuses built-in tokens even if a stale row offers the control.
+const bindRemove = (deps: TokensUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-token-remove]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const tokenId = button.dataset["tokenRemove"];
+      if (!tokenId) {
+        return;
+      }
+      buttonBusy(button, true);
+      void deps.wallet.removeToken(tokenId).then(
+        async () => {
+          showToast("Token removed", "success", deps.app);
+          await rerender(deps);
+        },
+        (error: unknown) => {
+          showToast(errorDetails(error, "Couldn't remove that token"), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -167,5 +191,6 @@ export const bindTokens = (deps: TokensUiDeps): void => {
   bindAddToken(deps);
   bindDetect(deps);
   bindToggles(deps);
+  bindRemove(deps);
   bindOpenDetail(deps);
 };

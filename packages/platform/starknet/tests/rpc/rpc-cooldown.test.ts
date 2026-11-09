@@ -6,11 +6,27 @@ import {
   timedRpcFetch,
   withRpcFallback,
   withRpcWrite,
-} from "@mc-wallet/starknet/rpc";
-import { RpcTransportError } from "@mc-wallet/starknet/rpc-transport";
+} from "@bramble/starknet/rpc";
+import { RpcTransportError } from "@bramble/starknet/rpc-transport";
 import type { RpcProvider } from "starknet";
 
 describe("RPC endpoint cooldown", () => {
+  test("treats JSON-RPC -32005 as a determinate refusal", async () => {
+    const rpcFetch = timedRpcFetch(
+      1_000,
+      async () =>
+        new Response(
+          '{"jsonrpc":"2.0","id":1,"error":{"code":-32005,"message":"rate limit exceeded"}}',
+        ),
+    );
+    const rejection = await rpcFetch("https://selected.example", {}).catch(
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(RpcRefusedError);
+    expect((rejection as Error).message).toBe(RPC_REFUSED_MESSAGE);
+  });
+
   test("retains Retry-After from an HTTP 429 without reading its body", async () => {
     let releaseCancellation = (): void => undefined;
     let settled = false;

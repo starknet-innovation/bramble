@@ -20,4 +20,4 @@
  * Re-exports the shared Starknet platform verifier for transaction callers.
  * It fails closed on malformed values and performs no signing or derivation.
  */
-export { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
+export { verifyStarkSignature } from "@bramble/starknet/signature-verify";

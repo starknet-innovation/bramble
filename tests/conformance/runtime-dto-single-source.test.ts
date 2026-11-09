@@ -16,7 +16,7 @@ describe("extension runtime DTOs have one owner", () => {
       read("packages/presentation/wallet-ui/src/popup/responses/approvals-responses.ts"),
     ]);
     for (const source of [producer, consumer]) {
-      expect(source).toContain('@mc-wallet/wallet-protocol/extension-responses"');
+      expect(source).toContain('@bramble/wallet-protocol/extension-responses"');
       expect(source).not.toMatch(/export type PendingApproval\s*=/);
     }
   });
@@ -27,7 +27,7 @@ describe("extension runtime DTOs have one owner", () => {
       read("packages/presentation/wallet-ui/src/popup/responses/responses.ts"),
     ]);
     for (const source of [producer, consumer]) {
-      expect(source).toContain('@mc-wallet/wallet-protocol/extension-responses"');
+      expect(source).toContain('@bramble/wallet-protocol/extension-responses"');
       expect(source).not.toMatch(/export type (?:NetworkOption|WalletStatus)\s*=/);
     }
   });
@@ -38,10 +38,10 @@ describe("extension runtime DTOs have one owner", () => {
       read("packages/foundation/wallet-protocol/src/provider/extension-responses.ts"),
       read("packages/platform/starknet/src/rpc/fee-bounds.ts"),
     ]);
-    expect(vault).toContain('export type { ConnectedSite } from "@mc-wallet/core/origin"');
-    expect(protocol).toContain('export type { ConnectedSite } from "@mc-wallet/core/origin"');
+    expect(vault).toContain('export type { ConnectedSite } from "@bramble/core/origin"');
+    expect(protocol).toContain('export type { ConnectedSite } from "@bramble/core/origin"');
     expect(feeBounds).toContain(
-      'export { type FeeEstimate, isFeeEstimate } from "@mc-wallet/wallet-protocol/fee-estimate"',
+      'export { type FeeEstimate, isFeeEstimate } from "@bramble/wallet-protocol/fee-estimate"',
     );
   });
 });

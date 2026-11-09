@@ -4,15 +4,15 @@
  * by owner and zero amounts, and isolating per-token failures.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { APPROVAL_EVENT_KEY } from "@mc-wallet/transactions/allowance-discovery";
+import { WalletError } from "@bramble/core/errors";
+import { APPROVAL_EVENT_KEY } from "@bramble/transactions/allowance-discovery";
 import {
   type AllowanceEvent,
   type AllowanceEventFilter,
   type AllowanceRpc,
   collectExternalAllowances,
   scanExternalAllowances,
-} from "@mc-wallet/transactions/allowance-scan";
+} from "@bramble/transactions/allowance-scan";
 import type { Call } from "starknet";
 
 const OWNER = "0x1234567890abcdef";
@@ -45,6 +45,9 @@ const makeRpc = (pages: readonly (readonly AllowanceEvent[])[]): AllowanceRpc =>
     const spender = canonical(String((call.calldata as string[])[1]));
     return AMOUNTS[spender] ?? ["0x0", "0x0"];
   },
+  async getLatestBlockNumber() {
+    return 100;
+  },
   async getEvents(filter: AllowanceEventFilter) {
     const page = Number(filter.continuation_token ?? "0");
     const events = pages[page] ?? [];
@@ -61,36 +64,51 @@ describe("collectExternalAllowances", () => {
 
     const found = await collectExternalAllowances(rpc, { owner: OWNER, tokens: [TOKEN] });
 
-    expect(found).toEqual([
-      { amount: "1000", spender: canonical(SPENDER), token: canonical(TOKEN) },
-      {
-        amount: (1n << 128n).toString(),
-        spender: canonical(LEGACY_SPENDER),
-        token: canonical(TOKEN),
-      },
-    ]);
+    expect(found).toEqual({
+      allowances: [
+        { amount: "1000", spender: canonical(SPENDER), token: canonical(TOKEN) },
+        {
+          amount: (1n << 128n).toString(),
+          spender: canonical(LEGACY_SPENDER),
+          token: canonical(TOKEN),
+        },
+      ],
+      complete: true,
+    });
   });
 
-  test("skips a token whose event query fails without a transport error", async () => {
+  test("skips a token whose event query fails without a transport error, as incomplete", async () => {
     const rpc: AllowanceRpc = {
       async callContract() {
         return ["0x3e8", "0x0"];
+      },
+      async getLatestBlockNumber() {
+        return 100;
       },
       async getEvents() {
         throw new WalletError("contract has no Approval events");
       },
     };
-    expect(await collectExternalAllowances(rpc, { owner: OWNER, tokens: [TOKEN] })).toEqual([]);
+    expect(await collectExternalAllowances(rpc, { owner: OWNER, tokens: [TOKEN] })).toEqual({
+      allowances: [],
+      complete: false,
+    });
   });
 
   test("returns nothing for an invalid owner", async () => {
     const rpc = makeRpc([[ozEvent(OWNER, SPENDER)]]);
-    expect(await collectExternalAllowances(rpc, { owner: "0x0", tokens: [TOKEN] })).toEqual([]);
+    expect(await collectExternalAllowances(rpc, { owner: "0x0", tokens: [TOKEN] })).toEqual({
+      allowances: [],
+      complete: true,
+    });
   });
 });
 
 describe("scanExternalAllowances", () => {
   test("short-circuits to an empty list when no tokens are tracked", async () => {
-    expect(await scanExternalAllowances({ owner: OWNER, rpcUrls: [], tokens: [] })).toEqual([]);
+    expect(await scanExternalAllowances({ owner: OWNER, rpcUrls: [], tokens: [] })).toEqual({
+      allowances: [],
+      complete: true,
+    });
   });
 });

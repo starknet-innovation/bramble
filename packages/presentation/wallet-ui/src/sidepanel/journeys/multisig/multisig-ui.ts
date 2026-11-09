@@ -1,20 +1,25 @@
 /** Bindings for watched Argent multisigs and frozen signing intents. */
 
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { buildErc20TransferCall, parseTokenAmount } from "@mc-wallet/starknet/rpc";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { buildErc20TransferCall, parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   canonicalFelt,
   normalizeFeltInput,
   STRK_TOKEN_ADDRESS,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+} from "@bramble/wallet-model/networks";
+import { UNDEPLOYED_REMOVAL_PROMPT } from "../../runtime/friendly-error-copy-multisig";
+import { failureTone } from "../../runtime/runtime-errors";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
+import { STALE_INTENT_MAY_HAVE_BEEN_SENT } from "./multisig-intent-actions";
 import { bindMultisigIntentCards } from "./multisig-intent-ui";
 import { parseArgentMultisigIntentPackage } from "./multisig-model";
+import { armResendConfirmation, resendConfirmed } from "./multisig-resend-confirm";
 import { bindMultisigSignerManagement } from "./multisig-signer-management-ui";
+import { bindMultisigStrk20Key } from "./multisig-strk20-key-ui";
 import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 /**
@@ -43,9 +48,12 @@ const run = (
       await rerender(deps);
     },
     (error: unknown) => {
-      const message = errorMessage(error, "Argent multisig request failed");
-      setResult(deps, resultId, message);
-      showToast(message, "error", button ?? deps.app);
+      setResult(deps, resultId, errorLine(error, "That request didn't go through"));
+      showToast(
+        errorDetails(error, "Ready multisig request failed"),
+        failureTone(error),
+        button ?? deps.app,
+      );
       buttonBusy(button, false);
     },
   );
@@ -90,10 +98,27 @@ const bindAdd = (deps: MultisigUiDeps): void => {
         deps.openDetail(view.record.id, "multisig-home");
       })
       .catch((error: unknown) => {
-        showToast(errorMessage(error, "Sync Argent multisig failed"), "error", button ?? deps.app);
+        showToast(errorDetails(error, "Sync Ready multisig failed"), "error", button ?? deps.app);
         buttonBusy(button, false);
       });
   });
+};
+
+// The second press a removal needs, by why the background asked for it: an
+// undeployed multisig whose setup only this wallet holds (Sherlock 214), or
+// saved transactions and history that go with it.
+const removalConfirmation = (
+  message: string,
+): { readonly label: string; readonly prompt: string } | null => {
+  if (/undeployed/i.test(message)) {
+    return { label: "Remove anyway", prompt: UNDEPLOYED_REMOVAL_PROMPT };
+  }
+  return /history|terminal|intent/i.test(message)
+    ? {
+        label: "Confirm removal and delete terminal history",
+        prompt: "Review the warning and click again to delete terminal history",
+      }
+    : null;
 };
 
 const bindList = (deps: MultisigUiDeps): void => {
@@ -117,19 +142,19 @@ const bindList = (deps: MultisigUiDeps): void => {
         try {
           await deps.multisig.removeMultisig(id, confirmedRemovals.has(button));
         } catch (error) {
-          if (
-            !confirmedRemovals.has(button) &&
-            error instanceof Error &&
-            /history|terminal|intent/i.test(error.message)
-          ) {
+          const confirmation =
+            !confirmedRemovals.has(button) && error instanceof Error
+              ? removalConfirmation(error.message)
+              : null;
+          if (confirmation) {
             confirmedRemovals.add(button);
-            button.lastChild?.replaceWith("Confirm removal and delete terminal history");
-            throw new Error("Review the warning and click again to delete terminal history");
+            button.lastChild?.replaceWith(confirmation.label);
+            throw new Error(confirmation.prompt);
           }
           throw error;
         }
         deps.openList();
-        return "Argent multisig removed from this wallet";
+        return "Multisig removed from this wallet";
       });
     });
   });
@@ -218,6 +243,13 @@ const bindTransferComposer = (form: HTMLFormElement): void => {
     });
     form.querySelector("#multisig-asset-empty")?.toggleAttribute("hidden", visible > 0);
   });
+  // Enter in the token search must never implicitly submit the form, which
+  // would prepare a transfer of the PREVIOUSLY selected hidden token rather
+  // than the one being searched for (audit 248, multisig twin of the Send
+  // token search). Choosing is done on an asset row.
+  form.querySelector("#multisig-asset-search")?.addEventListener("keydown", (event) => {
+    if ((event as KeyboardEvent).key === "Enter") event.preventDefault();
+  });
   form.querySelectorAll<HTMLButtonElement>("[data-ms-propose-asset]").forEach((asset) => {
     asset.addEventListener("click", () => applyTransferAsset(form, asset));
   });
@@ -244,7 +276,7 @@ const preparedCall = (form: HTMLFormElement) => {
     );
     const balance = String(data.get("tokenBalance") ?? "");
     if (balance && amount > BigInt(balance)) {
-      throw new Error("Amount exceeds the shared account balance");
+      throw new Error("Amount exceeds the multisig account balance");
     }
     const call = buildErc20TransferCall(
       normalizeFeltInput(String(data.get("tokenAddress") ?? "")),
@@ -292,7 +324,9 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
       if (!multisigId) return;
       setPreparing(true);
       void Promise.resolve()
-        .then(() => deps.multisig.prepareIntent(multisigId, [preparedCall(form)]))
+        .then(() =>
+          deps.multisig.prepareIntent(multisigId, [preparedCall(form)], resendConfirmed(button)),
+        )
         .then(
           (result) => {
             showToast("Transaction ready for multisig review", "success", button ?? deps.app);
@@ -300,11 +334,12 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
           },
           (error: unknown) => {
             showToast(
-              errorMessage(error, "Prepare Argent multisig transaction failed"),
+              errorDetails(error, "Prepare Ready multisig transaction failed"),
               "error",
               button ?? deps.app,
             );
             setPreparing(false);
+            armResendConfirmation(button, error);
           },
         );
     });
@@ -327,13 +362,13 @@ const bindImport = (deps: MultisigUiDeps): void => {
       const result = await deps.multisig.importIntent(intentPackage);
       deps.openIntent(result.intent.accountId, result.intent.id);
       return result.intent.state === "stale"
-        ? "Signed attempt restored — it was not submitted"
+        ? `Signed attempt restored. ${STALE_INTENT_MAY_HAVE_BEEN_SENT}`
         : "Intent verified and ready to review";
     });
   });
 };
 
-type MultisigHomeTab = "assets" | "collectibles" | "intents";
+type MultisigHomeTab = "assets" | "intents";
 const bindTabs = (deps: MultisigUiDeps): void => {
   const tabs = Array.from(
     deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]") ?? [],
@@ -352,7 +387,7 @@ const bindTabs = (deps: MultisigUiDeps): void => {
   for (const [index, button] of tabs.entries()) {
     button.addEventListener("click", () => {
       const value = button.dataset["msHomeTab"];
-      if (value === "assets" || value === "collectibles" || value === "intents") apply(value);
+      if (value === "assets" || value === "intents") apply(value);
     });
     button.addEventListener("keydown", (event) => {
       let next = index;
@@ -363,7 +398,7 @@ const bindTabs = (deps: MultisigUiDeps): void => {
       else return;
       const nextTab = tabs[next];
       const value = nextTab?.dataset["msHomeTab"];
-      if (!nextTab || (value !== "assets" && value !== "collectibles" && value !== "intents")) {
+      if (!nextTab || (value !== "assets" && value !== "intents")) {
         return;
       }
       event.preventDefault();
@@ -381,6 +416,7 @@ export const bindMultisigs = (deps: MultisigUiDeps): void => {
   bindList(deps);
   bindMultisigIntentCards(deps);
   bindMultisigSignerManagement(deps);
+  bindMultisigStrk20Key(deps);
   bindPrepare(deps);
   bindImport(deps);
   bindTabs(deps);

@@ -1,17 +1,23 @@
 /** Argent account ABI, deployment, and signature primitives pinned by release. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@bramble/core/json";
+import {
+  type AccountClassEntry,
+  type AccountFamily,
+  accountConstructorCalldata,
+  deploymentClasses,
+} from "@bramble/wallet-model/account-families";
 import {
   type AccountContractType,
   ARGENT_ACCOUNT_CLASS_HASH,
-} from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+} from "@bramble/wallet-model/networks";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import { hash, shortString } from "starknet";
 
 const ARGENT_UPSTREAM_COMMIT = "1352198956f36fb35fa544c4e46a3507a3ec20e3";
@@ -178,6 +184,54 @@ export const argentAccountAddress = (publicKey: string, salt = publicKey): strin
   );
 
 /**
+ * One address a signer public key could own under a particular deployment class.
+ */
+export type AccountAddressCandidate = {
+  readonly address: string;
+  readonly entry: AccountClassEntry;
+};
+
+/**
+ * The address a signer public key owns under one specific class, using that
+ * class's own constructor convention. The convention belongs to the class, not
+ * the family: pairing a correct class with another version's calldata yields a
+ * well-formed address that belongs to nobody.
+ *
+ * The salt defaults to the public key, which is what every wallet in the table
+ * uses for accounts it deploys counterfactually.
+ */
+export const familyAccountAddress = (
+  entry: AccountClassEntry,
+  publicKey: string,
+  salt: string = publicKey,
+): string =>
+  contractAddress(
+    salt,
+    entry.classHash,
+    accountConstructorCalldata(entry.constructorShape, publicKey),
+  );
+
+/**
+ * Every address one signer public key could own, one per class an account can
+ * be deployed with. Callers resolve which is real by asking the chain, because
+ * nothing local can distinguish them.
+ *
+ * The salt is the public key, which is what every wallet in this table used for
+ * the accounts it deploys counterfactually. An account deployed with any other
+ * salt — or with a constructor input the phrase does not contain, such as an
+ * Argent guardian — is not in this list and cannot be, since its address is not
+ * a function of the phrase. Those are found by supplying the address instead.
+ */
+export const accountAddressCandidates = (
+  publicKey: string,
+  family?: AccountFamily,
+): readonly AccountAddressCandidate[] =>
+  deploymentClasses(family).map((entry) => ({
+    address: familyAccountAddress(entry, publicKey),
+    entry,
+  }));
+
+/**
  * Computes a deterministic Argent Multisig 0.2 address.
  */
 export const argentMultisigAddress = (config: ArgentMultisigConfig, salt: string): string =>
@@ -208,6 +262,9 @@ export const serializeArgentAccountSignature = (signature: StarkSignature): read
 
 /**
  * Serializes one signer result for the selected single-signer account contract.
+ * Braavos verifies the same plain `(r, s)` stark pair as OpenZeppelin when the
+ * stark key is its only signer; whether that is the case is enforced on-chain
+ * state checked at the transaction boundary, never guessed here.
  */
 export const serializeAccountSignature = (
   accountContractType: AccountContractType,

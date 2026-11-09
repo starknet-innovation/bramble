@@ -3,15 +3,19 @@
  * instrumented SDK calls, and helpers for held approval requests.
  */
 import { expect } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   STRK20_NOT_REGISTERED,
   type Strk20PreparedSubmissionInput,
   type Strk20Service,
-} from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
+} from "@bramble/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { ApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
+import type { Strk20JobRegistry } from "../../apps/extension/src/background/privacy/strk20-preparation-jobs";
+import type { SponsoredShieldDeps } from "../../apps/extension/src/background/privacy/strk20-sponsored-shield";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
@@ -20,6 +24,7 @@ import {
   contentSender,
   createWallet,
   extensionSender,
+  testExtension,
   vaultPassphrase,
 } from "./background-wallet-stub";
 import { flushHeld, latestApprovalId, reviewedApprovalFee, waitForPendingApprovals } from "./held";
@@ -29,6 +34,9 @@ export const STRK20_TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1
 export const STRK20_RECIPIENT =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 export const STRK20_ORIGIN = "https://example.com";
+// The opt-in SDK shadow account anonymizer the default harness configures.
+export const STRK20_TEST_ANONYMIZER =
+  "0x04f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
 
 export const STRK20_EXTENSION_SENDER: RuntimeSender = extensionSender;
 export const STRK20_CONTENT_SENDER: RuntimeSender = contentSender;
@@ -42,15 +50,36 @@ export const STRK20_CALL_AND_PROOF = {
   proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
 };
 
+const gatewaySwitchedOff = async (): Promise<Response> => new Response("", { status: 404 });
+
 export type Strk20HarnessOptions = {
+  /**
+   * Sponsored first-shield relay table, transport and clock (#789). Without
+   * it the bundled table is used against a switched-off gateway (every call
+   * 404), so no suite reaches the real one.
+   */
+  readonly sponsoredShield?: SponsoredShieldDeps;
+  /** The stub vault's accounts, e.g. a Ledger account under the granted id. */
+  readonly accounts?: readonly AccountRef[];
   /** Seeded activity log, for pending-registration derivation. */
   readonly activity?: ActivityLog;
+  /** An approval queue of the suite's own, e.g. one on a test clock for expiry. */
+  readonly approvals?: ApprovalQueue;
+  readonly deployed?: boolean;
   readonly balance?: string;
   readonly balanceCalls?: { value: number };
   readonly invoked?: InvokeInput[];
   /** Wall clock used to age the pending-registration window. */
   readonly now?: () => number;
   readonly preferences?: WalletPreferences;
+  /**
+   * Pool `get_public_key` answer. A string is constant; a function is called
+   * on every read so a suite can flip the key between requests. Defaults to
+   * unregistered (`0x0`), which is not cached.
+   */
+  readonly poolPublicKey?: string | (() => Promise<string>);
+  /** Public viewing key the stub wallet would register. Defaults to `0x1`. */
+  readonly ownViewingPublicKey?: string;
   /**
    * Re-read on every access, for suites that change the trusted set (a contact
    * saved between consent and submission) while a request is in flight. Takes
@@ -63,7 +92,9 @@ export type Strk20HarnessOptions = {
   readonly registerCalls?: { value: number };
   readonly registered?: boolean;
   readonly strk20?: Strk20Service;
-  readonly subaccountCalls?: { value: number };
+  /** A registry of the suite's own, e.g. one with a diagnostics recorder. */
+  readonly strk20Jobs?: Strk20JobRegistry;
+  readonly shadowAccountCalls?: { value: number };
 };
 
 /**
@@ -76,8 +107,12 @@ export type Strk20HarnessOptions = {
  * disagreeing about what a live privacy response looks like.
  */
 export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Service => {
-  const { balanceCalls, proveCalls, registerCalls, subaccountCalls } = options;
+  const { balanceCalls, proveCalls, registerCalls, shadowAccountCalls } = options;
   return {
+    // Nothing is ever paused in this harness, so "Unlock anyway" clears nothing.
+    async releasePendingWrite() {
+      return false;
+    },
     async prepare() {
       if (proveCalls) {
         proveCalls.value += 1;
@@ -155,9 +190,18 @@ export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Ser
     async registrationStatus() {
       return options.registered === false ? "unregistered" : "registered";
     },
-    async subaccountCommitment() {
-      if (subaccountCalls) {
-        subaccountCalls.value += 1;
+    // Lists one address per nonce, nonce 0 deployed; each holds the token
+    // balance the RPC double reports for it.
+    async shadowAccounts({ nonces }) {
+      return nonces.map((nonce) => ({
+        address: `0x5ad0${nonce.toString(16)}`,
+        deployed: nonce === 0n,
+        nonce: `0x${nonce.toString(16)}`,
+      }));
+    },
+    async shadowAccountCommitment() {
+      if (shadowAccountCalls) {
+        shadowAccountCalls.value += 1;
       }
       return "0x123";
     },
@@ -189,18 +233,29 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
   if (!mainnetStrk20) {
     throw new Error("missing default STRK20 test config");
   }
+  // The opt-in SDK shadow account module is set, so shadow account requests reach
+  // their approval; a test of the unset case passes its own preferences.
   const preferences = options.preferences ?? {
     ...defaults,
     activeNetworkId: "SN_SEPOLIA" as const,
     strk20Networks: {
       ...defaults.strk20Networks,
-      SN_SEPOLIA: mainnetStrk20,
+      SN_SEPOLIA: { ...mainnetStrk20, shadowAccountAnonymizerAddress: STRK20_TEST_ANONYMIZER },
     },
   };
   const strk20: Strk20Service = options.strk20 ?? makeStrk20Service(options);
-  return createMessageHandler(createWallet(), "extension-id", {
+  const wallet = createWallet({
+    ...(options.accounts ? { accounts: options.accounts } : {}),
+    ...(options.ownViewingPublicKey === undefined
+      ? {}
+      : { viewingPublicKey: options.ownViewingPublicKey }),
+  });
+  return createMessageHandler(wallet, testExtension, {
     ...(options.activity ? { activity: options.activity } : {}),
+    ...(options.approvals ? { approvals: options.approvals } : {}),
     ...(options.now ? { now: options.now } : {}),
+    ...(options.strk20Jobs ? { strk20Jobs: options.strk20Jobs } : {}),
+    sponsoredShield: options.sponsoredShield ?? { http: gatewaySwitchedOff },
     preferencesStore: {
       ...unavailablePreferencesStore,
       async read() {
@@ -208,6 +263,13 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       },
     },
     runtimeRpc: makeRuntimeRpc({
+      async getDeploymentStatus() {
+        return options.deployed ?? true;
+      },
+      async getStrk20PublicKey() {
+        const key = options.poolPublicKey;
+        return typeof key === "function" ? key() : (key ?? "0x0");
+      },
       async getTokenBalances({ tokens }) {
         const balance = options.publicBalance ?? "100000000000000000000";
         return tokens.map((token) => ({
@@ -270,3 +332,76 @@ export const approveHeldStrk20 = async (
   }
   return held;
 };
+
+/**
+ * The id of a still-running tracked job in a background reply, or `null` for
+ * any other reply — mirrors the panel's own reader without importing it, so the
+ * harness cannot inherit a panel bug.
+ */
+export const strk20RunningJobId = (response: unknown): string | null => {
+  const job = (
+    response as { readonly strk20Job?: { readonly id?: unknown; readonly state?: unknown } }
+  )?.strk20Job;
+  return typeof job?.id === "string" && job.state === "running" ? job.id : null;
+};
+
+type Settle = (message: Record<string, unknown>, sender: RuntimeSender) => Promise<unknown>;
+
+/**
+ * Polls `wallet.strk20PreparationStatus` the way the panel does until a started
+ * job settles, returning the settled reply. A reply that is not a running job
+ * — a refusal at the gate, or a route that answers on the request — comes back
+ * unchanged. Bounded, so a job that never settles fails the test rather than
+ * hanging it.
+ */
+export const awaitStrk20Job = async (
+  settle: Settle,
+  started: unknown,
+  sender: RuntimeSender = STRK20_EXTENSION_SENDER,
+): Promise<unknown> => {
+  let response = started;
+  for (let poll = 0; poll < 50; poll += 1) {
+    const jobId = strk20RunningJobId(response);
+    if (jobId === null) {
+      return response;
+    }
+    await flushHeld();
+    response = await settle({ jobId, type: "wallet.strk20PreparationStatus" }, sender);
+  }
+  throw new Error("STRK20 preparation job never settled");
+};
+
+/**
+ * Drives a shield preparation through its tracked job: the start request, then
+ * the polls, returning the settled reply — the review envelope or the job's
+ * own refusal. Any request that may start a job settles the same way, so the
+ * activation and execution helpers below are spelled through this one.
+ */
+export const prepareStrk20Deposit = async (
+  handler: Strk20Handler,
+  message: Readonly<Record<string, unknown>>,
+  sender: RuntimeSender = STRK20_EXTENSION_SENDER,
+): Promise<unknown> =>
+  awaitStrk20Job((next, to) => handler(next, to), await handler(message, sender), sender);
+
+/**
+ * Drives the activation preparation through its tracked job, returning the
+ * settled review or refusal.
+ */
+export const prepareStrk20Registration = (
+  handler: Strk20Handler,
+  sender: RuntimeSender = STRK20_EXTENSION_SENDER,
+): Promise<unknown> =>
+  prepareStrk20Deposit(handler, { type: "wallet.strk20PrepareRegistration" }, sender);
+
+/**
+ * Executes a reviewed preparation through its tracked job: the execute request
+ * (whose gate answers refusals itself), then the polls, returning the settled
+ * `{ ok, transactionHash }` or the refusal.
+ */
+export const executeStrk20Preparation = (
+  handler: Strk20Handler,
+  preparationId: unknown,
+  sender: RuntimeSender = STRK20_EXTENSION_SENDER,
+): Promise<unknown> =>
+  prepareStrk20Deposit(handler, { preparationId, type: "wallet.strk20Execute" }, sender);

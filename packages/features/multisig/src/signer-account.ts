@@ -1,21 +1,21 @@
 /** Read-only signer-key discovery for supported single-signer accounts. */
-import { WalletError } from "@mc-wallet/core/errors";
-import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { WalletError } from "@bramble/core/errors";
+import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
 import {
   createRpcProvider,
   isContractNotFoundError,
   withRpcFallback,
-} from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/provider";
 import {
   type AccountContractType,
   OPENZEPPELIN_ACCOUNT_CLASS_HASH,
-} from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import { withPinnedBlock } from "./chain-pinned-read";
 

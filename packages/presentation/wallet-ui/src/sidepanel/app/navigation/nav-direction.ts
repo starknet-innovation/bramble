@@ -16,11 +16,14 @@ export type NavDirection = "forward" | "back" | "swap";
 // screen. Kept beside viewDepth so the depth map lives in one place.
 const DETAIL_VIEWS: readonly WalletView[] = [
   "advanced-network",
+  "find-accounts",
   "import-key",
+  "import-phrase",
   "backup-export",
   "backup-restore",
   "token-detail",
   "token-add",
+  "token-catalog",
   "token-discover",
   "nft-detail",
   "nft-hidden",
@@ -34,6 +37,7 @@ const DETAIL_VIEWS: readonly WalletView[] = [
   "multisig-propose",
   "multisig-deploy",
   "deploy-account",
+  "privacy-unlock",
 ];
 
 // A selected multisig is a first-class portfolio identity, so its home sits at

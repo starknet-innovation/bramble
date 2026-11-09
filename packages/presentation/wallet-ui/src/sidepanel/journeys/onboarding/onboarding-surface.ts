@@ -1,16 +1,27 @@
 /**
  * Dedicated full-page onboarding completion UI and Chrome side-panel handoff.
  */
-import { actionLink, button } from "@mc-wallet/ui-kit/controls";
+
+import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
+import { actionLink, button } from "@bramble/ui-kit/controls";
 import { icon } from "../../shared/icons";
 
 /**
- * Minimal Chrome surface used after setup. Opening is user-gesture gated and
+ * Minimal browser surface used after setup. Opening is user-gesture gated and
  * failure leaves the completion page intact with actionable guidance.
+ *
+ * Two panel APIs appear here because the browsers name the same surface
+ * differently: Chromium opens it through `sidePanel` and needs the window to
+ * target, Firefox through `sidebarAction` which always opens in the active
+ * window and takes no argument. Both are optional, and a runtime offering
+ * neither falls back to the toolbar guidance below rather than failing.
  */
 export type OnboardingCompletionBrowser = {
   readonly sidePanel?: {
     readonly open: (options: { readonly windowId: number }) => Promise<void>;
+  };
+  readonly sidebarAction?: {
+    readonly open: () => Promise<void>;
   };
   readonly windows?: {
     readonly WINDOW_ID_CURRENT: number;
@@ -23,12 +34,11 @@ export type OnboardingCompletionBrowser = {
  * opens the dedicated extension tab where security decisions have stable room.
  */
 export const onboardingLaunch = (): string => `
-  <main class="screen flow gate onboarding-gate">
-    <div class="gate-brand">${icon("wallet")}</div>
+  <section class="screen flow gate onboarding-gate">
+    <div class="gate-brand">${BRAMBLE_MARK}</div>
     <div class="gate-head">
       <p class="eyebrow">Wallet setup</p>
       <h1>Set up in a browser tab</h1>
-      <p class="lede">MC Wallet uses a full-screen setup so every recovery, protection, and account choice stays clear.</p>
     </div>
     <div class="onboarding-gate-actions">
       ${actionLink({
@@ -36,34 +46,47 @@ export const onboardingLaunch = (): string => `
         label: "Open full-screen setup",
         target: "_blank",
       })}
-      <p class="onboarding-local-note">${icon("lock")} Encrypted locally on this device</p>
     </div>
-  </main>`;
+  </section>`;
 
 /**
  * Completion screen rendered when onboarding.html observes an existing vault.
  * It contains no account data or secret material.
  */
 export const onboardingComplete = (): string => `
-  <main class="screen flow gate onboarding-complete">
+  <section class="screen flow gate onboarding-complete">
     <div class="gate-brand onboarding-complete-mark">${icon("check")}</div>
     <div class="gate-head">
-      <p class="eyebrow">Setup complete</p>
       <h1>You’re all set</h1>
-      <p class="lede">Your account is ready in MC Wallet. Open the side panel to receive assets, connect to an app, or deploy when you’re ready.</p>
-    </div>
-    <div class="onboarding-complete-details">
-      <div class="onboarding-complete-detail">${icon("lock")} <span>Vault encrypted locally on this device</span></div>
-      <div class="onboarding-complete-detail">${icon("shield")} <span>Recovery and signing material stay behind the wallet boundary</span></div>
     </div>
     <div class="onboarding-complete-actions">
-      ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open MC Wallet" })}
+      ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open Bramble" })}
       <p id="onboarding-complete-result" class="hint" role="status"></p>
     </div>
-  </main>`;
+  </section>`;
 
 /**
- * Hands a completed full-page setup into the wallet side panel. Chrome API
+ * Closes the compact surface once its "Open full-screen setup" link has
+ * opened the dedicated tab, so the side panel does not sit beside setup
+ * showing a stale handoff. The close is deferred past the click's default
+ * action so the new tab is already opening when the panel goes.
+ */
+export const bindOnboardingLaunch = (
+  app: Element | null,
+  closeSurface: () => void,
+  defer: (task: () => void) => void = (task) => setTimeout(task, 0),
+): void => {
+  const link = app?.querySelector<HTMLAnchorElement>('a.onboarding-launch[target="_blank"]');
+  link?.addEventListener("click", () => defer(closeSurface));
+};
+
+const TOOLBAR_FALLBACK = "Open Bramble from the browser toolbar to continue.";
+
+/**
+ * Hands a completed full-page setup into the wallet side panel. Chrome opens
+ * a side panel only inside a user gesture, so the attempt runs once as soon
+ * as the completion screen renders — still within the activation of the
+ * click that finished setup — and the button stays as the retry. Chrome API
  * denial fails visibly and never changes wallet state.
  */
 export const bindOnboardingCompletion = (
@@ -73,12 +96,25 @@ export const bindOnboardingCompletion = (
 ): void => {
   const button = app?.querySelector<HTMLButtonElement>("#onboarding-open-wallet");
   const result = app?.querySelector<HTMLElement>("#onboarding-complete-result");
-  button?.addEventListener("click", () => {
+  if (!button) {
+    return;
+  }
+  const open = (announceFallback: boolean): void => {
     const windowId = browser?.windows?.WINDOW_ID_CURRENT;
     const sidePanel = browser?.sidePanel;
-    if (typeof windowId !== "number" || !sidePanel?.open) {
-      if (result) {
-        result.textContent = "Open MC Wallet from the browser toolbar to continue.";
+    const sidebarAction = browser?.sidebarAction;
+    // Chromium needs a window id to open its side panel; Firefox's sidebar
+    // takes none. Missing either API, or the id Chromium's path requires, is
+    // the toolbar-guidance case rather than an error.
+    const raise =
+      typeof windowId === "number" && sidePanel?.open
+        ? () => sidePanel.open({ windowId })
+        : sidebarAction?.open
+          ? () => sidebarAction.open()
+          : null;
+    if (!raise) {
+      if (result && announceFallback) {
+        result.textContent = TOOLBAR_FALLBACK;
       }
       return;
     }
@@ -86,11 +122,19 @@ export const bindOnboardingCompletion = (
     if (result) {
       result.textContent = "Opening the wallet…";
     }
-    void sidePanel.open({ windowId }).then(closeSurface, () => {
+    void raise().then(closeSurface, () => {
       button.disabled = false;
       if (result) {
-        result.textContent = "Open MC Wallet from the browser toolbar to continue.";
+        result.textContent = announceFallback ? TOOLBAR_FALLBACK : "";
       }
     });
-  });
+  };
+  button.addEventListener("click", () => open(true));
+  // One automatic attempt per surface, tracked on the mount so re-renders of
+  // the completion scene do not retry (and flash the button) on every refresh.
+  const mount = app instanceof HTMLElement ? app : null;
+  if (mount && mount.dataset["onboardingAutoOpened"] !== "true") {
+    mount.dataset["onboardingAutoOpened"] = "true";
+    open(false);
+  }
 };

@@ -22,10 +22,10 @@ import {
   listConnectedDevicesRaw,
   newStarknetClient,
   openConnectedTransportRaw,
-} from "@mc-wallet/ledger-browser/webhid";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
-import type { LedgerDeviceChoice } from "@mc-wallet/ledger-protocol/session";
+} from "@bramble/ledger-browser/webhid";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import type { LedgerDeviceChoice } from "@bramble/ledger-protocol/session";
 
 type NavigatorWithLedgerTransport = {
   readonly bluetooth?: unknown;

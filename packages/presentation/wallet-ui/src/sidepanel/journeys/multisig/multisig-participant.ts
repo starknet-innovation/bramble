@@ -1,11 +1,12 @@
 /** Shared participant picker for multisig setup and signer management. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { inputControl, textareaField } from "@mc-wallet/ui-kit/fields";
-import { icon } from "@mc-wallet/ui-kit/icons";
-import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
-import { parseWalletContactCard } from "@mc-wallet/wallet-model/preferences";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { escapeHtml } from "@bramble/core/html";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { inputControl, textareaField } from "@bramble/ui-kit/fields";
+import { icon } from "@bramble/ui-kit/icons";
+import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
+import { parseWalletContactCard } from "@bramble/wallet-model/preferences";
+import type { SidepanelWallet } from "../../runtime/runtime";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountAvatar, accountLabel } from "../../shared/parts";
 import type { MultisigClient } from "./multisig-runtime";
 
@@ -77,7 +78,7 @@ export const multisigParticipantScreen = (
       </div>
       <div data-participant-field="address">
         <label><span>Participant account address</span>${inputControl({ ariaLabel: "Participant account address", attributes: { "data-participant-address-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
-        <p class="hint">For deployed OpenZeppelin or Argent accounts.</p>
+        <p class="hint">For deployed Bramble or Ready accounts.</p>
       </div>
       <div data-participant-field="public-key" hidden>
         <label><span>Participant public key</span>${inputControl({ ariaLabel: "Participant public key", attributes: { "data-participant-key-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
@@ -99,13 +100,33 @@ export const multisigParticipantScreen = (
 export type MultisigParticipantPickerDeps = {
   readonly multisig: Pick<MultisigClient, "resolveSigner">;
   readonly onSelect: (participant: MultisigParticipant) => string | null;
-  readonly saveContact?: (
-    participant: MultisigParticipant & {
-      readonly address: string;
-      readonly nostrPublicKey: string;
-    },
-  ) => Promise<void>;
+  /** Takes back a selection `onSelect` made, when the contact save after it fails. */
+  readonly onUnselect: (participant: MultisigParticipant) => void;
+  readonly saveContact?: (participant: WalletCardParticipant) => Promise<void>;
 };
+
+/** A wallet-card participant: the only kind the picker saves as a contact. */
+type WalletCardParticipant = MultisigParticipant & {
+  readonly address: string;
+  readonly nostrPublicKey: string;
+};
+
+/**
+ * Saves a wallet-card participant to the address book, on the network of the
+ * picker found inside `scope`.
+ */
+export const participantContactSaver =
+  (wallet: Pick<SidepanelWallet, "saveAddress">, scope: HTMLElement | null | undefined) =>
+  (participant: WalletCardParticipant): Promise<void> =>
+    wallet.saveAddress(
+      participant.label,
+      participant.address,
+      scope?.querySelector<HTMLElement>("[data-participant-network]")?.dataset[
+        "participantNetwork"
+      ] ?? "",
+      participant.publicKeyX,
+      participant.nostrPublicKey,
+    );
 
 /**
  * Binds one picker, validates all manual input, and restores focus/state to its origin.
@@ -183,7 +204,7 @@ export const bindMultisigParticipantPicker = (
     const card = parseWalletContactCard(walletCardInput?.value.trim() ?? "");
     const label = labelInput?.value.trim() ?? "";
     const message = !card
-      ? "Paste a valid MC Wallet card."
+      ? "Paste a valid Bramble card."
       : card.networkId !== screen.dataset["participantNetwork"]
         ? "That wallet card belongs to a different network."
         : !card.publicKeyX || !card.nostrPublicKey
@@ -206,12 +227,19 @@ export const bindMultisigParticipantPicker = (
     buttonBusy(confirm, true);
     try {
       if (!accept(participant)) return;
-      await deps.saveContact?.(participant);
+      // Selection runs first so a card the flow refuses is never saved. A save
+      // the address book refuses, such as a card whose keys differ from a saved
+      // contact's (Sherlock 258), takes the selection back: otherwise the card's
+      // keys would join the signer set while the screen reports the refusal.
+      await deps.saveContact?.(participant).catch((error: unknown) => {
+        deps.onUnselect(participant);
+        throw error;
+      });
       complete();
     } catch (error) {
       const failure = errorMessage(error, "Contact save failed");
-      result.textContent = failure;
-      showToast(failure, "error", confirm);
+      result.textContent = errorLine(error, "Contact save failed");
+      showToast(failure, "error", confirm, errorDetails(error, "Contact save failed"));
     } finally {
       buttonBusy(confirm, false);
     }
@@ -247,14 +275,13 @@ export const bindMultisigParticipantPicker = (
       );
       finish({
         address: signer.address,
-        label: signer.accountContractType === "argent" ? "Argent account" : "OpenZeppelin account",
+        label: signer.accountContractType === "argent" ? "Ready account" : "Bramble account",
         publicKeyX: signer.publicKeyX,
         source: "Account address",
       });
     } catch (error) {
-      const message = errorMessage(error, "Signer key lookup failed");
-      result.textContent = message;
-      showToast(message, "error", confirm);
+      result.textContent = errorLine(error, "Couldn't look up that signer");
+      showToast(errorDetails(error, "Signer key lookup failed"), "error", confirm);
     } finally {
       buttonBusy(confirm, false);
     }

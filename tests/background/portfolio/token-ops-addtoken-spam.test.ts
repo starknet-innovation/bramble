@@ -3,10 +3,11 @@
  * added but hidden by default, while a genuine token stays visible (A-L10).
  */
 import { describe, expect, test } from "bun:test";
-import type { PriceService } from "@mc-wallet/portfolio/prices";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { TokenMetadata } from "@mc-wallet/starknet/rpc";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { PriceService } from "@bramble/portfolio/prices";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import type { TokenMetadata } from "@bramble/starknet/rpc";
+import { createMemoryStore } from "@bramble/store/kv";
+import { verificationContext } from "@bramble/transactions/verify";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import {
   handleTokenOps,
@@ -102,6 +103,47 @@ describe("wallet.addToken spam handling", () => {
     const stored = prefs.tokens.find((token) => token.address === USDC);
     expect(stored?.name).toBe("USDC");
     expect(stored?.symbol).toBe("USDC");
+  });
+
+  test("falls back to the symbol when metadata carries Unicode spoofing", async () => {
+    const { deps, preferencesStore } = makeDeps({
+      decimals: 6,
+      name: "USD‮⁦Coin",
+      symbol: "usdc",
+    });
+
+    await handleTokenOps(deps, "wallet.addToken", {
+      address: USDC,
+      type: "wallet.addToken",
+    });
+
+    const stored = (await preferencesStore.read()).tokens.find((token) => token.address === USDC);
+    expect(stored?.name).toBe("USDC");
+  });
+
+  test("a user add clears the dapp mark, so the reviewer trusts the token (audit 171)", async () => {
+    const PLAIN = "0x0777000000000000000000000000000000000000000000000000000000000002";
+    const { deps, preferencesStore } = makeDeps({ decimals: 6, name: "Plain", symbol: "plain" });
+    const record = {
+      address: PLAIN,
+      decimals: 6,
+      name: "Plain",
+      networkId: "SN_MAIN",
+      symbol: "PLAIN",
+    } as const;
+    await preferencesStore.upsertToken(record, "dapp");
+    const before = await preferencesStore.read();
+    expect(
+      verificationContext({ address: "0x1", networkId: "SN_MAIN" }, before).tokens,
+    ).not.toContainEqual(expect.objectContaining({ address: PLAIN }));
+
+    await handleTokenOps(deps, "wallet.addToken", { address: PLAIN, type: "wallet.addToken" });
+
+    const after = await preferencesStore.read();
+    expect(after.dappTokenIds).toEqual([]);
+    expect(
+      verificationContext({ address: "0x1", networkId: "SN_MAIN" }, after).tokens,
+    ).toContainEqual(expect.objectContaining({ address: PLAIN, symbol: "PLAIN" }));
   });
 
   test("adds a symbol-spoofing token but hides it by default", async () => {

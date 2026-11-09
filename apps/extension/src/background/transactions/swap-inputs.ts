@@ -4,8 +4,8 @@
  * the user's tracked-token registry in the handler — the UI can never smuggle
  * a raw token address through these messages.
  */
-import { isSha256Digest } from "@mc-wallet/core/ids";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { isSha256Digest } from "@bramble/core/ids";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isTransferAmount } from "../routing/message-inputs";
 
 const isQuoteIdText = (value: unknown): value is string =>

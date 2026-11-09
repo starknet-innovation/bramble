@@ -4,9 +4,9 @@ title: Architecture and internals
 permalink: /architecture/
 ---
 
-# MC Wallet — Architecture & Internals
+# Bramble — Architecture & Internals
 
-The deep tour: how the extension is wired, the pinned account/multisig class hashes, the dApp provider surface, storage migrations, and the design system. For a quick overview and setup, see the [README](../README.md).
+The deep tour: how the extension is wired, the pinned account/multisig class hashes, the dApp provider surface, storage migrations, and the design system. For a quick overview and setup, see the [README](https://github.com/starknet-innovation/bramble/blob/main/README.md).
 
 ---
 
@@ -97,12 +97,12 @@ schema, so it cannot be changed after creation.
   `0x0294a323246c017d00a98f11942e1e38d562c97bc79426742110a14ce497e9b5`.
   It is pinned to Argent's `update-2024Q2` release at commit
   `1352198956f36fb35fa544c4e46a3507a3ec20e3`. Its constructor and account
-  signature encoding come from `@mc-wallet/starknet/account-contracts`.
+  signature encoding come from `@bramble/starknet/account-contracts`.
   The pin deliberately uses Argent's latest non-prerelease production line,
   not the newer v0.5 prerelease that upstream marks unsupported by Ready.
   The [May 2024 ChainSecurity report](https://github.com/argentlabs/argent-contracts-starknet/blob/1352198956f36fb35fa544c4e46a3507a3ec20e3/audit/ChainSecurity_Argent_Argent_Account_audit-2024-05.pdf)
   covers the pinned Account and Multisig release; its scope and assumptions are
-  evidence about those contracts, not an audit of MC Wallet's integration.
+  evidence about those contracts, not an audit of Bramble's integration.
 
 ### Verification
 
@@ -124,11 +124,10 @@ a networked host and expect the same result.
 
 ## Ledger Hardware Accounts
 
-Ledger accounts can use either supported single-signer account class, but the vault stores only
-public account metadata: the contract type, account address, public-key x-coordinate, account index, and canonical
-EIP-2645 path `m/2645'/1195502025'/734980059'/0'/<index>'/0`. No Ledger mnemonic or signing key enters MC
-Wallet. A Ledger-only vault therefore has `mnemonic: null` and no `signingKeys` entry for its
-accounts; a mixed vault may contain both software and Ledger account records.
+The vault stores only public Ledger account metadata: contract type (either supported single-signer
+class), address, public-key x-coordinate, account index, EIP-2645 application marker (`LedgerW` for
+accounts created here, `argentx` for accounts restored from Ready; [Wallet store](WALLET_STORE.md)
+has both path schemes), and canonical path. No Ledger mnemonic or signing key enters Bramble. A Ledger-only vault has `mnemonic: null` and no `signingKeys` entry; a mixed vault holds both kinds.
 
 The hardware signing path is split across two mutually checking contexts:
 
@@ -170,7 +169,7 @@ browser window that hosts unrelated tabs. Every tab and APDU wait is bounded. Fo
 devices, the side panel may reconnect silently and presents explicit non-secret device choices
 when several are connected; Bluetooth disambiguation remains in Chrome's native pairing chooser.
 
-MC Wallet supports the Starknet Ledger app 2.x compatibility line and rejects legacy 1.x before
+Bramble supports the Starknet Ledger app 2.x compatibility line and rejects legacy 1.x before
 enumeration or signing. The floor is a product compatibility boundary, not a substitute for the
 host-side signature verification gate. Blind signing must be enabled in the Starknet app. Device
 transport errors are collapsed into the typed rejection catalog and never used to authorize a
@@ -178,11 +177,12 @@ fallback signer.
 
 Recovery boundaries are deliberately explicit:
 
-- MC Wallet's recovery phrase restores software accounts only.
-- MC Wallet's JSON backup contains preferences, labels, contacts, and other non-secret settings;
+- Bramble's recovery phrase restores software accounts only.
+- Bramble's JSON backup contains preferences, labels, contacts, and other non-secret settings;
   it does not restore Ledger accounts.
 - Restore Ledger accounts with the Ledger device and its Ledger recovery phrase, then enumerate
   and add the same account indices again.
+- "Restore a Ready Ledger account" re-adds a Ledger account created in Ready by reading the device at Ready's path scheme (details in [Wallet store](WALLET_STORE.md)).
 
 ## Migration Workflow
 
@@ -192,16 +192,16 @@ Recovery boundaries are deliberately explicit:
 4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
 5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is currently at **v4**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"`
-derivation whose path, index, and `LedgerW` marker must agree and which has no `signingKeys` entry.
-v4 adds encrypted `accountSecrets`; public `AccountRef` records cannot contain optional secrets.
-Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance. Vaults migrated
-from v1 carry `mnemonic: null`; they cannot add software accounts or reveal a phrase until re-created,
-but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → v2 → v3 → v4`).
+The vault schema is at **v13**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"` derivation whose path, index, and scheme marker must agree and which has no `signingKeys` entry;
+v4 adds encrypted `accountSecrets` (public `AccountRef` records cannot contain optional secrets; Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance);
+v5 canonicalizes account ids; v6 records the account-contract type; v7 retains the Argent deployment salt; v8 retains imported seeds; v9 admits Ready's `argentx` Ledger path scheme;
+v10 admits Braavos accounts (with their deployment salt) and an Argent account at any release it could have been deployed with; v11 admits Ready-scheme accounts (`argentx-bip44`, issue 505), x-only with no `publicKeyY`; v12 adds `shadowAccountScopes`, the encrypted record of which shadow-account scopes (account, chain, pool, anonymizer, origin, label, exact nonces) each account used (#443), and its step adds an empty collection. v13 adds `multisigStrk20ViewingKeys` and `multisigStrk20KeyConflicts` (#826): one shared STRK20 viewing key per multisig, chain, and pool, plus a mark when a co-owner offered a different key. The v13 step adds empty collections. The key never enters account metadata.
+The v3–v8 validators stay pinned to `LedgerW`, so the v9 step rewrites nothing but the version stamp; likewise the v9 validator stays pinned to Argent 0.4 and no Braavos, and the v10 validator refuses the Ready-scheme kind, so the v10 and v11 steps each rewrite nothing but the version stamp. Vaults migrated from v1 carry `mnemonic: null`; they cannot add software
+accounts or reveal a phrase until re-created, but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → … → v13`).
 
 Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
 therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs
-the pure schema chain, verifies an encrypted `mc-wallet:vault-migration` stage, then verifies the
+the pure schema chain, verifies an encrypted `bramble:vault-migration` stage, then verifies the
 primary before cleanup. A worker stop leaves either the old primary or an authenticated recovery
 copy; invalid data never reaches the primary write. See [Wallet store architecture](WALLET_STORE.md).
 
@@ -280,7 +280,7 @@ so events never leak wallet state to unconnected sites.
 
 ## dApp Provider
 
-The injected `window.starknet_mcWallet` object follows the get-starknet/starknetkit
+The injected `window.starknet_bramble` object follows the get-starknet/starknetkit
 `StarknetWindowObject` shape: `id`, `name`, `version`, an inline `data:` URI `icon`, `isConnected`,
 `selectedAddress`, `on`/`off`, `enable`, and `request`. `chainId` is initialized lazily from
 `wallet_requestChainId` after `enable` and kept current from `networkChanged` events;
@@ -291,9 +291,8 @@ object is frozen and installed as a non-configurable global.
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
 `wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
 `wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
-`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and sub-account-commitment
-methods behind the same origin and phishing gates. Private-state requests additionally require a
-held approval bound to the account, network, and payload digest; connection alone is insufficient.
+`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and shadow-account-commitment methods behind the same origin and phishing gates, under the Wallet API 0.10.4 names (`wallet_strk20ShadowAccountCommitment`, `shadow_account_invoke`; the old sub-account names have no alias), plus the 0.10.5-rc.0 `register` action.
+Private-state requests additionally require a held approval bound to the account, network, and payload digest; connection alone is insufficient. A shadow-account approval is also bound to the anonymizer its card named, and its scope is recorded in the vault's `shadowAccountScopes` before it runs; extension-only `wallet.strk20ShadowAccounts`, `wallet.strk20ShadowAccountBalances`, and `wallet.strk20PrepareShadowSweep` list, read on request, and sweep them.
 
 Grants and provider events are isolated per origin: each origin reads only its own accounts
 (`wallet.getGrantedAccounts`) and each content script derives page events from its own history
@@ -316,13 +315,12 @@ match — fail-closed, and unreachable in practice because both account pickers 
 the active network and `switchActiveNetwork` re-selects the target network's account.
 
 `wallet_watchAsset` (SNIP-compatible ERC20, `options.address`) fetches the token's on-chain
-`name`/`symbol`/`decimals` via RPC (falling back to the caller's options), then queues a
-`watch-asset` approval rendered in the side panel. Approving calls `preferencesStore.upsertToken`;
-denying leaves the token untracked. Like `wallet_requestAccounts`, this uses the queue-and-pending
-model rather than a persistent open promise: an already-tracked asset resolves `true` immediately,
-otherwise the current call rejects with `approval pending` and the dapp receives `true` on a repeat
-call after approval. Holding the dapp promise open across the side-panel decision within a single
-service-worker lifetime is a possible future enhancement.
+`name`/`symbol`/`decimals` via RPC, then queues a `watch-asset` approval rendered in the side
+panel, and holds the dapp's call until the user decides or the approval expires. Approving calls
+`preferencesStore.upsertToken`; denying leaves the token untracked. A token the wallet already
+tracks is never answered at once: the per-origin cap is checked before preferences are read, the
+same metadata read runs, and the request is held on a close-only "already tracked" notice whose
+Close answers `true` (audit M1), so a page cannot list the tracked tokens.
 
 ## Connected Sites & Site Reputation
 
@@ -345,10 +343,12 @@ and reputation signals before a connection is approved:
   was to adopt a remote feed with a **fail-safe** stance:
   - `packages/features/permissions/src/phishing-feed.ts` fetches a maintained web3 phishing list from
     a configurable source (default: MetaMask's community-maintained
-    eth-phishing-detect, `https://metamask.github.io/eth-phishing-detect/v1/config.json`)
-    under an explicit new host permission (`https://metamask.github.io/*`).
+    eth-phishing-detect, read from the repository's
+    `https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/config.json`)
+    without a host permission: the file allows any origin, so no grant (and no
+    update-time permission prompt) is needed.
   - The payload is validated before use and cached in plain (non-secret) local
-    storage under `mc-wallet:phishing-feed`. Wire format is
+    storage under `bramble:phishing-feed`. Wire format is
     `{ "blocklist": string[], "version"?: number }`; the eth-phishing-detect
     `blacklist` key is accepted as an alias and its fuzzy/whitelist fields are
     ignored (the wallet's own heuristics cover lookalikes).
@@ -373,13 +373,13 @@ and reputation signals before a connection is approved:
   `ethereum.org`) raise warnings without blocking, so real sites are never
   denied by heuristics alone.
 - Site reputation: the first time an origin requests accounts is persisted in
-  `packages/features/permissions/src/origin-history.ts` (key `mc-wallet:origin-history`) using an
+  `packages/features/permissions/src/origin-history.ts` (key `bramble:origin-history`) using an
   injected clock. Approval cards show first-seen, prior-connection, risky-TLD,
   and lookalike insights prominently before the user grants access.
 
 ## STRK20 privacy
 
-MC Wallet implements Wallet API `0.10.5-rc.0` STRK20 through the pinned official Privacy SDK. Viewing
+Bramble implements Wallet API `0.10.5-rc.0` STRK20 through the pinned official Privacy SDK. Viewing
 keys stay inside the encrypted vault; actions, relay fees, account, network, pool, and payload digest
 are frozen before dedicated approval. No fallback prover or signer exists. Registration and
 deposit-only batches may use the public account; other private actions require a relayer. Writes are
@@ -412,10 +412,10 @@ user back to the Chrome side panel. Click the extension action for the normal wa
 Release zips and SHA-256 checksum files are written to `artifacts/` by
 `bun run package:extension`.
 
-CI uploads those same files as the `mc-wallet-extension` workflow artifact.
+CI uploads those same files as the `bramble-extension` workflow artifact.
 
 Cutting a release and submitting to the Chrome Web Store is documented in
-[`RELEASING.md`](RELEASING.md): pushing a `vX.Y.Z` tag runs
+[`RELEASING.md`](https://github.com/starknet-innovation/bramble/blob/main/RELEASING.md): pushing a `vX.Y.Z` tag runs
 `.github/workflows/release.yml` to publish a GitHub Release with the packaged
 zip + checksum, and an optional, currently-disabled job can publish to the
 Chrome Web Store once a store account and secrets exist.
@@ -433,7 +433,7 @@ constraint, not a wallet limitation.
 
 Settings → Multisigs manages true Argent M-of-N account contracts. Argent Multisig does not keep an
 on-chain proposal/confirmation queue: one final `INVOKE` carries exactly the threshold number of
-member signatures, sorted by Argent signer GUID. MC Wallet therefore stores public, frozen V3
+member signatures, sorted by Argent signer GUID. Bramble therefore stores public, frozen V3
 signing intents—not OpenZeppelin proposal ids—and never places a multisig in the encrypted
 single-signer `AccountRef` registry.
 
@@ -467,11 +467,11 @@ granted; the store applies the arithmetic (`applyDelta`, one serialized read-mod
 `lowerBound`, shown as "at least N". Each record's live `allowance(owner, spender)` is then read
 directly and adopted when it is at least the tracked figure. Collection approvals are excluded and
 reviewed as their own kinds: an ERC721 `approve` carries a token id, so a "revoke" would approve
-item 0. The store `mc-wallet:allowances` sits outside the vault.
+item 0. The store `bramble:allowances` sits outside the vault.
 
-## NFT gallery
+## NFTs (Home tab and gallery; on unless the user turns them off)
 
-Home → NFTs merges auto-discovered collectibles with watched `nfts` preferences (contract, token
+The gallery merges auto-discovered collectibles with watched `nfts` preferences (contract, token
 id, network, optional label, spam flag).
 Indexer claims are re-proved on-chain against the active account before display; explicitly
 watched NFTs also resolve ERC-721/1155 metadata without auto-fetching attacker-controlled airdrop
@@ -479,11 +479,12 @@ URLs. The detail screen shows the resolved artwork and attributes, then sends th
 review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-1155, decodes the
 exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
-On unlock and resync, watched NFTs hydrate through an ownership-proven metadata lane without
-waiting for the optional indexer.
-Concurrent refreshes for the same account share the in-flight request, while
-account switches remain isolated; the first visible watched images are fetched
-eagerly so the hidden Collectibles panel is warm when opened.
+Shown unless `collectiblesPreview` is explicitly `false` ("Show NFTs on Home"; `nftsShown`): the Home NFTs tab, gallery, indexer field and approvable site watch cards. NFT lanes load only on the NFTs tab or a gallery screen.
+With NFTs off nothing loads and no indexer URL is used. With no indexer saved, Starkscan's Mainnet ERC-721 positions are read over the existing Starkscan client and `explorerFallback` gate (`starkscan-nfts.ts`).
+A partial or failed index is reported as such, never as "no NFTs"; ERC-1155 stays watch-only.
+Ownership proofs stay untrusted-first whenever discovery runs: concurrent refreshes for the same account
+share the in-flight request, account switches remain isolated, and the first visible watched
+images are fetched eagerly so the gallery is warm when opened.
 
 ## Reproducible Builds
 Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen lockfile,
@@ -494,5 +495,5 @@ bundle digest are pinned by its vendor/check scripts. Reproduce a release, then 
 `artifacts/*.zip.sha256` against the CI artifact checksum:
 
 ```bash
-cd artifacts && shasum -a 256 -c mc-wallet-0.2.0.zip.sha256
+cd artifacts && shasum -a 256 -c bramble-0.2.0.zip.sha256
 ```

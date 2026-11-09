@@ -1,30 +1,39 @@
 /**
  * Swappable UI skin tokens for popup rendering.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 
 /**
  * CSS variable tokens every replaceable skin must provide.
  */
 export const SKIN_TOKENS = [
-  "--mc-accent",
-  "--mc-accent-text",
-  "--mc-account-avatar-0",
-  "--mc-account-avatar-1",
-  "--mc-account-avatar-2",
-  "--mc-account-avatar-3",
-  "--mc-account-avatar-ink",
-  "--mc-account-avatar-paper",
-  "--mc-bg",
-  "--mc-border",
-  "--mc-danger",
-  "--mc-elevated",
-  "--mc-muted",
-  "--mc-panel",
-  "--mc-positive",
-  "--mc-sunken",
-  "--mc-text",
-  "--mc-warning",
+  "--bramble-accent",
+  "--bramble-accent-text",
+  "--bramble-account-avatar-accent-0",
+  "--bramble-account-avatar-accent-1",
+  "--bramble-account-avatar-accent-2",
+  "--bramble-account-avatar-accent-3",
+  "--bramble-account-avatar-body-0",
+  "--bramble-account-avatar-body-1",
+  "--bramble-account-avatar-body-2",
+  "--bramble-account-avatar-body-3",
+  "--bramble-account-avatar-body-4",
+  "--bramble-account-avatar-ground-0",
+  "--bramble-account-avatar-ground-1",
+  "--bramble-account-avatar-ground-2",
+  "--bramble-account-avatar-ground-3",
+  "--bramble-account-avatar-ink",
+  "--bramble-account-avatar-paper",
+  "--bramble-bg",
+  "--bramble-border",
+  "--bramble-danger",
+  "--bramble-elevated",
+  "--bramble-muted",
+  "--bramble-panel",
+  "--bramble-positive",
+  "--bramble-sunken",
+  "--bramble-text",
+  "--bramble-warning",
 ] as const;
 
 /**

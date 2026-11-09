@@ -3,7 +3,7 @@
  * the background boundary.
  */
 
-import { isSha256Digest, isUuid } from "@mc-wallet/core/ids";
+import { isSha256Digest, isUuid } from "@bramble/core/ids";
 import {
   hasOnlyArrayEntries,
   hasOnlyKnownKeys,
@@ -13,26 +13,31 @@ import {
   isRecord,
   isRiskFlagCode,
   isSafeDecimals,
+  isTokenName,
   isTokenSymbol,
   JSON_BUDGETS,
-} from "@mc-wallet/core/json";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
-import { isFeeEstimate as isFee } from "@mc-wallet/starknet/fee-bounds";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/core/json";
+import { isWalletOrigin } from "@bramble/core/origin";
+import { isFeeEstimate as isFee } from "@bramble/starknet/fee-bounds";
+import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
   STARKNET_NETWORKS,
-} from "@mc-wallet/wallet-model/networks";
-import type {
-  ApprovalContext,
-  ApprovalRiskFlag,
-  ConnectedSite,
-  DeclarationReview,
-  PendingApproval,
-  WatchAssetToken,
-} from "@mc-wallet/wallet-protocol/extension-responses";
-import { readStrk20Action, readStrk20Actions } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-model/networks";
+import {
+  APPROVAL_SUMMARY_MAX_LENGTH,
+  type ApprovalContext,
+  type ApprovalRiskFlag,
+  type ConnectedSite,
+  type DeclarationReview,
+  type PendingApproval,
+  type WatchAssetNft,
+  type WatchAssetToken,
+} from "@bramble/wallet-protocol/extension-responses";
+import { readProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
+import { readStrk20Action, readStrk20Actions } from "@bramble/wallet-protocol/strk20";
 
 /**
  * Shared approval and connected-site wire shapes after runtime validation.
@@ -42,7 +47,7 @@ export type {
   ConnectedSite,
   PendingApproval,
   WatchAssetToken,
-} from "@mc-wallet/wallet-protocol/extension-responses";
+} from "@bramble/wallet-protocol/extension-responses";
 
 /**
  * Connected-sites response accepted from the background boundary.
@@ -66,11 +71,39 @@ const isWatchAssetToken = (value: unknown): value is WatchAssetToken =>
   typeof value["address"] === "string" &&
   isStarkFieldElement(value["address"]) &&
   isSafeDecimals(value["decimals"]) &&
-  typeof value["name"] === "string" &&
-  value["name"].length > 0 &&
-  value["name"].length <= 64 &&
+  isTokenName(value["name"]) &&
   isStarknetNetworkId(value["networkId"]) &&
   isTokenSymbol(value["symbol"]);
+
+// A collectible watch card: contract, decimal u256 token id, network, and the
+// standard the site claimed.
+const isWatchAssetNft = (value: unknown): value is WatchAssetNft =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["contract", "networkId", "standard", "tokenId"]) &&
+  typeof value["contract"] === "string" &&
+  isStarkFieldElement(value["contract"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  (value["standard"] === "ERC721" || value["standard"] === "ERC1155") &&
+  typeof value["tokenId"] === "string" &&
+  /^(?:0|[1-9]\d{0,77})$/u.test(value["tokenId"]);
+
+// A watch-asset card names exactly one token or one collectible; only a token
+// card can be an already-tracked notice. Every other kind carries neither.
+const hasValidWatchTarget = (value: Record<string, unknown>): boolean => {
+  if (value["kind"] !== "watch-asset") {
+    return (
+      value["token"] === undefined &&
+      value["nft"] === undefined &&
+      value["alreadyTracked"] === undefined
+    );
+  }
+  return value["nft"] === undefined
+    ? isWatchAssetToken(value["token"]) &&
+        (value["alreadyTracked"] === undefined || value["alreadyTracked"] === true)
+    : isWatchAssetNft(value["nft"]) &&
+        value["token"] === undefined &&
+        value["alreadyTracked"] === undefined;
+};
 
 const isApprovalReviewAsset = (value: unknown): boolean =>
   isRecord(value) &&
@@ -80,11 +113,15 @@ const isApprovalReviewAsset = (value: unknown): boolean =>
   typeof value["symbol"] === "string" &&
   isTokenSymbol(value["symbol"]);
 
+const isOptionalMultisigThreshold = (value: unknown): boolean =>
+  value === undefined ||
+  (typeof value === "number" && Number.isSafeInteger(value) && value > 1 && value <= 32);
+
 const isInsightText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
 
 const isSummaryText = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0 && value.length <= 300;
+  typeof value === "string" && value.length > 0 && value.length <= APPROVAL_SUMMARY_MAX_LENGTH;
 
 const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
   isRecord(value) &&
@@ -138,7 +175,28 @@ const isDeclarationReview = (value: unknown): value is DeclarationReview =>
   value["feeEstimateFailed"] === (value["fee"] === null) &&
   isCount(value["sierraProgramLength"]);
 
+// A deploy-first review (undeployed Braavos) is exactly one shape: no fee, no
+// failure, nothing pending, and a deployment required.
+const isDeployFirstReview = (value: Readonly<Record<string, unknown>>): boolean =>
+  value["deployFirst"] === undefined ||
+  (value["deployFirst"] === true &&
+    (value["fee"] ?? null) === null &&
+    value["feeEstimateFailed"] !== true &&
+    value["feeEstimatePending"] !== true &&
+    value["requiresDeployment"] === true);
+
+// The deployment half travels exactly when an account other than deploy-first
+// Braavos must deploy before its calls: an amount, or null with its failure
+// flag set. Nowhere else.
+const isDeploymentHalf = (value: Readonly<Record<string, unknown>>): boolean =>
+  value["requiresDeployment"] === true && value["deployFirst"] === undefined
+    ? (value["deploymentFee"] === null || isFee(value["deploymentFee"])) &&
+      value["deploymentFeeEstimateFailed"] === (value["deploymentFee"] === null)
+    : value["deploymentFee"] === undefined && value["deploymentFeeEstimateFailed"] === undefined;
+
 const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
+  isDeployFirstReview(value) &&
+  isDeploymentHalf(value) &&
   (value["fee"] === undefined || value["fee"] === null || isFee(value["fee"])) &&
   (value["feeAffordability"] === undefined ||
     value["feeAffordability"] === "insufficient" ||
@@ -147,12 +205,17 @@ const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
   (value["feeEstimateFailed"] === undefined || typeof value["feeEstimateFailed"] === "boolean") &&
   (value["feeEstimatePending"] === undefined || typeof value["feeEstimatePending"] === "boolean") &&
   (value["requiresDeployment"] === undefined || typeof value["requiresDeployment"] === "boolean") &&
-  (value["requiresDeployment"] !== true ||
-    ((value["fee"] ?? null) === null && value["feeEstimateFailed"] !== true)) &&
   (value["feeEstimateFailed"] !== true || (value["fee"] ?? null) === null) &&
   (value["feeEstimatePending"] !== true ||
     ((value["fee"] ?? null) === null &&
       value["feeEstimateFailed"] !== true &&
+      value["requiresDeployment"] !== true)) &&
+  (value["gaslessFees"] === undefined ||
+    (Array.isArray(value["gaslessFees"]) &&
+      value["gaslessFees"].length > 0 &&
+      value["gaslessFees"].length <= 3 &&
+      value["gaslessFees"].every(isGaslessFeeOffer) &&
+      (value["fee"] ?? null) !== null &&
       value["requiresDeployment"] !== true)) &&
   ((value["fee"] ?? null) !== null ||
     value["feeAffordability"] === undefined ||
@@ -163,17 +226,27 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, [
       "actionReviews",
+      "alreadyTracked",
       "blocked",
+      "callReviews",
       "context",
       "declaration",
+      "deployFirst",
+      "deploymentFee",
+      "deploymentFeeEstimateFailed",
+      "existingGrant",
       "fee",
       "feeAffordability",
       "feeEstimateFailed",
       "feeEstimatePending",
       "flags",
+      "gaslessFees",
       "id",
       "insights",
       "kind",
+      "multisigThreshold",
+      "nft",
+      "notice",
       "origin",
       "relayFeeAction",
       "reviewAssets",
@@ -187,8 +260,9 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     typeof value["origin"] !== "string" ||
     !isWalletOrigin(value["origin"]) ||
     (value["typedData"] !== undefined && !isJson(value["typedData"])) ||
-    (value["kind"] !== "add-chain" &&
-      value["kind"] !== "connect" &&
+    (value["existingGrant"] !== undefined && typeof value["existingGrant"] !== "boolean") ||
+    !isOptionalMultisigThreshold(value["multisigThreshold"]) ||
+    (value["kind"] !== "connect" &&
       value["kind"] !== "declare" &&
       value["kind"] !== "invoke" &&
       value["kind"] !== "sign-typed-data" &&
@@ -196,7 +270,8 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       value["kind"] !== "strk20-invoke" &&
       value["kind"] !== "strk20-prepare" &&
       value["kind"] !== "strk20-register" &&
-      value["kind"] !== "strk20-subaccount" &&
+      value["kind"] !== "strk20-shadow-account" &&
+      value["kind"] !== "strk20-unavailable" &&
       value["kind"] !== "switch-chain" &&
       value["kind"] !== "watch-asset") ||
     (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||
@@ -209,22 +284,34 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
         Array.isArray(value["reviewAssets"]) && value["reviewAssets"].every(isApprovalReviewAsset)
       )) ||
     (value["flags"] !== undefined &&
-      !(Array.isArray(value["flags"]) && value["flags"].every(isApprovalRiskFlag)))
+      !(Array.isArray(value["flags"]) && value["flags"].every(isApprovalRiskFlag))) ||
+    (value["callReviews"] !== undefined &&
+      !(
+        value["kind"] === "invoke" &&
+        Array.isArray(value["callReviews"]) &&
+        value["callReviews"].length > 0 &&
+        value["callReviews"].every(
+          (call) =>
+            isRecord(call) &&
+            hasOnlyKnownKeys(call, ["calldata", "contractAddress", "entrypoint"]) &&
+            readProviderInvokeCall(call) !== null,
+        )
+      ))
   ) {
     return false;
   }
-  const tokenValid =
-    value["kind"] === "watch-asset"
-      ? isWatchAssetToken(value["token"])
-      : value["token"] === undefined;
+  const tokenValid = hasValidWatchTarget(value);
   // The fee review travels only on invoke prompts and must be internally
-  // consistent, mirroring `resolveReviewFee`: an undeployed account has no
-  // estimate and no failure; a failed estimate carries no amount. Inconsistent
-  // combinations are rejected at the boundary rather than rendered.
+  // consistent: an undeployed account carries both halves of its total, a
+  // failed estimate carries no amount, and deploy-first carries neither.
+  // Inconsistent combinations are rejected at the boundary rather than rendered.
   const feeValid =
     value["kind"] === "invoke"
       ? isInvokeFeeReview(value)
-      : value["fee"] === undefined &&
+      : value["deployFirst"] === undefined &&
+        value["deploymentFee"] === undefined &&
+        value["deploymentFeeEstimateFailed"] === undefined &&
+        value["fee"] === undefined &&
         value["feeAffordability"] === undefined &&
         value["feeEstimateFailed"] === undefined &&
         value["feeEstimatePending"] === undefined &&
@@ -237,7 +324,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     value["kind"] === "strk20-invoke" ||
     value["kind"] === "strk20-prepare" ||
     value["kind"] === "strk20-register" ||
-    value["kind"] === "strk20-subaccount";
+    value["kind"] === "strk20-shadow-account";
   const declarationValid =
     value["kind"] === "declare"
       ? isDeclarationReview(value["declaration"])
@@ -251,8 +338,15 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   const relayFeeValid =
     relayFeeAction === undefined ||
     (value["kind"] === "strk20-invoke" && relayFeeAction?.type === "withdraw");
+  const noticeValid =
+    value["notice"] === undefined ||
+    (value["kind"] === "strk20-unavailable" &&
+      (value["notice"] === "other-wallet" ||
+        value["notice"] === "record-limit" ||
+        value["notice"] === "request-failed"));
   return (
     actionReviewValid &&
+    noticeValid &&
     relayFeeValid &&
     tokenValid &&
     feeValid &&

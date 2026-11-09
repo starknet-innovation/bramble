@@ -9,27 +9,44 @@ import {
   isPreferencesResponse,
   isTransferResponse,
   isTransferReviewResponse,
+  type NftCoverage,
   type TransferReviewResponse,
 } from "../../../popup/responses/responses";
 import { responseError as failure } from "../../runtime/runtime-errors";
 
 /**
+ * One discovery answer as the panel holds it: verified NFTs and how complete
+ * the indexer said its list was.
+ */
+export type NftDiscoveryView = {
+  readonly coverage: NftCoverage;
+  readonly nfts: readonly DiscoveredNft[];
+};
+
+// A reply that fails validation is an unavailable index, never an empty one.
+const UNAVAILABLE_VIEW: NftDiscoveryView = { coverage: "unavailable", nfts: [] };
+
+/**
  * Builds the NFT wrappers over a runtime send function. Every reply is checked
  * before it reaches the UI; malformed replies fail closed or degrade to an
- * empty discovery list.
+ * empty list marked unavailable.
  */
 export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promise<unknown>) => {
-  const inFlightLoads = new Map<string, Promise<readonly DiscoveredNft[]>>();
+  const inFlightLoads = new Map<string, Promise<NftDiscoveryView>>();
   const loadNfts = (
     key: string,
     message: Readonly<Record<string, unknown>>,
-  ): Promise<readonly DiscoveredNft[]> => {
+  ): Promise<NftDiscoveryView> => {
     const running = inFlightLoads.get(key);
     if (running) {
       return running;
     }
     const load = sendMessage(message)
-      .then((response) => (isDiscoverNftsResponse(response) ? response.nfts : []))
+      .then((response) =>
+        isDiscoverNftsResponse(response)
+          ? { coverage: response.coverage ?? "none", nfts: response.nfts }
+          : UNAVAILABLE_VIEW,
+      )
       .finally(() => {
         if (inFlightLoads.get(key) === load) {
           inFlightLoads.delete(key);
@@ -63,7 +80,7 @@ export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promis
       scopeKey = "current",
       multisigId?: string,
       cached = false,
-    ): Promise<readonly DiscoveredNft[]> {
+    ): Promise<NftDiscoveryView> {
       return loadNfts(
         `discover:${scopeKey}:${includeWatched}:${multisigId ?? "account"}:${cached}`,
         {
@@ -75,10 +92,11 @@ export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promis
       );
     },
     async loadWatchedNfts(scopeKey = "current", cached = false): Promise<readonly DiscoveredNft[]> {
-      return loadNfts(`watched:${scopeKey}:${cached}`, {
+      const watched = await loadNfts(`watched:${scopeKey}:${cached}`, {
         ...(cached ? { cached: true } : {}),
         type: "wallet.loadWatchedNfts",
       });
+      return watched.nfts;
     },
     async removeNft(id: string): Promise<void> {
       const response = await sendMessage({ id, type: "wallet.removeNft" });
@@ -119,10 +137,6 @@ export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promis
       }
       inFlightLoads.clear();
     },
-    /**
-     * Sends the reviewed NFT under its exact invoke and optional deployment
-     * fee ceilings. A missing required ceiling is refused before signing.
-     */
     async transferNft(
       contract: string,
       tokenId: string,

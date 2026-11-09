@@ -1,7 +1,7 @@
 /** Stateful official-service fake for extension-owned STRK20 journey tests. */
 
-import type { Strk20Service, Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import type { Strk20Service, Strk20SubmissionPlan } from "@bramble/privacy/service";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { STRK20_CALL_AND_PROOF, STRK20_RECIPIENT, STRK20_TOKEN } from "./strk20-background";
 
 type Capture = {
@@ -59,7 +59,7 @@ export const makeStrk20WalletService = (capture: Capture): Strk20Service => {
       }
       return registered.value ? "registered" : "unregistered";
     },
-    async subaccountCommitment() {
+    async shadowAccountCommitment() {
       return STRK20_RECIPIENT;
     },
     async submitActions({ actions, beforeProof, plan }) {

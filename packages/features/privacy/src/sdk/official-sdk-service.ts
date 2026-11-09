@@ -1,18 +1,24 @@
 /**
- * Adapter from the pinned official Starknet privacy SDK browser bundle to MC
+ * Adapter from the pinned official Starknet privacy SDK browser bundle to Bramble
  * Wallet's narrow STRK20 middleware contract.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isJson } from "@mc-wallet/core/json";
-import { serializeAccountSignature } from "@mc-wallet/starknet/account-contracts";
-import { createRpcProvider } from "@mc-wallet/starknet/provider";
-import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { Call, RpcProvider, TypedData } from "starknet";
-import { num, typedData } from "starknet";
-import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "../paymaster/paymaster";
-import type { Strk20MaturityScope, Strk20MaturityStore } from "../policy/maturity";
+import { WalletError } from "@bramble/core/errors";
+import { createRpcProvider } from "@bramble/starknet/provider";
+import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@bramble/starknet/rpc-submit";
+import { sameFelt } from "@bramble/wallet-model/networks";
+import type { Call, RpcProvider } from "starknet";
+import { num } from "starknet";
+import { submitStrk20PaymasterPlan } from "../paymaster/paymaster";
+import { quoteStrk20RelayPlan } from "../paymaster/relay-quote";
+import {
+  memoryStrk20MaturityStore,
+  STRK20_PRIOR_WRITE_UNRESOLVED,
+  type Strk20MaturityScope,
+  type Strk20SubmissionRoute,
+} from "../policy/maturity";
+import { reportStrk20Phase } from "../policy/phases";
+import { relayClaimSlots } from "../policy/relay-claim-slots";
 import {
   type PreparedStrk20AccountSubmission,
   STRK20_PRIVACY_LEAK,
@@ -21,19 +27,23 @@ import {
   type Strk20AccountContext,
   type Strk20Service,
 } from "../service";
-import { strk20RegistrationBuilderFor } from "./official-sdk-builder";
-import { mapStrk20ProtocolError, mapStrk20StageError } from "./official-sdk-errors";
-import { createStrk20MaturityRuntime } from "./official-sdk-maturity";
+import {
+  STRK20_WAIT_BUDGETS,
+  type Strk20WaitBudgets,
+  type Strk20Waits,
+} from "./official-sdk-budget";
+import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
+import { mapStrk20StageError } from "./official-sdk-errors";
+import { createStrk20MaturityRuntime, type Strk20SubmissionJournal } from "./official-sdk-maturity";
+import type { OfficialServiceOptions } from "./official-sdk-options";
 import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
-import { retryStrk20ServiceRead, type ServiceRetryPause } from "./official-sdk-retry";
-import type { PrivacySdkRuntime } from "./official-sdk-runtime";
-import { transfersFor } from "./official-sdk-transfers";
+import { strk20ReadMethods } from "./official-sdk-reads";
+import { strk20ShadowAccountReads } from "./official-sdk-shadow-accounts";
+import { accountTypedDataSigner, sponsoredShieldSubmitter } from "./official-sdk-sponsored";
 import {
   approveCalls,
-  balancesFrom,
   RELAY_PAYS_POOL_FEE,
   readStrk20PoolFee,
-  readStrk20Registered,
   requireReviewedStrk20PoolFee,
   requireStrk20Config,
 } from "./official-sdk-values";
@@ -43,37 +53,15 @@ import {
  */
 export type { PrivacySdkRuntime } from "./official-sdk-runtime";
 
-type OfficialServiceOptions = {
-  readonly http?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-  readonly maturityStore?: Strk20MaturityStore;
-  readonly nowSeconds?: () => number;
-  readonly pauseForMaturity?: () => Promise<void>;
-  readonly pauseForServiceRetry?: ServiceRetryPause;
-  readonly providerFor?: (nodeUrl: string) => RpcProvider;
-  readonly sdk: PrivacySdkRuntime;
-  readonly submitInvoke?: typeof submitInvokeTransaction;
-  readonly waitForAccepted?: (provider: RpcProvider, transactionHash: string) => Promise<number>;
-};
-
-/**
- * Reads the SDK's setup requirement as the account's *own* registration answer.
- *
- * The SDK reports four states — Register, SetupChannel, SetupToken, Ready.
- * `Register` means the caller has no viewing key registered with the pool;
- * every later state means registration is done and only per-channel setup
- * remains, which the transfer builder adds itself (`autoSetup`). Recipients are
- * deliberately not answered from here — see `readStrk20Registered`.
- */
-const readSetupRequirement = (
-  states: { readonly Register: number },
-  requirement: number,
-): "registered" | "unregistered" =>
-  requirement === states.Register ? "unregistered" : "registered";
-
 /**
  * Creates the production STRK20 service backed by the pinned official SDK.
+ *
+ * Every wait the SDK cannot bound itself runs under a budget, and every phase
+ * of a long operation is reported to the context's `onPhase` sink, so a
+ * tracked job can settle with a reason and show what it is doing meanwhile.
  */
 export const createOfficialStrk20Service = ({
+  feeReference,
   http,
   maturityStore,
   nowSeconds,
@@ -82,17 +70,43 @@ export const createOfficialStrk20Service = ({
   providerFor = createRpcProvider,
   sdk,
   submitInvoke = submitInvokeTransaction,
+  waitBudgets,
   waitForAccepted,
+  waitScheduler,
 }: OfficialServiceOptions): Strk20Service => {
+  const budgets: Strk20WaitBudgets = { ...STRK20_WAIT_BUDGETS, ...waitBudgets };
+  const waits: Strk20Waits = { budgets, ...(waitScheduler ? { schedule: waitScheduler } : {}) };
+  const journal = maturityStore ?? memoryStrk20MaturityStore();
   const maturity = createStrk20MaturityRuntime({
-    ...(maturityStore ? { store: maturityStore } : {}),
+    maturityBudgetMs: budgets.maturity,
+    store: journal,
     ...(pauseForMaturity ? { pause: pauseForMaturity } : {}),
+    ...(waitScheduler ? { schedule: waitScheduler } : {}),
     ...(waitForAccepted ? { waitForAccepted } : {}),
   });
+  const prepare = (
+    input: Parameters<typeof prepareWith>[1],
+    beforeProof?: () => Promise<void>,
+    builderForTransfers?: Parameters<typeof prepareWith>[6],
+    historicalState?: Parameters<typeof prepareWith>[7],
+  ) =>
+    prepareWith(
+      sdk,
+      input,
+      maturity,
+      providerFor,
+      pauseForServiceRetry,
+      beforeProof,
+      builderForTransfers,
+      historicalState,
+      waits,
+    );
   const submission = <P, T extends { readonly transactionHash: string }>(
     input: Strk20AccountContext,
+    route: Strk20SubmissionRoute,
     prepare: (provider: RpcProvider, scope: Strk20MaturityScope) => Promise<P>,
-    broadcast: (prepared: P) => Promise<T>,
+    broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
+    relaySlots?: (prepared: P) => readonly string[] | null,
   ): Promise<T> => {
     const config = requireStrk20Config(input);
     const nodeUrl = input.rpcUrls[0];
@@ -101,7 +115,14 @@ export const createOfficialStrk20Service = ({
     }
     const provider = providerFor(nodeUrl);
     const scope = maturityScope(input, config.poolAddress);
-    return maturity.submitAccepted(provider, scope, () => prepare(provider, scope), broadcast);
+    return maturity.submitAccepted(
+      provider,
+      scope,
+      route,
+      () => prepare(provider, scope),
+      broadcast,
+      relaySlots,
+    );
   };
   const publicBatch = (
     poolAddress: string,
@@ -118,81 +139,64 @@ export const createOfficialStrk20Service = ({
     ];
     return { allowanceGrants, calls, proof: callAndProof.proof };
   };
-  const prepareRegistrationProof = (input: Strk20AccountContext, simulate: boolean) =>
-    prepareWith(
-      sdk,
-      { ...input, actions: [], simulate },
-      maturity,
-      providerFor,
-      pauseForServiceRetry,
-      undefined,
-      strk20RegistrationBuilderFor,
-      "registration",
-    );
   return {
+    ...strk20ReadMethods({ pauseForServiceRetry, providerFor, sdk, waits }),
+    ...strk20ShadowAccountReads({ pauseForServiceRetry, providerFor, sdk }),
     async prepare(input) {
-      return prepareWith(sdk, input, maturity, providerFor, pauseForServiceRetry);
+      return prepare(input);
     },
-    async prepareRegistrationCall(input) {
-      requireStrk20Config(input);
-      return prepareRegistrationProof(input, input.simulate);
+    async releasePendingWrite(input) {
+      const config = requireStrk20Config(input);
+      return maturity.releasePendingWrite(maturityScope(input, config.poolAddress));
     },
-    async privateBalances(input) {
-      try {
-        const result = await retryStrk20ServiceRead(
-          () => transfersFor(sdk, input).discoverNotes(),
-          pauseForServiceRetry,
-        );
-        return balancesFrom(result.notes, input.tokens);
-      } catch (error) {
-        return mapStrk20ProtocolError(error);
-      }
-    },
-    async registrationStatus(input) {
-      try {
-        // A recipient is read straight from the pool: the discovery preflight
-        // cannot distinguish an unregistered recipient from a registered one
-        // this sender has never opened a channel to.
-        if (input.subject !== undefined) {
-          const config = requireStrk20Config(input);
-          const registered = await readStrk20Registered(
-            providerFor,
-            input.rpcUrls,
-            config.poolAddress,
-            input.subject,
-            pauseForServiceRetry,
-          );
-          return registered ? "registered" : "unregistered";
-        }
-        const transfers = transfersFor(sdk, input);
-        const discoverRequirement = transfers.discoverRequirement;
-        if (!discoverRequirement || !sdk.SetupRequirement) {
-          throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-        }
-        const requirement = await retryStrk20ServiceRead(
-          // Invoked ON `transfers`: the SDK method dereferences its receiver
-          // (`this.discoveryProvider`), so a detached call throws a TypeError.
-          () => discoverRequirement.call(transfers, input.account.address, input.token),
-          pauseForServiceRetry,
-        );
-        return readSetupRequirement(sdk.SetupRequirement, requirement);
-      } catch (error) {
-        return mapStrk20ProtocolError(error);
-      }
+    async submitAcceptedRelay(input) {
+      const config = requireStrk20Config(input);
+      const scope = maturityScope(input, config.poolAddress);
+      return submission(
+        input,
+        "relay",
+        async () => {
+          // Inside the scope queue, so a second send cannot pass this read
+          // before the first claim is durable.
+          if ((await journal.read(scope))?.state === "submitting") {
+            throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+          }
+          return undefined;
+        },
+        async () => input.broadcast(),
+        () => input.relaySlots,
+      );
     },
     async prepareRegistration(input) {
       const config = requireStrk20Config(input);
+      reportStrk20Phase(input.onPhase, "reading the pool fee");
       const reviewedPoolFee = await requireReviewedStrk20PoolFee(
         providerFor,
         input.rpcUrls,
         config.poolAddress,
         input.poolFeeFri,
       );
-      const callAndProof = await prepareRegistrationProof(input, false);
+      const callAndProof = await prepare(
+        { ...input, actions: [], simulate: false },
+        undefined,
+        strk20RegistrationBuilderFor,
+        "registration",
+      );
       return publicBatch(
         config.poolAddress,
         approveCalls([], config.poolAddress, reviewedPoolFee),
         callAndProof,
+      );
+    },
+    async prepareRegistrationCall(input) {
+      // Wallet API 0.10.5 register action via wallet_strk20PrepareInvoke: the
+      // site submits this call, so no pool-fee approve is built here.
+      requireStrk20Config(input);
+      return prepare(
+        { ...input, actions: [], simulate: input.simulate },
+        undefined,
+        strk20RegistrationBuilderFor,
+        "registration",
       );
     },
     async prepareAccountActions(input) {
@@ -200,19 +204,27 @@ export const createOfficialStrk20Service = ({
       if (input.actions.length === 0 || input.actions.some((action) => action.type !== "deposit")) {
         throw new WalletError(STRK20_PRIVACY_LEAK);
       }
+      // A registration opens the self channel; a third-party credit would open
+      // a second one in the same batch, which links the two (USER_LINKAGE).
+      const activate = input.activate === true;
+      if (activate && input.actions.some((action) => "recipient" in action && action.recipient)) {
+        throw new WalletError(STRK20_PRIVACY_LEAK);
+      }
+      reportStrk20Phase(input.onPhase, "reading the pool fee");
       const reviewedPoolFee = await requireReviewedStrk20PoolFee(
         providerFor,
         input.rpcUrls,
         config.poolAddress,
         input.poolFeeFri,
       );
-      const callAndProof = await prepareWith(
-        sdk,
+      const callAndProof = await prepare(
         { ...input, simulate: false },
-        maturity,
-        providerFor,
-        pauseForServiceRetry,
         input.beforeProof,
+        activate
+          ? (transfers) =>
+              strk20BuilderFor(sdk, transfers, input.actions, input.account.address, true)
+          : undefined,
+        activate ? "first-shield" : undefined,
       );
       return publicBatch(
         config.poolAddress,
@@ -222,6 +234,7 @@ export const createOfficialStrk20Service = ({
     },
     async register(input) {
       const config = requireStrk20Config(input);
+      reportStrk20Phase(input.onPhase, "reading the pool fee");
       const reviewedPoolFee = await requireReviewedStrk20PoolFee(
         providerFor,
         input.rpcUrls,
@@ -231,16 +244,25 @@ export const createOfficialStrk20Service = ({
       );
       return submission(
         input,
-        async () => prepareRegistrationProof(input, false),
+        "account",
+        async () =>
+          prepare(
+            { ...input, actions: [], simulate: false },
+            undefined,
+            strk20RegistrationBuilderFor,
+            "registration",
+          ),
         // The broadcast ran unmapped, so a pool rejection of apply_actions
         // reached the message boundary as a raw starknet.js error and its revert
         // reason was replaced by a generic failure. Map it with the submission
         // stage so the on-chain reason survives, sanitized, to the user.
-        async (callAndProof) => {
+        async (callAndProof, journal) => {
           const allowanceGrants = approveCalls([], config.poolAddress, reviewedPoolFee);
+          reportStrk20Phase(input.onPhase, "broadcasting");
           try {
             const result = await submitInvoke({
               account: input.account,
+              onSigned: journal,
               calls: [
                 ...allowanceGrants,
                 {
@@ -276,56 +298,19 @@ export const createOfficialStrk20Service = ({
       );
     },
     async quoteActions(input) {
-      const config = requireStrk20Config(input);
-      if (!config.paymaster) {
-        throw new WalletError(
-          `${STRK20_SUBMISSION_UNAVAILABLE}: no private relay is configured for this network`,
-        );
-      }
-      if (!nowSeconds) {
-        throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-      }
-      // The upstream supports converted fee tokens, but its response does not
-      // expose enough independently-verifiable pricing data to cap that
-      // conversion. Restrict the wallet route to STRK, then bind the quoted
-      // withdrawal exactly to the pool's on-chain fee before proving.
-      if (!sameFelt(config.paymaster.feeToken, STRK_TOKEN_ADDRESS)) {
-        throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-      }
-      const expectedFeeAmount = await readStrk20PoolFee(
-        providerFor,
-        input.rpcUrls,
-        config.poolAddress,
-        pauseForServiceRetry,
-      );
-      return buildStrk20PaymasterPlan({
+      reportStrk20Phase(input.onPhase, "quoting the private relay");
+      return quoteStrk20RelayPlan({
         accountAddress: input.account.address,
-        approveCalls: approveCalls(input.actions, config.poolAddress, RELAY_PAYS_POOL_FEE),
-        chainId: STARKNET_NETWORKS[input.account.networkId].chainId,
-        config: config.paymaster,
-        expectedFeeAmount,
+        actions: input.actions,
+        config: requireStrk20Config(input),
+        ...(feeReference ? { feeReference } : {}),
         ...(http ? { http } : {}),
-        nowSeconds: nowSeconds(),
-        poolAddress: config.poolAddress,
+        networkId: input.account.networkId,
+        ...(nowSeconds ? { nowSeconds } : {}),
+        pauseForServiceRetry,
+        providerFor,
+        rpcUrls: input.rpcUrls,
       });
-    },
-    async subaccountCommitment(input) {
-      const config = requireStrk20Config(input);
-      if (!config.subaccountAnonymizerAddress) {
-        throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-      }
-      try {
-        const transfers = transfersFor(sdk, input);
-        await retryStrk20ServiceRead(() => transfers.discoverNotes(), pauseForServiceRetry);
-        const subaccount = transfers.build().subaccounts(input.dappName);
-        const commitment =
-          input.nonce === undefined
-            ? await subaccount.partialCommitment()
-            : await subaccount.commitment(input.nonce);
-        return num.toHex(commitment);
-      } catch (error) {
-        return mapStrk20ProtocolError(error);
-      }
     },
     async submitActions(input) {
       const config = requireStrk20Config(input);
@@ -341,6 +326,7 @@ export const createOfficialStrk20Service = ({
         ) {
           throw new WalletError(STRK20_PRIVACY_LEAK);
         }
+        reportStrk20Phase(input.onPhase, "reading the pool fee");
         const reviewedPoolFee = await requireReviewedStrk20PoolFee(
           providerFor,
           input.rpcUrls,
@@ -350,29 +336,24 @@ export const createOfficialStrk20Service = ({
         );
         return submission(
           input,
-          async () =>
-            prepareWith(
-              sdk,
-              { ...input, simulate: false },
-              maturity,
-              providerFor,
-              pauseForServiceRetry,
-              input.beforeProof,
-            ),
+          "account",
+          async () => prepare({ ...input, simulate: false }, input.beforeProof),
           // The account-mode broadcast ran unmapped, so a pool rejection of the
           // shielding deposit reached the message boundary as a raw starknet.js
           // error whose message embeds the serialized request params — the
           // invoke calldata and the proof blob. Map it with the submission
           // stage so only the sanitized on-chain reason survives to the user.
-          async (callAndProof) => {
+          async (callAndProof, journal) => {
             const allowanceGrants = approveCalls(
               input.actions,
               config.poolAddress,
               reviewedPoolFee,
             );
+            reportStrk20Phase(input.onPhase, "broadcasting");
             try {
               const result = await submitInvoke({
                 account: input.account,
+                onSigned: journal,
                 calls: [
                   ...allowanceGrants,
                   {
@@ -404,27 +385,15 @@ export const createOfficialStrk20Service = ({
       }
       return submission(
         input,
+        "relay",
         async () =>
-          prepareWith(
-            sdk,
-            {
-              ...input,
-              actions: [...input.actions, privatePlan.feeAction],
-              simulate: false,
-            },
-            maturity,
-            providerFor,
-            pauseForServiceRetry,
+          prepare(
+            { ...input, actions: [...input.actions, privatePlan.feeAction], simulate: false },
             input.beforeProof,
           ),
-        async (callAndProof) => ({
-          // The relay executes the batch, but the approvals inside it are still
-          // granted BY this account — derived here from the one shared
-          // `approveCalls` rule, on the same actions and fee terms the reviewed
-          // plan was quoted with, so the log tracks the private route's grants
-          // exactly as it tracks the public one's.
-          allowanceGrants: approveCalls(input.actions, config.poolAddress, RELAY_PAYS_POOL_FEE),
-          ...(await submitStrk20PaymasterPlan({
+        async (callAndProof) => {
+          reportStrk20Phase(input.onPhase, "relaying privately");
+          const relayed = await submitStrk20PaymasterPlan({
             accountAddress: input.account.address,
             call: {
               calldata: [...callAndProof.call.calldata],
@@ -433,24 +402,38 @@ export const createOfficialStrk20Service = ({
             },
             config: paymaster,
             ...(http ? { http } : {}),
+            isAuthorized: input.isAuthorized,
             nowSeconds: nowSeconds(),
             plan: privatePlan,
             proof: callAndProof.proof,
-            signTypedData: async (value) => {
-              if (!isJson(value)) {
-                throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-              }
-              const messageHash = typedData.getMessageHash(
-                value as unknown as TypedData,
-                input.account.address,
-              );
-              const signature = await input.signHash(messageHash);
-              return serializeAccountSignature(input.account.accountContractType, signature);
-            },
-          })),
-        }),
+            signTypedData: accountTypedDataSigner(input, providerFor),
+          });
+          return {
+            // The relay executes the batch, but the approvals inside it are
+            // still granted BY this account — derived here from the one shared
+            // `approveCalls` rule, on the same actions and fee terms the
+            // reviewed plan was quoted with, so the log tracks the private
+            // route's grants exactly as it tracks the public one's.
+            allowanceGrants: approveCalls(input.actions, config.poolAddress, RELAY_PAYS_POOL_FEE),
+            ...relayed,
+          };
+        },
+        // The slots are read at the configured pool, so they are taken only
+        // from a call to that pool's `apply_actions` (mc-wallet #668).
+        (callAndProof) =>
+          callAndProof.call.entry_point === "apply_actions" &&
+          sameFelt(callAndProof.call.contract_address, config.poolAddress)
+            ? relayClaimSlots(callAndProof.call.calldata)
+            : null,
       );
     },
+    submitSponsoredShield: sponsoredShieldSubmitter({
+      ...(http ? { http } : {}),
+      maturity,
+      ...(nowSeconds ? { nowSeconds } : {}),
+      providerFor,
+      submission,
+    }),
     async submitPrepared(input) {
       const config = requireStrk20Config(input);
       const calls = input.calls ?? (input.call ? [input.call] : []);
@@ -470,14 +453,18 @@ export const createOfficialStrk20Service = ({
       }
       return submission(
         input,
+        "account",
         async (provider, scope) => {
+          reportStrk20Phase(input.onPhase, "waiting for pool maturity");
           await maturity.provingBlock(provider, scope);
           return input;
         },
-        async (prepared) => {
+        async (prepared, journal) => {
+          reportStrk20Phase(input.onPhase, "broadcasting");
           const result = await submitInvoke({
             account: prepared.account,
             calls,
+            onSigned: journal,
             isAuthorized: prepared.isAuthorized,
             proof: prepared.proof,
             ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),

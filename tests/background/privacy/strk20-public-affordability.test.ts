@@ -1,7 +1,7 @@
 /** Public token and pool-fee affordability checks for account-mode privacy operations. */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { assertPublicPoolSpendAffordable } from "../../../apps/extension/src/background/privacy/strk20-op-context";
 import { account } from "../../support/background-wallet-stub";
 

@@ -26,6 +26,22 @@ describe("mutation runtime", () => {
     expect(notifications).toEqual(["burst", "once", "once"]);
   });
 
+  test("repaints once after a token is removed", async () => {
+    // Removing a dapp-added token (Sherlock audit 134) must drop its row from
+    // the portfolio without waiting for the next poll.
+    const notifications: string[] = [];
+    const runtime = createMutationRuntime({
+      async sendMessage() {
+        return { ok: true };
+      },
+    });
+    runtime.setListener((refresh) => notifications.push(refresh));
+
+    await runtime.sendMessage({ tokenId: "SN_MAIN:PRZ:0xbad", type: "wallet.removeToken" });
+
+    expect(notifications).toEqual(["once"]);
+  });
+
   test("does not notify when a mutation fails", async () => {
     let notifications = 0;
     const runtime = createMutationRuntime({

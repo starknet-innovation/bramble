@@ -1,41 +1,101 @@
 /**
  * Home portfolio composition: public/private totals, primary actions, and the
- * token/collectible tabs. Kept separate from the screen router so adding a
+ * token list. Kept separate from the screen router so adding a
  * portfolio state cannot push routing back over the repository size limit.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { explorerAccountUrl, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { DiscoveredNft, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
+import { escapeHtml } from "@bramble/core/html";
+import {
+  type DisplayCurrency,
+  nftsShown,
+  type WalletPreferences,
+} from "@bramble/settings/preferences";
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
+import { type AccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import type {
+  DiscoveredNft,
+  NftCoverage,
+  SignabilityVerdict,
+  WalletStatus,
+} from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
-import { formatFiat, portfolioDelta, portfolioTotal } from "../../shared/fiat";
+
+/**
+ * Whether the loaded public balances can pay a deployment fee.
+ * `null` means unknown: the balance read has not succeeded, or it holds no
+ * STRK reading (STRK untracked or not read yet). Only a STRK balance actually
+ * read as zero is `false`, so "add STRK" is never said over an unknown
+ * balance (audit L4).
+ */
+export const strkAvailableForFees = (balances: BalanceState): boolean | null => {
+  if (!("balances" in balances)) return null;
+  const strk = balances.balances.find((token) => sameFelt(token.address, STRK_TOKEN_ADDRESS));
+  return strk === undefined || strk.formatted === "" ? null : BigInt(strk.balance) > 0n;
+};
+
+import { formatFiat, portfolioTotal } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { dockScreen, noAccountEmpty } from "../../shared/parts";
-import { actionTile, deployNotice, explorerTile, pendingCallout } from "../../shell/wallet-shell";
-import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import { actionTile, pendingCallout, shieldTile } from "../../shell/wallet-shell";
+import { homeNftsPanel } from "../collectibles/nft-home";
+import {
+  deploymentKnownFromPrivacy,
+  type PrivacyDisclosureState,
+  privacyIneligibleKind,
+} from "../privacy/privacy-model";
+import type { StakingState } from "../staking/staking-directory-client";
+import { stakedLine } from "../staking/staking-home";
+import { heroChange } from "./hero-change";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
+import { readOnlyNotice } from "./recovery-view";
+import { vipEligible, vipNotice } from "./vip-notice";
 
-const heroDelta = (
-  balances: readonly TokenBalance[],
-  prices: Readonly<Record<string, number>>,
-  changes: Readonly<Record<string, number>>,
-  currency: DisplayCurrency,
-): string => {
-  const delta = portfolioDelta(balances, prices, changes);
-  if (delta === null) {
-    return "";
-  }
-  const arrow = delta.direction === "up" ? "↑" : "↓";
-  return `<p class="hero-change${delta.direction === "down" ? " down" : ""}">
-      <span class="hero-change-amt">${arrow} ${escapeHtml(formatFiat(delta.absolute, currency))}</span>
-      <span class="hero-change-win">${delta.percent.toFixed(2)}% · 24h</span>
-    </p>`;
+/**
+ * Whether the active account's private discovery has landed: a reading for
+ * this account and network, not loading and not failed.
+ */
+const privateDiscoveryComplete = (
+  status: WalletStatus,
+  account: AccountRef | null,
+  privacy: PrivacyDisclosureState,
+): boolean =>
+  privacy.value !== null &&
+  !privacy.loading &&
+  privacy.error === null &&
+  privacy.value.accountId === account?.id &&
+  privacy.value.networkId === status.networkId;
+
+/**
+ * Whether private discovery that could still add to the Home total is out.
+ * Discovery that can no longer add a private balance is settled: privacy is
+ * off for this account (Ledger, a network without privacy, another wallet's
+ * registration), the account is undeployed, or the read failed. While this is
+ * true the hero holds "—" rather than print a public-only figure that jumps
+ * when the private part lands (issue 795), until the paint loop's capped wait
+ * (`hero-total-wait.ts`) lets the public total through.
+ */
+export const privateTotalPending = (
+  status: WalletStatus,
+  account: AccountRef | null,
+  privacy: PrivacyDisclosureState,
+  deployment: boolean | null,
+): boolean =>
+  !privateDiscoveryComplete(status, account, privacy) &&
+  privacy.error === null &&
+  privacyIneligibleKind(privacy) === null &&
+  deploymentKnownFromPrivacy(deployment, privacy) !== false;
+
+/** What the Home NFTs tab shows: the gallery lanes and their coverage. */
+export type HomeNfts = {
+  readonly coverage: NftCoverage;
+  readonly discovered: readonly DiscoveredNft[];
 };
 
 /**
  * Renders the account-scoped Home portfolio without the shared wallet shell.
+ * `privateTotalWaitOver` is the paint loop's verdict that the hero has held
+ * "—" long enough for pending private discovery and may show the public total.
  */
 export const homeScreen = (
   status: WalletStatus,
@@ -47,45 +107,78 @@ export const homeScreen = (
   prices: Readonly<Record<string, number>>,
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
-  discoveredNfts: readonly DiscoveredNft[],
   privacy: PrivacyDisclosureState,
+  signability: SignabilityVerdict | null = null,
+  privateTotalWaitOver = false,
+  stakingState: StakingState | null = null,
+  nfts: HomeNfts | null = null,
 ): string => {
+  // The Staking tab and the "Staked" line exist only where staking is on.
+  const staking = account !== null && stakingNetwork(status.networkId) ? stakingState : null;
+  // The NFTs tab exists only while NFTs are turned on (the default).
+  const nftsPanel =
+    nfts && nftsShown(preferences)
+      ? homeNftsPanel(status, account, preferences, nfts.discovered, nfts.coverage)
+      : null;
+  // Read-only until proven otherwise never — the flag is advisory UX; the
+  // transaction path enforces. Null (unknown) renders as a normal account.
+  const readOnly = signability?.readOnly === true;
+  // An undeployed Braavos account can still reach Shield's deploy-first step.
+  const shieldReadOnly = readOnly && signability.reason !== "undeployed";
   const unified = unifiedHomeBalances(balances, privacy, preferences);
   const shieldedIncluded = visiblePrivateHomeBalances(privacy, preferences).some(
     (token) => BigInt(token.balance) > 0n,
   );
-  // Fees are paid in STRK, and only a public balance can pay them: an
-  // undeployed account cannot have shielded anything anyway.
-  const fundedForFees = ("balances" in balances ? balances.balances : []).some(
-    (token) => sameFelt(token.address, STRK_TOKEN_ADDRESS) && BigInt(token.balance) > 0n,
-  );
+  const fundedForFees = strkAvailableForFees(balances);
+  // STRK by choice: it is seeded on every network, so the tile has something to
+  // name unless the user untracked it, and Send's asset picker stays enabled for
+  // anything else. `privateReady` is the same gate
+  // the token-detail actions use, so both surfaces agree on when shielding is
+  // possible rather than each deciding for itself.
+  const strkTokenId =
+    preferences?.tokens.find(
+      (token) =>
+        token.networkId === status.networkId && sameFelt(token.address, STRK_TOKEN_ADDRESS),
+    )?.id ?? null;
+  // A deployed, unregistered account's first shield registers in the same
+  // transaction (mc-wallet 789), so Shield opens directly for it too.
+  const privateReady =
+    privacy.value?.registration === "registered" ||
+    (privacy.value?.registration === "unregistered" &&
+      deploymentKnownFromPrivacy(deployment, privacy) === true);
   const balancesComplete =
-    "balances" in balances &&
-    privacy.value !== null &&
-    !privacy.loading &&
-    privacy.error === null &&
-    privacy.value.accountId === account?.id &&
-    privacy.value.networkId === status.networkId;
-  const showTotal = account !== null && "balances" in balances && Object.keys(prices).length > 0;
+    "balances" in balances && privateDiscoveryComplete(status, account, privacy);
+  const totalKnown = account !== null && "balances" in balances && Object.keys(prices).length > 0;
+  const showTotal =
+    totalKnown &&
+    (privateTotalWaitOver || !privateTotalPending(status, account, privacy, deployment));
   const total = showTotal ? portfolioTotal(unified, prices) : 0;
   return dockScreen(
     "home",
     `${pendingCallout(pendingCount)}
     <section class="hero" data-live-group>
       <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
-      ${showTotal ? heroDelta(unified, prices, changes, currency) : ""}
+      ${totalKnown ? heroChange(unified, prices, changes, currency, !showTotal) : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
-      ${account ? "" : noAccountEmpty(status)}
-      ${deployNotice(account, deployment, fundedForFees)}
+      ${staking ? stakedLine(staking, preferences?.tokens ?? []) : ""}
+      ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
+      ${account ? vipNotice(vipEligible({ currency, preferences, showTotal, total })) : noAccountEmpty(status)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">
       <div class="action-row">
-        ${actionTile("send", "Send", "send", account !== null)}
-        ${actionTile("swap", "Swap", "shuffle", account !== null)}
+        ${actionTile("send", "Send", "send", account !== null && !readOnly)}
+        ${actionTile("swap", "Swap", "shuffle", account !== null && !readOnly)}
         ${actionTile("receive", "Receive", "qrCode", account !== null)}
-        ${explorerTile(account ? explorerAccountUrl(status.networkId, account.address) : null)}
+        ${shieldTile(
+          strkTokenId,
+          privateReady,
+          deploymentKnownFromPrivacy(deployment, privacy),
+          fundedForFees,
+          shieldReadOnly,
+          privacy.blockerKind === "other-wallet",
+        )}
       </div>
     </section>
-    ${homeTabs(balances, preferences, prices, changes, currency, status, discoveredNfts, privacy)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, privacy, deployment, fundedForFees, staking, nftsPanel, stakingState?.homeTab ?? "tokens")}`,
   );
 };

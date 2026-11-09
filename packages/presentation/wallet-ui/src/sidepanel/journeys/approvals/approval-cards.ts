@@ -4,60 +4,49 @@
  * views.ts to keep each file within the size budget.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
-import { button } from "@mc-wallet/ui-kit/controls";
+import { escapeHtml } from "@bramble/core/html";
+import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
+import { reviewedInvokeTotal } from "@bramble/starknet/fee-bounds";
+import { button } from "@bramble/ui-kit/controls";
+import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
+import { sameFelt } from "@bramble/wallet-model/networks";
+import {
+  PRIVACY_OTHER_WALLET_ACTION,
+  PRIVATE_REQUEST_FAILED_NOTICE,
+  PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
+  SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
+} from "@bramble/wallet-protocol/privacy-blocker";
+import { STRK20_PREPARE_REGISTER_SUMMARY } from "@bramble/wallet-protocol/strk20";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountLabel, formatFri } from "../../shared/parts";
+import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
 import {
+  type ReviewFeeState,
+  reviewCallItems,
   reviewCallsList,
   reviewConstraints,
+  reviewCostNote,
   reviewFeeSection,
   reviewOutcome,
+  reviewOutcomeSection,
   reviewPanel,
   riskFlagMessages,
 } from "../../shared/review-render";
-import { SIGN_REQUEST_UNCLASSIFIED_WARNING, signRequestView } from "../../shared/sign-request";
-import { tokenGlyph } from "../portfolio/token-row";
-
-const denyButton = (approval: PendingApproval): string =>
-  button({
-    attributes: { "data-approval-action": "deny", "data-approval-id": approval.id },
-    icon: "x",
-    label: "Deny",
-    tone: "danger",
-    variant: "secondary",
-  });
-
-// Shared approve/deny controls (one long template line so it is not re-wrapped);
-// `approve` is disabled when the wallet is locked or the origin is blocked.
-// `reviewedFee`, when the card priced the request, is stamped onto the approve
-// control so the click reports the figure THIS paint showed. The background
-// binds the submission to that echo and refuses if its own copy has moved
-// since, which is how a card left open behind a re-estimate on another wallet
-// surface cannot approve a ceiling the user never read.
-const decisionRow = (
-  approval: PendingApproval,
-  label: string,
-  locked: boolean,
-  reviewedFee?: PendingApproval["fee"],
-): string =>
-  `<div class="button-row">${button({
-    attributes: {
-      "data-approval-action": "approve",
-      ...(reviewedFee
-        ? {
-            "data-approval-fee": reviewedFee.overallFee,
-            "data-approval-fee-unit": reviewedFee.unit,
-          }
-        : {}),
-      "data-approval-id": approval.id,
-    },
-    disabled: locked || approval.blocked === true,
-    icon: "check",
-    label,
-  })}${denyButton(approval)}</div>`;
+import {
+  SIGN_REQUEST_UNCLASSIFIED_WARNING,
+  signRequestView,
+  signRequestWarnings,
+} from "../../shared/sign-request";
+import { invokeCallReview, strk20ActionReview } from "./approval-call-parameters";
+import { decisionRow, denyButton, requestIdentity } from "./approval-card-parts";
+import { type ConnectPicker, connectCard } from "./approval-connect-card";
+import {
+  declarationDetails,
+  declarationFeeUnavailable,
+  declarationReviewedFee,
+  declarationWarnings,
+} from "./approval-declaration-review";
+import { watchAssetCard } from "./approval-watch-asset-card";
 
 // Used when the card cannot describe what approving would commit to: the
 // approve control is absent rather than merely disabled, so a partial view can
@@ -65,12 +54,34 @@ const decisionRow = (
 const denyOnlyRow = (approval: PendingApproval): string =>
   `<div class="button-row">${denyButton(approval)}</div>`;
 
+// A payment whose recipient mimics an address the user saved or paid reaches
+// the card instead of being refused on arrival, so the site cannot read the
+// address book from the answer (Sherlock 140). It can only be denied: the
+// approve control is absent, and the background refuses it at execution too.
+// The line above the row says why Approve is missing.
+const paysLookalike = (approval: PendingApproval): boolean =>
+  (approval.flags ?? []).some((flag) => flag.code === "address-poisoning");
+
+const paymentDecisionRow = (
+  approval: PendingApproval,
+  label: string,
+  locked: boolean,
+  reviewedFee?: PendingApproval["fee"],
+  extra: Readonly<Record<string, string>> = {},
+): string =>
+  paysLookalike(approval)
+    ? `<p class="hint">Bramble won't send this payment.</p>${denyOnlyRow(approval)}`
+    : decisionRow(approval, label, locked, reviewedFee, extra);
+
+// The signing account is identified by its `<network>:<address>` id; the row
+// shows the address half truncated and copies it whole.
 const contextDetails = (approval: PendingApproval): string => {
   const context = approval.context;
   if (!context) {
     return "";
   }
-  return `<dl class="request-detail"><div><dt>Account</dt><dd><code>${escapeHtml(accountLabel(context.accountId))}</code></dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
+  const address = accountIdAddress(context.accountId);
+  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
 };
 
 const contextDisclosure = (approval: PendingApproval): string => {
@@ -86,57 +97,6 @@ const contextDisclosure = (approval: PendingApproval): string => {
     : "";
 };
 
-const exactCalldata = (calldata: readonly string[]): string =>
-  calldata.length === 0
-    ? "None"
-    : `<code>${calldata.map((item) => escapeHtml(item)).join(", ")}</code>`;
-
-const strk20ActionParameters = (
-  action: NonNullable<PendingApproval["actionReviews"]>[number],
-  index: number,
-): string => {
-  if (action.type === "deposit") {
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · Deposit</strong><dl class="request-detail"><div><dt>Token</dt><dd><code>${escapeHtml(action.token)}</code></dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(action.amount)}</code></dd></div></dl></section>`;
-  }
-  if (action.type === "withdraw" || action.type === "transfer") {
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · ${action.type === "withdraw" ? "Withdraw" : "Private transfer"}</strong><dl class="request-detail"><div><dt>Token</dt><dd><code>${escapeHtml(action.token)}</code></dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(action.amount)}</code></dd></div><div><dt>Recipient</dt><dd><code>${escapeHtml(action.recipient)}</code></dd></div></dl></section>`;
-  }
-  if (action.type === "invoke") {
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · Contract invoke</strong><dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(action.contract)}</code></dd></div><div><dt>Calldata (${action.calldata.length})</dt><dd>${exactCalldata(action.calldata)}</dd></div></dl></section>`;
-  }
-  const collect =
-    action.collect_policy.type === "exact"
-      ? `Exact · ${action.collect_policy.amount}`
-      : action.collect_policy.type;
-  const calls = action.calls
-    .map(
-      (call, callIndex) =>
-        `<section class="strk20-action-call"><strong>Call ${callIndex + 1}</strong><dl class="request-detail"><div><dt>Contract</dt><dd><code>${escapeHtml(call.contract_address)}</code></dd></div><div><dt>Entrypoint</dt><dd><code>${escapeHtml(call.entry_point)}</code></dd></div><div><dt>Calldata (${call.calldata.length})</dt><dd>${exactCalldata(call.calldata)}</dd></div></dl></section>`,
-    )
-    .join("");
-  return `<section class="strk20-action-review"><strong>Action ${index + 1} · Subaccount invoke</strong><dl class="request-detail"><div><dt>Dapp</dt><dd>${escapeHtml(action.dapp_name)}</dd></div><div><dt>Nonce</dt><dd><code>${escapeHtml(action.nonce)}</code></dd></div><div><dt>Collect policy</dt><dd>${escapeHtml(collect)}</dd></div></dl>${calls}</section>`;
-};
-
-const strk20ActionReview = (approval: PendingApproval): string => {
-  const actions = approval.actionReviews;
-  if (!actions) {
-    return "";
-  }
-  const relayFee = approval.relayFeeAction;
-  const reviewedActionCount = actions.length + (relayFee ? 1 : 0);
-  const relayFeeReview = relayFee
-    ? `<section class="strk20-action-review"><strong>Relay fee action · Withdrawal</strong><dl class="request-detail"><div><dt>Token</dt><dd><code>${escapeHtml(relayFee.token)}</code></dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(relayFee.amount)}</code></dd></div><div><dt>Recipient</dt><dd><code>${escapeHtml(relayFee.recipient)}</code></dd></div></dl></section>`
-    : "";
-  const actionCountHint = relayFee ? "including relay fee" : "expand before approving";
-  return `<details class="disclosure request-technical">
-    <summary>
-      <span class="menu-copy"><strong>Exact action parameters</strong><small>${reviewedActionCount} action${reviewedActionCount === 1 ? "" : "s"} · ${actionCountHint}</small></span>
-      <span class="disclosure-mark">${icon("chevronRight")}</span>
-    </summary>
-    <div class="disclosure-body">${actions.map(strk20ActionParameters).join("")}${relayFeeReview}</div>
-  </details>`;
-};
-
 const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => {
   const actions = approval.actionReviews ?? [];
   return actions.some((action) => action.type === "deposit") &&
@@ -147,115 +107,28 @@ const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => 
     : [];
 };
 
-const declarationReviewedFee = (approval: PendingApproval): PendingApproval["fee"] => {
-  const declaration = approval.declaration;
-  if (!declaration?.fee || declaration.accountDeployment === "unknown") return null;
-  return declaration.accountDeployment === "undeployed"
-    ? declaration.deploymentFee && sumFeeEstimates(declaration.fee, declaration.deploymentFee)
-    : declaration.fee;
-};
-
-const declarationDetails = (approval: PendingApproval): string => {
-  const declaration = approval.declaration;
-  if (!declaration) {
-    return "";
-  }
-  const formatFee = (fee: NonNullable<typeof declaration.fee>): string =>
-    fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
-  const fee = declaration.fee ? formatFee(declaration.fee) : "Unavailable";
-  const deploymentFee = declaration.deploymentFee
-    ? formatFee(declaration.deploymentFee)
-    : "Unavailable";
-  const reviewedFee = declarationReviewedFee(approval);
-  const estimatedTotal = reviewedFee ? formatFee(reviewedFee) : null;
-  const deployment =
-    declaration.accountDeployment === "undeployed"
-      ? "Required before declaration"
-      : declaration.accountDeployment === "deployed"
-        ? "Already deployed"
-        : "Could not verify";
-  return `<dl class="request-detail declaration-detail"><div><dt>Action</dt><dd>Register Cairo 1 contract code</dd></div><div><dt>Declaration fee</dt><dd><strong>${escapeHtml(fee)}</strong></dd></div>${declaration.accountDeployment === "undeployed" ? `<div><dt>Account deployment fee</dt><dd><strong>${escapeHtml(deploymentFee)}</strong></dd></div>` : ""}${estimatedTotal === null ? "" : `<div><dt>Estimated total</dt><dd><strong>${escapeHtml(estimatedTotal)}</strong></dd></div>`}<div><dt>Fee token</dt><dd>${declaration.fee?.unit === "FRI" ? "STRK" : escapeHtml(declaration.fee?.unit ?? "Unavailable")}</dd></div><div><dt>Account deployment</dt><dd>${deployment}</dd></div>${declaration.classHash === undefined ? "" : `<div><dt>Class hash</dt><dd><code>${escapeHtml(declaration.classHash)}</code></dd></div>`}<div><dt>Compiled hash</dt><dd><code>${escapeHtml(declaration.compiledClassHash)}</code></dd></div><div><dt>Contract shape</dt><dd>${declaration.sierraProgramLength.toLocaleString()} Sierra words · ${declaration.abiEntryCount.toLocaleString()} ABI entries · ${declaration.entryPointCount.toLocaleString()} entry points</dd></div></dl>`;
-};
-
-const declarationWarnings = (approval: PendingApproval): readonly string[] => {
-  const declaration = approval.declaration;
-  if (!declaration) {
-    return [];
-  }
-  return [
-    "A declaration registers immutable contract code on this network. It does not deploy the collection or transfer assets.",
-    ...(declaration.accountDeployment === "undeployed"
+// A deposit naming a recipient credits that account's private balance, so a
+// site can dress a payment up as a shield. Only a recipient proven equal to the
+// approval's bound account reads as a self-deposit; with no bound account the
+// card cannot prove that, so it warns.
+const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[] => {
+  const account = approval.context ? accountIdAddress(approval.context.accountId) : undefined;
+  return (approval.actionReviews ?? []).flatMap((action) =>
+    action.type === "deposit" &&
+    action.recipient !== undefined &&
+    !sameFelt(action.recipient, account)
       ? [
-          "This account is not deployed yet. Approval first submits account deployment, which has an additional STRK fee not included in the declaration estimate.",
+          `This deposit pays ${accountLabel(action.recipient)}: the amount becomes that account's private note, not your private balance.`,
         ]
-      : []),
-    ...(declaration.deploymentFeeEstimateFailed
-      ? [
-          "The account deployment fee could not be estimated. Fund the account with STRK and retry if deployment fails.",
-        ]
-      : []),
-    ...(declaration.accountDeployment === "unknown"
-      ? [
-          "The wallet could not verify whether this account needs deployment. An additional STRK fee may apply.",
-        ]
-      : []),
-    ...(declaration.feeEstimateFailed
-      ? [
-          "The declaration fee could not be estimated. Check the RPC connection and the account's STRK balance before approving.",
-        ]
-      : []),
-  ];
-};
-
-const declarationFeeUnavailable = (approval: PendingApproval): boolean =>
-  declarationReviewedFee(approval) === null ||
-  approval.declaration?.feeEstimateFailed === true ||
-  approval.declaration?.deploymentFeeEstimateFailed === true;
-
-const requestIdentity = (origin: string, kind: string): string => {
-  let host = origin;
-  try {
-    host = new URL(origin).host || origin;
-  } catch {
-    // The full escaped value remains visible if an invalid origin reaches this
-    // presentation boundary; approval validation still fails closed upstream.
-  }
-  return `<p class="eyebrow">${kind}</p><div class="request-site"><span class="request-site-mark">${icon("globe")}</span><div class="request-site-copy"><span>Request from</span><strong title="${escapeHtml(origin)}">${escapeHtml(host)}</strong></div></div>`;
+      : [],
+  );
 };
 
 const approvalCalls = (approval: PendingApproval): string =>
   reviewCallsList(approval.summaries ?? [], approval.reviewAssets ?? []);
 
-const connectCard = (approval: PendingApproval, status: WalletStatus): string => `
-  <li class="request-card">
-    <div class="request-copy">
-      ${requestIdentity(approval.origin, "Connection request")}
-      ${status.locked ? '<p class="hint">Unlock the wallet to approve this site.</p>' : ""}
-      ${reviewOutcome("Share the granted account addresses with this site until you disconnect it.")}
-    </div>
-    ${reviewPanel(approval.insights ?? [])}
-    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(approval, "Approve", status.locked)}
-  </li>`;
-
-const watchAssetCard = (approval: PendingApproval): string => {
-  const token = approval.token;
-  if (!token) {
-    return "";
-  }
-  return `
-  <li class="request-card">
-    <div class="request-copy">
-      ${requestIdentity(approval.origin, "Add token request")}
-      <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(token.address))}</code></dd></div></dl>
-      ${reviewOutcome("Add this token contract to the wallet's tracked asset list.")}
-    </div>
-    ${reviewPanel(approval.insights ?? [])}
-    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(approval, "Add token", false)}
-  </li>`;
-};
-
+// Fixed copy per spam reason (audit 171): the card the user decides on says why
+// the token looks wrong, and that the wallet will store it hidden.
 // Everything is inlined into the template (template contents are not re-wrapped)
 // so the decoded calls and combined risk-flag/insight warnings stay compact.
 // The fee section renders through the shared `reviewFeeSection` — the same
@@ -263,62 +136,127 @@ const watchAssetCard = (approval: PendingApproval): string => {
 // retry button targets this approval by data attribute. A failed or absent fee
 // estimate disables Approve exactly as Send does: without a displayed amount
 // there is no fee ceiling for the user's consent to bind.
-const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
+const gaslessChoiceAllowed = (approval: PendingApproval, status: WalletStatus): boolean =>
+  approval.gaslessFees !== undefined &&
+  !status.locked &&
+  !paysLookalike(approval) &&
+  approval.deployFirst !== true &&
+  approval.feeEstimatePending !== true &&
+  approval.feeEstimateFailed !== true &&
+  approval.fee != null;
+
+// The deployment half of the Cost section. A Ledger account signs the
+// deployment and the calls separately, so the card says so before the click.
+const invokeDeploymentReview = (
+  approval: PendingApproval,
+  status: WalletStatus,
+): Partial<ReviewFeeState> => {
+  if (approval.requiresDeployment !== true || approval.deploymentFeeEstimateFailed === undefined) {
+    return {};
+  }
+  const account = status.accounts.find((entry) => entry.id === approval.context?.accountId);
+  return {
+    ...(approval.deploymentFee ? { deploymentFee: approval.deploymentFee } : {}),
+    deploymentFeeEstimateFailed: approval.deploymentFeeEstimateFailed,
+    ...(account?.derivation.kind === "ledger" ? { signsTwice: true } : {}),
+  };
+};
+
+// One "What will happen" section: the decoded calls (or, with none, the plain
+// sign-and-submit sentence), then, for a multisig proposal, that it is saved for
+// the other signers and not sent yet. Every line is the same consequence.
+const invokeOutcome = (approval: PendingApproval, proposal: boolean): string =>
+  reviewOutcomeSection(
+    (reviewCallItems(approval.summaries ?? [], approval.reviewAssets ?? []) ||
+      `<p>${escapeHtml("Sign and submit the decoded transaction from the active account.")}</p>`) +
+      (proposal
+        ? `<p>${escapeHtml("Saves this for the other signers. It is not sent yet.")}</p>`
+        : ""),
+  );
+
+const invokeCard = (approval: PendingApproval, status: WalletStatus): string => {
+  const offerGasless = gaslessChoiceAllowed(approval, status);
+  const proposal = (approval.multisigThreshold ?? 0) > 1;
+  return `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Transaction request")}
       ${status.locked ? '<p class="hint">Unlock the wallet to review and approve this transaction.</p>' : ""}
-      ${approvalCalls(approval) || reviewOutcome("Sign and submit the decoded transaction from the active account.")}
+      ${invokeOutcome(approval, proposal)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
     ${
+      // An undeployed Braavos account deploys only through its own step: say
+      // so, with no fee and no retry, and Approve stays disabled (no fee).
+      (approval.deployFirst === true && reviewCostNote(UNDEPLOYED_BRAAVOS_REFUSAL)) ||
       reviewFeeSection(
         {
           fee: approval.fee ?? null,
           feeAffordability: approval.feeAffordability ?? "unknown",
           feeEstimateFailed: approval.feeEstimateFailed === true,
           feeEstimatePending: approval.feeEstimatePending === true,
+          ...(offerGasless && approval.gaslessFees ? { gaslessFees: approval.gaslessFees } : {}),
+          ...invokeDeploymentReview(approval, status),
           requiresDeployment: approval.requiresDeployment === true,
         },
         { "data-approval-retry-fee": approval.id },
+        {
+          ...(offerGasless
+            ? {
+                gaslessAttributes: {
+                  "data-approval-action": "approve",
+                  "data-approval-id": approval.id,
+                  "data-approval-kind": approval.kind,
+                },
+              }
+            : {}),
+        },
       ) ||
-      reviewConstraints(
+      reviewCostNote(
         "The network fee is unavailable. Approval remains disabled until a fee can be reviewed.",
       )
     }
+    ${invokeCallReview(approval)}
     ${contextDisclosure(approval)}
-    ${decisionRow(
+    ${paymentDecisionRow(
       approval,
-      "Approve",
-      status.locked ||
-        approval.feeEstimatePending === true ||
-        approval.feeEstimateFailed === true ||
-        approval.fee == null,
-      approval.fee ?? undefined,
+      proposal ? "Save for signers" : "Approve",
+      // Approve echoes the total the Cost section showed — the same helper the
+      // background refusal reads — and is withheld while no total exists.
+      status.locked || reviewedInvokeTotal(approval) === null,
+      reviewedInvokeTotal(approval) ?? undefined,
+      proposal ? { "data-multisig-proposal": "true" } : {},
     )}
   </li>`;
+};
 
+// summaries[0] names the message; any further entries are the decoded calls an
+// OutsideExecution authorizes, listed with its risk flags (audit 144).
 // A sign card only offers to sign what the decoder could place on one side of
 // the signed hash or the other; an unclassified payload gets the warning and a
 // Deny-only row instead, because a partial view of a message is exactly what a
-// hostile payload wants the user to trust.
+// hostile payload wants the user to trust. An OutsideExecution paying a
+// lookalike is Deny-only too, like a payment card (Sherlock 140).
 const signCard = (approval: PendingApproval, status: WalletStatus): string => {
   const view = signRequestView(approval.typedData);
   return `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Sign request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Review exactly what this site asks you to sign. Signing does not move funds — only sign messages you understand."}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Signatures can authorize transfers or account access. Only sign requests you understand."}</p>
       ${reviewOutcome("Create a signed authorization over the decoded message shown below and return it to this site.")}
+      ${reviewCallsList(approval.summaries?.slice(1) ?? [])}
     </div>
     ${view.html}
     ${reviewPanel([
+      ...riskFlagMessages(approval.flags ?? []),
       ...(view.classified ? [] : [SIGN_REQUEST_UNCLASSIFIED_WARNING]),
+      ...signRequestWarnings(approval.typedData),
       ...(approval.insights ?? []),
     ])}
     ${reviewConstraints("No transaction or network fee is submitted. The signed result can still authorize site-specific actions.")}
     ${contextDisclosure(approval)}
-    ${view.classified ? decisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
+    ${view.classified ? paymentDecisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
   </li>`;
 };
 
@@ -329,11 +267,11 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
       ${status.locked ? '<p class="hint">Unlock the wallet to review this private transaction.</p>' : ""}
       ${approvalCalls(approval) || reviewOutcome("Authorize the exact private action bound to this request.")}
     </div>
-    ${reviewPanel([...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
-    ${reviewConstraints("This approval carries no public wallet fee. Wallet-funded routes require a separate exact-call fee review.")}
+    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
+    ${reviewConstraints("This approval charges no public wallet fee. A relay fee, if listed above, is paid from the private balance. If the wallet pays the network fee for this route, you will review that fee separately.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
-    ${decisionRow(approval, "Approve", status.locked)}
+    ${paymentDecisionRow(approval, "Approve", status.locked)}
   </li>`;
 
 const strk20DisclosureCard = (
@@ -352,38 +290,44 @@ const strk20DisclosureCard = (
       ${status.locked ? `<p class="hint">${copy.lockedHint}</p>` : ""}
       ${approvalCalls(approval) || reviewOutcome(copy.hint)}
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...(approval.insights ?? [])])}
     ${reviewConstraints("This approval carries no transaction fee. Any later transaction requires its own review.")}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
-    ${decisionRow(approval, copy.action, status.locked)}
+    ${paymentDecisionRow(approval, copy.action, status.locked)}
+  </li>`;
+
+// A site's private request on a network with no private services for it. The
+// site is answered only when the user closes this, so it cannot probe what the
+// wallet has set up. One fixed line and a Close control; nothing the site sent
+// is shown, and there is nothing to approve — Close works locked too, and the
+// panel says it closed rather than narrating a denial (data-approval-notice).
+const strk20UnavailableCard = (approval: PendingApproval): string => `
+  <li class="request-card" data-approval-notice>
+    <div class="request-copy">
+      <p>${escapeHtml(
+        approval.notice === "other-wallet"
+          ? PRIVACY_OTHER_WALLET_ACTION
+          : approval.notice === "record-limit"
+            ? SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE
+            : approval.notice === "request-failed"
+              ? PRIVATE_REQUEST_FAILED_NOTICE
+              : PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
+      )}</p>
+    </div>
+    <div class="button-row">${denyButton(approval, "Close")}</div>
   </li>`;
 
 const switchCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Network switch request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network. Nothing changes unless you approve."}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network."}</p>
       ${approvalCalls(approval) || reviewOutcome("Switch the wallet to the requested Starknet network.")}
     </div>
     ${reviewPanel(approval.insights ?? [])}
     ${reviewConstraints("No transaction is signed and no network fee is charged.")}
     ${decisionRow(approval, "Switch network", status.locked)}
-  </li>`;
-
-const addChainCard = (approval: PendingApproval): string => `
-  <li class="request-card">
-    <div class="request-copy">
-      ${requestIdentity(approval.origin, "Add network request")}
-      <p class="hint">This site is asking to add a custom Starknet network. Nothing is saved unless you approve.</p>
-      ${approvalCalls(approval) || reviewOutcome("Add the requested custom Starknet network to the wallet.")}
-    </div>
-    ${reviewPanel([
-      "Custom network endpoints can observe requests sent through them. Review the network details before use.",
-      ...(approval.insights ?? []),
-    ])}
-    ${reviewConstraints("Adding the network does not sign a transaction or charge a fee.")}
-    ${decisionRow(approval, "Add network", false)}
   </li>`;
 
 const declareCard = (approval: PendingApproval, status: WalletStatus): string => `
@@ -394,8 +338,8 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
       ${reviewOutcome("Register this exact Cairo contract class on the active network from the reviewed account.")}
     </div>
     ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])], "Declaration registers code but does not deploy a contract or transfer assets.")}
-    <section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-      <p class="decision-label">Maximum cost and constraints</p>
+    <section class="decision-layer decision-boundary" aria-label="Cost">
+      <p class="decision-label">Cost</p>
       ${declarationDetails(approval)}
     </section>
     ${contextDisclosure(approval)}
@@ -411,10 +355,15 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
 /**
  * Renders the correct approval card for a pending dapp request by kind.
  */
-export const approvalCard = (approval: PendingApproval, status: WalletStatus): string => {
+export const approvalCard = (
+  approval: PendingApproval,
+  status: WalletStatus,
+  preferences: WalletPreferences | null = null,
+  picker?: ConnectPicker,
+): string => {
   switch (approval.kind) {
     case "watch-asset":
-      return watchAssetCard(approval);
+      return watchAssetCard(approval, nftsShown(preferences));
     case "invoke":
       return invokeCard(approval, status);
     case "sign-typed-data":
@@ -442,26 +391,26 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
       return strk20DisclosureCard(approval, status, {
         action: "Activate",
         hint:
-          approval.summaries?.[0] === "Prepare private-balance activation for this site to submit"
+          approval.summaries?.[0] === STRK20_PREPARE_REGISTER_SUMMARY
             ? "This prepares the one-time registration commitment and proof and hands them to the site, which submits them itself and must cover the pool fee. The viewing key and private notes are never published."
             : "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
         lockedHint: "Unlock the wallet to review this private-balance activation.",
         title: "Activate private balances",
       });
-    case "strk20-subaccount":
+    case "strk20-shadow-account":
       return strk20DisclosureCard(approval, status, {
         action: "Share commitment",
         hint: "This reveals a deterministic, site-scoped private identity commitment that may link sessions for this site.",
         lockedHint: "Unlock the wallet to review this private identity request.",
         title: "Private identity request",
       });
+    case "strk20-unavailable":
+      return strk20UnavailableCard(approval);
     case "switch-chain":
       return switchCard(approval, status);
-    case "add-chain":
-      return addChainCard(approval);
     case "declare":
       return declareCard(approval, status);
     case "connect":
-      return connectCard(approval, status);
+      return connectCard(approval, status, preferences, picker);
   }
 };

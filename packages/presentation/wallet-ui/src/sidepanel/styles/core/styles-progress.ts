@@ -2,7 +2,7 @@
  * Shared indeterminate progress motion. This is a framework-free CSS/SVG
  * adaptation of Amicro's Liquid Dots treatment; see THIRD_PARTY_NOTICES.md.
  */
-import { CONTROL, MOTION, RADIUS, SIZE, SPACE } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE } from "@bramble/ui-kit/tokens";
 
 /**
  * Liquid Dots styles shared by Send, approvals, and Ledger signing.
@@ -24,10 +24,10 @@ export const PROGRESS_STYLES = `
     position: relative;
     width: ${SIZE.brand};
   }
-  .liquid-dots[data-liquid-dots="approval"] { filter: url("#mc-liquid-dots-approval"); }
-  .liquid-dots[data-liquid-dots="ledger"] { filter: url("#mc-liquid-dots-ledger"); }
-  .liquid-dots[data-liquid-dots="privacy"] { filter: url("#mc-liquid-dots-privacy"); }
-  .liquid-dots[data-liquid-dots="send"] { filter: url("#mc-liquid-dots-send"); }
+  .liquid-dots[data-liquid-dots="approval"] { filter: url("#bramble-liquid-dots-approval"); }
+  .liquid-dots[data-liquid-dots="ledger"] { filter: url("#bramble-liquid-dots-ledger"); }
+  .liquid-dots[data-liquid-dots="privacy"] { filter: url("#bramble-liquid-dots-privacy"); }
+  .liquid-dots[data-liquid-dots="send"] { filter: url("#bramble-liquid-dots-send"); }
   .liquid-dots-compact {
     --liquid-dot-size: ${SPACE.sm};
     --liquid-dot-travel: ${SPACE.sm};

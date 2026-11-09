@@ -6,9 +6,9 @@ permalink: /strk20-privacy/
 
 # STRK20 privacy integration
 
-MC Wallet implements the Wallet API `0.10.5-rc.0` STRK20 surface through the official Starknet
+Bramble implements the Wallet API `0.10.5-rc.0` STRK20 surface through the official Starknet
 Privacy SDK browser bundle. It supports shielded balance discovery, action preparation, private
-submission, dapp-scoped sub-account commitments, explicit account registration, and reviewed
+submission, dapp-scoped shadow-account commitments, explicit account registration, and reviewed
 public-to-private token deposits.
 
 ## Pinned runtime
@@ -34,8 +34,13 @@ Each enabled network needs one complete routing configuration:
 - Transaction Prover URL implementing `starknet_specVersion` and
   `starknet_proveTransaction`.
 - STRK20 pool contract address.
-- Optional SDK sub-account anonymizer module, used only by `subaccount_invoke`. Core registration,
-  discovery, shield, withdraw, and transfer operations do not need it.
+- Optional SDK shadow-account anonymizer (`shadowAccountAnonymizerAddress`), used only by
+  `shadow_account_invoke` and `wallet_strk20ShadowAccountCommitment`. Core registration, discovery,
+  shield, withdraw, and transfer operations do not need it. The anonymizer address is an input to
+  every shadow-account identity, so changing it moves every shadow account; accounts made under the
+  old one can only be reached through the old one. A preferences record from before Wallet API
+  0.10.4 that still carries `subaccountAnonymizerAddress` loads with that key dropped, not carried
+  over: it names an old-class anonymizer the pinned SDK only half-drives.
 - Dapp-specific anonymizers/executors are not global pool configuration. A Vesu, Ekubo, or other
   integration supplies its audited contract as an explicit invoke target inside the reviewed action
   plan, where it handles notes according to that dapp's rules.
@@ -46,7 +51,15 @@ Each enabled network needs one complete routing configuration:
 
 The bundled Mainnet configuration points only at the wallet-owned AWS gateway and the
 deployed pool
-`0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a`.
+`0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a`, with the shadow-account
+anonymizer `0x4f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7`
+(`STRK20_MAINNET_SHADOW_ACCOUNT_ANONYMIZER`, `Delegated` on that pool). That value is pinned for
+good, by a test as well: changing it would move every user's shadow accounts. A stored Mainnet
+configuration that is exactly the bundled routing from before this default (same endpoints, pool,
+and fee token, no anonymizer) gains it once, as a one-time migration recorded in the preferences
+as `strk20DefaultsVersion`; a user-set anonymizer, any custom endpoint, and an empty-map opt-out
+are kept. After that the stored routing is the user's: clearing the anonymizer sticks, including
+across a preferences backup restore. Every site request still needs its own approval.
 The private discovery and prover upstream URLs and any paymaster key are server-only ECS runtime
 configuration. They never appear in the extension source, preferences, source maps, logs, or
 browser requests. The public gateway URL is necessarily visible to clients.
@@ -84,7 +97,8 @@ is reset on lock, account switch, network switch, side-panel reload, or extensio
    discovers private note totals for tracked tokens on the active network.
 2. An unregistered account gets an **Activate private balances** action. Its immutable review
    identifies the network, pool, public account route, and public link between the wallet address
-   and its viewing-key commitment. No registration is silent.
+   and its viewing-key commitment. The same batch opens the account's own private channel, so a
+   later shield to another wallet opens only that recipient's channel. No registration is silent.
 3. After activation, each tracked asset detail has a **Shield SYMBOL** action. The composer keeps
    token identity, public balance, amount shortcuts, and destination network together.
 4. The shielding review freezes the amount, token metadata, pool, actions, submission route, and
@@ -96,7 +110,8 @@ is reset on lock, account switch, network switch, side-panel reload, or extensio
    discovery; failures never retry automatically.
 
 The UI Lab contains deterministic checkpoints under **Wallet journeys / 04 Private balances** for
-disclosure off, discovery, registration, empty notes, asset entry, compose, public shielding,
+disclosure off, discovery, registration, the registration funding shortfall, empty notes, asset
+entry, compose, public shielding,
 Wallet API private-relay review, proving, success, service failure, missing configuration, and the
 unsupported Ledger boundary. Fixtures never call a real vault, SDK service, RPC, or hardware
 device.
@@ -104,27 +119,63 @@ device.
 ## Privileged data flow
 
 1. The content/provider bridge strictly parses bounded actions, token lists, proof envelopes, and
-   dapp-scoped sub-account requests. A connected origin sees only its granted active account.
+   dapp-scoped shadow-account requests (Wallet API 0.10.4 names only; the pre-0.10.4
+   `wallet_strk20SubaccountCommitment` and `subaccount_invoke` have no alias). A connected origin
+   sees only its granted active account.
+   Before any approval is queued, the background refuses batch shapes the pinned SDK or pool
+   rejects only later (`strk20-batch.ts`): more than one `invoke`/`shadow_account_invoke`, a `0x…`
+   shadow-account `entry_point` (the SDK hashes it as a name), an `OPEN` transfer with no invoke or
+   after it, two `OPEN` transfers in one token beside a `shadow_account_invoke`, and a public deposit
+   beside a `shadow_account_invoke` that settles open notes (`MULTIPLE_SCREENING_SUBJECTS`). The site
+   gets `INVALID_REQUEST_PAYLOAD` with the rule as `data`.
+   A shadow-account commitment, or a batch with a `shadow_account_invoke`, on a network with no
+   anonymizer configured never reaches an approval card. It is not refused at once either, since
+   an instant answer would let any site probe whether the user has private services set up: the
+   wallet holds it on a notice ("Private services aren't set up for this network.") with only a
+   Close control, and the site receives the same `UNKNOWN_ERROR` (`strk20 services unavailable: …`)
+   only when the user closes it. If the queue's expiry drops it first, the site gets
+   `USER_REFUSED_OP` ("request rejected"), exactly as for any expired approval, so waiting out the
+   expiry does not reveal the configuration. With an anonymizer configured, a shadow invoke's fee is
+   quoted before its card is built; if that quote fails, the request is held on the same notice
+   (with its own line) and the site receives the quote's error only on Close, so a configured and an
+   unconfigured network look the same to the site.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
-   and sub-account commitments each create a dedicated approval. Registration is requested with the
-   Wallet API `register` action (or the older MC-namespaced `mc_strk20Register` capability, which
-   shares the same path). The queue retains the exact private request and
+   and shadow-account commitments each create a dedicated approval. Registration is requested with the
+   Wallet API `register` action (or the older Bramble-namespaced `mc_strk20Register` capability,
+   which shares the same path). A registration that cannot reach its card — a Ledger account, a network without private
+   services, or a public balance below the pool fee — is held on the same close-only notice, and the
+   site receives the refusal only on Close (audit L1). The
+   queue retains the exact private request and
    exposes display-safe summaries plus the exact action parameters and an account/network/payload
-   digest. Invoke calldata, sub-account call targets and entry points, nonce, and collect policy
-   remain expandable in the approval. A private-relay review also lists the relayer-fee withdrawal
+   digest. Invoke calldata, shadow-account call targets and entry points, nonce, and collect policy
+   remain expandable in the approval. A `shadow_account_invoke` is summarized by what it does: the
+   calls it runs through which shadow account (#nonce) for which site, the anonymizer, which tokens
+   settle back into private notes (or that none do), and who can move what the calls leave behind.
+   "Back into private notes" is said only for an `OPEN` note whose recipient is this account; a note
+   for anyone else names that recipient, and under `collect_policy: all` the card also says the
+   shadow account's whole balance of that token goes to them
+   (this card copy is proposed and pending review). The anonymizer the card names is bound into the
+   approval; execution refuses if the network's configured anonymizer changed after review. A private-relay review also lists the relayer-fee withdrawal
    as a separately labelled action with its exact token, amount, and recipient. Denial returns
    `USER_REFUSED_OP`; account, network, grant, or payload changes invalidate the request.
 3. Only after approval does the background resolve a domain-separated viewing key. Software
    accounts derive it lazily through Krusty from the selected account's encrypted signing key. The
    derivation matches the pinned SDK reference: deterministic Stark ECDSA over the canonical
    `chainId:poolAddress`, Poseidon of `(r,s)`, and the privacy pool's lower-half curve-order fold.
-   Software-derived keys are never persisted. A Ledger account may resolve only an exact
+   Software-derived keys are never persisted. An Argent multisig does not derive one; its shared key is
+   created once and retained, as described under Argent multisig. A Ledger account may resolve only an exact
    account/chain/pool-scoped key retained in encrypted vault `accountSecrets`; if none exists it
    fails closed. The typed-data hardware ceremony that provisions such a key is deliberately not
    implemented until its domain, message, reduction, confirmation UI, and test vectors are
    formally reviewed. No viewing key is logged or returned through a browser message.
 4. The SDK performs note discovery, transaction assembly, and proving. `USER_LINKAGE` warnings map
    to the Wallet API privacy-leak error; every other non-empty or malformed warning fails closed.
+   A simulation (`simulate: true`) is proved by the configured prover exactly like a real proof,
+   and its proof is then replaced by an empty one so it cannot be submitted. The wallet never
+   calls the SDK's own `simulate`: it sends the viewing-key-bearing `compile_actions` invocation
+   to the JSON-RPC node, which may be a user-set override. A simulation skips the final
+   pre-proof policy gate, since it produces nothing submittable, and counts against the prover's
+   rate limits and proving budget like any other proof.
 5. Before a dapp invoke approval appears, the wallet runs only public/pure action checks, rejects a
    deposit/withdraw correlation, and requests and freezes the relayer fee action and any typed
    data. It never discovers private balances, generates a proof, or signs before approval.
@@ -137,13 +188,19 @@ device.
    execution window, call count, fee, account, network, and payload digest are visible in review.
 7. The wallet requires the configured pool's `apply_actions` call and submits once through the
    configured private paymaster. The SDK signer binds account, chain, and complete call set using
-   the protocol SNIP-12 hash. Every accepted privacy write is recorded in browser-session storage;
-   a later proof waits until that accepted block is older than the SDK's historical proving block.
-   Writes for the same account, network, and pool are serialized across proof, submission, and
-   receipt acceptance. A `submitting` reservation is persisted immediately before broadcast; it
-   is replaced by the returned hash before receipt polling. An indeterminate broadcast or receipt
-   keeps the scope blocked, while only a receipt-proven rejection clears it. Production privacy
-   operations fail closed if that restart-safe session store is unavailable.
+   the protocol SNIP-12 hash. Every accepted privacy write is recorded in the extension's local
+   storage, so the record survives worker and browser restarts; a later proof waits until that
+   accepted block is older than the SDK's historical proving block. Writes for the same account,
+   network, and pool are serialized across proof, submission, and receipt acceptance. A
+   `submitting` reservation is persisted immediately before broadcast; it is replaced by the
+   returned hash before receipt polling. An indeterminate broadcast or receipt keeps the scope
+   blocked, while only chain evidence clears it: a receipt-proven rejection, a spent nonce for a
+   signed write, or, for a relayed write, one of the pool storage slots its `apply_actions` call
+   writes once already reading non-zero in a block the node reports accepted on L1, which makes
+   that call revert whoever submits it; that block is then kept as the floor for later proofs. A relayed write records those slots before it is sent and is refused if it has
+   none. Settings → Unlock private transactions clears a reservation no check can settle, after
+   stating that the earlier write could still land. Production privacy operations fail closed if
+   that store is unavailable.
 8. The proof base is ten blocks behind the finalized RPC head. Registration polls until the
    account contract exists at that exact historical block, and deposits poll until every
    aggregate ERC20 amount is visible there. This automatically covers freshly deployed and
@@ -151,15 +208,16 @@ device.
 
 The Wallet API allows a dapp to submit the result of `wallet_strk20PrepareInvoke`; therefore a
 non-simulated prepare request does not sign or generate that submittable proof until the user
-approves its exact action list. Private balances and the deterministic, origin-scoped sub-account
+approves its exact action list. Private balances and the deterministic, origin-scoped shadow-account
 commitment are likewise never disclosed under the general account connection grant alone.
 
 Wallet API `0.10.5-rc.0` adds the `register` action. It must be the only action in a
-`wallet_strk20InvokeTransaction` or `wallet_strk20PrepareInvoke` request; register mixed with other
-actions, or a register request for an account the pool already lists as registered, returns
-`INVALID_REQUEST_PAYLOAD`. The registration check reads the pool's public registry, so it runs before
-any approval without deriving a viewing key. Any other request from an unregistered account still
-returns `NOT_REGISTERED`.
+`wallet_strk20InvokeTransaction` or `wallet_strk20PrepareInvoke` request: register mixed with other
+actions returns `INVALID_REQUEST_PAYLOAD` at once, from the input alone. A register request for an
+account the pool already lists as registered is held on the close-only notice like every other
+setup refusal (audit L1) and also returns `INVALID_REQUEST_PAYLOAD`. That check reads the pool's
+public registry, so it never derives a viewing key. Any other request from an unregistered account
+still returns `NOT_REGISTERED`.
 
 - `wallet_strk20InvokeTransaction` with `[{ type: "register" }]` follows the same two-step path as
   `mc_strk20Register`: an activation approval, then an exact-call network-fee approval before the
@@ -174,13 +232,140 @@ and cannot derive a viewing key or submit until the user approves the account/ne
 payload.
 
 The wallet-owned side-panel journey currently exposes registration and deposit-only shielding.
-Private transfer, withdrawal, generic invoke, proof preparation, and sub-account commitment remain
+Private transfer, withdrawal, generic invoke, proof preparation, and shadow-account commitment remain
 Wallet API/dapp approval journeys; they do not appear as standalone portfolio actions yet.
 
-The generic `wallet_addInvokeTransaction` path also preserves an optional prepared proof. Such a
-request must contain exactly one call, receives the normal decoded approval review, and can submit
-only a non-empty proof to the configured pool's `apply_actions` entry point. The proof and call are
-included in the approval digest and are never silently converted into an ordinary public invoke.
+## Shadow accounts: records, recovery, and sweep
+
+A shadow account is derived from the user's identity key (account address, viewing key,
+anonymizer), the origin-bound scope (`bramble/strk20-shadow-account/v1`, the verified origin, and
+the site's label, cut to 30 hex characters), and a nonce the site chooses. Only this wallet,
+deriving that scope, can drive it. If the site disappears, or a `diff`/`exact` collect policy leaves
+a remainder, the funds stay in the shadow account until this wallet moves them.
+
+So the wallet records every scope it uses, in the encrypted vault (schema v12,
+`shadowAccountScopes`), never in preferences: account, chain, pool, anonymizer, origin, label, and
+the exact nonces used. A scope is recorded when its commitment is shared (a site can fund a
+precomputed address before the account is deployed), when a submittable proof names it, and before
+a shadow invoke is submitted. Recording happens first and fails closed: a request whose record cannot
+be written does not run. The record reveals which sites someone used privately. It is bounded to 128
+scopes, 64 nonces per scope, and half of the vault's capacity in all (`SHADOW_ACCOUNT_SCOPES_BUDGET`,
+derived from the provider JSON budget), so records can never fill the vault and block its other
+writes; past a bound the request is refused rather than a record dropped. The bounds and the vault's
+own capacity are checked before a card is queued, so the user is not asked to approve a request the
+record would refuse (the record after approval still re-checks). Such a request is held on the same
+close-only notice as a network with no anonymizer, with its own line, so the site learns nothing
+until the user sees it: Close returns the record refusal, and expiry returns `USER_REFUSED_OP`. There is no way yet to remove
+a record, so a full table stays full.
+Shadow accounts used before this record existed are not in it.
+
+Settings → Shadow accounts lists the records without any network read. Balances are read only when
+the user asks, and the screen says why: the read sends the scope's partial commitment to the RPC node
+(`get_shadow_accounts` on the anonymizer) and then each address's balances, so the node can link
+those addresses to each other and to this client. The read covers the recorded nonces plus the
+first 16 (undeployed included, since they may already hold funds); recorded nonces from 2^64 − 1
+up are reported as not listable, because the view's exclusive `u64` end bound cannot include them,
+and the scope's other nonces still list. A scope recorded under another anonymizer is listed but not
+reachable.
+
+A sweep is one `OPEN` transfer to this account per tracked token the shadow account holds, then a
+`shadow_account_invoke` with `collect_policy: all` and no calls (the anonymizer accepts this). It is
+always relayed, so the relay fee comes from the private balance. The collected amount is the balance
+at execution, not the one shown at review. Activity records a settled sweep as "Sweep shadow
+account", with no site, label, or nonce, since activity is plain browser storage and part of the CSV
+export.
+
+Limits of the sweep:
+
+- **Tracked tokens only.** Balances are read, and `OPEN` transfers built, only for tokens in the
+  wallet's token list for the network. A token the shadow account holds that is not tracked is not
+  shown and not swept; a listed shadow account holding only untracked tokens shows "No tracked tokens" and
+  has no Sweep control. Track the token first. What the anonymizer does with an untracked token's
+  balance under `collect_policy: all` is not yet confirmed on a live network.
+- **The relay fee needs a private balance in the fee token.** The fee is a private withdrawal in the
+  token the relay quotes, checked against the private balance before the review is built. Funds in
+  the shadow account do not count, so a user whose only funds of that token are in the shadow
+  account cannot sweep until they hold some privately. The Sweep tap is then refused with the
+  existing "Insufficient private balance" error, before any review or Confirm appears.
+
+The settled open notes are screened against the shadow
+account's own address (`Delegated`); whether the prover behind mc-backend performs that screening is
+not yet confirmed (issue 443).
+
+The generic `wallet_addInvokeTransaction` path also accepts an optional SNIP-36 proof, which must be
+submittable (a simulate-mode, all-empty proof is refused at intake). The request receives the normal
+decoded approval review, and the proof and calls are included in the approval digest. A pool-shaped
+batch (any call to `apply_actions` or to the configured pool) is submitted only through the STRK20
+lane, which requires `approve` calls followed by exactly one `apply_actions` on the configured pool;
+it is never converted into an ordinary public invoke. Any other proof-bearing batch, such as a SNIP-36
+application proof, is submitted as an ordinary invoke with `proof` and `proof_facts` attached, under the
+same fee review and reviewed-fee ceiling.
+
+## Argent multisig
+
+An Argent multisig has no single signing key, so it cannot derive a viewing key the way a
+software account does. One co-owner creates the key. Bramble asks Krusty for a throwaway phrase,
+derives the viewing key for this chain and pool, and discards the phrase. The key is stored in
+the encrypted vault (schema v13), bound to that multisig, chain, and pool
+(`multisig-strk20-shared-v1`). It is not the creator's personal viewing key. A second create does
+not rotate it: the pool commitment is the public key of this scalar, and a replacement would
+desynchronize co-owners.
+
+The key is shared on the multisig Nostr channel. Each co-owner gets their own gift wrap,
+addressed to the Nostr key on their saved signer card. The application identifier is
+`bramble.multisig.strk20-viewing-key`, not the intent identifier, so an intent parser never reads
+the key. The payload is the key, the multisig, the chain, and the pool. Krusty encrypts the wrap.
+Nothing in a browser message, the multisig record, preferences, or activity contains the key.
+The private-balance section says that anyone with the viewing key can see all of this multisig's
+private activity. Register, deposit, transfer, and withdraw use the tokens a single-signer
+private balance already tracks, including a curated token the pool reports as privately held.
+Deposit spends that token's public balance. Transfer and withdraw spend its private balance.
+A co-owner who receives a CallSet authorization reviews the entrypoints and the restored
+calls — the facts the digest covers — and signs or shares that fragment from the card. A label
+the sender wrote is not shown. A ready authorization stays on the card so the fragment can be
+returned. The card is loaded again when the panel opens.
+
+A wrap is stored only when the sender is a saved contact whose Stark key is in the chain's
+current signer set, and only for the pool configured on that network. Deployment signers are not
+treated as current. A signer set that cannot be read is left for a later sync. The first key wins.
+The same key offered again is a no-op. A different key is not stored; the vault keeps a conflict
+mark with no copy of the foreign key, and the section says this wallet kept its own. Dropping the
+key removes it from this wallet only. Removing the multisig removes the key and any conflict mark
+with it. Co-owners who already have it still can see private activity. A conflict wrap, and a wrap
+refused because the key collection or the vault is full, stays uncheckpointed. The next sync still
+reaches back to that wrap, so dropping a key can accept it while the wrap remains on the relay.
+
+Registration and deposit freeze an ordinary V3 intent. The hash includes `proofFacts` when a
+proof is attached, and matches starknet.js. The proof bytes are stored beside that intent, on
+this device only: they are not part of the hash and do not fit a Nostr gift wrap. A public intent
+omits `proofFacts` and keeps the previous hash. Submission sends the local proof with the
+threshold aggregate. Co-owners who did not generate the proof can sign the hash, and only the
+device that holds the bytes can broadcast it.
+
+Private transfer and withdraw use the relay. The second round is the paymaster's typed-data
+digest when the quote includes public calls. Co-owners exchange fragments of that digest. The
+wrap carries the typed data and the fragments, not the proof. The device that holds the proof
+sends only once the threshold is met, and only after the maturity journal has claimed the write.
+A quote with no public calls has already been authorized by the CallSet aggregate inside the
+proof, and the relay request is ready to send. A reloaded panel still lists a relay that has
+not been sent. Submitting a proof-bearing account intent checks that its `apply_actions` call
+targets the pool configured now. A proof for an intent that is still collecting, ready, or
+submitted is not dropped to make room for a newer one. An authorization or relay-fragment write
+is abandoned if the wallet locks before it commits.
+
+Both rounds use the multisig's Nostr channel. The CallSet authorization is a separate gift wrap
+(`bramble.multisig.strk20-authorization`). Its calldata has the shared scalar replaced before it
+is stored or wrapped; each co-owner puts their own copy back to recompute the digest. The signer
+callback returns `serializeArgentMultisigSignature`. A single signer still returns one Stark
+pair. `Strk20CallSetSigner` does not wrap either result.
+
+The pool accepts a proof only while `base_block < current_block <= base_block + proof_validity_blocks`.
+If co-signing outlasts that window, refresh marks the frozen intent stale, drops the local proof,
+and proves again. Collected signatures on the old hash no longer apply.
+
+A multisig dapp request that carries a private proof is still refused on pull request 825, which
+is not in this branch. That refusal can be lifted, after both land, only for a proof whose facts
+are committed in the frozen hash and whose account signature is the Argent aggregate.
 
 ## Failure and trust boundaries
 
@@ -213,7 +398,8 @@ production deployments require their own audits and operations monitoring.
 - Keep AWS WAF and the backend's DynamoDB rate-limit table enabled for `/rpc/*` and
   `/api/strk20/*`. Configure Vercel Firewall independently for Terminal-only
   `/api/private-swap/*` routes.
-- Configure the SDK sub-account module only when supporting `subaccount_invoke`; keep each
+- Configure the SDK shadow-account anonymizer only when supporting `shadow_account_invoke`, and
+  pick it once: changing it moves every user's shadow accounts. Keep each
   dapp-specific anonymizer/executor in that dapp's reviewed action plan.
 - Supply a private paymaster/relayer and fee token to enable private transfers, withdrawals,
   invokes, and private relay-fee submission. Registration and deposit-only entry remain available
@@ -235,39 +421,43 @@ production service.
 ## Opt-in Mainnet lifecycle test
 
 `tests/mainnet/strk20-lifecycle.mainnet.ts` is a separate, local-only Playwright core-lifecycle suite
-for the real deployed pool and configured discovery/proving services. It imports a dedicated funded
+for the real deployed pool and configured discovery/proving services. Wallet send, balance, dapp,
+and signing flows on mainnet are `bun run test:e2e:mainnet:wallet` (`docs/MAINNET_E2E.md`). It imports a dedicated funded
 account into a disposable Chromium profile, confirms that the derived address matches the expected
 address, connects that one account to a loopback dapp, and exercises registration, deposit,
 transfer to self, and withdrawal to self. It prepares real proofs, but deliberately submits them
 from the public account instead of a relayer. This validates the protocol without AVNU while
 publicly linking the account to every action; it is not a privacy-preserving production route.
 
-The suite is deliberately excluded from `bun run test:e2e` and CI. Its Playwright configuration
+The suite is deliberately excluded from `bun run test:e2e` and pull-request CI.
+The mainnet workflow runs it only when `vars.MAINNET_E2E_STRK20` is true,
+because the pool fee does not fit the standard hot-wallet cap
+(`docs/MAINNET_E2E_CI.md`). Its Playwright configuration
 disables traces, screenshots, video, retries, and parallel workers so entered signing material
 cannot enter a browser artifact. It also refuses deposits above 1 STRK. Build first, then export
 the values in the current shell without putting them in a repository file or shell history:
 
 ```bash
 bun run build
-export MC_STRK20_E2E_ACCOUNT_ADDRESS='<dedicated test account address>'
-export MC_STRK20_E2E_DEPOSIT_STRK='0.1'
-export MC_STRK20_E2E_DISCOVERY_URL='<direct discovery service URL>'
-export MC_STRK20_E2E_PROVER_URL='<direct proving service URL>'
-export MC_STRK20_E2E_RPC_URL='<RPC 0.10 endpoint with proof-facts support>'
-export MC_STRK20_E2E_MAINNET_ACK='I_UNDERSTAND_THIS_WRITES_TO_MAINNET'
-export MC_STRK20_E2E_PUBLIC_CALLER_ACK='I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS'
-read -rs 'MC_STRK20_E2E_PRIVATE_KEY?Dedicated test signing key: '
-export MC_STRK20_E2E_PRIVATE_KEY
+export BRAMBLE_STRK20_E2E_ACCOUNT_ADDRESS='<dedicated test account address>'
+export BRAMBLE_STRK20_E2E_DEPOSIT_STRK='0.1'
+export BRAMBLE_STRK20_E2E_DISCOVERY_URL='<direct discovery service URL>'
+export BRAMBLE_STRK20_E2E_PROVER_URL='<direct proving service URL>'
+export BRAMBLE_STRK20_E2E_RPC_URL='<RPC 0.10 endpoint with proof-facts support>'
+export BRAMBLE_STRK20_E2E_MAINNET_ACK='I_UNDERSTAND_THIS_WRITES_TO_MAINNET'
+export BRAMBLE_STRK20_E2E_PUBLIC_CALLER_ACK='I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS'
+read -rs 'BRAMBLE_STRK20_E2E_PRIVATE_KEY?Dedicated test signing key: '
+export BRAMBLE_STRK20_E2E_PRIVATE_KEY
 bun run test:e2e:mainnet
-unset MC_STRK20_E2E_ACCOUNT_ADDRESS MC_STRK20_E2E_PRIVATE_KEY \
-  MC_STRK20_E2E_DEPOSIT_STRK MC_STRK20_E2E_DISCOVERY_URL \
-  MC_STRK20_E2E_PROVER_URL MC_STRK20_E2E_RPC_URL MC_STRK20_E2E_MAINNET_ACK \
-  MC_STRK20_E2E_PUBLIC_CALLER_ACK MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK
+unset BRAMBLE_STRK20_E2E_ACCOUNT_ADDRESS BRAMBLE_STRK20_E2E_PRIVATE_KEY \
+  BRAMBLE_STRK20_E2E_DEPOSIT_STRK BRAMBLE_STRK20_E2E_DISCOVERY_URL \
+  BRAMBLE_STRK20_E2E_PROVER_URL BRAMBLE_STRK20_E2E_RPC_URL BRAMBLE_STRK20_E2E_MAINNET_ACK \
+  BRAMBLE_STRK20_E2E_PUBLIC_CALLER_ACK BRAMBLE_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK
 ```
 
 If a proof-bearing deposit reached the RPC but its response was lost, first
 verify that the private balance increased, then set
-`MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK=I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED`
+`BRAMBLE_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK=I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED`
 to resume at self-transfer without submitting a second deposit. This recovery
 gate is not part of the default full-lifecycle run.
 

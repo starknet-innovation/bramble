@@ -1,9 +1,11 @@
 {
-  "name": "@mc-wallet/ui-kit",
+  "name": "@bramble/ui-kit",
+  "description": "Design-system primitives: skin, scale, icons, fields, controls, navigation primitives, motion constants and safe markup helpers.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
+    "./brand-mark": "./src/components/brand-mark.ts",
     "./catalog": "./src/components/catalog.ts",
     "./content": "./src/components/content.ts",
     "./controls": "./src/components/controls.ts",
@@ -24,7 +26,7 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/wallet-model": "workspace:*"
   }
 }

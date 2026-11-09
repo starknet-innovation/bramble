@@ -11,7 +11,7 @@ import {
   normalizeAnimationUri,
   normalizeImageUrl,
   normalizeIndexerNft,
-} from "@mc-wallet/portfolio/nft-metadata";
+} from "@bramble/portfolio/nft-metadata";
 
 const CONTRACT = "0x0511a2b3";
 const CANONICAL = "0x511a2b3";
@@ -29,6 +29,17 @@ describe("normalizeImageUrl", () => {
     expect(normalizeImageUrl("ipfs://")).toBe("");
     expect(normalizeImageUrl(42)).toBe("");
     expect(normalizeImageUrl(undefined)).toBe("");
+  });
+
+  test("drops literal local and private hosts, including fully-qualified names", () => {
+    expect(normalizeImageUrl("https://localhost/a.png")).toBe("");
+    expect(normalizeImageUrl("https://localhost./a.png")).toBe("");
+    expect(normalizeImageUrl("https://sub.localhost/a.png")).toBe("");
+    expect(normalizeImageUrl("https://printer.local/a.png")).toBe("");
+    expect(normalizeImageUrl("https://printer.local./a.png")).toBe("");
+    expect(normalizeImageUrl("https://127.0.0.1/a.png")).toBe("");
+    expect(normalizeImageUrl("https://127.0.0.1./a.png")).toBe("");
+    expect(normalizeImageUrl("https://[::1]/a.png")).toBe("");
   });
 
   test("passes safe image data URIs through verbatim (idempotent)", () => {

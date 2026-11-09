@@ -1,56 +1,48 @@
 /**
- * Tabbed portfolio section on the home screen: Tokens and Collectibles share
- * one immediate local switcher. Activity remains a top-level dock destination
- * rather than appearing twice. A single overflow menu progressively discloses
- * asset management, refresh, and settings actions.
+ * Portfolio section on the home screen: Tokens, plus a Staking tab where
+ * staking is switched on and an NFTs tab while NFTs are turned on (the default),
+ * reading Tokens · Staking · NFTs (../staking/staking-home); with neither the
+ * section renders a heading rather than a one-item tablist. Activity
+ * remains a top-level dock destination rather than appearing twice. A single
+ * overflow menu offers Refresh on every tab and Manage tokens on the Tokens
+ * tab only.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { friendlyNetworkError } from "@mc-wallet/core/network-error";
+import { escapeHtml } from "@bramble/core/html";
+import { friendlyNetworkError } from "@bramble/core/network-error";
 import type {
   DisplayCurrency,
   TokenConfig,
   WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import { explorerTransactionUrl } from "@mc-wallet/wallet-model/networks";
-import type { DiscoveredNft, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
+} from "@bramble/settings/preferences";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
+import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
-import { type IconName, icon } from "../../shared/icons";
+import { icon } from "../../shared/icons";
+import { accountLabel, inlineCopyButton } from "../../shared/parts";
+import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
 import {
-  type NftGalleryItem,
-  nftImageMarkup,
-  nftTilePlay,
-  visibleNftItems,
-} from "../collectibles/nft-views";
-import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+  deploymentKnownFromPrivacy,
+  type PrivacyDisclosureState,
+  privacyIneligibleKind,
+} from "../privacy/privacy-model";
+import type { StakingState } from "../staking/staking-directory-client";
+import { type HomeTab, homeTabPanels } from "../staking/staking-home";
+import { activityRecordFacts, counterpartyFact } from "./activity-detail";
+import { type ActivityContact, activityRowAttributes } from "./activity-filter";
+import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
-import { type PrivateBreakdown, unifiedBalanceRow } from "./token-row";
-
-/**
- * Tab ids of the home portfolio section, in display order.
- */
-const HOME_TABS = ["tokens", "collectibles"] as const;
-
-/**
- * One of the home portfolio tabs.
- */
-export type HomeTab = (typeof HOME_TABS)[number];
-
-const TAB_LABELS: Readonly<Record<HomeTab, string>> = {
-  collectibles: "Collectibles",
-  tokens: "Tokens",
-};
-
-/**
- * Checks untrusted dataset values before switching home tabs.
- */
-export const isHomeTab = (value: unknown): value is HomeTab =>
-  typeof value === "string" && HOME_TABS.some((tab) => tab === value);
+import {
+  type PrivateBreakdown,
+  starknetNetworkGlyph,
+  tokenGlyph,
+  unifiedBalanceRow,
+} from "./token-row";
 
 /**
  * Balances shown on the home Tokens tab: tracked balances minus user-hidden
@@ -60,7 +52,7 @@ export const visibleHomeBalances = (
   state: BalanceState,
   preferences: WalletPreferences | null,
 ): readonly TokenBalance[] => {
-  if ("error" in state) {
+  if (!("balances" in state)) {
     return [];
   }
   const trackedById = new Map<string, TokenConfig>(
@@ -132,10 +124,8 @@ export const unifiedHomeBalances = (
  * committed its block yet.
  */
 const PROVISIONAL_TX_HINT: Partial<Record<ActivityEntry["status"], string>> = {
-  pending:
-    "Broadcast accepted. Starknet normally confirms quickly, and this wallet checks immediately. A pending transaction can't be fee-bumped, replaced, or cancelled.",
-  preconfirmed:
-    "Pre-confirmed by the block proposer, so the result is known but not yet final. MC Wallet keeps checking in the background and will tell you if it does not settle.",
+  pending: "Broadcast accepted. It can't be fee-bumped, replaced, or cancelled.",
+  preconfirmed: "Pre-confirmed, not final yet. Bramble tells you if it doesn't settle.",
 };
 
 /**
@@ -146,62 +136,149 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
   preconfirmed: "pre-confirmed",
 };
 
-const activityAppearance = (
-  entry: ActivityEntry,
-): { readonly icon: IconName; readonly label: string; readonly type: string } => {
-  const summary = entry.summary.toLowerCase();
-  if (/\bswap(ped|ping)?\b/.test(summary)) return { icon: "swap", label: "Swap", type: "swap" };
-  if (/\bunstak(e|ed|ing)\b|\bundelegat(e|ed|ing)\b/.test(summary))
-    return { icon: "piggyBankBroken", label: "Unstake", type: "unstake" };
-  if (
-    /\b(claim|claimed|claiming)\b.*\brewards?\b|\brewards?\b.*\b(claim|claimed|claiming)\b/.test(
-      summary,
-    )
-  )
-    return { icon: "blackberry", label: "Claim rewards", type: "reward" };
-  if (/\bstak(e|ed|ing)\b|\bdelegat(e|ed|ing)\b/.test(summary))
-    return { icon: "piggyBank", label: "Stake", type: "stake" };
-  if (/\b(un)?shield(ed|ing)?\b|\bprivate\b/.test(summary))
-    return { icon: "maskedFace", label: "Private transaction", type: "private" };
-  if (/\b(approve|approved|revoke|revoked)\b/.test(summary))
-    return { icon: "lock", label: "Approval", type: "approval" };
-  if (entry.kind === "transfer") {
-    const received = /\b(receive|received)\b/.test(summary);
-    return { icon: received ? "receive" : "send", label: "Transfer", type: "transfer" };
-  }
-  if (entry.kind === "deploy") return { icon: "rocket", label: "Deployment", type: "deploy" };
-  if (entry.kind === "declare")
-    return { icon: "terminal", label: "Contract declaration", type: "declare" };
-  return { icon: "activity", label: "Contract interaction", type: "other" };
-};
-
 /**
  * Renders one recorded transaction row for the account-partitioned Activity
- * dock and its design-system specimen. A provisional status carries an
- * explanatory hint and its own muted-but-distinct treatment, so a pre-confirmed
- * transaction never reads as settled.
+ * dock and its design-system specimen, in the design kit's transaction-row
+ * anatomy: an inline kind glyph beside the verb, the counterparty or asset
+ * pair beneath it, the signed fiat delta over the asset amount on the right,
+ * and the token mark trailing. A settled
+ * row says nothing more; a provisional or failed one adds its status word
+ * beneath the detail in the status hue, carries an explanatory hint, and keeps
+ * its glyph in that hue, so a pre-confirmed transaction never reads as
+ * settled. The status and UTC time stay reachable on the row's tooltip and in
+ * the summary's accessible name (the visible meta line is hidden from
+ * assistive tech), so nothing is announced twice. The visible verb is a classification, so the accessible name keeps
+ * the full recorded summary (prefixed by the verb when the summary does not
+ * already start with it) — the row never announces less than the record says.
+ * The transaction hash, its Starkscan link and its copy control, and a
+ * recorded counterparty in full with its own copy control, sit in the expanded
+ * body, followed by the fee, network and token contract the record holds:
+ * a `<summary>` is one control with its own accessible name, so links and
+ * buttons inside it may never reach assistive tech (mc-wallet issue 476).
+ * Without `pricing` the fiat delta is simply absent.
  */
-export const transactionRow = (entry: ActivityEntry): string => {
+export const transactionRow = (
+  entry: ActivityEntry,
+  pricing?: ActivityPricing,
+  contacts: readonly ActivityContact[] = [],
+): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
   const label = STATUS_LABEL[entry.status] ?? entry.status;
-  const appearance = activityAppearance(entry);
+  const row = activityRowModel(entry, pricing);
   // Devnet has no explorer, so the outbound link is simply absent there rather
   // than pointing somewhere that cannot resolve the hash.
   const explorer = explorerTransactionUrl(entry.networkId, entry.hash);
-  const statusLabel = `${appearance.label}, ${label}`;
-  const summary = escapeHtml(entry.summary);
+  const statusLabel = `${row.label}, ${label}`;
+  // Status leads the clock on the tooltip and in the accessible name; the time
+  // is not printed on the row itself.
+  const clock = formatUtcClock(entry.submittedAt);
+  const timing = [capitalise(label), clock].filter((part) => part !== null).join(" · ");
+  const spoken = clock === null ? label : `${label}, ${clock}`;
+  const avatar = row.tokenSymbol
+    ? tokenGlyph(row.tokenAddress ?? "0x0", row.tokenSymbol)
+    : starknetNetworkGlyph();
+  // The verb alone ("Sent") said less than the row's own asset column did, so
+  // the amount joins it and the column goes. The fiat figure went with it: a
+  // value computed from today's price is not what this transaction was worth.
+  // Entries recorded before the amount and token fields existed carry the
+  // figure only inside their summary, which `detail` has already stripped the
+  // verb from. Using it keeps the amount on the collapsed row; a counterparty
+  // detail is an address and belongs in the expansion, not the heading.
+  const figure = row.amount ?? (row.counterparty ? null : row.detail);
+  const heading = figure === null ? row.title : `${row.title} ${figure}`;
+  const when = [formatUtcDate(entry.submittedAt), clock].filter((part) => part !== null).join(", ");
+  const attributes = activityRowAttributes(entry, pricing, contacts);
   return `
-  <li class="tx-row">
-    <span class="tx-kind-icon tx-kind-${appearance.type} ${entry.status}" aria-label="${escapeHtml(statusLabel)}" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(appearance.icon)}</span>
-    <div class="tx-copy">
-      ${
-        explorer
-          ? `<a class="tx-summary-link" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" aria-label="${summary}. ${escapeHtml(label)}. View transaction on Starkscan"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${summary}</a>`
-          : `<strong>${summary}<span class="sr-only">. ${escapeHtml(label)}.</span></strong>`
-      }
-    </div>
+  <li class="tx-row" data-live-group title="${escapeHtml(timing)}"${attributes.length > 0 ? ` ${attributes}` : ""}>
+    <details class="disclosure tx-disclosure" data-disclosure="tx:${escapeHtml(entry.hash)}">
+      <summary aria-label="${escapeHtml(heading)}. ${escapeHtml(spoken)}">
+        <span class="tx-kind-icon tx-kind-${escapeHtml(row.type)} ${escapeHtml(entry.status)}" aria-hidden="true" title="${escapeHtml(hint ?? statusLabel)}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}">${icon(row.icon)}</span>
+        <span class="tx-copy">
+          <strong class="tx-title">${escapeHtml(heading)}</strong>
+        </span>
+        ${
+          entry.status === "accepted"
+            ? ""
+            : `<span class="tx-meta ${escapeHtml(entry.status)}">${escapeHtml(capitalise(label))}</span>`
+        }
+        <span class="tx-avatar">${avatar}</span>
+        <span class="disclosure-mark">${icon("chevronRight")}</span>
+      </summary>
+      <div class="disclosure-body">
+        <dl class="request-detail">
+          <div><dt>Transaction</dt><dd class="tx-hash-row">${
+            explorer
+              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
+              : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
+          }${inlineCopyButton(entry.hash, "Copy transaction hash")}</dd></div>
+          ${
+            row.counterparty
+              ? counterpartyFact(capitalise(row.counterparty.role), row.counterparty.address)
+              : row.detail && row.detail !== figure
+                ? `<div><dt>Detail</dt><dd>${escapeHtml(row.detail)}</dd></div>`
+                : ""
+          }
+          ${activityRecordFacts(entry, pricing?.tokens)}
+          ${when === "" ? "" : `<div><dt>Submitted</dt><dd>${escapeHtml(when)}</dd></div>`}
+          ${hint ? `<div><dt>Status</dt><dd>${escapeHtml(hint)}</dd></div>` : ""}
+        </dl>
+      </div>
+    </details>
   </li>`;
 };
+
+// The heading for one UTC day: the two most recent days read as words when
+// the caller knows which day it is, every other day shows its date.
+const dayLabel = (key: number, date: string, todayKey: number | null): string =>
+  key === todayKey ? "Today" : key === (todayKey ?? Number.NaN) - 1 ? "Yesterday" : date;
+
+/**
+ * Groups a newest-first feed into UTC calendar days, each rendered as a small
+ * heading over its own list, so a long feed reads by date rather than as one
+ * undifferentiated column. Consecutive entries are grouped, which preserves the
+ * feed's own order; an entry without a usable timestamp joins an "Undated"
+ * group. `todayKey` (the current UTC day from `utcDayKey`) labels that day
+ * "Today" and the one before it "Yesterday"; without it every day is dated.
+ */
+export const transactionGroups = (
+  entries: readonly ActivityEntry[],
+  pricing?: ActivityPricing,
+  todayKey: number | null = null,
+  contacts: readonly ActivityContact[] = [],
+): string => {
+  const groups: Array<{ readonly key: number | null; readonly label: string; rows: string[] }> = [];
+  for (const entry of entries) {
+    const date = formatUtcDate(entry.submittedAt);
+    const key = date === null ? null : utcDayKey(entry.submittedAt);
+    const current = groups.at(-1);
+    if (current && current.key === key) {
+      current.rows.push(transactionRow(entry, pricing, contacts));
+    } else {
+      const label = key === null || date === null ? "Undated" : dayLabel(key, date, todayKey);
+      groups.push({ key, label, rows: [transactionRow(entry, pricing, contacts)] });
+    }
+  }
+  return groups
+    .map(
+      (group) =>
+        `<section class="tx-day"><h3 class="tx-day-label">${escapeHtml(group.label)}</h3><ul class="tx-list">${group.rows.join("")}</ul></section>`,
+    )
+    .join("");
+};
+
+/**
+ * Renders the feed as one ungrouped list, for the amount sort where a per-day
+ * heading would fight the ordering the user asked for. The caller supplies the
+ * rows already ordered.
+ */
+export const transactionList = (
+  entries: readonly ActivityEntry[],
+  pricing?: ActivityPricing,
+  contacts: readonly ActivityContact[] = [],
+): string =>
+  `<ul class="tx-list tx-list-flat">${entries
+    .map((entry) => transactionRow(entry, pricing, contacts))
+    .join("")}</ul>`;
 
 // Renders the failed-load state with a friendly, actionable line and an
 // in-panel retry that re-runs the balance load (wired in ./index.ts).
@@ -222,7 +299,14 @@ const tokensErrorPanel = (error: string): string => `
 const privateBreakdownFor = (
   privacy: PrivacyDisclosureState,
   tokenId: string,
+  deployment: boolean | null,
+  fundedForFees: boolean | null,
 ): PrivateBreakdown => {
+  if (privacy.blockerKind === "other-wallet") return { kind: "other-wallet" };
+  if (privacyIneligibleKind(privacy)) return { kind: "unavailable" };
+  if (deploymentKnownFromPrivacy(deployment, privacy) === false) {
+    return { kind: fundedForFees === false ? "needs-funds" : "undeployed" };
+  }
   if (privacy.error) {
     return { kind: "unavailable" };
   }
@@ -250,24 +334,31 @@ const tokensPanel = (
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
   privacy: PrivacyDisclosureState,
+  deployment: boolean | null,
+  fundedForFees: boolean | null = true,
 ): string => {
   const visible = visibleHomeBalances(state, preferences);
-  const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
+  const hiddenCount = "balances" in state ? state.balances.length - visible.length : 0;
   const publicById = new Map(visible.map((token) => [token.id, token]));
   const unified = unifiedHomeBalances(state, privacy, preferences);
+  // Nothing read yet is not a failure: the list stays empty and busy until the
+  // first read lands, and only a read that failed shows the retry panel (795).
   const body =
-    "error" in state
-      ? tokensErrorPanel(state.error)
-      : unified.length === 0
-        ? emptyState("No tracked balances yet. Add or detect tokens to see them here.")
-        : `<ul class="token-list">${unified
-            .map((token) =>
-              unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
-                private: privateBreakdownFor(privacy, token.id),
-                publicFormatted: publicById.get(token.id)?.formatted ?? "0",
-              }),
-            )
-            .join("")}</ul>`;
+    "loading" in state
+      ? '<ul class="token-list" aria-busy="true"></ul>'
+      : "error" in state
+        ? tokensErrorPanel(state.error)
+        : unified.length === 0
+          ? emptyState("No tracked balances yet. Add or scan for tokens to see them here.")
+          : `<ul class="token-list">${unified
+              .map((token) =>
+                unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
+                  private: privateBreakdownFor(privacy, token.id, deployment, fundedForFees),
+                  // A public balance never read is unknown, not zero (audit M5).
+                  publicFormatted: publicById.get(token.id)?.formatted || null,
+                }),
+              )
+              .join("")}</ul>`;
   return `${body}
     ${
       privacy.error
@@ -282,55 +373,12 @@ const tokensPanel = (
         ? menuRow({
             attributes: { "data-view": "tokens" },
             icon: "coins",
-            label: "Hidden tokens",
-            value: `${hiddenCount} hidden`,
+            label: "Manage tokens",
+            value: `${hiddenCount} not shown`,
           })
         : ""
     }
     <p id="panel-result" role="status"></p>`;
-};
-
-/**
- * Renders one compact collectible card for the home portfolio tab.
- */
-export const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => `
-  <li class="collectible-tile">
-    <button class="collectible-card" data-nft-open="${escapeHtml(nft.id)}" type="button">
-      <span class="collectible-art">${nftImageMarkup(nft, true, eager)}${icon("image")}</span>
-      <span class="collectible-copy">
-        <strong>${escapeHtml(nft.title)}</strong>
-        <code>#${escapeHtml(nft.tokenId)}</code>
-      </span>
-    </button>
-    ${nftTilePlay(nft)}
-  </li>`;
-
-const collectiblesPanel = (
-  status: WalletStatus,
-  preferences: WalletPreferences | null,
-  discoveredNfts: readonly DiscoveredNft[],
-): string => {
-  const owner = status.accounts.find((account) => account.id === status.activeAccountId)?.address;
-  const nfts = visibleNftItems(
-    preferences?.nfts ?? [],
-    discoveredNfts,
-    status.networkId,
-    owner ?? null,
-  ).filter((nft) => nft.watched);
-  return `${
-    nfts.length === 0
-      ? emptyState("No collectibles watched on this network yet. Add one you own from the gallery.")
-      : `<ul class="collectible-grid">${nfts.map((nft, index) => collectibleCard(nft, index < 4)).join("")}</ul>`
-  }
-    ${button({
-      attributes: { "data-view": "nfts" },
-      className: "tab-more",
-      icon: "chevronRight",
-      iconPosition: "after",
-      label: "Open gallery",
-      size: "small",
-      variant: "ghost",
-    })}`;
 };
 
 /**
@@ -339,17 +387,14 @@ const collectiblesPanel = (
 export const activityEmptyCopy = (historyUnavailable: boolean): string =>
   historyUnavailable
     ? "No transactions recorded on this device yet."
-    : "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.";
-
-const tabButton = (tab: HomeTab): string =>
-  `<button class="home-tab" id="home-tab-${tab}" data-home-tab="${tab}" type="button" role="tab" aria-selected="${tab === "tokens"}" aria-controls="home-panel-${tab}">${TAB_LABELS[tab]}</button>`;
-
-const tabPanel = (tab: HomeTab, body: string): string =>
-  `<div class="tab-panel" id="home-panel-${tab}" data-tab-panel="${tab}" role="tabpanel" aria-labelledby="home-tab-${tab}"${tab === "tokens" ? "" : " hidden"}>${body}</div>`;
+    : "No activity yet. Transactions for this account appear here.";
 
 /**
- * Renders the tabbed portfolio section. The Tokens tab opens by default; the
- * runtime re-applies the remembered tab after every re-render.
+ * Renders the portfolio section. With an NFTs panel (NFTs turned on) or
+ * staking on, the offered tabs read Tokens · Staking · NFTs with `selected`
+ * open (the remembered tab, `StakingState.homeTab`); otherwise the section
+ * title is a plain heading rather than a one-item tablist, and the token list
+ * needs no panel wrapper.
  */
 export const homeTabs = (
   state: BalanceState,
@@ -357,19 +402,33 @@ export const homeTabs = (
   prices: Readonly<Record<string, number>>,
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
-  status: WalletStatus,
-  discoveredNfts: readonly DiscoveredNft[] = [],
   privacy: PrivacyDisclosureState = {
     error: null,
     loading: false,
     value: null,
   },
-): string => `
-  <section class="home-tabs" data-active-tab="tokens" aria-label="Portfolio">
+  deployment: boolean | null = null,
+  fundedForFees: boolean | null = true,
+  staking: StakingState | null = null,
+  nfts: string | null = null,
+  selected: HomeTab = staking?.homeTab ?? "tokens",
+): string => {
+  const tokens = tokensPanel(
+    state,
+    preferences,
+    prices,
+    changes,
+    currency,
+    privacy,
+    deployment,
+    fundedForFees,
+  );
+  // Tokens · Staking · NFTs, each tab offered only where it applies.
+  const tabs = staking || nfts !== null ? homeTabPanels(selected, tokens, staking, nfts) : null;
+  return `
+  <section class="home-tabs" aria-label="Portfolio">
     <div class="tab-bar">
-      <div class="tab-set" role="tablist" aria-label="Portfolio sections">
-        ${HOME_TABS.map(tabButton).join("")}
-      </div>
+      ${tabs ? tabs.bar : '<div class="tab-set"><h2>Tokens</h2></div>'}
       <div class="portfolio-actions">
         ${iconButton({
           attributes: {
@@ -384,27 +443,18 @@ export const homeTabs = (
           variant: "ghost",
         })}
         <div class="portfolio-menu" id="portfolio-menu" role="menu" aria-label="Portfolio actions" hidden>
-          ${button({
-            attributes: { "data-view": "tokens", role: "menuitem", tabindex: "-1" },
-            className: "portfolio-menu-item",
-            icon: "coins",
-            label: "Manage tokens",
-            variant: "ghost",
-          })}
-          ${button({
-            attributes: { "data-view": "nfts", role: "menuitem", tabindex: "-1" },
-            className: "portfolio-menu-item",
-            icon: "image",
-            label: "Manage collectibles",
-            variant: "ghost",
-          })}
-          ${button({
-            attributes: { "data-view": "settings", role: "menuitem", tabindex: "-1" },
-            className: "portfolio-menu-item",
-            icon: "settings",
-            label: "Wallet settings",
-            variant: "ghost",
-          })}
+          ${
+            // Manage tokens acts on the Tokens tab only; Refresh covers every tab.
+            !tabs || tabs.open === "tokens"
+              ? button({
+                  attributes: { "data-view": "tokens", role: "menuitem", tabindex: "-1" },
+                  className: "portfolio-menu-item",
+                  icon: "coins",
+                  label: "Manage tokens",
+                  variant: "ghost",
+                })
+              : ""
+          }
           ${button({
             attributes: {
               "data-reload-balances": true,
@@ -420,6 +470,6 @@ export const homeTabs = (
         </div>
       </div>
     </div>
-    ${tabPanel("tokens", tokensPanel(state, preferences, prices, changes, currency, privacy))}
-    ${tabPanel("collectibles", collectiblesPanel(status, preferences, discoveredNfts))}
+    ${tabs ? tabs.panels : tokens}
   </section>`;
+};

@@ -6,11 +6,8 @@
  * leaves the log untouched.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import {
-  createAllowanceStore,
-  memoryAllowanceStore,
-} from "@mc-wallet/transactions/allowance-store";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createAllowanceStore, memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -62,11 +59,11 @@ describe("memoryAllowanceStore no-op branches", () => {
     expect(entries[0]?.amount).toBe("2000");
   });
 
-  test("treats a zero amount as a removal (no push) and removes any prior entry", async () => {
+  test("keeps a prior entry, marked as revoking, when a zero amount is recorded over it", async () => {
     const store = memoryAllowanceStore();
     await store.record(input({ amount: "1000" }));
     await store.record(input({ amount: "0" }));
-    expect(await store.list()).toEqual([]);
+    expect(await store.list()).toMatchObject([{ amount: "1000", revoking: true }]);
   });
 
   test("a zero-amount record with no prior entry stays empty", async () => {

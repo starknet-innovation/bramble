@@ -1,14 +1,24 @@
 /** First-run recovery, account preview, and persistence bindings. */
 
-import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
+import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
+import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
-import { bindAccountContractChoices } from "./account-contract-bind";
-import { verifyBackupWords } from "./backup-verify";
-import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { friendlyAccountName } from "../../shared/parts";
+import {
+  BACKUP_VERIFY_COPY,
+  backupVerifyPositions,
+  backupVerifyState,
+  DEFAULT_BACKUP_VERIFY_POSITIONS,
+} from "./backup-verify";
+import { bindBackupVerification } from "./backup-verify-bind";
+import { bindGeneratedPhrase } from "./generated-phrase-ui";
+import { bindKeyImport } from "./import-key-ui";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
+import { applyPassphraseMeter, bindEnterToContinue } from "./passphrase-meter";
+import { bindPassphraseReveal } from "./passphrase-reveal";
 import { bindRecoveryAccountUi } from "./recovery-account-ui";
 import { bindRecoveryImportControls } from "./recovery-import-bind";
 import { bindRecoveryWordAssist } from "./recovery-word-assist";
@@ -17,6 +27,12 @@ import { fillRecoveryWords, recoveryWordsFrom, setRecoveryWordCount } from "./re
 /** Dependencies the onboarding binding closes over. */
 export type OnboardingUiDeps = {
   readonly app: Element | null;
+  /**
+   * The composition root's clock, used only to vary which words the backup
+   * confirmation asks for. Without one the default positions are asked every
+   * time, which is what fixtures and tests want.
+   */
+  readonly now?: (() => number) | null;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly wallet: SidepanelWallet;
 };
@@ -49,36 +65,27 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const recoveryResult = form.querySelector<HTMLElement>("#recovery-result");
   const generateResult = form.querySelector<HTMLElement>("#generate-result");
   const result = form.querySelector<HTMLElement>("#form-result");
-  const ackContainer = form.querySelector<HTMLElement>("#mainnet-ack");
-  const ackCheckbox = form.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
   const recoveryContinue = form.querySelector<HTMLButtonElement>("#recovery-continue");
   const generatedContinue = form.querySelector<HTMLButtonElement>("#generated-continue");
   const verifyContinue = form.querySelector<HTMLButtonElement>("#verify-continue");
-  const chooseAccountContract = form.querySelector<HTMLButtonElement>(
-    "#choose-account-contract-button",
-  );
-  const reviewAccount = form.querySelector<HTMLButtonElement>("#review-account-button");
+  const passwordContinue = form.querySelector<HTMLButtonElement>("#password-continue-button");
   const submitButton = form.querySelector<HTMLButtonElement>("#create-wallet-button");
-  const accountButton = form.querySelector<HTMLButtonElement>("#account-preview");
   const accountContractInput = form.querySelector<HTMLInputElement>(
     'input[name="accountContractType"]',
   );
   const previewAddress = form.querySelector<HTMLElement>("[data-preview-address]");
   const previewLabel = form.querySelector<HTMLElement>("[data-preview-label]");
-  const phraseToggle = form.querySelector<HTMLButtonElement>("#phrase-toggle");
-  const generatedGrid = form.querySelector<HTMLElement>('[data-recovery-grid="generated"]');
   const walletReady = form.dataset["walletReady"] === "true";
   const history: string[] = ["welcome"];
   let mnemonic = "";
   let importWordCount: 12 | 24 = 12;
-  let generatedWasRevealed = false;
   let requiresVerification = false;
-  let accountSelected = false;
   let previewMatchesInput = false;
   let previewGeneration = 0;
   let mnemonicGeneration = 0;
-  const accountContractType = (): AccountContractType | null =>
-    isAccountContractType(accountContractInput?.value) ? accountContractInput.value : null;
+  let verifyPositions: readonly number[] = DEFAULT_BACKUP_VERIFY_POSITIONS;
+  const accountContractType = () =>
+    isCreatableAccountContractType(accountContractInput?.value) ? accountContractInput.value : null;
 
   const stepFor = (id: string): HTMLElement | undefined =>
     steps.find((step) => step.dataset["onboardingStep"] === id);
@@ -130,19 +137,6 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     if (kind === "import") importWordCount = count;
   };
 
-  const setGeneratedPhraseMasked = (masked: boolean): void => {
-    generatedGrid?.classList.toggle("is-masked", masked);
-    generatedGrid?.toggleAttribute("inert", masked);
-    if (masked) {
-      generatedGrid?.setAttribute("aria-hidden", "true");
-    } else {
-      generatedGrid?.removeAttribute("aria-hidden");
-    }
-    for (const input of generatedInputs) {
-      input.tabIndex = masked ? -1 : 0;
-    }
-  };
-
   const recoveryFields = form.querySelector<HTMLElement>(
     '[data-onboarding-step="recovery"] .onboarding-fields',
   );
@@ -177,27 +171,22 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const invalidatePreview = (): void => {
     previewGeneration += 1;
     previewMatchesInput = false;
-    buttonBusy(reviewAccount, false);
-    if (chooseAccountContract) {
-      chooseAccountContract.disabled = !passwordOk();
+    if (passwordContinue) {
+      passwordContinue.disabled = !passwordOk();
     }
   };
 
   const refreshPassword = (): void => {
     const value = passphraseInput?.value ?? "";
     const confirmation = confirmationInput?.value ?? "";
-    const validLength = isVaultPassphrase(value);
     const matches = value === confirmation && confirmation.length > 0;
-    if (passwordResult) {
-      passwordResult.textContent = !validLength
-        ? "Enter at least 12 characters"
-        : matches
-          ? "Passphrases match"
-          : "Passphrases do not match";
-    }
-    passwordRequirement?.classList.toggle("is-ready", validLength && matches);
-    if (chooseAccountContract) {
-      chooseAccountContract.disabled = !passwordOk();
+    applyPassphraseMeter(
+      { requirement: passwordRequirement, result: passwordResult },
+      value,
+      confirmation,
+    );
+    if (passwordContinue) {
+      passwordContinue.disabled = !passwordOk();
     }
     if (passphraseResult) {
       passphraseResult.textContent =
@@ -206,25 +195,39 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     invalidatePreview();
   };
 
-  const verificationSatisfied = (): boolean =>
-    verifyBackupWords(
-      mnemonic,
-      verifyInputs.map((input) => input.value),
-    );
+  const verifyAnswers = () => verifyInputs.map((input) => input.value);
+  const verificationState = () => backupVerifyState(mnemonic, verifyAnswers(), verifyPositions);
 
-  const refreshVerification = (): void => {
-    const satisfied = verificationSatisfied();
-    if (verifyContinue) {
-      verifyContinue.disabled = !satisfied;
-    }
+  // Each generated phrase is confirmed at its own positions, so a second wallet
+  // is never confirmed with the words the first one taught. The field's visible
+  // label is its accessible name, so relabelling it is the whole change.
+  const applyVerifyPositions = (phrase: string): void => {
+    verifyPositions = backupVerifyPositions(
+      phrase.trim().split(/\s+/).filter(Boolean).length,
+      deps.now?.() ?? 0,
+    );
+    verifyInputs.forEach((input, index) => {
+      const position = verifyPositions[index];
+      const label = input.closest("label")?.querySelector("span");
+      if (label && position !== undefined) {
+        label.textContent = `Word ${position}`;
+      }
+    });
+  };
+  const verificationSatisfied = () => verificationState() === "confirmed";
+
+  // A mismatch shows on commit (blur/Enter) or a Continue attempt, never mid-typing.
+  const refreshVerification = (reportMismatch = false): void => {
+    const state = verificationState();
+    const shown = state === "mismatch" && !reportMismatch ? "incomplete" : state;
+    verifyContinue?.toggleAttribute("disabled", state !== "confirmed");
     if (verifyResult) {
-      verifyResult.textContent = satisfied
-        ? "Backup confirmed."
-        : "Enter the requested words to continue.";
+      verifyResult.textContent = BACKUP_VERIFY_COPY[shown];
+      verifyResult.classList.toggle("is-invalid", shown === "mismatch");
     }
   };
 
-  const selectedNetworkId = (): string => MAINNET_NETWORK_ID;
+  const selectedNetworkId = (): string => DEFAULT_NETWORK.id;
   const recoveryAccounts = bindRecoveryAccountUi({
     form,
     mnemonic: () => mnemonic,
@@ -233,26 +236,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     vaultPassphrase: () => passphraseInput?.value ?? "",
     wallet,
   });
-  const ackSatisfied = (): boolean =>
-    mainnetAckSatisfied(selectedNetworkId(), ackCheckbox?.checked ?? false);
-
   const refreshAccountGate = (): void => {
     if (submitButton) {
-      submitButton.disabled = !(
-        walletReady &&
-        accountSelected &&
-        previewMatchesInput &&
-        ackSatisfied()
-      );
+      submitButton.disabled = !(walletReady && previewMatchesInput);
     }
-  };
-
-  const syncNetworkGate = (): void => {
-    if (ackContainer) {
-      ackContainer.hidden = false;
-    }
-    previewMatchesInput = false;
-    refreshAccountGate();
   };
 
   app?.querySelectorAll<HTMLButtonElement>("[data-onboarding-back]").forEach((button) => {
@@ -261,13 +248,29 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   form
     .querySelector('[id="add-existing-button"]')
     ?.addEventListener("click", () => showStep("method"));
+  const keyImport = bindKeyImport({
+    app: deps.app,
+    form,
+    networkId: selectedNetworkId,
+    onEnter: () => {
+      requiresVerification = false;
+    },
+    passphrase: () => passphraseInput?.value ?? "",
+    passwordContinue,
+    render: deps.render,
+    showStep: (id: string) => {
+      showStep(id);
+      refreshPassword();
+    },
+    wallet,
+  });
   form.querySelector("#recovery-method-button")?.addEventListener("click", () => {
     requiresVerification = false;
+    keyImport.deactivate();
+    passwordContinue?.lastChild?.replaceWith("Find my accounts");
     showStep("recovery");
   });
-  form
-    .querySelector("#ledger-method-button")
-    ?.addEventListener("click", () => showStep("ledger-contract"));
+  form.querySelector("#ledger-method-button")?.addEventListener("click", () => showStep("ledger"));
 
   form.querySelector("#phrase-length-toggle")?.addEventListener("click", () => {
     importWordCount = importWordCount === 12 ? 24 : 12;
@@ -283,19 +286,22 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     importWordCount: () => importWordCount,
     isRecoveryActive: () =>
       steps.find((step) => !step.hidden)?.dataset["onboardingStep"] === "recovery",
+    recoveryClear: form.querySelector<HTMLButtonElement>("#phrase-clear"),
     recoveryContinue,
     recoveryResult,
     refreshPassword,
     refreshRecovery,
     setMnemonic: (phrase) => {
       mnemonic = phrase;
-      chooseAccountContract?.lastChild?.replaceWith("Find my accounts");
+      keyImport.deactivate();
+      passwordContinue?.lastChild?.replaceWith("Find my accounts");
     },
     showPasswordStep: () => showStep("password"),
     wallet,
     wordAssist,
   }));
 
+  const generatedPhrase = bindGeneratedPhrase(form, () => mnemonic);
   const createNew = form.querySelector<HTMLButtonElement>("#create-new-button");
   createNew?.addEventListener("click", () => {
     const generation = ++mnemonicGeneration;
@@ -307,16 +313,14 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           return;
         }
         mnemonic = generated.trim();
-        chooseAccountContract?.lastChild?.replaceWith("Choose account contract");
+        applyVerifyPositions(mnemonic);
+        keyImport.deactivate();
+        passwordContinue?.lastChild?.replaceWith("Review account");
         requiresVerification = true;
-        generatedWasRevealed = false;
-        setGeneratedPhraseMasked(true);
+        generatedPhrase.reset();
         fillWords(generatedInputs, mnemonic.split(/\s+/), "generated");
         for (const input of verifyInputs) {
           input.value = "";
-        }
-        if (generatedContinue) {
-          generatedContinue.disabled = true;
         }
         if (generateResult) {
           generateResult.textContent = "Reveal the phrase, save it offline, then continue.";
@@ -330,68 +334,49 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           return;
         }
         const message = errorMessage(error, "Recovery phrase failed");
-        showToast(message, "error", form);
+        showToast(message, "error", form, errorDetails(error, "Recovery phrase failed"));
         buttonBusy(createNew, false);
       },
     );
-  });
-
-  phraseToggle?.addEventListener("click", () => {
-    const masked = !(generatedGrid?.classList.contains("is-masked") ?? false);
-    setGeneratedPhraseMasked(masked);
-    phraseToggle.lastChild?.replaceWith(masked ? "Show recovery phrase" : "Hide recovery phrase");
-    if (!masked) {
-      generatedWasRevealed = true;
-    }
-    if (generatedContinue) {
-      generatedContinue.disabled = !generatedWasRevealed;
-    }
   });
 
   generatedContinue?.addEventListener("click", () => {
     showStep("verify");
     refreshVerification();
   });
-  for (const input of verifyInputs) {
-    input.addEventListener("input", refreshVerification);
-  }
-  verifyContinue?.addEventListener("click", () => {
-    if (verificationSatisfied()) {
+  bindBackupVerification({
+    continueButton: verifyContinue,
+    inputs: verifyInputs,
+    onConfirmed: () => {
       showStep("password");
       refreshPassword();
-    }
+    },
+    refresh: refreshVerification,
+    satisfied: verificationSatisfied,
   });
 
   passphraseInput?.addEventListener("input", refreshPassword);
   confirmationInput?.addEventListener("input", refreshPassword);
-  chooseAccountContract?.addEventListener("click", () => {
-    if (passwordOk()) {
-      if (requiresVerification) showStep("account-contract");
-      else {
-        showStep("recovery-accounts");
-        recoveryAccounts.start();
-      }
+  // Enter takes the step's Continue, never the form's submit, which belongs to
+  // "Finish setup".
+  bindEnterToContinue([passphraseInput, confirmationInput], passwordContinue);
+  passwordContinue?.addEventListener("click", () => {
+    if (!passwordOk()) {
+      refreshPassword();
+      return;
     }
+    if (keyImport.active()) {
+      void keyImport.runCreate();
+      return;
+    }
+    if (requiresVerification) {
+      runReviewAccount();
+      return;
+    }
+    showStep("recovery-accounts");
+    recoveryAccounts.start();
   });
-  ackCheckbox?.addEventListener("change", refreshAccountGate);
-  accountButton?.addEventListener("click", () => {
-    accountSelected = !(accountButton.getAttribute("aria-pressed") === "true");
-    accountButton.setAttribute("aria-pressed", String(accountSelected));
-    refreshAccountGate();
-  });
-  bindAccountContractChoices({
-    app,
-    form,
-    onLedgerContinue: () => showStep("ledger"),
-    onSoftwareChange: () => {
-      invalidatePreview();
-      accountSelected = false;
-      accountButton?.setAttribute("aria-pressed", "false");
-      refreshAccountGate();
-    },
-  });
-
-  reviewAccount?.addEventListener("click", () => {
+  const runReviewAccount = (): void => {
     if (!passwordOk()) {
       refreshPassword();
       return;
@@ -400,14 +385,14 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       showToast("Confirm your recovery phrase first", "error", form);
       return;
     }
-    buttonBusy(reviewAccount, true);
+    buttonBusy(passwordContinue, true);
     if (passphraseResult) {
       passphraseResult.textContent = "Deriving the public account address…";
     }
     const contractType = accountContractType();
     if (!contractType) {
       showToast("Choose a supported account contract", "error", form);
-      buttonBusy(reviewAccount, false);
+      buttonBusy(passwordContinue, false);
       return;
     }
     const generation = ++previewGeneration;
@@ -420,24 +405,22 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           invalidatePreview();
           return;
         }
-        accountSelected = false;
-        accountButton?.setAttribute("aria-pressed", "false");
         if (previewAddress) {
           previewAddress.textContent = `${account.address.slice(0, 10)}…${account.address.slice(-8)}`;
           previewAddress.title = account.address;
         }
         if (previewLabel) {
-          previewLabel.textContent =
-            contractType === "argent" ? "Primary Argent account" : "Primary OpenZeppelin account";
+          // The name the account gets once created: a new wallet has no
+          // label, so it shows the address-derived nickname, as Home will.
+          previewLabel.textContent = friendlyAccountName(account.address);
         }
         if (passphraseResult) {
           passphraseResult.textContent = "";
         }
-        syncNetworkGate();
         previewMatchesInput = true;
         refreshAccountGate();
         showStep("accounts");
-        buttonBusy(reviewAccount, false);
+        buttonBusy(passwordContinue, false);
       },
       (error: unknown) => {
         if (generation !== previewGeneration) {
@@ -445,27 +428,20 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         }
         const message = errorMessage(error, "Could not derive this account");
         if (passphraseResult) {
-          passphraseResult.textContent = message;
+          passphraseResult.textContent = errorLine(error, "Could not derive this account");
         }
-        showToast(message, "error", form);
-        buttonBusy(reviewAccount, false);
+        showToast(message, "error", form, errorDetails(error, "Could not derive this account"));
+        buttonBusy(passwordContinue, false);
       },
     );
-  });
+  };
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (!accountSelected || !previewMatchesInput) {
+    if (!previewMatchesInput) {
       if (result) {
-        result.textContent = "Select the account before continuing.";
+        result.textContent = "Wait for the account to finish deriving.";
       }
-      return;
-    }
-    if (!ackSatisfied()) {
-      if (result) {
-        result.textContent = "Confirm you understand this wallet can hold real funds.";
-      }
-      showToast("Acknowledge the real-funds warning first", "error", form);
       return;
     }
     buttonBusy(submitButton, true);
@@ -484,16 +460,17 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         },
         (error: unknown) => {
           const message = errorMessage(error, "Account import failed");
-          showToast(message, "error", form);
+          showToast(message, "error", form, errorDetails(error, "Account import failed"));
           if (result) {
-            result.textContent = message;
+            result.textContent = errorLine(error, "Account import failed");
           }
           buttonBusy(submitButton, false);
         },
       );
   });
 
-  syncNetworkGate();
+  bindPassphraseReveal(form);
+  refreshAccountGate();
   refreshRecovery();
   refreshPassword();
 };

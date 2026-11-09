@@ -7,10 +7,11 @@
  * passphrase; this module never touches the device or the vault directly.
  */
 
-import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { showToast } from "../../shared/dom";
-import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-ack";
+import { applyPassphraseMeter, bindEnterToContinue } from "../onboarding/passphrase-meter";
+import { bindPassphraseReveal } from "../onboarding/passphrase-reveal";
 
 /**
  * Dependencies the first-run Ledger setup binding closes over. `startLedgerSetup`
@@ -19,18 +20,14 @@ import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../onboarding/mainnet-a
  */
 export type LedgerFirstRunDeps = {
   readonly app: Element | null;
-  readonly startLedgerSetup: (
-    networkId: string,
-    vaultPassphrase: string,
-    accountContractType: AccountContractType,
-  ) => void;
+  readonly startLedgerSetup: (networkId: string, vaultPassphrase: string) => void;
 };
 
 /**
  * Binds the first-run "Set up with a Ledger" card: gates the button on a valid
- * unlock passphrase and, on Mainnet, the real-funds acknowledgement, then hands
- * the network and passphrase to the owner to drive the device onboarding overlay.
- * No recovery phrase is generated or requested — the vault holds no seed.
+ * unlock passphrase, then hands the network and passphrase to the owner to
+ * drive the device onboarding overlay. No recovery phrase is generated or
+ * requested — the vault holds no seed.
  */
 export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#ledger-setup-form");
@@ -42,11 +39,7 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   );
   const passwordResult = form?.querySelector<HTMLElement>("[data-password-result]");
   const passwordRequirement = passwordResult?.closest<HTMLElement>(".password-requirement");
-  const ackCheckbox = form?.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
   const button = form?.querySelector<HTMLButtonElement>("#ledger-setup-button");
-  const accountContractInput = form?.querySelector<HTMLInputElement>(
-    'input[name="ledgerAccountContractType"]',
-  );
   const result = form?.querySelector<HTMLElement>("#ledger-passphrase-result");
   const initiallyReady = !(button?.disabled ?? true);
 
@@ -54,12 +47,9 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
     const value = passphraseInput?.value ?? "";
     return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
   };
-  const ackOk = (): boolean =>
-    mainnetAckSatisfied(MAINNET_NETWORK_ID, ackCheckbox?.checked ?? false);
-
   const refreshGate = (): void => {
     if (button) {
-      button.disabled = !(initiallyReady && passphraseOk() && ackOk());
+      button.disabled = !(initiallyReady && passphraseOk());
     }
     if (result) {
       const value = passphraseInput?.value ?? "";
@@ -68,41 +58,34 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
       const passphraseValid = isVaultPassphrase(value);
       result.textContent = !passphraseValid
         ? valueLength > 0
-          ? "Passphrase must be at least 12 characters."
+          ? `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters.`
           : ""
         : confirmation.length > 0 && value !== confirmation
           ? "Enter the same passphrase in both fields."
           : "";
     }
-    if (passwordResult) {
-      passwordResult.textContent = !isVaultPassphrase(passphraseInput?.value ?? "")
-        ? "Enter at least 12 characters"
-        : passphraseOk()
-          ? "Passphrases match"
-          : "Passphrases do not match";
-    }
-    passwordRequirement?.classList.toggle("is-ready", passphraseOk());
+    applyPassphraseMeter(
+      { requirement: passwordRequirement, result: passwordResult },
+      passphraseInput?.value ?? "",
+      confirmationInput?.value ?? "",
+    );
   };
 
   passphraseInput?.addEventListener("input", refreshGate);
   confirmationInput?.addEventListener("input", refreshGate);
-  ackCheckbox?.addEventListener("change", refreshGate);
+  bindEnterToContinue([passphraseInput, confirmationInput], button);
+  bindPassphraseReveal(form);
   refreshGate();
 
   button?.addEventListener("click", () => {
     if (!passphraseOk()) {
-      showToast("Passphrase must be at least 12 characters", "error", form);
+      showToast(
+        `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+        "error",
+        form,
+      );
       return;
     }
-    if (!ackOk()) {
-      showToast("Acknowledge the real-funds warning first", "error", form);
-      return;
-    }
-    const accountContractType = accountContractInput?.value;
-    if (!isAccountContractType(accountContractType)) {
-      showToast("Choose a supported account contract", "error", form);
-      return;
-    }
-    deps.startLedgerSetup(MAINNET_NETWORK_ID, passphraseInput?.value ?? "", accountContractType);
+    deps.startLedgerSetup(DEFAULT_NETWORK.id, passphraseInput?.value ?? "");
   });
 };

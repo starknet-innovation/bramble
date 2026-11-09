@@ -9,8 +9,8 @@ import { describe, expect, test } from "bun:test";
 import {
   account as sidepanelAccount,
   secondAccount as sidepanelSecondAccount,
-} from "@mc-wallet/testkit/sidepanel";
-import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/testkit/sidepanel";
+import { isAccountRef } from "@bramble/wallet-model/accounts";
 import {
   account as backgroundAccount,
   secondAccount as backgroundSecondAccount,

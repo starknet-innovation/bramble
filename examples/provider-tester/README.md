@@ -1,7 +1,7 @@
-# MC Wallet — Provider Tester
+# Bramble — Provider Tester
 
 A standalone dApp page that exercises every method of the injected wallet
-provider (`window.starknet_mcWallet`) so you can walk through and confirm the
+provider (`window.starknet_bramble`) so you can walk through and confirm the
 wallet behaves correctly end to end.
 
 ## Why it must be served (not opened as a file)
@@ -25,17 +25,17 @@ python3 -m http.server 8000 --directory examples/provider-tester
 
 Then:
 
-1. Load and unlock MC Wallet (`bun run build`, load `dist/` unpacked in
+1. Load and unlock Bramble (`bun run build`, load `dist/` unpacked in
    `chrome://extensions`, create/unlock a wallet).
 2. Open `http://localhost:8000` (or the port your server printed) in a tab.
-3. Open the MC Wallet side panel next to it.
+3. Open the Bramble side panel next to it.
 4. Run the steps on the page top to bottom.
 
 ## What each step verifies
 
 | Step | Method | What to confirm |
 | --- | --- | --- |
-| 1 Detect | metadata | `id: mc-wallet`, `name: MC Wallet`, `version: 0.1.0`, inline icon |
+| 1 Detect | metadata | `id: bramble`, `name: Bramble`, `version: 0.1.0`, inline icon |
 | 2 Connect | `wallet_requestAccounts` | wallet prompts a **Connection request**; returns addresses after Approve |
 | 3 Authz | `mc_accounts`, `wallet_getPermissions` | `isPreauthorized: true` and `["accounts"]` once connected |
 | 4 Chain id | `wallet_requestChainId` | `0x534e5f4d41494e` (Mainnet) / `0x534e5f5345504f4c4941` (Sepolia) |

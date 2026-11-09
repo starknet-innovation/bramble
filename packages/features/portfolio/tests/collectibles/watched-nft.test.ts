@@ -3,7 +3,7 @@
  * rejection of malformed records.
  */
 import { describe, expect, test } from "bun:test";
-import { isWatchedNft, withNftId } from "@mc-wallet/portfolio/watched-nft";
+import { isWatchedNft, withNftId } from "@bramble/portfolio/watched-nft";
 
 const CONTRACT = "0x051a2b3c4d";
 

@@ -6,8 +6,8 @@ import {
   explorerDiagnosticsSnapshot,
   rpcDiagnosticsSnapshot,
   setReliabilityDiagnosticsEnabled,
-} from "@mc-wallet/starknet/rpc-diagnostics";
-import { createStarkscanClient, StarkscanError } from "@mc-wallet/transactions/starkscan";
+} from "@bramble/starknet/rpc-diagnostics";
+import { createStarkscanClient, StarkscanError } from "@bramble/transactions/starkscan";
 
 const ACCOUNT = "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";
 const TOKEN = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -53,7 +53,7 @@ describe("Starkscan client boundary", () => {
     expect(rpcDiagnosticsSnapshot()).toEqual([]);
   });
 
-  test("builds authenticated routes and parses complete token holdings", async () => {
+  test("builds authenticated routes and parses a token balance", async () => {
     const requests: Array<{ init: RequestInit; url: string }> = [];
     const client = createStarkscanClient({
       apiKey: "test-key",
@@ -61,39 +61,19 @@ describe("Starkscan client boundary", () => {
       async http(url, init) {
         requests.push({ init, url });
         return jsonResponse({
+          balanceRaw: "1023561579571385199213",
+          blockTag: "latest",
           chainId: "SN_MAIN",
           ownerAddress: ACCOUNT,
-          items: [
-            {
-              tokenAddress: TOKEN,
-              normalizedTokenAddress: TOKEN,
-              indexedBalanceRaw: "1023561579571385199213",
-              symbol: "STRK",
-              name: "Starknet Token",
-              decimals: 18,
-            },
-          ],
-          exact: true,
-          truncated: false,
-          completeness: {
-            exact: true,
-            truncated: false,
-            complete: true,
-            reasonCode: "complete",
-            reason: "Complete snapshot.",
-            lagBlocks: 0,
-            capped: false,
-            cap: null,
-          },
+          tokenAddress: TOKEN,
         });
       },
     });
 
-    const holdings = await client.getTokenHoldings("SN_MAIN", ACCOUNT, { limit: 25 });
-    expect(holdings.items[0]?.symbol).toBe("STRK");
-    expect(holdings.completeness.complete).toBe(true);
+    const balance = await client.getTokenBalance("SN_MAIN", TOKEN, ACCOUNT);
+    expect(balance.balanceRaw).toBe("1023561579571385199213");
     expect(requests[0]?.url).toBe(
-      `https://api.starkscan.test/v1/SN_MAIN/address/${ACCOUNT}/token-holdings?limit=25`,
+      `https://api.starkscan.test/v1/SN_MAIN/token/${TOKEN}/balance-of/${ACCOUNT}?block_tag=latest`,
     );
     expect(new Headers(requests[0]?.init.headers).get("X-Starkscan-Api-Key")).toBe("test-key");
   });

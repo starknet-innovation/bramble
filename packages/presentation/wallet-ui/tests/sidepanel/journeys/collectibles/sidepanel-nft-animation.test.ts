@@ -1,20 +1,19 @@
 /**
- * On-chain animation rendering through the real DOM binding: the detail view and
- * the collectibles-tile both surface a "Play animation" affordance for a token
- * with a data:text/html animation, and clicking it points the sandboxed iframe at
- * the renderer; a token without an animation shows no such control.
+ * On-chain animation rendering through the real DOM binding: the detail view
+ * surfaces a "Play animation" affordance for a token with a data:text/html
+ * animation, and clicking it points the sandboxed iframe at the renderer; a
+ * token without an animation shows no such control.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { bindNfts, type NftUiDeps } from "../../../../src/sidepanel/journeys/collectibles/nft-ui";
 import {
   nftDetailFlow,
   nftGalleryFlow,
 } from "../../../../src/sidepanel/journeys/collectibles/nft-views";
-import { homeTabs } from "../../../../src/sidepanel/journeys/portfolio/home-tabs";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const status: WalletStatus = {
@@ -52,6 +51,7 @@ const bind = (app: Element): void => {
   document.body.append(app);
   bindNfts({
     app,
+    navigate: () => undefined,
     openDetail: () => undefined,
     render: async () => undefined,
     wallet: {
@@ -95,6 +95,23 @@ describe("NFT detail animation", () => {
     expect(play?.hasAttribute("hidden")).toBe(true);
   });
 
+  test("never promises the absence of every network channel (Sherlock 236)", () => {
+    const app = fromHtml(nftDetailFlow(status, account, preferences, animated.id, [animated]));
+    const hint = app.querySelector("[data-nft-play]")?.previousElementSibling?.textContent ?? "";
+    // CSP does not govern WebRTC, and DNS prefetching differs by browser, so
+    // the hint must not claim the sandbox has no network access. Copy review
+    // #385 shortened it to what the reader does: nothing loads before play.
+    expect(hint).toBe("This NFT draws its own animation. Press play to load it.");
+    expect(hint.toLowerCase()).not.toContain("network");
+  });
+
+  test("the sandbox page opts out of DNS prefetching", async () => {
+    const page = await Bun.file(
+      new URL("../../../../../../../apps/extension/public/sandbox/render.html", import.meta.url),
+    ).text();
+    expect(page).toContain('<meta http-equiv="x-dns-prefetch-control" content="off" />');
+  });
+
   test("shows no play control for a collectible without an animation", () => {
     const app = fromHtml(nftDetailFlow(status, account, preferences, plain.id, [plain]));
     bind(app);
@@ -124,6 +141,8 @@ describe("NFT collectibles-tile animation", () => {
     const frame = app.querySelector<HTMLIFrameElement>("iframe.nft-animation--tile");
     expect(play).not.toBeNull();
     expect(frame?.hidden).toBe(true);
+    expect(frame?.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(frame?.referrerPolicy).toBe("no-referrer");
 
     play?.click();
 
@@ -137,60 +156,6 @@ describe("NFT collectibles-tile animation", () => {
   test("shows no tile play affordance for a collectible without an animation", () => {
     const app = fromHtml(nftGalleryFlow(status, account, preferences, [plain]));
     bind(app);
-    expect(app.querySelector(".nft-play-tile")).toBeNull();
-  });
-});
-
-describe("NFT home Collectibles-tab animation", () => {
-  const watchedPrefs: WalletPreferences = {
-    ...preferences,
-    nfts: [
-      {
-        contract: animated.contract,
-        id: animated.id,
-        label: animated.name,
-        networkId: animated.networkId,
-        tokenId: animated.tokenId,
-      },
-    ],
-  };
-
-  test("surfaces and plays the animation from the home Collectibles tile", () => {
-    const app = fromHtml(
-      homeTabs({ balances: [] }, watchedPrefs, {}, {}, "usd", status, [animated]),
-    );
-    bind(app);
-
-    const play = app.querySelector<HTMLButtonElement>(".collectible-tile .nft-play-tile");
-    const frame = app.querySelector<HTMLIFrameElement>(
-      ".collectible-tile iframe.nft-animation--tile",
-    );
-    expect(play).not.toBeNull();
-    expect(frame?.hidden).toBe(true);
-
-    play?.click();
-
-    expect(frame?.hidden).toBe(false);
-    expect(frame?.getAttribute("src")).toBe(
-      `sandbox/render.html#${encodeURIComponent(animated.animationUrl ?? "")}`,
-    );
-    expect(play?.hasAttribute("hidden")).toBe(true);
-  });
-
-  test("shows no play control on the home tile for a collectible without an animation", () => {
-    const plainPrefs: WalletPreferences = {
-      ...preferences,
-      nfts: [
-        {
-          contract: plain.contract,
-          id: plain.id,
-          label: plain.name,
-          networkId: plain.networkId,
-          tokenId: plain.tokenId,
-        },
-      ],
-    };
-    const app = fromHtml(homeTabs({ balances: [] }, plainPrefs, {}, {}, "usd", status, [plain]));
     expect(app.querySelector(".nft-play-tile")).toBeNull();
   });
 });

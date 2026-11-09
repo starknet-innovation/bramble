@@ -6,12 +6,13 @@
  * post-release phishing domain "starknet-rewards-2026.com".
  */
 import { describe, expect, test } from "bun:test";
-import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createOriginGuard } from "@bramble/permissions/blocklist";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const FEED_ONLY = "https://starknet-rewards-2026.com";
 const CLEAN = "https://legit-starknet-dapp.xyz";
@@ -54,9 +55,13 @@ const walletStub = {
       accounts: [account],
       accountSecrets: [],
       activeAccountId: account.id,
+      importedSeeds: [],
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 7 as const,
+      schemaVersion: 13 as const,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -83,7 +88,7 @@ const senderFor = (origin: string): RuntimeSender => ({ id: "extension-id", url:
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(walletStub, "extension-id", {
+  return createMessageHandler(walletStub, testExtension, {
     originGuard: createOriginGuard(() => new Set(["starknet-rewards-2026.com"])),
     preferencesStore: unavailablePreferencesStore,
     session,

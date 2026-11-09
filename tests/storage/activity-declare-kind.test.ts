@@ -18,13 +18,13 @@
  * still refused rather than silently rendered.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   type ActivityEntry,
   activityToCsv,
   createActivityLog,
   isActivityEntry,
-} from "@mc-wallet/transactions/activity";
+} from "@bramble/transactions/activity";
 
 const ACCOUNT = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 

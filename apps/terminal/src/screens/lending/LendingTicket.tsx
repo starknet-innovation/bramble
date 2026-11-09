@@ -3,13 +3,22 @@ import {
   Calculator,
   TriangleAlert,
 } from "lucide-react";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { avnuTokenArtwork } from "../../assets/avnu-token-assets";
 import { TokenIcon } from "../../components/index";
-import type { VesuMarket, VesuPair } from "../../data/index";
+import {
+  freshReferenceUsdPrice,
+  referenceUsdPrice,
+  type VesuMarket,
+  type VesuPair,
+} from "../../data/index";
 import {
   buildVesuMultiplyIncreaseCalls,
   quoteVesuMultiplyIncrease,
+  recheckVesuLendingQuote,
+  recheckVesuMultiplyQuote,
+  verifyVesuMultiplyPool,
 } from "../../protocols/index";
 import { buildLendingCalls, quoteLending } from "../../protocols/vesu/vesu";
 import { walletNetwork } from "../../wallet/connection/wallet-connection";
@@ -137,11 +146,24 @@ export const LendingTicket = ({
         if (collateralChoice === null || multiplyCollateralOutputRaw === null) {
           throw new Error("Enter a valid Multiply margin.");
         }
+        // The pool goes to modify_lever and both delegation calls, so the
+        // pinned factory's registry must list both legs first (Sherlock 169).
+        await verifyVesuMultiplyPool(
+          market.poolId,
+          collateralChoice.market.assetAddress,
+          market.assetAddress,
+        );
         setMessage("Quoting the debt-to-collateral route on Ekubo…");
+        // The swap cap is anchored to the AVNU price feed (#646).
         const route = await quoteVesuMultiplyIncrease(
           collateralChoice.market.assetAddress,
           market.assetAddress,
           BigInt(multiplyCollateralOutputRaw),
+          {
+            collateralDecimals: collateralChoice.market.decimals,
+            debtDecimals: market.decimals,
+            priceUsd: referenceUsdPrice,
+          },
         );
         const calls = buildVesuMultiplyIncreaseCalls(
           market.poolId,
@@ -153,6 +175,16 @@ export const LendingTicket = ({
         );
         await requestTransaction({
           calls,
+          // Right before the wallet sees the calls, the registry is read again
+          // (#270) and the swap cap is re-checked against an uncached price (#646).
+          handoffCheck: async () => {
+            await verifyVesuMultiplyPool(
+              market.poolId,
+              collateralChoice.market.assetAddress,
+              market.assetAddress,
+            );
+            await recheckVesuMultiplyQuote(route, freshReferenceUsdPrice);
+          },
           description:
             "Open or increase this Vesu Multiply position using the reviewed Ekubo route. Delegation and allowance are revoked in the same transaction.",
           details: [
@@ -188,6 +220,8 @@ export const LendingTicket = ({
           : [];
       await requestTransaction({
         calls,
+        // The registry is read again right before the wallet sees the calls (#270).
+        handoffCheck: () => recheckVesuLendingQuote(quote),
         description:
           "Submit the reviewed Vesu V2 position update. Your wallet will show every contract call and network fee.",
         details: [
@@ -204,13 +238,14 @@ export const LendingTicket = ({
             ? `Liquidation risk begins above ${collateralChoice?.pair.maxLtv.toFixed(2) ?? "—"}% LTV. Verify prices and amounts.`
             : "Rates are variable and can change when pool utilization changes.",
       });
-      if (action === "supply") {
+      if (action === "supply" && quote.vTokenAddress !== null) {
         setMessage("Supply broadcast. Add the Vesu receipt token in your wallet…");
         try {
-          await watchAsset({ address: market.vTokenAddress });
+          // The registry's vToken, not the API's (Sherlock 169).
+          await watchAsset({ address: quote.vTokenAddress });
           setMessage(`Supply broadcast. ${market.symbol} receipt token added to your wallet.`);
         } catch (cause) {
-          const detail = cause instanceof Error ? cause.message : "token request stopped";
+          const detail = userErrorMessage(cause, "token request stopped");
           setMessage(`Supply broadcast. Receipt token was not added: ${detail}`);
         }
       } else {
@@ -219,7 +254,7 @@ export const LendingTicket = ({
       setAmount("");
       if (action === "borrow") setCollateralAmount("");
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Vesu request failed.");
+      setMessage(userErrorMessage(cause, "Vesu request failed."));
     } finally {
       setIsPreparing(false);
     }

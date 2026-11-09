@@ -10,15 +10,15 @@ import {
   assertLedgerAppReady,
   assertLedgerDeviceReady,
   assertLedgerFirmwareReady,
+  BRAMBLE_LEDGER_OS_MIN,
+  BRAMBLE_LEDGER_STARKNET_APP_MIN,
   type LedgerDeviceClient,
   ledgerAppVersion,
   ledgerFirmwareVersion,
   ledgerPublicKeyX,
   ledgerSignHashOnDevice,
-  MC_LEDGER_OS_MIN,
-  MC_LEDGER_STARKNET_APP_MIN,
-} from "@mc-wallet/ledger-protocol/client";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
+} from "@bramble/ledger-protocol/client";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
 
 const OK = { errorMessage: "No errors", returnCode: 0x9000 };
 
@@ -62,8 +62,8 @@ describe("ledgerAppVersion / assertLedgerAppReady", () => {
       async getAppVersion() {
         return {
           ...OK,
-          major: MC_LEDGER_STARKNET_APP_MIN.major,
-          minor: MC_LEDGER_STARKNET_APP_MIN.minor - 1,
+          major: BRAMBLE_LEDGER_STARKNET_APP_MIN.major,
+          minor: BRAMBLE_LEDGER_STARKNET_APP_MIN.minor - 1,
           patch: 9,
         };
       },
@@ -121,11 +121,11 @@ describe("ledgerFirmwareVersion / assertLedgerFirmwareReady", () => {
   test("reads a known device OS and passes at the model's compatibility floor", async () => {
     expect(await ledgerFirmwareVersion(fakeClient())).toEqual({
       model: "nano-x",
-      version: MC_LEDGER_OS_MIN["nano-x"],
+      version: BRAMBLE_LEDGER_OS_MIN["nano-x"],
     });
     await expect(assertLedgerFirmwareReady(fakeClient())).resolves.toEqual({
       model: "nano-x",
-      version: MC_LEDGER_OS_MIN["nano-x"],
+      version: BRAMBLE_LEDGER_OS_MIN["nano-x"],
     });
   });
 
@@ -149,7 +149,7 @@ describe("ledgerFirmwareVersion / assertLedgerFirmwareReady", () => {
       { model: "nano-gen5", targetId: 0x33400099 },
     ] as const;
     for (const { model, targetId } of cases) {
-      const minimum = MC_LEDGER_OS_MIN[model];
+      const minimum = BRAMBLE_LEDGER_OS_MIN[model];
       const client = fakeClient({
         async getOsVersion() {
           return {
@@ -270,10 +270,10 @@ describe("ledgerSignHashOnDevice", () => {
     });
   });
 
-  test("maps an ExecutionError from signHash to blind-signing-disabled", async () => {
+  test("maps an ExecutionError from signHash to rejected-or-blind-signing-off", async () => {
     // The real signHash swallows every thrown transport error and folds any
-    // non-accepted status word (e.g. the conditions-not-satisfied returned when
-    // blind signing is off) into ExecutionError (0x6f00) — never a distinct word.
+    // non-accepted status word (the app's 0x6985 for a reject or for Blind
+    // signing off) into ExecutionError (0x6f00), so neither cause is claimed.
     const client = fakeClient({
       async signHash() {
         return {
@@ -286,7 +286,7 @@ describe("ledgerSignHashOnDevice", () => {
       },
     });
     await expect(ledgerSignHashOnDevice(client, "m", "0x1")).rejects.toMatchObject({
-      code: "blind-signing-disabled",
+      code: "rejected-or-blind-signing-off",
     });
   });
 

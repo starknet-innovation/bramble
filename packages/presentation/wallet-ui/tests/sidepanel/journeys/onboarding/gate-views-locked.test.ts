@@ -26,6 +26,9 @@ describe("locked gate view", () => {
     expect(html).toContain('name="vaultPassphrase"');
     expect(html).toContain('type="password"');
     expect(html).toContain("Unlock");
+    // The heading already says what the one field is for, so its label is
+    // kept for assistive tech only rather than repeated above the input.
+    expect(html).toContain('<label><span class="sr-only">Password</span><input');
     // Not the onboarding create form.
     expect(html).not.toContain('id="create-form"');
   });
@@ -35,7 +38,7 @@ describe("locked gate view", () => {
     expect(locked(lockedStatus(false))).toMatch(/<button type="submit" disabled>Unlock<\/button>/);
   });
 
-  test("explains that an origin request will continue after unlock", () => {
+  test("names the waiting origin request without a lede repeating it", () => {
     const html = locked(lockedStatus(true), [
       {
         id: "123e4567-e89b-42d3-a456-426614174000",
@@ -44,7 +47,9 @@ describe("locked gate view", () => {
       },
     ]);
 
-    expect(html).toContain("Unlock to review the wallet request waiting for you.");
+    // The callout below the heading already says a site is waiting and which
+    // one; a lede above it said the same thing in different words.
+    expect(html).not.toContain("Unlock to review the wallet request waiting for you.");
     expect(html).toContain("Site request waiting");
     expect(html).toContain("https://terminal.example");
   });

@@ -4,14 +4,17 @@
  * screens so a security-sensitive task never competes with unrelated options.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { button, segmentedControl } from "@mc-wallet/ui-kit/controls";
-import { selectField, textField } from "@mc-wallet/ui-kit/fields";
-import { menuLink } from "@mc-wallet/ui-kit/navigation";
+import { escapeHtml } from "@bramble/core/html";
+import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
+import { stakingNetwork } from "@bramble/transactions/staking-networks";
+import { button, segmentedControl } from "@bramble/ui-kit/controls";
+import { checkboxField, selectField, textField } from "@bramble/ui-kit/fields";
+import { menuLink } from "@bramble/ui-kit/navigation";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { type BuildInfo, buildInfo } from "../../shell/build-info";
+import { SHADOW_ACCOUNTS_TITLE } from "../privacy/shadow-accounts-copy";
+import { PRIVACY_UNLOCK_TITLE } from "./privacy-unlock";
 
 // The build stamp under the menu: extension version, plus the source branch
 // when the bundle was built from an unreleased branch. Empty outside a built
@@ -37,10 +40,18 @@ export const settingsScreen = (
     <section class="section">
       <p class="eyebrow">Accounts & networks</p>
       <div class="menu-list" role="group" aria-label="Accounts and networks">
-        ${walletMenuRow("account", "Accounts & groups", "wallet")}
+        ${walletMenuRow("account", "Accounts & folders", "wallet")}
         ${walletMenuRow("network", "Network", "globe", status.network)}
         ${walletMenuRow("address-book", "Address book", "book")}
-        ${walletMenuRow("multisigs", "Shared accounts", "users")}
+        ${walletMenuRow("multisigs", "Multisig accounts", "users")}
+      </div>
+    </section>
+    <section class="section">
+      <p class="eyebrow">This account</p>
+      <div class="menu-list" role="group" aria-label="This account">
+        ${walletMenuRow("deploy-account", "Deploy account", "rocket")}
+        ${walletMenuRow("privacy-unlock", PRIVACY_UNLOCK_TITLE, "lock")}
+        ${stakingNetwork(status.networkId) ? walletMenuRow("staking", "Staking", "trendingUp") : ""}
       </div>
     </section>
     <section class="section">
@@ -48,6 +59,7 @@ export const settingsScreen = (
       <div class="menu-list" role="group" aria-label="Access and permissions">
         ${walletMenuRow("connected-sites", "Connected sites", "link")}
         ${walletMenuRow("allowances", "Token allowances", "coins")}
+        ${walletMenuRow("shadow-accounts", SHADOW_ACCOUNTS_TITLE, "shield")}
         ${walletMenuRow(
           "request-settings",
           "Request display",
@@ -60,7 +72,7 @@ export const settingsScreen = (
       <p class="eyebrow">Backup & recovery</p>
       <div class="menu-list" role="group" aria-label="Backup and recovery">
         ${walletMenuRow("backup", "Backup & restore", "shield")}
-        ${walletMenuRow("reveal", "Reveal recovery secrets", "lock")}
+        ${walletMenuRow("reveal", "Reveal secrets", "lock")}
       </div>
     </section>
     <section class="section">
@@ -77,7 +89,7 @@ export const settingsScreen = (
     <section class="section">
       <div class="menu-list">
         ${menuLink({
-          href: "https://github.com/starknet-innovation/mc-wallet#readme",
+          href: "https://github.com/starknet-innovation/bramble#readme",
           icon: "book",
           label: "Help & docs",
           target: "_blank",
@@ -94,7 +106,7 @@ export const appearanceFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
 ): string =>
-  flowHeader("Appearance & currency", status, "How the wallet looks and values assets") +
+  flowHeader("Appearance & currency", status) +
   flowScreen(
     "appearance",
     `<section class="section">
@@ -112,7 +124,6 @@ export const appearanceFlow = (
       <p class="eyebrow">Values</p>
       ${selectField({
         attributes: { id: "currency-select" },
-        hint: "Prices and portfolio totals use this display currency. Token balances remain unchanged.",
         label: "Display currency",
         name: "displayCurrency",
         options: (["usd", "eur", "gbp"] as const).map((currency) => ({
@@ -121,6 +132,22 @@ export const appearanceFlow = (
         })),
         selected: preferences?.displayCurrency ?? "usd",
       })}
+    </section>
+    <section class="section">
+      <p class="eyebrow">Home</p>
+      ${checkboxField({
+        attributes: { id: "vip-notice-toggle" },
+        checked: preferences?.vipNotice !== false,
+        name: "vipNotice",
+        text: "Show when an account is eligible for Starknet VIP",
+      })}
+      ${checkboxField({
+        attributes: { id: "nfts-on-home" },
+        checked: nftsShown(preferences),
+        name: "collectiblesPreview",
+        text: "Show NFTs on Home",
+      })}
+      <p class="hint">On Mainnet, Starkscan finds this account's ERC-721 NFTs and sees its address. Every NFT shown is checked on-chain.</p>
     </section>
     <p id="display-result" role="status"></p>`,
   );
@@ -136,7 +163,6 @@ export const requestSettingsFlow = (
   flowScreen(
     "request-settings",
     `<section class="section">
-      <p class="lede">A new request opens in front so it cannot hide, while your current wallet task stays paused for a predictable return.</p>
       ${segmentedControl(
         "Wallet request surface",
         (["side-panel", "popup"] as const).map((surface) => ({
@@ -145,33 +171,8 @@ export const requestSettingsFlow = (
           pressed: (preferences?.approvalSurface ?? "side-panel") === surface,
         })),
       )}
-      <p class="hint">Wallet panel keeps the request beside the site. Compact popup opens above the current tab. Both preserve the task you were doing.</p>
     </section>
     <p id="display-result" role="status"></p>`,
-  );
-
-/**
- * Renders the security hub as destinations grouped by what they protect.
- */
-export const securityFlow = (status: WalletStatus): string =>
-  flowHeader("Security & permissions", status, "Review access before recovery") +
-  flowScreen(
-    "security",
-    `<section class="section">
-      <p class="eyebrow">External access</p>
-      <div class="menu-list" role="group" aria-label="External access">
-        ${walletMenuRow("connected-sites", "Connected sites", "link")}
-        ${walletMenuRow("allowances", "Token allowances", "coins")}
-        ${walletMenuRow("multisigs", "Multisigs", "users")}
-      </div>
-    </section>
-    <section class="section">
-      <p class="eyebrow">Recovery</p>
-      <div class="menu-list" role="group" aria-label="Recovery">
-        ${walletMenuRow("backup", "Backup & restore", "shield")}
-        ${walletMenuRow("reveal", "Reveal recovery secrets", "lock")}
-      </div>
-    </section>`,
   );
 
 /**
@@ -180,18 +181,17 @@ export const securityFlow = (status: WalletStatus): string =>
 export const backupHubFlow = (status: WalletStatus): string => {
   const hasLedgerAccount = status.accounts.some((account) => account.derivation.kind === "ledger");
   return (
-    flowHeader("Backup & restore", status, "Choose one focused task") +
+    flowHeader("Backup & restore", status) +
     flowScreen(
       "backup",
       `<section class="section">
         <div class="menu-list" role="group" aria-label="Backup and restore">
-          ${walletMenuRow("backup-export", "Download wallet backup", "receive")}
-          ${walletMenuRow("backup-restore", "Restore from a backup", "refresh")}
+          ${walletMenuRow("backup-export", "Download backup", "receive")}
+          ${walletMenuRow("backup-restore", "Restore backup", "refresh")}
         </div>
-        <p class="hint">Backup files include wallet preferences for reference. Restore applies only organization and display choices; saved contacts, tracked assets, and trust settings stay unchanged.</p>
         ${
           hasLedgerAccount
-            ? '<p class="review-flag" role="note">Ledger accounts are not restored by this backup or by MC Wallet’s recovery phrase. Recover them with the Ledger device and its Ledger recovery phrase.</p>'
+            ? '<p class="review-flag" role="note">Ledger accounts are not restored by this backup or by Bramble’s recovery phrase. Recover them with the Ledger device and its Ledger recovery phrase.</p>'
             : ""
         }
       </section>`,
@@ -203,16 +203,15 @@ export const backupHubFlow = (status: WalletStatus): string => {
  * Renders the non-secret preference export task.
  */
 export const backupExportFlow = (status: WalletStatus): string =>
-  flowHeader("Download backup", status, "Preferences and wallet organization") +
+  flowHeader("Download backup", status, "Your settings and folders") +
   flowScreen(
     "backup-export",
     `<section class="section">
-      <p class="lede">Download an encrypted-vault-free JSON copy of tokens, contacts, labels, groups, and display settings.</p>
-      <p class="hint">Recovery phrases, imported private keys, and Ledger key material are never included.</p>
+      <p class="hint">Recovery phrases, private keys, and Ledger keys are not included.</p>
       ${button({
         attributes: { id: "backup-export" },
         icon: "receive",
-        label: "Download backup",
+        label: "Download",
       })}
       <p id="backup-result" role="status"></p>
     </section>`,
@@ -222,11 +221,10 @@ export const backupExportFlow = (status: WalletStatus): string =>
  * Renders backup restore as an isolated replacement task.
  */
 export const backupRestoreFlow = (status: WalletStatus): string =>
-  flowHeader("Restore backup", status, "Replace preferences from a trusted file") +
+  flowHeader("Restore backup", status, "Replaces your settings from a file you trust") +
   flowScreen(
     "backup-restore",
     `<section class="section">
-      <p class="review-flag" role="note">Restore applies the backup’s active network, account labels, groups, hidden-token choices, display currency, and theme. Saved contacts and tracked assets, network, service, and approval settings, accounts, and signing keys stay unchanged.</p>
       ${textField({
         accept: "application/json",
         attributes: { id: "backup-file" },

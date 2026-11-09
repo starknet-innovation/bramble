@@ -1,7 +1,7 @@
 /** DOM coverage for address-only Argent signer recovery. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { multisigSignersFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
 import type { MultisigClient } from "../../../../src/sidepanel/journeys/multisig/multisig-runtime";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";

@@ -5,8 +5,8 @@
  * Sibling of chain-reads.test.ts, which was already at the file budget.
  */
 import { describe, expect, test } from "bun:test";
-import { getArgentMultisigConfig } from "@mc-wallet/multisig/chain";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { getArgentMultisigConfig } from "@bramble/multisig/chain";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import type { RpcProvider } from "starknet";
 
 const ADDRESS = "0x111";

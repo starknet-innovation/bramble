@@ -10,8 +10,8 @@ import {
   type LedgerAppVersion,
   type LedgerDeviceClient,
   ledgerPublicKeyX,
-} from "@mc-wallet/ledger-protocol/client";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/ledger-protocol/client";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
 /**
  * Narrow transport session used only to verify a newly granted Ledger.

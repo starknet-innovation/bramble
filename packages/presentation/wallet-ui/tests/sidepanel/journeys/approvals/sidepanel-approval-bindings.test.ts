@@ -5,12 +5,14 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { MOTION } from "@bramble/ui-kit/tokens";
 import type { PendingApproval } from "../../../../src/popup/responses/approvals-responses";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { bindApprovals } from "../../../../src/sidepanel/shell/dashboard-bindings";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
+import { manualTimers } from "../../../support/manual-timers";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -61,11 +63,13 @@ describe("bindApprovals", () => {
       },
     } as unknown as SidepanelWallet;
 
+    const stageTimers = manualTimers();
     bindApprovals({
       app: host,
       render: async () => {
         renderCount += 1;
       },
+      stageTimers,
       wallet,
     });
     const approve = host.querySelector<HTMLButtonElement>('[data-approval-action="approve"]');
@@ -90,6 +94,8 @@ describe("bindApprovals", () => {
 
     rejectDecision(new Error("Starknet rejected the declaration"));
     await flush();
+    stageTimers.flush();
+    await flush();
     expect(renderCount).toBe(1);
   });
 
@@ -106,12 +112,14 @@ describe("bindApprovals", () => {
     const decisions: boolean[] = [];
     const snoozed: string[] = [];
     let renders = 0;
+    const stageTimers = manualTimers();
 
     bindApprovals({
       app: host,
       render: async () => {
         renders += 1;
       },
+      stageTimers,
       snoozeApproval: (approvalId) => {
         snoozed.push(approvalId);
       },
@@ -126,6 +134,8 @@ describe("bindApprovals", () => {
     host.querySelector<HTMLButtonElement>("[data-approval-later]")?.click();
     host.querySelector<HTMLButtonElement>("[data-approval-id]")?.click();
     await flush();
+    stageTimers.flush();
+    await flush();
 
     expect(snoozed).toEqual([id]);
     expect(decisions).toEqual([false]);
@@ -133,6 +143,50 @@ describe("bindApprovals", () => {
     expect(host.querySelector("#approval-live-copy")?.textContent).toContain("returning control");
     expect(host.querySelector("#approval-result")?.textContent).toBe("Rejecting request…");
     expect(renders).toBe(1);
+  });
+
+  // Closing a private-services notice answers the site like Deny, but there was
+  // nothing to deny: no live line, no "Rejecting request…", and the toast says
+  // "Closed" (copy review b1011).
+  test("closing a notice says it closed, never that a request was denied", async () => {
+    const notice: PendingApproval = {
+      id: "c2d9e06c-9a5f-4f58-9f0e-1d7c3b2a4e51",
+      kind: "strk20-unavailable",
+      origin: "https://dapp.example",
+    };
+    const host = document.createElement("div");
+    host.innerHTML = `<ul>${approvalCard(notice, STATUS)}</ul>
+      <section id="approval-live" hidden>
+        <strong id="approval-live-title"></strong>
+        <p id="approval-live-copy"></p>
+      </section>
+      <p id="approval-result"></p>`;
+    document.body.replaceChildren(host);
+    const decisions: boolean[] = [];
+    const stageTimers = manualTimers();
+    bindApprovals({
+      app: host,
+      render: async () => undefined,
+      stageTimers,
+      wallet: {
+        decideApproval: async (_approvalId: string, approved: boolean) => {
+          decisions.push(approved);
+        },
+        loadStatus: async () => STATUS,
+      } as unknown as SidepanelWallet,
+    });
+
+    host.querySelector<HTMLButtonElement>('[data-approval-action="deny"]')?.click();
+    expect(host.querySelector<HTMLElement>("#approval-live")?.hidden).toBe(true);
+    expect(host.querySelector("#approval-result")?.textContent).toBe("");
+    await flush();
+    stageTimers.flush();
+    await flush();
+
+    expect(decisions).toEqual([false]);
+    const toasts = [...document.querySelectorAll(".toast")].map((toast) => toast.textContent);
+    expect(toasts.some((text) => text?.includes("Closed"))).toBe(true);
+    expect(toasts.some((text) => text?.includes("Request denied"))).toBe(false);
   });
 });
 
@@ -194,6 +248,15 @@ describe("bindApprovals echoes the fee the card painted", () => {
 
     expect(await clickApprove(invokeApproval())).toEqual([]);
   });
+
+  test("a card with no fee state says why under Cost, not Cost and limits", () => {
+    const { feeEstimateFailed: _failed, ...unpriced } = invokeApproval();
+    const html = approvalCard(unpriced, STATUS);
+    // Why there is no fee is a fee line, so it sits under "Cost" alone.
+    expect(html).toContain('aria-label="Cost"');
+    expect(html).not.toContain("Cost and limits");
+    expect(html).toContain("The network fee is unavailable.");
+  });
 });
 
 // The fee-retry affordance on a queued invoke card asks the background to
@@ -207,12 +270,14 @@ describe("bindApprovals fee retry", () => {
     document.body.replaceChildren(host);
     const retried: string[] = [];
     let renders = 0;
+    const stageTimers = manualTimers();
 
     bindApprovals({
       app: host,
       render: async () => {
         renders += 1;
       },
+      stageTimers,
       wallet: {
         loadStatus: async () => STATUS,
         retryApprovalFee: async (approvalId: string) => {
@@ -233,12 +298,14 @@ describe("bindApprovals fee retry", () => {
     host.innerHTML = `<button data-approval-retry-fee="${id}">Retry fee estimate</button>`;
     document.body.replaceChildren(host);
     let renders = 0;
+    const stageTimers = manualTimers();
 
     bindApprovals({
       app: host,
       render: async () => {
         renders += 1;
       },
+      stageTimers,
       wallet: {
         decideApproval: async () => {
           throw new Error("must not decide");
@@ -256,5 +323,145 @@ describe("bindApprovals fee retry", () => {
 
     expect(button?.disabled).toBe(false);
     expect(renders).toBe(0);
+  });
+});
+
+// A software approval settles in milliseconds; the "Authorizing request" line
+// must still be readable, without the decision or its status read waiting on it.
+describe("bindApprovals paces the authorizing line (#436)", () => {
+  const mount = (id: string): HTMLElement => {
+    const host = document.createElement("div");
+    host.innerHTML = `
+      <article class="request-card">
+        <button data-approval-action="approve" data-approval-id="${id}">Approve</button>
+      </article>
+      <section id="approval-live" hidden>
+        <strong id="approval-live-title"></strong>
+        <p id="approval-live-copy"></p>
+      </section>
+      <p id="approval-result"></p>`;
+    document.body.replaceChildren(host);
+    return host;
+  };
+
+  const run = async (outcome: "approved" | "failed") => {
+    const id = "5f0f3f8e-0d55-4d0b-9a55-6ad0d8e4c1a2";
+    const host = mount(id);
+    const stageTimers = manualTimers();
+    const calls: string[] = [];
+    let renders = 0;
+    bindApprovals({
+      app: host,
+      render: async () => {
+        renders += 1;
+      },
+      stageTimers,
+      wallet: {
+        decideApproval: async () => {
+          calls.push("decide");
+          if (outcome === "failed") throw new Error("Request expired");
+        },
+        loadStatus: async () => {
+          calls.push("status");
+          return STATUS;
+        },
+      } as unknown as SidepanelWallet,
+    });
+    host.querySelector<HTMLButtonElement>("[data-approval-id]")?.click();
+    await flush();
+    await flush();
+    return { calls, host, renders: () => renders, stageTimers };
+  };
+
+  const toasts = (): number => document.querySelectorAll(".toast").length;
+
+  test("the outcome waits for the minimum; the decision does not", async () => {
+    const h = await run("approved");
+    // The decision has finished at t=0 …
+    expect(h.calls).toEqual(["decide"]);
+    // … but the authorizing line is still the thing on screen.
+    expect(h.host.querySelector("#approval-live-title")?.textContent).toBe("Authorizing request");
+    expect(h.renders()).toBe(0);
+    expect(toasts()).toBe(0);
+    h.stageTimers.advance(MOTION.stageMinMs - 1);
+    await flush();
+    expect(h.renders()).toBe(0);
+    h.stageTimers.advance(1);
+    await flush();
+    // … and the status it repaints from is read when it paints (rest L3).
+    expect(h.calls).toEqual(["decide", "status"]);
+    expect(h.renders()).toBe(1);
+    expect(toasts()).toBe(1);
+  });
+
+  test("a failure is shown as soon as the minimum has passed, and only once", async () => {
+    const h = await run("failed");
+    expect(h.calls).toEqual(["decide"]);
+    expect(h.host.querySelector("#approval-result")?.textContent).toBe(
+      "Approved. Signing and broadcasting…",
+    );
+    h.stageTimers.advance(MOTION.stageMinMs);
+    await flush();
+    expect(h.host.querySelector("#approval-result")?.textContent).not.toBe(
+      "Approved. Signing and broadcasting…",
+    );
+    expect(h.renders()).toBe(1);
+    expect(h.stageTimers.pending()).toBe(0);
+  });
+
+  // Rest audit L3: a refresh that lands while the outcome is held (a new
+  // request queued) must not be painted over by a snapshot from before it.
+  test("the paced repaint uses the status current when it paints", async () => {
+    const id = "5f0f3f8e-0d55-4d0b-9a55-6ad0d8e4c1a2";
+    const host = mount(id);
+    const stageTimers = manualTimers();
+    let generation = 0;
+    const painted: number[] = [];
+    bindApprovals({
+      app: host,
+      render: async (status) => {
+        painted.push((status as unknown as { generation: number }).generation);
+      },
+      stageTimers,
+      wallet: {
+        decideApproval: async () => undefined,
+        loadStatus: async () => ({ ...STATUS, generation }),
+      } as unknown as SidepanelWallet,
+    });
+    host.querySelector<HTMLButtonElement>("[data-approval-id]")?.click();
+    await flush();
+    // A background event refreshes the wallet while the line is held.
+    generation = 1;
+    stageTimers.advance(MOTION.stageMinMs);
+    await flush();
+    await flush();
+    expect(painted).toEqual([1]);
+  });
+
+  test("a status read that fails after the outcome paints is handled", async () => {
+    const id = "5f0f3f8e-0d55-4d0b-9a55-6ad0d8e4c1a2";
+    const host = mount(id);
+    const stageTimers = manualTimers();
+    let reads = 0;
+    bindApprovals({
+      app: host,
+      render: async () => undefined,
+      stageTimers,
+      wallet: {
+        decideApproval: async () => undefined,
+        loadStatus: () => {
+          reads += 1;
+          return Promise.reject(new Error("worker gone"));
+        },
+      } as unknown as SidepanelWallet,
+    });
+    host.querySelector<HTMLButtonElement>("[data-approval-id]")?.click();
+    await flush();
+    stageTimers.advance(MOTION.stageMinMs);
+    await flush();
+    await flush();
+    // The outcome still painted, and the rejected read did not escape.
+    expect(reads).toBe(1);
+    expect(toasts()).toBe(1);
   });
 });

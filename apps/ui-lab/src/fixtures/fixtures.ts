@@ -1,23 +1,24 @@
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   argentSignerGuid,
   normalizeArgentMultisigConfig,
-} from "@mc-wallet/starknet/account-contracts";
-import { argentMultisigTransactionHash } from "@mc-wallet/starknet/multisig-invoke";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/starknet/account-contracts";
+import { argentMultisigTransactionHash } from "@bramble/starknet/multisig-invoke";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type {
   ArgentMultisigView,
   DiscoveredNft,
   PendingApproval,
   TokenBalance,
   WalletStatus,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
+import nftFixtureImage from "./nft-fixture.svg?inline";
 
 export const SOFTWARE_ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";
 export const LEDGER_ADDRESS = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";
@@ -152,13 +153,70 @@ const activity = (
   summary,
 });
 
+// Two UTC days of varied rows so the feed shows every part of the row anatomy:
+// counterparties, asset amounts (priced USDC and unpriced STRK), a swap pair,
+// and token-less contract interactions.
+const DAY_BEFORE = 1_785_171_200_000 - 86_400_000;
+
 export const softwareActivity: readonly ActivityEntry[] = [
-  activity(softwareAccount, "0x701", "Sent 24 USDC", "accepted"),
-  activity(softwareAccount, "0x702", "Swapped 50 USDC for STRK", "accepted"),
-  { ...activity(softwareAccount, "0x703", "Unstaked 120 STRK", "accepted"), kind: "invoke" },
-  { ...activity(softwareAccount, "0x704", "Claimed staking rewards", "accepted"), kind: "invoke" },
-  { ...activity(softwareAccount, "0x705", "Private transfer 20 USDC", "accepted"), kind: "invoke" },
+  {
+    ...activity(softwareAccount, "0x701", "Sent 24 USDC to 0x4567…cdef", "accepted"),
+    amount: "24",
+    counterparty: RECIPIENT_ADDRESS,
+    token: "USDC",
+  },
+  {
+    ...activity(softwareAccount, "0x702", "Swapped 50 USDC for 186.4 STRK", "accepted"),
+    amount: "50",
+    kind: "invoke",
+    token: "USDC",
+  },
+  {
+    ...activity(softwareAccount, "0x703", "Unstaked 120 STRK", "accepted"),
+    amount: "120",
+    kind: "invoke",
+    submittedAt: DAY_BEFORE,
+    token: "STRK",
+  },
+  {
+    ...activity(softwareAccount, "0x704", "Claimed staking rewards", "accepted"),
+    kind: "invoke",
+    submittedAt: DAY_BEFORE,
+  },
+  {
+    ...activity(softwareAccount, "0x705", "Private transfer 20 USDC", "accepted"),
+    amount: "20",
+    kind: "invoke",
+    submittedAt: DAY_BEFORE,
+    token: "USDC",
+  },
 ];
+
+// A feed long enough to overflow the side panel, so the lab can render the one
+// behavior this state exists for: the title bar holds its place while only the
+// list moves. It reuses the row anatomy above; the amounts differ so rows are
+// not byte-identical in a snapshot.
+export const longActivity: readonly ActivityEntry[] = Array.from(
+  { length: 12 },
+  (_, index): ActivityEntry => {
+    const day = Math.floor(index / 6);
+    const nth = (index % 6) + 1;
+    return {
+      ...activity(
+        softwareAccount,
+        `0x9${day}${nth}`,
+        index === 5
+          ? "Swapped 1,234.5678 USDC for 18,640.1234 STRK via the AVNU router on Starknet mainnet"
+          : `Sent ${nth} USDC to 0x4567…cdef`,
+        "accepted",
+      ),
+      amount: String(nth),
+      counterparty: RECIPIENT_ADDRESS,
+      submittedAt: day === 0 ? 1_785_171_200_000 : DAY_BEFORE,
+      token: "USDC",
+    };
+  },
+);
 
 export const secondActivity: readonly ActivityEntry[] = [
   activity(secondAccount, "0x801", "Supplied 200 USDC to Vesu", "pending"),
@@ -170,14 +228,28 @@ export const discoveredNft: DiscoveredNft = {
     { traitType: "Edition", value: "Genesis" },
     { traitType: "Role", value: "Tester" },
   ],
-  collection: "MC Test Collection",
+  collection: "Bramble Test Collection",
   contract: NFT_CONTRACT,
-  description: "A deterministic collectible used only inside the MC Wallet UI Lab.",
+  description: "A deterministic collectible used only inside the Bramble UI Lab.",
   id: nftId,
-  image: "/nft-fixture.svg",
+  image: nftFixtureImage,
   name: "Proof of Participation #342",
   networkId: "SN_MAIN",
   tokenId: "342",
+};
+
+/**
+ * An NFT the indexer found but the user never chose, as Starkscan lists it: no
+ * name or image until "Show art" watches it and its metadata is read.
+ */
+export const discoveredOnlyNft: DiscoveredNft = {
+  collection: "",
+  contract: "0x0733aa00bb11cc22dd33ee44ff5566778899aabbccddeeff00112233445566",
+  id: "SN_MAIN:0x0733aa00bb11cc22dd33ee44ff5566778899aabbccddeeff00112233445566:11",
+  image: "",
+  name: "",
+  networkId: "SN_MAIN",
+  tokenId: "11",
 };
 
 export const invokeApproval: PendingApproval = {
@@ -190,7 +262,7 @@ export const invokeApproval: PendingApproval = {
   flags: [],
   id: "00000000-0000-4000-8000-000000000134",
   kind: "invoke",
-  origin: "https://terminal.mcwallet.dev",
+  origin: "https://terminal.bramble.test",
   reviewAssets: [
     { address: USDC_ADDRESS, symbol: "USDC" },
     { address: STRK_TOKEN_ADDRESS, symbol: "STRK" },

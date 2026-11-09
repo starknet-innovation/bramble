@@ -9,9 +9,9 @@
  * happy-dom with fakes. Markup comes from the escaped onboarding templates,
  * inserted through the audited dom.ts fragment sink.
  */
-import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { renderFragment } from "../../shared/dom";
+import { buttonBusy, renderFragment } from "../../shared/dom";
 import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,
@@ -23,6 +23,7 @@ import {
 } from "./onboard-session";
 import {
   addAccountChooser,
+  importAccountChooser,
   ledgerAccountPicker,
   ledgerConnectPrompt,
   ledgerDevicePicker,
@@ -57,6 +58,8 @@ export type LedgerOnboardRuntimeDeps = {
   readonly networkId: () => string;
   readonly onCancel: () => void;
   readonly openImport: () => void;
+  readonly openImportSeed: () => void;
+  readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: Pick<SidepanelWallet, "deriveLedgerAccounts">;
@@ -69,17 +72,19 @@ export type LedgerOnboardRuntimeDeps = {
  */
 export type LedgerOnboardRuntime = {
   readonly bindTriggers: (app: Element | null) => void;
-  readonly start: (accountContractType?: AccountContractType) => void;
+  readonly start: () => void;
   readonly startAddAccount: () => void;
 };
 
 const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
-  value === "argent" ||
+  value === "find-accounts" ||
   value === "import" ||
-  value === "ledger-argent" ||
-  value === "ledger-openzeppelin" ||
+  value === "import-key" ||
+  value === "import-phrase" ||
+  value === "ledger" ||
   value === "multisig" ||
-  value === "openzeppelin";
+  value === "regular" ||
+  value === "restore-ready-ledger";
 
 /**
  * Creates the DOM-bound Ledger onboarding runtime. The controller persists
@@ -91,14 +96,43 @@ export const createLedgerOnboardRuntime = (
 ): LedgerOnboardRuntime => {
   const { connector, create, describe, existingIds, mount, networkId, onCancel, refresh, wallet } =
     deps;
+  // The runtime's Ledger capability decides whether the chooser offers the
+  // Ledger routes at all. It is a UI affordance only: an absent report keeps
+  // the routes, matching the connector type's default.
+  const ledgerAvailable = connector.isAvailable?.() ?? true;
   let controller: LedgerOnboardController;
 
   const bindSelection = (): void => {
     for (const input of mount.querySelectorAll<HTMLInputElement>("[data-ledger-toggle]")) {
       input.addEventListener("change", () => {
-        const index = Number(input.dataset["ledgerToggle"]);
-        if (Number.isSafeInteger(index)) {
-          controller.toggle(index);
+        const accountId = input.dataset["ledgerToggle"];
+        if (accountId) {
+          controller.toggle(accountId);
+        }
+      });
+    }
+  };
+
+  // Account-group disclosures are re-rendered wholesale on every picker paint,
+  // so their open state lives here: the user's explicit choice wins, and a
+  // group opens itself the first time detected activity appears in it.
+  const openGroups = new Set<string>();
+  const autoOpened = new Set<string>();
+  const bindGroups = (): void => {
+    for (const group of mount.querySelectorAll<HTMLDetailsElement>("[data-account-group]")) {
+      const key = group.dataset["accountGroup"] ?? "";
+      const detected =
+        Number(group.querySelector("[data-detected]")?.getAttribute("data-detected")) > 0;
+      if (detected && !autoOpened.has(key)) {
+        autoOpened.add(key);
+        openGroups.add(key);
+      }
+      group.open = openGroups.has(key);
+      group.addEventListener("toggle", () => {
+        if (group.open) {
+          openGroups.add(key);
+        } else {
+          openGroups.delete(key);
         }
       });
     }
@@ -109,13 +143,13 @@ export const createLedgerOnboardRuntime = (
       button.addEventListener("click", () => {
         const kind = button.dataset["addKind"];
         if (isAddKind(kind)) {
-          controller.select(kind);
+          controller.choose(kind);
         }
       });
     }
     mount
-      .querySelector<HTMLButtonElement>("[data-add-continue]")
-      ?.addEventListener("click", () => controller.continueChoice());
+      .querySelector<HTMLButtonElement>("[data-add-back]")
+      ?.addEventListener("click", () => controller.showChooser());
   };
 
   const bindDevices = (): void => {
@@ -136,9 +170,18 @@ export const createLedgerOnboardRuntime = (
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-onboard-cancel]")
       ?.addEventListener("click", () => controller.cancel());
-    mount
-      .querySelector<HTMLButtonElement>("[data-ledger-load-more]")
-      ?.addEventListener("click", () => controller.loadMore());
+    // The next page is read silently and lands inside the account groups, which
+    // stay closed when nothing in them has activity: open them, and mark the
+    // button busy while the device is read, so the click visibly does something.
+    const loadMore = mount.querySelector<HTMLButtonElement>("[data-ledger-load-more]");
+    loadMore?.addEventListener("click", () => {
+      for (const group of mount.querySelectorAll<HTMLDetailsElement>("[data-account-group]")) {
+        openGroups.add(group.dataset["accountGroup"] ?? "");
+        group.open = true;
+      }
+      buttonBusy(loadMore, true);
+      controller.loadMore();
+    });
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-add-selected]")
       ?.addEventListener("click", () => controller.addSelected());
@@ -149,7 +192,10 @@ export const createLedgerOnboardRuntime = (
 
   const bodyFor = (view: LedgerOnboardView): string => {
     if (view.kind === "chooser") {
-      return addAccountChooser(view.selected);
+      return addAccountChooser(ledgerAvailable);
+    }
+    if (view.kind === "import-chooser") {
+      return importAccountChooser(ledgerAvailable, view.phraselessNote);
     }
     if (view.kind === "connect") {
       return ledgerConnectPrompt();
@@ -161,7 +207,13 @@ export const createLedgerOnboardRuntime = (
       return ledgerDevicePicker(view.devices);
     }
     if (view.kind === "picker") {
-      return ledgerAccountPicker(view.candidates, view.selected, view.message);
+      return ledgerAccountPicker(
+        view.candidates,
+        view.selected,
+        view.message,
+        view.application,
+        view.loadingMore,
+      );
     }
     return ledgerOnboardError(view.message);
   };
@@ -175,20 +227,23 @@ export const createLedgerOnboardRuntime = (
     renderFragment(mount, bodyFor(view));
     mount.hidden = false;
     bindControls();
+    bindGroups();
   };
 
   controller = createLedgerOnboardController({
     addHd: (accountContractType) => deps.addHd(accountContractType),
     connector,
     create,
-    derive: (entries, accountContractType) =>
-      wallet.deriveLedgerAccounts(networkId(), entries, accountContractType),
+    derive: (entries, accountContractType, application) =>
+      wallet.deriveLedgerAccounts(networkId(), entries, accountContractType, application),
     describe: (account) => describe(account.address, networkId()),
-    enumerate: (client, startIndex, readiness) =>
-      enumerateLedgerPubKeys(client, startIndex, LEDGER_PAGE_SIZE, readiness),
+    enumerate: (client, startIndex, readiness, application) =>
+      enumerateLedgerPubKeys(client, startIndex, LEDGER_PAGE_SIZE, readiness, application),
     existingIds,
     onCancel,
     openImport: () => deps.openImport(),
+    openImportSeed: () => deps.openImportSeed(),
+    openFindAccounts: () => deps.openFindAccounts(),
     openMultisig: () => deps.openMultisig(),
     refresh,
     render,
@@ -200,8 +255,8 @@ export const createLedgerOnboardRuntime = (
         ?.querySelector<HTMLButtonElement>("[data-connect-ledger]")
         ?.addEventListener("click", () => controller.start());
     },
-    start(accountContractType) {
-      controller.start(accountContractType);
+    start() {
+      controller.start();
     },
     startAddAccount() {
       controller.showChooser();

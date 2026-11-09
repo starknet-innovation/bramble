@@ -8,8 +8,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { routeFor } from "@mc-wallet/transactions/send-routes";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { routeFor } from "@bramble/transactions/send-routes";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import type { TransferFields } from "../../../../src/sidepanel/journeys/send/transfer-model";
 import {

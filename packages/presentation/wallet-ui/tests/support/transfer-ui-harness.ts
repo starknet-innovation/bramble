@@ -5,8 +5,8 @@
  * support only — never imported by production code.
  */
 
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
 import type { TokenBalance, WalletStatus } from "../../src/popup/responses/responses";
 import { sendFlow } from "../../src/sidepanel/app/screens/flows";
 import type { TransferUiDeps } from "../../src/sidepanel/journeys/send/transfer-ui";
@@ -51,6 +51,25 @@ export const transferPublicBalance: TokenBalance = {
  */
 export const flush = (): Promise<void> =>
   new Promise((resolve) => originalSetTimeout(resolve as () => void, 0));
+
+/**
+ * A promise a test settles by hand, for holding the wallet stub mid-flight —
+ * the review preparation or the execute call — so the feedback shown while it
+ * runs can be asserted before it lands.
+ */
+export const deferred = <T>(): {
+  readonly promise: Promise<T>;
+  readonly reject: (error: Error) => void;
+  readonly resolve: (value: T) => void;
+} => {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (error: Error) => void = () => undefined;
+  const promise = new Promise<T>((settle, fail) => {
+    resolve = settle;
+    reject = fail;
+  });
+  return { promise, reject, resolve };
+};
 
 /**
  * Replaces a container's children from markup without assigning markup as a
@@ -105,11 +124,17 @@ const feeReview = {
 // carrying the verifier's wording, which is what the background really returns.
 const poolPreparation = {
   amount: "1",
-  id: "prep-1",
-  poolFeeFri: "0",
+  id: `sha256:${"b".repeat(64)}`,
+  kind: "deposit" as const,
+  networkFee: { overallFee: "2000", unit: "FRI" },
+  payloadDigest: `sha256:${"b".repeat(64)}`,
+  poolAddress: "0x0000000000000000000000000000000000000000000000000000000000000abc",
+  poolFeeFri: "1000",
   recipient: "0x0",
-  summary: "Private send",
-  token: { id: "SN_MAIN:ETH", symbol: "ETH" },
+  route: "public-account" as const,
+  summaries: ["Private send"],
+  symbol: "ETH",
+  tokenId: `SN_MAIN:ETH:${TOKEN_ADDRESS}`,
 };
 
 /**
@@ -177,6 +202,14 @@ export const makeWallet = (
     async reviewTransfer(...args: unknown[]) {
       calls.reviewTransfer.push(args);
       return feeReview;
+    },
+    async resolveStarkName(_name: string, _networkId: string) {
+      // Benign default: no name resolves, so a suite that drives the shared
+      // Send binding never has a name accidentally commit an address. The reply
+      // names the network the panel declared, so it is only dropped when a test
+      // deliberately answers for another network. Suites that assert resolution
+      // override this per test.
+      return { networkId: "SN_MAIN", ok: true, resolution: { status: "not-found" } };
     },
     async submitTransfer(...args: unknown[]) {
       calls.submitTransfer.push(args);

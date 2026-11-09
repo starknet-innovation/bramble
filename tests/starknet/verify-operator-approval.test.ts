@@ -11,10 +11,10 @@
  * as fungible units, and must never trip the unlimited-amount threshold.
  */
 import { describe, expect, test } from "bun:test";
-import type { WatchedNft } from "@mc-wallet/portfolio/watched-nft";
-import type { TokenConfig } from "@mc-wallet/settings/preferences";
-import { verificationContext, verifyCalls } from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { WatchedNft } from "@bramble/portfolio/watched-nft";
+import type { TokenConfig } from "@bramble/settings/preferences";
+import { verificationContext, verifyCalls } from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const COLLECTION = "0x03ba1f0dd8b9b6f7c8d1d1d7f0a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4";

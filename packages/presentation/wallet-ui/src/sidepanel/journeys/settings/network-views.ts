@@ -8,16 +8,17 @@
  * background returned. No value here is written directly to storage.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import { explorerFallbackAllowed, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { checkboxField, textField } from "@mc-wallet/ui-kit/fields";
-import { isStarknetNetworkId, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { Strk20NetworkConfig } from "@bramble/privacy/config";
+import { explorerFallbackAllowed, type WalletPreferences } from "@bramble/settings/preferences";
+import { button } from "@bramble/ui-kit/controls";
+import { checkboxField, textField } from "@bramble/ui-kit/fields";
+import { isStarknetNetworkId, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { contextHelp, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { strk20ServicesForm } from "../privacy/privacy-settings-view";
+import { collectiblesSettings } from "./collectibles-settings-view";
 
 const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   preferences && isStarknetNetworkId(status.networkId)
@@ -32,7 +33,7 @@ const devnetHint = (status: WalletStatus, preferences: WalletPreferences | null)
   }
   const override = rpcOverrideFor(status, preferences);
   const endpoint = escapeHtml(override || STARKNET_NETWORKS.SN_DEVNET.rpcUrls[0]);
-  const elsewhere = override ? "" : " Running yours elsewhere? Set a custom RPC under Advanced.";
+  const elsewhere = override ? "" : " Set a custom RPC under Advanced if yours runs elsewhere.";
   return `<p class="hint">Expects a node at ${endpoint} started with --chain-id SN_DEVNET.${elsewhere}</p>`;
 };
 
@@ -43,9 +44,6 @@ const strk20ConfigFor = (
   preferences && isStarknetNetworkId(status.networkId)
     ? (preferences.strk20Networks?.[status.networkId] ?? null)
     : null;
-
-const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
-  preferences?.nftIndexerUrl ?? "";
 
 const explorerApiUrlFor = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   preferences && isStarknetNetworkId(status.networkId)
@@ -77,7 +75,6 @@ const explorerFallbackForm = (
     ${textField({
       autocomplete: "off",
       className: "mono",
-      hint: "Starkscan-compatible data API used only after every RPC fails. Leave empty for the wallet default.",
       label: `Explorer data API for ${status.network}`,
       name: "apiUrl",
       placeholder: "https://…/v1",
@@ -85,15 +82,14 @@ const explorerFallbackForm = (
       type: "url",
       value: explorerApiUrlFor(status, preferences),
     })}
-    <p class="hint">The explorer learns which addresses you hold, and its data cannot be verified against the chain. Turn fallback off to show an RPC error instead.</p>
     ${checkboxField({
       checked: allowed,
       name: "explorerFallback",
-      text: "Use this explorer when my RPC is unreachable",
+      text: "Use this explorer for activity, and as a fallback when the RPC fails",
     })}
     ${button({
       icon: "check",
-      label: "Save explorer settings",
+      label: "Save explorer",
       type: "submit",
       variant: "secondary",
     })}
@@ -122,7 +118,7 @@ const endpointDisclosure = (
  * Renders the primary network picker.
  */
 export const networkFlow = (status: WalletStatus, preferences: WalletPreferences | null): string =>
-  flowHeader("Network", status, "Choose where the wallet operates") +
+  flowHeader("Network", status) +
   flowScreen(
     "network",
     `<section class="section">
@@ -159,8 +155,9 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
 
 /**
  * Renders the security-sensitive custom service endpoint editor: expert RPC,
- * prover, NFT-indexer, and explorer-fallback settings, away from the primary
- * network picker. Read-only — every field submits a privileged message and the
+ * prover, and explorer-fallback settings, away from the primary network picker.
+ * The NFT-indexer field appears only while NFTs are turned on.
+ * Read-only — every field submits a privileged message and the
  * rendered state always comes from the preferences the background returned.
  */
 export const advancedNetworkFlow = (
@@ -174,11 +171,11 @@ export const advancedNetworkFlow = (
     flowScreen(
       "advanced-network",
       `<section class="section">
-      <p class="review-flag" role="note">Only use endpoints you trust. Chrome asks before granting access to a new service host.</p>
+      <p class="review-flag" role="note">Only use endpoints you trust. Your browser asks before granting access to a new service host.</p>
       ${contextHelp(
         "advanced-endpoint-privacy",
         "What an endpoint can learn",
-        "An RPC, indexer, prover, or relay can observe the requests sent to it, including account or transaction context needed for that service. Configure only infrastructure you trust; clearing a field restores the wallet default or disables the optional integration.",
+        "Each service sees the requests sent to it. Use only ones you trust. Clear a field to restore the default.",
       )}
       <div class="disclosure-stack">
         ${endpointDisclosure(
@@ -189,7 +186,6 @@ export const advancedNetworkFlow = (
             ${textField({
               autocomplete: "off",
               className: "mono",
-              hint: "Used as the default when set. Leave empty to use the built-in endpoint.",
               label: `Custom endpoint for ${status.network}`,
               name: "rpcUrl",
               placeholder: "https://…",
@@ -226,7 +222,6 @@ export const advancedNetworkFlow = (
             ${textField({
               autocomplete: "off",
               className: "mono",
-              hint: "Used across networks for encrypted intent handoffs. Every co-signer must select the same relay. Leave empty for the reviewed defaults.",
               label: "Custom Nostr relay",
               name: "relayUrl",
               placeholder: "wss://relay.example",
@@ -236,37 +231,25 @@ export const advancedNetworkFlow = (
             })}
             ${button({
               icon: "check",
-              label: "Save coordination relay",
+              label: "Save relay",
               type: "submit",
               variant: "secondary",
             })}
             <p id="nostr-relay-result" role="status"></p>
           </form>`,
         )}
+        ${collectiblesSettings(preferences, endpointDisclosure)}
         ${endpointDisclosure(
-          "nft-indexer",
-          "NFT indexer",
-          nftIndexerUrlFor(preferences) ? "Configured" : "Off",
-          `<form id="nft-indexer-form">
-            ${textField({
-              autocomplete: "off",
-              className: "mono",
-              hint: "Where the wallet lists NFTs an account owns. Ownership is re-checked on-chain. Leave empty to only show manually watched NFTs.",
-              label: "NFT discovery endpoint",
-              name: "indexerUrl",
-              placeholder: "https://…",
-              spellcheck: false,
-              type: "url",
-              value: nftIndexerUrlFor(preferences),
-            })}
-            ${button({
-              icon: "check",
-              label: "Save indexer",
-              type: "submit",
-              variant: "secondary",
-            })}
-            <p id="nft-indexer-result" role="status"></p>
-          </form>`,
+          "product-analytics",
+          "Product analytics",
+          (preferences?.productAnalytics ?? true) ? "On" : "Off",
+          `${checkboxField({
+            attributes: { id: "product-analytics" },
+            checked: preferences?.productAnalytics ?? true,
+            name: "productAnalytics",
+            text: "Share pseudonymous gateway usage (on by default)",
+          })}
+          <p class="hint">Helps Bramble understand feature usage and failures.</p>`,
         )}
         ${endpointDisclosure(
           "reliability-diagnostics",
@@ -278,7 +261,7 @@ export const advancedNetworkFlow = (
             name: "reliabilityDiagnostics",
             text: "Keep anonymous RPC and explorer reliability counters on this device",
           })}
-          <p class="hint">No addresses, sites, transaction data, endpoint URLs, or raw errors are collected. Nothing is uploaded; you choose whether to export it.</p>
+          <p class="hint">Stays on this device until you export it.</p>
           ${button({ attributes: { id: "diagnostics-export" }, icon: "receive", label: "Download diagnostics" })}`,
         )}
       </div>

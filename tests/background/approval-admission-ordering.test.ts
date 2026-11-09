@@ -16,6 +16,7 @@ import { describe, expect, test } from "bun:test";
 import { MAX_PENDING_APPROVALS_PER_ORIGIN } from "../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 import { flushHeld } from "../support/held";
 import {
   invokeAccount as account,
@@ -82,7 +83,7 @@ const countingHandler = () => {
         return stub.getGrantedAccounts(target);
       },
     } as unknown as Parameters<typeof createMessageHandler>[0],
-    "extension-id",
+    testExtension,
     { runtimeRpc: makeRuntimeRpc(), session },
   );
   return { grantReads, handler };

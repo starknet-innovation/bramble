@@ -22,9 +22,9 @@
  *    the leaf, so the property holds where signing is actually decided.
  */
 import { describe, expect, test } from "bun:test";
-import { snip12Scalar } from "@mc-wallet/starknet/snip12-scalars";
-import { isTypedDataShape } from "@mc-wallet/starknet/typed-data";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { snip12Scalar } from "@bramble/starknet/snip12-scalars";
+import { isTypedDataShape } from "@bramble/starknet/typed-data";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import { typedData as snip12 } from "starknet";
 
 type Revision = "0" | "1";
@@ -40,13 +40,13 @@ const REV0_DOMAIN = [{ name: "name", type: "felt" }];
 const envelope = (revision: Revision, type: string, value: unknown): unknown =>
   revision === "1"
     ? {
-        domain: { name: "MC Test", revision: "1" },
+        domain: { name: "Bramble Test", revision: "1" },
         message: { v: value },
         primaryType: "Msg",
         types: { Msg: [{ name: "v", type }], StarknetDomain: REV1_DOMAIN },
       }
     : {
-        domain: { name: "MC Test" },
+        domain: { name: "Bramble Test" },
         message: { v: value },
         primaryType: "Msg",
         types: { Msg: [{ name: "v", type }], StarkNetDomain: REV0_DOMAIN },
@@ -140,6 +140,14 @@ describe("SNIP-12 scalars are read against their declared type", () => {
     expect(accepts("1", "i128", (i128Min - 1n).toString())).toBe(false);
     expect(accepts("1", "i128", "-1")).toBe(true);
     expect(accepts("0", "i128", "-1")).toBe(false);
+    // Both revisions keep the `i128` ceiling (Sherlock 229); revision 0 used
+    // to admit any field element.
+    const i128Max = (1n << 127n) - 1n;
+    for (const revision of ["0", "1"] as const) {
+      expect(accepts(revision, "i128", i128Max.toString())).toBe(true);
+      expect(accepts(revision, "i128", (i128Max + 1n).toString())).toBe(false);
+      expect(accepts(revision, "i128", feltMax.toString())).toBe(false);
+    }
   });
 
   test("short strings stay short, printable, and ASCII", () => {

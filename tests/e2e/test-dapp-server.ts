@@ -18,7 +18,7 @@ const dappHtml = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>MC Wallet E2E Dapp</title>
+    <title>Bramble E2E Dapp</title>
   </head>
   <body>
     <p data-testid="provider-status">missing</p>
@@ -35,7 +35,7 @@ const dappHtml = `<!doctype html>
       const write = (testId, value) => {
         document.querySelector('[data-testid="' + testId + '"]').textContent = value;
       };
-      const provider = () => window.starknet_mcWallet;
+      const provider = () => window.starknet_bramble;
       // A well-formed SNIP-12 revision 1 (SN_MAIN) typed message that hashes
       // cleanly. The wallet refuses any domain key the domain type does not
       // declare, so every one of them is spelled out here.

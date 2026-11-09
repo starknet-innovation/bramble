@@ -1,4 +1,4 @@
-import { WALLET_VIEWS } from "@mc-wallet/wallet-ui/lab";
+import { WALLET_VIEWS } from "@bramble/wallet-ui/lab";
 import { expect, userEvent, within } from "storybook/test";
 import {
   assertCheckpointReady,

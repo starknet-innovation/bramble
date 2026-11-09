@@ -7,16 +7,16 @@
  * dismisses the overlay, and the add-account chooser routes each option to its
  * flow. No WebHID or background is touched.
  */
+
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
 import {
   createLedgerOnboardRuntime,
   type LedgerOnboardRuntimeDeps,
 } from "../../../../src/sidepanel/journeys/ledger/onboard-runtime";
 import type { LedgerConnector } from "../../../../src/sidepanel/journeys/ledger/sign-session";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
+import { candidateAccount } from "../../../support/ledger-onboard-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -46,20 +46,10 @@ const enumerateClient: LedgerDeviceClient = {
   signHash: () => Promise.reject(new Error("unused")),
 };
 
-const candidate = (index: number): LedgerAccountRef => ({
-  accountContractType: "openzeppelin",
-  address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  derivation: {
-    accountIndex: index,
-    eip2645application: "LedgerW",
-    kind: "ledger",
-    path: ledgerAccountPath(index),
-  },
-  id: `SN_MAIN:0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  networkId: "SN_MAIN",
-  publicKeyX: `0x${index + 1}`,
-});
+const candidate = candidateAccount;
+
+const idOf = (index: number, accountContractType: "argent" | "openzeppelin" = "openzeppelin") =>
+  candidate(index, accountContractType).id;
 
 const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
   document.body.replaceChildren();
@@ -76,6 +66,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
   let cancels = 0;
   let hdAdds = 0;
   let imports = 0;
+  let seedImports = 0;
   let multisigs = 0;
   const connector: LedgerConnector = {
     openConnected: () => Promise.resolve(null),
@@ -91,7 +82,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
       added.push([account.networkId, account.derivation.accountIndex, account.publicKeyX]);
       return Promise.resolve();
     },
-    describe: () => Promise.resolve({ balance: null, deployed: null }),
+    describe: () => Promise.resolve({ balance: null, deployed: null, funded: null }),
     existingIds: () => new Set<string>(),
     mount,
     networkId: () => "SN_MAIN",
@@ -101,6 +92,10 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     openImport: () => {
       imports += 1;
     },
+    openFindAccounts: () => undefined,
+    openImportSeed: () => {
+      seedImports += 1;
+    },
     openMultisig: () => {
       multisigs += 1;
     },
@@ -109,8 +104,10 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
       return Promise.resolve();
     },
     wallet: {
-      deriveLedgerAccounts: (_networkId, entries) =>
-        Promise.resolve(entries.map((entry) => candidate(entry.accountIndex))),
+      deriveLedgerAccounts: (_networkId, entries, accountContractType, application) =>
+        Promise.resolve(
+          entries.map((entry) => candidate(entry.accountIndex, accountContractType, application)),
+        ),
     },
     ...overrides,
   });
@@ -121,6 +118,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     cancels: () => cancels,
     hdAdds: () => hdAdds,
     imports: () => imports,
+    seedImports: () => seedImports,
     multisigs: () => multisigs,
     mount,
     refreshed: () => refreshed,
@@ -146,6 +144,11 @@ const check = (root: ParentNode, selector: string): void => {
   input.dispatchEvent(new window.Event("change", { bubbles: true }));
 };
 
+// The trigger opens first-run setup, which reads both paths: per index, one
+// Bramble, one Ready and one Braavos row (an unused Argent account at
+// Bramble's path stays hidden), so a 5-index page is 15 rows.
+const ROWS_PER_PAGE = 15;
+
 const toggleCount = (root: ParentNode): number =>
   root.querySelectorAll("[data-ledger-toggle]").length;
 
@@ -163,9 +166,9 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
     // One page (5) of selectable candidates rendered.
-    expect(toggleCount(h.mount)).toBe(5);
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE);
 
-    check(h.mount, '[data-ledger-toggle="1"]');
+    check(h.mount, `[data-ledger-toggle="${idOf(1)}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
     expect(h.added).toEqual([["SN_MAIN", 1, candidate(1).publicKeyX]]);
@@ -190,16 +193,24 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    expect(toggleCount(h.mount)).toBe(5);
-    expect(h.mount.querySelector('[data-ledger-toggle="4"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-ledger-toggle="5"]')).toBeNull();
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE);
+    expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(4)}"]`)).not.toBeNull();
+    expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(5)}"]`)).toBeNull();
 
     click(h.mount, "[data-ledger-load-more]");
+    // With no activity the groups start closed, so the click opens them and
+    // marks itself busy; otherwise the appended page would arrive unseen.
+    expect(h.mount.querySelector<HTMLButtonElement>("[data-ledger-load-more]")?.disabled).toBe(
+      true,
+    );
     await tick();
     // Page 2 (indexes 5-9) is appended to the existing page (indexes 0-4).
-    expect(toggleCount(h.mount)).toBe(10);
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE * 2);
+    const groups = Array.from(h.mount.querySelectorAll<HTMLDetailsElement>("[data-account-group]"));
+    expect(groups.length).toBe(3);
+    expect(groups.every((group) => group.open)).toBe(true);
     for (let index = 5; index <= 9; index += 1) {
-      expect(h.mount.querySelector(`[data-ledger-toggle="${index}"]`)).not.toBeNull();
+      expect(h.mount.querySelector(`[data-ledger-toggle="${idOf(index)}"]`)).not.toBeNull();
     }
     // The first page used the gesture-gated picker; "Show more" reconnected the
     // already-granted device silently rather than prompting again.
@@ -234,7 +245,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, '[data-ledger-device="second"]');
     await tick();
     expect(openedId).toBe("second");
-    expect(toggleCount(h.mount)).toBe(5);
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE);
   });
 
   test("Add selected adds exactly the checked accounts, in order", async () => {
@@ -243,8 +254,8 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
 
-    check(h.mount, '[data-ledger-toggle="2"]');
-    check(h.mount, '[data-ledger-toggle="0"]');
+    check(h.mount, `[data-ledger-toggle="${idOf(2)}"]`);
+    check(h.mount, `[data-ledger-toggle="${idOf(0)}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
     expect(h.added).toEqual([
@@ -278,7 +289,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    expect(toggleCount(h.mount)).toBe(5);
+    expect(toggleCount(h.mount)).toBe(ROWS_PER_PAGE);
     expect(h.mount.querySelector("[data-ledger-onboard-cancel]")).not.toBeNull();
 
     click(h.mount, "[data-ledger-onboard-cancel]");
@@ -291,31 +302,41 @@ describe("Ledger onboarding runtime (DOM)", () => {
     const h = mountRuntime();
     h.runtime.startAddAccount();
     expect(h.mount.hidden).toBe(false);
-    expect(h.mount.querySelector('[data-add-kind="argent"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="openzeppelin"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="ledger-argent"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="ledger-openzeppelin"]')).not.toBeNull();
-
+    expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="multisig"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
+    // Restoring a Ready Ledger account is an import, so it lives one level in.
+    expect(h.mount.querySelector('[data-add-kind="restore-ready-ledger"]')).toBeNull();
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(4);
 
-    // Selection stays reversible until Continue confirms the route.
-    click(h.mount, '[data-add-kind="ledger-argent"]');
-    expect(h.mount.querySelector("[data-ledger-onboard-connect]")).toBeNull();
-    click(h.mount, "[data-add-continue]");
+    // One click routes: the Ledger tile opens the connect prompt directly.
+    click(h.mount, '[data-add-kind="ledger"]');
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
-    // "Import a private key" dismisses the overlay and routes to the import form.
+    // The Ready restore reaches the same connect gesture from inside Import.
     h.runtime.startAddAccount();
     click(h.mount, '[data-add-kind="import"]');
-    click(h.mount, "[data-add-continue]");
-    expect(h.mount.hidden).toBe(true);
-    expect(h.imports()).toBe(1);
+    click(h.mount, '[data-add-kind="restore-ready-ledger"]');
+    expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
-    // "New account" derives an HD account, then dismisses on success.
+    // "Import an existing account" opens the phrase/key chooser; the phrase
+    // route dismisses into the seed-import flow, Back returns to the four tiles.
     h.runtime.startAddAccount();
-    click(h.mount, '[data-add-kind="argent"]');
-    click(h.mount, "[data-add-continue]");
+    click(h.mount, '[data-add-kind="import"]');
+    expect(h.mount.querySelector('[data-add-kind="import-phrase"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="import-key"]')).not.toBeNull();
+    click(h.mount, "[data-add-back]");
+    expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
+    click(h.mount, '[data-add-kind="import"]');
+    click(h.mount, '[data-add-kind="import-phrase"]');
+    expect(h.mount.hidden).toBe(true);
+    expect(h.seedImports()).toBe(1);
+    expect(h.imports()).toBe(0);
+
+    // "Regular account" derives an HD account, then dismisses on success.
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="regular"]');
     await tick();
     expect(h.hdAdds()).toBe(1);
     expect(h.mount.hidden).toBe(true);
@@ -323,8 +344,44 @@ describe("Ledger onboarding runtime (DOM)", () => {
 
     h.runtime.startAddAccount();
     click(h.mount, '[data-add-kind="multisig"]');
-    click(h.mount, "[data-add-continue]");
     expect(h.mount.hidden).toBe(true);
     expect(h.multisigs()).toBe(1);
+  });
+
+  test("startAddAccount omits the Ledger route when the connector reports no transport", () => {
+    const h = mountRuntime({
+      connector: {
+        isAvailable: () => false,
+        openConnected: () => Promise.resolve(null),
+        request: () => Promise.reject(new Error("no device expected")),
+      },
+    });
+    h.runtime.startAddAccount();
+    expect(h.mount.hidden).toBe(false);
+    expect(h.mount.textContent).toContain("Add a new account");
+    expect(h.mount.querySelector('[data-add-kind="ledger"]')).toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="regular"]')).not.toBeNull();
+    expect(h.mount.querySelectorAll("[data-add-kind]").length).toBe(3);
+  });
+
+  test("startAddAccount keeps the Ledger route when the connector does not report capability", () => {
+    const h = mountRuntime();
+    h.runtime.startAddAccount();
+    expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
+  });
+
+  test("a phrase-less wallet's regular tile renders the import routes with the reason", async () => {
+    const h = mountRuntime({
+      addHd: () => Promise.reject(new Error("No recovery phrase stored for this wallet")),
+    });
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="regular"]');
+    await tick();
+    expect(h.mount.querySelector('[role="status"]')?.textContent).toBe(
+      "This wallet was set up without a recovery phrase. Import an existing account instead.",
+    );
+    expect(h.mount.querySelector('[data-add-kind="find-accounts"]')).toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="import-phrase"]')).not.toBeNull();
+    expect(h.mount.querySelector("[data-ledger-onboard-connect]")).toBeNull();
   });
 });

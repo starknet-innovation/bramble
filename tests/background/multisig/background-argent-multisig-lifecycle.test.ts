@@ -3,10 +3,10 @@ import { describe, expect, test } from "bun:test";
 import {
   type ArgentMultisigSigningIntent,
   createMultisigStore,
-} from "@mc-wallet/multisig/repository";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import { createMemoryStore, type KeyValueStore } from "@mc-wallet/store/kv";
-import { canonicalFelt, DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/multisig/repository";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
+import { canonicalFelt, DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
 import {
   HARNESS_MULTISIG_ID,
   HARNESS_TARGET,
@@ -273,12 +273,13 @@ describe("Argent multisig background lifecycle", () => {
         ),
       );
     }
+    // The lost reply answers typed status unknown under the signed hash (#681).
     await expect(
       harness.handler(
         { intentId: intent.id, type: "wallet.submitArgentMultisigIntent" },
         harnessExtensionSender,
       ),
-    ).resolves.toEqual({ error: "submission outcome unknown" });
+    ).resolves.toMatchObject({ transactionHash: intent.prepared.transactionHash });
     found = true;
     await expect(
       harness.handler(
@@ -421,7 +422,7 @@ describe("Argent multisig background lifecycle", () => {
       },
     };
     const multisigStore = createMultisigStore({ store: guardedStore });
-    const harness = await makeMultisigHarness({ multisigStore });
+    const harness = await makeMultisigHarness({ deploymentStatus: true, multisigStore });
     afterWrite = () => harness.session.lock();
     await expect(
       harness.handler(

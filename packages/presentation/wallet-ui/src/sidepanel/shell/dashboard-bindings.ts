@@ -4,14 +4,60 @@
  * from the side panel entrypoint to keep it within the size budget.
  */
 
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { parseWalletContactCard, walletContactCard } from "@mc-wallet/wallet-model/preferences";
+import {
+  canonicalAddress,
+  isStarknetNetworkId,
+  normalizeFeltInput,
+} from "@bramble/wallet-model/networks";
+import { parseWalletContactCard, walletContactCard } from "@bramble/wallet-model/preferences";
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
+import { RECEIVE_QR_LABELS } from "../journeys/send/receive-view";
 import type { SidepanelWallet } from "../runtime/runtime";
-import { buttonBusy, errorMessage, renderFragment, showToast } from "../shared/dom";
+import { isOutcomeUnknown } from "../runtime/runtime-errors";
+import { buttonBusy, errorDetails, errorLine, renderFragment, showToast } from "../shared/dom";
 import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
+import { createStagePacer, type StagePacer, type StageTimers } from "../shared/stage-pacer";
+import {
+  addressBookDraft,
+  clearAddressBookDraft,
+  rememberAddressBookDraft,
+  takeAddressBookLabelFocus,
+} from "./address-draft";
+
+// Approval kinds whose approval signs and submits a transaction (stamped on the
+// approve control as data-approval-kind): only their unknown outcome says the
+// approval may not have gone through (copy review bf08).
+const TRANSACTION_APPROVALS: ReadonlySet<string> = new Set(["declare", "invoke", "strk20-invoke"]);
+
+// What the panel says while a decision runs and when it lands. Closing a
+// notice answers the site like Deny, but there was nothing to deny: no live
+// line, and the toast says only that it closed.
+const decisionWords = (
+  action: "approve" | "deny",
+  notice: boolean,
+): {
+  readonly done: string;
+  readonly line: string;
+  readonly pending: string;
+  readonly title: string;
+} => {
+  if (notice) return { done: "Closed", line: "", pending: "", title: "" };
+  return action === "approve"
+    ? {
+        done: "Request approved",
+        line: "The reviewed request is locked while the wallet signs and submits it.",
+        pending: "Approved. Signing and broadcasting…",
+        title: "Authorizing request",
+      }
+    : {
+        done: "Request denied",
+        line: "The wallet is returning control to the requesting site.",
+        pending: "Rejecting request…",
+        title: "Denying request",
+      };
+};
 
 /**
  * Shared context: the app root, the runtime client, and a full re-render.
@@ -21,7 +67,10 @@ import { qrSvg } from "../shared/qr";
 export type BindingContext = {
   readonly app: Element | null;
   readonly render: (status: WalletStatus) => Promise<void>;
+  readonly onConnectAccount?: (id: string, kind: "account" | "multisig") => void;
   readonly snoozeApproval?: (id: string) => void;
+  /** Timer seam for the approval takeover's stage pacing; platform timers when absent. */
+  readonly stageTimers?: StageTimers;
   readonly wallet: SidepanelWallet;
 };
 
@@ -30,8 +79,46 @@ export type BindingContext = {
  */
 export const bindAddressBook = ({ app, render, wallet }: BindingContext): void => {
   const form = app?.querySelector<HTMLFormElement>("#address-form");
+  // The handoff lives until Save, or until this screen is gone. A shell
+  // repaint rebuilds the form from an empty template and reads it again.
+  if (!form) {
+    clearAddressBookDraft();
+    return;
+  }
   const result = app?.querySelector<HTMLElement>("#address-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+  // Arriving from Send's "Save address": the address is already known, so the
+  // form opens on it with only the label left to fill. A later paint fills
+  // whichever of the two fields the focus restore left empty.
+  const addressField = form.querySelector<HTMLInputElement>('[name="address"]');
+  const labelField = form.querySelector<HTMLInputElement>('[name="label"]');
+  const draft = addressBookDraft();
+  if (addressField && addressField.value.trim() === "" && draft.address) {
+    addressField.value = draft.address;
+  }
+  if (labelField && labelField.value.trim() === "" && draft.label) {
+    labelField.value = draft.label;
+  }
+  if (takeAddressBookLabelFocus()) {
+    labelField?.focus({ preventScroll: true });
+  }
+  const remember = (): void => {
+    rememberAddressBookDraft(addressField?.value ?? "", labelField?.value ?? "");
+  };
+  addressField?.addEventListener("input", remember);
+  labelField?.addEventListener("input", remember);
+
+  // Everything past label and address is opt-in: the form asked for five fields
+  // to record a name and an address, which is why it read as complex.
+  const advanced = form?.querySelector<HTMLButtonElement>("#advanced-address");
+  const advancedFields = form?.querySelector<HTMLElement>("#address-advanced-fields");
+  advanced?.addEventListener("click", () => {
+    const open = advanced.getAttribute("aria-checked") !== "true";
+    advanced.setAttribute("aria-checked", String(open));
+    advanced.dataset["checked"] = String(open);
+    advancedFields?.toggleAttribute("hidden", !open);
+  });
 
   const walletCardField = form?.querySelector<HTMLTextAreaElement>('[name="walletCard"]');
   if (form && walletCardField)
@@ -62,6 +149,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         if (input instanceof HTMLInputElement) input.value = value;
       }
       if (result) result.textContent = "Wallet card verified. Add a label, then save.";
+      rememberAddressBookDraft(addressField?.value ?? "", labelField?.value ?? "");
       const label = form.elements.namedItem("label");
       if (label instanceof HTMLInputElement) label.focus({ preventScroll: true });
     });
@@ -70,16 +158,24 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
     event.preventDefault();
     const data = new FormData(form);
     buttonBusy(submitButton, true);
+    // Canonicalised here, the way the wallet-card path already was: the
+    // background takes lowercase hex only, so an address pasted as 0x04F2…
+    // was refused as a malformed request even though Send had just accepted
+    // that exact text. An unparseable value is passed through untouched so the
+    // background still reports it rather than this quietly sending "null".
+    const typed = String(data.get("address") ?? "");
+    const publicKeyX = normalizeFeltInput(String(data.get("publicKeyX") ?? ""));
     void wallet
       .saveAddress(
         String(data.get("label") ?? ""),
-        String(data.get("address") ?? "").trim(),
+        canonicalAddress(typed) ?? typed.trim(),
         String(data.get("networkId") ?? ""),
-        String(data.get("publicKeyX") ?? "").trim() || undefined,
+        publicKeyX || undefined,
         String(data.get("nostrPublicKey") ?? "").trim() || undefined,
       )
       .then(
         async () => {
+          clearAddressBookDraft();
           showToast("Address saved", "success", form);
           if (result) {
             result.textContent = "Address saved";
@@ -87,9 +183,9 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Address save failed"), "error", form);
+          showToast(errorDetails(error, "Address save failed"), "error", form);
           if (result) {
-            result.textContent = errorMessage(error, "Address save failed");
+            result.textContent = errorLine(error, "Address save failed");
           }
           buttonBusy(submitButton, false);
         },
@@ -97,27 +193,74 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
   });
 };
 
-/** Saturates the account's public wallet card without putting Nostr derivation in polling. */
+/**
+ * Binds the Receive card's QR switch and saturates the account's public wallet
+ * card without putting Nostr derivation in polling. The address QR is painted
+ * by the view and never waits: the card is an additional choice that becomes
+ * selectable once its coordination key is derived, and disappears if it cannot be.
+ */
 export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => {
   const root = app?.querySelector<HTMLElement>("[data-receive-wallet-card]");
   const address = root?.dataset["receiveAddress"];
   const networkId = root?.dataset["receiveNetwork"];
   const publicKeyX = root?.dataset["receiveSignerKey"];
   if (!root || !address || !isStarknetNetworkId(networkId) || !publicKeyX) return;
+  const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+  const options = [...root.querySelectorAll<HTMLButtonElement>("[data-receive-payload]")];
+  const showPayload = (payload: "address" | "card"): void => {
+    const card = root.dataset["receiveCard"];
+    if (payload === "card" && !card) return;
+    if (qr) {
+      renderFragment(
+        qr,
+        payload === "card" && card
+          ? qrSvg(card, RECEIVE_QR_LABELS.card)
+          : qrSvg(address, RECEIVE_QR_LABELS.address),
+      );
+      qr.dataset["qrPayload"] = payload;
+    }
+    for (const option of options) {
+      option.setAttribute("aria-pressed", String(option.dataset["receivePayload"] === payload));
+    }
+  };
+
+  // Everything past the QR and the address is opt-in: receiving needs one
+  // address, and the contact card and keys are for multisig coordination.
+  // Closing Advanced hides the payload switch, so the QR goes back to the address
+  // with it: a card QR under "Your Starknet address" with no way to switch it
+  // is not something other wallets can scan.
+  const advanced = root.querySelector<HTMLButtonElement>("#advanced-receive");
+  const advancedFields = root.querySelector<HTMLElement>("#receive-advanced-fields");
+  advanced?.addEventListener("click", () => {
+    const open = advanced.getAttribute("aria-checked") !== "true";
+    advanced.setAttribute("aria-checked", String(open));
+    advanced.dataset["checked"] = String(open);
+    advancedFields?.toggleAttribute("hidden", !open);
+    if (!open) {
+      showPayload("address");
+    }
+  });
+
+  for (const option of options) {
+    option.addEventListener("click", () => {
+      const payload = option.dataset["receivePayload"];
+      if (payload === "address" || payload === "card") showPayload(payload);
+    });
+  }
   void wallet.loadNostrPublicKey().then(
     (nostrPublicKey) => {
       if (!root.isConnected) return;
       const card = walletContactCard({ address, networkId, nostrPublicKey, publicKeyX });
-      const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+      const cardOption = options.find((option) => option.dataset["receivePayload"] === "card");
       const cardCopy = root.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
       const keyRow = root.querySelector<HTMLElement>("[data-nostr-key-row]");
       const keyStatus = keyRow?.querySelector<HTMLElement>("[data-nostr-key-status]");
       const keyValue = keyRow?.querySelector<HTMLElement>("[data-nostr-key-value]");
       const key = root.querySelector<HTMLElement>("[data-nostr-key]");
       const keyCopy = keyRow?.querySelector<HTMLButtonElement>("[data-copy]");
-      if (qr) renderFragment(qr, qrSvg(card, "QR code for wallet contact card"));
-      if (qr) qr.removeAttribute("aria-busy");
+      root.dataset["receiveCard"] = card;
       root.dataset["walletCardState"] = "ready";
+      if (cardOption) cardOption.disabled = false;
       if (cardCopy) {
         cardCopy.dataset["copy"] = card;
         cardCopy.disabled = false;
@@ -133,15 +276,14 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
     },
     () => {
       if (!root.isConnected) return;
-      const qr = root.querySelector<HTMLElement>("[data-receive-qr]");
+      const payloadSwitch = root.querySelector<HTMLElement>("[data-receive-payload-switch]");
+      const explainer = root.querySelector<HTMLElement>("[data-receive-card-explainer]");
       const cardCopy = root.querySelector<HTMLButtonElement>("[data-wallet-card-copy]");
       const keyStatus = root.querySelector<HTMLElement>("[data-nostr-key-status]");
       const keyValue = root.querySelector<HTMLElement>("[data-nostr-key-value]");
-      if (qr) {
-        renderFragment(qr, qrSvg(address, "QR code for account address"));
-        qr.removeAttribute("aria-busy");
-      }
       root.dataset["walletCardState"] = "unavailable";
+      if (payloadSwitch) payloadSwitch.hidden = true;
+      if (explainer) explainer.hidden = true;
       if (cardCopy) cardCopy.hidden = true;
       if (keyStatus) {
         keyStatus.textContent = "Coordination is unavailable. Share the account address instead.";
@@ -157,12 +299,52 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
  * and the Activity list share one decision path) plus the takeover's "Not now"
  * snooze control.
  */
-export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingContext): void => {
+export const bindApprovals = ({
+  app,
+  onConnectAccount,
+  render,
+  snoozeApproval,
+  stageTimers,
+  wallet,
+}: BindingContext): void => {
   const result = app?.querySelector<HTMLElement>("#approval-result");
   const live = app?.querySelector<HTMLElement>("#approval-live");
   const liveTitle = app?.querySelector<HTMLElement>("#approval-live-title");
   const liveCopy = app?.querySelector<HTMLElement>("#approval-live-copy");
   const deciding = new Set<string>();
+  // A software approval can settle in a few milliseconds, which tore the
+  // "Authorizing request" line down before it could be read (issue 436). The
+  // decision itself starts at once; the outcome's paint, and the status read
+  // it repaints from, wait for the line's minimum time on screen.
+  const pacedOutcome = (): StagePacer<() => void> => {
+    const paced = createStagePacer<() => void>({
+      render: (paint) => paint(),
+      sameStage: () => false,
+      ...(stageTimers ? { timers: stageTimers } : {}),
+    });
+    paced.stage(() => undefined);
+    return paced;
+  };
+  const showFailure = (error: unknown, button: HTMLButtonElement): void => {
+    // An approved call whose reply was lost may be on chain: amber, not "failed".
+    showToast(
+      errorDetails(error, "Approval failed"),
+      isOutcomeUnknown(error) ? "warning" : "error",
+      button,
+    );
+    if (result) {
+      result.textContent = errorLine(error, "Approval failed");
+    }
+  };
+  app?.querySelectorAll<HTMLButtonElement>("[data-connect-choice]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["connectChoice"];
+      const kind = button.dataset["connectKind"];
+      if (!id || (kind !== "account" && kind !== "multisig")) return;
+      if (button.getAttribute("aria-pressed") === "true") return;
+      onConnectAccount?.(id, kind);
+    });
+  });
   app?.querySelectorAll<HTMLButtonElement>("[data-approval-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["approvalId"];
@@ -171,21 +353,29 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
         return;
       }
       deciding.add(id);
+      const paced = pacedOutcome();
       const approvalCard = button.closest<HTMLElement>(".request-card");
       if (approvalCard) {
         approvalCard.dataset["state"] = "working";
       }
-      if (live) {
+      const notice = approvalCard?.hasAttribute("data-approval-notice") === true;
+      if (live && !notice) {
         live.hidden = false;
       }
+      const words =
+        button.dataset["multisigProposal"] === "true"
+          ? {
+              done: "Saved for signers",
+              line: "Other signers still need to sign.",
+              pending: "Saving…",
+              title: "Saving for signers",
+            }
+          : decisionWords(action, notice);
       if (liveTitle) {
-        liveTitle.textContent = action === "approve" ? "Authorizing request" : "Denying request";
+        liveTitle.textContent = words.title;
       }
       if (liveCopy) {
-        liveCopy.textContent =
-          action === "approve"
-            ? "The reviewed request is locked while the wallet signs and submits it."
-            : "The wallet is returning control to the requesting site.";
+        liveCopy.textContent = words.line;
       }
       app
         ?.querySelectorAll<HTMLButtonElement>("[data-approval-id], [data-approval-later]")
@@ -195,8 +385,7 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
           }
         });
       if (result) {
-        result.textContent =
-          action === "approve" ? "Approved. Signing and broadcasting…" : "Rejecting request…";
+        result.textContent = words.pending;
       }
       // The fee this card painted, read back off the control that was clicked
       // rather than from any later status refresh, so the figure the user saw is
@@ -205,28 +394,63 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
       const unit = button.dataset["approvalFeeUnit"];
       const reviewedFee =
         overallFee !== undefined && unit !== undefined ? { overallFee, unit } : undefined;
-      void wallet.decideApproval(id, action === "approve", reviewedFee).then(
-        async () => {
-          showToast(
-            action === "approve" ? "Request approved" : "Request denied",
-            "success",
-            button,
-          );
-          await render(await wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Approval failed"), "error", button);
-          if (result) {
-            result.textContent = errorMessage(error, "Approval failed");
-          }
-          // The background atomically consumes an approval before execution.
-          // Repaint after any executor error so stale controls cannot decide the
-          // already-removed id and surface a misleading "approval not found".
-          void wallet.loadStatus().then(render, () => {
-            deciding.delete(id);
-          });
-        },
-      );
+      const gaslessToken = button.dataset["gaslessToken"];
+      const gaslessAmount = button.dataset["gaslessAmount"];
+      const gaslessLabel = button.dataset["gaslessLabel"];
+      const gaslessDecimals = button.dataset["gaslessDecimals"];
+      const gaslessFee =
+        gaslessToken !== undefined &&
+        gaslessAmount !== undefined &&
+        gaslessLabel !== undefined &&
+        gaslessDecimals !== undefined
+          ? {
+              amount: gaslessAmount,
+              decimals: Number(gaslessDecimals),
+              label: gaslessLabel,
+              tokenAddress: gaslessToken,
+            }
+          : undefined;
+      // Likewise the account a connection card named: read off the clicked
+      // control, so the account the user saw is the one the decision reports.
+      const reviewedAccountId = button.dataset["approvalAccount"];
+      const transaction = TRANSACTION_APPROVALS.has(button.dataset["approvalKind"] ?? "");
+      void wallet
+        .decideApproval(
+          id,
+          action === "approve",
+          reviewedFee,
+          reviewedAccountId,
+          transaction,
+          gaslessFee,
+        )
+        .then(
+          () => {
+            // The status is read when the outcome paints, not when the decision
+            // resolved: a snapshot taken up to the pacer's hold earlier could
+            // repaint over a newer refresh (a request queued in the meantime).
+            paced.settle(() => {
+              showToast(words.done, "success", button);
+              void wallet
+                .loadStatus()
+                .then(render)
+                .catch(() => undefined);
+            });
+          },
+          (error: unknown) => {
+            // The background atomically consumes an approval before execution.
+            // Repaint after any executor error so stale controls cannot decide the
+            // already-removed id and surface a misleading "approval not found".
+            paced.settle(() => {
+              showFailure(error, button);
+              void wallet
+                .loadStatus()
+                .then(render, () => {
+                  deciding.delete(id);
+                })
+                .catch(() => undefined);
+            });
+          },
+        );
     });
   });
   // Fee-estimate retry on a queued invoke card: asks the background to
@@ -243,7 +467,7 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
       void wallet.retryApprovalFee(id).then(
         async () => render(await wallet.loadStatus()),
         (error: unknown) => {
-          showToast(errorMessage(error, "Fee estimate failed"), "error", button);
+          showToast(errorDetails(error, "Fee estimate failed"), "error", button);
           buttonBusy(button, false);
         },
       );

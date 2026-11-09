@@ -2,10 +2,10 @@
  * Public schema and capability types for the plain preferences store.
  */
 
-import type { WatchedNft } from "@mc-wallet/portfolio/watched-nft";
-import type { Strk20NetworkConfig, Strk20NetworkConfigs } from "@mc-wallet/privacy/config";
-import type { CustomNetwork } from "@mc-wallet/wallet-model/custom-network";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { WatchedNft } from "@bramble/portfolio/watched-nft";
+import type { Strk20NetworkConfig, Strk20NetworkConfigs } from "@bramble/privacy/config";
+import type { CustomNetwork } from "@bramble/wallet-model/custom-network";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type {
   AccountLabels,
   AddressBookEntry,
@@ -16,8 +16,11 @@ import type {
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/preferences";
 import type { AccountGroupIcon, AccountGroups } from "./groups";
+
+/** Who added a tracked token: a dapp (wallet_watchAsset) or the user. */
+export type TokenSource = "dapp" | "user";
 
 /**
  * Current plain preferences schema. Optional fields keep preferences stored
@@ -28,7 +31,20 @@ export type WalletPreferences = {
   readonly activeNetworkId: StarknetNetworkId;
   readonly approvalSurface?: ApprovalSurfacePreference;
   readonly addressBook: readonly AddressBookEntry[];
+  /**
+   * Whether NFTs are shown ("Show NFTs on Home"). Absent means on; an explicit
+   * `false` (the user turned NFTs off) withholds the Home NFTs tab, every
+   * gallery route, NFT load and indexer request. Read it through `nftsShown`.
+   */
+  readonly collectiblesPreview?: boolean;
   readonly customNetworks?: readonly CustomNetwork[];
+  /**
+   * Ids of tracked tokens a dapp added (wallet_watchAsset) and the user has not
+   * added themselves since. Their metadata came from the site, so the call
+   * reviewer does not trust them unless they match a curated token. Absent on
+   * preferences written before the field existed (those tokens stay trusted).
+   */
+  readonly dappTokenIds?: readonly string[];
   readonly displayCurrency?: DisplayCurrency;
   /** Per-network Starkscan-compatible read API override. */
   readonly explorerApiUrls?: ExplorerApiOverrides;
@@ -39,27 +55,54 @@ export type WalletPreferences = {
    */
   readonly explorerFallback?: ExplorerFallback;
   readonly groups?: AccountGroups;
+  /**
+   * Ids of accounts the user has hidden. A hidden account leaves the account
+   * drawer and the Send/Receive pickers but keeps its grants and its signing
+   * material: hiding is a view filter, not a permission change, so it lives
+   * here rather than in the vault and needs no schema migration.
+   */
+  readonly hiddenAccountIds?: readonly string[];
   readonly hiddenTokens?: readonly string[];
   readonly nftIndexerUrl?: string;
+  /**
+   * Tokens the user removed, as `networkId:address`, so the curated held-token
+   * scan never tracks one again (issue 663). Bounded; adding the token again
+   * lifts the entry. Absent on preferences written before the field existed.
+   */
+  readonly removedTokens?: readonly string[];
+  /**
+   * Multisig the wallet is presenting to sites. Absent means the active
+   * single-signer account. The id is a public account id, not a secret.
+   */
+  readonly selectedMultisigId?: string;
   readonly nfts?: readonly WatchedNft[];
   /** Custom relay replacing the reviewed Nostr defaults for explicit multisig handoffs. */
   readonly nostrRelayUrl?: string;
+  /** User-controllable pseudonymous usage metadata sent only to the wallet-owned gateway. */
+  readonly productAnalytics?: boolean;
   readonly rpcOverrides?: RpcOverrides;
   /** Opt-in process-local aggregate RPC counters; never uploaded automatically. */
   readonly reliabilityDiagnostics?: boolean;
   readonly schemaVersion: 1;
+  /**
+   * The STRK20 bundled-defaults migration this record has had
+   * (`STRK20_DEFAULTS_VERSION`). Absent on records written before it existed;
+   * those have their bundled Mainnet snapshot rebased once, on the next read.
+   */
+  readonly strk20DefaultsVersion?: number;
   readonly strk20Networks?: Strk20NetworkConfigs;
   /** @deprecated Legacy incomplete prover-only setting retained for backup compatibility. */
   readonly strk20ProverUrl?: string;
   readonly theme?: ThemeChoice;
   readonly tokens: readonly TokenConfig[];
+  /** False once the user turns off the Home VIP eligibility notice; absent means shown. */
+  readonly vipNotice?: boolean;
 };
 
 /**
  * Plain preferences store methods exposed to the background worker.
  */
 export type WalletPreferencesStore = {
-  readonly addCustomNetwork: (network: CustomNetwork) => Promise<WalletPreferences>;
   readonly addNft: (nft: Omit<WatchedNft, "id">) => Promise<WalletPreferences>;
   readonly createGroup: (input: {
     readonly icon: AccountGroupIcon;
@@ -70,6 +113,11 @@ export type WalletPreferencesStore = {
   readonly removeAddress: (id: string) => Promise<WalletPreferences>;
   readonly removeGroup: (input: { readonly id: string }) => Promise<WalletPreferences>;
   readonly removeNft: (id: string) => Promise<WalletPreferences>;
+  /**
+   * Removes a tracked token that is not a built-in default, with its hidden
+   * flag. Throws for an unknown id or a default token.
+   */
+  readonly removeToken: (input: { readonly tokenId: string }) => Promise<WalletPreferences>;
   readonly renameGroup: (input: {
     readonly id: string;
     readonly name: string;
@@ -102,6 +150,15 @@ export type WalletPreferencesStore = {
     readonly id: string;
     readonly spam: boolean;
   }) => Promise<WalletPreferences>;
+  /**
+   * Hides or reveals one account. Hiding is refused for the last account a
+   * network would still show, and the background switches the active account
+   * away before hiding it, so no list ever opens on an account it omits.
+   */
+  readonly setAccountHidden: (input: {
+    readonly accountId: string;
+    readonly hidden: boolean;
+  }) => Promise<WalletPreferences>;
   readonly setAccountLabel: (input: {
     readonly accountId: string;
     readonly label: string;
@@ -109,13 +166,24 @@ export type WalletPreferencesStore = {
   readonly setActiveNetwork: (networkId: StarknetNetworkId) => Promise<WalletPreferences>;
   readonly setDisplay: (input: {
     readonly approvalSurface?: ApprovalSurfacePreference;
+    readonly collectiblesPreview?: boolean;
     readonly displayCurrency?: DisplayCurrency;
+    readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: ThemeChoice;
+    readonly vipNotice?: boolean;
   }) => Promise<WalletPreferences>;
   readonly setRpcOverride: (input: {
     readonly networkId: StarknetNetworkId;
     readonly rpcUrl: string;
+  }) => Promise<WalletPreferences>;
+  /**
+   * Presents `multisigId` to connected sites, or the active single-signer
+   * account when `multisigId` is null. Does not change the vault's active
+   * account. A malformed id throws and writes nothing.
+   */
+  readonly setSelectedMultisig: (input: {
+    readonly multisigId: string | null;
   }) => Promise<WalletPreferences>;
   readonly setStrk20NetworkConfig: (input: {
     readonly config: Strk20NetworkConfig | null;
@@ -125,5 +193,13 @@ export type WalletPreferencesStore = {
     readonly hidden: boolean;
     readonly tokenId: string;
   }) => Promise<WalletPreferences>;
-  readonly upsertToken: (token: Omit<TokenConfig, "id">) => Promise<WalletPreferences>;
+  /**
+   * Adds or replaces a tracked token. `source` records who added it: "dapp"
+   * marks it as dapp-supplied in `dappTokenIds`, "user" (an explicit add in the
+   * wallet) clears that mark. Required so no caller trusts a token by omission.
+   */
+  readonly upsertToken: (
+    token: Omit<TokenConfig, "id">,
+    source: TokenSource,
+  ) => Promise<WalletPreferences>;
 };

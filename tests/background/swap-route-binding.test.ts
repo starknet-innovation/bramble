@@ -57,7 +57,7 @@ describe("the AVNU route calldata is bound to the reviewed swap", () => {
       { ...routeCall, entrypoint: "swap_exact_token_to" },
     ]);
     await expect(response).resolves.toEqual({
-      error: "swap build called an entrypoint that is not an AVNU swap",
+      error: "swap build called an entrypoint that is not an avnu swap",
     });
     expect(submitted).toHaveLength(0);
   });

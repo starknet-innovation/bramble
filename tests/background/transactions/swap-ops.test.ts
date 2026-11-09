@@ -6,9 +6,10 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createActivityLog } from "@mc-wallet/transactions/activity";
-import { avnuRouterAddress, type SwapCall, type SwapService } from "@mc-wallet/transactions/avnu";
-import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { PriceService } from "@bramble/portfolio/prices";
+import { createActivityLog } from "@bramble/transactions/activity";
+import { avnuRouterAddress, type SwapCall, type SwapService } from "@bramble/transactions/avnu";
+import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -20,9 +21,10 @@ const mainnetToken = (symbol: string): string =>
 const ETH_TOKEN_ADDRESS = mainnetToken("ETH");
 const STRK_TOKEN_ADDRESS = mainnetToken("STRK");
 
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",
@@ -123,6 +125,7 @@ const makeHarness = (options?: {
   readonly buildError?: string;
   readonly activityWriteFails?: boolean;
   readonly locked?: boolean;
+  readonly prices?: PriceService;
   readonly quoteError?: string;
 }) => {
   const session = createUnlockSession();
@@ -174,7 +177,7 @@ const makeHarness = (options?: {
       };
     },
   };
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     activity: options?.activityWriteFails
       ? { ...activity, record: () => Promise.reject(new Error("storage quota exceeded")) }
       : activity,
@@ -187,6 +190,7 @@ const makeHarness = (options?: {
         return { calls: [], transactionHash: "0x5aa9" };
       },
     } as never,
+    ...(options?.prices ? { prices: options.prices } : {}),
     session,
     swap,
   });
@@ -221,6 +225,26 @@ describe("swap operations", () => {
         { address: STRK_TOKEN_ADDRESS, symbol: "STRK" },
       ],
     });
+  });
+
+  test("quote carries a value delta priced from the wallet's own feed (Sherlock 137)", async () => {
+    // The aggregator values both sides at about $18.8; the wallet's feed prices
+    // 0.01 ETH at $40 and 12.5 STRK at $10, a 75% loss.
+    const prices: PriceService = {
+      async getPrices({ currency }) {
+        const feed = { [ETH_TOKEN_ADDRESS]: 4_000, [STRK_TOKEN_ADDRESS]: 0.8 };
+        return { asOf: 1, changes: {}, currency, prices: feed, stale: false };
+      },
+      async getTokenChart({ currency }) {
+        return { currency, points: [] };
+      },
+    };
+    const { handler } = makeHarness({ prices });
+    const response = (await handler(
+      { amount: "0.01", buyTokenId, sellTokenId, type: "wallet.swapQuote" },
+      extensionSender,
+    )) as { readonly swapQuote: { readonly valueDeltaPercent?: number } };
+    expect(response.swapQuote.valueDeltaPercent).toBeCloseTo(-75, 5);
   });
 
   test("quote returns a display-ready view for the tracked pair", async () => {
@@ -357,8 +381,9 @@ describe("swap operations", () => {
       amount: "0.01",
       hash: "0x5aa9",
       kind: "invoke",
-      summary: "Swap 0.01 ETH for ~12.5 STRK via AVNU",
+      summary: "Swap 0.01 ETH for ~12.5 STRK via avnu",
       token: "ETH",
+      tokenAddress: `0x${BigInt(ETH_TOKEN_ADDRESS).toString(16)}`,
     });
     expect(await handler({ preparationId, type: "wallet.swapExecute" }, extensionSender)).toEqual({
       error: "swap preparation not found",
@@ -382,7 +407,7 @@ describe("swap operations", () => {
 
   test("rejects both additive allowance spellings regardless of token", async () => {
     // Which selectors grant spend is defined once, by isApproveEntrypoint in
-    // @mc-wallet/transactions/verify-selectors. If this gate kept its own list, a build
+    // @bramble/transactions/verify-selectors. If this gate kept its own list, a build
     // could route an approval onto another token under a spelling only the
     // reviewer knows about, and the policy would wave it through.
     for (const entrypoint of ["increase_allowance", "increaseAllowance"]) {

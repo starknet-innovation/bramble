@@ -3,12 +3,12 @@
  * bridge. Keeping this union separate makes the capability surface easy to
  * compare with the enforced DAPP_MESSAGES allowlist.
  */
-import type { Json } from "@mc-wallet/core/json";
+import type { Json } from "@bramble/core/json";
 import type { Strk20Proof, Strk20RequestedActions } from "../privacy/strk20-bridge";
 import type { ProviderChain } from "../transactions/add-chain";
 import type { ProviderDeclare } from "../transactions/declare";
 import type { ProviderInvokeCall } from "../transactions/invoke";
-import type { ProviderWatchAsset } from "../transactions/watch-asset";
+import type { ProviderWatchAsset, ProviderWatchNft } from "../transactions/watch-asset";
 
 /**
  * Exact extension messages the provider bridge may send to the background.
@@ -91,7 +91,7 @@ export type RuntimeMessage =
       readonly dappName: string;
       readonly nonce?: string;
       readonly origin: string;
-      readonly type: "wallet.strk20SubaccountCommitment";
+      readonly type: "wallet.strk20ShadowAccountCommitment";
     }
   | {
       readonly chainId: string;
@@ -100,6 +100,11 @@ export type RuntimeMessage =
     }
   | {
       readonly asset: ProviderWatchAsset;
+      readonly origin: string;
+      readonly type: "wallet.watchAsset";
+    }
+  | {
+      readonly nft: ProviderWatchNft;
       readonly origin: string;
       readonly type: "wallet.watchAsset";
     };

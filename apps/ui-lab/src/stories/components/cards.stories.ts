@@ -1,12 +1,12 @@
-import {
-  approvalCard,
-  collectibleCard,
-  nftGalleryCard,
-  reviewPanel,
-  visibleNftItems,
-} from "@mc-wallet/wallet-ui/lab";
+import { approvalCard, nftGalleryCard, reviewPanel, visibleNftItems } from "@bramble/wallet-ui/lab";
 import type { Meta } from "@storybook/html-vite";
-import { discoveredNft, invokeApproval, preferences, statusFor } from "../../fixtures/fixtures";
+import {
+  discoveredNft,
+  discoveredOnlyNft,
+  invokeApproval,
+  preferences,
+  statusFor,
+} from "../../fixtures/fixtures";
 import {
   CATALOG_META,
   type CatalogArgs,
@@ -22,8 +22,12 @@ const meta = {
 
 export default meta;
 
-const collectible = visibleNftItems(preferences.nfts ?? [], [discoveredNft], "SN_MAIN")[0];
-if (!collectible) {
+const [collectible, discoveredOnly] = visibleNftItems(
+  preferences.nfts ?? [],
+  [discoveredNft, discoveredOnlyNft],
+  "SN_MAIN",
+);
+if (!collectible || !discoveredOnly) {
   throw new Error("Missing UI Lab collectible fixture");
 }
 
@@ -47,13 +51,13 @@ export const CollectibleCards: CatalogStory = {
   render: (args) =>
     catalogFrame(
       "Collectible cards",
-      "Compact portfolio and gallery cards share the resolved NFT model while preserving image privacy and provenance.",
+      "Gallery cards render the resolved NFT model while preserving image privacy and provenance.",
       catalogGroup(
-        "Portfolio and gallery",
-        "Both specimens are the exact production renderers.",
+        "Gallery",
+        "The specimen is the exact production renderer.",
         `<div class="catalog-grid wide">
-          ${catalogSample("Portfolio card", `<ul class="collectible-grid catalog-nft-limit">${collectibleCard(collectible, true)}</ul>`)}
           ${catalogSample("Gallery card", `<ul class="nft-grid catalog-nft-limit">${nftGalleryCard(collectible, true)}</ul>`)}
+          ${catalogSample("Discovered card", `<ul class="nft-grid catalog-nft-limit">${nftGalleryCard(discoveredOnly, true)}</ul>`)}
         </div>`,
       ),
       args.theme,

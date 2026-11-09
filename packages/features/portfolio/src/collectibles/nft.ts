@@ -3,8 +3,8 @@
  * ownership reads live in ./rpc because they need network access.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 import { type Call, CallData, cairo } from "starknet";
 
 /**

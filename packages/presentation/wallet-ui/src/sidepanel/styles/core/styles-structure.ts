@@ -10,7 +10,16 @@
  * DIVIDERS for separation (never rings around content), values right-aligned
  * with tabular/mono voices where the data warrants it.
  */
-import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
+
+/**
+ * Stacking layers of the two repaint-surviving Ledger takeovers. The device-sign
+ * prompt sits above the onboarding overlay: when a parked device sign presents
+ * itself during Ledger onboarding, the hash the user compares on the device and
+ * its Cancel control must be the surface on top, whatever order the two mounts
+ * were created in (Sherlock 259).
+ */
+export const LEDGER_OVERLAY_LAYERS = { onboard: 40, sign: 41 } as const;
 
 /**
  * Structured-content stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -22,59 +31,90 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      after the value. */
   dl.receipt, .receipt { margin: 0; }
   .receipt {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     padding: 0 ${SPACE.lg};
   }
+  /* Label on the first line of its value, row centred in its height: see the
+     send receipt facts, which share this grammar. */
   .receipt-row {
-    align-items: center;
+    align-content: center;
+    align-items: baseline;
     display: flex;
+    flex-wrap: wrap;
     gap: ${SPACE.md};
     justify-content: space-between;
     min-height: 44px;
+    min-width: 0;
     padding: ${SPACE.xs} 0;
     position: relative;
   }
   .receipt-row + .receipt-row::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
     position: absolute;
   }
   .receipt-row dt {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     flex: none;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
   }
+  /* The value's flex basis is a readable measure, not zero: with a zero basis
+     the row could never wrap, so beside a long label ("Maximum network fee" at
+     the 320px panel) the value shrank to a sliver and its text spilled left
+     over the label. Now a value that cannot get 10ch beside its label drops to
+     its own line, still flush right (the auto start margin keeps a value with a
+     max-width there); a word longer than the value's line breaks as a last
+     resort. */
   .receipt-row dd {
     align-items: center;
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
+    flex: 1 1 10ch;
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.medium};
     gap: 6px;
-    margin: 0;
+    justify-content: flex-end;
+    margin: 0 0 0 auto;
     min-width: 0;
+    overflow-wrap: anywhere;
     text-align: right;
   }
-  .receipt-row dd code { color: var(--mc-text); overflow-wrap: normal; word-break: normal; }
-  .receipt-row dd .icon-button { height: 28px; min-height: 0; width: 28px; }
-  .receipt-row dd .icon-button .icon { height: 15px; width: 15px; }
+  /* Identifiers stay whole while they fit; only when the panel is narrower
+     than the value does the value break, rather than overflowing the row and
+     being cut off at the right edge. */
+  .receipt-row dd code { color: var(--bramble-text); overflow-wrap: anywhere; word-break: normal; }
+  .receipt-row dd .icon-button, .icon-button.copy-inline { height: 28px; min-height: 0; width: 28px; }
+  .receipt-row dd .icon-button .icon, .icon-button.copy-inline .icon { height: 15px; width: 15px; }
+  /* Inline copy control (shared/parts inlineCopyButton): trails a truncated
+     identifier on a text line at the receipt action's compact size. The
+     negative vertical margin keeps a caption or mono line at its own height,
+     so a row gains a copy affordance without gaining height. */
+  .icon-button.copy-inline {
+    flex: none;
+    margin: calc((${TYPE.caption.size} * ${TYPE.caption.line} - ${SIZE.pill}) / 2) 0;
+  }
+  /* A shortened identifier and its inline copy control on one line, for a
+     surface whose own layout stacks its children (a name over its address). */
+  .copy-line { align-items: center; display: flex; gap: 2px; max-width: 100%; min-width: 0; }
+  .copy-line > code { min-width: 0; }
   /* Approval request facts use the same receipt grammar, but allow long
      untrusted identifiers to wrap inside the panel instead of widening it. */
   .request-detail {
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.md};
     display: grid;
     min-width: 0;
     overflow: hidden;
     padding: 0 ${SPACE.md};
   }
+  /* Caption label and body value share a first baseline, not a top edge. */
   .request-detail > div {
-    align-items: start;
+    align-items: baseline;
     display: grid;
     gap: ${SPACE.md};
     grid-template-columns: minmax(88px, auto) minmax(0, 1fr);
@@ -82,13 +122,13 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     position: relative;
   }
   .request-detail > div + div::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
     position: absolute;
   }
-  .request-detail dt { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .request-detail dt { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
   .request-detail dd {
     margin: 0;
     min-width: 0;
@@ -101,6 +141,18 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     overflow-wrap: anywhere;
     word-break: break-all;
   }
+  /* A fact with a copy action keeps the identifier and its control on one
+     right-aligned line; the identifier still wraps inside the panel first. */
+  .request-detail dd:has(> .icon-button) {
+    align-items: center;
+    display: flex;
+    gap: 2px;
+    justify-content: flex-end;
+  }
+  .request-detail dd:has(> .icon-button) > code { min-width: 0; }
+  /* The connect card leads with the account's familiar display name, stacked
+     over the address it shares, right-aligned with the receipt grammar. */
+  .request-detail dd.request-account { display: grid; justify-items: end; }
   .review-calls {
     display: grid;
     gap: ${SPACE.sm};
@@ -115,18 +167,18 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   /* Segmented control: one recessed track, equal flat options, the active one
      lifted on a soft panel chip. Used for small either/or preferences (theme). */
   .seg {
-    background: var(--mc-sunken);
+    background: var(--bramble-sunken);
     border-radius: ${RADIUS.full};
     display: grid;
     gap: 3px;
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
-    padding: 3px;
+    padding: ${SPACE.xxs};
   }
   button.seg-option {
     background: transparent;
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.semibold};
     min-height: 34px;
@@ -134,14 +186,14 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     transition: background ${MOTION.pressMs}ms ${MOTION.ease}, color ${MOTION.pressMs}ms ${MOTION.ease};
   }
   @media (hover: hover) and (pointer: fine) {
-    button.seg-option:not(:disabled):hover { background: transparent; color: var(--mc-text); }
-    button.seg-option[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-panel); color: var(--mc-text); }
+    button.seg-option:not(:disabled):hover { background: transparent; color: var(--bramble-text); }
+    button.seg-option[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-panel); color: var(--bramble-text); }
   }
   button.seg-option:not(:disabled):active { background: transparent; transform: scale(0.97); }
   button.seg-option[aria-pressed="true"] {
-    background: var(--mc-panel);
-    box-shadow: var(--mc-elev-xs);
-    color: var(--mc-text);
+    background: var(--bramble-panel);
+    box-shadow: var(--bramble-elev-xs);
+    color: var(--bramble-text);
   }
 
   /* Disclosure: a native details/summary accordion styled as a grouped row.
@@ -149,13 +201,13 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      behind a scannable header so the primary path stays light; the chevron
      rotates on open and the body sits on a recessed fill. */
   details.disclosure {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     overflow: hidden;
   }
   details.disclosure > summary {
     align-items: center;
-    color: var(--mc-text);
+    color: var(--bramble-text);
     cursor: pointer;
     display: flex;
     gap: ${SPACE.sm};
@@ -168,7 +220,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   details.disclosure > summary::-webkit-details-marker { display: none; }
   @media (hover: hover) and (pointer: fine) {
-    details.disclosure > summary:hover { background: var(--mc-hover); }
+    details.disclosure > summary:hover { background: var(--bramble-hover); }
   }
   details.disclosure > summary .menu-copy strong {
     font-size: ${TYPE.body.size};
@@ -178,7 +230,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     text-wrap: nowrap;
   }
   details.disclosure > summary .menu-value { flex: none; }
-  .disclosure-mark { color: var(--mc-muted); display: inline-flex; flex: none; transition: transform ${MOTION.tabMs}ms var(--ease-out); }
+  .disclosure-mark { color: var(--bramble-muted); display: inline-flex; flex: none; transition: transform ${MOTION.tabMs}ms var(--ease-out); }
   .disclosure-mark .icon { height: 16px; width: 16px; }
   details.disclosure[open] > .disclosure-mark, details.disclosure[open] > summary .disclosure-mark { transform: rotate(90deg); }
   .disclosure-body {
@@ -189,7 +241,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   details.disclosure:not([open]) > .disclosure-body { display: none; }
   .disclosure-body::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
@@ -206,7 +258,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   .approval-header .flow-title h1 { font-size: ${TYPE.display.size}; letter-spacing: -0.02em; }
   .takeover-network {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     flex: none;
     font-size: ${TYPE.caption.size};
@@ -215,7 +267,9 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     text-wrap: nowrap;
   }
   .approval-takeover { gap: ${SPACE.md}; grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 0; }
-  .approval-takeover .request-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  /* both-edges, as on html (issue 795): a classic scrollbar's reserved gutter
+     is mirrored on the left, so the cards sit centred, not short of the right. */
+  .approval-takeover .request-list { min-height: 0; overflow-y: auto; scrollbar-gutter: stable both-edges; }
   .approval-takeover .request-card {
     background: transparent;
     border-radius: 0;
@@ -227,13 +281,13 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     padding: 0;
   }
   .approval-takeover .request-site {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.md};
     padding: ${SPACE.sm} ${SPACE.md};
   }
   .approval-takeover .request-site-mark {
-    background: var(--mc-accent-soft);
-    color: var(--mc-accent);
+    background: var(--bramble-accent-soft);
+    color: var(--bramble-accent);
   }
   .approval-takeover .request-site-copy strong {
     font-size: ${TYPE.body.size};
@@ -246,23 +300,26 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   .approval-takeover .review-panel {
     background: transparent;
     border-radius: 0;
-    box-shadow: inset 0 1px 0 var(--mc-hairline);
+    box-shadow: inset 0 1px 0 var(--bramble-hairline);
     padding: ${SPACE.md} 0 0;
   }
   .approval-takeover .review-flag {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     gap: ${SPACE.sm};
     line-height: ${TYPE.caption.line};
   }
-  .approval-takeover .review-flag .icon { color: var(--mc-danger); flex: none; }
+  .approval-takeover .review-flag .icon { color: var(--bramble-danger); flex: none; }
+  /* The decline column never drops below its own label: with a zero floor
+     the 320px panel squeezed "Cancel" and "Deny" to a 44px pill they spilled
+     out of while the primary kept its one-line width. */
   .approval-takeover .button-row {
-    grid-template-columns: minmax(0, 1fr) minmax(104px, auto);
+    grid-template-columns: minmax(min-content, 1fr) minmax(104px, auto);
     margin-top: auto;
     padding-top: ${SPACE.sm};
   }
-  .takeover-queue { color: var(--mc-muted); font-size: ${TYPE.caption.size}; text-align: center; }
+  .takeover-queue { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; text-align: center; }
   .takeover-foot { display: grid; gap: ${SPACE.sm}; }
   .takeover-foot button.ghost { justify-self: center; min-height: ${CONTROL.hitSmall}; }
 
@@ -272,14 +329,15 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      the device wherever they were. Owned outside the shell repaint so streaming
      data never resets an in-flight device prompt. */
   .ledger-sign-overlay {
-    background: var(--mc-bg);
+    background: var(--bramble-bg);
     display: grid;
     grid-template-rows: auto 1fr;
     inset: 0;
     overflow-y: auto;
     padding: ${SPACE.lg};
     position: fixed;
-    z-index: 40;
+    scrollbar-gutter: stable;
+    z-index: ${LEDGER_OVERLAY_LAYERS.sign};
   }
   .ledger-sign-overlay[hidden] { display: none; }
 
@@ -290,13 +348,14 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
      account picker renders a top-aligned .onboard-picker that scrolls when its
      list outgrows the panel. All rhythm comes from the scale tokens. */
   .ledger-onboard-overlay {
-    background: var(--mc-bg);
+    background: var(--bramble-bg);
     display: grid;
     inset: 0;
     overflow-y: auto;
     padding: ${SPACE.lg};
     position: fixed;
-    z-index: 40;
+    scrollbar-gutter: stable;
+    z-index: ${LEDGER_OVERLAY_LAYERS.onboard};
   }
   .ledger-onboard-overlay[hidden] { display: none; }
   .onboard-hero {
@@ -345,9 +404,9 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   .add-account-option {
     align-items: center;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     gap: ${SPACE.md};
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -358,7 +417,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   .add-account-option-icon {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
     display: inline-flex;
     height: ${SIZE.mark};
@@ -372,15 +431,15 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   .add-account-option-copy { display: grid; gap: ${SPACE.xs}; min-width: 0; }
   .add-account-option-copy strong { font-size: ${TYPE.title.size}; }
   .add-account-option-copy span {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
   }
   .add-account-option-check {
     align-items: center;
-    background: var(--mc-text);
+    background: var(--bramble-text);
     border-radius: ${RADIUS.full};
-    color: var(--mc-bg);
+    color: var(--bramble-bg);
     display: inline-flex;
     height: ${SIZE.pill};
     justify-content: center;
@@ -393,8 +452,8 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   .add-account-option-check .icon { height: ${CONTROL.icon}; width: ${CONTROL.icon}; }
   .add-account-option[aria-pressed="true"] {
-    background: var(--mc-elevated);
-    box-shadow: inset 0 0 0 2px var(--mc-text);
+    background: var(--bramble-elevated);
+    box-shadow: inset 0 0 0 2px var(--bramble-text);
   }
   .add-account-option[aria-pressed="true"] .add-account-option-check {
     opacity: 1;
@@ -402,12 +461,12 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   @media (hover: hover) and (pointer: fine) {
     button.add-account-option:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
     button.add-account-option[aria-pressed="true"]:not(:disabled):hover {
-      background: var(--mc-elevated);
-      color: var(--mc-text);
+      background: var(--bramble-elevated);
+      color: var(--bramble-text);
     }
   }
   .onboard-actions { display: grid; gap: ${SPACE.sm}; justify-items: stretch; width: 100%; }
@@ -431,7 +490,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     gap: ${SPACE.md};
     min-width: 0;
   }
-  .select-check { accent-color: var(--mc-accent); flex: none; height: ${SPACE.lg}; width: ${SPACE.lg}; }
+  .select-check { accent-color: var(--bramble-accent); flex: none; height: ${SPACE.lg}; width: ${SPACE.lg}; }
   .allowance-row.is-duplicate { opacity: 0.68; }
   @media (prefers-reduced-motion: reduce) {
     .add-account-option-check { transition: none; }

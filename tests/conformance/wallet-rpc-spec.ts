@@ -11,8 +11,8 @@
  * and the `SpecMethod` type live in spec-fixtures.ts.
  */
 
-import type { ProviderMethod } from "@mc-wallet/wallet-protocol/bridge";
-import { SUPPORTED_SPECS } from "@mc-wallet/wallet-protocol/versions";
+import type { ProviderMethod } from "@bramble/wallet-protocol/bridge";
+import { SUPPORTED_SPECS } from "@bramble/wallet-protocol/versions";
 import {
   ACCOUNT,
   ADDRESS,
@@ -222,10 +222,12 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
     runtimeType: "wallet.addStarknetChain",
     paramKeys: ["id", "chain_id", "chain_name"],
     optionalApiVersion: true,
-    stateChanging: true,
+    // Answered at once, never held: a built-in chain is already added and any
+    // other chain is unsupported (issue 852), so nothing is prompted or stored.
+    stateChanging: false,
     errorCodes: [
       ERROR_CODES.INVALID_REQUEST_PAYLOAD,
-      ERROR_CODES.USER_REFUSED_OP,
+      ERROR_CODES.CHAIN_ID_NOT_SUPPORTED,
       ERROR_CODES.API_VERSION_NOT_SUPPORTED,
       ERROR_CODES.UNKNOWN_ERROR,
     ],
@@ -234,16 +236,16 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
       method: "wallet_addStarknetChain",
       params: {
         chain_id: "0x4d43434841494e",
-        chain_name: "MC Chain",
-        id: "mc-chain",
+        chain_name: "Bramble Chain",
+        id: "bramble-chain",
         rpc_urls: ["https://rpc.example.com"],
       },
     },
     expectedRuntime: {
       chain: {
         chainId: "0x4d43434841494e",
-        chainName: "MC Chain",
-        id: "mc-chain",
+        chainName: "Bramble Chain",
+        id: "bramble-chain",
         rpcUrls: ["https://rpc.example.com"],
       },
       origin: ORIGIN,
@@ -395,7 +397,7 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
     method: "wallet_strk20Balances",
     resultMethod: "wallet_strk20Balances",
     runtimeType: "wallet.strk20Balances",
-    paramKeys: ["tokens"],
+    paramKeys: ["tokens", "valid_until"],
     optionalApiVersion: true,
     stateChanging: false,
     errorCodes: [
@@ -405,7 +407,13 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
       ERROR_CODES.API_VERSION_NOT_SUPPORTED,
       ERROR_CODES.UNKNOWN_ERROR,
     ],
-    request: { id: REQUEST_ID, method: "wallet_strk20Balances", params: { tokens: [TOKEN] } },
+    // Every spec param at once: valid_until and api_version are accepted, then
+    // dropped, so the runtime message carries only the token list.
+    request: {
+      id: REQUEST_ID,
+      method: "wallet_strk20Balances",
+      params: { api_version: API_VERSION, tokens: [TOKEN], valid_until: 1_790_000_000 },
+    },
     expectedRuntime: { origin: ORIGIN, tokens: [TOKEN], type: "wallet.strk20Balances" },
     backgroundResult: { balances: [{ balance: "0x64", token: TOKEN }], ok: true },
     validateResult: (r) =>
@@ -419,9 +427,9 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
       ),
   },
   {
-    method: "wallet_strk20SubaccountCommitment",
-    resultMethod: "wallet_strk20SubaccountCommitment",
-    runtimeType: "wallet.strk20SubaccountCommitment",
+    method: "wallet_strk20ShadowAccountCommitment",
+    resultMethod: "wallet_strk20ShadowAccountCommitment",
+    runtimeType: "wallet.strk20ShadowAccountCommitment",
     paramKeys: ["dapp_name", "nonce"],
     optionalApiVersion: true,
     stateChanging: false,
@@ -434,14 +442,14 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
     ],
     request: {
       id: REQUEST_ID,
-      method: "wallet_strk20SubaccountCommitment",
-      params: { dapp_name: "MC Terminal", nonce: "0x1" },
+      method: "wallet_strk20ShadowAccountCommitment",
+      params: { dapp_name: "Bramble Terminal", nonce: "0x1" },
     },
     expectedRuntime: {
-      dappName: "MC Terminal",
+      dappName: "Bramble Terminal",
       nonce: "0x1",
       origin: ORIGIN,
-      type: "wallet.strk20SubaccountCommitment",
+      type: "wallet.strk20ShadowAccountCommitment",
     },
     backgroundResult: { commitment: "0x123", ok: true },
     validateResult: (r) => isString(r) && ADDRESS.test(r),

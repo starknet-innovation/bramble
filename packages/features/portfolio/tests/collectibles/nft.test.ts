@@ -3,7 +3,7 @@
  * validation.
  */
 import { describe, expect, test } from "bun:test";
-import { buildErc721TransferCall, buildErc1155TransferCall } from "@mc-wallet/portfolio/nft";
+import { buildErc721TransferCall, buildErc1155TransferCall } from "@bramble/portfolio/nft";
 
 describe("ERC721 transfer call", () => {
   test("builds transfer_from calldata with a u256 token id", () => {

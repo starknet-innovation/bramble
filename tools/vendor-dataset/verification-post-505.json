@@ -1,0 +1,393 @@
+{
+  "results": {
+    "BRAMBLE_DATASET_SEED_READY_MAIN": {
+      "status": "Search complete. Checked 20 indices across every account type.",
+      "rows": [
+        {
+          "group": "openzeppelin",
+          "address": "0x3b6f0bb093b56b23e0cb65fdf41e95c4b1becda37b6b5ec891abbeab93ada0b",
+          "title": "Account 0",
+          "hint": "No on-chain activity found"
+        },
+        {
+          "group": "argent",
+          "address": "0x1d652eba2fa059b1eba97e3915a27462a95474a41a313fefa6122a2a4763b0d",
+          "title": "Account 0",
+          "hint": "No on-chain activity found — Bramble only imports existing Ready accounts"
+        },
+        {
+          "group": "argent",
+          "address": "0x1a51de858dec150f4db134113b42c69374eaafd25e87efa3509be6dec267954",
+          "title": "Account 0",
+          "hint": "Deployed on Starknet"
+        }
+      ]
+    },
+    "BRAMBLE_DATASET_SEED_BRAAVOS_MAIN": {
+      "status": "Search complete. Checked 20 indices across every account type.",
+      "rows": [
+        {
+          "group": "openzeppelin",
+          "address": "0x24ae5bf2ffbdf522a2ca7151800a87abdd87aefeed8a7eb218884d492886c21",
+          "title": "Account 0",
+          "hint": "No on-chain activity found"
+        },
+        {
+          "group": "argent",
+          "address": "0x229faf5057f140ec2e4aa8b315e55a12f03d0ac2071e76908e0c1c02450c8b8",
+          "title": "Account 0",
+          "hint": "No on-chain activity found — Bramble only imports existing Ready accounts"
+        },
+        {
+          "group": "braavos",
+          "address": "0x165d85b4d79f5a31cd25f109a453938bd007d67604c4dc55e9bb4e19acf17b7",
+          "title": "Account 0",
+          "hint": "Deployed on Starknet · view only for now"
+        },
+        {
+          "group": "braavos",
+          "address": "0x10d1aa580966bf51ba812de9846beeccc4e7d609284171b692180594fe8b9f6",
+          "title": "Account 1",
+          "hint": "Deployed on Starknet · view only for now"
+        },
+        {
+          "group": "braavos",
+          "address": "0x45070a872b80d5c60a28a5a0982199bf75383d686241e2cd0134a94f89aac60",
+          "title": "Account 2",
+          "hint": "Funded, not deployed · view only for now"
+        }
+      ]
+    },
+    "BRAMBLE_DATASET_SEED_READY_MATRIX": {
+      "status": "Search complete. Checked 20 indices across every account type.",
+      "rows": [
+        {
+          "group": "openzeppelin",
+          "address": "0x1cbb294ac2ddea6b230f17307663e99bfa2c9d85956951028d4b5780c1df21e",
+          "title": "Account 0",
+          "hint": "No on-chain activity found"
+        },
+        {
+          "group": "argent",
+          "address": "0x2990b2d531876e5f781558b26897d9d98109d8aa22cb70a128efc989917e9eb",
+          "title": "Account 0",
+          "hint": "No on-chain activity found — Bramble only imports existing Ready accounts"
+        },
+        {
+          "group": "argent",
+          "address": "0x5fcda56e8be4531ca7c1d51049e49687b222d13c239a678f14832d0458b3702",
+          "title": "Account 0",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "argent",
+          "address": "0x42717863866f4883cbbfcf9edf97a417be76ec65969d916c7e499a66487ef94",
+          "title": "Account 1",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "argent",
+          "address": "0x2104368826212cd8f7a50f1a4bd6406010b48e35baf6fb482a766bc65734ea3",
+          "title": "Account 2 · Argent 0.3.0",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "argent",
+          "address": "0x2ed080626ab83319e14424f9a878d1bd259be7fe61c0c25af5ded22f3de7fac",
+          "title": "Account 3 · Argent 0.3.0",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "argent",
+          "address": "0x122e539a8c679484a7dd514c38c5aa6f2cfcda59c83c05e71fd094cbd77962b",
+          "title": "Account 4 · Argent 0.3.1",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "argent",
+          "address": "0x7cc7967a52e2464b40e9a7a5c0cacef23778cb598434344548375a24f88e944",
+          "title": "Account 5",
+          "hint": "Funded and ready to deploy"
+        },
+        {
+          "group": "argent",
+          "address": "0x2baaa2e2914ff88b280032d1c712696f46a1d19ee1573edfd994f1fe9ad7531",
+          "title": "Account 6",
+          "hint": "Funded and ready to deploy"
+        },
+        {
+          "group": "argent",
+          "address": "0xbd90f0b669a72ed89285733d50201611653dc2cc00184de2b921f93766487b",
+          "title": "Account 9",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "argent",
+          "address": "0x6806346090ac047ddff967b2ce1b3ef65ff071c4015dfa62b6d207b34ba0ccc",
+          "title": "Account 11",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "argent",
+          "address": "0xd536533dff72853d5dbd055e527dc3370d0fba70ce2f5e0834b9e315e49d7a",
+          "title": "Account 12",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "argent",
+          "address": "0x4b617a8240cd8282151ea030243ad1960797703f70a7030cc6247c96afcc134",
+          "title": "Account 13",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "argent",
+          "address": "0x7a36ab2573c3a9eeca82cfb2a6edcc707e5e292646699a32b80845c9c4196b2",
+          "title": "Account 14",
+          "hint": "Deployed on Starknet"
+        },
+        {
+          "group": "braavos",
+          "address": "0x568a5a1d0b445078620f38a17da1a6ab38be52090cc2640b25db2a116c22a58",
+          "title": "Account 0",
+          "hint": "Deployed on Starknet · view only for now"
+        }
+      ]
+    },
+    "BRAMBLE_DATASET_SEED_BRAAVOS_MATRIX": {
+      "status": "Search complete. Checked 20 indices across every account type.",
+      "rows": [
+        {
+          "group": "openzeppelin",
+          "address": "0x5c40ea16914b54536ad5c5e4a08d4ad6c33bbdbcb19f638589d5e5b64a95d8c",
+          "title": "Account 0",
+          "hint": "No on-chain activity found"
+        },
+        {
+          "group": "argent",
+          "address": "0x2964d055b7a66afac664e960c8d6f2e1537850ed2c6627b8290534f0f465075",
+          "title": "Account 0",
+          "hint": "No on-chain activity found — Bramble only imports existing Ready accounts"
+        },
+        {
+          "group": "braavos",
+          "address": "0x6b462b2d9f8f5963df4fae4ad1991bdc66144f8a3d6e225b28e2ea8c7c0f753",
+          "title": "Account 0",
+          "hint": "Deployed on Starknet · view only for now"
+        },
+        {
+          "group": "braavos",
+          "address": "0x73a2dbc7d1534ce1c616cba3adf86188a5e014feb11339943b60e8b1d214c94",
+          "title": "Account 1",
+          "hint": "Deployed on Starknet · view only for now"
+        },
+        {
+          "group": "braavos",
+          "address": "0x47db2e5476d619b25d3cbc73e7f9cece3ea3da159d4c631d6da84d7baacf5a2",
+          "title": "Account 2",
+          "hint": "Funded, not deployed · view only for now"
+        },
+        {
+          "group": "braavos",
+          "address": "0x3dcd701c6b50d114e6d2263110ef5db2148d44edda7a3173dc3ee15c5eb2ed7",
+          "title": "Account 4",
+          "hint": "Deployed on Starknet · view only for now"
+        }
+      ]
+    },
+    "BRAMBLE_DATASET_SEED_GAPS": {
+      "status": "Search complete. Checked 20 indices across every account type.",
+      "rows": [
+        {
+          "group": "openzeppelin",
+          "address": "0x7895055bc642bed4522e3d3fa192c41fab45e80ffa25355085a5c22606af57e",
+          "title": "Account 0",
+          "hint": "No on-chain activity found"
+        },
+        {
+          "group": "argent",
+          "address": "0x68ac5817f5c92999a8395b21280feb7b66c0fa43c9e007621bfe294a1102b61",
+          "title": "Account 0",
+          "hint": "No on-chain activity found — Bramble only imports existing Ready accounts"
+        },
+        {
+          "group": "argent",
+          "address": "0x30513445d23be034a409eefa3eb60ab720795d0c3279a93102fe3b28b3ca2ac",
+          "title": "Account 7",
+          "hint": "Deployed on Starknet"
+        }
+      ]
+    }
+  },
+  "scorecard": {
+    "ready-matrix/0": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found once #505 fixed (0.4.0, deployed)"
+    },
+    "ready-matrix/2": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found once #505 fixed (0.3.0, view-only)"
+    },
+    "ready-matrix/4": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found once #505 fixed (0.3.1, view-only)"
+    },
+    "ready-matrix/5": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found once #505 fixed (undeployed, ETH balance probe)"
+    },
+    "ready-matrix/6": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found once #505 fixed (undeployed, STRK balance probe)"
+    },
+    "ready-matrix/9": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found once #505 fixed (deployed, used, near-zero balance)"
+    },
+    "gaps/7": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found after a 7-index gap (#504 + #505)"
+    },
+    "gaps/25": {
+      "found": false,
+      "detectability": "D3",
+      "note": "found past the old 0-19 window only via #504's extension"
+    },
+    "ready-matrix/7": {
+      "found": false,
+      "detectability": "D3",
+      "note": "missed by ETH/STRK probe despite holding native USDC (needs richer probes)"
+    },
+    "ready-matrix/3": {
+      "found": true,
+      "detectability": "D2",
+      "note": "address only derivable via the 0.3.0 shape; live class is 0.4.0"
+    },
+    "ready-matrix/11": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found; signing must be refused while get_guardian != 0"
+    },
+    "ready-matrix/12": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found and signable; a cached guardian verdict would wrongly exclude it"
+    },
+    "ready-matrix/13": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found; mid-escape account a wallet may import in-flight"
+    },
+    "ready-matrix/14": {
+      "found": true,
+      "detectability": "D5",
+      "note": "after pass 2 the live owner key is foreign to the seed (D5 for ownership)"
+    },
+    "braavos-matrix/0": {
+      "found": true,
+      "detectability": "D1",
+      "note": "found today at index 0 (the single overlapping coordinate), view-only"
+    },
+    "braavos-matrix/1": {
+      "found": true,
+      "detectability": "D2",
+      "note": "missed today (address axis); found once the scan walks the vendor axis"
+    },
+    "braavos-matrix/2": {
+      "found": true,
+      "detectability": "D2",
+      "note": "undeployed, STRK-funded on the vendor axis"
+    },
+    "braavos-matrix/3": {
+      "found": false,
+      "detectability": "D3",
+      "note": "undeployed, native-USDC only — invisible to the ETH/STRK probe"
+    },
+    "cross-vendor/braavos-0": {
+      "found": true,
+      "detectability": "D1",
+      "note": "same seed also carries Ready accounts; a scanner must surface both families"
+    },
+    "braavos-matrix/4": {
+      "found": true,
+      "detectability": "D2",
+      "note": "found by address; stark-key signing must be refused while the strong signer is active"
+    },
+    "ready-matrix/16": {
+      "found": false,
+      "detectability": "D4",
+      "note": "seed-owned key, unguessable address (salt != pubkey) — indexer-only"
+    },
+    "ready-matrix/17": {
+      "found": false,
+      "detectability": "D4",
+      "note": "deployed by the dataset deployer via UDC unique=1 — deployer folds into the address"
+    },
+    "ready-matrix/18": {
+      "found": false,
+      "detectability": "D5",
+      "note": "funded at a custom-salt counterfactual — invisible from the seed by any method"
+    },
+    "passphrase/0": {
+      "found": false,
+      "detectability": "D2",
+      "note": "same words + 25th word = disjoint account universe; found only if import asks for a passphrase"
+    },
+    "control/bramble-axis-1": {
+      "found": true,
+      "detectability": "D1",
+      "note": "control: on Bramble's current ladder, so today's scan MUST find it"
+    },
+    "ground-truth/ready-1": {
+      "found": true,
+      "detectability": "D2",
+      "note": "app-made, deployed 0.4.0"
+    },
+    "ground-truth/ready-2": {
+      "found": false,
+      "detectability": "D4",
+      "note": "smart account, backend salt; guardian 0x7601f48c…"
+    },
+    "ground-truth/ready-3": {
+      "found": false,
+      "detectability": "D5",
+      "note": "discarded in the Ready UI, empty; still the seed's account"
+    },
+    "ground-truth/ready-4": {
+      "found": false,
+      "detectability": "D2",
+      "note": "app-recorded, untouched"
+    },
+    "ground-truth/ready-5": {
+      "found": false,
+      "detectability": "D2",
+      "note": "app-recorded, untouched"
+    },
+    "ground-truth/braavos-1": {
+      "found": true,
+      "detectability": "D1",
+      "note": "app-made, deployed, 2FA (+3FA if enrolled)"
+    },
+    "ground-truth/braavos-2": {
+      "found": true,
+      "detectability": "D2",
+      "note": "app-made, deployed plain"
+    },
+    "ground-truth/braavos-3": {
+      "found": true,
+      "detectability": "D3",
+      "note": "app-made, 2.3 STRK, undeployed"
+    },
+    "ground-truth/braavos-4": {
+      "found": false,
+      "detectability": "D2",
+      "note": "app-recorded, untouched"
+    }
+  }
+}

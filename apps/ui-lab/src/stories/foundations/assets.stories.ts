@@ -1,4 +1,4 @@
-import { expect } from "storybook/test";
+import { expect, userEvent, waitFor } from "storybook/test";
 import {
   assertCheckpointReady,
   checkpointStory,
@@ -27,6 +27,50 @@ export const ActivityAccountARestored = checkpointStory(
   "activity",
   "account-a-restored",
 );
+export const ActivityFilters = checkpointStory("Activity · feed filters", "activity", "filters");
+export const ActivityFiltersSearch = checkpointStory(
+  "Activity · search one counterparty",
+  "activity",
+  "filters-search",
+);
+
+/**
+ * The feed is long enough to scroll. The title bar holds its place at the top
+ * of the panel while the rows move beneath it, which is the whole point of the
+ * checkpoint: assert the resting bar starts below the panel edge, then that a
+ * scroll pins it at zero with the list moving under it.
+ */
+export const ActivityLongFeed: LabStory = {
+  args: { checkpointId: "account-a-long", scenarioId: "activity" },
+  name: "Activity · long feed (pinned title bar)",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const frame = canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]");
+    const win = frame?.contentWindow;
+    const doc = frame?.contentDocument;
+    const header = doc?.querySelector<HTMLElement>(".activity-head");
+    const list = doc?.querySelector<HTMLElement>(".tx-list");
+    if (!win || !doc || !header || !list) throw new Error("Missing Activity feed");
+    // The fixture must actually overflow, or this state would prove nothing.
+    await expect(doc.documentElement.scrollHeight).toBeGreaterThan(
+      doc.documentElement.clientHeight,
+    );
+    const restingTop = Math.round(header.getBoundingClientRect().top);
+    const listRestingTop = list.getBoundingClientRect().top;
+    await expect(restingTop).toBeGreaterThan(0);
+    win.scrollTo(0, 240);
+    await waitFor(() => expect(Math.round(header.getBoundingClientRect().top)).toBe(0));
+    await expect(header).toBeVisible();
+    // The filter toolbar sits between the bar and the first day's rows, so
+    // compare the rows with where they rested: they moved by the whole scroll.
+    await expect(Math.round(listRestingTop - list.getBoundingClientRect().top)).toBe(
+      Math.round(win.scrollY),
+    );
+    await expect(win.scrollY).toBeGreaterThan(0);
+    // Leave the surface at rest, so a snapshot shows the screen, not the scroll.
+    win.scrollTo(0, 0);
+  },
+};
 
 export const Receive: LabStory = {
   args: { checkpointId: "receive", scenarioId: "assets" },
@@ -35,9 +79,32 @@ export const Receive: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
-    await expect(body?.querySelector(".receive-address-line")).not.toBeInTheDocument();
-    await expect(body?.querySelector(".receive-identity")).not.toHaveAttribute("open");
-    await expect(body?.querySelector(".receive-public-key")).toBeInTheDocument();
+    // Address first: the plain address is shown whole and is the default QR;
+    // the contact card is the second, switchable payload (spec item 3).
+    await expect(
+      body?.querySelector(".receive-address-copy [data-receive-address-text]"),
+    ).toHaveTextContent(/^0x[0-9a-f]+$/);
+    await expect(body?.querySelector("[data-receive-qr]")).toHaveAttribute(
+      "data-qr-payload",
+      "address",
+    );
+    await expect(body?.querySelector("[data-receive-qr] svg")).toHaveAttribute(
+      "aria-label",
+      "QR code for your Starknet address",
+    );
+    await expect(body?.querySelector('[data-receive-payload="address"]')).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(body?.querySelector('[data-receive-payload="card"]')).toBeEnabled();
+    // The contact card, the keys, and the payload switch wait behind Advanced; the
+    // QR stays on the address until the user asks for the card.
+    const advanced = body?.querySelector<HTMLButtonElement>("#advanced-receive");
+    if (!advanced) throw new Error("Missing receive Advanced switch");
+    await expect(advanced).toHaveAttribute("aria-checked", "false");
+    await expect(body?.querySelector("#receive-advanced-fields")).not.toBeVisible();
+    await userEvent.click(advanced);
+    await expect(body?.querySelector("#receive-advanced-fields")).toBeVisible();
     await expect(body?.querySelector(".receive-public-key [data-copy]")).toHaveAttribute(
       "data-copy",
     );
@@ -67,9 +134,13 @@ export const ReceivePreparing: LabStory = {
       "preparing",
     );
     await expect(body?.querySelector("[data-wallet-card-copy]")).toBeDisabled();
-    await expect(body?.querySelector("[data-receive-qr]")).toHaveTextContent(
-      "Preparing complete wallet card",
+    // Preparing the card never blocks the address: its QR is already painted
+    // and only the card option waits.
+    await expect(body?.querySelector("[data-receive-qr] svg")).toHaveAttribute(
+      "aria-label",
+      "QR code for your Starknet address",
     );
+    await expect(body?.querySelector('[data-receive-payload="card"]')).toBeDisabled();
   },
 };
 export const ReceiveAddressOnly: LabStory = {
@@ -84,6 +155,11 @@ export const ReceiveAddressOnly: LabStory = {
       "unavailable",
     );
     await expect(body?.querySelector("[data-wallet-card-copy]")).not.toBeVisible();
+    await expect(body?.querySelector("[data-receive-payload-switch]")).not.toBeVisible();
+    await expect(body?.querySelector("[data-receive-qr] svg")).toHaveAttribute(
+      "aria-label",
+      "QR code for your Starknet address",
+    );
     await expect(body?.querySelector("[data-nostr-key-status]")).toHaveTextContent(
       "Share the account address instead",
     );
@@ -96,6 +172,7 @@ export const DiscoverTokens = checkpointStory(
   "assets",
   "token-discover",
 );
+export const TokenCatalog = checkpointStory("Assets · AVNU token list", "assets", "token-catalog");
 export const TokensEmpty = checkpointStory("Assets · tokens empty", "assets", "tokens-empty");
 export const TokenDetail = checkpointStory("Assets · token detail", "assets", "token-detail");
 export const TokenOffline = checkpointStory("Assets · token offline", "assets", "token-offline");
@@ -106,6 +183,13 @@ export const AddressBook: LabStory = {
     await assertCheckpointReady(canvasElement);
     const body =
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    // Label and address are the whole form; the wallet card and the keys wait
+    // behind Advanced, so saving a contact never reads as a five-field task.
+    const advanced = body?.querySelector<HTMLButtonElement>("#advanced-address");
+    if (!advanced) throw new Error("Missing address book Advanced switch");
+    await expect(body?.querySelector('input[name="address"]')).toBeVisible();
+    await expect(body?.querySelector('textarea[name="walletCard"]')).not.toBeVisible();
+    await userEvent.click(advanced);
     await expect(body?.querySelector('textarea[name="walletCard"]')).toBeVisible();
     await expect(body?.querySelector('input[name="nostrPublicKey"]')).toBeVisible();
     await expect(body?.querySelector(".address-book")).toHaveTextContent(
@@ -118,4 +202,14 @@ export const AllowancesEmpty = checkpointStory(
   "Assets · allowances empty",
   "assets",
   "allowances-empty",
+);
+export const AllowancesPartial = checkpointStory(
+  "Assets · allowances partial",
+  "assets",
+  "allowances-partial",
+);
+export const AllowancesUnavailable = checkpointStory(
+  "Assets · allowances not loaded",
+  "assets",
+  "allowances-unavailable",
 );

@@ -1,17 +1,19 @@
 /**
  * First-run Ledger onboarding under happy-dom:
  *   - bindLedgerFirstRun gates the "Set up with a Ledger" button on a valid
- *     unlock passphrase (and, on Mainnet, the real-funds acknowledgement) and
- *     hands the captured network + passphrase to its owner;
+ *     unlock passphrase and hands the captured network + passphrase to its
+ *     owner;
  *   - createLedgerOnboardEntry drives the shared overlay and branches its create
  *     step: a first-run stash creates a brand-new Ledger vault, while no stash
  *     adds a keyless account to the already-unlocked wallet.
  * The device is an injected fake connector — no WebHID or background.
  */
+
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { bindLedgerFirstRun } from "../../../../src/sidepanel/journeys/ledger/first-run";
@@ -20,6 +22,7 @@ import type { LedgerConnector } from "../../../../src/sidepanel/journeys/ledger/
 import { onboarding } from "../../../../src/sidepanel/journeys/onboarding/gate-views";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
+import { candidateAccount } from "../../../support/ledger-onboard-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -47,11 +50,12 @@ const mountOnboarding = (status: WalletStatus) => {
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
-  const captured: Array<readonly [string, string, AccountContractType]> = [];
+  const captured: Array<readonly [string, string]> = [];
   bindLedgerFirstRun({
     app,
-    startLedgerSetup: (networkId, vaultPassphrase, accountContractType) =>
-      captured.push([networkId, vaultPassphrase, accountContractType]),
+    startLedgerSetup: (networkId, vaultPassphrase) => {
+      captured.push([networkId, vaultPassphrase]);
+    },
   });
   return { app, captured };
 };
@@ -88,32 +92,69 @@ describe("bindLedgerFirstRun", () => {
     document.body.replaceChildren();
   });
 
-  test("gates the button until the passphrase and Mainnet ack are satisfied", () => {
+  test("Enter in a passphrase field continues only once the button is enabled", () => {
+    const { app, captured } = mountOnboarding(mainnetStatus);
+    const enter = (): boolean => {
+      const event = new window.KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Enter",
+      });
+      app.querySelector('input[name="ledgerVaultPassphraseConfirm"]')?.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', `${PASSPHRASE}x`);
+    expect(enter()).toBe(true);
+    expect(captured).toEqual([]);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
+    expect(enter()).toBe(true);
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
+  });
+
+  test("gates the button on a confirmed passphrase and renders no acknowledgement", () => {
     const { app, captured } = mountOnboarding(mainnetStatus);
     const button = app.querySelector<HTMLButtonElement>("#ledger-setup-button");
     expect(button?.disabled).toBe(true);
 
     setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
-    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
-    // Passphrase alone is not enough on Mainnet — the ack must be checked too.
+    // One field is not enough: the confirmation must agree.
     expect(button?.disabled).toBe(true);
-
-    const ack = app.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
-    if (ack) {
-      ack.checked = true;
-      ack.dispatchEvent(new window.Event("change", { bubbles: true }));
-    }
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
     expect(button?.disabled).toBe(false);
 
+    // The real-funds tickbox was removed in the copy review; nothing else gates
+    // the button, so it must not reappear as a silent block.
+    expect(app.querySelector("#ledger-mainnet-ack")).toBeNull();
+    expect(app.querySelector('input[name="ledgerMainnetAck"]')).toBeNull();
+
     click(app, "#ledger-setup-button");
-    expect(captured).toEqual([["SN_MAIN", PASSPHRASE, "openzeppelin"]]);
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
+  });
+
+  test("accepts a weak passphrase without asking, and renders no acknowledgement", () => {
+    const { app, captured } = mountOnboarding(mainnetStatus);
+    const button = app.querySelector<HTMLButtonElement>("#ledger-setup-button");
+    const weak = "aaaaaaaaaaaa";
+
+    setValue(app, 'input[name="ledgerVaultPassphrase"]', weak);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', weak);
+
+    // Neither credential screen asks about a weak passphrase any more. The
+    // control is not rendered, and setup is not gated on one — the length floor
+    // is the only bar left, and the meter still bands the value.
+    expect(app.querySelector("#ledger-weak-passphrase-ack")).toBeNull();
+    expect(app.querySelector('input[name="ledgerWeakPassphraseAck"]')).toBeNull();
+    expect(button?.disabled).toBe(false);
+    click(app, "#ledger-setup-button");
+    expect(captured).toEqual([["SN_MAIN", weak]]);
   });
 
   test("shows a passphrase hint for a too-short passphrase", () => {
     const { app } = mountOnboarding(mainnetStatus);
     setValue(app, 'input[name="ledgerVaultPassphrase"]', "short");
     expect(app.querySelector("#ledger-passphrase-result")?.textContent).toContain(
-      "at least 12 characters",
+      `at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
     );
   });
 
@@ -125,37 +166,18 @@ describe("bindLedgerFirstRun", () => {
     });
     setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
     setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
-    check(app, 'input[name="ledgerMainnetAck"]');
     click(app, "#ledger-setup-button");
     expect(app.querySelector('select[name="ledgerNetworkId"]')).toBeNull();
-    expect(captured).toEqual([["SN_MAIN", PASSPHRASE, "openzeppelin"]]);
-  });
-
-  test("forwards the explicit Argent choice", () => {
-    const { app, captured } = mountOnboarding(mainnetStatus);
-    setValue(app, 'input[name="ledgerAccountContractType"]', "argent");
-    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
-    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
-    check(app, 'input[name="ledgerMainnetAck"]');
-    click(app, "#ledger-setup-button");
-    expect(captured).toEqual([["SN_MAIN", PASSPHRASE, "argent"]]);
-  });
-
-  test("blocks setup and toasts when the Mainnet ack is missing at click time", () => {
-    const { app, captured } = mountOnboarding(mainnetStatus);
-    setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
-    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
-    // Valid passphrase but the Mainnet ack is unchecked: clicking must not start.
-    click(app, "#ledger-setup-button");
-    expect(captured).toEqual([]);
-    expect(document.querySelector(".toast.error")?.textContent).toContain("real-funds");
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
   });
 
   test("blocks setup and toasts when the passphrase is too short at click time", () => {
     const { app, captured } = mountOnboarding(mainnetStatus);
     click(app, "#ledger-setup-button");
     expect(captured).toEqual([]);
-    expect(document.querySelector(".toast.error")?.textContent).toContain("at least 12 characters");
+    expect(document.querySelector(".toast.error")?.textContent).toContain(
+      `at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+    );
   });
 });
 
@@ -178,20 +200,7 @@ const enumerateClient: LedgerDeviceClient = {
   signHash: () => Promise.reject(new Error("unused")),
 };
 
-const candidate = (index: number): LedgerAccountRef => ({
-  accountContractType: "openzeppelin",
-  address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  derivation: {
-    accountIndex: index,
-    eip2645application: "LedgerW",
-    kind: "ledger",
-    path: ledgerAccountPath(index),
-  },
-  id: `SN_MAIN:0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
-  networkId: "SN_MAIN",
-  publicKeyX: `0x${index + 1}`,
-});
+const candidate = candidateAccount;
 
 const entryHarness = () => {
   document.body.replaceChildren();
@@ -219,7 +228,16 @@ const entryHarness = () => {
       created.push([networkId, accountIndex, publicKeyX, vaultPassphrase]);
       return Promise.resolve(candidate(accountIndex).id);
     },
-    deriveLedgerAccounts: () => Promise.resolve([candidate(0), candidate(1)]),
+    deriveLedgerAccounts: (
+      _networkId: string,
+      _entries: readonly unknown[],
+      accountContractType: AccountContractType,
+      application: LedgerEip2645Application,
+    ) =>
+      Promise.resolve([
+        candidate(0, accountContractType, application),
+        candidate(1, accountContractType, application),
+      ]),
     ledgerAccountStatus: () => Promise.resolve({ balance: null, deployed: null }),
     loadStatus: () => Promise.resolve(mainnetStatus),
   } as unknown as SidepanelWallet;
@@ -231,6 +249,8 @@ const entryHarness = () => {
     connector,
     mount,
     openImport: () => undefined,
+    openFindAccounts: () => undefined,
+    openImportSeed: () => undefined,
     openMultisig: () => {
       multisigs += 1;
     },
@@ -250,12 +270,12 @@ describe("createLedgerOnboardEntry", () => {
 
   test("first-run setup creates a brand-new Ledger vault with the passphrase", async () => {
     const h = entryHarness();
-    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE, "openzeppelin");
+    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE);
     expect(h.mount.hidden).toBe(false);
 
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    check(h.mount, '[data-ledger-toggle="1"]');
+    check(h.mount, `[data-ledger-toggle="${candidate(1).id}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
 
@@ -276,9 +296,8 @@ describe("createLedgerOnboardEntry", () => {
     const h = entryHarness();
     h.entry.startAddAccount();
 
-    click(h.mount, '[data-add-kind="multisig"]');
     expect(h.multisigs()).toBe(0);
-    click(h.mount, "[data-add-continue]");
+    click(h.mount, '[data-add-kind="multisig"]');
 
     expect(h.mount.hidden).toBe(true);
     expect(h.multisigs()).toBe(1);
@@ -296,7 +315,7 @@ describe("createLedgerOnboardEntry", () => {
     click(app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    check(h.mount, '[data-ledger-toggle="0"]');
+    check(h.mount, `[data-ledger-toggle="${candidate(0).id}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
 
@@ -306,7 +325,7 @@ describe("createLedgerOnboardEntry", () => {
 
   test("cancelling first-run setup clears the captured passphrase from the stash", async () => {
     const h = entryHarness();
-    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE, "openzeppelin");
+    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE);
     expect(h.mount.hidden).toBe(false);
 
     // Dismiss the overlay from the connect stage via the rendered cancel control.
@@ -326,7 +345,7 @@ describe("createLedgerOnboardEntry", () => {
     click(app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    check(h.mount, '[data-ledger-toggle="0"]');
+    check(h.mount, `[data-ledger-toggle="${candidate(0).id}"]`);
     click(h.mount, "[data-ledger-add-selected]");
     await tick();
 

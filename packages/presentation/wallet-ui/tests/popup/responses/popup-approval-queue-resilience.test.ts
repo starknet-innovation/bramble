@@ -8,8 +8,8 @@
  * `readPendingApprovals` drops only the offending entry.
  */
 import { describe, expect, test } from "bun:test";
-import { isJson, isJsonWithinBudget, JSON_BUDGETS, type Json } from "@mc-wallet/core/json";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { isJson, isJsonWithinBudget, JSON_BUDGETS, type Json } from "@bramble/core/json";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import {
   isPendingApprovalsResponse,
   type PendingApproval,
@@ -148,6 +148,37 @@ describe("pending approval queue per-entry validation (MCW-V09-106)", () => {
   });
 });
 
+describe("switch-network decision reply (Sherlock 251)", () => {
+  // An approved network switch answers with the new chain id beside the queue.
+  // The switch has already been applied, so a large queue behind it must not
+  // turn the reply into "approval failed".
+  const switched = (...pending: readonly unknown[]): unknown => ({
+    chainId: STARKNET_NETWORKS.SN_SEPOLIA.chainId,
+    ok: true,
+    pending,
+  });
+
+  test("accepts the reply when the queue behind it only breaches the aggregate budget", () => {
+    const reply = switched(...ids.map(typedDataApproval));
+    expect(isJson(reply)).toBe(false);
+    expect(isApprovalDecisionResponse(reply)).toBe(true);
+  });
+
+  test("still rejects a reply with a malformed chain id or an unknown key", () => {
+    expect(isApprovalDecisionResponse({ chainId: "SN_SEPOLIA", ok: true, pending: [] })).toBe(
+      false,
+    );
+    expect(
+      isApprovalDecisionResponse({
+        chainId: STARKNET_NETWORKS.SN_SEPOLIA.chainId,
+        extra: true,
+        ok: true,
+        pending: [],
+      }),
+    ).toBe(false);
+  });
+});
+
 // The whole-envelope `isJson` gate used to bound the queue itself. Per-entry
 // budgeting removed it, so these pin the replacement bounds directly.
 describe("pending approval queue envelope bounds (MCW-V09-106)", () => {
@@ -168,33 +199,5 @@ describe("pending approval queue envelope bounds (MCW-V09-106)", () => {
     Object.defineProperty(pending, "smuggled", { enumerable: true, value: { id: ids[1] } });
     expect(readPendingApprovals({ ok: true, pending })).toBeNull();
     expect(isPendingApprovalsResponse({ ok: true, pending })).toBe(false);
-  });
-});
-
-describe("add-chain prompt summaries (MCW-V09-106)", () => {
-  // `addChainSummaries` emits the RPC host verbatim and the dapp controls it:
-  // `isHttpUrl` bounds the URL at 2048 characters with no bound on the host, so
-  // the popup's 300-character summary cap can reject the add-chain entry. That
-  // entry is dropped, but the honest prompt queued beside it stays reviewable.
-  test("an over-long add-chain host drops only its own prompt", () => {
-    const honest = { id: ids[0], kind: "connect" as const, origin: "https://honest.example" };
-    const longHost = {
-      id: ids[1],
-      kind: "add-chain",
-      origin: ORIGIN,
-      summaries: ["Evil Chain", "0x534e5f5345504f4c4941", `${"a".repeat(400)}.example.com`],
-    };
-    expect(readPendingApprovals(queue(longHost, honest))).toEqual([honest]);
-    expect(isPendingApprovalsResponse(queue(longHost, honest))).toBe(false);
-  });
-
-  test("an add-chain prompt with a summary inside the cap is kept", () => {
-    const addChain: PendingApproval = {
-      id: ids[1],
-      kind: "add-chain",
-      origin: ORIGIN,
-      summaries: ["Evil Chain", "0x534e5f5345504f4c4941", "rpc.example.com"],
-    };
-    expect(readPendingApprovals(queue(addChain))).toEqual([addChain]);
   });
 });

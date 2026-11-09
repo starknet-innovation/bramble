@@ -6,22 +6,25 @@
  * public `(r, s)` signature pair.
  */
 
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
-  type AccountContractType,
-  isAccountContractType,
+  isLedgerAccountContractType,
+  type LedgerAccountContractType,
   type LedgerPubKeyEntry,
-} from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
+  isLedgerApplicationForFamily,
+  isLedgerEip2645Application,
+  type LedgerEip2645Application,
   MAX_LEDGER_ACCOUNT_BATCH,
-} from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/wallet-model/ledger-path";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 const isFeltString = (value: unknown): value is string =>
   typeof value === "string" && isStarkFieldElement(value);
@@ -29,12 +32,27 @@ const isFeltString = (value: unknown): value is string =>
 const isNonZeroFeltString = (value: unknown): value is string =>
   typeof value === "string" && isNonZeroStarkFieldElement(value);
 
+// The path scheme is optional on the wire (absent means Bramble's own LedgerW
+// scheme, as every pre-Ready message did) but, when present, must be one of the
+// two closed markers: an unknown application would derive a key no device path
+// this wallet builds can reach.
+const isOptionalApplication = (value: unknown): value is LedgerEip2645Application | undefined =>
+  value === undefined || isLedgerEip2645Application(value);
+
+const optionalApplication = (
+  value: LedgerEip2645Application | undefined,
+): { readonly eip2645application?: LedgerEip2645Application } =>
+  value === undefined ? {} : { eip2645application: value };
+
 /**
  * Parsed request to store a keyless Ledger account from a device public key.
+ * `eip2645application` is the path scheme the key was enumerated at; absent
+ * means Bramble's own `LedgerW` scheme.
  */
 export type AddLedgerAccountRequest = {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: LedgerAccountContractType;
   readonly accountIndex: number;
+  readonly eip2645application?: LedgerEip2645Application;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
 };
@@ -48,13 +66,16 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
     !hasOnlyKnownKeys(message, [
       "accountContractType",
       "accountIndex",
+      "eip2645application",
       "networkId",
       "publicKeyX",
       "type",
     ]) ||
     message["type"] !== "wallet.addLedgerAccount" ||
-    !isAccountContractType(message["accountContractType"]) ||
+    !isLedgerAccountContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
+    !isOptionalApplication(message["eip2645application"]) ||
+    !isLedgerApplicationForFamily(message["accountContractType"], message["eip2645application"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isNonZeroFeltString(message["publicKeyX"])
   ) {
@@ -63,6 +84,7 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
   return {
     accountContractType: message["accountContractType"],
     accountIndex: message["accountIndex"],
+    ...optionalApplication(message["eip2645application"]),
     networkId: message["networkId"],
     publicKeyX: message["publicKeyX"],
   };
@@ -71,11 +93,13 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
 /**
  * Parsed request to create a brand-new mnemonic-less vault whose first account
  * is a keyless Ledger account. Carries the vault passphrase (which encrypts the
- * account registry) plus the device public key and index; no seed is generated.
+ * account registry) plus the device public key, index, and path scheme; no seed
+ * is generated.
  */
 export type CreateLedgerVaultRequest = {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: LedgerAccountContractType;
   readonly accountIndex: number;
+  readonly eip2645application?: LedgerEip2645Application;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
   readonly vaultPassphrase: string;
@@ -90,14 +114,17 @@ export const readCreateLedgerVaultInput = (message: unknown): CreateLedgerVaultR
     !hasOnlyKnownKeys(message, [
       "accountIndex",
       "accountContractType",
+      "eip2645application",
       "networkId",
       "publicKeyX",
       "type",
       "vaultPassphrase",
     ]) ||
     message["type"] !== "wallet.createLedgerVault" ||
-    !isAccountContractType(message["accountContractType"]) ||
+    !isLedgerAccountContractType(message["accountContractType"]) ||
     !isLedgerAccountIndex(message["accountIndex"]) ||
+    !isOptionalApplication(message["eip2645application"]) ||
+    !isLedgerApplicationForFamily(message["accountContractType"], message["eip2645application"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !isNonZeroFeltString(message["publicKeyX"]) ||
     typeof message["vaultPassphrase"] !== "string"
@@ -107,6 +134,7 @@ export const readCreateLedgerVaultInput = (message: unknown): CreateLedgerVaultR
   return {
     accountContractType: message["accountContractType"],
     accountIndex: message["accountIndex"],
+    ...optionalApplication(message["eip2645application"]),
     networkId: message["networkId"],
     publicKeyX: message["publicKeyX"],
     vaultPassphrase: message["vaultPassphrase"],
@@ -148,10 +176,12 @@ const isPubKeyEntry = (value: unknown): value is LedgerPubKeyEntry =>
   isNonZeroFeltString(value["publicKeyX"]);
 
 /**
- * Parsed request to derive addresses for a batch of enumerated Ledger pairs.
+ * Parsed request to derive addresses for a batch of enumerated Ledger pairs,
+ * all read at one path scheme (`eip2645application`; absent means `LedgerW`).
  */
 export type DeriveLedgerAccountsRequest = {
-  readonly accountContractType: AccountContractType;
+  readonly accountContractType: LedgerAccountContractType;
+  readonly eip2645application?: LedgerEip2645Application;
   readonly entries: readonly LedgerPubKeyEntry[];
   readonly networkId: StarknetNetworkId;
 };
@@ -164,9 +194,17 @@ export const readDeriveLedgerAccountsInput = (
 ): DeriveLedgerAccountsRequest | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountContractType", "entries", "networkId", "type"]) ||
+    !hasOnlyKnownKeys(message, [
+      "accountContractType",
+      "eip2645application",
+      "entries",
+      "networkId",
+      "type",
+    ]) ||
     message["type"] !== "wallet.deriveLedgerAccounts" ||
-    !isAccountContractType(message["accountContractType"]) ||
+    !isLedgerAccountContractType(message["accountContractType"]) ||
+    !isOptionalApplication(message["eip2645application"]) ||
+    !isLedgerApplicationForFamily(message["accountContractType"], message["eip2645application"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     !Array.isArray(message["entries"]) ||
     message["entries"].length > MAX_LEDGER_ACCOUNT_BATCH ||
@@ -176,6 +214,7 @@ export const readDeriveLedgerAccountsInput = (
   }
   return {
     accountContractType: message["accountContractType"],
+    ...optionalApplication(message["eip2645application"]),
     entries: message["entries"].map((entry) => ({
       accountIndex: entry.accountIndex,
       publicKeyX: entry.publicKeyX,

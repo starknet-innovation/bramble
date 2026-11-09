@@ -1,11 +1,12 @@
 /** Pure stable Argent multisig deployment form. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { selectField, textField } from "@mc-wallet/ui-kit/fields";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { selectField, textField } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigView,
@@ -15,14 +16,24 @@ import { icon } from "../../shared/icons";
 import {
   accountAvatar,
   accountDisplayName,
+  accountFamilyName,
   accountLabel,
+  copyButton,
   flowHeader,
   flowScreen,
   hardwareBadge,
+  inlineCopyButton,
   noAccountEmpty,
 } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
-import { formatFeeEstimate } from "../../shared/review-render";
+import {
+  formatFeeEstimate,
+  friAtLeast,
+  friShownAtLeast,
+  reviewCostNote,
+  reviewOutcome,
+  reviewPanel,
+} from "../../shared/review-render";
 import { type MultisigParticipantOption, multisigParticipantScreen } from "./multisig-participant";
 
 /**
@@ -34,6 +45,31 @@ export const MULTISIG_CREATION_STEPS = [
   ["fund", "Fund"],
   ["deploy", "Deploy"],
 ] as const;
+
+/**
+ * The least STRK the predicted address must hold before deployment, in exact
+ * FRI: the reviewed fee rounded up to the precision the Fund step prints.
+ * Null when the fee is not a readable FRI amount, so nothing is prefilled
+ * from a figure the wallet cannot state exactly.
+ */
+export const deploymentFundingMinimum = (review: ArgentMultisigDeploymentReview): bigint | null => {
+  if (review.fee.unit !== "FRI") return null;
+  try {
+    const fee = BigInt(review.fee.overallFee);
+    return fee < 0n ? null : friShownAtLeast(fee);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The funding minimum as the Fund step and its recovery toast print it. One
+ * formatter for both, so the same figure never reads two ways.
+ */
+export const deploymentFundingMinimumText = (review: ArgentMultisigDeploymentReview): string => {
+  const minimum = deploymentFundingMinimum(review);
+  return minimum === null ? formatFeeEstimate(review.fee) : friAtLeast(minimum);
+};
 
 /**
  * Renders escaped external funding controls from a fresh deployment review.
@@ -48,7 +84,7 @@ export const deploymentFundingStage = (
       </div>
       <span class="multisig-funding-token" aria-label="STRK">STRK</span>
     </div>
-    <p class="hint">Send at least ${formatFeeEstimate(review.fee)} to this saved address. You can close this screen and resume safely.</p>
+    <p class="hint">Send at least ${deploymentFundingMinimumText(review)} to this address. You can close this screen and resume later.</p>
     <div class="multisig-funding-address">
       <div class="qr-card">${qrSvg(review.address, "Multisig funding address")}</div>
       <div class="address-line">
@@ -63,12 +99,73 @@ export const deploymentFundingStage = (
     })}
   </section>`;
 
+/**
+ * Renders the reviewed deployment: the outcome line, the predicted address, the
+ * irreversible-authority consequences, the fee ceiling, and the exact
+ * constructor. Shared by the live approval quote and the submit path so both
+ * paint the same review.
+ */
+export const deploymentReviewMarkup = (review: ArgentMultisigDeploymentReview): string =>
+  `${reviewOutcome(`Deploy a ${review.threshold}-of-${review.signerPublicKeys.length} Ready multisig.`)}
+    <div class="multisig-deployment-target" aria-label="Predicted multisig address">
+      <span>Predicted address</span>
+      <code title="${escapeHtml(review.address)}">${escapeHtml(accountLabel(review.address))}</code>
+      ${copyButton(review.address, "Copy predicted multisig address")}
+    </div>
+    ${reviewPanel([], "Deployment creates a new on-chain multisig account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
+    ${reviewCostNote(`Maximum network fee: ${formatFeeEstimate(review.fee)}`)}
+    <details class="disclosure" data-disclosure="multisig-deployment-technical">
+      <summary>
+        <span class="menu-copy"><strong>Technical details</strong><small>Exact constructor authority and signer</small></span>
+        <span class="disclosure-mark">${icon("chevronRight")}</span>
+      </summary>
+      <div class="disclosure-body">
+        <dl class="request-detail">
+          <div><dt>Address</dt><dd><code>${escapeHtml(review.address)}</code>${copyButton(review.address, "Copy multisig address")}</dd></div>
+          <div><dt>Contract</dt><dd>Ready Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
+          <div><dt>Class hash</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, "Copy Ready Multisig class hash")}</dd></div>
+          <div><dt>Network</dt><dd><code>${escapeHtml(review.networkId)}</code></dd></div>
+          <div><dt>Signers</dt><dd>${review.signerPublicKeys.length}</dd></div>
+          <div><dt>Public keys</dt><dd><code>${escapeHtml(review.signerPublicKeys.join(" "))}</code></dd></div>
+          <div><dt>Threshold</dt><dd>${review.threshold}</dd></div>
+          <div><dt>Salt</dt><dd><code>${escapeHtml(review.salt)}</code></dd></div>
+          <div><dt>Deployment signer</dt><dd><code>${escapeHtml(review.signerAccountId)}</code></dd></div>
+        </dl>
+      </div>
+    </details>`;
+
+/**
+ * Renders the receipt for a submitted deployment: the escaped address and
+ * transaction hash, the way into the saved account, and an explorer link when
+ * the network has one. Submitted is not confirmed; the copy says so.
+ */
+export const deploymentSubmittedMarkup = (
+  result: {
+    readonly address: string;
+    readonly multisig: ArgentMultisigView;
+    readonly transactionHash: string;
+  },
+  explorer: string | null,
+): string => `<section class="multisig-deployment-success" role="status" aria-live="polite">
+                <span class="multisig-deployment-success-mark">${icon("check")}</span>
+                <div><p class="context-label">Submitted to Starknet</p><h2>Multisig deployment is in progress</h2></div>
+                <p>Account saved. Deployment is confirming.</p>
+                <dl class="request-detail">
+                  <div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(result.address))}</code>${copyButton(result.address, "Copy multisig address")}</dd></div>
+                  <div><dt>Transaction</dt><dd><code>${escapeHtml(accountLabel(result.transactionHash))}</code>${copyButton(result.transactionHash, "Copy deployment transaction hash")}</dd></div>
+                </dl>
+                <div class="multisig-deployment-success-actions">
+                  ${button({ attributes: { "data-open-deployed-multisig": result.multisig.record.id }, label: "Go to deployed account" })}
+                  ${explorer ? `<a class="button secondary" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer">View transaction</a>` : ""}
+                </div>
+              </section>`;
+
 const deploymentSignerCopy = (
   account: AccountRef,
   preferences: WalletPreferences | null,
 ): string => `<span class="option-name"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>${hardwareBadge(account)}</span>
     <code>${escapeHtml(accountLabel(account.address))}</code>
-    <span class="option-sub">${account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"} · Key matches</span>`;
+    <span class="option-sub">${accountFamilyName(account.accountContractType)} · Key matches</span>`;
 
 const deploymentSignerIdentity = (
   account: AccountRef,
@@ -99,7 +196,7 @@ const signerKeySources = (
       address: candidate.address,
       label: accountDisplayName(candidate, preferences),
       publicKeyX: candidate.publicKeyX,
-      source: `${candidate.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
+      source: `${accountFamilyName(candidate.accountContractType)}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""} account`,
     })),
     ...(preferences?.addressBook
       .filter((entry) => entry.publicKeyX !== undefined)
@@ -131,8 +228,9 @@ const selectedSignerRow = (
     <span class="option-avatar">${accountAvatar(source.address)}</span>
     <span class="option-copy">
       <strong>${escapeHtml(source.label)}</strong>
-      <span class="option-sub">${source.source} · Key ${escapeHtml(accountLabel(source.publicKeyX))}</span>
+      <span class="option-sub" title="${escapeHtml(source.publicKeyX)}">${source.source} · Key ${escapeHtml(accountLabel(source.publicKeyX))}</span>
     </span>
+    ${inlineCopyButton(source.publicKeyX, `Copy ${source.label} signer public key`)}
     ${iconButton({
       attributes: { "data-remove-signer-public-key": source.publicKeyX },
       disabled: selected && onlySigner,
@@ -153,11 +251,19 @@ export const multisigDeployFlow = (
   selectedMultisig: ArgentMultisigView | null = null,
 ): string => {
   const flowTitle =
-    selectedMultisig?.deployed === false ? "Complete multisig setup" : "Create multisig";
+    selectedMultisig?.deployed === false ? "Complete multisig setup" : "Create a multisig account";
   if (!account) {
     return flowHeader(flowTitle, status) + flowScreen("multisig-deploy", noAccountEmpty(status));
   }
   const accounts = status.accounts.filter((candidate) => candidate.networkId === status.networkId);
+  // Braavos stays out of the funding list: whether this wallet can sign for
+  // one (no active 2FA, wallet key as first stark signer) is only known from a
+  // live read at submission, so it is not offered as a funding source here.
+  const fundingAccounts = accounts.filter(
+    (candidate) => candidate.accountContractType !== "braavos",
+  );
+  const fundingAccount =
+    fundingAccounts.find((candidate) => candidate.id === account.id) ?? fundingAccounts[0];
   const savedDeployment =
     selectedMultisig?.deployed === false ? selectedMultisig.record.deployment : undefined;
   const initialStage = savedDeployment ? "approval" : "participants";
@@ -179,7 +285,7 @@ export const multisigDeployFlow = (
       flowScreen(
         "multisig-deploy",
         emptyState(
-          "The pinned Argent Multisig 0.2 class is not declared on this network. Predeclare the audited class before deployment.",
+          "The pinned Ready Multisig 0.2 class is not declared on this network. Predeclare the audited class before deployment.",
         ),
       )
     );
@@ -215,18 +321,18 @@ export const multisigDeployFlow = (
             <template data-multisig-funding-controls>
               <div class="multisig-funding-local">
                 ${selectField({
-                  disabled: accounts.length === 0,
+                  disabled: fundingAccounts.length === 0,
                   label: "Fund from",
                   name: "fundingAccountId",
-                  options: accounts.map((candidate) => ({
-                    label: `${accountDisplayName(candidate, preferences)} · ${candidate.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
+                  options: fundingAccounts.map((candidate) => ({
+                    label: `${accountDisplayName(candidate, preferences)} · ${accountFamilyName(candidate.accountContractType)}${candidate.derivation.kind === "ledger" ? " · Ledger" : ""}`,
                     value: candidate.id,
                   })),
-                  selected: account.id,
+                  ...(fundingAccount ? { selected: fundingAccount.id } : {}),
                 })}
                 ${button({
                   attributes: { "data-multisig-fund-local": true },
-                  disabled: !strkToken || accounts.length === 0,
+                  disabled: !strkToken || fundingAccounts.length === 0,
                   icon: "send",
                   label: "Fund from this wallet",
                 })}
@@ -241,7 +347,7 @@ export const multisigDeployFlow = (
                     ? '<p class="hint" role="note">Confirm the original signers. The review will verify that they reproduce the watched address.</p>'
                     : ""
               }
-              ${textField({ label: "Shared account name (optional)", maxlength: 48, name: "name", value: selectedMultisig?.record.name ?? "" })}
+              ${textField({ label: "Multisig name (optional)", maxlength: 48, name: "name", value: selectedMultisig?.record.name ?? "" })}
               <section class="multisig-signer-set" aria-labelledby="multisig-signer-set-title">
             <div class="multisig-signer-set-head">
               <strong id="multisig-signer-set-title">Signer set</strong>
@@ -264,6 +370,7 @@ export const multisigDeployFlow = (
               <div class="multisig-selected-signer" data-manual-signer role="listitem">
                 <span class="option-avatar">${icon("user")}</span>
                 <span class="option-copy"><strong data-manual-signer-name>Participant</strong><span class="option-sub" data-manual-signer-label></span></span>
+                ${inlineCopyButton("", "Copy participant address", { "data-manual-signer-copy": true, hidden: true })}
                 ${iconButton({
                   attributes: { "data-remove-signer-public-key": true },
                   icon: "x",
@@ -331,7 +438,7 @@ export const multisigDeployFlow = (
             </div>
             <div id="multisig-deploy-review" aria-live="polite"></div>
             <div class="multisig-deploy-actions">
-              ${button({ disabled: classState !== true || !deploymentSigner, label: "Review deployment", type: "submit" })}
+              ${button({ disabled: classState !== true || !deploymentSigner, label: "Check fee and address", type: "submit" })}
             </div>
             <p id="multisig-deploy-result" role="status"></p>
           </div>

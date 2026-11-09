@@ -5,19 +5,19 @@ import type {
   ArgentMultisigAuthorityStatus,
   ArgentMultisigConfig,
   ArgentUnsupportedSigner,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import type {
   ArgentMultisigConfigSnapshot,
   ArgentMultisigRecord,
   MultisigStore,
-} from "@mc-wallet/multisig/repository";
+} from "@bramble/multisig/repository";
 import {
   ARGENT_MULTISIG_CONTRACT,
   normalizeArgentMultisigConfig,
-} from "@mc-wallet/starknet/account-contracts";
-import { isContractNotFoundError } from "@mc-wallet/starknet/provider";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/starknet/account-contracts";
+import { isContractNotFoundError } from "@bramble/starknet/provider";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import {
   type ActiveAccountContext,
   activeAccountContext,
@@ -46,6 +46,7 @@ import {
   readMultisigsInput,
 } from "./multisig-inputs";
 import { handleMultisigSignerOps } from "./multisig-signer-ops";
+import { recoverStaleIntentsFor } from "./multisig-stale-intents";
 import {
   type ArgentMultisigView,
   pendingDeploymentIds,
@@ -448,6 +449,7 @@ const refreshMultisig = async (
     config,
     context.rpcUrls,
   );
+  await recoverStaleIntentsFor(deps, refreshed.record.id);
   await markObservedArgentIntentOutcomes(deps, refreshed.record);
   await markChangedIntentsStale(deps.multisigStore, context.record.id, config);
   const intents = (await deps.multisigStore.listIntents()).filter(

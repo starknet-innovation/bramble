@@ -10,8 +10,8 @@
  * propagates rather than being downgraded into a benign "verified" result.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { asFelt, isNonZeroStarkFieldElement, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { asFelt, isNonZeroStarkFieldElement, sameFelt } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import { isContractNotFoundError, isTransportRpcError, withRpcFallback } from "../rpc/provider";
 

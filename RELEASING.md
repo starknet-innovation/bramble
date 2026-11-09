@@ -1,6 +1,6 @@
-# Releasing MC Wallet
+# Releasing Bramble
 
-This runbook takes MC Wallet from a version bump to a published Chrome Web Store
+This runbook takes Bramble from a version bump to a published Chrome Web Store
 listing. Two paths exist and share the same packaged bytes:
 
 - **Automatic (release-on-merge)** — merging a `release/*` (or `hotfix/*`) branch
@@ -45,15 +45,31 @@ step relies on.
 2. **Version metadata.** Bump `package.json` **and** `apps/extension/public/manifest.json` to
    `X.Y.0` in lockstep (section 1) and run the single-source guard.
 3. **Gates green.** Required PR CI is green on the release-branch tip; the
-   nightly / full suite (E2E, dependency audit, build — `.github/workflows/nightly.yml`)
-   is green on `release/vX.Y`.
+   nightly / full suite (E2E, live Sepolia import paths, dependency audit, build —
+   `.github/workflows/nightly.yml`) is green on `release/vX.Y`.
 4. **Release notes.** Draft the notes (CHANGELOG section once #60 lands;
    otherwise the tag's auto-generated notes).
 5. **Release candidate (when appropriate).** Tag `vX.Y.0-rc.1` on the release
    branch and run a final validation pass — build + package + `sha256sum -c`
-   (section 2), load the unpacked build, confirm E2E. Iterate `-rc.2`, … if the
+   (section 2), load the unpacked build, confirm E2E. Dispatch the nightly on
+   the release branch and check its Sepolia import-path verdicts in the job
+   summary (it uploads nothing). Then run `verify-sepolia.ts` locally with
+   `BRAMBLE_SEPOLIA_LEDGER=1` and the test Ledger for TA-32…TA-37, check TA-38 by
+   hand, and commit that local run's scorecard as
+   `tools/vendor-dataset/verification-sepolia-<date>.json`
+   (`tools/vendor-dataset/README.md`). Iterate `-rc.2`, … if the
    RC turns up blockers. RC tags are validation only; they do not publish.
 6. **Full validation.** Confirm the RC against the acceptance criteria.
+   The physical test Ledger check stays: import and blind-sign on the real
+   device (TA-32…TA-38). The Speculos suite (`bun run test:e2e:ledger`) answers
+   the dashboard steps with canned replies and fakes WebHID, so it does not
+   replace real firmware. Its CI run is `.github/workflows/ledger-e2e.yml`,
+   which fails by design while a Ledger app hash is unrecorded. They are
+   re-recorded only when the pinned app commit or builder image changes: one
+   maintainer records them with the workflow's `record_hashes` mode and a
+   second independent build (another record run or a local build), and a
+   second maintainer reviews that pull request
+   (`tests/e2e/ledger/README.md`, "Recording the app hashes").
 7. **Promote to `main`.** Merge `release/vX.Y` → `main` as a **merge commit**
    (not squash — preserve release history), done explicitly by a maintainer.
 8. **Automatic release.** The merge triggers `auto-release.yml`: it derives the
@@ -83,12 +99,12 @@ The release version has **one source of truth**: `package.json` → `version`.
   fail the build if the two versions differ or are not `x.y.z` (offline, every PR).
 - `scripts/release-version.ts` (`bun run check:release-version`) is the **release
   gate**: it asserts the tag equals `v<version>` and, on an auto-release, that the
-  `release/vX.Y` branch implies exactly that version — the check that was missing
+  `release/vX.Y` (or `release/vX.Y.Z`) branch implies exactly that version — the check that was missing
   when `v0.4.0` shipped as `mc-wallet-0.3.0.zip`. Its pure logic is unit-tested in
   `tests/conformance/release-version-single-source.test.ts`.
 
 To bump, edit **both** files to the same new semver (a `release/vX.Y` branch
-ships `X.Y.0`), then run the gates:
+ships `X.Y.0`, a `release/vX.Y.Z` branch ships `X.Y.Z`), then run the gates:
 
 ```sh
 bun test tests/conformance/release-version-single-source.test.ts
@@ -103,14 +119,16 @@ version **must be strictly greater** than the currently published one.
 ```sh
 bun install --frozen-lockfile
 bun run vendor:argent      # verifies the pinned official Argent release
-bun run build              # writes dist/
-bun run package:extension  # writes artifacts/mc-wallet-<version>.zip (+ .sha256)
+bun run package:extension           # writes artifacts/bramble-<version>.zip (+ .sha256)
+bun run package:extension:firefox   # writes artifacts/bramble-firefox-<version>.zip (+ .sha256)
+bun run check:firefox               # AMO's validator over dist-firefox/
 ```
 
 `scripts/package-extension.ts` produces a **reproducible** zip (normalized
-mtimes, pinned file set) plus a matching `.sha256`. The bytes on the Release
-page, in the Chrome Web Store, and in the CI `mc-wallet-extension` artifact are
-therefore identical for a given commit.
+mtimes, pinned file set) plus a matching `.sha256`, so a rebuild of the same
+commit on the same toolchain should give the same bytes. No workflow compares
+the Release zip with the CI `bramble-extension` artifact: the release build's
+checksum step only checks the zip against the `.sha256` it wrote itself.
 
 Verify the checksum before trusting a zip:
 
@@ -139,17 +157,19 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 
 1. resolves the merged head branch from the PR on the merge commit; a chore/docs
    merge resolves to no release and the workflow exits cleanly;
-2. runs the single-source gate — derives `X.Y.0` from `release/vX.Y` (or the
-   package version for a hotfix) and **fails** if `package.json`/`manifest` do
+2. runs the single-source gate — derives `X.Y.0` from `release/vX.Y`, `X.Y.Z`
+   from a `release/vX.Y.Z` patch branch (or the package version for a hotfix) and **fails** if `package.json`/`manifest` do
    not match, so a promotion that skipped the version bump cannot ship;
 3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
    idempotent, so a re-run never double-cuts);
 4. calls the reusable `release-build.yml`, which installs the toolchain exactly
-   as CI does, runs `vendor:argent`/`build`/`package:extension`, re-asserts the
-   tag ↔ version gate, verifies the `.zip` matches its `.sha256`, and uploads the
-   `mc-wallet-release` artifact. A separate hosted job that never checks out
-   wallet source creates the **GitHub Release** with the zip + `.sha256`
-   attached.
+   as CI does, runs `vendor:argent`, builds and packages both browser targets,
+   runs AMO's validator (`check:firefox`) over the Gecko build, re-asserts the
+   tag ↔ version gate, verifies each `.zip` matches its `.sha256`, and uploads
+   the `bramble-release` artifact. A separate hosted job that never checks out
+   wallet source creates the **GitHub Release** with both zips and their
+   `.sha256` files attached: `bramble-<version>.zip` for Chromium and
+   `bramble-firefox-<version>.zip` for addons.mozilla.org.
 
 Release notes come from the matching `CHANGELOG.md` section (issue #60) — kept
 current on the release branch via `bun run changelog` — falling back to a
@@ -170,7 +190,8 @@ A tag that does not match `v*` triggers nothing.
 ### Cutting a release (manual fallback)
 
 Run steps 1-2 locally, then create the Release by hand (Releases → Draft a new
-release), attaching `artifacts/mc-wallet-<version>.zip` and its `.sha256`.
+release), attaching `artifacts/bramble-<version>.zip`,
+`artifacts/bramble-firefox-<version>.zip`, and their `.sha256` files.
 
 Creating the release via the GitHub UI is also supported: the release step is
 create-or-upload, so it attaches the built assets to an existing (UI-created)
@@ -274,7 +295,7 @@ dispatch from protected `main`:
    - `deploy_percentage` — optional staged rollout (see below).
    - `dry_run: true` — validate the package and request plan without publishing.
 
-The job downloads the `mc-wallet-release` artifact built by `build-release`,
+The job downloads the `bramble-release` artifact built by `build-release`,
 verifies its SHA-256 checksum, checks out the reviewed publish client from
 protected `main` on a fresh hosted runner, and invokes it. The client:
 
@@ -332,6 +353,26 @@ window) is a dashboard-only option and is intentionally not automated.
   goes through review, so expect the same latency.
 - **User impact:** users on the bad version keep it until the corrected version
   passes review and their browser auto-updates the extension.
+
+### Never roll back; roll forward
+
+Upgrades are one-way. Once a user unlocks a new version, the wallet migrates
+their vault and preferences, and an older build can't open them: v0.10.5, for
+example, refuses a v0.10.6 vault as an unsupported schema. The vault and
+preferences stay intact while it is refused, and installing the current version
+again over the old one reopens them; removing the extension deletes them.
+Activity is not protected the same way: an older build drops activity rows it
+can't parse, and its next activity write (status reconciliation runs without an
+unlock) stores the list without them.
+
+v0.10.9 is one of these: it moves the vault to schema v13 (#827), so v0.10.8
+must not be republished after it.
+
+So never republish, re-tag or attach an older version, on any channel. To pull
+a bad release, ship a patch with a higher version (vX.Y.Z+1) that contains the
+fix or the last good code. The Chrome Web Store refuses a lower version, but
+AMO and self-hosted zips don't, so this rule is the only guard there. User-facing
+recovery steps are in the README ("Upgrading") and on the website support page.
 
 ## 9. Where automation hooks in
 

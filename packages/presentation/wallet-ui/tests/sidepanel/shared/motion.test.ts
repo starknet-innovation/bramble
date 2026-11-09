@@ -4,8 +4,8 @@
  * stagger correctly.
  */
 import { describe, expect, test } from "bun:test";
-import { resolveSpring, solveSpring } from "@mc-wallet/ui-kit/spring";
-import { SPRING } from "@mc-wallet/ui-kit/tokens";
+import { resolveSpring, solveSpring } from "@bramble/ui-kit/spring";
+import { SPRING } from "@bramble/ui-kit/tokens";
 import { navDirection } from "../../../src/sidepanel/app/navigation/nav-direction";
 import {
   prefersReducedMotion,

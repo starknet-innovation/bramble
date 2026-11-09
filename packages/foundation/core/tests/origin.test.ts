@@ -2,7 +2,7 @@
  * Origin policy checks keep dapp permissions aligned with the extension manifest.
  */
 import { expect, test } from "bun:test";
-import { isWalletOrigin, normalizeWalletOrigin } from "@mc-wallet/core/origin";
+import { isWalletOrigin, normalizeWalletOrigin } from "@bramble/core/origin";
 
 test("wallet origins allow HTTPS and local development pages only", () => {
   expect(normalizeWalletOrigin("https://example.com/path")).toBe("https://example.com");

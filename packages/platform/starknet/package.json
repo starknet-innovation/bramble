@@ -1,5 +1,6 @@
 {
-  "name": "@mc-wallet/starknet",
+  "name": "@bramble/starknet",
+  "description": "Generic Starknet RPC transport, timeout and failover, RPC response validation, call and value serialization, fee and resource primitives, and signer adaptation.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,7 +10,9 @@
     "./declare": "./src/transactions/declare.ts",
     "./deployment": "./src/transactions/deployment.ts",
     "./fee-bounds": "./src/rpc/fee-bounds.ts",
+    "./multisig-dapp-invoke": "./src/rpc/multisig-dapp-invoke.ts",
     "./multisig-invoke": "./src/rpc/multisig-invoke.ts",
+    "./pinned-block": "./src/rpc/pinned-block.ts",
     "./provider": "./src/rpc/provider.ts",
     "./rpc-diagnostics": "./src/rpc/rpc-diagnostics.ts",
     "./rpc-transport": "./src/rpc/rpc-transport.ts",
@@ -20,6 +23,7 @@
     "./snip12-merkle": "./src/transactions/snip12-merkle.ts",
     "./snip12-scalars": "./src/transactions/snip12-scalars.ts",
     "./snip12-vocabulary": "./src/transactions/snip12-vocabulary.ts",
+    "./stark-name": "./src/rpc/stark-name.ts",
     "./typed-data": "./src/transactions/typed-data.ts"
   },
   "scripts": {
@@ -28,9 +32,9 @@
     "test": "bun test --preload ../../../tests/support/test-preload.ts ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*",
-    "@mc-wallet/wallet-protocol": "workspace:*",
-    "starknet": "10.0.2"
+    "@bramble/core": "workspace:*",
+    "@bramble/wallet-model": "workspace:*",
+    "@bramble/wallet-protocol": "workspace:*",
+    "starknet": "10.8.0"
   }
 }

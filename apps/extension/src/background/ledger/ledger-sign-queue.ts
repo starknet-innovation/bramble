@@ -13,8 +13,8 @@
  * injected (not `setTimeout` in this module) so the logic stays pure and the
  * timeout is exercised deterministically in tests; omit it to disable timeouts.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import type { DeviceSignature } from "@mc-wallet/wallet-model/signing";
+import { WalletError } from "@bramble/core/errors";
+import type { DeviceSignature } from "@bramble/wallet-model/signing";
 import type { LedgerSignRequest } from "./ledger-signer";
 
 /**

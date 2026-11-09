@@ -44,4 +44,4 @@ jobs:
       - name: Install workspace dependencies
         run: bun install --frozen-lockfile
       - name: Build Terminal
-        run: bun run --filter @mc-wallet/terminal build
+        run: bun run --filter @bramble/terminal build

@@ -1,8 +1,8 @@
 /**
  * Wallet connection context for the trade terminal.
  *
- * Connects directly to the injected MC Wallet provider (preferring
- * window.starknet_mcWallet), exposes the connected account and address, and
+ * Connects directly to the injected Bramble provider (preferring
+ * window.starknet_bramble), exposes the connected account and address, and
  * drives the Connect / Disconnect buttons throughout the shell.
  *
  * Screens consume this via the `useWallet()` hook. Protocol calldata is handed
@@ -19,11 +19,13 @@ import {
   useRef,
   useState,
 } from "react";
+import { WalletError } from "../../protocols/support/errors";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import type { AccountInterface, InvokeFunctionResponse } from "starknet";
 import {
   INJECTION_TIMEOUT_MS,
   type StarknetWindowObject,
-  waitForInjectedMcWallet,
+  waitForInjectedBramble,
 } from "./starknet-window";
 import {
   requestAccounts,
@@ -40,6 +42,7 @@ import {
   type WalletRequestPreview,
   type WalletRequestView,
   type WalletTransactionRequest,
+  WALLET_IDENTITY_CHANGED,
   walletInvokeParams,
   walletRequestError,
   walletTransactionHash,
@@ -60,6 +63,10 @@ export type { WalletContextValue };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
+
+const walletIdentity = (address: string | null, chainId: string | null): string =>
+  address === null ? "" : `${address}:${chainId ?? ""}`;
+
 const declarationResult = (value: unknown): DeclarationResult | null => {
   if (typeof value !== "object" || value === null) {
     return null;
@@ -72,7 +79,12 @@ const declarationResult = (value: unknown): DeclarationResult | null => {
     : null;
 };
 
+// A queued request is built for the account and network that were active when
+// it was queued (Sherlock 222). `identity` records them; `inFlight` marks a
+// request the wallet is already handling, which only the wallet can settle.
 type PendingWalletRequest = {
+  readonly identity: string;
+  inFlight: boolean;
   readonly perform: () => Promise<unknown>;
   readonly reject: (reason: Error) => void;
   readonly resolve: (value: unknown) => void;
@@ -91,6 +103,14 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
   const [requestView, setRequestView] = useState<WalletRequestView | null>(null);
   const walletRef = useRef<StarknetWindowObject | null>(null);
   const pendingRequestRef = useRef<PendingWalletRequest | null>(null);
+  // The account and network this render's callbacks build requests for.
+  const identity = walletIdentity(address, chainId);
+
+  const dropWalletRequest = useCallback((reason: string) => {
+    pendingRequestRef.current?.reject(new Error(reason));
+    pendingRequestRef.current = null;
+    setRequestView(null);
+  }, []);
 
   const applyConnected = useCallback(
     (
@@ -111,16 +131,14 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
   );
 
   const clear = useCallback(() => {
-    pendingRequestRef.current?.reject(new Error("Wallet disconnected before approval."));
-    pendingRequestRef.current = null;
-    setRequestView(null);
+    dropWalletRequest("Wallet disconnected before approval.");
     walletRef.current = null;
     setWallet(null);
     setAccount(null);
     setAddress(null);
     setChainId(null);
     setWalletName(null);
-  }, []);
+  }, [dropWalletRequest]);
 
   const connect = useCallback(async () => {
     setIsConnecting(true);
@@ -128,22 +146,22 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     try {
       const target = await resolveWallet();
       if (target === null) {
-        throw new Error("No Starknet wallet detected. Install the MC Wallet extension.");
+        throw new Error("No Starknet wallet detected. Install the Bramble extension.");
       }
       const addresses = await requestAccounts(target);
       const nextAddress = addresses[0];
       if (nextAddress === undefined) {
-        throw new Error("Wallet did not authorize an account.");
+        throw new WalletError("Wallet did not authorize an account.");
       }
       const nextChainId = await requestChainId(target);
       const nextAccount = await resolveAccount(target, nextChainId);
       if (nextAccount === null) {
-        throw new Error("Could not resolve the connected account.");
+        throw new WalletError("Could not resolve the connected account.");
       }
       applyConnected(target, nextAccount, nextAddress, nextChainId);
     } catch (cause) {
       clear();
-      setError(cause instanceof Error ? cause.message : "Failed to connect wallet.");
+      setError(userErrorMessage(cause, "Couldn't connect your wallet. Try again."));
     } finally {
       setIsConnecting(false);
     }
@@ -163,6 +181,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
   const executeWalletRequest = useCallback(
     async (pending: PendingWalletRequest, preview: WalletRequestPreview): Promise<void> => {
       try {
+        pending.inFlight = true;
         const result = await pending.perform();
         const transactionHash = walletTransactionHash(result);
         if (transactionHash === null) {
@@ -177,6 +196,8 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
           preview,
           message: walletRequestError(cause),
         });
+      } finally {
+        pending.inFlight = false;
       }
     },
     [],
@@ -188,9 +209,13 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     if (pending === null || preview === undefined) {
       return;
     }
+    if (pending.identity !== identity) {
+      dropWalletRequest(WALLET_IDENTITY_CHANGED);
+      return;
+    }
     setRequestView({ phase: "awaiting", preview });
     await executeWalletRequest(pending, preview);
-  }, [executeWalletRequest, requestView]);
+  }, [dropWalletRequest, executeWalletRequest, identity, requestView]);
 
   const queueWalletRequest = useCallback(
     <Result,>(
@@ -203,6 +228,8 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       }
       return new Promise<Result>((resolve, reject) => {
         const pending: PendingWalletRequest = {
+          identity,
+          inFlight: false,
           perform,
           reject,
           resolve: (value) => resolve(value as Result),
@@ -214,14 +241,23 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
         }
       });
     },
-    [executeWalletRequest],
+    [executeWalletRequest, identity],
   );
 
-  const cancelWalletRequest = useCallback(() => {
-    pendingRequestRef.current?.reject(new Error("Wallet request cancelled."));
-    pendingRequestRef.current = null;
-    setRequestView(null);
-  }, []);
+  const cancelWalletRequest = useCallback(
+    () => dropWalletRequest("Wallet request cancelled."),
+    [dropWalletRequest],
+  );
+
+  // A request still under review, or failed and offering a retry, was built for
+  // the previous account or network, so it is dropped rather than sent for the
+  // new one. One the wallet is already handling is left to the wallet.
+  useEffect(() => {
+    const pending = pendingRequestRef.current;
+    if (pending !== null && !pending.inFlight && pending.identity !== identity) {
+      dropWalletRequest(WALLET_IDENTITY_CHANGED);
+    }
+  }, [dropWalletRequest, identity]);
 
   const closeWalletRequest = useCallback(() => setRequestView(null), []);
 
@@ -242,6 +278,8 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
         warning: input.warning,
       };
       const perform = async (): Promise<InvokeFunctionResponse> => {
+        // Runs on every attempt, right before the wallet sees the calls.
+        await input.handoffCheck?.();
         const params = walletInvokeParams(input.calls);
         if (wallet !== null && typeof wallet.request === "function") {
           const raw = wallet.request as unknown as WalletRequest;
@@ -343,7 +381,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     let cancelled = false;
     void (async () => {
       try {
-        const target = await waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
+        const target = await waitForInjectedBramble(INJECTION_TIMEOUT_MS);
         if (cancelled || target === null) {
           return;
         }

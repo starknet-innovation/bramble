@@ -73,16 +73,16 @@ describe("ledgerGrantFailure", () => {
 describe("ledgerGrantDiagnostic", () => {
   test("reports only fixed browser capability and saved-grant state", () => {
     expect(
-      ledgerGrantDiagnostic("MC-LDG-USB-PICKER", {
+      ledgerGrantDiagnostic("BRAMBLE-LDG-USB-PICKER", {
         apiAvailable: true,
         grantedDeviceCount: 0,
       }),
-    ).toBe("Support code · MC-LDG-USB-PICKER · API ready · saved grants 0");
+    ).toBe("Support code · BRAMBLE-LDG-USB-PICKER · API ready · saved grants 0");
     expect(
-      ledgerGrantDiagnostic("MC-LDG-BLE-PICKER", {
+      ledgerGrantDiagnostic("BRAMBLE-LDG-BLE-PICKER", {
         apiAvailable: false,
         grantedDeviceCount: null,
       }),
-    ).toBe("Support code · MC-LDG-BLE-PICKER · API unavailable · saved grants unavailable");
+    ).toBe("Support code · BRAMBLE-LDG-BLE-PICKER · API unavailable · saved grants unavailable");
   });
 });

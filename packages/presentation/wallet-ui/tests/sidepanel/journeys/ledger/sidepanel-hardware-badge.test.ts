@@ -4,9 +4,9 @@
  * accounts never do — the badge is a total function of account provenance.
  */
 import { describe, expect, test } from "bun:test";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
-import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { account, preferences } from "@bramble/testkit/sidepanel";
+import type { AccountRef, LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { hardwareBadge } from "../../../../src/sidepanel/shared/parts";
 import { accountDrawer } from "../../../../src/sidepanel/shell/account-drawer";

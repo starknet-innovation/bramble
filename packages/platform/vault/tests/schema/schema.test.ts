@@ -2,7 +2,7 @@
  * Vault schema checks reject ambiguous decrypted wallet state.
  */
 import { describe, expect, test } from "bun:test";
-import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { ARGENT_ACCOUNT_CONTRACT } from "@bramble/starknet/account-contracts";
 import {
   CURRENT_SCHEMA_VERSION,
   emptyVault,
@@ -11,15 +11,18 @@ import {
   isVaultV4,
   isVaultV5,
   isVaultV7,
-} from "@mc-wallet/vault/schema";
+  isVaultV8,
+  isVaultV13,
+} from "@bramble/vault/schema";
 import {
   type AccountRef,
   isAccountId,
   isAccountIdForNetwork,
   isKeylessAccount,
-} from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath, READY_EIP2645_APPLICATION } from "@bramble/wallet-model/ledger-path";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { asV7, withoutScopes } from "./legacy-stamp";
 
 const account = {
   address: "0x123",
@@ -50,21 +53,25 @@ const currentAccount = { accountContractType: "openzeppelin" as const, ...accoun
 const currentVault = {
   ...legacyV4,
   accounts: [currentAccount],
+  importedSeeds: [],
+  multisigStrk20KeyConflicts: [],
+  multisigStrk20ViewingKeys: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
+  shadowAccountScopes: [],
 };
 
-describe("isVaultV7 (current schema)", () => {
+describe("isVaultV13 (current schema)", () => {
   test("accepts current vaults with or without a stored phrase", () => {
-    expect(isVaultV7(currentVault)).toBe(true);
-    expect(isVaultV7({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
+    expect(isVaultV13(currentVault)).toBe(true);
+    expect(isVaultV13({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
     expect(emptyVault().schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(isVaultV7(emptyVault())).toBe(true);
+    expect(isVaultV13(emptyVault())).toBe(true);
     expect(isVaultV5(legacyV5)).toBe(true);
   });
 
   test("rejects legacy v1 vaults and version mismatches", () => {
-    expect(isVaultV7(vault)).toBe(false);
-    expect(isVaultV7({ ...currentVault, schemaVersion: 1 })).toBe(false);
+    expect(isVaultV13(vault)).toBe(false);
+    expect(isVaultV13({ ...currentVault, schemaVersion: 1 })).toBe(false);
     expect(isVaultV1(currentVault)).toBe(false);
     expect(isVaultV3(legacyV3)).toBe(true);
     expect(isVaultV4(legacyV4)).toBe(true);
@@ -73,7 +80,7 @@ describe("isVaultV7 (current schema)", () => {
   test("rejects non-canonical account aliases in the current schema", () => {
     const alias = "SN_SEPOLIA:0x0123";
     expect(
-      isVaultV7({
+      isVaultV13({
         ...currentVault,
         accounts: [{ ...currentAccount, address: "0x0123", id: alias }],
         activeAccountId: alias,
@@ -84,22 +91,51 @@ describe("isVaultV7 (current schema)", () => {
   });
 
   test("rejects a missing or malformed recovery phrase", () => {
-    const withoutMnemonic = {
-      accounts: currentVault.accounts,
-      accountSecrets: currentVault.accountSecrets,
-      activeAccountId: currentVault.activeAccountId,
-      originGrants: currentVault.originGrants,
-      schemaVersion: CURRENT_SCHEMA_VERSION,
-      signingKeys: currentVault.signingKeys,
-    };
+    const { mnemonic: _mnemonic, ...withoutMnemonic } = currentVault;
 
-    expect(isVaultV7(withoutMnemonic)).toBe(false);
-    expect(isVaultV7({ ...currentVault, mnemonic: "" })).toBe(false);
-    expect(isVaultV7({ ...currentVault, mnemonic: 42 })).toBe(false);
+    expect(isVaultV13(withoutMnemonic)).toBe(false);
+    expect(isVaultV13({ ...currentVault, mnemonic: "" })).toBe(false);
+    expect(isVaultV13({ ...currentVault, mnemonic: 42 })).toBe(false);
   });
 
   test("rejects unexpected keys", () => {
-    expect(isVaultV7({ ...currentVault, label: "unexpected" })).toBe(false);
+    expect(isVaultV13({ ...currentVault, label: "unexpected" })).toBe(false);
+  });
+
+  test("binds every imported-seed reference or rejects the vault", () => {
+    const withSeed = {
+      ...currentVault,
+      accounts: [
+        {
+          ...currentAccount,
+          derivation: { ...currentAccount.derivation, seedId: "phrase-1" },
+        },
+      ],
+      importedSeeds: [{ id: "phrase-1", mnemonic: "correct horse battery staple" }],
+    };
+    expect(isVaultV13(withSeed)).toBe(true);
+    // A dangling handle would break reveal and re-derivation: fail closed.
+    expect(isVaultV13({ ...withSeed, importedSeeds: [] })).toBe(false);
+    // Handles are the bounded deterministic grammar, ids unique.
+    expect(
+      isVaultV13({
+        ...withSeed,
+        importedSeeds: [{ id: "anything", mnemonic: "correct horse battery staple" }],
+      }),
+    ).toBe(false);
+    expect(
+      isVaultV13({
+        ...withSeed,
+        importedSeeds: [
+          { id: "phrase-1", mnemonic: "correct horse battery staple" },
+          { id: "phrase-1", mnemonic: "correct horse battery staple" },
+        ],
+      }),
+    ).toBe(false);
+    // The retained phrase itself must be mnemonic-shaped.
+    expect(isVaultV13({ ...withSeed, importedSeeds: [{ id: "phrase-1", mnemonic: "" }] })).toBe(
+      false,
+    );
   });
 
   test("rejects an Argent discriminator bound to an unpinned class", () => {
@@ -109,8 +145,8 @@ describe("isVaultV7 (current schema)", () => {
       classHash: canonicalFelt(ARGENT_ACCOUNT_CONTRACT.classHash),
       deploymentSalt: currentAccount.publicKeyX,
     };
-    expect(isVaultV7({ ...currentVault, accounts: [argent] })).toBe(true);
-    expect(isVaultV7({ ...currentVault, accounts: [{ ...argent, classHash: "0x123" }] })).toBe(
+    expect(isVaultV13({ ...currentVault, accounts: [argent] })).toBe(true);
+    expect(isVaultV13({ ...currentVault, accounts: [{ ...argent, classHash: "0x123" }] })).toBe(
       false,
     );
   });
@@ -135,22 +171,80 @@ const ledgerOnlyVault = {
   accounts: [ledgerAccount],
   accountSecrets: [],
   activeAccountId: ledgerAccount.id,
+  importedSeeds: [],
   mnemonic: null,
+  multisigStrk20KeyConflicts: [],
+  multisigStrk20ViewingKeys: [],
   originGrants: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
+  shadowAccountScopes: [],
   signingKeys: [],
 };
 
 describe("mnemonic-less Ledger-only vault", () => {
   test("validates a keyless Ledger vault that stores no recovery phrase", () => {
-    expect(isVaultV7(ledgerOnlyVault)).toBe(true);
+    expect(isVaultV13(ledgerOnlyVault)).toBe(true);
     expect(isKeylessAccount(ledgerAccount as AccountRef)).toBe(true);
+  });
+
+  test("admits a Ledger account restored at Ready's path when marker and path agree", () => {
+    const readyAccount = {
+      ...ledgerAccount,
+      accountContractType: "argent" as const,
+      classHash: canonicalFelt(ARGENT_ACCOUNT_CONTRACT.classHash) as string,
+      deploymentSalt: ledgerAccount.publicKeyX,
+      derivation: {
+        accountIndex: 12,
+        eip2645application: READY_EIP2645_APPLICATION,
+        kind: "ledger" as const,
+        path: ledgerAccountPath(12, READY_EIP2645_APPLICATION),
+      },
+    };
+    const readyVault = {
+      ...ledgerOnlyVault,
+      accounts: [readyAccount],
+      activeAccountId: readyAccount.id,
+    };
+    expect(isVaultV13(readyVault)).toBe(true);
+    // The Ready scheme is admitted from v9 onward: the same record stamped v8
+    // or v7 is refused, while a Bramble-path Ledger account is accepted at every version
+    // that admits Ledger accounts at all.
+    expect(isVaultV8({ ...withoutScopes(readyVault), schemaVersion: 8 })).toBe(false);
+    expect(isVaultV8({ ...withoutScopes(ledgerOnlyVault), schemaVersion: 8 })).toBe(true);
+    const readyV7 = asV7(readyVault);
+    const brambleV7 = asV7(ledgerOnlyVault);
+    expect(isVaultV7(readyV7)).toBe(false);
+    expect(isVaultV7(brambleV7)).toBe(true);
+    // Bramble's marker over Ready's path, or Ready's marker over Bramble's path,
+    // would sign with a key nobody enumerated: both fail closed.
+    expect(
+      isVaultV13({
+        ...readyVault,
+        accounts: [
+          {
+            ...readyAccount,
+            derivation: { ...readyAccount.derivation, eip2645application: "LedgerW" },
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isVaultV13({
+        ...readyVault,
+        accounts: [
+          {
+            ...readyAccount,
+            derivation: { ...readyAccount.derivation, path: ledgerAccountPath(12) },
+          },
+        ],
+      }),
+    ).toBe(false);
   });
 
   test("still accepts the grandfathered legacy null-phrase seed vault", () => {
     // A v1-migrated wallet carries seed accounts with a null mnemonic; that shape
     // stays valid so those wallets never fail closed.
-    expect(isVaultV7(currentVault)).toBe(true);
+    expect(isVaultV13(currentVault)).toBe(true);
     expect(currentVault.mnemonic).toBeNull();
   });
 
@@ -171,15 +265,15 @@ describe("mnemonic-less Ledger-only vault", () => {
       ],
     };
 
-    expect(isVaultV7(withSecret)).toBe(true);
+    expect(isVaultV13(withSecret)).toBe(true);
     expect(
-      isVaultV7({
+      isVaultV13({
         ...withSecret,
         accountSecrets: [{ ...withSecret.accountSecrets[0], accountId: "SN_MAIN:0x999" }],
       }),
     ).toBe(false);
     expect(
-      isVaultV7({
+      isVaultV13({
         ...withSecret,
         accountSecrets: [
           {
@@ -190,7 +284,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       }),
     ).toBe(false);
     expect(
-      isVaultV7({
+      isVaultV13({
         ...withSecret,
         accountSecrets: [
           {
@@ -210,7 +304,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       viewingKey: "0x654321",
     };
     expect(
-      isVaultV7({
+      isVaultV13({
         ...currentVault,
         accountSecrets: [
           {
@@ -221,7 +315,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       }),
     ).toBe(false);
     expect(
-      isVaultV7({
+      isVaultV13({
         ...ledgerOnlyVault,
         accountSecrets: [
           {

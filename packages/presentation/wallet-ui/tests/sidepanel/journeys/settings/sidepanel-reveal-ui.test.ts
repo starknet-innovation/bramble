@@ -3,9 +3,14 @@
  * fields and its own label, a confirmed passphrase renders the returned recovery
  * phrase and private key and unhides the output, and a rejected reveal surfaces
  * the error in the status line without exposing anything.
+ *
+ * The clipboard copy is covered here too: it reads the live node rather than any
+ * second copy of the secret, refuses when nothing has been revealed, and
+ * schedules the best-effort overwrite that keeps the phrase from sitting on the
+ * clipboard indefinitely.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { account } from "@mc-wallet/testkit/sidepanel";
+import { account } from "@bramble/testkit/sidepanel";
 import type {
   RevealSecretsResponse,
   WalletStatus,
@@ -15,6 +20,10 @@ import {
   type RevealUiDeps,
   revealFlow,
 } from "../../../../src/sidepanel/journeys/settings/reveal-ui";
+import {
+  GUARDED_COPY_NOTE,
+  GUARDED_COPY_NOTE_NO_CLEAR,
+} from "../../../../src/sidepanel/shared/guarded-copy";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 beforeAll(registerDom);
@@ -41,11 +50,11 @@ type RevealResult = { readonly resolve: RevealSecretsResponse } | { readonly rej
 
 // Mounts the reveal screen and binds it against a wallet whose revealSecrets
 // yields the scripted outcome, recording the passphrase it was handed.
-const mount = (outcome: RevealResult) => {
+const mount = (outcome: RevealResult, shown: WalletStatus = status) => {
   document.body.replaceChildren();
   const container = document.createElement("div");
   container.id = "app";
-  container.replaceChildren(document.createRange().createContextualFragment(revealFlow(status)));
+  container.replaceChildren(document.createRange().createContextualFragment(revealFlow(shown)));
   document.body.append(container);
 
   const passphrases: string[] = [];
@@ -85,12 +94,12 @@ describe("bindReveal", () => {
     toggle?.click();
     expect(phrase?.classList.contains("is-masked")).toBe(false);
     expect(key?.classList.contains("is-masked")).toBe(false);
-    expect(toggle?.textContent).toContain("Tap to hide");
+    expect(toggle?.textContent).toContain("Hide");
 
     toggle?.click();
     expect(phrase?.classList.contains("is-masked")).toBe(true);
     expect(key?.classList.contains("is-masked")).toBe(true);
-    expect(toggle?.textContent).toContain("Tap to show");
+    expect(toggle?.textContent).toContain("Show");
   });
 
   test("a confirmed passphrase reveals the phrase and key and unhides the output", async () => {
@@ -109,7 +118,9 @@ describe("bindReveal", () => {
     expect(container.querySelector("#reveal-phrase")?.textContent).toBe(MNEMONIC);
     expect(container.querySelector("#reveal-key")?.textContent).toBe(PRIVATE_KEY);
     expect(container.querySelector("#reveal-output")?.hasAttribute("hidden")).toBe(false);
-    expect(container.querySelector("#reveal-result")?.textContent).toContain("Revealed");
+    expect(container.querySelector("#reveal-result")?.textContent).toContain(
+      "Write it down offline",
+    );
   });
 
   test("a wallet with no recovery phrase shows the fallback line, still revealing the key", async () => {
@@ -122,6 +133,20 @@ describe("bindReveal", () => {
       "No recovery phrase is stored for this wallet.",
     );
     expect(container.querySelector("#reveal-key")?.textContent).toBe(PRIVATE_KEY);
+  });
+
+  test("a network with no account reveals the recovery phrase alone, with no key field", async () => {
+    const { container } = mount(
+      { resolve: { mnemonic: MNEMONIC, ok: true, privateKey: null } },
+      { ...status, activeAccountId: null },
+    );
+
+    submit(container);
+    await tick();
+
+    expect(container.querySelector("#reveal-phrase")?.textContent).toBe(MNEMONIC);
+    expect(container.querySelector("#reveal-key")).toBeNull();
+    expect(container.querySelector("#reveal-output")?.hasAttribute("hidden")).toBe(false);
   });
 
   test("a Ledger active account shows the device-recovery note, not a reveal form", () => {
@@ -146,8 +171,9 @@ describe("bindReveal", () => {
     };
     const html = revealFlow(ledgerStatus);
 
-    expect(html).toContain("lives on your Ledger");
-    expect(html).toContain("Recover this account from your Ledger device");
+    expect(html).toContain("key is on your Ledger");
+    // Which phrase recovers it: the Ledger's, not a Bramble one (mc-wallet #476).
+    expect(html).toContain("use the Ledger's own recovery phrase");
     // No reveal form or secret output region is emitted for a hardware account.
     expect(html).not.toContain('id="reveal-form"');
     expect(html).not.toContain('id="reveal-output"');
@@ -163,5 +189,97 @@ describe("bindReveal", () => {
     expect(container.querySelector("#reveal-output")?.hasAttribute("hidden")).toBe(true);
     // The error is announced as a toast too.
     expect(document.querySelector(".toast.error")?.textContent).toContain("Wrong passphrase");
+  });
+
+  test("copies the revealed phrase and schedules the clipboard overwrite", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+    const scheduled: Array<() => void> = [];
+    const realSetTimeout = window.setTimeout;
+    Object.defineProperty(window, "setTimeout", {
+      configurable: true,
+      value: (callback: () => void, delay?: number) => {
+        // Only intercept the clear timer; leave the toast's own timers alone.
+        if (delay === 60_000) {
+          scheduled.push(callback);
+          return 0;
+        }
+        return realSetTimeout(callback, delay);
+      },
+    });
+
+    const { container } = mount({
+      resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+    });
+    submit(container);
+    await tick();
+    container.querySelector<HTMLButtonElement>("#reveal-copy-phrase")?.click();
+    await tick();
+
+    expect(copied).toEqual([MNEMONIC]);
+    // The phrase must not linger on the clipboard: the overwrite is scheduled,
+    // and clears it when it runs.
+    expect(scheduled).toHaveLength(1);
+    scheduled[0]?.();
+    await tick();
+    expect(copied).toEqual([MNEMONIC, ""]);
+
+    Object.defineProperty(window, "setTimeout", { configurable: true, value: realSetTimeout });
+  });
+
+  test("warns what the clipboard does beside the copy control", () => {
+    // The copy review cut this to "Copy at your own risk", which states no fact
+    // (mc-wallet #476): other apps can read it, it may sync, and the clear.
+    const { container } = mount({
+      resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+    });
+    expect(container.querySelector("#reveal-copy-note")?.textContent).toBe(GUARDED_COPY_NOTE);
+  });
+
+  test("does not promise the clipboard clear where the browser refuses it", () => {
+    const happy = (window as unknown as { happyDOM: { setURL: (url: string) => void } }).happyDOM;
+    happy.setURL("moz-extension://bramble/sidepanel.html");
+    try {
+      const { container } = mount({
+        resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+      });
+      expect(container.querySelector("#reveal-copy-note")?.textContent).toBe(
+        GUARDED_COPY_NOTE_NO_CLEAR,
+      );
+    } finally {
+      happy.setURL("about:blank");
+    }
+  });
+
+  test("refuses to copy before anything has been revealed", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: async (value: string) => copied.push(value) },
+    });
+
+    const { container } = mount({
+      resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+    });
+    container.querySelector<HTMLButtonElement>("#reveal-copy-phrase")?.click();
+    await tick();
+
+    expect(copied).toEqual([]);
+  });
+
+  test("keeps the phrase out of the markup — the control carries no copy of it", () => {
+    // The shared inline copy affordance puts its value in a `data-copy`
+    // attribute. For a recovery phrase that would mint a second copy in the DOM
+    // that outlives the mask, so this control must read the live node instead.
+    const { container } = mount({
+      resolve: { mnemonic: MNEMONIC, ok: true, privateKey: PRIVATE_KEY },
+    });
+    const copyButton = container.querySelector<HTMLButtonElement>("#reveal-copy-phrase");
+    expect(copyButton).not.toBeNull();
+    expect(copyButton?.outerHTML).not.toContain("data-copy");
+    expect(revealFlow(status)).not.toContain("data-copy");
   });
 });

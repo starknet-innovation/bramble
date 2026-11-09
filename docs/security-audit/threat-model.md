@@ -21,7 +21,10 @@ permalink: /security-audit/threat-model/
 ## Assets
 
 - Seed phrase and imported/derived private keys.
-- STRK20 viewing keys, private note state, proof intent, and dapp-scoped sub-account commitments.
+- STRK20 viewing keys, private note state, proof intent, and dapp-scoped shadow-account commitments.
+- The record of which sites an account drove shadow accounts through (origin, label, anonymizer,
+  exact nonces), and the funds those shadow accounts hold. Only this wallet, deriving the
+  origin-bound scope, can move what a site leaves in one.
 - Vault passphrase-derived encryption state and decrypted vault contents.
 - Unlock session capability.
 - User approvals and origin-to-account permissions.
@@ -70,7 +73,23 @@ extension pages are privileged but remain subject to confused-deputy and stale-s
 Persistent and session Chrome storage are explicitly restricted to trusted extension contexts.
 Secret-bearing vault fields are additionally authenticated and encrypted; a retained Ledger STRK20
 viewing key is treated as privacy-sensitive even though it cannot authorize a spend, and remains in
-the v4 `accountSecrets` collection only.
+the v4 `accountSecrets` collection only. The v12 `shadowAccountScopes` collection is privacy-
+sensitive the same way: it names the sites someone used privately, lives only in the encrypted
+vault (never preferences, activity, logs, or session storage), crosses only to the privileged
+Shadow accounts screen, and is recorded before a shadow-account request runs so that a failed
+write stops the request instead of leaving an account the wallet cannot find again. Plaintext
+activity never holds a scope's label or nonce: a sweep is recorded as the generic "Sweep shadow
+account", and a site's own private transaction keeps the line every site-submitted transaction
+has always recorded, "<site> submitted a private transaction (N actions)", which names the site
+but not the scope. Reading a
+scope's shadow accounts or balances sends its partial commitment and addresses to the RPC
+provider, which can link them, so it runs only on the user's request. A dapp's shadow-account
+request on a network with no anonymizer is held on a close-only notice and given its refusal only
+when the user closes it; a notice left to expire answers as any expired approval does ("request
+rejected"), so a site cannot silently probe whether private services are set up. A request whose
+scope the full record table cannot take is held on the same notice, for the same reason, and so is
+a shadow invoke whose fee quote fails before its card is built: that quote runs only when an
+anonymizer is configured, so an instant failure would reveal one.
 
 ## Primary review questions
 
@@ -83,6 +102,8 @@ the v4 `accountSecrets` collection only.
 - Can remote data alter executable behavior?
 - Can privacy warnings, service routing, fee actions, or proofs bypass review or target a
   non-configured contract?
+- Can a shadow-account action run through an anonymizer other than the one the card named, or
+  without its scope recorded, or can a site read or probe the scope records?
 - Can a build or release include an undeclared file or unpinned input?
 
 ## Executable test coverage
@@ -100,7 +121,8 @@ dependency audit.
 | Malformed storage or RPC data changes a key, call, class hash, or recipient | `tests/property/security-boundaries.test.ts` — vault, message, felt, and Krusty properties; `tests/starknet/starknet-rpc-assets.test.ts` |
 | Dynamic text or metadata reaches an executable DOM sink | `scripts/check-file-standards.ts`; `tests/conformance/shared-helper-single-source.test.ts` |
 | Remote metadata changes executable behavior | `tests/background/portfolio/background-nft-discovery.test.ts`; `tests/background/portfolio/token-ops-addtoken-spam.test.ts` |
-| Privacy route, fee, proof, or pool bypasses exact review | `tests/background/strk20-subaccount-sdk-boundary.test.ts`; `tests/background/privacy/strk20-wallet-preparations.test.ts`; `tests/background/strk20-vault-sign-lock-revocation.test.ts` |
+| Shadow-account scope runs unrecorded, under another anonymizer, or leaks to a site | `tests/background/privacy/strk20-shadow-scope-recording.test.ts`; `tests/background/strk20-shadow-account-origin-binding.test.ts` — “refuses to execute under an anonymizer other than the one the card named”; `tests/background/privacy/strk20-shadow-account-lifecycle.test.ts`; `tests/background/privacy/strk20-anonymizer-precheck.test.ts`; `packages/platform/vault/tests/schema/schema-v12.test.ts` |
+| Privacy route, fee, proof, or pool bypasses exact review | `tests/background/strk20-shadow-account-sdk-boundary.test.ts`; `tests/background/privacy/strk20-wallet-preparations.test.ts`; `tests/background/strk20-vault-sign-lock-revocation.test.ts` |
 | Build or release admits undeclared or unpinned input | `tests/scripts/workflow-action-pinning.test.ts`; `tests/scripts/vendor-execution-policy.test.ts`; `tests/scripts/krusty-package-provenance.test.ts`; `tests/conformance/release-version-single-source.test.ts` |
 
 The dapp-reachable negative corpus explicitly covers hostile and overflowing calldata in

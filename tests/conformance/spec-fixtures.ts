@@ -5,15 +5,15 @@
  * the repository size cap. Everything here is distilled from wallet_rpc.json.
  */
 
-import type { Json } from "@mc-wallet/core/json";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { Json } from "@bramble/core/json";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type {
   ProviderMethod,
   ProviderRequest,
   RuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
-import type { ProviderResultMethod } from "@mc-wallet/wallet-protocol/results";
-import { SUPPORTED_WALLET_API } from "@mc-wallet/wallet-protocol/versions";
+} from "@bramble/wallet-protocol/bridge";
+import type { ProviderResultMethod } from "@bramble/wallet-protocol/results";
+import { SUPPORTED_WALLET_API } from "@bramble/wallet-protocol/versions";
 
 /** Spec PADDED_TXN_HASH: `0x` + 64 hex with a top nibble in 0-8 (felt < 2^252). */
 export const PADDED_TXN_HASH = /^0x(0[0-8][a-f0-9]{62})$/;
@@ -81,7 +81,7 @@ export const ACCOUNT: AccountRef = {
  * `tests/starknet/typed-data-revisions.test.ts` pins the other revision.
  */
 export const TYPED_DATA: Json = {
-  domain: { chainId: "SN_SEPOLIA", name: "MC Test", revision: "1", version: "1" },
+  domain: { chainId: "SN_SEPOLIA", name: "Bramble Test", revision: "1", version: "1" },
   message: { content: "hello" },
   primaryType: "Message",
   types: {

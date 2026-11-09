@@ -1,0 +1,307 @@
+/**
+ * The audited modules each file-standards allowance names.
+ *
+ * `check-file-standards.ts` owns the rules; this module owns the lists of files
+ * those rules exempt. They are split because the exemption lists grow with the
+ * codebase while the rules do not, and the gate itself is bound by the same
+ * 500-line limit it enforces — a limit it reached. Every entry here is a
+ * reviewed decision that one named file may do something the rest of the
+ * repository may not.
+ */
+
+/**
+ * What counts as naming secret material, kept beside the exemption list it is
+ * paired with so a test can pin it. The session credential accessors and the
+ * vault decrypt count too, so renaming the local that holds their result
+ * cannot carry a vault read out of the approved boundary modules (audit #163:
+ * the trust-set vault read must stay inside those modules).
+ */
+export const SECRET_MATERIAL_PATTERN =
+  /\b(?:accountSecrets|getPassphrase|mnemonic|mnemonicPassphrase|passphrase|peekPassphrase|privateKey|readVault|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
+
+/**
+ * Modules permitted to name secret material. Each one sits on a key, vault, or
+ * signing boundary where the field names are unavoidable; everywhere else,
+ * naming them is the signal that secret material has leaked out of its
+ * boundary.
+ */
+export const SECRET_MATERIAL_FILES = new Set([
+  // Translates raw background diagnostics into reader-facing sentences. Three
+  // of its lookup keys name secret-material fields because that is the exact
+  // text the background threw; nothing here reads, logs, or persists one.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy.ts",
+  // Split from friendly-error-copy.ts by the size budget: same contract — its
+  // lookup keys quote diagnostics that name secret-material fields verbatim.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-copy-multisig.ts",
+  // Classifies diagnostics the background threw ("Invalid mnemonic", "…signature
+  // key mismatch") by their words; matched here, never read, logged, or persisted.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal.ts",
+  // Decides whether a rejected send is known not sent; it names the Ledger
+  // catalog code "signature-verify-failed" as a lookup key and reads no secret.
+  "packages/presentation/wallet-ui/src/sidepanel/shared/submit-outcome.ts",
+  "apps/extension/src/background/ledger/account-hash-signer.ts",
+  "apps/extension/src/background/accounts/account-creation-inputs.ts",
+  // Privileged first-run boundary: the phrase is validated through Krusty and
+  // only the boolean verdict returns; the phrase is never logged or persisted.
+  "apps/extension/src/background/onboarding/onboarding-ops.ts",
+  // Import by address (issue 398): derives public keys from the phrase to match
+  // an on-chain owner; only public account metadata leaves, nothing is
+  // persisted or logged, and the phrase is never echoed.
+  "apps/extension/src/background/onboarding/address-import.ts",
+  // Builds the signHash for the recovery submissions; the phrase key signs
+  // in the platform layer and nothing is logged or persisted.
+  "apps/extension/src/background/accounts/account-recovery.ts",
+  "apps/extension/src/background/routing/account-creation-handlers.ts",
+  // Keeps the unlocked vault credential inside the privileged worker while
+  // coordinating fail-closed network/vault commits; never persists or emits it.
+  "apps/extension/src/background/runtime/active-network-mutation.ts",
+  // Claim validation split out of approval-decisions: reads the session's
+  // vault credential only to re-check a claimed approval's granted account
+  // against the vault at decision time; never logs, persists, or returns it.
+  "apps/extension/src/background/approvals/approval-claim-context.ts",
+  // Claim-time session view: wraps the session's credential accessors so a
+  // deferred executor cannot adopt a later unlock; it reads no value itself.
+  "apps/extension/src/background/approvals/approval-session.ts",
+  "apps/extension/src/background/approvals/approval-decisions.ts",
+  // Names the signature-waiter collaborator by its module path only. It holds
+  // no secret material and touches no key operations.
+  "apps/extension/src/background/approvals/approval-decision-deps.ts",
+  "apps/extension/src/background/transactions/chain-ops.ts",
+  "apps/extension/src/background/portfolio/discovery-ops.ts",
+  "apps/extension/src/background/transactions/declare-ops.ts",
+  "apps/extension/src/background/accounts/import-inputs.ts",
+  "apps/extension/src/background/ledger/ledger-ops.ts",
+  "apps/extension/src/background/ledger/ledger-sign-queue.ts",
+  "apps/extension/src/background/ledger/ledger-signer.ts",
+  "apps/extension/src/background/approvals/signature-waiters.ts",
+  "apps/extension/src/background/index.ts",
+  "apps/extension/src/background/routing/message-inputs.ts",
+  // Wires collaborators by name only. Its sole match is the `./signature-waiters`
+  // import path; it holds no secret material and touches no key operations.
+  "apps/extension/src/background/routing/message-context.ts",
+  "apps/extension/src/background/routing/messages.ts",
+  "apps/extension/src/background/provider/provider-grant.ts",
+  "apps/extension/src/background/provider/provider-ops.ts",
+  // Multisig dapp signing and submission. They read the vault to find the
+  // local signer and return the account aggregate. The credential is only
+  // forwarded to the existing hash signer.
+  "apps/extension/src/background/provider/multisig-dapp-sign.ts",
+  "apps/extension/src/background/provider/multisig-dapp-invoke.ts",
+  // Re-resolves the granted account before a typed-data signature. It peeks
+  // the session only to read grants, then forwards that credential to the
+  // existing signer. Nothing here is logged, persisted, or returned.
+  "apps/extension/src/background/transactions/sign-grant.ts",
+  "apps/extension/src/background/settings/origins-ops.ts",
+  "apps/extension/src/background/privacy/strk20-account-context.ts",
+  // Approved-request execution split out of strk20-ops.ts: it re-resolves the
+  // granted account behind a non-renewing session peek and hands the unlocked
+  // vault credential straight to the protected signer wiring. Same boundary,
+  // same rule — never logged, persisted, or returned across a message.
+  "apps/extension/src/background/privacy/strk20-approval-execution.ts",
+  // Records used shadow-account scopes (#443): hands the unlocked vault
+  // credential straight to the vault's record method. Never logged or returned.
+  "apps/extension/src/background/privacy/strk20-shadow-scopes.ts",
+  // Shadow accounts view (#443): reads the account's scope records with the
+  // unlocked vault credential, like the other privileged privacy journeys.
+  "apps/extension/src/background/privacy/strk20-shadow-ops.ts",
+  // Queues approvals only. Since the execution half moved out, its sole match
+  // is the `./signature-waiters` import path; no secret material transits here.
+  "apps/extension/src/background/privacy/strk20-ops.ts",
+  // Registration queueing split out of strk20-ops.ts by size. Like it, the sole
+  // match is the `./signature-waiters` import path; no secret material transits.
+  "apps/extension/src/background/privacy/strk20-register-ops.ts",
+  // Active-account context split from strk20-wallet-ops; the vault passphrase
+  // only transits into the protected signer wiring, never logged or stored.
+  "apps/extension/src/background/privacy/strk20-op-context.ts",
+  // Compares a pool public key with the public x-coordinate the vault would
+  // register. The vault credential only transits into that preview; the
+  // viewing key stays in the vault and nothing here is logged or stored.
+  "apps/extension/src/background/privacy/strk20-registration-owner.ts",
+  "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
+  "apps/extension/src/background/runtime/runtime-state.ts",
+  "apps/extension/src/background/runtime/runtime-types.ts",
+  "apps/extension/src/background/runtime/session.ts",
+  "packages/platform/ledger-protocol/src/broker.ts",
+  "apps/extension/src/background/routing/unlock-errors.ts",
+  "apps/extension/src/background/accounts/wallet-ops.ts",
+  // Deploy handlers split from wallet-ops (issue 431); the vault passphrase only
+  // transits into the protected hash-signer wiring, never logged or stored.
+  "apps/extension/src/background/accounts/deploy-account-ops.ts",
+  // Public-send review and broadcast split from wallet-ops. The session
+  // credential only transits into the hash signer; it is never logged,
+  // persisted, or returned.
+  "apps/extension/src/background/accounts/transfer-ops.ts",
+  "apps/extension/src/background/accounts/wallet-reader.ts",
+  "apps/extension/src/background/ledger/ledger-inputs.ts",
+  "packages/platform/kms-krusty/src/adapter.ts",
+  "packages/foundation/wallet-model/src/accounts/signing.ts",
+  // Pure length policy only; carries no passphrase value across a boundary.
+  "packages/foundation/wallet-model/src/preferences/passphrase.ts",
+  // Setup meter only: scores the typed value in the UI and keeps nothing.
+  "packages/foundation/wallet-model/src/preferences/passphrase-strength.ts",
+  "packages/testing/testkit/src/fake-kms.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses-ledger.ts",
+  "packages/foundation/wallet-protocol/src/provider/results.ts",
+  "packages/foundation/wallet-protocol/src/provider/bridge.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/gate-views.ts",
+  "packages/platform/ledger-protocol/src/client.ts",
+  "packages/platform/ledger-protocol/src/errors.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/first-run.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/onboard-entry.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/runtime-client.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-session.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-views.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-phrase-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
+  "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/import-key-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
+  // Setup strength meter: reads the typed vault credential only to score and
+  // describe it; nothing is stored, logged, or sent.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-meter.ts",
+  // Show/hide on a passphrase being created: names the field in its own
+  // accessible label and flips the input type. It never reads the value.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/passphrase-reveal.ts",
+  // Weak-credential acknowledgement shared by the software and Ledger setup
+  // flows: reads the typed vault credential only to decide whether to reveal a
+  // checkbox and whether the step may proceed. It holds no reference to the
+  // value, stores nothing, and sends nothing.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
+  // Recovery discovery keeps the phrase and vault credential only in the
+  // first-run DOM closure and forwards them to the privileged background.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-account-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-import-bind.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-word-assist.ts",
+  // Locked-gate UI forwards the passphrase to the privileged background and
+  // neither persists it nor renders it.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/unlock-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
+  // Privileged UI message client: credentials transit directly to the
+  // background and are never retained or rendered here.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime-accounts.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-runtime.ts",
+  // Public Argent multisig packages and verified signature fragments cross
+  // these UI boundaries; no private signing material is ever present.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-model.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-ui.ts",
+  // Public intent packages and verified public signature fragments only; all
+  // private signing remains inside the privileged background/Krusty boundary.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-intent-ui.ts",
+  // Renders public signature-fragment transport controls only; private signing
+  // remains behind the privileged background accountHashSigner boundary.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-intent-actions.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-views.ts",
+  "packages/features/transactions/src/routing/ledger-verify.ts",
+  // Pure public-key verification consolidated for Ledger and KMS probe
+  // callers; it receives no private key or vault credential.
+  "packages/platform/starknet/src/transactions/signature-verify.ts",
+  // Public account ABI serialization and signer façades. These files carry
+  // public keys/signature fragments; private-key operations remain in Krusty.
+  "packages/platform/starknet/src/accounts/account-contracts.ts",
+  "packages/platform/starknet/src/rpc/account-signer.ts",
+  "packages/platform/starknet/src/rpc/multisig-invoke.ts",
+  "packages/platform/starknet/src/rpc/rpc-estimate.ts",
+  "packages/platform/starknet/src/transactions/declare.ts",
+  "packages/platform/starknet/src/transactions/deployment.ts",
+  "packages/platform/starknet/src/rpc/provider.ts",
+  "packages/platform/starknet/src/rpc/rpc.ts",
+  "packages/features/privacy/src/policy/call-set-signer.ts",
+  "packages/features/privacy/src/sdk/official-sdk-service.ts",
+  // CallSet signing and viewing-key wiring extracted from official-sdk-service;
+  // same Krusty-delegated boundary, no secret ever stored or logged here.
+  "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
+  "packages/features/privacy/src/paymaster/paymaster.ts",
+  // Sponsored first shield (mc-wallet 789): posts the user's outside-execution
+  // signature to the sponsor's relay, and the typed-data signer split from
+  // official-sdk-service. Public fragments only; signing stays in Krusty.
+  "packages/features/privacy/src/paymaster/sponsored-shield.ts",
+  "packages/features/privacy/src/sdk/official-sdk-sponsored.ts",
+  // Posts the outside-execution signature the gasless gateway requires.
+  // The field is public; private signing stays in Krusty via signHash.
+  "packages/features/transactions/src/gasless/gasless-submit.ts",
+  "packages/features/privacy/src/service.ts",
+  // Multisig STRK20 CallSet records. Fragments are public Stark pairs. The
+  // shared scalar is redacted before it reaches this module and is only
+  // substituted while recomputing the digest.
+  "packages/features/privacy/src/multisig/records.ts",
+  // Relay invites carry the same public Stark fragments as CallSet records.
+  // The proof never enters this module.
+  "packages/features/privacy/src/multisig/relay-invite.ts",
+  // Multisig STRK20 prove path. Holds the vault credential only long enough
+  // to read the shared scalar and to sign a fragment, and returns neither.
+  "apps/extension/src/background/multisig/multisig-strk20-session.ts",
+  "apps/extension/src/background/multisig/multisig-strk20-prove.ts",
+  "apps/extension/src/background/multisig/multisig-strk20-actions.ts",
+  // Relay fragment collection. The vault credential only transits into the
+  // hash signer. Proof bytes stay on this device and are never wrapped.
+  "apps/extension/src/background/multisig/multisig-strk20-relay.ts",
+  // Co-owner package import. The vault credential only transits into the
+  // vault read of the shared scalar, which never leaves the binding check.
+  "apps/extension/src/background/multisig/multisig-strk20-import.ts",
+  // Argent multisig stores public signer identifiers and verified public
+  // signature fragments only. Private signing remains behind Krusty and the
+  // privileged background accountHashSigner boundary.
+  "packages/features/multisig/src/chain.ts",
+  "packages/features/multisig/src/deploy.ts",
+  "packages/features/multisig/src/repository-schema.ts",
+  "apps/extension/src/background/multisig/multisig-deploy-ops.ts",
+  "apps/extension/src/background/multisig/multisig-inputs.ts",
+  // Explicit user-triggered coordination keeps the vault credential inside the
+  // privileged worker while Krusty opens or wraps payloads; it is never stored.
+  "apps/extension/src/background/multisig/multisig-coordination-ops.ts",
+  // Gift-wrap publication. The passphrase transits into Krusty; the payload
+  // is not inspected or logged here.
+  "apps/extension/src/background/multisig/multisig-nostr-publish.ts",
+  // Multisig STRK20 viewing-key share (#826). The key is wrapped for each
+  // co-owner and is never placed on a response.
+  "apps/extension/src/background/multisig/multisig-strk20-key-ops.ts",
+  "apps/extension/src/background/multisig/multisig-tx-ops.ts",
+  "packages/platform/vault/src/accounts/account-secrets.ts",
+  "packages/platform/vault/src/encrypted-store.ts",
+  "packages/platform/vault/src/kms-port.ts",
+  "packages/platform/vault/src/schema/migrations.ts",
+  "packages/platform/vault/src/schema/schema-types.ts",
+  "packages/platform/vault/src/schema/schema.ts",
+  // Imported-seed validators split from schema.ts on the size budget; they name
+  // the retained phrase field only to validate it inside the vault.
+  "packages/platform/vault/src/schema/schema-seeds.ts",
+  "packages/platform/vault/src/schema/store-migration.ts",
+  "packages/platform/vault/src/accounts/accounts.ts",
+  // Split from accounts.ts by the size budget: same boundary, same rules — the
+  // mnemonic and derived keys pass through to the encrypted vault, unlogged.
+  "packages/platform/vault/src/accounts/derivation-core.ts",
+  // Assembles the Braavos 2FA-removal request through the signing boundary;
+  // the phrase key signs here and nothing is logged or persisted.
+  "packages/platform/starknet/src/transactions/braavos-recovery.ts",
+  // Assembles the Ready guardian-escape request through the signing boundary;
+  // the phrase key signs here and nothing is logged or persisted.
+  "packages/platform/starknet/src/transactions/argent-recovery.ts",
+  "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
+  // Multisig STRK20 viewing keys (#826): generated in the vault, stored only
+  // here, and wrapped for co-owners. The key never enters a message or the UI.
+  "packages/platform/vault/src/accounts/multisig-strk20-key.ts",
+  "packages/platform/vault/src/service/multisig-strk20-key.ts",
+  "packages/platform/vault/src/accounts/network-account.ts",
+  "packages/platform/vault/src/service/reveal.ts",
+  "packages/platform/vault/src/service/service-creation.ts",
+  // Atomic recovery re-derives selected accounts and writes their protected
+  // keys directly into the encrypted vault; no secret is returned or logged.
+  "packages/platform/vault/src/service/recovery.ts",
+  // Wallet-level Nostr derivation and application-data crypto stay behind the
+  // same encrypted-vault/Krusty boundary and never return private material.
+  "packages/platform/vault/src/service/nostr.ts",
+  "packages/platform/vault/src/service/service.ts",
+  // Shadow-account scope records (#443): reads and writes the encrypted vault
+  // with the caller's vault passphrase, like every other vault service method.
+  "packages/platform/vault/src/service/shadow-account-scopes.ts",
+  "packages/platform/vault/src/service/service-types.ts",
+]);

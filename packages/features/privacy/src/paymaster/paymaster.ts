@@ -5,26 +5,31 @@
  * relay instead.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
-} from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/provider";
+import { isPaymasterAuthorizationLive } from "@bramble/transactions/outside-execution-window";
+import type { PaymasterHttp } from "@bramble/transactions/paymaster-http";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
+  STRK_TOKEN_ADDRESS,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-model/networks";
+import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import { CallData, hash } from "starknet";
 import type { Strk20PaymasterConfig } from "../config";
-import { sanitizeStrk20Detail } from "../sdk/official-sdk-errors";
+import type { Strk20FeeBound } from "../policy/fee-policy";
 import { STRK20_SUBMISSION_UNAVAILABLE, type Strk20PrivateRelayPlan } from "../service";
+import { reviewedFeeCeiling, withinFeeBound } from "./fee-bound";
+import { BROADCAST_PAYMASTER_METHOD, rpc } from "./paymaster-rpc";
 
-import { bindPaymasterTypedData, isPaymasterAuthorizationLive } from "./paymaster-typed-data";
+import { bindPaymasterTypedData } from "./paymaster-typed-data";
 
 type PaymasterCall = {
   readonly calldata: readonly string[];
@@ -32,14 +37,7 @@ type PaymasterCall = {
   readonly to: string;
 };
 
-type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 const PARAMETERS = { version: "0x1" } as const;
-const PAYMASTER_TIMEOUT_MS = 30_000;
-const MAX_PAYMASTER_RESPONSE_BYTES = 1024 * 1024;
-// The one relay method that puts a transaction on the wire, mirroring
-// `BROADCAST_RPC_METHODS` in `../provider`: only a broadcast-capable call can
-// leave a write in flight, so only it may mint the ambiguity marker.
-const BROADCAST_PAYMASTER_METHOD = "paymaster_executeTransaction";
 
 const requirePaymasterFelt = (value: string, allowZero: boolean): string => {
   const canonical = canonicalFelt(value);
@@ -79,43 +77,12 @@ const paymasterCall = (call: Call): PaymasterCall => {
 const quoteRejected = (reason: string): WalletError =>
   new WalletError(`${STRK20_SUBMISSION_UNAVAILABLE}: ${reason}`);
 
-// The one piece of a JSON-RPC error worth showing is the reason, and the relay
-// nests it: an execution rejection arrives as `data.execution_error`, not as a
-// plain string. Reading only string `data` reduced every such rejection to a
-// bare "TRANSACTION_EXECUTION_ERROR" with the actual cause thrown away.
-const reportedDetails = (data: unknown): readonly string[] => {
-  if (typeof data === "string") {
-    return [data];
-  }
-  if (!isRecord(data)) {
-    return [];
-  }
-  return Object.values(data).filter((value): value is string => typeof value === "string");
-};
-
-const relayReportedError = (method: string, reported: unknown): WalletError => {
-  // An execute error may echo the submitted proof. Proof values are allowed to
-  // be short, so no pattern sanitizer can distinguish them reliably from a
-  // useful reason. Keep that post-proof boundary generic; quote failures carry
-  // no proof and may retain a bounded, sanitized diagnostic.
-  if (method === BROADCAST_PAYMASTER_METHOD) {
-    return new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-  }
-  const detail = sanitizeStrk20Detail(
-    isRecord(reported)
-      ? [reported["message"], ...reportedDetails(reported["data"])].join(": ")
-      : String(reported),
-  );
-  return new WalletError(
-    detail === ""
-      ? STRK20_SUBMISSION_UNAVAILABLE
-      : `${STRK20_SUBMISSION_UNAVAILABLE}: the private relay rejected the request (${detail})`,
-  );
-};
-
-const feeMode = (config: Strk20PaymasterConfig) => ({
+// The token the relay is told to collect its fee in. A quote names the token
+// it is asking about; a submission names the token of the frozen fee action it
+// carries, never the ambient configuration (#355).
+const feeMode = (feeToken: string) => ({
   mode: "sponsored_private",
-  pool_fee_token: requirePaymasterFelt(config.feeToken, false),
+  pool_fee_token: requirePaymasterFelt(feeToken, false),
   tip: "normal",
 });
 
@@ -185,124 +152,6 @@ const isQuoteParameters = (value: unknown, feeToken: string): boolean => {
   );
 };
 
-const readBoundedResponse = async (response: Response): Promise<string | null> => {
-  const declaredLength = response.headers.get("content-length");
-  if (
-    declaredLength !== null &&
-    (!/^[0-9]+$/.test(declaredLength) || Number(declaredLength) > MAX_PAYMASTER_RESPONSE_BYTES)
-  ) {
-    return null;
-  }
-  const reader = response.body?.getReader();
-  if (!reader) {
-    return null;
-  }
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      length += value.byteLength;
-      if (length > MAX_PAYMASTER_RESPONSE_BYTES) {
-        await reader.cancel();
-        return null;
-      }
-      chunks.push(value);
-    }
-  } catch {
-    return null;
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
-};
-
-// A relay answer the wallet could not read is not the same thing as a relay
-// refusal. Once `paymaster_executeTransaction` has left the wallet, the relay
-// may already have forwarded the transaction while its reply was truncated,
-// oversized, unparseable, or ended by this client's own deadline — so that case
-// carries the same ambiguity marker `runRpcBroadcast` mints on the JSON-RPC
-// lane, and every layer above (the maturity scope in particular) holds its
-// state closed instead of releasing it for a retry over a possibly-live write.
-//
-// Quote calls never broadcast, so their failures stay determinate; so does a
-// refusal the relay states for itself, whether as a JSON-RPC error object or an
-// HTTP status of its own choosing. This closes the lossy-channel case, not a
-// relay that lies about having rejected a transaction it forwarded — no
-// classification at this boundary can, and the relay URL is wallet-configured
-// rather than dapp-supplied for exactly that reason.
-const lostAnswer = (method: string): WalletError =>
-  method === BROADCAST_PAYMASTER_METHOD
-    ? new IndeterminateRpcWriteError(INDETERMINATE_RPC_WRITE_MESSAGE)
-    : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-
-// An expired request deadline is the one send-side failure that is ambiguous:
-// the request was written and this client stopped waiting for the answer. Every
-// other rejection here (DNS, refused connection, a refused redirect) means no
-// exchange took place. `AbortSignal.timeout` surfaces as this exact
-// `DOMException`, and the transport is wallet-chosen, never remote-controlled.
-const isDeadlineExpiry = (error: unknown): boolean =>
-  error instanceof DOMException && error.name === "TimeoutError";
-
-const rpc = async (
-  http: PaymasterHttp,
-  url: string,
-  method: string,
-  params: unknown,
-): Promise<unknown> => {
-  let response: Response;
-  try {
-    response = await http(url, {
-      body: JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0", method, params }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      signal: AbortSignal.timeout(PAYMASTER_TIMEOUT_MS),
-    });
-  } catch (error) {
-    throw isDeadlineExpiry(error)
-      ? lostAnswer(method)
-      : new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-  }
-  if (!response.ok) {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-  }
-  let body: unknown;
-  try {
-    const text = await readBoundedResponse(response);
-    if (text === null) {
-      throw new Error("invalid response");
-    }
-    body = JSON.parse(text);
-  } catch {
-    throw lostAnswer(method);
-  }
-  if (
-    !isRecord(body) ||
-    !hasOnlyKnownKeys(body, ["error", "id", "jsonrpc", "result"]) ||
-    body["jsonrpc"] !== "2.0" ||
-    body["id"] !== "mc-wallet-strk20"
-  ) {
-    throw lostAnswer(method);
-  }
-  const reported = body["error"];
-  if (reported !== undefined) {
-    throw relayReportedError(method, reported);
-  }
-  if (!Object.hasOwn(body, "result")) {
-    throw lostAnswer(method);
-  }
-  return body["result"];
-};
-
 const readFeeAction = (value: unknown): Strk20PrivateRelayPlan["feeAction"] | null =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["amount", "recipient", "token", "type"]) &&
@@ -330,7 +179,7 @@ export const buildStrk20PaymasterPlan = async (input: {
   readonly approveCalls: readonly Call[];
   readonly chainId: string;
   readonly config: Strk20PaymasterConfig;
-  readonly expectedFeeAmount: bigint;
+  readonly feeBound: Strk20FeeBound;
   readonly http?: PaymasterHttp;
   readonly nowSeconds: number;
   readonly poolAddress: string;
@@ -338,7 +187,7 @@ export const buildStrk20PaymasterPlan = async (input: {
   const hasApprovals = input.approveCalls.length > 0;
   const expectedType = hasApprovals ? "invoke_and_apply_action" : "apply_action";
   const result = await rpc(input.http ?? fetch, input.config.url, "paymaster_buildTransaction", {
-    parameters: { ...PARAMETERS, fee_mode: feeMode(input.config) },
+    parameters: { ...PARAMETERS, fee_mode: feeMode(input.config.feeToken) },
     transaction: hasApprovals
       ? {
           apply_action: { pool_address: requirePaymasterFelt(input.poolAddress, false) },
@@ -378,22 +227,23 @@ export const buildStrk20PaymasterPlan = async (input: {
     : undefined;
   // A relay fee withdrawn to the user's public account would link the private
   // action to that account on-chain. Compare numerically so padding cannot
-  // bypass the boundary. For the wallet's STRK-only relay route, the quoted
-  // amount must also equal the pool's independently-read on-chain fee: AVNU's
-  // sponsored-private STRK path applies neither conversion nor overhead to it.
-  // A mixed route also identifies the forwarder as the typed-data caller, so
+  // bypass the boundary. The quoted amount must additionally satisfy the
+  // route's fee bound — an exact match against the pool's on-chain charge on
+  // the STRK route, an independently derived ceiling on a converted one. A
+  // mixed route also identifies the forwarder as the typed-data caller, so
   // bind the fee recipient to that independently reviewed field.
   if (
     !feeAction ||
     !sameFelt(feeAction.token, input.config.feeToken) ||
     sameFelt(feeAction.recipient, input.accountAddress) ||
-    !sameFelt(feeAction.amount, input.expectedFeeAmount.toString()) ||
+    !withinFeeBound(feeAction.amount, input.feeBound) ||
     (boundTypedData ? !sameFelt(feeAction.recipient, boundTypedData.review.caller) : false)
   ) {
     throw quoteRejected("the relay returned a fee outside the reviewed route");
   }
+  const feeCeiling = reviewedFeeCeiling(input.feeBound);
   if (!hasApprovals) {
-    return { feeAction, mode: "private-relay" };
+    return { feeAction, ...feeCeiling, mode: "private-relay" };
   }
   if (!boundTypedData) {
     throw quoteRejected("the relay returned no usable typed data for the public approvals");
@@ -401,8 +251,34 @@ export const buildStrk20PaymasterPlan = async (input: {
   return {
     authorization: boundTypedData.review,
     feeAction,
+    ...feeCeiling,
     mode: "private-relay",
     typedData: boundTypedData.typedData,
+  };
+};
+
+// The public half of an `invoke_and_apply_action`: the reviewed typed data,
+// signed only while its execution window still has ten seconds to run.
+const signedPublicInvoke = async (
+  input: {
+    readonly accountAddress: string;
+    readonly nowSeconds: number;
+    readonly signTypedData: (typedData: unknown) => Promise<readonly string[]>;
+  },
+  typedData: unknown,
+  authorization: NonNullable<Strk20PrivateRelayPlan["authorization"]>,
+): Promise<{
+  readonly signature: readonly string[];
+  readonly typed_data: unknown;
+  readonly user_address: string;
+}> => {
+  if (!isPaymasterAuthorizationLive(authorization, input.nowSeconds, 10n)) {
+    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  }
+  return {
+    signature: await input.signTypedData(typedData),
+    typed_data: typedData,
+    user_address: requirePaymasterFelt(input.accountAddress, false),
   };
 };
 
@@ -420,12 +296,17 @@ export const buildStrk20PaymasterPlan = async (input: {
  * hash in it) throws an {@link IndeterminateRpcWriteError} instead: the relay
  * may already have forwarded the transaction, so the caller must hold its state
  * closed rather than retry.
+ *
+ * `isAuthorized` is the unlock-session guard. It is read immediately before
+ * the broadcast, after any typed-data signature, so a lock during proving or
+ * signing refuses the relay with `wallet locked` before anything is sent.
  */
 export const submitStrk20PaymasterPlan = async (input: {
   readonly accountAddress: string;
   readonly call: Call;
   readonly config: Strk20PaymasterConfig;
   readonly http?: PaymasterHttp;
+  readonly isAuthorized: () => boolean;
   readonly nowSeconds: number;
   readonly plan: Strk20PrivateRelayPlan;
   readonly proof: Strk20Proof;
@@ -436,25 +317,35 @@ export const submitStrk20PaymasterPlan = async (input: {
   if ((authorization === undefined) !== (typedData === undefined)) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
-  let invoke:
-    | {
-        readonly signature: readonly string[];
-        readonly typed_data: unknown;
-        readonly user_address: string;
-      }
-    | undefined;
-  if (typedData !== undefined && authorization !== undefined) {
-    if (!isPaymasterAuthorizationLive(authorization, input.nowSeconds, 10n)) {
-      throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
-    }
-    invoke = {
-      signature: await input.signTypedData(typedData),
-      typed_data: typedData,
-      user_address: requirePaymasterFelt(input.accountAddress, false),
-    };
+  // The route the relay validates must be the one the user reviewed. The
+  // frozen fee action is that route, so its token — not the configured
+  // default the quote may have converted away from — names the fee mode. A
+  // plan denominated in another token is only admissible when it carries the
+  // ceiling it was admitted under; without one it was never quoted this way.
+  // STRK is the exception: its fee is matched exactly against the pool's
+  // charge and carries no ceiling, and the quote prefers it for a STRK-only
+  // batch whatever token is configured (Sherlock 233).
+  const feeToken = input.plan.feeAction.token;
+  if (
+    !sameFelt(feeToken, input.config.feeToken) &&
+    !sameFelt(feeToken, STRK_TOKEN_ADDRESS) &&
+    input.plan.feeCeiling === undefined
+  ) {
+    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  }
+  const invoke =
+    typedData !== undefined && authorization !== undefined
+      ? await signedPublicInvoke(input, typedData, authorization)
+      : undefined;
+  // The proof can take minutes and typed-data signing awaits RPC reads, so the
+  // session may have been locked since the last signer check. This is the last
+  // point before the broadcast, matching the public lane's check before
+  // `execute`.
+  if (!input.isAuthorized()) {
+    throw new WalletError("wallet locked");
   }
   const result = await rpc(input.http ?? fetch, input.config.url, BROADCAST_PAYMASTER_METHOD, {
-    parameters: { ...PARAMETERS, fee_mode: feeMode(input.config) },
+    parameters: { ...PARAMETERS, fee_mode: feeMode(feeToken) },
     transaction: {
       apply_action: {
         apply_actions_call: paymasterCall(input.call),

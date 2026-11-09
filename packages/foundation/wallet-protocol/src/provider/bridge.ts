@@ -2,17 +2,17 @@
  * Pure provider bridge rules shared by the injected page script and content script.
  */
 
-import { isUuid } from "@mc-wallet/core/ids";
-import type { Json } from "@mc-wallet/core/json";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
+import { isUuid } from "@bramble/core/ids";
+import type { Json } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isWalletOrigin } from "@bramble/core/origin";
 import {
   providerStrk20Balances,
   providerStrk20CallAndProof,
   readStrk20BalancesParams,
   readStrk20InvokeParams,
   readStrk20PrepareParams,
-  readStrk20SubaccountCommitmentParams,
+  readStrk20ShadowAccountCommitmentParams,
   type Strk20BalanceEntry,
   type Strk20CallAndProof,
 } from "../privacy/strk20-bridge";
@@ -20,7 +20,7 @@ import { readProviderChain } from "../transactions/add-chain";
 import { readProviderDeclare } from "../transactions/declare";
 import { providerDeploymentResult } from "../transactions/deployment";
 import { providerInvokeRequest } from "../transactions/invoke";
-import { readProviderWatchAsset } from "../transactions/watch-asset";
+import { readProviderWatchAsset, readProviderWatchNft } from "../transactions/watch-asset";
 import { isProviderMethod, type ProviderMethod } from "./methods";
 import { readProviderParams } from "./request-params";
 import {
@@ -36,18 +36,18 @@ import {
   providerStringArrayResult,
   providerSwitchChainId,
   readApiVersionParam,
-  readTypedDataParam,
   toProviderPayload as toProviderPayloadResult,
 } from "./results";
-import { unknownError, type WalletRpcError } from "./rpc-errors";
+import { invalidRequestPayload, unknownError, type WalletRpcError } from "./rpc-errors";
 import type { RuntimeMessage } from "./runtime-message";
+import { readTypedDataParam } from "./typed-data-params";
 
 /** Marker for page-to-content wallet provider requests.
  */
-export const CONTENT_TARGET = "mc-wallet:content";
+export const CONTENT_TARGET = "bramble:content";
 /** Marker for content-to-page wallet provider responses.
  */
-export const PAGE_TARGET = "mc-wallet:page";
+export const PAGE_TARGET = "bramble:page";
 /** Maximum unresolved in-page provider requests kept in memory.
  */
 export const MAX_PENDING_PROVIDER_REQUESTS = 100;
@@ -157,10 +157,19 @@ export const canQueueProviderRequest = (pendingCount: number): boolean =>
   pendingCount >= 0 &&
   pendingCount < MAX_PENDING_PROVIDER_REQUESTS;
 
+// `{ method, params: undefined }` is how a dapp spells "no params" when it
+// forwards an optional argument; it means the same as leaving `params` out,
+// and refusing it broke spec-following callers (Sherlock 254).
+const withoutUndefinedParams = (raw: unknown): unknown =>
+  isRecord(raw) && Object.hasOwn(raw, "params") && raw["params"] === undefined
+    ? Object.fromEntries(Object.entries(raw).filter(([key]) => key !== "params"))
+    : raw;
+
 /**
  * Parses direct dapp calls to the injected provider request function.
  */
-export const readProviderRequestArguments = (value: unknown): ProviderRequestArguments | null => {
+export const readProviderRequestArguments = (raw: unknown): ProviderRequestArguments | null => {
+  const value = withoutUndefinedParams(raw);
   if (
     isRecord(value) &&
     hasOnlyKnownKeys(value, ["method", "params"]) &&
@@ -312,7 +321,9 @@ const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
     versionedMessage(params, origin, "wallet.deploymentData"),
   wallet_watchAsset: (params, origin) => {
     const asset = readProviderWatchAsset(params);
-    return asset ? { asset, origin, type: "wallet.watchAsset" } : null;
+    if (asset) return { asset, origin, type: "wallet.watchAsset" };
+    const nft = readProviderWatchNft(params);
+    return nft ? { nft, origin, type: "wallet.watchAsset" } : null;
   },
   wallet_addInvokeTransaction: (params, origin) => {
     const input = providerInvokeRequest(params);
@@ -356,14 +367,14 @@ const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
     const actions = readStrk20InvokeParams(params);
     return actions ? { actions, origin, type: "wallet.strk20InvokeTransaction" } : null;
   },
-  wallet_strk20SubaccountCommitment: (params, origin) => {
-    const input = readStrk20SubaccountCommitmentParams(params);
+  wallet_strk20ShadowAccountCommitment: (params, origin) => {
+    const input = readStrk20ShadowAccountCommitmentParams(params);
     return input
       ? {
           dappName: input.dappName,
           ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
           origin,
-          type: "wallet.strk20SubaccountCommitment",
+          type: "wallet.strk20ShadowAccountCommitment",
         }
       : null;
   },
@@ -407,8 +418,8 @@ const runtimeBuilderFor = (method: ProviderMethod): RuntimeBuilder => {
       return RUNTIME_BUILDERS.wallet_strk20InvokeTransaction;
     case "wallet_strk20PrepareInvoke":
       return RUNTIME_BUILDERS.wallet_strk20PrepareInvoke;
-    case "wallet_strk20SubaccountCommitment":
-      return RUNTIME_BUILDERS.wallet_strk20SubaccountCommitment;
+    case "wallet_strk20ShadowAccountCommitment":
+      return RUNTIME_BUILDERS.wallet_strk20ShadowAccountCommitment;
     case "wallet_switchStarknetChain":
       return RUNTIME_BUILDERS.wallet_switchStarknetChain;
     case "wallet_watchAsset":
@@ -426,6 +437,28 @@ export const toRuntimeMessage = (
   isProviderMethod(request.method) && isWalletOrigin(origin)
     ? runtimeBuilderFor(request.method)(request.params, origin)
     : null;
+
+/**
+ * Builds the page-targeted invalid-request response for a message that is
+ * addressed to the content bridge (correct target, well-formed request id) but
+ * fails {@link readProviderRequest}. Without it such a message would be
+ * dropped silently and the page's pending promise would hang forever; with it
+ * the page gets a deterministic rejection. Returns null for anything that is
+ * not addressed to the bridge — foreign window traffic must never receive a
+ * response — and for messages readProviderRequest accepts.
+ */
+export const misaddressedProviderResponse = (value: unknown): ProviderResponse | null => {
+  if (
+    !isRecord(value) ||
+    value["target"] !== CONTENT_TARGET ||
+    typeof value["id"] !== "string" ||
+    !isUuid(value["id"]) ||
+    readProviderRequest(value) !== null
+  ) {
+    return null;
+  }
+  return { error: invalidRequestPayload(), id: value["id"], target: PAGE_TARGET };
+};
 
 /**
  * Builds a page-targeted provider response for the in-page script.

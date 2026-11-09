@@ -6,20 +6,27 @@
  * deployment data is still gated to an origin that holds a connection grant.
  */
 
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { accountDeployment } from "@mc-wallet/starknet/deployment";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import { API_VERSION_PATTERN } from "@mc-wallet/wallet-protocol/results";
-import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@mc-wallet/wallet-protocol/versions";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { normalizeWalletOrigin } from "@bramble/core/origin";
+import type { MultisigStore } from "@bramble/multisig/repository";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { accountDeployment } from "@bramble/starknet/deployment";
+import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { API_VERSION_PATTERN } from "@bramble/wallet-protocol/results";
+import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@bramble/wallet-protocol/versions";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import { presentedVaultAccount } from "../provider/dapp-account";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { PassiveUnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 
 /**
  * Re-exported from the single-source versions module so callers importing them
@@ -31,8 +38,10 @@ export { SUPPORTED_SPECS, SUPPORTED_WALLET_API };
  * Dependencies shared by the read-only discovery operation handlers.
  */
 export type DiscoveryOpsDeps = {
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   /**
@@ -80,10 +89,18 @@ type DiscoveryOpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
-const handleSupportedVersions: DiscoveryOpsHandler = async (_deps, messageType, message) => {
+const handleSupportedVersions: DiscoveryOpsHandler = async (deps, messageType, message, sender) => {
   const input = readDiscoveryInput(message, messageType);
   if (!input) {
     return { error: "invalid discovery request" };
+  }
+  // Same perimeter as every other dapp surface: a blocked origin learns
+  // nothing from this wallet, not even its supported versions (Sherlock 165).
+  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
+    return { error: "origin blocked" };
   }
   if (!apiVersionSupported(input.apiVersion)) {
     return { error: "unsupported api version" };
@@ -93,12 +110,12 @@ const handleSupportedVersions: DiscoveryOpsHandler = async (_deps, messageType, 
 };
 
 const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, message, sender) => {
-  const { extensionId, preferencesStore, runtimeRpc, session, wallet } = deps;
+  const { extension, preferencesStore, runtimeRpc, session } = deps;
   const input = readDiscoveryInput(message, "wallet.deploymentData");
   if (!input) {
     return { error: "invalid deployment data request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
@@ -107,30 +124,42 @@ const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, mes
   if (!apiVersionSupported(input.apiVersion)) {
     return { error: "unsupported api version" };
   }
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
+  const account = await presentedVaultAccount(
+    deps,
+    input.origin,
+    passphrase,
+    (stored) => stored.networkId === preferences.activeNetworkId,
+  );
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
+  if ("error" in account) return account;
   const network = STARKNET_NETWORKS[account.networkId];
   const deployed = await runtimeRpc.getDeploymentStatus({
     accountAddress: account.address,
     rpcUrls: networkRpcUrls(network, preferences),
   });
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
   if (deployed) {
     return { error: "account already deployed" };
   }
   try {
     const deployment = accountDeployment(account);
+    // starknet.js compiles constructor calldata to decimal strings, and the
+    // provider boundary accepts only hex felts, so every entry is sent as
+    // canonical hex (Sherlock 243).
+    const calldata = deployment.constructorCalldata.map(canonicalFelt);
+    if (!calldata.every((felt): felt is string => felt !== null)) {
+      return { error: "deployment data not available" };
+    }
     return {
       deployment: {
         address: deployment.contractAddress,
-        calldata: [...deployment.constructorCalldata],
+        calldata,
         classHash: deployment.classHash,
         salt: deployment.addressSalt,
         version: 1,

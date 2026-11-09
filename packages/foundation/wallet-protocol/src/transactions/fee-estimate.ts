@@ -3,7 +3,7 @@
  * the final signing boundary. Unknown denominations and malformed amounts fail
  * closed because they cannot be compared to a reviewed ceiling.
  */
-import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@bramble/core/json";
 
 /**
  * Fee amount in base units and its Starknet denomination.

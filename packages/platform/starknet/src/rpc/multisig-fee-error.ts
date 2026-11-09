@@ -1,10 +1,14 @@
 /** Actionable classification for expired Argent multisig fee-price bounds. */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import { RpcError } from "starknet";
 
 /**
  * Stable message shown when a frozen intent can no longer enter the mempool.
+ * It is only ever the answer to this wallet's own submission, which the
+ * background makes after re-reading the account nonce and finding it unchanged,
+ * so "not submitted" is the known outcome here. A stored stale intent, whose
+ * nonce a co-signer may since have used, never reuses it (audit M3).
  */
 export const ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE = "Not submitted — network fees changed.";
 

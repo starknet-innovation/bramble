@@ -1,6 +1,6 @@
-import { RpcProvider } from "starknet";
 import { PRIVACY_POOL_ADDRESS } from "../../../shared/privacy";
 import { STARKNET_NETWORKS } from "../support/networks";
+import { createBoundedProvider } from "../support/provider";
 
 const FELT = /^0x[0-9a-fA-F]{1,64}$/;
 
@@ -32,9 +32,7 @@ const readSingleFelt = (value: unknown): string => {
  */
 export const readPrivacyPool = async (
   call: PoolCall = async (entrypoint) => {
-    const provider = new RpcProvider({
-      nodeUrl: STARKNET_NETWORKS.SN_MAIN.rpcUrls[0],
-    });
+    const provider = createBoundedProvider(STARKNET_NETWORKS.SN_MAIN.rpcUrls[0]);
     return provider.callContract({
       calldata: [],
       contractAddress: PRIVACY_POOL_ADDRESS,

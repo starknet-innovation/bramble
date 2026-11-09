@@ -3,33 +3,39 @@
  * Both reject unknown keys and malformed derivation indices before anything
  * reaches the Krusty KMS boundary.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
-import type { CreateVaultAccountInput } from "@mc-wallet/vault/service";
-import type { RecoverVaultAccountsInput } from "@mc-wallet/vault/service-types";
-import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import type { AccountDerivationInput } from "@bramble/vault/accounts";
+import type { CreateVaultAccountInput } from "@bramble/vault/service";
+import type { RecoverVaultAccountsInput } from "@bramble/vault/service-types";
+import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
   normalizeFeltInput,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import {
   isMnemonicPassphrase,
   isMnemonicText,
   isVaultPassphrase,
-} from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/passphrase";
 import {
   isRecoveryAccountIndex,
   isRecoveryAccountSelection,
   RECOVERY_SCAN_LIMITS,
-} from "@mc-wallet/wallet-model/recovery";
+  type RecoveryAccountSelection,
+} from "@bramble/wallet-model/recovery";
 
+// Bounded by the hardened BIP-44 ceiling, the highest account index the
+// recovery flow's manual field accepts (Sherlock 253). Recovery selects by
+// account index only, so a non-zero address index is still not recoverable
+// from the phrase. Only this creation boundary narrows: stored accounts are
+// never re-validated against it.
 const readOptionalIndex = (value: unknown): number | null | undefined => {
   if (value === undefined) {
     return undefined;
   }
-  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
+  return isRecoveryAccountIndex(value) ? value : null;
 };
 
 const readDeploymentSalt = (
@@ -58,7 +64,7 @@ const readDerivationFields = (
     return null;
   }
   const accountContractType = message["accountContractType"];
-  if (!isAccountContractType(accountContractType)) {
+  if (!isCreatableAccountContractType(accountContractType)) {
     return null;
   }
   const deploymentSalt = readDeploymentSalt(message["deploymentSalt"], accountContractType);
@@ -158,6 +164,140 @@ export const readDiscoverRecoveryAccountsInput = (
     ...(message["manualIndex"] === undefined ? {} : { manualIndex: message["manualIndex"] }),
     mnemonic: message["mnemonic"],
     networkId: message["networkId"],
+  };
+};
+
+// "0x" and 64 hex digits; anything longer is not an address. Parsing beyond
+// that is left to the lookup, so a malformed one gets its own refusal.
+const ADDRESS_INPUT_MAX_LENGTH = 66;
+
+/**
+ * A pasted account address as a message may carry it: a non-empty string no
+ * longer than an address. Shared by every import-by-address message; the
+ * lookup canonicalizes it and refuses one that is not a Starknet address.
+ */
+export const isAddressInput = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= ADDRESS_INPUT_MAX_LENGTH;
+
+/**
+ * Parses a lookup of one pasted account address against a phrase the panel
+ * holds (first-run restore, or importing another phrase): the address, the
+ * phrase, and the network to read. The address is only bounded here; the
+ * lookup canonicalizes it and refuses one that is not a Starknet address.
+ */
+export const readFindRecoveryAccountByAddressInput = (
+  message: unknown,
+): {
+  readonly address: string;
+  readonly mnemonic: string;
+  readonly networkId: StarknetNetworkId;
+} | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["address", "mnemonic", "networkId", "type"]) &&
+  message["type"] === "wallet.findRecoveryAccountByAddress" &&
+  isAddressInput(message["address"]) &&
+  isMnemonicText(message["mnemonic"]) &&
+  isStarknetNetworkId(message["networkId"])
+    ? {
+        address: message["address"],
+        mnemonic: message["mnemonic"],
+        networkId: message["networkId"],
+      }
+    : null;
+
+/**
+ * Parses a lookup of one pasted account address against the wallet's OWN
+ * phrase. The message carries no phrase: the background reads it inside the
+ * vault boundary through the live unlock session.
+ */
+export const readFindOwnAccountByAddressInput = (
+  message: unknown,
+): { readonly address: string; readonly networkId: StarknetNetworkId } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["address", "networkId", "type"]) &&
+  message["type"] === "wallet.findOwnAccountByAddress" &&
+  isAddressInput(message["address"]) &&
+  isStarknetNetworkId(message["networkId"])
+    ? { address: message["address"], networkId: message["networkId"] }
+    : null;
+
+/**
+ * Parses the in-wallet imported-seed account selection. Unlike first-run
+ * recovery the unlock passphrase comes from the live session, so the message
+ * carries only the phrase, target network, and selections.
+ */
+export const readImportSeedAccountsInput = (
+  message: unknown,
+): Omit<RecoverVaultAccountsInput, "vaultPassphrase"> | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["mnemonic", "networkId", "selections", "type"]) ||
+    message["type"] !== "wallet.importSeedAccounts" ||
+    !isMnemonicText(message["mnemonic"]) ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    !Array.isArray(message["selections"]) ||
+    message["selections"].length === 0 ||
+    message["selections"].length > RECOVERY_SCAN_LIMITS.maxSelections ||
+    !message["selections"].every(isRecoveryAccountSelection)
+  ) {
+    return null;
+  }
+  return {
+    mnemonic: message["mnemonic"],
+    networkId: message["networkId"],
+    selections: message["selections"],
+  };
+};
+
+/**
+ * Parses the settings-surface discovery of the wallet's OWN accounts. The
+ * message carries no phrase and no vault credential: the background reads the
+ * wallet's own phrase inside the vault boundary through the live unlock session.
+ */
+export const readDiscoverOwnAccountsInput = (
+  message: unknown,
+): { readonly manualIndex?: number; readonly networkId: StarknetNetworkId } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["manualIndex", "networkId", "type"]) ||
+    message["type"] !== "wallet.discoverOwnAccounts" ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    (message["manualIndex"] !== undefined && !isRecoveryAccountIndex(message["manualIndex"]))
+  ) {
+    return null;
+  }
+  return {
+    ...(message["manualIndex"] === undefined ? {} : { manualIndex: message["manualIndex"] }),
+    networkId: message["networkId"],
+  };
+};
+
+/**
+ * Parses the settings-surface selection of the wallet's OWN discovered
+ * accounts. The founding phrase is taken from the live unlock session inside the
+ * vault boundary, so the panel supplies only the target network and selections.
+ */
+export const readImportOwnAccountsInput = (
+  message: unknown,
+): {
+  readonly networkId: StarknetNetworkId;
+  readonly selections: readonly RecoveryAccountSelection[];
+} | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["networkId", "selections", "type"]) ||
+    message["type"] !== "wallet.importOwnAccounts" ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    !Array.isArray(message["selections"]) ||
+    message["selections"].length === 0 ||
+    message["selections"].length > RECOVERY_SCAN_LIMITS.maxSelections ||
+    !message["selections"].every(isRecoveryAccountSelection)
+  ) {
+    return null;
+  }
+  return {
+    networkId: message["networkId"],
+    selections: message["selections"],
   };
 };
 

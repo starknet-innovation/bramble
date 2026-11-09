@@ -1,13 +1,13 @@
 /** Valid Argent multisig presentation fixtures built through the platform hash boundary. */
 
-import type { ArgentMultisigCall } from "@mc-wallet/multisig/chain";
+import type { ArgentMultisigCall } from "@bramble/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { prepareArgentMultisigInvokeV3 } from "@mc-wallet/starknet/multisig-invoke";
-import { account } from "@mc-wallet/testkit/sidepanel";
+} from "@bramble/multisig/repository";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { prepareArgentMultisigInvokeV3 } from "@bramble/starknet/multisig-invoke";
+import { account } from "@bramble/testkit/sidepanel";
 import { ec, RpcProvider } from "starknet";
 import type {
   ArgentMultisigDeploymentReview,
@@ -125,7 +125,7 @@ export const makeArgentMultisigFixture = async (
     intent,
     intentPackage: {
       intent,
-      kind: "mc-wallet.argent-multisig-intent",
+      kind: "bramble.argent-multisig-intent",
       version: 1,
     },
     readyIntent,

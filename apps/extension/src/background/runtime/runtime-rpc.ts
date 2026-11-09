@@ -3,88 +3,113 @@
  * tests can stub network access.
  */
 
-import { untrustedFetch } from "@mc-wallet/core/http-json";
+import { untrustedFetch } from "@bramble/core/http-json";
 import {
   type ArgentMultisigConfigInput,
   type ArgentSignerDiscoveryInput,
   getArgentMultisigConfig,
   getArgentMultisigSignerPublicKeys,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import {
   type ArgentMultisigClassStatusInput,
   isArgentMultisigClassDeclared,
-} from "@mc-wallet/multisig/deploy";
+} from "@bramble/multisig/deploy";
 import {
   getMultisigSignerAccount,
   type MultisigSignerAccountInput,
-} from "@mc-wallet/multisig/signer-account";
+} from "@bramble/multisig/signer-account";
 import {
   createHttpNftIndexer,
   type NftIndexerHttp,
   type NftIndexerService,
-} from "@mc-wallet/portfolio/nft-indexer";
+} from "@bramble/portfolio/nft-indexer";
 import {
   type NftMetadataHttp,
   type NftTokenMetadata,
   resolveNftMetadataUri,
-} from "@mc-wallet/portfolio/nft-token-metadata";
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+} from "@bramble/portfolio/nft-token-metadata";
+import { readStrk20PublicKey } from "@bramble/privacy/official-sdk-values";
+import type { Strk20Service } from "@bramble/privacy/service";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import {
   type VerifyClassHashInput,
   verifyAccountClassHash,
-} from "@mc-wallet/starknet/class-hash-verify";
+} from "@bramble/starknet/class-hash-verify";
+import {
+  estimateArgentMultisigDappFee,
+  submitArgentMultisigDappInvoke,
+} from "@bramble/starknet/multisig-dapp-invoke";
 import {
   type PrepareArgentMultisigInvokeV3Input,
   prepareArgentMultisigInvokeV3,
   type SubmitPreparedArgentMultisigInvokeV3Input,
   submitPreparedArgentMultisigInvokeV3,
-} from "@mc-wallet/starknet/multisig-invoke";
-import { withRpcFallback } from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/multisig-invoke";
+import { readAtPinnedBlock } from "@bramble/starknet/pinned-block";
+import { createRpcProvider, withRpcFallback } from "@bramble/starknet/provider";
 import {
+  type AccountOwnerInput,
+  type ArgentRecoveryInput,
   type BalanceInput,
+  type BraavosRecoveryInput,
   type DeclareInput,
   type DeployAccountInput,
   type DeploymentStatusInput,
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  getAccountOwner,
+  getArgentRecoveryState,
+  getArgentSigningRestriction,
+  getBraavosRecoveryState,
+  getBraavosSigningRestriction,
   getDeploymentStatus,
   getNftOwner,
   getNftOwnership,
   getNftTokenUri,
   type getTokenBalances,
   getTokenMetadata,
+  getTransactionFees,
   getTransactionStatuses,
   type InvokeInput,
   type NftOwnerInput,
   type NftOwnershipInput,
   type NftTokenUriInput,
+  rememberDeployedAccounts,
+  reviewArgentRecovery,
+  reviewBraavosRecovery,
+  type SigningRestrictionInput,
   submitAccountDeployment,
+  submitArgentRecovery,
+  submitBraavosRecovery,
   submitDeclareTransaction,
   submitErc20Transfer,
   submitInvokeTransaction,
   type TokenMetadataInput,
   type TransactionStatusInput,
   type TransferInput,
-} from "@mc-wallet/starknet/rpc";
+} from "@bramble/starknet/rpc";
+import { type ResolveStarkNameInput, resolveStarkName } from "@bramble/starknet/stark-name";
 import {
   type ExternalAllowanceScan,
   readTrackedAllowances,
   scanExternalAllowances,
   type TrackedAllowanceScan,
-} from "@mc-wallet/transactions/allowance-scan";
-import { createStarkscanClient, type StarkscanHttp } from "@mc-wallet/transactions/starkscan";
+} from "@bramble/transactions/allowance-scan";
 import {
+  createStarkscanClient,
+  type StarkscanClient,
+  type StarkscanHttp,
+} from "@bramble/transactions/starkscan";
+import { createStarkscanNftSource } from "@bramble/transactions/starkscan-nfts";
+import {
+  createExplorerFirstHistory,
   createRpcFirstBalances,
-  createRpcFirstHistory,
-} from "@mc-wallet/transactions/starkscan-wallet";
-import type {
-  scanTransactionHistory,
-  TransactionHistoryScan,
-} from "@mc-wallet/transactions/tx-history-scan";
-import { canonicalFelt, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { ExplorerLanePreferences } from "@mc-wallet/wallet-model/preferences";
+  type DiscoveredHistory,
+} from "@bramble/transactions/starkscan-wallet";
+import type { TransactionHistoryScan } from "@bramble/transactions/tx-history-scan";
+import { canonicalFelt, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { ExplorerLanePreferences } from "@bramble/wallet-model/preferences";
 
 /**
  * Injectable multisig read operations used by the multisig message handlers.
@@ -143,6 +168,21 @@ export type RuntimeRpc = {
   readonly estimateDeclareFee?: (input: DeclareInput) => ReturnType<typeof estimateDeclareFee>;
   readonly estimateInvokeFee: (input: InvokeInput) => ReturnType<typeof estimateInvokeFee>;
   /**
+   * Multisig dapp invoke fee, estimated with a query aggregate. Optional so
+   * narrow stubs stay valid; production wires the real estimator.
+   */
+  readonly estimateMultisigDappFee?: (
+    input: Parameters<typeof estimateArgentMultisigDappFee>[0],
+  ) => ReturnType<typeof estimateArgentMultisigDappFee>;
+  /** Live class hash at an address. Used to refuse a multisig that was upgraded away. */
+  readonly getClassHashAt?: (input: {
+    readonly address: string;
+    readonly rpcUrls: readonly string[];
+  }) => Promise<string>;
+  readonly submitMultisigDappInvoke?: (
+    input: Parameters<typeof submitArgentMultisigDappInvoke>[0],
+  ) => ReturnType<typeof submitArgentMultisigDappInvoke>;
+  /**
    * Discovers ERC20 allowances granted outside this wallet for an account's
    * tracked tokens. Optional so existing RPC stubs stay valid; when absent the
    * allowance manager lists only the locally tracked (in-wallet) approvals.
@@ -161,9 +201,62 @@ export type RuntimeRpc = {
   readonly getTrackedAllowances?: (
     input: TrackedAllowanceScan,
   ) => ReturnType<typeof readTrackedAllowances>;
+  /**
+   * Advisory signability probe for deployed Argent recovery candidates (issue
+   * 542). Optional so narrow test doubles keep compiling; the scan treats an
+   * absent member or a throw as "no verdict".
+   */
+  /** Live class and owner key at an address, for importing it by address (issue 398). */
+  readonly getAccountOwner?: (input: AccountOwnerInput) => ReturnType<typeof getAccountOwner>;
+  readonly getArgentSigningRestriction?: (
+    input: SigningRestrictionInput,
+  ) => ReturnType<typeof getArgentSigningRestriction>;
+  /** Braavos sibling of the Argent probe; same advisory contract. */
+  readonly getBraavosSigningRestriction?: (
+    input: SigningRestrictionInput,
+  ) => ReturnType<typeof getBraavosSigningRestriction>;
+  /** Pending-state read for the Ready recovery flow; advisory, read-only. */
+  readonly getArgentRecoveryState?: (
+    input: Parameters<typeof getArgentRecoveryState>[0],
+  ) => ReturnType<typeof getArgentRecoveryState>;
+  /** Estimates the Ready recovery's next escape step. */
+  readonly reviewArgentRecovery?: (
+    input: ArgentRecoveryInput,
+  ) => ReturnType<typeof reviewArgentRecovery>;
+  /** Submits the reviewed Ready recovery step. */
+  readonly submitArgentRecovery?: (
+    input: ArgentRecoveryInput,
+  ) => ReturnType<typeof submitArgentRecovery>;
+  /** Pending-state read for the Braavos recovery flow; advisory, read-only. */
+  readonly getBraavosRecoveryState?: (
+    input: Parameters<typeof getBraavosRecoveryState>[0],
+  ) => ReturnType<typeof getBraavosRecoveryState>;
+  /** Estimates the Braavos recovery request for its review card. */
+  readonly reviewBraavosRecovery?: (
+    input: BraavosRecoveryInput,
+  ) => ReturnType<typeof reviewBraavosRecovery>;
+  /** Submits the reviewed Braavos recovery request. */
+  readonly submitBraavosRecovery?: (
+    input: BraavosRecoveryInput,
+  ) => ReturnType<typeof submitBraavosRecovery>;
+  /**
+   * Whether the account contract exists. The production wiring reuses a
+   * "deployed" answer per address and endpoint list for a few minutes (never
+   * for a local node); "not deployed" and failures always read the chain.
+   */
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
+  /**
+   * Reads the public viewing key an address registered with a privacy pool,
+   * `0x0` when none. Optional so existing RPC stubs stay valid; throws when the
+   * pool cannot be read.
+   */
+  readonly getStrk20PublicKey?: (input: {
+    readonly address: string;
+    readonly poolAddress: string;
+    readonly rpcUrls: readonly string[];
+  }) => Promise<string>;
   readonly getNftOwner: (input: NftOwnerInput) => ReturnType<typeof getNftOwner>;
   /**
    * Identifies and proves ERC721/ERC1155 holdings. Optional so existing narrow
@@ -177,19 +270,49 @@ export type RuntimeRpc = {
    */
   readonly getNftMetadata?: (input: NftTokenUriInput) => Promise<NftTokenMetadata | null>;
   readonly getTokenBalances: (input: BalanceInput) => ReturnType<typeof getTokenBalances>;
+  /**
+   * Runs a group of read-only contract calls at one accepted block (staking
+   * pool verification). Optional so existing RPC stubs stay valid; staking
+   * refuses when it is absent.
+   */
+  readonly readAtPinnedBlock?: typeof readAtPinnedBlock;
+  /**
+   * The explorer lane's Starkscan client for a network (same base, per-network
+   * override and hardened transport), for the staking directory and "Your
+   * stakes". Optional so existing stubs stay valid; without it those reads are
+   * off and staking is paste-only.
+   */
+  readonly starkscanFor?: (
+    networkId: StarknetNetworkId,
+    preferences: ExplorerLanePreferences,
+  ) => Pick<StarkscanClient, "getStakingAddress" | "getStakingValidators">;
   readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
   /**
    * Reads the account's recent on-chain transaction history for the activity
-   * feed. Optional so existing RPC stubs stay valid; when absent the feed shows
-   * only locally recorded transactions. A thrown transport error is treated by
-   * the handler as "history unavailable" and degrades to the local log.
+   * feed — explorer first when the user's preference permits, RPC scan
+   * otherwise. Optional so existing RPC stubs stay valid; when absent the feed
+   * shows only locally recorded transactions. A thrown error means neither lane
+   * answered and is treated by the handler as "history unavailable", degrading
+   * to the local log.
    */
-  readonly getTransactionHistory?: (
-    input: TransactionHistoryScan,
-  ) => ReturnType<typeof scanTransactionHistory>;
+  readonly getTransactionHistory?: (input: TransactionHistoryScan) => Promise<DiscoveredHistory>;
+  /**
+   * Reads the fee each transaction's receipt reports it paid, for the activity
+   * log. Optional so existing RPC stubs stay valid; when absent no fee is
+   * recorded. A hash with no usable receipt fee is absent from the answer.
+   */
+  readonly getTransactionFees?: (
+    input: TransactionStatusInput,
+  ) => ReturnType<typeof getTransactionFees>;
   readonly getTransactionStatuses: (
     input: TransactionStatusInput,
   ) => ReturnType<typeof getTransactionStatuses>;
+  /**
+   * Resolves a Starknet ID name (a typed `name.stark`) to an account address on
+   * the active network's endpoints. Optional so existing RPC stubs stay valid;
+   * when absent the name resolution handler reports the surface unavailable.
+   */
+  readonly resolveStarkName?: (input: ResolveStarkNameInput) => ReturnType<typeof resolveStarkName>;
   readonly submitAccountDeployment: (
     input: DeployAccountInput,
   ) => ReturnType<typeof submitAccountDeployment>;
@@ -237,16 +360,27 @@ const nftMetadataHttp: NftMetadataHttp = (url, init) =>
   fetch(url, { ...init, signal: AbortSignal.timeout(NFT_METADATA_TIMEOUT_MS) });
 const starkscanHttp: StarkscanHttp = untrustedFetch;
 // The public explorer read lane is used because an extension cannot safely
-// embed an external API key. The client keeps its base injectable so a
-// deployment-owned authenticated relay can replace this without changing
-// wallet consumers.
+// embed an external API key; the bundled base answers without one and lives on
+// a host the manifest already permits. The client keeps its base injectable so
+// a deployment-owned authenticated relay can replace this without changing
+// wallet consumers. Balances stay RPC-first with the explorer as the outage
+// rescue; transaction history is explorer-first (the RPC scan reaches back
+// only a few days of blocks) with the RPC scan as the keyless fallback. Both
+// obey the user's per-network `explorerFallback` choice.
 const DEFAULT_EXPLORER_API_URL = "https://starkscan.co/v1";
 const starkscanClients = new Map<string, ReturnType<typeof createStarkscanClient>>();
-const starkscanClientFor = (baseUrl: string): ReturnType<typeof createStarkscanClient> => {
-  const stored = starkscanClients.get(baseUrl);
+// NFT discovery gets its own client per base: the same host, transport and
+// override, but its own rate-limit cooldown, so an NFT failure never blocks
+// Activity or the balance rescue (and theirs never blocks the gallery).
+const nftStarkscanClients = new Map<string, ReturnType<typeof createStarkscanClient>>();
+const starkscanClientFor = (
+  baseUrl: string,
+  clients = starkscanClients,
+): ReturnType<typeof createStarkscanClient> => {
+  const stored = clients.get(baseUrl);
   if (stored) return stored;
   const client = createStarkscanClient({ baseUrl, http: starkscanHttp });
-  starkscanClients.set(baseUrl, client);
+  clients.set(baseUrl, client);
   return client;
 };
 const starkscanClient = starkscanClientFor(DEFAULT_EXPLORER_API_URL);
@@ -262,9 +396,10 @@ const getNftMetadata = async (input: NftTokenUriInput): Promise<NftTokenMetadata
  * Collaborators the production RPC wiring needs beyond the network itself.
  *
  * `readPreferences` is only consulted to decide whether the third-party
- * explorer read lane may run after every configured RPC has failed
- * (MCW-V09-129). A rejected read is treated as "not permitted", so a
- * preferences outage narrows disclosure rather than widening it.
+ * explorer read lane may run for a network (MCW-V09-129): as the outage rescue
+ * for balances, and as the primary source for transaction history. A rejected
+ * read is treated as "not permitted", so a preferences outage narrows
+ * disclosure rather than widening it.
  */
 export type RuntimeRpcOptions = {
   readonly readPreferences: () => Promise<ExplorerLanePreferences>;
@@ -277,9 +412,24 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   estimateAccountDeploymentFee,
   estimateDeclareFee,
   estimateInvokeFee,
+  estimateMultisigDappFee: estimateArgentMultisigDappFee,
+  getClassHashAt: ({ address, rpcUrls }) =>
+    withRpcFallback(rpcUrls, (provider) => provider.getClassHashAt(address)),
+  submitMultisigDappInvoke: submitArgentMultisigDappInvoke,
   getExternalAllowances: scanExternalAllowances,
   getTrackedAllowances: readTrackedAllowances,
-  getDeploymentStatus,
+  getAccountOwner,
+  getArgentSigningRestriction,
+  getArgentRecoveryState,
+  getBraavosRecoveryState,
+  getBraavosSigningRestriction,
+  getDeploymentStatus: rememberDeployedAccounts(getDeploymentStatus),
+  getStrk20PublicKey: ({ address, poolAddress, rpcUrls }) =>
+    readStrk20PublicKey(createRpcProvider, rpcUrls, poolAddress, address),
+  reviewArgentRecovery,
+  reviewBraavosRecovery,
+  submitArgentRecovery,
+  submitBraavosRecovery,
   getNftMetadata,
   getNftOwner,
   getNftOwnership,
@@ -289,11 +439,12 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     readPreferences,
   }),
   getTokenMetadata,
-  getTransactionHistory: createRpcFirstHistory({
+  getTransactionHistory: createExplorerFirstHistory({
     client: starkscanClient,
     clientFor: configuredStarkscanClient,
     readPreferences,
   }),
+  getTransactionFees,
   getTransactionStatuses,
   multisig: {
     getConfig: getArgentMultisigConfig,
@@ -304,7 +455,23 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
     resolveSignerAccount: getMultisigSignerAccount,
     submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
-  nftIndexer: createHttpNftIndexer(nftIndexerHttp),
+  // Starkscan is the built-in NFT indexer, over the same
+  // host, base override and explorer-lane gate as Activity.
+  nftIndexer: createHttpNftIndexer(
+    nftIndexerHttp,
+    createStarkscanNftSource({
+      client: starkscanClientFor(DEFAULT_EXPLORER_API_URL, nftStarkscanClients),
+      clientFor: (networkId, preferences) =>
+        starkscanClientFor(
+          preferences.explorerApiUrls?.[networkId] ?? DEFAULT_EXPLORER_API_URL,
+          nftStarkscanClients,
+        ),
+      readPreferences,
+    }),
+  ),
+  readAtPinnedBlock,
+  resolveStarkName,
+  starkscanFor: configuredStarkscanClient,
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,

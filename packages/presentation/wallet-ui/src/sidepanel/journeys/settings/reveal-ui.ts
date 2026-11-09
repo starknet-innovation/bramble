@@ -4,13 +4,20 @@
  * key blurred until tapped. Secrets are injected into the DOM only after a
  * fresh passphrase check, are never written to storage, and are wiped whenever
  * the shell re-renders (leaving the screen).
+ *
+ * The phrase may also be copied to the system clipboard through the shared
+ * guarded copy (../../shared/guarded-copy.ts), which the onboarding phrase step
+ * uses too: offered only after the same re-auth that reveals the phrase, with
+ * the same warning beside it and the same best-effort clear afterwards.
  */
 
-import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
+import { button } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
+import { bindGuardedCopy, GUARDED_COPY_NOTE, guardedCopyNote } from "../../shared/guarded-copy";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen } from "../../shared/parts";
 
@@ -44,7 +51,7 @@ export const revealFlow = (status: WalletStatus): string => {
         "reveal",
         `<section class="section" role="note">
           <p class="eyebrow">Recovery</p>
-          <p class="hint">This account lives on your Ledger. Its keys never leave the device, so there is no recovery phrase or private key to reveal here. Recover this account from your Ledger device itself, using the recovery phrase you set up with Ledger — not this wallet.</p>
+          <p class="hint" id="reveal-ledger-note">This account's key is on your Ledger. To recover it, use the Ledger's own recovery phrase.</p>
         </section>`,
       )
     );
@@ -55,15 +62,15 @@ export const revealFlow = (status: WalletStatus): string => {
       "reveal",
       `<section class="section reveal-warning" role="note">
       <p class="reveal-danger">${icon("alert")}Anyone who sees these can take your funds.</p>
-      <p class="hint">Reveal only in private. MC Wallet will never ask you for them. They are shown once here and never leave this screen.</p>
+      <p class="hint">Reveal only in private. Bramble will never ask you for them.</p>
     </section>
     <section class="section">
       <form id="reveal-form">
         ${textField({
           autocomplete: "current-password",
-          hint: "Re-enter it to reveal. An unlocked session alone is not enough.",
+          hint: "An unlocked session is not enough.",
           label: "Confirm vault passphrase",
-          minlength: 12,
+          minlength: MIN_VAULT_PASSPHRASE_LENGTH,
           name: "vaultPassphrase",
           required: true,
           type: "password",
@@ -74,8 +81,21 @@ export const revealFlow = (status: WalletStatus): string => {
       <div id="reveal-output" class="reveal-output" hidden>
         <p class="eyebrow">Recovery phrase</p>
         <div class="reveal-value is-masked" id="reveal-phrase"></div>
-        <p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
-        <code class="reveal-value is-masked" id="reveal-key"></code>
+        ${button({
+          attributes: { id: "reveal-copy-phrase" },
+          icon: "copy",
+          label: "Copy recovery phrase",
+          variant: "ghost",
+        })}
+        <p class="hint" id="reveal-copy-note">${GUARDED_COPY_NOTE}</p>
+        ${
+          // With no account on this network there is no active key: the
+          // background reveals the recovery phrase alone.
+          activeAccount
+            ? `<p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
+        <code class="reveal-value is-masked" id="reveal-key"></code>`
+            : ""
+        }
         ${
           activeIsImported
             ? '<p class="hint" id="reveal-imported-note">This account was imported from a raw key, so the wallet recovery phrase above does not restore it — its private key shown here is its only backup.</p>'
@@ -84,7 +104,7 @@ export const revealFlow = (status: WalletStatus): string => {
         ${button({
           attributes: { id: "reveal-toggle" },
           icon: "check",
-          label: "Tap to show",
+          label: "Show",
           variant: "secondary",
         })}
         <p class="hint">Write them down offline. Leaving this screen hides them again.</p>
@@ -105,12 +125,23 @@ export const bindReveal = (deps: RevealUiDeps): void => {
   const phraseEl = deps.app?.querySelector<HTMLElement>("#reveal-phrase");
   const keyEl = deps.app?.querySelector<HTMLElement>("#reveal-key");
   const toggle = deps.app?.querySelector<HTMLButtonElement>("#reveal-toggle");
+  const copyPhrase = deps.app?.querySelector<HTMLButtonElement>("#reveal-copy-phrase");
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+  // Reading the live node at click time keeps the phrase in exactly one place in
+  // the DOM. Putting it in a data attribute — as the shared inline copy control
+  // does — would mint a second copy that outlives the mask.
+  bindGuardedCopy(copyPhrase ?? null, () => phraseEl?.textContent ?? "");
+  // The markup promises the one-minute clear; where it cannot run, say so.
+  const copyNote = deps.app?.querySelector<HTMLElement>("#reveal-copy-note");
+  if (copyNote) {
+    copyNote.textContent = guardedCopyNote(copyNote.ownerDocument.defaultView);
+  }
 
   toggle?.addEventListener("click", () => {
     const masked = phraseEl?.classList.toggle("is-masked") ?? true;
     keyEl?.classList.toggle("is-masked", masked);
-    toggle.lastChild?.replaceWith(masked ? "Tap to show" : "Tap to hide");
+    toggle.lastChild?.replaceWith(masked ? "Show" : "Hide");
   });
 
   form?.addEventListener("submit", (event) => {
@@ -124,19 +155,19 @@ export const bindReveal = (deps: RevealUiDeps): void => {
             secrets.mnemonic ?? "No recovery phrase is stored for this wallet.";
         }
         if (keyEl) {
-          keyEl.textContent = secrets.privateKey;
+          keyEl.textContent = secrets.privateKey ?? "";
         }
         output?.removeAttribute("hidden");
         if (result) {
-          result.textContent = "Revealed. Tap to show, then write it down offline.";
+          result.textContent = "Write it down offline.";
         }
         form.reset();
         buttonBusy(submitButton, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Reveal failed"), "error", form);
+        showToast(errorDetails(error, "Reveal failed"), "error", form);
         if (result) {
-          result.textContent = errorMessage(error, "Reveal failed");
+          result.textContent = errorLine(error, "Reveal failed");
         }
         buttonBusy(submitButton, false);
       },

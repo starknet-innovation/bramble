@@ -2,8 +2,8 @@
  * Final wallet-policy gate at the official SDK proof boundary.
  */
 import { expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { createOfficialStrk20Service } from "@mc-wallet/privacy/official-sdk-service";
+import { WalletError } from "@bramble/core/errors";
+import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import {
   officialBuilder as builder,
   STRK20_SDK_CONTEXT as context,
@@ -37,7 +37,7 @@ test("the final wallet gate runs after preflights and before proof creation", as
   };
   const sdk = runtime(() => ({
     build: () => ({
-      ...builder(executeResult()),
+      ...builder(),
       async createProofInvocation() {
         proofs += 1;
         return executeResult();
@@ -91,7 +91,7 @@ test("does not re-enter proof preparation after the final registration read exha
     } as ReturnType<typeof providerFor>;
   };
   const sdk = runtime(() => ({
-    build: () => builder(executeResult()),
+    build: () => builder(),
     discoverNotes: async () => ({ notes: new Map() }),
     executeWithInvocation: async () => executeResult(),
   }));

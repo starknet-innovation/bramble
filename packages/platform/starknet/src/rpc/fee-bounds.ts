@@ -21,15 +21,11 @@
  * sign. So the comparison here is always against the spend the bounds imply,
  * for the speed those bounds will be built at.
  */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
-import {
-  type FeeEstimate,
-  isFeeEstimate,
-  isFeeUnit,
-} from "@mc-wallet/wallet-protocol/fee-estimate";
+import { WalletError } from "@bramble/core/errors";
+import { isBaseUnitsAmount, isRecord } from "@bramble/core/json";
+import { type FeeEstimate, isFeeEstimate, isFeeUnit } from "@bramble/wallet-protocol/fee-estimate";
 
-export { type FeeEstimate, isFeeEstimate } from "@mc-wallet/wallet-protocol/fee-estimate";
+export { type FeeEstimate, isFeeEstimate } from "@bramble/wallet-protocol/fee-estimate";
 
 /**
  * Reports whether two estimates state the same fee in the same denomination.
@@ -57,6 +53,30 @@ export const sumFeeEstimates = (left: FeeEstimate, right: FeeEstimate): FeeEstim
         unit: left.unit,
       }
     : null;
+
+/**
+ * The single figure an invoke review shows and its approval echoes: the invoke
+ * fee, plus the deployment fee when the account must deploy first. Null when
+ * any component is pending, failed, missing, or the two cannot be added — there
+ * is then no total for consent to bind. The background refusal and the card's
+ * Approve control both read this, so the displayed and the enforced figure
+ * cannot drift.
+ */
+export const reviewedInvokeTotal = (review: {
+  readonly deploymentFee?: FeeEstimate | null;
+  readonly deploymentFeeEstimateFailed?: boolean;
+  readonly fee?: FeeEstimate | null;
+  readonly feeEstimateFailed?: boolean;
+  readonly feeEstimatePending?: boolean;
+  readonly requiresDeployment?: boolean;
+}): FeeEstimate | null => {
+  if (!review.fee || review.feeEstimateFailed === true || review.feeEstimatePending === true) {
+    return null;
+  }
+  if (review.requiresDeployment !== true) return review.fee;
+  if (!review.deploymentFee || review.deploymentFeeEstimateFailed === true) return null;
+  return sumFeeEstimates(review.fee, review.deploymentFee);
+};
 
 /**
  * How far above the reviewed figure a submission-time estimate may land before
@@ -103,6 +123,20 @@ export const exceedsReviewedFee = (reviewed: FeeEstimate, quoted: FeeEstimate): 
     actual * BigInt(REVIEWED_FEE_HEADROOM.denominator) >
     ceiling * BigInt(REVIEWED_FEE_HEADROOM.numerator)
   );
+};
+
+/**
+ * The most a submission held to `reviewed` may authorise, in base units: the
+ * reviewed figure raised by {@link REVIEWED_FEE_HEADROOM}, the same bound
+ * {@link exceedsReviewedFee} enforces, so a balance that keeps this much back
+ * always covers the fee the wallet will sign. Null for a value that is not a
+ * decimal base-units integer, so a caller can withhold rather than guess.
+ */
+export const reviewedFeeCeiling = (reviewed: FeeEstimate): bigint | null => {
+  const base = baseUnits(reviewed.overallFee);
+  return base === null
+    ? null
+    : (base * BigInt(REVIEWED_FEE_HEADROOM.numerator)) / BigInt(REVIEWED_FEE_HEADROOM.denominator);
 };
 
 /**

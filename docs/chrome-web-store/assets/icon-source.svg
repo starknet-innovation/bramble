@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <title>MC Wallet icon</title>
-  <rect x="16" y="16" width="96" height="96" rx="26" fill="#171717"/>
-  <g fill="none" stroke="#f5f5f5" stroke-linecap="round" stroke-linejoin="round" stroke-width="6">
-    <path d="M34 54h60v40H34z"/>
-    <path d="M34 54l10-18h40l10 18"/>
-    <path d="M76 74h8"/>
-  </g>
-</svg>

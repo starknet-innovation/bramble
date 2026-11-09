@@ -10,7 +10,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   createRpcProvider,
   IndeterminateRpcWriteError,
@@ -20,7 +20,7 @@ import {
   RpcTransportError,
   timedRpcFetch,
   withRpcFallback,
-} from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/provider";
 import { logger, type RpcProvider, type RpcProviderOptions } from "starknet";
 import { repoRelative, workspaceSourceFiles } from "../support/workspace-sources";
 

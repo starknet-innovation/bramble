@@ -5,12 +5,13 @@
  * signTypedData, and switchChain — not just at requestAccounts.
  */
 import { describe, expect, test } from "bun:test";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const BLOCKED = "https://starknet-airdrop.com";
 const blockedSender: RuntimeSender = { id: "extension-id", url: `${BLOCKED}/app` };
@@ -53,9 +54,13 @@ const walletStub = {
       accounts: [account],
       accountSecrets: [],
       activeAccountId: account.id,
+      importedSeeds: [],
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin: BLOCKED }],
-      schemaVersion: 7 as const,
+      schemaVersion: 13 as const,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -88,7 +93,7 @@ const rpc = {
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(walletStub, "extension-id", {
+  return createMessageHandler(walletStub, testExtension, {
     preferencesStore: unavailablePreferencesStore,
     runtimeRpc: rpc,
     session,

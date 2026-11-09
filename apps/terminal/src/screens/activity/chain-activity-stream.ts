@@ -19,7 +19,7 @@ const MAX_PENDING = 48;
 const MAX_VISIBLE = 22;
 const MAX_SEEN = 1_000;
 const CACHE_SIZE = 20;
-const CACHE_KEY = "mc-terminal:chain-activity:v1";
+const CACHE_KEY = "bramble-terminal:chain-activity:v1";
 
 const shortAddress = (value: string): string =>
   value.length > 13 ? `${value.slice(0, 7)}…${value.slice(-5)}` : value;

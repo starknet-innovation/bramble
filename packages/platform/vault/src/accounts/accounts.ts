@@ -2,8 +2,8 @@
  * Starknet account derivation through Krusty KMS with no local crypto fallback.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
+import { WalletError } from "@bramble/core/errors";
+import { verifyStarkSignature } from "@bramble/starknet/signature-verify";
 import type {
   AccountContractType,
   AccountRef,
@@ -11,12 +11,17 @@ import type {
   ImportedAccountRef,
   LedgerAccountRef,
   LedgerPubKeyEntry,
-} from "@mc-wallet/wallet-model/accounts";
+  RecoverableAccountRef,
+} from "@bramble/wallet-model/accounts";
+import { BRAAVOS_DEPLOYMENT_CLASS_HASH } from "@bramble/wallet-model/accounts";
 import {
   isLedgerAccountIndex,
+  isLedgerApplicationForFamily,
+  isLedgerEip2645Application,
   LEDGER_EIP2645_APPLICATION,
+  type LedgerEip2645Application,
   ledgerAccountPath,
-} from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/wallet-model/ledger-path";
 import {
   canonicalFelt,
   DEFAULT_NETWORK,
@@ -25,41 +30,30 @@ import {
   isStarkPrivateKey,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { isMnemonicPassphrase, isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/networks";
 import type { KmsPort } from "../kms-port";
 import { deriveAccountContractAddress, resolveAccountClassHash } from "./account-contract";
+import {
+  type AccountDerivationInput,
+  type AccountDerivationResult,
+  bip44Axes,
+  canonicalKeypair,
+  deriveArgentXAccount,
+  isDerivationIndex,
+  recordContract,
+  requireDerivationInput,
+} from "./derivation-core";
 
 /** Account-contract class and address helpers exposed through this package subpath. */
 export { deriveAccountContractAddress, getOzAccountClassHash } from "./account-contract";
+/** Derivation input/output contracts, re-exported to keep this subpath's surface. */
+export type { AccountDerivationInput, AccountDerivationResult } from "./derivation-core";
 
 // Krusty owns the private-key -> public-key mapping; the wallet must never
 // derive it locally. `signStarkHash` is the one KMS export that returns the
 // stark public key for a private key, so a raw-key import recovers the account
 // public key from a signature over this fixed probe hash and discards `r`/`s`.
 const PUBLIC_KEY_PROBE_HASH = "0x1";
-
-/**
- * Account derivation input accepted by the Krusty-backed wallet boundary.
- */
-export type AccountDerivationInput = {
-  readonly accountContractType: AccountContractType;
-  readonly accountIndex?: number;
-  readonly addressIndex?: number;
-  readonly classHash?: string;
-  readonly deploymentSalt?: string;
-  readonly mnemonic: string;
-  readonly mnemonicPassphrase?: string;
-  readonly networkId?: StarknetNetworkId;
-};
-
-/**
- * Account derivation output with private key separated from public metadata.
- */
-export type AccountDerivationResult = {
-  readonly account: DerivedAccountRef;
-  readonly privateKey: string;
-};
 
 /**
  * Raw-private-key import input accepted by the Krusty-backed wallet boundary.
@@ -79,30 +73,6 @@ export type ImportedAccountInput = {
 export type ImportedAccountResult = {
   readonly account: ImportedAccountRef;
   readonly privateKey: string;
-};
-
-const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
-
-const requireDerivationInput = (input: AccountDerivationInput): void => {
-  if (!isMnemonicText(input.mnemonic) || !isMnemonicPassphrase(input.mnemonicPassphrase)) {
-    throw new WalletError("Invalid mnemonic derivation input");
-  }
-};
-
-const canonicalKeypair = (
-  value: Awaited<ReturnType<KmsPort["deriveStarknetKeypair"]>>,
-): { readonly privateKey: string; readonly publicKeyX: string; readonly publicKeyY: string } => {
-  if (
-    !isStarkPrivateKey(value.privateKey) ||
-    ![value.publicKeyX, value.publicKeyY].every(isNonZeroStarkFieldElement)
-  ) {
-    throw new WalletError("Krusty KMS returned invalid account key material");
-  }
-  return {
-    privateKey: canonicalFelt(value.privateKey) as string,
-    publicKeyX: canonicalFelt(value.publicKeyX) as string,
-    publicKeyY: canonicalFelt(value.publicKeyY) as string,
-  };
 };
 
 /**
@@ -135,11 +105,26 @@ export const deriveAccount = async (
     networkId,
     input.classHash,
   );
+  // Which axis the caller's `accountIndex` walks (issue 505). This wallet's
+  // own scheme steps the hardened account field; the vendors step the address
+  // field — Ready on its ETH-seeded tree, Braavos on the plain BIP-44 one. A
+  // Braavos derivation is only ever a recovery, so its index maps to the
+  // vendor axis unconditionally; index 0 is identical on both axes, which is
+  // the only coordinate any earlier release could have stored.
+  if ((input.derivation ?? "starknet-bip44") === "argentx-bip44") {
+    return deriveArgentXAccount(kms, input, {
+      accountIndex,
+      addressIndex,
+      networkId,
+      resolvedClassHash,
+    });
+  }
+  const axes = bip44Axes(accountContractType, accountIndex, addressIndex);
   const { privateKey, publicKeyX, publicKeyY } = canonicalKeypair(
     await kms.deriveStarknetKeypair(
       input.mnemonic,
-      addressIndex,
-      accountIndex,
+      axes.addressIndex,
+      axes.accountIndex,
       input.mnemonicPassphrase,
     ),
   );
@@ -151,10 +136,7 @@ export const deriveAccount = async (
     networkId,
     publicKeyX,
   });
-  const contract =
-    accountContractType === "argent"
-      ? { accountContractType, deploymentSalt: deploymentSalt as string }
-      : { accountContractType };
+  const contract = recordContract(accountContractType, deploymentSalt);
 
   return {
     account: {
@@ -162,9 +144,9 @@ export const deriveAccount = async (
       address,
       classHash,
       derivation: {
-        accountIndex,
-        addressIndex,
+        ...axes,
         kind: "starknet-bip44",
+        ...(input.seedId === undefined ? {} : { seedId: input.seedId }),
       },
       id: `${networkId}:${address}`,
       networkId,
@@ -178,16 +160,28 @@ export const deriveAccount = async (
 /**
  * Ledger account creation input. The public key and its account index come from
  * the device; the derivation path is rebuilt deterministically from the index
- * (one source of truth with the device client), so a stored path always matches
- * the one used to enumerate and sign.
+ * and the path scheme (`eip2645application`, Bramble's `LedgerW` unless the
+ * key was enumerated at Ready's `argentx` path) — one source of truth with the
+ * device client, so a stored path always matches the one used to enumerate and
+ * sign.
  */
 export type LedgerAccountInput = LedgerPubKeyEntry & {
   readonly accountContractType: AccountContractType;
   readonly classHash?: string;
   readonly deploymentSalt?: string;
-  readonly eip2645application?: string;
+  readonly eip2645application?: LedgerEip2645Application;
   readonly networkId?: StarknetNetworkId;
 };
+
+// A Ledger-owned Braavos account is discovered at the class Braavos's app deploys
+// today. The import path otherwise requires the Braavos class be named, but a
+// device scan is probing the current vendor convention, so default it here —
+// only for Braavos, and only on the Ledger derivation path.
+const ledgerDeployClassHash = (
+  accountContractType: AccountContractType,
+  classHash: string | undefined,
+): string | undefined =>
+  classHash ?? (accountContractType === "braavos" ? BRAAVOS_DEPLOYMENT_CLASS_HASH : undefined);
 
 const validatedNetworkClassHash = async (
   kms: KmsPort,
@@ -226,6 +220,15 @@ export const deriveLedgerAccount = async (
   if (!isNonZeroStarkFieldElement(input.publicKeyX)) {
     throw new WalletError("Invalid Ledger public key");
   }
+  const application = input.eip2645application ?? LEDGER_EIP2645_APPLICATION;
+  if (!isLedgerEip2645Application(application)) {
+    throw new WalletError("Invalid Ledger path application");
+  }
+  // Repeated below the message boundary so no caller can store a Braavos
+  // address at a scheme Braavos never derives a Ledger key from.
+  if (!isLedgerApplicationForFamily(input.accountContractType, application)) {
+    throw new WalletError("Invalid Ledger path application");
+  }
 
   const networkId = input.networkId ?? DEFAULT_NETWORK.id;
   if (!isStarknetNetworkId(networkId)) {
@@ -237,7 +240,7 @@ export const deriveLedgerAccount = async (
     kms,
     accountContractType,
     networkId,
-    input.classHash,
+    ledgerDeployClassHash(accountContractType, input.classHash),
   );
   const publicKeyX = canonicalFelt(input.publicKeyX) as string;
   const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
@@ -247,10 +250,7 @@ export const deriveLedgerAccount = async (
     networkId,
     publicKeyX,
   });
-  const contract =
-    accountContractType === "argent"
-      ? { accountContractType, deploymentSalt: deploymentSalt as string }
-      : { accountContractType };
+  const contract = recordContract(accountContractType, deploymentSalt);
 
   return {
     ...contract,
@@ -258,9 +258,9 @@ export const deriveLedgerAccount = async (
     classHash,
     derivation: {
       accountIndex: input.accountIndex,
-      eip2645application: input.eip2645application ?? LEDGER_EIP2645_APPLICATION,
+      eip2645application: application,
       kind: "ledger",
-      path: ledgerAccountPath(input.accountIndex),
+      path: ledgerAccountPath(input.accountIndex, application),
     },
     id: `${networkId}:${address}`,
     networkId,
@@ -271,7 +271,9 @@ export const deriveLedgerAccount = async (
 /**
  * Derives account metadata for a batch of enumerated Ledger (index, public key)
  * pairs on one network, resolving the class hash once and deriving addresses in
- * parallel. Backs the multi-index account picker. Throws if any entry is invalid.
+ * parallel. Every entry shares one path scheme — the one the device was
+ * enumerated at. Backs the multi-index account picker. Throws if any entry is
+ * invalid.
  */
 export const deriveLedgerAccountRefs = async (
   kms: KmsPort,
@@ -279,6 +281,7 @@ export const deriveLedgerAccountRefs = async (
     readonly accountContractType: AccountContractType;
     readonly classHash?: string;
     readonly deploymentSalt?: string;
+    readonly eip2645application?: LedgerEip2645Application;
     readonly entries: readonly LedgerPubKeyEntry[];
     readonly networkId?: StarknetNetworkId;
   },
@@ -292,7 +295,7 @@ export const deriveLedgerAccountRefs = async (
     kms,
     accountContractType,
     networkId,
-    input.classHash,
+    ledgerDeployClassHash(accountContractType, input.classHash),
   );
   return Promise.all(
     input.entries.map((entry) =>
@@ -301,6 +304,9 @@ export const deriveLedgerAccountRefs = async (
         accountIndex: entry.accountIndex,
         classHash,
         ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
+        ...(input.eip2645application === undefined
+          ? {}
+          : { eip2645application: input.eip2645application }),
         networkId,
         publicKeyX: entry.publicKeyX,
       }),
@@ -327,20 +333,29 @@ export const sameWalletKey = (left: AccountRef, right: AccountRef): boolean => {
 };
 
 /**
- * Lowest unused HD account index on a network. Imported accounts hold no HD
- * position, so they never occupy an index here.
+ * Lowest unused HD account index on a network for one seed (the founding
+ * phrase when `seedId` is absent). Imported raw-key accounts hold no HD
+ * position, and another seed's accounts occupy their own index space, so
+ * neither shifts the result. `taken` adds indices the caller already knows
+ * are occupied some other way, such as one whose derived account was imported
+ * from its raw key.
  */
 export const nextAccountIndex = (
   accounts: readonly AccountRef[],
   networkId: StarknetNetworkId,
+  seedId?: string,
+  taken: ReadonlySet<number> = new Set(),
 ): number => {
-  const used = new Set(
-    accounts.flatMap((account) =>
-      account.networkId === networkId && account.derivation.kind === "starknet-bip44"
+  const used = new Set([
+    ...taken,
+    ...accounts.flatMap((account) =>
+      account.networkId === networkId &&
+      account.derivation.kind === "starknet-bip44" &&
+      account.derivation.seedId === seedId
         ? [account.derivation.accountIndex]
         : [],
     ),
-  );
+  ]);
   let index = 0;
   while (used.has(index)) {
     index += 1;
@@ -349,12 +364,42 @@ export const nextAccountIndex = (
 };
 
 /**
+ * Narrows a derivation result to this wallet's own ladder, for creation paths:
+ * the wallet creates accounts only on its native BIP-44 scheme, so a vendor
+ * scheme reaching a creation flow fails closed instead of minting an account
+ * the wallet would not have offered.
+ */
+export const requireOwnLadderAccount = (account: RecoverableAccountRef): DerivedAccountRef => {
+  if ("publicKeyY" in account && account.derivation.kind === "starknet-bip44") {
+    return account;
+  }
+  throw new WalletError("Account creation uses this wallet's own derivation only");
+};
+
+/**
  * Derives only public account metadata for callers that must not receive keys.
  */
 export const deriveAccountRef = async (
   kms: KmsPort,
   input: AccountDerivationInput,
-): Promise<DerivedAccountRef> => (await deriveAccount(kms, input)).account;
+): Promise<RecoverableAccountRef> => (await deriveAccount(kms, input)).account;
+
+/**
+ * Recovers the canonical stark public key (x) for a private key through Krusty
+ * only, from a verified signature over a fixed probe hash. Throws a
+ * `WalletError` when Krusty answers with an invalid or unverifiable key.
+ */
+export const recoverStarkPublicKey = async (kms: KmsPort, privateKey: string): Promise<string> => {
+  const probe = await kms.signStarkHash(privateKey, PUBLIC_KEY_PROBE_HASH);
+  if (!isNonZeroStarkFieldElement(probe.publicKey)) {
+    throw new WalletError("Krusty KMS returned invalid public key");
+  }
+  const publicKeyX = canonicalFelt(probe.publicKey) as string;
+  if (!verifyStarkSignature({ hash: PUBLIC_KEY_PROBE_HASH, publicKeyX, signature: probe })) {
+    throw new WalletError("Krusty KMS public-key probe did not verify");
+  }
+  return publicKeyX;
+};
 
 /**
  * Builds an imported account from a raw Starknet private key through Krusty
@@ -384,20 +429,7 @@ export const deriveImportedAccount = async (
     networkId,
     input.classHash,
   );
-  const probe = await kms.signStarkHash(privateKey, PUBLIC_KEY_PROBE_HASH);
-  if (!isNonZeroStarkFieldElement(probe.publicKey)) {
-    throw new WalletError("Krusty KMS returned invalid public key");
-  }
-  const publicKeyX = canonicalFelt(probe.publicKey) as string;
-  if (
-    !verifyStarkSignature({
-      hash: PUBLIC_KEY_PROBE_HASH,
-      publicKeyX,
-      signature: probe,
-    })
-  ) {
-    throw new WalletError("Krusty KMS public-key probe did not verify");
-  }
+  const publicKeyX = await recoverStarkPublicKey(kms, privateKey);
 
   const { address, classHash, deploymentSalt } = await deriveAccountContractAddress(kms, {
     classHash: resolvedClassHash,
@@ -406,10 +438,7 @@ export const deriveImportedAccount = async (
     networkId,
     publicKeyX,
   });
-  const contract =
-    accountContractType === "argent"
-      ? { accountContractType, deploymentSalt: deploymentSalt as string }
-      : { accountContractType };
+  const contract = recordContract(accountContractType, deploymentSalt);
 
   return {
     account: {

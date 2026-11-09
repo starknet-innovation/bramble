@@ -1,15 +1,16 @@
 /** Durable last-known NFT ownership snapshots for low-latency gallery hydration. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { type DiscoveredNft, isDiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
-import { isStarknetNetworkId, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import type { NftCoverage } from "@bramble/portfolio/nft-indexer";
+import { type DiscoveredNft, isDiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
+import { isStarknetNetworkId, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 
 /**
  * Public browser-storage key for bounded NFT ownership snapshots.
  */
-export const NFT_SNAPSHOTS_KEY = "mc-wallet:nft-snapshots";
+export const NFT_SNAPSHOTS_KEY = "bramble:nft-snapshots";
 const MAX_SNAPSHOTS = 100;
 
 /**
@@ -20,13 +21,17 @@ export type NftSnapshotLane = "complete" | "indexed" | "watched";
 type NftSnapshot = {
   readonly accountId: string;
   readonly checkedAt: number;
+  /** The indexer lane's coverage; absent on watched lanes and older snapshots. */
+  readonly coverage?: NftCoverage;
   readonly fetchedAt: number;
   readonly lane: NftSnapshotLane;
   readonly networkId: StarknetNetworkId;
   readonly nfts: readonly DiscoveredNft[];
 };
 
-type NftSnapshotValue = Pick<NftSnapshot, "checkedAt" | "fetchedAt" | "nfts">;
+type NftSnapshotValue = Pick<NftSnapshot, "checkedAt" | "coverage" | "fetchedAt" | "nfts">;
+
+const COVERAGES: readonly unknown[] = ["complete", "incomplete", "none", "unavailable"];
 
 /**
  * Bounded public snapshot storage; never contains signing or viewing secrets.
@@ -53,7 +58,16 @@ const isLane = (value: unknown): value is NftSnapshotLane =>
 
 const isSnapshot = (value: unknown): value is NftSnapshot =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountId", "checkedAt", "fetchedAt", "lane", "networkId", "nfts"]) &&
+  hasOnlyKnownKeys(value, [
+    "accountId",
+    "checkedAt",
+    "coverage",
+    "fetchedAt",
+    "lane",
+    "networkId",
+    "nfts",
+  ]) &&
+  (value["coverage"] === undefined || COVERAGES.includes(value["coverage"])) &&
   isStarknetNetworkId(value["networkId"]) &&
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   typeof value["checkedAt"] === "number" &&
@@ -97,7 +111,12 @@ export const createNftSnapshotStore = (store: KeyValueStore): NftSnapshotStore =
             stored.lane === lane,
         );
         return snapshot
-          ? { checkedAt: snapshot.checkedAt, fetchedAt: snapshot.fetchedAt, nfts: snapshot.nfts }
+          ? {
+              checkedAt: snapshot.checkedAt,
+              ...(snapshot.coverage === undefined ? {} : { coverage: snapshot.coverage }),
+              fetchedAt: snapshot.fetchedAt,
+              nfts: snapshot.nfts,
+            }
           : null;
       },
       async touch(accountId, networkId, lane, checkedAt) {

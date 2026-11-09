@@ -5,27 +5,42 @@
  * errors around that dependency boundary.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import { REVIEWED_FEE_REQUIRED } from "@mc-wallet/starknet/rpc-submit";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import { WalletError } from "@bramble/core/errors";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 import type {
   Strk20Action,
   Strk20BalanceEntry,
   Strk20CallAndProof,
   Strk20Proof,
-} from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { Strk20NetworkConfig } from "./config";
+import {
+  assertFeeBalance,
+  assertReviewedFeeCeiling,
+  assertSufficientPrivateBalance,
+  spentTokens,
+} from "./policy/fee-guards";
 import { canonicalStrk20PoolFee, STRK20_SERVICE_UNAVAILABLE } from "./policy/fee-policy";
-import type { Strk20SubmissionPlan } from "./policy/submission-plan";
+import type { Strk20PhaseSink } from "./policy/phases";
+import type {
+  SponsoredShieldConfig,
+  Strk20SponsoredShieldPlan,
+  Strk20SubmissionPlan,
+} from "./policy/submission-plan";
 
+export { STRK20_INSUFFICIENT_BALANCE } from "./policy/fee-guards";
 export {
   canonicalStrk20PoolFee,
+  STRK20_FEE_ABOVE_CEILING,
+  STRK20_FEE_CEILING_MULTIPLIER,
+  STRK20_FEE_UNVERIFIABLE,
   STRK20_MAX_POOL_FEE,
   STRK20_SERVICE_UNAVAILABLE,
+  type Strk20FeeReference,
 } from "./policy/fee-policy";
 /**
  * Frozen account and relay route types, defined beside privacy policy and
@@ -37,26 +52,24 @@ export type {
   Strk20SubmissionPlan,
 } from "./policy/submission-plan";
 export {
+  formatStrk20PoolFee,
+  type Strk20AssetLookup,
+  type Strk20FeeAsset,
+  type Strk20ShadowAccountReview,
   strk20CallToInvoke,
   summarizeStrk20Action,
+  summarizeStrk20Batch,
   summarizeStrk20Plan,
 } from "./policy/summaries";
 
-/**
- * Wallet-API NOT_REGISTERED (118).
- */
+/** Wallet-API NOT_REGISTERED (118). */
 export const STRK20_NOT_REGISTERED = "account not registered in strk20";
 /**
  * Wallet-API INSUFFICIENT_PRIVATE_BALANCE (119).
  */
-export const STRK20_INSUFFICIENT_BALANCE = "insufficient private balance";
-/**
- * Wallet-API PRIVACY_LEAK (120).
- */
+/** Wallet-API PRIVACY_LEAK (120). */
 export const STRK20_PRIVACY_LEAK = "strk20 privacy leak";
-/**
- * No unlinkable broadcast service is configured.
- */
+/** No unlinkable broadcast service is configured. */
 export const STRK20_SUBMISSION_UNAVAILABLE = "strk20 private submission unavailable";
 /**
  * Privileged account context supplied only by the background worker. Viewing
@@ -68,14 +81,16 @@ export type Strk20AccountContext = {
   readonly config: Strk20NetworkConfig | null;
   /** Live unlock authorization checked at the final public-account write. */
   readonly isAuthorized: () => boolean;
+  /** Phase labels for a tracked job. Absent on the request path. */
+  readonly onPhase?: Strk20PhaseSink;
   readonly rpcUrls: readonly string[];
+  /** Multisig pool aggregate. Absent, `signHash` still returns one Stark pair. */
+  readonly signCallSet?: (messageHash: string, calls: readonly Call[]) => Promise<string[]>;
   readonly signHash: (messageHash: string) => Promise<StarkSignature>;
   readonly viewingKey: () => Promise<string>;
 };
 
-/**
- * A private-balance query. Empty `tokens` means every shielded token.
- */
+/** A private-balance query. Empty `tokens` means every shielded token. */
 export type Strk20BalancesInput = Strk20AccountContext & {
   readonly tokens: readonly string[];
 };
@@ -88,9 +103,7 @@ export type Strk20PrepareInput = Strk20AccountContext & {
   readonly simulate: boolean;
 };
 
-/**
- * Prepared-proof submission input used by wallet_addInvokeTransaction.
- */
+/** Prepared-proof submission input used by wallet_addInvokeTransaction. */
 export type Strk20PreparedSubmissionInput = Strk20AccountContext & {
   /** Exact batch for a wallet-prepared public transaction. */
   readonly calls?: readonly Call[];
@@ -134,12 +147,35 @@ export type Strk20SubmissionResult = {
 };
 
 /**
+ * Exclusive bound on nonces `get_shadow_accounts` can list, single-sourced with
+ * the pre-approval nonce refusal in the provider protocol (audit F4).
+ */
+export { STRK20_SHADOW_VIEW_NONCE_LIMIT } from "@bramble/wallet-protocol/strk20-batch";
+
+/** One shadow account as the anonymizer reports it (address deployed or derived). */
+export type Strk20ShadowAccountInfo = {
+  readonly address: string;
+  readonly deployed: boolean;
+  readonly nonce: string;
+};
+
+/** Deposit-only batch; `activate` (#789) also registers, self-credit only. */
+export type Strk20AccountActionsInput = Strk20AccountContext & {
+  readonly actions: readonly Strk20Action[];
+  readonly activate?: true;
+  readonly beforeProof?: () => Promise<void>;
+  readonly poolFeeFri: string;
+};
+
+/**
  * Injectable official-SDK adapter. Implementations must validate every SDK and
  * service response, target the configured pool, and fail closed.
  */
 export type Strk20Service = {
   readonly privateBalances: (input: Strk20BalancesInput) => Promise<readonly Strk20BalanceEntry[]>;
   readonly prepare: (input: Strk20PrepareInput) => Promise<Strk20CallAndProof>;
+  /** "Unlock anyway": clears a stuck `submitting` marker; that write may still land. */
+  readonly releasePendingWrite?: (input: Strk20AccountContext) => Promise<boolean>;
   readonly registrationStatus?: (
     input: Strk20AccountContext & { readonly subject?: string; readonly token: string },
   ) => Promise<"registered" | "unregistered">;
@@ -150,27 +186,39 @@ export type Strk20Service = {
   readonly prepareRegistration?: (
     input: Strk20AccountContext & { readonly poolFeeFri: string },
   ) => Promise<PreparedStrk20AccountSubmission>;
-  /** Builds the registration pool call + proof for a dapp to submit; never broadcasts. */
   readonly prepareRegistrationCall?: (
     input: Strk20AccountContext & { readonly simulate: boolean },
   ) => Promise<Strk20CallAndProof>;
   /** Builds a deposit-only public-account proof and calls without broadcasting. */
   readonly prepareAccountActions?: (
-    input: Strk20AccountContext & {
-      readonly actions: readonly Strk20Action[];
-      readonly beforeProof?: () => Promise<void>;
-      readonly poolFeeFri: string;
-    },
+    input: Strk20AccountActionsInput,
   ) => Promise<PreparedStrk20AccountSubmission>;
   /**
    * Reads the pool's per-`apply_actions` STRK fee so the UI can show it before
    * any quote exists. Absent implementations leave the fee unknown.
    */
   readonly poolFee?: (input: Strk20AccountContext) => Promise<string>;
+  /**
+   * Claims the relay maturity journal, then runs `broadcast` once. A later
+   * call while that claim is still open throws instead of sending again.
+   */
+  readonly submitAcceptedRelay?: (
+    input: Strk20AccountContext & {
+      readonly broadcast: () => Promise<{ readonly transactionHash: string }>;
+      readonly relaySlots: readonly string[];
+    },
+  ) => Promise<{ readonly transactionHash: string }>;
   readonly quoteActions: (
     input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
   ) => Promise<Strk20SubmissionPlan>;
-  readonly subaccountCommitment: (
+  /** Shadow accounts for one origin. Absent implementations fail closed. */
+  readonly shadowAccounts?: (
+    input: Strk20AccountContext & {
+      readonly dappName: string;
+      readonly nonces: readonly bigint[];
+    },
+  ) => Promise<readonly Strk20ShadowAccountInfo[]>;
+  readonly shadowAccountCommitment: (
     input: Strk20AccountContext & { readonly dappName: string; readonly nonce?: string },
   ) => Promise<string>;
   readonly submitActions: (
@@ -184,11 +232,17 @@ export type Strk20Service = {
   readonly submitPrepared: (
     input: Strk20PreparedSubmissionInput,
   ) => Promise<{ readonly transactionHash: string }>;
+  /** Relays a prepared deposit-only shield on a sponsor's frozen plan (#789). */
+  readonly submitSponsoredShield?: (
+    input: Strk20PreparedSubmissionInput & {
+      readonly plan: Strk20SponsoredShieldPlan;
+      readonly relay: SponsoredShieldConfig;
+    },
+  ) => Promise<{ readonly transactionHash: string }>;
 };
 
-// Names the stub explicitly. A build with no privacy runtime wired otherwise
-// reports the same line as a live service that failed, which sends the reader
-// looking at the backend for a wiring problem.
+// Names the stub explicitly, so a build with no privacy runtime wired does not
+// report the line a live failure does and send the reader to the backend.
 const unavailable = (): never => {
   throw new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: no privacy runtime is wired in this build`);
 };
@@ -206,9 +260,6 @@ export const unavailableStrk20Service: Strk20Service = {
   async prepareRegistration() {
     return unavailable();
   },
-  async prepareRegistrationCall() {
-    return unavailable();
-  },
   async privateBalances() {
     return unavailable();
   },
@@ -224,7 +275,7 @@ export const unavailableStrk20Service: Strk20Service = {
   async registrationStatus() {
     return unavailable();
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return unavailable();
   },
   async submitActions() {
@@ -233,55 +284,6 @@ export const unavailableStrk20Service: Strk20Service = {
   async submitPrepared() {
     return unavailable();
   },
-};
-
-const spentTokens = (actions: readonly Strk20Action[]): readonly string[] => {
-  const seen = new Map<bigint, string>();
-  for (const action of actions) {
-    if (action.type === "withdraw" || action.type === "transfer") {
-      seen.set(BigInt(action.token), action.token);
-    }
-  }
-  return [...seen.values()];
-};
-
-const assertSufficientPrivateBalance = (
-  actions: readonly Strk20Action[],
-  balances: readonly Strk20BalanceEntry[],
-): void => {
-  const required = new Map<bigint, bigint>();
-  for (const action of actions) {
-    if ((action.type === "withdraw" || action.type === "transfer") && action.amount !== "OPEN") {
-      const token = BigInt(action.token);
-      required.set(token, (required.get(token) ?? 0n) + BigInt(action.amount));
-    }
-  }
-  for (const [token, amount] of required) {
-    const entry = balances.find((balance) => BigInt(balance.token) === token);
-    if (amount > (entry ? BigInt(entry.balance) : 0n)) {
-      throw new WalletError(STRK20_INSUFFICIENT_BALANCE);
-    }
-  }
-};
-
-const assertFeeBalance = async (
-  service: Strk20Service,
-  input: Strk20AccountContext & {
-    readonly actions: readonly Strk20Action[];
-    readonly plan: Strk20SubmissionPlan;
-  },
-): Promise<void> => {
-  if (input.plan.mode === "account") {
-    return;
-  }
-  const feeAction = input.plan.feeAction;
-  const balances = await service.privateBalances({ ...input, tokens: [feeAction.token] });
-  const sameTokenSpend = input.actions.filter(
-    (action) =>
-      (action.type === "withdraw" || action.type === "transfer") &&
-      sameFelt(action.token, feeAction.token),
-  );
-  assertSufficientPrivateBalance([...sameTokenSpend, feeAction], balances);
 };
 
 const assertReviewedPoolFee = async (
@@ -315,6 +317,19 @@ const assertNoPrivacyLeak = (actions: readonly Strk20Action[]): void => {
     if (withdrawals.has(token)) {
       throw new WalletError(STRK20_PRIVACY_LEAK);
     }
+  }
+};
+
+// The relay's fee is a public withdrawal spliced into the batch after the
+// caller's actions are checked, so the same deposit/withdrawal pairing must be
+// refused on the combined set: a fee in a token the batch also deposits links
+// the deposit to the private spend on chain (Sherlock 189).
+const assertRelayFeeUnlinked = (
+  actions: readonly Strk20Action[],
+  plan: Strk20SubmissionPlan,
+): void => {
+  if (plan.mode !== "account") {
+    assertNoPrivacyLeak([...actions, plan.feeAction]);
   }
 };
 
@@ -362,18 +377,19 @@ export const quoteStrk20Plan = async (
   input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
 ): Promise<Strk20SubmissionPlan> => {
   assertNoPrivacyLeak(input.actions);
-  // Deposits are public by definition and may be the account's first private
-  // note. Routing them through the private relay would require a private fee
-  // balance that cannot exist yet, and checking for one here would disclose
-  // private state before the dapp request is approved. Keep the entry route
-  // deterministic and pay its fee from the public account instead.
+  // Deposits are public and may be the account's first private note. The relay
+  // would need a private fee balance that cannot exist yet, and checking for one
+  // here would disclose private state before the dapp request is approved. Keep
+  // the entry route deterministic and pay its fee from the public account.
   if (isDepositOnly(input.actions)) {
     if (!service.poolFee) {
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
     return { mode: "account", poolFeeFri: canonicalStrk20PoolFee(await service.poolFee(input)) };
   }
-  return service.quoteActions(input);
+  const plan = await service.quoteActions(input);
+  assertRelayFeeUnlinked(input.actions, plan);
+  return plan;
 };
 
 /**
@@ -402,6 +418,7 @@ export const submitStrk20Actions = async (
   },
 ): Promise<Strk20SubmissionResult> => {
   await assertActionBatch(service, input);
+  assertRelayFeeUnlinked(input.actions, input.plan);
   if (input.plan.mode === "account" && !isDepositOnly(input.actions)) {
     throw new WalletError(STRK20_PRIVACY_LEAK);
   }
@@ -411,6 +428,7 @@ export const submitStrk20Actions = async (
     }
     await assertReviewedPoolFee(service, input, input.plan.poolFeeFri);
   }
+  assertReviewedFeeCeiling(input.plan);
   await assertFeeBalance(service, input);
   return service.submitActions(input);
 };
@@ -422,11 +440,7 @@ export const submitStrk20Actions = async (
  */
 export const prepareStrk20AccountActions = async (
   service: Strk20Service,
-  input: Strk20AccountContext & {
-    readonly actions: readonly Strk20Action[];
-    readonly beforeProof?: () => Promise<void>;
-    readonly poolFeeFri: string;
-  },
+  input: Strk20AccountActionsInput,
 ): Promise<PreparedStrk20AccountSubmission> => {
   if (!service.prepareAccountActions || !isDepositOnly(input.actions)) {
     throw new WalletError(STRK20_PRIVACY_LEAK);
@@ -483,16 +497,3 @@ export const prepareStrk20Registration = async (
   await assertReviewedPoolFee(service, input, input.poolFeeFri);
   return service.prepareRegistration(input);
 };
-
-/**
- * Builds the Wallet-API register action's call and proof for
- * wallet_strk20PrepareInvoke. Only call after explicit user approval; missing
- * SDK support fails closed.
- */
-export const prepareStrk20RegistrationCall = (
-  service: Strk20Service,
-  input: Strk20AccountContext & { readonly simulate: boolean },
-): Promise<Strk20CallAndProof> =>
-  service.prepareRegistrationCall
-    ? service.prepareRegistrationCall(input)
-    : Promise.reject(new WalletError(STRK20_SERVICE_UNAVAILABLE));

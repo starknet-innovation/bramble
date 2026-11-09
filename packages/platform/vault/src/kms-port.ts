@@ -1,7 +1,7 @@
 /**
  * Privileged cryptographic capability required by the encrypted vault.
  */
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
 
 /** Authenticated public application data recovered inside Krusty. */
 export type NostrApplicationData = {
@@ -17,6 +17,15 @@ export type StarkKeypair = {
   readonly privateKey: string;
   readonly publicKeyX: string;
   readonly publicKeyY: string;
+};
+
+/**
+ * X-only Stark key material from derivations whose backend cannot produce an
+ * affine Y coordinate (Ready's ETH-seeded scheme). Vault flows only.
+ */
+export type StarkXOnlyKeypair = {
+  readonly privateKey: string;
+  readonly publicKeyX: string;
 };
 
 /**
@@ -40,6 +49,10 @@ export type KmsPort = {
     chainId: string,
     poolAddress: string,
   ) => Promise<string>;
+  readonly deriveArgentLegacyKeypair: (
+    mnemonic: string,
+    addressIndex: number,
+  ) => Promise<StarkXOnlyKeypair>;
   readonly deriveStarknetKeypair: (
     mnemonic: string,
     addressIndex: number,

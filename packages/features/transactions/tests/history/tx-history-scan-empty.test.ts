@@ -3,7 +3,7 @@
  * scan it returns an empty feed and never constructs a provider or touches RPC.
  */
 import { describe, expect, test } from "bun:test";
-import { scanTransactionHistory } from "@mc-wallet/transactions/tx-history-scan";
+import { scanTransactionHistory } from "@bramble/transactions/tx-history-scan";
 import type { RpcProvider } from "starknet";
 
 const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";

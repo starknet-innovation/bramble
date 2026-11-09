@@ -1,7 +1,8 @@
 /** Canonical public types for frozen Argent multisig V3 transactions. */
 
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
+import { STRK20_LIMITS, type Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { EDataAvailabilityMode } from "starknet";
 import type { ArgentMultisigConfig } from "../accounts/account-contracts";
 
@@ -22,6 +23,7 @@ export const ARGENT_MULTISIG_INVOKE_LIMITS = {
   calls: 16,
   calldataFelts: 256,
   executeCalldataFelts: 561,
+  proofFacts: STRK20_LIMITS.proofFacts,
   totalCalldataFelts: 512,
   transactionDataFelts: 64,
 } as const;
@@ -71,6 +73,12 @@ export type PreparedArgentMultisigInvokeV3 = {
   readonly nonce: string;
   readonly nonceDataAvailabilityMode: EDataAvailabilityMode;
   readonly paymasterData: readonly string[];
+  /**
+   * SNIP-36 proof facts committed by starknet.js when present. Omitted for a
+   * public transaction. The proof bytes are not stored: they are not part of
+   * the hash and do not fit a Nostr gift wrap.
+   */
+  readonly proofFacts?: readonly string[];
   readonly resourceBounds: PreparedResourceBounds;
   readonly senderAddress: string;
   readonly tip: string;
@@ -85,6 +93,11 @@ export type PrepareArgentMultisigInvokeV3Input = {
   readonly account: ArgentMultisigAccountInput;
   readonly calls: readonly ArgentMultisigCall[];
   readonly config: ArgentMultisigConfig;
+  /**
+   * Proof whose facts are frozen into the hash. The bytes are not stored on
+   * the prepared transaction; the caller keeps them beside the intent.
+   */
+  readonly proof?: Strk20Proof;
   readonly rpcUrls: readonly string[];
 };
 
@@ -96,6 +109,11 @@ export type SubmitPreparedArgentMultisigInvokeV3Input = {
   /** Live authorization captured by the privileged caller. */
   readonly isAuthorized?: () => boolean;
   readonly prepared: PreparedArgentMultisigInvokeV3;
+  /**
+   * Proof bytes for a transaction whose hash commits to `prepared.proofFacts`.
+   * Required exactly when those facts are present, and refused otherwise.
+   */
+  readonly proof?: Strk20Proof;
   readonly rpcUrls: readonly string[];
   readonly signatures: readonly StarkSignature[];
 };

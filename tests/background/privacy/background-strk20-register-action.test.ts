@@ -6,7 +6,8 @@
  * mixed with other actions as INVALID_REQUEST_PAYLOAD (114).
  */
 import { describe, expect, test } from "bun:test";
-import { toProviderPayload } from "@mc-wallet/wallet-protocol/bridge";
+import { toProviderPayload } from "@bramble/wallet-protocol/bridge";
+import { STRK20_PREPARE_REGISTER_SUMMARY } from "@bramble/wallet-protocol/strk20";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
 import {
   approveHeldStrk20,
@@ -58,9 +59,7 @@ describe("strk20 register action", () => {
     await flushHeld();
     const listed = await waitForPendingApprovals<Listed>(handler, STRK20_EXTENSION_SENDER);
     expect(listed.at(-1)).toMatchObject({ kind: "strk20-register" });
-    expect(listed.at(-1)?.summaries?.[0]).toBe(
-      "Prepare private-balance activation for this site to submit",
-    );
+    expect(listed.at(-1)?.summaries?.[0]).toBe(STRK20_PREPARE_REGISTER_SUMMARY);
     expect(proveCalls.value).toBe(0);
     const id = await latestApprovalId(handler, STRK20_EXTENSION_SENDER);
     await handler({ id, type: "wallet.approveOrigin" }, STRK20_EXTENSION_SENDER);
@@ -95,17 +94,18 @@ describe("strk20 register action", () => {
     expect(proveCalls.value).toBe(0);
   });
 
-  test("refuses an already registered account before any approval (114)", async () => {
+  test("holds an already registered account on a notice, then refuses with 114", async () => {
     for (const [message, method] of [
       [invokeRegister, "wallet_strk20InvokeTransaction"],
       [prepareRegister(false), "wallet_strk20PrepareInvoke"],
     ] as const) {
       const handler = buildStrk20Handler({ registered: true });
-      const result = await handler(message, STRK20_CONTENT_SENDER);
-      expect(toProviderPayload(result, method).error?.code).toBe(114);
-      const pending = await handler({ type: "wallet.pendingApprovals" }, STRK20_EXTENSION_SENDER);
-      expect(pending).toMatchObject({ ok: true });
-      expect(JSON.stringify(pending)).not.toContain("strk20-register");
+      const held = handler(message, STRK20_CONTENT_SENDER);
+      // Audit L1: setup is never answered at once; no activation card is raised.
+      const pending = await waitForPendingApprovals<Listed>(handler, STRK20_EXTENSION_SENDER);
+      expect(pending.map((approval) => approval.kind)).toEqual(["strk20-unavailable"]);
+      await handler({ id: pending[0]?.id, type: "wallet.denyOrigin" }, STRK20_EXTENSION_SENDER);
+      expect(toProviderPayload(await held, method).error?.code).toBe(114);
     }
   });
 

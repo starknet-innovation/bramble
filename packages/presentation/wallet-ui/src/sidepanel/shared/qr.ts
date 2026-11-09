@@ -3,7 +3,7 @@
  * correction level M, versions 1-11, mask pattern 0. No external dependencies
  * so the extension CSP stays locked to packaged code.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 
 type VersionSpec = {
   readonly alignment: readonly number[];

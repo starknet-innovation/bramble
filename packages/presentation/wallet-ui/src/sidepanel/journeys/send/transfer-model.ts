@@ -4,14 +4,11 @@
  * explicit and independently testable.
  */
 
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { ValueBucket } from "@mc-wallet/transactions/send-routes";
-import {
-  isStarkFieldElement,
-  normalizeFeltInput,
-  sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { errorMessage } from "../../shared/dom";
+import { normalizeStarkName } from "@bramble/starknet/stark-name";
+import type { ValueBucket } from "@bramble/transactions/send-routes";
+import { isStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
+import { errorLine, errorMessage } from "../../shared/dom";
+import type { PreparationProgress } from "../privacy/privacy-preparation-job";
 import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 
 /**
@@ -32,18 +29,40 @@ export const recipientFieldError = (recipient: string): string | null =>
   isStarkFieldElement(normalizeFeltInput(recipient)) ? null : INVALID_RECIPIENT_MESSAGE;
 
 /**
- * Maps a malformed-recipient background error onto the same friendly copy.
+ * True when the text is a syntactically valid Starknet name (for example
+ * `name.stark` or `name.braavos.stark`). The `.stark` suffix is required: a
+ * bare word is not a name, so an ordinary recipient search can never turn a
+ * word into a lookup. A name is not an address: it is only offered to the
+ * background for resolution, and the address it resolves to is what a review is
+ * built from. A bare hex address is judged by {@link recipientFieldError}
+ * instead.
+ */
+export const isStarkName = (value: string): boolean => normalizeStarkName(value) !== null;
+
+/**
+ * Maps a malformed-recipient background error onto the same friendly copy, and
+ * any other review failure onto its reader-facing sentence: the result is
+ * written to a status line as well as a toast, so it must never be the raw
+ * diagnostic (issue 652).
  */
 export const friendlyReviewError = (error: unknown): string => {
   const message = errorMessage(error, "Transfer review failed");
-  return INVALID_REVIEW_ERRORS.has(message) ? INVALID_RECIPIENT_MESSAGE : message;
+  return INVALID_REVIEW_ERRORS.has(message)
+    ? INVALID_RECIPIENT_MESSAGE
+    : errorLine(error, "Transfer review failed");
 };
+
+/**
+ * Screens Send can hand off to by name: where a finished or abandoned send
+ * lands, and the two screens its composition controls open (the address book
+ * for a new recipient, token management for a token it does not list).
+ */
+export type TransferExitView = "activity" | "address-book" | "home" | "multisig-deploy" | "tokens";
 
 /**
  * Deterministic screens owned by the Send state machine.
  */
 export type TransferStage =
-  | "asset"
   | "authorizing"
   | "broadcasting"
   | "confirming"
@@ -56,6 +75,24 @@ export type TransferStage =
   | "submitted";
 
 /**
+ * Whether a send is past the confirm and its result has not landed yet. Such a
+ * send is already signing or on its way to the network, so a screen that takes
+ * over the panel (a dapp approval) must keep its state rather than discard the
+ * hash it is about to return (Sherlock 164).
+ */
+export const isTransferInFlight = (stage: TransferStage): boolean =>
+  stage === "authorizing" || stage === "broadcasting" || stage === "confirming";
+
+/**
+ * Whether the Send form may act on a submit. Not once a send is past the
+ * confirm: a second submit there would sign the reviewed transfer again. The
+ * screen also hides and disables those controls; this is the state machine's
+ * own guard for a submit that arrives anyway (audit L5).
+ */
+export const acceptsTransferSubmit = (stage: TransferStage): boolean =>
+  !isTransferInFlight(stage) && stage !== "pending" && stage !== "submitted";
+
+/**
  * User-visible transaction fields frozen at review.
  */
 export type TransferFields = {
@@ -66,6 +103,12 @@ export type TransferFields = {
   readonly fiatEstimate: string;
   readonly recipient: string;
   readonly recipientLabel: string;
+  /**
+   * Set to `"stark-name"` when the recipient came from a resolved Starknet
+   * name, so the review can show the address it was resolved to and flag a
+   * recipient that is not already saved. Empty for every other recipient.
+   */
+  readonly recipientResolvedFrom: "" | "stark-name";
   readonly signer: "ledger" | "software";
   /** Balance the value is spent from. */
   readonly source: ValueBucket;
@@ -84,12 +127,41 @@ export type TransferFields = {
  */
 export type TransferState<Review> = {
   readonly error: string;
+  /**
+   * The complete diagnostic behind `error` on a `failed` stage, for the
+   * receipt's copy control: the rejected call's own message (`errorDetails`),
+   * which a pool route's background has already reduced to wallet-authored,
+   * sanitized text. Empty or absent when no error lies behind the failure (a
+   * chain rejection), in which case the control copies the reason shown.
+   */
+  readonly errorDetails?: string;
   readonly fields: TransferFields | null;
   readonly privatePreparation: PrivacyPreparation | null;
+  /**
+   * The latest progress of the tracked background job behind a pool route's
+   * review or confirm — the phase it is in and for how long — so the working
+   * screen can say what the wait is doing. Null outside such a wait.
+   */
+  readonly progress: PreparationProgress | null;
   readonly requiresDeployment: boolean;
   readonly review: Review | null;
   readonly reviewedKey: string | null;
   readonly stage: TransferStage;
+  /**
+   * True on a `failed` stage whose submission may still land (its reply was
+   * lost and no hash was captured). The receipt then says the status is
+   * unknown and offers Activity instead of Try again.
+   */
+  readonly submissionUnknown: boolean;
+  /**
+   * Set on a `failed` stage refused because an EARLIER private write may still
+   * land: this attempt was not sent, and the receipt offers Activity. When the
+   * refusal is `unresolved` it also offers Check again, which prepares afresh
+   * and so re-runs the background's resolution of that write; a `stranded`
+   * one offers no retry, since only ending the browser session clears it
+   * (mc-wallet issue 661).
+   */
+  readonly priorWrite?: "stranded" | "unresolved" | null;
   readonly transactionHash: string | null;
 };
 
@@ -100,10 +172,12 @@ export const initialTransferState = <Review>(): TransferState<Review> => ({
   error: "",
   fields: null,
   privatePreparation: null,
+  progress: null,
   requiresDeployment: false,
   review: null,
   reviewedKey: null,
   stage: "recipient",
+  submissionUnknown: false,
   transactionHash: null,
 });
 
@@ -126,6 +200,7 @@ export const transferFields = (form: HTMLFormElement): TransferFields => {
     fiatEstimate: String(data.get("fiatEstimate") ?? ""),
     recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
     recipientLabel: String(data.get("recipientLabel") ?? "").trim(),
+    recipientResolvedFrom: data.get("recipientResolvedFrom") === "stark-name" ? "stark-name" : "",
     signer: form.dataset["signer"] === "ledger" ? "ledger" : "software",
     source: bucket(data.get("source")),
     speed: data.get("speed") === "fast" ? "fast" : "standard",
@@ -157,76 +232,3 @@ export const transferKey = (fields: TransferFields): string =>
     speed: fields.speed,
     tokenId: fields.tokenId,
   });
-
-/**
- * Finds the current chain status for one submitted hash.
- */
-export const confirmationStatus = (
-  entries: readonly ActivityEntry[],
-  transactionHash: string,
-): ActivityEntry["status"] | null =>
-  entries.find((entry) => sameFelt(entry.hash, transactionHash))?.status ?? null;
-
-/**
- * What the Send journey should do about the latest chain status.
- *
- * A pre-confirmation is a real answer — the proposer has executed the
- * transaction and its revert status is already known — so the journey completes
- * on it rather than sitting on a spinner waiting for L2 acceptance. Background
- * reconciliation keeps verifying the transaction through to L1 finality and
- * raises a notice if it later fails. `null` means keep waiting.
- */
-export type ConfirmationOutcome =
-  | { readonly kind: "failed"; readonly message: string; readonly toast: string }
-  | { readonly kind: "succeeded"; readonly toast: string };
-
-// One row per status the journey acts on. Statuses absent here — `pending`, and
-// no status observed yet — mean keep waiting.
-const CONFIRMATION_OUTCOMES: Partial<Record<ActivityEntry["status"], ConfirmationOutcome>> = {
-  accepted: { kind: "succeeded", toast: "Transaction confirmed on Starknet" },
-  preconfirmed: { kind: "succeeded", toast: "Transaction pre-confirmed on Starknet" },
-  rejected: {
-    kind: "failed",
-    message: "Starknet rejected this transaction. No transfer was completed.",
-    toast: "Transaction was not confirmed",
-  },
-  reverted: {
-    kind: "failed",
-    message: "Starknet reverted this transaction. Review its activity details before retrying.",
-    toast: "Transaction was not confirmed",
-  },
-};
-
-/**
- * Confirmation checkpoints in milliseconds, paired with the outcome table above:
- * a tight burst for the common case, then ten-second checks out to roughly a
- * minute. Every checkpoint is a live chain read, so this is the journey's
- * patience rather than the chain's — it completes on PRE_CONFIRMED, but a
- * proposer can take longer than a ten-second burst to report even that.
- */
-export const CONFIRMATION_DELAYS_MS: readonly number[] = [
-  0, 250, 500, 900, 1_500, 2_500, 4_000, 5_000, 7_500, 10_000, 10_000, 10_000,
-];
-
-/**
- * Maps the latest observed status onto that decision.
- */
-export const confirmationOutcome = (
-  status: ActivityEntry["status"] | null,
-): ConfirmationOutcome | null => (status === null ? null : (CONFIRMATION_OUTCOMES[status] ?? null));
-
-/**
- * Human-readable title for the current Send checkpoint.
- */
-export const transferStageTitle = (stage: TransferStage): string => {
-  if (stage === "recipient") return "Send to";
-  if (stage === "asset") return "Select an asset";
-  if (stage === "details" || stage === "reviewing") return "Send";
-  if (stage === "review") return "Review send";
-  if (stage === "authorizing") return "Authorize send";
-  if (stage === "broadcasting") return "Sending";
-  if (stage === "confirming") return "Confirming";
-  if (stage === "pending") return "Confirmation pending";
-  if (stage === "submitted") return "Confirmed";
-  return "Send failed";
-};

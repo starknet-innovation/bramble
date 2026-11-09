@@ -13,12 +13,12 @@
  * might trust.
  *
  * This is a pure view over untrusted input: it renders whatever it is handed,
- * including payloads the hashing boundary in `@mc-wallet/starknet/typed-data`
+ * including payloads the hashing boundary in `@bramble/starknet/typed-data`
  * refuses, and never decides whether a request may be signed.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
-import { isRecord } from "@mc-wallet/core/json";
-import { RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { escapeHtml } from "@bramble/core/html";
+import { isRecord } from "@bramble/core/json";
+import { RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 import { decodeSignRequest } from "./sign-request-decode";
 import type { SignRequestRow, SignRequestSplit } from "./sign-request-rows";
 import { SIGN_ROW_LIMIT, signRawText, signValueText } from "./sign-request-text";
@@ -29,10 +29,13 @@ import { SIGN_ROW_LIMIT, signRawText, signValueText } from "./sign-request-text"
  */
 export const SIGN_REQUEST_STYLES = `
   .sign-block {
-    background: var(--mc-soft);
+    background: var(--bramble-soft);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: 6px;
+    /* One column no wider than the card: an auto track would take the widest
+       row's width and push every value past the visible edge. */
+    grid-template-columns: minmax(0, 1fr);
     margin-bottom: ${SPACE.sm};
     /* Bounded like the raw block below: an unbounded list of site-supplied rows
        would scroll its own "NOT signed" banner out of view and push the decision
@@ -40,27 +43,42 @@ export const SIGN_REQUEST_STYLES = `
     max-height: 240px;
     overflow: auto;
     padding: ${SPACE.sm} ${SPACE.md};
+    scrollbar-gutter: stable;
   }
-  .sign-unsigned { background: var(--mc-danger-soft); }
-  .sign-more { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-style: italic; }
+  .sign-unsigned { background: var(--bramble-danger-soft); }
+  .sign-more { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; font-style: italic; }
   .sign-row { align-items: baseline; display: flex; gap: ${SPACE.md}; justify-content: space-between; }
-  .sign-key { color: var(--mc-muted); flex: none; font-size: ${TYPE.caption.size}; }
-  .sign-val {
-    font-family: var(--mc-font-mono);
+  /* A key is a dotted path of site-chosen names with no break opportunity, so
+     it wraps anywhere and takes at most half the row. The value always keeps
+     the rest: a signed value must never be laid out at zero width beside a
+     long key (Sherlock 257). */
+  .sign-key {
+    color: var(--bramble-muted);
+    flex: 0 1 auto;
     font-size: ${TYPE.caption.size};
+    max-width: 50%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .sign-val {
+    flex: 1 1 0;
+    font-family: var(--bramble-font-mono);
+    font-size: ${TYPE.caption.size};
+    min-width: 0;
     overflow-wrap: anywhere;
     text-align: right;
   }
-  .sign-raw { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .sign-raw { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
   .sign-raw summary { cursor: pointer; }
   .sign-raw pre {
-    background: var(--mc-bg);
+    background: var(--bramble-bg);
     border-radius: ${RADIUS.sm};
     font-size: ${TYPE.mono.size};
     margin: ${SPACE.xs} 0 0;
     max-height: 200px;
     overflow: auto;
     padding: ${SPACE.sm};
+    scrollbar-gutter: stable;
   }`;
 
 /**
@@ -70,6 +88,21 @@ export const SIGN_REQUEST_STYLES = `
  */
 export const SIGN_REQUEST_UNCLASSIFIED_WARNING =
   "This wallet could not work out which parts of this message would actually be signed, so it will not offer to sign it. Deny this request and ask the site to send a standard SNIP-12 message.";
+
+/** Warning for the SNIP-9 capability shape used to authorize later calls. */
+export const OUTSIDE_EXECUTION_WARNING =
+  "This is an OutsideExecution capability. The site or another authorized caller may submit its signed calls later, without another wallet prompt, until the signed authorization expires.";
+
+/**
+ * Returns capability warnings derived only from explicit typed-data fields.
+ * Unknown payloads receive no guessed classification; `OutsideExecution` is
+ * warned because that standard authorizes later transaction execution rather
+ * than merely proving account ownership.
+ */
+export const signRequestWarnings = (typedData: unknown): readonly string[] =>
+  isRecord(typedData) && typedData["primaryType"] === "OutsideExecution"
+    ? [OUTSIDE_EXECUTION_WARNING]
+    : [];
 
 /**
  * A rendered sign request: the card body, and whether every value in the

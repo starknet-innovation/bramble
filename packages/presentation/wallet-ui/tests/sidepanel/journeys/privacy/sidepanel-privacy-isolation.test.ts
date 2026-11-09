@@ -4,7 +4,7 @@
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import type {
   PrivacyDisclosureState,
@@ -42,7 +42,9 @@ const preparation = {
   route: "public-account" as const,
   summaries: ["Register viewing-key commitment"],
   symbol: "ETH",
-  tokenId: preferences.tokens[0]?.id ?? "",
+  // A real id: the shared fixture tracks no tokens, and an empty id makes the
+  // entry a no-op, which once left the two tests below passing vacuously.
+  tokenId: "SN_MAIN:ETH:0x456",
 };
 
 const deferred = <T>() => {
@@ -131,7 +133,11 @@ describe("privacy UI async scope isolation", () => {
       { error: null, loading: false, value: null },
     );
     bindWith(statusFor(account.id), { error: null, loading: true, value: null });
-    bindWith(statusFor(account.id), { error: "prover offline", loading: false, value: null });
+    bindWith(statusFor(account.id), {
+      error: "The prover is offline.",
+      loading: false,
+      value: null,
+    });
 
     expect(loads).toBe(0);
   });
@@ -160,7 +166,7 @@ describe("privacy UI async scope isolation", () => {
       status: () => statusFor(account.id),
       wallet: {
         loadPrivacyState: async () => {
-          throw new Error("privacy indexer unavailable for this account");
+          throw new Error("The privacy indexer is unavailable for this account.");
         },
       } as unknown as SidepanelWallet,
     });
@@ -168,9 +174,9 @@ describe("privacy UI async scope isolation", () => {
     button?.click();
     await tick();
 
-    expect(disclosure.error).toBe("privacy indexer unavailable for this account");
+    expect(disclosure.error).toBe("The privacy indexer is unavailable for this account.");
     expect(document.querySelector(".toast.error .toast-text")?.textContent).toBe(
-      "privacy indexer unavailable for this account",
+      "The privacy indexer is unavailable for this account.",
     );
     expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
     expect(button?.hasAttribute("data-busy")).toBe(false);
@@ -305,7 +311,9 @@ describe("privacy UI async scope isolation", () => {
         },
       }),
       generation: () => generation,
-      journey: () => ({ stage: "idle" }),
+      // Real journey state, so the scope guard — not a stale journey — is what
+      // drops the result.
+      journey: () => journeys.at(-1) ?? { stage: "idle" },
       navigate: () => undefined,
       paint: () => undefined,
       preferences: () => preferences,
@@ -323,7 +331,9 @@ describe("privacy UI async scope isolation", () => {
     pending.resolve(preparation);
     await tick();
 
-    expect(journeys).toEqual([]);
+    // The press showed the wait; the review it produced belongs to the account
+    // that was active when it started and is never applied to the next one.
+    expect(journeys.map((journey) => journey.stage)).toEqual(["preparing"]);
   });
 
   test("drops execution success after the reviewed account scope is reset", async () => {

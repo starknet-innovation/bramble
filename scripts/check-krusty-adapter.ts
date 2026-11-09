@@ -9,19 +9,19 @@
 
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { deriveAccount } from "@mc-wallet/vault/accounts";
-import { DEFAULT_NETWORK, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { deriveAccount } from "@bramble/vault/accounts";
+import { DEFAULT_NETWORK, isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
-const packageVersion = "0.10.0";
+const packageVersion = "0.11.0";
 const packageRoot = `node_modules/${packageName}`;
 const packageManifest = `${packageRoot}/package.json`;
 const wasmPackage = `${packageRoot}/krusty_kms_wasm.js`;
 const wasmBinary = `${packageRoot}/krusty_kms_wasm_bg.wasm`;
 const expectedRuntimeDigests: Readonly<Record<string, string>> = {
-  [wasmPackage]: "a3e2d11f8ebae305341a65955b36b6f8869fdb28c8775c0754e36660cc00dfc9",
-  [wasmBinary]: "0f851abcc7ca23f95e23c182fdcc10ad165da21dd1f71437eb314fd72bc2af51",
+  [wasmPackage]: "b76e555eaf4edae057dff57f72c52533716f6bcb4c73418e4513934ce402e63e",
+  [wasmBinary]: "d92e54274127096998f32d556779fe0352f88c1d70ce19da8ba34b71db7b7d0c",
 };
 
 // A published BIP-39 test phrase, never a wallet phrase: it exists so the
@@ -93,7 +93,7 @@ const giftWrap = await kms.wrapNostrApplicationData(
   0,
   0,
   nostrPublicKey,
-  "mc-wallet.check",
+  "bramble.check",
   "round-trip",
 );
 const opened = await kms.openNostrApplicationData(mnemonic, 0, 0, giftWrap);
@@ -104,7 +104,7 @@ if (
   !isStarkFieldElement(viewingKey) ||
   BigInt(viewingKey) === 0n ||
   opened.content !== "round-trip" ||
-  opened.identifier !== "mc-wallet.check" ||
+  opened.identifier !== "bramble.check" ||
   opened.senderPublicKey !== nostrPublicKey ||
   ![signature.publicKey, signature.r, signature.s].every(isStarkFieldElement)
 ) {
@@ -127,6 +127,7 @@ const knownViewingKey = await kms.deriveStrk20ViewingKey(
 );
 
 if (
+  !("publicKeyY" in knownAccount) ||
   knownAccount.address !== referenceAccount.address ||
   knownAccount.publicKeyX !== referenceAccount.publicKeyX ||
   knownAccount.publicKeyY !== referenceAccount.publicKeyY ||

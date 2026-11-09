@@ -1,6 +1,6 @@
 /** Public Nostr values accepted at contact-card and relay trust boundaries. */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isWebSocketServiceUrl } from "@mc-wallet/core/service-url";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isWebSocketServiceUrl } from "@bramble/core/service-url";
 
 /** Largest signed event JSON accepted from a relay or Krusty. */
 export const MAX_NOSTR_EVENT_JSON_BYTES = 131_070;

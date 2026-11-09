@@ -3,10 +3,11 @@
 import type {
   ApprovalSurfacePreference,
   WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
+} from "@bramble/settings/preferences";
 
 type PreferencesAdapterOptions = {
   readonly onApprovalSurface: (preference: ApprovalSurfacePreference) => void;
+  readonly onProductAnalytics: (enabled: boolean) => void;
   readonly onReliabilityDiagnostics: (enabled: boolean) => void;
   readonly store: Promise<WalletPreferencesStore | null>;
 };
@@ -17,6 +18,7 @@ type PreferencesAdapterOptions = {
  */
 export const createBackgroundPreferences = ({
   onApprovalSurface,
+  onProductAnalytics,
   onReliabilityDiagnostics,
   store,
 }: PreferencesAdapterOptions): WalletPreferencesStore => {
@@ -26,12 +28,12 @@ export const createBackgroundPreferences = ({
     return resolved;
   };
   return {
-    addCustomNetwork: async (input) => (await required()).addCustomNetwork(input),
     addNft: async (input) => (await required()).addNft(input),
     createGroup: async (input) => (await required()).createGroup(input),
     async importPreferences(input) {
       const next = await (await required()).importPreferences(input);
       onApprovalSurface(next.approvalSurface ?? "side-panel");
+      onProductAnalytics(next.productAnalytics ?? true);
       onReliabilityDiagnostics(next.reliabilityDiagnostics ?? false);
       return next;
     },
@@ -39,14 +41,17 @@ export const createBackgroundPreferences = ({
     removeAddress: async (input) => (await required()).removeAddress(input),
     removeGroup: async (input) => (await required()).removeGroup(input),
     removeNft: async (input) => (await required()).removeNft(input),
+    removeToken: async (input) => (await required()).removeToken(input),
     renameGroup: async (input) => (await required()).renameGroup(input),
     saveAddress: async (input) => (await required()).saveAddress(input),
+    setAccountHidden: async (input) => (await required()).setAccountHidden(input),
     setAccountInGroup: async (input) => (await required()).setAccountInGroup(input),
     setAccountLabel: async (input) => (await required()).setAccountLabel(input),
     setActiveNetwork: async (input) => (await required()).setActiveNetwork(input),
     async setDisplay(input) {
       const next = await (await required()).setDisplay(input);
       if (input.approvalSurface !== undefined) onApprovalSurface(input.approvalSurface);
+      if (input.productAnalytics !== undefined) onProductAnalytics(input.productAnalytics);
       if (input.reliabilityDiagnostics !== undefined) {
         onReliabilityDiagnostics(input.reliabilityDiagnostics);
       }
@@ -61,8 +66,9 @@ export const createBackgroundPreferences = ({
     setNostrRelayUrl: async (input) => (await required()).setNostrRelayUrl(input),
     setNftSpam: async (input) => (await required()).setNftSpam(input),
     setRpcOverride: async (input) => (await required()).setRpcOverride(input),
+    setSelectedMultisig: async (input) => (await required()).setSelectedMultisig(input),
     setStrk20NetworkConfig: async (input) => (await required()).setStrk20NetworkConfig(input),
     setTokenHidden: async (input) => (await required()).setTokenHidden(input),
-    upsertToken: async (input) => (await required()).upsertToken(input),
+    upsertToken: async (input, source) => (await required()).upsertToken(input, source),
   };
 };

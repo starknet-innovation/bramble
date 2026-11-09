@@ -7,6 +7,7 @@ import { expect, test } from "./fixtures";
 import { startTestDapp } from "./test-dapp-server";
 import {
   createWalletFromGeneratedPhrase,
+  expectInvokeApprovalWithheld,
   IMPORT_MNEMONIC,
   importWalletFromPhrase,
   openPendingWalletSurface,
@@ -35,8 +36,9 @@ test("discovers and restores an imported wallet in a fresh profile", async ({ ex
   const onboarding = await extension.openExtensionPage("onboarding.html");
 
   await importWalletFromPhrase(onboarding, IMPORT_MNEMONIC);
-  await expect(onboarding.getByRole("heading", { name: "You’re all set" })).toBeVisible();
-  await expect(onboarding.getByRole("button", { name: "Open MC Wallet" })).toBeVisible();
+  // Completion hands off on its own: it opens the side panel inside the
+  // finishing click's activation and closes the setup tab, no second click.
+  await expect.poll(() => onboarding.isClosed(), { timeout: 10_000 }).toBe(true);
 });
 
 test("loads the built toolbar popup surface", async ({ extension }) => {
@@ -53,7 +55,7 @@ test("loads the dedicated Ledger hardware session surface", async ({ extension }
   );
 
   await expect(ledger.getByRole("heading", { name: "Connect your Ledger" })).toBeVisible();
-  await expect(ledger.getByText("Secure device session")).toBeVisible();
+  await expect(ledger.getByText(/Your browser needs this tab open/)).toBeVisible();
   await expect(ledger.getByRole("button", { name: /USB cable/ })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -67,6 +69,22 @@ test("loads the dedicated Ledger hardware session surface", async ({ extension }
   await ledger.getByRole("button", { name: /Bluetooth/ }).click();
   await expect(ledger.getByRole("button", { name: "Pair with Bluetooth" })).toBeEnabled();
   await expect(ledger.getByText("Stay on the Ledger dashboard")).toBeVisible();
+});
+
+test("refuses a Ledger tab that was not opened by the wallet", async ({ extension }) => {
+  for (const hash of [
+    "",
+    "#session=not-a-session",
+    "#session=2db2df18-12db-1d66-9b38-02dc16460ce3",
+  ]) {
+    const ledger = await extension.openExtensionPage(`ledger-grant.html${hash}`);
+    await expect(ledger.getByText("Open Ledger from Bramble")).toBeVisible();
+    await expect(
+      ledger.getByText("This hardware tab needs a fresh secure session from the wallet."),
+    ).toBeVisible();
+    await expect(ledger.getByRole("button", { name: "Connect with USB" })).toBeDisabled();
+    await ledger.close();
+  }
 });
 
 test("imports an existing recovery phrase without backup verification", async ({ extension }) => {
@@ -98,11 +116,14 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
 
-  const starkscanLink = sidepanel.getByRole("link", { name: "Open Starkscan" });
-  await expect(starkscanLink).toBeVisible();
-  await expect(starkscanLink).toHaveAttribute("href", "https://starkscan.co/");
-  await expect(starkscanLink).toHaveAttribute("target", "_blank");
-  await expect(starkscanLink).toHaveAttribute("rel", "noopener noreferrer");
+  // The header explorer link opens this account's page, not the explorer front page.
+  const explorerLink = sidepanel.getByRole("link", {
+    name: "View this account on the block explorer",
+  });
+  await expect(explorerLink).toBeVisible();
+  await expect(explorerLink).toHaveAttribute("href", /^https:\/\/starkscan\.co\/contract\/0x/);
+  await expect(explorerLink).toHaveAttribute("target", "_blank");
+  await expect(explorerLink).toHaveAttribute("rel", "noopener noreferrer");
 
   await sidepanel.getByRole("button", { name: "Lock wallet" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Welcome back" })).toBeVisible();
@@ -111,7 +132,7 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
   try {
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
     await dapp.getByTestId("connect").click();
     await expect(dapp.getByTestId("connect-result")).toHaveText("pending");
@@ -215,11 +236,86 @@ test("surfaces an invoke as a transaction approval and rejects on deny", async (
 
     await dapp.getByTestId("invoke").click();
     await expect(dapp.getByTestId("invoke-result")).toHaveText("pending");
-    // The provider request surfaces as a transaction approval card in the side
-    // panel; denying it rejects the held provider promise.
-    await resolvePendingApproval(sidepanel, "Transaction request", dappServer.origin, "deny");
+    // Egress is blocked, so the fee cannot be priced. Approve stays disabled
+    // and the dapp promise stays pending; only deny settles it.
+    await expectInvokeApprovalWithheld(sidepanel, dappServer.origin);
+    await expect(dapp.getByTestId("invoke-result")).toHaveText("pending");
+    await sidepanel.locator('[data-approval-action="deny"]').click();
 
     await expect(dapp.getByTestId("invoke-result")).toContainText('"status":"rejected"');
+  } finally {
+    await dappServer.close();
+  }
+});
+
+test("surfaces a SNIP wire-format multicall as a transaction approval", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await createWalletFromGeneratedPhrase(sidepanel);
+
+  const dappServer = await startTestDapp();
+  try {
+    const dapp = await extension.context.newPage();
+    await dapp.goto(dappServer.url);
+    await dapp.getByTestId("connect").click();
+    await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
+    // The grant is cached between vault writes, so an invoke sent before the
+    // connection settles is refused at once as "origin not connected".
+    await expect(dapp.getByTestId("connect-result")).toContainText('"status":"resolved"');
+
+    // Real dapps speak the SNIP wallet API: snake_case call fields and decimal
+    // calldata, here an approve on a tracked token (mainnet STRK) plus a swap
+    // call. The result is recorded on the page so a rejection cannot pass
+    // unnoticed while the card is still on screen.
+    await dapp.evaluate(() => {
+      const provider = (
+        globalThis as unknown as {
+          starknet_bramble: { request: (args: unknown) => Promise<unknown> };
+        }
+      ).starknet_bramble;
+      document.body.dataset["multicall"] = "pending";
+      void provider
+        .request({
+          params: {
+            calls: [
+              {
+                calldata: [
+                  "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f",
+                  "500000000000000000",
+                  "0",
+                ],
+                contract_address:
+                  "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+                entry_point: "approve",
+              },
+              {
+                calldata: ["2"],
+                contract_address:
+                  "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f",
+                entry_point: "multi_route_swap",
+              },
+            ],
+          },
+          type: "wallet_addInvokeTransaction",
+        })
+        .then(
+          () => {
+            document.body.dataset["multicall"] = "resolved";
+          },
+          () => {
+            document.body.dataset["multicall"] = "rejected";
+          },
+        );
+    });
+
+    await expectInvokeApprovalWithheld(sidepanel, dappServer.origin);
+    await expect(sidepanel.getByText("What will happen")).toBeVisible();
+    await expect(sidepanel.getByText("Allow 0x4270…3b0f to spend 0.5 STRK")).toBeVisible();
+    await expect(sidepanel.getByText("Call multi_route_swap on 0x4270…3b0f")).toBeVisible();
+    await expect(sidepanel.locator("code", { hasText: /^approve$/ })).toHaveCount(1);
+    await expect(sidepanel.locator("code", { hasText: /^multi_route_swap$/ })).toHaveCount(1);
+    await expect(dapp.locator("body")).toHaveAttribute("data-multicall", "pending");
+    await sidepanel.locator('[data-approval-action="deny"]').click();
+    await expect(dapp.locator("body")).toHaveAttribute("data-multicall", "rejected");
   } finally {
     await dappServer.close();
   }
@@ -233,11 +329,11 @@ test("detects the injected provider after a page reload", async ({ extension }) 
   try {
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
 
     await dapp.reload();
     await dapp.getByTestId("detect").click();
-    await expect(dapp.getByTestId("provider-status")).toHaveText("mc-wallet|MC Wallet|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
   } finally {
     await dappServer.close();
   }

@@ -4,14 +4,11 @@
  * verification before any executor is reached.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  memoryOriginHistory,
-  type OriginHistoryStore,
-} from "@mc-wallet/permissions/origin-history";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { memoryOriginHistory, type OriginHistoryStore } from "@bramble/permissions/origin-history";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalContext } from "../../../apps/extension/src/background/approvals/approval-context";
 import {
   type ApprovalDecisionDeps,
@@ -167,6 +164,80 @@ describe("approval execution security", () => {
     release?.();
     expect(await first).toMatchObject({ ok: true, pending: [] });
     expect(writes).toBe(1);
+  });
+
+  for (const replacement of [false, true]) {
+    test(`a claimed approval cannot cross session revocation (replacement: ${replacement})`, async () => {
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      let writes = 0;
+      const history = memoryOriginHistory();
+      const { approvals, deps, settled } = makeDeps({
+        originHistory: {
+          ...history,
+          async record(origin) {
+            entered.resolve();
+            await release.promise;
+            return history.record(origin);
+          },
+        },
+        onUpsert: async () => {
+          writes += 1;
+        },
+      });
+      const { id } = approvals.requestWatchAsset({
+        origin: ORIGIN,
+        token: { address: "0x1", decimals: 18, name: "Token", networkId: "SN_MAIN", symbol: "TKN" },
+      });
+      const pending = handleApprovalDecision(
+        deps,
+        "wallet.approveOrigin",
+        decision(id, "wallet.approveOrigin"),
+      );
+      await entered.promise;
+      deps.session.lock();
+      if (replacement) deps.session.unlock(PASSPHRASE);
+      release.resolve();
+      await expect(pending).resolves.toEqual({ error: "wallet locked" });
+      expect(writes).toBe(0);
+      expect(settled).toEqual([{ error: "wallet locked" }]);
+    });
+  }
+
+  test("a connect decision waiting for the coordinator cannot adopt a replacement unlock", async () => {
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const { approvals, deps } = makeDeps();
+    let grants = 0;
+    const guardedDeps = {
+      ...deps,
+      activeStateCoordinator: {
+        async run<T>(operation: () => Promise<T>): Promise<T> {
+          entered.resolve();
+          await release.promise;
+          return operation();
+        },
+      },
+      wallet: {
+        ...deps.wallet,
+        async grantOrigin() {
+          grants += 1;
+          return [account];
+        },
+      },
+    };
+    const { id } = approvals.request(ORIGIN);
+    const pending = handleApprovalDecision(
+      guardedDeps,
+      "wallet.approveOrigin",
+      decision(id, "wallet.approveOrigin"),
+    );
+    await entered.promise;
+    deps.session.lock();
+    deps.session.unlock(PASSPHRASE);
+    release.resolve();
+    await expect(pending).resolves.toEqual({ error: "wallet locked" });
+    expect(grants).toBe(0);
   });
 
   test("a newly blocked origin is refused at execution time", async () => {

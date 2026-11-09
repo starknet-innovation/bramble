@@ -5,6 +5,7 @@
  */
 import { X } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
+import CreateToken from "./screens/create/CreateToken";
 import Discover from "./screens/discover/Discover";
 import NftStudio from "./screens/nft/NftStudio";
 import Lending from "./screens/lending/Lending";
@@ -20,6 +21,7 @@ import { useWallet } from "./wallet/connection/WalletProvider";
 type ScreenProps = { readonly onNavigate: (screen: ScreenId) => void };
 
 const SCREENS: Record<ScreenId, ComponentType<ScreenProps>> = {
+  create: CreateToken,
   discover: Discover,
   lending: Lending,
   nfts: NftStudio,
@@ -31,7 +33,7 @@ const SCREENS: Record<ScreenId, ComponentType<ScreenProps>> = {
 
 export const App = (): ReactNode => {
   const [active, setActive] = useState<ScreenId>(() => screenFromHash(window.location.hash));
-  const { clearError, error: walletError } = useWallet();
+  const { address, chainId, clearError, error: walletError } = useWallet();
   const Screen = SCREENS[active];
   const navigate = (screen: ScreenId): void => {
     setActive(screen);
@@ -49,7 +51,10 @@ export const App = (): ReactNode => {
         </div>
       ) : null}
       <main>
-        <Screen onNavigate={navigate} />
+        {/* Screens hold account-bound state (a lending position under review,
+            private balances) and async replies started for one account; a new
+            account or network remounts the screen instead (Sherlock 222). */}
+        <Screen key={`${address ?? ""}:${chainId ?? ""}`} onNavigate={navigate} />
       </main>
       <BottomBar />
     </>

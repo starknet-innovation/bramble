@@ -5,7 +5,7 @@
  * blocked (A-L1).
  */
 import { describe, expect, test } from "bun:test";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
+import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
@@ -29,6 +29,13 @@ const activity = (pending: readonly PendingApproval[]): string =>
 
 describe("invoke approval card (A-H1)", () => {
   const invoke: PendingApproval = {
+    callReviews: [
+      {
+        calldata: ["0x0005", "0x3e8", "0x0"],
+        contractAddress: "0x049d36570d4e46f8",
+        entrypoint: "transfer",
+      },
+    ],
     flags: [{ code: "unknown-contract", message: "Verify the contract before continuing." }],
     id: INVOKE_ID,
     kind: "invoke",
@@ -43,8 +50,43 @@ describe("invoke approval card (A-H1)", () => {
     expect(html).toContain("https://dapp.example");
     expect(html).toContain("Send 1000 units to 0x0005…0005");
     expect(html).toContain("Verify the contract before continuing.");
+    expect(html).toContain("Exact call parameters");
+    expect(html).toContain("0x049d36570d4e46f8");
+    expect(html).toContain("0x0005, 0x3e8, 0x0");
     expect(html).toContain(`data-approval-action="approve" data-approval-id="${INVOKE_ID}"`);
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${INVOKE_ID}"`);
+    // Approve carries the kind, so an unknown outcome can say the approval of a
+    // transaction may not have gone through (copy review bf08).
+    expect(html).toContain('data-approval-kind="invoke" data-approval-action="approve"');
+  });
+
+  // A multisig proposal says what the calls do and that they are saved for the
+  // other signers under one "What will happen" heading, not two in a row.
+  const headings = (html: string): number => html.split(">What will happen</p>").length - 1;
+  const SAVED = "Saves this for the other signers. It is not sent yet.";
+
+  test("a multisig proposal keeps every line under one What will happen", () => {
+    const html = activity([{ ...invoke, multisigThreshold: 2 }]);
+    expect(headings(html)).toBe(1);
+    expect(html).toContain("Send 1000 units to 0x0005…0005");
+    expect(html).toContain(SAVED);
+    expect(html.indexOf("Send 1000 units")).toBeLessThan(html.indexOf(SAVED));
+  });
+
+  test("a multisig proposal with no decoded calls keeps both sentences under one heading", () => {
+    const { summaries: _summaries, ...bare } = invoke;
+    const html = activity([{ ...bare, multisigThreshold: 2 }]);
+    expect(headings(html)).toBe(1);
+    expect(html).toContain("Sign and submit the decoded transaction from the active account.");
+    expect(html).toContain(SAVED);
+  });
+
+  test("a single-owner invoke reads as before, without the multisig line", () => {
+    const html = activity([invoke]);
+    expect(headings(html)).toBe(1);
+    expect(html).not.toContain(SAVED);
+    const one = activity([{ ...invoke, multisigThreshold: 1 }]);
+    expect(one).not.toContain(SAVED);
   });
 
   test("disables approve while the wallet is locked", () => {
@@ -130,10 +172,164 @@ describe("invoke approval card fee review (#189)", () => {
     );
   });
 
-  test("an undeployed account reuses the Send wording instead of a fee amount", () => {
-    const undeployed: PendingApproval = { ...withFee, fee: null, requiresDeployment: true };
-    expect(activity([undeployed])).toContain(
-      "The network fee is estimated once this account is deployed.",
+  test("an undeployed Braavos account is told to deploy first, with no retry", () => {
+    const deployFirst: PendingApproval = {
+      ...withFee,
+      deployFirst: true,
+      fee: null,
+      requiresDeployment: true,
+    };
+    const html = activity([deployFirst]);
+    expect(html).toContain("Deploy this account first (Settings → Deploy account).");
+    expect(html).not.toContain("estimated once this account is deployed");
+    expect(html).not.toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
+    expect(html).toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
     );
+  });
+
+  // Issue 851: an undeployed account shows one total, and Approve echoes it.
+  const undeployed: PendingApproval = {
+    ...withFee,
+    context: {
+      accountId: account.id,
+      chainId: "0x534e5f4d41494e",
+      networkId: "SN_MAIN",
+      payloadDigest: `sha256:${"a".repeat(64)}`,
+    },
+    deploymentFee: { overallFee: "1500000000000000", unit: "FRI" },
+    deploymentFeeEstimateFailed: false,
+    requiresDeployment: true,
+  };
+
+  test("an undeployed account shows the combined total and Approve echoes it", () => {
+    const html = activity([undeployed]);
+    expect(html).toContain("Estimated fee: 0.004 STRK");
+    expect(html).toContain("Creating this account on Starknet is 0.0015 STRK of that.");
+    expect(html).not.toContain("estimated once this account is deployed");
+    expect(html).toContain('data-approval-fee="4000000000000000"');
+    expect(html).not.toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
+    );
+  });
+
+  test("an undeployed Ledger account is told it signs twice", () => {
+    const ledger = {
+      ...account,
+      derivation: {
+        accountIndex: 0,
+        eip2645application: "LedgerW",
+        kind: "ledger",
+        path: "m/2645'/1195502025'/734980059'/0'/0'/0",
+      },
+    } as WalletStatus["accounts"][number];
+    const html = dashboard(
+      "activity",
+      { ...status, accounts: [ledger] },
+      [undeployed],
+      preferences,
+      {
+        balances: [],
+      },
+    );
+    expect(html).toContain("and your Ledger asks to sign both");
+  });
+
+  test("an unpriced deployment offers retry and keeps Approve disabled", () => {
+    const html = activity([
+      { ...undeployed, deploymentFee: null, deploymentFeeEstimateFailed: true },
+    ]);
+    expect(html).toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
+    expect(html).not.toContain("data-approval-fee=");
+    expect(html).toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
+    );
+  });
+});
+
+// An OutsideExecution sign card lists the calls it authorizes and the same risk
+// flags an invoke card shows, all escaped (audit 144).
+describe("OutsideExecution sign card (audit 144)", () => {
+  const SIGN_ID = "d03e7ff3-75bb-4d9d-a393-2b2c2a2a2b36";
+  const sign: PendingApproval = {
+    flags: [{ code: "unlimited-approval", message: "Unlimited <b>approval</b> for 0xabc…" }],
+    id: SIGN_ID,
+    kind: "sign-typed-data",
+    origin: "https://dapp.example",
+    summaries: ["OutsideExecution · Account.execute_from_outside", "Allow <i>0xabc</i> to spend"],
+    typedData: { message: {}, primaryType: "Mail" },
+  };
+
+  test("renders decoded call summaries and risk flags, escaped", () => {
+    const html = activity([sign]);
+    expect(html).toContain("Sign request");
+    expect(html).toContain("Allow &lt;i&gt;0xabc&lt;/i&gt; to spend");
+    expect(html).toContain("Unlimited &lt;b&gt;approval&lt;/b&gt; for 0xabc…");
+    expect(html).not.toContain("<i>0xabc</i>");
+    expect(html).not.toContain("<b>approval</b>");
+  });
+
+  // A lookalike payee is queued, not refused, so the site cannot read the
+  // address book from the answer; the card can then only deny (Sherlock 140).
+  test("a lookalike payee leaves Deny only, and says why", () => {
+    expect(activity([sign])).toContain('data-approval-action="approve"');
+    const html = activity([
+      { ...sign, flags: [{ code: "address-poisoning", message: "The recipient closely mimics" }] },
+    ]);
+    expect(html).toContain("Bramble won't send this payment.");
+    expect(html).toContain('data-approval-action="deny"');
+    expect(html).not.toContain('data-approval-action="approve"');
+  });
+
+  test("a plain message lists no calls", () => {
+    const html = activity([
+      {
+        id: SIGN_ID,
+        kind: "sign-typed-data",
+        origin: sign.origin,
+        summaries: ["Mail · Example"],
+        typedData: sign.typedData,
+      },
+    ]);
+    expect(html).not.toContain(`class="review-calls"`);
+  });
+});
+
+// The add-token card says when a token borrows a known ticker (audit 171).
+describe("watch-asset spoof warning (audit 171)", () => {
+  const token = {
+    address: "0x0bad00000000000000000000000000000000000000000000000000000000001",
+    decimals: 6,
+    name: "USD <b>Coin</b>",
+    networkId: "SN_MAIN" as const,
+    symbol: "USDC",
+  };
+  const watch: PendingApproval = {
+    id: WATCH_ID,
+    kind: "watch-asset",
+    origin: "https://dapp.example",
+    token,
+  };
+
+  test("warns on a ticker spoof and escapes token text", () => {
+    const html = activity([watch]);
+    expect(html).toContain("This token uses the ticker of a different, known token contract.");
+    expect(html).toContain("If added, it stays hidden until you show it.");
+    expect(html).toContain("USD &lt;b&gt;Coin&lt;/b&gt;");
+    expect(html).not.toContain("<b>Coin</b>");
+  });
+
+  test("raises no warning for the curated contract", () => {
+    const html = activity([
+      {
+        ...watch,
+        token: {
+          ...token,
+          address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+          name: "USD Coin",
+        },
+      },
+    ]);
+    expect(html).not.toContain("ticker of a different");
   });
 });

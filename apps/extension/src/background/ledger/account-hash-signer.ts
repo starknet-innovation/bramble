@@ -11,10 +11,10 @@
  * never drift between the wallet-initiated and dapp-initiated flows.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
-import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import type { StarkHashSigner } from "@bramble/starknet/provider";
+import { type AccountRef, isKeylessAccount } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 import type { LedgerSignQueue } from "./ledger-sign-queue";

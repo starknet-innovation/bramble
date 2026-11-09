@@ -1,7 +1,7 @@
 /**
  * Shared navigation-row templates for settings hubs and chooser lists.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 import { badge } from "./content";
 import { type UiAttributes, uiAttributes, uiClassNames } from "./html-attributes";
 import { type IconName, icon } from "./icons";
@@ -107,9 +107,11 @@ export type DockItemProps = {
 };
 
 /**
- * Renders the shared bottom dock. Persistent labels make the three roots
- * recognizable without icon recall or hover, while accessible names and
- * explicit navigation capabilities remain unchanged.
+ * Renders the shared floating dock: three labelled roots in one pill, the
+ * selected root on a tinted disc. Each root shows the icon and a visible
+ * caption, and repeats the caption as its accessible name, so the destination
+ * is identifiable without hover; explicit navigation capabilities remain
+ * unchanged.
  */
 export const dockNavigation = (items: readonly DockItemProps[]): string =>
   `<nav class="wallet-dock" aria-label="Wallet screens" role="tablist">${items

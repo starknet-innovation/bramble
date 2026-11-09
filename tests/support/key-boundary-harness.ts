@@ -17,12 +17,13 @@
  * of granting an authority the real collaborator would not.
  */
 
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import { memoryMultisigStore } from "@mc-wallet/multisig/repository";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { type FeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import { memoryMultisigStore } from "@bramble/multisig/repository";
+import { DEFAULT_STRK20_NETWORKS } from "@bramble/privacy/config";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import { createMemoryStore } from "@bramble/store/kv";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import { ec } from "starknet";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
 import { createLedgerSignQueue } from "../../apps/extension/src/background/ledger/ledger-sign-queue";
@@ -37,6 +38,7 @@ import {
   type UnlockSession,
 } from "../../apps/extension/src/background/runtime/session";
 import { isFeeReviewResponse } from "../../packages/presentation/wallet-ui/src/popup/responses/responses";
+import { testExtension } from "./background-wallet-stub";
 import { flushHeld, latestApprovalId, reviewedApprovalFee } from "./held";
 import {
   ETH,
@@ -58,7 +60,10 @@ import {
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
+import { STAKING_PREPARE_MESSAGE } from "./key-boundary-staking-messages";
 import type { KeyBoundaryLiveIds } from "./key-boundary-types";
+import { testStakingNetworks } from "./staking-chain";
+import { awaitStrk20Job, strk20RunningJobId } from "./strk20-background";
 
 /**
  * The wired handler plus the live identifiers and session controls the scan
@@ -117,7 +122,7 @@ export const makeKeyBoundaryHarness = async (
   const allowanceStore = memoryAllowanceStore();
   const multisigStore = memoryMultisigStore();
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     allowanceStore,
     approvals,
     ledgerSignQueue,
@@ -125,6 +130,7 @@ export const makeKeyBoundaryHarness = async (
     preferencesStore,
     runtimeRpc: runtimeRpcFor(chainState),
     session,
+    stakingNetworks: testStakingNetworks,
     swap: swapService,
   });
 
@@ -261,6 +267,32 @@ export const makeKeyBoundaryHarness = async (
         "strk20Preparation",
       );
     },
+    async strk20PreparationJobId() {
+      const started = await settle(
+        {
+          amount: "1",
+          recipient: KEY_BOUNDARY_RECIPIENT,
+          tokenId: ETH.id,
+          type: "wallet.strk20PrepareDeposit",
+        },
+        extensionSender,
+      );
+      const jobId = strk20RunningJobId(started);
+      if (jobId === null) {
+        throw new Error(`shield did not start a job: ${JSON.stringify(started)}`);
+      }
+      // Settled before the poll under scan runs, so that poll answers with the
+      // job's outcome; the liveness test is what refuses an outcome that is an
+      // error rather than the review.
+      await awaitStrk20Job(settle, started, extensionSender);
+      return jobId;
+    },
+    async stakingPreparationId() {
+      return preparationIdOf(
+        await settle({ ...STAKING_PREPARE_MESSAGE }, extensionSender),
+        "stakingPreparation",
+      );
+    },
     async swapPreparationId() {
       return preparationIdOf(
         await settle(
@@ -276,6 +308,21 @@ export const makeKeyBoundaryHarness = async (
         ),
         "swapPreparation",
       );
+    },
+    async removableTokenId() {
+      const preferences = await preferencesStore.upsertToken(
+        {
+          address: "0x0123456789abcdef",
+          decimals: 6,
+          name: "Removable Token",
+          networkId: "SN_MAIN",
+          symbol: "RMV",
+        },
+        "dapp",
+      );
+      const id = preferences.tokens.at(-1)?.id;
+      if (!id) throw new Error("removable token was not stored");
+      return id;
     },
     tokenId: ETH.id,
     unregisterStrk20Account() {
@@ -332,6 +379,14 @@ const seedStores = async (stores: {
     tokenId: "1",
   });
   const withGroup = await stores.preferencesStore.createGroup({ icon: "folder", name: "Trading" });
+  // The opt-in SDK shadow account module, so the commitment entry reaches the
+  // viewing key instead of stopping at the pre-approval anonymizer check.
+  const mainnet = DEFAULT_STRK20_NETWORKS.SN_MAIN;
+  if (!mainnet) throw new Error("key-boundary harness needs the bundled Mainnet STRK20 config");
+  await stores.preferencesStore.setStrk20NetworkConfig({
+    config: { ...mainnet, shadowAccountAnonymizerAddress: "0x2" },
+    networkId: "SN_MAIN",
+  });
   const addressBookId = contacts.addressBook.at(-1)?.id;
   const groupId = withGroup.groups?.at(-1)?.id;
   const nftId = withNft.nfts?.at(-1)?.id;

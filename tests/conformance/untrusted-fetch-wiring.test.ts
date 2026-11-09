@@ -18,10 +18,10 @@
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { type BoundedHttpFetch, fetchBoundedJson, untrustedFetch } from "@mc-wallet/core/http-json";
-import { createPhishingFeed } from "@mc-wallet/permissions/phishing-feed";
-import { createHttpNftIndexer } from "@mc-wallet/portfolio/nft-indexer";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { type BoundedHttpFetch, fetchBoundedJson, untrustedFetch } from "@bramble/core/http-json";
+import { createPhishingFeed } from "@bramble/permissions/phishing-feed";
+import { createHttpNftIndexer } from "@bramble/portfolio/nft-indexer";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   EXTENSION_SRC_DIR,
   repoRelative,
@@ -114,12 +114,17 @@ describe("untrustedFetch is what reaches the socket", () => {
     const host = redirectingHost([{ contract_address: "0x1", token_id: "1" }]);
     try {
       const owned = { address: "0x1", indexerUrl: host.url, networkId: "SN_MAIN" } as const;
-      expect(await createHttpNftIndexer(untrustedFetch).listOwnedNfts(owned)).toEqual([]);
+      expect(await createHttpNftIndexer(untrustedFetch).listOwnedNfts(owned)).toEqual({
+        coverage: "unavailable",
+        nfts: [],
+      });
       expect(host.hops.count).toBe(0);
 
       // The same indexer, wired the way production once was: the hop is
       // reached, and records from a host the wallet never chose come back.
-      expect(await createHttpNftIndexer(initDroppingFetch).listOwnedNfts(owned)).toHaveLength(1);
+      expect(
+        (await createHttpNftIndexer(initDroppingFetch).listOwnedNfts(owned)).nfts,
+      ).toHaveLength(1);
       expect(host.hops.count).toBe(1);
     } finally {
       host.stop();

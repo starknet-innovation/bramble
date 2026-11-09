@@ -6,7 +6,7 @@
  * (never a fabricated "verified" verdict).
  */
 import { describe, expect, test } from "bun:test";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import {
   emptyRenderCache,
   updateRenderScope,
@@ -115,36 +115,32 @@ describe("emptyRenderCache (lock-reset single source)", () => {
     expect(empty.multisigClassDeclared).toBeNull();
     expect(empty.multisigsError).toBe(false);
     expect(empty.multisigBalanceId).toBeNull();
-    expect(empty.multisigBalances).toEqual({ error: "multisig balances unavailable" });
+    expect(empty.multisigBalances).toEqual({ loading: true });
   });
 
   test("clears the remaining view-scoped lists and price fields", () => {
-    expect(empty.allowances).toEqual([]);
-    expect(empty.discoveredNfts).toEqual([]);
-    expect(empty.connectedSites).toEqual([]);
+    expect(empty.allowances).toEqual({
+      entries: [],
+      loading: true,
+      notices: [],
+      unavailable: false,
+    });
+    // Not yet read, so the screen cannot claim no site is connected.
+    expect(empty.connectedSites).toBe("loading");
     expect(empty.chart).toEqual([]);
     expect(empty.deployment).toBeNull();
     expect(empty.prices).toEqual({});
     expect(empty.changes).toEqual({});
     expect(empty.priceAsOf).toBeNull();
     expect(empty.priceStale).toBe(false);
-    // The locked shell: balances carries the explicit "wallet locked" marker.
-    expect(empty.balances).toEqual({ error: "wallet locked" });
+    // Nothing read yet: loading, never a failed-read marker (issue 795).
+    expect(empty.balances).toEqual({ loading: true });
   });
 });
 
 describe("updateRenderScope", () => {
   test("retains scoped lanes on resync and clears them on account switches", () => {
     const cache = emptyRenderCache();
-    const nft = {
-      collection: "Punks",
-      contract: "0x123",
-      id: "SN_MAIN:0x123:0",
-      image: "https://cdn.example/punk.png",
-      name: "Punk #0",
-      networkId: "SN_MAIN" as const,
-      tokenId: "0",
-    };
     const transaction = {
       accountId: ACCOUNT_ID,
       hash: "0x1",
@@ -156,17 +152,15 @@ describe("updateRenderScope", () => {
     };
     Object.assign(cache, {
       balances: { accountId: ACCOUNT_ID, balances: [], networkId: "SN_MAIN" },
-      discoveredNfts: [nft],
+      deployment: false,
       historyUnavailable: true,
-      indexedNfts: [nft],
       multisigClassDeclared: true,
       status: { ...cache.status, activeAccountId: ACCOUNT_ID, networkId: "SN_MAIN" as const },
       transactions: [transaction],
-      watchedNfts: [nft],
     });
 
     expect(updateRenderScope(cache, { ...cache.status })).toBeNull();
-    expect(cache.discoveredNfts).toEqual([nft]);
+    expect(cache.deployment).toBe(false);
     expect(cache.transactions).toEqual([transaction]);
     expect(cache.historyUnavailable).toBe(true);
     expect(cache.multisigClassDeclared).toBe(true);
@@ -174,13 +168,11 @@ describe("updateRenderScope", () => {
     expect(updateRenderScope(cache, { ...cache.status, activeAccountId: OTHER_ACCOUNT_ID })).toBe(
       "account",
     );
-    expect(cache.discoveredNfts).toEqual([]);
-    expect(cache.indexedNfts).toEqual([]);
-    expect(cache.watchedNfts).toEqual([]);
     expect(cache.transactions).toEqual([]);
     expect(cache.historyUnavailable).toBe(false);
     expect(cache.multisigClassDeclared).toBeNull();
-    expect(cache.balances).toEqual({ error: "balances unavailable" });
+    expect(cache.deployment).toBeNull();
+    expect(cache.balances).toEqual({ loading: true });
 
     expect(updateRenderScope(cache, { ...cache.status, networkId: "SN_SEPOLIA" })).toBe("network");
   });

@@ -4,11 +4,14 @@
  * re-entered in the message rather than taken from the cached session.
  */
 import { describe, expect, test } from "bun:test";
-import type { AddDerivedAccountInput } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { AddDerivedAccountInput } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
+import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const account: AccountRef = {
   accountContractType: "openzeppelin",
@@ -26,6 +29,12 @@ const derived: AccountRef = {
   address: "0xdeadbeef",
   derivation: { accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" },
   id: "SN_SEPOLIA:0xdeadbeef",
+};
+
+// The fixture account is on Sepolia, so the reveal resolves it only there.
+const sepoliaPreferences = {
+  ...unavailablePreferencesStore,
+  read: async () => ({ ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const }),
 };
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
@@ -64,9 +73,13 @@ const createWallet = (captureAdd?: (input: AddDerivedAccountInput) => void) => (
       accounts: [account],
       accountSecrets: [],
       activeAccountId: account.id,
+      importedSeeds: [],
       mnemonic,
       originGrants: [],
-      schemaVersion: 7 as const,
+      schemaVersion: 13 as const,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
+      shadowAccountScopes: [],
       signingKeys: [{ accountId: account.id, privateKey: "0x1234" }],
     };
   },
@@ -93,7 +106,7 @@ describe("account lifecycle messages", () => {
     const session = createUnlockSession();
     const handler = createMessageHandler(
       createWallet((input) => captured.push(input)),
-      "extension-id",
+      testExtension,
       { session },
     );
 
@@ -128,7 +141,7 @@ describe("account lifecycle messages", () => {
   test("rejects add-account from content senders and malformed networks", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(createWallet(), "extension-id", { session });
+    const handler = createMessageHandler(createWallet(), testExtension, { session });
 
     await expect(
       handler(
@@ -146,7 +159,9 @@ describe("account lifecycle messages", () => {
   });
 
   test("reveals active account secrets only with a re-entered passphrase", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension, {
+      preferencesStore: sepoliaPreferences,
+    });
 
     await expect(
       handler({ type: "wallet.revealSecrets", vaultPassphrase }, sender),

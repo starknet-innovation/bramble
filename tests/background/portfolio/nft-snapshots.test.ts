@@ -1,6 +1,6 @@
 /** Durable NFT snapshots remain validated, scoped, and removable after mutations. */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   createNftSnapshotStore,
   NFT_SNAPSHOTS_KEY,
@@ -60,6 +60,26 @@ describe("NFT snapshots", () => {
       },
     ]);
 
+    expect(
+      await createNftSnapshotStore(storage).read("SN_MAIN:0x1", "SN_MAIN", "indexed"),
+    ).toBeNull();
+  });
+
+  test("keeps an indexer lane's coverage and refuses an unknown one", async () => {
+    const storage = createMemoryStore();
+    const row = {
+      accountId: "SN_MAIN:0x1",
+      checkedAt: 42,
+      fetchedAt: 42,
+      lane: "indexed" as const,
+      networkId: "SN_MAIN" as const,
+      nfts: [nft],
+    };
+    await createNftSnapshotStore(storage).write({ ...row, coverage: "incomplete" });
+    expect(await createNftSnapshotStore(storage).read("SN_MAIN:0x1", "SN_MAIN", "indexed")).toEqual(
+      { checkedAt: 42, coverage: "incomplete", fetchedAt: 42, nfts: [nft] },
+    );
+    await storage.set(NFT_SNAPSHOTS_KEY, [{ ...row, coverage: "everything" }]);
     expect(
       await createNftSnapshotStore(storage).read("SN_MAIN:0x1", "SN_MAIN", "indexed"),
     ).toBeNull();

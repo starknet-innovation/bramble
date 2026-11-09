@@ -10,13 +10,13 @@ import {
   readProviderResponse,
   toProviderPayload,
   toRuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
+} from "@bramble/wallet-protocol/bridge";
 import {
   accountAlreadyDeployed,
   apiVersionNotSupported,
   deploymentDataNotAvailable,
   unknownError,
-} from "@mc-wallet/wallet-protocol/rpc-errors";
+} from "@bramble/wallet-protocol/rpc-errors";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 

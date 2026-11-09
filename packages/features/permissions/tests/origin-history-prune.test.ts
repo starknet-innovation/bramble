@@ -8,8 +8,8 @@ import { describe, expect, test } from "bun:test";
 import {
   createOriginHistoryStore,
   ORIGIN_HISTORY_STORE_KEY,
-} from "@mc-wallet/permissions/origin-history";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+} from "@bramble/permissions/origin-history";
+import { createMemoryStore } from "@bramble/store/kv";
 
 describe("origin history overflow trimming", () => {
   test("prunes the oldest origins once the 500-entry cap is exceeded", async () => {

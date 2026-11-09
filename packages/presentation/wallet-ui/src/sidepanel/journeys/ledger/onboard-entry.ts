@@ -16,11 +16,21 @@
  * No seed or key material is generated on either path — the vault holds none.
  * Per-candidate deployed/balance state comes from the background
  * `ledgerAccountStatus` query, degrading gracefully to "unavailable".
+ *
+ * Both entry points are gated on the surface first. Every Ledger operation opens
+ * a focused browser tab to reach Chrome's device chooser, and a toolbar popup
+ * closes when it loses focus, so a flow started from the popup cannot finish.
+ * Rather than offer a control that dies on its first click, the overlay explains
+ * that and offers the switch. Gating here rather than at each caller means a new
+ * entry point cannot forget it — and the first-run passphrase is never captured
+ * on a surface that cannot complete the setup it was captured for.
  */
-import type { AccountContractType, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
 import type { RenderData } from "../../app/rendering/render-cache";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import { errorDetails, isPopupSurface, renderFragment, showToast } from "../../shared/dom";
 import { createLedgerOnboardRuntime } from "./onboard-runtime";
+import { ledgerSurfaceNotice, ledgerSurfaceSwitched } from "./onboard-views";
 import type { LedgerConnector } from "./sign-session";
 
 /**
@@ -32,11 +42,7 @@ import type { LedgerConnector } from "./sign-session";
 export type LedgerOnboardEntry = {
   readonly bindTriggers: (app: Element | null) => void;
   readonly startAddAccount: () => void;
-  readonly startLedgerSetup: (
-    networkId: string,
-    vaultPassphrase: string,
-    accountContractType: AccountContractType,
-  ) => void;
+  readonly startLedgerSetup: (networkId: string, vaultPassphrase: string) => void;
 };
 
 /**
@@ -55,13 +61,25 @@ export const createLedgerOnboardEntry = (deps: {
   readonly connector: LedgerConnector;
   readonly mount: HTMLElement;
   readonly openImport: () => void;
+  readonly openImportSeed: () => void;
+  readonly openFindAccounts: () => void;
   readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: SidepanelWallet;
 }): LedgerOnboardEntry => {
-  const { addHd, cache, connector, mount, openImport, openMultisig, refresh, wallet } = deps;
+  const {
+    addHd,
+    cache,
+    connector,
+    mount,
+    openImport,
+    openImportSeed,
+    openFindAccounts,
+    openMultisig,
+    refresh,
+    wallet,
+  } = deps;
   let ledgerSetup: {
-    readonly accountContractType: AccountContractType;
     readonly networkId: string;
     readonly vaultPassphrase: string;
   } | null = null;
@@ -76,16 +94,21 @@ export const createLedgerOnboardEntry = (deps: {
         account.derivation.accountIndex,
         account.publicKeyX,
         setup.vaultPassphrase,
-        setup.accountContractType,
+        account.accountContractType,
+        account.derivation.eip2645application,
       );
       ledgerSetup = null;
       return;
     }
+    // The path scheme travels with the candidate so a Ready account is stored
+    // at the path it was enumerated (and will be signed) at, never re-derived
+    // under Bramble's default scheme.
     await wallet.addLedgerAccount(
       account.networkId,
       account.derivation.accountIndex,
       account.publicKeyX,
       account.accountContractType,
+      account.derivation.eip2645application,
     );
   };
 
@@ -104,17 +127,62 @@ export const createLedgerOnboardEntry = (deps: {
       ledgerSetup = null;
     },
     openImport,
+    openImportSeed,
+    openFindAccounts,
     openMultisig,
     refresh,
     wallet,
   });
 
+  const dismiss = (): void => {
+    mount.replaceChildren();
+    mount.hidden = true;
+  };
+
+  // Renders the surface notice into the shared overlay and wires its two
+  // controls. Returns true when it took over, so callers stop before starting
+  // anything — including before stashing a first-run passphrase.
+  const blockedByPopupSurface = (): boolean => {
+    if (!isPopupSurface(mount)) {
+      return false;
+    }
+    renderFragment(mount, ledgerSurfaceNotice());
+    mount.hidden = false;
+    mount
+      .querySelector<HTMLButtonElement>("[data-ledger-onboard-cancel]")
+      ?.addEventListener("click", dismiss);
+    mount
+      .querySelector<HTMLButtonElement>("[data-ledger-surface-switch]")
+      ?.addEventListener("click", () => {
+        void wallet.setDisplay({ approvalSurface: "side-panel" }).then(
+          () => {
+            renderFragment(mount, ledgerSurfaceSwitched());
+            mount
+              .querySelector<HTMLButtonElement>("[data-ledger-onboard-cancel]")
+              ?.addEventListener("click", dismiss);
+          },
+          (error: unknown) => {
+            showToast(errorDetails(error, "Could not switch surface"), "error", mount);
+          },
+        );
+      });
+    return true;
+  };
+
   return {
     bindTriggers: (app) => runtime.bindTriggers(app),
-    startAddAccount: () => runtime.startAddAccount(),
-    startLedgerSetup: (networkId, vaultPassphrase, accountContractType) => {
-      ledgerSetup = { accountContractType, networkId, vaultPassphrase };
-      runtime.start(accountContractType);
+    startAddAccount: () => {
+      if (blockedByPopupSurface()) {
+        return;
+      }
+      runtime.startAddAccount();
+    },
+    startLedgerSetup: (networkId, vaultPassphrase) => {
+      if (blockedByPopupSurface()) {
+        return;
+      }
+      ledgerSetup = { networkId, vaultPassphrase };
+      runtime.start();
     },
   };
 };

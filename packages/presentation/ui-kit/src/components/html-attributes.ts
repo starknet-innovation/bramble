@@ -3,7 +3,7 @@
  * Attribute names are restricted to the small static surface components need;
  * values are always escaped before reaching markup.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 
 const UI_ATTRIBUTE_NAME =
   /^(?:aria-[a-z][a-z0-9-]*|data-[a-z][a-z0-9-]*|hidden|id|name|role|tabindex|title)$/;

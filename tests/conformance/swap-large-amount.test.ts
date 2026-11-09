@@ -11,10 +11,10 @@
  * message the side panel actually emits against the real background reader.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { isRecord } from "@mc-wallet/core/json";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
+import { isRecord } from "@bramble/core/json";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { DEFAULT_TOKENS } from "@bramble/wallet-model/networks";
 import { readSwapPrepareInput } from "../../apps/extension/src/background/transactions/swap-inputs";
 import type {
   TokenBalance,
@@ -151,6 +151,7 @@ const mountSwap = (prepareGate?: Promise<void>): { readonly sent: unknown[] } =>
     app,
     balances: () => ({ balances: [balance] }),
     currency: () => "usd",
+    navigateActivity: () => undefined,
     navigateHome: () => undefined,
     preferences: () => preferences,
     render: async () => undefined,
@@ -213,7 +214,7 @@ describe("swap preparation for an amount past the grouping threshold", () => {
       release = resolve;
     });
     mountSwap(held);
-    document.querySelector<HTMLButtonElement>("#swap-back-button")?.click();
+    document.querySelector<HTMLButtonElement>("#swap-header-back")?.click();
     await flush();
     document.querySelector<HTMLButtonElement>("#swap-max")?.click();
     await flush();
@@ -243,7 +244,7 @@ describe("the confirm receipt states the enforced minimum, not a derived one", (
     mountSwap();
     await clickReview();
     const receipt = document.querySelector("#swap-confirm-receipt")?.textContent ?? "";
-    expect(receipt).toContain(`${compactAmount(MIN_BUY_AMOUNT)} STRK (wallet-enforced)`);
+    expect(receipt).toContain(`${compactAmount(MIN_BUY_AMOUNT)} STRK`);
     // The figure the old row would have shown, which nothing enforced.
     expect(receipt).not.toContain(compactAmount((Number(BUY_AMOUNT) * 0.995).toFixed(8)));
   });

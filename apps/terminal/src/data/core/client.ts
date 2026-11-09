@@ -8,6 +8,12 @@
  * cancellation, and RPC failover are consistent across the app.
  */
 import type { RpcProvider } from "starknet";
+import {
+  BOUNDED_ERROR_BODY_CHARS,
+  type BoundedRequestInit,
+  boundedFetch,
+  readBoundedErrorBody,
+} from "../../protocols/support/bounded-network";
 import { withRpcFallback } from "../../protocols/support/provider";
 import { RPC_DIRECT_URLS } from "./endpoints";
 
@@ -28,11 +34,12 @@ export class HttpError extends Error {
   readonly retryAfterMs: number | null;
 
   constructor(status: number, url: string, body: string, retryAfterMs: number | null = null) {
-    super(`Request to ${url} failed with ${status}: ${body.slice(0, 300)}`);
+    const prefix = body.slice(0, BOUNDED_ERROR_BODY_CHARS);
+    super(`Request to ${url} failed with ${status}: ${prefix}`);
     this.name = "HttpError";
     this.status = status;
     this.url = url;
-    this.body = body;
+    this.body = prefix;
     this.retryAfterMs = retryAfterMs;
   }
 }
@@ -58,23 +65,20 @@ const parseRetryAfter = (value: string | null): number | null => {
 };
 
 /**
- * Fetches `url` and parses the JSON body, throwing `HttpError` on a non-2xx
- * response (with the body text attached) so failures are never silently read as
- * empty data. The caller's `AbortSignal` is threaded through so polling hooks
- * cancel in-flight requests on unmount / dependency change.
+ * Fetches `url` and parses the JSON body through the bounded network boundary,
+ * throwing `HttpError` on a non-2xx response (with a bounded body prefix
+ * attached) so failures are never silently read as empty data. The caller's
+ * `AbortSignal` is composed with an internal deadline and the response body is
+ * byte-capped, so polling hooks cancel in-flight requests on unmount /
+ * dependency change without leaving a stalled request in the shared cache.
  */
-export const fetchJson = async <T>(url: string, opts?: RequestInit): Promise<T> => {
-  const response = await fetch(url, {
+export const fetchJson = async <T>(url: string, opts?: BoundedRequestInit): Promise<T> => {
+  const response = await boundedFetch(url, {
     ...opts,
     headers: { accept: "application/json", ...(opts?.headers ?? {}) },
   });
   if (!response.ok) {
-    let body = "";
-    try {
-      body = await response.text();
-    } catch {
-      // Ignore body read failures — the status alone is enough to classify.
-    }
+    const body = await readBoundedErrorBody(response);
     const retryAfterMs = parseRetryAfter(response.headers?.get?.("retry-after") ?? null);
     throw new HttpError(response.status, url, body, retryAfterMs);
   }

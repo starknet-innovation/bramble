@@ -1,8 +1,8 @@
 /**
  * Pure parsers for token-management runtime messages from extension pages.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { canonicalAddress, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { canonicalAddress, isNonZeroStarkFieldElement } from "@bramble/wallet-model/networks";
 
 /**
  * Parses custom-token add requests carrying a contract address.
@@ -55,4 +55,18 @@ export const readSetTokenHiddenInput = (
   message["tokenId"].length > 0 &&
   message["tokenId"].length <= 200
     ? { hidden: message["hidden"], tokenId: message["tokenId"] }
+    : null;
+
+/**
+ * Parses a request to stop tracking one token, keyed by preference token id.
+ * Whether the token may be removed is decided by the preferences store.
+ */
+export const readRemoveTokenInput = (message: unknown): { readonly tokenId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["tokenId", "type"]) &&
+  message["type"] === "wallet.removeToken" &&
+  typeof message["tokenId"] === "string" &&
+  message["tokenId"].length > 0 &&
+  message["tokenId"].length <= 200
+    ? { tokenId: message["tokenId"] }
     : null;

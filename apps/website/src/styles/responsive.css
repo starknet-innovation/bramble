@@ -1,0 +1,208 @@
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .button,
+  .wallet-hotspot,
+  .wallet-screen {
+    transition: none;
+  }
+  .wallet-success-ring,
+  .wallet-success-check {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .button:active {
+    transform: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .home-story {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    padding-right: var(--page-gutter);
+  }
+  .hero h1 {
+    font-size: clamp(36px, 4.5vw, 56px);
+  }
+
+  .footer-columns {
+    gap: 32px;
+  }
+}
+@media (max-width: 800px) {
+  .home-story {
+    display: block;
+  }
+  .story-section {
+    min-height: auto;
+    padding: 48px 0;
+  }
+  .hero {
+    min-height: auto;
+    padding: 48px 0 48px;
+  }
+  .hero h1 {
+    font-size: clamp(36px, 6vw, 52px);
+  }
+  .story-stage-sticky {
+    position: static;
+    height: auto;
+    padding: 0 0 32px;
+    justify-content: center;
+  }
+  .wallet-preview {
+    width: min(320px, 100%);
+  }
+  .story-section h2 {
+    font-size: clamp(30px, 4.5vw, 40px);
+  }
+  .docs-layout {
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 32px;
+  }
+  .footer-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .support-cards section {
+    padding: 24px;
+  }
+}
+@media (max-width: 600px) {
+  .site-header {
+    flex-wrap: wrap;
+    column-gap: 12px;
+    row-gap: 8px;
+    padding-top: 14px;
+    padding-bottom: 8px;
+  }
+  .brand-lockup img {
+    height: 26px;
+  }
+  .header-download {
+    margin-left: auto;
+    min-height: 44px;
+    padding: 0 18px;
+    font-size: 14px;
+  }
+  .site-nav {
+    order: 3;
+    justify-content: center;
+    width: 100%;
+    margin: 0;
+    gap: 32px;
+  }
+  .hero {
+    padding-top: 40px;
+  }
+  .hero h1 {
+    font-size: clamp(36px, 8.8vw, 52px);
+  }
+  .hero-actions {
+    align-items: stretch;
+  }
+  .hero-actions .button {
+    flex: 1 0 auto;
+    min-height: 48px;
+    padding: 0 24px;
+  }
+  .hero-actions .text-link {
+    min-height: 44px;
+  }
+  .foundation-badge {
+    font-size: 12px;
+    padding: 8px 14px;
+  }
+  .feature-grid,
+  .setup-grid,
+  .support-cards,
+  .docs-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .setup-grid {
+    gap: 32px;
+  }
+  .setup-birds {
+    height: 150px;
+  }
+  .docs-index nav {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  .docs-index strong {
+    grid-column: 1 / -1;
+  }
+  .docs-index a {
+    font-size: 14px;
+  }
+  .reading-hero h1 {
+    font-size: clamp(36px, 9vw, 54px);
+    overflow-wrap: anywhere;
+  }
+  .docs-note,
+  .support-faq article {
+    padding: 24px;
+  }
+  .footer-columns {
+    gap: 40px 24px;
+  }
+  .footer-columns > div {
+    grid-column: 1 / -1;
+  }
+  .download-section {
+    min-height: 420px;
+  }
+}
+
+/*
+ * Below this width a four-column legal table leaves ~110px per column, so the
+ * policy tables restack as labelled rows (`data-label` on each cell) instead of
+ * scrolling sideways or shredding sentences one word per line.
+ */
+@media (max-width: 1000px) {
+  .policy-table,
+  .policy-table tbody,
+  .policy-table tr,
+  .policy-table td {
+    display: block;
+  }
+  .policy-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .policy-table tr {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .policy-table tr:last-child {
+    border-bottom: 0;
+  }
+  .policy-table td {
+    padding: 8px 20px;
+    border-bottom: 0;
+  }
+  .policy-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+}
+@media (max-width: 600px) {
+  .policy-clauses p {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  .policy-table td {
+    padding-inline: 16px;
+  }
+}

@@ -5,12 +5,13 @@
  * unavailable rather than implying a trusted result.
  */
 import { describe, expect, test } from "bun:test";
-import type { VerifyClassHashInput } from "@mc-wallet/starknet/class-hash-verify";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { VerifyClassHashInput } from "@bramble/starknet/class-hash-verify";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const account: AccountRef = {
@@ -81,7 +82,7 @@ describe("background class-hash verification message", () => {
   test("requires an extension page sender", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc(),
       session,
     });
@@ -89,7 +90,7 @@ describe("background class-hash verification message", () => {
   });
 
   test("requires an unlocked vault", async () => {
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc(),
       session: createUnlockSession(),
     });
@@ -100,7 +101,7 @@ describe("background class-hash verification message", () => {
     const calls: VerifyClassHashInput[] = [];
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc({
         async verifyAccountClassHash(input) {
           calls.push(input);
@@ -132,7 +133,7 @@ describe("background class-hash verification message", () => {
   test("surfaces a mismatch verdict without rewriting it", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc({
         async verifyAccountClassHash() {
           return {
@@ -159,7 +160,7 @@ describe("background class-hash verification message", () => {
   test("rejects an unexpected extra field on the request", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc(),
       session,
     });
@@ -175,7 +176,7 @@ describe("background class-hash verification message", () => {
     // treat that as a passing verification.
     const runtimeRpc = makeRuntimeRpc();
     delete (runtimeRpc as { verifyAccountClassHash?: unknown }).verifyAccountClassHash;
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc,
       session,
     });
@@ -226,7 +227,7 @@ describe("background class-hash verification message", () => {
     const calls: VerifyClassHashInput[] = [];
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(importedWalletStub, "extension-id", {
+    const handler = createMessageHandler(importedWalletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc({
         async verifyAccountClassHash(input) {
           calls.push(input);

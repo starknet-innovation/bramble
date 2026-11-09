@@ -14,13 +14,14 @@
  * never double-settles a result that already settled below.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { setApprovalNotifier } from "../../../apps/extension/src/background/approvals/approval-notifier";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { chromiumExtension } from "../../support/background-wallet-stub";
 import { reviewedApprovalFee, waitForPendingApprovals } from "../../support/held";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
@@ -42,9 +43,13 @@ const vault = {
   accounts: [account],
   accountSecrets: [],
   activeAccountId: account.id,
+  importedSeeds: [],
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: ORIGIN }],
-  schemaVersion: 7,
+  schemaVersion: 13,
+  multisigStrk20KeyConflicts: [],
+  multisigStrk20ViewingKeys: [],
+  shadowAccountScopes: [],
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 
@@ -132,7 +137,7 @@ const driveThrow = async (dappMessage: Record<string, unknown>) => {
   const session = createUnlockSession();
   session.unlock(PASSPHRASE);
   let submitted = false;
-  const handler = createMessageHandler(makeWallet(control), "ext", {
+  const handler = createMessageHandler(makeWallet(control), chromiumExtension("ext"), {
     runtimeRpc: makeRuntimeRpc({
       async submitDeclareTransaction() {
         submitted = true;

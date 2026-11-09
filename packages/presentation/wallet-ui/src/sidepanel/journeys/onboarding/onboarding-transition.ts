@@ -11,6 +11,7 @@
  *  300ms   incoming step settles from 28px with focus restored
  * ─────────────────────────────────────────────────────────
  */
+import { settleViewTransition } from "../../app/rendering/stage-transition";
 import { prefersReducedMotion } from "../../shared/motion";
 
 /**
@@ -23,6 +24,11 @@ type OnboardingViewTransition = {
   readonly skipTransition?: () => void;
 };
 
+// Longer than the 300ms step animation. Headless Chromium can leave
+// `finished` pending, and the view-transition pseudo-element then sits over
+// the page and swallows every click. Skipping past this bound releases it.
+const STUCK_TRANSITION_MS = 1_000;
+
 type OnboardingTransitionDocument = Document & {
   startViewTransition?: (callback: () => void) => OnboardingViewTransition;
 };
@@ -30,6 +36,8 @@ type OnboardingTransitionDocument = Document & {
 /**
  * Creates one interruptible transition owner for a staged onboarding page.
  * Unsupported and reduced-motion environments cut directly to the next step.
+ * A transition that never settles is skipped, so its overlay cannot keep
+ * blocking the next control.
  */
 export const createOnboardingStepTransition = (
   app: Element | null,
@@ -69,22 +77,38 @@ export const createOnboardingStepTransition = (
 
     activeTransition?.skipTransition?.();
     const generation = ++transitionGeneration;
-    root.dataset["onboardingDirection"] = direction;
-    const transition = ownerDocument.startViewTransition?.(() => reveal(next, direction));
-    if (!transition) {
-      reveal(next, direction);
-      focus(next);
-      return;
-    }
-    activeTransition = transition;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
     const finish = (): void => {
       if (generation !== transitionGeneration) {
         return;
       }
+      transitionGeneration += 1;
       activeTransition = null;
+      if (settleTimer !== undefined) {
+        clearTimeout(settleTimer);
+        settleTimer = undefined;
+      }
       delete root.dataset["onboardingDirection"];
       focus(next);
     };
-    void transition.finished.then(finish, finish);
+    root.dataset["onboardingDirection"] = direction;
+    // Arm the watchdog before the transition starts. A stuck snapshot can
+    // defer timers scheduled while it is active, which would leave the
+    // watchdog waiting on the very transition it is supposed to end.
+    settleTimer = setTimeout(() => {
+      if (generation !== transitionGeneration) {
+        return;
+      }
+      activeTransition?.skipTransition?.();
+      finish();
+    }, STUCK_TRANSITION_MS);
+    const transition = ownerDocument.startViewTransition?.(() => reveal(next, direction));
+    if (!transition) {
+      finish();
+      reveal(next, direction);
+      return;
+    }
+    activeTransition = transition;
+    settleViewTransition(transition, finish);
   };
 };

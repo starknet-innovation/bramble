@@ -14,16 +14,17 @@
  * agree with the shared Send-path computation.
  */
 import { describe, expect, test } from "bun:test";
-import type { AddressBookEntry, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AddressBookEntry, WalletPreferences } from "@bramble/settings/preferences";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { verifyCalls } from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { verificationContext } from "../../../apps/extension/src/background/accounts/wallet-ops";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { waitForPendingApprovals } from "../../support/held";
 
 const account: AccountRef = {
@@ -68,7 +69,7 @@ const preferencesStore = {
   async read() {
     return preferences;
   },
-} as unknown as import("@mc-wallet/settings/preferences").WalletPreferencesStore;
+} as unknown as import("@bramble/settings/preferences").WalletPreferencesStore;
 
 const origin = "https://dapp.example";
 const contentSender: RuntimeSender = { id: "extension-id", url: `${origin}/app` };
@@ -101,7 +102,7 @@ const walletStub = {
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
-  return createMessageHandler(walletStub as never, "extension-id", {
+  return createMessageHandler(walletStub as never, testExtension, {
     activity: memoryActivityLog(),
     approvals: createApprovalQueue(),
     preferencesStore,

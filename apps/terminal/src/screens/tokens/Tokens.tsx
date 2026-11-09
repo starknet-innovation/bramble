@@ -38,6 +38,7 @@ import { useWallet } from "../../wallet/connection/WalletProvider";
 import { SwapPanel } from "../swap/SwapPanel";
 import { TokenTradeTape } from "./TokenTradeTape";
 import { TIMEFRAMES } from "./tokensData";
+import { loadFailedMessage } from "../../protocols/support/user-error";
 
 type LeftTab = "tokens" | "perps" | "follows";
 type TradeTab = "trades" | "mine" | "positions" | "top" | "holders";
@@ -146,7 +147,7 @@ export default function Tokens({ onNavigate }: TokensProps): ReactNode {
   if (token === undefined) {
     return (
       <div className="screen" id="tokens">
-        {tokens.error !== null && <ErrorBanner message={`Couldn't load tokens: ${tokens.error}`} />}
+        {tokens.error !== null && <ErrorBanner message={loadFailedMessage("tokens", tokens.error)} />}
         <div className="pane3">
           <div className="leftlist">
             <TabStrip
@@ -184,7 +185,7 @@ export default function Tokens({ onNavigate }: TokensProps): ReactNode {
 
   return (
     <div className="screen" id="tokens">
-      {tokens.error !== null && <ErrorBanner message={`Couldn't load tokens: ${tokens.error}`} />}
+      {tokens.error !== null && <ErrorBanner message={loadFailedMessage("tokens", tokens.error)} />}
       <div className="pane3">
         {/* LEFT: token list */}
         <div className="leftlist">

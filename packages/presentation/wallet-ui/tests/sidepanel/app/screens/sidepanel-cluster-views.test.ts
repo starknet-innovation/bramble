@@ -3,10 +3,10 @@
  * transaction speed-up/cancel info affordance.
  */
 import { describe, expect, test } from "bun:test";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences } from "@bramble/testkit/sidepanel";
+import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
@@ -80,14 +80,14 @@ const dashboardWithNft = (
     {},
     [],
     null,
-    [],
+    { entries: [], notices: [], unavailable: false },
     selectedNftId,
     {},
     [],
     [],
     null,
     null,
-    null,
+    [],
     null,
     false,
     null,
@@ -109,9 +109,12 @@ describe("cluster views", () => {
     const html = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       pendingTx,
     ]);
-    expect(html).toContain("normally confirms quickly");
-    expect(html).toContain("checks immediately");
+    // What a reader can act on while a transaction is pending: nothing. The
+    // wallet used to also narrate how quickly it checks, which changed neither
+    // the wait nor what they could do about it.
+    expect(html).toContain("Broadcast accepted");
     expect(html).toContain("fee-bumped, replaced, or cancelled");
+    expect(html).not.toContain("checks immediately");
     expect(html).toMatch(/tx-kind-transfer pending"[^>]*title="/);
 
     const settled = dashboard("activity", status, [], preferences, { balances: [] }, null, [
@@ -122,11 +125,13 @@ describe("cluster views", () => {
 
   test("home and settings expose their task destinations", () => {
     const home = dashboard("home", status, [], preferences, { balances: [] });
-    expect(home).toContain('data-view="nfts"');
+    expect(home).toContain('data-view="tokens"');
+    // The Collectibles journey is parked: home must not link into the gallery.
+    expect(home).not.toContain('data-view="nfts"');
     const settings = dashboard("settings", status, [], preferences, { balances: [] });
     expect(settings).toContain('data-view="allowances"');
     expect(settings).toContain('data-view="reveal"');
-    expect(settings).toContain("Reveal recovery secrets");
+    expect(settings).toContain("Reveal secrets");
   });
 
   test("a site request names the paused task without repeating return guidance", () => {
@@ -157,12 +162,18 @@ describe("cluster views", () => {
       {},
       [],
       null,
-      [allowance],
+      { entries: [allowance], notices: [], unavailable: false },
     );
     expect(html).toContain('data-revoke-allowance="SN_MAIN:0x49d3657:0x5abcdef1234"');
     expect(html).toContain("Revoke");
     // Amounts render through the shared display policy (grouped thousands).
     expect(html).toContain("1,000");
+    // The spender leads truncated, with the full address on hover and a copy
+    // control beside it; the revoke stays the row's only other control.
+    expect(html).toContain(
+      '<span class="allowance-spender"><code title="0x5abcdef1234">0x5abc…1234</code><button class="icon-button ghost copy-inline" data-copy="0x5abcdef1234" type="button" aria-label="Copy spender address"',
+    );
+    expect(html).not.toContain("<code>0x5abcdef1234</code>");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
@@ -184,7 +195,7 @@ describe("cluster views", () => {
         {},
         [],
         null,
-        [view],
+        { entries: [view], notices: [], unavailable: false },
       );
 
     expect(listing({ ...allowance, lowerBound: true })).toContain("at least 1,000");
@@ -218,7 +229,7 @@ describe("cluster views", () => {
       {},
       [],
       null,
-      [{ ...allowance, unconfirmedToken: true }],
+      { entries: [{ ...allowance, unconfirmedToken: true }], notices: [], unavailable: false },
     );
     expect(html).toContain("may be an NFT item id");
     expect(html).not.toContain("data-revoke-allowance");

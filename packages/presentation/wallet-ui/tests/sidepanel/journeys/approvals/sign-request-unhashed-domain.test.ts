@@ -10,7 +10,7 @@
  * separate, unmistakably labelled block.
  */
 import { describe, expect, test } from "bun:test";
-import { typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { typedDataHash } from "@bramble/starknet/typed-data";
 import {
   signBlockBody,
   signHtml,

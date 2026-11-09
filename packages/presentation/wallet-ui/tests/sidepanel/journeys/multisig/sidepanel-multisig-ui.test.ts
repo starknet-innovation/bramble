@@ -1,17 +1,16 @@
 /** DOM bindings forward only exact Argent multisig intents, signatures, and calls. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigIntentPackage,
 } from "../../../../src/popup/responses/multisig-responses";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import { multisigSignersFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
-import {
-  EMPTY_MULTISIG_PORTFOLIO,
-  multisigPortfolio,
-} from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
+import { multisigPortfolio } from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
+import { EMPTY_MULTISIG_PORTFOLIO } from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio-data";
 import type { MultisigUiDeps } from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
+import { SUBMISSION_UNKNOWN } from "../../../../src/sidepanel/runtime/friendly-error-shared";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
@@ -95,28 +94,6 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(app.querySelector<HTMLInputElement>('input[name="signerAccountId"]')?.value).toBe(
       secondary.id,
     );
-  });
-  test("keeps approval visible while address and fee review are prepared", async () => {
-    const fixture = await makeArgentMultisigFixture();
-    const signer = fixture.status.accounts[0];
-    if (!signer) throw new Error("signer fixture unavailable");
-    const pending = deferred<typeof fixture.deploymentReview>();
-    const app = mount(
-      multisigDeployFlow(fixture.status, signer, true, defaultWalletPreferences()),
-      await testClient({ reviewDeployment: () => pending.promise }),
-      fixture.status,
-    );
-    const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
-    app.querySelector<HTMLButtonElement>("[data-multisig-deploy-continue]")?.click();
-    form?.requestSubmit();
-    expect(form?.dataset["deploymentStage"]).toBe("approval");
-    expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
-    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
-      "Calculating address and fee",
-    );
-    pending.resolve(fixture.deploymentReview);
-    await flush();
-    expect(form?.dataset["deploymentStage"]).toBe("deploy");
   });
   test("keeps an unfunded deployment in review instead of offering broadcast", async () => {
     const fixture = await makeArgentMultisigFixture();
@@ -207,7 +184,9 @@ describe("bindMultisigs frozen-intent forms", () => {
       multisigId: fixture.record.id,
     });
   });
-  test("keeps deployment failures in a copyable toast and resets the review action", async () => {
+  // Errors audit C3: a submit error the wallet cannot place before the
+  // broadcast may be on chain, so it is amber and Deploy is not re-armed.
+  test("keeps an unplaced deployment failure amber and copyable, with Deploy down", async () => {
     const fixture = await makeArgentMultisigFixture();
     const signer = fixture.status.accounts[0];
     if (!signer) throw new Error("signer fixture unavailable");
@@ -229,11 +208,12 @@ describe("bindMultisigs frozen-intent forms", () => {
     await flush();
 
     expect(app.querySelector("#multisig-deploy-result")?.textContent).not.toContain("RPC:");
-    expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain("Fund 0x");
-    expect(document.querySelector(".toast.error .toast-copy")).not.toBeNull();
-    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toContain(
-      "Review deployment",
+    expect(app.querySelector("#multisig-deploy-result")?.textContent).toContain(
+      SUBMISSION_UNKNOWN("The deployment"),
     );
+    expect(document.querySelector(".toast.error")).toBeNull();
+    expect(document.querySelector(".toast.warning .toast-copy")).not.toBeNull();
+    expect(app.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
   });
 
   test("syncs an existing account from its address and opens the matched account", async () => {
@@ -415,7 +395,7 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(app.querySelector("#multisig-deploy-review")?.textContent).toBe("");
     expect(form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
     expect(form?.querySelector('button[type="submit"]')?.textContent).toContain(
-      "Review deployment",
+      "Check fee and address",
     );
   });
 
@@ -447,8 +427,8 @@ describe("bindMultisigs frozen-intent forms", () => {
     expect(newest).toContain("0x999");
     expect(newest).toContain("0x2");
     expect(newest).toContain("What will happen");
-    expect(newest).toContain("Risk and recovery");
-    expect(newest).toContain("Maximum cost and constraints");
+    expect(newest).not.toContain("Risk and recovery");
+    expect(newest).toContain('aria-label="Cost"');
     expect(newest).toContain("Technical details");
     pending[0]?.resolve(fixture.deploymentReview);
     await flush();
@@ -476,24 +456,24 @@ describe("bindMultisigs frozen-intent forms", () => {
     );
     const tabs = Array.from(app.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]"));
     const panels = Array.from(app.querySelectorAll<HTMLElement>("[data-ms-home-panel]"));
-    expect(tabs[2]?.getAttribute("aria-label")).toBe("Signing intents, 0 open");
+    expect(tabs).toHaveLength(2);
+    expect(tabs[1]?.getAttribute("aria-label")).toBe("Transactions, 0 open");
     const selectedTab = tabs[1];
-    if (!selectedTab) throw new Error("collectibles tab unavailable");
+    if (!selectedTab) throw new Error("intents tab unavailable");
     expect(tabs.map((tab) => tab.getAttribute("aria-controls"))).toEqual(
       panels.map((panel) => panel.id),
     );
     expect(panels.map((panel) => panel.getAttribute("aria-labelledby"))).toEqual(
       tabs.map((tab) => tab.id),
     );
-    expect(panels.map((panel) => panel.tabIndex)).toEqual([0, 0, 0]);
+    expect(panels.map((panel) => panel.tabIndex)).toEqual([0, 0]);
 
     tabs[0]?.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight" }));
     expect(tabs.map((tab) => [tab.getAttribute("aria-selected"), tab.tabIndex])).toEqual([
       ["false", -1],
       ["true", 0],
-      ["false", -1],
     ]);
-    expect(panels.map((panel) => panel.hidden)).toEqual([true, false, true]);
+    expect(panels.map((panel) => panel.hidden)).toEqual([true, false]);
     expect(document.activeElement).toBe(selectedTab);
   });
 });

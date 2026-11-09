@@ -13,7 +13,7 @@ import {
   serializeArgentAccountSignature,
   serializeArgentMultisigDeploySignature,
   serializeArgentMultisigSignature,
-} from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/starknet/account-contracts";
 import { hash } from "starknet";
 
 const FIRST = "0x123";

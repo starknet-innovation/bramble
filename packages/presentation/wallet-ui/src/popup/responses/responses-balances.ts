@@ -17,9 +17,9 @@
  * `shared/json` grammars their writer used.
  */
 
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { isTokenBalance, type TokenBalance } from "@mc-wallet/starknet/rpc";
-import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { isTokenBalance, type TokenBalance } from "@bramble/starknet/rpc";
+import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 
 /**
  * Shared validated balance row accepted by presentation boundaries.
@@ -82,3 +82,30 @@ export const isDetectTokensResponse = (value: unknown): value is DetectTokensRes
   Array.isArray(value["suggestions"]) &&
   value["suggestions"].every(isTokenBalance) &&
   hasUniqueStrings(value["suggestions"].map((token) => token.id));
+
+/**
+ * Reads auto-detected suggestions row by row: the envelope must be well formed,
+ * but a row the token store would refuse is dropped instead of failing the
+ * whole scan, so one bad row cannot hide every other token the account holds
+ * (Sherlock 207). Rows are kept only once each, by id. Returns `null` when the
+ * envelope itself is malformed.
+ */
+export const readDetectedTokens = (value: unknown): readonly TokenBalance[] | null => {
+  if (
+    !isRecord(value) ||
+    !isJson(value) ||
+    !hasOnlyKnownKeys(value, ["ok", "suggestions"]) ||
+    value["ok"] !== true ||
+    !Array.isArray(value["suggestions"])
+  ) {
+    return null;
+  }
+  const seen = new Set<string>();
+  return value["suggestions"].filter((row): row is TokenBalance => {
+    if (!isTokenBalance(row) || seen.has(row.id)) {
+      return false;
+    }
+    seen.add(row.id);
+    return true;
+  });
+};

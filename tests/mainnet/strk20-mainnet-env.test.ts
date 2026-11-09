@@ -3,18 +3,51 @@
  * unrelated to any funded account.
  */
 import { describe, expect, test } from "bun:test";
+import {
+  assertStrk20CiAllowed,
+  MAINNET_E2E_CI_OPT_IN,
+  MAINNET_E2E_ENVIRONMENT,
+  MAINNET_E2E_REF,
+  MAINNET_E2E_REPOSITORY,
+  MAINNET_E2E_WORKFLOW_NAME,
+  mainnetE2eWorkflowRef,
+  STRK20_CI_REFUSAL,
+  STRK20_SEND_BUDGET_WIRED,
+} from "../../scripts/mainnet-e2e-guard";
 import { readStrk20MainnetEnvironment } from "./strk20-mainnet-env";
 
-const valid = (): Record<string, string> => ({
-  MC_STRK20_E2E_ACCOUNT_ADDRESS: "0x123",
-  MC_STRK20_E2E_DEPOSIT_STRK: "0.1",
-  MC_STRK20_E2E_DISCOVERY_URL: "https://discovery.example/",
-  MC_STRK20_E2E_MAINNET_ACK: "I_UNDERSTAND_THIS_WRITES_TO_MAINNET",
-  MC_STRK20_E2E_PRIVATE_KEY: "0x456",
-  MC_STRK20_E2E_PUBLIC_CALLER_ACK: "I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS",
-  MC_STRK20_E2E_PROVER_URL: "https://prover.example/",
-  MC_STRK20_E2E_RPC_URL: "https://rpc.example/",
+const ciOptIn = (): Record<string, string> => ({
+  BRAMBLE_MAINNET_E2E_CI: MAINNET_E2E_CI_OPT_IN,
+  BRAMBLE_MAINNET_E2E_ENVIRONMENT: MAINNET_E2E_ENVIRONMENT,
+  CI: "true",
+  GITHUB_ACTIONS: "true",
+  GITHUB_EVENT_NAME: "workflow_dispatch",
+  GITHUB_REF: MAINNET_E2E_REF,
+  GITHUB_REPOSITORY: MAINNET_E2E_REPOSITORY,
+  GITHUB_WORKFLOW: MAINNET_E2E_WORKFLOW_NAME,
+  GITHUB_WORKFLOW_REF: mainnetE2eWorkflowRef(),
 });
+
+const valid = (): Record<string, string> => ({
+  BRAMBLE_STRK20_E2E_ACCOUNT_ADDRESS: "0x123",
+  BRAMBLE_STRK20_E2E_DEPOSIT_STRK: "0.1",
+  BRAMBLE_STRK20_E2E_DISCOVERY_URL: "https://discovery.example/",
+  BRAMBLE_STRK20_E2E_MAINNET_ACK: "I_UNDERSTAND_THIS_WRITES_TO_MAINNET",
+  BRAMBLE_STRK20_E2E_PRIVATE_KEY: "0x456",
+  BRAMBLE_STRK20_E2E_PUBLIC_CALLER_ACK: "I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS",
+  BRAMBLE_STRK20_E2E_PROVER_URL: "https://prover.example/",
+  BRAMBLE_STRK20_E2E_RPC_URL: "https://rpc.example/",
+});
+
+/** The error `run` throws. Fails the test when `run` returns instead. */
+const thrown = (run: () => unknown): string => {
+  try {
+    run();
+  } catch (error) {
+    return String(error);
+  }
+  throw new Error("expected a refusal, but nothing was thrown");
+};
 
 describe("STRK20 live-mainnet environment", () => {
   test("normalizes inputs and derives bounded action amounts", () => {
@@ -33,19 +66,16 @@ describe("STRK20 live-mainnet environment", () => {
 
   test("requires an explicit acknowledgement and never echoes a key", () => {
     const env = valid();
-    env["MC_STRK20_E2E_MAINNET_ACK"] = "no";
-    env["MC_STRK20_E2E_PRIVATE_KEY"] = "0xsecret";
-    expect(() => readStrk20MainnetEnvironment(env)).toThrow("permit mainnet writes");
-    try {
-      readStrk20MainnetEnvironment(env);
-    } catch (error) {
-      expect(String(error)).not.toContain("0xsecret");
-    }
+    env["BRAMBLE_STRK20_E2E_MAINNET_ACK"] = "no";
+    env["BRAMBLE_STRK20_E2E_PRIVATE_KEY"] = "0xsecret";
+    const message = thrown(() => readStrk20MainnetEnvironment(env));
+    expect(message).toContain("permit mainnet writes");
+    expect(message).not.toContain("0xsecret");
   });
 
   test("requires a separate acknowledgement for the public-caller privacy tradeoff", () => {
     const env = valid();
-    env["MC_STRK20_E2E_PUBLIC_CALLER_ACK"] = "no";
+    env["BRAMBLE_STRK20_E2E_PUBLIC_CALLER_ACK"] = "no";
     expect(() => readStrk20MainnetEnvironment(env)).toThrow("public-caller submission");
   });
 
@@ -53,42 +83,86 @@ describe("STRK20 live-mainnet environment", () => {
     expect(
       readStrk20MainnetEnvironment({
         ...valid(),
-        MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK: "I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED",
+        BRAMBLE_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK: "I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED",
       }).resumeAfterDeposit,
     ).toBe(true);
     expect(() =>
       readStrk20MainnetEnvironment({
         ...valid(),
-        MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK: "yes",
+        BRAMBLE_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK: "yes",
       }),
     ).toThrow("resume after a confirmed deposit");
+  });
+
+  test("refuses the STRK20 lifecycle in Mainnet E2E CI until its send budget is wired", () => {
+    expect(STRK20_SEND_BUDGET_WIRED).toBe(false);
+    const ci: Record<string, string> = { ...valid(), ...ciOptIn(), BRAMBLE_STRK20_E2E_CI: "1" };
+    ci["BRAMBLE_STRK20_E2E_PRIVATE_KEY"] = "0xsecret";
+    const message = thrown(() => readStrk20MainnetEnvironment(ci));
+    expect(message).toContain(STRK20_CI_REFUSAL);
+    expect(message).not.toContain("0xsecret");
+    expect(() => assertStrk20CiAllowed(ci)).toThrow(STRK20_CI_REFUSAL);
+    // Local runs are unchanged.
+    expect(() => assertStrk20CiAllowed(valid())).not.toThrow();
+    expect(readStrk20MainnetEnvironment(valid()).depositAmount).toBe("0.1");
+  });
+
+  test("refuses a CI run outside GitHub Actions without echoing the key", () => {
+    const refused: Record<string, string> = { ...valid(), ...ciOptIn() };
+    refused["BRAMBLE_STRK20_E2E_PRIVATE_KEY"] = "0xsecret";
+    delete refused["GITHUB_ACTIONS"];
+    const message = thrown(() => readStrk20MainnetEnvironment(refused));
+    expect(message).toContain("only honored inside GitHub Actions");
+    expect(message).not.toContain("0xsecret");
   });
 
   test("rejects CI, invalid secrets, and deposits over the hard cap", () => {
     expect(() => readStrk20MainnetEnvironment({ ...valid(), CI: "true" })).toThrow("local-only");
     expect(() =>
-      readStrk20MainnetEnvironment({ ...valid(), MC_STRK20_E2E_PRIVATE_KEY: "invalid" }),
+      readStrk20MainnetEnvironment({ ...valid(), BRAMBLE_STRK20_E2E_PRIVATE_KEY: "invalid" }),
     ).toThrow("valid Stark signing key");
     expect(() =>
       readStrk20MainnetEnvironment({
         ...valid(),
-        MC_STRK20_E2E_DEPOSIT_STRK: "1.000000000000000001",
+        BRAMBLE_STRK20_E2E_DEPOSIT_STRK: "1.000000000000000001",
       }),
     ).toThrow("hard 1 STRK safety cap");
   });
 
   test("requires HTTPS discovery and proving endpoints without echoing them", () => {
     expect(() =>
-      readStrk20MainnetEnvironment({ ...valid(), MC_STRK20_E2E_DISCOVERY_URL: "" }),
-    ).toThrow("MC_STRK20_E2E_DISCOVERY_URL");
+      readStrk20MainnetEnvironment({ ...valid(), BRAMBLE_STRK20_E2E_DISCOVERY_URL: "" }),
+    ).toThrow("BRAMBLE_STRK20_E2E_DISCOVERY_URL");
     expect(() =>
       readStrk20MainnetEnvironment({
         ...valid(),
-        MC_STRK20_E2E_PROVER_URL: "http://prover.example/secret",
+        BRAMBLE_STRK20_E2E_PROVER_URL: "http://prover.example/secret",
       }),
-    ).toThrow("MC_STRK20_E2E_PROVER_URL");
-    expect(() => readStrk20MainnetEnvironment({ ...valid(), MC_STRK20_E2E_RPC_URL: "" })).toThrow(
-      "MC_STRK20_E2E_RPC_URL",
-    );
+    ).toThrow("BRAMBLE_STRK20_E2E_PROVER_URL");
+    expect(() =>
+      readStrk20MainnetEnvironment({ ...valid(), BRAMBLE_STRK20_E2E_RPC_URL: "" }),
+    ).toThrow("BRAMBLE_STRK20_E2E_RPC_URL");
+  });
+
+  test("refuses the shared wallet and Foundation RPCs for load-bearing automation", () => {
+    for (const rpcUrl of [
+      "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
+      "https://mainnet.nodes.starknet.org/rpc/v0_10",
+    ]) {
+      expect(() =>
+        readStrk20MainnetEnvironment({ ...valid(), BRAMBLE_STRK20_E2E_RPC_URL: rpcUrl }),
+      ).toThrow("dedicated test RPC endpoint");
+    }
+  });
+
+  test("refuses a shared RPC host written as a fully-qualified name", () => {
+    for (const rpcUrl of [
+      "https://wallet.nodes.starknet.org./rpc/mainnet/v0_10",
+      "https://mainnet.nodes.starknet.org./rpc/v0_10",
+    ]) {
+      expect(() =>
+        readStrk20MainnetEnvironment({ ...valid(), BRAMBLE_STRK20_E2E_RPC_URL: rpcUrl }),
+      ).toThrow("dedicated test RPC endpoint");
+    }
   });
 });

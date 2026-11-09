@@ -1,48 +1,88 @@
 /**
  * Per-session cache of which accounts are known-deployed, so the Home screen's
  * "deploy now" notice never re-queries the chain for an account already seen
- * deployed. Deployment is monotonic (an account never un-deploys), so a cached
- * "deployed" is safe to trust for the session; an undeployed or unknown result
- * is not cached and re-checked on the next Home paint. Kept out of the
- * entrypoint so the render loop holds no ad-hoc RPC memoisation.
+ * deployed. Deployment is monotonic, while an undeployed result receives only
+ * a short freshness window so external or wallet-driven deployment still
+ * appears promptly. Kept out of the entrypoint so the render loop holds no
+ * ad-hoc RPC memoisation.
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { WalletView } from "../screens/views";
+
+const UNDEPLOYED_FRESH_MS = 60_000;
+
+type DeploymentSnapshot = { readonly checkedAt: number; readonly deployed: boolean };
+
+// The views that read deployment: Home's "deploy now" notice, and the deploy
+// screen, which must never offer Deploy from another view's stale snapshot
+// (mc-wallet 712).
+const DEPLOYMENT_VIEWS: ReadonlySet<WalletView> = new Set<WalletView>(["home", "deploy-account"]);
 
 /**
  * Deployment-status cache handle bound to one wallet client.
  */
 export type DeploymentCache = {
   /**
-   * Resolves the active account's on-chain deployment for Home: true when
-   * deployed (from cache or a fresh query), false when confirmed undeployed,
-   * and null when it does not apply (not Home, locked, or no vault) or is
-   * unknown. Only "deployed" is memoised.
+   * Resolves the active account's on-chain deployment for Home and the deploy
+   * screen: true when deployed (from cache or a fresh query), false when
+   * confirmed undeployed, and null when it does not apply (another view,
+   * locked, or no vault) or is unknown. A completed action forces a fresh
+   * negative result while a positive result remains safe for the session.
    */
-  readonly load: (status: WalletStatus, activeView: WalletView) => Promise<boolean | null>;
+  readonly load: (
+    status: WalletStatus,
+    activeView: WalletView,
+    force?: boolean,
+  ) => Promise<boolean | null>;
+  /**
+   * Records that this account is deployed. A poll that just watched deployment
+   * land must not leave the 60-second undeployed snapshot in place.
+   */
+  readonly noteDeployed: (networkId: string, accountId: string) => void;
 };
 
 /**
  * Creates a deployment-status cache over the given wallet client.
  */
-export const createDeploymentCache = (wallet: SidepanelWallet): DeploymentCache => {
-  const deployedAccounts = new Set<string>();
+export const createDeploymentCache = (
+  wallet: SidepanelWallet,
+  now: () => number = () => performance.now(),
+): DeploymentCache => {
+  const snapshots = new Map<string, DeploymentSnapshot>();
   return {
-    async load(status, activeView) {
-      if (activeView !== "home" || !status.hasVault || status.locked) {
+    async load(status, activeView, force = false) {
+      if (!DEPLOYMENT_VIEWS.has(activeView) || !status.hasVault || status.locked) {
         return null;
       }
       const known = `${status.networkId}:${status.activeAccountId ?? ""}`;
-      if (deployedAccounts.has(known)) {
+      const cached = snapshots.get(known);
+      if (cached?.deployed) {
         return true;
       }
-      const result = await wallet.loadDeploymentStatus();
-      if (result?.deployed) {
-        deployedAccounts.add(`${status.networkId}:${result.accountId}`);
-        deployedAccounts.add(known);
+      const checkedAt = now();
+      if (
+        !force &&
+        cached &&
+        cached.checkedAt <= checkedAt &&
+        checkedAt - cached.checkedAt < UNDEPLOYED_FRESH_MS
+      ) {
+        return false;
       }
-      return result ? result.deployed : null;
+      const result = await wallet.loadDeploymentStatus();
+      // The background answers for whichever account is active when it handles
+      // the request, so a switch that lands mid-flight returns another
+      // account's verdict. Drop it rather than key it under this account: a
+      // foreign `true` would hide the deploy notice for the whole session.
+      if (!result || result.accountId !== status.activeAccountId) {
+        return null;
+      }
+      snapshots.set(known, { checkedAt, deployed: result.deployed });
+      return result.deployed;
+    },
+    noteDeployed(networkId, accountId) {
+      const snapshot = { checkedAt: now(), deployed: true };
+      snapshots.set(`${networkId}:${accountId}`, snapshot);
     },
   };
 };

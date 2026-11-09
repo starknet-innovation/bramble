@@ -2,8 +2,9 @@
  * Pure popup validators for pre-sign transfer review responses.
  */
 
-import { hasOnlyKnownKeys, isJson, isRecord, isRiskFlagCode } from "@mc-wallet/core/json";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { hasOnlyKnownKeys, isJson, isRecord, isRiskFlagCode } from "@bramble/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
+import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
 
 /**
  * Pre-sign transfer review accepted from the background boundary.
@@ -21,8 +22,16 @@ export type TransferReviewResponse = {
      */
     readonly feeAffordability: "insufficient" | "ok" | "unknown";
     readonly feeEstimateFailed: boolean;
+    readonly gaslessFees?: readonly {
+      readonly amount: string;
+      readonly decimals: number;
+      readonly label: string;
+      readonly tokenAddress: string;
+    }[];
     readonly flags: readonly { readonly code: string; readonly message: string }[];
     readonly requiresDeployment: boolean;
+    /** True when a device will be asked to sign both the deployment and the send. */
+    readonly signsTwice?: boolean;
     readonly summaries: readonly string[];
   };
 };
@@ -77,7 +86,9 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
       "feeAffordability",
       "feeEstimateFailed",
       "flags",
+      "gaslessFees",
       "requiresDeployment",
+      "signsTwice",
       "summaries",
     ])
   ) {
@@ -89,6 +100,7 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
   return (
     (deploymentFee === undefined || deploymentFee === null || isFeeShape(deploymentFee)) &&
     (deploymentFailed === undefined || typeof deploymentFailed === "boolean") &&
+    (review["signsTwice"] === undefined || typeof review["signsTwice"] === "boolean") &&
     (review["fee"] === null || isFeeShape(review["fee"])) &&
     (review["feeAffordability"] === "insufficient" ||
       review["feeAffordability"] === "ok" ||
@@ -96,6 +108,11 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     // An affordability claim requires an estimate to compare against.
     (review["fee"] !== null || review["feeAffordability"] === "unknown") &&
     typeof review["feeEstimateFailed"] === "boolean" &&
+    (review["gaslessFees"] === undefined ||
+      (Array.isArray(review["gaslessFees"]) &&
+        review["gaslessFees"].length > 0 &&
+        review["gaslessFees"].length <= 3 &&
+        review["gaslessFees"].every(isGaslessFeeOffer))) &&
     Array.isArray(review["flags"]) &&
     review["flags"].every(isRiskFlagShape) &&
     typeof review["requiresDeployment"] === "boolean" &&
