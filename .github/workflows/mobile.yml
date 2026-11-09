@@ -87,6 +87,16 @@ jobs:
           persist-credentials: false
       - name: Select Xcode
         run: sudo xcode-select --switch /Applications/Xcode_16.4.app
+      # The runner image keeps simulator runtimes only for its default Xcode, so the pinned one
+      # may have none (the 2026-11-04 macos-15 image offered no iOS Simulator destination at
+      # all). Downloading is a no-op when the runtime is present; the device is then chosen by
+      # id rather than a model name that changes with the Xcode release.
+      - name: Install the iOS simulator runtime and pick a device
+        run: |
+          xcodebuild -downloadPlatform iOS
+          SIM_ID=$(xcrun simctl list devices available | grep -m1 -E '^\s+iPhone' | grep -oE '[0-9A-F-]{36}')
+          test -n "$SIM_ID"
+          echo "SIM_ID=$SIM_ID" >> "$GITHUB_ENV"
       - name: Install Rust toolchain
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal \
@@ -104,13 +114,13 @@ jobs:
           set -o pipefail
           mkdir -p build
           xcodebuild -project Bramble.xcodeproj -scheme Bramble \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -destination "id=$SIM_ID" \
             -derivedDataPath build/DerivedData clean build-for-testing | tee build/xcodebuild.log
       - name: Unit tests
         working-directory: mobile/ios
         run: |
           xcodebuild -project Bramble.xcodeproj -scheme Bramble \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -destination "id=$SIM_ID" \
             -derivedDataPath build/DerivedData -only-testing:BrambleTests test-without-building
       - name: SwiftLint analyzer rules
         run: bash mobile/scripts/lint.sh swift-analyze mobile/ios/build/xcodebuild.log
