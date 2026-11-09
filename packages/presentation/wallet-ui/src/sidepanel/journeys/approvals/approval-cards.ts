@@ -441,7 +441,10 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
     case "strk20-register":
       return strk20DisclosureCard(approval, status, {
         action: "Activate",
-        hint: "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
+        hint:
+          approval.summaries?.[0] === "Prepare private-balance activation for this site to submit"
+            ? "This prepares the one-time registration commitment and proof and hands them to the site, which submits them itself and must cover the pool fee. The viewing key and private notes are never published."
+            : "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
         lockedHint: "Unlock the wallet to review this private-balance activation.",
         title: "Activate private balances",
       });

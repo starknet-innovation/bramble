@@ -150,6 +150,10 @@ export type Strk20Service = {
   readonly prepareRegistration?: (
     input: Strk20AccountContext & { readonly poolFeeFri: string },
   ) => Promise<PreparedStrk20AccountSubmission>;
+  /** Builds the registration pool call + proof for a dapp to submit; never broadcasts. */
+  readonly prepareRegistrationCall?: (
+    input: Strk20AccountContext & { readonly simulate: boolean },
+  ) => Promise<Strk20CallAndProof>;
   /** Builds a deposit-only public-account proof and calls without broadcasting. */
   readonly prepareAccountActions?: (
     input: Strk20AccountContext & {
@@ -200,6 +204,9 @@ export const unavailableStrk20Service: Strk20Service = {
     return unavailable();
   },
   async prepareRegistration() {
+    return unavailable();
+  },
+  async prepareRegistrationCall() {
     return unavailable();
   },
   async privateBalances() {
@@ -476,3 +483,16 @@ export const prepareStrk20Registration = async (
   await assertReviewedPoolFee(service, input, input.poolFeeFri);
   return service.prepareRegistration(input);
 };
+
+/**
+ * Builds the Wallet-API register action's call and proof for
+ * wallet_strk20PrepareInvoke. Only call after explicit user approval; missing
+ * SDK support fails closed.
+ */
+export const prepareStrk20RegistrationCall = (
+  service: Strk20Service,
+  input: Strk20AccountContext & { readonly simulate: boolean },
+): Promise<Strk20CallAndProof> =>
+  service.prepareRegistrationCall
+    ? service.prepareRegistrationCall(input)
+    : Promise.reject(new WalletError(STRK20_SERVICE_UNAVAILABLE));

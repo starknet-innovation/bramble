@@ -118,9 +118,24 @@ export const createOfficialStrk20Service = ({
     ];
     return { allowanceGrants, calls, proof: callAndProof.proof };
   };
+  const prepareRegistrationProof = (input: Strk20AccountContext, simulate: boolean) =>
+    prepareWith(
+      sdk,
+      { ...input, actions: [], simulate },
+      maturity,
+      providerFor,
+      pauseForServiceRetry,
+      undefined,
+      strk20RegistrationBuilderFor,
+      "registration",
+    );
   return {
     async prepare(input) {
       return prepareWith(sdk, input, maturity, providerFor, pauseForServiceRetry);
+    },
+    async prepareRegistrationCall(input) {
+      requireStrk20Config(input);
+      return prepareRegistrationProof(input, input.simulate);
     },
     async privateBalances(input) {
       try {
@@ -173,16 +188,7 @@ export const createOfficialStrk20Service = ({
         config.poolAddress,
         input.poolFeeFri,
       );
-      const callAndProof = await prepareWith(
-        sdk,
-        { ...input, actions: [], simulate: false },
-        maturity,
-        providerFor,
-        pauseForServiceRetry,
-        undefined,
-        strk20RegistrationBuilderFor,
-        "registration",
-      );
+      const callAndProof = await prepareRegistrationProof(input, false);
       return publicBatch(
         config.poolAddress,
         approveCalls([], config.poolAddress, reviewedPoolFee),
@@ -225,17 +231,7 @@ export const createOfficialStrk20Service = ({
       );
       return submission(
         input,
-        async () =>
-          prepareWith(
-            sdk,
-            { ...input, actions: [], simulate: false },
-            maturity,
-            providerFor,
-            pauseForServiceRetry,
-            undefined,
-            strk20RegistrationBuilderFor,
-            "registration",
-          ),
+        async () => prepareRegistrationProof(input, false),
         // The broadcast ran unmapped, so a pool rejection of apply_actions
         // reached the message boundary as a raw starknet.js error and its revert
         // reason was replaced by a generic failure. Map it with the submission

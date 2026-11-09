@@ -4,7 +4,7 @@
  * compare with the enforced DAPP_MESSAGES allowlist.
  */
 import type { Json } from "@mc-wallet/core/json";
-import type { Strk20Action, Strk20Proof } from "../privacy/strk20-bridge";
+import type { Strk20Proof, Strk20RequestedActions } from "../privacy/strk20-bridge";
 import type { ProviderChain } from "../transactions/add-chain";
 import type { ProviderDeclare } from "../transactions/declare";
 import type { ProviderInvokeCall } from "../transactions/invoke";
@@ -77,13 +77,13 @@ export type RuntimeMessage =
       readonly type: "wallet.strk20Balances";
     }
   | {
-      readonly actions: readonly Strk20Action[];
+      readonly actions: Strk20RequestedActions;
       readonly origin: string;
       readonly simulate: boolean;
       readonly type: "wallet.strk20PrepareInvoke";
     }
   | {
-      readonly actions: readonly Strk20Action[];
+      readonly actions: Strk20RequestedActions;
       readonly origin: string;
       readonly type: "wallet.strk20InvokeTransaction";
     }

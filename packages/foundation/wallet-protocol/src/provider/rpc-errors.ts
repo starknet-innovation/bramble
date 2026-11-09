@@ -72,6 +72,21 @@ export const apiVersionNotSupported = make(162, "The requested API version is no
  */
 export const unknownError = make(163, "The wallet request failed");
 
+// Ordered message patterns: the first match wins. Wallet API 0.10.5 makes a
+// register action for an already registered account INVALID_REQUEST_PAYLOAD, so
+// that pattern precedes NOT_REGISTERED.
+const MESSAGE_ERRORS: readonly (readonly [RegExp, () => WalletRpcError])[] = [
+  [/unsupported chain|chain (?:id )?not supported|unlisted network/i, chainIdNotSupported],
+  [/unsupported api|api version/i, apiVersionNotSupported],
+  [/already deployed/i, accountAlreadyDeployed],
+  [/deployment data/i, deploymentDataNotAvailable],
+  [/already (?:registered|active)/i, invalidRequestPayload],
+  [/not registered/i, notRegistered],
+  [/insufficient private balance/i, insufficientPrivateBalance],
+  [/privacy leak|would leak/i, privacyLeak],
+  [/^invalid\b|malformed|origin mismatch/i, invalidRequestPayload],
+];
+
 /**
  * Maps an internal background error string to its spec error object. Denials
  * become USER_REFUSED_OP, malformed inputs become INVALID_REQUEST_PAYLOAD,
@@ -82,29 +97,9 @@ export const errorForMessage = (message: string): WalletRpcError => {
   if (message === "request rejected" || message === "connection rejected") {
     return userRefusedOp();
   }
-  if (/unsupported chain|chain (?:id )?not supported|unlisted network/i.test(message)) {
-    return chainIdNotSupported();
-  }
-  if (/unsupported api|api version/i.test(message)) {
-    return apiVersionNotSupported();
-  }
-  if (/already deployed/i.test(message)) {
-    return accountAlreadyDeployed();
-  }
-  if (/deployment data/i.test(message)) {
-    return deploymentDataNotAvailable();
-  }
-  if (/not registered/i.test(message)) {
-    return notRegistered();
-  }
-  if (/insufficient private balance/i.test(message)) {
-    return insufficientPrivateBalance();
-  }
-  if (/privacy leak|would leak/i.test(message)) {
-    return privacyLeak();
-  }
-  if (/^invalid\b/i.test(message) || /malformed|origin mismatch/i.test(message)) {
-    return invalidRequestPayload();
+  const mapped = MESSAGE_ERRORS.find(([pattern]) => pattern.test(message));
+  if (mapped) {
+    return mapped[1]();
   }
   if (/^strk20 (?:services unavailable|private submission unavailable)/i.test(message)) {
     return unknownError(message);

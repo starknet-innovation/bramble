@@ -116,6 +116,14 @@ export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Ser
         proof: STRK20_CALL_AND_PROOF.proof,
       };
     },
+    async prepareRegistrationCall({ simulate }) {
+      if (proveCalls && !simulate) {
+        proveCalls.value += 1;
+      }
+      return simulate
+        ? { call: STRK20_CALL_AND_PROOF.call, proof: { data: "", output: [], proof_facts: [] } }
+        : STRK20_CALL_AND_PROOF;
+    },
     async privateBalances({ tokens }) {
       if (balanceCalls) {
         balanceCalls.value += 1;

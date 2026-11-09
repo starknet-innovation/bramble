@@ -15,11 +15,13 @@ import {
   isStrk20CallAndProof,
   isStrk20DappName,
   isStrk20Felt,
-  readStrk20Actions,
+  readStrk20ActionRequest,
   readStrk20Tokens,
   type Strk20Action,
   type Strk20BalanceEntry,
   type Strk20CallAndProof,
+  type Strk20RegisterAction,
+  strk20RequestActions,
 } from "./strk20";
 
 /**
@@ -30,6 +32,7 @@ export type {
   Strk20BalanceEntry,
   Strk20CallAndProof,
   Strk20Proof,
+  Strk20RegisterAction,
 } from "./strk20";
 
 /**
@@ -42,13 +45,19 @@ export const readStrk20BalancesParams = (params: Json | undefined): readonly str
     : null;
 
 /**
+ * Wire action list forwarded to the background: a proved-action batch or the
+ * lone register action. The background re-parses it as untrusted.
+ */
+export type Strk20RequestedActions = readonly (Strk20Action | Strk20RegisterAction)[];
+
+/**
  * Parses `wallet_strk20PrepareInvoke` params (`{ actions, simulate? }`) into the
  * validated action list and simulate flag (default false), or null when
- * malformed.
+ * malformed (including register mixed with other actions).
  */
 export const readStrk20PrepareParams = (
   params: Json | undefined,
-): { readonly actions: readonly Strk20Action[]; readonly simulate: boolean } | null => {
+): { readonly actions: Strk20RequestedActions; readonly simulate: boolean } | null => {
   if (
     !isRecord(params) ||
     !hasOnlyKnownKeys(params, ["actions", "simulate"]) ||
@@ -56,18 +65,24 @@ export const readStrk20PrepareParams = (
   ) {
     return null;
   }
-  const actions = readStrk20Actions(params["actions"]);
-  return actions ? { actions, simulate: params["simulate"] === true } : null;
+  const request = readStrk20ActionRequest(params["actions"]);
+  return request
+    ? { actions: strk20RequestActions(request), simulate: params["simulate"] === true }
+    : null;
 };
 
 /**
  * Parses `wallet_strk20InvokeTransaction` params (`{ actions }`) into the
- * validated action list, or null when malformed.
+ * validated action list, or null when malformed (including register mixed
+ * with other actions).
  */
-export const readStrk20InvokeParams = (params: Json | undefined): readonly Strk20Action[] | null =>
-  isRecord(params) && hasOnlyKnownKeys(params, ["actions"])
-    ? readStrk20Actions(params["actions"])
-    : null;
+export const readStrk20InvokeParams = (params: Json | undefined): Strk20RequestedActions | null => {
+  if (!isRecord(params) || !hasOnlyKnownKeys(params, ["actions"])) {
+    return null;
+  }
+  const request = readStrk20ActionRequest(params["actions"]);
+  return request ? strk20RequestActions(request) : null;
+};
 
 /**
  * Parses the dapp-scoped sub-account commitment request.

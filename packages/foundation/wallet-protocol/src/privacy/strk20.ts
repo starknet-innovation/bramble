@@ -5,9 +5,11 @@
  * validated here so a single source of truth backs both the provider bridge and
  * the background handler. These guards are pure and never touch secret material.
  *
- * The action shapes track the canonical Wallet-API 0.10.4-rc.0 STRK20 definitions
+ * The action shapes track the canonical Wallet-API 0.10.5-rc.0 STRK20 definitions
  * (starkware-libs/starknet-specs wallet-api/wallet_rpc.json): actions are
- * discriminated by a `type` field; withdraw carries a required `recipient`;
+ * discriminated by a `type` field; register is a parameterless action that must
+ * be the only one in its request, so it is parsed into its own request kind
+ * rather than joining the proved-action union; withdraw carries a required `recipient`;
  * transfer accepts either a FELT amount or the literal string "OPEN" (an open
  * note); invoke is the flat `{ type, contract, calldata }` shape (no
  * entry_point) whose calldata items are FELTs or wallet-resolved placeholder
@@ -342,6 +344,48 @@ export const readStrk20Actions = (value: unknown): readonly Strk20Action[] | nul
   const actions = value.map(readStrk20Action);
   return actions.every((action): action is Strk20Action => action !== null) ? actions : null;
 };
+
+/**
+ * STRK20_REGISTER_ACTION: registers the active account in the configured pool.
+ * It carries no parameters and is valid only as the sole action of a request.
+ */
+export type Strk20RegisterAction = { readonly type: "register" };
+
+/**
+ * A validated wallet_strk20InvokeTransaction / wallet_strk20PrepareInvoke
+ * action list: either the lone register action, or a batch of proved actions
+ * that never contains register.
+ */
+export type Strk20ActionRequest =
+  | { readonly kind: "actions"; readonly actions: readonly Strk20Action[] }
+  | { readonly kind: "register" };
+
+const isStrk20RegisterAction = (value: unknown): value is Strk20RegisterAction =>
+  isRecord(value) && hasOnlyKnownKeys(value, ["type"]) && value["type"] === "register";
+
+/**
+ * Parses a request's action list per Wallet-API 0.10.5: exactly
+ * `[{ type: "register" }]` becomes a register request; any other list must be a
+ * valid proved-action batch. Register mixed with other actions (or carrying
+ * extra keys) returns null, which the boundary reports as
+ * INVALID_REQUEST_PAYLOAD.
+ */
+export const readStrk20ActionRequest = (value: unknown): Strk20ActionRequest | null => {
+  if (Array.isArray(value) && value.length === 1 && isStrk20RegisterAction(value[0])) {
+    return { kind: "register" };
+  }
+  const actions = readStrk20Actions(value);
+  return actions ? { actions, kind: "actions" } : null;
+};
+
+/**
+ * Converts a validated request back to its wire action list, for forwarding
+ * across the content bridge where the background parses it again.
+ */
+export const strk20RequestActions = (
+  request: Strk20ActionRequest,
+): readonly (Strk20Action | Strk20RegisterAction)[] =>
+  request.kind === "register" ? [{ type: "register" }] : request.actions;
 
 /**
  * Parses an ADDRESS list used by the balances query. The canonical API uses an

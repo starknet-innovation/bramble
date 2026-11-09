@@ -6,7 +6,7 @@ permalink: /strk20-privacy/
 
 # STRK20 privacy integration
 
-MC Wallet implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
+MC Wallet implements the Wallet API `0.10.5-rc.0` STRK20 surface through the official Starknet
 Privacy SDK browser bundle. It supports shielded balance discovery, action preparation, private
 submission, dapp-scoped sub-account commitments, explicit account registration, and reviewed
 public-to-private token deposits.
@@ -106,9 +106,9 @@ device.
 1. The content/provider bridge strictly parses bounded actions, token lists, proof envelopes, and
    dapp-scoped sub-account requests. A connected origin sees only its granted active account.
 2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
-   and sub-account commitments each create a dedicated approval. Registration uses the explicitly
-   MC-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
-   queue retains the exact private request and
+   and sub-account commitments each create a dedicated approval. Registration is requested with the
+   Wallet API `register` action (or the older MC-namespaced `mc_strk20Register` capability, which
+   shares the same path). The queue retains the exact private request and
    exposes display-safe summaries plus the exact action parameters and an account/network/payload
    digest. Invoke calldata, sub-account call targets and entry points, nonce, and collect policy
    remain expandable in the approval. A private-relay review also lists the relayer-fee withdrawal
@@ -154,11 +154,24 @@ non-simulated prepare request does not sign or generate that submittable proof u
 approves its exact action list. Private balances and the deterministic, origin-scoped sub-account
 commitment are likewise never disclosed under the general account connection grant alone.
 
-The standard dapp Wallet API still returns `NOT_REGISTERED` when a site requests an operation
-before registration. The Terminal can initiate registration only through the MC-specific
-`mc_strk20Register` capability. It enters the same content-script trust boundary as other dapp
-requests, opens the wallet approval surface immediately, and cannot derive a viewing key or submit
-until the user approves the account/network/pool/token-bound payload.
+Wallet API `0.10.5-rc.0` adds the `register` action. It must be the only action in a
+`wallet_strk20InvokeTransaction` or `wallet_strk20PrepareInvoke` request; register mixed with other
+actions, or a register request for an account the pool already lists as registered, returns
+`INVALID_REQUEST_PAYLOAD`. The registration check reads the pool's public registry, so it runs before
+any approval without deriving a viewing key. Any other request from an unregistered account still
+returns `NOT_REGISTERED`.
+
+- `wallet_strk20InvokeTransaction` with `[{ type: "register" }]` follows the same two-step path as
+  `mc_strk20Register`: an activation approval, then an exact-call network-fee approval before the
+  wallet publishes the registration. No privacy fee withdrawal is added.
+- `wallet_strk20PrepareInvoke` with `[{ type: "register" }]` raises one activation approval, then
+  returns the registration `apply_actions` call and its proof (empty when `simulate` is true)
+  without signing or submitting. The site submits it and must cover the pool fee itself.
+
+The Terminal still initiates registration through `mc_strk20Register`. Both routes enter the same
+content-script trust boundary as other dapp requests, open the wallet approval surface immediately,
+and cannot derive a viewing key or submit until the user approves the account/network/pool-bound
+payload.
 
 The wallet-owned side-panel journey currently exposes registration and deposit-only shielding.
 Private transfer, withdrawal, generic invoke, proof preparation, and sub-account commitment remain

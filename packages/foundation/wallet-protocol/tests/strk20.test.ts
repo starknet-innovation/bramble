@@ -1,5 +1,5 @@
 /**
- * STRK20 schema checks prove strict, spec-0.10.4-rc.0 action validation and envelope
+ * STRK20 schema checks prove strict, spec-0.10.5-rc.0 action validation and envelope
  * shape guards. These exercise the request/response conformance surface (the
  * `type`-discriminated action union, required recipient, "OPEN" transfer, flat
  * invoke with placeholder calldata) and result shapes — not a live
@@ -11,6 +11,7 @@ import {
   isStrk20CallAndProof,
   isStrk20Proof,
   readStrk20Action,
+  readStrk20ActionRequest,
   readStrk20Actions,
   readStrk20InvokeCall,
   readStrk20Tokens,
@@ -200,6 +201,24 @@ describe("strk20 action schemas", () => {
       ]),
     ).toBeNull();
     expect(readStrk20Actions([{ amount: "0x0a", token, type: "deposit" }])).toHaveLength(1);
+  });
+
+  test("parses a lone register action as its own request kind (Wallet API 0.10.5)", () => {
+    const deposit = { amount: "0x0a", token, type: "deposit" };
+    expect(readStrk20ActionRequest([{ type: "register" }])).toEqual({ kind: "register" });
+    expect(readStrk20ActionRequest([deposit])).toEqual({
+      actions: [{ amount: "0x0a", token, type: "deposit" }],
+      kind: "actions",
+    });
+    // Register must be the only action, carries no parameters, and never joins
+    // the proved-action union.
+    expect(readStrk20ActionRequest([{ type: "register" }, deposit])).toBeNull();
+    expect(readStrk20ActionRequest([deposit, { type: "register" }])).toBeNull();
+    expect(readStrk20ActionRequest([{ type: "register" }, { type: "register" }])).toBeNull();
+    expect(readStrk20ActionRequest([{ token, type: "register" }])).toBeNull();
+    expect(readStrk20ActionRequest([])).toBeNull();
+    expect(readStrk20Action({ type: "register" })).toBeNull();
+    expect(readStrk20Actions([{ type: "register" }])).toBeNull();
   });
 
   test("parses result-side INVOKE_CALLs and rejects bad calldata felts", () => {

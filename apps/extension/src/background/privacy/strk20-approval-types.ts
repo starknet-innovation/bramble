@@ -28,6 +28,11 @@ export type Strk20DisclosureRequest =
       readonly type: "register";
     }
   | {
+      readonly poolAddress: string;
+      readonly simulate: boolean;
+      readonly type: "prepare-register";
+    }
+  | {
       readonly tokens: readonly string[];
       readonly type: "balances";
     }
@@ -52,5 +57,6 @@ export const matchesStrk20DisclosureKind = (
 ): boolean =>
   (kind === "strk20-balances" && request.type === "balances") ||
   (kind === "strk20-prepare" && request.type === "prepare") ||
-  (kind === "strk20-register" && request.type === "register") ||
+  (kind === "strk20-register" &&
+    (request.type === "register" || request.type === "prepare-register")) ||
   (kind === "strk20-subaccount" && request.type === "subaccount");

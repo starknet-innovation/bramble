@@ -44,6 +44,7 @@ import {
   readStrk20SubaccountMessage,
 } from "./strk20-provider-inputs";
 import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
+import { isStrk20AccountRegistered, STRK20_ALREADY_REGISTERED } from "./strk20-registration";
 
 /**
  * Dependencies shared by the STRK20 provider operation handlers.
@@ -127,20 +128,23 @@ const queueDisclosure = async (
   }
 };
 
-const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => {
-  const input = readStrk20RegisterMessage(message);
-  if (!input) {
-    return { error: "invalid strk20 registration request" };
-  }
-  const gate = gateOrigin(deps, input.origin, sender);
-  if (gate) {
-    return gate;
-  }
-  // Queue admission first: no privacy approval here deduplicates, so an origin
-  // at its cap is refused whatever this request contains — and refusing it now
-  // costs a map filter instead of a vault read plus a pool quote.
-  requireApprovalAdmission(deps.approvals, input.origin);
-  const resolved = await resolveAccount(deps, input.origin);
+type Strk20RegistrationMode =
+  | { readonly kind: "prepare"; readonly simulate: boolean }
+  | { readonly kind: "submit" };
+
+/**
+ * Queues registration for the origin's active account: the MC capability and
+ * the Wallet-API 0.10.5 register action share this one path. An already
+ * registered account is refused before any approval is raised. "submit" stages
+ * the wallet-broadcast registration behind a fee approval; "prepare" returns
+ * the call and proof for the site to submit itself.
+ */
+const queueStrk20Registration = async (
+  deps: Strk20OpsDeps,
+  origin: string,
+  mode: Strk20RegistrationMode,
+): Promise<RuntimeResponse> => {
+  const resolved = await resolveAccount(deps, origin);
   if ("error" in resolved) {
     return resolved;
   }
@@ -156,6 +160,28 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
   }
   try {
     const accountContext = strk20AccountContext(deps, resolved);
+    if (await isStrk20AccountRegistered(deps.runtimeRpc, accountContext, token.address)) {
+      return { error: STRK20_ALREADY_REGISTERED };
+    }
+    if (mode.kind === "prepare") {
+      return queueDisclosure(deps, resolved, {
+        kind: "strk20-register",
+        origin,
+        request: {
+          poolAddress: config.poolAddress,
+          simulate: mode.simulate,
+          type: "prepare-register",
+        },
+        summaries: [
+          "Prepare private-balance activation for this site to submit",
+          `Privacy pool ${config.poolAddress}`,
+          "Publishes a viewing-key commitment, never the viewing key",
+          mode.simulate
+            ? "Simulate only — no submittable proof"
+            : "The site submits it and must cover the pool fee",
+        ],
+      });
+    }
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
     if (!service.poolFee) {
       return { error: "strk20 services unavailable" };
@@ -168,7 +194,7 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
     );
     return queueDisclosure(deps, resolved, {
       kind: "strk20-register",
-      origin: input.origin,
+      origin,
       request: {
         poolAddress: config.poolAddress,
         poolFeeFri,
@@ -186,6 +212,22 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
   } catch (error) {
     return { error: strk20ErrorMessage(error) };
   }
+};
+
+const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => {
+  const input = readStrk20RegisterMessage(message);
+  if (!input) {
+    return { error: "invalid strk20 registration request" };
+  }
+  const gate = gateOrigin(deps, input.origin, sender);
+  if (gate) {
+    return gate;
+  }
+  // Queue admission first: no privacy approval here deduplicates, so an origin
+  // at its cap is refused whatever this request contains — and refusing it now
+  // costs a map filter instead of a vault read plus a pool quote.
+  requireApprovalAdmission(deps.approvals, input.origin);
+  return queueStrk20Registration(deps, input.origin, { kind: "submit" });
 };
 
 const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => {
@@ -232,6 +274,13 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   // at its cap is refused whatever this request contains — and refusing it now
   // costs a map filter instead of a vault read plus a pool quote.
   requireApprovalAdmission(deps.approvals, input.origin);
+  if (input.request.kind === "register") {
+    return queueStrk20Registration(deps, input.origin, {
+      kind: "prepare",
+      simulate: input.simulate,
+    });
+  }
+  const { actions } = input.request;
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
@@ -239,20 +288,16 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
   // The same recipient policy the wallet's own pool routes apply, before an
   // approval for a poisoned payment can be queued at all — the site never gets
   // to put a confirm button in front of the user for it.
-  const refusal = refusePoisonedStrk20Actions(
-    resolved.account,
-    resolved.preferences,
-    input.actions,
-  );
+  const refusal = refusePoisonedStrk20Actions(resolved.account, resolved.preferences, actions);
   if (refusal) {
     return refusal;
   }
   return queueDisclosure(deps, resolved, {
     kind: "strk20-prepare",
     origin: input.origin,
-    request: { actions: input.actions, simulate: input.simulate, type: "prepare" },
+    request: { actions, simulate: input.simulate, type: "prepare" },
     summaries: [
-      ...input.actions.map(summarizeStrk20Action),
+      ...actions.map(summarizeStrk20Action),
       input.simulate
         ? "Simulate only — no submittable proof"
         : "Generate a submittable private proof for this site",
@@ -273,6 +318,12 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   // at its cap is refused whatever this request contains — and refusing it now
   // costs a map filter instead of a vault read plus a pool quote.
   requireApprovalAdmission(deps.approvals, input.origin);
+  // Wallet API 0.10.5: a lone register action is the wallet-submitted
+  // registration, with no fee withdrawal added.
+  if (input.request.kind === "register") {
+    return queueStrk20Registration(deps, input.origin, { kind: "submit" });
+  }
+  const { actions } = input.request;
   const resolved = await resolveAccount(deps, input.origin);
   if ("error" in resolved) {
     return resolved;
@@ -280,30 +331,26 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   // Refused before the plan is even quoted: a private transfer or withdrawal to
   // an address that mimics a saved contact is the same attack whether the wallet
   // composed it or the site did.
-  const refusal = refusePoisonedStrk20Actions(
-    resolved.account,
-    resolved.preferences,
-    input.actions,
-  );
+  const refusal = refusePoisonedStrk20Actions(resolved.account, resolved.preferences, actions);
   if (refusal) {
     return refusal;
   }
   try {
     const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
       ...strk20AccountContext(deps, resolved),
-      actions: input.actions,
+      actions: actions,
     });
-    const payload = { actions: input.actions, strk20Plan: plan };
+    const payload = { actions: actions, strk20Plan: plan };
     const approval = deps.approvals.requestStrk20Invoke({
-      actions: input.actions,
+      actions: actions,
       context: await createApprovalContext(resolved.account, payload),
       origin: input.origin,
       plan,
       reviewAssets: reviewAssetsFor(resolved, [
-        ...actionTokenAddresses(input.actions),
+        ...actionTokenAddresses(actions),
         ...("feeAction" in plan ? [plan.feeAction.token] : []),
       ]),
-      summaries: [...input.actions.map(summarizeStrk20Action), summarizeStrk20Plan(plan)],
+      summaries: [...actions.map(summarizeStrk20Action), summarizeStrk20Plan(plan)],
     });
     notifyApprovalsChanged();
     return deps.waiters.register(approval.id);
