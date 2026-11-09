@@ -24,7 +24,7 @@ object PrivacyCopy {
     const val blockedServiceTitle = "Private balances unavailable"
     const val deployRequired = "Deploy this account before enabling private balances"
     const val deploymentUnchecked = "Account deployment could not be checked. Try again."
-    const val detailGoPrivate = "Go private"
+    const val detailGoPrivate = "Shield"
     const val detailShield = "Shield"
     const val detailUnshield = "Unshield"
     const val fundsRequired = "Deposit some STRK, then come back"

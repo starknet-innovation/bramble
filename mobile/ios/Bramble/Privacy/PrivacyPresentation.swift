@@ -50,7 +50,7 @@ extension PrivateLine {
 
 extension DetailAction {
     /// The token screen's privacy controls, left to right (`privacyActions`): one "Shield" for an
-    /// undeployed account, "Shield" and "Unshield" once registered, "Go private" otherwise.
+    /// undeployed account, "Shield" and "Unshield" once registered, "Shield" into the journey otherwise.
     var labels: [String] {
         switch self {
         case .none:

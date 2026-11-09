@@ -26,6 +26,7 @@ type Kind =
   | "bottom"
   | "leading"
   | "trailing"
+  | "column"
   | "insets"
   | "em"
   | "weight"
@@ -120,7 +121,7 @@ const LAYOUT_METRICS: Readonly<Record<string, Readonly<Record<string, Metric>>>>
     radius: ["input", "border-radius", "px"],
   },
   FlowHeader: {
-    gap: [".flow-header", "gap", "px"],
+    gap: [".flow-header", "gap", "column"],
     padding: [".flow-header", "padding", "insets"],
     subtitleSize: [".flow-title p", "font-size", "px"],
     titleGap: [".flow-title", "gap", "px"],
@@ -378,6 +379,9 @@ const read = (kind: Kind, value: string): string => {
       return String(edge(value, 2));
     case "leading":
       return String(edge(value, 3));
+    // `gap: <row> <column>`; a lone value is both. The column gap is a horizontal stack's spacing.
+    case "column":
+      return String(edge(value, 1));
     case "insets": {
       const [top, trailing, bottom, leading] = edges(value).map(evaluatePx);
       return `EdgeInsets(top: ${top}, leading: ${leading}, bottom: ${bottom}, trailing: ${trailing})`;

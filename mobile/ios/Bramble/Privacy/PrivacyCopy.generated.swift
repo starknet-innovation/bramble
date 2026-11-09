@@ -24,7 +24,7 @@ enum PrivacyCopy {
     static let blockedServiceTitle = "Private balances unavailable"
     static let deployRequired = "Deploy this account before enabling private balances"
     static let deploymentUnchecked = "Account deployment could not be checked. Try again."
-    static let detailGoPrivate = "Go private"
+    static let detailGoPrivate = "Shield"
     static let detailShield = "Shield"
     static let detailUnshield = "Unshield"
     static let fundsRequired = "Deposit some STRK, then come back"

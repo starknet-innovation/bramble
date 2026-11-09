@@ -161,7 +161,7 @@ rules, and returns a summary and an action:
 | `None` | ineligible network, or a failed read | nothing |
 | `Shield` | known undeployed, funded or not | "Shield" → journey → deploy or fund blocker, deploy suppressed as on the tile |
 | `ShieldUnshield` | registered | "Shield" and "Unshield" shown, disabled, with the Unsupported note |
-| `GoPrivate` | otherwise | "Go private" → journey |
+| `GoPrivate` | otherwise | "Shield" (`detailGoPrivate`, was "Go private") → journey |
 
 Both are pinned in fixture 5 through the extension's `tokenDetailFlow`. Mobile has no token-detail
 screen on this branch (the portfolio workstream owns it), so the section ships as
@@ -427,7 +427,7 @@ discovery service, as the extension would. Run only with the wallet owner's auth
 `-BramblePrivacyFixture <scenario>` beside the offline node `-uiTestOfflineFixtures <state>` (which
 also answers the portfolio's balance reads): registered (unified ETH row, "Includes shielded
 balances", token detail's "Private balance" with Shield and Unshield disabled, tile → Unsupported),
-unregistered (token detail's "Register to start shielding" and "Go private", Receive notice,
+unregistered (token detail's "Register to start shielding" and its "Shield" control, Receive notice,
 "Enable privacy" → Unsupported), service-failed (retry row, service blocker), undeployed-funded
 (token detail's "Shield" and the tile → deploy blocker, **no** deploy button), undeployed-unfunded
 (tile → fund blocker, "Deposit some STRK, then come back"), Sepolia (network blocker). A launch

@@ -276,8 +276,8 @@ pub enum DetailAction {
     Shield,
     /// Registered: "Shield" and "Unshield", each opening Send in its privacy mode.
     ShieldUnshield,
-    /// Deployed or deployment unknown, and not read as registered: "Go private", opening the
-    /// privacy journey.
+    /// Deployed or deployment unknown, and not read as registered: a "Shield" control
+    /// (`detailGoPrivate`) opening the privacy journey to register first.
     GoPrivate,
 }
 

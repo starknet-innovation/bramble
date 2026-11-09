@@ -202,10 +202,7 @@ export const contextHelp = (id: string, title: string, body: string): string =>
     <div class="disclosure-body"><p>${escapeHtml(body)}</p></div>
   </details>`;
 
-/**
- * Adjectives of the deterministic account nickname, indexed by `address mod 30`. Exported only so
- * the mobile asset generator renders the same list for the native apps; never mutate it.
- */
+/** Nickname adjectives, indexed by `address mod 30`; exported only for the mobile asset generator. */
 export const NAME_ADJECTIVES = [
   "Amber",
   "Bold",
@@ -238,10 +235,7 @@ export const NAME_ADJECTIVES = [
   "Masterful",
   "Chief",
 ] as const;
-/**
- * Animals of the deterministic account nickname, indexed by `(address div 131) mod 30`. Exported
- * only so the mobile asset generator renders the same list for the native apps.
- */
+/** Nickname animals, indexed by `(address div 131) mod 30`; exported only for the mobile asset generator. */
 export const NAME_ANIMALS = [
   "Otter",
   "Falcon",

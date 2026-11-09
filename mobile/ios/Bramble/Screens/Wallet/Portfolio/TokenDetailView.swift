@@ -10,7 +10,7 @@ struct TokenDetailView: View {
     let tokenId: String
     /// Opens Send on this token (its address); the recipient is still chosen first.
     var send: (String) -> Void = { _ in /* No action unless the shell wires the send flow. */ }
-    /// Opens the privacy journey (Shield, Go private).
+    /// Opens the privacy journey (Shield, GoPrivate).
     var journey: () -> Void = { /* No action unless the shell wires the privacy journey. */ }
     @State private var points: [Double] = []
 

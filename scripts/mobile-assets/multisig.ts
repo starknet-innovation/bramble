@@ -17,11 +17,11 @@ import {
   MAX_NOSTR_BATCH_ITEMS,
   MAX_NOSTR_EVENT_JSON_BYTES,
 } from "@bramble/wallet-model/nostr";
+import { MULTISIG_NOSTR_IDENTIFIER } from "../../apps/extension/src/background/multisig/multisig-coordination-ops";
 import {
-  MULTISIG_NOSTR_IDENTIFIER,
   NOSTR_INCREMENTAL_LOOKBACK_SECONDS,
   NOSTR_SYNC_LOOKBACK_SECONDS,
-} from "../../apps/extension/src/background/multisig/multisig-coordination-ops";
+} from "../../apps/extension/src/background/multisig/multisig-sync-window";
 import { MULTISIG_NOSTR_RELAYS } from "../../apps/extension/src/background/multisig/nostr-relay";
 import {
   MAX_RELAY_FRAME_BYTES,

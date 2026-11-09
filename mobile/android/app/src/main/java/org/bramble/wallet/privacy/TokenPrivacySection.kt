@@ -42,7 +42,7 @@ fun WalletStore.tokenDetailPrivacyFor(tokenAddress: String): TokenDetailPrivacy 
 /**
  * Token detail's private half, twin of the iOS `TokenPrivacySection`: the "Private balance" line
  * (amount, Try again, or "Register to start shielding") and the core's action. Shield (an
- * undeployed account, funded or not) and Go private open the journey, which names what is in the
+ * undeployed account, funded or not) and GoPrivate open the journey, which names what is in the
  * way; Shield and Unshield for a registered account stay disabled while the core's capabilities
  * say mobile cannot submit them. [actions] (the token's Send) sit between the line and the action.
  */

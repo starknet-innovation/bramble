@@ -42,7 +42,7 @@
       "backToWallet": "Back to wallet",
       "deployRequired": "Deploy this account before enabling private balances",
       "deploymentUnchecked": "Account deployment could not be checked. Try again.",
-      "detailGoPrivate": "Go private",
+      "detailGoPrivate": "Shield",
       "detailShield": "Shield",
       "detailUnshield": "Unshield",
       "fundsRequired": "Deposit some STRK, then come back",

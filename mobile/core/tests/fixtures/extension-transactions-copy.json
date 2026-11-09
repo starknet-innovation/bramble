@@ -183,7 +183,9 @@
           "Transaction",
           "0x2270…f099",
           "Recipient",
-          "0x3fa7…41a3",
+          "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+          "Network",
+          "Starknet Sepolia",
           "Status",
           "Broadcast accepted. It can&#39;t be fee-bumped, replaced, or cancelled."
         ]

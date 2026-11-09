@@ -361,7 +361,10 @@ fn static_gates_match_the_rendered_extension() {
             [] => DetailAction::None,
             ["Go private"] => DetailAction::GoPrivate,
             ["Shield", "Unshield"] => DetailAction::ShieldUnshield,
-            ["Shield"] => DetailAction::Shield,
+            // One "Shield" label, two actions: an undeployed account's control names the
+            // deploy step; a deployed, unregistered one opens the journey (`GoPrivate`).
+            ["Shield"] if text(&row["deployment"]) == "undeployed" => DetailAction::Shield,
+            ["Shield"] => DetailAction::GoPrivate,
             other => panic!("unexpected actions {other:?}"),
         };
         assert_eq!(detail.action, expected_action, "{label}");

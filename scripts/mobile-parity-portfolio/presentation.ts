@@ -242,9 +242,8 @@ const readRow = (html: string) => {
   const hashRow = /<dd class="tx-hash-row">([\s\S]*?)<\/dd>/.exec(body)?.[1] ?? "";
   const facts = body.replace(/<dd class="tx-hash-row">[\s\S]*?<\/dd>/, "");
   const hashLink = /<a class="tx-hash"[^>]*>/.exec(hashRow)?.[0] ?? "";
-  const counterparty = /<div><dt>([A-Z][a-z]+)<\/dt><dd><code title="([^"]*)">([^<]*)<\/code>/.exec(
-    body,
-  );
+  // The counterparty fact shows the whole address in `<code>` (no shortened label since 0.10.9).
+  const counterparty = /<div><dt>([A-Z][a-z]+)<\/dt><dd><code>([^<]*)<\/code>/.exec(body);
   const hash = copyControl(hashRow);
   const peer = copyControl(facts);
   return {
@@ -259,7 +258,7 @@ const readRow = (html: string) => {
           address: unescapeHtml(counterparty[2] ?? ""),
           copyLabel: peer.label,
           copyValue: peer.value,
-          label: unescapeHtml(counterparty[3] ?? ""),
+          label: unescapeHtml(counterparty[2] ?? ""),
           role: counterparty[1] ?? "",
         }
       : null,
