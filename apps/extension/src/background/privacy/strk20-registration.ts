@@ -13,6 +13,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import type { Strk20DisclosureRequest } from "./strk20-approval-types";
+import type { Strk20RegistrationBlock } from "./strk20-registration-owner";
 
 /**
  * Refusal for a register action on an already registered account. The leading
@@ -21,6 +22,17 @@ import type { Strk20DisclosureRequest } from "./strk20-approval-types";
  */
 export const STRK20_ALREADY_REGISTERED =
   "invalid strk20 registration request: account already registered";
+
+/**
+ * Post-approval owner check for the Wallet-API register action: a key another
+ * wallet registered is still "already registered" (INVALID_REQUEST_PAYLOAD),
+ * so it maps to {@link STRK20_ALREADY_REGISTERED}; any other block (a failed
+ * read) is returned unchanged.
+ */
+export const registerActionBlock = (
+  block: Strk20RegistrationBlock,
+): Strk20RegistrationBlock | { readonly error: string } =>
+  block.privacyBlocker === "other-wallet" ? { error: STRK20_ALREADY_REGISTERED } : block;
 
 type Strk20RegistrationContext = Omit<
   Parameters<typeof readStrk20RegistrationStatus>[1],

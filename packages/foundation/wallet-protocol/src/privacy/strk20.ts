@@ -389,6 +389,13 @@ export const STRK20_PREPARE_REGISTER_SUMMARY =
   "Prepare private-balance activation for this site to submit";
 
 /**
+ * First summary line of a simulated `wallet_strk20PrepareInvoke` register
+ * approval: nothing submittable is produced, so the card says so.
+ */
+export const STRK20_SIMULATE_REGISTER_SUMMARY =
+  "Simulate private-balance activation for this site (no submittable proof)";
+
+/**
  * Converts a validated request back to its wire action list, for forwarding
  * across the content bridge where the background parses it again.
  */

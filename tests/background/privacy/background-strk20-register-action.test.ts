@@ -8,7 +8,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { toProviderPayload } from "@bramble/wallet-protocol/bridge";
-import { STRK20_PREPARE_REGISTER_SUMMARY } from "@bramble/wallet-protocol/strk20";
+import {
+  STRK20_PREPARE_REGISTER_SUMMARY,
+  STRK20_SIMULATE_REGISTER_SUMMARY,
+} from "@bramble/wallet-protocol/strk20";
 import { clearStrk20PoolKeyCache } from "../../../apps/extension/src/background/privacy/strk20-registration-owner";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../../support/held";
 import {
@@ -87,7 +90,8 @@ describe("strk20 register action", () => {
     const handler = buildStrk20Handler({ proveCalls, registered: false });
     const held = handler(prepareRegister(true), STRK20_CONTENT_SENDER);
     await flushHeld();
-    await waitForPendingApprovals<Listed>(handler, STRK20_EXTENSION_SENDER);
+    const listed = await waitForPendingApprovals<Listed>(handler, STRK20_EXTENSION_SENDER);
+    expect(listed.at(-1)?.summaries?.[0]).toBe(STRK20_SIMULATE_REGISTER_SUMMARY);
     const id = await latestApprovalId(handler, STRK20_EXTENSION_SENDER);
     await handler({ id, type: "wallet.approveOrigin" }, STRK20_EXTENSION_SENDER);
     expect(await held).toEqual({
@@ -176,6 +180,31 @@ describe("strk20 register action", () => {
         ["strk20-unavailable", "other-wallet"],
       ]);
       await handler({ id: pending[0]?.id, type: "wallet.denyOrigin" }, STRK20_EXTENSION_SENDER);
+      expect(toProviderPayload(await held, method).error?.code).toBe(114);
+    }
+  });
+
+  test("a key another wallet registers while the card is open is refused with 114", async () => {
+    const own = `0x${"1".repeat(63)}`;
+    const foreign = `0x${"2".repeat(63)}`;
+    for (const [message, method] of [
+      [invokeRegister, "wallet_strk20InvokeTransaction"],
+      [prepareRegister(false), "wallet_strk20PrepareInvoke"],
+    ] as const) {
+      clearStrk20PoolKeyCache();
+      let poolKey = "0x0";
+      const handler = buildStrk20Handler({
+        ownViewingPublicKey: own,
+        poolPublicKey: async () => poolKey,
+        registered: false,
+      });
+      const held = handler(message, STRK20_CONTENT_SENDER);
+      const listed = await waitForPendingApprovals<Listed>(handler, STRK20_EXTENSION_SENDER);
+      expect(listed.map((approval) => approval.kind)).toEqual(["strk20-register"]);
+      // Another wallet registers the account before the user approves.
+      poolKey = foreign;
+      const id = await latestApprovalId(handler, STRK20_EXTENSION_SENDER);
+      await handler({ id, type: "wallet.approveOrigin" }, STRK20_EXTENSION_SENDER);
       expect(toProviderPayload(await held, method).error?.code).toBe(114);
     }
   });

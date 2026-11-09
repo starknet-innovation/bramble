@@ -24,6 +24,8 @@ export type Strk20DisclosureRequest =
   | {
       readonly poolAddress: string;
       readonly poolFeeFri: string;
+      /** Set for the Wallet-API register action (refusals map to 114). */
+      readonly spec?: true;
       readonly token: string;
       readonly type: "register";
     }
