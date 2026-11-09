@@ -44,6 +44,7 @@ import {
   refusePoisonedStrk20Actions,
   type Strk20TrustedPreferences,
 } from "./strk20-recipient-policy";
+import { executeApprovedStrk20RegistrationCall, registerActionBlock } from "./strk20-registration";
 import { type Strk20RegistrationBlock, strk20RegistrationBlock } from "./strk20-registration-owner";
 import { bindStrk20ActionsToOrigin, strk20ShadowAccountCommitment } from "./strk20-shadow-account";
 import {
@@ -289,11 +290,21 @@ export const executeStrk20DisclosureApproval = async (
     return resolved;
   }
   const owner = await strk20RegistrationBlockFor(deps, resolved);
-  if (owner) return owner;
+  if (owner) {
+    return approval.request.type === "prepare-register" ? registerActionBlock(owner) : owner;
+  }
   const context = strk20AccountContext(deps, resolved);
   try {
     if (approval.request.type === "register") {
       return { error: "registration requires a network-fee approval" };
+    }
+    if (approval.request.type === "prepare-register") {
+      return await executeApprovedStrk20RegistrationCall(
+        deps.runtimeRpc,
+        resolved,
+        context,
+        approval.request,
+      );
     }
     if (approval.request.type === "balances") {
       const balances = await readStrk20Balances(strk20ServiceForRuntime(deps.runtimeRpc), {

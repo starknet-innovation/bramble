@@ -85,7 +85,10 @@ const invalidPayloadFor = (message: string): WalletRpcError | null => {
       return invalidRequestPayload(message.slice(prefix.length));
     }
   }
-  return /^invalid\b/i.test(message) || /malformed|origin mismatch/i.test(message)
+  // Wallet API 0.10.5: a register action for an already registered account is
+  // INVALID_REQUEST_PAYLOAD (neither phrase contains "not registered").
+  return /^invalid\b/i.test(message) ||
+    /malformed|origin mismatch|already (?:registered|active)/i.test(message)
     ? invalidRequestPayload()
     : null;
 };

@@ -7,9 +7,9 @@ import { normalizeWalletOrigin } from "@bramble/core/origin";
 import {
   isStrk20DappName,
   isStrk20Felt,
-  readStrk20Actions,
+  readStrk20ActionRequest,
   readStrk20Tokens,
-  type Strk20Action,
+  type Strk20ActionRequest,
 } from "@bramble/wallet-protocol/strk20";
 
 /**
@@ -48,11 +48,13 @@ export const readStrk20BalancesMessage = (
 
 /**
  * Parses a private proof-preparation request and clones only validated actions.
+ * A lone register action becomes a register request; register mixed with other
+ * actions is rejected.
  */
 export const readStrk20PrepareMessage = (
   message: unknown,
 ): {
-  readonly actions: readonly Strk20Action[];
+  readonly request: Strk20ActionRequest;
   readonly origin: string;
   readonly simulate: boolean;
 } | null => {
@@ -65,16 +67,18 @@ export const readStrk20PrepareMessage = (
     return null;
   }
   const origin = normalizeWalletOrigin(message["origin"]);
-  const actions = readStrk20Actions(message["actions"]);
-  return origin && actions ? { actions, origin, simulate: message["simulate"] } : null;
+  const request = readStrk20ActionRequest(message["actions"]);
+  return origin && request ? { origin, request, simulate: message["simulate"] } : null;
 };
 
 /**
- * Parses a private invoke request and clones only validated actions.
+ * Parses a private invoke request and clones only validated actions. A lone
+ * register action becomes a register request; register mixed with other
+ * actions is rejected.
  */
 export const readStrk20InvokeMessage = (
   message: unknown,
-): { readonly actions: readonly Strk20Action[]; readonly origin: string } | null => {
+): { readonly origin: string; readonly request: Strk20ActionRequest } | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["actions", "origin", "type"]) ||
@@ -83,8 +87,8 @@ export const readStrk20InvokeMessage = (
     return null;
   }
   const origin = normalizeWalletOrigin(message["origin"]);
-  const actions = readStrk20Actions(message["actions"]);
-  return origin && actions ? { actions, origin } : null;
+  const request = readStrk20ActionRequest(message["actions"]);
+  return origin && request ? { origin, request } : null;
 };
 
 /**

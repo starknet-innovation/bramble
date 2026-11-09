@@ -16,6 +16,10 @@ import {
   PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import {
+  STRK20_PREPARE_REGISTER_SUMMARY,
+  STRK20_SIMULATE_REGISTER_SUMMARY,
+} from "@bramble/wallet-protocol/strk20";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
@@ -273,6 +277,30 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
     ${paymentDecisionRow(approval, "Approve", status.locked)}
   </li>`;
 
+// The register card's copy: a simulated prepare produces nothing submittable,
+// a prepare hands the proof to the site, and the wallet's own registration is
+// followed by a separate network-fee approval.
+const registerCardCopy = (first: string | undefined) => {
+  const lockedHint = "Unlock the wallet to review this private-balance activation.";
+  if (first === STRK20_SIMULATE_REGISTER_SUMMARY) {
+    return {
+      action: "Simulate",
+      hint: "This only simulates activation for the site. It returns no submittable proof, publishes nothing, and costs nothing.",
+      lockedHint,
+      title: "Simulate private-balance activation",
+    };
+  }
+  return {
+    action: "Activate",
+    hint:
+      first === STRK20_PREPARE_REGISTER_SUMMARY
+        ? "This prepares the one-time registration commitment and proof and hands them to the site, which submits them itself and must cover the pool fee. The viewing key and private notes are never published."
+        : "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
+    lockedHint,
+    title: "Activate private balances",
+  };
+};
+
 const strk20DisclosureCard = (
   approval: PendingApproval,
   status: WalletStatus,
@@ -387,12 +415,7 @@ export const approvalCard = (
         title: "Private proof request",
       });
     case "strk20-register":
-      return strk20DisclosureCard(approval, status, {
-        action: "Activate",
-        hint: "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
-        lockedHint: "Unlock the wallet to review this private-balance activation.",
-        title: "Activate private balances",
-      });
+      return strk20DisclosureCard(approval, status, registerCardCopy(approval.summaries?.[0]));
     case "strk20-shadow-account":
       return strk20DisclosureCard(approval, status, {
         action: "Share commitment",

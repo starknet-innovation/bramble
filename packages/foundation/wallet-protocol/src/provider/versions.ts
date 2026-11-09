@@ -20,15 +20,15 @@
 export const SUPPORTED_SPECS: readonly [string, ...string[]] = ["0.10.0"];
 
 /**
- * Wallet-API versions this wallet implements (API_VERSION values). Stable
- * `0.10.4` (starkware-libs/starknet-specs tag v0.10.4, commit cac6a4f9,
- * 2026-09-10; `info.version` "0.10.4") is the release whose names this wallet
- * speaks: `wallet_strk20ShadowAccountCommitment` and `shadow_account_invoke`,
- * which first shipped in 0.10.4-rc.1, plus the `valid_until` balance param
- * added in 0.10.4. `0.10.4-rc.0` is not advertised: it still names
+ * Wallet-API versions this wallet implements (API_VERSION values).
+ * `0.10.5-rc.0` (starkware-libs/starknet-specs tag v0.10.5-rc.0, 2026-11-09)
+ * adds the STRK20 `register` action on top of stable `0.10.4`, whose names this
+ * wallet speaks: `wallet_strk20ShadowAccountCommitment` and
+ * `shadow_account_invoke` (first shipped in 0.10.4-rc.1), plus the
+ * `valid_until` balance param. `0.10.4-rc.0` is not advertised: it still names
  * `wallet_strk20SubaccountCommitment` / `subaccount_invoke`, which are refused.
  */
-export const SUPPORTED_WALLET_API: readonly [string, ...string[]] = ["0.10.4"];
+export const SUPPORTED_WALLET_API: readonly [string, ...string[]] = ["0.10.5-rc.0"];
 
 /**
  * API_VERSION pattern accepted from dapps (semantic version, including a

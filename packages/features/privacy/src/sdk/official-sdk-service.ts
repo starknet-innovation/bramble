@@ -188,6 +188,17 @@ export const createOfficialStrk20Service = ({
         callAndProof,
       );
     },
+    async prepareRegistrationCall(input) {
+      // Wallet API 0.10.5 register action via wallet_strk20PrepareInvoke: the
+      // site submits this call, so no pool-fee approve is built here.
+      requireStrk20Config(input);
+      return prepare(
+        { ...input, actions: [], simulate: input.simulate },
+        undefined,
+        strk20RegistrationBuilderFor,
+        "registration",
+      );
+    },
     async prepareAccountActions(input) {
       const config = requireStrk20Config(input);
       if (input.actions.length === 0 || input.actions.some((action) => action.type !== "deposit")) {

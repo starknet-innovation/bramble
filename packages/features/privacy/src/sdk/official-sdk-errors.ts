@@ -39,6 +39,7 @@ export type Strk20ErrorCategory =
   | "rate-limited"
   | "service-unavailable"
   | "transport"
+  | "unsupported-builtin"
   | "validation-failed";
 
 // Longest sanitized revert detail surfaced to the user. A Starknet revert reason
@@ -57,6 +58,9 @@ const CATEGORY_MARKERS: readonly (readonly [RegExp, Strk20ErrorCategory])[] = [
   [/invalid transaction nonce|nonce mismatch|wrong nonce/i, "invalid-nonce"],
   [/validate_failure|validation failed|validate failed/i, "validation-failed"],
   [/max fee|fee token|exceed balance|fee transfer/i, "insufficient-fee"],
+  // Proving API 0.10.5 UNSUPPORTED_BUILTIN (1002): the transaction uses a
+  // builtin outside the prover's set. Ahead of the generic proof marker.
+  [/unsupported builtin/i, "unsupported-builtin"],
   [/proof|base_block|proving/i, "proof-rejected"],
   [/revert|execution (?:error|failed)|contract error|entry ?point/i, "execution-reverted"],
 ];

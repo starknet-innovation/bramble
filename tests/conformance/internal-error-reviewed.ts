@@ -125,6 +125,10 @@ export const SENSITIVE_COPY_REVIEWED: readonly (readonly [string, string])[] = [
     "Private services aren't set up for this network.",
   ],
   ["private balances are already active", "Private balances are already active."],
+  [
+    "invalid strk20 registration request: account already registered",
+    "Private balances are already active.",
+  ],
   ["private unlock failed", "Couldn't unlock private transactions. Try again."],
   [
     "private balances are not available for ledger accounts",

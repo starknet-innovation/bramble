@@ -291,7 +291,7 @@ object is frozen and installed as a non-configurable global.
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
 `wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
 `wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
-`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and shadow-account-commitment methods behind the same origin and phishing gates, under the Wallet API 0.10.4 names (`wallet_strk20ShadowAccountCommitment`, `shadow_account_invoke`; the old sub-account names have no alias).
+`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and shadow-account-commitment methods behind the same origin and phishing gates, under the Wallet API 0.10.4 names (`wallet_strk20ShadowAccountCommitment`, `shadow_account_invoke`; the old sub-account names have no alias), plus the 0.10.5-rc.0 `register` action.
 Private-state requests additionally require a held approval bound to the account, network, and payload digest; connection alone is insufficient. A shadow-account approval is also bound to the anonymizer its card named, and its scope is recorded in the vault's `shadowAccountScopes` before it runs; extension-only `wallet.strk20ShadowAccounts`, `wallet.strk20ShadowAccountBalances`, and `wallet.strk20PrepareShadowSweep` list, read on request, and sweep them.
 
 Grants and provider events are isolated per origin: each origin reads only its own accounts
@@ -379,7 +379,7 @@ and reputation signals before a connection is approved:
 
 ## STRK20 privacy
 
-Bramble implements Wallet API `0.10.4` STRK20 through the pinned official Privacy SDK. Viewing
+Bramble implements Wallet API `0.10.5-rc.0` STRK20 through the pinned official Privacy SDK. Viewing
 keys stay inside the encrypted vault; actions, relay fees, account, network, pool, and payload digest
 are frozen before dedicated approval. No fallback prover or signer exists. Registration and
 deposit-only batches may use the public account; other private actions require a relayer. Writes are
