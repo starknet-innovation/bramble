@@ -44,7 +44,8 @@ fun WalletStore.tokenDetailPrivacyFor(tokenAddress: String): TokenDetailPrivacy 
  * (amount, Try again, or "Register to start shielding") and the core's action. Shield (an
  * undeployed account, funded or not) and Go private open the journey, which names what is in the
  * way; the first Shield of a deployed, unregistered account and Shield and Unshield for a
- * registered one stay disabled while the core's capabilities say mobile cannot submit them. [actions] (the token's Send) sit between the line and the action.
+ * registered one stay disabled while the core's capabilities say mobile cannot submit them.
+ * [actions] (the token's Send) sit between the line and the action.
  */
 @Composable
 fun TokenPrivacySection(
