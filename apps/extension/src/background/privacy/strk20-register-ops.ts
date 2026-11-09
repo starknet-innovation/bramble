@@ -113,6 +113,29 @@ const registrationFee = async (
   return poolFeeFri;
 };
 
+// Like registrationHold, except that a key another wallet registered is still
+// "already registered" for the Wallet-API register action, so the site gets
+// INVALID_REQUEST_PAYLOAD; the notice keeps naming the other wallet.
+const registrationBlockHold = async (
+  deps: Strk20OpsDeps,
+  origin: string,
+  admission: ApprovalReservation,
+  resolved: ResolvedAccount,
+  mode: Strk20RegistrationMode,
+): Promise<RuntimeResponse | null> => {
+  const block = await strk20RegistrationBlockFor(deps, resolved);
+  if (!block) return null;
+  const foreign = block.privacyBlocker === "other-wallet";
+  const spec = mode.kind === "prepare" || mode.spec;
+  return holdStrk20Notice(
+    deps,
+    origin,
+    foreign && spec ? STRK20_ALREADY_REGISTERED : block.error,
+    foreign ? "other-wallet" : "request-failed",
+    admission,
+  );
+};
+
 type RegistrationSetup =
   | { readonly hold: RuntimeResponse }
   | {
@@ -144,8 +167,8 @@ const registrationSetup = async (
   if (resolved.account.derivation.kind === "ledger") {
     return hold("Private balances are not available for Ledger accounts", "request-failed");
   }
-  const registration = await registrationHold(deps, origin, admission, resolved);
-  if (registration) return { hold: registration };
+  const blocked = await registrationBlockHold(deps, origin, admission, resolved, mode);
+  if (blocked) return { hold: blocked };
   const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
   const token = resolved.preferences.tokens.find(
     (candidate) => candidate.networkId === resolved.account.networkId,
