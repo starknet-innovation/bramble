@@ -16,7 +16,7 @@ import {
   getNftOwnership,
   getNftTokenUri,
 } from "@bramble/starknet/rpc-assets";
-import { byteArray, RpcProvider } from "starknet";
+import { byteArray, RpcProvider, shortString } from "starknet";
 import { digestApprovalPayload } from "../../apps/extension/src/background/approvals/approval-context";
 
 const CONTRACT = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -175,6 +175,75 @@ describe("getNftTokenUri", () => {
 
   test("rejects malformed ByteArray responses", async () => {
     spyCallContract(async () => ["1000000", "0x1", "0x0", "0"]);
+
+    await expect(
+      getNftTokenUri({
+        contractAddress: CONTRACT,
+        rpcUrls: ["https://rpc.example"],
+        tokenId: "5",
+      }),
+    ).rejects.toThrow("Could not read NFT metadata URI");
+  });
+
+  test("decodes a legacy felt-array token URI (a SPOK on Mainnet)", async () => {
+    // The real token_uri reply for SPOK 0x2f8a65: a length, then short strings.
+    const legacy = [
+      "0x9",
+      "0x68747470733a2f2f636c6f75642e617267656e742d6170692e636f6d2f7631",
+      "0x2f6d6f6d656e74732f6d657461646174612f332f",
+      "0x33",
+      "0x31",
+      "0x31",
+      "0x35",
+      "0x36",
+      "0x32",
+      "0x31",
+    ];
+    const seen: string[] = [];
+    spyCallContract(async (call) => {
+      seen.push(call.entrypoint);
+      return legacy;
+    });
+
+    await expect(
+      getNftTokenUri({
+        contractAddress: CONTRACT,
+        rpcUrls: ["https://rpc.example"],
+        tokenId: "3115621",
+      }),
+    ).resolves.toBe("https://cloud.argent-api.com/v1/moments/metadata/3/3115621");
+    expect(seen).toEqual(["token_uri"]);
+  });
+
+  test("decodes a legacy URI split into more one-byte pieces than 31-byte words would need", async () => {
+    const uri = `https://metadata.example/${"a".repeat(1200)}`;
+    spyCallContract(async () => [
+      `0x${uri.length.toString(16)}`,
+      ...[...uri].map((char) => `0x${char.charCodeAt(0).toString(16)}`),
+    ]);
+
+    await expect(
+      getNftTokenUri({
+        contractAddress: CONTRACT,
+        rpcUrls: ["https://rpc.example"],
+        tokenId: "5",
+      }),
+    ).resolves.toBe(uri);
+  });
+
+  test.each([
+    ["a count that doesn't match the pieces", ["0x2", shortString.encodeShortString("https://")]],
+    ["an empty piece", ["0x2", shortString.encodeShortString("https://"), "0x0"]],
+    ["a control byte", ["0x1", "0x68740a"]],
+    ["a non-ASCII byte", ["0x1", "0x68ff"]],
+    ["a piece longer than 31 bytes", ["0x1", `0x${"61".repeat(32)}`]],
+    ["a zero count", ["0x0"]],
+    ["a non-numeric count", ["nope", "0x61"]],
+    ["a non-hex piece", ["0x1", "97"]],
+    ["a zero-padded piece past felt length", ["0x1", `0x${"0".repeat(64)}61`]],
+    ["more pieces than the URI byte bound", ["0x8001", ...Array<string>(0x8001).fill("0x61")]],
+  ])("rejects a legacy felt-array URI with %s", async (_label, response) => {
+    spyCallContract(async () => response);
 
     await expect(
       getNftTokenUri({
