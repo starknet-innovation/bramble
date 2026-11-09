@@ -276,8 +276,12 @@ pub enum DetailAction {
     Shield,
     /// Registered: "Shield" and "Unshield", each opening Send in its privacy mode.
     ShieldUnshield,
-    /// Deployed or deployment unknown, and not read as registered: a "Shield" control
-    /// (`detailGoPrivate`) opening the privacy journey to register first.
+    /// Deployed and read as unregistered: one "Shield" (`detailShieldFirst`). The extension's
+    /// first shield registers in the same transaction (789) and opens Send; mobile cannot shield
+    /// yet, so hosts show it disabled with the Unsupported note, as for `ShieldUnshield`.
+    ShieldFirst,
+    /// Deployment unknown, or a reading not yet settled: "Go private" (`detailGoPrivate`),
+    /// opening the privacy journey.
     GoPrivate,
 }
 

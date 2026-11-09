@@ -255,6 +255,8 @@ pub fn token_detail(
         DetailAction::None
     } else if registered(reading) {
         DetailAction::ShieldUnshield
+    } else if seen == Some(true) && settled(reading) {
+        DetailAction::ShieldFirst
     } else {
         DetailAction::GoPrivate
     };
