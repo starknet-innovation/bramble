@@ -212,6 +212,14 @@ struct TokenPrivacySection: View {
                     PillButton(label, icon: .shield, action: journey)
                 }
 
+            case .shieldFirst:
+                // The first shield (which registers too) is a send; not built on mobile either.
+                PillButton(PrivacyCopy.detailShieldFirst, icon: .shield) {
+                    // No action: shielding is not built on mobile, so the capability keeps this disabled.
+                }
+                .disabled(!privacyCapabilities().canShield)
+                Text(PrivacyCopy.unsupportedTitle).brambleText(BrambleTypeScale.label).foregroundStyle(skin.muted)
+
             case .shieldUnshield:
                 let labels = detail.action.labels
                 HStack(spacing: BrambleSpace.sm) {

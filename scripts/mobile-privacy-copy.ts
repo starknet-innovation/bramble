@@ -111,11 +111,14 @@ export const computePrivacyCopy = (gates: {
     readonly reading: string;
   }[];
 }) => {
-  const actions = (reading: string) =>
-    gates.static.find((row) => row.reading === reading && row.deployment === "deployed")?.detail
+  const actions = (reading: string, deployment = "deployed") =>
+    gates.static.find((row) => row.reading === reading && row.deployment === deployment)?.detail
       .actions ?? [];
   const [detailShield = "", detailUnshield = ""] = actions("registered");
-  const [detailGoPrivate = ""] = actions("unregistered");
+  // A deployed, unregistered account's first shield is offered directly (789); with the
+  // deployment unknown the control still opens the journey.
+  const [detailShieldFirst = ""] = actions("unregistered");
+  const [detailGoPrivate = ""] = actions("unregistered", "unknown");
   const preparing = flow({ progress: null, stage: "preparing", step: "discovering", tokenId });
   const failedHome = homeTabs(
     { balances: [] },
@@ -163,6 +166,7 @@ export const computePrivacyCopy = (gates: {
       gates.journeys.find((row) => row.deploymentRead === "throws")?.detail ?? "",
     detailGoPrivate,
     detailShield,
+    detailShieldFirst,
     detailUnshield,
     fundsRequired: PRIVACY_FUNDS_REQUIRED,
     headerJourney: pick(

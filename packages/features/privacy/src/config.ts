@@ -25,6 +25,16 @@ export const STRK20_MAINNET_POOL =
   "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a";
 
 /**
+ * Bundled Mainnet shadow-account anonymizer, paired with
+ * {@link STRK20_MAINNET_POOL} (screening policy `Delegated`), in canonical felt
+ * spelling. It is an input to every shadow-account identity: changing it moves
+ * every user's shadow accounts, and funds made under the old value stay
+ * reachable only through the old value. Pick it once and never change it (#666).
+ */
+export const STRK20_MAINNET_SHADOW_ACCOUNT_ANONYMIZER =
+  "0x4f33230dc57855c6e7eabe66dfa0fde82c5458fd0e54827cdb7cb4c474888a7";
+
+/**
  * Sponsored-private paymaster configuration. The fee token funds the
  * paymaster-provided withdrawal action added before proving.
  */
@@ -108,6 +118,7 @@ export const DEFAULT_STRK20_NETWORKS: Strk20NetworkConfigs = {
     },
     poolAddress: STRK20_MAINNET_POOL,
     proverUrl: `${STRK20_GATEWAY_BASE}/prover`,
+    shadowAccountAnonymizerAddress: STRK20_MAINNET_SHADOW_ACCOUNT_ANONYMIZER,
   },
 };
 

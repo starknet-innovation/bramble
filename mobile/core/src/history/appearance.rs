@@ -41,10 +41,11 @@ pub enum ActivityTone {
 pub struct ActivityCounterparty {
     /// The fact's label: "Sender", "Recipient" or "Counterparty".
     pub role: String,
-    /// The full recorded address (trimmed): the value the control copies, and the tooltip and
-    /// accessibility value of the truncated one.
+    /// The full recorded address (trimmed): the value the control copies and the accessibility
+    /// value of the shown text.
     pub address: String,
-    /// `accountLabel(address)`, 6…4, the text shown.
+    /// The text shown: the whole address, since the expansion is where it is read (extension
+    /// 53acf291). Kept beside `address` so a host never derives one from the other.
     pub address_label: String,
     /// The copy control's accessible name, "Copy {role} address" in lower case.
     pub copy_label: String,
@@ -242,7 +243,7 @@ fn row(entry: &ActivityEntry, tracked: &[TokenConfig]) -> ActivityRow {
             .counterparty
             .map(|(address, role)| ActivityCounterparty {
                 role: capitalise(role),
-                address_label: short_label(&address),
+                address_label: address.clone(),
                 copy_label: format!("Copy {role} address"),
                 address,
             }),

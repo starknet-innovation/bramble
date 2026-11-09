@@ -229,11 +229,14 @@ export type ExplorerLaneReadOptions = {
   readonly readPreferences: () => Promise<ExplorerLanePreferences>;
 };
 
-// Fails closed in both directions that are not an explicit "yes": a request
-// whose network cannot be identified, and a preferences read that throws (the
-// store is unavailable, or holds a record this build refuses), leave the
-// gateway unused so an infrastructure fault can never widen disclosure.
-const gatewayPreferencesFor = async (
+/**
+ * The preferences to read the explorer with, or null when the lane may not run.
+ * Fails closed in both directions that are not an explicit "yes": a request
+ * whose network cannot be identified, and a preferences read that throws (the
+ * store is unavailable, or holds a record this build refuses), leave the
+ * gateway unused so an infrastructure fault can never widen disclosure.
+ */
+export const gatewayPreferencesFor = async (
   readPreferences: () => Promise<ExplorerLanePreferences>,
   networkId: StarknetNetworkId | undefined,
 ): Promise<ExplorerLanePreferences | null> => {
@@ -248,7 +251,8 @@ const gatewayPreferencesFor = async (
   }
 };
 
-const gatewayClientFor = (
+/** The per-network configured explorer client, or the bundled default. */
+export const gatewayClientFor = (
   options: Pick<ExplorerLaneReadOptions, "client" | "clientFor">,
   networkId: StarknetNetworkId,
   preferences: ExplorerLanePreferences,

@@ -225,14 +225,16 @@ const FEE_KEYS = [
 
 // The echoed deployment must be the requested one field for field. Felts are
 // compared numerically, so padding cannot hide a change; length is exact, so an
-// appended constructor argument cannot ride along.
+// appended constructor argument cannot ride along. A sponsored deploy is
+// unsigned: the live relay echoes `sigdata: null`, and an absent field or an
+// empty list says the same; any `sigdata` content at all is refused.
 const isSameDeployment = (value: unknown, expected: SponsoredDeploymentData): boolean => {
+  const sigdata = isRecord(value) ? value["sigdata"] : undefined;
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, ["address", "calldata", "class_hash", "salt", "sigdata", "version"]) ||
     !(value["version"] === 1 || value["version"] === "0x1") ||
-    (value["sigdata"] !== undefined &&
-      !(Array.isArray(value["sigdata"]) && value["sigdata"].length === 0))
+    !(sigdata === undefined || sigdata === null || (Array.isArray(sigdata) && sigdata.length === 0))
   ) {
     return false;
   }

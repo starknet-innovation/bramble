@@ -43,8 +43,9 @@ fun WalletStore.tokenDetailPrivacyFor(tokenAddress: String): TokenDetailPrivacy 
  * Token detail's private half, twin of the iOS `TokenPrivacySection`: the "Private balance" line
  * (amount, Try again, or "Register to start shielding") and the core's action. Shield (an
  * undeployed account, funded or not) and Go private open the journey, which names what is in the
- * way; Shield and Unshield for a registered account stay disabled while the core's capabilities
- * say mobile cannot submit them. [actions] (the token's Send) sit between the line and the action.
+ * way; the first Shield of a deployed, unregistered account and Shield and Unshield for a
+ * registered one stay disabled while the core's capabilities say mobile cannot submit them.
+ * [actions] (the token's Send) sit between the line and the action.
  */
 @Composable
 fun TokenPrivacySection(
@@ -71,6 +72,17 @@ fun TokenPrivacySection(
 
             DetailAction.GO_PRIVATE -> {
                 PillButton(PrivacyCopy.detailGoPrivate, icon = BrambleIconName.SHIELD, onClick = journey)
+            }
+
+            DetailAction.SHIELD_FIRST -> {
+                val capabilities = privacyCapabilities()
+                // The first shield (which registers too) is a send: not built on mobile either.
+                PillButton(
+                    PrivacyCopy.detailShieldFirst,
+                    icon = BrambleIconName.SHIELD,
+                    enabled = capabilities.canShield,
+                ) {}
+                Text(PrivacyCopy.unsupportedTitle, color = skin.muted, style = textStyle(BrambleTypeScale.label))
             }
 
             DetailAction.SHIELD_UNSHIELD -> {

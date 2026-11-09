@@ -197,6 +197,7 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["display update failed", SAVE_FAILED],
   ["label update failed", SAVE_FAILED],
   ["rpc endpoint update failed", SAVE_FAILED],
+  ["indexer endpoint update failed", SAVE_FAILED],
   ["explorer fallback update failed", SAVE_FAILED],
   ["privacy service configuration failed", SAVE_FAILED],
   ["token visibility update failed", SAVE_FAILED],
@@ -393,25 +394,43 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   // on-chain allowance revoke has its own code (copy review bf07).
   ["revoke failed", REQUEST_UNKNOWN],
   ["allowance revoke failed", SUBMISSION_UNKNOWN("The revoke")],
+  // --- Staking (issue 750) ---------------------------------------------------
+  // A staking action signs a transaction: its unknown outcome says so. The
+  // background's own refusals are already reader sentences, kept as written.
+  ["staking action failed", SUBMISSION_UNKNOWN("The staking transaction")],
+  ["staking preparation failed", "Couldn't prepare this staking action. Try again."],
+  ["review this staking action again.", "Review this staking action again."],
+  ["staking isn't available on this network.", "Staking isn't available on this network."],
+  ["staking option unavailable.", "Staking option unavailable."],
+  [
+    "couldn't read staking on this network. try again.",
+    "Couldn't read staking on this network. Try again.",
+  ],
+  [
+    "couldn't load the validator list. paste a validator address instead.",
+    "Couldn't load the validator list. Paste a validator address instead.",
+  ],
+  ["couldn't load your stakes.", "Couldn't load your stakes."],
   [
     "switch to the account that granted this allowance",
     "Switch to the account that granted this allowance.",
   ],
   [
     "this contract is an nft collection, not a token; revoke it from the dapp",
-    "That's a collectible contract, not a token. Revoke it from the site that asked.",
+    "That's an NFT contract, not a token. Revoke it from the site that asked.",
   ],
 
   // --- Collectibles --------------------------------------------------------
-  ["this account does not own that nft", "This account doesn't own that collectible."],
+  ["this account does not own that nft", "This account doesn't own that NFT."],
+  ["nfts are turned off", "Turn on Show NFTs on Home in Appearance & currency to watch NFTs."],
   [
     "switch to the nft's network first",
-    "This collectible is on another network. Switch networks to move it.",
+    "This NFT is on another network. Switch networks to move it.",
   ],
   ["invalid watch asset metadata", "That site sent token details this wallet can't read."],
-  ["add nft failed", "Couldn't add that collectible. Check the contract address and try again."],
-  ["remove nft failed", "Couldn't remove that collectible. Try again."],
-  ["nft update failed", "Couldn't update that collectible. Try again."],
+  ["add nft failed", "Couldn't add that NFT. Check the contract address and try again."],
+  ["remove nft failed", "Couldn't remove that NFT. Try again."],
+  ["nft update failed", "Couldn't update that NFT. Try again."],
   ["nft transfer review failed", "Couldn't prepare this transfer. Try again."],
   ["nft transfer failed", SUBMISSION_UNKNOWN("The transfer")],
 

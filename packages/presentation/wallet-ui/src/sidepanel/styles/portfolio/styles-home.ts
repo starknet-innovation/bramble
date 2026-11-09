@@ -19,6 +19,13 @@ export const HOME_STYLES = `
   .recovery-confirm .recovery-confirm-warning { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; margin: 0; }
   .recovery-confirm .read-only-detail { max-width: none; }
   .recovery-confirm .button-row { justify-content: center; margin-top: ${SPACE.xs}; }
+  /* Starknet VIP notice (mc-wallet 688): a quiet line under the total, like the
+     read-only flag; its link and dismiss wrap rather than overflow at narrow widths. */
+  .vip-notice { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xxs}; }
+  .vip-notice-actions { align-items: center; display: flex; flex-wrap: wrap; gap: ${SPACE.sm}; justify-content: center; }
+  .vip-notice .vip-link { align-items: center; color: var(--bramble-accent); display: inline-flex; font-size: ${TYPE.caption.size}; gap: ${SPACE.xxs}; }
+  .vip-notice .vip-link .icon { height: 1em; width: 1em; }
+  .vip-notice #vip-notice-hide { font-size: ${TYPE.caption.size}; min-height: 0; padding: 0; }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */
@@ -237,13 +244,21 @@ export const HOME_STYLES = `
      Active state is carried by high-contrast type alone — no underline, pill,
      or duplicated Activity destination. Only multisig renders tab buttons; the
      home section is a plain h2 styled by the base heading rule. */
-  .home-tabs { display: grid; gap: ${SPACE.sm}; }
+  /* The single column is minmax(0, 1fr), not the implicit auto track: the
+     tab bar's intrinsic width (three tabs plus the actions menu) must never
+     widen the token list past the panel, where the right-hand amounts were cut
+     off at the 320px minimum. Below 360px the tab gap closes from xl to md so
+     Tokens, NFTs, and Staking still fit beside the menu. */
+  .home-tabs { display: grid; gap: ${SPACE.sm}; grid-template-columns: minmax(0, 1fr); }
   .tab-bar { align-items: center; display: flex; gap: ${SPACE.md}; min-height: 44px; }
   .tab-set {
     display: flex;
     flex: 1;
     gap: ${SPACE.xl};
     min-width: 0;
+  }
+  @media (max-width: 359px) {
+    .tab-set { gap: ${SPACE.md}; }
   }
   button.home-tab {
     background: transparent;

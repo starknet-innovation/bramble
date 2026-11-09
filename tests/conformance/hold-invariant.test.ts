@@ -34,7 +34,6 @@ import { ERROR_CODES, SPEC_METHODS, type SpecMethod } from "./wallet-rpc-spec";
 const SPY_KEYS: Readonly<Record<string, readonly (keyof MutationSpy)[]>> = {
   wallet_addDeclareTransaction: ["submitDeclare"],
   wallet_addInvokeTransaction: ["submitInvoke"],
-  wallet_addStarknetChain: ["addCustomNetwork"],
   wallet_requestAccounts: ["grantOrigin"],
   wallet_signTypedData: ["signHash"],
   wallet_strk20InvokeTransaction: ["submitInvoke"],

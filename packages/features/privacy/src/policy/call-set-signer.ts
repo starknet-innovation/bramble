@@ -62,7 +62,12 @@ export const computeStrk20CallSetHash = (
 type Strk20CallSetSignerOptions = {
   readonly accountAddress: BigNumberish;
   readonly chainId: BigNumberish;
-  readonly sign: (messageHash: string) => Promise<Signature>;
+  /**
+   * Signs the CallSet digest. `calls` are the pool calls that were hashed.
+   * A single signer returns one Stark pair. An Argent multisig returns
+   * `serializeArgentMultisigSignature` — this class does not wrap either one.
+   */
+  readonly sign: (messageHash: string, calls?: readonly Call[]) => Promise<Signature>;
 };
 
 /**
@@ -81,6 +86,7 @@ export class Strk20CallSetSigner implements SignerInterface {
   async signTransaction(calls: Call[], _details: InvocationsSignerDetails): Promise<Signature> {
     return this.options.sign(
       num.toHex(computeStrk20CallSetHash(this.options.accountAddress, calls, this.options.chainId)),
+      calls,
     );
   }
 

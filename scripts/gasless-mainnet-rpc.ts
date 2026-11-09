@@ -3,15 +3,22 @@
  * URL is kept only when `starknet_chainId` is mainnet. A bare host such as
  * `http://wallet.nodes.starknet.org` is not an RPC and is replaced by the
  * wallet default. The private key is never involved.
+ *
+ * The Mainnet E2E workflow uses {@link requireCiMainnetRpc} instead: the
+ * configured endpoint or nothing, never the wallet's shared RPC.
  */
 import { isRecord } from "../packages/foundation/core/src/json";
 import {
   STARKNET_NETWORKS,
   sameFelt,
 } from "../packages/foundation/wallet-model/src/networks/networks";
+import { assertDedicatedMainnetRpc } from "./mainnet-e2e-rpc";
 
 const CHAIN_ID = STARKNET_NETWORKS.SN_MAIN.chainId;
 const WALLET_RPC = STARKNET_NETWORKS.SN_MAIN.rpcUrls[0];
+
+/** Where the Mainnet E2E workflow passes the RPC it validated in preflight. */
+export const CI_RPC_SOURCE = "GASLESS_E2E_RPC_URL";
 
 type MainnetRpcChoice = {
   readonly note: string | null;
@@ -82,4 +89,23 @@ export const selectMainnetRpc = async (input: {
     source: "wallet default",
     url: WALLET_RPC,
   };
+};
+
+/**
+ * The RPC for a Mainnet E2E CI run. Accepts only `GASLESS_E2E_RPC_URL`, and
+ * only when it is a dedicated HTTPS endpoint (not a shared Starknet host) that
+ * answers mainnet's chain id, the rules preflight applies. Throws when it is
+ * missing, refused, unreachable or another chain. Never falls back to the
+ * wallet RPC or an sncast URL, and the thrown message never includes the URL.
+ */
+export const requireCiMainnetRpc = async (input: {
+  readonly configuredSource: string;
+  readonly configuredUrl: string;
+  readonly fetchImpl?: RpcFetch;
+}): Promise<MainnetRpcChoice> => {
+  if (input.configuredSource !== CI_RPC_SOURCE) {
+    throw new Error(`Mainnet E2E CI requires ${CI_RPC_SOURCE} and never falls back to another RPC`);
+  }
+  const url = await assertDedicatedMainnetRpc(input.configuredUrl, input.fetchImpl ?? fetch);
+  return { note: null, source: CI_RPC_SOURCE, url };
 };

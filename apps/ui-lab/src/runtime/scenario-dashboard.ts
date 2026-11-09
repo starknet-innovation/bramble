@@ -13,6 +13,7 @@ import type {
   PrivacyDisclosureState,
   PrivacyJourneyState,
   SignabilityVerdict,
+  StakingState,
   WalletStatus,
 } from "@bramble/wallet-ui/lab";
 import { dashboard, type WalletView } from "@bramble/wallet-ui/lab";
@@ -24,6 +25,21 @@ import {
   statusFor,
   USDC_ADDRESS,
 } from "../fixtures/fixtures";
+
+// A staking state with no stakes, used when a checkpoint opens a Home tab
+// without describing staking: the Staking tab is shown, empty.
+const NO_STAKES: StakingState = {
+  directory: { loading: true },
+  positions: { complete: true, rows: [] },
+  selected: null,
+  validator: { loading: true },
+};
+
+// The staking state passed to the dashboard, carrying the open Home tab.
+const stakingFor = (options: DashboardOptions): StakingState | undefined =>
+  options.homeTab === undefined
+    ? options.staking
+    : { ...(options.staking ?? NO_STAKES), homeTab: options.homeTab };
 
 export type DashboardOptions = {
   readonly activity?: readonly ActivityEntry[];
@@ -41,10 +57,18 @@ export type DashboardOptions = {
   readonly collapsedFolders?: readonly string[];
   readonly expandedGroupId?: string | null;
   readonly historyUnavailable?: boolean;
+  /**
+   * The open Home portfolio tab, kept where production keeps it: in the
+   * staking state (`StakingState.homeTab`). Tokens unless a checkpoint opens
+   * another.
+   */
+  readonly homeTab?: "nfts" | "staking" | "tokens";
   readonly multisigClassDeclared?: boolean | "error" | null;
   readonly multisigIntents?: readonly ArgentMultisigSigningIntent[];
   readonly multisigs?: readonly ArgentMultisigView[];
   readonly multisigsError?: boolean;
+  /** How complete the NFT indexer said its list was. */
+  readonly nftCoverage?: "complete" | "incomplete" | "none" | "unavailable";
   readonly pending?: readonly PendingApproval[];
   readonly preferences?: WalletPreferences | null;
   readonly priceAsOf?: number | null;
@@ -59,6 +83,7 @@ export type DashboardOptions = {
   /** The Home signability verdict; absent renders a normal, signable account. */
   readonly signability?: SignabilityVerdict | null;
   readonly snoozed?: readonly string[];
+  readonly staking?: StakingState;
   readonly status?: WalletStatus;
   readonly view?: WalletView;
 };
@@ -131,5 +156,9 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     selectedMultisigIntentId,
     null,
     options.signability ?? null,
+    [],
+    false,
+    stakingFor(options),
+    options.nftCoverage ?? "none",
   );
 };

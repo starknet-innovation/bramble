@@ -187,9 +187,18 @@ export const reviewCostSection = (trustedMarkup: string): string =>
  * calls (connections, signatures, and configuration changes).
  */
 export const reviewOutcome = (copy: string): string =>
+  reviewOutcomeSection(`<p>${escapeHtml(copy)}</p>`);
+
+/**
+ * Wraps already-composed, already-escaped markup in the one "What will happen"
+ * section. For a decision whose consequence has more than one part (the decoded
+ * calls, then that a multisig saves them for its other signers), so the card
+ * reads as one consequence under one heading rather than two in a row.
+ */
+export const reviewOutcomeSection = (trustedMarkup: string): string =>
   `<section class="decision-layer decision-outcome" aria-label="What will happen">
     <p class="decision-label">What will happen</p>
-    <p>${escapeHtml(copy)}</p>
+    ${trustedMarkup}
   </section>`;
 
 /**
@@ -347,22 +356,32 @@ export const reviewFeeSection = (
 export const reviewCallsList = (
   summaries: readonly string[],
   assets: readonly { readonly address: string; readonly symbol: string }[] = [],
+): string => {
+  const items = reviewCallItems(summaries, assets);
+  return items ? reviewOutcomeSection(items) : "";
+};
+
+/**
+ * The decoded call summaries alone, as the `review-calls` list with no section
+ * around it, for a caller that adds a line under the same heading. Returns an
+ * empty string when there are no summaries. Escapes every summary.
+ */
+export const reviewCallItems = (
+  summaries: readonly string[],
+  assets: readonly { readonly address: string; readonly symbol: string }[] = [],
 ): string =>
   summaries.length === 0
     ? ""
-    : `<section class="decision-layer decision-outcome" aria-label="What will happen">
-        <p class="decision-label">What will happen</p>
-        <ul class="review-calls">${summaries
-          .map((summary) => {
-            const words = new Set(summary.toUpperCase().match(/[A-Z0-9.]+/gu) ?? []);
-            const marks = assets
-              .filter((asset) => words.has(asset.symbol.toUpperCase()))
-              .map((asset) => tokenGlyph(asset.address, asset.symbol))
-              .join("");
-            return `<li class="review-call">${marks ? `<span class="review-call-assets">${marks}</span>` : ""}<span>${escapeHtml(summary)}</span></li>`;
-          })
-          .join("")}</ul>
-      </section>`;
+    : `<ul class="review-calls">${summaries
+        .map((summary) => {
+          const words = new Set(summary.toUpperCase().match(/[A-Z0-9.]+/gu) ?? []);
+          const marks = assets
+            .filter((asset) => words.has(asset.symbol.toUpperCase()))
+            .map((asset) => tokenGlyph(asset.address, asset.symbol))
+            .join("");
+          return `<li class="review-call">${marks ? `<span class="review-call-assets">${marks}</span>` : ""}<span>${escapeHtml(summary)}</span></li>`;
+        })
+        .join("")}</ul>`;
 
 /**
  * Renders risk-flag and insight lines inside the shared review panel. Returns an

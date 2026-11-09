@@ -7,10 +7,8 @@ import type {
 } from "../../../../src/popup/responses/multisig-responses";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import { multisigSignersFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
-import {
-  EMPTY_MULTISIG_PORTFOLIO,
-  multisigPortfolio,
-} from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
+import { multisigPortfolio } from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio";
+import { EMPTY_MULTISIG_PORTFOLIO } from "../../../../src/sidepanel/journeys/multisig/multisig-portfolio-data";
 import type { MultisigUiDeps } from "../../../../src/sidepanel/journeys/multisig/multisig-ui";
 import { SUBMISSION_UNKNOWN } from "../../../../src/sidepanel/runtime/friendly-error-shared";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";

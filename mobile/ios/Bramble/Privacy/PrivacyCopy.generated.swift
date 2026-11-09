@@ -26,6 +26,7 @@ enum PrivacyCopy {
     static let deploymentUnchecked = "Account deployment could not be checked. Try again."
     static let detailGoPrivate = "Go private"
     static let detailShield = "Shield"
+    static let detailShieldFirst = "Shield"
     static let detailUnshield = "Unshield"
     static let fundsRequired = "Deposit some STRK, then come back"
     static let headerJourney = "Go private"

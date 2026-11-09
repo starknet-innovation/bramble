@@ -11,7 +11,6 @@
  * decision instead of substituting its own figure.
  */
 
-import { sameFeeEstimate } from "@bramble/starknet/fee-bounds";
 import {
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,
@@ -24,7 +23,7 @@ import {
   matchesStrk20DisclosureKind,
   type Strk20DisclosureApprovalKind,
 } from "../privacy/strk20-approval-types";
-import { executeAddChainApproval } from "../provider/add-chain-ops";
+import { MULTISIG_PROPOSAL_SAVED } from "../provider/multisig-dapp-invoke";
 import { executeInvokeApproval } from "../provider/provider-ops";
 import { readApprovalIdInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -36,11 +35,17 @@ import { type ApplyResult, type ApproveDecision, reject, settleExecutor } from "
 import { settleClaimError, validateClaimContext } from "./approval-claim-context";
 import type { ApprovalDecisionDeps } from "./approval-decision-deps";
 import { pendingFeeRefusal, pendingGaslessRefusal } from "./approval-fee-refusal";
+import { heldInvoke, invokeExecutionDeps } from "./approval-invoke-execution";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { approvalSession } from "./approval-session";
-import { applyWatchAssetApproval, WATCH_ASSET_TRACKED_RESPONSE } from "./approval-watch-asset";
+import {
+  applyWatchAssetApproval,
+  applyWatchNftApproval,
+  WATCH_ASSET_TRACKED_RESPONSE,
+} from "./approval-watch-asset";
 import type { ApprovalClaim, ApprovalKind, PendingApproval } from "./approvals";
 import { applyGaslessInvoke } from "./gasless-approval";
+import { grantPresentedMultisig } from "./multisig-connect";
 import { DROPPED_APPROVAL_RESPONSE } from "./signature-waiters";
 
 /**
@@ -61,7 +66,9 @@ type ApproveApplier = (
 ) => Promise<ApplyResult>;
 
 const applyWatchAsset: ApproveApplier = (deps, { approval }) =>
-  applyWatchAssetApproval(deps.preferencesStore, approval);
+  approval.nft
+    ? applyWatchNftApproval(deps, approval)
+    : applyWatchAssetApproval(deps.preferencesStore, approval);
 
 const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision) => {
   if (!payload) {
@@ -70,43 +77,23 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
   if (decision.gaslessFee) {
     return applyGaslessInvoke(deps, approval, payload, decision);
   }
-  const reviewedFee = decision.reviewedFee;
-  if (
-    !reviewedFee ||
-    !approval.fee ||
-    approval.feeEstimateFailed === true ||
-    approval.feeEstimatePending === true
-  ) {
-    return reject(FEE_REVIEW_REQUIRED);
-  }
-  // The ceiling is the figure the clicking surface says it was displaying, and
-  // it only binds if the queue still agrees with it. A fee slot can be replaced
-  // between paint and click — a retry pressed on a second open wallet surface
-  // re-estimates the same approval — so a card that has not repainted since
-  // would otherwise consent to a snapshot it never showed. A moved figure is
-  // refused rather than substituted: the honest answer is "re-review", not a
-  // ceiling of the wallet's own choosing.
-  if (reviewedFee && !(approval.fee && sameFeeEstimate(reviewedFee, approval.fee))) {
-    return reject({ error: "the fee changed since this request was reviewed" });
-  }
+  // The echo must equal the total the card displayed (see pendingFeeRefusal).
+  // What binds submission is each component at its own boundary: the invoke
+  // fee, and the deployment fee when the account deploys first.
+  const feeRefusal = pendingFeeRefusal(approval, decision.reviewedFee);
+  if (feeRefusal) return reject(feeRefusal);
+  if (!approval.fee) return reject(FEE_REVIEW_REQUIRED);
   const result = await executeInvokeApproval(
-    {
-      activity: deps.activity,
-      allowanceStore: deps.allowanceStore,
-      preferencesStore: deps.preferencesStore,
-      runtimeRpc: deps.runtimeRpc,
-      session: deps.session,
-      wallet: deps.wallet,
-      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
-      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
-    },
-    {
-      ...(approval.context === undefined ? {} : { context: approval.context }),
-      origin: approval.origin,
-      payload,
-      reviewedFee,
-    },
+    invokeExecutionDeps(deps),
+    heldInvoke(approval, payload, approval.fee),
   );
+  if ("error" in result && result.error === MULTISIG_PROPOSAL_SAVED) {
+    return {
+      respond: (listPending) => ({ ok: true, pending: listPending() }),
+      settle: result,
+      status: "settle",
+    };
+  }
   return settleExecutor(result);
 };
 
@@ -190,8 +177,10 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigGrants ? { multisigGrants: deps.multisigGrants } : {}),
       ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
       ...(deps.relaySignatures ? { relaySignatures: deps.relaySignatures } : {}),
+      runtimeRpc: deps.runtimeRpc,
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -214,6 +203,8 @@ const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => 
       preferencesStore: deps.preferencesStore,
       session: deps.session,
       wallet: deps.wallet,
+      ...(deps.multisigGrants ? { multisigGrants: deps.multisigGrants } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     { networkId: payload.networkId, origin: approval.origin },
   );
@@ -223,17 +214,6 @@ const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => 
     settle: result,
     status: "settle",
   };
-};
-
-const applyAddChain: ApproveApplier = async (deps, { payload }) => {
-  if (payload?.chain === undefined) {
-    return reject(NOT_FOUND);
-  }
-  const result = await executeAddChainApproval(
-    { preferencesStore: deps.preferencesStore },
-    { chain: payload.chain },
-  );
-  return settleExecutor(result);
 };
 
 const applyDeclare: ApproveApplier = async (deps, { approval, payload }, decision) => {
@@ -254,6 +234,8 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }, decisio
       session: deps.session,
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+      ...(deps.multisigGrants ? { multisigGrants: deps.multisigGrants } : {}),
+      ...(deps.multisigStore ? { multisigStore: deps.multisigStore } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -274,6 +256,14 @@ const applyConnect: ApproveApplier = async (deps, { approval }, decision) => {
     if (!passphrase || !authorized.isCurrent()) {
       return reject({ error: "wallet locked" });
     }
+    const presented = await grantPresentedMultisig(
+      deps,
+      approval.origin,
+      decision.reviewedAccountId,
+      passphrase,
+      authorized.isCurrent,
+    );
+    if (presented) return presented;
     // The grant goes to the account the card named, never to whichever account
     // happens to be active when the click lands: the user can switch accounts
     // in the panel while a prompt is open, and a grant that followed the switch
@@ -321,7 +311,6 @@ const applyStrk20Unavailable: ApproveApplier = async (_deps, { payload }) =>
  * silent fall-through to the connection path.
  */
 const APPROVE_APPLIERS: Record<ApprovalKind, ApproveApplier> = {
-  "add-chain": applyAddChain,
   connect: applyConnect,
   declare: applyDeclare,
   invoke: applyInvoke,

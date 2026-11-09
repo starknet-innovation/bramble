@@ -5,138 +5,16 @@
  * and an unconfigured indexer yields an empty gallery.
  */
 import { describe, expect, test } from "bun:test";
-import { type ArgentMultisigRecord, memoryMultisigStore } from "@bramble/multisig/repository";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import { createHttpNftIndexer } from "@bramble/portfolio/nft-indexer";
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { NftTokenMetadata } from "@bramble/portfolio/nft-token-metadata";
-import { createPreferencesStore } from "@bramble/settings/preferences";
 import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import { createMemoryStore } from "@bramble/store/kv";
-import type { Vault } from "@bramble/vault/schema";
-import type { AccountRef } from "@bramble/wallet-model/accounts";
-import {
-  createNftSnapshotStore,
-  type NftSnapshotStore,
-} from "../../../apps/extension/src/background/portfolio/nft-snapshots";
-import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
-import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
-import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
-import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { testExtension } from "../../support/background-wallet-stub";
-import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
-
-const account: AccountRef = {
-  accountContractType: "openzeppelin",
-  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  networkId: "SN_MAIN",
-  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-};
-const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
-const vaultPassphrase = "correct horse battery staple";
-const sender: RuntimeSender = {
-  id: "extension-id",
-  url: "chrome-extension://extension-id/sidepanel.html",
-};
-
-const walletStub = {
-  async addDerivedAccount() {
-    return account;
-  },
-  async createAccount() {
-    return account;
-  },
-  async ensureNetworkAccount() {
-    return account;
-  },
-  async getGrantedAccounts() {
-    return [account];
-  },
-  async generateMnemonic() {
-    return "unused";
-  },
-  async grantOrigin() {
-    return [account];
-  },
-  async readVault() {
-    return vault;
-  },
-  async setActiveAccount() {
-    return account;
-  },
-  async signHash() {
-    return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
-  },
-  async status() {
-    return {
-      accountCount: 1,
-      activeAccountId: account.id,
-      hasVault: true,
-      locked: false,
-      ready: false,
-    };
-  },
-};
-
-const candidate = (tokenId: string, contract: string): DiscoveredNft => ({
-  collection: "Punks",
-  contract,
-  id: `SN_MAIN:${contract}:${tokenId}`,
-  image: "https://cdn.example/a.png",
-  name: `Punk #${tokenId}`,
-  networkId: "SN_MAIN",
-  tokenId,
-});
-
-const makeHandler = (options: {
-  readonly candidates: readonly DiscoveredNft[];
-  readonly getNftMetadata?: NonNullable<RuntimeRpc["getNftMetadata"]>;
-  readonly indexerFails?: boolean;
-  readonly nftSnapshots?: NftSnapshotStore;
-  readonly now?: () => number;
-  readonly owners: Readonly<Record<string, string>>;
-}) => {
-  const session = createUnlockSession();
-  session.unlock(vaultPassphrase);
-  const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const multisigStore = memoryMultisigStore();
-  let indexerCalls = 0;
-  const indexedAddresses: string[] = [];
-  const handler = createMessageHandler(walletStub, testExtension, {
-    multisigStore,
-    ...(options.nftSnapshots ? { nftSnapshots: options.nftSnapshots } : {}),
-    ...(options.now ? { now: options.now } : {}),
-    preferencesStore,
-    runtimeRpc: makeRuntimeRpc({
-      ...(options.getNftMetadata ? { getNftMetadata: options.getNftMetadata } : {}),
-      async getNftOwner({ contractAddress }) {
-        const owner = options.owners[contractAddress];
-        if (!owner) {
-          throw new Error("owner_of reverted");
-        }
-        return owner;
-      },
-      nftIndexer: {
-        async listOwnedNfts(input) {
-          indexerCalls += 1;
-          if (options.indexerFails) throw new Error("offline");
-          indexedAddresses.push(input.address);
-          return options.candidates;
-        },
-      },
-    }),
-    session,
-  });
-  return {
-    handler,
-    indexedAddresses,
-    indexerCalls: () => indexerCalls,
-    multisigStore,
-    preferencesStore,
-  };
-};
+import { createStarkscanClient } from "@bramble/transactions/starkscan";
+import { createStarkscanNftSource } from "@bramble/transactions/starkscan-nfts";
+import { createNftSnapshotStore } from "../../../apps/extension/src/background/portfolio/nft-snapshots";
+import { account, candidate, makeHandler, sender } from "../../support/nft-discovery-harness";
 
 describe("NFT auto-discovery messages", () => {
   test("serves a durable ownership snapshot and refreshes stale data once", async () => {
@@ -156,6 +34,7 @@ describe("NFT auto-discovery messages", () => {
 
     now += 120_000;
     await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual({
+      coverage: "none",
       nfts: [owned],
       ok: true,
     });
@@ -184,10 +63,37 @@ describe("NFT auto-discovery messages", () => {
     });
 
     await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual({
+      coverage: "none",
       nfts: [owned],
       ok: true,
     });
     await handler({ type: "wallet.discoverNfts" }, sender);
+    expect(indexerCalls()).toBe(1);
+  });
+
+  test("a failed refresh no longer claims a cached complete list is whole", async () => {
+    const snapshots = createNftSnapshotStore(createMemoryStore());
+    const owned = candidate("5", "0x511a2b3");
+    await snapshots.write({
+      accountId: account.id,
+      checkedAt: 1,
+      coverage: "complete",
+      fetchedAt: 1,
+      lane: "complete",
+      networkId: "SN_MAIN",
+      nfts: [owned],
+    });
+    const { handler, indexerCalls } = makeHandler({
+      candidates: [],
+      indexerFails: true,
+      nftSnapshots: snapshots,
+      now: () => 200_000,
+      owners: {},
+    });
+    const stale = { coverage: "incomplete", nfts: [owned], ok: true } as const;
+    await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual(stale);
+    // During the retry backoff the cached answer keeps saying so.
+    await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual(stale);
     expect(indexerCalls()).toBe(1);
   });
 
@@ -204,15 +110,37 @@ describe("NFT auto-discovery messages", () => {
       },
     });
     const response = await handler({ type: "wallet.discoverNfts" }, sender);
-    expect(response).toEqual({ nfts: [owned], ok: true });
+    expect(response).toEqual({ coverage: "none", nfts: [owned], ok: true });
   });
 
   test("an unconfigured indexer yields an empty gallery", async () => {
     const { handler } = makeHandler({ candidates: [], owners: {} });
     await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual({
+      coverage: "none",
       nfts: [],
       ok: true,
     });
+  });
+
+  test("NFTs are on by default; turned off, no indexer or Starkscan runs", async () => {
+    const asked: Array<string | null> = [];
+    const { handler, preferencesStore } = makeHandler({
+      candidates: [],
+      nftIndexer: {
+        async listOwnedNfts(input) {
+          asked.push(`${input.indexerUrl}|${input.starkscan}`);
+          return { coverage: "none", nfts: [] };
+        },
+      },
+      owners: {},
+    });
+    await preferencesStore.setNftIndexerUrl({ url: "https://indexer.example" });
+    // Nothing stored: NFTs are on, so the saved indexer is used.
+    await handler({ type: "wallet.discoverNfts" }, sender);
+    // The user turns NFTs off: nothing may be asked.
+    await preferencesStore.setDisplay({ collectiblesPreview: false });
+    await handler({ includeWatched: false, type: "wallet.discoverNfts" }, sender);
+    expect(asked).toEqual(["https://indexer.example|true", "null|false"]);
   });
 
   test("scopes shared-account discovery to a watched multisig address", async () => {
@@ -232,7 +160,7 @@ describe("NFT auto-discovery messages", () => {
 
     await expect(
       handler({ multisigId: shared.id, type: "wallet.discoverNfts" }, sender),
-    ).resolves.toEqual({ nfts: [owned], ok: true });
+    ).resolves.toEqual({ coverage: "none", nfts: [owned], ok: true });
     expect(indexedAddresses).toEqual([shared.address]);
   });
 
@@ -274,6 +202,7 @@ describe("NFT auto-discovery messages", () => {
     const response = await handler({ type: "wallet.discoverNfts" }, sender);
 
     expect(response).toEqual({
+      coverage: "none",
       nfts: [
         {
           attributes: metadata.attributes,
@@ -368,7 +297,7 @@ describe("NFT auto-discovery messages", () => {
 
     await expect(
       handler({ includeWatched: false, type: "wallet.discoverNfts" }, sender),
-    ).resolves.toEqual({ nfts: [unsolicited], ok: true });
+    ).resolves.toEqual({ coverage: "none", nfts: [unsolicited], ok: true });
     expect(metadataCalls).toBe(0);
   });
 
@@ -385,10 +314,113 @@ describe("NFT auto-discovery messages", () => {
     });
 
     await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual({
+      coverage: "none",
       nfts: [owned],
       ok: true,
     });
     expect(metadataCalls).toBe(0);
+  });
+
+  test("a failed ownership read makes a complete list incomplete", async () => {
+    const owned = candidate("5", "0x511a2b3");
+    const notOwned = candidate("9", "0x6220000");
+    const unreadable = candidate("7", "0x7330000");
+    const run = async (candidates: readonly DiscoveredNft[]) => {
+      const { handler, preferencesStore } = makeHandler({
+        candidates,
+        // 0x7330000 is absent, so its owner read throws.
+        owners: { "0x511a2b3": account.address, "0x6220000": "0x999" },
+      });
+      await preferencesStore.setDisplay({ collectiblesPreview: true });
+      await preferencesStore.setNftIndexerUrl({ url: "https://indexer.example" });
+      return handler({ includeWatched: false, type: "wallet.discoverNfts" }, sender);
+    };
+    // Someone else owning a candidate is a real answer; the list stays complete.
+    await expect(run([owned, notOwned])).resolves.toEqual({
+      coverage: "complete",
+      nfts: [owned],
+      ok: true,
+    });
+    await expect(run([owned, unreadable])).resolves.toEqual({
+      coverage: "incomplete",
+      nfts: [owned],
+      ok: true,
+    });
+  });
+
+  test("Starkscan candidates are shown only once the chain proves ownership", async () => {
+    const requested: string[] = [];
+    let now = 1_000;
+    const page = {
+      chainId: "SN_MAIN",
+      coverage: {
+        completeWithinScope: false,
+        declaredScope: "indexed_standard_erc721_transfers",
+        globallyComplete: false,
+        indexedFromBlock: 0,
+        indexedThroughBlock: 10,
+        reasonCodes: ["indexed_history_floor"],
+        status: "partial",
+      },
+      hasMore: false,
+      items: ["0x511a2b3", "0x6220000"].map((tokenAddress) => ({
+        collection: { metadataStatus: "indexed", name: "Punks", symbol: null },
+        evidenceSource: "indexed_erc721_ownership",
+        lastTransferHash: "0x1",
+        observedAtBlock: 1,
+        standard: "erc721",
+        tokenAddress,
+        tokenId: "5",
+      })),
+      nextCursor: null,
+      ownerAddress: account.address,
+      schemaVersion: "starkscan.nft_positions.v1",
+      snapshotBlock: 10,
+    };
+    // The wallet's existing Starkscan client, with only its transport faked.
+    const client = createStarkscanClient({
+      baseUrl: "https://starkscan.co/v1",
+      http: async (url) => {
+        requested.push(url);
+        return new Response(JSON.stringify(page));
+      },
+    });
+    const { handler, preferencesStore } = makeHandler({
+      candidates: [],
+      nftIndexer: createHttpNftIndexer(
+        async () => {
+          throw new Error("no custom indexer is saved");
+        },
+        createStarkscanNftSource({ client, readPreferences: async () => ({}) }),
+      ),
+      nftSnapshots: createNftSnapshotStore(createMemoryStore()),
+      now: () => now,
+      // Starkscan lists both; the chain says the second belongs to someone else.
+      owners: { "0x511a2b3": account.address, "0x6220000": "0x999" },
+    });
+    const message = { includeWatched: false, type: "wallet.discoverNfts" };
+    // NFTs turned off: Starkscan is never asked.
+    await preferencesStore.setDisplay({ collectiblesPreview: false });
+    await expect(handler(message, sender)).resolves.toEqual({
+      coverage: "none",
+      nfts: [],
+      ok: true,
+    });
+    expect(requested).toEqual([]);
+    // Back on by default once the user turns them on again.
+    await preferencesStore.setDisplay({ collectiblesPreview: true });
+    now += 120_000;
+    const expected = {
+      coverage: "incomplete",
+      nfts: [expect.objectContaining({ contract: "0x511a2b3", tokenId: "5" })],
+      ok: true,
+    } as const;
+    await expect(handler(message, sender)).resolves.toEqual(expected);
+    // The cached answer keeps saying the list is incomplete.
+    await expect(handler(message, sender)).resolves.toEqual(expected);
+    expect(requested).toEqual([
+      `https://starkscan.co/v1/SN_MAIN/address/${account.address}/nft-positions?limit=100`,
+    ]);
   });
 
   test("rejects a malformed discover request", async () => {

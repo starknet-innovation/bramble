@@ -229,7 +229,7 @@ describe("NFT transfer receipt", () => {
 
     expect(app.querySelector("#nft-success-title")?.textContent).toBe("Transfer complete");
     expect(app.querySelector("#nft-success-description")?.textContent).toBe(
-      "The collectible is now held by the recipient.",
+      "The NFT is now held by the recipient.",
     );
     expect(receipt?.classList.contains("send-success")).toBe(true);
     expect(receipt?.querySelector('[data-outcome-mark="succeeded"]')?.hasAttribute("hidden")).toBe(

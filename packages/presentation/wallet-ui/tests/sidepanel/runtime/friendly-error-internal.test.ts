@@ -90,7 +90,11 @@ describe("reviewed plumbing", () => {
 
 describe("Ledger device rejections", () => {
   test("a rejection code reads as the device catalog's own sentence, whatever the context", () => {
-    for (const code of ["rejected-on-device", "device-locked", "blind-signing-disabled"] as const) {
+    for (const code of [
+      "rejected-on-device",
+      "device-locked",
+      "rejected-or-blind-signing-off",
+    ] as const) {
       expect(friendlyError(code).message).toBe(ledgerMessage(code));
       expect(friendlyError(code, ADD_ACCOUNT).message).toBe(ledgerMessage(code));
     }
@@ -173,6 +177,34 @@ describe("STRK20 (review F1, F2)", () => {
     expect(friendlyError("strk20 services unavailable (rate limited; retry shortly)").message).toBe(
       "This service is rate limiting requests. Wait a moment and try again.",
     );
+  });
+
+  test("a privacy service's outage reads as unavailable and keeps its diagnostic (mc-wallet 723)", () => {
+    for (const cause of [
+      'Indexer API /v1/sync/preflight_check failed (502): {"error":"upstream_unavailable"}',
+      "Indexer API /v1/sync/incoming_state failed (503)",
+      "Indexer API /v1/history failed (504): gateway timeout",
+      'Indexer API /v1/sync/outgoing_state failed (500): {"error":"upstream_unavailable"}',
+    ]) {
+      expect(friendlyError(`strk20 services unavailable: ${cause}`).message).toBe(
+        `${STRK20_DOWN} (${cause})`,
+      );
+    }
+  });
+
+  test("a privacy service's 4xx refusal and other causes keep their words", () => {
+    for (const raw of [
+      'strk20 services unavailable: Indexer API /v1/sync/preflight_check failed (400): {"error":"bad_request"}',
+      "strk20 services unavailable: Indexer API /v1/history failed (404)",
+      "strk20 services unavailable: Indexer API /v1/history failed (501)",
+      "strk20 services unavailable: Indexer API /v1/history failed (5020)",
+      "strk20 services unavailable: unexpected discovery response shape",
+      // A stage error's catch-all keeps its words even with an outage detail:
+      // at submission a 5xx can mean the outcome is unknown.
+      "strk20 services unavailable (submission/service-unavailable): relay failed (503)",
+    ]) {
+      expect(friendlyError(raw).message).toBe(raw);
+    }
   });
 
   test("a privacy-leak refusal says so, in every form, never 'may not have gone through'", () => {

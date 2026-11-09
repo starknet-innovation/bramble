@@ -161,7 +161,8 @@ rules, and returns a summary and an action:
 | `None` | ineligible network, or a failed read | nothing |
 | `Shield` | known undeployed, funded or not | "Shield" → journey → deploy or fund blocker, deploy suppressed as on the tile |
 | `ShieldUnshield` | registered | "Shield" and "Unshield" shown, disabled, with the Unsupported note |
-| `GoPrivate` | otherwise | "Go private" → journey |
+| `ShieldFirst` | deployed and unregistered | one "Shield" (the extension's first shield registers in the same transaction, 789), shown disabled with the Unsupported note |
+| `GoPrivate` | otherwise (deployment unknown, or not yet settled) | "Go private" → journey |
 
 Both are pinned in fixture 5 through the extension's `tokenDetailFlow`. Mobile has no token-detail
 screen on this branch (the portfolio workstream owns it), so the section ships as

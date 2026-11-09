@@ -47,6 +47,11 @@ export const createSettingsRuntimeClient = (
     }
     throw responseError(response, "address save failed");
   },
+  async setSelectedMultisig(multisigId: string | null): Promise<void> {
+    const response = await sendMessage({ multisigId, type: "wallet.setSelectedMultisig" });
+    if (isPreferencesResponse(response)) return;
+    throw responseError(response, "account switch failed");
+  },
   async setActiveAccount(accountId: string): Promise<void> {
     const response = await sendMessage({ accountId, type: "wallet.setActiveAccount" });
     if (isCreateAccountResponse(response)) {
@@ -77,10 +82,12 @@ export const createSettingsRuntimeClient = (
   },
   async setDisplay(input: {
     readonly approvalSurface?: "popup" | "side-panel";
+    readonly collectiblesPreview?: boolean;
     readonly displayCurrency?: "eur" | "gbp" | "usd";
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: "dark" | "light";
+    readonly vipNotice?: boolean;
   }): Promise<void> {
     const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
     if (isPreferencesResponse(response)) {

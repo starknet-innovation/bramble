@@ -44,11 +44,9 @@ import {
   isFeeReplacementIntent,
   multisigDisplayName,
 } from "./multisig-model";
-import {
-  EMPTY_MULTISIG_PORTFOLIO,
-  type MultisigPortfolioData,
-  multisigPortfolio,
-} from "./multisig-portfolio";
+import { multisigPortfolio } from "./multisig-portfolio";
+import { EMPTY_MULTISIG_PORTFOLIO, type MultisigPortfolioData } from "./multisig-portfolio-data";
+import { multisigStrk20KeyPanel } from "./multisig-strk20-key-view";
 
 export { multisigDeployFlow } from "./multisig-deploy-view";
 export { multisigDisplayName } from "./multisig-model";
@@ -408,7 +406,7 @@ export const multisigDetailFlow = (
       flowHeader(multisigDisplayName(record), status, configLabel(view)) +
       flowScreen(
         screen,
-        `<section class="section multisig-review-flow">${authorityWarning}${intentList(record, view, intents, status, preferences, selectedIntentId)}</section><p id="multisig-detail-result" role="status"></p>`,
+        `<section class="section multisig-review-flow">${authorityWarning}${intentList(record, view, intents, status, preferences, selectedIntentId)}${multisigStrk20KeyPanel(record.networkId, preferences, portfolio)}</section><p id="multisig-detail-result" role="status"></p>`,
       )
     );
   }

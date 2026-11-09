@@ -21,19 +21,14 @@ import {
   type AllowanceListing,
   type DiscoveredNft,
   EMPTY_ALLOWANCE_LISTING,
+  type NftCoverage,
   type PendingApproval,
   type SignabilityVerdict,
   type TokenBalance,
   type WalletStatus,
 } from "../../../popup/responses/responses";
 import { actionableApprovals, approvalTakeover } from "../../journeys/approvals/approval-screen";
-import { nftSendFlow } from "../../journeys/collectibles/nft-send-view";
-import {
-  nftDetailFlow,
-  nftGalleryFlow,
-  nftHiddenFlow,
-  nftWatchFlow,
-} from "../../journeys/collectibles/nft-views";
+import { collectibleJourneyScreen } from "../../journeys/collectibles/nft-screens";
 import {
   multisigAddFlow,
   multisigReceiveFlow,
@@ -41,7 +36,7 @@ import {
   multisigTrackFlow,
   multisigWatchFlow,
 } from "../../journeys/multisig/multisig-management-views";
-import type { MultisigPortfolioData } from "../../journeys/multisig/multisig-portfolio";
+import type { MultisigPortfolioData } from "../../journeys/multisig/multisig-portfolio-data";
 import {
   multisigDeployFlow,
   multisigDetailFlow,
@@ -67,6 +62,11 @@ import { privacyFlow } from "../../journeys/privacy/privacy-views";
 import type { SendIntent } from "../../journeys/send/send-model";
 import { revealFlow } from "../../journeys/settings/reveal-ui";
 import { settingsScreen } from "../../journeys/settings/settings-views";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
+import { canStakeToken } from "../../journeys/staking/staking-entry";
 import type { BalanceState } from "../../runtime/runtime";
 import { networkDataIssue, privacyDataIssue } from "../../shared/network-status";
 import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "../../shared/parts";
@@ -87,6 +87,7 @@ type JourneyContext = {
   readonly chart: readonly number[];
   readonly currency: DisplayCurrency;
   readonly discoveredNfts: readonly DiscoveredNft[];
+  readonly nftCoverage: NftCoverage;
   readonly multisigClassDeclared: boolean | "error" | null;
   readonly multisigPortfolio: MultisigPortfolioData;
   readonly multisigIntents: readonly ArgentMultisigSigningIntent[];
@@ -97,6 +98,7 @@ type JourneyContext = {
   readonly prices: Readonly<Record<string, number>>;
   readonly privacy: PrivacyDisclosureState;
   readonly privacyJourney: PrivacyJourneyState;
+  readonly staking: StakingState;
   /** A pre-configured send from a shield or unshield shortcut. */
   readonly sendIntent?: SendIntent | null;
   readonly selectedMultisigId: string | null;
@@ -176,49 +178,6 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
     : multisigProposeFlow(context.status, selected, context.preferences, context.multisigPortfolio);
 };
 
-const collectibleJourneyScreen = (
-  activeView: WalletView,
-  context: JourneyContext,
-): string | null => {
-  if (activeView === "nfts") {
-    return nftGalleryFlow(
-      context.status,
-      context.account,
-      context.preferences,
-      context.discoveredNfts,
-    );
-  }
-  if (activeView === "nft-watch") {
-    return nftWatchFlow(context.status, context.account);
-  }
-  if (activeView === "nft-hidden") {
-    return nftHiddenFlow(
-      context.status,
-      context.preferences,
-      context.account,
-      context.discoveredNfts,
-    );
-  }
-  if (activeView === "nft-detail") {
-    return nftDetailFlow(
-      context.status,
-      context.account,
-      context.preferences,
-      context.selectedNftId,
-      context.discoveredNfts,
-    );
-  }
-  return activeView === "nft-send"
-    ? nftSendFlow(
-        context.status,
-        context.account,
-        context.preferences,
-        context.selectedNftId,
-        context.discoveredNfts,
-      )
-    : null;
-};
-
 const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): string | null => {
   if (activeView === "tokens") {
     return tokensFlow(
@@ -261,6 +220,7 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.currency,
     context.privacy,
     context.deployment,
+    canStakeToken(context.status.networkId, token, context.staking),
   );
 };
 
@@ -312,6 +272,8 @@ export const dashboard = (
   signability: SignabilityVerdict | null = null,
   relays: readonly RelaySignature[] = [],
   privateTotalWaitOver = false,
+  staking: StakingState = STAKING_LOADING,
+  nftCoverage: NftCoverage = "none",
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -328,6 +290,7 @@ export const dashboard = (
     currency,
     fundedForFees,
     discoveredNfts,
+    nftCoverage,
     multisigClassDeclared,
     multisigPortfolio: {
       balances: selectedPortfolioBalances,
@@ -347,6 +310,7 @@ export const dashboard = (
     selectedNftId,
     selectedTokenId,
     ...(sendIntent ? { sendIntent } : {}),
+    staking,
     status,
     trackedBalances,
   };
@@ -354,15 +318,17 @@ export const dashboard = (
   // regardless of which dock or flow screen was previously open. The user may
   // explicitly snooze it back to Activity after seeing it.
   const actionable = actionableApprovals(pending, snoozedApprovalIds);
+  const connectPicker = { multisigs, selectedMultisigId };
   if (actionable.length > 0) {
-    return approvalTakeover(actionable, status, activeView, preferences);
+    return approvalTakeover(actionable, status, activeView, preferences, connectPicker);
   }
   if (activeView === "requests") {
-    return requestsFlow(pending, status, preferences);
+    return requestsFlow(pending, status, preferences, connectPicker);
   }
   const simpleFlow = simpleFlowScreen(activeView, {
     account,
     allowances,
+    staking,
     balances: trackedBalances,
     changes,
     classHashVerification,
@@ -467,6 +433,8 @@ export const dashboard = (
               privacy,
               signability,
               privateTotalWaitOver,
+              staking,
+              { coverage: nftCoverage, discovered: discoveredNfts },
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity?.record, networkIssue || null)}

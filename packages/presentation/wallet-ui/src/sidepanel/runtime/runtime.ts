@@ -36,6 +36,9 @@ import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
 import { createPrivacyUnlockClient } from "../journeys/privacy/privacy-unlock-runtime";
 import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
+import { createStakingRuntimeClient } from "../journeys/staking/staking-client";
+import { createStakingDirectoryRuntimeClient } from "../journeys/staking/staking-directory-client";
+import { createStakingPositionsRuntimeClient } from "../journeys/staking/staking-positions-client";
 import { createSidePanelNoticeClient } from "../shell/side-panel-notice";
 import { createUpdateClient } from "../shell/update-banner";
 import type { RuntimeApi, ScopedBalanceState } from "./runtime-types";
@@ -87,6 +90,9 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createDeployRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
     ...createLookupRuntimeClient(sendMessage),
+    ...createStakingRuntimeClient(sendMessage),
+    ...createStakingDirectoryRuntimeClient(sendMessage),
+    ...createStakingPositionsRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {

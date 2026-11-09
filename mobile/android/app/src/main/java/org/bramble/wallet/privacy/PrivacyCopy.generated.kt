@@ -26,6 +26,7 @@ object PrivacyCopy {
     const val deploymentUnchecked = "Account deployment could not be checked. Try again."
     const val detailGoPrivate = "Go private"
     const val detailShield = "Shield"
+    const val detailShieldFirst = "Shield"
     const val detailUnshield = "Unshield"
     const val fundsRequired = "Deposit some STRK, then come back"
     const val headerJourney = "Go private"

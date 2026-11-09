@@ -70,6 +70,14 @@ BRAMBLE_MOBILE_MAINNET_MNEMONIC="…" BRAMBLE_MOBILE_MAINNET_ADDRESS=0x… \
   cargo test --locked --test mainnet -- --ignored
 ```
 
+Opt-in check against the Sepolia vendor-import dataset (`tools/vendor-dataset/`, issue 821): imports
+each phrase from the git-ignored `.env.vendor-seeds.local` (or `BRAMBLE_DATASET_ENV_FILE`), scans
+Sepolia, and fails if any D1 fixture is missed. Read-only, never in CI, about 10 minutes:
+
+```bash
+cargo test --locked --test sepolia_dataset -- --ignored --nocapture
+```
+
 ## iOS
 
 Needs Xcode 16+, XcodeGen, and the `aarch64-apple-ios` / `aarch64-apple-ios-sim` Rust targets.

@@ -205,6 +205,10 @@ describe("balance snapshots", () => {
       async loadWatchedNfts() {
         return [];
       },
+      // Home's Staking tab reads "Your stakes"; off here, so it adds no reads.
+      async loadStakingPositions() {
+        return { off: true };
+      },
     };
     const deployment = createDeploymentCache(wallet as never, () => now);
     const signability = createSignabilityCache(wallet as never, () => now);

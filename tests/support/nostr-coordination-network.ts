@@ -32,6 +32,9 @@ export const coordinationNetwork = () => {
       );
     },
   };
+  // Wraps are stamped just before the 2_000_000_000_000 ms clock most suites
+  // use, so a wrap's age reads the way a live relay's would.
+  const createdAtBase = 1_999_990_000;
   let sequence = 0;
   const identity = (publicKey: string) => ({
     async open(eventJson: string): Promise<NostrApplicationData> {
@@ -55,7 +58,7 @@ export const coordinationNetwork = () => {
           identifier: input.identifier,
           senderPublicKey: publicKey,
         }),
-        created_at: sequence,
+        created_at: createdAtBase + sequence,
         id: sequence.toString(16).padStart(64, "0"),
         kind: 1_059,
         pubkey: "33".repeat(32),

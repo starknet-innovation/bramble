@@ -60,6 +60,35 @@ describe("invoke approval card (A-H1)", () => {
     expect(html).toContain('data-approval-kind="invoke" data-approval-action="approve"');
   });
 
+  // A multisig proposal says what the calls do and that they are saved for the
+  // other signers under one "What will happen" heading, not two in a row.
+  const headings = (html: string): number => html.split(">What will happen</p>").length - 1;
+  const SAVED = "Saves this for the other signers. It is not sent yet.";
+
+  test("a multisig proposal keeps every line under one What will happen", () => {
+    const html = activity([{ ...invoke, multisigThreshold: 2 }]);
+    expect(headings(html)).toBe(1);
+    expect(html).toContain("Send 1000 units to 0x0005…0005");
+    expect(html).toContain(SAVED);
+    expect(html.indexOf("Send 1000 units")).toBeLessThan(html.indexOf(SAVED));
+  });
+
+  test("a multisig proposal with no decoded calls keeps both sentences under one heading", () => {
+    const { summaries: _summaries, ...bare } = invoke;
+    const html = activity([{ ...bare, multisigThreshold: 2 }]);
+    expect(headings(html)).toBe(1);
+    expect(html).toContain("Sign and submit the decoded transaction from the active account.");
+    expect(html).toContain(SAVED);
+  });
+
+  test("a single-owner invoke reads as before, without the multisig line", () => {
+    const html = activity([invoke]);
+    expect(headings(html)).toBe(1);
+    expect(html).not.toContain(SAVED);
+    const one = activity([{ ...invoke, multisigThreshold: 1 }]);
+    expect(one).not.toContain(SAVED);
+  });
+
   test("disables approve while the wallet is locked", () => {
     const locked = dashboard("activity", { ...status, locked: true }, [invoke], preferences, {
       balances: [],
@@ -159,10 +188,61 @@ describe("invoke approval card fee review (#189)", () => {
     );
   });
 
-  test("an undeployed account reuses the Send wording instead of a fee amount", () => {
-    const undeployed: PendingApproval = { ...withFee, fee: null, requiresDeployment: true };
-    expect(activity([undeployed])).toContain(
-      "The network fee is estimated once this account is deployed.",
+  // Issue 851: an undeployed account shows one total, and Approve echoes it.
+  const undeployed: PendingApproval = {
+    ...withFee,
+    context: {
+      accountId: account.id,
+      chainId: "0x534e5f4d41494e",
+      networkId: "SN_MAIN",
+      payloadDigest: `sha256:${"a".repeat(64)}`,
+    },
+    deploymentFee: { overallFee: "1500000000000000", unit: "FRI" },
+    deploymentFeeEstimateFailed: false,
+    requiresDeployment: true,
+  };
+
+  test("an undeployed account shows the combined total and Approve echoes it", () => {
+    const html = activity([undeployed]);
+    expect(html).toContain("Estimated fee: 0.004 STRK");
+    expect(html).toContain("Creating this account on Starknet is 0.0015 STRK of that.");
+    expect(html).not.toContain("estimated once this account is deployed");
+    expect(html).toContain('data-approval-fee="4000000000000000"');
+    expect(html).not.toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
+    );
+  });
+
+  test("an undeployed Ledger account is told it signs twice", () => {
+    const ledger = {
+      ...account,
+      derivation: {
+        accountIndex: 0,
+        eip2645application: "LedgerW",
+        kind: "ledger",
+        path: "m/2645'/1195502025'/734980059'/0'/0'/0",
+      },
+    } as WalletStatus["accounts"][number];
+    const html = dashboard(
+      "activity",
+      { ...status, accounts: [ledger] },
+      [undeployed],
+      preferences,
+      {
+        balances: [],
+      },
+    );
+    expect(html).toContain("and your Ledger asks to sign both");
+  });
+
+  test("an unpriced deployment offers retry and keeps Approve disabled", () => {
+    const html = activity([
+      { ...undeployed, deploymentFee: null, deploymentFeeEstimateFailed: true },
+    ]);
+    expect(html).toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
+    expect(html).not.toContain("data-approval-fee=");
+    expect(html).toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
     );
   });
 });

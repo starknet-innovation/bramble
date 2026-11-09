@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createPreferencesStore,
   defaultWalletPreferences,
+  nftsShown,
   PREFERENCES_STORE_KEY,
 } from "@bramble/settings/preferences";
 import { createMemoryStore } from "@bramble/store/kv";
@@ -13,6 +14,33 @@ import { createMemoryStore } from "@bramble/store/kv";
 const CONTRACT = "0x051a2b3c4d";
 
 describe("preferences NFT tracking", () => {
+  test("NFTs are on until the user turns them off, and an explicit off is kept", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+    expect((await preferences.read()).collectiblesPreview).toBeUndefined();
+    expect(nftsShown(await preferences.read())).toBe(true);
+    expect(nftsShown(null)).toBe(false);
+    expect(nftsShown(undefined)).toBe(false);
+    await preferences.setDisplay({ collectiblesPreview: true });
+    expect((await preferences.read()).collectiblesPreview).toBe(true);
+    await preferences.setDisplay({ theme: "light" });
+    expect((await preferences.read()).collectiblesPreview).toBe(true);
+    await preferences.setDisplay({ collectiblesPreview: false });
+    expect((await preferences.read()).collectiblesPreview).toBe(false);
+    expect(nftsShown(await preferences.read())).toBe(false);
+    // An unrelated write never turns a stored "off" back on.
+    await preferences.setDisplay({ theme: "dark" });
+    expect(nftsShown(await preferences.read())).toBe(false);
+    await expect(
+      preferences.setDisplay({ collectiblesPreview: "yes" as unknown as boolean }),
+    ).rejects.toThrow("Invalid display preference");
+    await store.set(
+      PREFERENCES_STORE_KEY,
+      JSON.parse(JSON.stringify({ ...defaultWalletPreferences(), collectiblesPreview: "yes" })),
+    );
+    await expect(preferences.read()).rejects.toThrow();
+  });
+
   test("adds, spam-hides, and removes watched NFTs", async () => {
     const preferences = createPreferencesStore({ store: createMemoryStore() });
 

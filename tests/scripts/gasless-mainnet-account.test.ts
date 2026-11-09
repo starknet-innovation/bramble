@@ -15,7 +15,11 @@ import {
   loadGaslessMainnetAccount,
 } from "../../scripts/gasless-mainnet-account";
 import { receiptSucceeded, transferredAmount } from "../../scripts/gasless-mainnet-receipt";
-import { displayRpcUrl, selectMainnetRpc } from "../../scripts/gasless-mainnet-rpc";
+import {
+  displayRpcUrl,
+  requireCiMainnetRpc,
+  selectMainnetRpc,
+} from "../../scripts/gasless-mainnet-rpc";
 
 const KEY = "0x333333333333333333333333333333333333333333333333333333333333333";
 const ADDRESS = "0x1234";
@@ -117,6 +121,96 @@ describe("gasless mainnet RPC", () => {
     expect(chosen.url).toBe(STARKNET_NETWORKS.SN_MAIN.rpcUrls[0]);
     expect(chosen.note).toContain("http://wallet.nodes.starknet.org");
     expect(chosen.note).toContain("did not answer starknet_chainId");
+  });
+});
+
+describe("gasless mainnet RPC in Mainnet E2E CI", () => {
+  const SECRET = "https://rpc.example/v0_10/super-secret-key";
+  const mainnet = (): Promise<Response> =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({ id: 1, jsonrpc: "2.0", result: STARKNET_NETWORKS.SN_MAIN.chainId }),
+        { status: 200 },
+      ),
+    );
+  const refused = async (input: Parameters<typeof requireCiMainnetRpc>[0]): Promise<string> => {
+    try {
+      await requireCiMainnetRpc(input);
+    } catch (error) {
+      return String(error);
+    }
+    throw new Error("expected a refusal");
+  };
+
+  test("keeps the configured dedicated mainnet RPC", async () => {
+    const chosen = await requireCiMainnetRpc({
+      configuredSource: "GASLESS_E2E_RPC_URL",
+      configuredUrl: SECRET,
+      fetchImpl: mainnet,
+    });
+    expect(chosen).toEqual({ note: null, source: "GASLESS_E2E_RPC_URL", url: SECRET });
+  });
+
+  test("fails closed instead of falling back to the wallet RPC", async () => {
+    const cases: Array<[Parameters<typeof requireCiMainnetRpc>[0], string]> = [
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: SECRET,
+          fetchImpl: () => Promise.reject(new Error(SECRET)),
+        },
+        "starknet_chainId failed",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: SECRET,
+          fetchImpl: async () => new Response("{}", { status: 503 }),
+        },
+        "starknet_chainId failed",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: SECRET,
+          fetchImpl: async () => new Response(JSON.stringify({ result: "0x534e5f5345504f4c4941" })),
+        },
+        "did not answer Starknet mainnet",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: "http://rpc.example/super-secret-key",
+          fetchImpl: mainnet,
+        },
+        "HTTPS",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: "https://wallet.nodes.starknet.org/rpc/v0_10?k=super-secret-key",
+          fetchImpl: mainnet,
+        },
+        "dedicated test RPC",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: "https://MAINNET.nodes.starknet.org./super-secret-key",
+          fetchImpl: mainnet,
+        },
+        "Mainnet E2E RPC URL must",
+      ],
+      [
+        { configuredSource: "wallet default", configuredUrl: SECRET, fetchImpl: mainnet },
+        "never falls back",
+      ],
+    ];
+    for (const [input, reason] of cases) {
+      const message = await refused(input);
+      expect(message).toContain(reason);
+      expect(message).not.toContain("super-secret-key");
+    }
   });
 });
 

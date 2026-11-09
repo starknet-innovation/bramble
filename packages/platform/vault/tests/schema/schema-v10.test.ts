@@ -69,11 +69,11 @@ const argentRelease = (label: string): string => {
 const BRAAVOS_CURRENT_IMPLEMENTATION =
   "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
 
-describe("schema v10 (two steps below current)", () => {
-  test("sits two steps below the current version", () => {
-    // v11 added the Ready-scheme derivation kind on top of this file's shapes,
-    // and v12 the shadow-account scope records.
-    expect(CURRENT_SCHEMA_VERSION).toBe(12);
+describe("schema v10 (three steps below current)", () => {
+  test("sits three steps below the current version", () => {
+    // v11 added the Ready-scheme derivation kind, v12 the shadow-account
+    // scopes, and v13 the multisig STRK20 viewing key.
+    expect(CURRENT_SCHEMA_VERSION).toBe(13);
   });
 
   test("admits Argent at every release an account could have been deployed with", () => {
@@ -124,7 +124,13 @@ describe("migration v9 -> v10", () => {
   test("rewrites nothing but the version stamp", () => {
     const v9 = vaultOf(argentAt(ARGENT_ACCOUNT_CLASS_HASH), 9);
     const migrated: unknown = migrateVault(v9);
-    expect(migrated).toEqual({ ...v9, schemaVersion: 12, shadowAccountScopes: [] });
+    expect(migrated).toEqual({
+      ...v9,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
+      schemaVersion: 13,
+      shadowAccountScopes: [],
+    });
   });
 
   test("refuses a v9 vault claiming a record only v10 can hold", () => {

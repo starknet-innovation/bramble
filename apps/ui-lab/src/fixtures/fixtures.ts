@@ -238,6 +238,20 @@ export const discoveredNft: DiscoveredNft = {
   tokenId: "342",
 };
 
+/**
+ * An NFT the indexer found but the user never chose, as Starkscan lists it: no
+ * name or image until "Show art" watches it and its metadata is read.
+ */
+export const discoveredOnlyNft: DiscoveredNft = {
+  collection: "",
+  contract: "0x0733aa00bb11cc22dd33ee44ff5566778899aabbccddeeff00112233445566",
+  id: "SN_MAIN:0x0733aa00bb11cc22dd33ee44ff5566778899aabbccddeeff00112233445566:11",
+  image: "",
+  name: "",
+  networkId: "SN_MAIN",
+  tokenId: "11",
+};
+
 export const invokeApproval: PendingApproval = {
   context: {
     accountId: softwareAccount.id,

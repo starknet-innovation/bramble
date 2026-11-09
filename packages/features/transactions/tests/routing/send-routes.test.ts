@@ -135,6 +135,31 @@ describe("gates", () => {
     });
   });
 
+  test("lets an unregistered account shield into its own balance, registering in the same batch", () => {
+    // #789: the first shield carries the registration, so only a self-credit
+    // deposit passes; a third-party credit and every private source still wait
+    // for a registration of their own.
+    const self = {
+      recipient: SENDER,
+      senderRegistration: "unregistered",
+      source: "public",
+    } as const;
+    expect(resolveSendRoute(ready(self)).blocked).toBeUndefined();
+    expect(resolveSendRoute(ready(self)).route?.id).toBe("public-private");
+    expect(blockerFor({ ...self, recipient: null }).reason).toBe("Choose a recipient first");
+    expect(blockerFor({ ...self, recipient: RECIPIENT }).reason).toBe(
+      "Activate private balances before sending privately",
+    );
+    expect(
+      blockerFor({
+        recipient: SENDER,
+        senderRegistration: "unregistered",
+        source: "private",
+        destination: "public",
+      }).reason,
+    ).toBe("Activate private balances before sending privately");
+  });
+
   test("refuses to spend a private balance with no relay configured", () => {
     expect(blockerFor({ relayConfigured: false })).toEqual({
       pending: false,

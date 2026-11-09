@@ -211,7 +211,9 @@ const sparkline = (points: readonly number[]): string => {
 // it is when Send is opened from Home. Send seeds the asset and nothing else —
 // the recipient is still chosen on the first step — while Shield and Unshield
 // below carry a recipient and open on the amount.
-const tokenActions = (tokenId: string): string =>
+// "Stake" follows on its own row, like the single privacy action below, and
+// only where staking is on and the token is stakable (../staking/staking-entry).
+const tokenActions = (tokenId: string, stakable: boolean): string =>
   `<div class="token-privacy-actions">${button({
     attributes: { "data-send-token": tokenId },
     icon: "send",
@@ -221,7 +223,16 @@ const tokenActions = (tokenId: string): string =>
     icon: "swap",
     label: "Swap",
     variant: "secondary",
-  })}</div>`;
+  })}</div>${
+    stakable
+      ? button({
+          attributes: { "data-stake-token": tokenId },
+          icon: "trendingUp",
+          label: "Stake",
+          variant: "secondary",
+        })
+      : ""
+  }`;
 
 // Deployment and funding are steps on the way to shielding, not alternatives
 // to it, so the control keeps the verb and the privacy screen it opens names
@@ -242,6 +253,10 @@ const privacyActions = (
   if (privacy.error) return "";
   if (privacy.value?.registration === "registered")
     return `<div class="token-privacy-actions">${button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: "Shield" })}${button({ attributes: { "data-send-unshield": tokenId }, label: "Unshield", variant: "secondary" })}</div>`;
+  // A deployed, unregistered account's first shield registers in the same
+  // transaction (mc-wallet 789), so it is offered directly: one pool fee, not two.
+  if (seen === true && privacy.value?.registration === "unregistered")
+    return button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: "Shield" });
   return button({
     attributes: { "data-privacy-open": tokenId },
     icon: "shield",
@@ -267,6 +282,7 @@ export const tokenDetailFlow = (
     value: null,
   },
   deployment: boolean | null = null,
+  stakable = false,
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
@@ -318,7 +334,7 @@ export const tokenDetailFlow = (
               </div>`
                   : ""
         }
-        ${tokenActions(token.id)}
+        ${tokenActions(token.id, stakable)}
         ${privacyActions(token.id, privacy, deployment)}
       </section>
       <section class="section">

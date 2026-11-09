@@ -1,6 +1,8 @@
 /**
- * Custom Starknet chain model added by dapps through `wallet_addStarknetChain`,
- * kept out of preferences-store.ts so that file stays within the size budget.
+ * Custom Starknet chain model that earlier builds stored for dapps through
+ * `wallet_addStarknetChain`. Nothing adds one now (issue 852); it validates
+ * records those builds left in preferences. Kept out of preferences-store.ts
+ * so that file stays within the size budget.
  * Follows the built-in network model in wallet-model/networks.
  */
 import { hasOnlyKnownKeys, isNetworkLabel, isRecord } from "@bramble/core/json";

@@ -16,11 +16,15 @@
  *     -> NftRecord[]  |  { nfts: NftRecord[] }
  *   NftRecord = { contract_address, token_id, name?, collection_name?, image_url? }
  *
- * A null `indexerUrl` means the wallet is unconfigured: discovery resolves to an
- * empty list without touching the network, exactly like
- * {@link unavailableNftIndexer}. Any transport failure or malformed body also
- * degrades to an empty list, so a discovery outage never blocks the gallery — it
- * simply shows the empty state and the manual watch form.
+ * The built-in indexer is Starkscan, over the wallet's existing Starkscan
+ * connection ({@link StarkscanNftSource}, injected by the wiring). It runs only
+ * when the caller sets `starkscan` (NFTs are turned on, the default) and no
+ * indexer URL is saved: a saved URL is the user's own choice and replaces it.
+ *
+ * With neither, discovery resolves to coverage "none" without touching the
+ * network, exactly like {@link unavailableNftIndexer}. A transport failure or
+ * malformed body resolves to "unavailable", and a partial answer to
+ * "incomplete", so the gallery never reads an outage or a gap as "no NFTs".
  */
 
 import { type BoundedHttpFetch, fetchBoundedJson, HTTP_BODY_LIMITS } from "@bramble/core/http-json";
@@ -30,13 +34,49 @@ import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { type DiscoveredNft, normalizeIndexerNft } from "./nft-metadata";
 
 /**
+ * What one discovery run can say about the candidates it returns:
+ * - "none": no indexer ran (the preview is off, the network is not Mainnet
+ *   for Starkscan, or the user keeps the explorer off it); only watched NFTs
+ *   show.
+ * - "complete": the indexer answered and claims its list is whole.
+ * - "incomplete": the list may be missing NFTs: Starkscan reports a partial
+ *   index or more positions than one page, an indexer listed more than the
+ *   wallet's discovery cap or records it could not read, or an on-chain
+ *   ownership read failed so a candidate could be neither shown nor ruled out.
+ * - "unavailable": the indexer failed or answered something malformed.
+ */
+export type NftCoverage = "complete" | "incomplete" | "none" | "unavailable";
+
+/** One discovery run: owned-token candidates (still untrusted) and coverage. */
+export type NftDiscovery = {
+  readonly coverage: NftCoverage;
+  readonly nfts: readonly DiscoveredNft[];
+};
+
+/**
  * Inputs for listing the NFTs an account owns through the configured indexer.
  */
 export type NftIndexerInput = {
   readonly address: string;
   readonly indexerUrl: string | null;
   readonly networkId: StarknetNetworkId;
+  /**
+   * True only while NFTs are turned on (the default): lets the built-in
+   * Starkscan source run when no indexer URL is saved. Absent means off, so a
+   * caller that forgets it sends nothing.
+   */
+  readonly starkscan?: boolean;
 };
+
+/**
+ * The built-in Starkscan source: owned-token candidates for one address and
+ * network, with coverage. It decides for itself whether it may run (Mainnet
+ * only, explorer lane permitted) and never throws.
+ */
+export type StarkscanNftSource = (input: {
+  readonly address: string;
+  readonly networkId: StarknetNetworkId;
+}) => Promise<NftDiscovery>;
 
 /**
  * The injected HTTP transport, `fetch`-shaped so the wiring that owns network
@@ -51,7 +91,7 @@ export type NftIndexerHttp = BoundedHttpFetch;
  * Injectable NFT discovery service used by the background message handler.
  */
 export type NftIndexerService = {
-  readonly listOwnedNfts: (input: NftIndexerInput) => Promise<readonly DiscoveredNft[]>;
+  readonly listOwnedNfts: (input: NftIndexerInput) => Promise<NftDiscovery>;
 };
 
 /**
@@ -68,15 +108,15 @@ const ownedNftsUrl = (indexerUrl: string, address: string, networkId: StarknetNe
   `${trimTrailingSlashes(indexerUrl)}/accounts/${address}/nfts?network=${networkId}`;
 
 // Extracts the record array from either a bare array body or a `{ nfts: [...] }`
-// envelope; anything else yields no records.
-const recordsFrom = (body: unknown): readonly unknown[] => {
+// envelope; anything else is malformed (null).
+const recordsFrom = (body: unknown): readonly unknown[] | null => {
   if (Array.isArray(body)) {
     return body;
   }
   if (isRecord(body) && Array.isArray(body["nfts"])) {
     return body["nfts"];
   }
-  return [];
+  return null;
 };
 
 // Fetches and JSON-parses the indexer response, degrading to null on a non-ok
@@ -94,48 +134,62 @@ const fetchIndexerBody = async (http: NftIndexerHttp, url: string): Promise<unkn
 // Pure fold of the untrusted record list into canonical NFTs: drops any record
 // that fails normalization or duplicates one already kept, and stops at
 // MAX_DISCOVERED_NFTS so a hostile or oversized indexer cannot fan out unbounded
-// on-chain owner_of re-proofs downstream.
-const dedupeDiscovered = (
+// on-chain owner_of re-proofs downstream. A dropped malformed record or a
+// trimmed list makes the answer incomplete rather than silently shorter.
+const foldDiscovered = (
   records: readonly unknown[],
   networkId: StarknetNetworkId,
-): DiscoveredNft[] => {
+): NftDiscovery => {
   const discovered: DiscoveredNft[] = [];
   const seen = new Set<string>();
+  let complete = records.length <= MAX_DISCOVERED_NFTS;
   for (const record of records) {
     if (discovered.length >= MAX_DISCOVERED_NFTS) {
       break;
     }
     const nft = normalizeIndexerNft(record, networkId);
-    if (nft && !seen.has(nft.id)) {
+    if (nft === null) {
+      complete = false;
+    } else if (!seen.has(nft.id)) {
       seen.add(nft.id);
       discovered.push(nft);
     }
   }
-  return discovered;
+  return { coverage: complete ? "complete" : "incomplete", nfts: discovered };
 };
 
+const NO_DISCOVERY: NftDiscovery = { coverage: "none", nfts: [] };
+const UNAVAILABLE: NftDiscovery = { coverage: "unavailable", nfts: [] };
+
 /**
- * Builds an {@link NftIndexerService} over the given HTTP transport. A null
- * `indexerUrl` reproduces the unavailable behavior; a set URL drives the
- * documented wire contract, dropping any record that fails normalization and
- * resolving to an empty list on a non-ok response, a transport error, or a
- * malformed body rather than throwing.
+ * Builds an {@link NftIndexerService} over the given HTTP transport and the
+ * optional built-in Starkscan source. A saved `indexerUrl` drives the
+ * documented wire contract; otherwise, only when `starkscan` is set, the
+ * Starkscan source answers; otherwise nothing is sent ("none"). A non-ok
+ * response, a transport error, or a malformed body resolves to "unavailable"
+ * rather than throwing or claiming an empty account.
  */
-export const createHttpNftIndexer = (http: NftIndexerHttp): NftIndexerService => ({
-  async listOwnedNfts({ address, indexerUrl, networkId }) {
+export const createHttpNftIndexer = (
+  http: NftIndexerHttp,
+  starkscanSource?: StarkscanNftSource,
+): NftIndexerService => ({
+  async listOwnedNfts({ address, indexerUrl, networkId, starkscan }) {
     if (indexerUrl === null) {
-      return [];
+      return starkscan === true && starkscanSource
+        ? starkscanSource({ address, networkId })
+        : NO_DISCOVERY;
     }
     const body = await fetchIndexerBody(http, ownedNftsUrl(indexerUrl, address, networkId));
-    return dedupeDiscovered(recordsFrom(body), networkId);
+    const records = body === null ? null : recordsFrom(body);
+    return records === null ? UNAVAILABLE : foldDiscovered(records, networkId);
   },
 });
 
 /**
- * Offline NFT indexer used when no discovery backend is wired; always empty.
+ * Offline NFT indexer used when no discovery backend is wired; always "none".
  */
 export const unavailableNftIndexer: NftIndexerService = {
   async listOwnedNfts() {
-    return [];
+    return NO_DISCOVERY;
   },
 };

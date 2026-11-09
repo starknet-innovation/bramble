@@ -15,6 +15,7 @@ import type { ActivityLog } from "@bramble/transactions/activity";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { ApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
 import type { Strk20JobRegistry } from "../../apps/extension/src/background/privacy/strk20-preparation-jobs";
+import type { SponsoredShieldDeps } from "../../apps/extension/src/background/privacy/strk20-sponsored-shield";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
@@ -49,7 +50,15 @@ export const STRK20_CALL_AND_PROOF = {
   proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
 };
 
+const gatewaySwitchedOff = async (): Promise<Response> => new Response("", { status: 404 });
+
 export type Strk20HarnessOptions = {
+  /**
+   * Sponsored first-shield relay table, transport and clock (#789). Without
+   * it the bundled table is used against a switched-off gateway (every call
+   * 404), so no suite reaches the real one.
+   */
+  readonly sponsoredShield?: SponsoredShieldDeps;
   /** The stub vault's accounts, e.g. a Ledger account under the granted id. */
   readonly accounts?: readonly AccountRef[];
   /** Seeded activity log, for pending-registration derivation. */
@@ -238,6 +247,7 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
     ...(options.approvals ? { approvals: options.approvals } : {}),
     ...(options.now ? { now: options.now } : {}),
     ...(options.strk20Jobs ? { strk20Jobs: options.strk20Jobs } : {}),
+    sponsoredShield: options.sponsoredShield ?? { http: gatewaySwitchedOff },
     preferencesStore: {
       ...unavailablePreferencesStore,
       async read() {
