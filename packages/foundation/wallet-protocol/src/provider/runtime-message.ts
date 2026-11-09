@@ -8,7 +8,7 @@ import type { Strk20Action, Strk20Proof } from "../privacy/strk20-bridge";
 import type { ProviderChain } from "../transactions/add-chain";
 import type { ProviderDeclare } from "../transactions/declare";
 import type { ProviderInvokeCall } from "../transactions/invoke";
-import type { ProviderWatchAsset } from "../transactions/watch-asset";
+import type { ProviderWatchAsset, ProviderWatchNft } from "../transactions/watch-asset";
 
 /**
  * Exact extension messages the provider bridge may send to the background.
@@ -100,6 +100,11 @@ export type RuntimeMessage =
     }
   | {
       readonly asset: ProviderWatchAsset;
+      readonly origin: string;
+      readonly type: "wallet.watchAsset";
+    }
+  | {
+      readonly nft: ProviderWatchNft;
       readonly origin: string;
       readonly type: "wallet.watchAsset";
     };

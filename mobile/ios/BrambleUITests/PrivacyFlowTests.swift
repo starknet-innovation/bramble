@@ -73,7 +73,10 @@ final class PrivacyFlowTests: XCTestCase {
         let app = launch(node: "ready", privacy: "unregistered")
         openToken(app, "STRK")
         UITest.wait(UITest.labelled(app, containing: "Register to start shielding"))
-        XCTAssertTrue(app.buttons["Go private"].exists)
+        // Deployed and unregistered: the first shield is offered directly (789), and shielding is
+        // not built on mobile, so it stays disabled under the Unsupported note.
+        XCTAssertFalse(app.buttons["Shield"].isEnabled, "shielding is not built on mobile")
+        XCTAssertTrue(app.staticTexts["Not available in the mobile app yet"].exists)
         snapshot(app, "privacy-public-token-detail")
         tap(app.buttons["Back"].firstMatch)
         XCTAssertFalse(app.staticTexts["Includes shielded balances"].exists)

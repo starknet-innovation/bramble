@@ -25,7 +25,6 @@ export type Strk20NoticeReason = "other-wallet" | "record-limit" | "request-fail
  * Every approval kind that may cross the background-to-UI boundary.
  */
 export type ApprovalKind =
-  | "add-chain"
   | "connect"
   | "declare"
   | "invoke"
@@ -85,6 +84,19 @@ export type WatchAssetToken = {
 };
 
 /**
+ * A collectible a site asked the wallet to watch (wallet_watchAsset with an
+ * ERC721 or ERC1155 asset, ahead of the Starknet wallet API). The standard is
+ * the site's claim; the wallet detects the real one when it re-proves
+ * ownership on approve.
+ */
+export type WatchAssetNft = {
+  readonly contract: string;
+  readonly networkId: StarknetNetworkId;
+  readonly standard: "ERC721" | "ERC1155";
+  readonly tokenId: string;
+};
+
+/**
  * Trusted token identity referenced by a decoded approval summary. The
  * background supplies the address alongside the symbol so presentation can
  * show the bundled mark without inferring token identity from display copy.
@@ -119,11 +131,19 @@ export type PendingApproval = {
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
   /**
-   * Invoke only: the account is an undeployed Braavos counterfactual, which
-   * deploys only through its own reviewed step, so this request cannot be
-   * approved until it is deployed. Present only when true, with no fee.
+   * Invoke only: the account is undeployed and cannot deploy alongside this
+   * request — a Braavos counterfactual, which deploys only through its own
+   * reviewed step, or a proof-bearing invoke — so it cannot be approved until
+   * the account is deployed. Present only when true, with no fee.
    */
   readonly deployFirst?: true;
+  /**
+   * Invoke only: the deployment an undeployed account sends before the calls.
+   * Approval binds `fee` plus this as one reviewed total, and each half is its
+   * own submission ceiling. Present only when `requiresDeployment` is true.
+   */
+  readonly deploymentFee?: FeeEstimate | null;
+  readonly deploymentFeeEstimateFailed?: boolean;
   /**
    * Connect only: the site already holds a grant, so approving adds the
    * reviewed account to it rather than sharing a first one. Absent when the
@@ -149,6 +169,11 @@ export type PendingApproval = {
   readonly insights?: readonly string[];
   readonly kind: ApprovalKind;
   /**
+   * Invoke from a multisig whose threshold is above 1. Approving saves an
+   * intent for the other signers and does not broadcast.
+   */
+  readonly multisigThreshold?: number;
+  /**
    * `strk20-unavailable` only: why the private request is held on a notice.
    * Absent means the network has no private services for it. Wallet-chosen,
    * never site text; the panel maps it to a fixed line.
@@ -160,6 +185,8 @@ export type PendingApproval = {
   readonly requiresDeployment?: boolean;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
+  /** A watch-asset card for a collectible carries this instead of `token`. */
+  readonly nft?: WatchAssetNft;
   readonly typedData?: unknown;
 };
 

@@ -5,7 +5,6 @@
 
 import type { Strk20SubmissionPlan } from "@bramble/privacy/service";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
-import type { ProviderChain } from "@bramble/wallet-protocol/add-chain";
 import type { ProviderDeclare } from "@bramble/wallet-protocol/declare";
 import type { ApprovalKind } from "@bramble/wallet-protocol/extension-responses";
 import type { Strk20Action, Strk20Proof } from "@bramble/wallet-protocol/strk20";
@@ -25,7 +24,6 @@ export type ApprovalPayload = {
   /** Trusted background-authored summary for the submitted activity entry. */
   readonly activitySummary?: string;
   readonly calls?: readonly Call[];
-  readonly chain?: ProviderChain;
   readonly chainId?: string;
   readonly declare?: ProviderDeclare;
   readonly networkId?: StarknetNetworkId;
@@ -94,8 +92,6 @@ const readInvoke: PayloadReader = (approval) =>
 const empty: PayloadReader = () => null;
 
 const READERS: Readonly<Record<ApprovalKind, PayloadReader>> = {
-  "add-chain": (approval) =>
-    approval.chain === undefined ? null : { chain: cloneApprovalValue(approval.chain) },
   connect: empty,
   declare: (approval) =>
     approval.declare === undefined ? null : { declare: cloneApprovalValue(approval.declare) },

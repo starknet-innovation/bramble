@@ -28,9 +28,9 @@ export const CATALOG_STYLES = `
   .catalog-grid {
     display: grid;
     gap: ${SPACE.lg};
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
   }
-  .catalog-grid.wide { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .catalog-grid.wide { grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); }
   .catalog-sample {
     align-content: start;
     background: var(--bramble-sunken);

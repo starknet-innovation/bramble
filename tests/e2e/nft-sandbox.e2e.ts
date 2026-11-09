@@ -154,5 +154,5 @@ test("fails closed when the animation payload is malformed", async ({ extension 
     `sandbox/render.html#${encodeURIComponent("data:text/html;base64,%%%")}`,
   );
 
-  await expect(page.getByText("This collectible's animation could not be rendered.")).toBeVisible();
+  await expect(page.getByText("This NFT's animation could not be rendered.")).toBeVisible();
 });

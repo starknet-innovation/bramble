@@ -44,6 +44,7 @@
       "deploymentUnchecked": "Account deployment could not be checked. Try again.",
       "detailGoPrivate": "Go private",
       "detailShield": "Shield",
+      "detailShieldFirst": "Shield",
       "detailUnshield": "Unshield",
       "fundsRequired": "Deposit some STRK, then come back",
       "headerJourney": "Go private",

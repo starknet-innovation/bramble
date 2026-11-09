@@ -200,7 +200,9 @@ describe("vault service guard branches", () => {
       importedSeeds: [],
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 12,
+      schemaVersion: 13,
+      multisigStrk20KeyConflicts: [],
+      multisigStrk20ViewingKeys: [],
       shadowAccountScopes: [],
       signingKeys: [
         { accountId: mainnet.id, privateKey: "0x123456" },

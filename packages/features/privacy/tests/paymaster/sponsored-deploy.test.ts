@@ -168,6 +168,44 @@ describe("sponsored deploy quote", () => {
     });
   });
 
+  // The relay's reply to a Bramble-shaped Argent 0.4.0 quote, verbatim from the
+  // live Sepolia gateway (2026-11-05). It echoes `sigdata: null`, which the
+  // wallet once refused, so every user silently fell back to a self-paid deploy.
+  test("accepts the live relay's quote reply, including its null sigdata", async () => {
+    const owner = "0x72cbc593b186c4c07027fc8ac2303b440fd59b3ed97fc51d5bdbd64f084013b";
+    const live = sponsoredDeploymentData({
+      addressSalt: owner,
+      classHash: ARGENT_ACCOUNT_CLASS_HASH,
+      constructorCalldata: ["0x0", owner, "0x1"],
+      contractAddress: "0x4b86577241e92bf3a7397fc7eb1efc8674022ae465fdad36a5d4a231f953515",
+    });
+    const reply = {
+      type: "deploy",
+      deployment: {
+        address: "0x4b86577241e92bf3a7397fc7eb1efc8674022ae465fdad36a5d4a231f953515",
+        class_hash: "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+        salt: owner,
+        calldata: ["0x0", owner, "0x1"],
+        sigdata: null,
+        version: 1,
+      },
+      parameters: {
+        version: "0x1",
+        fee_mode: { mode: "sponsored", tip: "normal" },
+        time_bounds: null,
+      },
+      fee: {
+        gas_token_price_in_strk: "0xde0b6b3a7640000",
+        estimated_fee_in_strk: "0x7c4d0eb0d17300",
+        estimated_fee_in_gas_token: "0x7c4d0eb0d17300",
+        suggested_max_fee_in_strk: "0x2e9ce5824e8b200",
+        suggested_max_fee_in_gas_token: "0x2e9ce5824e8b200",
+      },
+    };
+    const quote = await quoteSponsoredDeploy({ config, deployment: live, http: relay(reply) });
+    expect(quote.deployment).toEqual(live);
+  });
+
   const mismatches: readonly [string, Record<string, unknown>][] = [
     ["another address", { deployment: { ...deployment(), address: "0x123" } }],
     ["another class", { deployment: { ...deployment(), class_hash: "0x456" } }],
@@ -178,6 +216,7 @@ describe("sponsored deploy quote", () => {
       { deployment: { ...deployment(), calldata: [PUBLIC_KEY, "0x1"] } },
     ],
     ["a deploy signature", { deployment: { ...deployment(), sigdata: ["0x1"] } }],
+    ["non-list signature data", { deployment: { ...deployment(), sigdata: "0x1" } }],
     ["an unknown deployment field", { deployment: { ...deployment(), unique: true } }],
     ["another transaction type", { type: "deploy_and_invoke" }],
     [

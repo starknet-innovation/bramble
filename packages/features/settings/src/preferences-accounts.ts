@@ -32,3 +32,39 @@ export const withAccountHidden = (
     : current.filter((stored) => stored !== accountId);
   return { ...preferences, hiddenAccountIds };
 };
+
+/**
+ * Returns preferences presenting `multisigId` to sites, or the active
+ * single-signer account when `multisigId` is null. Throws {@link WalletError}
+ * for a malformed id and does not write. Null drops the field so older
+ * readers of an absent key stay valid.
+ */
+const withSelectedMultisig = (
+  preferences: WalletPreferences,
+  multisigId: string | null,
+): WalletPreferences => {
+  if (multisigId !== null && !isAccountId(multisigId)) {
+    throw new WalletError("Invalid account");
+  }
+  const next: WalletPreferences = { ...preferences };
+  if (multisigId === null) {
+    delete (next as { selectedMultisigId?: string }).selectedMultisigId;
+    return next;
+  }
+  return { ...next, selectedMultisigId: multisigId };
+};
+
+/**
+ * Writes the presented multisig through the store's own read and write.
+ * Kept beside {@link withSelectedMultisig} so the store object stays a dispatch
+ * table.
+ */
+export const selectedMultisigPreference = async (
+  read: () => Promise<WalletPreferences>,
+  write: (preferences: WalletPreferences) => Promise<void>,
+  multisigId: string | null,
+): Promise<WalletPreferences> => {
+  const next = withSelectedMultisig(await read(), multisigId);
+  await write(next);
+  return next;
+};

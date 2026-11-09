@@ -83,3 +83,160 @@ export const RevealLedger = checkpointStory(
   "settings-security",
   "reveal-ledger",
 );
+export const StakingSettingsRow = checkpointStory(
+  "Staking in Settings",
+  "settings-security",
+  "staking-settings-row",
+);
+export const StakingTokenStake = checkpointStory(
+  "Stake from a token",
+  "settings-security",
+  "staking-token-stake",
+);
+export const StakingUnavailable = checkpointStory(
+  "Staking, Starkscan unavailable",
+  "settings-security",
+  "staking-paste-only",
+);
+export const Staking = checkpointStory("Staking", "settings-security", "staking");
+export const StakingIncomplete = checkpointStory(
+  "Staking list incomplete",
+  "settings-security",
+  "staking-incomplete",
+);
+export const StakingHome = checkpointStory("Home Staking tab", "settings-security", "staking-home");
+export const StakingHomeEmpty = checkpointStory(
+  "Home Staking, no stakes",
+  "settings-security",
+  "staking-home-empty",
+);
+export const StakingHomeUnavailable = checkpointStory(
+  "Home Staking, couldn't load",
+  "settings-security",
+  "staking-home-unavailable",
+);
+export const StakingHomeStaked = checkpointStory(
+  "Home Staked line",
+  "settings-security",
+  "staking-home-staked",
+);
+export const StakingUnstakeReady = checkpointStory(
+  "Unstake, amount",
+  "settings-security",
+  "staking-unstake-ready",
+);
+export const StakingUnstakeEstimating = checkpointStory(
+  "Unstake, estimating fee",
+  "settings-security",
+  "staking-unstake-estimating",
+);
+export const StakingUnstakeReview = checkpointStory(
+  "Unstake, review",
+  "settings-security",
+  "staking-unstake-review",
+);
+export const StakingUnstakeSubmitting = checkpointStory(
+  "Unstake, submitting",
+  "settings-security",
+  "staking-unstake-submitting",
+);
+export const StakingUnstakeSubmitted = checkpointStory(
+  "Unstake, submitted",
+  "settings-security",
+  "staking-unstake-submitted",
+);
+export const StakingUnstakeRefused = checkpointStory(
+  "Unstake, refused",
+  "settings-security",
+  "staking-unstake-refused",
+);
+export const StakingUnstakeUnknown = checkpointStory(
+  "Unstake, outcome unknown",
+  "settings-security",
+  "staking-unstake-unknown",
+);
+export const StakingExitPending = checkpointStory(
+  "Unstake waiting",
+  "settings-security",
+  "staking-exit-pending",
+);
+export const StakingWithdrawReady = checkpointStory(
+  "Withdraw, ready",
+  "settings-security",
+  "staking-withdraw-ready",
+);
+export const StakingWithdrawEstimating = checkpointStory(
+  "Withdraw, estimating fee",
+  "settings-security",
+  "staking-withdraw-estimating",
+);
+export const StakingWithdrawReview = checkpointStory(
+  "Withdraw, review",
+  "settings-security",
+  "staking-withdraw-review",
+);
+export const StakingWithdrawSubmitting = checkpointStory(
+  "Withdraw, submitting",
+  "settings-security",
+  "staking-withdraw-submitting",
+);
+export const StakingWithdrawSubmitted = checkpointStory(
+  "Withdraw, submitted",
+  "settings-security",
+  "staking-withdraw-submitted",
+);
+export const StakingWithdrawRefused = checkpointStory(
+  "Withdraw, refused",
+  "settings-security",
+  "staking-withdraw-refused",
+);
+export const StakingWithdrawUnknown = checkpointStory(
+  "Withdraw, outcome unknown",
+  "settings-security",
+  "staking-withdraw-unknown",
+);
+export const StakingClaimReady = checkpointStory(
+  "Claim rewards, ready",
+  "settings-security",
+  "staking-claim-ready",
+);
+export const StakingClaimEstimating = checkpointStory(
+  "Claim rewards, estimating fee",
+  "settings-security",
+  "staking-claim-estimating",
+);
+export const StakingClaimReview = checkpointStory(
+  "Claim rewards, review",
+  "settings-security",
+  "staking-claim-review",
+);
+export const StakingClaimSubmitting = checkpointStory(
+  "Claim rewards, submitting",
+  "settings-security",
+  "staking-claim-submitting",
+);
+export const StakingClaimSubmitted = checkpointStory(
+  "Claim rewards, submitted",
+  "settings-security",
+  "staking-claim-submitted",
+);
+export const StakingClaimRefused = checkpointStory(
+  "Claim rewards, refused",
+  "settings-security",
+  "staking-claim-refused",
+);
+export const StakingClaimUnknown = checkpointStory(
+  "Claim rewards, outcome unknown",
+  "settings-security",
+  "staking-claim-unknown",
+);
+export const StakingClaimElsewhere = checkpointStory(
+  "Claim rewards, paid elsewhere",
+  "settings-security",
+  "staking-claim-elsewhere",
+);
+export const StakingClaimNone = checkpointStory(
+  "Nothing to claim",
+  "settings-security",
+  "staking-claim-none",
+);

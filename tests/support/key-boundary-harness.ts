@@ -60,7 +60,9 @@ import {
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
+import { STAKING_PREPARE_MESSAGE } from "./key-boundary-staking-messages";
 import type { KeyBoundaryLiveIds } from "./key-boundary-types";
+import { testStakingNetworks } from "./staking-chain";
 import { awaitStrk20Job, strk20RunningJobId } from "./strk20-background";
 
 /**
@@ -128,6 +130,7 @@ export const makeKeyBoundaryHarness = async (
     preferencesStore,
     runtimeRpc: runtimeRpcFor(chainState),
     session,
+    stakingNetworks: testStakingNetworks,
     swap: swapService,
   });
 
@@ -283,6 +286,12 @@ export const makeKeyBoundaryHarness = async (
       // error rather than the review.
       await awaitStrk20Job(settle, started, extensionSender);
       return jobId;
+    },
+    async stakingPreparationId() {
+      return preparationIdOf(
+        await settle({ ...STAKING_PREPARE_MESSAGE }, extensionSender),
+        "stakingPreparation",
+      );
     },
     async swapPreparationId() {
       return preparationIdOf(

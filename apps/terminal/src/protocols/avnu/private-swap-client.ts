@@ -1,7 +1,13 @@
 import type { PrivateCallAndProof } from "../../wallet/privacy/privacy-wallet";
 import { validatedPrivateActions } from "../../wallet/privacy/privacy-wallet";
-import { PRIVATE_SWAP_EXECUTOR, PRIVATE_SWAP_FEE_TOKEN } from "../../../shared/privacy";
-import { sameAddress } from "../support/networks";
+import {
+  checkPinnedExecutorClass,
+  PRIVATE_SWAP_EXECUTOR,
+  PRIVATE_SWAP_EXECUTOR_CLASS_HASH,
+  PRIVATE_SWAP_FEE_TOKEN,
+} from "../../../shared/privacy";
+import { DEFAULT_NETWORK, sameAddress } from "../support/networks";
+import { withRpcFallback } from "../support/provider";
 import type { Strk20Action } from "../support/strk20-schemas";
 
 import { checkPrivateSwapCalldata } from "./private-swap-intent";
@@ -104,18 +110,68 @@ const reviewedExecutor = (): string => {
   return PRIVATE_SWAP_EXECUTOR;
 };
 
+/** Reads a contract's live mainnet class hash; injectable for tests. */
+export type ClassHashReader = (address: string) => Promise<unknown>;
+
+const readClassHashOnMainnet: ClassHashReader = (address) =>
+  withRpcFallback([...DEFAULT_NETWORK.rpcUrls], (provider) => provider.getClassHashAt(address));
+
+/** Refusal when the pinned executor runs a class other than the pinned one. */
+export const PRIVATE_SWAP_EXECUTOR_CHANGED =
+  "AVNU's private swap contract changed. Private swaps are off until Bramble reviews it.";
+
+/** Refusal when the executor's class could not be read. */
+export const PRIVATE_SWAP_EXECUTOR_UNVERIFIED =
+  "Couldn't verify AVNU's private swap contract. Try again.";
+
+/**
+ * Refuses unless the pinned executor's live class hash equals
+ * `PRIVATE_SWAP_EXECUTOR_CLASS_HASH` (#269). Called at plan time and again right
+ * before the wallet proves the swap. Fails closed when the class cannot be read.
+ */
+export const verifyPrivateSwapExecutor = async (
+  readClassHash: ClassHashReader = readClassHashOnMainnet,
+): Promise<string> => {
+  const executor = reviewedExecutor();
+  const result = await checkPinnedExecutorClass(
+    readClassHash,
+    executor,
+    PRIVATE_SWAP_EXECUTOR_CLASS_HASH,
+  );
+  if (result === "class_mismatch") throw new Error(PRIVATE_SWAP_EXECUTOR_CHANGED);
+  if (result !== "ok") throw new Error(PRIVATE_SWAP_EXECUTOR_UNVERIFIED);
+  return executor;
+};
+
+/**
+ * Wallet handoff for a reviewed private swap: re-reads the executor's class
+ * (#269) and only then runs `prove`, which hands the actions to the wallet.
+ * Refuses, without calling `prove`, on a different class or a failed read.
+ */
+export const provePrivateSwap = async <T>(
+  prove: () => Promise<T>,
+  readClassHash: ClassHashReader = readClassHashOnMainnet,
+): Promise<T> => {
+  await verifyPrivateSwapExecutor(readClassHash);
+  return prove();
+};
+
 /**
  * Builds an AVNU private route on the server, where the pinned SDK and
- * paymaster credential stay out of the browser bundle. Every returned action is
- * revalidated locally before display or wallet handoff.
+ * paymaster credential stay out of the browser bundle. Refuses before any
+ * request unless the pinned executor runs the pinned class. Every returned
+ * action is revalidated locally before display or wallet handoff.
  */
-export const fetchPrivateSwapPlan = async (input: {
-  readonly buyToken: string;
-  readonly sellAmount: string;
-  readonly sellToken: string;
-  readonly takerAddress: string;
-}): Promise<PrivateSwapPlan> => {
-  const executor = reviewedExecutor();
+export const fetchPrivateSwapPlan = async (
+  input: {
+    readonly buyToken: string;
+    readonly sellAmount: string;
+    readonly sellToken: string;
+    readonly takerAddress: string;
+  },
+  readClassHash: ClassHashReader = readClassHashOnMainnet,
+): Promise<PrivateSwapPlan> => {
+  const executor = await verifyPrivateSwapExecutor(readClassHash);
   const value = await post("plan", {
     ...input,
     feeMode: { poolFeeToken: PRIVATE_SWAP_FEE_TOKEN, tip: "normal" },

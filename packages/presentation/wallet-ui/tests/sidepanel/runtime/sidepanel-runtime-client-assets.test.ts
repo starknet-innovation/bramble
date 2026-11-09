@@ -143,10 +143,10 @@ describe("NFT wrappers", () => {
   });
 
   test("NFT loaders select full, indexed-only, and watched lanes", async () => {
-    expect(await runtimeReturning({ nfts: [discoveredNft], ok: true }).discoverNfts()).toEqual([
-      discoveredNft,
-    ]);
-    expect(await runtimeReturning(errorEnvelope).discoverNfts()).toEqual([]);
+    const full = await runtimeReturning({ nfts: [discoveredNft], ok: true }).discoverNfts();
+    expect(full).toEqual({ coverage: "none", nfts: [discoveredNft] });
+    const refused = await runtimeReturning(errorEnvelope).discoverNfts();
+    expect(refused).toEqual({ coverage: "unavailable", nfts: [] });
 
     const indexed = captureRuntime({ nfts: [discoveredNft], ok: true });
     await indexed.wallet.discoverNfts(false);

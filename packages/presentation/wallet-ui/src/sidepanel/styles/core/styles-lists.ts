@@ -12,18 +12,28 @@ import { MOTION, RADIUS, SPACE, TYPE } from "@bramble/ui-kit/tokens";
  */
 export const LIST_STYLES = `  /* Flow screens: back control + goal title */
   /* Back control, title, network pill on one row, the pill vertically centred
-     against the title block. The title column is minmax(0, 1fr) so a long title
-     wraps its words rather than sliding under the pill; the pill itself never
-     wraps or shrinks. */
+     against the title block. A long title wraps its words beside the pill; the
+     pill itself never wraps or shrinks. The title never gets narrower than its
+     longest word: when that word and the pill cannot share the row (the 320px
+     minimum panel: "Appearance", "transactions"), the header wraps and the pill
+     drops to its own line at the right edge rather than the word running out
+     of its column and under the pill. */
   .flow-header {
     align-items: center;
     display: flex;
-    gap: ${SPACE.sm};
+    flex-wrap: wrap;
+    gap: ${SPACE.xs} ${SPACE.sm};
     min-width: 0;
     padding: ${SPACE.xxs} 0 ${SPACE.xs};
   }
-  .flow-header > .pill { flex: none; }
-  .flow-title { display: grid; flex: 1; gap: 1px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .flow-header > .pill { flex: none; margin-left: auto; }
+  .flow-title {
+    display: grid;
+    flex: 1;
+    gap: 1px;
+    grid-template-columns: minmax(min-content, 1fr);
+    min-width: min-content;
+  }
   .flow-title h1 { font-size: ${TYPE.display.size}; }
   .flow-title p {
     color: var(--bramble-muted);
@@ -133,7 +143,19 @@ export const LIST_STYLES = `  /* Flow screens: back control + goal title */
   .option-mark { color: var(--bramble-accent); display: inline-flex; flex: none; }
   .menu-copy, .option-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .menu-copy strong, .option-copy strong { font-size: ${TYPE.body.size}; font-weight: 600; }
-  .menu-value { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
+  /* Label and value share a navigation row. Both start from their own width
+     and give way together, each wrapping onto more lines but never below its
+     longest word, so neither paints over the other. The label used to start
+     from zero, which left the value its full one-line width and let it cover
+     the label: "Network" under "Starknet Mainnet" at the 320px minimum panel.
+     Disclosure summaries keep their ellipsized label (structure layer). */
+  :is(button, a).menu-row > .menu-copy { flex: 1 1 auto; min-width: auto; }
+  .menu-value {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    overflow-wrap: break-word;
+    text-align: right;
+  }
   .option-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
   .option-sub { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
 `;

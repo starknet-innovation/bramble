@@ -20,19 +20,24 @@ const rule = (selector: string): string => {
 
 describe("row alignment", () => {
   test.each([
-    [".receipt-row", ".receipt-row dd"],
+    // A receipt value keeps a 10ch basis: beside a label too long to leave it
+    // that much (the 320px panel) it drops to its own line instead of shrinking
+    // to a sliver whose text spills over the label.
+    [".receipt-row", ".receipt-row dd", "flex: 1 1 10ch"],
     [
       ".send-context-receipt > div, .send-review-facts > div",
       ".send-context-receipt dd, .send-review-facts dd",
+      "flex: 1 1 0",
     ],
-  ])("%s aligns its label to the value's first line and stays centred", (row, value) => {
+  ])("%s aligns its label to the value's first line and stays centred", (row, value, basis) => {
     const declarations = rule(row);
     expect(declarations).toContain("align-items: baseline");
     // The single line box is centred in the row's minimum height…
     expect(declarations).toContain("flex-wrap: wrap");
     expect(declarations).toContain("align-content: center");
-    // …and the value's zero basis keeps label and value on that one line.
-    expect(rule(value)).toContain("flex: 1 1 0");
+    // …and the value's basis keeps label and value on that one line while
+    // the value still has room beside its label.
+    expect(rule(value)).toContain(basis);
   });
 
   test("a request fact's caption label shares its value's baseline", () => {
@@ -45,6 +50,26 @@ describe("row alignment", () => {
         ".send-context-receipt > div:has(> dd.network-inline-value), .send-review-facts > div:has(.send-review-amount)",
       ),
     ).toContain("align-items: center");
+  });
+
+  // Label/value rows that overlapped at the 320px minimum panel: a column
+  // with a zero basis and no floor gave its neighbour the whole line and its
+  // own text spilled over it. The UI Lab minimum-width stories measure the
+  // result; these pin the rules.
+  test("a navigation row's label keeps its longest word beside the value", () => {
+    expect(rule(":is(button, a).menu-row > .menu-copy")).toContain("flex: 1 1 auto");
+    expect(rule(":is(button, a).menu-row > .menu-copy")).toContain("min-width: auto");
+    expect(rule(".menu-value")).toContain("overflow-wrap: break-word");
+  });
+
+  test("a flow title never narrows below its longest word; the pill wraps instead", () => {
+    expect(rule(".flow-header")).toContain("flex-wrap: wrap");
+    expect(rule(".flow-title")).toContain("min-width: min-content");
+    expect(rule(".flow-title")).toContain("grid-template-columns: minmax(min-content, 1fr)");
+  });
+
+  test("the home tab bar cannot widen the token list past the panel", () => {
+    expect(rule(".home-tabs")).toContain("grid-template-columns: minmax(0, 1fr)");
   });
 
   test("the multisig exact-identity receipt no longer overrides the shared alignment", () => {

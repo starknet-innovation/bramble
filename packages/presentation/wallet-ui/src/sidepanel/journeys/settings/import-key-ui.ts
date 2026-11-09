@@ -4,7 +4,7 @@
  * straight to the privileged background requests (which route it to the
  * encrypted vault) and is never logged, echoed, or stored in preferences.
  *
- * A "Ready Account" key first lists the Argent releases it controls an address
+ * A "Ready" key first lists the Argent releases it controls an address
  * in use at, and imports only the ones the user ticks (issue 776). When it is
  * not listed, the user can paste its address instead (issue 779).
  */

@@ -21,7 +21,7 @@ export type LedgerRejectionCode =
   | "firmware-below-minimum"
   | "app-below-minimum"
   | "unsupported-ledger-device"
-  | "blind-signing-disabled"
+  | "rejected-or-blind-signing-off"
   | "device-busy"
   | "replug"
   | "multiple-devices"
@@ -45,8 +45,12 @@ export type LedgerRejectionCode =
 const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "app-below-minimum":
     "Your Ledger's Starknet app needs an update. Update it in Ledger Live, then reconnect and open Starknet.",
-  "blind-signing-disabled":
-    "Turn on Blind signing in the Starknet app settings on your Ledger, then retry.",
+  // The Starknet app (2.4.0 to 2.4.3) answers a sign-hash refusal with the same
+  // status whether the user rejected it or Blind signing is off (and a
+  // mid-sign transport failure looks the same), so this copy names no cause
+  // as fact. Owner-approved wording (mc-wallet 877, 2026-11-06).
+  "rejected-or-blind-signing-off":
+    "Signing couldn't be completed. You may have rejected the request, or Blind signing may be off. Check your Ledger and its connection before retrying.",
   "chain-failed": "Your transaction was submitted but failed on-chain.",
   "dashboard-restore-failed":
     "Your Ledger didn't return to its home screen. Unlock it, leave it on the Starknet app, then try again.",

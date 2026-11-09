@@ -13,9 +13,6 @@ import {
  * Fallback preferences store used by tests that do not wire browser storage.
  */
 export const unavailablePreferencesStore: WalletPreferencesStore = {
-  async addCustomNetwork() {
-    throw new Error("preferences unavailable");
-  },
   async addNft() {
     throw new Error("preferences unavailable");
   },
@@ -77,6 +74,9 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
     return { ...defaultWalletPreferences(), activeNetworkId: networkId };
   },
   async setRpcOverride() {
+    throw new Error("preferences unavailable");
+  },
+  async setSelectedMultisig() {
     throw new Error("preferences unavailable");
   },
   async setStrk20NetworkConfig() {
