@@ -1,4 +1,4 @@
-//! Transaction hashes through Krusty 0.11.0 (`compute_invoke_v3_hash`,
+//! Transaction hashes through Krusty 2.0.0 (`compute_invoke_v3_hash`,
 //! `compute_deploy_account_v3_hash`) over exactly the fields `rpc_bodies` sends, with the chain
 //! id taken from `NetworkId` and never from a node. Signing itself happens in
 //! `WalletCore::plan_sign`, which refuses once the session generation has moved.

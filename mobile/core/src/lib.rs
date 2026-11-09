@@ -197,7 +197,7 @@ pub struct CoreInfo {
 pub fn core_info() -> CoreInfo {
     CoreInfo {
         core_version: env!("CARGO_PKG_VERSION").into(),
-        krusty_version: "0.11.0".into(),
+        krusty_version: "2.0.0".into(),
     }
 }
 

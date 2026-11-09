@@ -151,7 +151,7 @@ pub(crate) fn private_key(
                 });
             }
             // Ready fixes the hardened account field at zero, as the extension's adapter pins it.
-            // Krusty 0.11.0 returns this key as a plain `Felt`, so the copy it hands back is not
+            // Krusty 2.0.0 returns this key as a plain `Felt`, so the copy it hands back is not
             // wiped; it is moved straight into a `SecretFelt` (the same residual as the viewing
             // key, mobile/docs/privacy.md §5).
             SecretFelt::new(
@@ -210,7 +210,7 @@ pub fn sign_hash(
 /// Derives the account's STRK20 viewing key scoped to `"<chain_id>:<pool>"`, exactly as the
 /// extension's adapter (`deriveStrk20ViewingKey`): both scope values must be canonical non-zero
 /// felts, and the result must be a usable scalar (`isStarkPrivateKey`). The account key is derived
-/// per call into a zeroizing `SecretFelt`; Krusty 0.11.0 returns the viewing key as a plain `Felt`,
+/// per call into a zeroizing `SecretFelt`; Krusty 2.0.0 returns the viewing key as a plain `Felt`,
 /// which callers must use for one request body and drop (mobile/docs/privacy.md §5, residual).
 pub fn derive_scoped_viewing_key(
     phrase: &str,

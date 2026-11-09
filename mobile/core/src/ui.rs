@@ -186,10 +186,9 @@ pub fn recovery_word_suggestions(prefix: &str) -> Vec<String> {
         return Vec::new();
     }
     bip39::Language::English
-        .words_by_prefix(&prefix)
-        .iter()
+        .words_by_prefix_iter(&prefix)
         .take(SUGGESTION_LIMIT)
-        .map(|word| (*word).to_string())
+        .map(str::to_string)
         .collect()
 }
 
