@@ -190,22 +190,6 @@ fn notices_are_drained_at_most_five_at_a_time() {
 }
 
 #[test]
-fn discard_drops_only_an_unobserved_pending_entry() {
-    let dir = tempfile::tempdir().unwrap();
-    record(dir.path(), entry("0xab", 1));
-    record(dir.path(), entry("0xcd", 2));
-    let observed = Felt::from(0xcdu8);
-    observe(dir.path(), SCOPE, &observed, Observation::NotFound);
-    discard(dir.path(), SCOPE, &Felt::from(0xabu8));
-    discard(dir.path(), SCOPE, &observed);
-    let left: Vec<String> = list(dir.path(), SCOPE)
-        .into_iter()
-        .map(|e| e.hash)
-        .collect();
-    assert_eq!(left, vec!["0xcd".to_string()]);
-}
-
-#[test]
 fn an_observation_reaches_every_leg_of_a_transaction() {
     use crate::history::activity::{ActivityEntry, ActivityKind};
     let dir = tempfile::tempdir().unwrap();

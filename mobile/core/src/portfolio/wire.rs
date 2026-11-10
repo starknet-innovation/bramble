@@ -8,7 +8,8 @@
 
 use serde_json::Value;
 
-pub(crate) use crate::rpc::{envelope, RpcRequest};
+pub(crate) use crate::rpc::envelope;
+pub(crate) use crate::rpc_request::RpcRequest;
 
 use crate::js::json::{self, JsValue};
 

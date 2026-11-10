@@ -190,38 +190,169 @@ fn delete_wallet_removes_activity() {
     assert!(!dir.path().join("activity.v1.json").exists());
 }
 
+/// The core keeps the pending record of a signed write whatever the node answers, and the
+/// failure carries its hash: a refused write may still land, so only an observation settles it.
 #[test]
-fn a_refused_invoke_write_leaves_no_activity_record() {
+fn a_refused_invoke_write_keeps_its_record_and_hash() {
     let (_dir, core) = wallet();
     let mut node = sepolia(true);
     let plan = reviewed(&core, &mut node, ACCOUNT_1);
     let step = plan.advance(StepReply::Confirm).unwrap();
     let write = run_until(&plan, &core, &mut node, step, |_, write| write);
     let (id, ..) = rpc_parts(&write);
+    let hash = latest_hash(&core);
     let refused = json!({"error": {"code": 55, "message": "Account validation failed"}});
     let failed = failure(plan.advance(rpc_reply(id, &refused)).unwrap());
     assert_eq!(failed.code, SendFailureCode::NodeError);
-    assert!(core
-        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
-        .unwrap()
-        .is_empty());
+    assert_eq!(failed.hash.as_deref(), Some(hash.as_str()));
+    let account = oz_id(&core, bramble_core::NetworkId::Sepolia, 0);
+    let records = core.activity(account.clone()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(
+        (records[0].hash.as_str(), records[0].status),
+        (hash.as_str(), TxStatus::Pending)
+    );
+    // Reconciliation settles it, as for any other pending record.
+    let refresh = core.clone().refresh_activity(account, hash).unwrap();
+    let first = refresh.advance(StepReply::Start).unwrap();
+    assert!(matches!(
+        run_until(&refresh, &core, &mut node, first, never),
+        SendStep::Finished {
+            status: TxStatus::Accepted,
+            ..
+        }
+    ));
 }
 
 #[test]
-fn a_refused_deploy_write_leaves_no_activity_record() {
+fn a_refused_deploy_write_keeps_its_record_and_hash() {
     let (_dir, core) = wallet();
     let mut node = sepolia(false);
     let plan = reviewed(&core, &mut node, ACCOUNT_1);
     let step = plan.advance(StepReply::Confirm).unwrap();
     let write = run_until(&plan, &core, &mut node, step, |_, write| write);
     let (id, ..) = rpc_parts(&write);
+    let hash = latest_hash(&core);
     let refused = json!({"error": {"code": 55, "message": "Account validation failed"}});
     let failed = failure(plan.advance(rpc_reply(id, &refused)).unwrap());
     assert_eq!(failed.code, SendFailureCode::AutoDeploymentFailed);
+    assert_eq!(failed.hash.as_deref(), Some(hash.as_str()));
+    let records = core
+        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
+        .unwrap();
+    assert_eq!(records.len(), 1, "the invoke was never signed");
+    assert_eq!(records[0].summary, "Deploy account contract");
+    assert_eq!(records[0].status, TxStatus::Pending);
+    assert_eq!(plan.signatures_made(), 1);
+}
+
+/// A refused step after a write has left (`OutOfOrder` here) is never "nothing was sent": the
+/// plan closes and `interrupted_failure` still names the write's hash.
+#[test]
+fn an_error_after_a_write_still_yields_its_hash() {
+    let (_dir, core) = wallet();
+    let mut node = sepolia(true);
+    let plan = reviewed(&core, &mut node, ACCOUNT_1);
+    let step = plan.advance(StepReply::Confirm).unwrap();
+    let write = run_until(&plan, &core, &mut node, step, |_, write| write);
+    let (id, ..) = rpc_parts(&write);
+    let hash = latest_hash(&core);
+    let accepted = json!({"result": {"transaction_hash": hash}});
+    assert_eq!(
+        plan.advance(rpc_reply(id + 1, &accepted)),
+        Err(SendError::OutOfOrder)
+    );
+    let interrupted = plan.interrupted_failure().unwrap();
+    assert_eq!(interrupted.code, SendFailureCode::SubmissionIndeterminate);
+    assert_eq!(interrupted.hash.as_deref(), Some(hash.as_str()));
+    assert_eq!(
+        plan.advance(rpc_reply(id, &accepted)),
+        Err(SendError::PlanClosed)
+    );
+}
+
+/// The core checks the session at Confirm only; every later signature is refused by the host.
+/// Locks (and a fresh unlock, a new generation) land after Confirm: before the deployment is
+/// signed, and while the plan waits for the deployment before signing the invoke. Neither
+/// signature is made and nothing is written after the lock. The first ends in `Locked`; the
+/// second in `DeploymentThenInvokeUnconfirmed` with the deployment's hash, because once a
+/// deployment is accepted every later refusal is reported as that (the deployment did land).
+#[test]
+fn a_lock_after_confirm_refuses_every_later_signature() {
+    // The steps of an undeployed send up to its first write, to stop just before it.
+    let (_dir, core) = wallet();
+    let mut node = sepolia(false);
+    let plan = reviewed(&core, &mut node, ACCOUNT_1);
+    let mut before_write = 0;
+    let step = plan.advance(StepReply::Confirm).unwrap();
+    run_until(&plan, &core, &mut node, step, |_, write| {
+        before_write += 1;
+        write
+    });
+
+    // Before the deployment signature.
+    let (_dir, core) = wallet();
+    let mut node = sepolia(false);
+    let plan = reviewed(&core, &mut node, ACCOUNT_1);
+    let mut seen = 0;
+    let step = plan.advance(StepReply::Confirm).unwrap();
+    let last_read = run_until(&plan, &core, &mut node, step, |_, _| {
+        seen += 1;
+        seen == before_write - 1
+    });
+    let (id, method, params, write) = rpc_parts(&last_read);
+    assert!(!write);
+    core.lock();
+    core.unlock(PASSWORD.into()).unwrap();
+    let failed = failure(
+        plan.advance(rpc_reply(id, &node.reply(&method, &params, None)))
+            .unwrap(),
+    );
+    assert_eq!((failed.code, failed.hash), (SendFailureCode::Locked, None));
+    assert_eq!(plan.signatures_made(), 0);
+    assert!(plan.interrupted_failure().is_none());
     assert!(core
         .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
         .unwrap()
         .is_empty());
+
+    // During the deployment wait, before the invoke signature.
+    let (_dir, core) = wallet();
+    let mut node = sepolia(false);
+    let plan = reviewed(&core, &mut node, ACCOUNT_1);
+    let step = plan.advance(StepReply::Confirm).unwrap();
+    let poll = run_until(&plan, &core, &mut node, step, |method, _| {
+        method == "starknet_getTransactionStatus"
+    });
+    let deploy_hash = latest_hash(&core);
+    core.lock();
+    core.unlock(PASSWORD.into()).unwrap();
+    let mut writes = Vec::new();
+    let (id, method, params, _) = rpc_parts(&poll);
+    let step = plan
+        .advance(rpc_reply(id, &node.reply(&method, &params, None)))
+        .unwrap();
+    let failed = failure(run_until(&plan, &core, &mut node, step, |method, write| {
+        if write {
+            writes.push(method.to_string());
+        }
+        false
+    }));
+    assert!(
+        writes.is_empty(),
+        "nothing written after the lock: {writes:?}"
+    );
+    assert_eq!(
+        failed.code,
+        SendFailureCode::DeploymentThenInvokeUnconfirmed
+    );
+    assert_eq!(failed.hash.as_deref(), Some(deploy_hash.as_str()));
+    assert_eq!(plan.signatures_made(), 1, "only the deployment was signed");
+    let records = core
+        .activity(oz_id(&core, bramble_core::NetworkId::Sepolia, 0))
+        .unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].summary, "Deploy account contract");
 }
 
 /// One activity list and store: a submitted transaction and an on-chain history row for the

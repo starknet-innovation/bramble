@@ -3,7 +3,7 @@
 //! The Rust middleware shared by the iOS and Android wallets. It is the mobile counterpart of the
 //! extension's background service: Krusty KMS key custody (`kms`), the encrypted vault
 //! (`vault`, byte-compatible with the extension envelope), the bundled network catalog
-//! (`networks`), and sans-IO Starknet RPC (`rpc`). The native apps render UI and move bytes;
+//! (`networks`), and sans-IO Starknet RPC (`wallet_core::rpc`). The native apps render UI and move bytes;
 //! they never see a private key.
 //!
 //! Errors carry an operation name or a fixed reason, never input text, so nothing a user typed
@@ -49,7 +49,8 @@ mod records;
 mod recovery;
 mod recovery_advisory;
 mod recovery_scan;
-mod rpc;
+pub(crate) use wallet_core::rpc;
+mod rpc_request;
 mod security;
 mod send;
 mod ui;
@@ -97,7 +98,7 @@ pub use privacy::{
 };
 pub use recovery::{RecoveryCandidate, RecoverySelection};
 pub use recovery_scan::RecoveryScanStep;
-pub use rpc::{RpcRequest, RpcResponse};
+pub use rpc_request::{RpcRequest, RpcResponse};
 pub use send::plan::TransferPlan;
 pub use send::types::{
     ActivityKind, DeploymentState, FeeAffordability, FeeAmount, FeeUnit, ReviewFlag, RpcPurpose,
@@ -236,19 +237,19 @@ pub fn rpc_chain_id_request(id: u64) -> String {
 /// Whether a chain-id response proves the endpoint serves `network`.
 #[uniffi::export]
 pub fn rpc_verify_chain_id(body: String, id: u64, network: NetworkId) -> Result<bool, CoreError> {
-    rpc::verify_chain_id(&body, id, network)
+    Ok(rpc::verify_chain_id(&body, id, network.core())?)
 }
 
 /// JSON-RPC body for an ERC-20 balance query.
 #[uniffi::export]
 pub fn rpc_balance_request(id: u64, token: String, account: String) -> Result<String, CoreError> {
-    rpc::balance_of_request(id, &token, &account)
+    Ok(rpc::balance_of_request(id, &token, &account)?)
 }
 
 /// Base-10 base-unit balance from a balance response.
 #[uniffi::export]
 pub fn rpc_parse_balance(body: String, id: u64) -> Result<String, CoreError> {
-    rpc::parse_balance_of(&body, id)
+    Ok(rpc::parse_balance_of(&body, id)?)
 }
 
 /// The account bird for an address: tones, facing and parts, as the extension's `accountAvatar`.
@@ -290,7 +291,7 @@ pub fn format_token_amount(
     decimals: u8,
     max_fraction: u8,
 ) -> Result<String, CoreError> {
-    rpc::format_amount(&raw, decimals, max_fraction)
+    Ok(rpc::format_amount(&raw, decimals, max_fraction)?)
 }
 
 #[cfg(test)]

@@ -342,9 +342,9 @@ recorded (§6 item 1), and the Rust fixture test replays it request by request.
 6. The broadcast reply must carry a non-zero felt equal (numerically) to the signed hash.
    Otherwise it is `HashMismatch`. A `TransportFailure` on a write is `SubmissionIndeterminate`,
    and the core never re-emits a write. A JSON-RPC error reply to a write (invoke or
-   deployment) is a determinate refusal (`NodeError` / `AutoDeploymentFailed`): the transaction
-   never existed, so its still-unobserved pending record is removed, as the extension records
-   activity only after an accepted write. Acceptance returns `Broadcast`.
+   deployment) is a refusal (`NodeError` / `AutoDeploymentFailed`) that carries the signed hash:
+   a refused write may still land, so its pending record stays and settles only through status
+   observation, like any other (wallet-core #25). Acceptance returns `Broadcast`.
 7. `Proceed` starts the confirmation checkpoints, which alternate `Wait` and
    `TransactionStatus`, settle the activity record, and end in `Finished`. `CheckAgain` re-runs
    the checkpoints from `Finished { Pending }`.

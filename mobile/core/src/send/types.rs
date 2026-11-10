@@ -1,6 +1,15 @@
-//! The send path's FFI vocabulary. Every error and failure is a fixed variant: none carries a
-//! recipient, an amount, node text or key material, so nothing a user typed or a node said can
-//! reach a log through an error.
+//! The send path's FFI vocabulary. The plan's own types are `wallet_core::send`'s, exported here
+//! through `#[uniffi::remote]` with the shapes and docs mobile's bindings already have; only the
+//! request, the plan-API errors, the deployment state and the activity kind are mobile's. Every
+//! error and failure is a fixed variant: none carries a recipient, an amount, node text or key
+//! material, so nothing a user typed or a node said can reach a log through an error.
+
+pub use wallet_core::send::calls::{ReviewFlag, SendAmountError};
+pub use wallet_core::send::fees::{FeeAmount, FeeUnit};
+pub use wallet_core::send::judge::TxStatus;
+pub use wallet_core::send::types::{
+    FeeAffordability, RpcPurpose, SendFailure, SendFailureCode, SendStep, StepReply, TransferReview,
+};
 
 use crate::networks::NetworkId;
 
@@ -26,14 +35,14 @@ pub struct TransferRequest {
 }
 
 /// The unit a fee is quoted in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum FeeUnit {
     Fri,
     Wei,
 }
 
 /// A fee as the spend its resource bounds authorise, with its display text.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct FeeAmount {
     /// Base-10 base units.
     pub max_spend: String,
@@ -43,7 +52,7 @@ pub struct FeeAmount {
 }
 
 /// A reviewable risk the verifier raised.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum ReviewFlag {
     SelfTransfer,
     /// The recipient is a token contract the wallet knows. A warning: it does not block Confirm.
@@ -52,7 +61,7 @@ pub enum ReviewFlag {
 }
 
 /// Whether the account's STRK covers the fee (and the amount, when STRK is sent).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum FeeAffordability {
     Sufficient,
     Insufficient,
@@ -68,7 +77,7 @@ pub enum DeploymentState {
 }
 
 /// Everything the review screen shows, derived from the one stored call.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct TransferReview {
     /// The verifier's summary, e.g. "Send 1.5 STRK to 0x3fa7…41a3", or "Deploy account contract".
     pub summary: String,
@@ -89,7 +98,7 @@ pub struct TransferReview {
 
 /// What a JSON-RPC step is for; the host uses it only for progress copy and to refuse redirects
 /// on writes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum RpcPurpose {
     ChainId,
     ClassHashAt,
@@ -111,7 +120,7 @@ pub enum RpcPurpose {
 
 /// A transaction's chain status as the wallet reports it: the extension's `TxStatus`, the one
 /// status for plans and activity rows alike.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum TxStatus {
     Pending,
     Preconfirmed,
@@ -121,7 +130,7 @@ pub enum TxStatus {
 }
 
 /// The next thing the host must do for a plan.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum SendStep {
     /// POST `body` to the plan's endpoint and reply with `StepReply::Rpc` (same `id`) or
     /// `StepReply::TransportFailure`. A write is sent exactly once and never redirected.
@@ -148,7 +157,7 @@ pub enum SendStep {
 }
 
 /// What the host reports back.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum StepReply {
     Start,
     Rpc { id: u64, body: String, now_ms: u64 },
@@ -161,7 +170,7 @@ pub enum StepReply {
 }
 
 /// Why an amount was refused.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum SendAmountError {
     /// "Invalid transfer amount"
     Invalid,
@@ -194,9 +203,18 @@ pub enum SendError {
     UnknownTransaction,
 }
 
+impl From<wallet_core::send::types::SendError> for SendError {
+    fn from(error: wallet_core::send::types::SendError) -> Self {
+        match error {
+            wallet_core::send::types::SendError::OutOfOrder => Self::OutOfOrder,
+            wallet_core::send::types::SendError::PlanClosed => Self::PlanClosed,
+        }
+    }
+}
+
 /// Why a plan ended without a confirmed transaction. The host maps each code to the extension's
 /// copy (`extension-transactions-*.json`, `copy`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum SendFailureCode {
     ReviewedFeeExceeded,
     ReviewedFeeRequired,
@@ -247,7 +265,7 @@ pub enum SendFailureCode {
 }
 
 /// A failure, with the hash of anything already accepted (a deployment, or an ambiguous write).
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct SendFailure {
     pub code: SendFailureCode,
     pub hash: Option<String>,

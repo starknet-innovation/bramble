@@ -270,6 +270,7 @@ pub fn balance_requests(
             let id = first_id + i as u64;
             crate::rpc::balance_of_request(id, &token.address, &account)
                 .map(|body| super::wire::rpc_request(id, body))
+                .map_err(CoreError::from)
         })
         .collect()
 }

@@ -11,6 +11,7 @@ use std::sync::OnceLock;
 use krusty_kms::{ArgentAccount, ArgentConstructorLayout};
 use serde::Deserialize;
 use starknet_types_core::felt::Felt;
+use wallet_core::send::plan::{ArgentClass, Authorization};
 
 use crate::felt;
 
@@ -311,6 +312,36 @@ pub(crate) fn authorization_shape(family: AccountFamily, class_hash: &Felt) -> S
     }
 }
 
+/// The authorization shape this wallet produces for Ready accounts.
+pub(crate) const ARGENT_SIGNER_ARRAY: &str = "argent-signer-array";
+
+/// How a `family` account authorises a send (`authorizationShape`), with the catalog data the
+/// plan's account-state reads check against: every known Argent class, marked whether its
+/// authorization is the signer array this wallet produces, and the Braavos implementations a
+/// deployed account may run plus the one a deployment installs.
+pub(crate) fn send_authorization(family: AccountFamily) -> Authorization {
+    let catalog = catalog();
+    match family {
+        AccountFamily::OpenZeppelin => Authorization::StarkPair,
+        AccountFamily::Argent => Authorization::ArgentSignerArray {
+            classes: catalog
+                .classes
+                .iter()
+                .filter(|entry| entry.family == AccountFamily::Argent)
+                .map(|entry| ArgentClass {
+                    class_hash: entry.class_hash,
+                    label: entry.info.label.clone(),
+                    signer_array: entry.info.authorization_shape == ARGENT_SIGNER_ARRAY,
+                })
+                .collect(),
+        },
+        AccountFamily::Braavos => Authorization::Braavos {
+            signing_classes: catalog.braavos_signing.clone(),
+            implementation: catalog.braavos_implementation,
+        },
+    }
+}
+
 /// `accountFamilyName`: "Bramble", "Ready", or "Braavos".
 #[uniffi::export]
 pub fn account_family_name(family: AccountFamily) -> String {
@@ -410,5 +441,48 @@ mod tests {
         );
         assert_eq!(recovery_limits().max_selections, 40);
         assert_eq!(copy_feedback().confirm_ms, 1400);
+    }
+
+    /// The catalog's rule behind every Ready send: the class the wallet creates is authorizable
+    /// with the signer array, every Argent class is listed with its own label, and an Argent class
+    /// whose shape is not the signer array is listed as such (the core then refuses it, naming
+    /// the label). Braavos carries the signing implementations and what a deployment installs.
+    #[test]
+    fn the_send_authorization_follows_the_catalog() {
+        let catalog = catalog();
+        let Authorization::ArgentSignerArray { classes } =
+            send_authorization(AccountFamily::Argent)
+        else {
+            panic!("Ready accounts sign with the signer array");
+        };
+        let argent: Vec<_> = catalog
+            .classes
+            .iter()
+            .filter(|entry| entry.family == AccountFamily::Argent)
+            .collect();
+        assert_eq!(classes.len(), argent.len());
+        for (class, entry) in classes.iter().zip(argent) {
+            assert_eq!(class.class_hash, entry.class_hash);
+            assert_eq!(class.label, entry.info.label);
+            assert_eq!(
+                class.signer_array,
+                entry.info.authorization_shape == ARGENT_SIGNER_ARRAY
+            );
+        }
+        assert!(classes
+            .iter()
+            .any(|class| class.class_hash == catalog.argent_default && class.signer_array));
+        assert!(classes.iter().any(|class| !class.signer_array));
+        assert_eq!(
+            send_authorization(AccountFamily::Braavos),
+            Authorization::Braavos {
+                signing_classes: catalog.braavos_signing.clone(),
+                implementation: catalog.braavos_implementation,
+            }
+        );
+        assert_eq!(
+            send_authorization(AccountFamily::OpenZeppelin),
+            Authorization::StarkPair
+        );
     }
 }

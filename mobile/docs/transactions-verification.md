@@ -3,6 +3,11 @@
 Continues [transactions.md](transactions.md): how the send path is pinned to the extension and
 tested, the files it adds, what Krusty 0.11.0 lacks, and how each review must-fix was resolved.
 
+Since M4 (wallet-core `v0.2.1`) the mechanism files below (`u256`, `calls`, `fees`, `rpc_bodies`,
+`judge`, `sign`, `plan*`) and the parity suites that replay the captures live in wallet-core;
+`mobile/core/src/send/` keeps `mod`, `types`, `plan` (the `TransferPlan` wrapper and its
+`PlanHost`), `wallet_ext` and `fixture_tests`. This page records the path as it was added.
+
 ## 6. Parity fixtures (pin behaviour to the extension)
 
 New committed fixture `mobile/core/tests/fixtures/extension-transactions-{wire,rules,presentation,

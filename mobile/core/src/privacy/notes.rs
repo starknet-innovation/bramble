@@ -16,7 +16,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::config::Limits;
 use super::json::{js_bigint, Ordered, FIELD_PRIME};
-use crate::send::u256::U256;
+use wallet_core::send::u256::U256;
 
 /// Totals gathered so far in one discovery attempt.
 #[derive(Debug, Default)]

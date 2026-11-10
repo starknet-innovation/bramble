@@ -24,8 +24,8 @@ use super::observation;
 use crate::felt;
 use crate::files::write_atomic;
 use crate::history::activity_rules::{is_recorded_token_address, parse_direction};
-use crate::send::judge::Observation;
 use crate::send::types::{ActivityKind, TxStatus};
+use wallet_core::send::judge::Observation;
 
 pub(crate) const ACTIVITY_FILE: &str = "activity.v1.json";
 const MAX_ENTRIES_PER_SCOPE: usize = 200;
@@ -361,28 +361,6 @@ fn observe_entry(entry: &mut Entry, observation: Observation) -> Option<TxStatus
         }
         parse_status(&entry.status)
     }
-}
-
-/// Drops the still-`pending` entry for `hash` after the node gave a determinate JSON-RPC refusal
-/// of its write: the transaction never existed, and the extension records activity only after a
-/// write is accepted. An entry that has already been observed is left alone.
-pub(crate) fn discard(dir: &Path, account_id: &str, hash: &Felt) {
-    locked(|| {
-        let mut log = load_log(dir);
-        let scopes = &mut log.scopes;
-        let Some(entries) = scopes.get_mut(account_id) else {
-            return;
-        };
-        let before = entries.len();
-        entries.retain(|e| {
-            felt::parse(&e.hash).as_ref() != Some(hash)
-                || e.status != status_text(TxStatus::Pending)
-                || e.not_found_count.is_some()
-        });
-        if entries.len() != before {
-            save_log(dir, &log);
-        }
-    });
 }
 
 /// Retires the scope's unresolved entries that outlived their observation window

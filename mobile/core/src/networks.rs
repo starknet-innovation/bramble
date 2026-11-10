@@ -33,6 +33,14 @@ impl NetworkId {
             .find(|network| network.catalog_id() == value)
     }
 
+    /// The same network as `wallet-core` names it, for the core's RPC and send plans.
+    pub(crate) fn core(self) -> wallet_core::NetworkId {
+        match self {
+            Self::Mainnet => wallet_core::NetworkId::Mainnet,
+            Self::Sepolia => wallet_core::NetworkId::Sepolia,
+        }
+    }
+
     pub(crate) fn chain(self) -> ChainId {
         match self {
             Self::Mainnet => ChainId::Mainnet,

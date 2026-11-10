@@ -8,7 +8,7 @@ Braavos records use the same `TransferPlan`, following `braavos-compatibility.ts
 
 - **Signature.** A bare `[r, s]` over Krusty's invoke hash, as for OpenZeppelin; invoke estimates
   skip validation and carry no signature.
-- **Account state before estimating or signing** (`send/plan_probe.rs`). The accepted block, then
+- **Account state before estimating or signing** (wallet-core's `send/plan_probe.rs`). The accepted block, then
   the class at that block. A JSON-RPC 24 (or "block not found") re-pins and retries the decision
   up to three times, for Braavos and Ready alike; a third miss fails closed. The class must be an
   implementation this wallet signs for
@@ -29,7 +29,7 @@ Braavos records use the same `TransferPlan`, following `braavos-compatibility.ts
   even in an estimate, so the deployment estimate carries a real signature over the
   query-version hash, which can never be broadcast. This is the one place a review signs: two
   hashes at review, two again at confirmation's re-estimate, then two for the deployment.
-  Krusty hashes only version 3, so `send/sign.rs` composes the query-version hash itself; a unit
+  Krusty hashes only version 3, so wallet-core's `send/sign.rs` composes the query-version hash itself; a unit
   test pins that composition to Krusty's at version 3, and the parity fixture pins the query hash.
 - **Refusals.** The review step fails with the extension's sentence, before any estimate or
   signature: `BraavosDeployFirst`, `BraavosNotDeployable`, `BraavosClassUnrecognised`,
@@ -41,6 +41,6 @@ Braavos records use the same `TransferPlan`, following `braavos-compatibility.ts
 Parity: `scripts/mobile-transactions-braavos.ts` runs the extension's own path for the published
 phrase's Braavos account (deployed sends on both networks, the legacy implementation, an expired
 2FA removal, standalone deployment on both networks) and each refusal, into
-`tests/fixtures/extension-transactions-braavos*.json`. `tests/transactions_braavos_parity.rs`
+`tests/fixtures/extension-transactions-braavos*.json`. wallet-core's `transactions_plan_parity.rs`
 replays it request by request and requires the same bodies, signature arrays, signed-hash count
 and transaction hashes.
