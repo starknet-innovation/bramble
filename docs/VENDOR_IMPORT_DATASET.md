@@ -144,6 +144,20 @@ against Argent's backend** (`ARGENT_SMART_ACCOUNT_DISCOVERY_URL`,
   the scan lists it as "unsupported release · view only", and pasting the address
   gives "Bramble doesn't support this account's contract version yet."
 - Braavos withdrawal-limit / deferred-removal state surfaces for the manifest.
+  Parked on 2026-11-10: `set_withdrawal_limit_low` needs a strong-signer
+  (secp256r1) invoke signature, which the stage cannot produce yet, and a fee
+  rate from Braavos's rate service, which may not exist on Sepolia
+  (`MISSING_FEE`). Needs a P-256 invoke signer in `matrix-signers.ts` first.
+- Two leaves from the account-tree review that nothing covered are now Sepolia
+  fixtures (2026-11-10): TA-64, an Argent 0.4.0 account deployed and then
+  emptied to exactly zero through a SNIP-9 outside execution the bank pays for,
+  so the class probe alone must list it; and TA-65, an undeployed counterfactual
+  holding only an ERC-721, which no balance probe sees (D3). A "received and
+  swept, events only" leaf is not reachable on Starknet: an undeployed account
+  cannot send, and sending deploys it, so it collapses into TA-64. Both score
+  as predicted in `verification-sepolia-2026-11-10.json` (60/60 against the
+  v0.10.10 build): TA-64 listed as "Deployed on Starknet", TA-65 not listed and
+  "No account found" on paste.
 
 ## Phase 2 status — calibration PASSED (2026-10-02)
 
