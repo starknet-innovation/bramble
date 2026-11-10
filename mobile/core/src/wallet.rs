@@ -14,7 +14,6 @@
 //! can never sign in another, however the first one ended (lock, idle lock, re-unlock).
 
 use std::fs;
-use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -25,7 +24,7 @@ use crate::account_catalog::AccountFamily;
 use crate::account_store::{self, VaultPayload};
 use crate::clock::{ClockReading, HostClock};
 use crate::container::{self, Dek, Randomness, StoredVault, VaultFile};
-use crate::files::{storage, write_atomic};
+use crate::files::{storage, Directory};
 use crate::migrations::{open_stored, Opened, VAULT_VERSION};
 use crate::networks::NetworkId;
 pub use crate::records::{
@@ -89,7 +88,7 @@ impl WalletCore {
     }
 
     pub(crate) fn now(&self) -> ClockReading {
-        ClockReading::read(self.clock.as_ref())
+        ClockReading::read(&self.clock.as_ref())
     }
 
     /// A poisoned session lock means a panic mid-operation; clearing the session fails closed.
@@ -106,18 +105,17 @@ impl WalletCore {
     }
 
     pub(crate) fn read_vault(&self) -> Result<StoredVault, CoreError> {
-        let text = match fs::read_to_string(self.vault_path()) {
-            Ok(text) => text,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Err(CoreError::NoWallet),
-            Err(_) => return Err(storage("read vault")),
-        };
-        container::parse(&text)
+        container::read(&Directory(&self.data_dir), VAULT_FILE, VAULT_VERSION)?
+            .ok_or(CoreError::NoWallet)
     }
 
     /// Call with the file lock held.
     pub(crate) fn write_vault(&self, file: &VaultFile) -> Result<(), CoreError> {
-        let body = serde_json::to_vec(file).map_err(|_| storage("serialise vault"))?;
-        write_atomic(&self.data_dir, VAULT_FILE, &body)
+        Ok(container::write(
+            &Directory(&self.data_dir),
+            VAULT_FILE,
+            file,
+        )?)
     }
 
     /// One throttled, counted passphrase attempt, with `then` run under the same attempt mutex.
@@ -198,7 +196,11 @@ impl WalletCore {
                 .ok_or_else(|| storage("vault changed on disk"))?,
             StoredVault::Container(_) => return Err(storage("vault changed on disk")),
         };
-        self.write_vault(&base.with_payload(&session.dek, &session.payload.to_json()?)?)?;
+        self.write_vault(&base.with_payload(
+            &session.dek,
+            VAULT_VERSION,
+            &session.payload.to_json()?,
+        )?)?;
         session.pending = None;
         Ok(())
     }
@@ -252,9 +254,18 @@ impl WalletCore {
         let epoch = self.lock_epoch.load(Ordering::SeqCst);
         let payload = VaultPayload::new(mnemonic.to_string(), passphrase, first_account)?;
         account_store::check_consistent(&payload)?;
+        // The shared core's `SealingKey::create` takes any passphrase, so the rule is held here,
+        // on the one path that makes a vault, where no caller can skip it.
+        vault::check_password(password)?;
         let key = SealingKey::create(password)?;
         let dek = container::new_dek()?;
-        let file = container::seal_new(&key, &dek, &payload.to_json()?, &Randomness::draw()?)?;
+        let file = container::seal_new(
+            &key,
+            &dek,
+            VAULT_VERSION,
+            &payload.to_json()?,
+            &Randomness::draw()?,
+        )?;
         {
             let _file = self.lock_file();
             if self.vault_path().exists() {
