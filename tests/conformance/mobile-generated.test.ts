@@ -1,5 +1,5 @@
 /**
- * The mobile wallet reuses the extension's design system, network catalog, and Krusty release
+ * The mobile wallet reuses the extension's design system and network catalog
  * rather than restating them. These tests fail when a committed mobile copy drifts from its
  * TypeScript source: re-run `bun run mobile:assets` (tokens, networks, brand mark) or
  * `bun run mobile:parity` (derivation vectors) and commit the result.
@@ -7,7 +7,6 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { EXPECTED_DEPENDENCIES } from "../../scripts/config-standards-policy";
 import { readMobileAssetSources, renderMobileAssets } from "../../scripts/mobile-assets";
 import { mobilePrivacyRoutes } from "../../scripts/mobile-assets/privacy";
 import { FACE_ID_USAGE, SECURITY_POLICY } from "../../scripts/mobile-assets/security-copy";
@@ -132,14 +131,15 @@ describe("mobile core parity", () => {
     expect(() => renderSendCopy(shifted)).toThrow(/shifted screen position/);
   });
 
-  test("the Rust core pins the same Krusty release as the extension", async () => {
+  // The extension stays on its own Krusty release until it adopts the shared core, so the two
+  // pins are no longer compared; the parity fixtures hold the releases to the same output.
+  test("the Rust core reports the Krusty release it pins", async () => {
     const cargo = await readFile("mobile/core/Cargo.toml", "utf8");
-    const npmPin = EXPECTED_DEPENDENCIES["@starknetfoundation/krusty-kms-wasm"];
-    expect(npmPin).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(cargo).toContain(`krusty-kms = { version = "=${npmPin}"`);
-    expect(cargo).toContain(`krusty-kms-common = { version = "=${npmPin}"`);
+    const pin = /^krusty-kms = \{ version = "=(\d+\.\d+\.\d+)"/m.exec(cargo)?.[1];
+    expect(pin).toBeDefined();
+    expect(cargo).toContain(`krusty-kms-common = { version = "=${pin}"`);
     const lib = await readFile("mobile/core/src/lib.rs", "utf8");
-    expect(lib).toContain(`krusty_version: "${npmPin}".into()`);
+    expect(lib).toContain(`krusty_version: "${pin}".into()`);
   });
 });
 

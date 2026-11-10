@@ -1,7 +1,7 @@
 //! STRK20 privacy, read-only: the account's scoped viewing key derived inside the core, private
 //! balance discovery through the privacy service as a sans-IO plan, and the extension's privacy
 //! gates for Home, Receive, token detail and the journey. Nothing is submitted: registration,
-//! shielding, private sends and unshielding need an upstream privacy client that Krusty 0.11.0 does
+//! shielding, private sends and unshielding need an upstream privacy client that Krusty 2.0.0 does
 //! not provide (mobile/docs/privacy.md §1, §9), so `privacy_capabilities()` is all false.
 //!
 //! The viewing key never crosses FFI as a value. It exists only while one discovery body is built

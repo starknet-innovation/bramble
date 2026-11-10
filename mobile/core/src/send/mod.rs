@@ -1,7 +1,7 @@
 //! Sending: an ERC-20 transfer from an OpenZeppelin account, with automatic deployment before
 //! the first send, exactly as the extension does. Protocol logic only — the core builds every
 //! JSON-RPC body and judges every reply (`rpc_bodies`, `judge`); the host moves bytes.
-//! Hashing and signing use Krusty 0.11.0 inside the core (`sign`, `WalletCore::plan_sign`).
+//! Hashing and signing use Krusty 2.0.0 inside the core (`sign`, `WalletCore::plan_sign`).
 //!
 //! Design and review resolutions: `mobile/docs/transactions.md`. Parity with the extension is
 //! pinned by `tests/fixtures/extension-transactions-*.json`.

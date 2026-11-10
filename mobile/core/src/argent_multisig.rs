@@ -1,7 +1,7 @@
 //! Argent Multisig 0.2 (the extension's "Ready Multisig"), mirroring
 //! `packages/platform/starknet/src/accounts/account-contracts.ts`:
 //! signer GUIDs, the GUID-sorted configuration, constructor calldata, and the counterfactual
-//! address. Krusty 0.11.0 has no Argent-multisig descriptor (its `OpenZeppelinMultisig` is a
+//! address. Krusty 2.0.0 has no Argent-multisig descriptor (its `OpenZeppelinMultisig` is a
 //! different contract whose addresses never match), so this composes Krusty's public
 //! `calculate_contract_address` and `encode_short_string` with the 2-to-1 Poseidon hash from
 //! `starknet-types-core`, the same primitive library Krusty uses. These are public hash functions,
