@@ -150,6 +150,30 @@ fn refuses_weak_input_and_double_creation() {
     ));
 }
 
+/// The shared core seals under any passphrase, so the minimum is Bramble's to hold on every
+/// path that makes a vault. Seven characters is one under it; nothing may reach the disk.
+#[test]
+fn a_passphrase_under_the_minimum_is_refused_on_create_and_on_import() {
+    use bramble_core::testing::{seal_container_vault, seal_envelope_vault, MIN_PASSWORD_LENGTH};
+    let short = "p".repeat(MIN_PASSWORD_LENGTH - 1);
+    let (dir, core) = core();
+    let refused = |result: Result<(), CoreError>| {
+        assert!(matches!(result, Err(CoreError::InvalidInput { .. })));
+        assert!(!dir.path().join("vault.json").exists());
+    };
+    refused(core.create_wallet(short.clone(), 12).map(|_| ()));
+    refused(
+        core.create_wallet_on_network(short.clone(), 12, NetworkId::Sepolia)
+            .map(|_| ()),
+    );
+    refused(core.import_wallet(short.clone(), PHRASE.into(), None));
+    let path = dir.path().to_str().unwrap();
+    refused(seal_envelope_vault(path, &short, "{}"));
+    refused(seal_container_vault(path, &short, 2, "{}"));
+    core.import_wallet("p".repeat(MIN_PASSWORD_LENGTH), PHRASE.into(), None)
+        .unwrap();
+}
+
 #[test]
 fn delete_requires_the_password() {
     let (_dir, core) = core();

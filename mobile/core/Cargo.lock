@@ -213,7 +213,6 @@ dependencies = [
  "base64 0.22.1",
  "bip39",
  "bramble-core",
- "getrandom 0.4.3",
  "krusty-kms",
  "krusty-kms-common",
  "pbkdf2",

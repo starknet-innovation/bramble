@@ -141,7 +141,7 @@ impl WalletCore {
             return Err(CoreError::BiometricUnavailable);
         };
         let dek = match file.open_biometric(&secret) {
-            Err(CoreError::BiometricInvalidated) => {
+            Err(wallet_core::Error::BiometricInvalidated) => {
                 let id = file.biometric_slot.as_ref().map(|slot| slot.id.as_str());
                 self.drop_biometric_slot(id)?;
                 return Err(CoreError::BiometricInvalidated);

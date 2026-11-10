@@ -57,25 +57,6 @@ pub fn braavos_implementation_class() -> String {
     crate::felt::canonical(&crate::account_catalog::catalog().braavos_implementation)
 }
 
-/// Opens a raw envelope JSON string, as the extension would.
-pub fn open_envelope(json: &str, password: &str, scope: &str) -> Result<Vec<u8>, crate::CoreError> {
-    let envelope: crate::vault::Envelope =
-        serde_json::from_str(json).map_err(|_| crate::CoreError::Storage {
-            reason: "not an envelope".into(),
-        })?;
-    crate::vault::open(&envelope, password, scope).map(|(plaintext, _)| plaintext.to_vec())
-}
-
-/// Opens a DEK passphrase slot (scope `bramble.mobile.dek.v1`) exactly as the vault does.
-pub fn open_password_slot(json: &str, password: &str) -> Result<Vec<u8>, crate::CoreError> {
-    let envelope: crate::vault::Envelope =
-        serde_json::from_str(json).map_err(|_| crate::CoreError::Storage {
-            reason: "not an envelope".into(),
-        })?;
-    let (plaintext, _) = crate::vault::open(&envelope, password, crate::container::DEK_SCOPE)?;
-    crate::container::decode_dek(&plaintext).map(|dek| dek.to_vec())
-}
-
 /// Seals `plaintext` as a pre-container vault in `dir`: a bare envelope with scope
 /// `bramble.mobile.vault.v1`, as the original core (payload version 1) and the accounts branch
 /// before the merge (records payload, version 2) wrote it.
@@ -84,6 +65,7 @@ pub fn seal_envelope_vault(
     password: &str,
     plaintext: &str,
 ) -> Result<(), crate::CoreError> {
+    crate::vault::check_password(password)?;
     let key = crate::vault::SealingKey::create(password)?;
     let envelope = key.seal_with(
         plaintext.as_bytes(),
@@ -105,10 +87,11 @@ pub fn seal_container_vault(
     version: u32,
     plaintext: &str,
 ) -> Result<(), crate::CoreError> {
+    crate::vault::check_password(password)?;
     let key = crate::vault::SealingKey::create(password)?;
     let dek = crate::container::new_dek()?;
     let randomness = crate::container::Randomness::draw()?;
-    let file = crate::container::seal_new(&key, &dek, plaintext.as_bytes(), &randomness)?;
+    let file = crate::container::seal_new(&key, &dek, version, plaintext.as_bytes(), &randomness)?;
     let file = crate::container::VaultFile { version, ..file };
     write_vault(
         dir,
@@ -128,7 +111,7 @@ fn write_vault(dir: &str, body: &[u8]) -> Result<(), crate::CoreError> {
 pub fn open_vault(dir: &str, password: &str) -> Result<String, crate::CoreError> {
     let path = std::path::Path::new(dir).join(crate::wallet::VAULT_FILE);
     let json = std::fs::read_to_string(path).map_err(|_| crate::CoreError::NoWallet)?;
-    let plaintext = match crate::container::parse(&json)? {
+    let plaintext = match crate::container::parse(&json, crate::migrations::VAULT_VERSION)? {
         crate::container::StoredVault::Container(file) => {
             let (dek, _) = file.open_dek(password)?;
             file.open_payload(&dek)?

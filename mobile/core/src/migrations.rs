@@ -263,7 +263,7 @@ pub(crate) fn open_container(file: VaultFile, dek: Dek) -> Result<Opened, CoreEr
     }
     let (payload, migrated) = migrate(staged)?;
     let container = if migrated {
-        let resealed = file.with_payload(&dek, &payload.to_json()?)?;
+        let resealed = file.with_payload(&dek, VAULT_VERSION, &payload.to_json()?)?;
         // Prove the re-sealed file opens as the current version before anyone writes it.
         if stage(&resealed.open_payload(&dek)?)?.version() != VAULT_VERSION {
             return Err(storage("vault migration did not round-trip"));
@@ -289,7 +289,13 @@ pub(crate) fn seal_migrated(
     dek: &[u8; 32],
     randomness: &Randomness,
 ) -> Result<VaultFile, CoreError> {
-    container::seal_new(key, dek, &payload.to_json()?, randomness)
+    Ok(container::seal_new(
+        key,
+        dek,
+        VAULT_VERSION,
+        &payload.to_json()?,
+        randomness,
+    )?)
 }
 
 /// Opens whatever is on disk with the passphrase (one KDF) and brings it to the current version

@@ -308,7 +308,7 @@ fn each_layout_accepts_only_the_versions_it_was_written_with() {
 
 #[test]
 fn sealing_a_migrated_vault_is_deterministic_given_its_randomness() {
-    let key = SealingKey::fixed("fixture passphrase", [7; 16], &"ab".repeat(16));
+    let key = SealingKey::from_parts("fixture passphrase", [7; 16], &"ab".repeat(16));
     let (payload, _) = migrate(stage(&counted_json(1, 3, PHRASE)).unwrap()).unwrap();
     let seal = || {
         serde_json::to_string(
@@ -327,7 +327,7 @@ fn sealing_a_migrated_vault_is_deterministic_given_its_randomness() {
         serde_json::from_str::<serde_json::Value>(&first).unwrap(),
         golden
     );
-    let StoredVault::Container(file) = parse(&first).unwrap() else {
+    let StoredVault::Container(file) = parse(&first, VAULT_VERSION).unwrap() else {
         panic!("expected a container")
     };
     assert_eq!(file.version, VAULT_VERSION);
@@ -340,10 +340,16 @@ fn sealing_a_migrated_vault_is_deterministic_given_its_randomness() {
 
 #[test]
 fn a_version_two_container_is_resealed_in_place() {
-    let key = SealingKey::fixed("fixture passphrase", [7; 16], &"ab".repeat(16));
+    let key = SealingKey::from_parts("fixture passphrase", [7; 16], &"ab".repeat(16));
     let dek = [9u8; 32];
-    let file =
-        container::seal_new(&key, &dek, &counted_json(2, 1, PHRASE), &fixed_randomness()).unwrap();
+    let file = container::seal_new(
+        &key,
+        &dek,
+        VAULT_VERSION,
+        &counted_json(2, 1, PHRASE),
+        &fixed_randomness(),
+    )
+    .unwrap();
     let file = VaultFile { version: 2, ..file };
     let mut with_slot = file.clone();
     with_slot.biometric_slot = Some(file.seal_biometric(&dek, &[5; 32], String::new()).unwrap());
