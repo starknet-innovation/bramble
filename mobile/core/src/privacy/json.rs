@@ -14,7 +14,7 @@ use std::fmt;
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 
-use crate::send::u256::U256;
+use wallet_core::send::u256::U256;
 
 /// Largest integer `JSON.parse` represents exactly (`Number.MAX_SAFE_INTEGER`).
 pub const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;

@@ -194,7 +194,7 @@ OpenZeppelin ones, with the extension's authorization (`authorizationShape` in
 - **Signature.** Argent 0.4's `argent-signer-array`: `[1, 0, public_key, r, s]` (one signer,
   `Signer::Starknet`). The transaction hash is Krusty's `compute_invoke_v3_hash` /
   `compute_deploy_account_v3_hash`, as for OZ; only the array around `(r, s)` differs.
-- **Account state before estimating or signing** (`send/plan_probe.rs`). The latest accepted
+- **Account state before estimating or signing** (wallet-core's `send/plan_probe.rs`). The latest accepted
   block (`starknet_blockHashAndNumber`), then the class at that block. A deployed account must run
   a class whose authorization is the signer array (Argent 0.4.0; an un-upgraded 0.3.x account is
   refused, an unknown class too) and must report, at the same block, this wallet's key as a
@@ -218,7 +218,7 @@ OpenZeppelin ones, with the extension's authorization (`authorizationShape` in
 Parity: `scripts/mobile-transactions-argent.ts` runs the extension's own send path for the
 published phrase's Ready account under each Argent class (0.4.0 deployed, undeployed and
 standalone deployment on both networks; 0.3.0 and 0.3.1 upgraded to 0.4.0) and each refusal, into
-`tests/fixtures/extension-transactions-argent*.json`. `tests/transactions_argent_parity.rs` and
+`tests/fixtures/extension-transactions-argent*.json`. wallet-core's `transactions_plan_parity.rs` and
 `BrambleTests/ReadyTransferBridgeTests.swift` replay it request by request and require the same
 bodies, signature arrays and hashes; `bun run check` fails when the fixture drifts.
 

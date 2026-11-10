@@ -18,10 +18,10 @@ use super::types::{
     PrivacyFailure, PrivacyPurpose, PrivacyRegistration, PrivacyState, PrivacyStep, PrivateBalance,
 };
 use crate::networks::TokenInfo;
-use crate::send::judge::{answer, chain, ChainAnswer};
-use crate::send::u256::U256;
 use crate::wallet::WalletCore;
 use crate::{felt, networks, rpc};
+use wallet_core::send::judge::{answer, chain, ChainAnswer};
+use wallet_core::send::u256::U256;
 
 /// The extension's `readRequestedTokens`, then the `balancesFrom` length cap.
 ///
@@ -201,7 +201,7 @@ impl ReadState {
         now_ms: u64,
     ) -> PrivacyStep {
         match read {
-            Read::Chain => match chain(answer(body, id), self.network) {
+            Read::Chain => match chain(answer(body, id), self.network.core()) {
                 ChainAnswer::Match => self.begin(core, Read::Preflight, now_ms),
                 ChainAnswer::Mismatch => self.fail(PrivacyFailure::WrongChain),
                 ChainAnswer::Unreadable => self.fail(PrivacyFailure::RpcUnavailable),
@@ -281,7 +281,7 @@ mod tests {
     use super::super::plan::MAX_DISCOVERY_PAGES;
     use super::*;
     use crate::networks::{self, NetworkId, TokenInfo};
-    use crate::send::u256::U256;
+    use wallet_core::send::u256::U256;
 
     fn token(address: &str) -> TokenInfo {
         TokenInfo {

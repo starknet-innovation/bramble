@@ -9,8 +9,8 @@ use crate::networks::{self, NetworkId, TokenInfo};
 use crate::portfolio::fiat::{compact_amount, portfolio_amount};
 use crate::portfolio::model::TokenBalance;
 use crate::portfolio::registry::{strk_address, with_token_id};
-use crate::send::u256::U256;
 use crate::{felt, rpc};
+use wallet_core::send::u256::U256;
 
 /// `formatTokenAmount`: full precision, trailing zeros dropped.
 pub fn format_full(balance: &str, decimals: u8) -> String {

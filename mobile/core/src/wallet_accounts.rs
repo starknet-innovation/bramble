@@ -19,7 +19,7 @@ use crate::kms::{self, Ladder};
 use crate::networks::NetworkId;
 use crate::recovery::{derive_selections, RecoverySelection};
 use crate::recovery_scan::{self, RecoveryScanStep};
-use crate::rpc::RpcResponse;
+use crate::rpc_request::RpcResponse;
 use crate::wallet::{Session, StarkSignature, WalletCore};
 use crate::CoreError;
 
@@ -99,7 +99,7 @@ impl From<SignRefusal> for CoreError {
 /// The one gate before any signature: the record must exist in a vault that is not waiting for
 /// discovery. Every family passes. The signature array a transaction carries is the plan's,
 /// built for the record's family; a Ready or Braavos account's live class and signers are
-/// checked on chain before any hash reaches this gate (`send/plan_probe.rs`), and a Braavos
+/// checked on chain before any hash reaches this gate (`wallet_core::send::plan_probe`), and a Braavos
 /// account that is not deployed signs only its own deployment (`docs/accounts.md` §2.7).
 pub(crate) fn signing_record<'a>(
     payload: &'a VaultPayload,

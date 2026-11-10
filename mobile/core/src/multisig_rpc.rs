@@ -14,7 +14,8 @@ use starknet_types_core::felt::Felt;
 
 use crate::contact_card::lenient_hex_felt;
 use crate::networks::{self, NetworkId};
-pub(crate) use crate::rpc::{envelope, RpcRequest, MAX_RESPONSE_BYTES};
+pub(crate) use crate::rpc::{envelope, MAX_RESPONSE_BYTES};
+pub(crate) use crate::rpc_request::RpcRequest;
 use crate::{argent_multisig, felt, multisig_constants, CoreError};
 
 const GET_THRESHOLD: &str = "0x1753cadb342b30cb76742fe738135a182b5c30e6e9eed2d3ee796b2accd34fd";

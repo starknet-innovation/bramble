@@ -16,8 +16,8 @@ use super::json::Ordered;
 use super::notes::Totals;
 use super::types::{PrivacyError, PrivacyFailure, PrivacyReply, PrivacyStep};
 use crate::networks::{NetworkId, TokenInfo};
-use crate::send::u256::U256;
 use crate::wallet::WalletCore;
+use wallet_core::send::u256::U256;
 
 /// Mobile-only bound on discovery pages (the SDK has none).
 pub const MAX_DISCOVERY_PAGES: u32 = 256;

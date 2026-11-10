@@ -1,24 +1,19 @@
-//! Sending: an ERC-20 transfer from an OpenZeppelin account, with automatic deployment before
-//! the first send, exactly as the extension does. Protocol logic only — the core builds every
-//! JSON-RPC body and judges every reply (`rpc_bodies`, `judge`); the host moves bytes.
-//! Hashing and signing use Krusty 2.0.0 inside the core (`sign`, `WalletCore::plan_sign`).
+//! Sending: an ERC-20 transfer, with automatic deployment before the first send, exactly as the
+//! extension does. The mechanism is `wallet_core::send`: it builds every JSON-RPC body and judges
+//! every reply, and its `Plan` sequences the steps; the host moves bytes. Mobile holds the FFI
+//! (`types`, the `TransferPlan` wrapper in `plan`), the plan's host (its session, signing through
+//! `WalletCore::plan_sign`, the activity store) and preparing plans from vault records, contacts
+//! and catalogs (`wallet_ext`).
 //!
 //! Design and review resolutions: `mobile/docs/transactions.md`. Parity with the extension is
-//! pinned by `tests/fixtures/extension-transactions-*.json`.
+//! pinned by wallet-core's `extension-transactions-*.json` tests; the explorer and activity-store
+//! rules, and mobile's send numbers, by `fixture_tests.rs` here.
 
-pub(crate) mod calls;
-pub(crate) mod fees;
-pub(crate) mod judge;
 pub(crate) mod plan;
-mod plan_deploy;
-pub(crate) mod plan_probe;
-mod plan_review;
-mod plan_submit;
-pub(crate) mod rpc_bodies;
-mod sign;
 pub(crate) mod types;
-pub(crate) mod u256;
 mod wallet_ext;
+
+use wallet_core::send::{calls, judge, rpc_bodies};
 
 use crate::activity::observation;
 use crate::felt;

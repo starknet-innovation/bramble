@@ -9,12 +9,14 @@ use std::sync::Arc;
 
 use starknet_types_core::felt::Felt;
 
-use super::calls;
-use krusty_kms::{calculate_contract_address, AccountClass};
+use krusty_kms::AccountClass;
+use wallet_core::send::calls;
+use wallet_core::send::plan::{Account, Kind, Token, Transfer, TransferRefusal};
+use wallet_core::send::sign::Deployment;
+use wallet_core::send::u256::U256;
 
-use super::plan::{Account, Authorization, Deployment, Kind, Transfer, TransferPlan};
+use super::plan::TransferPlan;
 use super::types::{SendError, TransferRequest};
-use super::u256::U256;
 use crate::account_catalog::{self, AccountFamily};
 use crate::account_store::StoredAccount;
 use crate::activity::{observation, store};
@@ -29,6 +31,15 @@ impl From<SignRefusal> for SendError {
     fn from(refusal: SignRefusal) -> Self {
         match refusal {
             SignRefusal::Unknown => SendError::UnknownAccount,
+        }
+    }
+}
+
+impl From<TransferRefusal> for SendError {
+    fn from(refusal: TransferRefusal) -> Self {
+        match refusal {
+            TransferRefusal::InvalidRecipient => SendError::InvalidRecipient,
+            TransferRefusal::InvalidAmount(reason) => SendError::InvalidAmount { reason },
         }
     }
 }
@@ -48,8 +59,9 @@ enum Use {
 /// guardian). Braavos: only the
 /// modern deployment class, with the public key as salt and sole constructor argument (an older
 /// base-class counterfactual is refused, since its deployment authorization is not established).
-/// Every way, the parameters must reproduce the stored address, or nothing is deployed.
-fn deployment(record: &StoredAccount, address: &Felt, public_key: &Felt) -> Option<Deployment> {
+/// Which classes are deployable is this catalog's rule; `Plan::new` then drops any deployment
+/// that does not reproduce the stored address, so nothing else is ever deployed.
+fn deployment(record: &StoredAccount, public_key: &Felt) -> Option<Deployment> {
     let class_hash = record.class_felt();
     let (salt, constructor_calldata) = match record.family() {
         AccountFamily::OpenZeppelin => (Felt::ZERO, vec![*public_key]),
@@ -68,30 +80,31 @@ fn deployment(record: &StoredAccount, address: &Felt, public_key: &Felt) -> Opti
         }
         AccountFamily::Argent | AccountFamily::Braavos => return None,
     };
-    let computed =
-        calculate_contract_address(&salt, &class_hash, &constructor_calldata, &Felt::ZERO).ok()?;
-    (computed == *address).then_some(Deployment {
+    Some(Deployment {
         class_hash,
         salt,
         constructor_calldata,
     })
 }
 
+/// The acting account for a plan: the core's `Account`, built once from the vault record, and
+/// what ties the plan to that record. The plan's `Transfer` is derived from the same `account`.
+struct PlanAccount {
+    account: Account,
+    account_id: String,
+    network: NetworkId,
+    generation: u64,
+}
+
 fn plan_account(record: &StoredAccount) -> Result<Account, SendError> {
     let parse = |value: &str| felt::parse_non_zero(value).ok_or(SendError::UnknownAccount);
     let (address, public_key) = (parse(&record.address)?, parse(&record.public_key)?);
-    let authorization = match record.family() {
-        AccountFamily::Argent => Authorization::ArgentSignerArray,
-        AccountFamily::OpenZeppelin => Authorization::StarkPair,
-        AccountFamily::Braavos => Authorization::Braavos,
-    };
     Ok(Account {
-        network: record.network(),
-        deployment: deployment(record, &address, &public_key),
+        network: record.network().core(),
+        deployment: deployment(record, &public_key),
         address,
         public_key,
-        authorization,
-        account_id: record.id.clone(),
+        authorization: account_catalog::send_authorization(record.family()),
     })
 }
 
@@ -160,20 +173,21 @@ impl WalletCore {
 
     /// The stored record `account_id` names plus the session generation, for a plan being
     /// prepared. A signing plan must pass `signing_record` (a known record, no pending discovery). Passive: preparing or reading never renews the idle window.
-    fn plan_account_for(
-        &self,
-        account_id: &str,
-        purpose: Use,
-    ) -> Result<(Account, u64), SendError> {
+    fn plan_account_for(&self, account_id: &str, purpose: Use) -> Result<PlanAccount, SendError> {
         let outcome = self.with_session(false, |session| {
             let payload = &session.payload;
             let record = match purpose {
                 Use::Sign => signing_record(payload, account_id).map_err(SendError::from),
                 Use::Read => payload.record(account_id).ok_or(SendError::UnknownAccount),
             };
-            Ok(record
-                .and_then(plan_account)
-                .map(|account| (account, self.lock_epoch.load(Ordering::SeqCst))))
+            Ok(record.and_then(|record| {
+                Ok(PlanAccount {
+                    account: plan_account(record)?,
+                    account_id: record.id.clone(),
+                    network: record.network(),
+                    generation: self.lock_epoch.load(Ordering::SeqCst),
+                })
+            }))
         });
         outcome.unwrap_or(Err(SendError::Locked))
     }
@@ -225,48 +239,35 @@ impl WalletCore {
             .iter()
             .find(|token| felt::parse(&token.address) == Some(requested))
             .ok_or(SendError::UnknownToken)?;
-        let recipient = calls::validate_recipient(&request.recipient)
-            .filter(|recipient| *recipient != Felt::ZERO)
-            .ok_or(SendError::InvalidRecipient)?;
-        let amount = calls::parse_token_amount(&request.amount, token.decimals)
-            .map_err(|reason| SendError::InvalidAmount { reason })?;
-        let calldata = calls::transfer_execute_calldata(&requested, &recipient, &amount)
-            .ok_or(SendError::InvalidRecipient)?;
-        let (account, generation) = self.plan_account_for(&request.account_id, Use::Sign)?;
-        if account.network != request.network {
+        let acting = self.plan_account_for(&request.account_id, Use::Sign)?;
+        if acting.network != request.network {
             return Err(SendError::UnknownAccount);
         }
-        let transfer = Transfer {
-            symbol: token.symbol.clone(),
-            token_address: requested,
-            is_strk: token.symbol == "STRK",
-            recipient,
-            amount,
-            amount_text: request.amount.trim().to_string(),
-            summary: calls::transfer_summary(&amount, token.decimals, &token.symbol, &recipient),
-            flags: calls::transfer_flags(
-                &recipient,
-                &account.address,
-                &self.trusted_recipients(request.network)?,
-                &known_token_addresses(request.network)
-                    .into_iter()
-                    .chain(
-                        request
-                            .tracked_tokens
-                            .iter()
-                            .filter_map(|address| felt::parse(address)),
-                    )
-                    .collect::<Vec<_>>(),
-            ),
-            calldata,
-            fee_balance: request.fee_balance.as_deref().and_then(U256::from_decimal),
-        };
-        Ok(TransferPlan::new(
-            &self,
-            account,
-            Kind::Transfer(Box::new(transfer)),
-            generation,
-        ))
+        let tokens = known_token_addresses(request.network)
+            .into_iter()
+            .chain(
+                request
+                    .tracked_tokens
+                    .iter()
+                    .filter_map(|address| felt::parse(address)),
+            )
+            .collect::<Vec<_>>();
+        // The same account the plan signs for, so the self-transfer and lookalike flags are
+        // judged against the address that will send.
+        let transfer = Transfer::new(
+            &acting.account,
+            Token {
+                address: requested,
+                symbol: &token.symbol,
+                decimals: token.decimals,
+            },
+            &request.recipient,
+            &request.amount,
+            &self.trusted_recipients(request.network)?,
+            &tokens,
+            request.fee_balance.as_deref().and_then(U256::from_decimal),
+        )?;
+        Ok(self.plan(acting, Kind::Transfer(Box::new(transfer))))
     }
 
     /// The standalone Deploy account flow for the home chip: the same machine without the invoke.
@@ -275,23 +276,18 @@ impl WalletCore {
         self: Arc<Self>,
         account_id: String,
     ) -> Result<Arc<TransferPlan>, SendError> {
-        let (account, generation) = self.plan_account_for(&account_id, Use::Sign)?;
-        Ok(TransferPlan::new(
-            &self,
-            account,
-            Kind::Deployment,
-            generation,
-        ))
+        let acting = self.plan_account_for(&account_id, Use::Sign)?;
+        Ok(self.plan(acting, Kind::Deployment))
     }
 
     /// The account's one activity list, newest first: the transactions this wallet submitted and
     /// the on-chain history rows merged into the same log. Requires an unlocked wallet (the record
     /// lives in the vault). Any family may be read.
     pub fn activity(&self, account_id: String) -> Result<Vec<ActivityEntry>, SendError> {
-        let (account, _) = self.plan_account_for(&account_id, Use::Read)?;
+        let acting = self.plan_account_for(&account_id, Use::Read)?;
         Ok(crate::activity::feed::scope(
             &self.data_dir,
-            &account.account_id,
+            &acting.account_id,
         ))
     }
 
@@ -306,10 +302,10 @@ impl WalletCore {
         account_id: String,
         now_ms: u64,
     ) -> Result<Vec<String>, SendError> {
-        let (account, _) = self.plan_account_for(&account_id, Use::Read)?;
-        store::retire_expired(&self.data_dir, &account.account_id, now_ms);
+        let acting = self.plan_account_for(&account_id, Use::Read)?;
+        store::retire_expired(&self.data_dir, &acting.account_id, now_ms);
         Ok(
-            store::take_failure_notices(&self.data_dir, &account.account_id)
+            store::take_failure_notices(&self.data_dir, &acting.account_id)
                 .iter()
                 .filter_map(|entry| {
                     let status = store::parse_status(&entry.status)?;
@@ -325,19 +321,27 @@ impl WalletCore {
         account_id: String,
         hash: String,
     ) -> Result<Arc<TransferPlan>, SendError> {
-        let (account, generation) = self.plan_account_for(&account_id, Use::Read)?;
+        let acting = self.plan_account_for(&account_id, Use::Read)?;
         let hash = felt::parse_non_zero(&hash).ok_or(SendError::UnknownTransaction)?;
-        let known = store::list(&self.data_dir, &account.account_id)
+        let known = store::list(&self.data_dir, &acting.account_id)
             .iter()
             .any(|entry| felt::parse(&entry.hash) == Some(hash));
         if !known {
             return Err(SendError::UnknownTransaction);
         }
-        Ok(TransferPlan::new(
-            &self,
-            account,
-            Kind::Refresh { hash },
-            generation,
-        ))
+        Ok(self.plan(acting, Kind::Refresh { hash }))
+    }
+}
+
+impl WalletCore {
+    fn plan(self: &Arc<Self>, acting: PlanAccount, kind: Kind) -> Arc<TransferPlan> {
+        TransferPlan::new(
+            self,
+            acting.account_id,
+            acting.network,
+            acting.account,
+            kind,
+            acting.generation,
+        )
     }
 }

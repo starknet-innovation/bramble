@@ -5,7 +5,7 @@
 //!
 //! Advisory only: a read that fails or answers malformed leaves the row unlabelled and never
 //! pauses the scan. A wrong or missing signer verdict can mislabel a row but never move funds,
-//! because the send path (`plan_probe.rs`) re-checks authoritatively. The extension's privacy
+//! because the send path (`wallet_core::send::plan_probe`) re-checks authoritatively. The extension's privacy
 //! path also refuses an account another wallet registered (`strk20RegistrationBlock`); mobile's
 //! privacy path does not check that yet, so here the pool note is the only signal.
 
@@ -14,15 +14,16 @@ use std::collections::HashMap;
 use serde_json::json;
 use starknet_types_core::felt::Felt;
 
-use crate::account_catalog::{catalog, class_entry, AccountFamily};
+use crate::account_catalog::{catalog, class_entry, AccountFamily, ARGENT_SIGNER_ARRAY};
 use crate::account_store::VaultPayload;
 use crate::networks::{self, NetworkId};
 use crate::privacy::config::route_for;
 use crate::recovery::{Found, Restriction};
-use crate::rpc::{self, RpcRequest};
-use crate::send::judge;
-use crate::send::plan_probe::{self as probe, braavos_signers, selector, ARGENT_SIGNER_ARRAY};
+use crate::rpc;
+use crate::rpc_request::RpcRequest;
 use crate::{felt, kms};
+use wallet_core::send::judge;
+use wallet_core::send::plan_probe::{self as probe, braavos_signers, selector};
 
 /// The pool's `get_public_key(address)`: the viewing key registered for an account.
 const GET_PUBLIC_KEY: &str = "0x1a35984e05126dbecb7c3bb9929e7dd9106d460c59b1633739a5c733a5fb13b";

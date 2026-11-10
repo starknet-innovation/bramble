@@ -23,7 +23,8 @@ use crate::networks::{self, NetworkId};
 use crate::privacy::config::route_for;
 use crate::recovery::{candidate, keep, scan_shapes, Found, RecoveryCandidate};
 use crate::recovery_advisory::{self as advisory, Gathered, Read};
-use crate::rpc::{self, rpc_error, RpcRequest, RpcResponse, MAX_RESPONSE_BYTES};
+use crate::rpc::{self, MAX_RESPONSE_BYTES};
+use crate::rpc_request::{rpc_error, RpcRequest, RpcResponse};
 use crate::{felt, CoreError};
 
 /// Candidates one scan may accumulate (a manual check adds at most one per scan shape).
