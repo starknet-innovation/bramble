@@ -1,6 +1,7 @@
 /**
  * Sepolia fixtures on S-SCR: script-made Argent, Xverse and Braavos shapes on
- * every ladder (TA-15…TA-26, TA-30, TA-62), per the scope doc's TA cards. "argentx N"
+ * every ladder (TA-15…TA-26, TA-30, TA-62), per the scope doc's TA cards, plus
+ * TA-64 and TA-65 from the account-tree review (docs/VENDOR_IMPORT_DATASET.md). "argentx N"
  * on a card is the Ready double derivation at index N. Argent 0.4.0 calldata
  * and change_owner hashing follow the vendored account-0.4.0 source.
  */
