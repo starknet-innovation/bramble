@@ -38,6 +38,21 @@ fn wallet(mnemonic: &str) -> (tempfile::TempDir, std::sync::Arc<WalletCore>) {
     (dir, core)
 }
 
+/// The wallet's own coordination identity is the extension's key at Nostr address 0. The key
+/// derivation itself is pinned for every index in wallet-core; this pins which one the wallet uses.
+#[test]
+fn the_wallets_coordination_key_matches_the_extension() {
+    let fixture = fixture();
+    let vector = fixture["nostrKeys"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|vector| vector["index"] == 0)
+        .expect("the fixture holds the key at index 0");
+    let (_dir, core) = wallet(vector["mnemonic"].as_str().unwrap());
+    assert_eq!(core.nostr_public_key().unwrap(), text(&vector["publicKey"]));
+}
+
 #[test]
 fn rust_gift_wraps_round_trip_and_the_committed_one_still_opens() {
     let fixture = fixture();
