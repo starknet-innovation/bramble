@@ -58,23 +58,30 @@ final class BackupPendingTests: XCTestCase {
 
     @MainActor
     func testALockDuringCreationGoesToUnlockAndThenToSavePhrase() async throws {
-        let core = try WalletCore(dataDir: directory(), clock: DeviceClock())
-        let store = WalletStore(core: core)
-        XCTAssertEqual(store.route, .onboarding)
-        let creating = Task { try await store.create(password: password) }
-        // Backgrounded while the passphrase is stretched: the vault lands after the lock.
-        try await Task.sleep(for: .milliseconds(200))
-        store.lock()
-        do {
-            try await creating.value
-            XCTFail("a lock during creation wins")
-        } catch CoreError.Locked {
-            // Expected.
+        // Backgrounded while the passphrase is stretched: the vault lands after the lock. How
+        // long the stretch takes depends on the machine and the build, so the lock is tried at
+        // widening delays until one lands inside it; a lock before or after it is no race at all.
+        for delay in [1, 2, 4, 8, 15, 25, 40, 60, 90, 135, 200, 300, 450, 700, 1_000, 1_500] {
+            let core = try WalletCore(dataDir: directory(), clock: DeviceClock())
+            let store = WalletStore(core: core)
+            XCTAssertEqual(store.route, .onboarding)
+            let creating = Task { try await store.create(password: password) }
+            try await Task.sleep(for: .milliseconds(delay))
+            store.lock()
+            do {
+                try await creating.value
+                store.lock()
+                continue
+            } catch CoreError.Locked {
+                // The lock won.
+            }
+            XCTAssertEqual(store.route, .locked, "the vault exists, so the way on is Unlock")
+            try await store.unlock(password: password)
+            XCTAssertEqual(store.route, .backup)
+            XCTAssertEqual(store.pendingBackup.count, 12, "the phrase never shown is offered now")
+            store.lock()
+            return
         }
-        XCTAssertEqual(store.route, .locked, "the vault exists, so the way on is Unlock")
-        try await store.unlock(password: password)
-        XCTAssertEqual(store.route, .backup)
-        XCTAssertEqual(store.pendingBackup.count, 12, "the phrase never shown is offered now")
-        store.lock()
+        XCTFail("no lock landed while the vault key was being derived")
     }
 }
