@@ -1,11 +1,12 @@
-//! One of the two modules that call Krusty KMS (with `kms_accounts.rs`). Mirrors `packages/platform/kms-krusty/src/adapter.ts`:
-//! inputs are validated before they reach Krusty, and outputs are re-checked before they leave,
-//! so a Krusty regression surfaces as an error here rather than as a wrong key or address.
+//! Mobile's glue over `wallet_core::kms`, which owns key custody: it validates inputs before they
+//! reach Krusty and re-checks outputs before they leave (the extension's
+//! `packages/platform/kms-krusty/src/adapter.ts`). What stays here is Bramble's: which key tree an
+//! account walks (`Ladder`), the import form's phrase normalisation, and the OpenZeppelin account
+//! version this wallet deploys.
 //!
-//! Private keys are derived per call, held in Krusty's zeroizing `SecretFelt`, and never returned to a caller
-//! outside this crate.
+//! Private keys are derived per call, held in Krusty's zeroizing `SecretFelt`, and never returned
+//! to a caller outside this crate.
 
-use krusty_kms::{OzAccountClassConfig, STARKNET_COIN_TYPE};
 use krusty_kms_common::{ChainId, SecretFelt};
 use serde::{Deserialize, Serialize};
 use starknet_types_core::felt::Felt;
@@ -14,26 +15,24 @@ use zeroize::Zeroizing;
 use crate::felt;
 use crate::CoreError;
 
-/// Mnemonic lengths Krusty generates and the extension accepts.
-pub const MNEMONIC_WORD_COUNTS: [u8; 5] = [12, 15, 18, 21, 24];
-/// Upper bound on an optional BIP-39 passphrase, as in `wallet-model/passphrase`.
-const MAX_BIP39_PASSPHRASE_LENGTH: usize = 256;
-/// Upper bound on phrase text accepted from the UI before BIP-39 parsing.
-const MAX_MNEMONIC_TEXT_LENGTH: usize = 512;
+pub use wallet_core::{generate_mnemonic, validate_mnemonic, StarkSignature as Signature};
 
-/// A Stark ECDSA signature over a caller-supplied hash.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Signature {
-    pub public_key: String,
-    pub r: String,
-    pub s: String,
-}
+/// The OpenZeppelin account release this wallet deploys (the extension's `account-contract.ts`).
+/// Named exactly, never Krusty's `latest`, so a Krusty bump cannot move an address.
+pub const OZ_ACCOUNT_VERSION: &str = "3.0.0";
 
 pub(crate) fn kms_error(context: &str) -> impl Fn(krusty_kms_common::KmsError) -> CoreError + '_ {
     // Krusty's messages can echo input; only the operation name crosses the boundary.
     move |_| CoreError::Kms {
         operation: context.to_string(),
     }
+}
+
+/// A felt the shared core returned as canonical text, back as a `Felt`.
+fn parsed(text: &str, operation: &str) -> Result<Felt, CoreError> {
+    felt::parse(text).ok_or_else(|| CoreError::Kms {
+        operation: operation.into(),
+    })
 }
 
 /// Normalises phrase text the way the extension's import form does: lowercase words, single spaces.
@@ -45,50 +44,6 @@ pub fn normalise_phrase(phrase: &str) -> Zeroizing<String> {
             .collect::<Vec<_>>()
             .join(" "),
     )
-}
-
-/// Whether text is a checksummed BIP-39 English phrase of a supported length.
-pub fn validate_mnemonic(phrase: &str) -> bool {
-    if phrase.len() > MAX_MNEMONIC_TEXT_LENGTH {
-        return false;
-    }
-    let words = phrase.split(' ').count();
-    MNEMONIC_WORD_COUNTS
-        .iter()
-        .any(|count| usize::from(*count) == words)
-        && krusty_kms::validate_mnemonic(phrase).is_ok()
-}
-
-/// Generates a fresh phrase from OS entropy.
-pub fn generate_mnemonic(word_count: u8) -> Result<Zeroizing<String>, CoreError> {
-    if !MNEMONIC_WORD_COUNTS.contains(&word_count) {
-        return Err(CoreError::InvalidInput {
-            reason: "unsupported word count".into(),
-        });
-    }
-    let phrase = Zeroizing::new(
-        krusty_kms::generate_mnemonic(usize::from(word_count)).map_err(kms_error("generate"))?,
-    );
-    if !validate_mnemonic(&phrase) {
-        return Err(CoreError::Kms {
-            operation: "generate".into(),
-        });
-    }
-    Ok(phrase)
-}
-
-fn check_derivation_input(phrase: &str, passphrase: Option<&str>) -> Result<(), CoreError> {
-    if !validate_mnemonic(phrase) {
-        return Err(CoreError::InvalidInput {
-            reason: "invalid recovery phrase".into(),
-        });
-    }
-    if passphrase.is_some_and(|p| p.len() > MAX_BIP39_PASSPHRASE_LENGTH) {
-        return Err(CoreError::InvalidInput {
-            reason: "passphrase too long".into(),
-        });
-    }
-    Ok(())
 }
 
 /// Which key tree an account's index walks (the extension's issue 505). Each wallet app steps a
@@ -125,24 +80,13 @@ pub(crate) fn private_key(
     path: Ladder,
     index: u32,
 ) -> Result<SecretFelt, CoreError> {
-    check_derivation_input(phrase, passphrase)?;
+    // The shared core's order is (address index, account index), as Krusty's.
     let key = match path {
-        // Krusty's order is (address index, account index).
-        Ladder::Account | Ladder::Address => {
-            let (address, account) = if path == Ladder::Account {
-                (0, index)
-            } else {
-                (index, 0)
-            };
-            krusty_kms::derive_keypair_with_coin_type(
-                phrase,
-                address,
-                account,
-                STARKNET_COIN_TYPE,
-                passphrase,
-            )
-            .map_err(kms_error("derive"))?
-            .private_key
+        Ladder::Account => {
+            wallet_core::derive_starknet_keypair(phrase, 0, index, passphrase)?.private_key
+        }
+        Ladder::Address => {
+            wallet_core::derive_starknet_keypair(phrase, index, 0, passphrase)?.private_key
         }
         Ladder::ArgentX => {
             if passphrase.is_some() {
@@ -150,35 +94,20 @@ pub(crate) fn private_key(
                     reason: "Ready accounts take no passphrase".into(),
                 });
             }
-            // Ready fixes the hardened account field at zero, as the extension's adapter pins it.
-            // Krusty 2.0.0 returns this key as a plain `Felt`, so the copy it hands back is not
-            // wiped; it is moved straight into a `SecretFelt` (the same residual as the viewing
-            // key, mobile/docs/privacy.md §5).
-            SecretFelt::new(
-                krusty_kms::derive_argent_legacy_private_key(phrase, index, 0)
-                    .map_err(kms_error("derive"))?,
-            )
+            wallet_core::derive_argent_legacy_keypair(phrase, index)?.private_key
         }
     };
-    if !felt::is_private_key(key.expose_secret()) {
-        return Err(CoreError::Kms {
-            operation: "derive".into(),
-        });
-    }
     Ok(key)
 }
 
-/// The OpenZeppelin account class the wallet deploys, from Krusty's checked-in manifest.
+/// The OpenZeppelin account class the wallet deploys: Krusty's manifest at `OZ_ACCOUNT_VERSION`.
 pub fn oz_class_hash(chain: ChainId) -> Result<Felt, CoreError> {
-    let class_hash = OzAccountClassConfig::latest(chain)
-        .map_err(kms_error("class hash"))?
-        .class_hash();
-    if class_hash == Felt::ZERO {
-        return Err(CoreError::Kms {
-            operation: "class hash".into(),
-        });
-    }
-    Ok(class_hash)
+    let network = match chain {
+        ChainId::Mainnet => wallet_core::NetworkId::Mainnet,
+        ChainId::Sepolia => wallet_core::NetworkId::Sepolia,
+    };
+    let class_hash = wallet_core::oz_account_class_hash(network, OZ_ACCOUNT_VERSION)?;
+    parsed(&class_hash, "class hash")
 }
 
 /// Signs a message hash with deterministic RFC-6979 Stark ECDSA.
@@ -189,29 +118,32 @@ pub fn sign_hash(
     account_index: u32,
     message_hash: &str,
 ) -> Result<Signature, CoreError> {
-    let hash = felt::parse(message_hash).ok_or_else(|| CoreError::InvalidInput {
-        reason: "message hash is not a felt".into(),
-    })?;
     let key = private_key(phrase, passphrase, path, account_index)?;
-    let signature =
-        krusty_kms::sign_stark_hash(key.expose_secret(), &hash).map_err(kms_error("sign"))?;
-    if !felt::is_private_key(&signature.r) || !felt::is_private_key(&signature.s) {
-        return Err(CoreError::Kms {
-            operation: "sign".into(),
-        });
-    }
-    Ok(Signature {
-        public_key: felt::canonical(&signature.public_key),
-        r: felt::canonical(&signature.r),
-        s: felt::canonical(&signature.s),
-    })
+    Ok(wallet_core::sign_stark_hash(&key, message_hash)?)
+}
+
+/// The account's STRK20 viewing key scoped to `"<chain_id>:<pool>"`, zeroizing. The shared core
+/// holds both scope values to canonical non-zero felts and the result to a usable scalar.
+fn scoped_viewing_key(
+    phrase: &str,
+    passphrase: Option<&str>,
+    path: Ladder,
+    account_index: u32,
+    chain_id: &str,
+    pool_address: &str,
+) -> Result<SecretFelt, CoreError> {
+    let key = private_key(phrase, passphrase, path, account_index)?;
+    Ok(wallet_core::derive_strk20_viewing_key(
+        &key,
+        chain_id,
+        pool_address,
+    )?)
 }
 
 /// Derives the account's STRK20 viewing key scoped to `"<chain_id>:<pool>"`, exactly as the
-/// extension's adapter (`deriveStrk20ViewingKey`): both scope values must be canonical non-zero
-/// felts, and the result must be a usable scalar (`isStarkPrivateKey`). The account key is derived
-/// per call into a zeroizing `SecretFelt`; Krusty 2.0.0 returns the viewing key as a plain `Felt`,
-/// which callers must use for one request body and drop (mobile/docs/privacy.md §5, residual).
+/// extension's adapter (`deriveStrk20ViewingKey`). The account key is derived per call into a
+/// zeroizing `SecretFelt`. The viewing key leaves as a plain `Felt`, which callers must use for
+/// one request body and drop (mobile/docs/privacy.md §5, residual).
 pub fn derive_scoped_viewing_key(
     phrase: &str,
     passphrase: Option<&str>,
@@ -220,29 +152,20 @@ pub fn derive_scoped_viewing_key(
     chain_id: &str,
     pool_address: &str,
 ) -> Result<Felt, CoreError> {
-    let canonical = |value: &str| {
-        felt::parse_non_zero(value).is_some_and(|parsed| felt::canonical(&parsed) == value)
-    };
-    if !canonical(chain_id) || !canonical(pool_address) {
-        return Err(CoreError::InvalidInput {
-            reason: "invalid viewing-key scope".into(),
-        });
-    }
-    let key = private_key(phrase, passphrase, path, account_index)?;
-    let viewing_key =
-        krusty_kms::derive_scoped_strk20_viewing_key(key.expose_secret(), chain_id, pool_address)
-            .map_err(kms_error("viewing key"))?;
-    if !felt::is_private_key(&viewing_key) {
-        return Err(CoreError::Kms {
-            operation: "viewing key".into(),
-        });
-    }
-    Ok(viewing_key)
+    scoped_viewing_key(
+        phrase,
+        passphrase,
+        path,
+        account_index,
+        chain_id,
+        pool_address,
+    )
+    .map(|key| *key.expose_secret())
 }
 
 /// The public viewing key this wallet would register for one account in one pool
 /// (`previewStrk20ViewingPublicKey`), so recovery can compare it with the key the pool holds.
-/// The viewing key is derived inside this call and only Krusty's public x-coordinate leaves it.
+/// The viewing key is derived inside this call and only its public x-coordinate leaves it.
 pub fn scoped_viewing_public_key(
     phrase: &str,
     passphrase: Option<&str>,
@@ -251,7 +174,7 @@ pub fn scoped_viewing_public_key(
     chain_id: &str,
     pool_address: &str,
 ) -> Result<Felt, CoreError> {
-    let viewing_key = derive_scoped_viewing_key(
+    let viewing_key = scoped_viewing_key(
         phrase,
         passphrase,
         path,
@@ -259,5 +182,40 @@ pub fn scoped_viewing_public_key(
         chain_id,
         pool_address,
     )?;
-    krusty_kms::stark_public_key(&viewing_key).map_err(kms_error("viewing public key"))
+    parsed(
+        &wallet_core::stark_public_key(&viewing_key)?,
+        "viewing public key",
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const PHRASE: &str =
+        "habit hope tip crystal because grunt nation idea electric witness alert like";
+
+    #[test]
+    fn the_bip39_passphrase_bound_is_the_extensions() {
+        // 1,024 UTF-16 units (`wallet-model/preferences/passphrase.ts`), not bytes.
+        let at_bound = "é".repeat(1_024);
+        assert!(private_key(PHRASE, Some(&at_bound), Ladder::Account, 0).is_ok());
+        let over = "p".repeat(1_025);
+        assert!(matches!(
+            private_key(PHRASE, Some(&over), Ladder::Account, 0),
+            Err(CoreError::InvalidInput { .. })
+        ));
+        assert!(private_key(PHRASE, Some("p"), Ladder::ArgentX, 0).is_err());
+    }
+
+    #[test]
+    fn the_oz_class_is_the_pinned_release_on_each_network() {
+        for (chain, network) in [
+            (ChainId::Mainnet, wallet_core::NetworkId::Mainnet),
+            (ChainId::Sepolia, wallet_core::NetworkId::Sepolia),
+        ] {
+            let pinned = wallet_core::oz_account_class_hash(network, OZ_ACCOUNT_VERSION).unwrap();
+            assert_eq!(felt::canonical(&oz_class_hash(chain).unwrap()), pinned);
+        }
+    }
 }

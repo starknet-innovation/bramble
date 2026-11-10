@@ -23,7 +23,7 @@ mod contact_card;
 mod contacts;
 mod container;
 mod coordination;
-mod felt;
+pub(crate) use wallet_core::felt;
 mod ffi_coordination;
 mod ffi_nostr_multisig;
 mod files;
@@ -185,6 +185,20 @@ pub enum CoreError {
     Coordination { reason: String },
 }
 
+impl From<wallet_core::Error> for CoreError {
+    fn from(error: wallet_core::Error) -> Self {
+        match error {
+            wallet_core::Error::InvalidInput { reason } => Self::InvalidInput { reason },
+            wallet_core::Error::Kms { operation } => Self::Kms { operation },
+            wallet_core::Error::WrongPassword => Self::WrongPassword,
+            wallet_core::Error::Storage { reason } => Self::Storage { reason },
+            wallet_core::Error::BiometricUnavailable => Self::BiometricUnavailable,
+            wallet_core::Error::BiometricInvalidated => Self::BiometricInvalidated,
+            wallet_core::Error::Rpc { reason } => Self::Rpc { reason },
+        }
+    }
+}
+
 /// Versions compiled into this core, for the About screen and bug reports.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct CoreInfo {
@@ -197,7 +211,7 @@ pub struct CoreInfo {
 pub fn core_info() -> CoreInfo {
     CoreInfo {
         core_version: env!("CARGO_PKG_VERSION").into(),
-        krusty_version: "2.0.0".into(),
+        krusty_version: wallet_core::KRUSTY_VERSION.into(),
     }
 }
 

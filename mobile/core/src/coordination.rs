@@ -14,7 +14,7 @@ use serde_json::Value;
 use crate::argent_multisig;
 use crate::contacts;
 use crate::multisig_store::{self, Authority, Record};
-use crate::nostr::{self, ApplicationData};
+use crate::nostr::{self, NostrApplicationData};
 use crate::nostr_relay::{is_relay_url, stored_relay_url};
 use crate::{multisig_constants, public_store, CoreError};
 
@@ -287,7 +287,7 @@ fn package_authority(content: &str) -> Option<(String, Authority)> {
 /// the snapshot must equal the record's stored authority. Without that, any saved contact could
 /// forge a snapshot listing itself.
 pub fn is_trusted(
-    opened: &ApplicationData,
+    opened: &NostrApplicationData,
     contacts: &[contacts::Entry],
     record: &Record,
     authority: Option<&Authority>,

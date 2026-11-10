@@ -81,6 +81,14 @@ fn load() -> Constants {
                 .all(|url| url.starts_with("wss://")),
         "default relays are secure"
     );
+    // `wallet_core::nostr` enforces these two bounds with its own constants; the extension's
+    // values, rendered here, are what they have to be.
+    assert!(
+        constants.nostr.max_event_json_bytes == wallet_core::nostr::MAX_EVENT_JSON_BYTES
+            && constants.nostr.max_application_data_bytes
+                == wallet_core::nostr::MAX_APPLICATION_DATA_BYTES,
+        "the shared core's Nostr bounds are the extension's"
+    );
     constants
 }
 
