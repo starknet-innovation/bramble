@@ -19,6 +19,7 @@ vendor/ledger-app-bin/
 .env
 .env*.local
 .DS_Store
+.idea
 /dist.zip
 .claude/*
 !.claude/skills
