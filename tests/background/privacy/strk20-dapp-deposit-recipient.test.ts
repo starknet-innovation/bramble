@@ -61,16 +61,16 @@ describe("dapp STRK20 deposit recipient summaries", () => {
   for (const route of routes) {
     test(`${route.kind} names the payee of a deposit to another account`, async () => {
       await expect(queuedSummary(route, STRK20_RECIPIENT)).resolves.toBe(
-        "Pay 0.000000000000000005 ETH privately to 0x04718f…938d (0x049d36…4dc7)",
+        "Pay 0.000000000000000005 ETH privately to 0x4718…938d (0x49d3…4dc7)",
       );
     });
 
     test(`${route.kind} keeps a deposit to the requesting account a plain shield`, async () => {
       await expect(queuedSummary(route, account.address)).resolves.toBe(
-        "Deposit 0.000000000000000005 ETH to private balance (0x049d36…4dc7)",
+        "Deposit 0.000000000000000005 ETH to private balance (0x49d3…4dc7)",
       );
       await expect(queuedSummary(route, undefined)).resolves.toBe(
-        "Deposit 0.000000000000000005 ETH to private balance (0x049d36…4dc7)",
+        "Deposit 0.000000000000000005 ETH to private balance (0x49d3…4dc7)",
       );
     });
   }
@@ -81,7 +81,7 @@ describe("dapp STRK20 deposit recipient summaries", () => {
     test(`${route.kind} keeps the exact amount for a token the wallet does not trust`, async () => {
       const untracked = "0x0123abc";
       await expect(queuedSummary(route, account.address, untracked)).resolves.toBe(
-        "Deposit 0x5 to private balance (0x0123abc)",
+        "Deposit 0x5 to private balance (0x123abc)",
       );
     });
   }

@@ -15,9 +15,8 @@ import {
   verificationContext,
   verifyCalls,
 } from "@bramble/transactions/verify";
-import { shortAddress } from "@bramble/transactions/verify-decode";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { paddedFelt, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, paddedFelt, sameFelt } from "@bramble/wallet-model/networks";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const CONTACT = "0x0555aa7890abcdef1234567890abcdef1234567890abcdef1234567890aabbcc";
@@ -58,10 +57,12 @@ describe("isLookalikeAddress padded window (audit #242)", () => {
   test("a partially padded spelling that renders like the padded contact is flagged", () => {
     // 62 significant digits sharing only "555" + "bbcc" with the contact: its
     // canonical (0x555b) and fully padded (0x0055) windows both differ, yet the
-    // one-leading-zero spelling an attacker hands out shows 0x0555…bbcc, and a
-    // typed recipient is labelled with exactly that spelling.
+    // one-leading-zero spelling an attacker hands out once showed 0x0555…bbcc.
+    // Labels now canonicalize every spelling, so the display no longer collides,
+    // but the check still flags the spelling rather than trusting the label.
     const spelling = `0x0555b${"1".repeat(54)}bbcc`;
-    expect(shortAddress(spelling)).toBe(shortAddress(paddedFelt(CONTACT) ?? CONTACT));
+    expect(addressLabel(spelling)).toBe("0x555b…bbcc");
+    expect(addressLabel(spelling)).not.toBe(addressLabel(CONTACT));
     expect(isLookalikeAddress(spelling, CONTACT)).toBe(true);
   });
 

@@ -19,11 +19,10 @@ import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
 import type { DiscoveredNft, NftCoverage, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
-  accountLabel,
   flowHeader,
   flowScreen,
   inlineCopyButton,
@@ -162,7 +161,7 @@ export const nftGalleryCard = (item: NftGalleryItem, eager: boolean): string => 
       ${nftArt(item, item.watched, eager)}
       <span class="nft-copy">
         <strong>${escapeHtml(item.title)}</strong>
-        <code>${escapeHtml(item.collection || accountLabel(item.contract))} · #${escapeHtml(item.tokenId)}</code>
+        <code>${escapeHtml(item.collection || addressLabel(item.contract))} · #${escapeHtml(item.tokenId)}</code>
       </span>
     </button>
     ${nftTilePlay(item)}
@@ -173,7 +172,7 @@ const hiddenRow = (nft: WatchedNft): string => `
   <li class="address-line">
     <div class="stack-tight">
       <strong>${escapeHtml(watchedTitle(nft))}</strong>
-      <span class="copy-line"><code title="${escapeHtml(nft.contract)}">${escapeHtml(accountLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>${inlineCopyButton(nft.contract, "Copy collection contract address")}</span>
+      <span class="copy-line"><code title="${escapeHtml(nft.contract)}">${escapeHtml(addressLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>${inlineCopyButton(nft.contract, "Copy collection contract address")}</span>
     </div>
     ${button({
       attributes: { "data-nft-spam": nft.id, "data-nft-spam-value": "false" },
@@ -427,7 +426,7 @@ export const nftDetailFlow = (
                   label: "Copy contract address",
                 },
                 label: "Contract",
-                value: accountLabel(nft.contract),
+                value: addressLabel(nft.contract),
                 valueStyle: "code",
               },
               { label: "Token id", value: nft.tokenId, valueStyle: "code" },

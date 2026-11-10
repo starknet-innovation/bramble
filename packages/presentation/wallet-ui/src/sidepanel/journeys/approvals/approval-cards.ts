@@ -9,7 +9,7 @@ import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences
 import { reviewedInvokeTotal } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
 import {
   PRIVACY_OTHER_WALLET_ACTION,
   PRIVATE_REQUEST_FAILED_NOTICE,
@@ -18,7 +18,7 @@ import {
 } from "@bramble/wallet-protocol/privacy-blocker";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
+import { accountIdAddress, inlineCopyButton } from "../../shared/parts";
 import {
   type ReviewFeeState,
   reviewCallItems,
@@ -80,7 +80,7 @@ const contextDetails = (approval: PendingApproval): string => {
     return "";
   }
   const address = accountIdAddress(context.accountId);
-  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
+  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(address)}">${escapeHtml(addressLabel(address))}</code>${inlineCopyButton(address, "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
 };
 
 const contextDisclosure = (approval: PendingApproval): string => {
@@ -117,7 +117,7 @@ const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[
     action.recipient !== undefined &&
     !sameFelt(action.recipient, account)
       ? [
-          `This deposit pays ${accountLabel(action.recipient)}: the amount becomes that account's private note, not your private balance.`,
+          `This deposit pays ${addressLabel(action.recipient)}: the amount becomes that account's private note, not your private balance.`,
         ]
       : [],
   );

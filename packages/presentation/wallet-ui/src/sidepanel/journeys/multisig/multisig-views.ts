@@ -12,13 +12,12 @@ import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
   accountDisplayName,
-  accountLabel,
   dockScreen,
   flowHeader,
   flowScreen,
@@ -252,7 +251,7 @@ const intentCard = (
                 icon: "copy",
                 label: "Copy transaction hash",
               },
-              value: accountLabel(intent.prepared.transactionHash),
+              value: addressLabel(intent.prepared.transactionHash),
               valueStyle: "code",
             },
             {
@@ -262,7 +261,7 @@ const intentCard = (
                 icon: "copy",
                 label: "Copy sender",
               },
-              value: accountLabel(intent.prepared.senderAddress),
+              value: addressLabel(intent.prepared.senderAddress),
               valueStyle: "code",
             },
             {
@@ -272,7 +271,7 @@ const intentCard = (
                 icon: "copy",
                 label: "Copy class hash",
               },
-              value: accountLabel(intent.configSnapshot.classHash),
+              value: addressLabel(intent.configSnapshot.classHash),
               valueStyle: "code",
             },
             { label: "Chain ID", value: intent.prepared.chainId, valueStyle: "code" },

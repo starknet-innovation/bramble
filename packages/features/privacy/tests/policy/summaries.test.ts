@@ -13,7 +13,7 @@ const PAYEE = "0xa77ac4e2a77ac4e2a77ac4e2a77ac4e2a77ac4e2a77ac4e2a77ac4e2a77ac4"
 describe("summarizeStrk20Action deposit recipient", () => {
   test("a deposit without a recipient reads as a shield into the private balance", () => {
     expect(summarizeStrk20Action({ amount: "0x5", token: TOKEN, type: "deposit" }, ACCOUNT)).toBe(
-      "Deposit 0x5 to private balance (0x049d36…4dc7)",
+      "Deposit 0x5 to private balance (0x49d3…4dc7)",
     );
   });
 
@@ -24,7 +24,7 @@ describe("summarizeStrk20Action deposit recipient", () => {
         { amount: "0x5", recipient: unpadded, token: TOKEN, type: "deposit" },
         ACCOUNT,
       ),
-    ).toBe("Deposit 0x5 to private balance (0x049d36…4dc7)");
+    ).toBe("Deposit 0x5 to private balance (0x49d3…4dc7)");
   });
 
   test("a deposit paying another account names that account as the payee", () => {
@@ -33,13 +33,13 @@ describe("summarizeStrk20Action deposit recipient", () => {
         { amount: "0x5", recipient: PAYEE, token: TOKEN, type: "deposit" },
         ACCOUNT,
       ),
-    ).toBe("Pay 0x5 privately to 0xa77ac4…7ac4 (0x049d36…4dc7)");
+    ).toBe("Pay 0x5 privately to 0xa77a…7ac4 (0x49d3…4dc7)");
   });
 
   test("a recipient-bearing deposit with no known depositor still names the payee", () => {
     expect(
       summarizeStrk20Action({ amount: "0x5", recipient: PAYEE, token: TOKEN, type: "deposit" }),
-    ).toContain("privately to 0xa77ac4");
+    ).toContain("privately to 0xa77a…7ac4");
   });
 });
 
@@ -55,9 +55,7 @@ describe("summarizeStrk20Action amounts (Sherlock 154)", () => {
         ACCOUNT,
         trusted,
       ),
-    ).toBe(
-      `Withdraw 100 STRK to ${PAYEE.slice(0, 8)}…${PAYEE.slice(-4)} (${TOKEN.slice(0, 8)}…${TOKEN.slice(-4)})`,
-    );
+    ).toBe("Withdraw 100 STRK to 0xa77a…7ac4 (0x49d3…4dc7)");
     expect(
       summarizeStrk20Action(
         { amount: "0xde0b6b3a7640000", recipient: PAYEE, token: TOKEN, type: "transfer" },

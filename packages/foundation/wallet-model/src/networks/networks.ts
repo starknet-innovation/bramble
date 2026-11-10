@@ -395,9 +395,8 @@ export const uint256Felts = (low: unknown, high: unknown): bigint | null => {
 };
 
 /**
- * Normalizes a numeric string into the canonical `0x`-hex felt form, or null
- * when the value is not numeric. Callers needing throw-on-invalid semantics
- * wrap this rather than re-deriving the conversion.
+ * Normalizes a numeric string into the canonical `0x`-hex felt form, or null when
+ * not numeric. Callers needing throw-on-invalid semantics wrap this, not re-derive it.
  */
 export const canonicalFelt = (value: string): string | null => {
   try {
@@ -405,6 +404,17 @@ export const canonicalFelt = (value: string): string | null => {
   } catch {
     return null;
   }
+};
+
+/**
+ * Cuts a felt for display as `0x5e1d…f2e4`, canonical first so a padded contact
+ * and a canonical account read the same. A non-felt, or a felt that already
+ * fits, is returned unchanged. The one shared shortener; do not re-derive it.
+ */
+export const addressLabel = (value: string): string => {
+  const felt = isStarkFieldElement(value.toLowerCase()) ? canonicalFelt(value) : null;
+  if (felt === null || felt.length <= 12) return felt ?? value;
+  return `${felt.slice(0, 6)}…${felt.slice(-4)}`;
 };
 
 /**

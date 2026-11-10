@@ -121,7 +121,7 @@ describe("same-symbol tokens in the Activity feed", () => {
     const labels = [...mount().querySelectorAll<HTMLOptionElement>("#activity-token option")]
       .slice(1)
       .map((option) => option.textContent);
-    expect(labels).toEqual(["USDC · 0x0000…11ce", "USDC · 0x0000…0b0b"]);
+    expect(labels).toEqual(["USDC · 0xa11ce", "USDC · 0xb0b"]);
   });
 
   test("filtering on one token shows only that token's rows", () => {

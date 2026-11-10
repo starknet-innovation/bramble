@@ -134,7 +134,7 @@ describe("privacy journey templates", () => {
       tokenId: token.id,
     });
 
-    expect(html).toContain("<code>0x123456…67890</code>");
+    expect(html).toContain("<code>0x1234…7890</code>");
     expect(html).toContain('data-copy="0x12345678901234567890"');
     expect(html).toContain('aria-label="Copy privacy pool address"');
     expect(html).toContain('data-copy="0x99"');

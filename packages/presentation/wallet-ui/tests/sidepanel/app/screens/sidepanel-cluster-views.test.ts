@@ -250,7 +250,7 @@ describe("cluster views", () => {
   test("NFT detail shows identifiers and routes to a focused send flow", () => {
     const html = dashboardWithNft("nft-detail", ownedNft.id);
     expect(html).toContain('data-view="nft-send"');
-    expect(html).toContain("0x511a…a2b3");
+    expect(html).toContain("0x511a2b3");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     const send = dashboardWithNft("nft-send", ownedNft.id);
     expect(send).toContain('id="nft-send-form"');

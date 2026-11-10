@@ -14,10 +14,12 @@
  * control writes the full value and confirms through the section's status line
  * without touching any live-region container that shares the section.
  */
+
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { AllowanceView } from "@bramble/transactions/allowance-discovery";
 import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../src/popup/responses/responses";
 import { dashboard } from "../../../src/sidepanel/app/screens/views";
 import { approvalCard } from "../../../src/sidepanel/journeys/approvals/approval-cards";
@@ -27,7 +29,7 @@ import { restoreTransferCompose } from "../../../src/sidepanel/journeys/send/tra
 import type { TransferFields } from "../../../src/sidepanel/journeys/send/transfer-model";
 import { reviewSummaryHtml } from "../../../src/sidepanel/journeys/send/transfer-review-markup";
 import { bindCopyButtons } from "../../../src/sidepanel/shared/dom";
-import { accountLabel, inlineCopyButton } from "../../../src/sidepanel/shared/parts";
+import { inlineCopyButton } from "../../../src/sidepanel/shared/parts";
 import { makeArgentMultisigFixture } from "../../support/argent-multisig-fixtures";
 import { registerDom, unregisterDom } from "../../support/groups-harness";
 
@@ -106,7 +108,7 @@ const truncatedIdentifiers = (
   return Array.from(root.querySelectorAll("code"))
     .map((code) => code.textContent?.trim() ?? "")
     .filter((text) => TRUNCATED.test(text))
-    .map((text) => ({ copies: copies.filter((value) => accountLabel(value) === text), text }));
+    .map((text) => ({ copies: copies.filter((value) => addressLabel(value) === text), text }));
 };
 
 const expectEveryTruncatedIdentifierCopyable = (root: HTMLElement, atLeast: number): void => {

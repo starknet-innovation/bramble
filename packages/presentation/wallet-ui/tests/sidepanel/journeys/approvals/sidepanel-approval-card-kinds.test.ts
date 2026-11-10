@@ -395,7 +395,7 @@ describe("approvalCard renders each approval kind", () => {
     );
 
     expect(html).toContain(
-      `<dt>Address</dt><dd><code title="${address}">0x053c…68a8</code><button class="icon-button ghost copy-inline" data-copy="${address}" type="button" aria-label="Copy token address"`,
+      `<dt>Address</dt><dd><code title="${address}">0x53c9…68a8</code><button class="icon-button ghost copy-inline" data-copy="${address}" type="button" aria-label="Copy token address"`,
     );
     expect(html).not.toContain(`<code>${address}</code>`);
   });

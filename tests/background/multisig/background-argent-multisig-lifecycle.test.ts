@@ -33,7 +33,7 @@ describe("Argent multisig background lifecycle", () => {
     );
     expect(prepared).toMatchObject({ feeReview: { overallFee: "44", unit: "FRI" }, ok: true });
     let intent = intentFrom(prepared);
-    expect(intent.summary).toBe("Call transfer on 0x222…x222");
+    expect(intent.summary).toBe("Call transfer on 0x222");
     for (const account of [harnessAccountB, harnessAccountA]) {
       const signed = await harness.handler(
         {
@@ -153,7 +153,7 @@ describe("Argent multisig background lifecycle", () => {
       },
       harnessExtensionSender,
     );
-    expect(intentFrom(prepared).summary).toBe("Call transfer on 0x222…x222 (+1 more)");
+    expect(intentFrom(prepared).summary).toBe("Call transfer on 0x222 (+1 more)");
   });
 
   test("returns balances with their exact account and network scope", async () => {

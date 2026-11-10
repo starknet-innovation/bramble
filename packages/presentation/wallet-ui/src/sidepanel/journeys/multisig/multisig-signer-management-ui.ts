@@ -4,9 +4,8 @@ import {
   argentMultisigConfigChangeCall,
 } from "@bramble/multisig/chain";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
-import { normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
-import { accountLabel } from "../../shared/parts";
 import {
   bindMultisigParticipantPicker,
   type MultisigParticipant,
@@ -64,7 +63,7 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
         }
         selectedKey.value = participant.publicKeyX;
         selectionName.textContent = participant.label;
-        selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · Key ${accountLabel(participant.publicKeyX)}`;
+        selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${addressLabel(participant.address)}` : ""} · Key ${addressLabel(participant.publicKeyX)}`;
         const copy = selection.querySelector<HTMLButtonElement>(
           "[data-participant-selection-copy]",
         );

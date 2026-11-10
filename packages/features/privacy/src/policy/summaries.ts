@@ -1,7 +1,12 @@
 /** Review summaries and invoke conversion for STRK20 wire values. */
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
-import { DEFAULT_TOKENS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  DEFAULT_TOKENS,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import type { Strk20Action, Strk20InvokeCall } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import {
@@ -14,9 +19,6 @@ import {
   SHADOW_INVOKE_SETTLES_TO,
 } from "./shadow-account-copy";
 import type { Strk20SubmissionPlan } from "./submission-plan";
-
-const shortAddress = (value: string): string =>
-  value.length <= 13 ? value : `${value.slice(0, 8)}…${value.slice(-4)}`;
 
 /**
  * The fee token's display metadata, when the caller knows it. A converted fee
@@ -76,24 +78,24 @@ export const summarizeStrk20Action = (
   if (action.type === "deposit") {
     const amount = actionAmount(action.amount, action.token, assetFor);
     return action.recipient === undefined || sameFelt(action.recipient, depositor)
-      ? `Deposit ${amount} to private balance (${shortAddress(action.token)})`
-      : `Pay ${amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
+      ? `Deposit ${amount} to private balance (${addressLabel(action.token)})`
+      : `Pay ${amount} privately to ${addressLabel(action.recipient)} (${addressLabel(action.token)})`;
   }
   if (action.type === "withdraw") {
     const amount = actionAmount(action.amount, action.token, assetFor);
-    return `Withdraw ${amount} to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
+    return `Withdraw ${amount} to ${addressLabel(action.recipient)} (${addressLabel(action.token)})`;
   }
   if (action.type === "transfer") {
     const amount =
       action.amount === "OPEN"
         ? "an open note"
         : actionAmount(action.amount, action.token, assetFor);
-    return `Transfer ${amount} privately to ${shortAddress(action.recipient)} (${shortAddress(action.token)})`;
+    return `Transfer ${amount} privately to ${addressLabel(action.recipient)} (${addressLabel(action.token)})`;
   }
   if (action.type === "shadow_account_invoke") {
     return `Private ${action.dapp_name} shadow account invoke (${action.calls.length} calls)`;
   }
-  return `Private invoke on ${shortAddress(action.contract)}`;
+  return `Private invoke on ${addressLabel(action.contract)}`;
 };
 
 /**
@@ -132,7 +134,7 @@ const settledTokens = (
       continue;
     }
     const self = sameFelt(action.recipient, depositor);
-    const token = assetFor?.(action.token)?.symbol ?? shortAddress(action.token);
+    const token = assetFor?.(action.token)?.symbol ?? addressLabel(action.token);
     const group = groups.find(
       (candidate) => candidate.self === self && sameFelt(candidate.recipient, action.recipient),
     );
@@ -163,7 +165,7 @@ const settlementLines = (
     if (group.self) {
       return [SHADOW_INVOKE_SETTLES(tokens)];
     }
-    const recipient = shortAddress(group.recipient);
+    const recipient = addressLabel(group.recipient);
     return [
       SHADOW_INVOKE_SETTLES_TO(tokens, recipient),
       ...(action.collect_policy.type === "all"
@@ -258,7 +260,7 @@ export const summarizeStrk20Plan = (
     ...(ceiling === null ? [] : [`capped at ${ceiling}`]),
     ...(plan.authorization
       ? [
-          `outside execution by ${shortAddress(plan.authorization.caller)} from ${plan.authorization.executeAfter} until ${plan.authorization.executeBefore} for ${plan.authorization.publicCallCount} public approval call${plan.authorization.publicCallCount === 1 ? "" : "s"}`,
+          `outside execution by ${addressLabel(plan.authorization.caller)} from ${plan.authorization.executeAfter} until ${plan.authorization.executeBefore} for ${plan.authorization.publicCallCount} public approval call${plan.authorization.publicCallCount === 1 ? "" : "s"}`,
         ]
       : []),
   ].join(" · ");

@@ -11,6 +11,7 @@ import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/prefe
 import { button, iconButton, switchControl } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -18,7 +19,6 @@ import { networkDisplayName } from "../../shared/network-label";
 import { outcomeHashRow } from "../../shared/outcome-hash";
 import {
   accountDisplayName,
-  accountLabel,
   flowScreen,
   flowSteps,
   inlineCopyButton,
@@ -115,7 +115,7 @@ const amountStage = (
         <dd>
           <span class="send-context-account">
             <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
-            ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy sending account address")}</span>` : "<code>—</code>"}
+            ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(addressLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy sending account address")}</span>` : "<code>—</code>"}
           </span>
           ${routeSwitch("source", "Send from the private balance")}
         </dd>

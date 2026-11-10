@@ -4,14 +4,13 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl, textareaField, textField } from "@bramble/ui-kit/fields";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
   accountAvatar,
   accountDisplayName,
-  accountLabel,
   flowHeader,
   flowScreen,
   inlineCopyButton,
@@ -62,7 +61,7 @@ const recipientRow = (recipient: ProposeRecipient): string => `
     <span class="send-recipient-avatar">${accountAvatar(recipient.address)}</span>
     <span class="send-recipient-copy">
       <strong>${escapeHtml(recipient.label)}</strong>
-      <code>${escapeHtml(accountLabel(recipient.address))}</code>
+      <code>${escapeHtml(addressLabel(recipient.address))}</code>
       <small>${recipient.source}</small>
     </span>
     ${icon("chevronRight")}
@@ -140,7 +139,7 @@ const transferComposer = (
         <span class="send-recipient-avatar">${accountAvatar(view.record.address)}</span>
         <span class="send-recipient-copy">
           <strong>${escapeHtml(multisigDisplayName(view.record))}</strong>
-          <span class="copy-line"><code title="${escapeHtml(view.record.address)}">${escapeHtml(accountLabel(view.record.address))}</code>${inlineCopyButton(view.record.address, "Copy multisig address")}</span>
+          <span class="copy-line"><code title="${escapeHtml(view.record.address)}">${escapeHtml(addressLabel(view.record.address))}</code>${inlineCopyButton(view.record.address, "Copy multisig address")}</span>
         </span>
       </div>
     </div>

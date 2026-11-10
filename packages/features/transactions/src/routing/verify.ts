@@ -15,7 +15,7 @@
 import { knownTokensForNetwork } from "@bramble/portfolio/token-registry";
 import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-discovery";
 import { AVNU_MULTI_ROUTE_SWAP } from "@bramble/wallet-model/avnu-route";
-import { asFelt, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, asFelt, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
 import {
   canonical,
@@ -24,7 +24,6 @@ import {
   readAddressAt,
   readUint256At,
   recipientForFlags,
-  shortAddress,
   tokenFor,
   type VerificationContext,
 } from "./verify-decode";
@@ -158,7 +157,7 @@ const unknownContractFlag = (call: Call, known: boolean): RiskFlag | null =>
     ? null
     : {
         code: "unknown-contract",
-        message: `${shortAddress(canonical(call.contractAddress))} is not a token or contact this wallet knows. Verify the contract before continuing.`,
+        message: `${addressLabel(call.contractAddress)} is not a token or contact this wallet knows. Verify the contract before continuing.`,
       };
 
 const UNLIMITED_APPROVAL_FLAG: RiskFlag = {
@@ -370,7 +369,7 @@ const foreignBeneficiaryFlag = (
   beneficiary && !sameFelt(beneficiary, context.account.address)
     ? {
         code: "foreign-beneficiary",
-        message: `This swap pays its proceeds to ${shortAddress(canonical(beneficiary))}, not to this account. Reject it unless you meant to send them there.`,
+        message: `This swap pays its proceeds to ${addressLabel(beneficiary)}, not to this account. Reject it unless you meant to send them there.`,
       }
     : null;
 

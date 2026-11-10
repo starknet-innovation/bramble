@@ -1,5 +1,6 @@
 /** Linear exact-review binding for stable Argent multisig creation. */
 import {
+  addressLabel,
   explorerTransactionUrl,
   isNonZeroStarkFieldElement,
   normalizeFeltInput,
@@ -16,7 +17,6 @@ import {
   renderFragment,
   showToast,
 } from "../../shared/dom";
-import { accountLabel } from "../../shared/parts";
 import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import type { SendIntent } from "../send/send-model";
 import {
@@ -247,7 +247,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       if (!row || !name || !label || !remove || !copy) return "Signer setup is unavailable.";
       row.dataset["signerPublicKey"] = publicKey;
       name.textContent = participant.label;
-      label.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · Key ${accountLabel(publicKey)}`;
+      label.textContent = `${participant.source}${participant.address ? ` · ${addressLabel(participant.address)}` : ""} · Key ${addressLabel(publicKey)}`;
       remove.dataset["removeSignerPublicKey"] = publicKey;
       copy.dataset["copy"] = participant.address ?? "";
       copy.hidden = !participant.address;

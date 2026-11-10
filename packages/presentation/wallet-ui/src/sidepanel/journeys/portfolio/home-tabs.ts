@@ -20,11 +20,11 @@ import type { ActivityEntry } from "@bramble/transactions/activity";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
-import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
+import { addressLabel, explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { icon } from "../../shared/icons";
-import { accountLabel, inlineCopyButton } from "../../shared/parts";
+import { inlineCopyButton } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
 import {
   deploymentKnownFromPrivacy,
@@ -208,8 +208,8 @@ export const transactionRow = (
         <dl class="request-detail">
           <div><dt>Transaction</dt><dd class="tx-hash-row">${
             explorer
-              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
-              : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
+              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(addressLabel(entry.hash))}</code></a>`
+              : `<code class="tx-hash is-plain">${escapeHtml(addressLabel(entry.hash))}</code>`
           }${inlineCopyButton(entry.hash, "Copy transaction hash")}</dd></div>
           ${
             row.counterparty

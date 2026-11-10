@@ -8,11 +8,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
-import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, canonicalFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
-import { accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
   flush,
@@ -66,7 +65,7 @@ describe("send review recipient copy", () => {
     const copy = fact?.querySelector<HTMLButtonElement>("[data-copy]");
 
     expect(CANONICAL).not.toBe(RECIPIENT);
-    expect(code?.textContent).toBe(accountLabel(CANONICAL));
+    expect(code?.textContent).toBe(addressLabel(CANONICAL));
     expect(code?.textContent).not.toBe(CANONICAL);
     expect(code?.getAttribute("title")).toBe(CANONICAL);
     expect(copy?.dataset["copy"]).toBe(CANONICAL);

@@ -190,7 +190,7 @@ describe("NFT gallery auto-discovery", () => {
     const html = nftDetailFlow(status, account, preferences, "SN_MAIN:0x511a2b3:5", [discovered]);
     expect(html).toContain('data-view="nft-send"');
     expect(html).toContain("Everai #5");
-    expect(html).toContain("0x511a…a2b3");
+    expect(html).toContain("0x511a2b3");
     expect(html).toContain('<img class="nft-image nft-image--pixelated"');
     expect(html).toContain('loading="eager"');
     expect(html).toContain("A test collectible");
@@ -204,7 +204,7 @@ describe("NFT gallery auto-discovery", () => {
   test("detail and send receipts copy the collection contract in full", () => {
     const detail = nftDetailFlow(status, account, preferences, discovered.id, [discovered]);
     expect(detail).toContain(
-      `<dt>Contract</dt><dd><code>0x511a…a2b3</code><button class="icon-button" data-copy="${discovered.contract}" type="button" aria-label="Copy contract address"`,
+      `<dt>Contract</dt><dd><code>0x511a2b3</code><button class="icon-button" data-copy="${discovered.contract}" type="button" aria-label="Copy contract address"`,
     );
     // The send receipt names the collection, so the control says what it copies.
     const send = nftSendFlow(status, account, preferences, discovered.id, [discovered]);

@@ -8,8 +8,9 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton, switchControl } from "@bramble/ui-kit/controls";
 import { textareaField, textField } from "@bramble/ui-kit/fields";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { ConnectedSite, WalletStatus } from "../../../popup/responses/responses";
-import { accountLabel, copyButton, flowHeader, flowScreen } from "../../shared/parts";
+import { copyButton, flowHeader, flowScreen } from "../../shared/parts";
 
 /**
  * What the connected-sites screen knows: the granted origins, or that the read
@@ -162,8 +163,8 @@ export const addressBookFlow = (
                   (entry) => `<li>
                     <div class="stack-tight">
                       <strong>${escapeHtml(entry.label)}</strong>
-                      <code>${escapeHtml(accountLabel(entry.address))}</code>
-                      ${entry.publicKeyX ? `<span class="hint">Signer key ${escapeHtml(accountLabel(entry.publicKeyX))}</span>` : ""}
+                      <code>${escapeHtml(addressLabel(entry.address))}</code>
+                      ${entry.publicKeyX ? `<span class="hint">Signer key ${escapeHtml(addressLabel(entry.publicKeyX))}</span>` : ""}
                       ${entry.nostrPublicKey ? `<span class="hint">Secure coordination ready</span>` : ""}
                     </div>
                     ${copyButton(entry.address, `Copy ${entry.label}`)}
