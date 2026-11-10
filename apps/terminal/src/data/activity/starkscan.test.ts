@@ -34,7 +34,7 @@ describe("Starkscan connected-wallet activity", () => {
     });
 
     expect(rows[0]).toMatchObject({
-      detail: "Ekubo · 3 token movements · 0x12345…bcdef",
+      detail: "Ekubo · 3 token movements · 0x1234…cdef",
       finality: "final",
       title: "Swap on Ekubo",
     });

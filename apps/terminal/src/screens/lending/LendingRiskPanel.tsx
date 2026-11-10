@@ -1,7 +1,7 @@
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { ExternalLink, Gauge, Radio } from "lucide-react";
 import type { ReactNode } from "react";
 import { formatCompactUsd, type VesuMarket, type VesuPair } from "../../data/index";
-import { shortenAddress } from "../../shell/screens";
 import { InterestRateCurve } from "./InterestRateCurve";
 
 const pct = (value: number): string => `${value.toFixed(2)}%`;
@@ -52,8 +52,8 @@ export const LendingRiskPanel = ({ market, collateralPairs }: Props): ReactNode 
           <div><dt>Freshness limit</dt><dd>{market.oracleTimeoutSeconds ? `${market.oracleTimeoutSeconds}s` : "Default"}</dd></div>
           <div><dt>Window</dt><dd>{market.oracleTimeWindowSeconds ? `${market.oracleTimeWindowSeconds}s` : "Spot"}</dd></div>
           <div><dt>Adaptive half-life</dt><dd>{Math.round(market.rateHalfLifeSeconds / 3600)}h</dd></div>
-          <div><dt>Oracle contract</dt><dd title={market.oracleAddress}>{shortenAddress(market.oracleAddress)}</dd></div>
-          <div><dt>Pool curator</dt><dd title={market.poolOwner}>{shortenAddress(market.poolOwner)}</dd></div>
+          <div><dt>Oracle contract</dt><dd title={market.oracleAddress}>{addressLabel(market.oracleAddress)}</dd></div>
+          <div><dt>Pool curator</dt><dd title={market.poolOwner}>{addressLabel(market.poolOwner)}</dd></div>
         </dl>
       </section>
 

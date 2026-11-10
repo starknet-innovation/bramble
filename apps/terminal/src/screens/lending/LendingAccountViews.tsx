@@ -1,3 +1,4 @@
+import { addressLabel } from "@bramble/wallet-model/networks";
 import {
   ArrowRight,
   Banknote,
@@ -29,7 +30,6 @@ import {
   VESU_VAULT_DEPOSITS_PAUSED,
   verifyCuratedVesuVault,
 } from "../../protocols/index";
-import { shortenAddress } from "../../shell/screens";
 import { useWallet } from "../../wallet/connection/WalletProvider";
 import { toSmallestUnit } from "../swap/swap-panel-utils";
 
@@ -233,7 +233,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
         details: [
           { label: "Redemption id", value: redeem.redemptionId },
           { label: "Expected assets", value: `${redeem.assetsAmount.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${redeem.assetsSymbol}` },
-          { label: "Vault", value: shortenAddress(redeem.sharesAddress) },
+          { label: "Vault", value: addressLabel(redeem.sharesAddress) },
         ],
         title: `Claim ${redeem.assetsSymbol} redemption`,
       });
@@ -267,7 +267,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
                 size={28}
                 symbol={vault.assetSymbol}
               />
-              <span><strong>{vault.name}</strong><small>by {shortenAddress(vault.curatorAddress)}</small></span>
+              <span><strong>{vault.name}</strong><small>by {addressLabel(vault.curatorAddress)}</small></span>
             </span>
             <span>{formatCompactUsd(vault.tvlUsd)}</span>
             <span className={vault.apr7d >= 0 ? "pos" : "neg"}>{vault.apr7d.toFixed(2)}%</span>
@@ -284,7 +284,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
             <dl>
               <div><dt>Deposit cap</dt><dd>{selected.depositLimit.toLocaleString()} {selected.assetSymbol}</dd></div>
               <div><dt>Average redemption</dt><dd>{Math.round(selected.averageRedeemDelaySeconds / 3600)} hours</dd></div>
-              <div><dt>Vault contract</dt><dd title={selected.address}>{shortenAddress(selected.address)}</dd></div>
+              <div><dt>Vault contract</dt><dd title={selected.address}>{addressLabel(selected.address)}</dd></div>
             </dl>
             <label className="lending-input-block compact">
               <span>Deposit amount</span>

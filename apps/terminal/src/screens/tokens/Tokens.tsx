@@ -7,6 +7,7 @@
  * a live spot tape from Ekubo's indexed pair events. RIGHT: an AVNU-inspired
  * swap ticket with a complete quote and wallet-review flow.
  */
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { useMemo, useState, type ReactNode } from "react";
 import { Check, Coins, LineChart, Plus } from "lucide-react";
 import {
@@ -32,7 +33,6 @@ import {
   type TokenRow,
 } from "../../data/index";
 import { canonicalAddress } from "../../protocols/support/networks";
-import { shortenAddress } from "../../shell/screens";
 import type { ScreenId } from "../../shell/screens";
 import { useWallet } from "../../wallet/connection/WalletProvider";
 import { SwapPanel } from "../swap/SwapPanel";
@@ -256,7 +256,7 @@ export default function Tokens({ onNavigate }: TokensProps): ReactNode {
                 </h2>
                 <div className="tiny">
                   Starknet ·{" "}
-                  <span style={{ color: "var(--text-2)" }}>{shortenAddress(token.address)}</span>
+                  <span style={{ color: "var(--text-2)" }}>{addressLabel(token.address)}</span>
                 </div>
               </div>
               <button
@@ -296,7 +296,7 @@ export default function Tokens({ onNavigate }: TokensProps): ReactNode {
               <StatPair label="Liquidity" value={compactLabel(token.liquidityUsd)} />
               <StatPair label="24h Volume" value={compactLabel(token.volume24hUsd)} />
               <StatPair label="Decimals" value={String(token.decimals)} />
-              <StatPair label="Contract" value={shortenAddress(token.address)} />
+              <StatPair label="Contract" value={addressLabel(token.address)} />
             </div>
           </div>
 
@@ -396,7 +396,7 @@ export default function Tokens({ onNavigate }: TokensProps): ReactNode {
               </div>
               <div className="ir">
                 <span className="k">Contract</span>
-                <span className="v">{shortenAddress(token.address)}</span>
+                <span className="v">{addressLabel(token.address)}</span>
               </div>
             </div>
           </div>

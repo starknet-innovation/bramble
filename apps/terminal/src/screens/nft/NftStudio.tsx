@@ -1,3 +1,4 @@
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { Box, ExternalLink, Fingerprint, Image, ShieldCheck } from "lucide-react";
 import { userErrorMessage } from "../../protocols/support/user-error";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
@@ -15,7 +16,6 @@ import {
   waitForPunkTransaction,
 } from "../../nft/punk-runtime";
 import type { ScreenId } from "../../shell/screens";
-import { shortenAddress } from "../../shell/screens";
 import { useWallet } from "../../wallet/connection/WalletProvider";
 import {
   type StudioOperation,
@@ -93,7 +93,7 @@ export default function NftStudio(_props: NftStudioProps): ReactNode {
       await waitForPunkTransaction(chainId, transactionHash);
       addRecent(tokenId);
       setOperation({
-        message: `Punk #${tokenId} minted to ${shortenAddress(mintRecipient)}.`,
+        message: `Punk #${tokenId} minted to ${addressLabel(mintRecipient)}.`,
         tone: "success",
         transactionHash,
       });
