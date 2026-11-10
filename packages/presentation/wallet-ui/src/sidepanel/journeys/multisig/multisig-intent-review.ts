@@ -6,6 +6,7 @@
  * co-signer can check the identity they were told against the one being
  * signed. Pure templates over already-validated repository data.
  */
+
 import { escapeHtml } from "@bramble/core/html";
 import {
   type ArgentMultisigConfigReview,
@@ -14,11 +15,12 @@ import {
 } from "@bramble/multisig/chain";
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
-import { accountLabel, inlineCopyButton } from "../../shared/parts";
+import { inlineCopyButton } from "../../shared/parts";
 
 const signerKeyItem = (key: string): string =>
-  `<li><code title="${escapeHtml(key)}">${escapeHtml(accountLabel(key))}</code>${inlineCopyButton(key, "Copy signer public key")}</li>`;
+  `<li><code title="${escapeHtml(key)}">${escapeHtml(addressLabel(key))}</code>${inlineCopyButton(key, "Copy signer public key")}</li>`;
 
 /**
  * Renders each prepared call with its entrypoint, target contract (copyable in
@@ -29,7 +31,7 @@ export const exactCalls = (intent: ArgentMultisigSigningIntent): string =>
     .map(
       (call, index) => `<li class="review-panel">
         <p><strong>Call ${index + 1}</strong> · <code>${escapeHtml(call.entrypoint)}</code></p>
-        <p>Contract · <code title="${escapeHtml(call.contractAddress)}">${escapeHtml(accountLabel(call.contractAddress))}</code>${inlineCopyButton(call.contractAddress, `Copy call ${index + 1} contract address`)}</p>
+        <p>Contract · <code title="${escapeHtml(call.contractAddress)}">${escapeHtml(addressLabel(call.contractAddress))}</code>${inlineCopyButton(call.contractAddress, `Copy call ${index + 1} contract address`)}</p>
         <p>Calldata · <code>${escapeHtml(call.calldata.join(" ") || "none")}</code></p>
       </li>`,
     )

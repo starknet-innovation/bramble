@@ -5,9 +5,9 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-registry";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { addressLabel, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { PendingApproval } from "../../../popup/responses/responses";
-import { accountLabel, inlineCopyButton } from "../../shared/parts";
+import { inlineCopyButton } from "../../shared/parts";
 import { reviewConstraints, reviewOutcome, reviewPanel } from "../../shared/review-render";
 import { tokenGlyph } from "../portfolio/token-row";
 import { decisionRow, denyButton, requestIdentity } from "./approval-card-parts";
@@ -40,7 +40,7 @@ const watchAssetTrackedCard = (
   <li class="request-card" data-approval-notice>
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Add token request")}
-      <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
+      <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(addressLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
       <p>${escapeHtml(ALREADY_TRACKED_NOTICE)}</p>
     </div>
     <div class="button-row">${denyButton(approval, "Close")}</div>
@@ -96,7 +96,7 @@ export const watchAssetCard = (approval: PendingApproval, preview = false): stri
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Add token request")}
-      <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
+      <dl class="request-detail"><div><dt>Token</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Address</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(addressLabel(token.address))}</code>${inlineCopyButton(token.address, "Copy token address")}</dd></div></dl>
       ${reviewOutcome("Add this token contract to the wallet's tracked asset list.")}
     </div>
     ${reviewPanel([...watchAssetWarnings(token), ...(approval.insights ?? [])])}

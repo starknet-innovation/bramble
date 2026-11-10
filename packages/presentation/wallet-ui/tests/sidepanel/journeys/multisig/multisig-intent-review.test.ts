@@ -39,7 +39,7 @@ describe("multisig intent technical details", () => {
     // Each call's contract address copies in full beside its truncated label.
     const calls = html.slice(callsStart);
     expect(calls).toContain(
-      '<p>Contract · <code title="0x123">0x123…x123</code><button class="icon-button ghost copy-inline" data-copy="0x123" type="button" aria-label="Copy call 1 contract address"',
+      '<p>Contract · <code title="0x123">0x123</code><button class="icon-button ghost copy-inline" data-copy="0x123" type="button" aria-label="Copy call 1 contract address"',
     );
   });
 });

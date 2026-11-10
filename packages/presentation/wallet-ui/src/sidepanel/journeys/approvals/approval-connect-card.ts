@@ -6,9 +6,10 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
-import { accountDisplayName, accountLabel, inlineCopyButton } from "../../shared/parts";
+import { accountDisplayName, inlineCopyButton } from "../../shared/parts";
 import { reviewConstraints, reviewOutcome, reviewPanel } from "../../shared/review-render";
 import { decisionRow, requestIdentity } from "./approval-card-parts";
 
@@ -32,7 +33,7 @@ const connectIdentity = (status: WalletStatus, preferences: WalletPreferences | 
   if (!account) {
     return `<p class="hint">${status.locked ? "Unlock the wallet to see which account will be shared." : "Select an account on this network to share it."}</p>`;
   }
-  return `<dl class="request-detail"><div><dt>Account</dt><dd class="request-account"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong><span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy account address")}</span></dd></div><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
+  return `<dl class="request-detail"><div><dt>Account</dt><dd class="request-account"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong><span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(addressLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy account address")}</span></dd></div><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
 };
 
 const connectChoices = (
@@ -64,7 +65,7 @@ const connectChoiceList = (choices: readonly ConnectChoice[], selectedId: string
   choices
     .map(
       (choice) =>
-        `<button class="request-account-choice" type="button" data-connect-choice="${escapeHtml(choice.id)}" data-connect-kind="${choice.kind}" aria-pressed="${choice.id === selectedId}"><strong>${escapeHtml(choice.name)}</strong><code>${escapeHtml(accountLabel(choice.address))}</code></button>`,
+        `<button class="request-account-choice" type="button" data-connect-choice="${escapeHtml(choice.id)}" data-connect-kind="${choice.kind}" aria-pressed="${choice.id === selectedId}"><strong>${escapeHtml(choice.name)}</strong><code>${escapeHtml(addressLabel(choice.address))}</code></button>`,
     )
     .join("");
 

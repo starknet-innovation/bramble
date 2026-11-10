@@ -9,9 +9,9 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account, secondAccount } from "@bramble/testkit/sidepanel";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
-import { accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
   flush,
@@ -88,7 +88,7 @@ describe("closing Send", () => {
     bindTransfer(deps);
 
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel("0xdeadbeef"));
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(addressLabel("0xdeadbeef"));
     expect(app.querySelector("#send-success-hash")?.getAttribute("title")).toBe("0xdeadbeef");
   });
 

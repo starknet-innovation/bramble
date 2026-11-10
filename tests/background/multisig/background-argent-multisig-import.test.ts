@@ -202,11 +202,11 @@ describe("Argent multisig intent import", () => {
     expect(imported).toMatchObject({
       intent: { state: "ready" },
       intentPackage: {
-        intent: { state: "ready", summary: "Call transfer on 0x222…x222" },
+        intent: { state: "ready", summary: "Call transfer on 0x222" },
       },
       ok: true,
     });
-    expect(intentFrom(imported).summary).toBe("Call transfer on 0x222…x222");
+    expect(intentFrom(imported).summary).toBe("Call transfer on 0x222");
     expect(intentFrom(imported).broadcastTransactionHash).toBeUndefined();
   });
 

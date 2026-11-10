@@ -10,8 +10,7 @@
  * while it waits; and a membership whose on-chain reward address is not this
  * account pays its rewards there, which another app may have set.
  */
-import { sameFelt } from "@bramble/wallet-model/networks";
-import { canonical, shortAddress } from "../routing/verify-decode";
+import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
 import type { StakingAction } from "./staking-calls";
 import type { PoolMember } from "./staking-decode";
 
@@ -42,6 +41,6 @@ export const stakingReviewSentence = (input: {
     !sameFelt(reward, input.account) &&
     (action === "claim" || action === "stake");
   return paysElsewhere
-    ? `${what[action]} Rewards are paid to ${shortAddress(canonical(reward))}, not this account.`
+    ? `${what[action]} Rewards are paid to ${addressLabel(reward)}, not this account.`
     : what[action];
 };

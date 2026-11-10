@@ -11,6 +11,11 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+### Changed
+- Addresses are shortened the same way on every screen. Contacts, tokens, NFTs
+  and the watch-asset request read `0x5e1d…f2e4`, as the review you sign
+  already did (#884).
+
 ## [0.10.10] - Unreleased
 
 Quick fixes from the v0.10.9 review: the validator list on Mainnet, the Home

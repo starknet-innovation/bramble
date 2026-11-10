@@ -163,15 +163,15 @@ describe("activityRowModel", () => {
       kind: "transfer" as const,
       summary: "Send 1 STRK",
     };
-    expect(activityRowModel(sent).detail).toBe("To 0x0123…cdef");
+    expect(activityRowModel(sent).detail).toBe("To 0x1234…cdef");
     expect(activityRowModel({ ...sent, summary: "Received 1 STRK" }).detail).toBe(
-      "From 0x0123…cdef",
+      "From 0x1234…cdef",
     );
     expect(activityRowModel({ ...sent, summary: "Allow 0x… to spend" }).detail).toBe(
-      "To 0x0123…cdef",
+      "To 0x1234…cdef",
     );
     expect(activityRowModel({ ...sent, kind: "deploy", summary: "Deploy" }).detail).toBe(
-      "With 0x0123…cdef",
+      "With 0x1234…cdef",
     );
   });
 

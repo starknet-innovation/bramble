@@ -3,11 +3,15 @@ import { escapeHtml } from "@bramble/core/html";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { inputControl, textareaField } from "@bramble/ui-kit/fields";
 import { icon } from "@bramble/ui-kit/icons";
-import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  isNonZeroStarkFieldElement,
+  normalizeFeltInput,
+} from "@bramble/wallet-model/networks";
 import { parseWalletContactCard } from "@bramble/wallet-model/preferences";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
-import { accountAvatar, accountLabel } from "../../shared/parts";
+import { accountAvatar } from "../../shared/parts";
 import type { MultisigClient } from "./multisig-runtime";
 
 /**
@@ -36,8 +40,8 @@ const knownParticipant = ({
     <span class="option-avatar">${accountAvatar(address)}</span>
     <span class="option-copy">
       <strong>${escapeHtml(label)}</strong>
-      <code>${escapeHtml(accountLabel(address))}</code>
-      <span class="option-sub">${escapeHtml(source)} · Key ${escapeHtml(accountLabel(publicKeyX))}</span>
+      <code>${escapeHtml(addressLabel(address))}</code>
+      <span class="option-sub">${escapeHtml(source)} · Key ${escapeHtml(addressLabel(publicKeyX))}</span>
     </span>
     <span class="option-mark">${icon("plus")}</span>
   </button>`;
@@ -253,7 +257,7 @@ export const bindMultisigParticipantPicker = (
       return;
     }
     finish({
-      label: `Signer ${accountLabel(publicKeyX)}`,
+      label: `Signer ${addressLabel(publicKeyX)}`,
       publicKeyX,
       source: "Shared public key",
     });
@@ -320,7 +324,7 @@ export const bindMultisigParticipantPicker = (
         ...(control.dataset["participantAddress"]
           ? { address: control.dataset["participantAddress"] }
           : {}),
-        label: control.dataset["participantLabel"] ?? `Signer ${accountLabel(publicKeyX)}`,
+        label: control.dataset["participantLabel"] ?? `Signer ${addressLabel(publicKeyX)}`,
         publicKeyX,
         source: control.dataset["participantSource"] ?? "Known participant",
       });

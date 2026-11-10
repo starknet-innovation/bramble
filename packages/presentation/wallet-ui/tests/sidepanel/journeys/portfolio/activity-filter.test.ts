@@ -465,8 +465,8 @@ describe("token and counterparty identity", () => {
     );
     expect(options.tokens.map((option) => option.label)).toEqual([
       "STRK",
-      "USDC · 0x0330…35fb",
-      "USDC · 0x053c…68a8",
+      "USDC · 0x3306…35fb",
+      "USDC · 0x53c9…68a8",
       "USDC",
     ]);
     expect(options.tokens.map((option) => option.key)).toEqual([

@@ -1,4 +1,4 @@
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
 import { KeyRound, ShieldAlert } from "lucide-react";
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { createNetworkFor, createNetworkNames } from "../../create/create-runtime";
@@ -14,7 +14,6 @@ import {
 } from "../../create/token-ownership";
 import { TOKEN_PRESETS } from "../../create/token-presets";
 import { userErrorMessage } from "../../protocols/support/user-error";
-import { shortenAddress } from "../../shell/screens";
 import { useWallet } from "../../wallet/connection/WalletProvider";
 import { WALLET_IDENTITY_CHANGED } from "../../wallet/requests/wallet-request";
 import { type CreateOperation, CreateStatus } from "./create-parts";
@@ -141,7 +140,7 @@ export default function TokenOwnership({ createdAddress }: TokenOwnershipProps):
       setOperation({
         address: ownership.contract,
         chainId,
-        message: request.kind === "transfer" ? `Ownership moved to ${shortenAddress(owner)}.` : "Ownership renounced.",
+        message: request.kind === "transfer" ? `Ownership moved to ${addressLabel(owner)}.` : "Ownership renounced.",
         tone: "success",
         transactionHash,
       });

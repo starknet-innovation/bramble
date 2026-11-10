@@ -15,7 +15,12 @@ import type {
 import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
-import { isDefaultToken, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  isDefaultToken,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import {
   PRIVACY_OTHER_WALLET,
   PRIVACY_OTHER_WALLET_NEXT,
@@ -24,7 +29,7 @@ import type { TokenBalance, WalletStatus } from "../../../popup/responses/respon
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
-import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
+import { flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import {
   deploymentKnownFromPrivacy,
   type PrivacyDisclosureState,
@@ -347,7 +352,7 @@ export const tokenDetailFlow = (
               label: "Copy token address",
             },
             label: "Address",
-            value: accountLabel(token.address),
+            value: addressLabel(token.address),
             valueStyle: "code",
           },
           { label: "Symbol", value: token.symbol },

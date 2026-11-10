@@ -19,14 +19,10 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import {
-  accountAvatar,
-  accountDisplayName,
-  accountLabel,
-  inlineCopyButton,
-} from "../../shared/parts";
+import { accountAvatar, accountDisplayName, inlineCopyButton } from "../../shared/parts";
 import {
   type FolderSection,
   folderSections,
@@ -47,7 +43,7 @@ const recipientAccountRow = (
     <span class="send-recipient-avatar">${accountAvatar(account.address)}</span>
     <span class="send-recipient-copy">
       <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
-      <code>${escapeHtml(accountLabel(account.address))}</code>
+      <code>${escapeHtml(addressLabel(account.address))}</code>
       ${isSender ? "<small>Current</small>" : ""}
     </span>
     ${icon("chevronRight")}
@@ -82,7 +78,7 @@ const addressBookRow = (entry: NonNullable<WalletPreferences["addressBook"]>[num
     <span class="send-recipient-avatar">${accountAvatar(entry.address)}</span>
     <span class="send-recipient-copy">
       <strong>${escapeHtml(entry.label)}</strong>
-      <code>${escapeHtml(accountLabel(entry.address))}</code>
+      <code>${escapeHtml(addressLabel(entry.address))}</code>
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -97,7 +93,7 @@ const multisigRecipientRow = (record: ArgentMultisigRecord): string => {
     <span class="send-recipient-avatar">${accountAvatar(record.address)}</span>
     <span class="send-recipient-copy">
       <strong>${escapeHtml(name)}</strong>
-      <code>${escapeHtml(accountLabel(record.address))}</code>
+      <code>${escapeHtml(addressLabel(record.address))}</code>
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -133,7 +129,7 @@ export const recipientStage = (
         <span class="send-recipient-avatar">${accountAvatar(account?.address ?? "")}</span>
         <span class="send-recipient-copy">
           <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
-          ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy sending account address")}</span>` : "<code>—</code>"}
+          ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(addressLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy sending account address")}</span>` : "<code>—</code>"}
         </span>
       </div>
     </div>

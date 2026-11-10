@@ -1,6 +1,7 @@
 /** Bounded account discovery and confirmation for phrase recovery, per family. */
 
 import { type AccountContractType, recoveryLadderIndex } from "@bramble/wallet-model/accounts";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type {
   RecoveryAccountCandidate,
   RecoveryAccountSelection,
@@ -14,7 +15,7 @@ import {
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
-import { accountLabel, accountsDetectedText } from "../../shared/parts";
+import { accountsDetectedText } from "../../shared/parts";
 import {
   candidateName,
   candidateState,
@@ -178,7 +179,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     const title = deps.form.ownerDocument.createElement("strong");
     title.textContent = candidateTitle(candidate);
     const address = deps.form.ownerDocument.createElement("code");
-    address.textContent = accountLabel(candidate.account.address);
+    address.textContent = addressLabel(candidate.account.address);
     address.title = candidate.account.address;
     const hint = deps.form.ownerDocument.createElement("span");
     hint.className = "hint";

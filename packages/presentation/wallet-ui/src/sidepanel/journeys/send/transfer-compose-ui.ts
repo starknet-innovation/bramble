@@ -4,10 +4,9 @@
  * to the parent transfer state machine.
  */
 import { normalizeStarkName } from "@bramble/starknet/stark-name";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { StarkNameResolutionResponse } from "../../../popup/responses/responses";
 import { formatFiat } from "../../shared/fiat";
-import { accountLabel } from "../../shared/parts";
 import { bindTokenDropdown } from "../../shared/token-dropdown";
 import { setAddressBookDraft } from "../../shell/address-draft";
 import { isUnlistedRecipient, knownRecipientLabel, matchingRecipients } from "./recipient-rows";
@@ -70,8 +69,8 @@ export const restoreTransferCompose = (form: HTMLFormElement, fields: TransferFi
     const node = form.querySelector(`#${id}`);
     if (node) node.textContent = value;
   };
-  text("send-recipient-name", fields.recipientLabel || accountLabel(fields.recipient));
-  text("send-recipient-label", accountLabel(fields.recipient));
+  text("send-recipient-name", fields.recipientLabel || addressLabel(fields.recipient));
+  text("send-recipient-label", addressLabel(fields.recipient));
   const recipientCopy = form.querySelector<HTMLButtonElement>("#send-recipient-copy");
   if (recipientCopy) {
     recipientCopy.dataset["copy"] = fields.recipient;
@@ -311,7 +310,7 @@ const bindRecipientControls = (
     if (recipientFieldError(typed) === null) {
       // A pasted address that is already on the screen reads as the row it
       // matches, the same as tapping that row would.
-      choose(typed, knownRecipientLabel(form, typed) || accountLabel(typed));
+      choose(typed, knownRecipientLabel(form, typed) || addressLabel(typed));
       return;
     }
     // The box is also the address-book search, so a text that names a listed

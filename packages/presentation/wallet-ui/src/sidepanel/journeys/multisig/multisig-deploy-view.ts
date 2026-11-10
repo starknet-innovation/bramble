@@ -6,7 +6,7 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { selectField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type {
   ArgentMultisigDeploymentReview,
   ArgentMultisigView,
@@ -17,7 +17,6 @@ import {
   accountAvatar,
   accountDisplayName,
   accountFamilyName,
-  accountLabel,
   copyButton,
   flowHeader,
   flowScreen,
@@ -88,7 +87,7 @@ export const deploymentFundingStage = (
     <div class="multisig-funding-address">
       <div class="qr-card">${qrSvg(review.address, "Multisig funding address")}</div>
       <div class="address-line">
-        <code title="${escapeHtml(review.address)}">${escapeHtml(accountLabel(review.address))}</code>
+        <code title="${escapeHtml(review.address)}">${escapeHtml(addressLabel(review.address))}</code>
         ${iconButton({ attributes: { "data-copy": review.address }, icon: "copy", label: "Copy multisig funding address" })}
       </div>
     </div>
@@ -109,7 +108,7 @@ export const deploymentReviewMarkup = (review: ArgentMultisigDeploymentReview): 
   `${reviewOutcome(`Deploy a ${review.threshold}-of-${review.signerPublicKeys.length} Ready multisig.`)}
     <div class="multisig-deployment-target" aria-label="Predicted multisig address">
       <span>Predicted address</span>
-      <code title="${escapeHtml(review.address)}">${escapeHtml(accountLabel(review.address))}</code>
+      <code title="${escapeHtml(review.address)}">${escapeHtml(addressLabel(review.address))}</code>
       ${copyButton(review.address, "Copy predicted multisig address")}
     </div>
     ${reviewPanel([], "Deployment creates a new on-chain multisig account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
@@ -151,8 +150,8 @@ export const deploymentSubmittedMarkup = (
                 <div><p class="context-label">Submitted to Starknet</p><h2>Multisig deployment is in progress</h2></div>
                 <p>Account saved. Deployment is confirming.</p>
                 <dl class="request-detail">
-                  <div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(result.address))}</code>${copyButton(result.address, "Copy multisig address")}</dd></div>
-                  <div><dt>Transaction</dt><dd><code>${escapeHtml(accountLabel(result.transactionHash))}</code>${copyButton(result.transactionHash, "Copy deployment transaction hash")}</dd></div>
+                  <div><dt>Address</dt><dd><code>${escapeHtml(addressLabel(result.address))}</code>${copyButton(result.address, "Copy multisig address")}</dd></div>
+                  <div><dt>Transaction</dt><dd><code>${escapeHtml(addressLabel(result.transactionHash))}</code>${copyButton(result.transactionHash, "Copy deployment transaction hash")}</dd></div>
                 </dl>
                 <div class="multisig-deployment-success-actions">
                   ${button({ attributes: { "data-open-deployed-multisig": result.multisig.record.id }, label: "Go to deployed account" })}
@@ -164,7 +163,7 @@ const deploymentSignerCopy = (
   account: AccountRef,
   preferences: WalletPreferences | null,
 ): string => `<span class="option-name"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>${hardwareBadge(account)}</span>
-    <code>${escapeHtml(accountLabel(account.address))}</code>
+    <code>${escapeHtml(addressLabel(account.address))}</code>
     <span class="option-sub">${accountFamilyName(account.accountContractType)} · Key matches</span>`;
 
 const deploymentSignerIdentity = (
@@ -208,7 +207,7 @@ const signerKeySources = (
       })) ?? []),
     ...deploymentKeys.map((publicKeyX) => ({
       address: publicKeyX,
-      label: `Signer ${accountLabel(publicKeyX)}`,
+      label: `Signer ${addressLabel(publicKeyX)}`,
       publicKeyX,
       source: "Deployment setup",
     })),
@@ -228,7 +227,7 @@ const selectedSignerRow = (
     <span class="option-avatar">${accountAvatar(source.address)}</span>
     <span class="option-copy">
       <strong>${escapeHtml(source.label)}</strong>
-      <span class="option-sub" title="${escapeHtml(source.publicKeyX)}">${source.source} · Key ${escapeHtml(accountLabel(source.publicKeyX))}</span>
+      <span class="option-sub" title="${escapeHtml(source.publicKeyX)}">${source.source} · Key ${escapeHtml(addressLabel(source.publicKeyX))}</span>
     </span>
     ${inlineCopyButton(source.publicKeyX, `Copy ${source.label} signer public key`)}
     ${iconButton({

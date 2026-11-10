@@ -1,8 +1,9 @@
 /** Displays the exact private-swap review before proof authorization. */
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { ReactNode } from "react";
 import { PRIVATE_SWAP_SLIPPAGE_BPS } from "../../../shared/privacy";
 import type { PrivacyPoolSnapshot } from "../../protocols/privacy/privacy-pool";
-import { formatRaw, short, type SwapReview } from "./model";
+import { formatRaw, type SwapReview } from "./model";
 
 /** Render-only review; the parent owns proof submission and connection state. */
 export function PrivateSwapReview({
@@ -52,7 +53,7 @@ export function PrivateSwapReview({
             <div>
               <dt>Private executor</dt>
               <dd>
-                <code>{short(swapReview.executor)}</code>
+                <code>{addressLabel(swapReview.executor)}</code>
               </dd>
             </div>
             <div>
@@ -83,7 +84,7 @@ export function PrivateSwapReview({
             <div>
               <dt>Pool</dt>
               <dd>
-                <code>{short(pool?.address ?? "0x040337…812a")}</code>
+                <code>{addressLabel(pool?.address ?? "0x040337…812a")}</code>
               </dd>
             </div>
             <div>

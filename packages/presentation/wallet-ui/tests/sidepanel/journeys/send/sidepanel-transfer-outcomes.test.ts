@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
 import type { ActivityStatus } from "@bramble/transactions/activity";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/journeys/send/send-views";
 import {
@@ -18,7 +19,7 @@ import {
   CONFIRMATION_DELAYS_MS,
   confirmationOutcome,
 } from "../../../../src/sidepanel/shared/confirm-submitted";
-import { accountDisplayName, accountLabel } from "../../../../src/sidepanel/shared/parts";
+import { accountDisplayName } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 
 const HASH = "0x1234";
@@ -140,7 +141,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(addressLabel(HASH));
   });
 
   test("reads the receipt as sender sent amount to recipient, with copy and explorer", async () => {
@@ -254,7 +255,7 @@ describe("Send confirmation outcomes", () => {
     const explorer = app.querySelector<HTMLAnchorElement>("#send-success-hash-link");
     expect(explorer?.hasAttribute("href")).toBe(false);
     // The hash and its copy control stay: only the link is withheld.
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(addressLabel(HASH));
   });
 
   // The point of the fast-confirmation work: a pre-confirmation is a real
@@ -265,7 +266,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("submitted");
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(addressLabel(HASH));
   });
 
   test("shows the failure recovery state when Starknet rejects", async () => {
@@ -302,7 +303,7 @@ describe("Send confirmation outcomes", () => {
     await submitTwice(form);
     expect(form.dataset["stage"]).toBe("pending");
     expect(app.querySelector("#send-pending")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-pending-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(app.querySelector("#send-pending-hash")?.textContent).toBe(addressLabel(HASH));
     expect(app.querySelector("#send-pending-hash")?.getAttribute("title")).toBe(HASH);
   });
 });

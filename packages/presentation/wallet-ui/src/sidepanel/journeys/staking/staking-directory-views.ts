@@ -9,11 +9,12 @@
  * and an unknown figure says "unknown" rather than 0. The list names its
  * source and shows each address, because a name is not a check.
  */
+
 import { escapeHtml } from "@bramble/core/html";
-import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { icon } from "../../shared/icons";
 import type { StakingDirectoryEntry, StakingState } from "./staking-directory-client";
 
@@ -49,7 +50,7 @@ const entryRow = (entry: StakingDirectoryEntry): string => `
     <button class="staking-card" type="button" data-staking-open="${escapeHtml(entry.staker)}">
       <span class="allowance-copy staking-copy">
         <strong>${escapeHtml(entry.name ?? "Unnamed validator")}</strong>
-        <code>${escapeHtml(shortAddress(canonical(entry.staker)))}</code>
+        <code>${escapeHtml(addressLabel(entry.staker))}</code>
         <span class="hint">${escapeHtml(figuresLine(entry))}</span>
         ${entry.pools.map((pool) => `<span class="hint">${escapeHtml(poolLine(pool))}</span>`).join("")}
         ${entry.website ? `<span class="hint">${escapeHtml(entry.website)}</span>` : ""}

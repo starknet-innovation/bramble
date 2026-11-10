@@ -348,7 +348,7 @@ describe("staking actions", () => {
     const { review } = await act({ action: "claim" });
     expect(review).toMatchObject({
       stakingPreparation: {
-        review: `Claim your STRK rewards from ${VALIDATOR}. Rewards are paid to 0xabc1…c123, not this account.`,
+        review: `Claim your STRK rewards from ${VALIDATOR}. Rewards are paid to 0xabc123, not this account.`,
       },
     });
     expect(await send(OVERVIEW)).toMatchObject({

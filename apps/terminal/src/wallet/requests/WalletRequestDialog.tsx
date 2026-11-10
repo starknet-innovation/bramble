@@ -1,6 +1,6 @@
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { Check, ExternalLink, ShieldCheck, WalletCards, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
-import { shortenAddress } from "../../shell/screens";
 import type { WalletRequestView } from "./wallet-request";
 
 type WalletRequestDialogProps = {
@@ -126,7 +126,7 @@ export const WalletRequestDialog = ({
         <div className="wallet-request-route" aria-label="Request route">
           <div>
             <span>From</span>
-            <strong>{address === null ? "No account" : shortenAddress(address)}</strong>
+            <strong>{address === null ? "No account" : addressLabel(address)}</strong>
           </div>
           <ExternalLink size={14} aria-hidden />
           <div>
@@ -183,7 +183,7 @@ export const WalletRequestDialog = ({
             <ShieldCheck size={18} aria-hidden />
             <div>
               <strong>Handed to Starknet</strong>
-              <span className="mono">{shortenAddress(request.transactionHash)}</span>
+              <span className="mono">{addressLabel(request.transactionHash)}</span>
             </div>
           </div>
         ) : null}

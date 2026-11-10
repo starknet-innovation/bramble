@@ -1,3 +1,4 @@
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { PRIVATE_SWAP_EXECUTOR } from "../../../shared/privacy";
 import { userErrorMessage } from "../../protocols/support/user-error";
 import {
@@ -33,7 +34,6 @@ import {
   type Mode,
   modeLabel,
   parseAmount,
-  short,
   type SwapReview,
   TOKENS,
   type TokenOption,
@@ -120,7 +120,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       const transactionHash = await registerPrivate();
       setRegistration("active");
       setMode("balances");
-      setStatus(`Registration accepted on Starknet · ${short(transactionHash)}`);
+      setStatus(`Registration accepted on Starknet · ${addressLabel(transactionHash)}`);
     } catch (cause) {
       setStatus(userErrorMessage(cause, "Private activation failed."));
     } finally {
@@ -140,7 +140,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
             ? [buildPrivacyWithdraw({ amount: raw, recipient, token: token.address })]
             : [buildPrivacyTransfer({ amount: raw, recipient, token: token.address })];
       const transactionHash = await invokePrivate(actions);
-      setStatus(`Accepted on Starknet · ${short(transactionHash)}`);
+      setStatus(`Accepted on Starknet · ${addressLabel(transactionHash)}`);
       setAmount("");
       await refreshBalances();
     } catch (cause) {
@@ -196,7 +196,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       const proof = await provePrivateSwap(() => preparePrivateInvoke(swapReview.actions));
       setStatus("Proof ready · submitting through the AVNU private paymaster…");
       const transactionHash = await submitPrivateSwapProof(proof, FEE_MODE);
-      setStatus(`Private swap accepted · ${short(transactionHash)}`);
+      setStatus(`Private swap accepted · ${addressLabel(transactionHash)}`);
       setSwapReview(null);
       setAmount("");
       await refreshBalances();
@@ -223,7 +223,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
             <small>Production pool</small>
             <strong>{pool ? "On-chain configuration read" : "Checking pool…"}</strong>
             <code>
-              {short(
+              {addressLabel(
                 pool?.address ??
                   "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a",
               )}
