@@ -6,10 +6,14 @@
  * only — seeds are read from the env file and typed straight into the UI.
  *
  * Run from the repository root after `bun run build`:
- *   BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json]
+ *   BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json] [seed filter]
  * The scorecard goes to the given path, or to a new owner-only directory under
  * the system temp directory; copy a run into this folder as a dated
- * `verification-*.json` snapshot to keep it.
+ * `verification-*.json` snapshot to keep it. A seed filter (a substring of the
+ * variable name, e.g. `GAPS`) imports only the matching seeds, so one seed can
+ * be re-run alone; `BRAMBLE_DATASET_HEADED=1` shows the browser. A browser
+ * crash, page error or worker exit during a scan is recorded in that seed's
+ * status instead of being lost with the context.
  */
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -23,6 +27,8 @@ const defaultOutPath = (): string =>
   join(mkdtempSync(join(tmpdir(), "bramble-vendor-dataset-")), "verification.json");
 
 const OUT_PATH = resolve(process.argv[2] ?? defaultOutPath());
+const SEED_FILTER = process.argv[3] ?? "";
+const HEADED = process.env["BRAMBLE_DATASET_HEADED"] === "1";
 const SCAN_TIMEOUT_MS = 300_000;
 const VAULT_PASSPHRASE = "dataset verification passphrase";
 
@@ -60,9 +66,25 @@ const scrapeRecovery = async (page: Page): Promise<Scraped[]> => {
 };
 
 const importAndScan = async (mnemonic: string): Promise<{ rows: Scraped[]; status: string }> => {
-  const loaded = await launchExtension({ headless: true });
+  const loaded = await launchExtension({ headless: !HEADED });
+  // Anything the browser reports before dying is appended to the thrown error,
+  // so a crash leaves a diagnosis in the scorecard rather than a bare
+  // "Target closed". Nothing here can carry the phrase: it is typed into an
+  // input and never logged by the wallet.
+  const diagnostics: string[] = [];
+  const note = (line: string): void => {
+    diagnostics.push(line.slice(0, 300));
+  };
+  loaded.serviceWorker.on("close", () => note("service worker closed"));
   try {
     const page = await loaded.context.newPage();
+    page.on("crash", () => note("page crashed"));
+    page.on("pageerror", (error) => note(`pageerror: ${error.message}`));
+    page.on("console", (message) => {
+      if (message.type() === "error" || message.type() === "warning") {
+        note(`console.${message.type()}: ${message.text()}`);
+      }
+    });
     await page.goto(`chrome-extension://${loaded.extensionId}/onboarding.html`);
     await expect(page.getByRole("button", { name: "Add an existing wallet" })).toBeVisible({
       timeout: 30_000,
@@ -81,8 +103,11 @@ const importAndScan = async (mnemonic: string): Promise<{ rows: Scraped[]; statu
     const status = (await page.locator("#recovery-scan-status").textContent()) ?? "";
     const rows = await scrapeRecovery(page);
     return { rows, status };
+  } catch (error) {
+    const tail = diagnostics.length ? ` | ${diagnostics.slice(-5).join(" | ")}` : "";
+    throw new Error(`${String(error).slice(0, 200)}${tail}`);
   } finally {
-    await loaded.close();
+    await loaded.close().catch(() => undefined);
   }
 };
 
@@ -98,6 +123,7 @@ const manifest = loadManifest();
 
 const results: Record<string, { status: string; rows: Scraped[] }> = {};
 for (const seedVar of SEEDS) {
+  if (!seedVar.includes(SEED_FILTER)) continue;
   console.log(`\n### importing ${seedVar}`);
   try {
     const { rows, status } = await importAndScan(envSeed(seedVar));
@@ -107,8 +133,9 @@ for (const seedVar of SEEDS) {
       console.log(`   [${row.group}] ${row.title} ${norm(row.address)} — ${row.hint}`);
     }
   } catch (error) {
-    results[seedVar] = { status: `ERROR: ${String(error).slice(0, 200)}`, rows: [] };
-    console.log(`   FAILED: ${String(error).slice(0, 160)}`);
+    const message = error instanceof Error ? error.message : String(error);
+    results[seedVar] = { status: `ERROR: ${message.slice(0, 2000)}`, rows: [] };
+    console.log(`   FAILED: ${message.slice(0, 600)}`);
   }
 }
 
