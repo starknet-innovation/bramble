@@ -3,46 +3,28 @@
 //! `account-types.ts`, `parts.ts`, `groups.ts`, `recovery.ts` and `dom.ts`. There is no second
 //! hand-written copy of a class hash, a nickname word, a group icon, or a recovery bound here.
 //!
-//! Constructor calldata is not read from this table: Krusty's `ArgentAccount` and
-//! `BraavosAccount` own it, and a unit test proves both agree on every class.
+//! Constructor calldata is not read from this table: Krusty builds it inside
+//! `wallet_core::accounts`, which takes the table's Argent layout and refuses a disagreement;
+//! wallet-core's `accounts_scan_parity.rs` checks the two agree on every class.
 
 use std::sync::OnceLock;
 
-use krusty_kms::{ArgentAccount, ArgentConstructorLayout};
 use serde::Deserialize;
 use starknet_types_core::felt::Felt;
 use wallet_core::send::plan::{ArgentClass, Authorization};
 
 use crate::felt;
 
+pub use wallet_core::accounts::AccountFamily;
+
 const CATALOG_JSON: &str = include_str!("../generated/accounts.json");
 
 /// The account contract families the wallet can derive.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum AccountFamily {
     OpenZeppelin,
     Argent,
     Braavos,
-}
-
-impl AccountFamily {
-    /// The extension's `AccountContractType` spelling, used in stored records and selection keys.
-    pub(crate) fn wire(self) -> &'static str {
-        match self {
-            Self::OpenZeppelin => "openzeppelin",
-            Self::Argent => "argent",
-            Self::Braavos => "braavos",
-        }
-    }
-
-    pub(crate) fn from_wire(value: &str) -> Option<Self> {
-        match value {
-            "openzeppelin" => Some(Self::OpenZeppelin),
-            "argent" => Some(Self::Argent),
-            "braavos" => Some(Self::Braavos),
-            _ => None,
-        }
-    }
 }
 
 /// One known account class, as the extension's `ACCOUNT_CLASSES` lists it. Read-only.
@@ -271,27 +253,6 @@ pub(crate) fn class_entry(class_hash: &Felt) -> Option<&'static ClassEntry> {
         .find(|entry| entry.class_hash == *class_hash)
 }
 
-/// The Argent preset Krusty derives and deploys a class with: Krusty's own when it lists the
-/// class; otherwise, for `argent_xverse` alone, the constructor layout the extension's reviewed
-/// table gives (`with_class_hash_and_layout`). Krusty still builds the calldata and the address
-/// either way. Any other class Krusty does not list is refused, so a new class needs review here.
-pub(crate) fn argent_preset(class_hash: Felt) -> Option<ArgentAccount> {
-    if let Ok(account) = ArgentAccount::try_with_class_hash(class_hash) {
-        return Some(account);
-    }
-    if class_hash != catalog().argent_xverse {
-        return None;
-    }
-    let layout = match class_entry(&class_hash)?.constructor_shape.as_str() {
-        "owner-guardian" => ArgentConstructorLayout::OwnerGuardianFelts,
-        "signer-owner-guardian-option" => ArgentConstructorLayout::SignerWithOptionalGuardian,
-        _ => return None,
-    };
-    Some(ArgentAccount::with_class_hash_and_layout(
-        class_hash, layout,
-    ))
-}
-
 /// `knownAccountType` for a stored class.
 pub(crate) fn type_label(family: AccountFamily, class_hash: &Felt) -> Option<String> {
     if family == AccountFamily::OpenZeppelin {
@@ -384,50 +345,6 @@ pub fn recovery_limits() -> RecoveryLimits {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use krusty_kms::{AccountClass, ArgentAccount, ArgentConstructorLayout, BraavosAccount};
-
-    #[test]
-    fn krusty_constructors_agree_with_the_extension_table() {
-        let key = Felt::from(42u64);
-        let unlisted: Vec<Felt> = deployment_classes(AccountFamily::Argent)
-            .map(|entry| entry.class_hash)
-            .filter(|hash| ArgentAccount::layout_for_class_hash(hash).is_none())
-            .collect();
-        // Only Xverse's build goes through the reviewed-table layout; a new unlisted class
-        // must be reviewed into `argent_preset` before it derives anything.
-        assert_eq!(unlisted, vec![catalog().argent_xverse]);
-        for entry in deployment_classes(AccountFamily::Argent) {
-            let layout = argent_preset(entry.class_hash)
-                .expect("every Argent deployment class has a preset")
-                .constructor_layout();
-            let expected = match entry.constructor_shape.as_str() {
-                "owner-guardian" => ArgentConstructorLayout::OwnerGuardianFelts,
-                "signer-owner-guardian-option" => {
-                    ArgentConstructorLayout::SignerWithOptionalGuardian
-                }
-                other => panic!("unexpected Argent shape {other}"),
-            };
-            assert_eq!(layout, expected, "{}", entry.info.label);
-        }
-        for entry in deployment_classes(AccountFamily::Braavos) {
-            assert_eq!(entry.constructor_shape, "public-key");
-            let braavos = BraavosAccount::with_class_hash(entry.class_hash);
-            assert_eq!(braavos.build_constructor_calldata(&key), vec![key]);
-        }
-    }
-
-    #[test]
-    fn open_zeppelin_class_is_krustys_on_every_network() {
-        for chain in [
-            krusty_kms_common::ChainId::Mainnet,
-            krusty_kms_common::ChainId::Sepolia,
-        ] {
-            assert_eq!(
-                crate::kms::oz_class_hash(chain).unwrap(),
-                catalog().open_zeppelin_class
-            );
-        }
-    }
 
     #[test]
     fn families_and_labels() {

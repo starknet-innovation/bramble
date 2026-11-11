@@ -1,50 +1,18 @@
 //! The mobile core reproduces the extension's account rules bit for bit.
-//! `tests/fixtures/accounts-parity-{families,rules}.json` are written by `bun run mobile:parity` from the extension's
-//! own code (`deriveAccount` over the real Krusty WASM package, `accountDisplayName`,
-//! `accountLabel`, `isLabel`, `createGroup`, and the discovery row helpers), and
-//! `tests/conformance/mobile-accounts-parity.test.ts` keeps it in step with the extension.
+//! `tests/fixtures/accounts-parity-{rules,recovery}.json` are written by `bun run mobile:parity`
+//! from the extension's own code (`accountDisplayName`, `accountLabel`, `isLabel`, `createGroup`,
+//! and the discovery row helpers), and `tests/conformance/mobile-accounts-parity.test.ts` keeps
+//! it in step with the extension. The family address vectors
+//! (`accounts-parity-families-*.json`, `deriveAccount` over the real Krusty WASM package) are
+//! checked by wallet-core's `accounts_parity.rs`, which owns `family_address`.
 
 mod common;
-
-use std::collections::BTreeMap;
 
 use bramble_core::testing::{deployed_recovery_candidate, recovery_candidate};
 use bramble_core::{
     account_display_name, account_label, is_account_label, AccountFamily, Ladder, NetworkId,
-    RecoverySelection,
 };
 use serde_json::Value;
-
-/// The derivation vectors, committed one file per network and read here as one set.
-/// The phrase comes from the mainnet file; `split_family_fixtures_agree_on_the_phrase` checks
-/// the sepolia file carries the same mnemonic and passphrase.
-fn families() -> Value {
-    let mut whole: Value = serde_json::from_str(include_str!(
-        "fixtures/accounts-parity-families-mainnet.json"
-    ))
-    .unwrap();
-    let sepolia: Value = serde_json::from_str(include_str!(
-        "fixtures/accounts-parity-families-sepolia.json"
-    ))
-    .unwrap();
-    let more = sepolia["vectors"].as_array().unwrap().clone();
-    whole["vectors"].as_array_mut().unwrap().extend(more);
-    whole
-}
-
-#[test]
-fn split_family_fixtures_agree_on_the_phrase() {
-    let mainnet: Value = serde_json::from_str(include_str!(
-        "fixtures/accounts-parity-families-mainnet.json"
-    ))
-    .unwrap();
-    let sepolia: Value = serde_json::from_str(include_str!(
-        "fixtures/accounts-parity-families-sepolia.json"
-    ))
-    .unwrap();
-    assert_eq!(mainnet["mnemonic"], sepolia["mnemonic"]);
-    assert_eq!(mainnet["passphrase"], sepolia["passphrase"]);
-}
 
 fn fixture() -> Value {
     serde_json::from_str(include_str!("fixtures/accounts-parity-rules.json")).unwrap()
@@ -77,68 +45,8 @@ fn ladder(vector: &Value) -> Ladder {
     }
 }
 
-fn network(value: &Value) -> NetworkId {
-    match value.as_str().unwrap() {
-        "SN_MAIN" => NetworkId::Mainnet,
-        "SN_SEPOLIA" => NetworkId::Sepolia,
-        other => panic!("unexpected network {other}"),
-    }
-}
-
 fn text(value: &Value) -> String {
     value.as_str().unwrap().to_string()
-}
-
-#[test]
-fn every_family_and_class_derives_the_extensions_address() {
-    let fixture = families();
-    // Group vectors by (network, passphrase): each group is one restore on one vault.
-    let mut groups: BTreeMap<(String, Option<String>), Vec<&Value>> = BTreeMap::new();
-    for vector in fixture["vectors"].as_array().unwrap() {
-        let key = (
-            text(&vector["networkId"]),
-            vector["passphrase"].as_str().map(str::to_string),
-        );
-        groups.entry(key).or_default().push(vector);
-    }
-    assert_eq!(groups.len(), 3);
-    for ((net, passphrase), vectors) in groups {
-        let (_dir, _clock, core) = common::core();
-        core.import_wallet(
-            "parity password".into(),
-            text(&fixture["mnemonic"]),
-            passphrase.clone(),
-        )
-        .unwrap();
-        let selections = vectors
-            .iter()
-            .map(|vector| RecoverySelection {
-                family: family(&vector["accountContractType"]),
-                account_index: u32::try_from(vector["accountIndex"].as_u64().unwrap()).unwrap(),
-                ladder: Some(ladder(vector)),
-                class_hash: vector["requestedClassHash"].as_str().map(str::to_string),
-            })
-            .collect();
-        let records = core
-            .restore_recovered_accounts(network(&Value::String(net.clone())), selections)
-            .unwrap();
-        for (record, vector) in records.iter().zip(&vectors) {
-            let context = format!("{net} {passphrase:?} {}", vector["accountIndex"]);
-            assert_eq!(
-                record.address,
-                text(&vector["address"]),
-                "address {context}"
-            );
-            assert_eq!(record.public_key, text(&vector["publicKeyX"]), "{context}");
-            assert_eq!(record.class_hash, text(&vector["classHash"]), "{context}");
-            assert_eq!(
-                record.deployment_salt.as_deref(),
-                vector["deploymentSalt"].as_str(),
-                "{context}"
-            );
-            assert_eq!(record.id, format!("{net}:{}", record.address));
-        }
-    }
 }
 
 #[test]

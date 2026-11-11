@@ -33,8 +33,7 @@ pub fn ladder_public_key(
     ladder: crate::kms::Ladder,
     index: u32,
 ) -> Result<String, crate::CoreError> {
-    crate::kms_accounts::public_key(mnemonic, None, ladder, index)
-        .map(|key| crate::felt::canonical(&key))
+    crate::kms::public_key(mnemonic, None, ladder, index).map(|key| crate::felt::canonical(&key))
 }
 
 /// The public viewing key this wallet would register at `index` on `ladder` in `network`'s
@@ -133,7 +132,7 @@ pub fn recovery_candidate(
     deployed: bool,
     funded: bool,
 ) -> crate::RecoveryCandidate {
-    crate::recovery::candidate(&crate::recovery::Found {
+    crate::recovery::candidate(&wallet_core::accounts::scan::Found {
         family,
         ladder,
         class_hash: crate::felt::parse(class_hash).expect("class hash is a felt"),
@@ -157,8 +156,8 @@ pub fn deployed_recovery_candidate(
     restriction: Option<&str>,
     privacy_elsewhere: bool,
 ) -> crate::RecoveryCandidate {
-    use crate::recovery::Restriction;
-    let mut found = crate::recovery::Found {
+    use wallet_core::accounts::advisory::Restriction;
+    let mut found = wallet_core::accounts::scan::Found {
         family,
         ladder,
         class_hash: crate::felt::parse(class_hash).expect("class hash is a felt"),

@@ -9,6 +9,7 @@
 //! Errors carry an operation name or a fixed reason, never input text, so nothing a user typed
 //! can reach a log through an error message.
 
+mod account_address;
 mod account_catalog;
 mod account_names;
 mod account_store;
@@ -32,7 +33,6 @@ mod history;
 mod js;
 mod kms;
 pub use kms::Ladder;
-mod kms_accounts;
 mod migrations;
 mod multisig_constants;
 mod multisig_rpc;
@@ -47,7 +47,6 @@ mod privacy;
 mod public_store;
 mod records;
 mod recovery;
-mod recovery_advisory;
 mod recovery_scan;
 pub(crate) use wallet_core::rpc;
 mod rpc_request;

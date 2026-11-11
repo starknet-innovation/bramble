@@ -13,12 +13,12 @@ use serde::{Deserialize, Serialize};
 use starknet_types_core::felt::Felt;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
+use crate::account_address::family_address;
 use crate::account_catalog::{catalog, AccountFamily};
 use crate::account_names::{is_label, js_trim};
 use crate::files::storage;
 use crate::groups::{self, StoredGroup};
 use crate::kms::Ladder;
-use crate::kms_accounts::{self, family_address};
 use crate::migrations::VAULT_VERSION;
 use crate::networks::NetworkId;
 use crate::{felt, kms, CoreError};
@@ -47,10 +47,54 @@ pub(crate) struct StoredAccount {
     /// The key tree `account_index` walks. Absent before vault version 5 and required from 5 on:
     /// every earlier record was derived on this wallet's own ladder, and the 4 → 5 step labels it
     /// so, which keeps every record at the address it already had. Read it through `ladder()`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "stored_ladder"
+    )]
     pub ladder: Option<Ladder>,
     pub network: String,
     pub public_key: String,
+}
+
+/// `Ladder` as the vault spells it (`account`, `address`, `argentx`). The core's `Ladder` carries
+/// no serde, so the stored names are this mirror's, unchanged from every vault already written.
+mod stored_ladder {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    use crate::kms::Ladder;
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "kebab-case")]
+    enum Name {
+        Account,
+        Address,
+        #[serde(rename = "argentx")]
+        ArgentX,
+    }
+
+    pub fn serialize<S: Serializer>(
+        ladder: &Option<Ladder>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let name = ladder.map(|ladder| match ladder {
+            Ladder::Account => Name::Account,
+            Ladder::Address => Name::Address,
+            Ladder::ArgentX => Name::ArgentX,
+        });
+        name.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Ladder>, D::Error> {
+        let name = Option::<Name>::deserialize(deserializer)?;
+        Ok(name.map(|name| match name {
+            Name::Account => Ladder::Account,
+            Name::Address => Ladder::Address,
+            Name::ArgentX => Ladder::ArgentX,
+        }))
+    }
 }
 
 impl StoredAccount {
@@ -154,7 +198,7 @@ impl VaultPayload {
     }
 
     pub(crate) fn public_key(&self, path: Ladder, index: u32) -> Result<Felt, CoreError> {
-        kms_accounts::public_key(
+        kms::public_key(
             &self.mnemonic,
             self.mnemonic_passphrase.as_deref(),
             path,
@@ -225,7 +269,7 @@ pub(crate) fn record_at(
             reason: "account index out of range".into(),
         });
     }
-    let placed = family_address(family, class_hash, salt, public_key, network.chain())?;
+    let placed = family_address(family, class_hash, salt, public_key, network)?;
     let address = felt::canonical(&placed.address);
     Ok(StoredAccount {
         account_index,

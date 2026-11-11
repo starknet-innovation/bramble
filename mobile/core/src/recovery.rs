@@ -1,7 +1,8 @@
 //! Account discovery rules and restore, reproducing the extension's `onboarding-ops.ts`
-//! (which shapes to scan, which candidates to keep), `recovery-account-ui.ts` (row titles, hints,
+//! (which shapes to scan, which are creatable), `recovery-account-ui.ts` (row titles, hints,
 //! selectability), and `vault/src/service/recovery.ts` (selection checks and atomic restore).
-//! The sans-IO scan that feeds these rules lives in `recovery_scan.rs`.
+//! The scan itself, its candidates and its keep rule are `wallet_core::accounts::scan`;
+//! `recovery_scan.rs` feeds it these rules.
 //!
 //! The host supplies only coordinates, `(family, ladder, index, class)`, never an address or a
 //! key: every restored record is re-derived here from the phrase.
@@ -9,7 +10,10 @@
 use std::collections::{HashMap, HashSet};
 
 use starknet_types_core::felt::Felt;
+use wallet_core::accounts::advisory::Restriction;
+use wallet_core::accounts::scan::{Found, SaltRule, ScanShape};
 
+use crate::account_address::{argent_shape, resolve_class};
 use crate::account_catalog::{catalog, class_entry, deployment_classes, AccountFamily};
 use crate::account_names::short_label;
 use crate::account_store::{is_usable_account_index, record_at, StoredAccount, VaultPayload};
@@ -57,90 +61,73 @@ pub struct RecoverySelection {
     pub ladder: Option<Ladder>,
 }
 
-/// One scan shape: a family, the key tree it walks and, except for OpenZeppelin, the class.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Shape {
-    pub family: AccountFamily,
-    pub ladder: Ladder,
-    pub class_hash: Option<Felt>,
-}
-
 /// `recoveryScanShapes` (issues 505, 734): OZ on this wallet's ladder; every Argent release on the
 /// same ladder (accounts this wallet made, and Xverse's, which derive there); every Argent release
 /// but Xverse's on Ready's ladder; and every Braavos class on Braavos's. Ready takes no BIP-39
 /// passphrase, so a phrase opened with one has no Ready accounts and `with_ready` drops those
-/// shapes rather than failing the scan.
-pub(crate) fn scan_shapes(with_ready: bool) -> Vec<Shape> {
-    let mut shapes = vec![Shape {
-        family: AccountFamily::OpenZeppelin,
-        ladder: Ladder::Account,
-        class_hash: None,
-    }];
-    shapes.extend(
-        deployment_classes(AccountFamily::Argent).map(|entry| Shape {
-            family: AccountFamily::Argent,
-            ladder: Ladder::Account,
-            class_hash: Some(entry.class_hash),
-        }),
-    );
+/// shapes rather than failing the scan. Each class goes through `resolve_class` (OZ's is Krusty's
+/// on `network`), with the catalog's Argent layout, Bramble's salt (`0x0` for OZ, the public key
+/// otherwise) and whether it is creatable.
+pub(crate) fn scan_shapes(
+    with_ready: bool,
+    network: NetworkId,
+) -> Result<Vec<ScanShape>, CoreError> {
+    let mut coordinates = vec![(AccountFamily::OpenZeppelin, Ladder::Account, None)];
+    coordinates.extend(deployment_classes(AccountFamily::Argent).map(|entry| {
+        (
+            AccountFamily::Argent,
+            Ladder::Account,
+            Some(entry.class_hash),
+        )
+    }));
     if with_ready {
-        shapes.extend(
+        coordinates.extend(
             deployment_classes(AccountFamily::Argent)
                 .filter(|entry| entry.class_hash != catalog().argent_xverse)
-                .map(|entry| Shape {
-                    family: AccountFamily::Argent,
-                    ladder: Ladder::ArgentX,
-                    class_hash: Some(entry.class_hash),
+                .map(|entry| {
+                    (
+                        AccountFamily::Argent,
+                        Ladder::ArgentX,
+                        Some(entry.class_hash),
+                    )
                 }),
         );
     }
-    shapes.extend(
-        deployment_classes(AccountFamily::Braavos).map(|entry| Shape {
-            family: AccountFamily::Braavos,
-            ladder: Ladder::Address,
-            class_hash: Some(entry.class_hash),
-        }),
-    );
-    shapes
+    coordinates.extend(deployment_classes(AccountFamily::Braavos).map(|entry| {
+        (
+            AccountFamily::Braavos,
+            Ladder::Address,
+            Some(entry.class_hash),
+        )
+    }));
+    coordinates
+        .into_iter()
+        .map(|(family, ladder, class_hash)| {
+            let class_hash = resolve_class(family, class_hash.as_ref(), network)?;
+            Ok(ScanShape {
+                family,
+                ladder,
+                class_hash,
+                argent_shape: argent_shape(family, &class_hash)?,
+                salt: if family == AccountFamily::OpenZeppelin {
+                    SaltRule::Zero
+                } else {
+                    SaltRule::PublicKey
+                },
+                creatable: is_creatable(family, ladder, &class_hash),
+            })
+        })
+        .collect()
 }
 
-/// A candidate found by the scan, before it is worded for the UI.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Found {
-    pub family: AccountFamily,
-    pub ladder: Ladder,
-    pub class_hash: Felt,
-    pub account_index: u32,
-    pub address: Felt,
-    pub deployed: bool,
-    pub funded: bool,
-    /// The scan's advisory signability verdict for a deployed account; `None` when there is
-    /// none or the reads did not answer. The send path re-checks authoritatively either way.
-    pub restriction: Option<Restriction>,
-    /// Another wallet's viewing key is registered for this account in the privacy pool.
-    pub privacy_elsewhere: bool,
-}
-
-/// `RecoverySigningRestriction`: why this wallet could not sign for a deployed account.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Restriction {
-    Guardian,
-    OwnerChanged,
-    OwnerType,
-    Release,
-    StrongSigner,
-}
-
-impl Restriction {
-    /// `RESTRICTION_COPY`.
-    fn copy(self) -> &'static str {
-        match self {
-            Self::Guardian => "has a guardian",
-            Self::OwnerChanged => "owner key changed",
-            Self::OwnerType => "unsupported signer",
-            Self::Release => "unsupported release",
-            Self::StrongSigner => "2FA active",
-        }
+/// `RESTRICTION_COPY`.
+fn restriction_copy(restriction: Restriction) -> &'static str {
+    match restriction {
+        Restriction::Guardian => "has a guardian",
+        Restriction::OwnerChanged => "owner key changed",
+        Restriction::OwnerType => "unsupported signer",
+        Restriction::Release => "unsupported release",
+        Restriction::StrongSigner => "2FA active",
     }
 }
 
@@ -169,15 +156,6 @@ fn deployable_here(family: AccountFamily, class_hash: &Felt) -> bool {
         }
         AccountFamily::Braavos => *class_hash == catalog().braavos_deployment,
     }
-}
-
-/// Whether the scan keeps a candidate: on-chain evidence, or a creatable account at index 0 or at
-/// a manually checked index.
-pub(crate) fn keep(found: &Found, manual: bool) -> bool {
-    found.deployed
-        || found.funded
-        || (is_creatable(found.family, found.ladder, &found.class_hash)
-            && (found.account_index == 0 || manual))
 }
 
 /// `candidateName`: `Account N`, with the Argent release when it is not the one Bramble creates.
@@ -219,7 +197,10 @@ fn hint(found: &Found) -> String {
     if found.deployed {
         return match found.restriction {
             Some(restriction) => {
-                format!("Deployed on Starknet · {} · view only", restriction.copy())
+                format!(
+                    "Deployed on Starknet · {} · view only",
+                    restriction_copy(restriction)
+                )
             }
             None => "Deployed on Starknet".into(),
         };
@@ -390,110 +371,5 @@ pub(crate) fn derive_selections(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn found(family: AccountFamily, class_hash: Felt, index: u32) -> Found {
-        Found {
-            family,
-            ladder: if family == AccountFamily::Braavos {
-                Ladder::Address
-            } else {
-                Ladder::Account
-            },
-            class_hash,
-            account_index: index,
-            address: Felt::from(99u64),
-            deployed: false,
-            funded: false,
-            restriction: None,
-            privacy_elsewhere: false,
-        }
-    }
-
-    #[test]
-    fn keep_rule_matches_onboarding_ops() {
-        let oz = catalog().open_zeppelin_class;
-        let argent = catalog().argent_default;
-        let braavos = catalog().braavos_deployment;
-        let braavos_base = deployment_classes(AccountFamily::Braavos)
-            .map(|entry| entry.class_hash)
-            .find(|hash| *hash != braavos)
-            .unwrap();
-        assert!(keep(&found(AccountFamily::OpenZeppelin, oz, 0), false));
-        assert!(!keep(&found(AccountFamily::OpenZeppelin, oz, 3), false));
-        assert!(keep(&found(AccountFamily::OpenZeppelin, oz, 3), true));
-        assert!(keep(&found(AccountFamily::Argent, argent, 0), false));
-        // Braavos lists index 0 at the class its app deploys (issue 718); older classes only
-        // once used. Xverse's build is never listed unused.
-        assert!(keep(&found(AccountFamily::Braavos, braavos, 0), false));
-        assert!(!keep(&found(AccountFamily::Braavos, braavos_base, 0), true));
-        assert!(!keep(
-            &found(AccountFamily::Argent, catalog().argent_xverse, 0),
-            true
-        ));
-        let mut funded = found(AccountFamily::Braavos, braavos_base, 7);
-        funded.funded = true;
-        assert!(keep(&funded, false));
-        // Ready's ladder never offers an account this wallet would create.
-        let mut ready = found(AccountFamily::Argent, argent, 0);
-        ready.ladder = Ladder::ArgentX;
-        assert!(!keep(&ready, true));
-    }
-
-    #[test]
-    fn scan_walks_each_familys_ladder_in_extension_order() {
-        let argent = deployment_classes(AccountFamily::Argent).count();
-        let braavos = deployment_classes(AccountFamily::Braavos).count();
-        let shapes = scan_shapes(true);
-        // OZ; every Argent release on this wallet's ladder; all but Xverse's on Ready's; Braavos.
-        let ready = argent - 1;
-        assert_eq!(shapes.len(), 1 + argent + ready + braavos);
-        assert_eq!(
-            (shapes[0].family, shapes[0].ladder),
-            (AccountFamily::OpenZeppelin, Ladder::Account)
-        );
-        let own = &shapes[1..1 + argent];
-        assert!(own
-            .iter()
-            .all(|s| s.family == AccountFamily::Argent && s.ladder == Ladder::Account));
-        assert!(own
-            .iter()
-            .any(|s| s.class_hash == Some(catalog().argent_xverse)));
-        let vendor = &shapes[1 + argent..1 + argent + ready];
-        assert!(vendor.iter().all(|s| s.ladder == Ladder::ArgentX));
-        assert!(vendor
-            .iter()
-            .all(|s| s.class_hash != Some(catalog().argent_xverse)));
-        assert!(shapes[1 + argent + ready..]
-            .iter()
-            .all(|s| s.ladder == Ladder::Address));
-        // A passphrase-protected phrase has no Ready accounts.
-        assert_eq!(scan_shapes(false).len(), 1 + argent + braavos);
-    }
-
-    #[test]
-    fn selections_default_to_each_familys_vendor_ladder() {
-        let pick = |family, ladder| RecoverySelection {
-            family,
-            account_index: 1,
-            ladder,
-            class_hash: None,
-        };
-        let path = |family, ladder| selection_path(&pick(family, ladder));
-        assert_eq!(
-            path(AccountFamily::OpenZeppelin, None).unwrap(),
-            Ladder::Account
-        );
-        assert_eq!(path(AccountFamily::Argent, None).unwrap(), Ladder::ArgentX);
-        assert_eq!(
-            path(AccountFamily::Argent, Some(Ladder::Account)).unwrap(),
-            Ladder::Account
-        );
-        assert_eq!(path(AccountFamily::Braavos, None).unwrap(), Ladder::Address);
-        assert!(path(AccountFamily::OpenZeppelin, Some(Ladder::Address)).is_err());
-        assert!(path(AccountFamily::Argent, Some(Ladder::Address)).is_err());
-        assert!(path(AccountFamily::Braavos, Some(Ladder::Account)).is_err());
-        assert!(path(AccountFamily::Braavos, Some(Ladder::ArgentX)).is_err());
-    }
-}
+#[path = "recovery_tests.rs"]
+mod tests;
