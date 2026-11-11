@@ -53,7 +53,7 @@ fn config(payload: &VaultPayload, network: NetworkId) -> Result<ScanConfig, Core
         })
         .collect::<Result<_, _>>()?;
     Ok(ScanConfig {
-        network: network.core(),
+        network,
         shapes: scan_shapes(payload.mnemonic_passphrase.is_none(), network)?,
         limits: ScanLimits {
             batch_size: limits.batch_size,

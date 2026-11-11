@@ -236,7 +236,7 @@ pub fn rpc_chain_id_request(id: u64) -> String {
 /// Whether a chain-id response proves the endpoint serves `network`.
 #[uniffi::export]
 pub fn rpc_verify_chain_id(body: String, id: u64, network: NetworkId) -> Result<bool, CoreError> {
-    Ok(rpc::verify_chain_id(&body, id, network.core())?)
+    Ok(rpc::verify_chain_id(&body, id, network)?)
 }
 
 /// JSON-RPC body for an ERC-20 balance query.

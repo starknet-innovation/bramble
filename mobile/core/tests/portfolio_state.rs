@@ -1,6 +1,9 @@
-//! Stateful behaviour of the portfolio and activity objects that the parity fixture cannot pin on
-//! its own: persistence and schema guards, the balance-snapshot and history-read cadences, the
-//! Starkscan lane's authority, and the key boundary (nothing here touches key material).
+//! Stateful behaviour of the activity objects that the parity fixture cannot pin on its own:
+//! persistence and schema guards, the history-read cadence, the Starkscan lane's authority, the
+//! portfolio FFI objects' delegation to `wallet_core::portfolio`, and the key boundary (nothing
+//! here touches key material). The portfolio's own stateful cases (price and snapshot caches,
+//! preferences, the `format_fiat` property) are wallet-core's
+//! (`crates/bramble-core/tests/portfolio_state.rs`).
 
 use bramble_core::portfolio_testing as t;
 use bramble_core::*;
@@ -22,31 +25,6 @@ fn tracked() -> Vec<TokenConfig> {
 
 #[test]
 fn caches_reject_unknown_or_tampered_documents() {
-    for doc in [
-        "not json",
-        r#"{"schema":"bramble.mobile.portfolio.v9","prices":{"fetchedAt":1,"prices":{}}}"#,
-        r#"{"schema":"bramble.mobile.portfolio.v1","prices":{"fetchedAt":1,"prices":{"x":{"usd":1}}}}"#,
-        r#"{"schema":"bramble.mobile.portfolio.v1","prices":{"fetchedAt":1,"prices":{},"evil":1}}"#,
-    ] {
-        let book = PriceBook::new(Some(doc.into()));
-        match book.plan(
-            NetworkId::Mainnet,
-            vec![STRK.into()],
-            DisplayCurrency::Usd,
-            10.0,
-            true,
-        ) {
-            PricePlan::Serve { view } => {
-                assert!(view.prices.is_empty() && view.as_of_ms.is_none(), "{doc}")
-            }
-            PricePlan::Fetch { .. } => panic!("cached-only never fetches"),
-        }
-    }
-    let snapshots = BalanceSnapshots::new(Some(r#"{"schema":"bramble.mobile.portfolio.v1","snapshots":[{"accountId":"SN_MAIN:0x0ab","balances":[],"fetchedAt":1,"networkId":"SN_MAIN"}]}"#.into()));
-    assert_eq!(
-        snapshots.plan("SN_MAIN:0x0ab".into(), NetworkId::Mainnet, 2.0, true, false),
-        BalancePlan::Empty
-    );
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("activity.v1.json"),
@@ -61,79 +39,53 @@ fn caches_reject_unknown_or_tampered_documents() {
 }
 
 #[test]
-fn preferences_default_on_corruption_but_protect_newer_files() {
-    let corrupt = TokenPreferences::new(Some(
-        r#"{"schema":"bramble.mobile.portfolio.v1","tokens":"nope"}"#.into(),
+fn ffi_objects_wrap_the_cores_stores() {
+    let book = PriceBook::new(None);
+    assert!(matches!(
+        book.chart_plan(NetworkId::Mainnet, "0x0".into(), DisplayCurrency::Usd, 0.0),
+        Err(CoreError::InvalidInput { .. })
     ));
-    assert!(!corrupt.read_only());
-    assert_eq!(corrupt.tracked(NetworkId::Mainnet).len(), 2);
-    let newer = TokenPreferences::new(Some(
-        r#"{"schema":"bramble.mobile.portfolio.v2","tokens":[]}"#.into(),
-    ));
-    assert!(newer.read_only() && newer.persisted().is_none());
-    let prefs = TokenPreferences::new(None);
-    prefs.set_display_currency(DisplayCurrency::Gbp);
-    let id = prefs.tracked(NetworkId::Mainnet)[0].token.id.clone();
-    prefs.set_hidden(id.clone(), true).unwrap();
-    prefs.set_hidden(id.clone(), true).unwrap();
-    let again = TokenPreferences::new(prefs.persisted());
-    assert_eq!(again.display_currency(), DisplayCurrency::Gbp);
-    assert!(again.tracked(NetworkId::Mainnet)[0].hidden_from_home);
-    assert!(again.set_hidden(String::new(), true).is_err());
-    assert!(again.explorer_fallback_allowed(NetworkId::Sepolia));
-    assert!(again.discovery_candidates(NetworkId::Sepolia).is_empty());
-    assert!(again
-        .discovery_candidates(NetworkId::Mainnet)
-        .iter()
-        .all(|t| t.symbol != "STRK"));
-}
-
-#[test]
-fn balance_snapshots_follow_cached_balances() {
-    let snapshots = BalanceSnapshots::new(None);
-    let id = account_id();
     assert_eq!(
-        snapshots.plan(id.clone(), NetworkId::Mainnet, 1_000.0, false, false),
-        BalancePlan::Load
+        book.plan(
+            NetworkId::Sepolia,
+            vec![STRK.into()],
+            DisplayCurrency::Usd,
+            0.0,
+            false
+        ),
+        PricePlan::Serve {
+            view: PriceView {
+                currency: DisplayCurrency::Usd,
+                prices: Vec::new(),
+                changes: Vec::new(),
+                as_of_ms: None,
+                stale: false,
+            }
+        }
     );
-    assert_eq!(snapshots.failed(id.clone(), NetworkId::Mainnet), None);
-    let token = tracked()[0].clone();
+    let snapshots = BalanceSnapshots::new(None);
     let row = TokenBalance {
-        token,
+        token: tracked()[0].clone(),
         balance: "5".into(),
         formatted: "0.000000000000000005".into(),
     };
-    let view = snapshots.loaded(id.clone(), NetworkId::Mainnet, vec![row.clone()], 1_000.0);
-    assert!(!view.stale);
-    match snapshots.plan(id.clone(), NetworkId::Mainnet, 30_000.0, false, false) {
-        BalancePlan::Serve { view } => assert!(!view.stale && view.balances == vec![row.clone()]),
-        other => panic!("fresh snapshot is served, got {other:?}"),
-    }
-    assert_eq!(
-        snapshots.plan(id.clone(), NetworkId::Mainnet, 30_000.0, false, true),
-        BalancePlan::Load
-    );
-    assert_eq!(
-        snapshots.plan(id.clone(), NetworkId::Mainnet, 61_000.0, false, false),
-        BalancePlan::Load
-    );
-    let failed = snapshots.failed(id.clone(), NetworkId::Mainnet).unwrap();
-    assert!(failed.stale && failed.balances == vec![row]);
+    snapshots.loaded(account_id(), NetworkId::Mainnet, vec![row.clone()], 1_000.0);
     let restored = BalanceSnapshots::new(Some(snapshots.persisted()));
-    assert!(
-        matches!(restored.plan(id, NetworkId::Mainnet, 90_000.0, true, false), BalancePlan::Serve { view } if view.stale)
-    );
-    let issue = network_data_issue(
-        BalanceHealth::Loaded {
-            stale: true,
-            as_of_ms: Some(1_000.0),
-        },
-        None,
-    );
     assert_eq!(
-        issue.as_deref(),
-        Some("Using saved balances (01 Jan, 00:00 UTC).")
+        restored
+            .failed(account_id(), NetworkId::Mainnet)
+            .map(|v| v.balances),
+        Some(vec![row])
     );
+    let prefs = TokenPreferences::new(None);
+    assert!(matches!(
+        prefs.set_hidden(String::new(), true),
+        Err(CoreError::InvalidInput { .. })
+    ));
+    prefs.set_display_currency(DisplayCurrency::Gbp);
+    let again = TokenPreferences::new(prefs.persisted());
+    assert_eq!(again.display_currency(), DisplayCurrency::Gbp);
+    assert_eq!(again.tracked(NetworkId::Mainnet).len(), 2);
 }
 
 fn page(items: &str) -> HttpOutcome {
@@ -227,32 +179,10 @@ fn history_cadence_and_lane_authority() {
 }
 
 #[test]
-fn formatted_fiat_never_leaks_exponents_or_nan() {
-    let mut value = 1e-9;
-    while value < 1e30 {
-        for currency in [
-            DisplayCurrency::Usd,
-            DisplayCurrency::Eur,
-            DisplayCurrency::Gbp,
-        ] {
-            let text = format_fiat(value, currency);
-            assert!(
-                !text.contains('e') && !text.contains("NaN") && !text.contains("inf"),
-                "{value} → {text}"
-            );
-        }
-        value *= 3.7;
-    }
-    assert_eq!(format_fiat(f64::NAN, DisplayCurrency::Usd), "$0.00");
-    assert_eq!(format_fiat(f64::INFINITY, DisplayCurrency::Usd), "$0.00");
-}
-
-#[test]
 fn portfolio_and_history_never_touch_key_material() {
     let sources = [
         include_str!("../src/portfolio/fiat.rs"),
         include_str!("../src/portfolio/prices.rs"),
-        include_str!("../src/portfolio/price_cache.rs"),
         include_str!("../src/portfolio/registry.rs"),
         include_str!("../src/portfolio/snapshots.rs"),
         include_str!("../src/portfolio/token_meta.rs"),

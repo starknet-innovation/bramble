@@ -1,17 +1,14 @@
-//! Portfolio: fiat prices and charts, tracked tokens, on-chain token reads and saved balances,
-//! each a sans-IO port of the extension's TypeScript (see `mobile/docs/portfolio-activity.md`).
+//! Portfolio: fiat prices and charts, tracked tokens, on-chain token reads and saved balances.
+//! The rules are `wallet_core::portfolio` (sans-IO ports of the extension's TypeScript, see
+//! `mobile/docs/portfolio-activity.md`); this module is Bramble's side: the UniFFI shapes and
+//! exports, the three FFI objects wrapping the core's stores in a lock, the bundled catalogs they
+//! pass (`networks::catalogs`), and the copy that carries no rule.
 
 pub mod fiat;
 pub mod model;
-pub(crate) mod ordered;
-mod price_cache;
 pub mod prices;
 pub(crate) mod registry;
 pub mod snapshots;
 pub mod token_meta;
 pub mod tokens;
 pub mod wire;
-
-/// Schema tag of every persisted portfolio/activity document (`preferences.json`, `prices.json`,
-/// `snapshots.json`, `activity.json`). A later change bumps it and adds one adjacent migration.
-pub const SCHEMA: &str = "bramble.mobile.portfolio.v1";

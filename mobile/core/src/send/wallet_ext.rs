@@ -100,7 +100,7 @@ fn plan_account(record: &StoredAccount) -> Result<Account, SendError> {
     let parse = |value: &str| felt::parse_non_zero(value).ok_or(SendError::UnknownAccount);
     let (address, public_key) = (parse(&record.address)?, parse(&record.public_key)?);
     Ok(Account {
-        network: record.network().core(),
+        network: record.network(),
         deployment: deployment(record, &public_key),
         address,
         public_key,

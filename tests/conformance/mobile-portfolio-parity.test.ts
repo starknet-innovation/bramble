@@ -1,7 +1,8 @@
 /**
  * The mobile core's portfolio and activity rules are ports of the extension's TypeScript. The
- * Rust suite (`mobile/core/tests/portfolio_parity.rs`) asserts the core against the committed
- * fixture; this test fails when that fixture no longer matches what the extension computes today,
+ * Rust suites (`mobile/core/tests/{history,row,token}_parity.rs`, and wallet-core's
+ * `crates/bramble-core/tests/{portfolio,token}_parity.rs` for the portfolio rules it now holds)
+ * assert the core against the committed fixture; this test fails when that fixture no longer matches what the extension computes today,
  * so a change to prices, tokens, history or row presentation must be carried to mobile
  * (`bun run mobile:parity`, then fix the core until `cargo test` passes).
  */

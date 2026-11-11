@@ -1,30 +1,16 @@
 //! Account ids and explorer links, as the extension builds them: `canonicalAccountId` /
-//! `isAccountIdForNetwork` (`wallet-model/accounts`) and `explorerTransactionUrl` /
-//! `explorerAccountUrl` (`wallet-model/networks`). The explorer base comes from the generated
-//! network catalog; a link is built only from a validated felt, never from a response body.
+//! `isAccountIdForNetwork` (`wallet-model/accounts`, now `wallet_core::history::explorer`) and
+//! `explorerTransactionUrl` / `explorerAccountUrl` (`wallet-model/networks`). The explorer base
+//! comes from the generated network catalog; a link is built only from a validated felt, never
+//! from a response body.
 
-use crate::js::felt::{canonical_felt, is_non_zero_felt};
+pub use wallet_core::history::explorer::canonical_account_id;
+pub(crate) use wallet_core::history::explorer::is_account_id_for_network;
+
+use crate::js::felt::is_non_zero_felt;
 use crate::networks::{self, NetworkId};
-use crate::portfolio::model::{network_code, network_from_code};
+use crate::portfolio::model::network_code;
 use crate::CoreError;
-
-/// `canonicalAccountId`: `<networkId>:<canonicalFelt(address)>` for a strictly spelled non-zero
-/// felt address, else `None`.
-pub fn canonical_account_id(value: &str) -> Option<String> {
-    let mut parts = value.split(':');
-    let (network, address) = (parts.next()?, parts.next()?);
-    if parts.next().is_some() || network_from_code(network).is_none() || !is_non_zero_felt(address)
-    {
-        return None;
-    }
-    Some(format!("{network}:{}", canonical_felt(address)?))
-}
-
-/// `isAccountIdForNetwork`.
-pub(crate) fn is_account_id_for_network(value: &str, network: NetworkId) -> bool {
-    canonical_account_id(value).as_deref() == Some(value)
-        && value.starts_with(&format!("{}:", network_code(network)))
-}
 
 /// The address half of an account id.
 pub(crate) fn account_id_address(value: &str) -> &str {

@@ -4,53 +4,24 @@
 
 use std::sync::OnceLock;
 
-use krusty_kms_common::ChainId;
 use serde::Deserialize;
+pub use wallet_core::catalog::{Catalogs, NetworkInfo, RegistryToken, TokenInfo, TokenRegistry};
+pub use wallet_core::NetworkId;
 
 use crate::felt;
 
 const CATALOG_JSON: &str = include_str!("../generated/networks.json");
+const REGISTRY_JSON: &str = include_str!("../generated/token-registry.json");
 
 /// A network the mobile wallet supports.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum NetworkId {
     Mainnet,
     Sepolia,
 }
 
-impl NetworkId {
-    /// The extension's network id, used in account ids and stored records.
-    pub(crate) fn catalog_id(self) -> &'static str {
-        match self {
-            Self::Mainnet => "SN_MAIN",
-            Self::Sepolia => "SN_SEPOLIA",
-        }
-    }
-
-    pub(crate) fn from_catalog_id(value: &str) -> Option<Self> {
-        [Self::Mainnet, Self::Sepolia]
-            .into_iter()
-            .find(|network| network.catalog_id() == value)
-    }
-
-    /// The same network as `wallet-core` names it, for the core's RPC and send plans.
-    pub(crate) fn core(self) -> wallet_core::NetworkId {
-        match self {
-            Self::Mainnet => wallet_core::NetworkId::Mainnet,
-            Self::Sepolia => wallet_core::NetworkId::Sepolia,
-        }
-    }
-
-    pub(crate) fn chain(self) -> ChainId {
-        match self {
-            Self::Mainnet => ChainId::Mainnet,
-            Self::Sepolia => ChainId::Sepolia,
-        }
-    }
-}
-
 /// An ERC-20 the wallet home queries by default.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct TokenInfo {
     pub address: String,
     pub decimals: u8,
@@ -60,10 +31,8 @@ pub struct TokenInfo {
 
 /// Public network metadata. RPC endpoints are tried in order; the host verifies
 /// `starknet_chainId` against `chain_id` before trusting any response.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, uniffi::Record)]
-#[serde(rename_all = "camelCase")]
+#[uniffi::remote(Record)]
 pub struct NetworkInfo {
-    #[serde(skip, default = "default_network")]
     pub network: NetworkId,
     pub chain_id: String,
     pub explorer_base_url: String,
@@ -72,16 +41,23 @@ pub struct NetworkInfo {
     pub tokens: Vec<TokenInfo>,
 }
 
-fn default_network() -> NetworkId {
-    NetworkId::Sepolia
+#[derive(Deserialize)]
+struct RawToken {
+    address: String,
+    decimals: u8,
+    name: String,
+    symbol: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CatalogEntry {
     id: String,
-    #[serde(flatten)]
-    info: NetworkInfo,
+    chain_id: String,
+    explorer_base_url: String,
+    name: String,
+    rpc_urls: Vec<String>,
+    tokens: Vec<RawToken>,
 }
 
 #[derive(Deserialize)]
@@ -102,7 +78,20 @@ fn load() -> Vec<NetworkInfo> {
                 .expect("bundled catalog covers every NetworkId");
             let info = NetworkInfo {
                 network,
-                ..entry.info.clone()
+                chain_id: entry.chain_id.clone(),
+                explorer_base_url: entry.explorer_base_url.clone(),
+                name: entry.name.clone(),
+                rpc_urls: entry.rpc_urls.clone(),
+                tokens: entry
+                    .tokens
+                    .iter()
+                    .map(|t| TokenInfo {
+                        address: t.address.clone(),
+                        decimals: t.decimals,
+                        name: t.name.clone(),
+                        symbol: t.symbol.clone(),
+                    })
+                    .collect(),
             };
             assert!(
                 felt::parse_non_zero(&info.chain_id).is_some(),
@@ -129,10 +118,55 @@ pub fn all() -> &'static [NetworkInfo] {
 
 /// Metadata for one network.
 pub fn info(network: NetworkId) -> &'static NetworkInfo {
-    all()
-        .iter()
-        .find(|info| info.network == network)
-        .expect("every NetworkId is bundled")
+    wallet_core::catalog::network_info(all(), network).expect("every NetworkId is bundled")
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RegistryEntry {
+    address: String,
+    decimals: u8,
+    name: String,
+    network_id: String,
+    symbol: String,
+}
+
+#[derive(Deserialize)]
+struct Registry {
+    tokens: Vec<RegistryEntry>,
+    logos: Vec<String>,
+}
+
+/// The curated token registry and bundled-logo set, embedded from `generated/token-registry.json`
+/// (rendered from the extension by the same script), parsed once on first use.
+pub fn registry() -> &'static TokenRegistry {
+    static REGISTRY: OnceLock<TokenRegistry> = OnceLock::new();
+    REGISTRY.get_or_init(|| {
+        let raw: Registry =
+            serde_json::from_str(REGISTRY_JSON).expect("bundled token registry parses");
+        TokenRegistry {
+            tokens: raw
+                .tokens
+                .into_iter()
+                .map(|t| RegistryToken {
+                    address: t.address,
+                    decimals: t.decimals,
+                    name: t.name,
+                    network_id: t.network_id,
+                    symbol: t.symbol,
+                })
+                .collect(),
+            logos: raw.logos,
+        }
+    })
+}
+
+/// Both bundled catalogs, as `wallet_core` takes them.
+pub fn catalogs() -> Catalogs<'static> {
+    Catalogs {
+        networks: all(),
+        registry: registry(),
+    }
 }
 
 #[cfg(test)]
@@ -142,7 +176,7 @@ mod tests {
     #[test]
     fn catalog_matches_krusty_chain_ids() {
         for network in [NetworkId::Mainnet, NetworkId::Sepolia] {
-            let expected = felt::canonical(&network.chain().as_felt());
+            let expected = felt::canonical(&network.chain_id());
             assert_eq!(info(network).chain_id, expected);
             assert!(info(network).tokens.iter().any(|t| t.symbol == "STRK"));
         }

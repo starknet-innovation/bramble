@@ -201,7 +201,7 @@ impl ReadState {
         now_ms: u64,
     ) -> PrivacyStep {
         match read {
-            Read::Chain => match chain(answer(body, id), self.network.core()) {
+            Read::Chain => match chain(answer(body, id), self.network) {
                 ChainAnswer::Match => self.begin(core, Read::Preflight, now_ms),
                 ChainAnswer::Mismatch => self.fail(PrivacyFailure::WrongChain),
                 ChainAnswer::Unreadable => self.fail(PrivacyFailure::RpcUnavailable),
