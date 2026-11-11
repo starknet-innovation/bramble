@@ -6,6 +6,7 @@
 //! because the extension reads them through `BigInt` and `String.prototype.trim`.
 
 use starknet_types_core::felt::Felt;
+use wallet_core::js::num::is_js_whitespace;
 
 use crate::networks::NetworkId;
 use crate::{felt, multisig_constants, nostr, CoreError};
@@ -34,28 +35,8 @@ pub enum ContactCardParse {
     Unrecognized,
 }
 
-/// JavaScript's `WhiteSpace` and `LineTerminator` code points, which `trim` and `BigInt` skip.
-fn is_js_whitespace(c: char) -> bool {
-    matches!(
-        c,
-        '\u{9}'..='\u{d}'
-            | ' '
-            | '\u{a0}'
-            | '\u{1680}'
-            | '\u{2000}'..='\u{200a}'
-            | '\u{2028}'
-            | '\u{2029}'
-            | '\u{202f}'
-            | '\u{205f}'
-            | '\u{3000}'
-            | '\u{feff}'
-    )
-}
-
-/// Trims JavaScript whitespace from both ends, as `String.prototype.trim`.
-pub fn js_trim(value: &str) -> &str {
-    value.trim_matches(is_js_whitespace)
-}
+/// JavaScript `String.prototype.trim`.
+pub use wallet_core::js::num::js_trim;
 
 /// Hex digits (any case) to a felt below the prime; `None` for anything else.
 fn hex_digits(digits: &str) -> Option<Felt> {

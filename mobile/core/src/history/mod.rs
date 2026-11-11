@@ -9,4 +9,4 @@ pub mod classify;
 pub mod events;
 pub mod explorer;
 pub mod starkscan;
-pub mod time;
+pub use wallet_core::history::time;

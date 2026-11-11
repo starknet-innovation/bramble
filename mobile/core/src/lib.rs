@@ -30,7 +30,7 @@ mod ffi_nostr_multisig;
 mod files;
 mod groups;
 mod history;
-mod js;
+pub(crate) use wallet_core::js;
 mod kms;
 pub use kms::Ladder;
 mod migrations;

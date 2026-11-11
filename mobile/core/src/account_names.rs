@@ -12,21 +12,8 @@ pub(crate) const MAX_LABEL_UNITS: usize = 64;
 /// `NAME_ADJECTIVES.length * 131`: `a mod 30` and `(a div 131) mod 30` both follow from `a mod 3930`.
 const NAME_MODULUS: u32 = 3930;
 
-/// Whether `c` is removed by JavaScript's `trim()` (WhiteSpace and LineTerminator). Rust's
-/// `is_whitespace` adds U+0085 and omits U+FEFF, so both are special-cased.
-fn is_js_whitespace(c: char) -> bool {
-    (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}'
-}
-
-/// JavaScript `String.prototype.trim`.
-pub(crate) fn js_trim(value: &str) -> &str {
-    value.trim_matches(is_js_whitespace)
-}
-
-/// JavaScript `.length`: UTF-16 code units.
-pub(crate) fn utf16_len(value: &str) -> usize {
-    value.encode_utf16().count()
-}
+/// JavaScript `String.prototype.trim` and `.length` (UTF-16 code units), from wallet-core.
+pub(crate) use wallet_core::js::num::{js_trim, utf16_len};
 
 /// `a mod 3930` for the value JavaScript's `BigInt(text)` would parse, or `None` where `BigInt`
 /// throws (the extension then uses zero). A negative decimal also yields zero: its remainders are
@@ -82,10 +69,8 @@ fn truncate(value: &str, head: usize, tail: usize) -> String {
     format!("{}…{}", utf16_slice(start), utf16_slice(end))
 }
 
-/// `accountLabel` / `shortAddress`: `0x1234…abcd`.
-pub fn short_label(value: &str) -> String {
-    truncate(value, 6, 4)
-}
+/// `accountLabel` / `shortAddress`: `0x1234…abcd` (wallet-core's `slice(0, 6) + "…" + slice(-4)`).
+pub use wallet_core::js::num::short_label;
 
 /// The onboarding review step's longer preview, `slice(0, 10) + "…" + slice(-8)`.
 pub fn preview_label(value: &str) -> String {
