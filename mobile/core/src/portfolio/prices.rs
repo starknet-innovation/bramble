@@ -80,7 +80,7 @@ impl PriceBook {
     #[uniffi::constructor]
     pub fn new(persisted: Option<String>) -> Arc<Self> {
         Arc::new(Self {
-            state: Mutex::new(port::PriceBook::new(persisted)),
+            state: Mutex::new(port::PriceBook::new(persisted, super::PORTFOLIO_POLICY)),
         })
     }
 

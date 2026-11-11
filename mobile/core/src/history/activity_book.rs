@@ -37,7 +37,7 @@ impl ActivityBook {
     pub(crate) fn at(dir: PathBuf) -> Arc<Self> {
         Arc::new(Self {
             dir,
-            book: Mutex::new(port::ActivityBook::new()),
+            book: Mutex::new(port::ActivityBook::new(super::HISTORY_POLICY)),
         })
     }
 

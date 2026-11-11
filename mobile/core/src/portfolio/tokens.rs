@@ -58,7 +58,11 @@ impl TokenPreferences {
     #[uniffi::constructor]
     pub fn new(persisted: Option<String>) -> Arc<Self> {
         Arc::new(Self {
-            prefs: Mutex::new(port::TokenPreferences::new(persisted, networks::catalogs())),
+            prefs: Mutex::new(port::TokenPreferences::new(
+                persisted,
+                networks::catalogs(),
+                super::PORTFOLIO_POLICY,
+            )),
         })
     }
 

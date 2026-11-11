@@ -5,13 +5,24 @@
 use std::sync::OnceLock;
 
 use serde::Deserialize;
-pub use wallet_core::catalog::{Catalogs, NetworkInfo, RegistryToken, TokenInfo, TokenRegistry};
+pub use wallet_core::catalog::{
+    Catalogs, NetworkInfo, RegistryToken, TokenAlias, TokenInfo, TokenRegistry,
+};
 pub use wallet_core::NetworkId;
 
 use crate::felt;
 
 const CATALOG_JSON: &str = include_str!("../generated/networks.json");
 const REGISTRY_JSON: &str = include_str!("../generated/token-registry.json");
+
+/// `LEGITIMATE_ALIASES` (`portfolio/token-registry.ts`): registry symbols with an allow-listed
+/// second deployment, which `tokenSpamReasons` never flags as a spoof. USDC's is bridged USDC.e
+/// (#645). Not in `token-registry.json`, so held here. A copy of wallet-core's `bramble-core`
+/// `catalogs::networks::LEGITIMATE_ALIASES`, value for value, until 2.7 swaps it for that.
+pub const LEGITIMATE_ALIASES: [(&str, &[&str]); 1] = [(
+    "USDC",
+    &["0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8"],
+)];
 
 /// A network the mobile wallet supports.
 #[uniffi::remote(Enum)]
@@ -138,7 +149,8 @@ struct Registry {
 }
 
 /// The curated token registry and bundled-logo set, embedded from `generated/token-registry.json`
-/// (rendered from the extension by the same script), parsed once on first use.
+/// (rendered from the extension by the same script), with `LEGITIMATE_ALIASES`, parsed once on
+/// first use.
 pub fn registry() -> &'static TokenRegistry {
     static REGISTRY: OnceLock<TokenRegistry> = OnceLock::new();
     REGISTRY.get_or_init(|| {
@@ -157,6 +169,13 @@ pub fn registry() -> &'static TokenRegistry {
                 })
                 .collect(),
             logos: raw.logos,
+            aliases: LEGITIMATE_ALIASES
+                .iter()
+                .map(|(symbol, addresses)| TokenAlias {
+                    symbol: (*symbol).into(),
+                    addresses: addresses.iter().map(|a| (*a).into()).collect(),
+                })
+                .collect(),
         }
     })
 }
@@ -179,6 +198,19 @@ mod tests {
             let expected = felt::canonical(&network.chain_id());
             assert_eq!(info(network).chain_id, expected);
             assert!(info(network).tokens.iter().any(|t| t.symbol == "STRK"));
+        }
+    }
+
+    /// Each alias is a curated registry token on mainnet whose ticker is the bridged form of the
+    /// symbol it widens (`USDC.e` for `USDC`).
+    #[test]
+    fn aliases_are_curated_bridged_deployments() {
+        for (symbol, addresses) in LEGITIMATE_ALIASES {
+            for address in addresses {
+                assert!(registry().tokens.iter().any(|t| t.address == *address
+                    && t.network_id == "SN_MAIN"
+                    && t.symbol == format!("{symbol}.e")));
+            }
         }
     }
 }

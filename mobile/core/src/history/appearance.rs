@@ -105,7 +105,13 @@ pub fn activity_groups(
     tracked: Vec<TokenConfig>,
     now_ms: Option<f64>,
 ) -> Vec<ActivityDayGroup> {
-    port::activity_groups(entries, tracked, now_ms, networks::catalogs())
+    port::activity_groups(
+        entries,
+        tracked,
+        now_ms,
+        networks::catalogs(),
+        &super::HISTORY_POLICY,
+    )
 }
 
 /// `activityEmptyCopy`.

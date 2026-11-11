@@ -52,7 +52,10 @@ impl BalanceSnapshots {
     #[uniffi::constructor]
     pub fn new(persisted: Option<String>) -> Arc<Self> {
         Arc::new(Self {
-            snapshots: Mutex::new(port::BalanceSnapshots::new(persisted)),
+            snapshots: Mutex::new(port::BalanceSnapshots::new(
+                persisted,
+                super::PORTFOLIO_POLICY,
+            )),
         })
     }
 
