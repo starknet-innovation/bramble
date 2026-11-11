@@ -445,7 +445,8 @@ an amount, node text or a key. Node error messages are never forwarded.
   and scene backgrounding call `plan.close()` (an additive line in `WalletStore.swift`), which
   stops further signing but keeps that record; `refresh_activity` settles it later.
 - **Local activity: a new file `activity.v1.json`, next to `vault.json`.** The core owns it; the
-  host never reads or writes it directly.
+  host never reads or writes it directly. Since M8 it is wallet-core's `ActivityLog`, every use
+  under mobile's process-wide lock (`activity::with_log`).
   - **Shape.** The extension's `ActivityEntry` as `{version: 1, scopes: {"<networkId>:<canonical
     address>": [entry…]}}`, where an entry is `{accountId, amount, counterparty, hash, kind:
     "transfer"|"deploy", networkId, status, submittedAt, summary, token}`.
@@ -466,8 +467,8 @@ an amount, node text or a key. Node error messages are never forwarded.
     left, as in the extension. The pending record is written before the write; if that write
     fails the send still proceeds (the extension's `recordSubmittedActivity` is best-effort too),
     and the plan's own checkpoints report the outcome.
-  - **Reading.** An unreadable, over-sized or wrong-version file is ignored when read and never
-    overwritten blind: the core renames it `activity.v1.corrupt-<n>.json` and starts empty.
+  - **Reading.** An unreadable (or failed read), over-sized or wrong-version file is ignored and
+    never overwritten blind: the core renames it `activity.v1.corrupt-<n>.json`, starts empty.
   - **Future versions.** `version` is the migration hook; any future shape adds exactly one
     adjacent step, as with the vault.
   - **Coordination.** The portfolio-activity workstream merges its explorer feed onto these
