@@ -4,6 +4,7 @@
 //! error and failure is a fixed variant: none carries a recipient, an amount, node text or key
 //! material, so nothing a user typed or a node said can reach a log through an error.
 
+pub use wallet_core::history::activity::ActivityKind;
 pub use wallet_core::send::calls::{ReviewFlag, SendAmountError};
 pub use wallet_core::send::fees::{FeeAmount, FeeUnit};
 pub use wallet_core::send::judge::TxStatus;
@@ -277,7 +278,7 @@ pub struct SendFailure {
 
 /// What an activity row's transaction did: the extension's `ActivityEntry.kind`. The one kind
 /// for local and on-chain rows alike (`history::activity::ActivityEntry`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum ActivityKind {
     Declare,
     Deploy,

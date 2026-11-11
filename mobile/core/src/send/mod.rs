@@ -6,8 +6,9 @@
 //! and catalogs (`wallet_ext`).
 //!
 //! Design and review resolutions: `mobile/docs/transactions.md`. Parity with the extension is
-//! pinned by wallet-core's `extension-transactions-*.json` tests; the explorer and activity-store
-//! rules, and mobile's send numbers, by `fixture_tests.rs` here.
+//! pinned by wallet-core's `extension-transactions-*.json` tests (the explorer and the activity
+//! log's rules among them); mobile's send numbers and failure-notice copy by `fixture_tests.rs`
+//! here.
 
 pub(crate) mod plan;
 pub(crate) mod types;
@@ -15,9 +16,9 @@ mod wallet_ext;
 
 use wallet_core::send::{calls, judge, rpc_bodies};
 
-use crate::activity::observation;
 use crate::felt;
 use types::{DeploymentState, SendError};
+use wallet_core::activity::observation;
 
 /// `normalizeFeltInput` + `isStarkFieldElement`: the canonical felt for a typed or pasted
 /// address, or `None`. `0x0` is returned as the extension's field check returns it; the call

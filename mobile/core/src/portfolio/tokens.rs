@@ -9,7 +9,6 @@ use wallet_core::portfolio::tokens as port;
 pub use wallet_core::portfolio::tokens::{AddTokenOutcome, HomeRows, TrackedToken};
 
 use super::model::{DisplayCurrency, TokenBalance, TokenConfig};
-pub(crate) use super::registry::starknet_glyph;
 pub use super::registry::{
     token_config_id, token_glyph, token_spam_reasons, SpamReason, TokenGlyph,
 };

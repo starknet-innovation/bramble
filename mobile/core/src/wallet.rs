@@ -462,7 +462,7 @@ impl WalletCore {
             // never a deleted vault beside another wallet's trusted contacts and shared accounts.
             crate::public_store::remove_all(&self.data_dir)?;
             fs::remove_file(self.vault_path()).map_err(|_| storage("remove vault"))?;
-            crate::activity::store::remove(&self.data_dir);
+            crate::activity::remove(&self.data_dir);
             security::remove(&self.data_dir)
         })
     }

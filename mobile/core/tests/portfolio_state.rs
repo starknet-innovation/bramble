@@ -1,8 +1,8 @@
-//! Stateful behaviour of the activity objects that the parity fixture cannot pin on its own:
-//! persistence and schema guards, the history-read cadence, the Starkscan lane's authority, the
-//! portfolio FFI objects' delegation to `wallet_core::portfolio`, and the key boundary (nothing
-//! here touches key material). The portfolio's own stateful cases (price and snapshot caches,
-//! preferences, the `format_fiat` property) are wallet-core's
+//! The portfolio and history FFI objects' delegation to `wallet_core::{portfolio, history}` (the
+//! activity book over the wallet directory's log), and the key boundary (nothing here touches key
+//! material). The stateful cases themselves (price and snapshot caches, preferences, the
+//! `format_fiat` property, the activity log's schema guards, the history-read cadence, the
+//! Starkscan lane's authority and cooldown) are wallet-core's
 //! (`crates/bramble-core/tests/portfolio_state.rs`).
 
 use bramble_core::portfolio_testing as t;
@@ -21,21 +21,6 @@ fn tracked() -> Vec<TokenConfig> {
         .into_iter()
         .map(|t| t.token)
         .collect()
-}
-
-#[test]
-fn caches_reject_unknown_or_tampered_documents() {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("activity.v1.json"),
-        r#"{"version":1,"scopes":{"SN_MAIN:0xab":[{"accountId":"SN_MAIN:0xab","hash":"0xZZ"}]}}"#,
-    )
-    .unwrap();
-    let activity = t::activity_book(dir.path());
-    assert!(activity
-        .cached("SN_MAIN:0xab".into(), NetworkId::Mainnet)
-        .entries
-        .is_empty());
 }
 
 #[test]
@@ -98,87 +83,6 @@ fn page(items: &str) -> HttpOutcome {
 }
 
 #[test]
-fn history_cadence_and_lane_authority() {
-    let dir = tempfile::tempdir().unwrap();
-    let book = t::activity_book(dir.path());
-    let id = account_id();
-    assert!(
-        book.history_due(id.clone(), NetworkId::Mainnet, false, 0.0),
-        "never synced"
-    );
-    assert!(
-        book.starkscan_request(id.clone(), NetworkId::Mainnet, tracked(), false, 0.0)
-            .is_none(),
-        "lane not permitted"
-    );
-    assert!(
-        book.starkscan_request(id.clone(), NetworkId::Mainnet, Vec::new(), true, 0.0)
-            .is_none(),
-        "no tracked tokens"
-    );
-    let request = book
-        .starkscan_request(id.clone(), NetworkId::Mainnet, tracked(), true, 1_000.0)
-        .unwrap();
-    assert!(
-        request.url.starts_with("https://")
-            && request
-                .headers
-                .iter()
-                .all(|h| !h.name.to_lowercase().contains("key"))
-    );
-    let view = book
-        .starkscan_apply(id.clone(), NetworkId::Mainnet, tracked(), page(""), 1_000.0)
-        .expect("an answering page is authoritative");
-    assert!(view.entries.is_empty() && !view.history_unavailable);
-    assert!(!book.history_due(id.clone(), NetworkId::Mainnet, false, 1_000.0 + 299_000.0));
-    assert!(book.history_due(id.clone(), NetworkId::Mainnet, false, 1_000.0 + 300_000.0));
-    assert!(
-        book.history_due(id.clone(), NetworkId::Mainnet, true, 2_000.0),
-        "refresh forces"
-    );
-    assert!(
-        book.history_due(id.clone(), NetworkId::Mainnet, false, 500.0),
-        "sync in the future"
-    );
-    let local = ActivityEntry {
-        account_id: id.clone(),
-        amount: None,
-        counterparty: None,
-        direction: None,
-        failure_notice: None,
-        finalized_on_l1: None,
-        hash: "0x0abc".into(),
-        kind: ActivityKind::Invoke,
-        network: NetworkId::Mainnet,
-        not_found_count: None,
-        status: TxStatus::Pending,
-        submitted_at: 5_000,
-        summary: "Send 1 STRK to 0x1234…abcd".into(),
-        token: None,
-        token_address: None,
-    };
-    assert!(t::record_activity(dir.path(), &local));
-    assert!(
-        book.history_due(id.clone(), NetworkId::Mainnet, false, 6_000.0),
-        "a local row newer than the sync"
-    );
-    assert!(!t::record_activity(
-        dir.path(),
-        &ActivityEntry {
-            summary: String::new(),
-            ..local.clone()
-        }
-    ));
-    let view = book.mark_unavailable(id.clone(), NetworkId::Mainnet, 7_000.0);
-    assert!(view.history_unavailable && view.entries == vec![local.clone()]);
-    assert!(!book.history_due(id.clone(), NetworkId::Mainnet, false, 66_000.0));
-    assert!(book.history_due(id.clone(), NetworkId::Mainnet, false, 67_000.0));
-    let restored = t::activity_book(dir.path());
-    let cached = restored.cached(id, NetworkId::Mainnet);
-    assert!(cached.history_unavailable && cached.entries == vec![local]);
-}
-
-#[test]
 fn portfolio_and_history_never_touch_key_material() {
     let sources = [
         include_str!("../src/portfolio/fiat.rs"),
@@ -191,9 +95,7 @@ fn portfolio_and_history_never_touch_key_material() {
         include_str!("../src/history/activity.rs"),
         include_str!("../src/history/activity_book.rs"),
         include_str!("../src/history/appearance.rs"),
-        include_str!("../src/history/classify.rs"),
         include_str!("../src/history/events.rs"),
-        include_str!("../src/history/starkscan.rs"),
     ];
     for source in sources {
         for forbidden in [
@@ -215,10 +117,28 @@ fn portfolio_and_history_never_touch_key_material() {
 }
 
 #[test]
-fn starkscan_cooldown_is_in_memory_only() {
+fn history_objects_wrap_the_cores_log_and_scan() {
     let dir = tempfile::tempdir().unwrap();
     let book = t::activity_book(dir.path());
     let id = account_id();
+    assert!(book.history_due(id.clone(), NetworkId::Mainnet, false, 0.0));
+    let view = book.mark_unavailable(id.clone(), NetworkId::Mainnet, 1_000.0);
+    assert!(view.history_unavailable && view.entries.is_empty());
+    assert!(
+        dir.path().join("activity.v1.json").exists(),
+        "the book writes the wallet's log"
+    );
+    let restored = t::activity_book(dir.path());
+    assert!(
+        restored
+            .cached(id.clone(), NetworkId::Mainnet)
+            .history_unavailable
+    );
+    let view = book
+        .starkscan_apply(id.clone(), NetworkId::Mainnet, tracked(), page(""), 2_000.0)
+        .expect("an answering page is authoritative");
+    assert!(!view.history_unavailable);
+    assert!(!book.history_due(id.clone(), NetworkId::Mainnet, false, 2_000.0));
     let limited = HttpOutcome {
         status: 429,
         retry_after: Some("60".into()),
@@ -226,20 +146,36 @@ fn starkscan_cooldown_is_in_memory_only() {
         timed_out: false,
     };
     assert!(book
-        .starkscan_apply(id.clone(), NetworkId::Mainnet, tracked(), limited, 1_000.0)
+        .starkscan_apply(id.clone(), NetworkId::Mainnet, tracked(), limited, 3_000.0)
         .is_none());
     assert!(
-        book.starkscan_request(id.clone(), NetworkId::Mainnet, tracked(), true, 2_000.0)
+        book.starkscan_request(id.clone(), NetworkId::Mainnet, tracked(), true, 4_000.0)
             .is_none(),
-        "cooling down"
+        "the cooldown is kept in the object"
     );
-    let saved = t::activity_file(dir.path()).unwrap_or_default();
-    assert!(!saved.contains("RetryAt"), "the cooldown is never written");
-    let restored = t::activity_book(dir.path());
-    assert!(
-        restored
-            .starkscan_request(id, NetworkId::Mainnet, tracked(), true, 2_000.0)
-            .is_some(),
-        "a restart clears it, like createStarkscanClient"
-    );
+    assert!(restored
+        .starkscan_request(id.clone(), NetworkId::Mainnet, tracked(), true, 4_000.0)
+        .is_some());
+    let rows = book.scan_apply(id.clone(), NetworkId::Mainnet, Vec::new(), 5_000.0);
+    assert_eq!(rows, book.cached(id.clone(), NetworkId::Mainnet));
+
+    assert!(matches!(
+        HistoryScan::new(id.clone(), NetworkId::Sepolia, tracked()),
+        Err(CoreError::InvalidInput { .. })
+    ));
+    let idle = HistoryScan::new(id.clone(), NetworkId::Mainnet, Vec::new()).unwrap();
+    assert!(idle.next_calls().is_empty());
+    assert_eq!(idle.finish().unwrap(), Vec::new());
+    let scan = HistoryScan::new(id, NetworkId::Mainnet, tracked()).unwrap();
+    let calls = scan.next_calls();
+    assert_eq!(calls.len(), 1);
+    assert!(matches!(scan.finish(), Err(CoreError::Rpc { .. })));
+    let failed = RpcReply {
+        id: calls[0].id,
+        status: 503,
+        body: None,
+    };
+    assert_eq!(scan.accept(failed), ScanStep::Transport);
+    scan.restart();
+    assert_eq!(scan.next_calls().len(), 1);
 }

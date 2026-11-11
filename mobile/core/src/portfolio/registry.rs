@@ -49,11 +49,6 @@ pub fn token_glyph(address: String, symbol: String) -> TokenGlyph {
     port::token_glyph(networks::registry(), address, symbol)
 }
 
-/// The Starknet network mark (`starknetNetworkGlyph`): STRK's glyph.
-pub(crate) fn starknet_glyph() -> TokenGlyph {
-    port::starknet_glyph(networks::all(), networks::registry())
-}
-
 /// `STRK_TOKEN_ADDRESS`, read from the generated catalog rather than restated.
 pub(crate) fn strk_address() -> &'static str {
     port::strk_address(networks::all()).expect("the catalog seeds STRK")

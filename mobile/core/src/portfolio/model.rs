@@ -2,9 +2,7 @@
 //! configs, balances, prices, request and response bytes. Nothing here is derived from the vault.
 //! The types are `wallet_core::portfolio::model`'s; their UniFFI shapes are declared here.
 
-pub use wallet_core::portfolio::model::{
-    network_code, network_from_code, DisplayCurrency, TokenBalance, TokenConfig,
-};
+pub use wallet_core::portfolio::model::{DisplayCurrency, TokenBalance, TokenConfig};
 
 use crate::networks::NetworkId;
 

@@ -4,10 +4,8 @@
 //! never passes a truncated body. The types are the core's; their UniFFI shapes are declared here.
 
 pub(crate) use crate::rpc_request::RpcRequest;
-pub(crate) use wallet_core::portfolio::wire::{classify, rpc_call, Reply};
 pub use wallet_core::portfolio::wire::{
-    HttpHeader, HttpMethod, HttpOutcome, HttpRequest, RpcLimits, RpcReply, STARKSCAN_BODY_LIMIT,
-    STARKSCAN_DEADLINE_MS,
+    HttpHeader, HttpMethod, HttpOutcome, HttpRequest, RpcLimits, RpcReply,
 };
 
 /// HTTP method of a request the core built.

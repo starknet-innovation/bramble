@@ -20,13 +20,14 @@ use super::types::{SendError, TransferRequest};
 use crate::account_address::argent_shape;
 use crate::account_catalog::{self, AccountFamily};
 use crate::account_store::StoredAccount;
-use crate::activity::{observation, store};
+use crate::activity::{failure_notice_message, with_log};
 use crate::history::activity::ActivityEntry;
 use crate::networks::{self, NetworkId};
 use crate::portfolio::registry;
 use crate::wallet::WalletCore;
 use crate::wallet_accounts::{sign_for, signing_record, SignRefusal};
 use crate::{contacts, felt, kms, multisig_store, CoreError};
+use wallet_core::activity::store::parse_status;
 
 impl From<SignRefusal> for SendError {
     fn from(refusal: SignRefusal) -> Self {
@@ -285,10 +286,9 @@ impl WalletCore {
     /// lives in the vault). Any family may be read.
     pub fn activity(&self, account_id: String) -> Result<Vec<ActivityEntry>, SendError> {
         let acting = self.plan_account_for(&account_id, Use::Read)?;
-        Ok(crate::activity::feed::scope(
-            &self.data_dir,
-            &acting.account_id,
-        ))
+        Ok(with_log(&self.data_dir, |log| {
+            log.scope(&acting.account_id)
+        }))
     }
 
     /// Retires the account's unresolved records that outlived their hour (`expiredObservations`:
@@ -303,16 +303,17 @@ impl WalletCore {
         now_ms: u64,
     ) -> Result<Vec<String>, SendError> {
         let acting = self.plan_account_for(&account_id, Use::Read)?;
-        store::retire_expired(&self.data_dir, &acting.account_id, now_ms);
-        Ok(
-            store::take_failure_notices(&self.data_dir, &acting.account_id)
-                .iter()
-                .filter_map(|entry| {
-                    let status = store::parse_status(&entry.status)?;
-                    Some(observation::failure_notice_message(status, &entry.summary))
-                })
-                .collect(),
-        )
+        let taken = with_log(&self.data_dir, |log| {
+            log.retire_expired(&acting.account_id, now_ms);
+            log.take_failure_notices(&acting.account_id)
+        });
+        Ok(taken
+            .iter()
+            .filter_map(|entry| {
+                let status = parse_status(&entry.status)?;
+                Some(failure_notice_message(status, &entry.summary))
+            })
+            .collect())
     }
 
     /// A plan that reads one recorded transaction's status and settles its record; never signs.
@@ -323,7 +324,7 @@ impl WalletCore {
     ) -> Result<Arc<TransferPlan>, SendError> {
         let acting = self.plan_account_for(&account_id, Use::Read)?;
         let hash = felt::parse_non_zero(&hash).ok_or(SendError::UnknownTransaction)?;
-        let known = store::list(&self.data_dir, &acting.account_id)
+        let known = with_log(&self.data_dir, |log| log.list(&acting.account_id))
             .iter()
             .any(|entry| felt::parse(&entry.hash) == Some(hash));
         if !known {

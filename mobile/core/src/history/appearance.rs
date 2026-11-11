@@ -1,6 +1,7 @@
-//! Activity rows as the side panel renders them: `activity-format.ts` (`activityRowModel`) and
-//! `home-tabs.ts` (`transactionRow`, `transactionGroups`, `activityEmptyCopy`), over the
-//! classification in `classify.rs`.
+//! Activity rows as the side panel renders them (`wallet_core::history::appearance`,
+//! `activity-format.ts activityRowModel` and `home-tabs.ts transactionRow` /
+//! `transactionGroups`): the UniFFI shapes and the export with Bramble's catalogs, plus Bramble's
+//! own sentences (`activityEmptyCopy`, the unavailable notice).
 //!
 //! A row is a disclosure. Its summary shows the kind glyph, a heading that joins the verb and the
 //! amount, the truncated hash (linked to the explorer) with a copy control, a status word for a
@@ -8,25 +9,20 @@
 //! the submission time, and the provisional-status hint. No fiat figure: a value computed from
 //! today's price is not what the transaction was worth.
 
+use wallet_core::history::appearance as port;
+pub use wallet_core::history::appearance::{
+    ActivityCounterparty, ActivityDayGroup, ActivityDirection, ActivityRow, ActivityTone,
+};
+
 use super::activity::{ActivityEntry, TxStatus};
-pub use super::classify::ActivityDirection;
-use super::classify::{appearance, capitalise, compact_activity_amount, detail};
-use super::explorer::explorer_transaction_url;
-use super::time::{format_utc_clock, format_utc_date, utc_day_key};
-use crate::account_names::short_label;
-use crate::js::num::js_trim;
+use crate::networks;
 use crate::portfolio::model::TokenConfig;
-use crate::portfolio::tokens::{starknet_glyph, token_glyph, TokenGlyph};
+use crate::portfolio::tokens::TokenGlyph;
 
 const HISTORY_UNAVAILABLE_NOTICE: &str = "Couldn't load on-chain history. Showing transactions recorded on this device only — check your connection or RPC endpoint and refresh.";
-/// `PROVISIONAL_TX_HINT`: pending has not executed; pre-confirmed has, in a block not yet final.
-const PENDING_HINT: &str = "Broadcast accepted. It can't be fee-bumped, replaced, or cancelled.";
-const PRECONFIRMED_HINT: &str =
-    "Pre-confirmed, not final yet. Bramble tells you if it doesn't settle.";
-const HASH_COPY_LABEL: &str = "Copy transaction hash";
 
 /// The status hue of a row's glyph and status word.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum ActivityTone {
     /// Accepted: the neutral secondary tone, no status word.
     Settled,
@@ -37,7 +33,7 @@ pub enum ActivityTone {
 }
 
 /// The recorded counterparty, as a row's expansion lists it.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct ActivityCounterparty {
     /// The fact's label: "Sender", "Recipient" or "Counterparty".
     pub role: String,
@@ -52,7 +48,7 @@ pub struct ActivityCounterparty {
 }
 
 /// Everything one Activity row displays: the disclosure's summary, then its expansion.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct ActivityRow {
     /// A `BrambleIconName` case name (checked against the generated set in the tests).
     pub icon: String,
@@ -94,163 +90,10 @@ pub struct ActivityRow {
 }
 
 /// Rows of one UTC day under their heading.
-#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct ActivityDayGroup {
     pub heading: String,
     pub rows: Vec<ActivityRow>,
-}
-
-/// `activityRowModel` without its fiat figure, which no row renders any more. Not FFI: the rows
-/// are built from it, and the parity suite checks it against the extension's model directly.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ActivityRowModel {
-    pub direction: Option<ActivityDirection>,
-    pub icon: &'static str,
-    pub label: &'static str,
-    pub title: &'static str,
-    /// The appearance `type` (`transfer`, `swap`, `approval`, …).
-    pub kind: &'static str,
-    pub amount: Option<String>,
-    /// The trimmed address and its role (`sender`, `recipient` or `counterparty`).
-    pub counterparty: Option<(String, &'static str)>,
-    pub detail: Option<String>,
-    pub token_address: Option<String>,
-    pub token_symbol: Option<String>,
-}
-
-fn status_label(status: TxStatus) -> &'static str {
-    match status {
-        TxStatus::Preconfirmed => "pre-confirmed",
-        other => crate::activity::store::status_text(other),
-    }
-}
-
-fn trimmed(value: Option<&str>) -> Option<&str> {
-    value.map(js_trim).filter(|s| !s.is_empty())
-}
-
-/// `activityRowModel`: the tracked token is the one tracked token with the entry's symbol on its
-/// network (a symbol two tracked tokens share is ambiguous and matches none).
-pub fn activity_row_model(entry: &ActivityEntry, tracked: &[TokenConfig]) -> ActivityRowModel {
-    let look = appearance(entry);
-    let symbol = trimmed(entry.token.as_deref());
-    let amount = match (symbol, trimmed(entry.amount.as_deref())) {
-        (Some(symbol), Some(raw)) => Some(format!("{} {symbol}", compact_activity_amount(raw))),
-        _ => None,
-    };
-    let matches: Vec<&TokenConfig> = symbol.map_or(Vec::new(), |symbol| {
-        tracked
-            .iter()
-            .filter(|t| {
-                t.network == entry.network && t.symbol.to_lowercase() == symbol.to_lowercase()
-            })
-            .collect()
-    });
-    let token = (matches.len() == 1).then(|| matches[0]);
-    let role = match look.direction {
-        Some(ActivityDirection::In) => "sender",
-        Some(ActivityDirection::Out) => "recipient",
-        _ if look.kind == "approval" => "recipient",
-        _ => "counterparty",
-    };
-    let counterparty = trimmed(entry.counterparty.as_deref()).map(|a| (a, role));
-    ActivityRowModel {
-        detail: detail(entry, &look, counterparty, amount.is_some()),
-        counterparty: counterparty.map(|(a, role)| (a.to_string(), role)),
-        direction: look.direction,
-        icon: look.icon,
-        label: look.label,
-        title: look.title,
-        kind: look.kind,
-        amount,
-        token_address: token.map(|t| t.address.clone()),
-        token_symbol: symbol.map(str::to_string),
-    }
-}
-
-// `transactionRow` over `activityRowModel`.
-fn row(entry: &ActivityEntry, tracked: &[TokenConfig]) -> ActivityRow {
-    let model = activity_row_model(entry, tracked);
-    let label = status_label(entry.status);
-    let hint = match entry.status {
-        TxStatus::Pending => Some(PENDING_HINT.to_string()),
-        TxStatus::Preconfirmed => Some(PRECONFIRMED_HINT.to_string()),
-        _ => None,
-    };
-    let at = Some(entry.submitted_at as f64);
-    let clock = format_utc_clock(at);
-    let timing = match &clock {
-        Some(clock) => format!("{} · {clock}", capitalise(label)),
-        None => capitalise(label),
-    };
-    let spoken = match &clock {
-        Some(clock) => format!("{label}, {clock}"),
-        None => label.to_string(),
-    };
-    let submitted = match (format_utc_date(at), &clock) {
-        (Some(date), Some(clock)) => Some(format!("{date}, {clock}")),
-        (date, clock) => date.or_else(|| clock.clone()),
-    };
-    // Legacy entries carry their figure only in the summary, which `detail` already stripped of
-    // the verb; a counterparty detail is an address and stays in the expansion.
-    let figure = model.amount.clone().or_else(|| {
-        model
-            .counterparty
-            .is_none()
-            .then(|| model.detail.clone())
-            .flatten()
-    });
-    let heading = match &figure {
-        Some(figure) => format!("{} {figure}", model.title),
-        None => model.title.to_string(),
-    };
-    let detail = model
-        .detail
-        .clone()
-        .filter(|d| model.counterparty.is_none() && figure.as_ref() != Some(d));
-    let avatar = match &model.token_symbol {
-        Some(symbol) => token_glyph(
-            model
-                .token_address
-                .clone()
-                .unwrap_or_else(|| "0x0".to_string()),
-            symbol.clone(),
-        ),
-        None => starknet_glyph(),
-    };
-    ActivityRow {
-        icon: model.icon.into(),
-        tone: match entry.status {
-            TxStatus::Accepted => ActivityTone::Settled,
-            TxStatus::Pending => ActivityTone::Pending,
-            TxStatus::Preconfirmed => ActivityTone::Preconfirmed,
-            TxStatus::Rejected | TxStatus::Reverted => ActivityTone::Failed,
-        },
-        status: entry.status,
-        glyph_title: hint
-            .clone()
-            .unwrap_or_else(|| format!("{}, {label}", model.label)),
-        accessibility_label: format!("{heading}. {spoken}"),
-        heading,
-        hash: entry.hash.clone(),
-        hash_label: short_label(&entry.hash),
-        hash_copy_label: HASH_COPY_LABEL.into(),
-        explorer_url: explorer_transaction_url(entry.network, entry.hash.clone()),
-        status_word: (entry.status != TxStatus::Accepted).then(|| capitalise(label)),
-        avatar,
-        timing,
-        counterparty: model
-            .counterparty
-            .map(|(address, role)| ActivityCounterparty {
-                role: capitalise(role),
-                address_label: address.clone(),
-                copy_label: format!("Copy {role} address"),
-                address,
-            }),
-        detail,
-        submitted,
-        status_hint: hint,
-    }
 }
 
 /// `transactionGroups`: consecutive rows grouped by UTC day under "Today", "Yesterday",
@@ -262,35 +105,7 @@ pub fn activity_groups(
     tracked: Vec<TokenConfig>,
     now_ms: Option<f64>,
 ) -> Vec<ActivityDayGroup> {
-    let today = now_ms.map(utc_day_key);
-    let mut groups: Vec<(Option<i64>, ActivityDayGroup)> = Vec::new();
-    for entry in &entries {
-        let at = Some(entry.submitted_at as f64);
-        let date = format_utc_date(at);
-        let key = date
-            .as_ref()
-            .map(|_| utc_day_key(entry.submitted_at as f64));
-        let row = row(entry, &tracked);
-        match groups.last_mut() {
-            Some((last, group)) if *last == key => group.rows.push(row),
-            _ => {
-                let heading = match (key, date) {
-                    (Some(k), _) if Some(k) == today => "Today".to_string(),
-                    (Some(k), _) if today.is_some_and(|t| k == t - 1) => "Yesterday".to_string(),
-                    (Some(_), Some(date)) => date,
-                    _ => "Undated".to_string(),
-                };
-                groups.push((
-                    key,
-                    ActivityDayGroup {
-                        heading,
-                        rows: vec![row],
-                    },
-                ));
-            }
-        }
-    }
-    groups.into_iter().map(|(_, g)| g).collect()
+    port::activity_groups(entries, tracked, now_ms, networks::catalogs())
 }
 
 /// `activityEmptyCopy`.

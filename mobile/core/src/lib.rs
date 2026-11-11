@@ -280,7 +280,7 @@ pub fn recovery_word_suggestions(prefix: String) -> Vec<String> {
 /// a link that cannot resolve.
 #[uniffi::export]
 pub fn explorer_account_url(network: NetworkId, address: String) -> Option<String> {
-    history::explorer::explorer_url(network, "contract", &address)
+    wallet_core::history::explorer::explorer_account_url(networks::all(), network, address)
 }
 
 /// Display string for a base-unit amount.

@@ -16,9 +16,11 @@ use wallet_core::send::plan::{
 use wallet_core::{Felt, StarkSignature};
 
 use super::types::{ActivityKind, SendError, SendFailure, SendStep, StepReply, TransferReview};
-use crate::activity::store::{self, Entry};
-use crate::history::activity::TransferDirection;
-use crate::history::activity_rules::direction_text;
+use wallet_core::activity::store::{kind_text, Entry};
+use wallet_core::history::activity::TransferDirection;
+use wallet_core::history::activity_rules::direction_text;
+
+use crate::activity::with_log;
 use crate::networks::NetworkId;
 use crate::wallet::WalletCore;
 use crate::{felt, CoreError};
@@ -173,9 +175,8 @@ impl PlanHost for TransferPlan {
             ),
             PendingKind::Deployment => (ActivityKind::Deploy, None, None, None, None),
         };
-        store::record(
-            &core.data_dir,
-            Entry {
+        with_log(&core.data_dir, |log| {
+            log.record(Entry {
                 account_id: self.account_id.clone(),
                 amount,
                 counterparty,
@@ -186,7 +187,7 @@ impl PlanHost for TransferPlan {
                 failure_notice: None,
                 finalized_on_l1: None,
                 hash: felt::canonical(&record.hash),
-                kind: store::kind_text(kind).into(),
+                kind: kind_text(kind).into(),
                 network_id: self.network.catalog_id().into(),
                 not_found_count: None,
                 status: "pending".into(),
@@ -194,13 +195,15 @@ impl PlanHost for TransferPlan {
                 summary: record.summary,
                 token,
                 token_address,
-            },
-        );
+            })
+        });
     }
 
     fn observe(&self, hash: &Felt, observation: Observation) -> Option<TxStatus> {
         let core = self.core.upgrade()?;
-        store::observe(&core.data_dir, &self.account_id, hash, observation)
+        with_log(&core.data_dir, |log| {
+            log.observe(&self.account_id, hash, observation)
+        })
     }
 
     fn explorer_url(&self, hash: &str) -> Option<String> {
