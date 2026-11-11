@@ -27,9 +27,11 @@ testing = []
 
 [dependencies]
 # The shared Rust core (felt grammar, key custody, Nostr identity, vault, sans-IO RPC and send),
-# pinned to a tag; the package is `starknet-wallet-core`, renamed to keep `wallet_core::` paths.
-# Cargo.lock records the commit. Plain Rust with no UniFFI, so the binary holds one scaffolding.
-wallet-core = { package = "starknet-wallet-core", git = "https://github.com/starknet-innovation/wallet-core", tag = "v0.2.1" }
+# pinned to a commit; the package is `starknet-wallet-core`, renamed to keep `wallet_core::` paths.
+# Plain Rust with no UniFFI, so the binary holds one scaffolding. The `rev` is the tip of
+# wallet-core's A2 (accounts and the recovery scan), which no tag holds yet: it moves to the tag
+# that follows A2 before this merges.
+wallet-core = { package = "starknet-wallet-core", git = "https://github.com/starknet-innovation/wallet-core", rev = "57af8899b8c2dfd10e212fca47a0359e141aec1b" }
 # Wallet cryptography, still named directly by the account, multisig and send modules. Pinned
 # exactly, at the release wallet-core pins, so the lockfile resolves one copy
 # (tests/conformance/mobile-generated.test.ts). The extension's
