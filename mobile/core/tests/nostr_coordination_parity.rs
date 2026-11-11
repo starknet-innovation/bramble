@@ -1,6 +1,6 @@
 //! Nostr coordination parity with the extension, over the shared core's relay judges and sync
-//! window (wallet-core plan, step 2.5b). `tests/fixtures/nostr-coordination-parity-*.json` are written by
-//! `bun run mobile:parity` from the extension's own functions and re-checked by
+//! window (wallet-core plan, step 2.5b). `tests/fixtures/nostr-coordination-parity-*.json` are
+//! written by `bun run mobile:parity` from the extension's own functions and re-checked by
 //! `tests/conformance/mobile-nostr-parity.test.ts`. Events are numbered: event `n` is the
 //! fixture's `event` with the id `n` as 64-digit hex and the case's `created_at`.
 
