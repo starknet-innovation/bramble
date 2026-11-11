@@ -43,7 +43,7 @@ pub(crate) fn resolve_class(
     network: NetworkId,
 ) -> Result<Felt, CoreError> {
     match (family, class_hash) {
-        (AccountFamily::OpenZeppelin, None) => kms::oz_class_hash(network.into()),
+        (AccountFamily::OpenZeppelin, None) => kms::oz_class_hash(network),
         (AccountFamily::OpenZeppelin, Some(_)) => Err(invalid("unknown account class")),
         (AccountFamily::Argent, None) => Ok(catalog().argent_default),
         (AccountFamily::Braavos, None) => Err(invalid("a Braavos account must name its class")),

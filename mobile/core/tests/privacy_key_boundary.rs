@@ -62,9 +62,10 @@ fn the_key_appears_only_inside_discovery_bodies() {
 
 /// The scoped derivation lives in `wallet_core::derive_strk20_viewing_key`, which takes the chain
 /// and pool. Only `kms.rs` may call it, and nothing may reach Krusty's viewing-key functions
-/// directly, where the unscoped one is. Mobile's zeroizing accessor over it, `scoped_viewing_key`,
-/// is reached only from `kms.rs` (the public key), the session-checked `plan_viewing_key` behind
-/// the read plan's `PrivacyHost`, and the test hooks.
+/// directly, where the unscoped one is: no file in `src` or `tests` names Krusty's crates at all
+/// (mobile depends on Krusty only through wallet-core). Mobile's zeroizing accessor over it,
+/// `scoped_viewing_key`, is reached only from `kms.rs` (the public key), the session-checked
+/// `plan_viewing_key` behind the read plan's `PrivacyHost`, and the test hooks.
 #[test]
 fn viewing_keys_are_derived_only_through_the_shared_core() {
     fn visit(dir: &std::path::Path, found: &mut Vec<(String, String)>) {
@@ -74,22 +75,30 @@ fn viewing_keys_are_derived_only_through_the_shared_core() {
                 visit(&path, found);
                 continue;
             }
-            let text = std::fs::read_to_string(&path).unwrap();
-            if text.contains("strk20_viewing_key") || text.contains("scoped_viewing_key") {
+            if path.extension().is_some_and(|ext| ext == "rs") {
+                let text = std::fs::read_to_string(&path).unwrap();
                 found.push((path.display().to_string(), text));
             }
         }
     }
-    let mut found = Vec::new();
-    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    visit(&src, &mut found);
-    for (path, text) in &found {
-        assert!(
-            !text.contains("krusty_kms::derive_strk20_viewing_key")
-                && !text.contains("krusty_kms::derive_scoped_strk20_viewing_key"),
-            "{path} derives a viewing key from Krusty directly"
-        );
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut everything = Vec::new();
+    visit(&root.join("src"), &mut everything);
+    visit(&root.join("tests"), &mut everything);
+    // Split so this file does not name it either; it covers both of Krusty's crates.
+    let krusty = concat!("krusty", "_kms");
+    for (path, text) in &everything {
+        assert!(!text.contains(krusty), "{path} names Krusty directly");
     }
+    let src = root.join("src");
+    let src_prefix = src.display().to_string();
+    let found: Vec<(String, String)> = everything
+        .into_iter()
+        .filter(|(path, text)| {
+            path.starts_with(&src_prefix)
+                && (text.contains("strk20_viewing_key") || text.contains("scoped_viewing_key"))
+        })
+        .collect();
     let callers: Vec<&str> = found
         .iter()
         .filter(|(_, text)| text.contains("derive_strk20_viewing_key"))

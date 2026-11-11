@@ -4,11 +4,11 @@
 //! of the core's `Ladder` (which key tree an account walks), the import form's phrase
 //! normalisation, and the OpenZeppelin account version this wallet deploys.
 //!
-//! Private keys are derived per call, held in Krusty's zeroizing `SecretFelt`, and never returned
-//! to a caller outside this crate.
+//! Private keys are derived per call, held in the zeroizing `SecretFelt` (Krusty's, re-exported
+//! by `wallet_core`), and never returned to a caller outside this crate.
 
-use krusty_kms_common::{ChainId, SecretFelt};
 use starknet_types_core::felt::Felt;
+use wallet_core::{NetworkId, SecretFelt};
 use zeroize::Zeroizing;
 
 use crate::felt;
@@ -81,11 +81,7 @@ pub(crate) fn public_key(
 }
 
 /// The OpenZeppelin account class the wallet deploys: Krusty's manifest at `OZ_ACCOUNT_VERSION`.
-pub fn oz_class_hash(chain: ChainId) -> Result<Felt, CoreError> {
-    let network = match chain {
-        ChainId::Mainnet => wallet_core::NetworkId::Mainnet,
-        ChainId::Sepolia => wallet_core::NetworkId::Sepolia,
-    };
+pub fn oz_class_hash(network: NetworkId) -> Result<Felt, CoreError> {
     let class_hash = wallet_core::oz_account_class_hash(network, OZ_ACCOUNT_VERSION)?;
     parsed(&class_hash, "class hash")
 }
@@ -169,12 +165,9 @@ mod tests {
 
     #[test]
     fn the_oz_class_is_the_pinned_release_on_each_network() {
-        for (chain, network) in [
-            (ChainId::Mainnet, wallet_core::NetworkId::Mainnet),
-            (ChainId::Sepolia, wallet_core::NetworkId::Sepolia),
-        ] {
+        for network in [NetworkId::Mainnet, NetworkId::Sepolia] {
             let pinned = wallet_core::oz_account_class_hash(network, OZ_ACCOUNT_VERSION).unwrap();
-            assert_eq!(felt::canonical(&oz_class_hash(chain).unwrap()), pinned);
+            assert_eq!(felt::canonical(&oz_class_hash(network).unwrap()), pinned);
         }
     }
 }

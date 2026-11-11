@@ -213,8 +213,6 @@ dependencies = [
  "base64 0.22.1",
  "bip39",
  "bramble-core",
- "krusty-kms",
- "krusty-kms-common",
  "pbkdf2",
  "serde",
  "serde_json",

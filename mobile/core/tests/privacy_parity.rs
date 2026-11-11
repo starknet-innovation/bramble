@@ -10,6 +10,7 @@ use bramble_core::testing::{privacy as hooks, strk20_viewing_key, strk20_viewing
 use bramble_core::{Ladder, NetworkId};
 use privacy_support::{wire, PHRASE};
 use serde_json::Value;
+use wallet_core::{derive_strk20_viewing_key, Felt, SecretFelt};
 
 fn text(value: &Value) -> &str {
     value.as_str().unwrap()
@@ -33,16 +34,19 @@ fn viewing_keys_match_the_extension_krusty_path() {
             "account {index}"
         );
     }
+    // Krusty's own vectors, through wallet-core's wrapper (mobile never names Krusty).
     for vector in keys["crate"].as_array().unwrap() {
-        let private_key =
-            starknet_types_core::felt::Felt::from_hex(text(&vector["privateKey"])).unwrap();
-        let key = krusty_kms::derive_scoped_strk20_viewing_key(
+        let private_key = SecretFelt::new(Felt::from_hex(text(&vector["privateKey"])).unwrap());
+        let key = derive_strk20_viewing_key(
             &private_key,
             text(&vector["chainId"]),
             text(&vector["pool"]),
         )
         .unwrap();
-        assert_eq!(format!("{key:#x}"), text(&vector["viewingKey"]));
+        assert_eq!(
+            key.expose_secret_hex().as_str(),
+            text(&vector["viewingKey"])
+        );
     }
     for refusal in keys["refusals"].as_array().unwrap() {
         assert!(refusal["refused"].as_bool().unwrap());
