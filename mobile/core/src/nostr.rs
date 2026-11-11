@@ -14,8 +14,7 @@ pub use wallet_core::kms::utf16_length;
 #[cfg(any(test, feature = "testing"))]
 pub use wallet_core::nostr::parse_event_json;
 pub use wallet_core::nostr::{
-    event_from_value, has_recipient_tag, is_public_key, safe_non_negative_integer,
-    NostrApplicationData, NostrEvent, GIFT_WRAP_KIND,
+    is_public_key, safe_non_negative_integer, NostrApplicationData, NostrEvent,
 };
 
 /// The wallet's coordination public key: x-only, 64 lowercase hex characters.

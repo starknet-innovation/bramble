@@ -5,6 +5,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use wallet_core::nostr::sync_window::nostr_sync_since;
+
 use crate::coordination::{self, Checkpoint, Held};
 use crate::nostr_relay::{self, RelayStep, SyncJudge};
 use crate::{contacts, multisig_constants, multisig_store, nostr, CoreError, WalletCore};
@@ -108,12 +110,17 @@ impl WalletCore {
         let coordination_file = coordination::load(self.data_dir())?;
         let relays = coordination::relay_urls(&coordination_file);
         let checkpoint = coordination::checkpoint(&coordination_file, &record.id, &relays);
-        let since = coordination::sync_since(now, checkpoint.map(|c| c.synced_at));
-        let seen = checkpoint
+        // A clock past `i64::MAX` saturates; the judge then refuses the unsafe `since`.
+        let since = nostr_sync_since(
+            i64::try_from(now).unwrap_or(i64::MAX),
+            checkpoint.and_then(|c| i64::try_from(c.synced_at).ok()),
+            coordination::sync_lookbacks(),
+        );
+        let seen: HashSet<String> = checkpoint
             .map(|c| c.event_ids.iter().cloned().collect())
             .unwrap_or_default();
         Ok(Arc::new(NostrSyncPlan {
-            judge: SyncJudge::new(&own, since, relays)?,
+            judge: SyncJudge::new(&own, since, relays, seen.clone())?,
             record_id: record.id.clone(),
             now,
             seen,

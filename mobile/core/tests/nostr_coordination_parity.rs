@@ -1,26 +1,32 @@
-//! Nostr coordination parity with the extension, before the shared core ports these rules
-//! (wallet-core plan, step 2.5). `tests/fixtures/nostr-coordination-parity-*.json` are written by
+//! Nostr coordination parity with the extension, over the shared core's relay judges and sync
+//! window (wallet-core plan, step 2.5b). `tests/fixtures/nostr-coordination-parity-*.json` are written by
 //! `bun run mobile:parity` from the extension's own functions and re-checked by
 //! `tests/conformance/mobile-nostr-parity.test.ts`. Events are numbered: event `n` is the
 //! fixture's `event` with the id `n` as 64-digit hex and the case's `created_at`.
 
 mod common;
 
-use bramble_core::testing::{coordination_sender_trusted, publish_counts, PublishJudge, SyncJudge};
+use std::collections::HashSet;
+
+use bramble_core::testing::{coordination_sender_trusted, publish_many, SyncJudge};
 use bramble_core::{
-    nostr_relay_url_normalize, MultisigAuthorityRead, MultisigAuthorityStatus, NetworkId,
-    WalletCore,
+    nostr_relay_url_normalize, CoreError, MultisigAuthorityRead, MultisigAuthorityStatus,
+    NetworkId, WalletCore,
 };
 use serde_json::{json, Value};
+use wallet_core::nostr::relay::{NostrGiftWrapDelivery, RelayError};
 
-/// Cases where mobile differs from the extension today, left out of the assertions below rather
-/// than asserted either way: mobile refuses `ws:` relays on loopback (App Transport Security and
-/// `usesCleartextTraffic=false`), and reads one page per relay with no `until` cursor and no
-/// unseen-first bound. The port takes the extension's behaviour for each.
+/// Cases where mobile differs from the extension, left out of the assertions below rather than
+/// asserted either way. Every other case is asserted.
 const MOBILE_DIFFERS: [&str; 6] = [
+    // Mobile refuses `ws:` relays, loopback included: App Transport Security and
+    // `usesCleartextTraffic=false` block cleartext sockets.
     "ws://localhost:7000",
     "ws://127.0.0.1:7000",
     "a loopback relay",
+    // Mobile reads one page per relay until the FFI can page (2.7); these need a second page.
+    // ("paging stops after the page cap" and "the cursor stops at since" pass: their later pages
+    // hold only seen wraps.)
     "a burst of newer wraps hides an older one",
     "seen wraps are skipped before the batch bound",
     "a full page from one second steps below it",
@@ -168,14 +174,23 @@ fn the_sync_since_matches_the_extension() {
     }
 }
 
+/// The reason a `CoreError` carries, which is the core's message for relay failures.
+fn reason(error: CoreError) -> String {
+    match error {
+        CoreError::InvalidInput { reason } | CoreError::Coordination { reason } => reason,
+        other => other.to_string(),
+    }
+}
+
 /// What mobile's sync judge returns for one paging case when each relay answers its first request
-/// (mobile reads one page), with seen ids dropped afterwards as `coordination_sync_finish` does.
+/// (mobile reads one page), or the error message.
 fn mobile_candidates(recipient: &str, template: &Value, case: &Value) -> Result<Vec<u64>, String> {
     let recipient = case["recipient"].as_str().unwrap_or(recipient);
-    let since = case["since"].as_u64().ok_or("negative since")?;
+    let since = case["since"].as_i64().unwrap();
     let relays = case["relays"].as_array().unwrap();
     let urls = relays.iter().map(|relay| text(&relay["url"])).collect();
-    let judge = SyncJudge::new(recipient, since, urls).map_err(|error| error.to_string())?;
+    let seen: HashSet<String> = numbers(&case["seen"]).into_iter().map(id_of).collect();
+    let judge = SyncJudge::new(recipient, since, urls, seen).map_err(reason)?;
     for (index, relay) in relays.iter().enumerate() {
         let expected: Value =
             serde_json::from_str(relay["requests"][0]["frame"].as_str().unwrap()).unwrap();
@@ -194,11 +209,9 @@ fn mobile_candidates(recipient: &str, template: &Value, case: &Value) -> Result<
         }
         judge.accept_frame(index, &json!(["EOSE", "mcw-1"]).to_string());
     }
-    let seen: Vec<String> = numbers(&case["seen"]).into_iter().map(id_of).collect();
-    let candidates = judge.candidates().map_err(|error| error.to_string())?;
+    let candidates = judge.candidates().map_err(reason)?;
     Ok(candidates
         .into_iter()
-        .filter(|event| !seen.contains(&event.id))
         .map(|event| u64::from_str_radix(&event.id, 16).unwrap())
         .collect())
 }
@@ -215,64 +228,92 @@ fn sync_paging_matches_the_extension() {
         let mobile = mobile_candidates(&recipient, template, case);
         match case.get("result") {
             Some(result) => assert_eq!(mobile, Ok(numbers(result)), "{}", case["name"]),
-            None => assert!(mobile.is_err(), "{}", case["name"]),
+            None => assert_eq!(mobile, Err(text(&case["error"])), "{}", case["name"]),
         }
+    }
+}
+
+/// Publishes through mobile, replying to each wrap a relay was sent with `reply(relay, id)`, an
+/// `OK` frame or nothing. The counts, or the error message.
+fn publish(
+    deliveries: &[NostrGiftWrapDelivery],
+    relay_urls: &[String],
+    reply: impl Fn(usize, &str) -> Option<String>,
+) -> Result<Vec<u64>, String> {
+    let mut publish = publish_many(deliveries, relay_urls).map_err(reason)?;
+    for relay in 0..relay_urls.len() {
+        for frame in publish.event_frames() {
+            let sent: Value = serde_json::from_str(&frame).unwrap();
+            if let Some(ok) = reply(relay, sent[1]["id"].as_str().unwrap()) {
+                publish.accept_frame(relay, &ok);
+            }
+        }
+    }
+    let counts = publish
+        .acknowledgements()
+        .map_err(|error: RelayError| error.to_string())?;
+    Ok(counts.into_iter().map(u64::from).collect())
+}
+
+fn outcome(case: &Value) -> Result<Vec<u64>, String> {
+    match case.get("acknowledgements") {
+        Some(counts) => Ok(numbers(counts)),
+        None => Err(text(&case["error"])),
+    }
+}
+
+#[test]
+fn gift_wrap_batches_match_the_extension() {
+    let relays = part("relays");
+    let (template, recipient) = (&relays["event"], text(&relays["recipient"]));
+    let batches = &relays["giftWrapBatches"];
+    for case in batches["cases"].as_array().unwrap() {
+        let mut deliveries: Vec<NostrGiftWrapDelivery> = numbers(&case["ids"])
+            .into_iter()
+            .map(|n| NostrGiftWrapDelivery {
+                event_json: event(template, n, 1).to_string(),
+                recipient_public_key: recipient.clone(),
+            })
+            .collect();
+        deliveries.extend(case["extra"].as_array().unwrap().iter().map(|extra| {
+            NostrGiftWrapDelivery {
+                event_json: text(&extra["eventJson"]),
+                recipient_public_key: text(&extra["recipientPublicKey"]),
+            }
+        }));
+        // One relay that accepts every wrap it is sent.
+        let accepting = |_: usize, id: &str| Some(json!(["OK", id, true, ""]).to_string());
+        let counts = publish(&deliveries, &strings(&batches["relayUrls"]), accepting);
+        assert_eq!(counts, outcome(case), "{}", case["name"]);
     }
 }
 
 #[test]
 fn acknowledgement_counts_match_the_extension() {
     let relays = part("relays");
-    let template = &relays["event"];
-    let recipient = text(&relays["recipient"]);
+    let (template, recipient) = (&relays["event"], text(&relays["recipient"]));
     for case in relays["acknowledgements"].as_array().unwrap() {
-        let urls: Vec<String> = case["relays"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|relay| text(&relay["url"]))
-            .collect();
-        if case["error"] == "Invalid Nostr relay configuration" {
-            // Publishing and syncing share the relay-selection rule.
-            assert!(
-                SyncJudge::new(&recipient, 1, urls).is_err(),
-                "{}",
-                case["name"]
-            );
-            continue;
-        }
         let ids = numbers(&case["ids"]);
-        let events: Vec<_> = ids
+        let deliveries: Vec<NostrGiftWrapDelivery> = ids
             .iter()
-            .map(|n| wallet_core::nostr::event_from_value(&event(template, *n, 1)).unwrap())
-            .collect();
-        let per_relay: Vec<Vec<bool>> = case["relays"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|relay| {
-                let judge = PublishJudge::new(events.clone());
-                if let Some(replies) = relay["replies"].as_array() {
-                    for (n, reply) in ids.iter().zip(replies) {
-                        let frame = json!(["OK", id_of(*n), reply[0], reply[1]]).to_string();
-                        judge.accept_frame(&frame);
-                    }
-                }
-                judge.accepted()
+            .map(|n| NostrGiftWrapDelivery {
+                event_json: event(template, *n, 1).to_string(),
+                recipient_public_key: recipient.clone(),
             })
             .collect();
-        match case.get("acknowledgements") {
-            Some(counts) => {
-                let counts: Vec<u32> = numbers(counts).into_iter().map(|n| n as u32).collect();
-                assert_eq!(
-                    publish_counts(&per_relay).unwrap(),
-                    counts,
-                    "{}",
-                    case["name"]
-                );
-            }
-            None => assert!(publish_counts(&per_relay).is_err(), "{}", case["name"]),
-        }
+        let scripted = case["relays"].as_array().unwrap();
+        let urls: Vec<String> = scripted.iter().map(|relay| text(&relay["url"])).collect();
+        // Each relay's reply to a wrap, by delivery order; "socket error" replies to nothing.
+        let reply = |relay: usize, id: &str| {
+            let replies = scripted[relay]["replies"].as_array()?;
+            let index = ids.iter().position(|n| id_of(*n) == id)?;
+            let [accepted, message] = replies[index].as_array()?.as_slice() else {
+                return None;
+            };
+            Some(json!(["OK", id, accepted, message]).to_string())
+        };
+        let counts = publish(&deliveries, &urls, reply);
+        assert_eq!(counts, outcome(case), "{}", case["name"]);
     }
 }
 

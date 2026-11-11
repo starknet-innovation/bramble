@@ -209,10 +209,10 @@ pub fn wrap_gift(
     crate::nostr::wrap(mnemonic, index, recipient, identifier, content, now)
 }
 
-/// The relay judges and acknowledgement counting, which no FFI call exposes on their own (the
-/// sync judge sits inside `NostrSyncPlan`; publishing is deferred), for the coordination parity
-/// suite against the extension.
-pub use crate::nostr_relay::{publish_counts, PublishJudge, SyncJudge};
+/// The sync judge and the publish, which no FFI call exposes on their own (the sync judge sits
+/// inside `NostrSyncPlan`; publishing is deferred), for the coordination parity suite against the
+/// extension.
+pub use crate::nostr_relay::{publish_many, SyncJudge};
 
 /// The sender rule inside `coordination::is_trusted`, which no FFI call exposes on its own: whether
 /// a `bramble.multisig` package from `sender` naming a multisig on `network_id` is trusted, given

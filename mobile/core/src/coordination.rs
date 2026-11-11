@@ -10,6 +10,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use wallet_core::nostr::sync_window::SyncLookbacks;
 
 use crate::argent_multisig;
 use crate::contacts;
@@ -128,11 +129,12 @@ pub fn store(dir: &Path, file: &File) -> Result<(), CoreError> {
     public_store::write(dir, public_store::COORDINATION, file)
 }
 
-/// `coordinationRelayUrls`: one custom relay replaces the reviewed defaults.
+/// `coordinationRelayUrls`: one custom relay replaces the reviewed defaults (bramble-core's
+/// `coordination_relay_urls`).
 pub fn relay_urls(file: &File) -> Vec<String> {
     match &file.relay_url {
-        Some(url) => vec![url.clone()],
-        None => multisig_constants::get().relays.defaults.clone(),
+        Some(url) if !url.is_empty() => vec![url.clone()],
+        _ => multisig_constants::get().relays.defaults.clone(),
     }
 }
 
@@ -147,14 +149,16 @@ pub fn checkpoint<'a>(
         .find(|checkpoint| checkpoint.account_id == account_id && checkpoint.relay_urls == relays)
 }
 
-/// `nostrSyncSince`: 30 days back on a first sync, else three days behind the last checkpoint.
-pub fn sync_since(now: u64, synced_at: Option<u64>) -> u64 {
+/// Mobile's sync window for `wallet_core::nostr::sync_window` (30 days back on a first sync, else
+/// three days behind the last checkpoint). Mobile records `syncedAt = now`: it holds packages
+/// instead of importing them, so no wrap is retryable and `retryable_synced_at` and
+/// `is_wrap_past_retry` have no call site until intent import lands.
+pub fn sync_lookbacks() -> SyncLookbacks {
     let c = &multisig_constants::get().coordination;
-    match synced_at {
-        Some(synced_at) if synced_at <= now => {
-            synced_at.saturating_sub(c.incremental_lookback_seconds)
-        }
-        _ => now.saturating_sub(c.sync_lookback_seconds),
+    let seconds = |value: u64| i64::try_from(value).unwrap_or(i64::MAX);
+    SyncLookbacks {
+        lookback_seconds: seconds(c.sync_lookback_seconds),
+        incremental_lookback_seconds: seconds(c.incremental_lookback_seconds),
     }
 }
 

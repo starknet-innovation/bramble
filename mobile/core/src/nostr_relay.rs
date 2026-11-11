@@ -1,18 +1,23 @@
-//! Nostr relay protocol as sans-IO judges, mirroring `nostr-relay-socket.ts` and `nostr-relay.ts`.
-//! The host owns the WebSockets and the timers; the core builds every frame it sends and judges
-//! every frame it receives.
+//! Nostr relay protocol over `wallet_core::nostr::{relay_url, relay, sync}`, which mirror the
+//! extension's `nostr-relay-socket.ts`, `nostr-relay.ts` and `isNostrRelayUrl`. The host owns the
+//! WebSockets and the timers; the core builds every frame it sends and judges every frame it
+//! receives. Mobile adds two things here: its UniFFI `RelayStep`, and the `wss:`-only platform
+//! rule.
 //!
-//! The sync judge follows the extension as implemented: an oversized, non-JSON, non-array, or
-//! over-long frame is ignored and the subscription stays open; every EVENT frame for the
-//! subscription counts toward the 50-frame close, accepted or not; and a relay that ends early
-//! (CLOSED, timeout, socket error, close) keeps the events it already delivered.
+//! The sync reads one page per relay until the FFI can page (wallet-core plan, 2.7): the core's
+//! judge runs with a page cap of 1, so mobile already has its unseen-first bound (seen wraps are
+//! skipped before the 50-wrap batch bound) and its error messages, but not the `until` cursor or
+//! later pages.
 
-use std::sync::Mutex;
+use std::collections::HashSet;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use serde_json::{json, Value};
+use wallet_core::nostr::relay::{self, RelayError, RelayLimits};
+use wallet_core::nostr::relay_url::is_nostr_relay_url;
+use wallet_core::nostr::sync;
 
 use crate::contact_card::js_trim;
-use crate::nostr::{self, NostrEvent, GIFT_WRAP_KIND};
+use crate::nostr::NostrEvent;
 use crate::{multisig_constants, CoreError};
 
 /// What the host does after handing the core a frame.
@@ -24,8 +29,29 @@ pub enum RelayStep {
     Finish { close_frame: Option<String> },
 }
 
-/// The subscription id the extension uses for the first sync on a fresh connection.
-const SUBSCRIPTION_ID: &str = "mcw-1";
+impl From<relay::RelayStep> for RelayStep {
+    fn from(step: relay::RelayStep) -> Self {
+        match step {
+            relay::RelayStep::Continue => Self::Continue,
+            relay::RelayStep::Finish { close_frame } => Self::Finish { close_frame },
+            // Unreachable at mobile's page cap of 1; stopping is the fail-safe. It goes at 2.7,
+            // when the FFI's `RelayStep` gains the next page.
+            relay::RelayStep::NextPage { close_frame, .. } => Self::Finish {
+                close_frame: Some(close_frame),
+            },
+        }
+    }
+}
+
+impl From<RelayError> for CoreError {
+    fn from(error: RelayError) -> Self {
+        let reason = error.to_string();
+        match error {
+            RelayError::RelaysUnavailable => Self::Coordination { reason },
+            _ => Self::InvalidInput { reason },
+        }
+    }
+}
 
 fn invalid_relay() -> CoreError {
     CoreError::InvalidInput {
@@ -33,97 +59,30 @@ fn invalid_relay() -> CoreError {
     }
 }
 
-fn is_host_label(label: &str) -> bool {
-    !label.is_empty()
-        && label
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-}
-
-fn is_dotted_quad(host: &str) -> bool {
-    let parts: Vec<&str> = host.split('.').collect();
-    parts.len() == 4
-        && parts.iter().all(|part| {
-            !part.is_empty()
-                && part.len() <= 3
-                && part.bytes().all(|b| b.is_ascii_digit())
-                && (part.len() == 1 || !part.starts_with('0'))
-                && part.parse::<u16>().is_ok_and(|n| n <= 255)
-        })
-}
-
-// The host as the extension's WHATWG parser would print it back: lowercase names, an IPv4 address
-// in plain dotted-quad form, an IPv6 literal in its compressed RFC 5952 form. Any other spelling
-// the parser would rewrite is refused, so mobile accepts a subset of the extension's canonical
-// relay URLs.
-fn is_host(host: &str) -> bool {
-    if let Some(inner) = host.strip_prefix('[').and_then(|h| h.strip_suffix(']')) {
-        // An embedded IPv4 tail prints differently in the two serializers; refuse it.
-        return !inner.contains('.')
-            && inner
-                .parse::<std::net::Ipv6Addr>()
-                .is_ok_and(|address| address.to_string() == inner);
-    }
-    if host.bytes().any(|b| b.is_ascii_uppercase()) {
-        return false;
-    }
-    let name = host.strip_suffix('.').unwrap_or(host);
-    let labels: Vec<&str> = name.split('.').collect();
-    let numeric_tail = labels
-        .last()
-        .is_some_and(|label| label.bytes().all(|b| b.is_ascii_digit()));
-    if numeric_tail {
-        return is_dotted_quad(name);
-    }
-    labels.iter().all(|label| is_host_label(label))
-}
-
-// Whether the path and query are already in the parser's canonical form: a query follows a path
-// (it prints `host/?q`, never `host?q`), no `.` or `..` segment (it resolves them, `%2e` spellings
-// included) and no `'` in the query (it percent-encodes it).
-fn is_canonical_tail(tail: &str) -> bool {
-    if tail.starts_with('?') {
-        return false;
-    }
-    let (path, query) = tail.split_once('?').unwrap_or((tail, ""));
-    let dot_segment = path.split('/').any(|segment| {
-        let lowered = segment.to_ascii_lowercase().replace("%2e", ".");
-        lowered == "." || lowered == ".."
-    });
-    !dot_segment && !query.contains('\'')
-}
-
-/// Whether `value` is a relay URL mobile can connect to: `wss://host[:port][/path][?query]` in
-/// plain ASCII, with no credentials or fragment, spelled exactly as the extension's WHATWG parser
-/// prints it. This is a strict subset of the extension's `isNostrRelayUrl`, which accepts only a
-/// URL already in canonical form (`wss:` anywhere, `ws:` on loopback). Mobile refuses `ws:`
-/// because App Transport Security and `usesCleartextTraffic=false` would block it, and refuses the
-/// exotic spellings WHATWG repairs (IDN hosts, `@`, an empty `#`); the parity vectors list both.
+/// Whether `value` is a relay URL mobile can connect to: the core's `is_nostr_relay_url` (the
+/// extension's canonical-spelling grammar) over `wss:` only. The core and the extension also
+/// accept `ws:` on `127.0.0.1` and `localhost`; mobile refuses it as a platform rule, because App
+/// Transport Security and `usesCleartextTraffic=false` block cleartext sockets, loopback included.
 pub fn is_relay_url(value: &str) -> bool {
-    if value.is_empty() || value.len() > 2048 || !value.is_ascii() {
-        return false;
+    value.starts_with("wss://") && is_nostr_relay_url(value)
+}
+
+/// Mobile's relay numbers: as many relays as the reviewed defaults, and one page (see the module
+/// comment).
+fn limits() -> RelayLimits {
+    RelayLimits {
+        max_relays: multisig_constants::get().relays.defaults.len(),
+        max_sync_pages: 1,
     }
-    let Some(rest) = value.strip_prefix("wss://") else {
-        return false;
-    };
-    let split = rest.find(['/', '?']).unwrap_or(rest.len());
-    let (authority, tail) = rest.split_at(split);
-    let (host, port) = match authority.rfind(':').filter(|_| !authority.ends_with(']')) {
-        Some(index) => (&authority[..index], Some(&authority[index + 1..])),
-        None => (authority, None),
-    };
-    // The parser drops the default port and leading zeros.
-    let port_ok = port.is_none_or(|port| {
-        !port.is_empty()
-            && port.len() <= 5
-            && port.bytes().all(|b| b.is_ascii_digit())
-            && (port == "0" || !port.starts_with('0'))
-            && port.parse::<u32>().is_ok_and(|n| n <= 65_535 && n != 443)
-    });
-    let tail_ok = tail
-        .bytes()
-        .all(|b| b.is_ascii_alphanumeric() || b"-._~!$&'()*+,;=:@/?%".contains(&b));
-    is_host(host) && port_ok && tail_ok && is_canonical_tail(tail)
+}
+
+// The core checked the selection; mobile additionally refuses `ws:` with the same error.
+fn secure(relay_urls: &[String]) -> Result<(), CoreError> {
+    if relay_urls.iter().all(|url| is_relay_url(url)) {
+        Ok(())
+    } else {
+        Err(RelayError::InvalidRelayConfiguration.into())
+    }
 }
 
 /// Brings a relay URL an earlier build stored to the current rule, as the extension's
@@ -157,7 +116,8 @@ pub fn stored_relay_url(value: &str) -> Option<String> {
     is_relay_url(&candidate).then_some(candidate)
 }
 
-/// Trims a relay URL typed in settings. `Ok(None)` restores the reviewed defaults.
+/// Trims a relay URL typed in settings, as bramble-core's `with_nostr_relay_url` over the core's
+/// grammar, plus the `wss:` rule with its own message. `Ok(None)` restores the reviewed defaults.
 pub fn normalize_relay_url(raw: &str) -> Result<Option<String>, CoreError> {
     let trimmed = js_trim(raw);
     if trimmed.is_empty() {
@@ -174,280 +134,66 @@ pub fn normalize_relay_url(raw: &str) -> Result<Option<String>, CoreError> {
     Ok(Some(trimmed.to_string()))
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum RelayState {
-    Open,
-    Finished,
-    Failed,
-}
-
-#[derive(Debug, Clone)]
-struct RelaySync {
-    state: RelayState,
-    frames: usize,
-    events: Vec<NostrEvent>,
-}
-
-/// One gift-wrap sync across the selected relays, judged frame by frame.
-pub struct SyncJudge {
-    recipient: String,
-    since: u64,
-    relays: Vec<String>,
-    syncs: Mutex<Vec<RelaySync>>,
-}
-
-/// `parseFrame`: a JSON array of at most four elements, no more than 140,000 bytes.
-fn parse_frame(frame: &str) -> Option<Vec<Value>> {
-    if frame.len() > multisig_constants::get().relays.max_frame_bytes {
-        return None;
-    }
-    let value: Value = serde_json::from_str(frame).ok()?;
-    let parts = value.as_array()?;
-    (parts.len() <= 4).then(|| parts.clone())
-}
-
-fn close_frame() -> String {
-    json!(["CLOSE", SUBSCRIPTION_ID]).to_string()
-}
+/// One gift-wrap sync across the selected relays: the core's judge behind a lock, so the UniFFI
+/// plan can drive it through `&self`.
+pub struct SyncJudge(Mutex<sync::SyncJudge>);
 
 impl SyncJudge {
-    /// A judge for `recipient`'s gift wraps since `since` on `relays` (1–2 validated URLs).
-    pub fn new(recipient: &str, since: u64, relays: Vec<String>) -> Result<Self, CoreError> {
-        let unique = relays
-            .iter()
-            .enumerate()
-            .all(|(i, url)| !relays[..i].contains(url));
-        if !nostr::is_public_key(recipient)
-            || relays.is_empty()
-            || relays.len() > multisig_constants::get().relays.defaults.len()
-            || !unique
-            || !relays.iter().all(|url| is_relay_url(url))
-        {
-            return Err(invalid_relay());
-        }
-        let syncs = vec![
-            RelaySync {
-                state: RelayState::Open,
-                frames: 0,
-                events: Vec::new(),
-            };
-            relays.len()
-        ];
-        Ok(Self {
-            recipient: recipient.to_string(),
-            since,
-            relays,
-            syncs: Mutex::new(syncs),
-        })
+    /// A judge for `recipient`'s gift wraps since `since` on `relays`, skipping `seen` wraps
+    /// before the batch bound. The core's checks and messages, then mobile's `wss:` rule.
+    pub fn new(
+        recipient: &str,
+        since: i64,
+        relays: Vec<String>,
+        seen: HashSet<String>,
+    ) -> Result<Self, CoreError> {
+        let judge = sync::sync_nostr_gift_wraps(recipient, since, relays, seen, limits())?;
+        secure(judge.relay_urls())?;
+        Ok(Self(Mutex::new(judge)))
     }
 
-    fn syncs(&self) -> std::sync::MutexGuard<'_, Vec<RelaySync>> {
-        self.syncs
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    fn judge(&self) -> MutexGuard<'_, sync::SyncJudge> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// The selected relays, in order.
     pub fn relay_urls(&self) -> Vec<String> {
-        self.relays.clone()
+        self.judge().relay_urls().to_vec()
     }
 
     /// The REQ frame for one relay.
     pub fn open_frame(&self) -> String {
-        let limit = multisig_constants::get().nostr.max_batch_items;
-        json!(["REQ", SUBSCRIPTION_ID, { "#p": [self.recipient], "kinds": [GIFT_WRAP_KIND], "limit": limit, "since": self.since }])
-            .to_string()
+        self.judge().open_frame()
     }
 
     /// Judges one frame from relay `relay`.
     pub fn accept_frame(&self, relay: usize, frame: &str) -> RelayStep {
-        let mut syncs = self.syncs();
-        let Some(sync) = syncs.get_mut(relay) else {
-            return RelayStep::Finish { close_frame: None };
-        };
-        if sync.state != RelayState::Open {
-            return RelayStep::Finish { close_frame: None };
-        }
-        let Some(parts) = parse_frame(frame) else {
-            return RelayStep::Continue;
-        };
-        if parts.get(1).and_then(Value::as_str) != Some(SUBSCRIPTION_ID) {
-            return RelayStep::Continue;
-        }
-        match parts.first().and_then(Value::as_str) {
-            Some("EOSE") => {
-                sync.state = RelayState::Finished;
-                RelayStep::Finish {
-                    close_frame: Some(close_frame()),
-                }
-            }
-            Some("CLOSED") => {
-                Self::end(sync);
-                RelayStep::Finish { close_frame: None }
-            }
-            Some("EVENT") => {
-                sync.frames += 1;
-                if let Some(event) = parts.get(2).and_then(nostr::event_from_value) {
-                    if event.kind == GIFT_WRAP_KIND
-                        && nostr::has_recipient_tag(&event, &self.recipient)
-                    {
-                        sync.events.push(event);
-                    }
-                }
-                if sync.frames >= multisig_constants::get().nostr.max_batch_items {
-                    sync.state = RelayState::Finished;
-                    return RelayStep::Finish {
-                        close_frame: Some(close_frame()),
-                    };
-                }
-                RelayStep::Continue
-            }
-            _ => RelayStep::Continue,
-        }
-    }
-
-    fn end(sync: &mut RelaySync) {
-        if sync.state == RelayState::Open {
-            sync.state = if sync.events.is_empty() {
-                RelayState::Failed
-            } else {
-                RelayState::Finished
-            };
-        }
+        self.judge().accept_frame(relay, frame).into()
     }
 
     /// The relay timed out, errored, or closed: it keeps its events if it has any.
     pub fn relay_ended(&self, relay: usize) {
-        if let Some(sync) = self.syncs().get_mut(relay) {
-            Self::end(sync);
-        }
+        self.judge().relay_ended(relay);
     }
 
-    /// Candidates across relays: round-robin up to 50, newest first then by id. Fails only when
-    /// every relay failed ("Nostr relays are unavailable").
+    /// Unseen candidates across relays: round-robin up to 50, newest first then by id. Fails only
+    /// when every relay failed ("Nostr relays are unavailable").
     pub fn candidates(&self) -> Result<Vec<NostrEvent>, CoreError> {
-        let mut syncs = self.syncs();
-        syncs.iter_mut().for_each(Self::end);
-        let successful: Vec<&Vec<NostrEvent>> = syncs
-            .iter()
-            .filter(|sync| sync.state == RelayState::Finished)
-            .map(|sync| &sync.events)
-            .collect();
-        if successful.is_empty() {
-            return Err(CoreError::Coordination {
-                reason: "nostr relays are unavailable".into(),
-            });
-        }
-        let max = multisig_constants::get().nostr.max_batch_items;
-        let mut candidates = Vec::new();
-        'rounds: for index in 0.. {
-            let mut added = false;
-            for events in &successful {
-                if let Some(event) = events.get(index) {
-                    candidates.push(event.clone());
-                    added = true;
-                    if candidates.len() == max {
-                        break 'rounds;
-                    }
-                }
-            }
-            if !added {
-                break;
-            }
-        }
-        candidates.sort_by(|left, right| {
-            right
-                .created_at
-                .cmp(&left.created_at)
-                .then_with(|| left.id.cmp(&right.id))
-        });
-        Ok(candidates)
+        Ok(self.judge().candidates()?)
     }
 }
 
-/// Publish judging for one relay (`RelayConnection.publish`): EVENT frames out, OK frames in. A
-/// false OK whose message starts with `duplicate:` counts as accepted. Built and tested now; it is
-/// not exported until intent sharing lands (docs/nostr-multisig.md §1).
-#[allow(dead_code)]
-pub struct PublishJudge {
-    events: Vec<NostrEvent>,
-    acks: Mutex<Vec<Option<bool>>>,
-}
-
-#[allow(dead_code)]
-impl PublishJudge {
-    /// A judge for validated, distinct gift wraps.
-    pub fn new(events: Vec<NostrEvent>) -> Self {
-        let acks = Mutex::new(vec![None; events.len()]);
-        Self { events, acks }
-    }
-
-    /// The EVENT frames to send.
-    pub fn event_frames(&self) -> Vec<String> {
-        self.events
-            .iter()
-            .map(|event| json!(["EVENT", event]).to_string())
-            .collect()
-    }
-
-    /// Judges one frame; `Finish` once every event is acknowledged.
-    pub fn accept_frame(&self, frame: &str) -> RelayStep {
-        let mut acks = self
-            .acks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(parts) = parse_frame(frame) {
-            let accepted = parts.get(2).and_then(Value::as_bool);
-            let duplicate = parts
-                .get(3)
-                .and_then(Value::as_str)
-                .is_some_and(|message| message.to_lowercase().starts_with("duplicate:"));
-            if let (Some("OK"), Some(id), Some(accepted)) = (
-                parts.first().and_then(Value::as_str),
-                parts.get(1).and_then(Value::as_str),
-                accepted,
-            ) {
-                if let Some(index) = self.events.iter().position(|event| event.id == id) {
-                    acks[index].get_or_insert(accepted || duplicate);
-                }
-            }
-        }
-        if acks.iter().all(Option::is_some) {
-            RelayStep::Finish { close_frame: None }
-        } else {
-            RelayStep::Continue
-        }
-    }
-
-    /// The relay ended: anything unacknowledged was not accepted.
-    pub fn accepted(&self) -> Vec<bool> {
-        let acks = self
-            .acks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        acks.iter().map(|ack| ack.unwrap_or(false)).collect()
-    }
-}
-
-/// Acknowledgement counts across relays; "Nostr relays are unavailable" when no relay accepted
-/// anything, as `publishWithPool`.
-#[allow(dead_code)]
-pub fn publish_counts(per_relay: &[Vec<bool>]) -> Result<Vec<u32>, CoreError> {
-    let count = per_relay.first().map_or(0, Vec::len);
-    let counts: Vec<u32> = (0..count)
-        .map(|index| {
-            per_relay
-                .iter()
-                .filter(|acks| acks.get(index) == Some(&true))
-                .count() as u32
-        })
-        .collect();
-    if counts.iter().all(|count| *count == 0) {
-        return Err(CoreError::Coordination {
-            reason: "nostr relays are unavailable".into(),
-        });
-    }
-    Ok(counts)
+/// Starts a publish of gift wraps (`publishManyNostrGiftWraps`): the core's batch validation,
+/// relay selection and acknowledgement counting, then mobile's `wss:` rule. Built for the parity
+/// suite; nothing calls it until intent sharing lands (docs/nostr-multisig.md §1).
+#[cfg(feature = "testing")]
+pub fn publish_many(
+    gift_wraps: &[relay::NostrGiftWrapDelivery],
+    relay_urls: &[String],
+) -> Result<relay::PublishMany, CoreError> {
+    let publish = relay::publish_many_nostr_gift_wraps(gift_wraps, relay_urls, limits())?;
+    secure(relay_urls)?;
+    Ok(publish)
 }
 
 #[cfg(test)]
