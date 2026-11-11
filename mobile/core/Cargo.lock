@@ -1739,7 +1739,7 @@ dependencies = [
 [[package]]
 name = "starknet-wallet-core"
 version = "0.2.2"
-source = "git+https://github.com/starknet-innovation/wallet-core?rev=57af8899b8c2dfd10e212fca47a0359e141aec1b#57af8899b8c2dfd10e212fca47a0359e141aec1b"
+source = "git+https://github.com/starknet-innovation/wallet-core?rev=4ecccf9373f20e207f38722a7642da0fa426d287#4ecccf9373f20e207f38722a7642da0fa426d287"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
