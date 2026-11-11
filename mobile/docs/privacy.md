@@ -227,7 +227,11 @@ transfers only" and one of three variants:
 
 ## 3. UniFFI surface
 
-All code is in new files under `mobile/core/src/privacy/`. Shared files get additive edits only:
+All code is in new files under `mobile/core/src/privacy/` (since M9 the rules are wallet-core's
+`wallet_core::privacy`, and `privacy/{mod, types, config, plan, wallet_ext}.rs` hold only the
+UniFFI shapes, the routing loader and its debug override, the `PrivacyReadPlan` object around the
+core's plan with its `PrivacyHost`, the session-checked key accessor and the exports; see §8).
+Shared files get additive edits only:
 `lib.rs` gains `mod privacy;` plus `pub use`; `kms.rs` gains the one Krusty call; `wallet.rs`
 gains one crate-private accessor. `delete_wallet` needs nothing, because nothing is persisted.
 
@@ -292,7 +296,8 @@ generated `privacy.json` (`MAX_SERVICE_ATTEMPTS`, `STRK20_WAIT_BUDGETS.discovery
 - After the last attempt a throttled read fails `RateLimited`; 409 fails `Reorg`; any other
   non-2xx or transport failure fails `ServiceUnavailable`.
 
-**Deviations from the extension** (each pinned by a fixture-4 or `privacy_plan.rs` case):
+**Deviations from the extension** (each pinned by a fixture-4 or `privacy_plan.rs` case, in
+wallet-core since M9):
 
 1. The chain-id proof before any privacy read (the extension trusts `rpcUrls[0]`).
 2. `block_ref` must be echoed by every later page (the SDK overwrites it with each reply's). Honest
@@ -305,18 +310,23 @@ generated `privacy.json` (`MAX_SERVICE_ATTEMPTS`, `STRK20_WAIT_BUDGETS.discovery
 6. A pool-fee reply over HTTP 429 is a transport failure on mobile (the host RPC transport reports
    only 200 bodies), so it is not retried; starknet.js may retry it when its text matches.
 
-**Viewing-key handling inside the core** (`privacy/plan_steps.rs`, via `wallet.rs` and `kms.rs`):
+**Viewing-key handling inside the core** (wallet-core's `privacy/plan_steps.rs` and `bodies.rs`,
+asking mobile's `PrivacyHost` in `privacy/plan.rs`, via `privacy/wallet_ext.rs` and `kms.rs`):
 
-- `WalletCore::plan_viewing_key(generation, index, chain_id, pool)` checks the generation under the
-  session lock, derives the per-call `SecretFelt` account key, and calls
-  `derive_scoped_strk20_viewing_key(key, felt::canonical(chain_id), felt::canonical(pool))`.
+- `WalletCore::plan_viewing_key(generation, account_id, chain_id, pool)` checks the generation
+  under the session lock, then that the record still passes the signing gate, derives the per-call
+  `SecretFelt` account key, and calls `wallet_core::derive_strk20_viewing_key` (Krusty's
+  `derive_scoped_strk20_viewing_key(key, felt::canonical(chain_id), felt::canonical(pool))`). It
+  returns the key as a `SecretFelt` to the plan, through `PrivacyHost::viewing_key`, and nowhere
+  else; a failed check is `None` there, and the plan fails `Locked`.
 - It re-validates the result (non-zero, below the curve order: the adapter's `isStarkPrivateKey`).
   The lock is held for the whole derivation, so the extension's before-and-after
   `requireLiveSession` check collapses into one.
 - The key serialises one `Post` body into a `Zeroizing` buffer sized exactly up front (public
   parts built first, key hex pushed without a serde temporary), so no reallocation frees an
   unwiped copy; it is re-derived per page and never stored on the plan, in state, errors or `Debug` (`Post` prints
-  `body: [redacted N bytes]`).
+  `body: [redacted N bytes]`). The buffer stays zeroizing in the core's step until mobile's FFI
+  conversion makes the one copy into `Post.body`, and is wiped as that step drops.
 
 **What never crosses FFI:** the viewing key as a value, field or string; the account private key;
 the recovery phrase (beyond SCOPE.md's existing exemptions); per-note data (ids, salts, channel
@@ -352,8 +362,8 @@ and address, and fixed failure codes.
 | --- | --- |
 | Viewing key leaks to UI, logs, storage or crash reports | Derived only inside `plan_viewing_key` and never returned across FFI. No record field holds it. `Post` Debug is redacted. Hosts never log step bodies (a Swift test asserts the store's observable state never contains the fixture key). Nothing about privacy is persisted. |
 | Host or attacker redirects the key to another server | The URL comes from the embedded generated routing, not the host, and is `https` (re-checked in Rust at load). The one exception is the DEBUG discovery override (README "Pointing at your own privacy service"): it passes the same URL rules, only replaces an already-routed non-OHTTP network's URL, and a release core refuses it. The host transport for `Post` refuses every redirect, uses an ephemeral session without cache or cookies, and is HTTPS-only under ATS and `usesCleartextTraffic=false`. |
-| Key sent in plaintext once upstream enables OHTTP | The generator renders an OHTTP network with no URL; the core loader refuses `ohttp: true` independently; `prepare_privacy_read` returns `NotConfigured`. Conformance and Rust tests pin both. |
-| Key persists in memory | Krusty 0.11.0 returns a plain `Felt` (Copy, cannot be zeroized). The core holds it for one body build and serialises into an exactly sized `Zeroizing` buffer. The FFI copy is zeroed by the host after the send, but the HTTP/TLS stack's internal copies cannot be. Both **residual**; the upstream fix is in §9. |
+| Key sent in plaintext once upstream enables OHTTP | The generator renders an OHTTP network with no URL; the core loader refuses `ohttp: true` independently; `prepare_privacy_read` returns `NotConfigured`; and wallet-core's plan refuses an OHTTP route or a non-`https` discovery URL again when it is created. Conformance and Rust tests pin both. |
+| Key persists in memory | Krusty returns a plain `Felt` (Copy, cannot be zeroized), which wallet-core moves straight into a `SecretFelt`; mobile and the plan hold only that, for one body build, serialised into an exactly sized `Zeroizing` buffer that stays zeroizing until the one FFI copy into `Post.body`. The FFI copy is zeroed by the host after the send, but Krusty's transient return value and the HTTP/TLS stack's internal copies cannot be. Both **residual**; the upstream fix is in §9. |
 | Key for the wrong network or pool, or reused across scopes | The scope string is built from the plan's `NetworkId` chain id and that network's generated pool. The endpoint must prove `starknet_chainId` first. No unscoped `derive_strk20_viewing_key` call exists; a grep test enforces this. |
 | A reading from the previous network or account shows under the new one | Hosts reset privacy synchronously on network and account switch and at the start of every balance refresh whose scope changed (`retain`); the core ignores a `PrivacyState` whose network differs from the requested one (`in_scope`; ETH and STRK share addresses across networks). |
 | Use after lock | The generation is checked under the session lock at every derivation; plans close on lock and backgrounding; stored state is cleared. |
@@ -407,14 +417,21 @@ and compares them. Everything comes from the extension's real code, driven with 
 
 ## 7. Test plan (as built)
 
-**Rust** (`cargo test --locked`): unit tests beside each `privacy/` module, plus
-`tests/privacy_parity.rs` (fixture 1 keys through `#[doc(hidden)] testing::strk20_viewing_key`,
-never FFI; fixture 2 routing incl. the OHTTP configs; fixture 3 byte-identical bodies and fee
-params; every fixture-4 outcome, request count and pause; every fixture-5 gate, journey, unified
-row and compact amount), `tests/privacy_plan.rs` (ordering, lock after re-unlock, per-attempt
-budget, restart from page one, classification, changed `block_ref`, page cap, unregistered) and
-`tests/privacy_key_boundary.rs` (the key's hex appears only inside `Post` bodies; no unscoped
-`derive_strk20_viewing_key` anywhere in `src`). The core has no HTTP client; the opt-in live read
+**Rust** (`cargo test --locked`): since M9 the rules' unit tests and most of the suites run in
+wallet-core: `crates/bramble-core/tests/privacy_parity.rs` (fixture 1 keys, fixture 2 routing,
+fixture 3 byte-identical bodies and fee params, every fixture-4 outcome, request count and pause),
+`privacy_gates_parity.rs` (every fixture-5 gate, journey, unified row and compact amount) and
+`privacy_plan.rs` (ordering, lock, per-attempt budget, restart from page one, classification,
+changed `block_ref`, page cap, unregistered, and the key only inside `Post` bodies), over a test
+`PrivacyHost`. Mobile keeps the loader's unit tests (`privacy/config.rs`: OHTTP, URL rules,
+override), `tests/privacy_parity.rs` (fixture 1 keys and public keys through `#[doc(hidden)]
+testing::strk20_viewing_key` and `strk20_viewing_public_key`, mobile's KMS glue, never FFI;
+fixture 2 through the loader), `tests/privacy_plan.rs` (over a real `WalletCore`: lock after
+re-unlock, prepare's `Locked`, `UnknownAccount` and `NotConfigured`, and the FFI object's
+delegation and redacted `Debug`) and `tests/privacy_key_boundary.rs` (the key's hex appears only
+inside `Post` bodies of the FFI plan; no unscoped `derive_strk20_viewing_key` anywhere in `src`,
+and `scoped_viewing_key` reached only from `kms.rs`, `privacy/wallet_ext.rs` and the test
+hooks). The core has no HTTP client; the opt-in live read
 `tests/privacy_mainnet.rs` moves its bytes with the system `curl` (README).
 
 **Swift unit** (`BrambleTests`): `PrivacyBridgeTests` (fixture-3 bytes through the Swift model,
@@ -437,9 +454,10 @@ onboarding suite passes `offline`, so no UI test sends a viewing key anywhere.
 
 ## 8. Files
 
-- **Rust:** `mobile/core/src/privacy/{mod, types, config, json, bodies, judge, notes, plan,
-  plan_steps, gates, home, wallet_ext}.rs`, `generated/privacy.json`; additive `lib.rs`, `kms.rs`,
-  `wallet.rs`; tests `privacy_{parity, plan, key_boundary}.rs` and `privacy_support/`.
+- **Rust:** `mobile/core/src/privacy/{mod, types, config, plan, wallet_ext}.rs` over wallet-core's
+  `privacy/{mod, types, config, json, bodies, judge, notes, plan, plan_steps, gates, home}.rs`
+  (since M9), `generated/privacy.json`; additive `lib.rs`, `kms.rs`, `wallet.rs`; tests
+  `privacy_{parity, plan, key_boundary, mainnet}.rs` and `privacy_support/`.
 - **Scripts:** `scripts/mobile-assets/privacy.ts`, `scripts/mobile-privacy-{cases, wire, gates,
   copy, fixture}.ts`, `scripts/generate-mobile-privacy-vectors.ts`; additive lines in
   `scripts/mobile-assets.ts`, `scripts/generate-mobile-parity-vectors.ts` and the conformance test.
@@ -494,5 +512,6 @@ onboarding suite passes `offline`, so no UI test sends a viewing key anywhere.
    remaining difference under "Deviations", each with a fixture case.
 7. **Viewing key in host memory (round 2)** → hosts wipe the body after the send, comments no longer
    claim the key never reaches Swift/Kotlin, and §1.1 states the deviation; signed off 2026-09-24.
-8. **Unwiped key copies in the core** → `bodies.rs` builds into one exactly sized buffer.
+8. **Unwiped key copies in the core** → `bodies.rs` (wallet-core's since M9) builds into one
+   exactly sized buffer.
 9. **Stale scope after a switch** → `retain`/`reset` in the hosts and `in_scope` in the core (§5).
