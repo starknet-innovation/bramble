@@ -1,21 +1,31 @@
-//! The privacy FFI vocabulary. Every failure is a fixed variant: none carries service text, a
-//! note, a cursor or key material. The one field that may hold the viewing key is the opaque
-//! `PrivacyStep::Post::body`, and its `Debug` is redacted.
+//! The privacy FFI vocabulary. The types are `wallet_core::privacy::types`'s, exported here
+//! through `#[uniffi::remote]` with the shapes and docs mobile's bindings already have; only the
+//! step (whose body crosses FFI as plain bytes) and the plan-API errors are mobile's. Every failure
+//! is a fixed variant: none carries service text, a note, a cursor or key material. The one field
+//! that may hold the viewing key is the opaque `PrivacyStep::Post::body`, and its `Debug` is
+//! redacted.
 
 use std::fmt;
+
+pub use wallet_core::privacy::types::{
+    DetailAction, DetailSummary, PoolNotice, PrivacyBlocker, PrivacyCapabilities, PrivacyEntry,
+    PrivacyFailure, PrivacyPurpose, PrivacyReading, PrivacyRegistration, PrivacyReply,
+    PrivacyState, PrivacyStatus, PrivateBalance, PrivateLine, ShieldTile, TokenDetailPrivacy,
+    UnifiedBalance,
+};
 
 use crate::networks::NetworkId;
 use crate::portfolio::model::TokenBalance;
 
 /// Whether the account has a viewing key registered with the pool.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PrivacyRegistration {
     Registered,
     Unregistered,
 }
 
 /// One bundled token's private total.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct PrivateBalance {
     pub token_address: String,
     pub symbol: String,
@@ -27,7 +37,7 @@ pub struct PrivateBalance {
 }
 
 /// A settled private-balance reading for one account on one network.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct PrivacyState {
     pub network: NetworkId,
     /// The vault record id the reading belongs to (never an account index).
@@ -42,7 +52,7 @@ pub struct PrivacyState {
 }
 
 /// What mobile can submit. All false until an upstream privacy client exists (docs/privacy.md §9).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct PrivacyCapabilities {
     pub can_register: bool,
     pub can_shield: bool,
@@ -51,7 +61,7 @@ pub struct PrivacyCapabilities {
 }
 
 /// What a step is for; progress copy only.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PrivacyPurpose {
     ChainId,
     PreflightCheck,
@@ -113,8 +123,33 @@ impl fmt::Debug for PrivacyStep {
     }
 }
 
+impl From<wallet_core::privacy::types::PrivacyStep> for PrivacyStep {
+    /// The one copy of a discovery body out of the core's zeroizing buffer, which is wiped when
+    /// the core's step drops here: the FFI body is plain bytes the host owns.
+    fn from(step: wallet_core::privacy::types::PrivacyStep) -> Self {
+        use wallet_core::privacy::types::PrivacyStep as Core;
+        match step {
+            Core::Post {
+                id,
+                url,
+                body,
+                purpose,
+            } => Self::Post {
+                id,
+                url,
+                body: body.to_vec(),
+                purpose,
+            },
+            Core::Rpc { id, body, purpose } => Self::Rpc { id, body, purpose },
+            Core::Wait { delay_ms } => Self::Wait { delay_ms },
+            Core::Finished { state } => Self::Finished { state },
+            Core::Failed { failure } => Self::Failed { failure },
+        }
+    }
+}
+
 /// What the host reports back. Every reply carries the host clock; the core never reads one.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PrivacyReply {
     Start {
         now_ms: u64,
@@ -140,7 +175,7 @@ pub enum PrivacyReply {
 }
 
 /// Why a read ended without a state. The UI shows each as "Unavailable" with "Try again".
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PrivacyFailure {
     NotConfigured,
     WrongChain,
@@ -175,8 +210,19 @@ pub enum PrivacyError {
     OverrideUnavailable,
 }
 
+impl From<wallet_core::privacy::types::PrivacyError> for PrivacyError {
+    fn from(error: wallet_core::privacy::types::PrivacyError) -> Self {
+        use wallet_core::privacy::types::PrivacyError as Core;
+        match error {
+            Core::NotConfigured => Self::NotConfigured,
+            Core::OutOfOrder => Self::OutOfOrder,
+            Core::PlanClosed => Self::PlanClosed,
+        }
+    }
+}
+
 /// The extension's `PrivacyDisclosureState`, reduced to what the gates read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PrivacyReading {
     /// Not read yet (the extension's `value === null`, not loading, no error).
     Idle,
@@ -193,7 +239,7 @@ pub enum PrivacyReading {
 /// The Home Shield tile (`wallet-shell.ts` `shieldTile`). Every enabled variant is labelled
 /// "Shield"; the variant picks the accessible name, which carries the reason the label does not
 /// spell out, and the destination.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum ShieldTile {
     /// Disabled: no STRK token is tracked on this network.
     NoStrkToken,
@@ -210,7 +256,7 @@ pub enum ShieldTile {
 }
 
 /// A token row's private line (`token-row.ts` `privateBreakdownLine`).
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PrivateLine {
     Unavailable,
     /// Undeployed, funded or not: a "Shield" control that opens the privacy journey, which names
@@ -226,7 +272,7 @@ pub enum PrivateLine {
 }
 
 /// Receive's privacy-pool notice (`receive-view.ts` `privacyPoolNotice`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PoolNotice {
     Hidden,
     FundFirst,
@@ -235,7 +281,7 @@ pub enum PoolNotice {
 }
 
 /// The extension's blocker vocabulary plus mobile's `Unsupported`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PrivacyBlocker {
     Deploy,
     Fund,
@@ -247,7 +293,7 @@ pub enum PrivacyBlocker {
 }
 
 /// Where a privacy entry point leads (`privacy-ui.ts` `startJourney`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PrivacyEntry {
     Blocked {
         blocker: PrivacyBlocker,
@@ -259,7 +305,7 @@ pub enum PrivacyEntry {
 }
 
 /// Token detail's private summary line.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum DetailSummary {
     None,
     Retry,
@@ -268,7 +314,7 @@ pub enum DetailSummary {
 }
 
 /// Token detail's privacy action (`token-flows.ts` `privacyActions`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum DetailAction {
     None,
     /// Undeployed, funded or not: one "Shield" control that opens the privacy journey, which
@@ -286,14 +332,14 @@ pub enum DetailAction {
 }
 
 /// Both halves of token detail's privacy section.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct TokenDetailPrivacy {
     pub summary: DetailSummary,
     pub action: DetailAction,
 }
 
 /// The header's private-data freshness (`network-status.ts` `privacyDataIssue`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum PrivacyStatus {
     Current,
     Refreshing,
@@ -302,7 +348,7 @@ pub enum PrivacyStatus {
 
 /// One Home row with public and private summed (`home-tabs.ts` `unifiedHomeBalances`): the
 /// portfolio's `TokenBalance` with its balance and formatted text covering both halves.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+#[uniffi::remote(Record)]
 pub struct UnifiedBalance {
     /// The row: the portfolio's token config, balance (base units) and `formatTokenAmount` of the sum.
     pub balance: TokenBalance,

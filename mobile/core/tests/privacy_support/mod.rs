@@ -41,17 +41,6 @@ pub fn wire() -> Value {
     value
 }
 
-/// `extension-privacy-rules.json` with its row strings decoded.
-pub fn rules() -> Value {
-    let mut value: Value =
-        serde_json::from_str(include_str!("../fixtures/extension-privacy-rules.json")).unwrap();
-    decode_rows(
-        &mut value,
-        &["compactAmounts", "journeys", "static", "unified"],
-    );
-    value
-}
-
 /// A host clock that never moves, so no session idles out mid-test.
 pub struct StillClock;
 

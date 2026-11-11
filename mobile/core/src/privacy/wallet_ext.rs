@@ -5,8 +5,10 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use wallet_core::SecretFelt;
+
 use super::config;
-use super::plan::{Discovery, PrivacyReadPlan, ReadState, Stage};
+use super::plan::PrivacyReadPlan;
 use super::types::PrivacyError;
 use crate::networks;
 use crate::wallet::WalletCore;
@@ -18,22 +20,23 @@ impl WalletCore {
     /// generation (`lock_epoch`) is still `generation` and the record still passes the signing gate
     /// (a known record in a vault not waiting for discovery, any family, as the extension's
     /// `deriveVaultStrk20ViewingKey`). Checked under the session mutex held for the whole derivation, so a lock cannot
-    /// interleave; passive (never renews). `Err(CoreError::Locked)` otherwise. Never exported:
-    /// the key goes straight into one request body (privacy/plan.rs).
+    /// interleave; passive (never renews). `Err(CoreError::Locked)` otherwise. Never exported: it
+    /// backs the read plan's `PrivacyHost::viewing_key` (privacy/plan.rs), and the key, zeroizing,
+    /// goes straight into one request body in the shared core.
     pub(crate) fn plan_viewing_key(
         &self,
         generation: u64,
         account_id: &str,
         chain_id: &str,
         pool_address: &str,
-    ) -> Result<starknet_types_core::felt::Felt, CoreError> {
+    ) -> Result<SecretFelt, CoreError> {
         self.with_session(false, |session| {
             if self.lock_epoch.load(Ordering::SeqCst) != generation {
                 return Err(CoreError::Locked);
             }
             let payload = &session.payload;
             let record = signing_record(payload, account_id).map_err(|_| CoreError::Locked)?;
-            kms::derive_scoped_viewing_key(
+            kms::scoped_viewing_key(
                 &payload.mnemonic,
                 payload.mnemonic_passphrase.as_deref(),
                 record.ladder(),
@@ -71,24 +74,13 @@ impl WalletCore {
             .map_err(|_| PrivacyError::UnknownAccount)?;
         let route = config::route_for(network).ok_or(PrivacyError::NotConfigured)?;
         let address = felt::parse_non_zero(&address).ok_or(PrivacyError::UnknownAccount)?;
-        let limits = &config::routing().limits;
-        let tokens = &networks::info(network).tokens;
-        let state = ReadState {
-            network,
-            account_id,
+        let plan = wallet_core::privacy::plan::PrivacyReadPlan::new(
+            networks::info(network),
+            account_id.clone(),
             address,
             route,
-            limits,
-            tokens,
-            requested: super::plan_steps::requested_token_keys(tokens, limits),
-            generation,
-            stage: Stage::Fresh,
-            next_id: 0,
-            attempt: 0,
-            attempt_started_ms: 0,
-            registered: false,
-            discovery: Discovery::default(),
-        };
-        Ok(PrivacyReadPlan::new(&self, state))
+            config::routing().limits.clone(),
+        )?;
+        Ok(PrivacyReadPlan::new(&self, account_id, generation, plan))
     }
 }

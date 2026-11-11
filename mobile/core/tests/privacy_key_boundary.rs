@@ -62,7 +62,9 @@ fn the_key_appears_only_inside_discovery_bodies() {
 
 /// The scoped derivation lives in `wallet_core::derive_strk20_viewing_key`, which takes the chain
 /// and pool. Only `kms.rs` may call it, and nothing may reach Krusty's viewing-key functions
-/// directly, where the unscoped one is.
+/// directly, where the unscoped one is. Mobile's zeroizing accessor over it, `scoped_viewing_key`,
+/// is reached only from `kms.rs` (the public key), the session-checked `plan_viewing_key` behind
+/// the read plan's `PrivacyHost`, and the test hooks.
 #[test]
 fn viewing_keys_are_derived_only_through_the_shared_core() {
     fn visit(dir: &std::path::Path, found: &mut Vec<(String, String)>) {
@@ -73,7 +75,7 @@ fn viewing_keys_are_derived_only_through_the_shared_core() {
                 continue;
             }
             let text = std::fs::read_to_string(&path).unwrap();
-            if text.contains("strk20_viewing_key") {
+            if text.contains("strk20_viewing_key") || text.contains("scoped_viewing_key") {
                 found.push((path.display().to_string(), text));
             }
         }
@@ -100,4 +102,15 @@ fn viewing_keys_are_derived_only_through_the_shared_core() {
         kms.matches("wallet_core::derive_strk20_viewing_key")
             .count()
     );
+    let mut accessors: Vec<&str> = found
+        .iter()
+        .filter(|(_, text)| text.contains("scoped_viewing_key("))
+        .map(|(path, _)| path.as_str())
+        .collect();
+    accessors.sort();
+    let expected: Vec<String> = ["kms.rs", "privacy/wallet_ext.rs", "testing.rs"]
+        .iter()
+        .map(|file| src.join(file).display().to_string())
+        .collect();
+    assert_eq!(accessors, expected);
 }

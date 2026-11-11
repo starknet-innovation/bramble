@@ -1,95 +1,52 @@
-//! `PrivacyReadPlan`: one private-balance read as a core-owned state machine, in the extension's
-//! `stateResponse` order (docs/privacy.md §3): chain id, preflight, note discovery when registered,
-//! pool fee. The host relays opaque bodies and replies; it cannot pick a URL, reorder a step, or
-//! see the viewing key, which is re-derived for every `Post` and never stored here.
+//! `PrivacyReadPlan`: mobile's FFI object around `wallet_core::privacy::plan::PrivacyReadPlan`,
+//! the core-owned state machine for one private-balance read, in the extension's `stateResponse`
+//! order (docs/privacy.md §3): chain id, preflight, note discovery when registered, pool fee. The
+//! host relays opaque bodies and replies; it cannot pick a URL, reorder a step, or see the viewing
+//! key, which is re-derived for every `Post` and never stored here.
 //!
-//! Reply handling for each read lives in `plan_steps`.
+//! The wrapper holds what ties a read to this wallet: the vault record it reads for, the session
+//! generation it was prepared in, and the plan's `PrivacyHost` (`impl PrivacyHost for
+//! PrivacyReadPlan` below), which derives the key through `WalletCore::plan_viewing_key`.
 
-use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 
-use starknet_types_core::felt::Felt;
+use wallet_core::privacy::plan::{PrivacyHost, PrivacyReadPlan as Plan};
+use wallet_core::SecretFelt;
 
-use super::bodies::BlockRef;
-use super::config::{Limits, Route};
-use super::json::Ordered;
-use super::notes::Totals;
-use super::types::{PrivacyError, PrivacyFailure, PrivacyReply, PrivacyStep};
-use crate::networks::{NetworkId, TokenInfo};
+use super::types::{PrivacyError, PrivacyReply, PrivacyStep};
 use crate::wallet::WalletCore;
-use wallet_core::send::u256::U256;
-
-/// Mobile-only bound on discovery pages (the SDK has none).
-pub const MAX_DISCOVERY_PAGES: u32 = 256;
-
-/// The read a reply or a pause belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Read {
-    Chain,
-    Preflight,
-    Discovery,
-    PoolFee,
-}
-
-#[derive(Debug)]
-pub(crate) enum Stage {
-    Fresh,
-    Awaiting { id: u64, read: Read },
-    Waiting(Read),
-    Closed,
-}
-
-/// Discovery progress within one attempt; dropped when the attempt restarts.
-#[derive(Debug, Default)]
-pub(crate) struct Discovery {
-    pub totals: Totals,
-    pub cursor: Option<Ordered>,
-    pub block: Option<BlockRef>,
-    pub pages: u32,
-}
-
-pub(crate) struct ReadState {
-    pub network: NetworkId,
-    /// The vault record id; the viewing key is derived from this record only.
-    pub account_id: String,
-    pub address: Felt,
-    pub route: Route,
-    pub limits: &'static Limits,
-    pub tokens: &'static [TokenInfo],
-    /// Keys of `tokens`, checked once when the plan is prepared. `None` when that list is longer
-    /// than the extension allows, or has a zero, unparseable, or repeated address: the read fails
-    /// `NotConfigured` before any request.
-    pub requested: Option<BTreeSet<U256>>,
-    pub generation: u64,
-    pub stage: Stage,
-    pub next_id: u64,
-    /// 1-based attempt of the current read.
-    pub attempt: u32,
-    /// Host time the current attempt began, for the discovery budget.
-    pub attempt_started_ms: u64,
-    pub registered: bool,
-    pub discovery: Discovery,
-}
 
 /// One read. Closed on lock, backgrounding, or a scope change; a new read means a new plan.
 #[derive(uniffi::Object)]
 pub struct PrivacyReadPlan {
     core: Weak<WalletCore>,
-    state: Mutex<ReadState>,
+    /// The vault record id; the viewing key is derived from this record only.
+    account_id: String,
+    /// The session generation (`lock_epoch`) the plan was prepared in.
+    generation: u64,
+    plan: Mutex<Plan>,
 }
 
 impl PrivacyReadPlan {
-    pub(crate) fn new(core: &Arc<WalletCore>, state: ReadState) -> Arc<Self> {
+    pub(crate) fn new(
+        core: &Arc<WalletCore>,
+        account_id: String,
+        generation: u64,
+        plan: Plan,
+    ) -> Arc<Self> {
         Arc::new(Self {
             core: Arc::downgrade(core),
-            state: Mutex::new(state),
+            account_id,
+            generation,
+            plan: Mutex::new(plan),
         })
     }
 
-    fn lock_state(&self) -> MutexGuard<'_, ReadState> {
-        self.state.lock().unwrap_or_else(|poisoned| {
+    fn lock_plan(&self) -> MutexGuard<'_, Plan> {
+        // A poisoned lock means a panic mid-step: close the plan rather than continue.
+        self.plan.lock().unwrap_or_else(|poisoned| {
             let mut guard = poisoned.into_inner();
-            guard.stage = Stage::Closed;
+            guard.close();
             guard
         })
     }
@@ -101,23 +58,14 @@ impl PrivacyReadPlan {
     /// or a reply kind the current step does not expect, returns `OutOfOrder` and closes the plan.
     /// `Finished` and `Failed` close it too.
     pub fn advance(&self, reply: PrivacyReply) -> Result<PrivacyStep, PrivacyError> {
-        let mut state = self.lock_state();
-        if matches!(state.stage, Stage::Closed) {
+        let mut plan = self.lock_plan();
+        if self.core.upgrade().is_none() {
+            plan.close();
             return Err(PrivacyError::PlanClosed);
         }
-        let Some(core) = self.core.upgrade() else {
-            state.stage = Stage::Closed;
-            return Err(PrivacyError::PlanClosed);
-        };
-        let result = state.step(&core, reply);
-        if !matches!(
-            result,
-            Ok(PrivacyStep::Post { .. } | PrivacyStep::Rpc { .. } | PrivacyStep::Wait { .. })
-        ) {
-            state.stage = Stage::Closed;
-            state.discovery = Discovery::default();
-        }
-        result
+        plan.advance(self, reply)
+            .map(PrivacyStep::from)
+            .map_err(PrivacyError::from)
     }
 
     /// Stops the plan and drops its cursor and totals. Idempotent.
@@ -126,117 +74,17 @@ impl PrivacyReadPlan {
     /// would otherwise clash with it.
     #[uniffi::method(name = "cancel")]
     pub fn close(&self) {
-        let mut state = self.lock_state();
-        state.stage = Stage::Closed;
-        state.discovery = Discovery::default();
+        self.lock_plan().close();
     }
 }
 
-impl ReadState {
-    fn step(
-        &mut self,
-        core: &WalletCore,
-        reply: PrivacyReply,
-    ) -> Result<PrivacyStep, PrivacyError> {
-        let stage = std::mem::replace(&mut self.stage, Stage::Closed);
-        match (stage, reply) {
-            (Stage::Fresh, PrivacyReply::Start { now_ms }) => {
-                Ok(self.begin(core, Read::Chain, now_ms))
-            }
-            (
-                Stage::Awaiting { id, read },
-                PrivacyReply::Http {
-                    id: got,
-                    status,
-                    body,
-                    now_ms,
-                },
-            ) if id == got && matches!(read, Read::Preflight | Read::Discovery) => {
-                Ok(self.on_http(core, read, status, &body, now_ms))
-            }
-            (
-                Stage::Awaiting { id, read },
-                PrivacyReply::Rpc {
-                    id: got,
-                    body,
-                    now_ms,
-                },
-            ) if id == got && matches!(read, Read::Chain | Read::PoolFee) => {
-                Ok(self.on_rpc(core, read, id, &body, now_ms))
-            }
-            (Stage::Awaiting { id, read }, PrivacyReply::TransportFailure { id: got, now_ms })
-                if id == got =>
-            {
-                Ok(self.on_transport_failure(read, now_ms))
-            }
-            (Stage::Waiting(read), PrivacyReply::WaitElapsed { now_ms }) => {
-                self.attempt += 1;
-                Ok(self.start_attempt(core, read, now_ms))
-            }
-            _ => Err(PrivacyError::OutOfOrder),
-        }
-    }
-
-    /// Starts a read at its first attempt. A tracked token list the extension would reject never
-    /// starts: no chain probe, and no viewing key in a request body.
-    pub(crate) fn begin(&mut self, core: &WalletCore, read: Read, now_ms: u64) -> PrivacyStep {
-        if self.requested.is_none() {
-            return self.fail(PrivacyFailure::NotConfigured);
-        }
-        self.attempt = 1;
-        self.start_attempt(core, read, now_ms)
-    }
-
-    /// Starts (or restarts) the current attempt of a read: discovery restarts from page one.
-    fn start_attempt(&mut self, core: &WalletCore, read: Read, now_ms: u64) -> PrivacyStep {
-        self.attempt_started_ms = now_ms;
-        match read {
-            Read::Chain => self.rpc(Read::Chain, |_, id| crate::rpc::chain_id_request(id)),
-            Read::Preflight => self.post_preflight(core),
-            Read::Discovery => {
-                self.discovery = Discovery::default();
-                self.post_incoming(core)
-            }
-            Read::PoolFee => self.rpc(Read::PoolFee, |state, id| {
-                super::bodies::pool_fee(id, &state.route.pool_address)
-            }),
-        }
-    }
-
-    pub(crate) fn next_id(&mut self) -> u64 {
-        self.next_id += 1;
-        self.next_id
-    }
-
-    pub(crate) fn rpc(
-        &mut self,
-        read: Read,
-        body: impl FnOnce(&Self, u64) -> String,
-    ) -> PrivacyStep {
-        let id = self.next_id();
-        let body = body(self, id);
-        self.stage = Stage::Awaiting { id, read };
-        PrivacyStep::Rpc {
-            id,
-            body,
-            purpose: super::plan_steps::purpose(read),
-        }
-    }
-
-    /// Pauses `attempt × 1 s` before the next attempt of `read`, or fails with `last` when the
-    /// attempts are spent.
-    pub(crate) fn retry_or(&mut self, read: Read, last: PrivacyFailure) -> PrivacyStep {
-        if self.attempt >= self.limits.max_service_attempts {
-            return self.fail(last);
-        }
-        self.stage = Stage::Waiting(read);
-        PrivacyStep::Wait {
-            delay_ms: self.attempt.saturating_mul(1_000),
-        }
-    }
-
-    pub(crate) fn fail(&mut self, failure: PrivacyFailure) -> PrivacyStep {
-        self.stage = Stage::Closed;
-        PrivacyStep::Failed { failure }
+/// The wallet behind the read. Every call re-reads the wallet through the weak reference; a
+/// dropped wallet is a moved session, and the plan fails `Locked`.
+impl PrivacyHost for PrivacyReadPlan {
+    fn viewing_key(&self, chain_id: &str, pool_address: &str) -> Option<SecretFelt> {
+        self.core
+            .upgrade()?
+            .plan_viewing_key(self.generation, &self.account_id, chain_id, pool_address)
+            .ok()
     }
 }

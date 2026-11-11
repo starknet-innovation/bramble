@@ -1,9 +1,9 @@
 //! Token identity and the curated registry (`wallet_core::portfolio::registry`): the UniFFI
 //! shapes and exports, over Bramble's registry and bundled-logo set (`networks::registry`,
-//! generated from the extension), plus the crate's calls that need no catalog argument.
+//! generated from the extension).
 
 use wallet_core::portfolio::registry as port;
-pub use wallet_core::portfolio::registry::{with_token_id, SpamReason, TokenGlyph};
+pub use wallet_core::portfolio::registry::{SpamReason, TokenGlyph};
 
 use super::model::TokenConfig;
 use crate::networks::{self, NetworkId};
@@ -47,9 +47,4 @@ pub struct TokenGlyph {
 #[uniffi::export]
 pub fn token_glyph(address: String, symbol: String) -> TokenGlyph {
     port::token_glyph(networks::registry(), address, symbol)
-}
-
-/// `STRK_TOKEN_ADDRESS`, read from the generated catalog rather than restated.
-pub(crate) fn strk_address() -> &'static str {
-    port::strk_address(networks::all()).expect("the catalog seeds STRK")
 }

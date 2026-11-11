@@ -1,14 +1,16 @@
-//! `PrivacyReadPlan` behaviour the fixture cannot show: reply ordering, lock, budgets, the page
-//! cap, retries restarting from page one, the pinned `block_ref`, size bounds, and configuration.
+//! Mobile's `PrivacyReadPlan`: the FFI object's delegation to the shared core's plan, and the
+//! wallet's own checks over a real `WalletCore` (a lock between steps, even one followed by a new
+//! unlock; an unknown account or a locked wallet at prepare). The plan's rules (reply ordering,
+//! budgets, the page cap, retries, the pinned `block_ref`, size bounds) are wallet-core's
+//! `crates/bramble-core/tests/privacy_plan.rs`.
 
 mod privacy_support;
 
+use bramble_core::testing::strk20_viewing_key;
 use bramble_core::{
     NetworkId, PrivacyError, PrivacyFailure, PrivacyPurpose, PrivacyReply, PrivacyStep,
 };
-use privacy_support::{
-    account_id, drive, mainnet_plan, steady, wallet, Script, MAINNET_CHAIN, NOW,
-};
+use privacy_support::{account_id, mainnet_plan, wallet, wire, MAINNET_CHAIN, NOW, PHRASE};
 use serde_json::json;
 
 fn chain_reply(id: u64, now: u64) -> PrivacyReply {
@@ -35,92 +37,6 @@ fn registered() -> (u16, Vec<u8>) {
         200,
         json!({ "block_ref": "0x1", "sender_registered": true }),
     )
-}
-
-fn fee() -> String {
-    r#"{"jsonrpc":"2.0","id":0,"result":["0x5"]}"#.into()
-}
-
-fn incomplete_page(block: &str) -> (u16, Vec<u8>) {
-    http(
-        200,
-        json!({ "block_ref": block, "channels": [], "notes": [], "cursor": { "channel_discovery_complete": false } }),
-    )
-}
-
-fn complete_page(block: &str) -> (u16, Vec<u8>) {
-    http(
-        200,
-        json!({ "block_ref": block, "channels": [], "notes": [], "cursor": { "channel_discovery_complete": true } }),
-    )
-}
-
-fn script(pages: Vec<(u16, Vec<u8>)>) -> Script {
-    Script {
-        preflight: vec![registered()].into(),
-        pages: pages.into(),
-        fee: vec![fee()].into(),
-    }
-}
-
-#[test]
-fn a_reply_out_of_order_closes_the_plan() {
-    let (_dir, core) = wallet();
-    let plan = mainnet_plan(&core);
-    let chain = plan.advance(PrivacyReply::Start { now_ms: NOW }).unwrap();
-    assert!(matches!(
-        chain,
-        PrivacyStep::Rpc {
-            purpose: PrivacyPurpose::ChainId,
-            ..
-        }
-    ));
-    let wrong = plan.advance(PrivacyReply::Http {
-        id: id_of(&chain),
-        status: 200,
-        body: vec![],
-        now_ms: NOW,
-    });
-    assert_eq!(wrong, Err(PrivacyError::OutOfOrder));
-    assert_eq!(
-        plan.advance(chain_reply(id_of(&chain), NOW)),
-        Err(PrivacyError::PlanClosed)
-    );
-
-    let plan = mainnet_plan(&core);
-    let chain = plan.advance(PrivacyReply::Start { now_ms: NOW }).unwrap();
-    assert_eq!(
-        plan.advance(chain_reply(id_of(&chain) + 1, NOW)),
-        Err(PrivacyError::OutOfOrder)
-    );
-
-    let plan = mainnet_plan(&core);
-    plan.close();
-    assert_eq!(
-        plan.advance(PrivacyReply::Start { now_ms: NOW }),
-        Err(PrivacyError::PlanClosed)
-    );
-}
-
-#[test]
-fn a_wrong_chain_stops_before_any_post() {
-    let (_dir, core) = wallet();
-    let plan = mainnet_plan(&core);
-    let chain = plan.advance(PrivacyReply::Start { now_ms: NOW }).unwrap();
-    let id = id_of(&chain);
-    let step = plan
-        .advance(PrivacyReply::Rpc {
-            id,
-            body: format!(r#"{{"jsonrpc":"2.0","id":{id},"result":"0x534e5f5345504f4c4941"}}"#),
-            now_ms: NOW,
-        })
-        .unwrap();
-    assert_eq!(
-        step,
-        PrivacyStep::Failed {
-            failure: PrivacyFailure::WrongChain
-        }
-    );
 }
 
 #[test]
@@ -179,172 +95,54 @@ fn preparing_needs_an_unlocked_wallet_a_known_account_and_routing() {
 }
 
 #[test]
-fn the_discovery_budget_is_per_attempt_on_host_time() {
+fn the_ffi_plan_delegates_and_redacts_the_key_in_debug() {
     let (_dir, core) = wallet();
-    // One page takes 61 s of host time: the attempt's 60 s budget has lapsed.
-    let mut slow = |now: u64| now + 61_000;
-    let run = drive(
-        &mainnet_plan(&core),
-        script(vec![complete_page("0x1")]),
-        &mut slow,
-    );
-    assert_eq!(
-        run.outcome.clone().unwrap().unwrap_err(),
-        PrivacyFailure::BudgetExceeded
-    );
-
-    // 50 s, a throttled reply, a pause, then 50 s again: each attempt stays within its own budget.
-    let mut half = |now: u64| now + 50_000;
-    let throttled = http(429, json!({ "error": "Too Many Requests" }));
-    let run = drive(
-        &mainnet_plan(&core),
-        script(vec![throttled, complete_page("0x1")]),
-        &mut half,
-    );
-    assert!(run.outcome.clone().unwrap().is_ok());
-    assert_eq!(run.waits, vec![1_000]);
-}
-
-#[test]
-fn a_retry_restarts_discovery_from_the_first_page() {
-    let (_dir, core) = wallet();
-    let throttled = http(503, json!({ "error": "rate limit" }));
-    let run = drive(
-        &mainnet_plan(&core),
-        script(vec![
-            incomplete_page("0x1"),
-            throttled,
-            complete_page("0x2"),
-        ]),
-        &mut steady,
-    );
-    assert!(run.outcome.clone().unwrap().is_ok());
-    let incoming: Vec<_> = run
-        .posts
-        .iter()
-        .filter(|(_, _, p)| *p == PrivacyPurpose::IncomingState)
-        .collect();
-    assert_eq!(incoming.len(), 3);
-    // The retried attempt starts over: its body is the first page's, with an empty cursor.
-    assert_eq!(incoming[2].1, incoming[0].1);
-    assert!(std::str::from_utf8(&incoming[2].1)
-        .unwrap()
-        .ends_with(r#""cursor":{}}"#));
-    assert_eq!(run.waits, vec![1_000]);
-}
-
-#[test]
-fn failures_keep_their_classification() {
-    let (_dir, core) = wallet();
-    let cases = [
-        (
-            http(409, json!({ "error": "BLOCK_REORGED" })),
-            PrivacyFailure::Reorg,
-        ),
-        ((429, Vec::new()), PrivacyFailure::ServiceUnavailable),
-        (
-            (500, b"internal".to_vec()),
-            PrivacyFailure::ServiceUnavailable,
-        ),
-        (
-            (200, b"{not json".to_vec()),
-            PrivacyFailure::InvalidResponse,
-        ),
-        (
-            http(
-                200,
-                json!({ "block_ref": "pending", "channels": [], "notes": [], "cursor": {} }),
-            ),
-            PrivacyFailure::InvalidResponse,
-        ),
-        (
-            (200, vec![b' '; 2 * 1024 * 1024 + 1]),
-            PrivacyFailure::InvalidResponse,
-        ),
-    ];
-    for ((status, body), failure) in cases {
-        let run = drive(
-            &mainnet_plan(&core),
-            script(vec![(status, body)]),
-            &mut steady,
-        );
-        assert_eq!(
-            run.outcome.clone().unwrap().unwrap_err(),
-            failure,
-            "{status}"
-        );
-    }
-    let throttled = || http(429, json!({ "error": "rate limit" }));
-    let run = drive(
-        &mainnet_plan(&core),
-        script(vec![throttled(), throttled(), throttled()]),
-        &mut steady,
-    );
-    assert_eq!(
-        run.outcome.clone().unwrap().unwrap_err(),
-        PrivacyFailure::RateLimited
-    );
-    assert_eq!(run.waits, vec![1_000, 2_000]);
-}
-
-#[test]
-fn a_changed_block_ref_is_refused() {
-    let (_dir, core) = wallet();
-    let run = drive(
-        &mainnet_plan(&core),
-        script(vec![incomplete_page("0x1"), complete_page("0x2")]),
-        &mut steady,
-    );
-    assert_eq!(
-        run.outcome.clone().unwrap().unwrap_err(),
-        PrivacyFailure::InvalidResponse
-    );
-    let run = drive(
-        &mainnet_plan(&core),
-        script(vec![incomplete_page("0x1"), complete_page("0x1")]),
-        &mut steady,
-    );
-    assert!(run.outcome.clone().unwrap().is_ok());
-    // The pinned block is echoed on the later page.
-    let later = &run
-        .posts
-        .iter()
-        .filter(|(_, _, p)| *p == PrivacyPurpose::IncomingState)
-        .nth(1)
-        .unwrap()
-        .1;
-    assert!(std::str::from_utf8(later)
-        .unwrap()
-        .ends_with(r#""block_ref":"0x1"}"#));
-}
-
-#[test]
-fn pagination_stops_at_the_page_cap() {
-    let (_dir, core) = wallet();
-    let pages = (0..300).map(|_| incomplete_page("0x1")).collect();
-    let run = drive(&mainnet_plan(&core), script(pages), &mut steady);
-    assert_eq!(
-        run.outcome.clone().unwrap().unwrap_err(),
-        PrivacyFailure::InvalidResponse
-    );
-    assert_eq!(run.count(PrivacyPurpose::IncomingState), 256);
-}
-
-#[test]
-fn an_unregistered_account_reads_no_notes() {
-    let (_dir, core) = wallet();
-    let script = Script {
-        preflight: vec![http(
-            200,
-            json!({ "block_ref": "0x1", "sender_registered": false }),
-        )]
-        .into(),
-        pages: Default::default(),
-        fee: vec![fee()].into(),
+    let plan = mainnet_plan(&core);
+    let chain = plan.advance(PrivacyReply::Start { now_ms: NOW }).unwrap();
+    assert!(matches!(
+        chain,
+        PrivacyStep::Rpc {
+            purpose: PrivacyPurpose::ChainId,
+            ..
+        }
+    ));
+    let preflight = plan.advance(chain_reply(id_of(&chain), NOW)).unwrap();
+    let PrivacyStep::Post {
+        url,
+        body,
+        purpose: PrivacyPurpose::PreflightCheck,
+        ..
+    } = &preflight
+    else {
+        panic!("expected the preflight post");
     };
-    let run = drive(&mainnet_plan(&core), script, &mut steady);
-    let state = run.outcome.clone().unwrap().unwrap();
-    assert!(state.balances.is_empty());
-    assert_eq!(state.pool_fee_fri, "0x5");
-    assert_eq!(run.count(PrivacyPurpose::IncomingState), 0);
+    let discovery = bramble_core::privacy_discovery_url(NetworkId::Mainnet).unwrap();
+    assert_eq!(url, &format!("{discovery}/v1/sync/preflight_check"));
+    let keys = &wire()["viewingKeys"];
+    let key = strk20_viewing_key(
+        PHRASE,
+        0,
+        keys["chainId"].as_str().unwrap(),
+        keys["pool"].as_str().unwrap(),
+    )
+    .unwrap();
+    assert!(std::str::from_utf8(body).unwrap().contains(&key));
+    let debug = format!("{preflight:?}");
+    assert!(debug.contains("[redacted"));
+    assert!(!debug.contains(key.trim_start_matches("0x")));
+    // An out-of-order reply is the core's refusal, mapped, and closes the plan; so does `cancel`.
+    assert_eq!(
+        plan.advance(PrivacyReply::Start { now_ms: NOW }),
+        Err(PrivacyError::OutOfOrder)
+    );
+    assert_eq!(
+        plan.advance(PrivacyReply::Start { now_ms: NOW }),
+        Err(PrivacyError::PlanClosed)
+    );
+    let plan = mainnet_plan(&core);
+    plan.close();
+    assert_eq!(
+        plan.advance(PrivacyReply::Start { now_ms: NOW }),
+        Err(PrivacyError::PlanClosed)
+    );
 }

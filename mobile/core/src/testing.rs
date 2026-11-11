@@ -15,7 +15,7 @@ pub fn strk20_viewing_key(
     chain_id: &str,
     pool_address: &str,
 ) -> Result<String, crate::CoreError> {
-    crate::kms::derive_scoped_viewing_key(
+    crate::kms::scoped_viewing_key(
         mnemonic,
         None,
         crate::kms::Ladder::Account,
@@ -23,7 +23,7 @@ pub fn strk20_viewing_key(
         chain_id,
         pool_address,
     )
-    .map(|key| crate::felt::canonical(&key))
+    .map(|key| key.expose_secret_hex().to_string())
 }
 
 /// The public key the published phrase derives at `index` on `ladder`, which a signable

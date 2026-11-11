@@ -1,6 +1,6 @@
-//! The send path's FFI vocabulary. The plan's own types are `wallet_core::send`'s, exported here
-//! through `#[uniffi::remote]` with the shapes and docs mobile's bindings already have; only the
-//! request, the plan-API errors, the deployment state and the activity kind are mobile's. Every
+//! The send path's FFI vocabulary. The plan's own types, the deployment state and the activity
+//! kind are `wallet_core`'s, exported here through `#[uniffi::remote]` with the shapes and docs
+//! mobile's bindings already have; only the request and the plan-API errors are mobile's. Every
 //! error and failure is a fixed variant: none carries a recipient, an amount, node text or key
 //! material, so nothing a user typed or a node said can reach a log through an error.
 
@@ -9,7 +9,8 @@ pub use wallet_core::send::calls::{ReviewFlag, SendAmountError};
 pub use wallet_core::send::fees::{FeeAmount, FeeUnit};
 pub use wallet_core::send::judge::TxStatus;
 pub use wallet_core::send::types::{
-    FeeAffordability, RpcPurpose, SendFailure, SendFailureCode, SendStep, StepReply, TransferReview,
+    DeploymentState, FeeAffordability, RpcPurpose, SendFailure, SendFailureCode, SendStep,
+    StepReply, TransferReview,
 };
 
 use crate::networks::NetworkId;
@@ -70,7 +71,7 @@ pub enum FeeAffordability {
 }
 
 /// What a `getClassHashAt` answer says about an account contract.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[uniffi::remote(Enum)]
 pub enum DeploymentState {
     Deployed,
     Undeployed,

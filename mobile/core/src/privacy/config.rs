@@ -11,11 +11,15 @@
 //! developer can point the app or the tests at their own service. The override passes the same
 //! URL rules as the generated file, applies only to a network that is already routed (so it never
 //! re-enables an OHTTP network), and is refused outright by a release build.
+//!
+//! The records are `wallet_core::privacy::config`'s, as is the URL rule (`is_service_url`), which
+//! the core's plan checks again before it builds a body.
 
 use std::sync::{OnceLock, RwLock};
 
 use serde::Deserialize;
-use starknet_types_core::felt::Felt;
+use wallet_core::privacy::config::is_service_url;
+pub use wallet_core::privacy::config::{Limits, Route};
 
 use crate::felt;
 use crate::networks::NetworkId;
@@ -55,28 +59,6 @@ struct RawRouting {
     wait_budgets: RawWaits,
 }
 
-/// One routed network.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Route {
-    pub network: NetworkId,
-    /// `https://…`, no trailing slash; the SDK appends `/v1/sync/…`.
-    pub discovery_url: String,
-    /// As configured (the extension's `starknet_call` sends this spelling).
-    pub pool_address: String,
-    pub pool: Felt,
-}
-
-/// The extension's limits the judges enforce.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Limits {
-    pub balances: usize,
-    pub discovered_notes: usize,
-    pub max_pool_fee: u128,
-    pub max_service_attempts: u32,
-    pub tokens: usize,
-    pub discovery_budget_ms: u64,
-}
-
 /// Everything the privacy module reads from the generated file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Routing {
@@ -92,19 +74,6 @@ fn network_for(id: &str) -> Option<NetworkId> {
     }
 }
 
-/// The extension's bound on a service URL (`isServiceUrl` in `@bramble/core/service-url`).
-pub const MAX_SERVICE_URL_BYTES: usize = 2048;
-
-fn is_service_url(url: &str) -> bool {
-    url.len() <= MAX_SERVICE_URL_BYTES
-        && url.strip_prefix("https://").is_some_and(|rest| {
-            !rest.is_empty()
-                && !url.ends_with('/')
-                && url.bytes().all(|b| b.is_ascii_graphic())
-                && !url.contains(['?', '#', '@', '\\'])
-        })
-}
-
 fn route(raw: RawNetwork) -> Option<Route> {
     // OHTTP on means the extension never posts the key in plaintext: neither does mobile.
     if raw.ohttp {
@@ -116,6 +85,7 @@ fn route(raw: RawNetwork) -> Option<Route> {
     let pool = felt::parse_non_zero(&pool_address)?;
     Some(Route {
         network,
+        ohttp: false,
         discovery_url,
         pool_address,
         pool,
@@ -220,6 +190,7 @@ pub fn route_for(network: NetworkId) -> Option<Route> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wallet_core::privacy::config::MAX_SERVICE_URL_BYTES;
 
     const LIMITS: &str = r#""limits":{"balances":64,"discoveredNotes":4096,"maxPoolFee":"0xffffffffffffffffffffffffffffffff","maxServiceAttempts":3,"tokens":64},"waitBudgets":{"discoveryMs":60000}"#;
 

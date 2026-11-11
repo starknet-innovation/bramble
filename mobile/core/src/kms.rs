@@ -102,9 +102,11 @@ pub fn sign_hash(
     Ok(wallet_core::sign_stark_hash(&key, message_hash)?)
 }
 
-/// The account's STRK20 viewing key scoped to `"<chain_id>:<pool>"`, zeroizing. The shared core
-/// holds both scope values to canonical non-zero felts and the result to a usable scalar.
-fn scoped_viewing_key(
+/// The account's STRK20 viewing key scoped to `"<chain_id>:<pool>"`, exactly as the extension's
+/// adapter (`deriveStrk20ViewingKey`), zeroizing. The account key is derived per call into a
+/// zeroizing `SecretFelt`; the shared core holds both scope values to canonical non-zero felts
+/// and the result to a usable scalar.
+pub(crate) fn scoped_viewing_key(
     phrase: &str,
     passphrase: Option<&str>,
     path: Ladder,
@@ -118,29 +120,6 @@ fn scoped_viewing_key(
         chain_id,
         pool_address,
     )?)
-}
-
-/// Derives the account's STRK20 viewing key scoped to `"<chain_id>:<pool>"`, exactly as the
-/// extension's adapter (`deriveStrk20ViewingKey`). The account key is derived per call into a
-/// zeroizing `SecretFelt`. The viewing key leaves as a plain `Felt`, which callers must use for
-/// one request body and drop (mobile/docs/privacy.md §5, residual).
-pub fn derive_scoped_viewing_key(
-    phrase: &str,
-    passphrase: Option<&str>,
-    path: Ladder,
-    account_index: u32,
-    chain_id: &str,
-    pool_address: &str,
-) -> Result<Felt, CoreError> {
-    scoped_viewing_key(
-        phrase,
-        passphrase,
-        path,
-        account_index,
-        chain_id,
-        pool_address,
-    )
-    .map(|key| *key.expose_secret())
 }
 
 /// The public viewing key this wallet would register for one account in one pool
