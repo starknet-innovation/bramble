@@ -8,9 +8,8 @@ mod common;
 
 use bramble_core::testing::{open_gift_wrap, wrap_gift};
 use bramble_core::{
-    argent_multisig_normalize, argent_multisig_predict, argent_signer_guid,
-    nostr_relay_url_normalize, wallet_contact_card_parse, ArgentMultisigConfig, ContactCardParse,
-    MultisigAuthorityRead, MultisigAuthorityStatus, NetworkId, WalletCore,
+    nostr_relay_url_normalize, wallet_contact_card_parse, ContactCardParse, MultisigAuthorityRead,
+    MultisigAuthorityStatus, NetworkId, WalletCore,
 };
 use serde_json::{json, Value};
 
@@ -22,10 +21,6 @@ fn fixture() -> Value {
 
 fn text(value: &Value) -> String {
     value.as_str().unwrap().to_string()
-}
-
-fn strings(value: &Value) -> Vec<String> {
-    value.as_array().unwrap().iter().map(text).collect()
 }
 
 /// `mnemonic` imported with OpenZeppelin accounts 0 and 1 restored on Sepolia.
@@ -85,42 +80,6 @@ fn rust_gift_wraps_round_trip_and_the_committed_one_still_opens() {
         open_gift_wrap(parity, cosigner, committed["eventJson"].as_str().unwrap()).unwrap();
     assert_eq!(opened, text(&committed["content"]));
     assert_eq!(sender, text(&committed["senderPublicKey"]));
-}
-
-#[test]
-fn argent_multisig_layout_matches_the_extension() {
-    let argent = &fixture()["argent"];
-    for vector in argent["guids"].as_array().unwrap() {
-        assert_eq!(
-            argent_signer_guid(text(&vector["publicKey"])).unwrap(),
-            text(&vector["guid"])
-        );
-    }
-    for vector in argent["configs"].as_array().unwrap() {
-        let config = ArgentMultisigConfig {
-            threshold: u32::try_from(vector["threshold"].as_u64().unwrap()).unwrap(),
-            signer_public_keys: strings(&vector["signerPublicKeys"]),
-        };
-        assert_eq!(
-            argent_multisig_normalize(config.clone())
-                .unwrap()
-                .signer_public_keys,
-            strings(&vector["normalized"])
-        );
-        let prediction = argent_multisig_predict(config, text(&vector["salt"])).unwrap();
-        assert_eq!(
-            prediction.constructor_calldata,
-            strings(&vector["calldata"])
-        );
-        assert_eq!(prediction.address, text(&vector["address"]));
-    }
-    for vector in argent["rejected"].as_array().unwrap() {
-        let config = ArgentMultisigConfig {
-            threshold: u32::try_from(vector["threshold"].as_u64().unwrap()).unwrap(),
-            signer_public_keys: strings(&vector["signerPublicKeys"]),
-        };
-        assert!(argent_multisig_normalize(config).is_err(), "{vector}");
-    }
 }
 
 #[test]

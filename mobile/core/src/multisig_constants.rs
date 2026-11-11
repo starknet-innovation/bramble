@@ -6,6 +6,7 @@
 use std::sync::OnceLock;
 
 use serde::Deserialize;
+use wallet_core::accounts::multisig::ArgentMultisigClass;
 
 const CONSTANTS_JSON: &str = include_str!("../generated/multisig.json");
 
@@ -96,6 +97,20 @@ fn load() -> Constants {
 pub fn get() -> &'static Constants {
     static CONSTANTS: OnceLock<Constants> = OnceLock::new();
     CONSTANTS.get_or_init(load)
+}
+
+/// Bramble's Argent Multisig class (`argentMultisig.classHash`, `limits.signers`), built once so
+/// every caller of `wallet_core::accounts` passes the same value.
+pub fn argent_multisig_class() -> &'static ArgentMultisigClass {
+    static CLASS: OnceLock<ArgentMultisigClass> = OnceLock::new();
+    CLASS.get_or_init(|| {
+        let constants = get();
+        ArgentMultisigClass::new(
+            &constants.argent_multisig.class_hash,
+            constants.limits.signers,
+        )
+        .expect("pinned multisig class is a non-zero felt with a signer limit")
+    })
 }
 
 #[cfg(test)]

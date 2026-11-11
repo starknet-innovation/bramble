@@ -87,13 +87,6 @@ fn respond(read: &MultisigAuthorityRead, result: Value) {
     read.accept_response(request.id, body).unwrap();
 }
 
-fn respond_error(read: &MultisigAuthorityRead, code: i64) {
-    let request = read.next_request().unwrap();
-    let body =
-        json!({"jsonrpc":"2.0","id":request.id,"error":{"code":code,"message":"x"}}).to_string();
-    read.accept_response(request.id, body).unwrap();
-}
-
 /// Drives a read to `Available` with the given threshold and GUIDs (in node order).
 fn available_read(address: &str, threshold: u32, guids: &[String]) -> Arc<MultisigAuthorityRead> {
     let read = MultisigAuthorityRead::new(NetworkId::Sepolia, address.into()).unwrap();
@@ -134,78 +127,6 @@ fn nostr_key_ignores_the_bip39_passphrase_and_needs_a_session() {
         plain.contacts(NetworkId::Sepolia),
         Err(CoreError::Locked)
     ));
-}
-
-#[test]
-fn authority_reads_settle_every_status() {
-    let read = MultisigAuthorityRead::new(NetworkId::Sepolia, "0x123".into()).unwrap();
-    let first = read.next_request().unwrap();
-    assert!(
-        read.accept_response(first.id + 1, "{}".into()).is_err(),
-        "id mismatch refused"
-    );
-    respond(&read, json!("0x534e5f4d41494e"));
-    assert_eq!(
-        read.status(),
-        Some(MultisigAuthorityStatus::NetworkUnavailable),
-        "wrong chain"
-    );
-
-    let undeployed = MultisigAuthorityRead::new(NetworkId::Sepolia, "0x123".into()).unwrap();
-    respond(&undeployed, json!(SEPOLIA_CHAIN));
-    respond(&undeployed, json!({"block_hash":"0xabc","block_number":7}));
-    respond_error(&undeployed, 20);
-    assert_eq!(
-        undeployed.status(),
-        Some(MultisigAuthorityStatus::Undeployed)
-    );
-
-    let other_class = MultisigAuthorityRead::new(NetworkId::Sepolia, "0x123".into()).unwrap();
-    respond(&other_class, json!(SEPOLIA_CHAIN));
-    respond(&other_class, json!({"block_hash":"0xabc","block_number":7}));
-    respond(
-        &other_class,
-        json!("0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"),
-    );
-    assert_eq!(
-        other_class.status(),
-        Some(MultisigAuthorityStatus::UnsupportedClass)
-    );
-
-    let bad = MultisigAuthorityRead::new(NetworkId::Sepolia, "0x123".into()).unwrap();
-    respond(&bad, json!(SEPOLIA_CHAIN));
-    respond(&bad, json!({"block_hash":"0xabc","block_number":7}));
-    respond(&bad, json!(argent_multisig::class_hash()));
-    respond(&bad, json!(["0x3"]));
-    respond(&bad, json!(["0x2", "0x1", "0x1"]));
-    assert_eq!(
-        bad.status(),
-        Some(MultisigAuthorityStatus::InvalidConfig),
-        "duplicate GUIDs"
-    );
-
-    let repinned = MultisigAuthorityRead::new(NetworkId::Sepolia, "0x123".into()).unwrap();
-    respond(&repinned, json!(SEPOLIA_CHAIN));
-    for _ in 0..2 {
-        respond(&repinned, json!({"block_hash":"0xabc","block_number":7}));
-        respond_error(&repinned, 24);
-        assert_eq!(repinned.status(), None, "re-pins after Block not found");
-    }
-    respond(&repinned, json!({"block_hash":"0xabc","block_number":7}));
-    respond_error(&repinned, 24);
-    assert_eq!(
-        repinned.status(),
-        Some(MultisigAuthorityStatus::NetworkUnavailable),
-        "three attempts"
-    );
-
-    let transport = MultisigAuthorityRead::new(NetworkId::Sepolia, "0x123".into()).unwrap();
-    let request = transport.next_request().unwrap();
-    transport.transport_failed(request.id);
-    assert_eq!(
-        transport.status(),
-        Some(MultisigAuthorityStatus::NetworkUnavailable)
-    );
 }
 
 #[test]

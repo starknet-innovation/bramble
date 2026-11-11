@@ -6,7 +6,6 @@
 //! because the extension reads them through `BigInt` and `String.prototype.trim`.
 
 use starknet_types_core::felt::Felt;
-use wallet_core::js::num::is_js_whitespace;
 
 use crate::networks::NetworkId;
 use crate::{felt, multisig_constants, nostr, CoreError};
@@ -59,10 +58,7 @@ fn hex_digits(digits: &str) -> Option<Felt> {
 
 /// `canonicalFelt(value)` for `0x`-prefixed hex, non-zero: `BigInt` accepts trailing whitespace
 /// and any digit case. Returns the canonical (minimal) felt.
-pub fn lenient_hex_felt(value: &str) -> Option<Felt> {
-    let digits = value.strip_prefix("0x")?;
-    hex_digits(digits.trim_end_matches(is_js_whitespace)).filter(|f| *f != Felt::ZERO)
-}
+pub use wallet_core::js::felt::lenient_hex_felt;
 
 /// `canonicalAddress`: trimmed, lower-cased, at most 64 hex digits, non-zero; padded form.
 pub fn canonical_address(value: &str) -> Option<String> {
