@@ -29,9 +29,9 @@ testing = []
 # The shared Rust core (felt grammar, key custody, Nostr identity, vault, sans-IO RPC and send),
 # pinned to a commit; the package is `starknet-wallet-core`, renamed to keep `wallet_core::` paths.
 # Plain Rust with no UniFFI, so the binary holds one scaffolding. The `rev` is the tip of
-# wallet-core's 2.4d (privacy), which no tag holds yet: it moves to the tag that follows 2.4d before
-# this merges.
-wallet-core = { package = "starknet-wallet-core", git = "https://github.com/starknet-innovation/wallet-core", rev = "7df36e8e3908c48158333fe8211cb66a910e1d56" }
+# wallet-core's 2.5a (the multisig account), which no tag holds yet: it moves to the tag that
+# follows 2.5a before this merges.
+wallet-core = { package = "starknet-wallet-core", git = "https://github.com/starknet-innovation/wallet-core", rev = "4d21720dbf1e1615660673504143209963db0e0a" }
 # Wallet cryptography, still named directly by the account, multisig and send modules. Pinned
 # exactly, at the release wallet-core pins, so the lockfile resolves one copy
 # (tests/conformance/mobile-generated.test.ts). The extension's
