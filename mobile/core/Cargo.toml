@@ -32,8 +32,8 @@ testing = []
 # wallet-core's 2.5a (the multisig account), which no tag holds yet: it moves to the tag that
 # follows 2.5a before this merges.
 wallet-core = { package = "starknet-wallet-core", git = "https://github.com/starknet-innovation/wallet-core", rev = "4d21720dbf1e1615660673504143209963db0e0a" }
-# Wallet cryptography, still named directly by the account, multisig and send modules. Pinned
-# exactly, at the release wallet-core pins, so the lockfile resolves one copy
+# Wallet cryptography, still named directly by `kms.rs` (`ChainId`, `SecretFelt`) and the privacy
+# parity tests. Pinned exactly, at the release wallet-core pins, so the lockfile resolves one copy
 # (tests/conformance/mobile-generated.test.ts). The extension's
 # `@starknetfoundation/krusty-kms-wasm` stays on 0.11; the parity fixtures hold the two together.
 # `parallel` (rayon) is only used by proof generation, which this core never runs.

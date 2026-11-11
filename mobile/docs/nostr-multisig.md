@@ -19,8 +19,9 @@ with Android written against the generated Kotlin bindings (uncompiled, see the 
    Krusty's public `calculate_contract_address` and `encode_short_string`, plus the 2-to-1
    `starknet_types_core::hash::Poseidon::hash`. That crate is already a direct dependency, pinned
    `=0.2.4`, and it is the same primitive library Krusty uses. These are public hash functions, not
-   key handling, so they are not fallback crypto. The protocol formula still lives in bramble-core
-   rather than Krusty, so §8 proposes the upstream descriptor. `krusty_kms_crypto::poseidon_hash_many`
+   key handling, so they are not fallback crypto. Since M10 the formula, the authority and
+   class-declared reads and the record rules are wallet-core's `accounts::multisig*`, called with
+   Bramble's pinned class; §8 still proposes the upstream descriptor. `krusty_kms_crypto::poseidon_hash_many`
    (the many-input sponge) must **not** be used for the GUID: it gives different results.
 
 ## 1. What ships and what is deferred
@@ -461,7 +462,7 @@ from `extension-parity.json` so that sibling branches do not conflict. It is wri
 1. **Argent Multisig 0.2 descriptor** beside `OpenZeppelinMultisig`: pinned class hash,
    `signer_guid(pk) = Poseidon::hash(short_string("Starknet Signer"), pk)`, GUID-sorted validated calldata
    (≤ 32 signers), `deployment_descriptor(threshold, signers, SaltPolicy::Explicit)`, and signature
-   serialisation (threshold `[n,(0,pk,r,s)…]`, deploy `[1,(0,pk,r,s)]`). Until then bramble-core composes
+   serialisation (threshold `[n,(0,pk,r,s)…]`, deploy `[1,(0,pk,r,s)]`). Until then wallet-core composes
    it from public Krusty and `starknet-types-core` functions (§0), pinned by fixtures.
 2. **Stark signature verification export.** This blocks intent import. The core can re-hash
    invoke-v3 with Krusty's `compute_invoke_v3_hash`, but Krusty 0.11.0 exports no
