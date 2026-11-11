@@ -427,3 +427,29 @@ pub(crate) fn check_consistent(payload: &VaultPayload) -> Result<(), CoreError> 
         Err(invalid_payload())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The names vaults already on disk store: the core's `Ladder` has no serde, so these are
+    /// `stored_ladder`'s, and a rename would strand every vault-5 record.
+    #[test]
+    fn ladders_keep_the_names_the_vault_stores() {
+        for (ladder, name) in [
+            (Ladder::Account, "account"),
+            (Ladder::Address, "address"),
+            (Ladder::ArgentX, "argentx"),
+        ] {
+            let stored = stored_ladder::serialize(&Some(ladder), serde_json::value::Serializer);
+            assert_eq!(stored.unwrap(), serde_json::json!(name));
+            let read = stored_ladder::deserialize(serde_json::json!(name)).unwrap();
+            assert_eq!(read, Some(ladder));
+        }
+        assert_eq!(
+            stored_ladder::deserialize(serde_json::Value::Null).unwrap(),
+            None
+        );
+        assert!(stored_ladder::deserialize(serde_json::json!("ArgentX")).is_err());
+    }
+}
