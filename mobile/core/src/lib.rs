@@ -309,6 +309,23 @@ mod tests {
             None
         );
     }
+
+    /// The Krusty version the About screen shows is the one this lockfile links, the single copy
+    /// wallet-core brings (tests/conformance/mobile-generated.test.ts checks there is one).
+    #[test]
+    fn core_info_reports_the_krusty_this_lockfile_resolves() {
+        let lock = include_str!("../Cargo.lock");
+        let resolved = lock
+            .split("[[package]]")
+            .find(|entry| entry.contains("name = \"krusty-kms\"\n"))
+            .and_then(|entry| {
+                entry
+                    .lines()
+                    .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
+            })
+            .expect("Cargo.lock resolves krusty-kms");
+        assert_eq!(core_info().krusty_version, resolved);
+    }
 }
 
 /// Test-only hooks for the integration suite; not part of the FFI surface. Compiled only for

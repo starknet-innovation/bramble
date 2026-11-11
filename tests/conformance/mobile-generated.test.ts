@@ -133,20 +133,28 @@ describe("mobile core parity", () => {
 
   // The extension stays on its own Krusty release until it adopts the shared core, so the two
   // pins are no longer compared; the parity fixtures hold the releases to the same output.
-  // The version the core reports is `wallet_core::KRUSTY_VERSION`, which wallet-core holds to its
-  // own lockfile; mobile pins wallet-core by `rev` (2.5b's commit) until the tag that follows 2.5b.
-  // Mobile still names Krusty directly, for `ChainId` and `SecretFelt` in `kms.rs` (the multisig
-  // account is wallet-core's since M10), so its pin has to resolve to that one copy.
-  test("the Rust core pins one Krusty release, the shared core's", async () => {
+  // Mobile names Krusty nowhere (tests/privacy_key_boundary.rs) and pins none: Krusty comes only
+  // through wallet-core, pinned by `rev` (2.6's commit) until the tag that follows 2.6. So the
+  // lockfile must resolve one copy of each Krusty crate, at one version, as wallet-core's
+  // dependency and not mobile's; the core reports `wallet_core::KRUSTY_VERSION`, which lib.rs's
+  // `core_info_reports_the_krusty_this_lockfile_resolves` holds to that version.
+  test("the Rust core links one Krusty release, the shared core's", async () => {
     const cargo = await readFile("mobile/core/Cargo.toml", "utf8");
-    const pin = /^krusty-kms = \{ version = "=(\d+\.\d+\.\d+)"/m.exec(cargo)?.[1];
-    expect(pin).toBeDefined();
-    expect(cargo).toContain(`krusty-kms-common = { version = "=${pin}"`);
+    expect(cargo).not.toMatch(/^krusty-kms(-common)?\s*=/m);
     const lock = await readFile("mobile/core/Cargo.lock", "utf8");
-    const resolved = [...lock.matchAll(/^name = "krusty-kms"\nversion = "([^"]+)"/gm)].map(
-      (match) => match[1],
-    );
-    expect(resolved).toEqual([pin]);
+    const resolved = (name: string) =>
+      [...lock.matchAll(new RegExp(`^name = "${name}"\nversion = "([^"]+)"`, "gm"))].map(
+        (match) => match[1],
+      );
+    const kms = resolved("krusty-kms");
+    expect(kms).toHaveLength(1);
+    expect(resolved("krusty-kms-common")).toEqual(kms);
+    const entry = (name: string) =>
+      lock.split("[[package]]").find((block) => block.includes(`\nname = "${name}"\n`)) ?? "";
+    for (const krusty of ["krusty-kms", "krusty-kms-common"]) {
+      expect(entry("starknet-wallet-core")).toContain(` "${krusty}",`);
+      expect(entry("bramble-core")).not.toContain(` "${krusty}`);
+    }
     const lib = await readFile("mobile/core/src/lib.rs", "utf8");
     expect(lib).toContain("krusty_version: wallet_core::KRUSTY_VERSION.into()");
   });
