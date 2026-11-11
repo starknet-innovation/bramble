@@ -7,46 +7,12 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use starknet_types_core::felt::Felt;
+use wallet_core::accounts::multisig_records;
 
-use crate::argent_multisig::{self, ArgentMultisigConfig};
-use crate::contacts::{network_catalog_id, network_from_catalog_id};
 use crate::networks::NetworkId;
-use crate::{felt, multisig_constants, nostr, public_store, CoreError};
+use crate::{multisig_constants, public_store, CoreError};
 
-/// `ArgentMultisigCurrentConfig`: GUID-ordered Stark keys and a threshold.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PublicConfig {
-    pub signer_public_keys: Vec<String>,
-    pub threshold: u32,
-}
-
-/// `ArgentMultisigDeployment`: the counterfactual constructor commitment.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Deployment {
-    pub salt: String,
-    pub signer_public_keys: Vec<String>,
-    pub threshold: u32,
-}
-
-/// `ArgentMultisigRecord`, field for field.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct Record {
-    pub account_contract_type: String,
-    pub address: String,
-    pub class_hash: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub current_config: Option<PublicConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub deployment: Option<Deployment>,
-    pub id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    pub network_id: String,
-}
+pub use wallet_core::accounts::multisig_records::{Authority, Deployment, PublicConfig, Record};
 
 /// Mobile-only chain authority for a record without `currentConfig`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -65,83 +31,28 @@ pub struct File {
     pub observed: Vec<Observed>,
 }
 
-/// Signer authority a record commits to: threshold and ascending signer GUIDs.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Authority {
-    pub threshold: u32,
-    pub signer_guids: Vec<String>,
-}
-
 fn unreadable() -> CoreError {
     CoreError::Storage {
         reason: format!("{} unreadable", public_store::MULTISIGS),
     }
 }
 
-fn is_canonical_felt(value: &str) -> bool {
-    felt::parse(value).is_some_and(|f| felt::canonical(&f) == value)
-}
-
-fn is_canonical_non_zero(value: &str) -> bool {
-    felt::parse_non_zero(value).is_some_and(|f| felt::canonical(&f) == value)
-}
-
-/// `isArgentMultisigCurrentConfig`: normalising must leave the keys exactly as stored.
-fn normalized_guids(keys: &[String], threshold: u32) -> Option<Vec<String>> {
-    let config = ArgentMultisigConfig {
-        threshold,
-        signer_public_keys: keys.to_vec(),
-    };
-    let (normalized, guids) = argent_multisig::normalize(&config).ok()?;
-    (normalized.signer_public_keys == keys).then(|| guids.iter().map(felt::canonical).collect())
-}
-
-/// `isArgentMultisigRecord`.
+/// `isArgentMultisigRecord` on the pinned class and name limit.
 pub fn is_record(record: &Record) -> bool {
-    let name_ok = record.name.as_deref().is_none_or(|name| {
-        (1..=multisig_constants::get().limits.name_length).contains(&nostr::utf16_length(name))
-    });
-    let deployment_ok = record.deployment.as_ref().is_none_or(|deployment| {
-        is_canonical_felt(&deployment.salt)
-            && normalized_guids(&deployment.signer_public_keys, deployment.threshold).is_some()
-            && argent_multisig::predict(
-                &ArgentMultisigConfig {
-                    threshold: deployment.threshold,
-                    signer_public_keys: deployment.signer_public_keys.clone(),
-                },
-                &deployment.salt,
-            )
-            .is_ok_and(|prediction| prediction.address == record.address)
-    });
-    record.account_contract_type == "argent-multisig"
-        && is_canonical_non_zero(&record.address)
-        && record.class_hash == argent_multisig::class_hash()
-        && network_from_catalog_id(&record.network_id).is_some()
-        && record.id == format!("{}:{}", record.network_id, record.address)
-        && name_ok
-        && record.current_config.as_ref().is_none_or(|config| {
-            normalized_guids(&config.signer_public_keys, config.threshold).is_some()
-        })
-        && deployment_ok
+    multisig_records::is_record(
+        record,
+        multisig_constants::argent_multisig_class(),
+        multisig_constants::get().limits.name_length,
+    )
 }
 
 /// Ascending, canonical, unique, non-zero GUIDs with a threshold in `1..=n`.
 pub fn is_authority(signer_guids: &[String], threshold: u32) -> bool {
-    let parsed: Option<Vec<Felt>> = signer_guids
-        .iter()
-        .map(|guid| {
-            is_canonical_non_zero(guid)
-                .then(|| felt::parse(guid))
-                .flatten()
-        })
-        .collect();
-    parsed.is_some_and(|guids| {
-        !guids.is_empty()
-            && guids.len() <= multisig_constants::get().limits.signers
-            && threshold >= 1
-            && threshold as usize <= guids.len()
-            && guids.windows(2).all(|pair| pair[0] < pair[1])
-    })
+    multisig_records::is_authority(
+        signer_guids,
+        threshold,
+        multisig_constants::argent_multisig_class(),
+    )
 }
 
 /// Reads and validates the registry; a missing file is empty, an invalid one fails closed.
@@ -185,19 +96,12 @@ pub fn store(dir: &Path, file: &File) -> Result<(), CoreError> {
     public_store::write(dir, public_store::MULTISIGS, file)
 }
 
-/// The authority a record commits to: `currentConfig`, else `deployment`, else `observed`.
+/// The authority a record commits to: `currentConfig`, else `deployment`, else `observed`. A
+/// record whose stored keys do not normalise has none; `observed` is consulted only for a record
+/// with neither `currentConfig` nor `deployment`.
 pub fn authority(file: &File, record: &Record) -> Option<Authority> {
-    let from_keys = |keys: &[String], threshold: u32| {
-        normalized_guids(keys, threshold).map(|signer_guids| Authority {
-            threshold,
-            signer_guids,
-        })
-    };
-    if let Some(config) = &record.current_config {
-        return from_keys(&config.signer_public_keys, config.threshold);
-    }
-    if let Some(deployment) = &record.deployment {
-        return from_keys(&deployment.signer_public_keys, deployment.threshold);
+    if record.current_config.is_some() || record.deployment.is_some() {
+        return multisig_records::authority(record, multisig_constants::argent_multisig_class());
     }
     file.observed
         .iter()
@@ -210,12 +114,7 @@ pub fn authority(file: &File, record: &Record) -> Option<Authority> {
 
 /// Builds a record's id and checks the address is canonical and non-zero.
 pub fn record_id(network: NetworkId, address: &str) -> Result<String, CoreError> {
-    if !is_canonical_non_zero(address) {
-        return Err(CoreError::InvalidInput {
-            reason: "invalid multisig address".into(),
-        });
-    }
-    Ok(format!("{}:{address}", network_catalog_id(network)))
+    Ok(multisig_records::record_id(network, address)?)
 }
 
 fn full() -> CoreError {
@@ -296,4 +195,58 @@ pub fn remove(dir: &Path, id: &str) -> Result<(), CoreError> {
     file.records.retain(|record| record.id != id);
     file.observed.retain(|observed| observed.id != id);
     store(dir, &file)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn record(current_config: Option<PublicConfig>, deployment: Option<Deployment>) -> Record {
+        Record {
+            account_contract_type: "argent-multisig".into(),
+            address: "0x123".into(),
+            class_hash: crate::argent_multisig::class_hash().into(),
+            current_config,
+            deployment,
+            id: "SN_SEPOLIA:0x123".into(),
+            name: None,
+            network_id: "SN_SEPOLIA".into(),
+        }
+    }
+
+    #[test]
+    fn observed_backs_only_a_record_without_keys() {
+        let observed = Observed {
+            id: "SN_SEPOLIA:0x123".into(),
+            signer_guids: vec!["0x1".into()],
+            threshold: 1,
+        };
+        let file = File {
+            version: 1,
+            records: Vec::new(),
+            observed: vec![observed.clone()],
+        };
+        assert_eq!(
+            authority(&file, &record(None, None)),
+            Some(Authority {
+                threshold: 1,
+                signer_guids: observed.signer_guids,
+            })
+        );
+        let bad_keys = vec!["0xABC".to_string()];
+        let broken_deployment = Deployment {
+            salt: "0x0".into(),
+            signer_public_keys: bad_keys.clone(),
+            threshold: 1,
+        };
+        assert_eq!(
+            authority(&file, &record(None, Some(broken_deployment))),
+            None
+        );
+        let broken_config = PublicConfig {
+            signer_public_keys: bad_keys,
+            threshold: 1,
+        };
+        assert_eq!(authority(&file, &record(Some(broken_config), None)), None);
+    }
 }
