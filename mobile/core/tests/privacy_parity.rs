@@ -4,7 +4,7 @@
 
 mod privacy_support;
 
-use bramble_core::testing::{privacy as hooks, strk20_viewing_key};
+use bramble_core::testing::{privacy as hooks, strk20_viewing_key, strk20_viewing_public_key};
 use bramble_core::{
     format_token_amount, portfolio_amount, supported_networks, token_config_id, TokenBalance,
     TokenConfig,
@@ -12,7 +12,7 @@ use bramble_core::{
 use bramble_core::{
     privacy_entry, privacy_status, private_line, receive_pool_notice, shield_tile,
     shielded_balances_included, token_detail_privacy, unified_home_balances, DeploymentState,
-    DetailAction, DetailSummary, NetworkId, PoolNotice, PrivacyBlocker, PrivacyEntry,
+    DetailAction, DetailSummary, Ladder, NetworkId, PoolNotice, PrivacyBlocker, PrivacyEntry,
     PrivacyPurpose, PrivacyReading, PrivacyRegistration, PrivacyState, PrivacyStatus,
     PrivateBalance, PrivateLine, ShieldTile,
 };
@@ -32,6 +32,14 @@ fn viewing_keys_match_the_extension_krusty_path() {
         let index = account["accountIndex"].as_u64().unwrap() as u32;
         let derived = strk20_viewing_key(PHRASE, index, chain, pool).unwrap();
         assert_eq!(derived, text(&account["viewingKey"]), "account {index}");
+        let (public, scoped_pool) =
+            strk20_viewing_public_key(PHRASE, Ladder::Account, index, NetworkId::Mainnet).unwrap();
+        assert_eq!(scoped_pool, pool, "account {index}");
+        assert_eq!(
+            public,
+            text(&account["viewingPublicKey"]),
+            "account {index}"
+        );
     }
     for vector in keys["crate"].as_array().unwrap() {
         let private_key =

@@ -48,12 +48,14 @@
       {
         "accountIndex": 0,
         "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
-        "viewingKey": "0x3bec6bc060cb3f8115300228c16ecc438b1c91ff41ca540f3042724eef55c84"
+        "viewingKey": "0x3bec6bc060cb3f8115300228c16ecc438b1c91ff41ca540f3042724eef55c84",
+        "viewingPublicKey": "0x486e390c5f5acfc53d256ea63b101dcf165af422bdc56bb5ea829ee1507a459"
       },
       {
         "accountIndex": 1,
         "address": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
-        "viewingKey": "0x2f23be2c267b9592447f5dfc5423db694e5fb235e261e77de8b45fbcd0fa5d4"
+        "viewingKey": "0x2f23be2c267b9592447f5dfc5423db694e5fb235e261e77de8b45fbcd0fa5d4",
+        "viewingPublicKey": "0x7e26575772b2bfa9485ebacdb98724af44335a8e204e41136531d58bf8130ed"
       }
     ],
     "chainId": "0x534e5f4d41494e",

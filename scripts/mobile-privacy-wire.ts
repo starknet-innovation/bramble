@@ -22,6 +22,7 @@ import {
 } from "@bramble/privacy/service";
 import { createRpcProvider, resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
 import { deriveAccount } from "@bramble/vault/accounts";
+import { previewStrk20ViewingPublicKey } from "@bramble/vault/strk20-viewing-key";
 import { canonicalFelt, DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { PARITY_MNEMONIC } from "./mobile-parity";
 import {
@@ -75,13 +76,25 @@ const refused = async (run: () => Promise<unknown>): Promise<boolean> => {
   }
 };
 
-/** Fixture 1: scoped viewing keys from the WASM adapter, the crate's vectors, and refusals. */
+/**
+ * Fixture 1: scoped viewing keys from the WASM adapter, each account's public viewing key from the
+ * extension's `previewStrk20ViewingPublicKey`, the crate's vectors, and refusals.
+ */
 export const computeViewingKeys = async () => {
   const kms = await kmsPromise;
   const accounts = [];
   for (const accountIndex of [0, 1]) {
     const { address, viewingKey } = await parityPrivacyAccount(accountIndex);
-    accounts.push({ accountIndex, address, viewingKey });
+    // The public key the extension registers for this account, from its own preview function.
+    const viewingPublicKey = await previewStrk20ViewingPublicKey(kms, {
+      accountContractType: "openzeppelin",
+      accountIndex,
+      chainId: STARKNET_NETWORKS.SN_MAIN.chainId,
+      mnemonic: PARITY_MNEMONIC,
+      networkId: "SN_MAIN",
+      poolAddress: scopedPool(),
+    });
+    accounts.push({ accountIndex, address, viewingKey, viewingPublicKey });
   }
   const crateVectors = [
     ["0x1", "0x534e5f5345504f4c4941", "0x123"],
