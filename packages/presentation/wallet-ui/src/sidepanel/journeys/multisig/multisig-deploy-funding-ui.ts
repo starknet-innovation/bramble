@@ -1,4 +1,5 @@
 /** Local and external funding controls for a predicted Argent multisig address. */
+import { t } from "../../../i18n/messages";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { bindCopyButtons, errorDetails, showToast } from "../../shared/dom";
 import type { SendIntent } from "../send/send-model";
@@ -26,7 +27,7 @@ export const bindDeploymentFunding = (
       )?.value;
       const tokenId = form.querySelector<HTMLInputElement>('input[name="fundingTokenId"]')?.value;
       if (!source || !tokenId) {
-        showToast("A local STRK funding account is unavailable", "error", form);
+        showToast(t("multisig.fund.noLocalAccount"), "error", form);
         return;
       }
       // Prefills the STRK minimum the Fund step names, in exact FRI; Send
@@ -46,7 +47,7 @@ export const bindDeploymentFunding = (
           tokenId,
         })
         .catch((error: unknown) =>
-          showToast(errorDetails(error, "Open funding transfer failed"), "error", form),
+          showToast(errorDetails(error, t("multisig.fund.openFailed")), "error", form),
         );
     });
   form

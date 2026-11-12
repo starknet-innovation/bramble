@@ -5,6 +5,7 @@ import {
 } from "@bramble/multisig/chain";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { accountLabel } from "../../shared/parts";
 import {
@@ -57,14 +58,14 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
       const currentKeys = (form.dataset["currentSignerKeys"] ?? "").split(/\s+/).filter(Boolean);
       const selectParticipant = (participant: MultisigParticipant): string | null => {
         if (currentKeys.some((key) => sameFelt(key, participant.publicKeyX))) {
-          return "That participant is already a current signer.";
+          return t("multisig.signers.alreadySigner");
         }
         if (!selectedKey || !selection || !selectionName || !selectionDetail || !button) {
-          return "Signer management is unavailable.";
+          return t("multisig.signers.managementUnavailable");
         }
         selectedKey.value = participant.publicKeyX;
         selectionName.textContent = participant.label;
-        selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · Key ${accountLabel(participant.publicKeyX)}`;
+        selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · ${t("multisig.participant.key", { key: accountLabel(participant.publicKeyX) })}`;
         const copy = selection.querySelector<HTMLButtonElement>(
           "[data-participant-selection-copy]",
         );
@@ -104,16 +105,20 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
         .then((call) => deps.multisig.prepareIntent(multisigId, [call], resendConfirmed(button)))
         .then(
           () => {
-            showToast("Signer change ready for multisig review", "success", button ?? form);
+            showToast(t("multisig.signers.changeReady"), "success", button ?? form);
             deps.openDetail(multisigId, "multisig-detail");
           },
           (error: unknown) => {
             setResult(
               deps,
               "multisig-signers-result",
-              errorLine(error, "Couldn't prepare that signer change"),
+              errorLine(error, t("multisig.signers.prepareFailed")),
             );
-            showToast(errorDetails(error, "Prepare signer change failed"), "error", button ?? form);
+            showToast(
+              errorDetails(error, t("multisig.signers.prepareFailedShort")),
+              "error",
+              button ?? form,
+            );
             buttonBusy(button, false);
             armResendConfirmation(button, error);
           },
@@ -150,11 +155,11 @@ const bindCompleteSignerConfig = (deps: MultisigUiDeps): void => {
       }
       const message =
         guid === ""
-          ? "Enter a valid Stark public key."
+          ? t("multisig.signers.invalidStarkKey")
           : !signerGuids.some((expected) => sameFelt(expected, guid))
-            ? "This public key is not a current Stark signer for this multisig."
+            ? t("multisig.signers.notCurrentSigner")
             : seenGuids.some((seen) => sameFelt(seen, guid))
-              ? "Each signer public key can only be added once."
+              ? t("multisig.signers.keyOnce")
               : null;
       if (message) {
         input.setCustomValidity(message);
@@ -179,16 +184,20 @@ const bindCompleteSignerConfig = (deps: MultisigUiDeps): void => {
       })
       .then(
         async () => {
-          showToast("Signer setup verified and saved", "success", button ?? form);
+          showToast(t("multisig.signers.setupSaved"), "success", button ?? form);
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
           setResult(
             deps,
             "multisig-complete-config-result",
-            errorLine(error, "Couldn't finish signer setup"),
+            errorLine(error, t("multisig.signers.finishFailed")),
           );
-          showToast(errorDetails(error, "Complete signer setup failed"), "error", button ?? form);
+          showToast(
+            errorDetails(error, t("multisig.signers.finishFailedShort")),
+            "error",
+            button ?? form,
+          );
           buttonBusy(button, false);
         },
       );
