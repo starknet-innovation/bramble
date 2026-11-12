@@ -56,14 +56,16 @@ const BLOCKER = /new\s+PrivacyBlockerError\(\s*[^,]+,\s*(["`])((?:(?!\1)[^\\]|\\
 // Literals that open with a guard prefix passed through a helper.
 const GUARD_LITERAL = /"((?:Unlock session|Krusty KMS) [^"]+)"/g;
 // A fallback can be a UI catalog message, passed as `t("key")` or bound first
-// as `const fallback = t("key")`; it is read as its English source text, which
-// is what an English reader sees and what the copy tables are keyed on.
+// as `const fallback = t("key")`, and a reply can carry one as `error: t("key")`;
+// each is read as its English source text, which is what an English reader
+// sees and what the copy tables are keyed on.
 const FALLBACK_MESSAGE =
   /\b(?:responseError|errorText|errorDetails|errorLine|errorMessage)\(\s*[^,()]+(?:\([^()]*\))?\s*,\s*t\(\s*"([\w.]+)"/g;
 const FALLBACK_BINDING = /\bconst\s+fallback\s*=\s*t\(\s*"([\w.]+)"/g;
+const REPLY_MESSAGE = /\berror:\s*t\(\s*"([\w.]+)"/g;
 const englishMessages: Readonly<Record<string, string>> = uiCatalogs.en;
 const catalogFallbacks = (src: string): readonly string[] =>
-  [FALLBACK_MESSAGE, FALLBACK_BINDING].flatMap((pattern) =>
+  [FALLBACK_MESSAGE, FALLBACK_BINDING, REPLY_MESSAGE].flatMap((pattern) =>
     [...src.matchAll(pattern)].flatMap((match) => {
       const text = match[1] === undefined ? undefined : englishMessages[match[1]];
       return text === undefined ? [] : [text];

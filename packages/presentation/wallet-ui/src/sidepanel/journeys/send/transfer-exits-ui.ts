@@ -3,6 +3,8 @@
  * links from the receipt, pending and failure screens to Activity. Wiring only;
  * the journey decides what finishing means and owns navigation.
  */
+
+import { t } from "../../../i18n/messages";
 import type { TransferExitView } from "./transfer-model";
 
 /**
@@ -21,7 +23,7 @@ export const bindTransferExits = (
   const homeButton = form.querySelector<HTMLButtonElement>("#send-home");
   if (homeButton) {
     homeButton.textContent =
-      deps.completionTarget === "multisig-deploy" ? "Deploy Multisignature Account" : "Back";
+      deps.completionTarget === "multisig-deploy" ? t("send.exit.deployMultisig") : t("send.back");
     homeButton.addEventListener("click", deps.complete);
   }
   for (const id of ["#send-view-activity", "#send-pending-activity", "#send-failure-activity"]) {

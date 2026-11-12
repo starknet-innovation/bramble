@@ -4,9 +4,10 @@
  * size budget; pure DOM writes, no wallet access.
  */
 
+import { t } from "../../../i18n/messages";
 import { setFlowStep } from "../../shared/parts";
 import { PROVING_HINT } from "../privacy/privacy-views";
-import { type TransferMode, transferModeCopy } from "./transfer-mode";
+import { type TransferMode, transferWorkingTitle } from "./transfer-mode";
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
 import { transferRoute } from "./transfer-route";
 
@@ -67,7 +68,7 @@ const proofLeg = (fields: TransferFields | null): "confirm" | "none" | "review" 
 // on a screen that exists for a second or two.
 const preparingStatus = (): WorkingStatus => ({
   copy: "",
-  title: "Preparing private transfer…",
+  title: t("send.working.preparingPrivate"),
 });
 
 /**
@@ -91,14 +92,14 @@ export const workingStatus = <Review>(
   // pointing the reader back at the Ledger is wrong.
   if (state.fields?.signer === "ledger" && state.stage === "authorizing" && !isHandingOn(state)) {
     return {
-      copy: "Review the request on your Ledger.",
-      title: "Waiting for your Ledger",
+      copy: t("send.working.ledger"),
+      title: t("send.working.ledgerTitle"),
     };
   }
   if (proofLeg(state.fields) === "confirm" && !isHandingOn(state)) {
-    return { copy: PROVING_HINT, title: "Proving privately" };
+    return { copy: PROVING_HINT, title: t("send.working.proving") };
   }
-  return { copy: "", title: `${transferModeCopy(mode).progressive} your transaction…` };
+  return { copy: "", title: transferWorkingTitle(mode) };
 };
 
 // Phases the execute job reports once the transaction has left the signing or

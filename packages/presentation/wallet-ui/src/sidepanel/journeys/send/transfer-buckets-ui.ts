@@ -14,6 +14,7 @@
  */
 
 import type { SendRouteResolution, ValueBucket } from "@bramble/transactions/send-routes";
+import { t } from "../../../i18n/messages";
 import { sendBalanceLine } from "./send-model";
 import { sendFormInput } from "./transfer-compose-ui";
 
@@ -37,10 +38,8 @@ export type TransferBucketsDeps = {
 
 // The switch is labelled "Private" and carries its state in aria-checked, so
 // its title only has to say what pressing it does.
-const HINTS: Readonly<Record<ValueBucket, string>> = {
-  private: "Switch to the public balance",
-  public: "Switch to the private balance",
-};
+const hint = (bucket: ValueBucket): string =>
+  bucket === "private" ? t("send.bucket.toPublic") : t("send.bucket.toPrivate");
 
 const legOf = (button: HTMLButtonElement): "destination" | "source" =>
   button.dataset["sendBucket"] === "destination" ? "destination" : "source";
@@ -90,10 +89,10 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
       button.dataset["bucket"] = bucket;
       button.setAttribute("aria-checked", String(bucket === "private"));
       button.dataset["checked"] = String(bucket === "private");
-      button.title = HINTS[bucket];
+      button.title = hint(bucket);
     }
     container?.classList.toggle("muted", blocked !== undefined);
-    container?.setAttribute("title", blocked?.reason ?? "Choose where the value moves");
+    container?.setAttribute("title", blocked?.reason ?? t("send.context.chooseRoute"));
     if (reason) {
       // Spelled out beside the controls: a disabled action whose only
       // explanation was a title tooltip read as a broken control.
