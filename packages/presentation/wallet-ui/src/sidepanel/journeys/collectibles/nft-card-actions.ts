@@ -11,6 +11,7 @@
  */
 
 import { button } from "@bramble/ui-kit/controls";
+import { t } from "../../../i18n/messages";
 
 /**
  * The fields of a gallery item the action row reads. Structural, so the
@@ -40,7 +41,7 @@ const showArtButton = (item: NftCardTarget): string =>
       "data-nft-show-network": item.networkId,
       "data-nft-show-token": item.tokenId,
     },
-    label: "Show art",
+    label: t("collectibles.showArt"),
   });
 
 // The Hide control: a watched entry toggles its stored spam flag; a
@@ -50,7 +51,7 @@ const hideButton = (item: NftCardTarget): string =>
     ? button({
         ...SMALL_SECONDARY,
         attributes: { "data-nft-spam": item.id, "data-nft-spam-value": "true" },
-        label: "Hide",
+        label: t("collectibles.hide"),
       })
     : button({
         ...SMALL_SECONDARY,
@@ -61,14 +62,14 @@ const hideButton = (item: NftCardTarget): string =>
           "data-nft-hide-network": item.networkId,
           "data-nft-hide-token": item.tokenId,
         },
-        label: "Hide",
+        label: t("collectibles.hide"),
       });
 
 const removeButton = (item: NftCardTarget): string =>
   button({
     ...SMALL_SECONDARY,
     attributes: { "data-remove-nft": item.id },
-    label: "Remove",
+    label: t("collectibles.remove"),
     tone: "danger",
   });
 

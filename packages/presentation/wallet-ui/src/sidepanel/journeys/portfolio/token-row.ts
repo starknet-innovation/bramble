@@ -8,6 +8,7 @@ import { tokenLogoSvg } from "@bramble/portfolio/token-logos";
 import type { DisplayCurrency } from "@bramble/settings/preferences";
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
+import { t, th } from "../../../i18n/messages";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -111,7 +112,7 @@ const changeBadge = (change: number | undefined): string => {
   const arrow = change >= 0 ? "↑" : "↓";
   // A short visible window keeps the figure honest (a 24h price move, not a
   // balance change); screen readers get the full name in place of it.
-  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%<span class="token-change-win" aria-hidden="true"> · 24h</span><span class="sr-only"> 24h price change</span></span>`;
+  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%<span class="token-change-win" aria-hidden="true"> · ${th("portfolio.token.window")}</span><span class="sr-only"> ${th("portfolio.token.changeLabel")}</span></span>`;
 };
 
 /**
@@ -138,9 +139,12 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
     breakdown.kind === "unregistered" ||
     breakdown.kind === "undeployed"
   ) {
-    const label = breakdown.kind === "unregistered" ? "Register to start shielding" : "Shield";
+    const label =
+      breakdown.kind === "unregistered"
+        ? th("portfolio.token.register")
+        : th("portfolio.token.shield");
     return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="${label}">
-        <span class="token-breakdown-label">${icon("lock")}Private balance</span>
+        <span class="token-breakdown-label">${icon("lock")}${th("portfolio.token.privateBalance")}</span>
         <span>${label}</span>
       </button>`;
   }
@@ -148,14 +152,14 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
     breakdown.kind === "ready"
       ? `${escapeHtml(compactAmount(breakdown.formatted, PORTFOLIO_FRACTION_PLACES))} ${escapeHtml(symbol)}`
       : breakdown.kind === "loading"
-        ? "Discovering…"
+        ? th("portfolio.token.discovering")
         : breakdown.kind === "pending"
-          ? "Registration pending…"
+          ? th("portfolio.token.registrationPending")
           : breakdown.kind === "other-wallet"
             ? escapeHtml(PRIVACY_OTHER_WALLET)
-            : "Unavailable";
+            : th("portfolio.token.unavailable");
   return `<div class="token-breakdown-row${breakdown.kind === "ready" ? "" : " muted"}">
-      <span class="token-breakdown-label">${icon("lock")}Private balance</span>
+      <span class="token-breakdown-label">${icon("lock")}${th("portfolio.token.privateBalance")}</span>
       <span class="token-breakdown-value">${value}</span>
     </div>`;
 };
@@ -164,7 +168,7 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
  * The collapsed row's split line, e.g. "12.00 public · 5.00 private".
  */
 export const TOKEN_SPLIT_LINE = (publicAmount: string, privateAmount: string): string =>
-  `${publicAmount} public · ${privateAmount} private`;
+  t("portfolio.token.split", { private: privateAmount, public: publicAmount });
 
 // Shown only when part of the total is private: a public-only row's amount is
 // already its public balance, and a second line saying so is noise. Amounts use
@@ -206,7 +210,7 @@ export const unifiedBalanceRow = (
   const fiat = tokenFiatValue(token.formatted, price);
   return `<li class="token-row token-unified" data-live-group>
     <details class="token-disclosure">
-      <summary aria-label="Show ${escapeHtml(token.symbol)} balance breakdown">
+      <summary aria-label="${th("portfolio.token.breakdownLabel", { symbol: token.symbol })}">
         ${tokenGlyph(token.address, token.symbol)}
         <div class="token-copy">
           <strong>${escapeHtml(token.symbol)}</strong>
@@ -220,11 +224,11 @@ export const unifiedBalanceRow = (
       </summary>
       <div class="token-breakdown">
         <div class="token-breakdown-row">
-          <span class="token-breakdown-label">Public balance</span>
+          <span class="token-breakdown-label">${th("portfolio.token.publicBalance")}</span>
           <span class="token-breakdown-value">${breakdown.publicFormatted === null ? "—" : `${escapeHtml(compactAmount(breakdown.publicFormatted, PORTFOLIO_FRACTION_PLACES))} ${escapeHtml(token.symbol)}`}</span>
         </div>
         ${privateBreakdownLine(token, breakdown.private)}
-        <button class="token-breakdown-more" data-token-detail="${escapeHtml(token.id)}" type="button">See more about ${escapeHtml(token.symbol)}${icon("chevronRight")}</button>
+        <button class="token-breakdown-more" data-token-detail="${escapeHtml(token.id)}" type="button">${th("portfolio.token.seeMore", { symbol: token.symbol })}${icon("chevronRight")}</button>
       </div>
     </details>
   </li>`;
@@ -246,7 +250,7 @@ export const balanceRow = (
       ${tokenGlyph(token.address, token.symbol)}
       <div class="token-copy">
         <strong>${escapeHtml(token.symbol)}</strong>
-        <p data-live-key="token:${escapeHtml(token.id)}:balance" data-live-value="${escapeHtml(token.formatted)}">${escapeHtml(compactAmount(token.formatted, PORTFOLIO_FRACTION_PLACES))}${options.private ? `<span class="private-balance-mark" aria-label="Private balance">${icon("lock")}</span>` : ""}</p>
+        <p data-live-key="token:${escapeHtml(token.id)}:balance" data-live-value="${escapeHtml(token.formatted)}">${escapeHtml(compactAmount(token.formatted, PORTFOLIO_FRACTION_PLACES))}${options.private ? `<span class="private-balance-mark" aria-label="${th("portfolio.token.privateBalance")}">${icon("lock")}</span>` : ""}</p>
       </div>
       <div class="token-side">
         <span class="token-amount" data-live-key="token:${escapeHtml(token.id)}:fiat" data-live-value="${fiat === null ? "unknown" : fiat}">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>

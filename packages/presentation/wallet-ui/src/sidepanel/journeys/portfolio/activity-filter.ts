@@ -11,6 +11,7 @@ import type { ActivityEntry, ActivityStatus } from "@bramble/transactions/activi
 import { shortAddress } from "@bramble/transactions/verify-decode";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { canonicalAddress, canonicalFelt } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import { formatUtcDate } from "../../shared/timestamp";
 import {
   type ActivityPricing,
@@ -472,13 +473,23 @@ export const activitySummaryRow = (
 export const activityPartySummaryParts = (
   summary: ActivityPartySummary,
 ): { readonly body: string; readonly label: string } => {
-  const lines = [`${summary.count} transaction${summary.count === 1 ? "" : "s"}`];
+  const count = String(summary.count);
+  const lines = [
+    summary.count === 1
+      ? t("portfolio.activity.summaryOne", { count })
+      : t("portfolio.activity.summaryMany", { count }),
+  ];
   for (const total of summary.totals) {
-    if (total.sent !== "0") lines.push(`Sent ${total.sent} ${total.symbol}`);
-    if (total.received !== "0") lines.push(`Received ${total.received} ${total.symbol}`);
+    const facts = { amount: total.sent, symbol: total.symbol };
+    if (total.sent !== "0") lines.push(t("portfolio.activity.summarySent", facts));
+    if (total.received !== "0") {
+      lines.push(
+        t("portfolio.activity.summaryReceived", { amount: total.received, symbol: total.symbol }),
+      );
+    }
   }
   const from = summary.firstAt === null ? null : formatUtcDate(summary.firstAt);
   const to = summary.lastAt === null ? null : formatUtcDate(summary.lastAt);
-  if (from && to) lines.push(from === to ? from : `${from} to ${to}`);
+  if (from && to) lines.push(from === to ? from : t("portfolio.activity.dateRange", { from, to }));
   return { body: lines.join(" · "), label: summary.label };
 };

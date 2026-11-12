@@ -10,12 +10,15 @@
 import { escapeHtml } from "@bramble/core/html";
 import { type Locale, type MessageArgs, translator } from "@bramble/core/i18n";
 import { uiLocale } from "./locale";
+import { activityMessages } from "./messages/activity";
+import { collectiblesMessages } from "./messages/collectibles";
 import { ledgerMessages } from "./messages/ledger";
 import { multisigMessages } from "./messages/multisig";
 import { multisigProposeMessages } from "./messages/multisig-propose";
 import { multisigSetupMessages } from "./messages/multisig-setup";
 import { multisigSignerMessages } from "./messages/multisig-signers";
 import { onboardingMessages } from "./messages/onboarding";
+import { portfolioMessages } from "./messages/portfolio";
 import { privacyMessages } from "./messages/privacy";
 import { sendMessages } from "./messages/send";
 import { settingsMessages } from "./messages/settings";
@@ -28,12 +31,15 @@ import { swapStakingMessages } from "./messages/swap-staking";
  * read it to refuse a message id two areas define and to pin signing text.
  */
 export const UI_AREA_CATALOGS = {
+  activity: activityMessages,
+  collectibles: collectiblesMessages,
   ledger: ledgerMessages,
   "multisig-propose": multisigProposeMessages,
   "multisig-setup": multisigSetupMessages,
   "multisig-signers": multisigSignerMessages,
   multisig: multisigMessages,
   onboarding: onboardingMessages,
+  portfolio: portfolioMessages,
   privacy: privacyMessages,
   send: sendMessages,
   settings: settingsMessages,
@@ -43,12 +49,15 @@ export const UI_AREA_CATALOGS = {
 } as const;
 
 const en = {
+  ...activityMessages.en,
+  ...collectiblesMessages.en,
   ...ledgerMessages.en,
   ...multisigProposeMessages.en,
   ...multisigSetupMessages.en,
   ...multisigSignerMessages.en,
   ...multisigMessages.en,
   ...onboardingMessages.en,
+  ...portfolioMessages.en,
   ...privacyMessages.en,
   ...sendMessages.en,
   ...settingsMessages.en,
@@ -61,12 +70,15 @@ const en = {
 export const uiCatalogs = {
   en,
   "zh-Hans": {
+    ...activityMessages["zh-Hans"],
+    ...collectiblesMessages["zh-Hans"],
     ...ledgerMessages["zh-Hans"],
     ...multisigProposeMessages["zh-Hans"],
     ...multisigSetupMessages["zh-Hans"],
     ...multisigSignerMessages["zh-Hans"],
     ...multisigMessages["zh-Hans"],
     ...onboardingMessages["zh-Hans"],
+    ...portfolioMessages["zh-Hans"],
     ...privacyMessages["zh-Hans"],
     ...sendMessages["zh-Hans"],
     ...settingsMessages["zh-Hans"],

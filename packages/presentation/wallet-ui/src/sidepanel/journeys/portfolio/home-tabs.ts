@@ -21,6 +21,7 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { icon } from "../../shared/icons";
@@ -35,7 +36,15 @@ import type { StakingState } from "../staking/staking-directory-client";
 import { type HomeTab, homeTabPanels } from "../staking/staking-home";
 import { activityRecordFacts, counterpartyFact } from "./activity-detail";
 import { type ActivityContact, activityRowAttributes } from "./activity-filter";
-import { type ActivityPricing, activityRowModel, capitalise } from "./activity-format";
+import {
+  type ActivityPricing,
+  activityKindText,
+  activityRowModel,
+  activityStatusTitle,
+  activityStatusWord,
+  activityTitleText,
+  counterpartyText,
+} from "./activity-format";
 import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import {
   type PrivateBreakdown,
@@ -123,18 +132,12 @@ export const unifiedHomeBalances = (
  * pre-confirmed means the proposer has executed it and consensus has not
  * committed its block yet.
  */
-const PROVISIONAL_TX_HINT: Partial<Record<ActivityEntry["status"], string>> = {
-  pending: "Broadcast accepted. It can't be fee-bumped, replaced, or cancelled.",
-  preconfirmed: "Pre-confirmed, not final yet. Bramble tells you if it doesn't settle.",
-};
-
-/**
- * Display label for a status. Pre-confirmed reads as "PRE-CONFIRMED" rather
- * than the storage spelling.
- */
-const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
-  preconfirmed: "pre-confirmed",
-};
+const provisionalTxHint = (status: ActivityEntry["status"]): string | undefined =>
+  status === "pending"
+    ? t("portfolio.activity.hintPending")
+    : status === "preconfirmed"
+      ? t("portfolio.activity.hintPreconfirmed")
+      : undefined;
 
 /**
  * Renders one recorded transaction row for the account-partitioned Activity
@@ -162,18 +165,25 @@ export const transactionRow = (
   pricing?: ActivityPricing,
   contacts: readonly ActivityContact[] = [],
 ): string => {
-  const hint = PROVISIONAL_TX_HINT[entry.status];
-  const label = STATUS_LABEL[entry.status] ?? entry.status;
+  const hint = provisionalTxHint(entry.status);
+  // The status word reads lowercase in the accessible name and capitalised on
+  // the row and its tooltip; pre-confirmed keeps its hyphen.
+  const label = activityStatusWord(entry.status);
+  const statusTitle = activityStatusTitle(entry.status);
   const row = activityRowModel(entry, pricing);
   // Devnet has no explorer, so the outbound link is simply absent there rather
   // than pointing somewhere that cannot resolve the hash.
   const explorer = explorerTransactionUrl(entry.networkId, entry.hash);
-  const statusLabel = `${row.label}, ${label}`;
+  const statusLabel = t("portfolio.activity.kindStatus", {
+    kind: activityKindText(row.label),
+    status: label,
+  });
   // Status leads the clock on the tooltip and in the accessible name; the time
   // is not printed on the row itself.
   const clock = formatUtcClock(entry.submittedAt);
-  const timing = [capitalise(label), clock].filter((part) => part !== null).join(" · ");
-  const spoken = clock === null ? label : `${label}, ${clock}`;
+  const timing = [statusTitle, clock].filter((part) => part !== null).join(" · ");
+  const spoken =
+    clock === null ? label : t("portfolio.activity.statusTime", { status: label, time: clock });
   const avatar = row.tokenSymbol
     ? tokenGlyph(row.tokenAddress ?? "0x0", row.tokenSymbol)
     : starknetNetworkGlyph();
@@ -185,7 +195,9 @@ export const transactionRow = (
   // verb from. Using it keeps the amount on the collapsed row; a counterparty
   // detail is an address and belongs in the expansion, not the heading.
   const figure = row.amount ?? (row.counterparty ? null : row.detail);
-  const heading = figure === null ? row.title : `${row.title} ${figure}`;
+  const title = activityTitleText(row.title);
+  const heading =
+    figure === null ? title : t("portfolio.activity.heading", { action: title, amount: figure });
   const when = [formatUtcDate(entry.submittedAt), clock].filter((part) => part !== null).join(", ");
   const attributes = activityRowAttributes(entry, pricing, contacts);
   return `
@@ -199,28 +211,28 @@ export const transactionRow = (
         ${
           entry.status === "accepted"
             ? ""
-            : `<span class="tx-meta ${escapeHtml(entry.status)}">${escapeHtml(capitalise(label))}</span>`
+            : `<span class="tx-meta ${escapeHtml(entry.status)}">${escapeHtml(statusTitle)}</span>`
         }
         <span class="tx-avatar">${avatar}</span>
         <span class="disclosure-mark">${icon("chevronRight")}</span>
       </summary>
       <div class="disclosure-body">
         <dl class="request-detail">
-          <div><dt>Transaction</dt><dd class="tx-hash-row">${
+          <div><dt>${th("portfolio.activity.transaction")}</dt><dd class="tx-hash-row">${
             explorer
-              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
+              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="${th("portfolio.activity.viewOnStarkscan")}"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
               : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
-          }${inlineCopyButton(entry.hash, "Copy transaction hash")}</dd></div>
+          }${inlineCopyButton(entry.hash, t("portfolio.activity.copyHash"))}</dd></div>
           ${
             row.counterparty
-              ? counterpartyFact(capitalise(row.counterparty.role), row.counterparty.address)
+              ? counterpartyFact(counterpartyText(row.counterparty.role), row.counterparty.address)
               : row.detail && row.detail !== figure
-                ? `<div><dt>Detail</dt><dd>${escapeHtml(row.detail)}</dd></div>`
+                ? `<div><dt>${th("portfolio.activity.detail")}</dt><dd>${escapeHtml(row.detail)}</dd></div>`
                 : ""
           }
           ${activityRecordFacts(entry, pricing?.tokens)}
-          ${when === "" ? "" : `<div><dt>Submitted</dt><dd>${escapeHtml(when)}</dd></div>`}
-          ${hint ? `<div><dt>Status</dt><dd>${escapeHtml(hint)}</dd></div>` : ""}
+          ${when === "" ? "" : `<div><dt>${th("portfolio.activity.submitted")}</dt><dd>${escapeHtml(when)}</dd></div>`}
+          ${hint ? `<div><dt>${th("portfolio.activity.status")}</dt><dd>${escapeHtml(hint)}</dd></div>` : ""}
         </dl>
       </div>
     </details>
@@ -230,7 +242,11 @@ export const transactionRow = (
 // The heading for one UTC day: the two most recent days read as words when
 // the caller knows which day it is, every other day shows its date.
 const dayLabel = (key: number, date: string, todayKey: number | null): string =>
-  key === todayKey ? "Today" : key === (todayKey ?? Number.NaN) - 1 ? "Yesterday" : date;
+  key === todayKey
+    ? t("portfolio.activity.today")
+    : key === (todayKey ?? Number.NaN) - 1
+      ? t("portfolio.activity.yesterday")
+      : date;
 
 /**
  * Groups a newest-first feed into UTC calendar days, each rendered as a small
@@ -254,7 +270,10 @@ export const transactionGroups = (
     if (current && current.key === key) {
       current.rows.push(transactionRow(entry, pricing, contacts));
     } else {
-      const label = key === null || date === null ? "Undated" : dayLabel(key, date, todayKey);
+      const label =
+        key === null || date === null
+          ? t("portfolio.activity.undated")
+          : dayLabel(key, date, todayKey);
       groups.push({ key, label, rows: [transactionRow(entry, pricing, contacts)] });
     }
   }
@@ -286,9 +305,9 @@ const tokensErrorPanel = (error: string): string => `
   <div class="panel-error">
     ${emptyState(friendlyNetworkError(error) ?? error)}
     ${button({
-      attributes: { "aria-label": "Retry loading balances", "data-reload-balances": true },
+      attributes: { "aria-label": t("portfolio.tokens.retryLabel"), "data-reload-balances": true },
       icon: "refresh",
-      label: "Try again",
+      label: t("portfolio.tokens.retry"),
       size: "small",
       variant: "ghost",
     })}
@@ -349,7 +368,7 @@ const tokensPanel = (
       : "error" in state
         ? tokensErrorPanel(state.error)
         : unified.length === 0
-          ? emptyState("No tracked balances yet. Add or scan for tokens to see them here.")
+          ? emptyState(t("portfolio.tokens.empty"))
           : `<ul class="token-list">${unified
               .map((token) =>
                 unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
@@ -363,8 +382,8 @@ const tokensPanel = (
     ${
       privacy.error
         ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
-            <span class="private-balance-label">${icon("lock")}<span>Private balances</span></span>
-            <span class="token-fiat">Try again</span>
+            <span class="private-balance-label">${icon("lock")}<span>${th("portfolio.tokens.privateBalances")}</span></span>
+            <span class="token-fiat">${th("portfolio.tokens.retry")}</span>
           </button>`
         : ""
     }
@@ -373,8 +392,8 @@ const tokensPanel = (
         ? menuRow({
             attributes: { "data-view": "tokens" },
             icon: "coins",
-            label: "Manage tokens",
-            value: `${hiddenCount} not shown`,
+            label: t("portfolio.tokens.manage"),
+            value: t("portfolio.tokens.notShown", { count: String(hiddenCount) }),
           })
         : ""
     }
@@ -385,9 +404,7 @@ const tokensPanel = (
  * Empty-state copy for the account-partitioned Activity dock.
  */
 export const activityEmptyCopy = (historyUnavailable: boolean): string =>
-  historyUnavailable
-    ? "No transactions recorded on this device yet."
-    : "No activity yet. Transactions for this account appear here.";
+  historyUnavailable ? t("portfolio.activity.emptyDevice") : t("portfolio.activity.empty");
 
 /**
  * Renders the portfolio section. With an NFTs panel (NFTs turned on) or
@@ -426,9 +443,9 @@ export const homeTabs = (
   // Tokens · Staking · NFTs, each tab offered only where it applies.
   const tabs = staking || nfts !== null ? homeTabPanels(selected, tokens, staking, nfts) : null;
   return `
-  <section class="home-tabs" aria-label="Portfolio">
+  <section class="home-tabs" aria-label="${th("portfolio.tabs.label")}">
     <div class="tab-bar">
-      ${tabs ? tabs.bar : '<div class="tab-set"><h2>Tokens</h2></div>'}
+      ${tabs ? tabs.bar : `<div class="tab-set"><h2>${th("portfolio.tabs.tokens")}</h2></div>`}
       <div class="portfolio-actions">
         ${iconButton({
           attributes: {
@@ -439,10 +456,10 @@ export const homeTabs = (
           },
           className: "portfolio-menu-trigger",
           icon: "moreHorizontal",
-          label: "Portfolio actions",
+          label: t("portfolio.tabs.actions"),
           variant: "ghost",
         })}
-        <div class="portfolio-menu" id="portfolio-menu" role="menu" aria-label="Portfolio actions" hidden>
+        <div class="portfolio-menu" id="portfolio-menu" role="menu" aria-label="${th("portfolio.tabs.actions")}" hidden>
           ${
             // Manage tokens acts on the Tokens tab only; Refresh covers every tab.
             !tabs || tabs.open === "tokens"
@@ -450,7 +467,7 @@ export const homeTabs = (
                   attributes: { "data-view": "tokens", role: "menuitem", tabindex: "-1" },
                   className: "portfolio-menu-item",
                   icon: "coins",
-                  label: "Manage tokens",
+                  label: t("portfolio.tokens.manage"),
                   variant: "ghost",
                 })
               : ""
@@ -464,7 +481,7 @@ export const homeTabs = (
             },
             className: "portfolio-menu-item",
             icon: "refresh",
-            label: "Refresh portfolio",
+            label: t("portfolio.tabs.refresh"),
             variant: "ghost",
           })}
         </div>

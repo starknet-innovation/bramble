@@ -7,6 +7,7 @@
  */
 
 import { resolveSpring } from "@bramble/ui-kit/spring";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -244,14 +245,16 @@ const bindDrawer = (deps: HomeUiDeps): void => {
           }
           deps.setDrawerOpen(false);
           showToast(
-            keepsSharedAccount ? "Multisig signer switched" : "Account switched",
+            keepsSharedAccount
+              ? t("portfolio.home.signerSwitched")
+              : t("portfolio.home.accountSwitched"),
             "success",
             button,
           );
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Account switch failed"), "error", button);
+          showToast(errorDetails(error, t("portfolio.home.switchFailed")), "error", button);
           buttonBusy(button, false);
         },
       );

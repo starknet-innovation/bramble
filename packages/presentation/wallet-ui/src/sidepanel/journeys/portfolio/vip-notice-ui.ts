@@ -3,6 +3,7 @@
  * local display preference; Settings → Appearance turns the notice back on.
  */
 
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -27,7 +28,7 @@ export const bindVipNotice = (deps: VipNoticeUiDeps): void => {
     try {
       await deps.wallet.setDisplay({ vipNotice: false });
     } catch (error) {
-      showToast(errorDetails(error, "VIP preference failed"), "error", hide);
+      showToast(errorDetails(error, t("portfolio.vip.saveFailed")), "error", hide);
       buttonBusy(hide, false);
       return;
     }
