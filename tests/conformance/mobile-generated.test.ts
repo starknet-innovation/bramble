@@ -134,7 +134,7 @@ describe("mobile core parity", () => {
   // The extension stays on its own Krusty release until it adopts the shared core, so the two
   // pins are no longer compared; the parity fixtures hold the releases to the same output.
   // The version the core reports is `wallet_core::KRUSTY_VERSION`, which wallet-core holds to its
-  // own lockfile; mobile pins wallet-core by `rev` (A2's commit) until the tag that follows A2.
+  // own lockfile; mobile pins wallet-core by tag.
   // Mobile still names Krusty directly, for `ChainId` and `SecretFelt` in `kms.rs` and
   // `networks.rs` and for the multisig in `argent_multisig.rs`, so its pin has to resolve to
   // that one copy.
