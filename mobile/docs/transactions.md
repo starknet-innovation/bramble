@@ -195,7 +195,7 @@ shows a failed deployment fee and cannot be confirmed.
   (§3, "Pending record before every write"). The extension records none because its background
   worker always finishes the send; a phone app cannot promise that.
 
-## 3. UniFFI surface (new; all in new files under `mobile/core/src/send/`)
+## 3. UniFFI surface (new; all in new files under wallet-core's `crates/bramble-core/src/send/`)
 
 **Design choice.** A core-owned state machine, not a set of free functions. The host cannot
 reorder steps, skip the re-estimate, substitute bounds or hand in a hash. It only relays opaque
