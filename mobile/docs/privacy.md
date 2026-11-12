@@ -227,7 +227,7 @@ transfers only" and one of three variants:
 
 ## 3. UniFFI surface
 
-All code is in new files under `mobile/core/src/privacy/` (since M9 the rules are
+All code is in new files under wallet-core's `crates/bramble-core/src/privacy/` (since M9 the rules are
 `wallet_core::privacy`'s; see §8). Shared files get additive edits only:
 `lib.rs` gains `mod privacy;` plus `pub use`; `kms.rs` gains the one Krusty call; `wallet.rs`
 gains one crate-private accessor. `delete_wallet` needs nothing, because nothing is persisted.
@@ -438,7 +438,7 @@ onboarding suite passes `offline`, so no UI test sends a viewing key anywhere.
 
 ## 8. Files
 
-- **Rust:** `mobile/core/src/privacy/{mod, types, config, plan, wallet_ext}.rs` over
+- **Rust:** wallet-core's `crates/bramble-core/src/privacy/{mod, types, config, plan, wallet_ext}.rs` over
   `wallet_core::privacy` (since M9), `generated/privacy.json`; additive `lib.rs`, `kms.rs`, `wallet.rs`; tests
   `privacy_{parity, plan, key_boundary, mainnet}.rs` and `privacy_support/`.
 - **Scripts:** `scripts/mobile-assets/privacy.ts`, `scripts/mobile-privacy-{cases, wire, gates,

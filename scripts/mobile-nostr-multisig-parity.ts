@@ -26,7 +26,11 @@ import { computeParityAccounts, PARITY_MNEMONIC } from "./mobile-parity";
 
 /** Repository-relative path of the deterministic and extension-made vectors. */
 export const NOSTR_MULTISIG_FIXTURE_PATH = "mobile/core/tests/fixtures/nostr-multisig-parity.json";
-/** Repository-relative path of the gift wrap the Rust core made for the extension to open. */
+/**
+ * Repository-relative path of the gift wrap the Rust core made for the extension to open: a copy
+ * of wallet-core's `crates/bramble-core/tests/regression/rust-gift-wrap.json`, which that crate's
+ * `nostr_multisig_parity` test writes.
+ */
 export const RUST_GIFT_WRAP_PATH = "mobile/core/tests/fixtures/rust-gift-wrap.json";
 /** The co-signer's Nostr address index within the parity phrase (the wallet itself uses 0). */
 export const COSIGNER_NOSTR_INDEX = 1;
