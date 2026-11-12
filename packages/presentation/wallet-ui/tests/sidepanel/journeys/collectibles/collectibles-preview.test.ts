@@ -125,7 +125,7 @@ describe("Settings for NFTs", () => {
     expect(on).toMatch(/id="nfts-on-home"[^>]*checked|checked[^>]*id="nfts-on-home"/);
     expect(on).toContain("Show NFTs on Home");
     expect(on).toContain(
-      "On Mainnet, Starkscan finds this account's ERC-721 NFTs and sees its address. Every NFT shown is checked on-chain.",
+      "On Mainnet, Starkscan finds this account&#39;s ERC-721 NFTs and sees its address. Every NFT shown is checked on-chain.",
     );
     const off = appearanceFlow(status, prefs({ collectiblesPreview: false }));
     expect(off).toContain('id="nfts-on-home"');

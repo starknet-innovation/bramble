@@ -3,6 +3,7 @@
  * appearance (theme and currency), and non-secret backup export/restore.
  */
 import { exportablePreferences } from "@bramble/settings/preferences-backup";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
@@ -52,13 +53,17 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
       buttonBusy(submitButton, true);
       void deps.wallet.setAccountLabel(accountId, label).then(
         async () => {
-          showToast(label ? "Name saved" : "Name cleared", "success", form);
+          showToast(
+            label ? t("settings.account.nameSaved") : t("settings.account.nameCleared"),
+            "success",
+            form,
+          );
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Name update failed"), "error", form);
+          showToast(errorDetails(error, t("settings.account.nameUpdateFailed")), "error", form);
           if (result) {
-            result.textContent = errorLine(error, "Name update failed");
+            result.textContent = errorLine(error, t("settings.account.nameUpdateFailed"));
           }
           buttonBusy(submitButton, false);
         },
@@ -82,14 +87,18 @@ const writeAccountVisibility = (
   buttonBusy(control, true);
   void deps.wallet.setAccountHidden(accountId, hidden).then(
     async () => {
-      showToast(hidden ? "Account hidden" : "Account shown", "success", control);
+      showToast(
+        hidden ? t("settings.account.hidden") : t("settings.account.shown"),
+        "success",
+        control,
+      );
       await rerender(deps);
     },
     (error: unknown) => {
-      showToast(errorDetails(error, "Account update failed"), "error", control);
+      showToast(errorDetails(error, t("settings.account.updateFailed")), "error", control);
       const result = deps.app?.querySelector<HTMLElement>("#account-visibility-result");
       if (result) {
-        result.textContent = errorLine(error, "Account update failed");
+        result.textContent = errorLine(error, t("settings.account.updateFailed"));
       }
       buttonBusy(control, false);
     },
@@ -156,11 +165,11 @@ export const bindContacts = (deps: SettingsUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.removeAddress(id).then(
         async () => {
-          showToast("Contact removed", "success", button);
+          showToast(t("settings.contacts.removed"), "success", button);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Contact removal failed"), "error", button);
+          showToast(errorDetails(error, t("settings.contacts.removalFailed")), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -188,15 +197,15 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         async () => {
           showToast(
             approvalSurface === "popup"
-              ? "Wallet requests open as a popup"
-              : "Wallet requests open in the side panel",
+              ? t("settings.request.openPopup")
+              : t("settings.request.openPanel"),
             "success",
             button,
           );
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Wallet request preference failed"), "error", button);
+          showToast(errorDetails(error, t("settings.request.failed")), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -215,11 +224,17 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.setDisplay({ theme }).then(
         async () => {
-          showToast(`Theme: ${theme}`, "success", button);
+          showToast(
+            theme === "light"
+              ? t("settings.appearance.themeLight")
+              : t("settings.appearance.themeDark"),
+            "success",
+            button,
+          );
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Theme update failed"), "error", button);
+          showToast(errorDetails(error, t("settings.appearance.themeFailed")), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -235,13 +250,21 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     currencySelect.disabled = true;
     void deps.wallet.setDisplay({ displayCurrency: value }).then(
       async () => {
-        showToast(`Currency: ${value.toUpperCase()}`, "success", currencySelect);
+        showToast(
+          t("settings.appearance.currencySaved", { currency: value.toUpperCase() }),
+          "success",
+          currencySelect,
+        );
         await rerender(deps);
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Currency update failed"), "error", currencySelect);
+        showToast(
+          errorDetails(error, t("settings.appearance.currencyFailed")),
+          "error",
+          currencySelect,
+        );
         if (result) {
-          result.textContent = errorLine(error, "Currency update failed");
+          result.textContent = errorLine(error, t("settings.appearance.currencyFailed"));
         }
         currencySelect.disabled = false;
       },
@@ -253,12 +276,16 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     vipToggle.disabled = true;
     void deps.wallet.setDisplay({ vipNotice: vipToggle.checked }).then(
       async () => {
-        showToast(vipToggle.checked ? "VIP notice on" : "VIP notice off", "success", vipToggle);
+        showToast(
+          vipToggle.checked ? t("settings.appearance.vipOn") : t("settings.appearance.vipOff"),
+          "success",
+          vipToggle,
+        );
         await rerender(deps);
       },
       (error: unknown) => {
         vipToggle.checked = !vipToggle.checked;
-        showToast(errorDetails(error, "VIP preference failed"), "error", vipToggle);
+        showToast(errorDetails(error, t("settings.appearance.vipFailed")), "error", vipToggle);
         vipToggle.disabled = false;
       },
     );
@@ -270,12 +297,16 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     // The literal state is written, so turning NFTs off is remembered as off.
     void deps.wallet.setDisplay({ collectiblesPreview: nftsToggle.checked }).then(
       async () => {
-        showToast(nftsToggle.checked ? "NFTs on Home" : "NFTs off", "success", nftsToggle);
+        showToast(
+          nftsToggle.checked ? t("settings.appearance.nftsOn") : t("settings.appearance.nftsOff"),
+          "success",
+          nftsToggle,
+        );
         await rerender(deps);
       },
       (error: unknown) => {
         nftsToggle.checked = !nftsToggle.checked;
-        showToast(errorDetails(error, "NFT preference failed"), "error", nftsToggle);
+        showToast(errorDetails(error, t("settings.appearance.nftsFailed")), "error", nftsToggle);
         nftsToggle.disabled = false;
       },
     );
@@ -288,7 +319,9 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     void deps.wallet.setDisplay({ productAnalytics: analyticsToggle.checked }).then(
       async () => {
         showToast(
-          analyticsToggle.checked ? "Product analytics enabled" : "Product analytics disabled",
+          analyticsToggle.checked
+            ? t("settings.analytics.enabled")
+            : t("settings.analytics.disabled"),
           "success",
           analyticsToggle,
         );
@@ -296,7 +329,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       },
       (error: unknown) => {
         analyticsToggle.checked = !analyticsToggle.checked;
-        showToast(errorDetails(error, "Analytics preference failed"), "error", analyticsToggle);
+        showToast(errorDetails(error, t("settings.analytics.failed")), "error", analyticsToggle);
         analyticsToggle.disabled = false;
       },
     );
@@ -307,7 +340,9 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     void deps.wallet.setDisplay({ reliabilityDiagnostics: diagnosticsToggle.checked }).then(
       async () => {
         showToast(
-          diagnosticsToggle.checked ? "Local diagnostics enabled" : "Local diagnostics cleared",
+          diagnosticsToggle.checked
+            ? t("settings.diagnostics.enabled")
+            : t("settings.diagnostics.cleared"),
           "success",
           diagnosticsToggle,
         );
@@ -315,7 +350,11 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
       },
       (error: unknown) => {
         diagnosticsToggle.checked = !diagnosticsToggle.checked;
-        showToast(errorDetails(error, "Diagnostic preference failed"), "error", diagnosticsToggle);
+        showToast(
+          errorDetails(error, t("settings.diagnostics.preferenceFailed")),
+          "error",
+          diagnosticsToggle,
+        );
         diagnosticsToggle.disabled = false;
       },
     );
@@ -335,11 +374,15 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
         anchor.download = "bramble-diagnostics.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
-        showToast("Diagnostics downloaded", "success", diagnosticsExport);
+        showToast(t("settings.diagnostics.downloaded"), "success", diagnosticsExport);
         buttonBusy(diagnosticsExport, false);
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Diagnostic export failed"), "error", diagnosticsExport);
+        showToast(
+          errorDetails(error, t("settings.diagnostics.exportFailed")),
+          "error",
+          diagnosticsExport,
+        );
         buttonBusy(diagnosticsExport, false);
       },
     );
@@ -370,11 +413,11 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
         anchor.download = "bramble-backup.json";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
-        showToast("Backup downloaded", "success", exportButton);
+        showToast(t("settings.backup.downloaded"), "success", exportButton);
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Backup export failed"), "error", exportButton);
+        showToast(errorDetails(error, t("settings.backup.exportFailed")), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );
@@ -383,7 +426,7 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
   importButton?.addEventListener("click", () => {
     const file = fileInput?.files?.[0];
     if (!file) {
-      showToast("Choose a backup file first", "error", importButton);
+      showToast(t("settings.backup.chooseFileFirst"), "error", importButton);
       return;
     }
     buttonBusy(importButton, true);
@@ -392,13 +435,13 @@ export const bindBackup = (deps: SettingsUiDeps): void => {
       .then((text) => deps.wallet.importPreferences(JSON.parse(text) as unknown))
       .then(
         async () => {
-          showToast("Backup restored", "success", importButton);
+          showToast(t("settings.backup.restored"), "success", importButton);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Backup restore failed"), "error", importButton);
+          showToast(errorDetails(error, t("settings.backup.restoreFailed")), "error", importButton);
           if (result) {
-            result.textContent = errorLine(error, "Backup restore failed");
+            result.textContent = errorLine(error, t("settings.backup.restoreFailed"));
           }
           buttonBusy(importButton, false);
         },

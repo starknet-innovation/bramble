@@ -17,6 +17,7 @@ import {
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 
+import { t, th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
 
 /**
@@ -25,7 +26,7 @@ import { icon } from "../../shared/icons";
  * as options are pressed; `selected` seeds the initial choice.
  */
 const groupIconPicker = (selected: AccountGroupIcon = "folder"): string => `
-  <div class="group-icon-picker" role="radiogroup" aria-label="Folder icon">
+  <div class="group-icon-picker" role="radiogroup" aria-label="${th("settings.folders.icon")}">
     ${GROUP_ICONS.map(
       (glyph) =>
         `<button class="group-icon-option" type="button" data-group-icon="${glyph}" aria-pressed="${glyph === selected}" aria-label="${glyph}" title="${glyph}">${icon(glyph)}</button>`,
@@ -40,18 +41,18 @@ const groupIconPicker = (selected: AccountGroupIcon = "folder"): string => `
 export const newGroupForm = (): string => `
   <form class="new-group-form">
     ${inputControl({
-      ariaLabel: "New folder name",
+      ariaLabel: t("settings.folders.newName"),
       attributes: { "data-group-name": true },
       autocomplete: "off",
       className: "group-name-input",
       maxlength: 64,
-      placeholder: "Folder name",
+      placeholder: t("settings.folders.name"),
     })}
     ${groupIconPicker()}
     ${button({
       attributes: { "data-create-group": true },
       icon: "plus",
-      label: "Create folder",
+      label: t("settings.folders.create"),
       size: "small",
       type: "submit",
       variant: "secondary",
@@ -68,7 +69,7 @@ export const newGroupForm = (): string => `
 export const editGroupForm = (group: AccountGroup): string => `
   <form class="edit-group-form" data-edit-group="${escapeHtml(group.id)}">
     ${inputControl({
-      ariaLabel: "Folder name",
+      ariaLabel: t("settings.folders.name"),
       attributes: { "data-group-name": true },
       autocomplete: "off",
       className: "group-name-input",
@@ -79,7 +80,7 @@ export const editGroupForm = (group: AccountGroup): string => `
     ${button({
       attributes: { "data-save-group": group.id },
       icon: "check",
-      label: "Save changes",
+      label: t("settings.folders.saveChanges"),
       size: "small",
       type: "submit",
       variant: "secondary",
@@ -95,6 +96,6 @@ export const editGroupForm = (group: AccountGroup): string => `
 export const accountGroupsLine = (memberGroups: AccountGroups): string =>
   memberGroups.length === 0
     ? ""
-    : `<span class="account-groups-line" aria-label="Folders: ${escapeHtml(
-        memberGroups.map((group) => group.name).join(", "),
-      )}">${memberGroups.map((group) => icon(group.icon)).join("")}</span>`;
+    : `<span class="account-groups-line" aria-label="${th("settings.folders.memberOf", {
+        names: memberGroups.map((group) => group.name).join(", "),
+      })}">${memberGroups.map((group) => icon(group.icon)).join("")}</span>`;

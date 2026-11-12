@@ -173,7 +173,8 @@ describe("bindReveal", () => {
 
     expect(html).toContain("key is on your Ledger");
     // Which phrase recovers it: the Ledger's, not a Bramble one (mc-wallet #476).
-    expect(html).toContain("use the Ledger's own recovery phrase");
+    // Catalog text is escaped into the template, so the apostrophe is an entity.
+    expect(html).toContain("use the Ledger&#39;s own recovery phrase");
     // No reveal form or secret output region is emitted for a hardware account.
     expect(html).not.toContain('id="reveal-form"');
     expect(html).not.toContain('id="reveal-output"');

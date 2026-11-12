@@ -3,6 +3,8 @@
  * button removes an origin's grant through the background and re-renders the
  * refreshed list.
  */
+
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { failureTone } from "../../runtime/runtime-errors";
@@ -32,13 +34,17 @@ export const bindConnectedSites = ({ app, render, wallet }: ConnectedSitesUiDeps
       buttonBusy(button, true);
       void wallet.revokeOrigin(origin).then(
         async () => {
-          showToast("Access revoked", "success", button);
+          showToast(t("settings.origins.revoked"), "success", button);
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Revoke failed"), failureTone(error), button);
+          showToast(
+            errorDetails(error, t("settings.origins.revokeFailed")),
+            failureTone(error),
+            button,
+          );
           if (result) {
-            result.textContent = errorLine(error, "Revoke failed");
+            result.textContent = errorLine(error, t("settings.origins.revokeFailed"));
           }
           buttonBusy(button, false);
         },
