@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use starknet_types_core::felt::Felt;
 
-use krusty_kms::AccountClass;
+use wallet_core::accounts::constructor_calldata;
 use wallet_core::send::calls;
 use wallet_core::send::plan::{Account, Kind, Token, Transfer, TransferRefusal};
 use wallet_core::send::sign::Deployment;
@@ -17,6 +17,7 @@ use wallet_core::send::u256::U256;
 
 use super::plan::TransferPlan;
 use super::types::{SendError, TransferRequest};
+use crate::account_address::argent_shape;
 use crate::account_catalog::{self, AccountFamily};
 use crate::account_store::StoredAccount;
 use crate::activity::{observation, store};
@@ -55,8 +56,8 @@ enum Use {
 /// The DEPLOY_ACCOUNT a record's address commits to (`accountDeployment`), or `None` when this
 /// wallet does not deploy the record's class. OpenZeppelin: salt 0 and `[public_key]`. Ready:
 /// the pinned Argent 0.4.0 class or Xverse's build of it (`DEPLOYABLE_ARGENT_CLASSES`), with the
-/// record's salt and Krusty's constructor calldata (`[0, public_key, 1]`: a Starknet signer and no
-/// guardian). Braavos: only the
+/// record's salt and the core's constructor calldata (`[0, public_key, 1]`: a Starknet signer and
+/// no guardian), at the layout the catalog gives the class. Braavos: only the
 /// modern deployment class, with the public key as salt and sole constructor argument (an older
 /// base-class counterfactual is refused, since its deployment authorization is not established).
 /// Which classes are deployable is this catalog's rule; `Plan::new` then drops any deployment
@@ -69,11 +70,10 @@ fn deployment(record: &StoredAccount, public_key: &Felt) -> Option<Deployment> {
             if class_hash == account_catalog::catalog().argent_default
                 || class_hash == account_catalog::catalog().argent_xverse =>
         {
-            let argent = account_catalog::argent_preset(class_hash)?;
-            (
-                record.salt_felt()?,
-                argent.build_constructor_calldata(public_key),
-            )
+            let shape = argent_shape(AccountFamily::Argent, &class_hash).ok()?;
+            let calldata =
+                constructor_calldata(AccountFamily::Argent, &class_hash, shape, public_key).ok()?;
+            (record.salt_felt()?, calldata)
         }
         AccountFamily::Braavos if class_hash == account_catalog::catalog().braavos_deployment => {
             (*public_key, vec![*public_key])

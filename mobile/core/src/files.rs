@@ -28,8 +28,8 @@ pub(crate) fn write_atomic(dir: &Path, name: &str, body: &[u8]) -> Result<(), Co
     commit(dir, name, body).map_err(storage)
 }
 
-/// The vault directory as the shared core's `Storage`: a key is a file name in it, and a write
-/// is `write_atomic`'s.
+/// The wallet directory as the shared core's `Storage` (the vault and the activity log): a key is a
+/// file name in it, a write is `write_atomic`'s, and a rename is `fs::rename` within it.
 pub(crate) struct Directory<'a>(pub &'a Path);
 
 impl wallet_core::host::Storage for Directory<'_> {
@@ -43,5 +43,10 @@ impl wallet_core::host::Storage for Directory<'_> {
 
     fn write(&self, key: &str, value: &[u8]) -> Result<(), wallet_core::Error> {
         commit(self.0, key, value).map_err(wallet_core::Error::storage)
+    }
+
+    fn rename(&self, from: &str, to: &str) -> Result<(), wallet_core::Error> {
+        fs::rename(self.0.join(from), self.0.join(to))
+            .map_err(|_| wallet_core::Error::storage("rename file"))
     }
 }
