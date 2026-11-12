@@ -15,6 +15,7 @@ import { multisigProposeMessages } from "./messages/multisig-propose";
 import { multisigSetupMessages } from "./messages/multisig-setup";
 import { multisigSignerMessages } from "./messages/multisig-signers";
 import { onboardingMessages } from "./messages/onboarding";
+import { privacyMessages } from "./messages/privacy";
 import { sendMessages } from "./messages/send";
 import { settingsMessages } from "./messages/settings";
 import { swapStakingMessages } from "./messages/swap-staking";
@@ -25,6 +26,7 @@ const en = {
   ...multisigSignerMessages.en,
   ...multisigMessages.en,
   ...onboardingMessages.en,
+  ...privacyMessages.en,
   ...sendMessages.en,
   ...settingsMessages.en,
   ...swapStakingMessages.en,
@@ -39,6 +41,7 @@ export const uiCatalogs = {
     ...multisigSignerMessages["zh-Hans"],
     ...multisigMessages["zh-Hans"],
     ...onboardingMessages["zh-Hans"],
+    ...privacyMessages["zh-Hans"],
     ...sendMessages["zh-Hans"],
     ...settingsMessages["zh-Hans"],
     ...swapStakingMessages["zh-Hans"],

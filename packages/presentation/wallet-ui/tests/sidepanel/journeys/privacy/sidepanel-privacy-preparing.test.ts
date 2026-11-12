@@ -25,10 +25,7 @@ import {
   bindPrivacy,
   type PrivacyUiDeps,
 } from "../../../../src/sidepanel/journeys/privacy/privacy-ui";
-import {
-  PROVING_HINT,
-  privacyFlow,
-} from "../../../../src/sidepanel/journeys/privacy/privacy-views";
+import { privacyFlow, provingHint } from "../../../../src/sidepanel/journeys/privacy/privacy-views";
 import type { SendIntent } from "../../../../src/sidepanel/journeys/send/send-model";
 import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -198,7 +195,7 @@ describe("the preparing screen", () => {
     expect(preparingStep(app)).toBe("proving");
     expect(app.textContent).toContain("Preparing to go private");
     expect(app.textContent).toContain("Build registration proof");
-    expect(liveness(app)).toBe(PROVING_HINT);
+    expect(liveness(app)).toBe(provingHint());
     // The way back is on the screen; the home entry it replaced is not.
     expect(app.querySelector("#privacy-cancel")).not.toBeNull();
     expect(app.querySelector("[data-privacy-open]")).toBeNull();
@@ -213,7 +210,7 @@ describe("the preparing screen", () => {
 
     registration.report({ elapsedMs: 72_000, phase: "proving" });
 
-    expect(liveness(app)).toBe(`Proving · 1 min 12 s. ${PROVING_HINT}`);
+    expect(liveness(app)).toBe(`Proving · 1 min 12 s. ${provingHint()}`);
     // Rewritten, not repainted: the same node carries the new text.
     expect(app.querySelector("#privacy-liveness")).toBe(before);
     const current = journey();
@@ -224,7 +221,7 @@ describe("the preparing screen", () => {
 
     repaint();
 
-    expect(liveness(app)).toBe(`Proving · 1 min 12 s. ${PROVING_HINT}`);
+    expect(liveness(app)).toBe(`Proving · 1 min 12 s. ${provingHint()}`);
   });
 
   test("the review replaces the wait when the proof lands", async () => {
@@ -258,7 +255,7 @@ describe("the preparing screen", () => {
     expect(views).toEqual(["privacy", "privacy"]);
     expect(preparingStep(app)).toBe("proving");
     // The rejoined screen opens on the proof's latest progress, not from zero.
-    expect(liveness(app)).toBe(`Waiting for pool maturity · 30 s. ${PROVING_HINT}`);
+    expect(liveness(app)).toBe(`Waiting for pool maturity · 30 s. ${provingHint()}`);
   });
 
   test("backing out drops the outcome, and pressing again rejoins the same proof", async () => {

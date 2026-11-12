@@ -8,15 +8,15 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import {
-  SHADOW_ACCOUNTS_CHECK,
   SHADOW_ACCOUNTS_CONFIRM_SWEEP,
-  SHADOW_ACCOUNTS_EMPTY,
-  SHADOW_ACCOUNTS_NOTHING_HELD,
-  SHADOW_ACCOUNTS_OTHER_ANONYMIZER,
-  SHADOW_ACCOUNTS_SWEEP,
-  SHADOW_ACCOUNTS_SWEEP_SENT,
-  SHADOW_ACCOUNTS_UNDEPLOYED,
-  SHADOW_ACCOUNTS_UNLISTED,
+  shadowAccountsCheck,
+  shadowAccountsEmpty,
+  shadowAccountsNothingHeld,
+  shadowAccountsOtherAnonymizer,
+  shadowAccountsSweep,
+  shadowAccountsSweepSent,
+  shadowAccountsUndeployed,
+  shadowAccountsUnlisted,
 } from "./shadow-accounts-copy";
 import type { ShadowAccountView, ShadowScopeView } from "./shadow-accounts-runtime";
 
@@ -58,7 +58,7 @@ const bindSweep = (
   account: ShadowAccountView,
   row: HTMLElement,
 ): void => {
-  const sweep = control(SHADOW_ACCOUNTS_SWEEP);
+  const sweep = control(shadowAccountsSweep());
   row.append(sweep);
   sweep.addEventListener("click", () => {
     buttonBusy(sweep, true);
@@ -72,8 +72,9 @@ const bindSweep = (
           buttonBusy(confirm, true);
           void wallet.executePrivacyPreparation(preparation.id).then(
             () => {
-              confirm.replaceWith(element("p", SHADOW_ACCOUNTS_SWEEP_SENT, "hint"));
-              showToast(SHADOW_ACCOUNTS_SWEEP_SENT, "success", row);
+              const sent = shadowAccountsSweepSent();
+              confirm.replaceWith(element("p", sent, "hint"));
+              showToast(sent, "success", row);
             },
             (error: unknown) => {
               const details = errorDetails(error, "Private transaction failed");
@@ -115,13 +116,13 @@ const accountRow = (
   const row = element("li", undefined, "shadow-account-row");
   const head = element("p");
   head.append(element("strong", nonceLabel(account.nonce)), " ", element("code", account.address));
-  if (!account.deployed) head.append(" · ", SHADOW_ACCOUNTS_UNDEPLOYED);
+  if (!account.deployed) head.append(" · ", shadowAccountsUndeployed());
   row.append(head);
   row.append(
     element(
       "p",
       account.balances.length === 0
-        ? SHADOW_ACCOUNTS_NOTHING_HELD
+        ? shadowAccountsNothingHeld()
         : account.balances.map((balance) => `${balance.formatted} ${balance.symbol}`).join(", "),
       "hint",
     ),
@@ -134,10 +135,10 @@ const scopeCard = (wallet: ShadowWallet, scope: ShadowScopeView): HTMLElement =>
   const card = element("li", undefined, "shadow-scope");
   card.append(element("strong", scope.origin), element("p", scope.label, "hint"));
   if (!scope.current) {
-    card.append(element("p", SHADOW_ACCOUNTS_OTHER_ANONYMIZER(scope.anonymizer), "hint"));
+    card.append(element("p", shadowAccountsOtherAnonymizer(scope.anonymizer), "hint"));
     return card;
   }
-  const check = control(SHADOW_ACCOUNTS_CHECK);
+  const check = control(shadowAccountsCheck());
   const results = element("div");
   card.append(check, results);
   check.addEventListener("click", () => {
@@ -152,9 +153,7 @@ const scopeCard = (wallet: ShadowWallet, scope: ShadowScopeView): HTMLElement =>
           results.append(
             element(
               "p",
-              SHADOW_ACCOUNTS_UNLISTED(
-                unlisted.map((nonce) => BigInt(nonce).toString()).join(", #"),
-              ),
+              shadowAccountsUnlisted(unlisted.map((nonce) => BigInt(nonce).toString()).join(", #")),
               "hint",
             ),
           );
@@ -188,7 +187,7 @@ export const bindShadowAccounts = ({
   void wallet.loadShadowAccounts().then(
     (scopes) => {
       if (scopes.length === 0) {
-        list.replaceChildren(element("p", SHADOW_ACCOUNTS_EMPTY, "empty-state"));
+        list.replaceChildren(element("p", shadowAccountsEmpty(), "empty-state"));
         return;
       }
       const cards = element("ul", undefined, "shadow-scopes");
