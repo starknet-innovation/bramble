@@ -22,6 +22,7 @@ import {
 } from "./mobile-parity";
 import { ACCOUNTS_PARITY_FIXTURE_PATHS, computeAccountParity } from "./mobile-parity-accounts";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
+import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
 
 const envelopePassword = "parity-vector-password";
 const envelopeScope = "bramble.parity";
@@ -77,6 +78,17 @@ for (const part of ["familiesMainnet", "familiesSepolia", "recovery", "rules"] a
   const path = ACCOUNTS_PARITY_FIXTURE_PATHS[part];
   await writeFile(path, `${JSON.stringify(accounts[part], null, 2)}\n`);
   console.log(`wrote ${path}`);
+}
+const scan = await computeScanParity();
+for (const part of ["scan", "signing"] as const) {
+  const path = ACCOUNTS_SCAN_FIXTURE_PATHS[part];
+  await writeFile(path, `${JSON.stringify(scan[part], null, 2)}\n`);
+  console.log(`wrote ${path}`);
+}
+// Biome owns JSON style in this repository; the drift test compares the fixtures as parsed data.
+const scanPaths = Object.values(ACCOUNTS_SCAN_FIXTURE_PATHS);
+if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...scanPaths]).exitCode !== 0) {
+  throw new Error("biome could not format the recovery-scan fixtures");
 }
 
 // The transaction fixture and Send copy tables are part of the same `bun run mobile:parity` run.

@@ -8,26 +8,16 @@ import {
 } from "@bramble/settings/preferences";
 import type { AccountDerivationInput } from "@bramble/vault/accounts";
 import {
-  ARGENT_ACCOUNT_CLASS_HASH,
-  BRAAVOS_DEPLOYMENT_CLASS_HASH,
-  deploymentClasses,
-  XVERSE_ARGENT_CLASS_HASH,
-} from "@bramble/wallet-model/account-families";
-import type { AccountContractType } from "@bramble/wallet-model/accounts";
-import {
   isRecoverableAccountRef,
   type RecoverableAccountRef,
 } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import {
-  STARKNET_NETWORKS,
-  type StarknetNetworkId,
-  sameFelt,
-} from "@bramble/wallet-model/networks";
-import {
+  keepsRecoveryCandidate,
   RECOVERY_SCAN_LIMITS,
   RESERVED_AGENT_ACCOUNT_INDEX,
   type RecoveryAccountCandidate,
-  type RecoveryDerivationKind,
+  recoveryScanShapes,
   recoveryScanTarget,
 } from "@bramble/wallet-model/recovery";
 import { readAccountActivity } from "../accounts/account-activity";
@@ -135,59 +125,6 @@ const discoveryFingerprint = (
     mnemonic: input.mnemonic,
     networkId: input.networkId,
   });
-
-// One derivation per class an account could have been deployed with, not one
-// per family. A Ready account deployed at Argent 0.3.x keeps that address
-// forever, whatever it upgraded to, so scanning only the release this wallet
-// creates finds nobody who arrived from Ready. The wallet's own OpenZeppelin
-// class stays resolved per network by Krusty rather than listed here.
-//
-// Argent walks two ladders, and every Argent release is scanned on both. The
-// Ready extension derives its keys on an ETH-seeded tree ("argentx-bip44",
-// issue 505). Other Argent-account apps, Ready mobile among them, derive
-// straight from the phrase on this wallet's own ladder, and their accounts
-// date from Argent 0.3.x too: one deployed at 0.3.1 and since upgraded was
-// missed because only the release this wallet creates was scanned there.
-// Xverse derives on that own ladder at its own Argent build (issue 734), so
-// that class is scanned there and never on Ready's. Braavos keys live on the
-// plain BIP-44 address axis, which the vault derivation maps to by family.
-const recoveryScanShapes = (): readonly {
-  readonly accountContractType: AccountContractType;
-  readonly classHash?: string;
-  readonly derivation?: RecoveryDerivationKind;
-}[] => [
-  { accountContractType: "openzeppelin" },
-  ...deploymentClasses("argent").map((entry) => ({
-    accountContractType: "argent" as const,
-    classHash: entry.classHash,
-  })),
-  ...deploymentClasses("argent")
-    .filter((entry) => !sameFelt(entry.classHash, XVERSE_ARGENT_CLASS_HASH))
-    .map((entry) => ({
-      accountContractType: "argent" as const,
-      classHash: entry.classHash,
-      derivation: "argentx-bip44" as const,
-    })),
-  ...deploymentClasses("braavos").map((entry) => ({
-    accountContractType: "braavos" as const,
-    classHash: entry.classHash,
-  })),
-];
-
-// Whether this candidate is listed before it exists on chain: one row per
-// family at the class it creates today (its own OpenZeppelin account, Argent at
-// the release it deploys, Braavos at the current app's deployment class), so
-// every group shows its index-zero address. Only OpenZeppelin is selectable
-// unused; the picker shows the other two view-only, since an undeployed,
-// unfunded Ready or Braavos address belongs to nobody. Older releases and
-// classes are only ever found.
-const isCreatableCandidate = (account: RecoverableAccountRef): boolean =>
-  account.derivation.kind === "starknet-bip44" &&
-  (account.accountContractType === "openzeppelin" ||
-    (account.accountContractType === "argent" &&
-      sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)) ||
-    (account.accountContractType === "braavos" &&
-      sameFelt(account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH)));
 
 const scanRecoveryIndex = async (
   deps: OnboardingOpsDeps,
@@ -300,11 +237,8 @@ const runRecoveryDiscovery = async (
       poolAddress,
     );
     discovered.push(
-      ...candidates.filter(
-        (candidate) =>
-          candidate.deployed ||
-          candidate.funded ||
-          (isCreatableCandidate(candidate.account) && (accountIndex === 0 || manual !== undefined)),
+      ...candidates.filter((candidate) =>
+        keepsRecoveryCandidate(candidate, accountIndex, manual !== undefined),
       ),
     );
   }
