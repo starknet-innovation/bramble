@@ -11,6 +11,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { encryptJson } from "@bramble/vault/encrypted-store";
+import { writeNostrCoordinationParity } from "./mobile-assets/write-nostr-coordination-parity";
 import { writeNostrMultisigParity } from "./mobile-assets/write-nostr-multisig-parity";
 import {
   computeParityAccounts,
@@ -95,6 +96,7 @@ if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...scanPaths]).exitCode
 await import("./generate-mobile-transaction-vectors");
 
 console.log(`wrote ${await writeNostrMultisigParity()}`);
+for (const path of await writeNostrCoordinationParity()) console.log(`wrote ${path}`);
 
 await writeFile(PORTFOLIO_PARITY_FIXTURE_PATH, await renderPortfolioParity());
 console.log(`wrote ${PORTFOLIO_PARITY_FIXTURE_PATH}`);

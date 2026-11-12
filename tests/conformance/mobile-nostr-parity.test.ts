@@ -2,10 +2,15 @@
  * The mobile core's Nostr and multisig vectors must stay what the extension computes, and each
  * wallet must open the other's gift wraps. Re-run `bun run mobile:parity` (and, for the Rust-made
  * wrap, `BRAMBLE_WRITE_FIXTURES=1 cargo test --locked --test nostr_multisig_parity` in
- * mobile/core) and commit the result when these fail.
+ * mobile/core) and commit the result when these fail. The coordination fixture parts
+ * (`nostr-coordination-parity-*.json`) are deterministic and recomputed in full.
  */
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
+import {
+  computeNostrCoordinationParity,
+  NOSTR_COORDINATION_FIXTURE_PATHS,
+} from "../../scripts/mobile-nostr-coordination-parity";
 import {
   COSIGNER_NOSTR_INDEX,
   computeNostrMultisigParity,
@@ -38,6 +43,16 @@ describe("mobile Nostr and multisig parity", () => {
       NOSTR_MULTISIG_FIXTURE_PATH,
     );
     expect(deterministic).toEqual(JSON.parse(JSON.stringify(await computeNostrMultisigParity())));
+  });
+
+  test("the committed coordination vectors are what the extension computes today", async () => {
+    const parts = JSON.parse(JSON.stringify(await computeNostrCoordinationParity())) as Record<
+      string,
+      unknown
+    >;
+    for (const [part, path] of Object.entries(NOSTR_COORDINATION_FIXTURE_PATHS)) {
+      expect(await readJson<unknown>(path)).toEqual(parts[part]);
+    }
   });
 
   test("the extension-made gift wrap opens, and its variants never do", async () => {

@@ -209,3 +209,50 @@ pub fn wrap_gift(
 ) -> Result<String, crate::CoreError> {
     crate::nostr::wrap(mnemonic, index, recipient, identifier, content, now)
 }
+
+/// The relay judges and acknowledgement counting, which no FFI call exposes on their own (the
+/// sync judge sits inside `NostrSyncPlan`; publishing is deferred), for the coordination parity
+/// suite against the extension.
+pub use crate::nostr_relay::{publish_counts, PublishJudge, SyncJudge};
+
+/// The sender rule inside `coordination::is_trusted`, which no FFI call exposes on its own: whether
+/// a `bramble.multisig` package from `sender` naming a multisig on `network_id` is trusted, given
+/// the saved `contacts` (address-book entries as JSON) and a snapshot whose signer set (ascending
+/// canonical GUIDs) equals the record's stored authority.
+pub fn coordination_sender_trusted(
+    contacts_json: &str,
+    network_id: &str,
+    sender: &str,
+    signer_guids: &[String],
+) -> bool {
+    let contacts: Vec<crate::contacts::Entry> =
+        serde_json::from_str(contacts_json).expect("address-book entries");
+    let class_hash = crate::argent_multisig::class_hash();
+    let record = crate::multisig_store::Record {
+        account_contract_type: "argent-multisig".into(),
+        address: "0x123".into(),
+        class_hash: class_hash.into(),
+        current_config: None,
+        deployment: None,
+        id: format!("{network_id}:0x123"),
+        name: None,
+        network_id: network_id.into(),
+    };
+    let snapshot =
+        serde_json::json!({"classHash": class_hash, "signerGuids": signer_guids, "threshold": 1});
+    let content = serde_json::json!({"intent": {"accountId": record.id, "configSnapshot": snapshot},
+        "kind": "bramble.argent-multisig-intent", "version": 1});
+    let opened = crate::nostr::NostrApplicationData {
+        content: content.to_string(),
+        identifier: crate::multisig_constants::get()
+            .coordination
+            .identifier
+            .clone(),
+        sender_public_key: sender.into(),
+    };
+    let authority = crate::multisig_store::Authority {
+        threshold: 1,
+        signer_guids: signer_guids.to_vec(),
+    };
+    crate::coordination::is_trusted(&opened, &contacts, &record, Some(&authority))
+}
