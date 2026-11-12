@@ -55,7 +55,11 @@ import type {
   ApprovalQueue,
   ApprovalQueueOptions,
 } from "./approval-queue-types";
-import { switchSummaryTexts, typedDataSummaryTexts } from "./approval-review-texts";
+import {
+  copySummaryTexts,
+  switchSummaryTexts,
+  typedDataSummaryTexts,
+} from "./approval-review-texts";
 import { requireRenderableSummaries } from "./approval-summary-bound";
 import { sameWatchTarget, watchTarget } from "./approval-watch-target";
 
@@ -343,6 +347,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       request,
       reviewAssets = [],
       summaries,
+      summaryTexts,
     }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
@@ -363,6 +368,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
           ...copyReviewAssets(reviewAssets),
           strk20Request: cloneApprovalValue(request),
           summaries: [...summaries],
+          ...copySummaryTexts(summaryTexts),
         },
         arrivedAt,
       );
@@ -377,6 +383,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       reviewAssets = [],
       shadowAccountAnonymizer,
       summaries,
+      summaryTexts,
     }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
@@ -395,6 +402,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
           ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
           strk20Plan: cloneApprovalValue(plan),
           summaries: [...summaries],
+          ...copySummaryTexts(summaryTexts),
         },
         arrivedAt,
       );

@@ -5,6 +5,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import type { MessageRef } from "@bramble/core/i18n";
 import { isSha256Digest } from "@bramble/core/ids";
 import type { PaymasterAuthorizationReview } from "@bramble/privacy/paymaster-typed-data";
 import type {
@@ -65,6 +66,12 @@ type BasePreparation = {
   readonly id: string;
   readonly poolAddress: string;
   readonly summaries: readonly string[];
+  /**
+   * `summaries` as review references, index for index; absent when any line
+   * has none. Display-only and not committed: the panel renders a reference
+   * only when it re-renders to exactly the committed English line.
+   */
+  readonly summaryTexts?: readonly MessageRef[] | undefined;
   readonly token: TokenConfig;
 };
 
@@ -205,6 +212,7 @@ export type Strk20WalletPreparationReview = {
     readonly token: string;
   };
   readonly summaries: readonly string[];
+  readonly summaryTexts?: readonly MessageRef[];
   readonly symbol: string;
   readonly tokenId: string;
 };
@@ -319,6 +327,14 @@ const relayFeeReview = (
   };
 };
 
+// The summary references, cloned for the panel when the producer sent them.
+const reviewTextsOf = (
+  preparation: Strk20WalletPreparation,
+): Pick<Strk20WalletPreparationReview, "summaryTexts"> =>
+  preparation.summaryTexts === undefined
+    ? {}
+    : { summaryTexts: structuredClone(preparation.summaryTexts) };
+
 const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparationReview => ({
   ...(preparation.kind === "register" || preparation.kind === "shadow-sweep"
     ? {}
@@ -347,6 +363,7 @@ const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparation
     ? { relayFee: relayFeeReview(preparation.token, preparation.plan) }
     : {}),
   summaries: [...preparation.summaries],
+  ...reviewTextsOf(preparation),
   symbol: preparation.token.symbol,
   tokenId: preparation.token.id,
   ...sponsoredReview(preparation),

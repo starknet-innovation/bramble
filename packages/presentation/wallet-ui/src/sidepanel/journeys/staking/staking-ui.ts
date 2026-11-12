@@ -28,6 +28,7 @@
  */
 
 import { t } from "../../../i18n/messages";
+import { reviewLine } from "../../../i18n/review";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
@@ -216,9 +217,13 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
           if (!isLatest(row ?? null, generation)) return release();
           const fee = formatFeeEstimate(preparation.reviewedFee);
           ARMED.set(button, preparation.id);
-          // `preparation.review` is the background's English sentence.
+          // `preparation.review` is the background's English sentence; its
+          // reference renders it in the reader's language when they agree.
           if (review) {
-            review.textContent = t("review.staking.review", { fee, review: preparation.review });
+            review.textContent = t("review.staking.review", {
+              fee,
+              review: reviewLine(preparation.reviewText, preparation.review),
+            });
           }
           button.replaceChildren(t("review.staking.confirm", { fee }));
           button.classList.remove("secondary");

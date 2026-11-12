@@ -7,7 +7,15 @@
  */
 import { hasOnlyKnownKeys, isRecord, isRiskFlagCode } from "@bramble/core/json";
 import { isInsightText } from "@bramble/permissions/insight-messages";
+import { isStrk20ReviewText } from "@bramble/privacy/review-messages";
 import { isReviewText, type ReviewText } from "@bramble/transactions/review-messages";
+
+/**
+ * A summary line's reference: a verifier review sentence or a STRK20 one.
+ * Each catalog checks its own key space, so an unknown key fails closed.
+ */
+const isSummaryReference = (value: unknown): boolean =>
+  isReviewText(value) || isStrk20ReviewText(value);
 
 /** The longest risk-flag or summary line the panel renders. */
 const REVIEW_LINE_MAX_LENGTH = 300;
@@ -35,7 +43,7 @@ export const isReviewedRiskFlag = (value: unknown): value is ReviewedRiskFlag =>
  */
 export const isOptionalSummaryTexts = (value: unknown, lines: number): boolean =>
   value === undefined ||
-  (Array.isArray(value) && value.length === lines && value.every(isReviewText));
+  (Array.isArray(value) && value.length === lines && value.every(isSummaryReference));
 
 /**
  * Whether `value` is absent or one site-warning reference per English insight

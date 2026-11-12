@@ -67,15 +67,25 @@ const filler = (characters: number): string => "x".repeat(characters);
 
 // The largest review-sentence reference a line of `characters` can carry.
 // Every fact is rendered verbatim into the English line, so a reference's fact
-// text never exceeds the line it renders; the shape carries the most facts and
-// the one nesting level the panel accepts, so it also bounds the node count.
+// text never exceeds the line it renders. The shape is the most the panel
+// accepts (eight facts, one of them a nested reference with eight of its own)
+// under names as long as any real fact name, so it also bounds keys and nodes.
+const FACT_NAME_CHARACTERS = 24;
+const MAX_REFERENCE_FACTS = 8;
+const factName = (index: number): string => `f${index}`.padEnd(FACT_NAME_CHARACTERS, "x");
+const worstCaseFacts = (characters: number, nested: boolean): Record<string, unknown> =>
+  Object.fromEntries(
+    Array.from({ length: MAX_REFERENCE_FACTS }, (_, index) => [
+      factName(index),
+      index === 0
+        ? filler(characters)
+        : nested && index === MAX_REFERENCE_FACTS - 1
+          ? { facts: worstCaseFacts(1, false), key: filler(MESSAGE_KEY_CHARACTERS) }
+          : filler(1),
+    ]),
+  );
 const worstCaseText = (characters: number): Record<string, unknown> => ({
-  facts: {
-    a: filler(characters),
-    b: filler(1),
-    c: filler(1),
-    d: { facts: { e: filler(1), f: filler(1) }, key: filler(MESSAGE_KEY_CHARACTERS) },
-  },
+  facts: worstCaseFacts(characters, true),
   key: filler(MESSAGE_KEY_CHARACTERS),
 });
 

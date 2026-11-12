@@ -5,9 +5,11 @@
  * chain by a digest, until one confirm claims them. A confirm can therefore
  * sign only what was reviewed, from the account it was reviewed on.
  */
+
 import { WalletError } from "@bramble/core/errors";
 import { isSha256Digest } from "@bramble/core/ids";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { ReviewText } from "@bramble/transactions/review-messages";
 import type { StakingAction } from "@bramble/transactions/staking-calls";
 import type { Call } from "starknet";
 import type { ApprovalContext } from "../approvals/approval-context";
@@ -28,6 +30,12 @@ export type StakingPreparation = {
   readonly pool: string;
   /** What the calls do, in the reviewed signing wording. */
   readonly review: string;
+  /**
+   * `review` as a reference, for the panel to render in the reader's language.
+   * Display-only and not committed: the panel shows it only when it re-renders
+   * to exactly the committed English.
+   */
+  readonly reviewText?: ReviewText;
   readonly reviewedFee: FeeEstimate;
   /** The deterministic Activity summary. */
   readonly summary: string;
@@ -41,6 +49,7 @@ export type StakingPreparation = {
 type StakingPreparationReview = {
   readonly id: string;
   readonly review: string;
+  readonly reviewText?: ReviewText;
   readonly reviewedFee: FeeEstimate;
 };
 
@@ -103,7 +112,12 @@ export const createStakingPreparationStore = (): StakingPreparationStore => {
         if (typeof oldest !== "string") break;
         pending.delete(oldest);
       }
-      return { id: copy.id, review: copy.review, reviewedFee: { ...copy.reviewedFee } };
+      return {
+        id: copy.id,
+        review: copy.review,
+        ...(copy.reviewText === undefined ? {} : { reviewText: structuredClone(copy.reviewText) }),
+        reviewedFee: { ...copy.reviewedFee },
+      };
     },
   };
 };

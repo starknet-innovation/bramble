@@ -56,6 +56,19 @@ const en = {
     "{contract} is not a token or contact this wallet knows. Verify the contract before continuing.",
   "review.flag.unlimitedApproval":
     "This grants an effectively unlimited spending allowance. Approve only the amount you intend to spend.",
+  "review.stakeAction.cancelUnstake":
+    "Cancel your unstake and keep the {symbol} staked with {validator}.",
+  "review.stakeAction.claim": "Claim your STRK rewards from {validator}.",
+  "review.stakeAction.claimElsewhere":
+    "Claim your STRK rewards from {validator}. Rewards are paid to {reward}, not this account.",
+  "review.stakeAction.stake":
+    "Stake {figure} with {validator}. This approves exactly {figure} for its pool.",
+  "review.stakeAction.stakeElsewhere":
+    "Stake {figure} with {validator}. This approves exactly {figure} for its pool. Rewards are paid to {reward}, not this account.",
+  "review.stakeAction.unstake":
+    "Unstake {figure} from {validator}. It earns no rewards until you withdraw it.",
+  "review.stakeAction.validator": "validator {address}",
+  "review.stakeAction.withdraw": "Withdraw your unstaked {symbol} from {validator}.",
   "review.sign.name": "{name}",
   "review.switchNetwork": "Switch network to {network}",
 } as const;
@@ -93,6 +106,18 @@ export const reviewMessages = {
       "钱包无法读取此兑换的收款方或最低兑得数量。除非你信任此网站，否则拒绝。",
     "review.flag.unknownContract": "{contract} 不是此钱包已知的代币或联系人。继续前先核实该合约。",
     "review.flag.unlimitedApproval": "这将授予几乎无限的花费额度。只批准你打算花费的数额。",
+    "review.stakeAction.cancelUnstake": "取消解除质押，继续将 {symbol} 质押在 {validator}。",
+    "review.stakeAction.claim": "从 {validator} 领取你的 STRK 奖励。",
+    "review.stakeAction.claimElsewhere":
+      "从 {validator} 领取你的 STRK 奖励。奖励将支付给 {reward}，而不是此账户。",
+    "review.stakeAction.stake":
+      "将 {figure} 质押给 {validator}。这只会为其质押池批准恰好 {figure}。",
+    "review.stakeAction.unstake":
+      "从 {validator} 解除质押 {figure}。在你提取之前，它不会获得任何奖励。",
+    "review.stakeAction.stakeElsewhere":
+      "将 {figure} 质押给 {validator}。这只会为其质押池批准恰好 {figure}。奖励将支付给 {reward}，而不是此账户。",
+    "review.stakeAction.validator": "验证者 {address}",
+    "review.stakeAction.withdraw": "从 {validator} 提取你已解除质押的 {symbol}。",
     "review.sign.name": "{name}",
     "review.switchNetwork": "切换网络至 {network}",
   } satisfies Catalog<keyof typeof en>,
@@ -161,4 +186,12 @@ export const reviewTextsFor = (
 ): readonly ReviewText[] | undefined => {
   const texts = lines.flatMap((line) => (line.text === undefined ? [] : [line.text]));
   return texts.length === lines.length ? texts : undefined;
+};
+
+/** `{ summaryTexts }` when every line has a reference, else `{}`, ready to spread. */
+export const summaryTextsFor = (
+  lines: readonly { readonly text?: ReviewText }[],
+): { readonly summaryTexts?: readonly ReviewText[] } => {
+  const texts = reviewTextsFor(lines);
+  return texts === undefined ? {} : { summaryTexts: texts };
 };

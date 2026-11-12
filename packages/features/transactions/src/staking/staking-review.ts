@@ -11,37 +11,51 @@
  * account pays its rewards there, which another app may have set.
  */
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { type ReviewText, reviewEnglish, reviewText } from "../routing/review-messages";
 import { canonical, shortAddress } from "../routing/verify-decode";
 import type { StakingAction } from "./staking-calls";
 import type { PoolMember } from "./staking-decode";
 
 /**
- * Builds the review sentence. `member` is the membership read at the same
- * block the calls were built from.
+ * Builds the review sentence as a reference. `member` is the membership read
+ * at the same block the calls were built from.
  */
-export const stakingReviewSentence = (input: {
+export const stakingReviewText = (input: {
   readonly account: string;
   readonly action: StakingAction;
   readonly amount: string | null;
   readonly member: PoolMember | "none";
   readonly symbol: string;
-  readonly validator: string;
-}): string => {
+  /** The validator as display text, or as a reference (`stakingValidatorText`). */
+  readonly validator: string | ReviewText;
+}): ReviewText => {
   const { action, amount, symbol, validator } = input;
   const figure = `${amount ?? ""} ${symbol}`.trim();
-  const what: Readonly<Record<StakingAction, string>> = {
-    "cancel-unstake": `Cancel your unstake and keep the ${symbol} staked with ${validator}.`,
-    claim: `Claim your STRK rewards from ${validator}.`,
-    stake: `Stake ${figure} with ${validator}. This approves exactly ${figure} for its pool.`,
-    unstake: `Unstake ${figure} from ${validator}. It earns no rewards until you withdraw it.`,
-    withdraw: `Withdraw your unstaked ${symbol} from ${validator}.`,
-  };
   const reward = input.member === "none" ? null : input.member.rewardAddress;
-  const paysElsewhere =
-    reward !== null &&
-    !sameFelt(reward, input.account) &&
-    (action === "claim" || action === "stake");
-  return paysElsewhere
-    ? `${what[action]} Rewards are paid to ${shortAddress(canonical(reward))}, not this account.`
-    : what[action];
+  const elsewhere =
+    reward !== null && !sameFelt(reward, input.account) ? shortAddress(canonical(reward)) : null;
+  switch (action) {
+    case "cancel-unstake":
+      return reviewText("review.stakeAction.cancelUnstake", { symbol, validator });
+    case "claim":
+      return elsewhere === null
+        ? reviewText("review.stakeAction.claim", { validator })
+        : reviewText("review.stakeAction.claimElsewhere", { reward: elsewhere, validator });
+    case "stake":
+      return elsewhere === null
+        ? reviewText("review.stakeAction.stake", { figure, validator })
+        : reviewText("review.stakeAction.stakeElsewhere", { figure, reward: elsewhere, validator });
+    case "unstake":
+      return reviewText("review.stakeAction.unstake", { figure, validator });
+    case "withdraw":
+      return reviewText("review.stakeAction.withdraw", { symbol, validator });
+  }
 };
+
+/** A validator named by its staker address, as the background's review names it. */
+export const stakingValidatorText = (staker: string): ReviewText =>
+  reviewText("review.stakeAction.validator", { address: staker });
+
+/** The English of {@link stakingReviewText}, as the staking review has always read. */
+export const stakingReviewSentence = (input: Parameters<typeof stakingReviewText>[0]): string =>
+  reviewEnglish(stakingReviewText(input));
