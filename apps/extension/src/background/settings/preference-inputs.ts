@@ -13,7 +13,12 @@ import {
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
 import { isNostrPublicKey, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
-import { isApprovalSurfacePreference, isDisplayCurrency } from "@bramble/wallet-model/preferences";
+import {
+  isApprovalSurfacePreference,
+  isDisplayCurrency,
+  isLanguagePreference,
+  type LanguagePreference,
+} from "@bramble/wallet-model/preferences";
 
 const isGroupNameText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;
@@ -188,6 +193,7 @@ type DisplayPreferenceInput = {
   readonly approvalSurface?: "popup" | "side-panel";
   readonly collectiblesPreview?: boolean;
   readonly displayCurrency?: "eur" | "gbp" | "usd";
+  readonly language?: LanguagePreference;
   readonly productAnalytics?: boolean;
   readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
@@ -204,6 +210,9 @@ const hasValidDisplayValues = (
     return false;
   }
   if (message["displayCurrency"] !== undefined && !isDisplayCurrency(message["displayCurrency"])) {
+    return false;
+  }
+  if (message["language"] !== undefined && !isLanguagePreference(message["language"])) {
     return false;
   }
   if (
@@ -228,6 +237,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
       "approvalSurface",
       "collectiblesPreview",
       "displayCurrency",
+      "language",
       "productAnalytics",
       "reliabilityDiagnostics",
       "theme",
@@ -246,6 +256,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
   const approvalSurface = message["approvalSurface"];
   const collectiblesPreview = message["collectiblesPreview"];
   const displayCurrency = message["displayCurrency"];
+  const language = message["language"];
   const productAnalytics = message["productAnalytics"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
@@ -254,6 +265,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
     ...(collectiblesPreview === undefined ? {} : { collectiblesPreview }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
+    ...(language === undefined ? {} : { language }),
     ...(productAnalytics === undefined ? {} : { productAnalytics }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),

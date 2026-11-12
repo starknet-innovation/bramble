@@ -5,6 +5,7 @@
 import {
   isApprovalSurfacePreference,
   isDisplayCurrency,
+  isLanguagePreference,
   isThemeChoice,
 } from "@bramble/wallet-model/preferences";
 import type { WalletPreferencesStore } from "./preferences-types";
@@ -25,6 +26,9 @@ export const isValidDisplayInput = (
     return false;
   }
   if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
+    return false;
+  }
+  if (input.language !== undefined && !isLanguagePreference(input.language)) {
     return false;
   }
   if (DISPLAY_FLAGS.some((flag) => input[flag] !== undefined && typeof input[flag] !== "boolean")) {

@@ -315,6 +315,7 @@ export const createPreferencesStore = ({
             ? {}
             : { displayCurrency: input.displayCurrency }),
           ...displayFlags(input),
+          ...(input.language === undefined ? {} : { language: input.language }),
           ...(input.theme === undefined ? {} : { theme: input.theme }),
         };
         await writePreferences(store, next);

@@ -69,6 +69,8 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
 };
 
 export const PINNED_RUNTIME_FILES = [
+  "_locales/en/messages.json",
+  "_locales/zh_CN/messages.json",
   "background/index.js",
   "brand/onboarding-landscape.webp",
   "content/index.js",

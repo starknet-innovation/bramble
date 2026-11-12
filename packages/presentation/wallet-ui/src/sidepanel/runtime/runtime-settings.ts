@@ -11,6 +11,7 @@
  */
 
 import type { Strk20NetworkConfig } from "@bramble/privacy/config";
+import type { LanguagePreference } from "@bramble/wallet-model/preferences";
 import {
   isCreateAccountResponse,
   isPreferencesResponse,
@@ -84,6 +85,7 @@ export const createSettingsRuntimeClient = (
     readonly approvalSurface?: "popup" | "side-panel";
     readonly collectiblesPreview?: boolean;
     readonly displayCurrency?: "eur" | "gbp" | "usd";
+    readonly language?: LanguagePreference;
     readonly productAnalytics?: boolean;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: "dark" | "light";

@@ -120,6 +120,7 @@ const SHARED_KEYS = [
   "name",
   "version",
   "description",
+  "default_locale",
   "author",
   "homepage_url",
   "icons",

@@ -37,7 +37,7 @@ import { isParkedCollectibleView } from "../shared/parts";
 import { utcDayKey } from "../shared/timestamp";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
 import { bindDrawerFolders, createDrawerFolderState } from "../shell/drawer-folders-ui";
-import { applyEntryTheme, bindEntryNavigation } from "../shell/entry-ui";
+import { applyEntryLanguage, applyEntryTheme, bindEntryNavigation } from "../shell/entry-ui";
 import {
   bindDashboard,
   bindDeploy,
@@ -299,6 +299,7 @@ export const startWalletUi = async (
     });
   };
   const applyTheme = (): void => {
+    applyEntryLanguage(cache.preferences?.language, document.documentElement);
     lastSkinName = applyEntryTheme(
       cache.preferences?.theme ?? "dark",
       lastSkinName,

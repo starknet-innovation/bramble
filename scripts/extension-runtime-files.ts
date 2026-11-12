@@ -7,6 +7,8 @@ import { FIREFOX_EXCLUDED_FILES } from "../apps/extension/firefox-manifest";
  * Exact runtime files allowed in the packaged MV3 extension.
  */
 export const EXPECTED_RUNTIME_FILES = [
+  "_locales/en/messages.json",
+  "_locales/zh_CN/messages.json",
   "background/index.js",
   "brand/onboarding-landscape.webp",
   "content/index.js",

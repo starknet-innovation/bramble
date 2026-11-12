@@ -54,6 +54,7 @@ const poolNoticeAction = (ctx: {
 
 import type { SendIntent } from "../../journeys/send/send-model";
 import { sendFlow } from "../../journeys/send/send-views";
+import { languageFlow } from "../../journeys/settings/language-ui";
 import { advancedNetworkFlow, networkFlow } from "../../journeys/settings/network-views";
 import { privacyUnlockFlow } from "../../journeys/settings/privacy-unlock";
 import {
@@ -412,6 +413,8 @@ export const simpleFlowScreen = (
       return shadowAccountsFlow(ctx.status);
     case "appearance":
       return appearanceFlow(ctx.status, ctx.preferences);
+    case "language":
+      return languageFlow(ctx.status, ctx.preferences);
     case "request-settings":
       return requestSettingsFlow(ctx.status, ctx.preferences);
     case "privacy-unlock":

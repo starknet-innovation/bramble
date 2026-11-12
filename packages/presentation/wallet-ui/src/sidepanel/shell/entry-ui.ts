@@ -1,9 +1,12 @@
 /**
  * Small DOM effects used by the side-panel entrypoint.
  */
+import type { Locale } from "@bramble/core/i18n";
 import type { ThemeChoice } from "@bramble/settings/preferences";
 import { applySkin } from "@bramble/ui-kit/skin";
 import { colorSchemeForChoice, skinForChoice } from "@bramble/ui-kit/theme";
+import type { LanguagePreference } from "@bramble/wallet-model/preferences";
+import { resolveUiLocale, setUiLocale } from "../../i18n/locale";
 import { isWalletView, type WalletView } from "../shared/parts";
 
 /**
@@ -41,4 +44,22 @@ export const applyEntryTheme = (
     applySkin(skin, root);
   }
   return skin.name;
+};
+
+/**
+ * Sets the page language from the stored preference and the browser's list,
+ * and mirrors it on `<html lang>` so screen readers and CJK font selection
+ * follow. Returns the applied locale.
+ */
+export const applyEntryLanguage = (
+  preference: LanguagePreference | undefined,
+  root: HTMLElement,
+): Locale => {
+  const locale = resolveUiLocale(
+    preference,
+    root.ownerDocument.defaultView?.navigator.languages ?? [],
+  );
+  setUiLocale(locale);
+  if (root.getAttribute("lang") !== locale) root.setAttribute("lang", locale);
+  return locale;
 };
