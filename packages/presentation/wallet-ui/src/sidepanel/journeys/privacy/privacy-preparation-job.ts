@@ -22,6 +22,7 @@ import { isStrk20JobId } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { isStrk20Phase, STRK20_JOB_INTERRUPTED, type Strk20Phase } from "@bramble/privacy/phases";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import { t, type UiMessageKey } from "../../../i18n/messages";
 
 /**
  * How often the panel asks after a proof it is waiting on. Each poll is a short
@@ -191,9 +192,32 @@ export const runExecutionJob = async (
 const elapsedText = (elapsedMs: number): string => {
   const seconds = Math.floor(elapsedMs / 1_000);
   if (seconds < 60) {
-    return `${seconds} s`;
+    return t("privacy.progress.seconds", { seconds: String(seconds) });
   }
-  return `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+  return t("privacy.progress.minutes", {
+    minutes: String(Math.floor(seconds / 60)),
+    seconds: String(seconds % 60),
+  });
+};
+
+// The label for each phase in the closed vocabulary, plus the not-yet-reported
+// "starting".
+const PHASE_LABELS: Readonly<
+  Record<Strk20Phase | "starting", Extract<UiMessageKey, `privacy.phase.${string}`>>
+> = {
+  broadcasting: "privacy.phase.broadcasting",
+  "building the proof request": "privacy.phase.buildingProofRequest",
+  "checking registration": "privacy.phase.checkingRegistration",
+  "checking the public balance": "privacy.phase.checkingPublicBalance",
+  "discovering private notes": "privacy.phase.discoveringNotes",
+  "estimating the network fee": "privacy.phase.estimatingNetworkFee",
+  proving: "privacy.phase.proving",
+  "quoting the private relay": "privacy.phase.quotingRelay",
+  "reading the pool fee": "privacy.phase.readingPoolFee",
+  "relaying privately": "privacy.phase.relayingPrivately",
+  signing: "privacy.phase.signing",
+  starting: "privacy.phase.starting",
+  "waiting for pool maturity": "privacy.phase.waitingPoolMaturity",
 };
 
 /**
@@ -203,11 +227,14 @@ const elapsedText = (elapsedMs: number): string => {
  * it is safe to render as text.
  */
 export const preparationProgressText = (progress: PreparationProgress): string => {
-  const phase = progress.phase ?? "starting";
-  const label = phase.charAt(0).toUpperCase() + phase.slice(1);
-  const round =
-    progress.attempt !== undefined && progress.attempts !== undefined
-      ? ` (attempt ${progress.attempt} of ${progress.attempts})`
-      : "";
-  return `${label}${round} · ${elapsedText(progress.elapsedMs)}`;
+  const phase = t(PHASE_LABELS[progress.phase ?? "starting"]);
+  const elapsed = elapsedText(progress.elapsedMs);
+  return progress.attempt !== undefined && progress.attempts !== undefined
+    ? t("privacy.progress.lineAttempt", {
+        attempt: String(progress.attempt),
+        attempts: String(progress.attempts),
+        elapsed,
+        phase,
+      })
+    : t("privacy.progress.line", { elapsed, phase });
 };

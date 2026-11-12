@@ -6,7 +6,7 @@
 
 import { t } from "../../../i18n/messages";
 import { setFlowStep } from "../../shared/parts";
-import { PROVING_HINT } from "../privacy/privacy-views";
+import { provingHint } from "../privacy/privacy-views";
 import { type TransferMode, transferWorkingTitle } from "./transfer-mode";
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
 import { transferRoute } from "./transfer-route";
@@ -97,7 +97,7 @@ export const workingStatus = <Review>(
     };
   }
   if (proofLeg(state.fields) === "confirm" && !isHandingOn(state)) {
-    return { copy: PROVING_HINT, title: t("send.working.proving") };
+    return { copy: provingHint(), title: t("send.working.proving") };
   }
   return { copy: "", title: transferWorkingTitle(mode) };
 };

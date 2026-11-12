@@ -11,6 +11,7 @@
  */
 
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { t } from "../../../i18n/messages";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
@@ -45,12 +46,12 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
   button.addEventListener("click", () => {
     const scope = deps.deploymentScope();
     if (!scope) {
-      showToast("No active account is available to deploy", "error", button);
+      showToast(t("privacy.deploy.noAccount"), "error", button);
       return;
     }
     buttonBusy(button, true);
     showToast(
-      DEPLOYMENT_FEES.has(button) ? "Deploying this account…" : "Estimating deployment fee…",
+      DEPLOYMENT_FEES.has(button) ? t("privacy.deploy.deploying") : t("privacy.deploy.estimating"),
       "success",
       button,
     );
@@ -75,7 +76,7 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
         }
         if (!deployed) {
           showToast(
-            `Deployment ${response.slice(0, 10)}… is still settling. Register once it lands.`,
+            t("privacy.deploy.settling", { hash: response.slice(0, 10) }),
             "warning",
             button,
           );
