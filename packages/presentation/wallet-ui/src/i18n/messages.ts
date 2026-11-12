@@ -26,6 +26,28 @@ import { shellMessages } from "./messages/shell";
 import { shellScreenMessages } from "./messages/shell-screens";
 import { swapStakingMessages } from "./messages/swap-staking";
 
+/**
+ * Every area catalog by file name (`./messages/<name>.ts`). The catalog tests
+ * read it to refuse a message id two areas define and to pin signing text.
+ */
+export const UI_AREA_CATALOGS = {
+  activity: activityMessages,
+  collectibles: collectiblesMessages,
+  ledger: ledgerMessages,
+  "multisig-propose": multisigProposeMessages,
+  "multisig-setup": multisigSetupMessages,
+  "multisig-signers": multisigSignerMessages,
+  multisig: multisigMessages,
+  onboarding: onboardingMessages,
+  portfolio: portfolioMessages,
+  privacy: privacyMessages,
+  send: sendMessages,
+  settings: settingsMessages,
+  "shell-screens": shellScreenMessages,
+  shell: shellMessages,
+  "swap-staking": swapStakingMessages,
+} as const;
+
 const en = {
   ...activityMessages.en,
   ...collectiblesMessages.en,
