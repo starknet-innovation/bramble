@@ -23,7 +23,10 @@ rustup target add aarch64-linux-android x86_64-linux-android >/dev/null
 
 ndk_args=()
 for abi in "${ABIS[@]}"; do ndk_args+=(-t "$abi"); done
-(cd "$CORE_DIR" && cargo ndk "${ndk_args[@]}" --platform 28 -o "$APP_DIR/src/main/jniLibs" build "${CARGO_FLAGS[@]}")
+# cargo-ndk resolves `-p` among workspace members only, and bramble-core is a dependency: name the
+# shell's manifest so it skips that lookup.
+(cd "$CORE_DIR" && cargo ndk "${ndk_args[@]}" --platform 28 -o "$APP_DIR/src/main/jniLibs" \
+  --manifest-path "$CORE_DIR/Cargo.toml" build "${CARGO_FLAGS[@]}")
 
 (cd "$CORE_DIR" && cargo build --locked -p bramble-core --lib)
 rm -rf "$APP_DIR/build/generated/uniffi"
