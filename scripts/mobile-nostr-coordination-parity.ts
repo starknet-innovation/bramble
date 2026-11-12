@@ -27,7 +27,7 @@ import {
 import { MULTISIG_NOSTR_RELAYS } from "../apps/extension/src/background/multisig/nostr-relay";
 import { withNostrRelayUrl } from "../packages/features/settings/src/preferences-nostr";
 import { pagingParity } from "./mobile-nostr-coordination-paging";
-import { relayParity } from "./mobile-nostr-coordination-relay";
+import { CUSTOM_RELAY, errorOf, relayParity } from "./mobile-nostr-coordination-relay";
 
 /** The fixture parts, split to keep each file inside the repository's line budget. */
 export const NOSTR_COORDINATION_FIXTURE_PATHS = {
@@ -35,8 +35,6 @@ export const NOSTR_COORDINATION_FIXTURE_PATHS = {
   relays: "mobile/core/tests/fixtures/nostr-coordination-parity-relays.json",
   rules: "mobile/core/tests/fixtures/nostr-coordination-parity-rules.json",
 } as const;
-
-const errorOf = (error: unknown): string => (error instanceof Error ? error.message : "throw");
 
 // ---- relay URLs --------------------------------------------------------------------------------
 
@@ -140,12 +138,12 @@ const RELAY_POLICY_CASES: readonly {
   readonly input: string | null;
 }[] = [
   { input: null, name: "defaults", stored: null },
-  { input: null, name: "a stored custom relay", stored: "wss://relay.team.example" },
-  { input: "wss://relay.team.example", name: "a custom relay replaces the defaults", stored: null },
+  { input: null, name: "a stored custom relay", stored: CUSTOM_RELAY },
+  { input: CUSTOM_RELAY, name: "a custom relay replaces the defaults", stored: null },
   { input: "  wss://relay.team.example/x \n", name: "the input is trimmed", stored: null },
   { input: "wss://nos.lol", name: "a default relay alone", stored: null },
-  { input: "", name: "empty restores the defaults", stored: "wss://relay.team.example" },
-  { input: " \t ", name: "blank restores the defaults", stored: "wss://relay.team.example" },
+  { input: "", name: "empty restores the defaults", stored: CUSTOM_RELAY },
+  { input: " \t ", name: "blank restores the defaults", stored: CUSTOM_RELAY },
   { input: "ws://relay.example", name: "an insecure relay is refused", stored: null },
   { input: "WSS://relay.example", name: "a non-canonical relay is refused", stored: null },
   { input: "ws://localhost:7000", name: "a loopback relay", stored: null },
