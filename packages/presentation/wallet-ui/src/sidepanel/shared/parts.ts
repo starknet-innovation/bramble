@@ -11,8 +11,8 @@ import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
 import { type IconName, icon } from "@bramble/ui-kit/icons";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountContractType, AccountRef } from "@bramble/wallet-model/accounts";
+import { t } from "../../i18n/messages";
 import type { WalletStatus } from "../../popup/responses/responses";
-import { SHADOW_ACCOUNTS_TITLE } from "../journeys/privacy/shadow-accounts-copy";
 import { networkDisplayName } from "./network-label";
 
 export { accountAvatar } from "../shell/account-avatar";
@@ -100,64 +100,6 @@ export const isParkedCollectibleView = (
   preferences: Parameters<typeof nftsShown>[0],
 ): boolean => !nftsShown(preferences) && PARKED_COLLECTIBLE_VIEWS.some((parked) => parked === view);
 
-const WALLET_VIEW_LABELS: Readonly<Record<WalletView, string>> = {
-  account: "Accounts",
-  activity: "Activity",
-  "address-book": "Address book",
-  allowances: "Token allowances",
-  staking: "Staking",
-  "advanced-network": "Network services",
-  appearance: "Appearance",
-  language: "Language",
-  backup: "Backup and restore",
-  "backup-export": "Backup export",
-  "backup-restore": "Backup restore",
-  "find-accounts": "Find my other accounts",
-  "connected-sites": "Connected sites",
-  "deploy-account": "Deploy account",
-  "privacy-unlock": "Unlock private transactions",
-  home: "Home",
-  "import-key": "Private-key import",
-  "import-phrase": "Recovery-phrase import",
-  multisigs: "Multisig accounts",
-  "multisig-add": "Set up multisig",
-  "multisig-deploy": "Create a multisig account",
-  "multisig-detail": "Review multisig transaction",
-  "multisig-home": "Multisig account",
-  "multisig-propose": "New multisig transaction",
-  "multisig-receive": "Receive to multisig",
-  "multisig-signers": "Manage multisig signers",
-  "multisig-track": "Import transaction",
-  "multisig-watch": "Add multisig account",
-  network: "Networks",
-  nfts: "NFTs",
-  "nft-detail": "NFT details",
-  "nft-hidden": "Hidden NFTs",
-  "nft-send": "Send NFT",
-  "nft-watch": "Watch NFT",
-  privacy: "Private balances",
-  "shadow-accounts": SHADOW_ACCOUNTS_TITLE,
-  receive: "Receive",
-  requests: "Wallet requests",
-  "request-settings": "Request display",
-  reveal: "Recovery secrets",
-  send: "Send",
-  settings: "Settings",
-  swap: "Swap",
-  tokens: "Tokens",
-  "token-add": "Add token",
-  "token-catalog": "avnu token list",
-  "token-detail": "Token details",
-  "token-discover": "Discover tokens",
-};
-
-/**
- * Returns the stable human label used when a task is paused or resumed. This
- * mapping is presentation-only; navigation still validates against
- * {@link WALLET_VIEWS}.
- */
-export const walletViewLabel = (view: WalletView): string => WALLET_VIEW_LABELS[view];
-
 /**
  * Dock screens shown with the bottom navigation.
  */
@@ -188,7 +130,8 @@ export const accountIdAddress = (accountId: string): string =>
  * markup, and whether a zero is worth showing) shared by the recovery-phrase
  * and Ledger import pickers so the two flows describe detection identically.
  */
-export const accountsDetectedText = (detected: number): string => `${detected} found`;
+export const accountsDetectedText = (detected: number): string =>
+  t("shell.accounts.detected", { count: String(detected) });
 
 /**
  * Renders a native, repaint-persistent explanation for protocol concepts. The
@@ -356,7 +299,7 @@ export const formatFri = (fri: string): string => {
  */
 export const hardwareBadge = (account: AccountRef): string =>
   account.derivation.kind === "ledger"
-    ? pill("Hardware", { icon: "shield", tone: "hardware" })
+    ? pill(t("shell.badge.hardware"), { icon: "shield", tone: "hardware" })
     : "";
 
 /**
@@ -437,7 +380,7 @@ const networkPill = (status: WalletStatus): string =>
  * Renders the shared empty state for networks without an account.
  */
 export const noAccountEmpty = (status: WalletStatus): string =>
-  emptyState(`No account on ${status.network} yet. Switch network from Settings to continue.`);
+  emptyState(t("shell.noAccount", { network: status.network }));
 
 /**
  * Renders one settings destination with the side-panel navigation capability.
@@ -486,7 +429,7 @@ export const flowHeader = (title: string, status: WalletStatus, subtitle?: strin
     ${iconButton({
       attributes: { "data-nav-back": true },
       icon: "chevronLeft",
-      label: "Back",
+      label: t("shell.back"),
       variant: "ghost",
     })}
     <div class="flow-title">

@@ -19,6 +19,8 @@ import { onboardingMessages } from "./messages/onboarding";
 import { privacyMessages } from "./messages/privacy";
 import { sendMessages } from "./messages/send";
 import { settingsMessages } from "./messages/settings";
+import { shellMessages } from "./messages/shell";
+import { shellScreenMessages } from "./messages/shell-screens";
 import { swapStakingMessages } from "./messages/swap-staking";
 
 const en = {
@@ -31,6 +33,8 @@ const en = {
   ...privacyMessages.en,
   ...sendMessages.en,
   ...settingsMessages.en,
+  ...shellScreenMessages.en,
+  ...shellMessages.en,
   ...swapStakingMessages.en,
 } as const;
 
@@ -47,6 +51,8 @@ export const uiCatalogs = {
     ...privacyMessages["zh-Hans"],
     ...sendMessages["zh-Hans"],
     ...settingsMessages["zh-Hans"],
+    ...shellScreenMessages["zh-Hans"],
+    ...shellMessages["zh-Hans"],
     ...swapStakingMessages["zh-Hans"],
   },
 };

@@ -7,6 +7,7 @@ import { applySkin } from "@bramble/ui-kit/skin";
 import { colorSchemeForChoice, skinForChoice } from "@bramble/ui-kit/theme";
 import type { LanguagePreference } from "@bramble/wallet-model/preferences";
 import { resolveUiLocale, setUiLocale } from "../../i18n/locale";
+import { t } from "../../i18n/messages";
 import { isWalletView, type WalletView } from "../shared/parts";
 
 /**
@@ -49,7 +50,7 @@ export const applyEntryTheme = (
 /**
  * Sets the page language from the stored preference and the browser's list,
  * and mirrors it on `<html lang>` so screen readers and CJK font selection
- * follow. Returns the applied locale.
+ * follow, along with the onboarding tab title. Returns the applied locale.
  */
 export const applyEntryLanguage = (
   preference: LanguagePreference | undefined,
@@ -61,5 +62,9 @@ export const applyEntryLanguage = (
   );
   setUiLocale(locale);
   if (root.getAttribute("lang") !== locale) root.setAttribute("lang", locale);
+  // The onboarding tab's title is the only page title a user reads in the tab
+  // strip; the panel and popup are titled with the product name alone.
+  const doc = root.ownerDocument;
+  if (doc.body?.classList.contains("onboarding-surface")) doc.title = t("shell.page.onboarding");
   return locale;
 };

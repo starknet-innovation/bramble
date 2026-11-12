@@ -19,8 +19,9 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { type WalletView, walletViewLabel } from "../../shared/parts";
+import type { WalletView } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
+import { walletViewLabel } from "../../shared/view-labels";
 import { approvalCard } from "./approval-cards";
 import type { ConnectPicker } from "./approval-connect-card";
 

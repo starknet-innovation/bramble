@@ -7,10 +7,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import {
   createUpdateClient,
   startUpdateBanner,
-  UPDATE_BUSY_NOTICE,
-  UPDATE_READY_BODY,
-  UPDATE_READY_TITLE,
-  UPDATE_RESTART_LABEL,
+  updateBusyNotice,
+  updateReadyBody,
+  updateReadyTitle,
+  updateRestartLabel,
 } from "../../../src/sidepanel/shell/update-banner";
 import { registerDom, unregisterDom } from "../../support/groups-harness";
 
@@ -51,9 +51,9 @@ describe("update banner", () => {
     await flush();
     const shown = document.querySelectorAll("#update-banner");
     expect(shown).toHaveLength(1);
-    expect(shown[0]?.textContent).toContain(UPDATE_READY_TITLE);
-    expect(shown[0]?.textContent).toContain(UPDATE_READY_BODY);
-    expect(document.querySelector("#update-restart")?.textContent).toBe(UPDATE_RESTART_LABEL);
+    expect(shown[0]?.textContent).toContain(updateReadyTitle());
+    expect(shown[0]?.textContent).toContain(updateReadyBody());
+    expect(document.querySelector("#update-restart")?.textContent).toBe(updateRestartLabel());
   });
 
   test("shows nothing while no update waits", async () => {
@@ -76,7 +76,7 @@ describe("update banner", () => {
     const control = document.querySelector<HTMLButtonElement>("#update-restart");
     control?.click();
     await flush();
-    expect(document.body.textContent).toContain(UPDATE_BUSY_NOTICE);
+    expect(document.body.textContent).toContain(updateBusyNotice());
     expect(control?.disabled).toBe(false);
   });
 });
@@ -96,7 +96,7 @@ describe("failures", () => {
     await flush();
     document.querySelector<HTMLButtonElement>("#update-restart")?.click();
     await flush();
-    expect(document.body.textContent).toContain(UPDATE_BUSY_NOTICE);
+    expect(document.body.textContent).toContain(updateBusyNotice());
   });
 
   test("a failed status check shows nothing", async () => {

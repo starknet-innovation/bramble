@@ -21,6 +21,7 @@ import {
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { t, th } from "../../i18n/messages";
 import { icon } from "../shared/icons";
 
 /**
@@ -54,7 +55,9 @@ export const folderSections = (
   }));
 
 const folderCount = (count: number): string =>
-  count === 0 ? "Empty" : `${count} account${count === 1 ? "" : "s"}`;
+  count === 0
+    ? t("shell.folder.empty")
+    : t(count === 1 ? "shell.folder.countOne" : "shell.folder.countMany", { count: String(count) });
 
 /**
  * Renders one folder: its heading, and its accounts as rendered by the caller.
@@ -74,7 +77,7 @@ export const folderSection = (section: FolderSection, rows: string, collapsed: b
     </button>
     <ul class="drawer-list"${collapsed ? " hidden" : ""}>${
       section.accounts.length === 0
-        ? '<li class="drawer-folder-empty">Drag an account here.</li>'
+        ? `<li class="drawer-folder-empty">${th("shell.folder.dropHere")}</li>`
         : rows
     }</ul>
   </section>`;
@@ -89,16 +92,16 @@ export const addFolderControl = (open: boolean): string => `
       open
         ? `<form id="drawer-folder-form" class="drawer-folder-form">
             ${inputControl({
-              ariaLabel: "Folder name",
+              ariaLabel: t("shell.folder.name"),
               attributes: { id: "drawer-folder-name", name: "folderName" },
               autocomplete: "off",
               maxlength: 64,
-              placeholder: "Folder name",
+              placeholder: t("shell.folder.name"),
             })}
-            ${button({ attributes: { id: "drawer-folder-create" }, label: "Add", size: "small", type: "submit" })}
+            ${button({ attributes: { id: "drawer-folder-create" }, label: t("shell.folder.add"), size: "small", type: "submit" })}
             ${button({
               attributes: { id: "drawer-folder-cancel" },
-              label: "Cancel",
+              label: t("shell.folder.cancel"),
               size: "small",
               variant: "ghost",
             })}
@@ -106,7 +109,7 @@ export const addFolderControl = (open: boolean): string => `
         : button({
             attributes: { id: "drawer-add-folder" },
             icon: "plus",
-            label: "Add folder",
+            label: t("shell.folder.addFolder"),
             size: "small",
             variant: "ghost",
           })

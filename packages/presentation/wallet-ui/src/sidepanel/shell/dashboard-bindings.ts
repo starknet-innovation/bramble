@@ -10,6 +10,7 @@ import {
   normalizeFeltInput,
 } from "@bramble/wallet-model/networks";
 import { parseWalletContactCard, walletContactCard } from "@bramble/wallet-model/preferences";
+import { t } from "../../i18n/messages";
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { RECEIVE_QR_LABELS } from "../journeys/send/receive-view";
@@ -132,9 +133,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
       const networkId = form.elements.namedItem("networkId");
       const currentNetwork = networkId instanceof HTMLInputElement ? networkId.value : "";
       if (!card || card.networkId !== currentNetwork) {
-        const message = card
-          ? "This wallet card belongs to a different network."
-          : "That wallet card is not recognized.";
+        const message = card ? t("shell.card.otherNetwork") : t("shell.card.unrecognized");
         walletCardField.setCustomValidity(message);
         if (result) result.textContent = message;
         return;
@@ -148,7 +147,7 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
         const input = form.elements.namedItem(name);
         if (input instanceof HTMLInputElement) input.value = value;
       }
-      if (result) result.textContent = "Wallet card verified. Add a label, then save.";
+      if (result) result.textContent = t("shell.card.verified");
       rememberAddressBookDraft(addressField?.value ?? "", labelField?.value ?? "");
       const label = form.elements.namedItem("label");
       if (label instanceof HTMLInputElement) label.focus({ preventScroll: true });
@@ -176,16 +175,16 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
       .then(
         async () => {
           clearAddressBookDraft();
-          showToast("Address saved", "success", form);
+          showToast(t("shell.addressBook.saved"), "success", form);
           if (result) {
-            result.textContent = "Address saved";
+            result.textContent = t("shell.addressBook.saved");
           }
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Address save failed"), "error", form);
+          showToast(errorDetails(error, t("shell.addressBook.saveFailed")), "error", form);
           if (result) {
-            result.textContent = errorLine(error, "Address save failed");
+            result.textContent = errorLine(error, t("shell.addressBook.saveFailed"));
           }
           buttonBusy(submitButton, false);
         },
@@ -264,7 +263,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
       if (cardCopy) {
         cardCopy.dataset["copy"] = card;
         cardCopy.disabled = false;
-        if (cardCopy.lastChild) cardCopy.lastChild.textContent = "Copy wallet card";
+        if (cardCopy.lastChild) cardCopy.lastChild.textContent = t("receive.card.copy");
       }
       if (keyStatus) keyStatus.hidden = true;
       if (key) {
@@ -286,7 +285,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
       if (explainer) explainer.hidden = true;
       if (cardCopy) cardCopy.hidden = true;
       if (keyStatus) {
-        keyStatus.textContent = "Coordination is unavailable. Share the account address instead.";
+        keyStatus.textContent = t("shell.card.coordinationUnavailable");
         keyStatus.hidden = false;
       }
       if (keyValue) keyValue.hidden = true;

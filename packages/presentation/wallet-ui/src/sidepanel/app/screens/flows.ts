@@ -9,6 +9,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
   AllowanceListing,
@@ -87,7 +88,7 @@ const receiveFlow = (
   poolAction: PoolNoticeAction,
   classHashVerification: ClassHashVerification | null,
 ): string =>
-  flowHeader("Receive", status) +
+  flowHeader(t("shell.receive.title"), status) +
   flowScreen(
     "receive",
     `<section class="section">
@@ -97,8 +98,8 @@ const receiveFlow = (
               address: account.address,
               classHash: account.classHash,
               classHashVerification,
-              copyLabel: "Copy address",
-              hint: `Only send ${status.network} assets to this address.`,
+              copyLabel: t("shell.copyAddress"),
+              hint: t("shell.receive.hint", { network: status.network }),
               networkId: status.networkId,
               publicKeyX: account.publicKeyX,
             })
@@ -140,7 +141,7 @@ const deployAccountFlow = (
   deployment: boolean | null,
   fundedForFees: boolean | null,
 ): string =>
-  flowHeader("Deploy account", status) +
+  flowHeader(t("shell.deploy.title"), status) +
   flowScreen(
     "deploy-account",
     `<section class="section">
@@ -148,18 +149,21 @@ const deployAccountFlow = (
         account
           ? `<section class="section" id="deploy-review-stage">
               ${receipt([
-                { label: "Account", value: accountDisplayName(account, preferences) },
+                {
+                  label: t("shell.field.account"),
+                  value: accountDisplayName(account, preferences),
+                },
                 {
                   action: {
                     attributes: { "data-copy": account.address },
                     icon: "copy",
-                    label: "Copy address",
+                    label: t("shell.copyAddress"),
                   },
-                  label: "Address",
+                  label: t("shell.field.address"),
                   value: accountLabel(account.address),
                   valueStyle: "code",
                 },
-                { label: "Network", value: networkDisplayName(status.network) },
+                { label: t("shell.field.network"), value: networkDisplayName(status.network) },
               ])}
               ${deployNotes(account, deployment, fundedForFees)}
               <div id="deploy-review" aria-live="polite"></div>
@@ -167,7 +171,7 @@ const deployAccountFlow = (
                 attributes: { id: "deploy-button" },
                 disabled: deployment !== false,
                 icon: "check",
-                label: deployment === true ? "Account already deployed" : "Deploy",
+                label: t(deployment === true ? "shell.deploy.already" : "shell.deploy.button"),
               })}
               <p id="deploy-result" role="status"></p>
             </section>
@@ -184,29 +188,33 @@ const deployAccountFlow = (
  * until the single privileged import request.
  */
 export const importPhraseFlow = (status: WalletStatus): string =>
-  flowHeader("Import a recovery phrase", status, `Add existing accounts on ${status.network}`) +
+  flowHeader(
+    t("shell.importPhrase.title"),
+    status,
+    t("shell.importPhrase.subtitle", { network: status.network }),
+  ) +
   flowScreen(
     "import-phrase",
     `<section class="section">
-      <p class="review-flag" role="note">Anyone with this phrase controls its accounts.</p>
+      <p class="review-flag" role="note">${th("shell.importPhrase.warning")}</p>
       <form id="import-phrase-form" class="stack" novalidate>
         <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
         <div class="recovery-actions">
-          <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
-          <button class="onboarding-inline-action" id="phrase-clear" type="button">Clear</button>
+          <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">${th("onboarding.phrase.use24")}</button>
+          <button class="onboarding-inline-action" id="phrase-clear" type="button">${th("onboarding.phrase.clear")}</button>
         </div>
         <p id="recovery-result" role="status"></p>
         ${button({
           attributes: { id: "import-phrase-search" },
           disabled: true,
-          label: "Find its accounts",
+          label: t("shell.importPhrase.find"),
         })}
         <div id="import-phrase-scan" hidden>
 ${recoveryScanFields()}
           ${button({
             attributes: { id: "recover-accounts-button" },
             disabled: true,
-            label: "Import selected accounts",
+            label: t("shell.importPhrase.import"),
           })}
         </div>
       </form>
@@ -220,23 +228,23 @@ ${recoveryScanFields()}
  */
 export const findAccountsFlow = (status: WalletStatus): string =>
   flowHeader(
-    "Find my other accounts",
+    t("shell.findAccounts.title"),
     status,
-    `Search this wallet's accounts on ${status.network}`,
+    t("shell.findAccounts.subtitle", { network: status.network }),
   ) +
   flowScreen(
     "find-accounts",
     `<section class="section">
-      <p class="review-flag" role="note">Only accounts derived from this wallet's own phrase are searched.</p>
+      <p class="review-flag" role="note">${th("shell.findAccounts.scope")}</p>
       <form id="find-accounts-form" class="stack" novalidate>
-        <p class="hint">Searching uses the phrase this wallet already holds; there is nothing to type here.</p>
-        ${button({ attributes: { id: "find-accounts-search" }, label: "Search for accounts" })}
+        <p class="hint">${th("shell.findAccounts.hint")}</p>
+        ${button({ attributes: { id: "find-accounts-search" }, label: t("shell.findAccounts.search") })}
         <div id="find-accounts-scan" hidden>
 ${recoveryScanFields()}
           ${button({
             attributes: { id: "recover-accounts-button" },
             disabled: true,
-            label: "Add selected accounts",
+            label: t("shell.findAccounts.add"),
           })}
         </div>
         <p id="find-accounts-result" role="status"></p>
@@ -249,26 +257,30 @@ ${recoveryScanFields()}
  * the Add account chooser.
  */
 export const importKeyFlow = (status: WalletStatus): string =>
-  flowHeader("Import private key", status, `Add a standalone account on ${status.network}`) +
+  flowHeader(
+    t("shell.importKey.title"),
+    status,
+    t("shell.importKey.subtitle", { network: status.network }),
+  ) +
   flowScreen(
     "import-key",
     `<section class="section">
-      <p class="review-flag" role="note">Anyone with this key controls the account.</p>
+      <p class="review-flag" role="note">${th("shell.importKey.warning")}</p>
       <form id="import-key-form" class="stack">
         ${selectField({
-          hint: "Choose the contract that already owns this key. A different choice derives a different address.",
-          label: "Account contract",
+          hint: t("shell.importKey.contractHint"),
+          label: t("shell.importKey.contract"),
           name: "accountContractType",
           options: [
-            { label: "Bramble (recommended)", value: "openzeppelin" },
+            { label: t("shell.importKey.recommended"), value: "openzeppelin" },
             { label: "Ready", value: "argent" },
           ],
           selected: "openzeppelin",
         })}
         ${textareaField({
           autocomplete: "off",
-          hint: "The key is validated and stored inside the encrypted vault, never in plain settings.",
-          label: "Raw Starknet private key",
+          hint: t("shell.importKey.keyHint"),
+          label: t("shell.importKey.key"),
           name: "rawKey",
           placeholder: "0x…",
           required: true,
@@ -276,8 +288,8 @@ export const importKeyFlow = (status: WalletStatus): string =>
         })}
         ${textField({
           autocomplete: "off",
-          hint: "Ready accounts only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for Bramble's public-key salt.",
-          label: "Ready deployment salt (optional)",
+          hint: t("shell.importKey.saltHint"),
+          label: t("shell.importKey.salt"),
           name: "deploymentSalt",
           placeholder: "0x…",
           spellcheck: false,
@@ -285,7 +297,7 @@ export const importKeyFlow = (status: WalletStatus): string =>
         ${addressFinderFields("key", { hidden: true })}
         ${button({
           icon: "wallet",
-          label: "Import account",
+          label: t("shell.importKey.submit"),
           type: "submit",
         })}
         <p id="import-key-result" role="status"></p>
@@ -317,7 +329,7 @@ export const accountFlow = (
   // halves read the same seeded folder list, so a wallet that has never stored
   // a group still shows "My accounts" and "Archived accounts" on both.
   return (
-    flowHeader("Accounts & folders", status) +
+    flowHeader(t("shell.accounts.title"), status) +
     flowScreen(
       "account",
       accountNamesSection(status, preferences, groups) +
