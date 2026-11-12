@@ -7,6 +7,7 @@
  * make. The binder holds one receipt and replaces it whole.
  */
 import type { TokenConfig } from "@bramble/settings/preferences";
+import { t } from "../../../i18n/messages";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { renderFragment } from "../../shared/dom";
@@ -58,9 +59,9 @@ export const swapReceiptFor = (
   hash: string,
 ): SwapReceipt => ({
   hash,
-  note: outcome ? "" : "Not confirmed yet. Follow it in Activity.",
+  note: outcome ? "" : t("swap.success.notConfirmed"),
   summary,
-  title: outcome ? "Swap complete" : "Swap submitted",
+  title: outcome ? t("swap.success.complete") : t("swap.success.submitted"),
 });
 
 /**
@@ -72,7 +73,7 @@ export const swapUnknownReceipt = (message: string, summary: string): SwapReceip
   hash: "",
   note: message,
   summary,
-  title: "Status unknown",
+  title: t("swap.success.statusUnknown"),
 });
 
 /**
@@ -164,13 +165,17 @@ export const paintSwapMeta = (
       ? `1 ${figures.sellToken.symbol} = ${compactAmount(rate >= 1 ? rate.toFixed(4) : rate.toFixed(10))} ${figures.buyToken.symbol}`
       : "",
   );
-  setText(root, "swap-gas", quote ? `Fee ≈ ${formatFiat(quote.gasFeesInUsd, "usd")}` : "");
+  setText(
+    root,
+    "swap-gas",
+    quote ? t("swap.edit.fee", { amount: formatFiat(quote.gasFeesInUsd, "usd") }) : "",
+  );
   const warning = root.querySelector<HTMLElement>("#swap-warning");
   if (warning) {
     // The Swap button carries the figure ("Swap anyway (-4.2%)"), so the
     // warning names the risk rather than restating the percentage.
     const message =
-      quote && figures.lossPercent >= SWAP_LOSS_WARN_PERCENT ? "High slippage risk" : "";
+      quote && figures.lossPercent >= SWAP_LOSS_WARN_PERCENT ? t("swap.edit.highSlippage") : "";
     warning.textContent = message;
     warning.hidden = message.length === 0;
   }
@@ -180,9 +185,11 @@ export const paintSwapMeta = (
     review.disabled = !quote || figures.insufficient || amount <= 0;
     review.classList.toggle("swap-risk", figures.highRisk);
     reviewLabel.textContent = figures.insufficient
-      ? `Insufficient ${figures.sellToken?.symbol ?? "balance"}`
+      ? figures.sellToken
+        ? t("swap.edit.insufficientToken", { symbol: figures.sellToken.symbol })
+        : t("swap.edit.insufficientBalance")
       : figures.highRisk
-        ? `Swap anyway (−${figures.lossPercent.toFixed(1)}%)`
-        : "Review swap";
+        ? t("swap.edit.swapAnyway", { percent: figures.lossPercent.toFixed(1) })
+        : t("swap.edit.review");
   }
 };

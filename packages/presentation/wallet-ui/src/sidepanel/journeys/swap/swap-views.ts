@@ -13,6 +13,7 @@ import { receipt } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { outcomeHashRow } from "../../shared/outcome-hash";
@@ -26,12 +27,12 @@ import type { SwapPreparationView } from "./swap-client";
 // line. The sell side carries a real input plus Max; the buy side is output.
 const swapPanel = (side: "buy" | "sell", disabled: boolean): string => `
   <div class="swap-panel" data-swap-side="${side}">
-    <p class="swap-label">${side === "sell" ? "Sell" : "Buy"}</p>
+    <p class="swap-label">${side === "sell" ? th("swap.edit.sell") : th("swap.edit.buy")}</p>
     <div class="swap-main">
       ${
         side === "sell"
           ? inputControl({
-              ariaLabel: "Amount to sell",
+              ariaLabel: t("swap.edit.amountToSell"),
               attributes: { id: "swap-sell-amount" },
               autocomplete: "off",
               className: "swap-amount",
@@ -43,17 +44,17 @@ const swapPanel = (side: "buy" | "sell", disabled: boolean): string => `
           : `<output id="swap-buy-amount" class="swap-amount is-output" aria-live="polite">0</output>`
       }
       <div class="token-dropdown" data-align="end">
-        <button id="swap-${side}-token" class="swap-token" type="button" aria-haspopup="listbox" aria-label="Choose ${side} token" ${disabled ? "disabled" : ""}>
+        <button id="swap-${side}-token" class="swap-token" type="button" aria-haspopup="listbox" aria-label="${side === "sell" ? th("swap.edit.chooseSellToken") : th("swap.edit.chooseBuyToken")}" ${disabled ? "disabled" : ""}>
           <span class="swap-token-copy">—</span>${icon("chevronDown")}
         </button>
-        ${tokenDropdownShell(`swap-${side}-options`, side === "sell" ? "Tokens you can pay with" : "Tokens you can receive")}
+        ${tokenDropdownShell(`swap-${side}-options`, side === "sell" ? t("swap.edit.payWith") : t("swap.edit.receivable"))}
       </div>
     </div>
     <div class="swap-sub">
       <span id="swap-${side}-usd" class="swap-usd"></span>
       <span class="swap-balance">
         <span id="swap-${side}-balance"></span>
-        ${side === "sell" ? `<button id="swap-max" class="swap-max" type="button" ${disabled ? "disabled" : ""}>Max</button>` : ""}
+        ${side === "sell" ? `<button id="swap-max" class="swap-max" type="button" ${disabled ? "disabled" : ""}>${th("swap.edit.max")}</button>` : ""}
       </span>
     </div>
   </div>`;
@@ -66,10 +67,10 @@ const swapHeader = (): string => `
     ${iconButton({
       attributes: { id: "swap-header-back" },
       icon: "chevronLeft",
-      label: "Back",
+      label: t("swap.back"),
       variant: "ghost",
     })}
-    <div class="flow-title"><h1>Swap</h1></div>
+    <div class="flow-title"><h1>${th("swap.title")}</h1></div>
   </header>`;
 
 /**
@@ -83,20 +84,20 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
     flowScreen(
       "swap",
       `${disabled ? noAccountEmpty(status) : ""}
-      ${flowSteps("data-swap-step", "Swap progress", [
-        ["edit", "Quote"],
-        ["confirm", "Review"],
-        ["success", "Execute"],
+      ${flowSteps("data-swap-step", t("swap.steps.label"), [
+        ["edit", t("swap.steps.quote")],
+        ["confirm", t("swap.steps.review")],
+        ["success", t("swap.steps.execute")],
       ])}
       <section class="swap-stage" id="swap-edit">
         <div class="swap-card">
           ${swapPanel("sell", disabled)}
-          <button id="swap-flip" class="swap-flip" type="button" aria-label="Switch sell and buy tokens" ${disabled ? "disabled" : ""}>${icon("arrowDown")}</button>
+          <button id="swap-flip" class="swap-flip" type="button" aria-label="${th("swap.edit.flip")}" ${disabled ? "disabled" : ""}>${icon("arrowDown")}</button>
           ${swapPanel("buy", disabled)}
         </div>
         <div class="swap-meta"><span id="swap-rate"></span><span id="swap-gas"></span></div>
         <p id="swap-warning" class="swap-warning" role="alert" hidden></p>
-        <button id="swap-review" type="button" disabled>${icon("swap")}<span id="swap-review-label">Review swap</span></button>
+        <button id="swap-review" type="button" disabled>${icon("swap")}<span id="swap-review-label">${th("swap.edit.review")}</span></button>
       </section>
       <section class="swap-stage" id="swap-confirm" hidden>
         <h2 class="swap-review-title">Review swap</h2>
@@ -115,19 +116,19 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
           <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
         </span>
         <div class="send-outcome-copy">
-          <h2 id="swap-success-title">Swap complete</h2>
+          <h2 id="swap-success-title">${th("swap.success.complete")}</h2>
           <p id="swap-success-note" hidden></p>
         </div>
         <div class="send-receipt">
           <p class="send-receipt-summary" id="swap-success-summary"></p>
           <div class="send-receipt-tx">
-            <span class="send-receipt-label">Transaction</span>
+            <span class="send-receipt-label">${th("swap.success.transaction")}</span>
             ${outcomeHashRow("swap-success-hash")}
           </div>
         </div>
         <div class="send-actions">
-          ${button({ attributes: { id: "swap-view-activity" }, icon: "activity", label: "View in Activity tab" })}
-          ${button({ attributes: { id: "swap-home" }, label: "Back", variant: "secondary" })}
+          ${button({ attributes: { id: "swap-view-activity" }, icon: "activity", label: t("swap.success.viewActivity") })}
+          ${button({ attributes: { id: "swap-home" }, label: t("swap.back"), variant: "secondary" })}
         </div>
       </section>
       <p id="swap-result" role="status"></p>`,

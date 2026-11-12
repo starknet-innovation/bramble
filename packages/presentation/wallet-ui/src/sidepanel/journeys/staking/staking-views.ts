@@ -15,6 +15,7 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { flowHeader, flowScreen } from "../../shared/parts";
 import type { StakingAction, StakingRow, StakingValidatorState } from "./staking-client";
@@ -23,24 +24,24 @@ import { stakingDirectorySection } from "./staking-directory-views";
 import { positionLines } from "./staking-position-lines";
 import { stakingPositionsSection } from "./staking-positions-views";
 
-const UNIT_SECONDS: readonly (readonly [number, string])[] = [
-  [86_400, "day"],
-  [3_600, "hour"],
-  [60, "minute"],
-];
+const UNIT_SECONDS = [
+  [86_400, "staking.duration.day", "staking.duration.days"],
+  [3_600, "staking.duration.hour", "staking.duration.hours"],
+  [60, "staking.duration.minute", "staking.duration.minutes"],
+] as const;
 
 /**
  * The exit window in words, rounded down to its largest whole unit
  * ("7 days", "5 minutes"). Pure.
  */
 export const exitWindowText = (seconds: number): string => {
-  for (const [unit, name] of UNIT_SECONDS) {
+  for (const [unit, one, many] of UNIT_SECONDS) {
     if (seconds >= unit) {
       const count = Math.floor(seconds / unit);
-      return `${count} ${name}${count === 1 ? "" : "s"}`;
+      return t(count === 1 ? one : many, { count: String(count) });
     }
   }
-  return `${seconds} seconds`;
+  return t("staking.duration.seconds", { count: String(seconds) });
 };
 
 const rowKey = (row: StakingRow): string => `${row.staker}|${row.tokenId}`;
@@ -61,7 +62,10 @@ const actionButton = (
 const amountForm = (row: StakingRow, action: "stake" | "unstake", label: string): string => `
   <div class="staking-form">
     ${inputControl({
-      ariaLabel: `${label} amount in ${row.symbol}`,
+      ariaLabel: t(
+        action === "stake" ? "staking.action.stakeAmount" : "staking.action.unstakeAmount",
+        { symbol: row.symbol },
+      ),
       attributes: { "data-staking-amount": `${action}|${rowKey(row)}` },
       inputmode: "decimal",
       maxlength: 40,
@@ -73,11 +77,11 @@ const amountForm = (row: StakingRow, action: "stake" | "unstake", label: string)
 const rowActions = (row: StakingRow): string => {
   const parts: string[] = [];
   if (row.unclaimed && row.unclaimed !== "0")
-    parts.push(actionButton(row, "claim", "Claim rewards", "secondary"));
+    parts.push(actionButton(row, "claim", t("staking.action.claim"), "secondary"));
   if (row.state === "withdrawable")
-    parts.push(actionButton(row, "withdraw", "Withdraw", "primary"));
+    parts.push(actionButton(row, "withdraw", t("staking.action.withdraw"), "primary"));
   if (row.state === "exit-pending" || row.state === "withdrawable") {
-    parts.push(actionButton(row, "cancel-unstake", "Cancel unstake", "secondary"));
+    parts.push(actionButton(row, "cancel-unstake", t("staking.action.cancelUnstake"), "secondary"));
   }
   // Cancel closes a claim, withdraw or cancel-unstake review: those reviews
   // hide the row's other controls, so it is the way back to them.
@@ -85,15 +89,15 @@ const rowActions = (row: StakingRow): string => {
     parts.push(
       button({
         attributes: { "data-staking-cancel": rowKey(row), hidden: true },
-        label: "Cancel",
+        label: t("staking.action.cancel"),
         size: "small",
         variant: "ghost",
       }),
     );
   }
   return `${parts.length > 0 ? `<div class="staking-actions">${parts.join("")}</div>` : ""}
-    ${row.accepting ? amountForm(row, "stake", "Stake") : `<p class="hint">${escapeHtml("This validator is leaving staking.")}</p>`}
-    ${row.state === "staked" ? amountForm(row, "unstake", "Unstake") : ""}`;
+    ${row.accepting ? amountForm(row, "stake", t("staking.action.stake")) : `<p class="hint">${th("staking.validator.leaving")}</p>`}
+    ${row.state === "staked" ? amountForm(row, "unstake", t("staking.action.unstake")) : ""}`;
 };
 
 const stakingRow = (row: StakingRow): string => `
@@ -103,7 +107,7 @@ const stakingRow = (row: StakingRow): string => `
       ${
         row.refusal
           ? `<p class="hint">${escapeHtml(row.refusal)}</p>`
-          : `<p class="hint">${escapeHtml(`Commission ${row.commission ?? ""} · ${row.delegated ?? ""} ${row.symbol} delegated`)}</p>
+          : `<p class="hint">${th("staking.validator.commission", { commission: row.commission ?? "", delegated: row.delegated ?? "", symbol: row.symbol })}</p>
              ${positionLines(row)}
              ${rowActions(row)}`
       }
@@ -116,19 +120,19 @@ const validatorSection = (
   state: StakingValidatorState,
 ): string => `
   <div class="staking-validator">
-    ${button({ attributes: { "data-staking-back": "" }, label: "All validators", size: "small", variant: "ghost" })}
-    <strong>${escapeHtml(selected.name ?? "Validator")}</strong>
+    ${button({ attributes: { "data-staking-back": "" }, label: t("staking.validator.allValidators"), size: "small", variant: "ghost" })}
+    <strong>${escapeHtml(selected.name ?? t("staking.validator.name"))}</strong>
     <code>${escapeHtml(selected.staker)}</code>
   </div>
   ${
     "loading" in state
-      ? emptyState("Loading staking…")
+      ? emptyState(t("staking.validator.loading"))
       : "unavailable" in state
         ? emptyState(state.unavailable, "alert")
-        : `<p class="lede">${escapeHtml(`Unstaking takes ${exitWindowText(state.exitWindowSeconds)}, with no rewards while you wait.`)}</p>
+        : `<p class="lede">${th("staking.validator.exitWindow", { window: exitWindowText(state.exitWindowSeconds) })}</p>
            ${
              state.rows.length === 0
-               ? emptyState("No tokens you track can be staked here.")
+               ? emptyState(t("staking.validator.noTokens"))
                : `<ul class="allowance-list staking-list">${state.rows.map(stakingRow).join("")}</ul>`
            }`
   }`;
@@ -142,13 +146,13 @@ export const stakingFlow = (
   account: AccountRef | null,
   state: StakingState,
 ): string =>
-  flowHeader("Staking", status) +
+  flowHeader(t("staking.title"), status) +
   flowScreen(
     "staking",
     `<section class="section">
       ${
         account === null
-          ? emptyState("Unlock an account on this network to stake.")
+          ? emptyState(t("staking.validator.unlockAccount"))
           : state.selected
             ? validatorSection(state.selected, state.validator)
             : `${stakingPositionsSection(state)}${stakingDirectorySection(state)}`

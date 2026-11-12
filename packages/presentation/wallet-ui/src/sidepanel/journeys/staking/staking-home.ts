@@ -15,6 +15,7 @@ import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
 import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
+import { t, th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
 import { compactAmount } from "../portfolio/token-row";
 import type { StakingRow } from "./staking-client";
@@ -28,7 +29,7 @@ const stakeButton = (): string =>
   button({
     attributes: { "data-staking-list": "" },
     icon: "trendingUp",
-    label: "Stake",
+    label: t("staking.action.stake"),
   });
 
 /**
@@ -43,7 +44,7 @@ export const stakingPositionCard = (
   <li class="allowance-row staking-row staking-card-row" data-staking-position="${escapeHtml(`${row.staker}|${row.tokenId}`)}">
     <button class="staking-card" type="button" ${attribute}="${escapeHtml(row.staker)}">
       <span class="allowance-copy staking-copy">
-        <strong>${escapeHtml(name ?? "Validator")}</strong>
+        <strong>${escapeHtml(name ?? t("staking.validator.name"))}</strong>
         <code>${escapeHtml(shortAddress(canonical(row.staker)))}</code>
         ${positionLines(row, "span")}
       </span>
@@ -65,13 +66,13 @@ const homeStakingPanel = (state: StakingState): string => {
   const { positions } = state;
   const body =
     "loading" in positions
-      ? emptyState("Loading staking…")
+      ? emptyState(t("staking.validator.loading"))
       : "off" in positions
         ? ""
         : "unavailable" in positions
           ? `<p class="hint" role="alert">${escapeHtml(positions.unavailable)}</p>`
           : positions.rows.length === 0 && positions.complete
-            ? emptyState("Stake STRK or BTC with a validator to earn rewards.")
+            ? emptyState(t("staking.home.empty"))
             : `${
                 positions.rows.length === 0
                   ? ""
@@ -80,7 +81,7 @@ const homeStakingPanel = (state: StakingState): string => {
                         stakingPositionCard(row, nameIn(state, row.staker), "data-staking-go"),
                       )
                       .join("")}</ul>`
-              }${positions.complete ? "" : `<p class="hint" role="status">Some of your stakes may not be listed.</p>`}`;
+              }${positions.complete ? "" : `<p class="hint" role="status">${th("staking.positions.mayNotBeListed")}</p>`}`;
   return `<div class="home-staking">${stakeButton()}${body}</div>`;
 };
 
@@ -97,9 +98,11 @@ export const homeTabPanels = (
   nfts: string | null = null,
 ): { readonly bar: string; readonly open: HomeTab; readonly panels: string } => {
   const offered: ReadonlyArray<readonly [HomeTab, string, string]> = [
-    ["tokens", "Tokens", tokens],
-    ...(staking ? [["staking", "Staking", homeStakingPanel(staking)] as const] : []),
-    ...(nfts === null ? [] : [["nfts", "NFTs", nfts] as const]),
+    ["tokens", th("staking.home.tabTokens"), tokens],
+    ...(staking
+      ? [["staking", th("staking.home.tabStaking"), homeStakingPanel(staking)] as const]
+      : []),
+    ...(nfts === null ? [] : [["nfts", th("staking.home.tabNfts"), nfts] as const]),
   ];
   const open = offered.some(([value]) => value === selected) ? selected : "tokens";
   const tab = (value: HomeTab, label: string): string =>
@@ -108,7 +111,7 @@ export const homeTabPanels = (
     `<div id="home-panel-${value}" role="tabpanel" aria-labelledby="home-tab-${value}"${value === open ? "" : " hidden"}>${body}</div>`;
   return {
     open,
-    bar: `<div class="tab-set" role="tablist" aria-label="Portfolio sections">${offered.map(([value, label]) => tab(value, label)).join("")}</div>`,
+    bar: `<div class="tab-set" role="tablist" aria-label="${th("staking.home.tabs")}">${offered.map(([value, label]) => tab(value, label)).join("")}</div>`,
     panels: offered.map(([value, , body]) => panel(value, body)).join(""),
   };
 };
@@ -138,12 +141,14 @@ export const stakedSummary = (
     else totals.set(token.id, { raw, token });
   }
   if (totals.size === 0) return null;
-  return `Staked ${[...totals.values()]
-    .map(
-      ({ raw, token }) =>
-        `${compactAmount(formatTokenAmount(raw, token.decimals))} ${token.symbol}`,
-    )
-    .join(" · ")}`;
+  return t("staking.home.staked", {
+    amounts: [...totals.values()]
+      .map(
+        ({ raw, token }) =>
+          `${compactAmount(formatTokenAmount(raw, token.decimals))} ${token.symbol}`,
+      )
+      .join(" · "),
+  });
 };
 
 /**

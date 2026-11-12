@@ -13,8 +13,14 @@ import { uiLocale } from "./locale";
 import { onboardingMessages } from "./messages/onboarding";
 import { sendMessages } from "./messages/send";
 import { settingsMessages } from "./messages/settings";
+import { swapStakingMessages } from "./messages/swap-staking";
 
-const en = { ...onboardingMessages.en, ...sendMessages.en, ...settingsMessages.en } as const;
+const en = {
+  ...onboardingMessages.en,
+  ...sendMessages.en,
+  ...settingsMessages.en,
+  ...swapStakingMessages.en,
+} as const;
 
 /** Every UI message, per locale. Exported for the catalog test. */
 export const uiCatalogs = {
@@ -23,6 +29,7 @@ export const uiCatalogs = {
     ...onboardingMessages["zh-Hans"],
     ...sendMessages["zh-Hans"],
     ...settingsMessages["zh-Hans"],
+    ...swapStakingMessages["zh-Hans"],
   },
 };
 
