@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
-  LEDGER_HANDSHAKE_PROGRESS,
+  ledgerHandshakeProgress,
   ledgerTransitionProgress,
 } from "../../apps/extension/src/ledger-grant/transition-progress";
 
@@ -20,7 +20,7 @@ describe("Ledger transition progress", () => {
   });
 
   test("the handshake that starts the wait says nothing is signed", () => {
-    expect(LEDGER_HANDSHAKE_PROGRESS).toEqual({
+    expect(ledgerHandshakeProgress()).toEqual({
       message: "No transaction is signed.",
       title: "Checking firmware and Starknet",
     });

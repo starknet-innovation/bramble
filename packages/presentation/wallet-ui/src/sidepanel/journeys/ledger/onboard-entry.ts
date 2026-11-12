@@ -26,6 +26,7 @@
  * on a surface that cannot complete the setup it was captured for.
  */
 import type { AccountContractType, LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { t } from "../../../i18n/messages";
 import type { RenderData } from "../../app/rendering/render-cache";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { errorDetails, isPopupSurface, renderFragment, showToast } from "../../shared/dom";
@@ -162,7 +163,7 @@ export const createLedgerOnboardEntry = (deps: {
               ?.addEventListener("click", dismiss);
           },
           (error: unknown) => {
-            showToast(errorDetails(error, "Could not switch surface"), "error", mount);
+            showToast(errorDetails(error, t("ledger.surface.switchFailed")), "error", mount);
           },
         );
       });

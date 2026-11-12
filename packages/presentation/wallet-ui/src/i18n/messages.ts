@@ -10,6 +10,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import { type Locale, type MessageArgs, translator } from "@bramble/core/i18n";
 import { uiLocale } from "./locale";
+import { ledgerMessages } from "./messages/ledger";
 import { multisigMessages } from "./messages/multisig";
 import { multisigProposeMessages } from "./messages/multisig-propose";
 import { multisigSetupMessages } from "./messages/multisig-setup";
@@ -21,6 +22,7 @@ import { settingsMessages } from "./messages/settings";
 import { swapStakingMessages } from "./messages/swap-staking";
 
 const en = {
+  ...ledgerMessages.en,
   ...multisigProposeMessages.en,
   ...multisigSetupMessages.en,
   ...multisigSignerMessages.en,
@@ -36,6 +38,7 @@ const en = {
 export const uiCatalogs = {
   en,
   "zh-Hans": {
+    ...ledgerMessages["zh-Hans"],
     ...multisigProposeMessages["zh-Hans"],
     ...multisigSetupMessages["zh-Hans"],
     ...multisigSignerMessages["zh-Hans"],
