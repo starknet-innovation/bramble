@@ -15,6 +15,7 @@ import { AVNU_MULTI_ROUTE_SWAP, decodeAvnuRoute } from "@bramble/wallet-model/av
 import { asFelt, canonicalFelt, sameFelt, uint256Felts } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { Call } from "starknet";
+import { type ReviewText, reviewEnglish, reviewText } from "./review-messages";
 import type { VerificationContext } from "./verification-context";
 import {
   APPROVE_ENTRYPOINTS,
@@ -50,8 +51,21 @@ export type DecodedCall = {
   readonly contractAddress: string;
   readonly entrypoint: string;
   readonly kind: DecodedCallKind;
+  /** The English sentence, rendered from `text`; activity and refusals read it. */
   readonly summary: string;
+  /** The same sentence as a key and its facts, for the UI to render in the reader's language. */
+  readonly text: ReviewText;
 };
+
+// One decoded call: the sentence is decided once, as data, and its English
+// rendering is derived from it so the two can never disagree.
+const decoded = (call: Call, kind: DecodedCallKind, text: ReviewText): DecodedCall => ({
+  contractAddress: call.contractAddress,
+  entrypoint: call.entrypoint,
+  kind,
+  summary: reviewEnglish(text),
+  text,
+});
 
 /**
  * Re-exported verifier context so callers keep importing it from this module.
@@ -118,8 +132,10 @@ export const isWatchedNftContract = (
   contractAddress: string,
 ): boolean => (context.nftContracts ?? []).some((contract) => sameFelt(contract, contractAddress));
 
-const amountLabel = (amount: bigint, token: TokenConfig | undefined): string =>
-  token ? `${formatTokenAmount(amount, token.decimals)} ${token.symbol}` : `${amount} units`;
+const amountLabel = (amount: bigint, token: TokenConfig | undefined): string | ReviewText =>
+  token
+    ? `${formatTokenAmount(amount, token.decimals)} ${token.symbol}`
+    : reviewText("review.amount.units", { amount: String(amount) });
 
 // One decoder per known entrypoint shape: given the call, its guarded calldata,
 // and the wallet context, it returns a decoded summary or null to fall through
@@ -147,16 +163,21 @@ const decodeTransferFromCall: CallDecoder = (call, calldata, context) => {
     return null;
   }
   const token = tokenFor(context.tokens, call.contractAddress);
-  const fromLabel = from ? ` from ${shortAddress(canonical(from))}` : "";
-  return {
-    contractAddress: call.contractAddress,
-    entrypoint: call.entrypoint,
-    // Treated as a transfer so self-send and address-poisoning checks run.
-    kind: "transfer",
-    summary: token
-      ? `Send ${amountLabel(amountOrId, token)}${fromLabel} to ${shortAddress(canonical(recipient))}`
-      : `Send NFT #${amountOrId} to ${shortAddress(canonical(recipient))}`,
-  };
+  const to = shortAddress(canonical(recipient));
+  // Treated as a transfer so self-send and address-poisoning checks run.
+  return decoded(
+    call,
+    "transfer",
+    !token
+      ? reviewText("review.call.sendNft", { id: String(amountOrId), to })
+      : from
+        ? reviewText("review.call.sendFrom", {
+            amount: amountLabel(amountOrId, token),
+            from: shortAddress(canonical(from)),
+            to,
+          })
+        : reviewText("review.call.send", { amount: amountLabel(amountOrId, token), to }),
+  );
 };
 
 // Whether the span is EXACTLY an ERC721 safe transfer: [from, to, id_low,
@@ -202,19 +223,17 @@ const decodeSafeTransferCall: CallDecoder = (call, calldata) => {
   if (value === null && !erc721) {
     return null;
   }
-  const party = shortAddress(canonical(recipient));
-  const summary =
+  const to = shortAddress(canonical(recipient));
+  const id = String(tokenId);
+  return decoded(
+    call,
+    "transfer",
     value !== null && erc721
-      ? `Safe transfer of NFT #${tokenId} to ${party}`
+      ? reviewText("review.call.safeTransferNft", { id, to })
       : value !== null
-        ? `Send ${value} of NFT #${tokenId} to ${party}`
-        : `Send NFT #${tokenId} to ${party}`;
-  return {
-    contractAddress: call.contractAddress,
-    entrypoint: call.entrypoint,
-    kind: "transfer",
-    summary,
-  };
+        ? reviewText("review.call.sendNftEditions", { count: String(value), id, to })
+        : reviewText("review.call.sendNft", { id, to }),
+  );
 };
 
 // ERC1155 safe_batch_transfer_from(from, to, ids: Span<u256>, values:
@@ -243,13 +262,16 @@ const decodeErc1155BatchTransferCall: CallDecoder = (call, calldata) => {
   ) {
     return null;
   }
-  const collection = shortAddress(canonical(call.contractAddress));
-  return {
-    contractAddress: call.contractAddress,
-    entrypoint: call.entrypoint,
-    kind: "transfer",
-    summary: `Send ${count} token id${count === 1 ? "" : "s"} of collection ${collection} to ${shortAddress(canonical(recipient))}`,
+  const facts = {
+    collection: shortAddress(canonical(call.contractAddress)),
+    count: String(count),
+    to: shortAddress(canonical(recipient)),
   };
+  return decoded(
+    call,
+    "transfer",
+    reviewText(count === 1 ? "review.call.sendBatchOne" : "review.call.sendBatchMany", facts),
+  );
 };
 
 // set_approval_for_all(operator, approved): the operator grant. `approved` is a
@@ -266,17 +288,15 @@ const decodeOperatorApprovalCall: CallDecoder = (call, calldata) => {
   if (!operator || approved === null) {
     return null;
   }
-  const party = shortAddress(canonical(operator));
-  const collection = shortAddress(canonical(call.contractAddress));
-  return {
-    contractAddress: call.contractAddress,
-    entrypoint: call.entrypoint,
-    kind: "operator-approval",
-    summary:
-      approved === 0n
-        ? `Revoke ${party}'s permission to transfer every item in collection ${collection}`
-        : `Allow ${party} to transfer EVERY item you own in collection ${collection}`,
+  const facts = {
+    collection: shortAddress(canonical(call.contractAddress)),
+    party: shortAddress(canonical(operator)),
   };
+  return decoded(
+    call,
+    "operator-approval",
+    reviewText(approved === 0n ? "review.call.revokeOperator" : "review.call.grantOperator", facts),
+  );
 };
 
 // transfer(to, amount_low, amount_high) and the ERC20 allowance grants
@@ -297,39 +317,38 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
   const token = tokenFor(context.tokens, call.contractAddress);
   const party = shortAddress(canonical(counterparty));
   if (call.entrypoint === "transfer") {
-    return {
-      contractAddress: call.contractAddress,
-      entrypoint: call.entrypoint,
-      kind: "transfer",
-      summary: `Send ${amountLabel(amount, token)} to ${party}`,
-    };
+    return decoded(
+      call,
+      "transfer",
+      reviewText("review.call.send", { amount: amountLabel(amount, token), to: party }),
+    );
   }
+  const contract = shortAddress(canonical(call.contractAddress));
   if (isWatchedNftContract(context, call.contractAddress)) {
-    return {
-      contractAddress: call.contractAddress,
-      entrypoint: call.entrypoint,
-      kind: "nft-approval",
-      summary: `Allow ${party} to transfer NFT #${amount} of collection ${shortAddress(canonical(call.contractAddress))}`,
-    };
+    return decoded(
+      call,
+      "nft-approval",
+      reviewText("review.call.nftApproval", { collection: contract, id: String(amount), party }),
+    );
   }
   if (!token) {
-    return {
-      contractAddress: call.contractAddress,
-      entrypoint: call.entrypoint,
-      kind: "approve",
-      summary: `Authorize ${party} for amount or NFT #${amount} on unknown contract ${shortAddress(canonical(call.contractAddress))}`,
-    };
+    return decoded(
+      call,
+      "approve",
+      reviewText("review.call.unknownApproval", { amount: String(amount), contract, party }),
+    );
   }
   // An increase adds to whatever allowance already stands, and the resulting
   // cap is not knowable from the call alone, so it is summarized as "more"
   // rather than as an absolute limit the wallet would be guessing at.
-  const extra = call.entrypoint === "approve" ? "" : " more";
-  return {
-    contractAddress: call.contractAddress,
-    entrypoint: call.entrypoint,
-    kind: "approve",
-    summary: `Allow ${party} to spend ${amountLabel(amount, token)}${extra}`,
-  };
+  return decoded(
+    call,
+    "approve",
+    reviewText(call.entrypoint === "approve" ? "review.call.allow" : "review.call.allowMore", {
+      amount: amountLabel(amount, token),
+      party,
+    }),
+  );
 };
 
 // A route amount with the token it is in: decimals and symbol for a tracked
@@ -337,7 +356,12 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
 // states a quantity without saying what it is a quantity of.
 const routeAmountLabel = (amount: bigint, tokenAddress: string, context: VerificationContext) => {
   const token = tokenFor(context.tokens, tokenAddress);
-  return token ? amountLabel(amount, token) : `${amount} units of ${shortAddress(tokenAddress)}`;
+  return token
+    ? amountLabel(amount, token)
+    : reviewText("review.amount.unitsOf", {
+        amount: String(amount),
+        token: shortAddress(tokenAddress),
+      });
 };
 
 // AVNU multi_route_swap, read through the wallet's one pinned route decoder —
@@ -354,20 +378,22 @@ const decodeAvnuSwapCall: CallDecoder = (call, calldata, context) => {
   }
   const sell = routeAmountLabel(route.sellAmount, route.sellToken, context);
   const floor = routeAmountLabel(route.minBuyAmount, route.buyToken, context);
-  return {
-    contractAddress: call.contractAddress,
-    entrypoint: call.entrypoint,
-    kind: "swap",
-    summary: `Swap ${sell} for at least ${floor}, paid to ${shortAddress(route.beneficiary)}`,
-  };
+  return decoded(
+    call,
+    "swap",
+    reviewText("review.call.swap", { floor, payee: shortAddress(route.beneficiary), sell }),
+  );
 };
 
-const decodeUnknownCall = (call: Call): DecodedCall => ({
-  contractAddress: call.contractAddress,
-  entrypoint: call.entrypoint,
-  kind: "unknown",
-  summary: `Call ${call.entrypoint} on ${shortAddress(canonical(call.contractAddress))}`,
-});
+const decodeUnknownCall = (call: Call): DecodedCall =>
+  decoded(
+    call,
+    "unknown",
+    reviewText("review.call.unknown", {
+      contract: shortAddress(canonical(call.contractAddress)),
+      entrypoint: call.entrypoint,
+    }),
+  );
 
 // Dispatch table keyed by entrypoint. EVERY row is derived from a shared
 // selector list rather than written out again, so a spelling added to

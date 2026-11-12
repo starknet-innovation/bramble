@@ -142,3 +142,91 @@ export const catalogFailures = (catalogs: Catalogs<string>): readonly string[] =
     ];
   });
 };
+
+/**
+ * A message as data: its id and the facts it states. Lets one layer decide
+ * what a sentence says (and with which exact values) while another renders it
+ * in the reader's language. A fact is display text, or one nested message for
+ * a fragment that itself needs wording (an amount in raw units, say).
+ */
+export type MessageRef = {
+  readonly key: string;
+  readonly facts: Readonly<Record<string, string | MessageRef>>;
+};
+
+// Bounds for a message reference read from another context. Generous for a
+// review sentence, small enough that a hostile one cannot bloat a screen.
+const MESSAGE_KEY = /^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*){1,5}$/u;
+const MAX_FACTS = 8;
+const MAX_FACT_LENGTH = 300;
+const MAX_NESTING = 1;
+
+const isFactsRecord = (
+  value: unknown,
+  isKey: (key: string) => boolean,
+  depth: number,
+): value is MessageRef["facts"] => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const entries = Object.entries(value);
+  return (
+    entries.length <= MAX_FACTS &&
+    entries.every(
+      ([name, fact]) =>
+        /^[A-Za-z][A-Za-z0-9]*$/u.test(name) &&
+        (typeof fact === "string"
+          ? fact.length > 0 && fact.length <= MAX_FACT_LENGTH
+          : depth < MAX_NESTING && isMessageRefAt(fact, isKey, depth + 1)),
+    )
+  );
+};
+
+const isMessageRefAt = (
+  value: unknown,
+  isKey: (key: string) => boolean,
+  depth: number,
+): value is MessageRef => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  const key = record["key"];
+  return (
+    keys.length === 2 &&
+    typeof key === "string" &&
+    MESSAGE_KEY.test(key) &&
+    isKey(key) &&
+    isFactsRecord(record["facts"], isKey, depth)
+  );
+};
+
+/**
+ * Validates a message reference from an untrusted context (another extension
+ * page, storage). The key must be one the caller's catalog defines, facts are
+ * bounded plain strings, and at most one level of nesting is allowed. It does
+ * not check that the facts match the message's placeholders; rendering does,
+ * and throws on a missing one.
+ */
+export const isMessageRef = (
+  value: unknown,
+  isKey: (key: string) => boolean,
+): value is MessageRef => isMessageRefAt(value, isKey, 0);
+
+/**
+ * Renders a message reference with a lookup from message id to template.
+ * Nested facts render first, through the same lookup. Throws when a key is
+ * unknown or a placeholder has no fact; callers that hold an English fallback
+ * catch and show it instead.
+ */
+export const renderMessageRef = (
+  ref: MessageRef,
+  template: (key: string) => string | undefined,
+): string => {
+  const text = template(ref.key);
+  if (text === undefined) throw new Error(`unknown message: ${ref.key}`);
+  const facts = Object.fromEntries(
+    Object.entries(ref.facts).map(([name, fact]) => [
+      name,
+      typeof fact === "string" ? fact : renderMessageRef(fact, template),
+    ]),
+  );
+  return formatMessage(text, facts);
+};

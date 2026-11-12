@@ -245,7 +245,7 @@ const swapPrepareResponse = async (
       buyAmount: input.buyAmount,
       buySymbol: buyToken.symbol,
       calls,
-      flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+      flags: report.flags.map((flag) => ({ ...flag })),
       minBuyAmount: minBuyText,
       reviewedFee,
       sellSymbol: sellToken.symbol,

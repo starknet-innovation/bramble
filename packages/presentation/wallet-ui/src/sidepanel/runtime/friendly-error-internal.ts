@@ -368,13 +368,13 @@ export const PLUMBING_DESPITE_FACT_WORD: ReadonlySet<string> = new Set([
 // The KMS result-field checks are not here: their field can be a public key or
 // a signature, so they stay visible. The anchored grammar admits nothing else.
 const KMS_TEMPLATE_PLUMBING =
-  /^krusty kms export missing: [a-z0-9_]+$|^krusty kms class hashes are missing sn_(?:main|sepolia|devnet)$|^unknown account constructor shape: [^\s]+$|^qr layout mismatch: [^\s]+ cells for [^\s]+ bits$|^missing message parameter: [a-z][a-z0-9]*$/;
+  /^krusty kms export missing: [a-z0-9_]+$|^krusty kms class hashes are missing sn_(?:main|sepolia|devnet)$|^unknown account constructor shape: [^\s]+$|^qr layout mismatch: [^\s]+ cells for [^\s]+ bits$|^missing message parameter: [a-z][a-z0-9]*$|^unknown message: [^\s]+$/;
 
 /**
  * Whether a raw string is reviewed plumbing that must not be shown as written.
  * Exact match against `REVIEWED_PLUMBING`, or the anchored template shapes
- * (the KMS adapter's, and the message catalog's missing-parameter guard, which
- * only a programming error can reach). Everything else is shown.
+ * (the KMS adapter's, and the message catalog's missing-parameter and
+ * unknown-message guards, which only a programming error can reach). Everything else is shown.
  */
 export const isReviewedPlumbing = (trimmed: string): boolean => {
   const normalized = trimmed.toLowerCase();

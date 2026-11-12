@@ -35,9 +35,10 @@ describe("known-not-sent refusals", () => {
 
   test("every listed refusal is still minted by the wallet", async () => {
     // The poisoned-recipient refusal is a verifier flag's `message`, which the
-    // scan does not read; pinned to its source instead.
+    // scan does not read; pinned to its source instead: the review-sentence
+    // catalog, whose English the verifier renders every flag message from.
     const verifier = (
-      await Bun.file("packages/features/transactions/src/routing/verify.ts").text()
+      await Bun.file("packages/features/transactions/src/routing/review-messages.ts").text()
     ).toLowerCase();
     const unminted = [...KNOWN_NOT_SENT].filter(
       (raw) => !lowered.has(raw) && !verifier.includes(`"${raw}"`),

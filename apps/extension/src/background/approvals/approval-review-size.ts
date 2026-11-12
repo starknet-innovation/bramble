@@ -37,6 +37,8 @@ const AMOUNT_CHARACTERS = 78;
 const SYMBOL_CHARACTERS = 16;
 // Longer than any account id, chain id or payload digest.
 const CONTEXT_CHARACTERS = 96;
+// Longer than every review sentence id, and than every fact name.
+const MESSAGE_KEY_CHARACTERS = 48;
 
 // Wallet-written fields. The fee review fields are left out of the worst case:
 // they are covered by the fee headroom in `REVIEWABLE_APPROVAL_BUDGET`, which
@@ -58,9 +60,24 @@ const WALLET_FIELDS: ReadonlySet<string> = new Set([
   "requiresDeployment",
   "reviewAssets",
   "summaries",
+  "summaryTexts",
 ]);
 
 const filler = (characters: number): string => "x".repeat(characters);
+
+// The largest review-sentence reference a line of `characters` can carry.
+// Every fact is rendered verbatim into the English line, so a reference's fact
+// text never exceeds the line it renders; the shape carries the most facts and
+// the one nesting level the panel accepts, so it also bounds the node count.
+const worstCaseText = (characters: number): Record<string, unknown> => ({
+  facts: {
+    a: filler(characters),
+    b: filler(1),
+    c: filler(1),
+    d: { facts: { e: filler(1), f: filler(1) }, key: filler(MESSAGE_KEY_CHARACTERS) },
+  },
+  key: filler(MESSAGE_KEY_CHARACTERS),
+});
 
 // The approval with every wallet-written field replaced by the largest value
 // the panel would accept for the counts the site chose. Each real field is no
@@ -91,6 +108,7 @@ const worstCaseReview = (approval: PendingApproval): Record<string, unknown> => 
           flags: Array.from({ length: lines * FLAGS_PER_SUMMARY }, () => ({
             code: filler(FLAG_CODE_CHARACTERS),
             message: filler(PANEL_TEXT_CHARACTERS),
+            text: worstCaseText(PANEL_TEXT_CHARACTERS),
           })),
         }
       : {}),
@@ -111,6 +129,9 @@ const worstCaseReview = (approval: PendingApproval): Record<string, unknown> => 
     // A line already longer than the panel renders comes from the site's own
     // strings, not the user's data; it is measured as it is.
     summaries: summaries.map((line) => filler(Math.max(line.length, PANEL_TEXT_CHARACTERS))),
+    summaryTexts: summaries.map((line) =>
+      worstCaseText(Math.max(line.length, PANEL_TEXT_CHARACTERS)),
+    ),
   };
 };
 

@@ -6,13 +6,9 @@
  */
 
 import { isSha256Digest } from "@bramble/core/ids";
-import {
-  hasOnlyKnownKeys,
-  isDecimalAmountText,
-  isRecord,
-  isRiskFlagCode,
-} from "@bramble/core/json";
+import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@bramble/core/json";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
+import { isReviewedRiskFlag } from "../../../popup/responses/review-flags";
 import type { RuntimeApi } from "../../runtime/runtime";
 import { lostReplySend, responseError } from "../../runtime/runtime-errors";
 
@@ -99,15 +95,7 @@ const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
   ) &&
   Array.isArray(value["flags"]) &&
   value["flags"].length <= 12 &&
-  value["flags"].every(
-    (flag) =>
-      isRecord(flag) &&
-      hasOnlyKnownKeys(flag, ["code", "message"]) &&
-      isRiskFlagCode(flag["code"]) &&
-      typeof flag["message"] === "string" &&
-      flag["message"].length > 0 &&
-      flag["message"].length <= 300,
-  );
+  value["flags"].every(isReviewedRiskFlag);
 
 /**
  * Value delta of a quote in percent: how much MORE (+) or LESS (−) the buy
