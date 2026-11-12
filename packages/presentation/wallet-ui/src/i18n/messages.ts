@@ -10,14 +10,15 @@
 import { escapeHtml } from "@bramble/core/html";
 import { type Locale, type MessageArgs, translator } from "@bramble/core/i18n";
 import { uiLocale } from "./locale";
+import { onboardingMessages } from "./messages/onboarding";
 import { settingsMessages } from "./messages/settings";
 
-const en = { ...settingsMessages.en } as const;
+const en = { ...onboardingMessages.en, ...settingsMessages.en } as const;
 
 /** Every UI message, per locale. Exported for the catalog test. */
 export const uiCatalogs = {
   en,
-  "zh-Hans": { ...settingsMessages["zh-Hans"] },
+  "zh-Hans": { ...onboardingMessages["zh-Hans"], ...settingsMessages["zh-Hans"] },
 };
 
 /** A UI message id. */

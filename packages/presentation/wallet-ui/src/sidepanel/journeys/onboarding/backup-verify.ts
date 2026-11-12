@@ -14,6 +14,8 @@
  * screen shows must not be a function of the secret it is checking.
  */
 
+import { t } from "../../../i18n/messages";
+
 /** How many words of a freshly generated phrase the user confirms. */
 export const BACKUP_VERIFY_COUNT = 3;
 
@@ -97,8 +99,11 @@ export const backupVerifyState = (
  * reported as such, so a mistyped word reads as an error to fix rather than
  * as the same prompt shown to an empty form.
  */
-export const BACKUP_VERIFY_COPY: Readonly<Record<BackupVerifyState, string>> = {
-  confirmed: "Backup confirmed.",
-  incomplete: "Enter the requested words to continue.",
-  mismatch: "These words don't match your recovery phrase. Check your copy.",
-};
+export const backupVerifyCopy = (state: BackupVerifyState): string =>
+  t(
+    state === "confirmed"
+      ? "onboarding.verify.confirmed"
+      : state === "mismatch"
+        ? "onboarding.verify.mismatch"
+        : "onboarding.verify.incomplete",
+  );

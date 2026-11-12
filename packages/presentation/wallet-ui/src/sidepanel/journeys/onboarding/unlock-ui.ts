@@ -2,10 +2,12 @@
  * Locked-gate binder that forwards the vault passphrase directly to the
  * privileged background and never persists or renders it.
  */
+import { t } from "../../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine, showRefusalToast, showToast } from "../../shared/dom";
 import type { OnboardingUiDeps } from "./onboarding-ui";
 
-// The background's refusal for a passphrase that does not open the vault.
+// The background's refusal for a passphrase that does not open the vault. It is
+// matched, never shown: the toast reads the catalog's sentence instead.
 const WRONG_PASSPHRASE = "Incorrect passphrase";
 
 /**
@@ -33,19 +35,19 @@ export const bindUnlock = (
     void unlock.then(
       async (status) => {
         onUnlocked();
-        showToast("Vault unlocked", "success", form);
+        showToast(t("onboarding.unlock.unlocked"), "success", form);
         await deps.render(status);
       },
       (error: unknown) => {
         // A wrong passphrase is the user's own mistake, not a diagnostic, so
         // its toast carries no copy control (QA C2).
-        if (errorDetails(error, "Unlock failed") === WRONG_PASSPHRASE) {
-          showRefusalToast(WRONG_PASSPHRASE, form);
+        if (errorDetails(error, t("onboarding.unlock.failed")) === WRONG_PASSPHRASE) {
+          showRefusalToast(t("onboarding.unlock.wrongPassphrase"), form);
         } else {
-          showToast(errorDetails(error, "Unlock failed"), "error", form);
+          showToast(errorDetails(error, t("onboarding.unlock.failed")), "error", form);
         }
         if (result) {
-          result.textContent = errorLine(error, "Unlock failed");
+          result.textContent = errorLine(error, t("onboarding.unlock.failed"));
         }
         buttonBusy(submitButton, false);
       },

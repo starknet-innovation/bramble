@@ -10,6 +10,7 @@
  * time through `readPhrase` and never keeps, renders, or attributes a second
  * copy of its own.
  */
+import { t } from "../../../i18n/messages";
 import { bindGuardedCopy } from "../../shared/guarded-copy";
 import { setGeneratedPhraseMasked } from "./recovery-word-state";
 
@@ -50,8 +51,13 @@ export const bindGeneratedPhrase = (
   toggle?.addEventListener("click", () => {
     const masked = !(grid?.classList.contains("is-masked") ?? false);
     setGeneratedPhraseMasked(grid, inputs, masked);
-    toggle.lastChild?.replaceWith(masked ? "Show" : "Hide");
-    toggle.setAttribute("aria-label", `${masked ? "Show" : "Hide"} recovery phrase`);
+    toggle.lastChild?.replaceWith(
+      t(masked ? "onboarding.generated.show" : "onboarding.generated.hide"),
+    );
+    toggle.setAttribute(
+      "aria-label",
+      t(masked ? "onboarding.generated.showLabel" : "onboarding.generated.hideLabel"),
+    );
     revealed ||= !masked;
     syncUnlocked();
   });
@@ -61,8 +67,8 @@ export const bindGeneratedPhrase = (
     reset: () => {
       revealed = false;
       setGeneratedPhraseMasked(grid, inputs, true);
-      toggle?.lastChild?.replaceWith("Show");
-      toggle?.setAttribute("aria-label", "Show recovery phrase");
+      toggle?.lastChild?.replaceWith(t("onboarding.generated.show"));
+      toggle?.setAttribute("aria-label", t("onboarding.generated.showLabel"));
       syncUnlocked();
     },
   };

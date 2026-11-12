@@ -9,6 +9,7 @@
  */
 
 import { accountClassEntry } from "@bramble/wallet-model/account-families";
+import { t } from "../../../i18n/messages";
 import type { ReadyKeyCandidate } from "../../../popup/responses/responses-onboarding";
 import { accountLabel } from "../../shared/parts";
 
@@ -25,10 +26,10 @@ const releaseName = (classHash: string): string => {
 };
 
 const rowState = (candidate: ReadyKeyCandidate, duplicate: boolean): string => {
-  if (duplicate) return "Already in this wallet";
-  if (candidate.deployed) return "Deployed";
+  if (duplicate) return t("onboarding.picker.alreadyAdded");
+  if (candidate.deployed) return t("onboarding.picker.deployed");
   const held = candidate.holdings.map(({ formatted, symbol }) => `${formatted} ${symbol}`);
-  return `Not deployed · holds ${held.join(", ")}`;
+  return t("onboarding.picker.notDeployedHolds", { holdings: held.join(", ") });
 };
 
 /**
@@ -46,7 +47,7 @@ export const mountReadyKeyPicker = (
   const fieldset = doc.createElement("fieldset");
   fieldset.dataset["readyKeyPicker"] = "";
   const legend = doc.createElement("legend");
-  legend.textContent = "Accounts using this key";
+  legend.textContent = t("onboarding.picker.keyAccounts");
   const list = doc.createElement("ul");
   list.className = "allowance-list";
   const checks: { readonly box: HTMLInputElement; readonly classHash: string }[] = [];
@@ -70,7 +71,9 @@ export const mountReadyKeyPicker = (
     const copy = doc.createElement("span");
     copy.className = "allowance-copy";
     const title = doc.createElement("strong");
-    title.textContent = `Account · ${releaseName(candidate.classHash)}`;
+    title.textContent = t("onboarding.picker.accountRelease", {
+      release: releaseName(candidate.classHash),
+    });
     const address = doc.createElement("code");
     address.textContent = accountLabel(candidate.address);
     address.title = candidate.address;

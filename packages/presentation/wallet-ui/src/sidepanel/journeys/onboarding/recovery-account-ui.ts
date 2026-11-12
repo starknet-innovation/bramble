@@ -11,6 +11,7 @@ import {
   recoveryScanTarget,
   recoverySelectionKey,
 } from "@bramble/wallet-model/recovery";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
@@ -135,7 +136,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       return !selected.has(selectionKey(selectionFor(candidate)));
     });
     return waiting
-      ? ` At most ${RECOVERY_SCAN_LIMITS.maxSelections} accounts can be restored at once. Uncheck one to choose another.`
+      ? ` ${t("onboarding.scan.limitNote", { max: String(RECOVERY_SCAN_LIMITS.maxSelections) })}`
       : "";
   };
   const renderStatus = (): void => {
@@ -163,7 +164,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
         if (!trySelect(key)) {
           checkbox.checked = false;
           showToast(
-            `Choose at most ${RECOVERY_SCAN_LIMITS.maxSelections} accounts. Uncheck one to add another.`,
+            t("onboarding.scan.limitToast", { max: String(RECOVERY_SCAN_LIMITS.maxSelections) }),
             "error",
             checkbox,
           );
@@ -237,8 +238,11 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     complete = next.complete;
     renderCandidates();
     scanStatus = complete
-      ? `Search complete. Checked ${next.nextIndex} indices across every account type.`
-      : `Checked ${next.nextIndex} of ${recoveryScanTarget(next.candidates)} indices…`;
+      ? t("onboarding.scan.complete", { count: String(next.nextIndex) })
+      : t("onboarding.scan.progress", {
+          count: String(next.nextIndex),
+          total: String(recoveryScanTarget(next.candidates)),
+        });
     renderStatus();
   };
 
@@ -266,18 +270,10 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       } while (manualIndex === undefined && !next.complete);
     } catch (error) {
       if (generation !== activeGeneration) return;
-      const message = errorMessage(error, "Account search paused. Check the network and retry.");
-      if (status)
-        status.textContent = errorLine(
-          error,
-          "Account search paused. Check the network and retry.",
-        );
-      showToast(
-        message,
-        "error",
-        deps.form,
-        errorDetails(error, "Account search paused. Check the network and retry."),
-      );
+      const fallback = t("onboarding.scan.paused");
+      if (status) status.textContent = errorLine(error, fallback);
+      const message = errorMessage(error, fallback);
+      showToast(message, "error", deps.form, errorDetails(error, fallback));
     } finally {
       scanning = false;
       buttonBusy(activeButton, false);
@@ -325,10 +321,10 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     if (group) group.open = true;
     renderCandidates();
     renderStatus();
-    if (duplicate) return `${title} is already in this wallet.`;
+    if (duplicate) return t("onboarding.scan.alreadyAdded", { title });
     return candidate.restriction
-      ? `Found ${title}. It's view only until you recover it.`
-      : `Found ${title}.`;
+      ? t("onboarding.scan.foundViewOnly", { title })
+      : t("onboarding.scan.found", { title });
   };
   const addressFinder = bindRecoveryAddressFinder({
     lookup: (address) =>
@@ -351,7 +347,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
   manualSearch?.addEventListener("click", () => {
     const index = Number(manual?.value);
     if (!manual?.value || !isRecoveryAccountIndex(index)) {
-      showToast("Enter a valid non-negative account index", "error", manualSearch);
+      showToast(t("onboarding.scan.badIndex"), "error", manualSearch);
       return;
     }
     void scan(index);
@@ -362,7 +358,7 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
       .filter((selection) => selected.has(selectionKey(selection)));
     if (selections.length === 0) return;
     buttonBusy(restore, true);
-    if (result) result.textContent = "Restoring the selected accounts into your encrypted vault…";
+    if (result) result.textContent = t("onboarding.scan.restoring");
     const commit =
       deps.restore ??
       ((mnemonic: string, networkId: string, picks: readonly RecoveryAccountSelection[]) =>
@@ -370,7 +366,14 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
     void commit(deps.mnemonic?.() ?? "", deps.networkId(), selections)
       .then(async () => {
         showToast(
-          `${selections.length} account${selections.length === 1 ? "" : "s"} restored`,
+          t(
+            selections.length === 1
+              ? "onboarding.scan.restoredOne"
+              : "onboarding.scan.restoredMany",
+            {
+              count: String(selections.length),
+            },
+          ),
           "success",
           restore,
         );
@@ -386,16 +389,17 @@ export const bindRecoveryAccountUi = (deps: RecoveryAccountUiDeps): RecoveryAcco
         await deps.render(await deps.wallet.loadStatus());
       })
       .catch((error: unknown) => {
-        const message = errorMessage(error, "Account recovery failed");
-        if (result) result.textContent = errorLine(error, "Account recovery failed");
-        showToast(message, "error", restore, errorDetails(error, "Account recovery failed"));
+        const fallback = t("onboarding.scan.recoveryFailed");
+        if (result) result.textContent = errorLine(error, fallback);
+        const message = errorMessage(error, fallback);
+        showToast(message, "error", restore, errorDetails(error, fallback));
         buttonBusy(restore, false);
       });
   });
 
   return {
     start() {
-      if (status) status.textContent = "Searching every account type…";
+      if (status) status.textContent = t("onboarding.scan.searching");
       reset();
       if (scanning) restartOnIdle = true;
       else void scan();
