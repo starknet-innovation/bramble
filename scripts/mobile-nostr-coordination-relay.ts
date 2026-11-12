@@ -1,9 +1,10 @@
 /**
  * Relay-side parity vectors for Nostr multisig coordination (wallet-core plan, step 2.5): the
- * gift-wrap batch rule (`parsedGiftWraps`), acknowledgement counting, and sync paging, each
- * produced by the extension's own `nostr-relay.ts` over the scripted sockets its tests use
+ * gift-wrap batch rule (`parsedGiftWraps`) and acknowledgement counting, each produced by the
+ * extension's own `nostr-relay.ts` over the scripted sockets its tests use
  * (`tests/support/nostr-relay-sockets.ts`). Nothing here restates a rule: every expected value is
- * what `publishManyNostrGiftWraps` or the transport's `sync` returned or threw.
+ * what `publishManyNostrGiftWraps` returned or threw. Sync paging is in
+ * `mobile-nostr-coordination-paging.ts`.
  *
  * Events are the support module's stand-in gift wrap (`EVENT_TEMPLATE`) with the id `idOf(n)` and
  * a chosen `created_at`, so the fixture lists events by number. The relays never verify a
@@ -30,10 +31,14 @@ const wrapAt = (n: number, createdAt = 1, recipient = RECIPIENT) => ({
 });
 
 const OTHER_RECIPIENT = "55".repeat(32);
-const CUSTOM_RELAY = "wss://relay.team.example";
-const range = (count: number, from = 0): number[] =>
+/** A relay outside the defaults, shared by every coordination vector. */
+export const CUSTOM_RELAY = "wss://relay.team.example";
+/** `count` consecutive event numbers from `from`. */
+export const range = (count: number, from = 0): number[] =>
   Array.from({ length: count }, (_, index) => from + index);
-const errorOf = (error: unknown): string => (error instanceof Error ? error.message : "throw");
+/** A thrown value as the fixture records it: the message, or "throw" for a non-Error. */
+export const errorOf = (error: unknown): string =>
+  error instanceof Error ? error.message : "throw";
 
 // ---- gift-wrap batches -------------------------------------------------------------------------
 
@@ -278,6 +283,7 @@ const acknowledgementCases = async () => {
   return cases;
 };
 
+/** The gift-wrap batch and acknowledgement vectors, with the event template they number. */
 export const relayParity = async () => ({
   acknowledgements: await acknowledgementCases(),
   event: EVENT_TEMPLATE,

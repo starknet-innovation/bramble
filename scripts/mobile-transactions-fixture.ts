@@ -103,7 +103,7 @@ const compactWire = (scenario: Scenario): Scenario => ({
 /**
  * The fixture as committed: ten files, each within the repository's 500-line limit. Wire
  * exchanges are stored one compact JSON string per line; readers decode them
- * (`mobile/core/tests/send_support`, `BrambleTests/SendTestSupport.swift`).
+ * (wallet-core's `crates/bramble-core/tests/send_support`, `BrambleTests/SendTestSupport.swift`).
  */
 export const splitTransactionFixture = (whole: unknown): ReadonlyMap<string, unknown> => {
   const fixture = whole as Fixture;

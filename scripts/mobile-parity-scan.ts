@@ -158,23 +158,21 @@ const targetVectors = async (kms: Kms) => {
           const shape = shapes[position];
           if (!shape) throw new Error(`no shape at ${position}`);
           const made = candidate(await derive(kms, shape, accountIndex), deployed, funded);
-          return { accountIndex, made, manual, position };
+          const kept = keepsRecoveryCandidate(made, accountIndex, manual);
+          return { accountIndex, kept, made, manual, position };
         }),
       );
-      const kept = found.filter(({ accountIndex, made, manual }) =>
-        keepsRecoveryCandidate(made, accountIndex, manual),
-      );
       return {
-        candidates: found.map(({ accountIndex, made, manual, position }) => ({
+        candidates: found.map(({ accountIndex, kept, made, manual, position }) => ({
           accountIndex,
           deployed: made.deployed,
           funded: made.funded,
-          kept: kept.some((entry) => entry.made === made),
+          kept,
           manual,
           shape: position,
         })),
         name,
-        target: recoveryScanTarget(kept.map(({ made }) => made)),
+        target: recoveryScanTarget(found.filter(({ kept }) => kept).map(({ made }) => made)),
       };
     }),
   );
