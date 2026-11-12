@@ -44,19 +44,19 @@ const decisionWords = (
   readonly pending: string;
   readonly title: string;
 } => {
-  if (notice) return { done: "Closed", line: "", pending: "", title: "" };
+  if (notice) return { done: t("approval.decision.closed"), line: "", pending: "", title: "" };
   return action === "approve"
     ? {
-        done: "Request approved",
-        line: "The reviewed request is locked while the wallet signs and submits it.",
-        pending: "Approved. Signing and broadcasting…",
-        title: "Authorizing request",
+        done: t("approval.decision.approved"),
+        line: t("approval.decision.approvedLine"),
+        pending: t("approval.decision.approvedPending"),
+        title: t("approval.decision.approvedTitle"),
       }
     : {
-        done: "Request denied",
-        line: "The wallet is returning control to the requesting site.",
-        pending: "Rejecting request…",
-        title: "Denying request",
+        done: t("approval.decision.denied"),
+        line: t("approval.decision.deniedLine"),
+        pending: t("approval.decision.deniedPending"),
+        title: t("approval.decision.deniedTitle"),
       };
 };
 
@@ -327,12 +327,12 @@ export const bindApprovals = ({
   const showFailure = (error: unknown, button: HTMLButtonElement): void => {
     // An approved call whose reply was lost may be on chain: amber, not "failed".
     showToast(
-      errorDetails(error, "Approval failed"),
+      errorDetails(error, t("approval.decision.failed")),
       isOutcomeUnknown(error) ? "warning" : "error",
       button,
     );
     if (result) {
-      result.textContent = errorLine(error, "Approval failed");
+      result.textContent = errorLine(error, t("approval.decision.failed"));
     }
   };
   app?.querySelectorAll<HTMLButtonElement>("[data-connect-choice]").forEach((button) => {
@@ -364,10 +364,10 @@ export const bindApprovals = ({
       const words =
         button.dataset["multisigProposal"] === "true"
           ? {
-              done: "Saved for signers",
-              line: "Other signers still need to sign.",
-              pending: "Saving…",
-              title: "Saving for signers",
+              done: t("approval.decision.saved"),
+              line: t("approval.decision.savedLine"),
+              pending: t("approval.decision.savedPending"),
+              title: t("approval.decision.savedTitle"),
             }
           : decisionWords(action, notice);
       if (liveTitle) {
@@ -466,7 +466,7 @@ export const bindApprovals = ({
       void wallet.retryApprovalFee(id).then(
         async () => render(await wallet.loadStatus()),
         (error: unknown) => {
-          showToast(errorDetails(error, "Fee estimate failed"), "error", button);
+          showToast(errorDetails(error, t("approval.decision.feeFailed")), "error", button);
           buttonBusy(button, false);
         },
       );

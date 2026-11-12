@@ -32,11 +32,11 @@ import { typedData as snip12 } from "starknet";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 import {
-  OUTSIDE_EXECUTION_WARNING,
-  SIGN_REQUEST_UNCLASSIFIED_WARNING,
+  outsideExecutionWarning,
+  signRequestUnclassifiedWarning,
   signRequestView,
 } from "../../../../src/sidepanel/shared/sign-request";
-import { PRIMARY_TYPE_KEY } from "../../../../src/sidepanel/shared/sign-request-rows";
+import { primaryTypeKey } from "../../../../src/sidepanel/shared/sign-request-rows";
 import {
   SIGNED_MESSAGE_LABEL as SIGNED_LABEL,
   signBlockBody,
@@ -184,7 +184,7 @@ describe("sign card variant payloads", () => {
     );
 
     // The signed block carries the primary type and nothing else.
-    expect(signBlockBody(view.html, SIGNED_LABEL)).toContain(PRIMARY_TYPE_KEY);
+    expect(signBlockBody(view.html, SIGNED_LABEL)).toContain(primaryTypeKey());
     expect(signBlockBody(view.html, SIGNED_LABEL)).not.toContain("Withdraw");
     expect(signBlockBody(view.html, UNSIGNED_MESSAGE_LABEL)).toContain("action.Withdraw");
     expect(view.classified).toBe(false);
@@ -294,7 +294,7 @@ describe("sign card structural refusal", () => {
     const html = card(enumPayload([{ name: "Approve", type: "()" }], { Approve: [] }));
 
     expect(html).toContain('data-approval-action="approve"');
-    expect(html).not.toContain(SIGN_REQUEST_UNCLASSIFIED_WARNING);
+    expect(html).not.toContain(signRequestUnclassifiedWarning());
   });
 
   test("an OutsideExecution capability gets a prominent warning", () => {
@@ -304,7 +304,7 @@ describe("sign card structural refusal", () => {
     }
     const html = card({ ...payload, primaryType: "OutsideExecution" });
 
-    expect(html).toContain(OUTSIDE_EXECUTION_WARNING);
+    expect(html).toContain(outsideExecutionWarning());
   });
 
   test("an unclassifiable payload gets no approve control at all", () => {
@@ -324,7 +324,7 @@ describe("sign card structural refusal", () => {
     // Not merely disabled — absent, so no state can re-enable it.
     expect(html).not.toContain('data-approval-action="approve"');
     expect(html).toContain('data-approval-action="deny"');
-    expect(html).toContain(SIGN_REQUEST_UNCLASSIFIED_WARNING);
+    expect(html).toContain(signRequestUnclassifiedWarning());
     // The value is still shown, on the side that cannot mislead.
     expect(html).toContain("1000 USDC to 0xsafe");
     expect(html).toContain(UNSIGNED_MESSAGE_LABEL);

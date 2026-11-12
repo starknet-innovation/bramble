@@ -72,7 +72,7 @@ import { stakingFlow } from "../../journeys/staking/staking-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
 import { networkDisplayName } from "../../shared/network-label";
 import { outcomeReceiptSection } from "../../shared/outcome-receipt";
-import { DEPLOY_NEEDS_STRK } from "../../shell/deploy-errors";
+import { deployNeedsStrk } from "../../shell/deploy-errors";
 import { addressBookFlow, type ConnectedSitesState, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
@@ -124,7 +124,7 @@ const deployNotes = (
 ): string => {
   if (deployment !== false) return "";
   const notes = [
-    ...(fundedForFees === false ? [DEPLOY_NEEDS_STRK] : []),
+    ...(fundedForFees === false ? [deployNeedsStrk()] : []),
     ...(account.accountContractType === "braavos" ? [] : [FIRST_SEND_DEPLOYS]),
   ];
   return notes.map((note) => `<p class="hint">${escapeHtml(note)}</p>`).join("");

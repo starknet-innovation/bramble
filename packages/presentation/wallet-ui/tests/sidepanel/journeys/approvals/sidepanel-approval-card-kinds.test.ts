@@ -321,7 +321,7 @@ describe("approvalCard renders each approval kind", () => {
     const html = approvalCard(approval, status);
 
     expect(html).toContain("Network switch request");
-    expect(html).toContain("asking to change the wallet's active network");
+    expect(html).toContain("asking to change the wallet&#39;s active network");
     expect(html).toContain("Switch to Starknet Sepolia");
     expect(html).toContain("Switch network");
   });

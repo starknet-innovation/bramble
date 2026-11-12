@@ -10,7 +10,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { signRequestView } from "../../../../src/sidepanel/shared/sign-request";
-import { PRIMARY_TYPE_KEY } from "../../../../src/sidepanel/shared/sign-request-rows";
+import { primaryTypeKey } from "../../../../src/sidepanel/shared/sign-request-rows";
 import {
   SIGNED_MESSAGE_LABEL,
   signBlockBody,
@@ -42,7 +42,7 @@ describe("signRequestView", () => {
     // The section header is the wallet's own fixed word; the site-chosen primary
     // type is reported as a signed row, because the type hash covers it.
     expect(html).toContain(`<p class="eyebrow">${SIGNED_MESSAGE_LABEL}</p>`);
-    expect(signBlockBody(html, SIGNED_MESSAGE_LABEL)).toContain(`${PRIMARY_TYPE_KEY}</span>`);
+    expect(signBlockBody(html, SIGNED_MESSAGE_LABEL)).toContain(`${primaryTypeKey()}</span>`);
     expect(signBlockBody(html, SIGNED_MESSAGE_LABEL)).toContain("Approve");
     // Fields are emitted in the declared field-list order (spender before
     // amount), which is the reverse of the message object's own key order,
@@ -117,7 +117,7 @@ describe("signRequestView", () => {
     // emitted — and it carries no primary-type row, because there is none.
     expect(html).toContain(`class="eyebrow">${UNSIGNED_MESSAGE_LABEL}</p>`);
     expect(html).not.toContain(`class="eyebrow">${SIGNED_MESSAGE_LABEL}</p>`);
-    expect(html).not.toContain(PRIMARY_TYPE_KEY);
+    expect(html).not.toContain(primaryTypeKey());
   });
 
   test("omits an empty domain/message section but still renders the raw view", () => {

@@ -12,7 +12,7 @@ import { bindReceiveWalletCard } from "./dashboard-bindings";
 import type { ShellBindingDeps } from "./shell-binding-deps";
 
 /** The deploy binder and post-deploy watchers, kept importable from here. */
-export { bindDeploy, DEPLOY_RECEIPT_COPY } from "./deploy-bindings";
+export { bindDeploy, deployReceiptCopy } from "./deploy-bindings";
 export {
   awaitDeployment,
   type DeploymentWatchDeps,

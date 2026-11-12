@@ -7,6 +7,8 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import { uiLocale } from "../../../i18n/locale";
+import { t, th } from "../../../i18n/messages";
 import type { PendingApproval } from "../../../popup/responses/responses";
 import { formatFri } from "../../shared/parts";
 
@@ -31,19 +33,22 @@ export const declarationDetails = (approval: PendingApproval): string => {
   }
   const formatFee = (fee: NonNullable<typeof declaration.fee>): string =>
     fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
-  const fee = declaration.fee ? formatFee(declaration.fee) : "Unavailable";
+  const unavailable = t("detail.declare.unavailable");
+  const fee = declaration.fee ? formatFee(declaration.fee) : unavailable;
   const deploymentFee = declaration.deploymentFee
     ? formatFee(declaration.deploymentFee)
-    : "Unavailable";
+    : unavailable;
+  const count = (value: number): string =>
+    value.toLocaleString(uiLocale() === "en" ? "en-US" : uiLocale());
   const reviewedFee = declarationReviewedFee(approval);
   const estimatedTotal = reviewedFee ? formatFee(reviewedFee) : null;
   const deployment =
     declaration.accountDeployment === "undeployed"
-      ? "Required before declaration"
+      ? th("detail.declare.requiredBefore")
       : declaration.accountDeployment === "deployed"
-        ? "Already deployed"
-        : "Could not verify";
-  return `<dl class="request-detail declaration-detail"><div><dt>Action</dt><dd>Register Cairo 1 contract code</dd></div><div><dt>Declaration fee</dt><dd><strong>${escapeHtml(fee)}</strong></dd></div>${declaration.accountDeployment === "undeployed" ? `<div><dt>Account deployment fee</dt><dd><strong>${escapeHtml(deploymentFee)}</strong></dd></div>` : ""}${estimatedTotal === null ? "" : `<div><dt>Estimated total</dt><dd><strong>${escapeHtml(estimatedTotal)}</strong></dd></div>`}<div><dt>Fee token</dt><dd>${declaration.fee?.unit === "FRI" ? "STRK" : escapeHtml(declaration.fee?.unit ?? "Unavailable")}</dd></div><div><dt>Account deployment</dt><dd>${deployment}</dd></div>${declaration.classHash === undefined ? "" : `<div><dt>Class hash</dt><dd><code>${escapeHtml(declaration.classHash)}</code></dd></div>`}<div><dt>Compiled hash</dt><dd><code>${escapeHtml(declaration.compiledClassHash)}</code></dd></div><div><dt>Contract shape</dt><dd>${declaration.sierraProgramLength.toLocaleString()} Sierra words · ${declaration.abiEntryCount.toLocaleString()} ABI entries · ${declaration.entryPointCount.toLocaleString()} entry points</dd></div></dl>`;
+        ? th("detail.declare.alreadyDeployed")
+        : th("detail.declare.couldNotVerify");
+  return `<dl class="request-detail declaration-detail"><div><dt>${th("detail.declare.actionLabel")}</dt><dd>${th("detail.declare.actionValue")}</dd></div><div><dt>${th("detail.declare.fee")}</dt><dd><strong>${escapeHtml(fee)}</strong></dd></div>${declaration.accountDeployment === "undeployed" ? `<div><dt>${th("detail.declare.deploymentFee")}</dt><dd><strong>${escapeHtml(deploymentFee)}</strong></dd></div>` : ""}${estimatedTotal === null ? "" : `<div><dt>${th("detail.declare.total")}</dt><dd><strong>${escapeHtml(estimatedTotal)}</strong></dd></div>`}<div><dt>${th("detail.declare.feeToken")}</dt><dd>${declaration.fee?.unit === "FRI" ? "STRK" : escapeHtml(declaration.fee?.unit ?? unavailable)}</dd></div><div><dt>${th("detail.declare.deployment")}</dt><dd>${deployment}</dd></div>${declaration.classHash === undefined ? "" : `<div><dt>${th("detail.declare.classHash")}</dt><dd><code>${escapeHtml(declaration.classHash)}</code></dd></div>`}<div><dt>${th("detail.declare.compiledHash")}</dt><dd><code>${escapeHtml(declaration.compiledClassHash)}</code></dd></div><div><dt>${th("detail.declare.shapeLabel")}</dt><dd>${th("detail.declare.shape", { abi: count(declaration.abiEntryCount), entries: count(declaration.entryPointCount), words: count(declaration.sierraProgramLength) })}</dd></div></dl>`;
 };
 
 /** The warnings a declaration card shows for its deployment and fee state. */
@@ -53,27 +58,11 @@ export const declarationWarnings = (approval: PendingApproval): readonly string[
     return [];
   }
   return [
-    "A declaration registers immutable contract code on this network. It does not deploy the collection or transfer assets.",
-    ...(declaration.accountDeployment === "undeployed"
-      ? [
-          "This account is not deployed yet. Approval first submits account deployment, which has an additional STRK fee not included in the declaration estimate.",
-        ]
-      : []),
-    ...(declaration.deploymentFeeEstimateFailed
-      ? [
-          "The account deployment fee could not be estimated. Fund the account with STRK and retry if deployment fails.",
-        ]
-      : []),
-    ...(declaration.accountDeployment === "unknown"
-      ? [
-          "The wallet could not verify whether this account needs deployment. An additional STRK fee may apply.",
-        ]
-      : []),
-    ...(declaration.feeEstimateFailed
-      ? [
-          "The declaration fee could not be estimated. Check the RPC connection and the account's STRK balance before approving.",
-        ]
-      : []),
+    t("detail.declare.warnRegisters"),
+    ...(declaration.accountDeployment === "undeployed" ? [t("detail.declare.warnUndeployed")] : []),
+    ...(declaration.deploymentFeeEstimateFailed ? [t("detail.declare.warnDeployFeeFailed")] : []),
+    ...(declaration.accountDeployment === "unknown" ? [t("detail.declare.warnUnknown")] : []),
+    ...(declaration.feeEstimateFailed ? [t("detail.declare.warnFeeFailed")] : []),
   ];
 };
 

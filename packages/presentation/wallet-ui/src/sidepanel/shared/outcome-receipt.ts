@@ -15,6 +15,7 @@
  */
 
 import { button } from "@bramble/ui-kit/controls";
+import { t, th } from "../../i18n/messages";
 import { setText } from "../journeys/send/transfer-progress-ui";
 import type { ConfirmationOutcome } from "./confirm-submitted";
 import { applyOutcomeHash, outcomeHashRow } from "./outcome-hash";
@@ -49,7 +50,7 @@ export const outcomeReceiptFor = (
 ): OutcomeReceipt => {
   if (!outcome) {
     return {
-      description: "Not confirmed yet. Follow it in Activity.",
+      description: t("cost.outcome.notConfirmed"),
       failed: false,
       hash,
       title: copy.submittedTitle,
@@ -86,17 +87,17 @@ export const outcomeReceiptSection = (id: string): string => `
     <div class="send-receipt">
       <p class="send-receipt-summary" id="${id}-description"></p>
       <div class="send-receipt-tx">
-        <span class="send-receipt-label">Transaction</span>
+        <span class="send-receipt-label">${th("cost.outcome.transaction")}</span>
         ${outcomeHashRow(`${id}-hash`)}
       </div>
     </div>
     <div class="send-actions" data-outcome-actions="succeeded">
-      ${button({ attributes: { "data-outcome-action": "activity" }, icon: "activity", label: "View in Activity tab" })}
-      ${button({ attributes: { "data-outcome-action": "home", "data-view": "home" }, label: "Back", variant: "secondary" })}
+      ${button({ attributes: { "data-outcome-action": "activity" }, icon: "activity", label: t("cost.outcome.viewActivity") })}
+      ${button({ attributes: { "data-outcome-action": "home", "data-view": "home" }, label: t("cost.outcome.back"), variant: "secondary" })}
     </div>
     <div class="send-actions" data-outcome-actions="failed" hidden>
-      ${button({ attributes: { "data-outcome-action": "retry" }, label: "Try again" })}
-      ${button({ attributes: { "data-outcome-action": "activity" }, icon: "activity", label: "View in Activity tab", variant: "secondary" })}
+      ${button({ attributes: { "data-outcome-action": "retry" }, label: t("cost.outcome.tryAgain") })}
+      ${button({ attributes: { "data-outcome-action": "activity" }, icon: "activity", label: t("cost.outcome.viewActivity"), variant: "secondary" })}
     </div>
   </section>`;
 

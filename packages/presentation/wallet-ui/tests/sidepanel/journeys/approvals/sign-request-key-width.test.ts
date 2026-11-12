@@ -17,7 +17,7 @@ import type { PendingApproval, WalletStatus } from "../../../../src/popup/respon
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
 import {
   SIGN_REQUEST_STYLES,
-  SIGN_REQUEST_UNCLASSIFIED_WARNING,
+  signRequestUnclassifiedWarning,
   signRequestView,
 } from "../../../../src/sidepanel/shared/sign-request";
 import { SIGN_KEY_MAX_LENGTH } from "../../../../src/sidepanel/shared/sign-request-rows";
@@ -159,7 +159,7 @@ describe("composed keys", () => {
     const html = card(payload);
     expect(html).not.toContain('data-approval-action="approve"');
     expect(html).toContain('data-approval-action="deny"');
-    expect(html).toContain(SIGN_REQUEST_UNCLASSIFIED_WARNING);
+    expect(html).toContain(signRequestUnclassifiedWarning());
     expect(html).toContain("0x1");
   });
 
