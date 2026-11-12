@@ -15,7 +15,7 @@ import { AVNU_MULTI_ROUTE_SWAP, decodeAvnuRoute } from "@bramble/wallet-model/av
 import { asFelt, canonicalFelt, sameFelt, uint256Felts } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { Call } from "starknet";
-import { type ReviewText, reviewEnglish, reviewText } from "./review-messages";
+import { type ReviewText, reviewEnglish, reviewText, withReviewText } from "./review-messages";
 import type { VerificationContext } from "./verification-context";
 import {
   APPROVE_ENTRYPOINTS,
@@ -53,8 +53,11 @@ export type DecodedCall = {
   readonly kind: DecodedCallKind;
   /** The English sentence, rendered from `text`; activity and refusals read it. */
   readonly summary: string;
-  /** The same sentence as a key and its facts, for the UI to render in the reader's language. */
-  readonly text: ReviewText;
+  /**
+   * The same sentence as a key and its facts, for the UI to render in the
+   * reader's language. Absent when a fact would not pass the panel's bounds.
+   */
+  readonly text?: ReviewText;
 };
 
 // One decoded call: the sentence is decided once, as data, and its English
@@ -64,7 +67,7 @@ const decoded = (call: Call, kind: DecodedCallKind, text: ReviewText): DecodedCa
   entrypoint: call.entrypoint,
   kind,
   summary: reviewEnglish(text),
-  text,
+  ...withReviewText(text),
 });
 
 /**

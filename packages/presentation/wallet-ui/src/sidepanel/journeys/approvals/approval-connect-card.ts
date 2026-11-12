@@ -7,6 +7,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { t, th } from "../../../i18n/messages";
+import { reviewLines } from "../../../i18n/review";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { accountDisplayName, accountLabel, inlineCopyButton } from "../../shared/parts";
@@ -99,7 +100,7 @@ export const connectCard = (
         approval.existingGrant ? t("detail.connect.adds") : t("detail.connect.shares"),
       )}
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${reviewPanel(reviewLines(approval.insights ?? [], approval.insightTexts))}
     ${reviewConstraints(t("approval.noFee"))}
     ${decisionRow(
       approval,

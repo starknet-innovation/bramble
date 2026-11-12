@@ -275,3 +275,48 @@ test("English is unchanged", () => {
   // The leak check is not vacuous: in English it finds these very sentences.
   expect(leaks(html)).toContain("This site is asking to change the wallet's active network.");
 });
+
+describe("site warnings on cards", () => {
+  test("a connect card renders the background's site warnings in Chinese, facts verbatim", async () => {
+    const { insightEnglish, insightText } = await import("@bramble/permissions/insight-messages");
+    const texts = [
+      insightText("siteInsight.lookalike", { target: "starknet.io" }),
+      insightText("siteInsight.firstSeen"),
+    ];
+    zh();
+    const html = card({
+      insightTexts: texts,
+      insights: texts.map(insightEnglish),
+      kind: "connect",
+    });
+    expect(html).not.toContain("closely resembles");
+    expect(html).not.toContain("First time this wallet");
+    expect(html).toContain("此域名与 starknet.io 极为相似");
+    expect(html).toContain("此钱包首次见到此网站");
+  });
+});
+
+describe("background lines on switch and typed-data cards", () => {
+  test("switch and OutsideExecution lines render from their references", async () => {
+    const { reviewEnglish, reviewText } = await import("@bramble/transactions/review-messages");
+    const sw = reviewText("review.switchNetwork", { network: "Starknet Sepolia" });
+    const name = reviewText("review.sign.name", { name: "OutsideExecution · AVNU" });
+    const call = reviewText("review.call.send", { amount: "5 STRK", to: "0x1234…abcd" });
+    zh();
+    const switchHtml = card({
+      kind: "switch-chain",
+      summaries: [reviewEnglish(sw)],
+      summaryTexts: [sw],
+    });
+    expect(switchHtml).toContain("切换网络至 Starknet Sepolia");
+    expect(switchHtml).not.toContain("Switch network to");
+    const signHtml = card({
+      kind: "sign-typed-data",
+      summaries: [reviewEnglish(name), reviewEnglish(call)],
+      summaryTexts: [name, call],
+      typedData: { domain: {}, message: {}, primaryType: "OutsideExecution", types: {} },
+    });
+    expect(signHtml).toContain("发送 5 STRK 至 0x1234…abcd");
+    expect(signHtml).not.toContain("Send 5 STRK to");
+  });
+});

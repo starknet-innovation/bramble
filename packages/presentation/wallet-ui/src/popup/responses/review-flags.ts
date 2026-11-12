@@ -6,6 +6,7 @@
  * extension message; anything unexpected fails closed and drops the review.
  */
 import { hasOnlyKnownKeys, isRecord, isRiskFlagCode } from "@bramble/core/json";
+import { isInsightText } from "@bramble/permissions/insight-messages";
 import { isReviewText, type ReviewText } from "@bramble/transactions/review-messages";
 
 /** The longest risk-flag or summary line the panel renders. */
@@ -35,3 +36,11 @@ export const isReviewedRiskFlag = (value: unknown): value is ReviewedRiskFlag =>
 export const isOptionalSummaryTexts = (value: unknown, lines: number): boolean =>
   value === undefined ||
   (Array.isArray(value) && value.length === lines && value.every(isReviewText));
+
+/**
+ * Whether `value` is absent or one site-warning reference per English insight
+ * line. A count mismatch fails closed, as for summaries.
+ */
+export const isOptionalInsightTexts = (value: unknown, lines: number): boolean =>
+  value === undefined ||
+  (Array.isArray(value) && value.length === lines && value.every(isInsightText));

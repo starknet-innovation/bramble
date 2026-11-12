@@ -319,6 +319,7 @@
         "@bramble/core": "workspace:*",
         "@bramble/ledger-protocol": "workspace:*",
         "@bramble/multisig": "workspace:*",
+        "@bramble/permissions": "workspace:*",
         "@bramble/portfolio": "workspace:*",
         "@bramble/privacy": "workspace:*",
         "@bramble/settings": "workspace:*",

@@ -184,7 +184,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       ${status.locked ? `<p class="hint">${th("approval.invoke.locked")}</p>` : ""}
       ${invokeOutcome(approval, proposal)}
     </div>
-    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
+    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...reviewLines(approval.insights ?? [], approval.insightTexts)])}
     ${
       // An undeployed Braavos account deploys only through its own step: say
       // so, with no fee and no retry, and Approve stays disabled (no fee).
@@ -243,14 +243,14 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
       ${requestIdentity(approval.origin, t("approval.sign.title"))}
       <p class="hint">${status.locked ? th("approval.sign.locked") : th("approval.sign.hint")}</p>
       ${reviewOutcome(t("approval.sign.outcome"))}
-      ${reviewCallsList(approval.summaries?.slice(1) ?? [])}
+      ${reviewCallsList(reviewLines(approval.summaries ?? [], approval.summaryTexts).slice(1))}
     </div>
     ${view.html}
     ${reviewPanel([
       ...riskFlagMessages(approval.flags ?? []),
       ...(view.classified ? [] : [signRequestUnclassifiedWarning()]),
       ...signRequestWarnings(approval.typedData),
-      ...(approval.insights ?? []),
+      ...reviewLines(approval.insights ?? [], approval.insightTexts),
     ])}
     ${reviewConstraints(t("approval.sign.constraints"))}
     ${contextDisclosure(approval)}
@@ -265,7 +265,7 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
       ${status.locked ? `<p class="hint">${th("approval.strk20.locked")}</p>` : ""}
       ${approvalCalls(approval) || reviewOutcome(t("approval.strk20.outcome"))}
     </div>
-    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
+    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...strk20LinkageWarnings(approval), ...reviewLines(approval.insights ?? [], approval.insightTexts)])}
     ${reviewConstraints(t("approval.strk20.constraints"))}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
@@ -288,7 +288,7 @@ const strk20DisclosureCard = (
       ${status.locked ? `<p class="hint">${escapeHtml(copy.lockedHint)}</p>` : ""}
       ${approvalCalls(approval) || reviewOutcome(copy.hint)}
     </div>
-    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...(approval.insights ?? [])])}
+    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...reviewLines(approval.insights ?? [], approval.insightTexts)])}
     ${reviewConstraints(t("approval.disclosure.constraints"))}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
@@ -323,7 +323,7 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
       <p class="hint">${status.locked ? th("approval.switch.locked") : th("approval.switch.hint")}</p>
       ${approvalCalls(approval) || reviewOutcome(t("approval.switch.outcome"))}
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${reviewPanel(reviewLines(approval.insights ?? [], approval.insightTexts))}
     ${reviewConstraints(t("approval.noFee"))}
     ${decisionRow(approval, t("approval.switch.action"), status.locked)}
   </li>`;
@@ -335,7 +335,7 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
       <p class="hint">${status.locked ? th("approval.declare.locked") : th("approval.declare.hint")}</p>
       ${reviewOutcome(t("approval.declare.outcome"))}
     </div>
-    ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])], t("approval.declare.clear"))}
+    ${reviewPanel([...declarationWarnings(approval), ...reviewLines(approval.insights ?? [], approval.insightTexts)], t("approval.declare.clear"))}
     <section class="decision-layer decision-boundary" aria-label="${th("cost.section.cost")}">
       <p class="decision-label">${th("cost.section.cost")}</p>
       ${declarationDetails(approval)}

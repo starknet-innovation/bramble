@@ -17,7 +17,7 @@ import { UNLIMITED_ALLOWANCE_THRESHOLD } from "@bramble/transactions/allowance-d
 import { AVNU_MULTI_ROUTE_SWAP } from "@bramble/wallet-model/avnu-route";
 import { asFelt, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { Call } from "starknet";
-import { type ReviewText, reviewEnglish, reviewText } from "./review-messages";
+import { type ReviewText, reviewEnglish, reviewText, withReviewText } from "./review-messages";
 import {
   canonical,
   type DecodedCall,
@@ -69,15 +69,15 @@ export type RiskFlag = {
   readonly code: RiskFlagCode;
   /** The English sentence, rendered from `text`; refusals and logs read it. */
   readonly message: string;
-  /** The same sentence as a key and its facts, for the UI to render in the reader's language. */
-  readonly text: ReviewText;
+  /** `message` as a key and facts for the UI; absent if a fact breaks the panel's bounds. */
+  readonly text?: ReviewText;
 };
 
 // A flag's sentence is decided once, as data; its English is derived from it.
 const riskFlag = (code: RiskFlagCode, text: ReviewText): RiskFlag => ({
   code,
   message: reviewEnglish(text),
-  text,
+  ...withReviewText(text),
 });
 
 /**

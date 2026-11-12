@@ -37,7 +37,7 @@ import {
 } from "@bramble/wallet-protocol/extension-responses";
 import { readProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { readStrk20Action, readStrk20Actions } from "@bramble/wallet-protocol/strk20";
-import { isOptionalSummaryTexts, isReviewedRiskFlag } from "./review-flags";
+import { isOptionalInsightTexts, isOptionalSummaryTexts, isReviewedRiskFlag } from "./review-flags";
 
 /**
  * Shared approval and connected-site wire shapes after runtime validation.
@@ -236,6 +236,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "flags",
       "gaslessFees",
       "id",
+      "insightTexts",
       "insights",
       "kind",
       "multisigThreshold",
@@ -272,6 +273,10 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||
     (value["insights"] !== undefined &&
       !(Array.isArray(value["insights"]) && value["insights"].every(isInsightText))) ||
+    !isOptionalInsightTexts(
+      value["insightTexts"],
+      Array.isArray(value["insights"]) ? value["insights"].length : 0,
+    ) ||
     (value["summaries"] !== undefined &&
       !(Array.isArray(value["summaries"]) && value["summaries"].every(isSummaryText))) ||
     !isOptionalSummaryTexts(

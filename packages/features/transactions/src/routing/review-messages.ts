@@ -56,6 +56,8 @@ const en = {
     "{contract} is not a token or contact this wallet knows. Verify the contract before continuing.",
   "review.flag.unlimitedApproval":
     "This grants an effectively unlimited spending allowance. Approve only the amount you intend to spend.",
+  "review.sign.name": "{name}",
+  "review.switchNetwork": "Switch network to {network}",
 } as const;
 
 /** English and Simplified Chinese review sentences. */
@@ -91,6 +93,8 @@ export const reviewMessages = {
       "钱包无法读取此兑换的收款方或最低兑得数量。除非你信任此网站，否则拒绝。",
     "review.flag.unknownContract": "{contract} 不是此钱包已知的代币或联系人。继续前先核实该合约。",
     "review.flag.unlimitedApproval": "这将授予几乎无限的花费额度。只批准你打算花费的数额。",
+    "review.sign.name": "{name}",
+    "review.switchNetwork": "切换网络至 {network}",
   } satisfies Catalog<keyof typeof en>,
 };
 
@@ -127,3 +131,34 @@ export const reviewEnglish = (text: ReviewText): string =>
  */
 export const isReviewText = (value: unknown): value is ReviewText =>
   isMessageRef(value, isReviewMessageKey);
+
+/**
+ * `{ text }` when the reference passes the panel's own validator, else `{}`.
+ * A reference the panel would refuse (an empty or oversized fact) must never
+ * ride on a review: the panel rejects the whole review when one entry is
+ * invalid, so the English alone is sent instead and the panel shows it.
+ */
+export const withReviewText = (text: ReviewText): { readonly text?: ReviewText } =>
+  isReviewText(text) ? { text } : {};
+
+/**
+ * A one-line review as its English `summary` plus, when the panel would
+ * accept it, its reference `summaryText`.
+ */
+export const reviewSentence = (
+  text: ReviewText,
+): { readonly summary: string; readonly summaryText?: ReviewText } => {
+  const valid = withReviewText(text).text;
+  return { summary: reviewEnglish(text), ...(valid === undefined ? {} : { summaryText: valid }) };
+};
+
+/**
+ * Every line's reference, index for index, or `undefined` when any line has
+ * none: references pair with English lines only when the counts match.
+ */
+export const reviewTextsFor = (
+  lines: readonly { readonly text?: ReviewText }[],
+): readonly ReviewText[] | undefined => {
+  const texts = lines.flatMap((line) => (line.text === undefined ? [] : [line.text]));
+  return texts.length === lines.length ? texts : undefined;
+};

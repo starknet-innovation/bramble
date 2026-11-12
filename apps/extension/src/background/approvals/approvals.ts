@@ -55,6 +55,7 @@ import type {
   ApprovalQueue,
   ApprovalQueueOptions,
 } from "./approval-queue-types";
+import { switchSummaryTexts, typedDataSummaryTexts } from "./approval-review-texts";
 import { requireRenderableSummaries } from "./approval-summary-bound";
 import { sameWatchTarget, watchTarget } from "./approval-watch-target";
 
@@ -329,6 +330,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         kind: "sign-typed-data",
         origin,
         summaries: [summary, ...(review?.summaries ?? [])],
+        ...typedDataSummaryTexts(summary, review?.summaryTexts),
         typedData: cloneApprovalValue(typedData),
       });
     },
@@ -432,6 +434,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         networkId,
         origin,
         summaries: [summary],
+        ...switchSummaryTexts(networkId, summary),
       });
     },
     requestWatchAsset(request) {
