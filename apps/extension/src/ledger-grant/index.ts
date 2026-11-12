@@ -17,6 +17,7 @@
  * browser/DOM boundary exercised against Chromium and physical hardware.
  */
 
+import { localeForLanguages } from "@bramble/core/i18n";
 import { serveLedgerBroker } from "@bramble/ledger-browser/broker-server";
 import { probeLedgerGrantClient } from "@bramble/ledger-browser/grant-session";
 import {
@@ -43,8 +44,9 @@ import {
   ledgerGrantFailure,
   transportForConnectionMethod,
 } from "./grant-flow";
+import { gt, setGrantLocale } from "./messages";
 import { LEDGER_GRANT_STYLES } from "./styles";
-import { LEDGER_HANDSHAKE_PROGRESS, ledgerTransitionProgress } from "./transition-progress";
+import { ledgerHandshakeProgress, ledgerTransitionProgress } from "./transition-progress";
 
 type GrantChrome = {
   readonly tabs?: {
@@ -102,10 +104,17 @@ const transportLabel = (transport: LedgerTransportKind): string =>
 
 const retryTransportLabel = (transport: LedgerTransportKind): string =>
   transport === "ble"
-    ? "Try Bluetooth pairing"
+    ? gt("ledgerGrant.button.tryBluetooth")
     : transport === "usb"
-      ? "Try USB cable"
-      : "Try HID cable";
+      ? gt("ledgerGrant.button.tryUsb")
+      : gt("ledgerGrant.button.tryHid");
+
+// The visible name of a transport. USB and HID are names; Bluetooth is a word.
+const transportName = (transport: LedgerTransportKind): string =>
+  transport === "ble" ? gt("ledgerGrant.method.bluetooth") : transportLabel(transport);
+
+const connectLabel = (method: LedgerConnectionMethod): string =>
+  method === "ble" ? gt("ledgerGrant.button.pairBluetooth") : gt("ledgerGrant.button.connectUsb");
 
 const diagnosticId = (transport: LedgerTransportKind, stage: string): string =>
   `BRAMBLE-LDG-${transport.toUpperCase()}-${stage}`;
@@ -116,6 +125,11 @@ const render = (): void => {
     return;
   }
 
+  // No runtime client here, so the tab follows the browser's language list.
+  const locale = localeForLanguages(globalThis.navigator?.languages ?? []);
+  setGrantLocale(locale);
+  document.documentElement.setAttribute("lang", locale);
+  document.title = gt("ledgerGrant.documentTitle");
   document.documentElement.style.setProperty("color-scheme", "dark");
   applySkin(darkSkin, document.documentElement);
   const style = element("style");
@@ -132,40 +146,36 @@ const render = (): void => {
   const hero = element("div", "grant-hero");
   const copy = element("div", "grant-copy");
   copy.append(
-    textElement("h1", "", "Connect your Ledger"),
-    textElement(
-      "p",
-      "",
-      "Your browser needs this tab open to reach your Ledger. It closes when the wallet is done.",
-    ),
+    textElement("h1", "", gt("ledgerGrant.title")),
+    textElement("p", "", gt("ledgerGrant.intro")),
   );
   hero.append(ledgerVisual(), copy);
 
   const methods = element("section", "grant-methods");
   methods.setAttribute("aria-labelledby", "grant-methods-title");
-  const methodsTitle = textElement("p", "grant-readiness-head", "Connection method");
+  const methodsTitle = textElement("p", "grant-readiness-head", gt("ledgerGrant.method.title"));
   methodsTitle.id = "grant-methods-title";
-  const validationNotice = textElement(
-    "p",
-    "grant-footnote",
-    "Hardware preview · Bramble has not been tested against every Ledger model. Use test funds only.",
-  );
+  const validationNotice = textElement("p", "grant-footnote", gt("ledgerGrant.preview"));
   const methodOptions = element("div", "grant-method-options");
   const cableMethod = element("button", "grant-method");
   cableMethod.type = "button";
   cableMethod.dataset["active"] = "true";
   cableMethod.setAttribute("aria-pressed", "true");
-  cableMethod.append(textElement("strong", "", "USB cable"));
+  cableMethod.append(textElement("strong", "", gt("ledgerGrant.method.usb")));
   const bluetoothMethod = element("button", "grant-method");
   bluetoothMethod.type = "button";
   bluetoothMethod.setAttribute("aria-pressed", "false");
-  bluetoothMethod.append(textElement("strong", "", "Bluetooth"));
+  bluetoothMethod.append(textElement("strong", "", gt("ledgerGrant.method.bluetooth")));
   methodOptions.append(cableMethod, bluetoothMethod);
   methods.append(methodsTitle, validationNotice, methodOptions);
 
   const readiness = element("section", "grant-readiness");
   readiness.setAttribute("aria-labelledby", "grant-readiness-title");
-  const readinessTitle = textElement("p", "grant-readiness-head", "Before you continue");
+  const readinessTitle = textElement(
+    "p",
+    "grant-readiness-head",
+    gt("ledgerGrant.readiness.title"),
+  );
   readinessTitle.id = "grant-readiness-title";
   const steps = element("ol", "grant-steps");
   readiness.append(readinessTitle, steps);
@@ -185,13 +195,13 @@ const render = (): void => {
   button.type = "button";
   const spinner = element("span", "grant-spinner");
   spinner.setAttribute("aria-hidden", "true");
-  const buttonLabel = textElement("span", "", "Connect with USB");
+  const buttonLabel = textElement("span", "", connectLabel("cable"));
   button.append(spinner, buttonLabel);
-  const cancel = textElement("button", "grant-cancel", "Cancel");
+  const cancel = textElement("button", "grant-cancel", gt("ledgerGrant.cancel"));
   cancel.type = "button";
   actions.append(button, cancel);
 
-  const footnote = textElement("p", "grant-footnote", "Your keys never leave your Ledger.");
+  const footnote = textElement("p", "grant-footnote", gt("ledgerGrant.footnote"));
 
   const setStatus = (
     title: string,
@@ -224,12 +234,12 @@ const render = (): void => {
     steps.replaceChildren(
       ...(selectedMethod === "ble"
         ? [
-            readinessStep("1", "Enable Bluetooth, then power your Ledger off and back on"),
-            readinessStep("2", "Stay on the Ledger dashboard and pair it in your browser"),
+            readinessStep("1", gt("ledgerGrant.steps.bleOne")),
+            readinessStep("2", gt("ledgerGrant.steps.bleTwo")),
           ]
         : [
-            readinessStep("1", "Unlock your Ledger and connect a data-capable USB cable"),
-            readinessStep("2", "Choose your Ledger in your browser, then press Connect"),
+            readinessStep("1", gt("ledgerGrant.steps.cableOne")),
+            readinessStep("2", gt("ledgerGrant.steps.cableTwo")),
           ]),
     );
   };
@@ -279,19 +289,21 @@ const render = (): void => {
     bluetoothMethod.setAttribute("aria-pressed", `${method === "ble"}`);
     status.hidden = true;
     renderReadiness();
-    resetButton(method === "ble" ? "Pair with Bluetooth" : "Connect with USB");
+    resetButton(connectLabel(method));
   };
 
   const showLedgerRejection = (error: LedgerRejection, transport: LedgerTransportKind): void => {
     const appIsClosed = error.code === "no-app-open";
     setStatus(
-      appIsClosed ? "Open Starknet on your Ledger" : "Ledger isn't ready",
+      appIsClosed ? gt("ledgerGrant.openStarknet") : gt("ledgerGrant.notReady"),
       ledgerMessage(error.code),
       "danger",
       `Support code · ${diagnosticId(transport, appIsClosed ? "APP" : "DEVICE")}`,
     );
     nextTransport = transport;
-    resetButton(appIsClosed ? "Check Starknet again" : "Try again");
+    resetButton(
+      appIsClosed ? gt("ledgerGrant.button.checkStarknet") : gt("ledgerGrant.button.tryAgain"),
+    );
   };
 
   const showTransportFailure = (
@@ -304,10 +316,8 @@ const render = (): void => {
     if (failure === "permission-dismissed") {
       nextTransport = transport;
       setStatus(
-        "No Ledger selected",
-        transport === "ble"
-          ? "No Ledger was found to pair with. Choose USB above if the device is cabled."
-          : "No Ledger was found. Unlock the device, open the Starknet app, and try again.",
+        gt("ledgerGrant.picker.title"),
+        transport === "ble" ? gt("ledgerGrant.picker.ble") : gt("ledgerGrant.picker.cable"),
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "PICKER"), diagnostics),
       );
@@ -315,8 +325,8 @@ const render = (): void => {
       return;
     } else if (failure === "permission-blocked") {
       setStatus(
-        "Device access blocked",
-        "Reconnect the Ledger, then allow device access for Bramble in your browser.",
+        gt("ledgerGrant.access.blocked"),
+        gt("ledgerGrant.access.blockedCopy"),
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "POLICY"), diagnostics),
       );
@@ -324,19 +334,23 @@ const render = (): void => {
       const alternate = alternateLedgerTransport(transport, supported);
       nextTransport = alternate ?? transport;
       setStatus(
-        `${transportLabel(transport)} couldn't open the Ledger`,
+        gt("ledgerGrant.interface.title", { transport: transportName(transport) }),
         alternate
-          ? `Your browser couldn't open that connection. Try ${transportLabel(alternate)} instead.`
-          : "Reconnect the Ledger, close other wallet apps, and try again.",
+          ? gt("ledgerGrant.interface.alternate", { transport: transportName(alternate) })
+          : gt("ledgerGrant.interface.retry"),
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "INTERFACE"), diagnostics),
       );
-      resetButton(alternate ? `Try ${transportLabel(alternate)} instead` : "Try again");
+      resetButton(
+        alternate
+          ? gt("ledgerGrant.button.tryInstead", { transport: transportName(alternate) })
+          : gt("ledgerGrant.button.tryAgain"),
+      );
       return;
     } else {
       setStatus(
-        "Ledger connection failed",
-        "Reconnect the cable, unlock the device, open Starknet, and close other wallet apps.",
+        gt("ledgerGrant.failed.title"),
+        gt("ledgerGrant.failed.copy"),
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "TRANSPORT"), diagnostics),
       );
@@ -351,27 +365,30 @@ const render = (): void => {
     }
     button.disabled = true;
     button.dataset["busy"] = "true";
-    buttonLabel.textContent = "Checking browser support…";
+    buttonLabel.textContent = gt("ledgerGrant.button.checkingSupport");
     const supported = supportedTransports;
     const transport = transportForConnectionMethod(selectedMethod, supported, nextTransport);
     if (!transport) {
       setStatus(
-        "Ledger transport unavailable",
+        gt("ledgerGrant.transport.title"),
         selectedMethod === "ble"
-          ? "Bluetooth is unavailable in this browser. Connect with USB instead."
-          : "Use the latest Chrome, Brave, or Edge on desktop, then try again.",
+          ? gt("ledgerGrant.transport.noBluetooth")
+          : gt("ledgerGrant.transport.unsupported"),
         "danger",
         "Support code · BRAMBLE-LDG-BROWSER",
       );
-      resetButton(selectedMethod === "ble" ? "Pair with Bluetooth" : "Connect with USB");
+      resetButton(connectLabel(selectedMethod));
       return;
     }
 
-    buttonLabel.textContent = `Waiting for ${transportLabel(transport)}…`;
-    const chooserAction = transport === "ble" ? "Pair" : "Connect";
+    buttonLabel.textContent = gt("ledgerGrant.button.waiting", {
+      transport: transportName(transport),
+    });
     setStatus(
-      "Choose your device in your browser",
-      `Select your Ledger in your browser's ${transportLabel(transport)} device list, then click ${chooserAction}.`,
+      gt("ledgerGrant.chooser.title"),
+      gt(transport === "ble" ? "ledgerGrant.chooser.pair" : "ledgerGrant.chooser.connect", {
+        transport: transportName(transport),
+      }),
       "info",
       `Transport · ${transportLabel(transport)}`,
     );
@@ -381,9 +398,10 @@ const render = (): void => {
         activeTransport = await requestGrantTransport(transport);
         activeTransportKind = transport;
       }
+      const handshake = ledgerHandshakeProgress();
       setStatus(
-        LEDGER_HANDSHAKE_PROGRESS.title,
-        LEDGER_HANDSHAKE_PROGRESS.message,
+        handshake.title,
+        handshake.message,
         "info",
         `Transport · ${transportLabel(transport)} · Firmware, app, and key handshake`,
       );
@@ -398,14 +416,16 @@ const render = (): void => {
         void release();
       });
       setStatus(
-        "Ledger connected",
-        `Starknet ${version.major}.${version.minor}.${version.patch} verified. Bramble is ready to continue.`,
+        gt("ledgerGrant.connected.title"),
+        gt("ledgerGrant.connected.copy", {
+          version: `${version.major}.${version.minor}.${version.patch}`,
+        }),
         "success",
         `Transport · ${transportLabel(transport)} · Secure session active`,
       );
       button.dataset["busy"] = "false";
-      buttonLabel.textContent = "Connected";
-      cancel.textContent = "Disconnect";
+      buttonLabel.textContent = gt("ledgerGrant.button.connected");
+      cancel.textContent = gt("ledgerGrant.disconnect");
     } catch (error) {
       if (error instanceof LedgerRejection) {
         if (error.code !== "no-app-open" && error.code !== "device-locked") {
@@ -452,8 +472,8 @@ const render = (): void => {
   if (!sessionId) {
     button.disabled = true;
     setStatus(
-      "Open Ledger from Bramble",
-      "This hardware tab needs a fresh secure session from the wallet.",
+      gt("ledgerGrant.session.title"),
+      gt("ledgerGrant.session.copy"),
       "danger",
       "Support code · BRAMBLE-LDG-SESSION",
     );

@@ -21,6 +21,7 @@ import {
   type LedgerEip2645Application,
   READY_EIP2645_APPLICATION,
 } from "@bramble/wallet-model/ledger-path";
+import { t, th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
 import { accountLabel, accountsDetectedText } from "../../shared/parts";
 import type { LedgerOnboardAddKind } from "./onboard-session";
@@ -38,7 +39,7 @@ import type { LedgerDeviceChoice } from "./sign-session";
 const ledgerOnboardCancel = (): string =>
   button({
     attributes: { "data-ledger-onboard-cancel": true },
-    label: "Cancel",
+    label: t("ledger.cancel"),
     size: "small",
     variant: "ghost",
   });
@@ -55,6 +56,7 @@ const onboardHero = (chip: string, head: string, actions: string): string => `
 
 // One chooser tile: a single click routes immediately — no separate
 // select-then-confirm step. The chevron marks each tile as a direct action.
+// Label and supporting text are plain catalog text, escaped here.
 const chooserOption = (
   kind: LedgerOnboardAddKind,
   iconName: "book" | "link" | "shield" | "users" | "wallet",
@@ -63,7 +65,7 @@ const chooserOption = (
 ): string => `
     <button class="add-account-option" data-add-kind="${kind}" type="button">
       <span class="add-account-option-icon">${icon(iconName)}</span>
-      <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
+      <span class="add-account-option-copy"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(supportingText)}</span></span>
       <span class="add-account-option-check">${icon("chevronRight")}</span>
     </button>`;
 
@@ -77,19 +79,19 @@ export const addAccountChooser = (ledgerAvailable = true): string => {
   return `
   <div class="onboard-hero add-account-hero">
     <header class="add-account-header">
-      <h1>Add a new account</h1>
+      <h1>${th("ledger.add.title")}</h1>
       ${iconButton({
         attributes: { "data-ledger-onboard-cancel": true },
         icon: "x",
-        label: "Close Add account",
+        label: t("ledger.add.close"),
         variant: "ghost",
       })}
     </header>
-    <div class="add-account-chooser" role="group" aria-label="Add an account">
-      ${chooserOption("regular", "wallet", "Regular account", "Create the next account from this wallet’s recovery phrase.")}
-      ${ledgerAvailable ? chooserOption("ledger", "shield", "Ledger account", "Connect a Ledger and pick its accounts, new or existing.") : ""}
-      ${chooserOption("multisig", "users", "Multisig account", "Create or add a multisig account controlled by multiple signers.")}
-      ${chooserOption("import", "link", "Import an existing account", "Bring accounts you already own: a recovery phrase or a private key.")}
+    <div class="add-account-chooser" role="group" aria-label="${th("ledger.add.group")}">
+      ${chooserOption("regular", "wallet", t("ledger.add.regular"), t("ledger.add.regularHint"))}
+      ${ledgerAvailable ? chooserOption("ledger", "shield", t("ledger.add.ledger"), t("ledger.add.ledgerHint")) : ""}
+      ${chooserOption("multisig", "users", t("ledger.add.multisig"), t("ledger.add.multisigHint"))}
+      ${chooserOption("import", "link", t("ledger.add.import"), t("ledger.add.importHint"))}
     </div>
   </div>`;
 };
@@ -110,25 +112,25 @@ export const importAccountChooser = (ledgerAvailable = true, phraselessNote?: st
   return `
   <div class="onboard-hero add-account-hero">
     <header class="add-account-header">
-      <h1>Import an existing account</h1>
+      <h1>${th("ledger.import.title")}</h1>
       ${iconButton({
         attributes: { "data-ledger-onboard-cancel": true },
         icon: "x",
-        label: "Close Add account",
+        label: t("ledger.add.close"),
         variant: "ghost",
       })}
     </header>
     ${phraselessNote ? `<p class="hint" role="status">${escapeHtml(phraselessNote)}</p>` : ""}
-    <div class="add-account-chooser" role="group" aria-label="Import an existing account">
-      ${phraselessNote ? "" : chooserOption("find-accounts", "users", "Find my other accounts", "Search this wallet for accounts it does not list yet.")}
-      ${chooserOption("import-phrase", "book", "Recovery phrase", "Import accounts from another wallet's 12 or 24 words.")}
-      ${chooserOption("import-key", "link", "Private key", "Import a single account from its raw Starknet key.")}
-      ${ledgerAvailable ? chooserOption("restore-ready-ledger", "shield", "Ready Ledger account", "Bring over a Ledger account created in Ready (Argent X).") : ""}
+    <div class="add-account-chooser" role="group" aria-label="${th("ledger.import.title")}">
+      ${phraselessNote ? "" : chooserOption("find-accounts", "users", t("ledger.import.find"), t("ledger.import.findHint"))}
+      ${chooserOption("import-phrase", "book", t("ledger.import.phrase"), t("ledger.import.phraseHint"))}
+      ${chooserOption("import-key", "link", t("ledger.import.key"), t("ledger.import.keyHint"))}
+      ${ledgerAvailable ? chooserOption("restore-ready-ledger", "shield", t("ledger.import.ready"), t("ledger.import.readyHint")) : ""}
     </div>
     <div class="onboard-actions">
       ${button({
         attributes: { "data-add-back": true },
-        label: "Back",
+        label: t("ledger.back"),
         variant: "ghost",
       })}
     </div>
@@ -143,12 +145,12 @@ export const importAccountChooser = (ledgerAvailable = true, phraselessNote?: st
 export const ledgerConnectPrompt = (): string =>
   onboardHero(
     icon("shield"),
-    `<h1>Connect a Ledger</h1>
-      <p class="lede">Your browser will ask you to select your Ledger. This only connects it — no funds move.</p>`,
+    `<h1>${th("ledger.connect.title")}</h1>
+      <p class="lede">${th("ledger.connect.lede")}</p>`,
     `${button({
       attributes: { "data-ledger-onboard-connect": true },
       icon: "shield",
-      label: "Connect a Ledger",
+      label: t("ledger.connect.title"),
     })}
       ${ledgerOnboardCancel()}`,
   );
@@ -159,8 +161,8 @@ export const ledgerConnectPrompt = (): string =>
 export const ledgerReadingPrompt = (): string =>
   onboardHero(
     icon("shield"),
-    `<h1>Reading accounts</h1>
-      <p class="lede">Reading accounts from your device…</p>`,
+    `<h1>${th("ledger.reading.title")}</h1>
+      <p class="lede">${th("ledger.reading.lede")}</p>`,
     ledgerOnboardCancel(),
   );
 
@@ -172,9 +174,9 @@ export const ledgerReadingPrompt = (): string =>
 export const ledgerDevicePicker = (devices: readonly LedgerDeviceChoice[]): string =>
   onboardHero(
     icon("shield"),
-    `<h1>Choose your Ledger</h1>
-      <p class="lede">More than one Ledger is connected. Select the device to read.</p>`,
-    `<div class="add-account-chooser" role="group" aria-label="Connected Ledger devices">
+    `<h1>${th("ledger.device.title")}</h1>
+      <p class="lede">${th("ledger.device.lede")}</p>`,
+    `<div class="add-account-chooser" role="group" aria-label="${th("ledger.device.group")}">
       ${devices
         .map((device) =>
           menuRow({
@@ -198,12 +200,12 @@ export const ledgerDevicePicker = (devices: readonly LedgerDeviceChoice[]): stri
 export const ledgerSurfaceNotice = (): string =>
   onboardHero(
     icon("lock"),
-    `<h1>Ledger needs the side panel</h1>
-      <p class="hint">Connecting a Ledger opens a browser tab to reach the device, and that closes this popup before the connection finishes. The side panel stays open, so Ledger works there.</p>`,
+    `<h1>${th("ledger.surface.title")}</h1>
+      <p class="hint">${th("ledger.surface.copy")}</p>`,
     `${button({
       attributes: { "data-ledger-surface-switch": true },
       icon: "link",
-      label: "Switch to the side panel",
+      label: t("ledger.surface.switch"),
     })}
       ${ledgerOnboardCancel()}`,
   );
@@ -216,8 +218,8 @@ export const ledgerSurfaceNotice = (): string =>
 export const ledgerSurfaceSwitched = (): string =>
   onboardHero(
     icon("check"),
-    `<h1>Switched to the side panel</h1>
-      <p class="hint">Click the Bramble icon in your browser toolbar to reopen the wallet in the side panel, then connect your Ledger there.</p>`,
+    `<h1>${th("ledger.surface.switchedTitle")}</h1>
+      <p class="hint">${th("ledger.surface.switchedCopy")}</p>`,
     ledgerOnboardCancel(),
   );
 
@@ -228,12 +230,12 @@ export const ledgerSurfaceSwitched = (): string =>
 export const ledgerOnboardError = (message: string): string =>
   onboardHero(
     icon("alert"),
-    `<h1>Something went wrong</h1>
+    `<h1>${th("ledger.error.title")}</h1>
       <p class="review-flag">${escapeHtml(message)}</p>`,
     `${button({
       attributes: { "data-ledger-onboard-connect": true },
       icon: "refresh",
-      label: "Try again",
+      label: t("ledger.error.tryAgain"),
       variant: "secondary",
     })}
       ${ledgerOnboardCancel()}`,
@@ -244,24 +246,26 @@ export const ledgerOnboardError = (message: string): string =>
 // (or a degraded RPC). Only Bramble deploys a funded Bramble account itself.
 const candidateState = (candidate: LedgerCandidate): string => {
   const type = candidate.account.accountContractType;
-  if (candidate.duplicate) return "Already in this wallet";
-  if (candidate.deployed === null) return "Checking…";
-  if (candidate.deployed) return "Deployed on Starknet";
+  if (candidate.duplicate) return t("onboarding.picker.alreadyAdded");
+  if (candidate.deployed === null) return t("ledger.candidate.checking");
+  if (candidate.deployed) return t("onboarding.picker.deployedOnStarknet");
   if (candidate.funded) {
-    return type === "openzeppelin" ? "Funded and ready to deploy" : "Funded, not deployed";
+    return type === "openzeppelin"
+      ? t("onboarding.picker.fundedReady")
+      : t("ledger.candidate.fundedNotDeployed");
   }
   // A failed balance read proves nothing: a funded account must not read as empty.
-  if (candidate.funded === null) return "Couldn't check this account's activity. Try again.";
+  if (candidate.funded === null) return t("ledger.candidate.balanceUnknown");
   if (type === "argent") {
     // Only Ready's own path holds Ready accounts; one at Bramble's path is an
     // Argent account on the key Bramble reads, not Ready's.
     return candidate.account.derivation.eip2645application === READY_EIP2645_APPLICATION
-      ? "No on-chain activity found — Bramble only imports existing Ready accounts"
-      : "No on-chain activity found — Bramble only imports existing Argent accounts";
+      ? t("onboarding.picker.noActivityReady")
+      : t("ledger.candidate.noActivityArgent");
   }
   return type === "braavos"
-    ? "No on-chain activity found — Bramble only imports existing Braavos accounts"
-    : "No on-chain activity found";
+    ? t("onboarding.picker.noActivityBraavos")
+    : t("onboarding.picker.noActivity");
 };
 
 // An Argent account at Bramble's own path shares its index with the Ready
@@ -269,8 +273,8 @@ const candidateState = (candidate: LedgerCandidate): string => {
 // (Bramble's path is also starknet.js's default Ledger path, so who created the
 // account is not known — only where its key lives.)
 const candidateMeta = (candidate: LedgerCandidate, atBramblePath = false): string => {
-  const index = escapeHtml(String(candidate.account.derivation.accountIndex));
-  return `<strong>Account ${index}${atBramblePath ? " · Bramble path" : ""}</strong>
+  const index = String(candidate.account.derivation.accountIndex);
+  return `<strong>${atBramblePath ? th("ledger.candidate.accountBramblePath", { index }) : th("onboarding.picker.accountName", { index })}</strong>
       <code>${escapeHtml(accountLabel(candidate.account.address))}</code>
       <span class="hint">${escapeHtml(candidateState(candidate))}</span>`;
 };
@@ -303,13 +307,15 @@ const candidateRows = (
   atBramblePathLabel: (candidate: LedgerCandidate) => boolean = () => false,
 ): string =>
   candidates.length === 0
-    ? emptyState("No accounts read from the device yet.")
+    ? emptyState(t("ledger.picker.empty"))
     : `<ul class="allowance-list">${candidates.map((candidate) => candidateRow(candidate, selected, atBramblePathLabel(candidate))).join("")}</ul>`;
 
-const GROUP_LABELS = {
-  argent: "Argent accounts",
-  braavos: "Braavos accounts",
-  openzeppelin: "Bramble accounts",
+// The family name in each group heading ("{family} accounts"). Product names,
+// never translated.
+const GROUP_FAMILIES = {
+  argent: "Argent",
+  braavos: "Braavos",
+  openzeppelin: "Bramble",
 } as const;
 
 // One contract-family group, laid out as the recovery-phrase picker's: a native
@@ -323,7 +329,7 @@ const GROUP_LABELS = {
 // unused one does not double every Ready row with an unselectable twin. One
 // whose balance read failed stays listed, so the failure is said, not hidden.
 const candidateGroup = (
-  contractType: keyof typeof GROUP_LABELS,
+  contractType: keyof typeof GROUP_FAMILIES,
   candidates: readonly LedgerCandidate[],
   selected: readonly string[],
 ): string => {
@@ -348,10 +354,12 @@ const candidateGroup = (
     (left, right) => left.account.derivation.accountIndex - right.account.derivation.accountIndex,
   );
   const detected = rows.filter(ledgerCandidateActive).length;
-  const label =
-    contractType === "argent" && family.some((candidate) => !atBramblePath(candidate))
-      ? "Ready accounts"
-      : GROUP_LABELS[contractType];
+  const label = th("onboarding.scan.group", {
+    family:
+      contractType === "argent" && family.some((candidate) => !atBramblePath(candidate))
+        ? "Ready"
+        : GROUP_FAMILIES[contractType],
+  });
   return `
   <details class="disclosure account-group" data-account-group="${contractType}">
     <summary>${label}<span class="eyebrow" data-detected="${detected}">${accountsDetectedText(detected)}</span></summary>
@@ -372,7 +380,7 @@ const readyCandidates = (
   const detected = candidates.filter(ledgerCandidateActive).length;
   return `
   <div class="account-group" data-ready-accounts>
-    <p class="hint">Ready accounts${detected === 0 ? "" : ` · ${accountsDetectedText(detected)}`}</p>
+    <p class="hint">${th("onboarding.scan.group", { family: "Ready" })}${detected === 0 ? "" : ` · ${accountsDetectedText(detected)}`}</p>
     ${candidateRows(candidates, selected)}
   </div>`;
 };
@@ -381,14 +389,8 @@ const pickerCopy = (
   application: LedgerEip2645Application,
 ): { readonly heading: string; readonly lede: string } =>
   application === READY_EIP2645_APPLICATION
-    ? {
-        heading: "Select Ready accounts",
-        lede: "Accounts with activity are preselected. Yours may be a few pages in.",
-      }
-    : {
-        heading: "Select accounts",
-        lede: "Accounts with activity are preselected.",
-      };
+    ? { heading: th("ledger.picker.readyTitle"), lede: th("ledger.picker.readyLede") }
+    : { heading: th("ledger.picker.title"), lede: th("ledger.picker.lede") };
 
 /**
  * The multi-select account picker: one row per enumerated candidate with its
@@ -413,13 +415,16 @@ export const ledgerAccountPicker = (
     application === READY_EIP2645_APPLICATION
       ? readyCandidates(candidates, selected)
       : candidates.length === 0
-        ? emptyState("No accounts read from the device yet.")
+        ? emptyState(t("ledger.picker.empty"))
         : (["openzeppelin", "argent", "braavos"] as const)
             .map((family) => candidateGroup(family, candidates, selected))
             .join("");
   const copy = pickerCopy(application);
   const count = selected.length;
-  const addLabel = count > 0 ? `Add selected (${count})` : "Add selected";
+  const addLabel =
+    count > 0
+      ? t("ledger.picker.addSelectedCount", { count: String(count) })
+      : t("ledger.picker.addSelected");
   return `
   <div class="onboard-picker">
     <div class="gate-head">
@@ -432,7 +437,7 @@ export const ledgerAccountPicker = (
       attributes: { "data-ledger-load-more": true, ...(loadingMore ? { "data-busy": true } : {}) },
       disabled: loadingMore,
       icon: "plus",
-      label: "Show more",
+      label: t("ledger.picker.showMore"),
       size: "small",
       variant: "ghost",
     })}
