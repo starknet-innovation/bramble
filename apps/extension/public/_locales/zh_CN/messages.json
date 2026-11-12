@@ -1,0 +1,6 @@
+{
+  "extensionDescription": {
+    "message": "自托管 Starknet 钱包，支持隐私余额、Ledger 和多签。",
+    "description": "Store listing summary: the manifest description. Chrome caps it at 132 characters."
+  }
+}

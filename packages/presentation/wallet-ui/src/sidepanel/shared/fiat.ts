@@ -1,7 +1,9 @@
 /**
  * Pure fiat formatting and portfolio math for the side panel. No DOM.
  */
+import type { Locale } from "@bramble/core/i18n";
 import type { DisplayCurrency } from "@bramble/settings/preferences";
+import { uiLocale } from "../../i18n/locale";
 import { formatUtcClock, formatUtcDay } from "./timestamp";
 
 /**
@@ -16,8 +18,11 @@ export const CURRENCY_SYMBOLS: Readonly<Record<DisplayCurrency, string>> = {
 // Locale grouping with fixed 2 decimals. Unlike `toFixed`, this never switches
 // to exponential notation for very large magnitudes (>=1e21), so huge balances
 // still render as plain grouped digits rather than a garbled "$1e+21.00".
+// The grouping and decimal marks for each UI language; both read 1,234.56.
+const NUMBER_LOCALE: Readonly<Record<Locale, string>> = { en: "en-US", "zh-Hans": "zh-Hans" };
+
 const groupWithThousands = (amount: number): string =>
-  amount.toLocaleString("en-US", {
+  amount.toLocaleString(NUMBER_LOCALE[uiLocale()], {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
     useGrouping: true,

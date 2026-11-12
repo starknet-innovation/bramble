@@ -302,6 +302,7 @@ if (import.meta.main) {
       "content_security_policy",
       "author",
       "content_scripts",
+      "default_locale",
       "description",
       "homepage_url",
       "host_permissions",

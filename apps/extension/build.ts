@@ -218,6 +218,7 @@ const emit = async (target: BuildTarget): Promise<void> => {
   await cp(join(publicRoot, "popup.html"), join(outdir, "popup.html"));
   await cp(join(publicRoot, "sidepanel.html"), join(outdir, "sidepanel.html"));
   await cp(join(publicRoot, "ledger-grant.html"), join(outdir, "ledger-grant.html"));
+  await cp(join(publicRoot, "_locales"), join(outdir, "_locales"), { recursive: true });
   await cp(join(publicRoot, "icons"), join(outdir, "icons"), { recursive: true });
   await cp(join(publicRoot, "brand"), join(outdir, "brand"), { recursive: true });
   if (shipsSandboxedRenderer(target)) {

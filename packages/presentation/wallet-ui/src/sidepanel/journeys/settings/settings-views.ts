@@ -10,10 +10,12 @@ import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import { button, segmentedControl } from "@bramble/ui-kit/controls";
 import { checkboxField, selectField, textField } from "@bramble/ui-kit/fields";
 import { menuLink } from "@bramble/ui-kit/navigation";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import { type BuildInfo, buildInfo } from "../../shell/build-info";
 import { SHADOW_ACCOUNTS_TITLE } from "../privacy/shadow-accounts-copy";
+import { languageRowValue } from "./language-ui";
 import { PRIVACY_UNLOCK_TITLE } from "./privacy-unlock";
 
 // The build stamp under the menu: extension version, plus the source branch
@@ -78,6 +80,7 @@ export const settingsScreen = (
     <section class="section">
       <p class="eyebrow">Preferences</p>
       <div class="menu-list" role="group" aria-label="Wallet preferences">
+        ${walletMenuRow("language", t("settings.language.title"), "languages", languageRowValue(preferences))}
         ${walletMenuRow(
           "appearance",
           "Appearance & currency",

@@ -68,6 +68,12 @@ export const SettingsAppearance = narrowSidepanelStory(
   "appearance",
 );
 
+export const SettingsLanguage = narrowSidepanelStory(
+  "Language choices · 320px",
+  "settings-security",
+  "language",
+);
+
 export const LedgerApproval = narrowSidepanelStory("Ledger approval · 320px", "ledger", "connect");
 
 export const ConnectRequest = narrowSidepanelStory(
