@@ -5,7 +5,7 @@ tested, the files it adds, what Krusty 0.11.0 lacks, and how each review must-fi
 
 Since M4 (wallet-core `v0.2.1`) the mechanism files below (`u256`, `calls`, `fees`, `rpc_bodies`,
 `judge`, `sign`, `plan*`) and the parity suites that replay the captures live in wallet-core;
-`mobile/core/src/send/` keeps `mod`, `types`, `plan` (the `TransferPlan` wrapper and its
+wallet-core's `crates/bramble-core/src/send/` keeps `mod`, `types`, `plan` (the `TransferPlan` wrapper and its
 `PlanHost`), `wallet_ext` and `fixture_tests`. This page records the path as it was added.
 
 ## 6. Parity fixtures (pin behaviour to the extension)
@@ -131,9 +131,9 @@ generated Kotlin bindings. They are **uncompiled** here (no SDK); a JVM parity t
 
 ## 8. Files
 
-- **New in the core:** `mobile/core/src/send/{mod,types,u256,calls,fees,rpc_bodies,judge,sign,
+- **New in the core:** wallet-core's `crates/bramble-core/src/send/{mod,types,u256,calls,fees,rpc_bodies,judge,sign,
   plan,plan_review,plan_submit,plan_deploy,wallet_ext,fixture_tests}.rs`,
-  `mobile/core/src/activity/{mod,store}.rs`, and `tests/{transactions_parity,transactions_plan,
+  wallet-core's `crates/bramble-core/src/activity/{mod,store}.rs`, and `tests/{transactions_parity,transactions_plan,
   transactions_lifecycle}.rs` with `tests/send_support/`. Each file stays under 500 lines.
 - **New generators:** `scripts/{generate-mobile-transaction-vectors,mobile-transactions,
   mobile-transactions-capture,mobile-transactions-copy,mobile-transactions-screens,

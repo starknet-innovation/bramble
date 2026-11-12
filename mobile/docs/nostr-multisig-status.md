@@ -63,7 +63,7 @@ mainnet broadcast, no funds.
 
 ### Delivered
 
-- **Core** (`mobile/core/src`): `nostr.rs`, `contact_card.rs`, `contacts.rs`, `argent_multisig.rs`,
+- **Core** (wallet-core's `crates/bramble-core/src`): `nostr.rs`, `contact_card.rs`, `contacts.rs`, `argent_multisig.rs`,
   `multisig_rpc.rs`, `class_declared.rs`, `multisig_store.rs`, `nostr_relay.rs`, `coordination.rs`,
   `public_store.rs`, `multisig_constants.rs`, and the FFI files `ffi_nostr_multisig.rs` and
   `ffi_coordination.rs`. The additive edits are the `mod`/`pub use` lines and `CoreError::Coordination` in

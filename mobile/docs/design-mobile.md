@@ -395,7 +395,7 @@ suite that uses a live network. The new suites never do.
 
 ## 7. UniFFI surface, storage, and parity fixtures
 
-- **UniFFI:** **none added.** No Rust signature changes, and `mobile/core/src/lib.rs` and
+- **UniFFI:** **none added.** No Rust signature changes, and wallet-core's `crates/bramble-core/src/lib.rs` and
   `Cargo.toml` are untouched. Nothing new crosses the boundary. What never crosses stays as
   SCOPE.md defines it: private keys, viewing keys and vault keys never cross, and the phrase
   crosses only at creation and on a reveal that re-checks the password.

@@ -355,7 +355,7 @@ into generated `androidTest` assets the same way.
 
 ## 5. UniFFI surface
 
-**No new UniFFI surface.** Android uses only what `mobile/core/src/lib.rs` already exports, through
+**No new UniFFI surface.** Android uses only what wallet-core's `crates/bramble-core/src/lib.rs` already exports, through
 the Kotlin bindings that `mobile/scripts/build-core-android.sh` generates into
 `app/build/generated/uniffi` (package `org.bramble.core`, never committed):
 
