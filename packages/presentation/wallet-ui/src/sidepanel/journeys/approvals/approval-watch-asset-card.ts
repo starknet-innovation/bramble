@@ -7,6 +7,7 @@ import { escapeHtml } from "@bramble/core/html";
 import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-registry";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
+import { reviewLines } from "../../../i18n/review";
 import type { PendingApproval } from "../../../popup/responses/responses";
 import { accountLabel, inlineCopyButton } from "../../shared/parts";
 import { reviewConstraints, reviewOutcome, reviewPanel } from "../../shared/review-render";
@@ -62,7 +63,7 @@ const watchNftCard = (
     </div>
     ${
       preview
-        ? `${reviewPanel(approval.insights ?? [])}
+        ? `${reviewPanel(reviewLines(approval.insights ?? [], approval.insightTexts))}
     ${reviewConstraints(t("approval.noFee"))}
     ${decisionRow(approval, t("detail.watch.nftAction"), false)}`
         : `<div class="button-row">${denyButton(approval, t("approval.card.close"))}</div>`
@@ -91,7 +92,7 @@ export const watchAssetCard = (approval: PendingApproval, preview = false): stri
       <dl class="request-detail"><div><dt>${th("detail.params.token")}</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>${th("detail.watch.name")}</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>${th("detail.watch.address")}</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, t("detail.watch.copyToken"))}</dd></div></dl>
       ${reviewOutcome(t("detail.watch.outcome"))}
     </div>
-    ${reviewPanel([...watchAssetWarnings(token), ...(approval.insights ?? [])])}
+    ${reviewPanel([...watchAssetWarnings(token), ...reviewLines(approval.insights ?? [], approval.insightTexts)])}
     ${reviewConstraints(t("approval.noFee"))}
     ${decisionRow(approval, t("detail.watch.action"), false)}
   </li>`;

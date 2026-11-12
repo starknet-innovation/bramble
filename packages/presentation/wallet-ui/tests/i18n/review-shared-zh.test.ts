@@ -275,3 +275,23 @@ test("English is unchanged", () => {
   // The leak check is not vacuous: in English it finds these very sentences.
   expect(leaks(html)).toContain("This site is asking to change the wallet's active network.");
 });
+
+describe("site warnings on cards", () => {
+  test("a connect card renders the background's site warnings in Chinese, facts verbatim", async () => {
+    const { insightEnglish, insightText } = await import("@bramble/permissions/insight-messages");
+    const texts = [
+      insightText("siteInsight.lookalike", { target: "starknet.io" }),
+      insightText("siteInsight.firstSeen"),
+    ];
+    zh();
+    const html = card({
+      insightTexts: texts,
+      insights: texts.map(insightEnglish),
+      kind: "connect",
+    });
+    expect(html).not.toContain("closely resembles");
+    expect(html).not.toContain("First time this wallet");
+    expect(html).toContain("此域名与 starknet.io 极为相似");
+    expect(html).toContain("此钱包首次见到此网站");
+  });
+});
