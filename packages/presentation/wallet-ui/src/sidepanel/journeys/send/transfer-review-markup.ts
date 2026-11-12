@@ -3,6 +3,7 @@
  * and the Send receipt shown once the transfer lands.
  */
 import { escapeHtml } from "@bramble/core/html";
+import { t } from "../../../i18n/messages";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { accountLabel, inlineCopyButton } from "../../shared/parts";
 import {
@@ -12,6 +13,7 @@ import {
   riskFlagMessages,
 } from "../../shared/review-render";
 import { tokenGlyph } from "../portfolio/token-row";
+import { fragmentTokens, htmlSentence } from "./html-message";
 import { type TransferMode, transferSuccessSummary } from "./transfer-mode";
 import type { TransferFields } from "./transfer-model";
 
@@ -149,8 +151,15 @@ export const successReceiptHtml = (
     ? `<strong>${escapeHtml(fields.recipientLabel)}</strong> `
     : "";
   const senderName = sender.label ? `<strong>${escapeHtml(sender.label)}</strong> ` : "";
-  const subject = sender.address
-    ? `${senderName}${receiptAddress(sender.address, "Copy sender address")} sent`
-    : "Sent";
-  return `${subject} ${amount} to ${recipientName}${receiptAddress(fields.recipient, "Copy recipient address")}`;
+  const recipient = `${recipientName}${receiptAddress(fields.recipient, t("send.copyRecipient"))}`;
+  if (!sender.address) {
+    const fragments = { amount, recipient };
+    return htmlSentence(t("send.receipt.sent", fragmentTokens(fragments)), fragments);
+  }
+  const fragments = {
+    amount,
+    recipient,
+    sender: `${senderName}${receiptAddress(sender.address, t("send.receipt.copySender"))}`,
+  };
+  return htmlSentence(t("send.receipt.sentBy", fragmentTokens(fragments)), fragments);
 };

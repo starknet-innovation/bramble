@@ -5,19 +5,20 @@
  * access and no state of its own.
  */
 
+import { t } from "../../../i18n/messages";
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
 import { applyOutcomeHash } from "../../shared/outcome-hash";
 import { knownRecipientLabel } from "./recipient-rows";
 import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
-  TRANSFER_FAILURE_TITLE,
-  TRANSFER_SENT_FAILURE_REASON,
-  TRANSFER_SENT_FAILURE_TITLE,
-  TRANSFER_UNKNOWN_TITLE,
   type TransferMode,
+  transferFailureTitle,
   transferModeCopy,
   transferModeFor,
+  transferSentFailureReason,
+  transferSentFailureTitle,
   transferStageTitle,
+  transferUnknownTitle,
 } from "./transfer-mode";
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
 import {
@@ -185,10 +186,10 @@ const applyFailureReceipt = (
     form,
     "send-failure-title",
     unknown
-      ? TRANSFER_UNKNOWN_TITLE
+      ? transferUnknownTitle()
       : submitted
-        ? TRANSFER_SENT_FAILURE_TITLE
-        : TRANSFER_FAILURE_TITLE,
+        ? transferSentFailureTitle()
+        : transferFailureTitle(),
   );
   const section = form.querySelector<HTMLElement>("#send-failure");
   if (unknown) section?.setAttribute("data-severity", "warning");
@@ -199,15 +200,15 @@ const applyFailureReceipt = (
   const priorWrite = !unknown && !submitted ? (state.priorWrite ?? null) : null;
   const retry = form.querySelector("#send-retry");
   retry?.toggleAttribute("hidden", unknown || priorWrite === "stranded");
-  if (retry) retry.textContent = priorWrite === "unresolved" ? "Check again" : "Try again";
+  if (retry) {
+    retry.textContent =
+      priorWrite === "unresolved" ? t("send.failure.checkAgain") : t("send.failure.tryAgain");
+  }
   form
     .querySelector("#send-failure-activity")
     ?.toggleAttribute("hidden", !unknown && priorWrite === null);
   const reason =
-    state.error ||
-    (submitted
-      ? TRANSFER_SENT_FAILURE_REASON
-      : "The transaction was not sent. Your balance is unchanged.");
+    state.error || (submitted ? transferSentFailureReason() : t("send.failure.notSent"));
   setText(form, "send-failure-copy", reason);
   // What is worth taking to support is the cause, not the identifier the
   // transaction never got: the complete diagnostic the rejected call carried,

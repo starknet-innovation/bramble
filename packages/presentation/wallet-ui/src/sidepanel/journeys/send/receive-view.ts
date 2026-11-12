@@ -5,21 +5,18 @@ import { button, switchControl } from "@bramble/ui-kit/controls";
 import { icon } from "@bramble/ui-kit/icons";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import { walletContactCard } from "@bramble/wallet-model/preferences";
+import { t, th } from "../../../i18n/messages";
 import { accountLabel, copyButton } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
 import { knownAccountType } from "../../shell/account-types";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import { fragmentTokens, htmlSentence } from "./html-message";
 
-const PUBLIC_ONLY_COPY = "Public transfers only";
-const UNREGISTERED_COPY = "Enable private balances to receive privately.";
 // Registration is an on-chain transaction from this account, so it needs a
-// deployed contract and STRK for the fee. Naming the prerequisite beats offering
-// a control whose only outcome is a failed estimate.
-const PREREQUISITE_COPY = "Deploy this account and add STRK before enabling private balances.";
-// Deployment and registration are two transactions — Starknet cannot batch a
-// DEPLOY_ACCOUNT with an invoke — so the copy says so rather than implying one.
-const DEPLOY_FIRST_COPY =
-  "Enabling private balances takes two transactions: deploy, then register. Each has a network fee.";
+// deployed contract and STRK for the fee: the fund-first notice names that
+// prerequisite rather than offering a control whose only outcome is a failed
+// estimate. Deployment and registration are two transactions — Starknet cannot
+// batch a DEPLOY_ACCOUNT with an invoke — so the deploy-first notice says so.
 
 /**
  * Whether the account can act on the privacy-pool notice, and if not, why.
@@ -49,15 +46,25 @@ export const privacyPoolNotice = (
   }
   if (action === "fund-first") {
     return `<p class="privacy-pool-notice is-static">
-        <span class="privacy-pool-copy"><strong>${escapeHtml(PUBLIC_ONLY_COPY)}</strong><span>${escapeHtml(PREREQUISITE_COPY)}</span></span>
+        <span class="privacy-pool-copy"><strong>${th("receive.pool.publicOnly")}</strong><span>${th("receive.pool.prerequisite")}</span></span>
       </p>`;
   }
   const deploying = action === "deploy-first";
   const hook = deploying ? "data-privacy-deploy-register" : "data-privacy-register";
   return `<button class="privacy-pool-notice" ${hook}="" type="button">
-      <span class="privacy-pool-copy"><strong>${escapeHtml(PUBLIC_ONLY_COPY)}</strong><span>${escapeHtml(deploying ? DEPLOY_FIRST_COPY : UNREGISTERED_COPY)}</span></span>
-      <strong>Enable privacy</strong>
+      <span class="privacy-pool-copy"><strong>${th("receive.pool.publicOnly")}</strong><span>${deploying ? th("receive.pool.deployFirst") : th("receive.pool.unregistered")}</span></span>
+      <strong>${th("receive.pool.enable")}</strong>
     </button>`;
+};
+
+// The mismatch sentence names both classes as `<code>`, wherever the
+// translation places them.
+const mismatchSentence = (onChain: string, expected: string): string => {
+  const fragments = {
+    expected: `<code>${escapeHtml(expected)}</code>`,
+    onChain: `<code>${escapeHtml(onChain)}</code>`,
+  };
+  return htmlSentence(t("receive.verify.mismatch", fragmentTokens(fragments)), fragments);
 };
 
 /**
@@ -69,17 +76,17 @@ export const privacyPoolNotice = (
  */
 export const classHashVerificationBadge = (verification: ClassHashVerification | null): string => {
   if (verification === null) {
-    return `<p class="verify-status pending" role="status">${icon("refresh")}Verifying on-chain…</p>`;
+    return `<p class="verify-status pending" role="status">${icon("refresh")}${th("receive.verify.pending")}</p>`;
   }
   switch (verification.status) {
     case "verified":
-      return `<p class="verify-status verified" role="status">${icon("shield")}Verified on-chain</p>`;
+      return `<p class="verify-status verified" role="status">${icon("shield")}${th("receive.verify.verified")}</p>`;
     case "mismatch":
-      return `<p class="verify-status mismatch" role="alert">${icon("alert")}On-chain mismatch — the contract deployed at this address runs class <code>${escapeHtml(verification.onChainClassHash)}</code>, not <code>${escapeHtml(verification.expectedClassHash)}</code>, the class this wallet expects. Do not trust this account until resolved.</p>`;
+      return `<p class="verify-status mismatch" role="alert">${icon("alert")}${mismatchSentence(verification.onChainClassHash, verification.expectedClassHash)}</p>`;
     case "undeployed":
-      return `<p class="verify-status pending" role="status">${icon("alert")}Not deployed yet — the class hash cannot be verified on-chain until this account is deployed.</p>`;
+      return `<p class="verify-status pending" role="status">${icon("alert")}${th("receive.verify.undeployed")}</p>`;
     case "unreachable":
-      return `<p class="verify-status pending" role="status">${icon("alert")}Could not reach the network — shown from local data and not yet verified on-chain.</p>`;
+      return `<p class="verify-status pending" role="status">${icon("alert")}${th("receive.verify.unreachable")}</p>`;
   }
 };
 
@@ -104,16 +111,16 @@ const classHashRows = (
   }
   const accountType = knownAccountType(classHash);
   return `<div class="receive-key-row">
-      <strong>Class hash</strong>
+      <strong>${th("receive.classHash")}</strong>
       <span class="receive-key-value">
         <code title="${escapeHtml(classHash)}">${escapeHtml(accountLabel(classHash))}</code>
-        ${copyButton(classHash, "Copy class hash")}
+        ${copyButton(classHash, t("receive.classHash.copy"))}
       </span>
     </div>
     ${
       accountType
         ? `<div class="receive-key-row">
-      <strong>Type</strong>
+      <strong>${th("receive.type")}</strong>
       <span class="receive-key-value">${escapeHtml(accountType)}</span>
     </div>`
         : ""
@@ -127,14 +134,13 @@ const classHashRows = (
  * drift apart.
  */
 export const RECEIVE_QR_LABELS = {
-  address: "QR code for your Starknet address",
-  card: "QR code for wallet card",
-} as const;
-
-// The wallet card is a public document; saying so keeps the signer and
-// coordination keys from reading as secrets when they appear beside it.
-const CARD_EXPLAINER =
-  "The wallet card is public: this address, the signer public key, and the coordination public key. It holds nothing secret.";
+  get address(): string {
+    return t("receive.qr.address");
+  },
+  get card(): string {
+    return t("receive.qr.card");
+  },
+};
 
 /**
  * Renders the canonical Receive card. The QR carries the plain Starknet
@@ -194,7 +200,7 @@ export const receiveAddressView = ({
     ${classHash && isMismatch(classHashVerification) ? classHashVerificationBadge(classHashVerification ?? null) : ""}
     <div class="qr-card" data-receive-qr data-qr-payload="address">${qrSvg(address, RECEIVE_QR_LABELS.address)}</div>
     <div class="receive-intro">
-      <h2>Your Starknet address</h2>
+      <h2>${th("receive.title")}</h2>
       <button class="receive-address-copy" type="button" data-copy="${escapeHtml(address)}" aria-label="${escapeHtml(copyLabel)}" aria-describedby="receive-address-text" title="${escapeHtml(copyLabel)}">
         <code id="receive-address-text" data-receive-address-text>${escapeHtml(address)}</code>
         <span class="receive-address-copy-mark" aria-hidden="true">${icon("copy")}</span>
@@ -205,14 +211,14 @@ export const receiveAddressView = ({
       publicKeyX
         ? `${switchControl({
             attributes: { id: "advanced-receive" },
-            label: "Advanced",
+            label: t("receive.advanced"),
           })}
       <div class="receive-advanced-fields" id="receive-advanced-fields" hidden>
-        <div class="seg receive-payload-switch" role="group" aria-label="QR code contents" data-receive-payload-switch>
-          <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">Address</button>
-          <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>Wallet card</button>
+        <div class="seg receive-payload-switch" role="group" aria-label="${th("receive.payload.label")}" data-receive-payload-switch>
+          <button class="seg-option" type="button" aria-pressed="true" data-receive-payload="address">${th("receive.payload.address")}</button>
+          <button class="seg-option" type="button" aria-pressed="false" data-receive-payload="card"${walletCardReady ? "" : " disabled"}>${th("receive.payload.card")}</button>
         </div>
-        <p class="hint receive-card-explainer" data-receive-card-explainer>${escapeHtml(CARD_EXPLAINER)}</p>
+        <p class="hint receive-card-explainer" data-receive-card-explainer>${th("receive.card.explainer")}</p>
         <div class="receive-actions">
           ${button({
             attributes: {
@@ -221,24 +227,24 @@ export const receiveAddressView = ({
             },
             disabled: !walletCardReady,
             icon: "copy",
-            label: walletCardReady ? "Copy wallet card" : "Preparing card…",
+            label: walletCardReady ? t("receive.card.copy") : t("receive.card.preparing"),
             variant: "secondary",
           })}
         </div>
         <div class="receive-public-key">
           <div class="receive-key-row">
-            <strong>Signer public key</strong>
+            <strong>${th("receive.signer.title")}</strong>
             <span class="receive-key-value">
               <code title="${escapeHtml(publicKeyX)}">${escapeHtml(accountLabel(publicKeyX))}</code>
-              ${copyButton(publicKeyX, "Copy signer public key")}
+              ${copyButton(publicKeyX, t("receive.signer.copy"))}
             </span>
           </div>
           <div class="receive-key-row" data-nostr-key-row>
-            <strong>Coordination public key</strong>
-            <span data-nostr-key-status role="status" aria-live="polite"${nostrPublicKey ? " hidden" : ""}>Preparing secure coordination…</span>
+            <strong>${th("receive.coordination.title")}</strong>
+            <span data-nostr-key-status role="status" aria-live="polite"${nostrPublicKey ? " hidden" : ""}>${th("receive.coordination.preparing")}</span>
             <span class="receive-key-value" data-nostr-key-value${nostrPublicKey ? "" : " hidden"}>
               <code data-nostr-key title="${escapeHtml(nostrPublicKey ?? "")}">${nostrPublicKey ? escapeHtml(accountLabel(nostrPublicKey)) : ""}</code>
-              ${copyButton(nostrPublicKey ?? "", "Copy coordination public key")}
+              ${copyButton(nostrPublicKey ?? "", t("receive.coordination.copy"))}
             </span>
           </div>
           ${classHashRows(classHash, classHashVerification)}

@@ -5,6 +5,7 @@
  */
 import { normalizeStarkName } from "@bramble/starknet/stark-name";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import type { StarkNameResolutionResponse } from "../../../popup/responses/responses";
 import { formatFiat } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
@@ -13,6 +14,7 @@ import { setAddressBookDraft } from "../../shell/address-draft";
 import { isUnlistedRecipient, knownRecipientLabel, matchingRecipients } from "./recipient-rows";
 import {
   balanceShortcut,
+  estimatedValueLine,
   fiatInputToken,
   sendBalanceLine,
   sendCurrencySymbol,
@@ -112,7 +114,7 @@ const currencyFor = (form: HTMLFormElement): Currency => {
 const syncUnitToggle = (form: HTMLFormElement): void => {
   const unit =
     form.dataset["amountMode"] === "fiat"
-      ? sendFormInput(form, "tokenSymbol")?.value || "Token"
+      ? sendFormInput(form, "tokenSymbol")?.value || t("send.amount.tokenUnit")
       : currencyFor(form).toUpperCase();
   const label = form.querySelector("#send-unit-label");
   if (label) label.textContent = unit;
@@ -141,7 +143,7 @@ const updateAmountPresentation = (
     );
     const estimate = amount
       ? `≈ ${amount} ${sendFormInput(form, "tokenSymbol")?.value ?? "token"}`
-      : "Token amount —";
+      : t("send.amount.tokenAmountUnknown");
     const node = form.querySelector("#send-fiat-estimate");
     if (node) node.textContent = estimate;
   } else {
@@ -150,7 +152,7 @@ const updateAmountPresentation = (
     const formatted = fiat === null ? "" : formatFiat(fiat, currency);
     setSendFormValue(form, "fiatEstimate", formatted);
     const node = form.querySelector("#send-fiat-estimate");
-    if (node) node.textContent = formatted ? `Estimated value ${formatted}` : "Estimated value —";
+    if (node) node.textContent = estimatedValueLine(formatted);
   }
   onFields(transferFields(form));
 };
@@ -284,18 +286,15 @@ const bindRecipientControls = (
     response: StarkNameResolutionResponse | null,
     name: string,
   ): string => {
-    if (response === null) {
-      return `Could not resolve ${name}.`;
-    }
-    switch (response.resolution.status) {
+    switch (response?.resolution.status) {
       case "not-found":
-        return `No address found for ${name}.`;
+        return t("send.name.noAddress", { name });
       case "unreachable":
-        return `Could not reach the network to resolve ${name}.`;
+        return t("send.name.unreachable", { name });
       case "unsupported-network":
-        return "Starknet names are not available on this network.";
+        return t("send.name.unsupported");
       default:
-        return `Could not resolve ${name}.`;
+        return t("send.name.notResolved", { name });
     }
   };
   // Commits the typed value as the recipient. A bare address is taken as is; a
@@ -335,7 +334,7 @@ const bindRecipientControls = (
     }
     resolving = true;
     if (continueButton) continueButton.disabled = true;
-    setNote(`Resolving ${canonical}…`);
+    setNote(t("send.name.resolving", { name: canonical }));
     let response: StarkNameResolutionResponse | null = null;
     try {
       response = await resolveName(canonical, form.dataset["sendNetwork"] ?? "");
