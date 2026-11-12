@@ -4,7 +4,7 @@
  * `tests/conformance/mobile-generated.test.ts`, so both compute exactly the same documents.
  *
  * Committed as three files, each within the 500-line limit: rows are stored one compact JSON
- * string per line, and readers decode them (`mobile/core/tests/privacy_support`,
+ * string per line, and readers decode them (wallet-core's `crates/bramble-core/tests/privacy_support`,
  * `BrambleTests/PrivacyTestSupport.swift`).
  */
 import { DEFAULT_STRK20_NETWORKS } from "@bramble/privacy/config";

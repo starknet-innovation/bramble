@@ -1,8 +1,9 @@
 /**
  * The mobile core's Nostr and multisig vectors must stay what the extension computes, and each
  * wallet must open the other's gift wraps. Re-run `bun run mobile:parity` (and, for the Rust-made
- * wrap, `BRAMBLE_WRITE_FIXTURES=1 cargo test --locked --test nostr_multisig_parity` in
- * mobile/core) and commit the result when these fail. The coordination fixture parts
+ * wrap, `BRAMBLE_WRITE_FIXTURES=1 cargo test -p bramble-core --features mobile,testing --test
+ * nostr_multisig_parity` in wallet-core, which writes `crates/bramble-core/tests/regression/
+ * rust-gift-wrap.json`; copy it here unchanged) and commit the result when these fail. The coordination fixture parts
  * (`nostr-coordination-parity-*.json`) are deterministic and recomputed in full.
  */
 import { describe, expect, test } from "bun:test";

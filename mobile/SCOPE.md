@@ -17,32 +17,47 @@ instead of its WASM build. Native UI per platform (SwiftUI, Jetpack Compose); on
    (screens, URLSession, Keychain/SE)   (screens, HttpsURLConnection, Keystore)
                  │  UniFFI (Swift)                    │  UniFFI (Kotlin/JNA)
                  └───────────────┬────────────────────┘
-                        bramble-core  (mobile/core, Rust)
-     kms.rs      → wallet-core (shared Rust core, pinned to tag v0.3.0) → krusty-kms =2.0.0; the extension's krusty-kms-wasm stays on 0.11
+          bramble-core  (wallet-core's crates/bramble-core, `mobile` feature; mobile/core pins it)
+     kms.rs      → wallet-core (shared Rust core, pinned by rev until the tag after 2.7) → krusty-kms =2.0.0, which mobile never names; the extension's krusty-kms-wasm stays on 0.11
      vault.rs    → wallet-core's EncryptedEnvelope v3, byte-compatible with the extension; the passphrase rule stays here
      wallet.rs   → WalletCore: lifecycle + key custody; phrase never crosses FFI except backup/reveal
-     networks.rs → generated/networks.json  (rendered from wallet-model/networks)
+     networks.rs → generated/{networks,token-registry}.json  (rendered from wallet-model/networks), as wallet-core's catalog records
+     portfolio/  → wallet-core's portfolio (prices, tokens, token reads, saved balances); the FFI objects and Bramble's copy stay here
+     history/, activity/ → wallet-core's history and activity log; the FFI objects, the file lock, deletion and Bramble's copy stay here
+     privacy/    → wallet-core's privacy reads (the read plan, gates, Home rows); the FFI object, its PrivacyHost over the session, the routing loader and override stay here
      send/       → wallet-core's sans-IO JSON-RPC and send Plan: core builds requests and judges responses; host moves bytes
      recovery_scan.rs → wallet-core's account addresses and sans-IO discovery scan; Bramble's catalog, rules and wording stay here
+     argent_multisig.rs, multisig_rpc.rs, class_declared.rs → wallet-core's multisig account and reads, on Bramble's pinned class; the registry file stays here
+     nostr_relay.rs, coordination.rs → wallet-core's relay grammar, judges and sync window, read one page per relay until 2.7; the wss-only rule, the coordination file and the trust judgement stay here
 ```
+
+Since M13 the core's sources and Rust tests (every `.rs` file named below) live in wallet-core's
+`crates/bramble-core`, behind its `mobile` feature, and its Rust tests run there. `mobile/core` is a
+shell: it pins that crate by `rev` (`b590726`, wallet-core's 2.7, until the tag that follows it),
+builds it for the apps, runs the bindings generator, and keeps what Bramble's generators write
+(`generated/`, `tests/fixtures/`). Its `tests/generated.rs` holds `generated/` to the catalogs the
+pinned core embeds.
 
 What is reused from the extension, and how drift is prevented:
 
 | Shared piece | Source of truth | Mobile copy | Drift gate |
 | --- | --- | --- | --- |
-| Wallet crypto | Krusty KMS (2.0.0 here, 0.11.0 in the extension) | `wallet-core` at tag `v0.3.0` (2.4a), and the `krusty-kms` crate pinned `=2.0.0` to match it, named only by `kms.rs` and `networks.rs` (`ChainId`, `SecretFelt`) and `argent_multisig.rs` | `tests/conformance/mobile-generated.test.ts` checks the lockfile resolves one `krusty-kms`, the pinned one, and that `lib.rs` reports `wallet_core::KRUSTY_VERSION`; the parity fixtures below hold the two releases to the same output |
+| Wallet crypto | Krusty KMS (2.0.0 here, 0.11.0 in the extension) | `wallet-core`, through `bramble-core` at tag `v0.3.0` (2.7), which pins Krusty and re-exports what mobile uses (`SecretFelt`, `NetworkId`); mobile neither depends on nor names a Krusty crate | `privacy_key_boundary.rs` (in wallet-core) checks no `bramble-core` file names Krusty; `tests/conformance/mobile-generated.test.ts` checks `Cargo.toml` pins no Krusty crate and the lockfile resolves one `krusty-kms` and one `krusty-kms-common`, both wallet-core's, and `mobile/core/tests/core_info.rs` holds what `core_info()` reports to the resolved version; the parity fixtures below hold the two releases to the same output |
 | Derivation / addresses / signatures | extension `deriveAccount` + WASM | `wallet_core::kms` and `wallet_core::accounts`, with mobile's glue in `kms.rs` and Bramble's class, layout and salt choices in `account_address.rs` | `mobile/core/tests/fixtures/extension-parity.json`, written by the extension's real path, asserted in wallet-core's Rust tests (which hold a copy) and in mobile's Swift tests, re-checked in `bun run check` |
 | Vault envelope | `vault/src/encrypted-store.ts` | `wallet_core::envelope` and `wallet_core::container`, re-exported by `vault.rs` and `container.rs` | wallet-core's Rust tests open an envelope and a DEK slot the extension sealed; mobile's `vault-v*.json` and `migration-v1-to-v5.golden.json` hold every file an earlier mobile core wrote |
 | Skins, scale, motion, springs, shadows | `ui-kit/src/theme/*` | `BrambleTokens.generated.{swift,kt}` | generated by `bun run mobile:assets`; byte-compared in `bun run check` |
 | Brand mark | `ui-kit/src/components/brand-mark.ts` | iOS vector asset, Android vector drawable | same generator + test |
-| Networks, RPC endpoints, default tokens | `wallet-model/src/networks/networks.ts` | `core/generated/networks.json` | same generator + test |
+| Networks, RPC endpoints, default tokens | `wallet-model/src/networks/networks.ts` | `core/generated/networks.json`, read by `networks.rs` into `wallet_core::catalog::NetworkInfo` (`NetworkId` is the core's enum) | same generator + test |
+| Portfolio rules (prices, fiat, tracked tokens, registry and spam, token reads, saved balances, account ids) | `packages/features/portfolio`, `wallet-model`, the extension's `background/portfolio` | `wallet_core::portfolio` and `wallet_core::history::explorer`'s account ids; mobile's `portfolio/` keeps the UniFFI shapes (`#[uniffi::remote]`), the `PriceBook`, `BalanceSnapshots` and `TokenPreferences` objects wrapping the core's values in a lock, the curated registry (`core/generated/token-registry.json`, parsed by `networks.rs`, with `LEGITIMATE_ALIASES`) passed as the core's `Catalogs`, `PORTFOLIO_POLICY` (it and the aliases are copies of wallet-core's `bramble-core` values until 2.7), and the two copy lines (`token_network_error`, `balance_failure_copy`) | wallet-core's `portfolio_parity.rs`, `token_parity.rs` and `portfolio_state.rs` replay `portfolio-parity.jsonl`; mobile's `token_parity.rs` checks the copy against it, and `portfolio_state.rs` the FFI objects |
+| History and activity (Starkscan lane, RPC history scan, the activity log and its cadence, observation, row presentation, explorer links) | `packages/features/transactions` (`activity`, `history`, `tx-observation`), the side panel's `activity-format.ts` and `home-tabs.ts` | `wallet_core::{history, activity}`, the log being `ActivityLog` over the wallet directory's `Storage`; mobile's `history/` keeps the UniFFI shapes (`#[uniffi::remote]`) and the `ActivityBook` and `HistoryScan` objects wrapping the core's values in a lock, with the bundled catalogs and `HISTORY_POLICY` (a copy of wallet-core's `bramble-core` value until 2.7) passed in; `activity/` keeps the process-wide lock every use of the log runs under (`with_log`), deleting the files with the wallet, and Bramble's copy (`activity_empty_copy`, `activity_unavailable_notice`, `failure_notice_message`) | wallet-core's `history_parity.rs`, `row_parity.rs`, `portfolio_state.rs` and `transactions_rules_parity.rs` replay `portfolio-parity.jsonl` and the `extension-transactions-*.json` captures; mobile's `row_parity.rs` and `send/fixture_tests.rs` check the copy against them, and `portfolio_state.rs` the FFI objects |
+| STRK20 privacy reads (discovery bodies, reply judging, note sums, the read plan, the privacy gates, unified Home rows) | `packages/features/privacy`, the vendored privacy SDK's discovery path, the side panel's privacy journey and `home-tabs.ts` | `wallet_core::privacy`; mobile's `privacy/` keeps the UniFFI shapes (`#[uniffi::remote]`), the `PrivacyReadPlan` object wrapping the core's plan in a lock and acting as its `PrivacyHost` (the scoped viewing key from `WalletCore::plan_viewing_key`, under the session the plan was prepared in), the `generated/privacy.json` loader with its debug override, and the exports, which pass the bundled catalog and routing | wallet-core's `privacy_parity.rs`, `privacy_gates_parity.rs` and `privacy_plan.rs` replay the `extension-privacy-*.json` captures; mobile's `privacy_parity.rs` checks the viewing keys through its KMS glue and the loader against them, `privacy_plan.rs` the FFI object and the session checks over a real `WalletCore`, and `privacy_key_boundary.rs` where the key may appear |
 | Send mechanism (RPC bodies, judging, hashing, the plan) | `packages/features/transactions` | `wallet_core::{rpc, send}`; mobile keeps the `TransferPlan` wrapper, its `PlanHost` and preparing plans (`send/`) | wallet-core's `transactions_*_parity.rs` replay the `extension-transactions-*.json` captures; mobile's wallet-level send tests run the same plan through `WalletCore` |
-| Felt grammar, explorer URLs | `wallet-model/networks` | `wallet_core::felt`, `explorer_account_url` | unit tests mirror the TS cases (the felt ones in wallet-core) |
-| JavaScript semantics (`trim`, UTF-16 lengths, `Number`, `JSON.parse`, `BigInt`, `RegExp`) and en-GB UTC dates | the extension's runtime | `wallet_core::js` and `wallet_core::history::time`, re-exported as `crate::js` and `history::time`; `account_names` and `contact_card` re-export `js_trim`, `utf16_len` and `short_label` from it | the shims' unit tests live in wallet-core; mobile's parity fixtures exercise them through every caller |
+| Felt grammar | `wallet-model/networks` | `wallet_core::felt` | unit tests mirror the TS cases, in wallet-core |
+| JavaScript semantics (`trim`, UTF-16 lengths, `Number`, `JSON.parse`, `BigInt`, `RegExp`) and en-GB UTC dates | the extension's runtime | `wallet_core::js` and `wallet_core::history::time`, the first re-exported as `crate::js`; `account_names` and `contact_card` re-export `js_trim`, `utf16_len` and `short_label` from it | the shims' unit tests live in wallet-core; mobile's parity fixtures exercise them through every caller |
 
 ## Security posture (implemented)
 
-- **Keys stay in Rust.** Private keys are derived per call into Krusty's zeroizing `SecretFelt`
+- **Keys stay in Rust.** Private keys are derived per call into the zeroizing `SecretFelt`
   and never returned. The phrase is held in a zeroize-on-drop payload for the unlocked session
   only; it crosses FFI only at creation (to back it up) and on a password-rechecked reveal.
 - **Fail closed.** No fallback crypto; every Krusty output is re-validated (curve-order range,
