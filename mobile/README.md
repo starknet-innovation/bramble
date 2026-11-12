@@ -5,7 +5,7 @@ Krusty KMS. Read [SCOPE.md](SCOPE.md) for the architecture, security posture, an
 
 ```
 mobile/
-  core/        Rust core (UniFFI). Tests: cargo test --locked
+  core/        Shell over the Rust core, wallet-core's bramble-core (UniFFI), pinned by rev
   ios/         SwiftUI app (XcodeGen spec; the .xcodeproj is generated)
   android/     Compose app (Gradle Kotlin DSL)
   scripts/     build-core-ios.sh, build-core-android.sh, lint.sh, lint-tools.sh
@@ -57,25 +57,22 @@ locally (see Android below).
 
 ## Rust core
 
+The core's code and its Rust tests (unit, lifecycle, extension parity, and the opt-in mainnet and
+Sepolia-dataset checks) live in wallet-core's `crates/bramble-core`, behind its `mobile` feature;
+run them there with `cargo test -p bramble-core --features mobile,testing`. The opt-in checks
+against a real mainnet wallet (`--test mainnet`, `BRAMBLE_MOBILE_MAINNET_MNEMONIC` and
+`BRAMBLE_MOBILE_MAINNET_ADDRESS`; never commit the phrase) and the Sepolia vendor-import dataset
+(`--test sepolia_dataset`, reading `.env.vendor-seeds.local` or `BRAMBLE_DATASET_ENV_FILE`) run
+there too, with `-- --ignored`, never in CI. A core change is a wallet-core PR, then a `rev` move in `core/Cargo.toml`.
+
+`mobile/core` builds that crate for the apps (`cargo build -p bramble-core --lib`, as the build
+scripts do) and runs the bindings generator. Its own tests hold `generated/` to the catalogs the
+pinned core embeds, and what `core_info()` reports to the lockfile's Krusty:
+
 ```bash
 cd mobile/core
-cargo test --locked                  # unit, lifecycle, and extension-parity tests
+cargo test --locked
 cargo clippy --all-targets --locked
-```
-
-Opt-in check against a real mainnet wallet (never in CI; never commit the phrase):
-
-```bash
-BRAMBLE_MOBILE_MAINNET_MNEMONIC="…" BRAMBLE_MOBILE_MAINNET_ADDRESS=0x… \
-  cargo test --locked --test mainnet -- --ignored
-```
-
-Opt-in check against the Sepolia vendor-import dataset (`tools/vendor-dataset/`, issue 821): imports
-each phrase from the git-ignored `.env.vendor-seeds.local` (or `BRAMBLE_DATASET_ENV_FILE`), scans
-Sepolia, and fails if any D1 fixture is missed. Read-only, never in CI, about 10 minutes:
-
-```bash
-cargo test --locked --test sepolia_dataset -- --ignored --nocapture
 ```
 
 ## iOS

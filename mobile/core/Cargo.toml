@@ -1,64 +1,30 @@
 [package]
-name = "bramble-core"
+# Not `bramble-core`: that is the dependency below, which the build scripts select with
+# `cargo build -p bramble-core --lib`.
+name = "bramble-mobile-core"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.92"
 license = "MIT"
 publish = false
-description = "Bramble mobile wallet core: Krusty KMS key custody, vault, and Starknet protocol logic behind a UniFFI boundary"
+description = "Builds wallet-core's bramble-core for Bramble's iOS and Android apps and generates its bindings"
 
-[lib]
-# staticlib: linked into the iOS app through an XCFramework.
-# cdylib:    loaded by the Android app from jniLibs, and read by uniffi-bindgen.
-# lib:       integration tests and the bindgen binary.
-crate-type = ["staticlib", "cdylib", "lib"]
-name = "bramble_core"
+# Its own workspace, so the profiles below apply when the scripts build the dependency.
+[workspace]
 
 [[bin]]
 name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
-required-features = ["bindgen"]
-
-[features]
-bindgen = ["uniffi/cli"]
-# Integration-test hooks (`bramble_core::testing`: raw vault open/seal). Never enabled for the
-# shipped libraries; the self dev-dependency below turns it on only for test builds.
-testing = []
 
 [dependencies]
-# The shared Rust core (felt grammar, key custody, Nostr identity, vault, sans-IO RPC and send),
-# pinned to a commit; the package is `starknet-wallet-core`, renamed to keep `wallet_core::` paths.
-# Plain Rust with no UniFFI, so the binary holds one scaffolding. The `rev` is the tip of
-# wallet-core's 2.4c (history and the activity log), which no tag holds yet: it moves to the tag
-# that follows 2.4c before this merges.
-wallet-core = { package = "starknet-wallet-core", git = "https://github.com/starknet-innovation/wallet-core", rev = "17c7b8b3c50805cfd2d3896a2da98ea4b65a4f0f" }
-# Wallet cryptography, still named directly by the account, multisig and send modules. Pinned
-# exactly, at the release wallet-core pins, so the lockfile resolves one copy
-# (tests/conformance/mobile-generated.test.ts). The extension's
-# `@starknetfoundation/krusty-kms-wasm` stays on 0.11; the parity fixtures hold the two together.
-# `parallel` (rayon) is only used by proof generation, which this core never runs.
-krusty-kms = { version = "=2.0.0", default-features = false }
-krusty-kms-common = { version = "=2.0.0" }
-starknet-types-core = { version = "=0.2.4", features = ["hash"] }
-# BIP-39 English word list for the recovery-phrase word assist (the version Krusty depends on).
-bip39 = { version = "=3.0.0", default-features = false, features = ["std"] }
-# Bindings generator for the Swift and Kotlin surfaces.
-uniffi = { version = "=0.29.5" }
-serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = { version = "=1.0.154" }
-thiserror = { version = "=2.0.21" }
-zeroize = { version = "=1.9.1", features = ["derive"] }
-
-[dev-dependencies]
-bramble-core = { path = ".", features = ["testing"] }
-# tests/migration.rs seals a vault as the first mobile core did (310k iterations), by hand. The
-# vault envelope itself is wallet-core's; these are its pins, so the lockfile holds one copy.
-aes-gcm = { version = "=0.11.1", features = ["zeroize"] }
-pbkdf2 = { version = "=0.13.0", default-features = false, features = ["hmac"] }
-sha2 = { version = "=0.11.1", default-features = false }
-base64 = { version = "=0.22.1" }
-sha3 = { version = "=0.12.0" }
-tempfile = { version = "=3.27.0" }
+# The mobile wallet core (vault, accounts, send, portfolio, history, privacy, multisig coordination,
+# the UniFFI surface): wallet-core's `bramble-core` with its `mobile` feature and without the
+# extension's raw-key and phrase exports. Crate, lib and UniFFI module names are mobile's
+# (`bramble_core`, `BrambleCore`, `org.bramble.core`). Krusty KMS comes only through it. Pinned
+# to the release that holds the 2.7 port (wallet-core PR #50).
+bramble-core = { git = "https://github.com/starknet-innovation/wallet-core", tag = "v0.3.0", default-features = false, features = ["mobile"] }
+# The Swift and Kotlin bindings generator, at the version bramble-core exports through.
+uniffi = { version = "=0.31.2", features = ["cli"] }
 
 [profile.release]
 lto = true
@@ -66,8 +32,7 @@ codegen-units = 1
 panic = "abort"
 strip = "symbols"
 
-# PBKDF2 at the extension's 600k iterations is unusably slow unoptimised; the
-# vault tests run the real KDF, so dependencies (wallet-core, which holds it, among them) are
-# optimised even in debug.
+# PBKDF2 at the extension's 600k iterations is unusably slow unoptimised, so dependencies (the
+# core among them) are optimised even in debug.
 [profile.dev.package."*"]
 opt-level = 3

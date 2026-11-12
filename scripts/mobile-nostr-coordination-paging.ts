@@ -13,11 +13,10 @@ import {
   MULTISIG_NOSTR_RELAYS,
 } from "../apps/extension/src/background/multisig/nostr-relay";
 import { event, RECIPIENT, socketFactory } from "../tests/support/nostr-relay-sockets";
-import { idOf } from "./mobile-nostr-coordination-relay";
+import { CUSTOM_RELAY, errorOf, idOf, range } from "./mobile-nostr-coordination-relay";
 
 const N = MAX_NOSTR_BATCH_ITEMS;
 const [PRIMARY, SECONDARY] = MULTISIG_NOSTR_RELAYS;
-const CUSTOM_RELAY = "wss://relay.team.example";
 
 /** What one scripted relay stores: event numbers and their `created_at`, index for index. */
 type StoredRelay = {
@@ -35,9 +34,6 @@ type PagingCase = {
   readonly relays: readonly StoredRelay[];
   readonly recipient?: string;
 };
-
-const range = (count: number, from = 0): number[] =>
-  Array.from({ length: count }, (_, index) => from + index);
 
 const relay = (url: string, ids: readonly number[], createdAt: (n: number) => number) => ({
   createdAt: ids.map(createdAt),
@@ -188,7 +184,7 @@ const runCase = async ({ recipient, relays, seen, since }: PagingCase) => {
     );
     return { requests, result: candidates.map(({ id }) => Number.parseInt(id, 16)) };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "throw", requests };
+    return { error: errorOf(error), requests };
   } finally {
     transport.close();
   }
