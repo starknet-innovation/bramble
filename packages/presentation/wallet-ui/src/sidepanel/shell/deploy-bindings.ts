@@ -8,6 +8,7 @@
 
 import { DEPLOYMENT_IN_PROGRESS } from "@bramble/privacy/sponsored-deploy";
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { t } from "../../i18n/messages";
 import { isOutcomeUnknown } from "../runtime/runtime-errors";
 import type { ConfirmationOutcome } from "../shared/confirm-submitted";
 import { buttonBusy, errorDetails, renderFragment, scopedStatus, showToast } from "../shared/dom";
@@ -37,12 +38,17 @@ import type { ShellBindingDeps } from "./shell-binding-deps";
  * UI Lab paints its receipt checkpoints from the copy the binder ships rather
  * than a restatement of it; display text only, it carries no authority.
  */
-export const DEPLOY_RECEIPT_COPY = {
-  confirmedDescription: "This account is on Starknet and can submit transactions.",
-  confirmedTitle: "Account deployed",
-  failedTitle: "Deployment failed",
-  submittedTitle: "Deployment submitted",
-} as const;
+export const deployReceiptCopy = (): {
+  readonly confirmedDescription: string;
+  readonly confirmedTitle: string;
+  readonly failedTitle: string;
+  readonly submittedTitle: string;
+} => ({
+  confirmedDescription: t("cost.deploy.confirmedDescription"),
+  confirmedTitle: t("cost.deploy.confirmedTitle"),
+  failedTitle: t("cost.deploy.failedTitle"),
+  submittedTitle: t("cost.deploy.submittedTitle"),
+});
 
 // A deployment has nothing to itemise, so its receipt states the outcome, says
 // once what now exists, and shows the hash. The network comes off the live
@@ -58,7 +64,7 @@ const paintDeployReceipt = async (
   paintOutcomeReceipt(
     deps.app,
     "deploy-success",
-    outcomeReceiptFor(outcome, DEPLOY_RECEIPT_COPY, hash),
+    outcomeReceiptFor(outcome, deployReceiptCopy(), hash),
     status.networkId,
   );
 };
@@ -262,7 +268,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
   const quote = (toast: boolean): void => {
     delete journey.quoteNote;
     buttonBusy(target, true);
-    scopedStatus(target, "Estimating fee…");
+    scopedStatus(target, t("cost.deploy.estimating"));
     void deps.wallet.deployAccount().then(
       (response) => {
         if (typeof response !== "string") journey.fee = response;
@@ -283,7 +289,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         if (error instanceof Error && error.message === ALREADY_DEPLOYED) {
           void deps.wallet.loadStatus().then((status) => deps.render(status, "action"));
         }
-        failed(error, "Could not estimate the deployment fee", "quote", toast);
+        failed(error, t("cost.deploy.quoteFailed"), "quote", toast);
       },
     );
   };
@@ -294,7 +300,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     resumeDeployReceipt(deps, journey, reviewStage, successStage);
   } else if (journey.pressed) {
     buttonBusy(target, true);
-    scopedStatus(target, "Submitting deployment…");
+    scopedStatus(target, t("cost.deploy.submitting"));
   } else if (journey.sponsorship === "held") {
     paintDeployHold(target, reviewStage, reviewPanelRoot, true);
     scheduleDeployHold(journey, holdTimer, live, holdRecheck);
@@ -377,14 +383,14 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         }
         if (rebound()) {
           showToast(
-            deployToastText(error, "Deployment failed"),
+            deployToastText(error, t("cost.deploy.failed")),
             "error",
             app,
-            errorDetails(error, "Deployment failed"),
+            errorDetails(error, t("cost.deploy.failed")),
           );
           return;
         }
-        failed(error, "Deployment failed", "submit");
+        failed(error, t("cost.deploy.failed"), "submit");
       },
     );
   };
@@ -393,7 +399,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
     if (journey.pressed) return;
     journey.pressed = true;
     buttonBusy(target, true);
-    scopedStatus(target, "Submitting deployment…");
+    scopedStatus(target, t("cost.deploy.submitting"));
     if (journey.sponsorship === "available") {
       deploySponsored();
       return;
@@ -428,14 +434,14 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
           // Amber when the reply was lost: the deployment may be on chain.
           const tone = isOutcomeUnknown(error) ? "warning" : "error";
           showToast(
-            deployToastText(error, "Deployment failed"),
+            deployToastText(error, t("cost.deploy.failed")),
             tone,
             deps.app,
-            errorDetails(error, "Deployment failed"),
+            errorDetails(error, t("cost.deploy.failed")),
           );
           return;
         }
-        failed(error, "Deployment failed", reviewedFee ? "submit" : "quote");
+        failed(error, t("cost.deploy.failed"), reviewedFee ? "submit" : "quote");
       },
     );
   });

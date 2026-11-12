@@ -29,6 +29,7 @@
  */
 import { isSnip12Scalar, type Snip12Scalar } from "@bramble/starknet/snip12-scalars";
 import { isSafeSnip12Name } from "@bramble/starknet/snip12-vocabulary";
+import { t } from "../../i18n/messages";
 
 /**
  * The most rows one block prints before it collapses the rest into a single
@@ -89,7 +90,7 @@ export const signNameText = (name: string): string => {
     return name;
   }
   const sketch = name.replace(SAFE_NAME_CHARS, "").slice(0, MAX_NAME_SKETCH);
-  return `«${sketch.length > 0 ? sketch : "unnamed"}»`;
+  return `«${sketch.length > 0 ? sketch : t("signing.unnamed")}»`;
 };
 
 // A signed scalar is printed as what the account will authorize, not as what
@@ -111,9 +112,9 @@ const scalarText = (scalar: Snip12Scalar): string => {
       // type it is the whole point of the row that the value is text.
       return scalar.type.endsWith("string")
         ? `${quoted} (${scalar.type} = ${scalar.encoded})`
-        : `${quoted} (${scalar.type} short string = ${scalar.encoded})`;
+        : t("signing.shortString", { encoded: scalar.encoded, quoted, type: scalar.type });
     case "selector":
-      return `${quoted} (${scalar.type} entry point = ${scalar.encoded})`;
+      return t("signing.entryPoint", { encoded: scalar.encoded, quoted, type: scalar.type });
     default:
       return `${quoted} (${scalar.type} = ${scalar.encoded})`;
   }
@@ -152,4 +153,7 @@ export const signRawText = (text: string): string => escapeDisplay(text);
 const truncateDisplay = (text: string): string =>
   text.length <= MAX_VALUE_TEXT
     ? text
-    : `${text.slice(0, MAX_VALUE_TEXT)}… (+${text.length - MAX_VALUE_TEXT} characters, see Raw typed data)`;
+    : t("signing.truncated", {
+        count: String(text.length - MAX_VALUE_TEXT),
+        text: text.slice(0, MAX_VALUE_TEXT),
+      });

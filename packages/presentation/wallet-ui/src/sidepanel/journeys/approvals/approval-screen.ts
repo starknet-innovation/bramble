@@ -17,6 +17,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { button } from "@bramble/ui-kit/controls";
+import { t, th } from "../../../i18n/messages";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import type { WalletView } from "../../shared/parts";
@@ -54,35 +55,38 @@ export const approvalTakeover = (
   }
   const queue =
     actionable.length > 1
-      ? `<p class="takeover-queue">${actionable.length - 1} more request${actionable.length === 2 ? "" : "s"} waiting behind this one.</p>`
+      ? `<p class="takeover-queue">${th(
+          actionable.length === 2 ? "approval.screen.queueOne" : "approval.screen.queueMany",
+          { count: String(actionable.length - 1) },
+        )}</p>`
       : "";
   const pausedTask = walletViewLabel(pausedView);
   return `
   <header class="flow-header approval-header">
     <div class="flow-title">
-      <p class="eyebrow">Wallet approval</p>
-      <h1 id="approval-title">Review request</h1>
+      <p class="eyebrow">${th("approval.screen.eyebrow")}</p>
+      <h1 id="approval-title">${th("approval.screen.title")}</h1>
     </div>
     <span class="takeover-network"><span class="dot"></span>${escapeHtml(status.network)}</span>
   </header>
   <section class="screen flow approval-takeover" id="wallet-screen-approval-takeover" aria-labelledby="approval-title" tabindex="-1">
     <section class="takeover-continuity" role="note" aria-label="Paused wallet task">
       <span class="takeover-continuity-mark">${icon("shield")}</span>
-      <span><strong>${escapeHtml(pausedTask)} paused</strong></span>
+      <span><strong>${th("approval.screen.paused", { task: pausedTask })}</strong></span>
     </section>
     <ul class="request-list">${approvalCard(first, status, preferences, picker)}</ul>
     <section class="approval-live" id="approval-live" role="status" aria-live="polite" hidden>
       <span class="approval-live-mark">${liquidDots("approval", true)}${liquidDotsFilter("approval")}</span>
       <div>
-        <strong id="approval-live-title">Authorizing request</strong>
-        <p id="approval-live-copy">Keep this wallet open while the request is completed.</p>
+        <strong id="approval-live-title">${th("approval.decision.approvedTitle")}</strong>
+        <p id="approval-live-copy">${th("approval.screen.liveCopy")}</p>
       </div>
     </section>
     ${queue}
     <div class="takeover-foot">
       ${button({
         attributes: { "data-approval-later": first.id },
-        label: "Review later in Activity",
+        label: t("approval.screen.later"),
         size: "small",
         variant: "ghost",
       })}

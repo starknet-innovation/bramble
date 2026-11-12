@@ -6,6 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { t, th } from "../../../i18n/messages";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { accountDisplayName, accountLabel, inlineCopyButton } from "../../shared/parts";
@@ -30,9 +31,9 @@ type ConnectChoice = {
 const connectIdentity = (status: WalletStatus, preferences: WalletPreferences | null): string => {
   const account = status.accounts.find((candidate) => candidate.id === status.activeAccountId);
   if (!account) {
-    return `<p class="hint">${status.locked ? "Unlock the wallet to see which account will be shared." : "Select an account on this network to share it."}</p>`;
+    return `<p class="hint">${status.locked ? th("detail.connect.lockedIdentity") : th("detail.connect.selectAccount")}</p>`;
   }
-  return `<dl class="request-detail"><div><dt>Account</dt><dd class="request-account"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong><span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy account address")}</span></dd></div><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
+  return `<dl class="request-detail"><div><dt>${th("approval.context.account")}</dt><dd class="request-account"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong><span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, t("approval.context.copyAccount"))}</span></dd></div><div><dt>${th("approval.context.network")}</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
 };
 
 const connectChoices = (
@@ -55,7 +56,7 @@ const connectChoices = (
       address: view.record.address,
       id: view.record.id,
       kind: "multisig",
-      name: view.record.name ?? "Multisig",
+      name: view.record.name ?? t("detail.connect.multisig"),
     }));
   return [...accounts, ...shared];
 };
@@ -86,29 +87,27 @@ export const connectCard = (
   // when it is the only account left after hidden vault accounts are removed.
   const identity =
     selected && (choices.length > 1 || selected.kind === "multisig")
-      ? `<div class="request-account-choices">${connectChoiceList(choices, selected.id)}</div><dl class="request-detail"><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`
+      ? `<div class="request-account-choices">${connectChoiceList(choices, selected.id)}</div><dl class="request-detail"><div><dt>${th("approval.context.network")}</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`
       : connectIdentity(status, preferences);
   return `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Connection request")}
-      ${status.locked ? '<p class="hint">Unlock the wallet to approve this site.</p>' : ""}
+      ${requestIdentity(approval.origin, t("detail.connect.title"))}
+      ${status.locked ? `<p class="hint">${th("detail.connect.locked")}</p>` : ""}
       ${identity}
       ${reviewOutcome(
-        approval.existingGrant
-          ? "Adds this account to the ones already shared with this site, until you disconnect it."
-          : "Shares this account's address with this site until you disconnect it.",
+        approval.existingGrant ? t("detail.connect.adds") : t("detail.connect.shares"),
       )}
     </div>
     ${reviewPanel(approval.insights ?? [])}
-    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
+    ${reviewConstraints(t("approval.noFee"))}
     ${decisionRow(
       approval,
-      "Connect account",
+      t("detail.connect.action"),
       status.locked || accountId === null,
       undefined,
       accountId === null ? {} : { "data-approval-account": accountId },
-      "Cancel",
+      t("detail.connect.cancel"),
     )}
   </li>`;
 };

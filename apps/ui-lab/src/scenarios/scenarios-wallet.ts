@@ -5,7 +5,7 @@ import {
   bindHomeUi,
   bindReceiveWalletCard,
   confirmationOutcome,
-  DEPLOY_RECEIPT_COPY,
+  deployReceiptCopy,
   outcomeReceiptFor,
   paintOutcomeReceipt,
 } from "@bramble/wallet-ui/lab";
@@ -38,7 +38,7 @@ const paintDeployAnswer =
     paintOutcomeReceipt(
       context.app,
       "deploy-success",
-      outcomeReceiptFor(confirmationOutcome(chainStatus), DEPLOY_RECEIPT_COPY, DEPLOY_HASH),
+      outcomeReceiptFor(confirmationOutcome(chainStatus), deployReceiptCopy(), DEPLOY_HASH),
       "SN_MAIN",
     );
   };

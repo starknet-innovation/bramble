@@ -17,6 +17,7 @@ import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import { ledgerAccountIndexOfPath } from "@bramble/wallet-model/ledger-path";
 import { paddedFelt } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import type { LedgerSignRequestSummary, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
@@ -25,12 +26,13 @@ import type { LedgerSignView } from "./sign-session";
 
 const signerLine = (request: LedgerSignRequestSummary): string => {
   const index = ledgerAccountIndexOfPath(request.path);
-  const suffix = index === null ? "" : `<span>Account ${index}</span>`;
+  const suffix =
+    index === null ? "" : `<span>${th("ledgerSign.account", { index: String(index) })}</span>`;
   const address = accountIdAddress(request.accountId);
   return `<div class="ledger-signer-line">
-    <span>Signing with</span>
+    <span>${th("ledgerSign.signingWith")}</span>
     <code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>
-    ${inlineCopyButton(address, "Copy signing account address")}
+    ${inlineCopyButton(address, t("ledgerSign.copyAddress"))}
     ${suffix}
   </div>`;
 };
@@ -38,7 +40,7 @@ const signerLine = (request: LedgerSignRequestSummary): string => {
 const cancelButton = (): string =>
   button({
     attributes: { "data-ledger-cancel": true },
-    label: "Cancel transaction",
+    label: t("ledgerSign.cancel"),
     size: "small",
     variant: "ghost",
   });
@@ -73,55 +75,55 @@ const deviceHashCheck = (request: LedgerSignRequestSummary): string => {
   const digits = hash.startsWith("0x") ? hash.slice(2) : hash;
   return `<section class="ledger-hash-check">
     <div class="ledger-hash-head">
-      <p class="context-label">Hash shown on your Ledger</p>
+      <p class="context-label">${th("ledgerSign.hashLabel")}</p>
       ${iconButton({
         attributes: { "data-copy": hash },
         icon: "copy",
-        label: "Copy transaction hash",
+        label: t("ledgerSign.copyHash"),
         variant: "ghost",
       })}
     </div>
     <p class="ledger-hash-value"><code>${escapeHtml("0x")}${hashGroups(digits)
       .map((group) => `<span>${escapeHtml(group)}</span>`)
       .join("")}</code></p>
-    <p class="ledger-hash-help">Approve only if this matches your device, character for character.</p>
+    <p class="ledger-hash-help">${th("ledgerSign.hashHelp")}</p>
   </section>`;
 };
 
 const phaseBody = (view: LedgerSignView): string => {
   const phase = view.phase;
   if (phase.kind === "discovering") {
-    return `<p>Checking for a Ledger already connected to this browser.</p>${cancelButton()}`;
+    return `<p>${th("ledgerSign.discoveringBody")}</p>${cancelButton()}`;
   }
   if (phase.kind === "connect") {
-    return `<p>Connect and unlock your Ledger, then open the Starknet app.</p>
+    return `<p>${th("ledgerSign.connectBody")}</p>
       <div class="ledger-phase-actions">
         ${button({
           attributes: { "data-ledger-connect": true },
           icon: "shield",
-          label: "Connect Ledger",
+          label: t("ledgerSign.connect"),
         })}
         ${cancelButton()}
       </div>`;
   }
   if (phase.kind === "connecting") {
-    return `<p>Choose your Ledger in the Ledger tab.</p>${cancelButton()}`;
+    return `<p>${th("ledgerSign.connectingBody")}</p>${cancelButton()}`;
   }
   if (phase.kind === "checking") {
     return cancelButton();
   }
   if (phase.kind === "verifying") {
-    return `<p>Checking this is the right Ledger.</p>${cancelButton()}`;
+    return `<p>${th("ledgerSign.verifyingBody")}</p>${cancelButton()}`;
   }
   if (phase.kind === "confirming") {
-    return `<p>Approve the request on your Ledger.</p>${cancelButton()}`;
+    return `<p>${th("ledgerSign.confirmingBody")}</p>${cancelButton()}`;
   }
   if (phase.kind === "submitting") {
     return "";
   }
   if (phase.kind === "devices") {
-    return `<p>More than one Ledger is connected. Choose the device that holds this account.</p>
-      <div class="add-account-chooser" role="group" aria-label="Connected Ledger devices">
+    return `<p>${th("ledgerSign.devicesBody")}</p>
+      <div class="add-account-chooser" role="group" aria-label="${th("ledgerSign.devicesLabel")}">
         ${phase.devices
           .map((device) =>
             menuRow({
@@ -141,7 +143,7 @@ const phaseBody = (view: LedgerSignView): string => {
     <div class="ledger-phase-actions">
       ${button({
         attributes: { "data-ledger-close": true },
-        label: "Close",
+        label: t("ledgerSign.close"),
         size: "small",
         variant: "ghost",
       })}
@@ -152,24 +154,25 @@ const phaseBody = (view: LedgerSignView): string => {
       ${button({
         attributes: { "data-ledger-retry": true },
         icon: "refresh",
-        label: "Try again",
+        label: t("ledgerSign.tryAgain"),
         variant: "secondary",
       })}
       ${cancelButton()}
     </div>`;
 };
 
-const phaseTitle: Readonly<Record<LedgerSignView["phase"]["kind"], string>> = {
-  checking: "Checking the Starknet app",
-  confirming: "Approve on your Ledger",
-  connect: "Ledger connection needed",
-  connecting: "Connecting securely",
-  devices: "Choose your Ledger",
-  discovering: "Finding your Ledger",
-  error: "Ledger needs attention",
-  submitting: "Finishing securely",
-  verifying: "Verifying the right account",
-};
+const phaseTitle = (kind: LedgerSignView["phase"]["kind"]): string =>
+  ({
+    checking: t("ledgerSign.title.checking"),
+    confirming: t("ledgerSign.title.confirming"),
+    connect: t("ledgerSign.title.connect"),
+    connecting: t("ledgerSign.title.connecting"),
+    devices: t("ledgerSign.title.devices"),
+    discovering: t("ledgerSign.title.discovering"),
+    error: t("ledgerSign.title.error"),
+    submitting: t("ledgerSign.title.submitting"),
+    verifying: t("ledgerSign.title.verifying"),
+  })[kind];
 
 const phaseIndex = (view: LedgerSignView): number => {
   const kind = view.phase.kind;
@@ -188,17 +191,18 @@ const phaseIndex = (view: LedgerSignView): number => {
   return 0;
 };
 
-const phaseLiveness: Readonly<Record<LedgerSignView["phase"]["kind"], string>> = {
-  checking: "Talking to the Starknet app…",
-  confirming: "Waiting for confirmation on the device…",
-  connect: "The transaction is safely paused.",
-  connecting: "Waiting for the browser device chooser…",
-  devices: "No device is contacted until you choose one.",
-  discovering: "Looking for an existing secure session…",
-  error: "The transaction has not been signed or broadcast.",
-  submitting: "Signature received; completing wallet verification…",
-  verifying: "Comparing the device key with this account…",
-};
+const phaseLiveness = (kind: LedgerSignView["phase"]["kind"]): string =>
+  ({
+    checking: t("ledgerSign.live.checking"),
+    confirming: t("ledgerSign.live.confirming"),
+    connect: t("ledgerSign.live.connect"),
+    connecting: t("ledgerSign.live.connecting"),
+    devices: t("ledgerSign.live.devices"),
+    discovering: t("ledgerSign.live.discovering"),
+    error: t("ledgerSign.live.error"),
+    submitting: t("ledgerSign.live.submitting"),
+    verifying: t("ledgerSign.live.verifying"),
+  })[kind];
 
 // A wallet-side failure after the device signed (`code: null`) is not the
 // device's fault, and "not signed or broadcast" is false once it has signed
@@ -208,12 +212,10 @@ const signedUnfinished = (view: LedgerSignView): boolean =>
   view.phase.kind === "error" && view.phase.code === null;
 
 const titleText = (view: LedgerSignView): string =>
-  signedUnfinished(view) ? "Signing didn't finish" : phaseTitle[view.phase.kind];
+  signedUnfinished(view) ? t("ledgerSign.unfinishedTitle") : phaseTitle(view.phase.kind);
 
 const livenessText = (view: LedgerSignView): string =>
-  signedUnfinished(view)
-    ? "Your Ledger signed; the wallet didn't finish."
-    : phaseLiveness[view.phase.kind];
+  signedUnfinished(view) ? t("ledgerSign.unfinishedLine") : phaseLiveness(view.phase.kind);
 
 const livenessMark = (view: LedgerSignView): string => {
   if (view.phase.kind === "error") {
@@ -227,8 +229,13 @@ const livenessMark = (view: LedgerSignView): string => {
 
 const ledgerProgress = (view: LedgerSignView): string => {
   const activeIndex = phaseIndex(view);
-  const labels = ["Connect", "Verify account", "Approve", "Finish"];
-  return `<ol class="ledger-task-list" aria-label="Ledger signing progress">
+  const labels = [
+    t("ledgerSign.step.connect"),
+    t("ledgerSign.step.verify"),
+    t("ledgerSign.step.approve"),
+    t("ledgerSign.step.finish"),
+  ];
+  return `<ol class="ledger-task-list" aria-label="${th("ledgerSign.progressLabel")}">
     ${labels
       .map((label, index) => {
         const state =
@@ -241,7 +248,7 @@ const ledgerProgress = (view: LedgerSignView): string => {
                 : "pending";
         return `<li data-state="${state}"${index === activeIndex ? ' aria-current="step"' : ""}>
           <span class="ledger-task-mark">${index < activeIndex ? icon("check") : index + 1}</span>
-          <span>${label}</span>
+          <span>${escapeHtml(label)}</span>
         </li>`;
       })
       .join("")}
@@ -256,8 +263,8 @@ const ledgerProgress = (view: LedgerSignView): string => {
 export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): string => `
   <header class="flow-header">
     <div class="flow-title">
-      <h1>Ledger approval</h1>
-      <p>Hardware wallet</p>
+      <h1>${th("ledgerSign.title")}</h1>
+      <p>${th("ledgerSign.subtitle")}</p>
     </div>
     ${pill(status.network, { dot: true })}
   </header>
@@ -265,7 +272,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
     <section class="ledger-progress-card" data-phase="${escapeHtml(view.phase.kind)}">
       <div class="ledger-progress-hero">
         <span class="ledger-device-mark" aria-hidden="true">${icon("shield")}</span>
-        <p class="context-label">Secure hardware signature</p>
+        <p class="context-label">${th("ledgerSign.secure")}</p>
         <h2>${escapeHtml(titleText(view))}</h2>
         ${signerLine(view.request)}
       </div>

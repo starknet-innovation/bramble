@@ -21,6 +21,7 @@
  */
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { t } from "../../i18n/messages";
 
 /**
  * What a journey should do about the latest chain status: finish, fail with a
@@ -34,20 +35,21 @@ export type ConfirmationOutcome =
 // no status observed yet — mean keep waiting. A failure's message is read
 // under every journey's failure heading, so it must be true of a send, a swap,
 // a deployment and an NFT transfer alike.
-const CONFIRMATION_OUTCOMES: Partial<Record<ActivityEntry["status"], ConfirmationOutcome>> = {
-  accepted: { kind: "succeeded", toast: "Transaction confirmed on Starknet" },
-  preconfirmed: { kind: "succeeded", toast: "Transaction pre-confirmed on Starknet" },
+// Built per call so the words follow the active language.
+const confirmationOutcomes = (): Partial<Record<ActivityEntry["status"], ConfirmationOutcome>> => ({
+  accepted: { kind: "succeeded", toast: t("cost.confirm.accepted") },
+  preconfirmed: { kind: "succeeded", toast: t("cost.confirm.preconfirmed") },
   rejected: {
     kind: "failed",
-    message: "Starknet rejected this transaction. Nothing changed.",
-    toast: "Transaction was not confirmed",
+    message: t("cost.confirm.rejected"),
+    toast: t("cost.confirm.notConfirmed"),
   },
   reverted: {
     kind: "failed",
-    message: "Starknet reverted this transaction. Review its activity details before retrying.",
-    toast: "Transaction was not confirmed",
+    message: t("cost.confirm.reverted"),
+    toast: t("cost.confirm.notConfirmed"),
   },
-};
+});
 
 /**
  * Confirmation checkpoints in milliseconds, paired with the outcome table
@@ -73,7 +75,8 @@ const confirmationStatus = (
  */
 export const confirmationOutcome = (
   status: ActivityEntry["status"] | null,
-): ConfirmationOutcome | null => (status === null ? null : (CONFIRMATION_OUTCOMES[status] ?? null));
+): ConfirmationOutcome | null =>
+  status === null ? null : (confirmationOutcomes()[status] ?? null);
 
 /** Collaborators the wait closes over. */
 export type ConfirmationWatch = {

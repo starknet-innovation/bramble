@@ -5,11 +5,12 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { button } from "@bramble/ui-kit/controls";
+import { t, th } from "../../../i18n/messages";
 import type { PendingApproval } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 
 /** The deny control for one approval; `label` names it (Close on a notice). */
-export const denyButton = (approval: PendingApproval, label = "Deny"): string =>
+export const denyButton = (approval: PendingApproval, label = t("approval.card.deny")): string =>
   button({
     attributes: { "data-approval-action": "deny", "data-approval-id": approval.id },
     icon: "x",
@@ -35,7 +36,7 @@ export const decisionRow = (
   locked: boolean,
   reviewedFee?: PendingApproval["fee"],
   reviewed: Readonly<Record<string, string>> = {},
-  denyLabel = "Deny",
+  denyLabel = t("approval.card.deny"),
 ): string =>
   `<div class="button-row">${denyButton(approval, denyLabel)}${button({
     attributes: {
@@ -64,5 +65,5 @@ export const requestIdentity = (origin: string, kind: string): string => {
     // The full escaped value remains visible if an invalid origin reaches this
     // presentation boundary; approval validation still fails closed upstream.
   }
-  return `<p class="eyebrow">${kind}</p><div class="request-site"><span class="request-site-mark">${icon("globe")}</span><div class="request-site-copy"><span>Request from</span><strong title="${escapeHtml(origin)}">${escapeHtml(host)}</strong></div></div>`;
+  return `<p class="eyebrow">${escapeHtml(kind)}</p><div class="request-site"><span class="request-site-mark">${icon("globe")}</span><div class="request-site-copy"><span>${th("approval.card.requestFrom")}</span><strong title="${escapeHtml(origin)}">${escapeHtml(host)}</strong></div></div>`;
 };

@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { DEPLOYMENT_IN_PROGRESS } from "@bramble/privacy/sponsored-deploy";
 import {
   deployCostLine,
-  SPONSORED_DEPLOY_COST,
+  sponsoredDeployCost,
 } from "../../../src/sidepanel/shell/deploy-sponsorship";
 import {
   bindDeployScreen as bind,
@@ -88,7 +88,7 @@ describe("sponsored deploy screen", () => {
     const stub = wallet({ sponsored: async () => "0x5ab", sponsorship: "available" });
     bind(container, stub.wallet);
     await tick();
-    expect(screen(container).cost).toContain(SPONSORED_DEPLOY_COST);
+    expect(screen(container).cost).toContain(sponsoredDeployCost());
     expect(screen(container).cost).not.toContain("Maximum network fee");
     press(container);
     await tick();

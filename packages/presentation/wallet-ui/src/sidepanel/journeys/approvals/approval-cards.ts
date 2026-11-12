@@ -16,6 +16,7 @@ import {
   PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import { t, th } from "../../../i18n/messages";
 import { reviewLines } from "../../../i18n/review";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -33,7 +34,7 @@ import {
   riskFlagMessages,
 } from "../../shared/review-render";
 import {
-  SIGN_REQUEST_UNCLASSIFIED_WARNING,
+  signRequestUnclassifiedWarning,
   signRequestView,
   signRequestWarnings,
 } from "../../shared/sign-request";
@@ -70,7 +71,7 @@ const paymentDecisionRow = (
   extra: Readonly<Record<string, string>> = {},
 ): string =>
   paysLookalike(approval)
-    ? `<p class="hint">Bramble won't send this payment.</p>${denyOnlyRow(approval)}`
+    ? `<p class="hint">${th("approval.payment.wontSend")}</p>${denyOnlyRow(approval)}`
     : decisionRow(approval, label, locked, reviewedFee, extra);
 
 // The signing account is identified by its `<network>:<address>` id; the row
@@ -81,7 +82,7 @@ const contextDetails = (approval: PendingApproval): string => {
     return "";
   }
   const address = accountIdAddress(context.accountId);
-  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
+  return `<dl class="request-detail"><div><dt>${th("approval.context.account")}</dt><dd><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, t("approval.context.copyAccount"))}</dd></div><div><dt>${th("approval.context.network")}</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>${th("approval.context.digest")}</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
 };
 
 const contextDisclosure = (approval: PendingApproval): string => {
@@ -89,7 +90,7 @@ const contextDisclosure = (approval: PendingApproval): string => {
   return details
     ? `<details class="disclosure request-technical">
         <summary>
-          <span class="menu-copy"><strong>Technical details</strong><small>Account, network, and review digest</small></span>
+          <span class="menu-copy"><strong>${th("approval.context.title")}</strong><small>${th("approval.context.subtitle")}</small></span>
           <span class="disclosure-mark">${icon("chevronRight")}</span>
         </summary>
         <div class="disclosure-body">${details}</div>
@@ -101,9 +102,7 @@ const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => 
   const actions = approval.actionReviews ?? [];
   return actions.some((action) => action.type === "deposit") &&
     actions.some((action) => action.type !== "deposit")
-    ? [
-        "This mixed batch includes a public deposit approval, linking this account to the private relay transaction. Split the deposit and private actions if that linkage is not intended.",
-      ]
+    ? [t("approval.strk20.linkage")]
     : [];
 };
 
@@ -117,9 +116,7 @@ const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[
     action.type === "deposit" &&
     action.recipient !== undefined &&
     !sameFelt(action.recipient, account)
-      ? [
-          `This deposit pays ${accountLabel(action.recipient)}: the amount becomes that account's private note, not your private balance.`,
-        ]
+      ? [t("approval.strk20.depositPayee", { recipient: accountLabel(action.recipient) })]
       : [],
   );
 };
@@ -173,11 +170,8 @@ const invokeOutcome = (approval: PendingApproval, proposal: boolean): string =>
     (reviewCallItems(
       reviewLines(approval.summaries ?? [], approval.summaryTexts),
       approval.reviewAssets ?? [],
-    ) ||
-      `<p>${escapeHtml("Sign and submit the decoded transaction from the active account.")}</p>`) +
-      (proposal
-        ? `<p>${escapeHtml("Saves this for the other signers. It is not sent yet.")}</p>`
-        : ""),
+    ) || `<p>${th("approval.invoke.fallback")}</p>`) +
+      (proposal ? `<p>${th("approval.invoke.proposal")}</p>` : ""),
   );
 
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => {
@@ -186,8 +180,8 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
   return `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Transaction request")}
-      ${status.locked ? '<p class="hint">Unlock the wallet to review and approve this transaction.</p>' : ""}
+      ${requestIdentity(approval.origin, t("approval.invoke.title"))}
+      ${status.locked ? `<p class="hint">${th("approval.invoke.locked")}</p>` : ""}
       ${invokeOutcome(approval, proposal)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
@@ -218,15 +212,13 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
             : {}),
         },
       ) ||
-      reviewCostNote(
-        "The network fee is unavailable. Approval remains disabled until a fee can be reviewed.",
-      )
+      reviewCostNote(t("approval.invoke.feeUnavailable"))
     }
     ${invokeCallReview(approval)}
     ${contextDisclosure(approval)}
     ${paymentDecisionRow(
       approval,
-      proposal ? "Save for signers" : "Approve",
+      proposal ? t("approval.invoke.saveForSigners") : t("approval.approve"),
       // Approve echoes the total the Cost section showed — the same helper the
       // background refusal reads — and is withheld while no total exists.
       status.locked || reviewedInvokeTotal(approval) === null,
@@ -248,36 +240,36 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
   return `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Sign request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Signatures can authorize transfers or account access. Only sign requests you understand."}</p>
-      ${reviewOutcome("Create a signed authorization over the decoded message shown below and return it to this site.")}
+      ${requestIdentity(approval.origin, t("approval.sign.title"))}
+      <p class="hint">${status.locked ? th("approval.sign.locked") : th("approval.sign.hint")}</p>
+      ${reviewOutcome(t("approval.sign.outcome"))}
       ${reviewCallsList(approval.summaries?.slice(1) ?? [])}
     </div>
     ${view.html}
     ${reviewPanel([
       ...riskFlagMessages(approval.flags ?? []),
-      ...(view.classified ? [] : [SIGN_REQUEST_UNCLASSIFIED_WARNING]),
+      ...(view.classified ? [] : [signRequestUnclassifiedWarning()]),
       ...signRequestWarnings(approval.typedData),
       ...(approval.insights ?? []),
     ])}
-    ${reviewConstraints("No transaction or network fee is submitted. The signed result can still authorize site-specific actions.")}
+    ${reviewConstraints(t("approval.sign.constraints"))}
     ${contextDisclosure(approval)}
-    ${view.classified ? paymentDecisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
+    ${view.classified ? paymentDecisionRow(approval, t("approval.sign.action"), status.locked) : denyOnlyRow(approval)}
   </li>`;
 };
 
 const strk20Card = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Private transaction request")}
-      ${status.locked ? '<p class="hint">Unlock the wallet to review this private transaction.</p>' : ""}
-      ${approvalCalls(approval) || reviewOutcome("Authorize the exact private action bound to this request.")}
+      ${requestIdentity(approval.origin, t("approval.strk20.title"))}
+      ${status.locked ? `<p class="hint">${th("approval.strk20.locked")}</p>` : ""}
+      ${approvalCalls(approval) || reviewOutcome(t("approval.strk20.outcome"))}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
-    ${reviewConstraints("This approval charges no public wallet fee. A relay fee, if listed above, is paid from the private balance. If the wallet pays the network fee for this route, you will review that fee separately.")}
+    ${reviewConstraints(t("approval.strk20.constraints"))}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
-    ${paymentDecisionRow(approval, "Approve", status.locked)}
+    ${paymentDecisionRow(approval, t("approval.approve"), status.locked)}
   </li>`;
 
 const strk20DisclosureCard = (
@@ -293,11 +285,11 @@ const strk20DisclosureCard = (
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, copy.title)}
-      ${status.locked ? `<p class="hint">${copy.lockedHint}</p>` : ""}
+      ${status.locked ? `<p class="hint">${escapeHtml(copy.lockedHint)}</p>` : ""}
       ${approvalCalls(approval) || reviewOutcome(copy.hint)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...(approval.insights ?? [])])}
-    ${reviewConstraints("This approval carries no transaction fee. Any later transaction requires its own review.")}
+    ${reviewConstraints(t("approval.disclosure.constraints"))}
     ${strk20ActionReview(approval)}
     ${contextDisclosure(approval)}
     ${paymentDecisionRow(approval, copy.action, status.locked)}
@@ -321,38 +313,38 @@ const strk20UnavailableCard = (approval: PendingApproval): string => `
               : PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
       )}</p>
     </div>
-    <div class="button-row">${denyButton(approval, "Close")}</div>
+    <div class="button-row">${denyButton(approval, t("approval.card.close"))}</div>
   </li>`;
 
 const switchCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Network switch request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network."}</p>
-      ${approvalCalls(approval) || reviewOutcome("Switch the wallet to the requested Starknet network.")}
+      ${requestIdentity(approval.origin, t("approval.switch.title"))}
+      <p class="hint">${status.locked ? th("approval.switch.locked") : th("approval.switch.hint")}</p>
+      ${approvalCalls(approval) || reviewOutcome(t("approval.switch.outcome"))}
     </div>
     ${reviewPanel(approval.insights ?? [])}
-    ${reviewConstraints("No transaction is signed and no network fee is charged.")}
-    ${decisionRow(approval, "Switch network", status.locked)}
+    ${reviewConstraints(t("approval.noFee"))}
+    ${decisionRow(approval, t("approval.switch.action"), status.locked)}
   </li>`;
 
 const declareCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      ${requestIdentity(approval.origin, "Declare contract request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review and declare this contract class." : "Approving signs and submits this exact class declaration from the account shown below."}</p>
-      ${reviewOutcome("Register this exact Cairo contract class on the active network from the reviewed account.")}
+      ${requestIdentity(approval.origin, t("approval.declare.title"))}
+      <p class="hint">${status.locked ? th("approval.declare.locked") : th("approval.declare.hint")}</p>
+      ${reviewOutcome(t("approval.declare.outcome"))}
     </div>
-    ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])], "Declaration registers code but does not deploy a contract or transfer assets.")}
-    <section class="decision-layer decision-boundary" aria-label="Cost">
-      <p class="decision-label">Cost</p>
+    ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])], t("approval.declare.clear"))}
+    <section class="decision-layer decision-boundary" aria-label="${th("cost.section.cost")}">
+      <p class="decision-label">${th("cost.section.cost")}</p>
       ${declarationDetails(approval)}
     </section>
     ${contextDisclosure(approval)}
-    ${declarationFeeUnavailable(approval) ? button({ attributes: { "data-approval-retry-fee": approval.id }, disabled: status.locked, icon: "refresh", label: "Retry fee estimate", variant: "secondary" }) : ""}
+    ${declarationFeeUnavailable(approval) ? button({ attributes: { "data-approval-retry-fee": approval.id }, disabled: status.locked, icon: "refresh", label: t("cost.fee.retry"), variant: "secondary" }) : ""}
     ${decisionRow(
       approval,
-      "Declare",
+      t("approval.declare.action"),
       status.locked || declarationFeeUnavailable(approval),
       declarationReviewedFee(approval) ?? undefined,
     )}
@@ -376,36 +368,37 @@ export const approvalCard = (
       return signCard(approval, status);
     case "strk20-balances":
       return strk20DisclosureCard(approval, status, {
-        action: "Share balances",
+        action: t("approval.balances.action"),
+        // Matched on the background's English line, which is data, not copy.
         hint:
           approval.summaries?.[0] === "Share all private token balances"
-            ? "This reveals every private token balance discovered for this account to the site. It does not move funds."
-            : "This reveals only the listed private token balances to this site. It does not move funds.",
-        lockedHint: "Unlock the wallet to review this private balance request.",
-        title: "Private balance request",
+            ? t("approval.balances.hintAll")
+            : t("approval.balances.hintListed"),
+        lockedHint: t("approval.balances.locked"),
+        title: t("approval.balances.title"),
       });
     case "strk20-invoke":
       return strk20Card(approval, status);
     case "strk20-prepare":
       return strk20DisclosureCard(approval, status, {
-        action: "Authorize",
-        hint: "This may generate a proof that authorizes the exact private actions below. The site can submit a returned proof.",
-        lockedHint: "Unlock the wallet to review this private proof request.",
-        title: "Private proof request",
+        action: t("approval.prepare.action"),
+        hint: t("approval.prepare.hint"),
+        lockedHint: t("approval.prepare.locked"),
+        title: t("approval.prepare.title"),
       });
     case "strk20-register":
       return strk20DisclosureCard(approval, status, {
-        action: "Activate",
-        hint: "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
-        lockedHint: "Unlock the wallet to review this private-balance activation.",
-        title: "Activate private balances",
+        action: t("approval.register.action"),
+        hint: t("approval.register.hint"),
+        lockedHint: t("approval.register.locked"),
+        title: t("approval.register.title"),
       });
     case "strk20-shadow-account":
       return strk20DisclosureCard(approval, status, {
-        action: "Share commitment",
-        hint: "This reveals a deterministic, site-scoped private identity commitment that may link sessions for this site.",
-        lockedHint: "Unlock the wallet to review this private identity request.",
-        title: "Private identity request",
+        action: t("approval.shadow.action"),
+        hint: t("approval.shadow.hint"),
+        lockedHint: t("approval.shadow.locked"),
+        title: t("approval.shadow.title"),
       });
     case "strk20-unavailable":
       return strk20UnavailableCard(approval);

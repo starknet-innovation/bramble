@@ -59,5 +59,5 @@ export * from "./sidepanel/shared/token-dropdown";
 export * from "./sidepanel/shell/account-types";
 export * from "./sidepanel/shell/dashboard-bindings";
 /** The deployment receipt's copy, so lab checkpoints paint what the binder ships. */
-export { DEPLOY_RECEIPT_COPY } from "./sidepanel/shell/shell-bindings";
+export { deployReceiptCopy } from "./sidepanel/shell/shell-bindings";
 export * from "./sidepanel/styles/index";

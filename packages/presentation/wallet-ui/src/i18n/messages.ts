@@ -20,6 +20,10 @@ import { multisigSignerMessages } from "./messages/multisig-signers";
 import { onboardingMessages } from "./messages/onboarding";
 import { portfolioMessages } from "./messages/portfolio";
 import { privacyMessages } from "./messages/privacy";
+import { reviewApprovalMessages } from "./messages/review-approvals";
+import { reviewDetailMessages } from "./messages/review-details";
+import { reviewFeeMessages } from "./messages/review-fees";
+import { reviewSignMessages } from "./messages/review-sign";
 import { sendMessages } from "./messages/send";
 import { settingsMessages } from "./messages/settings";
 import { shellMessages } from "./messages/shell";
@@ -41,6 +45,10 @@ export const UI_AREA_CATALOGS = {
   onboarding: onboardingMessages,
   portfolio: portfolioMessages,
   privacy: privacyMessages,
+  "review-approvals": reviewApprovalMessages,
+  "review-details": reviewDetailMessages,
+  "review-fees": reviewFeeMessages,
+  "review-sign": reviewSignMessages,
   send: sendMessages,
   settings: settingsMessages,
   "shell-screens": shellScreenMessages,
@@ -59,6 +67,10 @@ const en = {
   ...onboardingMessages.en,
   ...portfolioMessages.en,
   ...privacyMessages.en,
+  ...reviewApprovalMessages.en,
+  ...reviewDetailMessages.en,
+  ...reviewFeeMessages.en,
+  ...reviewSignMessages.en,
   ...sendMessages.en,
   ...settingsMessages.en,
   ...shellScreenMessages.en,
@@ -80,6 +92,10 @@ export const uiCatalogs = {
     ...onboardingMessages["zh-Hans"],
     ...portfolioMessages["zh-Hans"],
     ...privacyMessages["zh-Hans"],
+    ...reviewApprovalMessages["zh-Hans"],
+    ...reviewDetailMessages["zh-Hans"],
+    ...reviewFeeMessages["zh-Hans"],
+    ...reviewSignMessages["zh-Hans"],
     ...sendMessages["zh-Hans"],
     ...settingsMessages["zh-Hans"],
     ...shellScreenMessages["zh-Hans"],

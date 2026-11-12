@@ -327,7 +327,7 @@ describe("route fee lines", () => {
       preparation: null,
       review: review({ fee: null, feeEstimateFailed: true }),
     });
-    expect(html).toContain("Couldn't estimate the network fee");
+    expect(html).toContain("Couldn&#39;t estimate the network fee");
     expect(html).toContain("review-retry-fee");
   });
 });

@@ -13,6 +13,7 @@
  * never got an identifier does not show an empty line with a dead control.
  */
 import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
+import { t } from "../../i18n/messages";
 import { bindCopyButtons } from "./dom";
 import { accountLabel, inlineCopyButton } from "./parts";
 
@@ -23,7 +24,7 @@ import { accountLabel, inlineCopyButton } from "./parts";
 export const outcomeHashRow = (id: string): string => `
   <span class="send-outcome-hash" hidden>
     <a id="${id}-link" target="_blank" rel="noopener noreferrer"><code id="${id}"></code></a>
-    ${inlineCopyButton("", "Copy transaction hash")}
+    ${inlineCopyButton("", t("cost.outcome.copyHash"))}
   </span>`;
 
 /**

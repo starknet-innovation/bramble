@@ -6,13 +6,14 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
+import { t, th } from "../../../i18n/messages";
 import type { PendingApproval } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { inlineCopyButton } from "../../shared/parts";
 
 const exactCalldata = (calldata: readonly string[]): string =>
   calldata.length === 0
-    ? "None"
+    ? th("detail.params.none")
     : `<code>${calldata.map((item) => escapeHtml(item)).join(", ")}</code>`;
 
 // An exact address in the technical details, printed in full and copyable so
@@ -32,13 +33,16 @@ export const invokeCallReview = (approval: PendingApproval): string => {
   }
   return `<details class="disclosure request-technical">
     <summary>
-      <span class="menu-copy"><strong>Exact call parameters</strong><small>${calls.length} call${calls.length === 1 ? "" : "s"} · full addresses and calldata</small></span>
+      <span class="menu-copy"><strong>${th("detail.params.callsTitle")}</strong><small>${th(
+        calls.length === 1 ? "detail.params.callsOne" : "detail.params.callsMany",
+        { count: String(calls.length) },
+      )}</small></span>
       <span class="disclosure-mark">${icon("chevronRight")}</span>
     </summary>
     <div class="disclosure-body">${calls
       .map(
         (call, index) =>
-          `<section class="strk20-action-call"><strong>Call ${index + 1}</strong><dl class="request-detail"><div><dt>Contract</dt><dd>${exactAddress(call.contractAddress, `Copy call ${index + 1} contract address`)}</dd></div><div><dt>Entrypoint</dt><dd><code>${escapeHtml(call.entrypoint)}</code></dd></div><div><dt>Calldata (${call.calldata.length})</dt><dd>${exactCalldata(call.calldata)}</dd></div></dl></section>`,
+          `<section class="strk20-action-call"><strong>${th("detail.params.call", { index: String(index + 1) })}</strong><dl class="request-detail"><div><dt>${th("detail.params.contract")}</dt><dd>${exactAddress(call.contractAddress, t("detail.params.copyCallContract", { index: String(index + 1) }))}</dd></div><div><dt>${th("detail.params.entrypoint")}</dt><dd><code>${escapeHtml(call.entrypoint)}</code></dd></div><div><dt>${th("detail.params.calldata", { count: String(call.calldata.length) })}</dt><dd>${exactCalldata(call.calldata)}</dd></div></dl></section>`,
       )
       .join("")}</div>
   </details>`;
@@ -48,30 +52,34 @@ const strk20ActionParameters = (
   action: NonNullable<PendingApproval["actionReviews"]>[number],
   index: number,
 ): string => {
+  const n = String(index + 1);
+  const tokenRow = (token: string): string =>
+    `<div><dt>${th("detail.params.token")}</dt><dd>${exactAddress(token, t("detail.params.copyActionToken", { index: n }))}</dd></div>`;
+  const amountRow = (amount: string): string =>
+    `<div><dt>${th("detail.params.amount")}</dt><dd><code>${escapeHtml(amount)}</code></dd></div>`;
+  const recipientRow = (recipient: string): string =>
+    `<div><dt>${th("detail.params.recipient")}</dt><dd>${exactAddress(recipient, t("detail.params.copyActionRecipient", { index: n }))}</dd></div>`;
   if (action.type === "deposit") {
-    const recipient =
-      action.recipient === undefined
-        ? ""
-        : `<div><dt>Recipient</dt><dd>${exactAddress(action.recipient, `Copy action ${index + 1} recipient address`)}</dd></div>`;
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · Deposit</strong><dl class="request-detail"><div><dt>Token</dt><dd>${exactAddress(action.token, `Copy action ${index + 1} token address`)}</dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(action.amount)}</code></dd></div>${recipient}</dl></section>`;
+    const recipient = action.recipient === undefined ? "" : recipientRow(action.recipient);
+    return `<section class="strk20-action-review"><strong>${th("detail.params.actionDeposit", { index: n })}</strong><dl class="request-detail">${tokenRow(action.token)}${amountRow(action.amount)}${recipient}</dl></section>`;
   }
   if (action.type === "withdraw" || action.type === "transfer") {
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · ${action.type === "withdraw" ? "Withdraw" : "Private transfer"}</strong><dl class="request-detail"><div><dt>Token</dt><dd>${exactAddress(action.token, `Copy action ${index + 1} token address`)}</dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(action.amount)}</code></dd></div><div><dt>Recipient</dt><dd>${exactAddress(action.recipient, `Copy action ${index + 1} recipient address`)}</dd></div></dl></section>`;
+    return `<section class="strk20-action-review"><strong>${th(action.type === "withdraw" ? "detail.params.actionWithdraw" : "detail.params.actionTransfer", { index: n })}</strong><dl class="request-detail">${tokenRow(action.token)}${amountRow(action.amount)}${recipientRow(action.recipient)}</dl></section>`;
   }
   if (action.type === "invoke") {
-    return `<section class="strk20-action-review"><strong>Action ${index + 1} · Contract invoke</strong><dl class="request-detail"><div><dt>Contract</dt><dd>${exactAddress(action.contract, `Copy action ${index + 1} contract address`)}</dd></div><div><dt>Calldata (${action.calldata.length})</dt><dd>${exactCalldata(action.calldata)}</dd></div></dl></section>`;
+    return `<section class="strk20-action-review"><strong>${th("detail.params.actionInvoke", { index: n })}</strong><dl class="request-detail"><div><dt>${th("detail.params.contract")}</dt><dd>${exactAddress(action.contract, t("detail.params.copyActionContract", { index: n }))}</dd></div><div><dt>${th("detail.params.calldata", { count: String(action.calldata.length) })}</dt><dd>${exactCalldata(action.calldata)}</dd></div></dl></section>`;
   }
   const collect =
     action.collect_policy.type === "exact"
-      ? `Exact · ${action.collect_policy.amount}`
+      ? t("detail.params.collectExact", { amount: action.collect_policy.amount })
       : action.collect_policy.type;
   const calls = action.calls
     .map(
       (call, callIndex) =>
-        `<section class="strk20-action-call"><strong>Call ${callIndex + 1}</strong><dl class="request-detail"><div><dt>Contract</dt><dd>${exactAddress(call.contract_address, `Copy action ${index + 1} call ${callIndex + 1} contract address`)}</dd></div><div><dt>Entrypoint</dt><dd><code>${escapeHtml(call.entry_point)}</code></dd></div><div><dt>Calldata (${call.calldata.length})</dt><dd>${exactCalldata(call.calldata)}</dd></div></dl></section>`,
+        `<section class="strk20-action-call"><strong>${th("detail.params.call", { index: String(callIndex + 1) })}</strong><dl class="request-detail"><div><dt>${th("detail.params.contract")}</dt><dd>${exactAddress(call.contract_address, t("detail.params.copyActionCallContract", { call: String(callIndex + 1), index: n }))}</dd></div><div><dt>${th("detail.params.entrypoint")}</dt><dd><code>${escapeHtml(call.entry_point)}</code></dd></div><div><dt>${th("detail.params.calldata", { count: String(call.calldata.length) })}</dt><dd>${exactCalldata(call.calldata)}</dd></div></dl></section>`,
     )
     .join("");
-  return `<section class="strk20-action-review"><strong>Action ${index + 1} · Shadow account invoke</strong><dl class="request-detail"><div><dt>Dapp</dt><dd>${escapeHtml(action.dapp_name)}</dd></div><div><dt>Nonce</dt><dd><code>${escapeHtml(action.nonce)}</code></dd></div><div><dt>Collect policy</dt><dd>${escapeHtml(collect)}</dd></div></dl>${calls}</section>`;
+  return `<section class="strk20-action-review"><strong>${th("detail.params.actionShadow", { index: n })}</strong><dl class="request-detail"><div><dt>${th("detail.params.dapp")}</dt><dd>${escapeHtml(action.dapp_name)}</dd></div><div><dt>${th("detail.params.nonce")}</dt><dd><code>${escapeHtml(action.nonce)}</code></dd></div><div><dt>${th("detail.params.collectPolicy")}</dt><dd>${escapeHtml(collect)}</dd></div></dl>${calls}</section>`;
 };
 
 /**
@@ -87,12 +95,15 @@ export const strk20ActionReview = (approval: PendingApproval): string => {
   const relayFee = approval.relayFeeAction;
   const reviewedActionCount = actions.length + (relayFee ? 1 : 0);
   const relayFeeReview = relayFee
-    ? `<section class="strk20-action-review"><strong>Relay fee action · Withdrawal</strong><dl class="request-detail"><div><dt>Token</dt><dd>${exactAddress(relayFee.token, "Copy relay fee token address")}</dd></div><div><dt>Amount</dt><dd><code>${escapeHtml(relayFee.amount)}</code></dd></div><div><dt>Recipient</dt><dd>${exactAddress(relayFee.recipient, "Copy relay fee recipient address")}</dd></div></dl></section>`
+    ? `<section class="strk20-action-review"><strong>${th("detail.params.relayTitle")}</strong><dl class="request-detail"><div><dt>${th("detail.params.token")}</dt><dd>${exactAddress(relayFee.token, t("detail.params.copyRelayToken"))}</dd></div><div><dt>${th("detail.params.amount")}</dt><dd><code>${escapeHtml(relayFee.amount)}</code></dd></div><div><dt>${th("detail.params.recipient")}</dt><dd>${exactAddress(relayFee.recipient, t("detail.params.copyRelayRecipient"))}</dd></div></dl></section>`
     : "";
-  const actionCountHint = relayFee ? "including relay fee" : "expand before approving";
+  const actionCountHint = t(relayFee ? "detail.params.hintRelay" : "detail.params.hintExpand");
   return `<details class="disclosure request-technical">
     <summary>
-      <span class="menu-copy"><strong>Exact action parameters</strong><small>${reviewedActionCount} action${reviewedActionCount === 1 ? "" : "s"} · ${actionCountHint}</small></span>
+      <span class="menu-copy"><strong>${th("detail.params.actionsTitle")}</strong><small>${th(
+        reviewedActionCount === 1 ? "detail.params.actionsOne" : "detail.params.actionsMany",
+        { count: String(reviewedActionCount), hint: actionCountHint },
+      )}</small></span>
       <span class="disclosure-mark">${icon("chevronRight")}</span>
     </summary>
     <div class="disclosure-body">${actions.map(strk20ActionParameters).join("")}${relayFeeReview}</div>

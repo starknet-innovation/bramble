@@ -351,7 +351,7 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
       feeEstimateFailed: true,
       requiresDeployment: false,
     };
-    const alert = "Couldn't estimate the network fee right now.";
+    const alert = "Couldn&#39;t estimate the network fee right now.";
 
     const send = sendReview(summaries, flags, fee);
     expect(send).toContain(alert);
