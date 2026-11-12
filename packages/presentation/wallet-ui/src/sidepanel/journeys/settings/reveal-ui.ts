@@ -14,6 +14,7 @@
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
+import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
@@ -46,45 +47,45 @@ export const revealFlow = (status: WalletStatus): string => {
   // form — never fabricate or display a phrase for a hardware account.
   if (activeAccount?.derivation.kind === "ledger") {
     return (
-      flowHeader("Reveal secrets", status, "Hardware account") +
+      flowHeader(t("settings.reveal.title"), status, t("settings.reveal.hardware")) +
       flowScreen(
         "reveal",
         `<section class="section" role="note">
-          <p class="eyebrow">Recovery</p>
-          <p class="hint" id="reveal-ledger-note">This account's key is on your Ledger. To recover it, use the Ledger's own recovery phrase.</p>
+          <p class="eyebrow">${th("settings.reveal.recovery")}</p>
+          <p class="hint" id="reveal-ledger-note">${th("settings.reveal.ledgerNote")}</p>
         </section>`,
       )
     );
   }
   return (
-    flowHeader("Reveal secrets", status, "Recovery phrase and active key") +
+    flowHeader(t("settings.reveal.title"), status, t("settings.reveal.subtitle")) +
     flowScreen(
       "reveal",
       `<section class="section reveal-warning" role="note">
-      <p class="reveal-danger">${icon("alert")}Anyone who sees these can take your funds.</p>
-      <p class="hint">Reveal only in private. Bramble will never ask you for them.</p>
+      <p class="reveal-danger">${icon("alert")}${th("settings.reveal.danger")}</p>
+      <p class="hint">${th("settings.reveal.private")}</p>
     </section>
     <section class="section">
       <form id="reveal-form">
         ${textField({
           autocomplete: "current-password",
-          hint: "An unlocked session is not enough.",
-          label: "Confirm vault passphrase",
+          hint: t("settings.reveal.sessionHint"),
+          label: t("settings.reveal.confirmPassphrase"),
           minlength: MIN_VAULT_PASSPHRASE_LENGTH,
           name: "vaultPassphrase",
           required: true,
           type: "password",
         })}
-        ${button({ icon: "lock", label: "Reveal secrets", type: "submit" })}
+        ${button({ icon: "lock", label: t("settings.reveal.title"), type: "submit" })}
         <p id="reveal-result" role="status"></p>
       </form>
       <div id="reveal-output" class="reveal-output" hidden>
-        <p class="eyebrow">Recovery phrase</p>
+        <p class="eyebrow">${th("settings.reveal.phrase")}</p>
         <div class="reveal-value is-masked" id="reveal-phrase"></div>
         ${button({
           attributes: { id: "reveal-copy-phrase" },
           icon: "copy",
-          label: "Copy recovery phrase",
+          label: t("settings.reveal.copyPhrase"),
           variant: "ghost",
         })}
         <p class="hint" id="reveal-copy-note">${GUARDED_COPY_NOTE}</p>
@@ -92,22 +93,22 @@ export const revealFlow = (status: WalletStatus): string => {
           // With no account on this network there is no active key: the
           // background reveals the recovery phrase alone.
           activeAccount
-            ? `<p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
+            ? `<p class="eyebrow">${th(activeIsImported ? "settings.reveal.activeKeyImported" : "settings.reveal.activeKey")}</p>
         <code class="reveal-value is-masked" id="reveal-key"></code>`
             : ""
         }
         ${
           activeIsImported
-            ? '<p class="hint" id="reveal-imported-note">This account was imported from a raw key, so the wallet recovery phrase above does not restore it — its private key shown here is its only backup.</p>'
+            ? `<p class="hint" id="reveal-imported-note">${th("settings.reveal.importedNote")}</p>`
             : ""
         }
         ${button({
           attributes: { id: "reveal-toggle" },
           icon: "check",
-          label: "Show",
+          label: t("settings.reveal.show"),
           variant: "secondary",
         })}
-        <p class="hint">Write them down offline. Leaving this screen hides them again.</p>
+        <p class="hint">${th("settings.reveal.offline")}</p>
       </div>
     </section>`,
     )
@@ -141,7 +142,7 @@ export const bindReveal = (deps: RevealUiDeps): void => {
   toggle?.addEventListener("click", () => {
     const masked = phraseEl?.classList.toggle("is-masked") ?? true;
     keyEl?.classList.toggle("is-masked", masked);
-    toggle.lastChild?.replaceWith(masked ? "Show" : "Hide");
+    toggle.lastChild?.replaceWith(masked ? t("settings.reveal.show") : t("settings.reveal.hide"));
   });
 
   form?.addEventListener("submit", (event) => {
@@ -151,23 +152,22 @@ export const bindReveal = (deps: RevealUiDeps): void => {
     void deps.wallet.revealSecrets(value).then(
       (secrets) => {
         if (phraseEl) {
-          phraseEl.textContent =
-            secrets.mnemonic ?? "No recovery phrase is stored for this wallet.";
+          phraseEl.textContent = secrets.mnemonic ?? t("settings.reveal.noPhrase");
         }
         if (keyEl) {
           keyEl.textContent = secrets.privateKey ?? "";
         }
         output?.removeAttribute("hidden");
         if (result) {
-          result.textContent = "Write it down offline.";
+          result.textContent = t("settings.reveal.writeDown");
         }
         form.reset();
         buttonBusy(submitButton, false);
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Reveal failed"), "error", form);
+        showToast(errorDetails(error, t("settings.reveal.failed")), "error", form);
         if (result) {
-          result.textContent = errorLine(error, "Reveal failed");
+          result.textContent = errorLine(error, t("settings.reveal.failed"));
         }
         buttonBusy(submitButton, false);
       },

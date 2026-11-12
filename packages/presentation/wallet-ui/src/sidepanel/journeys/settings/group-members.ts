@@ -26,6 +26,7 @@ import {
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { iconButton } from "@bramble/ui-kit/controls";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { t, th } from "../../../i18n/messages";
 import type { NetworkOption } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountAvatar, accountDisplayName, accountLabel } from "../../shared/parts";
@@ -42,7 +43,7 @@ const createGroupRow = (open: boolean): string => `
   <li class="group-manage-row">
     <button class="group-expand" type="button" data-group-expand="${CREATE_GROUP_PANEL}" aria-expanded="${open}" aria-controls="group-create-panel">
       <span class="group-manage-icon">${icon("plus")}</span>
-      <span class="group-manage-copy"><strong>Create a folder</strong></span>
+      <span class="group-manage-copy"><strong>${th("settings.folders.createRow")}</strong></span>
       <span class="group-expand-mark">${icon(open ? "chevronDown" : "chevronRight")}</span>
     </button>
     <div class="group-members" id="group-create-panel"${open ? "" : " hidden"}>
@@ -67,7 +68,7 @@ const accountChecklistRow = (
   // Clearing that row would leave the account on screen, so the control is
   // not offered.
   const staysInHome = member && group.id === DEFAULT_GROUP_IDS.home;
-  return `<button class="account-check" type="button" data-group-toggle="${escapeHtml(group.id)}" data-account="${escapeHtml(account.id)}" aria-pressed="${member}"${staysInHome ? ' disabled title="File this account into another folder to move it."' : ""}>
+  return `<button class="account-check" type="button" data-group-toggle="${escapeHtml(group.id)}" data-account="${escapeHtml(account.id)}" aria-pressed="${member}"${staysInHome ? ` disabled title="${th("settings.folders.staysHome")}"` : ""}>
     <span class="option-avatar">${accountAvatar(account.address)}</span>
     <span class="account-check-copy">
       <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
@@ -93,26 +94,26 @@ const groupMembersEditor = (
   const count = accounts.filter(
     (account) => displayedAccountGroup(groups, account.id)?.id === group.id,
   ).length;
-  const plural = count === 1 ? "" : "s";
+  const countFacts = { count: String(count) };
   return `<li class="group-manage-row">
     <button class="group-expand" type="button" data-group-expand="${escapeHtml(group.id)}" aria-expanded="${expanded}" aria-controls="group-editor-${escapeHtml(group.id)}">
       <span class="group-manage-icon">${icon(group.icon)}</span>
       <span class="group-manage-copy">
         <strong>${escapeHtml(group.name)}</strong>
-        <span class="hint">${count} account${plural}</span>
+        <span class="hint">${th(count === 1 ? "settings.folders.accountsOne" : "settings.folders.accountsMany", countFacts)}</span>
       </span>
       <span class="group-expand-mark">${icon(expanded ? "chevronDown" : "chevronRight")}</span>
     </button>
     <div class="group-members" id="group-editor-${escapeHtml(group.id)}"${expanded ? "" : " hidden"}>
       <div class="group-members-head">
-        <p class="eyebrow">${count} member${plural}</p>
+        <p class="eyebrow">${th(count === 1 ? "settings.folders.membersOne" : "settings.folders.membersMany", countFacts)}</p>
         ${
           isDefaultGroup(group.id)
             ? ""
             : iconButton({
                 attributes: { "data-remove-group": group.id },
                 icon: "x",
-                label: `Delete ${group.name}`,
+                label: t("settings.folders.delete", { name: group.name }),
                 tone: "danger",
               })
         }
@@ -120,7 +121,7 @@ const groupMembersEditor = (
       ${editGroupForm(group)}
       ${
         accounts.length === 0
-          ? '<p class="hint">No accounts yet. Add one above to start bucketing.</p>'
+          ? `<p class="hint">${th("settings.folders.empty")}</p>`
           : `<div class="account-check-list">${accounts
               .map((account) =>
                 accountChecklistRow(account, group, groups, preferences, networkNameFor(account)),
@@ -162,7 +163,7 @@ export const groupsSection = (
   const createOpen = expandedGroupId === CREATE_GROUP_PANEL || groups.length === 0;
   return `
   <section class="section">
-    <p class="eyebrow">Folders</p>
+    <p class="eyebrow">${th("settings.folders.title")}</p>
     <ul class="group-manage-list">
       ${createGroupRow(createOpen)}
       ${groups

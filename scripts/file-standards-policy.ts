@@ -166,6 +166,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Ledger journey copy catalog: its chooser and first-run sentences name a
   // "Private key" import route and the passphrase. Text only, like the above.
   "packages/presentation/wallet-ui/src/i18n/messages/ledger.ts",
+  // Settings copy catalog: the reveal-secrets screen names the vault passphrase
+  // it asks for ("Confirm vault passphrase"). Text only, like the onboarding one.
+  "packages/presentation/wallet-ui/src/i18n/messages/settings.ts",
   // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
   "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",

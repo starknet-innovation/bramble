@@ -6,6 +6,7 @@
  * identical group behaviour without duplication.
  */
 import { DEFAULT_GROUP_IDS, isAccountGroupIcon } from "@bramble/settings/groups";
+import { t } from "../../../i18n/messages";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { confirmSecondTap } from "../../shared/two-tap-confirm";
@@ -55,7 +56,7 @@ const bindCreateForms = (root: Element, deps: GroupControlDeps): void => {
       const glyph = selectedIcon(form);
       const button = form.querySelector<HTMLButtonElement>("[data-create-group]");
       if (!name || !glyph) {
-        showToast("Enter a folder name", "error", form);
+        showToast(t("settings.folders.enterName"), "error", form);
         return;
       }
       buttonBusy(button, true);
@@ -64,11 +65,11 @@ const bindCreateForms = (root: Element, deps: GroupControlDeps): void => {
       void deps.wallet.createGroup(name, glyph).then(
         async (id) => {
           deps.setExpandedGroup(id);
-          showToast("Folder created", "success", form);
+          showToast(t("settings.folders.created"), "success", form);
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't create that folder"), "error", form);
+          showToast(errorDetails(error, t("settings.folders.createFailed")), "error", form);
           buttonBusy(button, false);
         },
       );
@@ -85,7 +86,7 @@ const bindEditForms = (root: Element, deps: GroupControlDeps): void => {
       const glyph = selectedIcon(form);
       const button = form.querySelector<HTMLButtonElement>("[data-save-group]");
       if (!id || !name || !glyph) {
-        showToast("Enter a folder name", "error", form);
+        showToast(t("settings.folders.enterName"), "error", form);
         return;
       }
       buttonBusy(button, true);
@@ -94,11 +95,11 @@ const bindEditForms = (root: Element, deps: GroupControlDeps): void => {
         .then(() => deps.wallet.setGroupIcon(id, glyph))
         .then(
           async () => {
-            showToast("Folder updated", "success", form);
+            showToast(t("settings.folders.updated"), "success", form);
             await deps.rerender();
           },
           (error: unknown) => {
-            showToast(errorDetails(error, "Couldn't update that folder"), "error", form);
+            showToast(errorDetails(error, t("settings.folders.updateFailed")), "error", form);
             buttonBusy(button, false);
           },
         );
@@ -116,17 +117,19 @@ const bindRemoveButtons = (root: Element, deps: GroupControlDeps): void => {
       }
       // First tap arms the delete; a second tap on the same, still-armed
       // control confirms. The icon stays; CSS adds the visible "Delete?".
-      if (!confirmSecondTap(el, { label: "Tap again to delete", replaceContent: false })) {
+      if (
+        !confirmSecondTap(el, { label: t("settings.folders.deleteConfirm"), replaceContent: false })
+      ) {
         return;
       }
       buttonBusy(el, true);
       void deps.wallet.removeGroup(id).then(
         async () => {
-          showToast("Folder deleted", "success", el);
+          showToast(t("settings.folders.deleted"), "success", el);
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't delete that folder"), "error", el);
+          showToast(errorDetails(error, t("settings.folders.deleteFailed")), "error", el);
           buttonBusy(el, false);
         },
       );
@@ -151,11 +154,15 @@ const bindAssignToggles = (root: Element, deps: GroupControlDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.setAccountInGroup(accountId, groupId, !member).then(
         async () => {
-          showToast(member ? "Removed from folder" : "Added to folder", "success", button);
+          showToast(
+            member ? t("settings.folders.removed") : t("settings.folders.added"),
+            "success",
+            button,
+          );
           await deps.rerender();
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't update that folder"), "error", button);
+          showToast(errorDetails(error, t("settings.folders.updateFailed")), "error", button);
           buttonBusy(button, false);
         },
       );

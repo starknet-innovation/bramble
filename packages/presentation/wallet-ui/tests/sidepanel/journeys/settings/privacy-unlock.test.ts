@@ -7,9 +7,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createPrivacyUnlockClient } from "../../../../src/sidepanel/journeys/privacy/privacy-unlock-runtime";
 import {
   bindPrivacyUnlock,
-  PRIVACY_UNLOCK_DONE,
-  PRIVACY_UNLOCK_NONE,
+  privacyUnlockDone,
   privacyUnlockFlow,
+  privacyUnlockNone,
 } from "../../../../src/sidepanel/journeys/settings/privacy-unlock";
 import { emptyStatus } from "../../../../src/sidepanel/runtime/runtime";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
@@ -43,12 +43,12 @@ describe("unlock private transactions", () => {
     const unlocked = mounted(async () => true);
     unlocked.press();
     await flush();
-    expect(unlocked.result()).toBe(PRIVACY_UNLOCK_DONE);
+    expect(unlocked.result()).toBe(privacyUnlockDone());
 
     const none = mounted(async () => false);
     none.press();
     await flush();
-    expect(none.result()).toBe(PRIVACY_UNLOCK_NONE);
+    expect(none.result()).toBe(privacyUnlockNone());
   });
 
   test("a failed unlock reports nothing as unlocked", async () => {

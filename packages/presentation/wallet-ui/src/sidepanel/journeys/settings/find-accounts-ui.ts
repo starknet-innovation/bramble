@@ -6,6 +6,7 @@
  * the first-run scan binder so detection, grouping, and selection behave
  * identically.
  */
+import { t } from "../../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { bindRecoveryAccountUi } from "../onboarding/recovery-account-ui";
 import type { SettingsUiDeps } from "./settings-ui";
@@ -54,9 +55,9 @@ export const bindFindAccounts = (deps: SettingsUiDeps): void => {
       (error: unknown) => {
         buttonBusy(search, false);
         if (result) {
-          result.textContent = errorLine(error, "Account search is unavailable");
+          result.textContent = errorLine(error, t("settings.findAccounts.unavailable"));
         }
-        showToast(errorDetails(error, "Account search is unavailable"), "error", form);
+        showToast(errorDetails(error, t("settings.findAccounts.unavailable")), "error", form);
       },
     );
   });
