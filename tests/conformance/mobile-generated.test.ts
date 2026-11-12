@@ -133,11 +133,11 @@ describe("mobile core parity", () => {
 
   // The extension stays on its own Krusty release until it adopts the shared core, so the two
   // pins are no longer compared; the parity fixtures hold the releases to the same output.
-  // Mobile names Krusty nowhere (tests/privacy_key_boundary.rs) and pins none: Krusty comes only
-  // through wallet-core, pinned by `rev` (2.6's commit) until the tag that follows 2.6. So the
-  // lockfile must resolve one copy of each Krusty crate, at one version, as wallet-core's
-  // dependency and not mobile's; the core reports `wallet_core::KRUSTY_VERSION`, which lib.rs's
-  // `core_info_reports_the_krusty_this_lockfile_resolves` holds to that version.
+  // Mobile's core is wallet-core's `bramble-core` (mobile/core is a shell over it, pinned by `rev`
+  // until the tag that follows 2.7), which names Krusty nowhere (its tests/privacy_key_boundary.rs):
+  // Krusty comes only through `starknet-wallet-core`. So the lockfile must resolve one copy of each
+  // Krusty crate, at one version, as wallet-core's dependency and neither the core's nor the
+  // shell's; mobile/core/tests/core_info.rs holds what `core_info()` reports to that version.
   test("the Rust core links one Krusty release, the shared core's", async () => {
     const cargo = await readFile("mobile/core/Cargo.toml", "utf8");
     expect(cargo).not.toMatch(/^krusty-kms(-common)?\s*=/m);
@@ -154,9 +154,9 @@ describe("mobile core parity", () => {
     for (const krusty of ["krusty-kms", "krusty-kms-common"]) {
       expect(entry("starknet-wallet-core")).toContain(` "${krusty}",`);
       expect(entry("bramble-core")).not.toContain(` "${krusty}`);
+      expect(entry("bramble-mobile-core")).not.toContain(` "${krusty}`);
     }
-    const lib = await readFile("mobile/core/src/lib.rs", "utf8");
-    expect(lib).toContain("krusty_version: wallet_core::KRUSTY_VERSION.into()");
+    expect(entry("bramble-mobile-core")).toContain(` "bramble-core",`);
   });
 });
 

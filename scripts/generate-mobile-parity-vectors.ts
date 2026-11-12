@@ -2,7 +2,7 @@
  * Writes the extension-parity fixture the mobile Rust core is tested against: derivation vectors
  * from the extension's real Krusty path, plus one vault envelope sealed by the extension's own
  * `encryptJson`, so the core proves it can open what the extension writes. Re-run after bumping
- * Krusty in either `package.json` or `mobile/core/Cargo.toml`: `bun run mobile:parity`.
+ * Krusty in `package.json` or moving mobile's wallet-core pin (`mobile/core/Cargo.toml`): `bun run mobile:parity`.
  *
  * Sealing draws a fresh salt, IV and commit, so re-sealing on every run would rewrite the fixture
  * with no change in meaning. A committed envelope is therefore kept when it is still one the
