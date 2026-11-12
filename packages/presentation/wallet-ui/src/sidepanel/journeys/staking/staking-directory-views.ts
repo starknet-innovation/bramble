@@ -9,11 +9,13 @@
  * and an unknown figure says "unknown" rather than 0. The list names its
  * source and shows each address, because a name is not a check.
  */
+
 import { escapeHtml } from "@bramble/core/html";
 import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t, th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
 import type { StakingDirectoryEntry, StakingState } from "./staking-directory-client";
@@ -72,7 +74,7 @@ const listed = (
       ? emptyState(t("staking.directory.noValidators"))
       : `<ul class="allowance-list staking-list">${directory.entries.map(entryRow).join("")}</ul>`
   }
-  ${directory.moreError ? `<p class="hint" role="alert">${escapeHtml(directory.moreError)}</p>` : ""}
+  ${directory.moreError ? `<p class="hint" role="alert">${escapeHtml(localizeErrorCopy(directory.moreError))}</p>` : ""}
   ${
     directory.nextCursor
       ? `<div class="staking-more">${button({ attributes: { "data-staking-more": "" }, label: t("staking.directory.showMore"), size: "small", variant: "ghost" })}</div>`
@@ -93,7 +95,7 @@ export const stakingDirectorySection = (state: StakingState): string => {
         : "incomplete" in directory
           ? emptyState(t("staking.directory.incomplete"), "alert")
           : "unavailable" in directory
-            ? emptyState(directory.unavailable, "alert")
+            ? emptyState(localizeErrorCopy(directory.unavailable), "alert")
             : listed(directory)
   }${pasteForm("entries" in directory)}`;
 };

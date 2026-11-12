@@ -5,6 +5,7 @@
  * access and no state of its own.
  */
 
+import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t } from "../../../i18n/messages";
 import { bindCopyButtons, buttonBusy } from "../../shared/dom";
 import { applyOutcomeHash } from "../../shared/outcome-hash";
@@ -208,7 +209,8 @@ const applyFailureReceipt = (
     .querySelector("#send-failure-activity")
     ?.toggleAttribute("hidden", !unknown && priorWrite === null);
   const reason =
-    state.error || (submitted ? transferSentFailureReason() : t("send.failure.notSent"));
+    localizeErrorCopy(state.error) ||
+    (submitted ? transferSentFailureReason() : t("send.failure.notSent"));
   setText(form, "send-failure-copy", reason);
   // What is worth taking to support is the cause, not the identifier the
   // transaction never got: the complete diagnostic the rejected call carried,
@@ -347,7 +349,7 @@ export const applyTransferUi = (
   if (state.stage === "failed") {
     applyFailureReceipt(form, state);
   }
-  setText(form, "transfer-result", state.stage === "failed" ? "" : state.error);
+  setText(form, "transfer-result", state.stage === "failed" ? "" : localizeErrorCopy(state.error));
   if (previousStage && previousStage !== state.stage) {
     form.ownerDocument.documentElement.scrollTop = 0;
     form.ownerDocument.body.scrollTop = 0;

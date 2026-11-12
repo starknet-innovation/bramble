@@ -19,7 +19,8 @@
  * signs) every account at its own path.
  */
 
-import { asLedgerRejection, LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
+import { asLedgerRejection, LedgerRejection } from "@bramble/ledger-protocol/errors";
+import { ledgerMessageIn } from "@bramble/ledger-protocol/errors-i18n";
 import {
   closeLedgerSessionQuietly,
   type LedgerDeviceChoice,
@@ -35,6 +36,8 @@ import {
   type LedgerEip2645Application,
   READY_EIP2645_APPLICATION,
 } from "@bramble/wallet-model/ledger-path";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
+import { uiLocale } from "../../../i18n/locale";
 import { friendlyError } from "../../runtime/friendly-error";
 import { ADD_ACCOUNT_FAILED, isPhraselessAddRefusal } from "../../runtime/friendly-error-shared";
 import {
@@ -228,7 +231,10 @@ export const createLedgerOnboardController = (
     } catch (error) {
       moreQueued = false;
       if (epoch === flowEpoch) {
-        deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
+        deps.render({
+          kind: "error",
+          message: ledgerMessageIn(asLedgerRejection(error).code, uiLocale()),
+        });
       }
     } finally {
       if (session) {
@@ -284,7 +290,10 @@ export const createLedgerOnboardController = (
       (error) => {
         busy = false;
         if (epoch === flowEpoch) {
-          deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
+          deps.render({
+            kind: "error",
+            message: ledgerMessageIn(asLedgerRejection(error).code, uiLocale()),
+          });
         }
       },
     );
@@ -351,10 +360,9 @@ export const createLedgerOnboardController = (
       // account), never a device-catalog message. The background replies with
       // a raw diagnostic, so it is translated before it reaches the picker;
       // the wallet's own plumbing reads as "couldn't add that account".
-      const message = friendlyError(
-        error instanceof Error ? error.message : "",
-        ADD_ACCOUNT_FAILED,
-      ).message;
+      const message = localizeErrorCopy(
+        friendlyError(error instanceof Error ? error.message : "", ADD_ACCOUNT_FAILED).message,
+      );
       await deps.refresh().catch(() => undefined);
       if (epoch === flowEpoch) {
         renderPicker(message);
@@ -381,7 +389,7 @@ export const createLedgerOnboardController = (
       await deps.refresh();
     } catch (error) {
       const raw = error instanceof Error ? error.message : "";
-      const message = friendlyError(raw, ADD_ACCOUNT_FAILED).message;
+      const message = localizeErrorCopy(friendlyError(raw, ADD_ACCOUNT_FAILED).message);
       // No phrase to derive from: land on import, not on a Ledger "Try again".
       deps.render(
         isPhraselessAddRefusal(raw)

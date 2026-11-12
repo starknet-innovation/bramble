@@ -5,7 +5,8 @@
  * language list (set once by the entrypoint through `setGrantLocale`). Text
  * lands only through `textContent`, never as markup. Support codes and the
  * transport detail line stay English: they are read by support, not the user.
- * Device error sentences come from `ledgerMessage` and are not translated here.
+ * Device error sentences come from `ledgerMessageIn` (ledger-protocol), which holds
+ * their translations beside the English source; they are not repeated here.
  */
 import {
   type Catalog,
@@ -161,6 +162,9 @@ let active: Locale = SOURCE_LOCALE;
 export const setGrantLocale = (locale: Locale): void => {
   active = locale;
 };
+
+/** The grant tab's language, for text rendered from another catalog. */
+export const grantLocale = (): Locale => active;
 
 const lookup = translator(ledgerGrantMessages);
 
