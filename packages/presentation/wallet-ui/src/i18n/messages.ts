@@ -19,7 +19,28 @@ import { onboardingMessages } from "./messages/onboarding";
 import { privacyMessages } from "./messages/privacy";
 import { sendMessages } from "./messages/send";
 import { settingsMessages } from "./messages/settings";
+import { shellMessages } from "./messages/shell";
+import { shellScreenMessages } from "./messages/shell-screens";
 import { swapStakingMessages } from "./messages/swap-staking";
+
+/**
+ * Every area catalog by file name (`./messages/<name>.ts`). The catalog tests
+ * read it to refuse a message id two areas define and to pin signing text.
+ */
+export const UI_AREA_CATALOGS = {
+  ledger: ledgerMessages,
+  "multisig-propose": multisigProposeMessages,
+  "multisig-setup": multisigSetupMessages,
+  "multisig-signers": multisigSignerMessages,
+  multisig: multisigMessages,
+  onboarding: onboardingMessages,
+  privacy: privacyMessages,
+  send: sendMessages,
+  settings: settingsMessages,
+  "shell-screens": shellScreenMessages,
+  shell: shellMessages,
+  "swap-staking": swapStakingMessages,
+} as const;
 
 const en = {
   ...ledgerMessages.en,
@@ -31,6 +52,8 @@ const en = {
   ...privacyMessages.en,
   ...sendMessages.en,
   ...settingsMessages.en,
+  ...shellScreenMessages.en,
+  ...shellMessages.en,
   ...swapStakingMessages.en,
 } as const;
 
@@ -47,6 +70,8 @@ export const uiCatalogs = {
     ...privacyMessages["zh-Hans"],
     ...sendMessages["zh-Hans"],
     ...settingsMessages["zh-Hans"],
+    ...shellScreenMessages["zh-Hans"],
+    ...shellMessages["zh-Hans"],
     ...swapStakingMessages["zh-Hans"],
   },
 };

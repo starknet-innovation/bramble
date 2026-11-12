@@ -23,6 +23,7 @@ import { emptyState, pill } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { t, th } from "../../i18n/messages";
 import type { ArgentMultisigView } from "../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { icon } from "../shared/icons";
@@ -44,16 +45,19 @@ const drawerMultisigRow = (
   // Threshold and signer count are safe integers at the response boundary.
   // Escape them anyway: this string is later parsed as HTML.
   const authority = view.config
-    ? escapeHtml(`${view.config.threshold} of ${view.config.signerGuids.length}`)
-    : "authority unavailable";
-  const openLabel = open > 0 ? ` · ${escapeHtml(String(open))} open` : "";
+    ? th("shell.drawer.authority", {
+        signers: String(view.config.signerGuids.length),
+        threshold: String(view.config.threshold),
+      })
+    : th("shell.drawer.authorityUnavailable");
+  const openLabel = open > 0 ? ` · ${th("shell.drawer.open", { count: String(open) })}` : "";
   return `<li class="drawer-account-item">
     <button class="drawer-account drawer-multisig" data-multisig-select="${escapeHtml(record.id)}" type="button" aria-pressed="${record.id === selectedId}">
       <span class="option-avatar">${accountAvatar(record.address)}</span>
       <span class="drawer-copy">
-        <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
+        <strong>${escapeHtml(record.name ?? t("shell.header.multisigAccount"))}</strong>
         <code title="${escapeHtml(record.address)}">${escapeHtml(accountLabel(record.address))}</code>
-        <span class="account-groups-line">Multisig · ${authority}${openLabel}</span>
+        <span class="account-groups-line">${th("shell.drawer.multisig")} · ${authority}${openLabel}</span>
       </span>
       <span class="option-mark">${icon(record.id === selectedId ? "check" : "chevronRight")}</span>
     </button>
@@ -78,7 +82,7 @@ const drawerAccountRow = (
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
           <code title="${escapeHtml(stored.address)}">${escapeHtml(accountLabel(stored.address))}</code>
-          ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.record.name ?? "selected multisig")}</span>` : ""}
+          ${selectedMultisigSigner ? `<span class="account-groups-line">${th("shell.drawer.signerFor", { name: selectedMultisig?.record.name ?? t("shell.drawer.selectedMultisig") })}</span>` : ""}
         </span>
         ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>
@@ -104,7 +108,7 @@ const networkControl = (status: WalletStatus): string => `
       aria-expanded="false" aria-controls="drawer-network-menu">
       ${pill(networkDisplayName(status.network), { dot: true })}${icon("chevronDown")}
     </button>
-    <div class="drawer-network-menu" id="drawer-network-menu" role="group" aria-label="Network" hidden>
+    <div class="drawer-network-menu" id="drawer-network-menu" role="group" aria-label="${th("shell.drawer.network")}" hidden>
       ${status.networks
         .map(
           (network) => `<button class="drawer-network-option" type="button"
@@ -150,23 +154,23 @@ export const accountDrawer = (
   return `
   <div class="drawer-root" data-open="false">
     <div class="drawer-backdrop" data-drawer-close></div>
-    <aside class="account-drawer" role="dialog" aria-modal="true" aria-label="Accounts">
+    <aside class="account-drawer" role="dialog" aria-modal="true" aria-label="${th("shell.drawer.accounts")}">
       <header class="drawer-head">
         <div class="drawer-title">
-          <h2>Accounts</h2>
+          <h2>${th("shell.drawer.accounts")}</h2>
           ${networkControl(status)}
         </div>
         ${iconButton({
           attributes: { "data-drawer-close": true },
           className: "drawer-close",
           icon: "x",
-          label: "Close accounts",
+          label: t("shell.drawer.close"),
           variant: "ghost",
         })}
       </header>
       ${
         accounts.length === 0 && shared.length === 0
-          ? emptyState("No accounts on this network yet. Add one below.")
+          ? emptyState(t("shell.drawer.empty"))
           : `<div class="drawer-folders">${sections
               .map((section) =>
                 folderSection(
@@ -189,7 +193,7 @@ export const accountDrawer = (
               shared.length === 0
                 ? ""
                 : `<section class="drawer-folder drawer-shared">
-                    <p class="eyebrow">Multisig accounts</p>
+                    <p class="eyebrow">${th("shell.view.multisigs")}</p>
                     <ul class="drawer-list">${shared
                       .map((view) =>
                         drawerMultisigRow(
@@ -210,13 +214,13 @@ export const accountDrawer = (
         ${button({
           attributes: { id: "drawer-add-account" },
           icon: "plus",
-          label: "Add account",
+          label: t("shell.drawer.addAccount"),
           variant: "secondary",
         })}
         ${menuRow({
           attributes: { "data-view": "account" },
           icon: "settings",
-          label: "Manage accounts & folders",
+          label: t("shell.drawer.manage"),
         })}
       </div>
     </aside>

@@ -6,6 +6,7 @@
  * budget; each binder is safe to call after every render and closes over the
  * shared state accessors passed in `ShellBindingDeps`.
  */
+import { t } from "../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../shared/dom";
 import { bindReceiveWalletCard } from "./dashboard-bindings";
 import type { ShellBindingDeps } from "./shell-binding-deps";
@@ -34,13 +35,13 @@ export const bindDashboard = (deps: ShellBindingDeps): void => {
     buttonBusy(lockButton, true);
     void wallet.lockVault().then(
       (status) => {
-        showToast("Vault locked", "success", lockButton);
+        showToast(t("shell.lock.locked"), "success", lockButton);
         void render(status, "action");
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Lock failed"), "error", lockButton);
+        showToast(errorDetails(error, t("shell.lock.failed")), "error", lockButton);
         if (result) {
-          result.textContent = errorLine(error, "Lock failed");
+          result.textContent = errorLine(error, t("shell.lock.failed"));
         }
         buttonBusy(lockButton, false);
       },
@@ -83,18 +84,18 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
       }
       buttonBusy(button, true);
       if (result) {
-        result.textContent = "Switching network...";
+        result.textContent = t("shell.network.switching");
       }
       void wallet.setActiveNetwork(networkId).then(
         async (status) => {
           setActiveView("settings");
-          showToast("Network switched", "success", button);
+          showToast(t("shell.network.switched"), "success", button);
           await render(status, "action");
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Network switch failed"), "error", button);
+          showToast(errorDetails(error, t("shell.network.switchFailed")), "error", button);
           if (result) {
-            result.textContent = errorLine(error, "Network switch failed");
+            result.textContent = errorLine(error, t("shell.network.switchFailed"));
           }
           buttonBusy(button, false);
         },

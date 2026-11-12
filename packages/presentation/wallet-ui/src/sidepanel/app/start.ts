@@ -1,6 +1,7 @@
 /** Primary side-panel UI and its scene-preserving paint loop. */
 import type { LedgerConnector } from "@bramble/ledger-protocol/session";
 import { withDefaultGroups } from "@bramble/settings/groups";
+import { t } from "../../i18n/messages";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { actionableApprovals } from "../journeys/approvals/approval-screen";
 import { bindLedgerFirstRun } from "../journeys/ledger/first-run";
@@ -84,7 +85,7 @@ export const startWalletUi = async (
   let selectedNftId: string | null = null;
   let selectedMultisigId: string | null = null;
   const multisigChoice = multisigSelection({
-    notify: () => showNoticeToast("Couldn't switch accounts.", app),
+    notify: () => showNoticeToast(t("shell.account.switchFailed"), app),
     onShow: (id) => (selectedMultisigId = id),
     write: (id) => wallet.setSelectedMultisig(id),
   });
@@ -124,7 +125,7 @@ export const startWalletUi = async (
   const ledgerOnboard = createLedgerOnboardEntry({
     addHd: async (accountContractType) => {
       await wallet.addAccount(lastNetworkId, accountContractType);
-      showToast("Account added", "success", app);
+      showToast(t("shell.account.added"), "success", app);
     },
     cache,
     connector: ledgerConnector,
@@ -238,7 +239,7 @@ export const startWalletUi = async (
       onConnectAccount: bindConnectChoice({
         accountId: () => cache.status.activeAccountId,
         apply: showSelection,
-        notify: () => showNoticeToast("Couldn't switch accounts.", app),
+        notify: () => showNoticeToast(t("shell.account.switchFailed"), app),
         render: renderLatest,
         showMultisig: () => (activeView = "multisig-home"),
         switchAccount: (id) => wallet.setActiveAccount(id),

@@ -13,6 +13,7 @@ import { dockNavigation } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { explorerAccountUrl } from "@bramble/wallet-model/networks";
 import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
+import { t, th } from "../../i18n/messages";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { type IconName, icon } from "../shared/icons";
 import { networkDisplayName } from "../shared/network-label";
@@ -29,7 +30,7 @@ export const walletHeader = (
   networkIssue: string | null = null,
 ): string => {
   const name = multisig
-    ? (multisig.name ?? "Multisig account")
+    ? (multisig.name ?? t("shell.header.multisigAccount"))
     : account
       ? accountDisplayName(account, preferences)
       : "Bramble";
@@ -47,7 +48,7 @@ export const walletHeader = (
     : "";
   return `
   <header class="wallet-header">
-    <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false"${networkIssue ? ' aria-describedby="network-status-detail"' : ""} title="Manage accounts">
+    <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false"${networkIssue ? ' aria-describedby="network-status-detail"' : ""} title="${th("shell.header.manageAccounts")}">
       <span class="brand-mark">${address ? accountAvatar(address) : BRAMBLE_MARK}</span>
       <span class="account-meta">
         <span class="account-name"><strong>${escapeHtml(name)}</strong>${icon("chevronDown")}</span>
@@ -58,7 +59,7 @@ export const walletHeader = (
       ${iconButton({
         attributes: { "data-view": "connected-sites" },
         icon: "link",
-        label: "Connected sites",
+        label: t("shell.header.connectedSites"),
         variant: "ghost",
       })}
       ${
@@ -67,14 +68,14 @@ export const walletHeader = (
               attributes: { id: "starkscan-button" },
               disabled: true,
               icon: "externalLink",
-              label: "Explorer unavailable on this network",
+              label: t("shell.header.explorerUnavailable"),
               variant: "ghost",
             })
           : iconLink({
               attributes: { id: "starkscan-button" },
               href: explorerUrl,
               icon: "externalLink",
-              label: "View this account on the block explorer",
+              label: t("shell.header.viewOnExplorer"),
               target: "_blank",
               variant: "ghost",
             })
@@ -82,7 +83,7 @@ export const walletHeader = (
       ${iconButton({
         attributes: { id: "lock-button" },
         icon: "lock",
-        label: "Lock wallet",
+        label: t("shell.header.lock"),
         variant: "ghost",
       })}
     </div>
@@ -102,7 +103,7 @@ export const walletDock = (
       attributes: { "data-view": sharedAccount ? "multisig-home" : "home" },
       controls: "wallet-screen-home",
       icon: "home",
-      label: "Home",
+      label: t("shell.dock.home"),
       selected: activeView === "home" || activeView === "multisig-home",
     },
     {
@@ -110,14 +111,14 @@ export const walletDock = (
       controls: "wallet-screen-activity",
       count: pendingCount,
       icon: "activity",
-      label: "Activity",
+      label: t("shell.dock.activity"),
       selected: activeView === "activity",
     },
     {
       attributes: { "data-view": "settings" },
       controls: "wallet-screen-settings",
       icon: "settings",
-      label: "Settings",
+      label: t("shell.dock.settings"),
       selected: activeView === "settings",
     },
   ]);
@@ -131,13 +132,15 @@ export const pendingCallout = (pendingCount: number): string =>
     : callout({
         action: {
           attributes: { "data-view": "activity" },
-          label: "Review",
+          label: t("shell.pending.review"),
           size: "small",
           variant: "secondary",
         },
-        body: "Review before any site can see your accounts.",
+        body: t("shell.pending.body"),
         icon: "link",
-        title: `${pendingCount} connection ${pendingCount === 1 ? "request" : "requests"} waiting`,
+        title: t(pendingCount === 1 ? "shell.pending.titleOne" : "shell.pending.titleMany", {
+          count: String(pendingCount),
+        }),
       });
 
 /**
@@ -162,10 +165,10 @@ export const actionTile = (
  */
 export const explorerTile = (url: string | null): string => {
   const body = `<span class="tile-icon">${icon("externalLink")}</span>
-    <span class="tile-label">Explorer</span>`;
+    <span class="tile-label">${th("shell.tile.explorer")}</span>`;
   return url === null
-    ? `<button class="action-tile" type="button" disabled aria-label="Explorer unavailable on this network">${body}</button>`
-    : `<a class="action-tile" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open this account on the block explorer">${body}</a>`;
+    ? `<button class="action-tile" type="button" disabled aria-label="${th("shell.header.explorerUnavailable")}">${body}</button>`
+    : `<a class="action-tile" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="${th("shell.tile.openExplorer")}">${body}</a>`;
 };
 
 /**
@@ -192,7 +195,7 @@ export const shieldTile = (
   const needsDeploy = deployment === false;
   const needsFunds = needsDeploy && fundedForFees === false;
   const body = `<span class="tile-icon">${icon("shield")}</span>
-      <span class="tile-label">Shield</span>`;
+      <span class="tile-label">${th("shell.tile.shield")}</span>`;
   // Another wallet registered this account. The tile still opens the privacy
   // screen, which states why shield and unshield are off, and does not offer
   // to activate.
@@ -202,10 +205,10 @@ export const shieldTile = (
   // A read-only account cannot sign the activation or the shield, so the tile
   // is a true disabled control, not a link into a flow that fails at the end.
   if (readOnly) {
-    return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable — this account is read only">${body}</button>`;
+    return `<button class="action-tile" type="button" disabled aria-label="${th("shell.tile.shieldReadOnly")}">${body}</button>`;
   }
   if (tokenId === null) {
-    return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable until a token is tracked">${body}</button>`;
+    return `<button class="action-tile" type="button" disabled aria-label="${th("shell.tile.shieldNoToken")}">${body}</button>`;
   }
   // One tile, one word, whatever the account still needs: deployment and
   // funding are steps on the way to shielding, and the privacy screen this
@@ -213,11 +216,11 @@ export const shieldTile = (
   // reason, so a screen reader is told before the tap rather than after.
   const attribute = ready && !needsDeploy ? "data-send-shield" : "data-privacy-open";
   const label = needsFunds
-    ? "Shield — add STRK to this account first"
+    ? th("shell.tile.shieldNeedsFunds")
     : needsDeploy
-      ? "Shield — deploy this account first"
+      ? th("shell.tile.shieldNeedsDeploy")
       : ready
-        ? "Shield public value into your private balance"
-        : "Activate private balances";
+        ? th("shell.tile.shieldReady")
+        : th("shell.tile.activatePrivacy");
   return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
 };

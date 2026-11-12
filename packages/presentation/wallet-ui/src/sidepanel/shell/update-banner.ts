@@ -6,19 +6,20 @@
  * progress: the background refuses, and the banner says what to do.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { t } from "../../i18n/messages";
 import { buttonBusy, showToast } from "../shared/dom";
 
 /** Banner title. */
-export const UPDATE_READY_TITLE = "An update is ready";
+export const updateReadyTitle = (): string => t("shell.update.title");
 
 /** Banner body: the one consequence of restarting. */
-export const UPDATE_READY_BODY = "You'll unlock again after the restart.";
+export const updateReadyBody = (): string => t("shell.update.body");
 
 /** The restart control. */
-export const UPDATE_RESTART_LABEL = "Restart Bramble";
+export const updateRestartLabel = (): string => t("shell.update.restart");
 
 /** Shown when the restart waits for a request still in progress. */
-export const UPDATE_BUSY_NOTICE = "Finish what's in progress, then restart.";
+export const updateBusyNotice = (): string => t("shell.update.busy");
 
 const BANNER_ID = "update-banner";
 const CHECK_INTERVAL_MS = 60_000;
@@ -80,14 +81,14 @@ export const startUpdateBanner = ({
     const copy = doc.createElement("span");
     copy.className = "callout-copy";
     const title = doc.createElement("strong");
-    title.textContent = UPDATE_READY_TITLE;
+    title.textContent = updateReadyTitle();
     const body = doc.createElement("p");
-    body.textContent = UPDATE_READY_BODY;
+    body.textContent = updateReadyBody();
     copy.append(title, body);
     const restart = doc.createElement("button");
     restart.id = "update-restart";
     restart.type = "button";
-    restart.textContent = UPDATE_RESTART_LABEL;
+    restart.textContent = updateRestartLabel();
     holder.append(copy, restart);
     doc.body.prepend(holder);
     const control = holder.querySelector<HTMLButtonElement>("#update-restart");
@@ -96,12 +97,12 @@ export const startUpdateBanner = ({
       void wallet.applyUpdate().then(
         (outcome) => {
           if (outcome !== "restarting") {
-            if (outcome === "busy") showToast(UPDATE_BUSY_NOTICE, "warning", control);
+            if (outcome === "busy") showToast(updateBusyNotice(), "warning", control);
             buttonBusy(control, false);
           }
         },
         () => {
-          showToast(UPDATE_BUSY_NOTICE, "warning", control);
+          showToast(updateBusyNotice(), "warning", control);
           buttonBusy(control, false);
         },
       );
