@@ -9,6 +9,7 @@ import { callout } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
+import { t, th } from "../../../i18n/messages";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { recoveryGate } from "./gate-recovery-view";
 import { onboardingWizard } from "./onboarding-views";
@@ -36,11 +37,11 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
       gateBrand(),
       textField({
         autocomplete: "current-password",
-        label: "Password",
+        label: t("onboarding.unlock.password"),
         labelHidden: true,
         minlength: MIN_VAULT_PASSPHRASE_LENGTH,
         name: "vaultPassphrase",
-        placeholder: "Enter your password",
+        placeholder: t("onboarding.unlock.placeholder"),
         required: true,
         type: "password",
       }),
@@ -51,7 +52,7 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
   <section class="screen flow gate">
     ${gateBrand()}
     <div class="gate-head">
-      <h1>Welcome back</h1>
+      <h1>${th("onboarding.unlock.title")}</h1>
     </div>
     ${
       request
@@ -60,18 +61,18 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
             className: "gate-request",
             icon: "link",
             role: "status",
-            title: "Site request waiting",
+            title: t("onboarding.unlock.siteRequest"),
           })
         : ""
     }
     <form id="unlock-form" class="gate-form">
       ${textField({
         autocomplete: "current-password",
-        label: "Password",
+        label: t("onboarding.unlock.password"),
         labelHidden: true,
         minlength: MIN_VAULT_PASSPHRASE_LENGTH,
         name: "vaultPassphrase",
-        placeholder: "Enter your password",
+        placeholder: t("onboarding.unlock.placeholder"),
         required: true,
         type: "password",
       })}
@@ -79,7 +80,7 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
       <div class="gate-cta">
         ${button({
           disabled: !status.ready,
-          label: "Unlock",
+          label: t("onboarding.unlock.submit"),
           type: "submit",
         })}
       </div>

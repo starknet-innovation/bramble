@@ -4,12 +4,14 @@
  * escaped controls and never reads or stores wallet material.
  */
 
+import { escapeHtml } from "@bramble/core/html";
 import { BRAMBLE_WORDMARK } from "@bramble/ui-kit/brand-mark";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { inputControl, selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { RECOVERY_SCAN_LIMITS } from "@bramble/wallet-model/recovery";
+import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { addressFinderFields } from "./address-finder-view";
@@ -22,11 +24,13 @@ import { DEFAULT_BACKUP_VERIFY_POSITIONS } from "./backup-verify";
  * such consequence to state. It replaces the old acknowledgement tickbox with a
  * stated fact on each step that creates, imports or restores accounts.
  */
-const MAINNET_CONSEQUENCE = "This wallet is on Starknet Mainnet and holds real funds.";
 const networkConsequence = (): string =>
   DEFAULT_NETWORK.id === "SN_MAIN"
-    ? `<p class="hint onboarding-network-consequence">${MAINNET_CONSEQUENCE}</p>`
+    ? `<p class="hint onboarding-network-consequence">${th("onboarding.mainnet")}</p>`
     : "";
+
+const scanGroup = (family: string): string => th("onboarding.scan.group", { family });
+const scanGroupList = (family: string): string => th("onboarding.scan.groupList", { family });
 
 const flowBack = (label: string): string =>
   iconButton({
@@ -44,8 +48,8 @@ const stepHead = (
 ) => `
   <div class="onboarding-step-head">
     <div class="onboarding-step-icon">${icon(iconName)}</div>
-    <h1>${title}</h1>
-    ${lede ? `<p class="lede">${lede}</p>` : ""}
+    <h1>${escapeHtml(title)}</h1>
+    ${lede ? `<p class="lede">${escapeHtml(lede)}</p>` : ""}
   </div>`;
 
 const option = (
@@ -57,8 +61,8 @@ const option = (
   <button class="onboarding-option" id="${id}" type="button">
     <span class="onboarding-option-icon">${icon(iconName)}</span>
     <span class="onboarding-option-copy">
-      <strong>${title}</strong>
-      ${description ? `<span>${description}</span>` : ""}
+      <strong>${escapeHtml(title)}</strong>
+      ${description ? `<span>${escapeHtml(description)}</span>` : ""}
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -78,7 +82,7 @@ export const recoveryWordInputs = (kind: "generated" | "import"): string =>
     (_, index) =>
       `<label class="recovery-word-cell"><span aria-hidden="true">${index + 1}</span>${inputControl(
         {
-          ariaLabel: `Recovery word ${index + 1}`,
+          ariaLabel: t("onboarding.phrase.word", { position: String(index + 1) }),
           attributes: {
             "data-recovery-kind": kind,
             "data-word-index": `${index}`,
@@ -104,7 +108,7 @@ const backupVerifyInputs = (): string =>
       autocomplete: "off",
       autocapitalize: "off",
       inputmode: "text",
-      label: `Word ${position}`,
+      label: t("onboarding.verify.word", { position: String(position) }),
       name: `verify-${index}`,
       spellcheck: false,
     }),
@@ -117,32 +121,32 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
   return `
   ${textField({
     autocomplete: "new-password",
-    label: "Vault passphrase",
+    label: t("onboarding.passphrase.field"),
     minlength: MIN_VAULT_PASSPHRASE_LENGTH,
     name: passphraseName,
-    placeholder: `At least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+    placeholder: t("onboarding.passphrase.minimum", { min: String(MIN_VAULT_PASSPHRASE_LENGTH) }),
     required: true,
     trailing: iconButton({
       attributes: { "data-passphrase-reveal": true },
       className: "field-action",
       icon: "eye",
-      label: "Show passphrase",
+      label: t("onboarding.passphrase.show"),
       variant: "ghost",
     }),
     type: "password",
   })}
   ${textField({
     autocomplete: "new-password",
-    label: "Confirm passphrase",
+    label: t("onboarding.passphrase.confirm"),
     minlength: MIN_VAULT_PASSPHRASE_LENGTH,
     name: confirmationName,
-    placeholder: "Enter it again",
+    placeholder: t("onboarding.passphrase.again"),
     required: true,
     type: "password",
   })}
   <div class="password-requirement" aria-live="polite">
     <span class="password-requirement-bar"><span></span></span>
-    <span data-password-result>Enter at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters</span>
+    <span data-password-result>${th("onboarding.passphrase.tooShort", { min: String(MIN_VAULT_PASSPHRASE_LENGTH) })}</span>
   </div>`;
 };
 
@@ -153,12 +157,12 @@ const welcomeStep = (ready: boolean): string => `
       ${button({
         attributes: { id: "create-new-button" },
         disabled: !ready,
-        label: "Create a new wallet",
+        label: t("onboarding.welcome.create"),
       })}
       ${button({
         attributes: { id: "add-existing-button" },
         disabled: !ready,
-        label: "Add an existing wallet",
+        label: t("onboarding.welcome.addExisting"),
         variant: "secondary",
       })}
     </div>
@@ -166,34 +170,34 @@ const welcomeStep = (ready: boolean): string => `
 
 const methodStep = (ledgerAvailable = true): string => `
   <section class="onboarding-step" data-onboarding-step="method" hidden>
-    ${flowBack("Back to welcome")}
-    ${stepHead("wallet", "Import wallet")}
+    ${flowBack(t("onboarding.back.welcome"))}
+    ${stepHead("wallet", t("onboarding.method.title"))}
     <div class="onboarding-options">
       ${option(
         "recovery-method-button",
         "book",
-        "Recovery phrase",
-        "Import a recovery phrase from a Bramble, Ready or Braavos wallet.",
+        t("onboarding.method.phrase"),
+        t("onboarding.method.phraseHint"),
       )}
-      ${ledgerAvailable ? option("ledger-method-button", "shield", "Ledger hardware wallet") : ""}
+      ${ledgerAvailable ? option("ledger-method-button", "shield", t("onboarding.method.ledger")) : ""}
       ${option(
         "key-method-button",
         "link",
-        "Private key",
-        "Import a single account from its raw Starknet key.",
+        t("onboarding.method.key"),
+        t("onboarding.method.keyHint"),
       )}
     </div>
   </section>`;
 
 const recoveryStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery" hidden>
-    ${flowBack("Back to wallet methods")}
-    ${stepHead("book", "Enter your recovery phrase")}
+    ${flowBack(t("onboarding.back.methods"))}
+    ${stepHead("book", t("onboarding.phrase.title"))}
     <div class="onboarding-fields recovery-fields">
       <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
       <div class="recovery-actions">
-        <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
-        <button class="onboarding-inline-action" id="phrase-clear" type="button">Clear</button>
+        <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">${th("onboarding.phrase.use24")}</button>
+        <button class="onboarding-inline-action" id="phrase-clear" type="button">${th("onboarding.phrase.clear")}</button>
       </div>
       <p id="recovery-result" role="status"></p>
     </div>
@@ -201,15 +205,15 @@ const recoveryStep = (): string => `
       ${button({
         attributes: { id: "recovery-continue" },
         disabled: true,
-        label: "Continue",
+        label: t("onboarding.continue"),
       })}
     </div>
   </section>`;
 
 const generatedStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="generated" hidden>
-    ${flowBack("Back to welcome")}
-    ${stepHead("book", "Save your recovery phrase", "Write these words down in order and keep them offline.")}
+    ${flowBack(t("onboarding.back.welcome"))}
+    ${stepHead("book", t("onboarding.generated.title"), t("onboarding.generated.lede"))}
     <div class="onboarding-fields">
       <div
         class="recovery-grid is-masked"
@@ -219,35 +223,38 @@ const generatedStep = (): string => `
       >${recoveryWordInputs("generated")}</div>
       <div class="button-row">
         ${button({
-          attributes: { "aria-label": "Show recovery phrase", id: "phrase-toggle" },
+          attributes: { "aria-label": t("onboarding.generated.showLabel"), id: "phrase-toggle" },
           icon: "book",
-          label: "Show",
+          label: t("onboarding.generated.show"),
           variant: "secondary",
         })}
         ${button({
-          attributes: { "aria-label": "Copy recovery phrase", id: "generated-copy-phrase" },
+          attributes: {
+            "aria-label": t("onboarding.generated.copyLabel"),
+            id: "generated-copy-phrase",
+          },
           disabled: true,
           icon: "copy",
-          label: "Copy",
+          label: t("onboarding.generated.copy"),
           variant: "ghost",
         })}
       </div>
-      <p class="hint" id="generated-copy-note">Anyone with these words controls the wallet and its funds. Bramble cannot recover them for you.</p>
+      <p class="hint" id="generated-copy-note">${th("onboarding.generated.note")}</p>
       <p id="generate-result" role="status"></p>
     </div>
     <div class="onboarding-step-cta">
       ${button({
         attributes: { id: "generated-continue" },
         disabled: true,
-        label: "I saved my phrase",
+        label: t("onboarding.generated.continue"),
       })}
     </div>
   </section>`;
 
 const verifyStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="verify" hidden>
-    ${flowBack("Back to recovery phrase")}
-    ${stepHead("shield", "Confirm your backup")}
+    ${flowBack(t("onboarding.back.phrase"))}
+    ${stepHead("shield", t("onboarding.verify.title"))}
     <div class="onboarding-fields">
       <div class="verify-grid">${backupVerifyInputs()}</div>
       <p id="verify-result" role="status"></p>
@@ -257,7 +264,7 @@ const verifyStep = (): string => `
         ${button({
           attributes: { id: "verify-continue" },
           disabled: true,
-          label: "Continue",
+          label: t("onboarding.continue"),
         })}
       </div>
     </div>
@@ -265,8 +272,8 @@ const verifyStep = (): string => `
 
 const passwordStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="password" hidden>
-    ${flowBack("Back")}
-    ${stepHead("lock", "Create your vault passphrase")}
+    ${flowBack(t("onboarding.back"))}
+    ${stepHead("lock", t("onboarding.passphrase.title"))}
     <div class="onboarding-fields">
       <input name="accountContractType" type="hidden" value="openzeppelin" />
       ${passwordFields()}
@@ -276,30 +283,30 @@ const passwordStep = (): string => `
       ${button({
         attributes: { id: "password-continue-button" },
         disabled: true,
-        label: "Continue",
+        label: t("onboarding.continue"),
       })}
     </div>
   </section>`;
 
 const importKeyStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="import-key" hidden>
-    ${flowBack("Back to wallet methods")}
-    ${stepHead("wallet", "Import from a private key")}
+    ${flowBack(t("onboarding.back.methods"))}
+    ${stepHead("wallet", t("onboarding.key.title"))}
     <div class="onboarding-fields">
-      <p class="review-flag" role="note">Anyone with this key controls the account.</p>
+      <p class="review-flag" role="note">${th("onboarding.key.flag")}</p>
       ${selectField({
-        label: "Account type",
+        label: t("onboarding.key.accountType"),
         name: "importKeyContractType",
         options: [
-          { label: "Bramble Account", value: "openzeppelin" },
-          { label: "Ready Account", value: "argent" },
+          { label: t("onboarding.key.brambleAccount"), value: "openzeppelin" },
+          { label: t("onboarding.key.readyAccount"), value: "argent" },
         ],
         selected: "openzeppelin",
       })}
       ${textareaField({
         autocomplete: "off",
-        hint: "This key is stored encrypted in Bramble's key store.",
-        label: "Raw Starknet private key",
+        hint: t("onboarding.key.hint"),
+        label: t("onboarding.key.field"),
         name: "importKeyRaw",
         placeholder: "0x…",
         required: true,
@@ -308,7 +315,7 @@ const importKeyStep = (): string => `
       <div id="import-key-salt-field" hidden>
         ${textField({
           autocomplete: "off",
-          label: "Ready deployment salt (optional)",
+          label: t("onboarding.key.salt"),
           name: "importKeySalt",
           placeholder: "0x…",
           spellcheck: false,
@@ -322,7 +329,7 @@ const importKeyStep = (): string => `
       ${button({
         attributes: { id: "import-key-continue" },
         disabled: true,
-        label: "Continue",
+        label: t("onboarding.continue"),
       })}
     </div>
   </section>`;
@@ -335,40 +342,40 @@ const importKeyStep = (): string => `
  */
 export const recoveryScanFields = (): string => `
       <div class="section-head">
-        <p id="recovery-scan-status" class="hint" role="status">Ready to search.</p>
-        ${iconButton({ attributes: { id: "recovery-scan-retry" }, icon: "refresh", label: "Retry account search" })}
+        <p id="recovery-scan-status" class="hint" role="status">${th("onboarding.scan.ready")}</p>
+        ${iconButton({ attributes: { id: "recovery-scan-retry" }, icon: "refresh", label: t("onboarding.scan.retry") })}
       </div>
       <details class="disclosure account-group" data-recovery-group="openzeppelin">
-        <summary>Bramble accounts<span class="eyebrow" data-detected></span></summary>
+        <summary>${scanGroup("Bramble")}<span class="eyebrow" data-detected></span></summary>
         <div class="disclosure-body">
-          <ul class="allowance-list" aria-label="Recovered Bramble accounts"></ul>
+          <ul class="allowance-list" aria-label="${scanGroupList("Bramble")}"></ul>
         </div>
       </details>
       <details class="disclosure account-group" data-recovery-group="argent">
-        <summary>Ready accounts<span class="eyebrow" data-detected></span></summary>
+        <summary>${scanGroup("Ready")}<span class="eyebrow" data-detected></span></summary>
         <div class="disclosure-body">
-          <ul class="allowance-list" aria-label="Recovered Ready accounts"></ul>
+          <ul class="allowance-list" aria-label="${scanGroupList("Ready")}"></ul>
         </div>
       </details>
       <details class="disclosure account-group" data-recovery-group="braavos">
-        <summary>Braavos accounts<span class="eyebrow" data-detected></span></summary>
+        <summary>${scanGroup("Braavos")}<span class="eyebrow" data-detected></span></summary>
         <div class="disclosure-body">
-          <ul class="allowance-list" aria-label="Recovered Braavos accounts"></ul>
+          <ul class="allowance-list" aria-label="${scanGroupList("Braavos")}"></ul>
         </div>
       </details>${addressFinderFields("recovery")}
       <details class="disclosure">
-        <summary>Advanced manual index</summary>
+        <summary>${th("onboarding.scan.manual")}</summary>
         <div class="disclosure-body onboarding-fields">
-          ${textField({ inputmode: "numeric", label: "Account index", max: RECOVERY_SCAN_LIMITS.maxIndex, min: 0, name: "recoveryManualIndex", type: "number" })}
-          ${button({ attributes: { id: "recovery-manual-search" }, label: "Check this index", variant: "secondary" })}
+          ${textField({ inputmode: "numeric", label: t("onboarding.scan.accountIndex"), max: RECOVERY_SCAN_LIMITS.maxIndex, min: 0, name: "recoveryManualIndex", type: "number" })}
+          ${button({ attributes: { id: "recovery-manual-search" }, label: t("onboarding.scan.checkIndex"), variant: "secondary" })}
         </div>
       </details>
       <p id="recovery-accounts-result" role="status"></p>`;
 
 const recoveryAccountsStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery-accounts" hidden>
-    ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Find your accounts")}
+    ${flowBack(t("onboarding.back.passphrase"))}
+    ${stepHead("wallet", t("onboarding.scan.title"))}
     <div class="onboarding-fields">
 ${recoveryScanFields()}
       ${networkConsequence()}
@@ -377,21 +384,21 @@ ${recoveryScanFields()}
       ${button({
         attributes: { id: "recover-accounts-button" },
         disabled: true,
-        label: "Restore selected accounts",
+        label: t("onboarding.scan.restore"),
       })}
     </div>
   </section>`;
 
 const accountStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="accounts" hidden>
-    ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Review your account")}
+    ${flowBack(t("onboarding.back.passphrase"))}
+    ${stepHead("wallet", t("onboarding.account.title"))}
     <div class="onboarding-fields">
       <div class="onboarding-account" id="account-preview">
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
           <strong data-preview-label></strong>
-          <span data-preview-address>Deriving account…</span>
+          <span data-preview-address>${th("onboarding.account.deriving")}</span>
         </span>
         <span class="onboarding-account-check" aria-hidden="true">${icon("check")}</span>
       </div>
@@ -402,7 +409,7 @@ const accountStep = (): string => `
       ${button({
         attributes: { id: "create-wallet-button" },
         disabled: true,
-        label: "Finish setup",
+        label: t("onboarding.account.finish"),
         type: "submit",
       })}
     </div>
@@ -412,8 +419,8 @@ const ledgerStep = (status: WalletStatus, ledgerAvailable = true): string =>
   ledgerAvailable
     ? `
   <section class="onboarding-step" data-onboarding-step="ledger" hidden>
-    ${flowBack("Back to wallet methods")}
-    ${stepHead("lock", "Choose a password")}
+    ${flowBack(t("onboarding.back.methods"))}
+    ${stepHead("lock", t("onboarding.ledger.title"))}
     <form id="ledger-setup-form" class="onboarding-fields">
       ${passwordFields("ledger")}
       ${networkConsequence()}
@@ -422,7 +429,7 @@ const ledgerStep = (status: WalletStatus, ledgerAvailable = true): string =>
         ${button({
           attributes: { "data-ledger-first-run": true, id: "ledger-setup-button" },
           disabled: !status.ready,
-          label: "Continue with Ledger",
+          label: t("onboarding.ledger.continue"),
         })}
       </div>
     </form>
@@ -446,7 +453,7 @@ export const onboardingWizard = (status: WalletStatus, ledgerAvailable = true): 
   FIRST VIEWPORT: One centered wallet stage; the Bramble wordmark leads to two full-width actions at the foot.
   FORM: Staged wallet setup based on the supplied reference flow, adapted to Bramble trust boundaries.
   -->
-  <section class="screen flow gate onboarding-wizard" aria-label="Wallet setup">
+  <section class="screen flow gate onboarding-wizard" aria-label="${th("onboarding.wizard.label")}">
     <form id="create-form" class="onboarding-flow" data-wallet-ready="${status.ready === true ? "true" : "false"}" novalidate>
       ${welcomeStep(status.ready)}
       ${methodStep(ledgerAvailable)}

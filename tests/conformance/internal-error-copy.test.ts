@@ -227,6 +227,8 @@ const KEPT_VISIBLE = new Set([
 
 // Wallet-written sentences the wider scan found (constants, replies, UI copy).
 const SCANNED_SENTENCES = new Set([
+  // Settings → Language: the write failed; the setting is unchanged.
+  "Couldn't change the language.",
   "Deploy this account first (Settings → Deploy account).",
   "Not enough x",
   "The network fee was not reviewed. Nothing was submitted — review the transaction again.",

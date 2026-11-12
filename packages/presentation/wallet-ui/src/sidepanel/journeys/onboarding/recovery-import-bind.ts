@@ -7,6 +7,7 @@
  * are discarded when the phrase, word count, or recovery step has changed.
  */
 
+import { t } from "../../../i18n/messages";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { bindRecoveryWordEntry } from "./recovery-word-state";
@@ -93,7 +94,7 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
     const requestId = validateGeneration;
     buttonBusy(recoveryContinue, true);
     if (recoveryResult) {
-      recoveryResult.textContent = "Checking recovery phrase…";
+      recoveryResult.textContent = t("onboarding.phrase.checking");
     }
     void wallet.validateMnemonic(phrase).then(
       (valid) => {
@@ -108,16 +109,16 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
         buttonBusy(recoveryContinue, false);
         if (!valid) {
           if (recoveryResult) {
-            recoveryResult.textContent = "This recovery phrase is not valid.";
+            recoveryResult.textContent = t("onboarding.phrase.notValid");
           }
-          showToast("Invalid recovery phrase", "error", recoveryContinue);
+          showToast(t("onboarding.phrase.invalid"), "error", recoveryContinue);
           return;
         }
         setMnemonic(phrase);
         if (recoveryResult) {
           recoveryResult.textContent = "";
         }
-        showToast("Valid recovery phrase", "success", recoveryContinue);
+        showToast(t("onboarding.phrase.valid"), "success", recoveryContinue);
         wordAssist.hideSuggestions();
         showPasswordStep();
         refreshPassword();
@@ -131,15 +132,15 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
         ) {
           return;
         }
-        const message = errorMessage(error, "Could not check this recovery phrase");
+        const message = errorMessage(error, t("onboarding.phrase.checkFailed"));
         if (recoveryResult) {
-          recoveryResult.textContent = errorLine(error, "Could not check this recovery phrase");
+          recoveryResult.textContent = errorLine(error, t("onboarding.phrase.checkFailed"));
         }
         showToast(
           message,
           "error",
           recoveryContinue,
-          errorDetails(error, "Could not check this recovery phrase"),
+          errorDetails(error, t("onboarding.phrase.checkFailed")),
         );
         buttonBusy(recoveryContinue, false);
       },

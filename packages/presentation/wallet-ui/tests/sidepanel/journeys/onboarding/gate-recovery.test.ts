@@ -54,7 +54,8 @@ describe("recovery gate view", () => {
     const html = locked({ ...lockedStatus, recovery: "rollback" });
     expect(html).toContain("This wallet is out of date");
     expect(html).toContain("Restoring a browser backup causes this.");
-    expect(html).toContain("someone may have changed this browser's data");
+    // Catalog text is escaped into the template; the rendered text is unchanged.
+    expect(html).toContain("someone may have changed this browser&#39;s data");
     expect(html).toMatch(/<button type="submit">Unlock anyway<\/button>/);
   });
 

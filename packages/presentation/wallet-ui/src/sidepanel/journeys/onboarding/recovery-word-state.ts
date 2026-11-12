@@ -2,6 +2,8 @@
  * Small DOM helpers for recovery-word count and normalized field values.
  */
 
+import { t } from "../../../i18n/messages";
+
 /**
  * Identifies which recovery-word grid is being updated.
  */
@@ -20,7 +22,7 @@ export const setRecoveryWordCount = (
   if (kind !== "import") return;
   const toggle = form.querySelector<HTMLButtonElement>("#phrase-length-toggle");
   if (toggle) {
-    toggle.textContent = count === 12 ? "Use a 24-word phrase" : "Use a 12-word phrase";
+    toggle.textContent = t(count === 12 ? "onboarding.phrase.use24" : "onboarding.phrase.use12");
   }
 };
 

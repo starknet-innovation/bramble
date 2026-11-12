@@ -8,7 +8,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import {
-  BACKUP_VERIFY_COPY,
+  backupVerifyCopy,
   backupVerifyPositions,
   DEFAULT_BACKUP_VERIFY_POSITIONS,
 } from "../../../../src/sidepanel/journeys/onboarding/backup-verify";
@@ -114,7 +114,7 @@ describe("backup verification feedback", () => {
     type(app, 0, "w3");
     type(app, 1, "w7");
     type(app, 2, "w11");
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.confirmed);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("confirmed"));
     expect(continueDisabled(app)).toBe(false);
   });
 
@@ -127,7 +127,7 @@ describe("backup verification feedback", () => {
 
   test("an untouched form asks for the words, in the neutral tone", async () => {
     const app = await mountAtVerify();
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.incomplete);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("incomplete"));
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(false);
     expect(continueDisabled(app)).toBe(true);
   });
@@ -137,11 +137,11 @@ describe("backup verification feedback", () => {
     type(app, 0, MATCHING[0] ?? "");
     type(app, 1, MATCHING[1] ?? "");
     type(app, 2, "wrong");
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.incomplete);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("incomplete"));
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(false);
 
     commit(app, 2);
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.mismatch);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("mismatch"));
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(true);
     expect(continueDisabled(app)).toBe(true);
   });
@@ -151,7 +151,7 @@ describe("backup verification feedback", () => {
     type(app, 0, MATCHING[0] ?? "");
     type(app, 1, MATCHING[1] ?? "");
     type(app, 2, "wrong");
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.incomplete);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("incomplete"));
     expect(continueDisabled(app)).toBe(true);
     // A disabled button is not a hit target. The click lands on the step
     // action because the control is taken out of pointer events.
@@ -160,7 +160,7 @@ describe("backup verification feedback", () => {
     app
       .querySelector('[data-onboarding-step="verify"] .verify-continue-hit')
       ?.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.mismatch);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("mismatch"));
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(true);
     expect(continueDisabled(app)).toBe(true);
     expect(app.querySelector('[data-onboarding-step="password"]')?.hasAttribute("hidden")).toBe(
@@ -173,11 +173,11 @@ describe("backup verification feedback", () => {
     type(app, 0, MATCHING[0] ?? "");
     type(app, 1, MATCHING[1] ?? "");
     type(app, 2, "wrong");
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.incomplete);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("incomplete"));
     verifyInput(app, 2).dispatchEvent(
       new window.KeyboardEvent("keydown", { bubbles: true, key: "Enter" }),
     );
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.mismatch);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("mismatch"));
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(true);
     expect(continueDisabled(app)).toBe(true);
     expect(app.querySelector('[data-onboarding-step="password"]')?.hasAttribute("hidden")).toBe(
@@ -208,7 +208,7 @@ describe("backup verification feedback", () => {
     const app = await mountAtVerify();
     type(app, 0, "wrong");
     commit(app, 0);
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.incomplete);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("incomplete"));
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(false);
   });
 
@@ -221,7 +221,7 @@ describe("backup verification feedback", () => {
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(true);
 
     type(app, 2, MATCHING[2] ?? "");
-    expect(statusLine(app)?.textContent).toBe(BACKUP_VERIFY_COPY.confirmed);
+    expect(statusLine(app)?.textContent).toBe(backupVerifyCopy("confirmed"));
     expect(statusLine(app)?.classList.contains("is-invalid")).toBe(false);
     expect(continueDisabled(app)).toBe(false);
   });

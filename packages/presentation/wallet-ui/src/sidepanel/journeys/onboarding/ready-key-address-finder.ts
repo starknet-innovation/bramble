@@ -9,6 +9,7 @@
  */
 
 import { type KeyAddressCandidate, NO_READY_ACCOUNT_FOR_KEY } from "@bramble/wallet-model/recovery";
+import { t } from "../../../i18n/messages";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { errorDetails } from "../../shared/dom";
 import type { ReadyKeyPicker } from "./ready-key-picker";
@@ -38,8 +39,8 @@ export type ReadyKeyAddressFinder = {
 const foundLine = (candidate: KeyAddressCandidate | null): string => {
   if (candidate === null) return "";
   return candidate.restriction
-    ? "Found your account. It's view only until you recover it."
-    : "Found your account.";
+    ? t("onboarding.address.foundViewOnly")
+    : t("onboarding.address.found");
 };
 
 /** Binds the finder block inside a private-key import form. */

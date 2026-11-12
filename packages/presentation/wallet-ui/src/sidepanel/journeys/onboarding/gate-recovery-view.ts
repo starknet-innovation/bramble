@@ -11,22 +11,23 @@
 
 import { button } from "@bramble/ui-kit/controls";
 import type { VaultRecovery } from "@bramble/wallet-model/vault-recovery";
+import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 
 const RECOVERY_COPY: Readonly<
-  Record<VaultRecovery, { readonly title: string; readonly lede: string }>
+  Record<VaultRecovery, { readonly title: () => string; readonly lede: () => string }>
 > = {
   invalid: {
-    lede: "This wallet's saved data is damaged. Reinstall Bramble and restore your wallet from its recovery phrase.",
-    title: "This wallet cannot be opened",
+    lede: () => th("onboarding.recoveryGate.invalidLede"),
+    title: () => th("onboarding.recoveryGate.invalidTitle"),
   },
   rollback: {
-    lede: "Bramble has a newer copy on record. Restoring a browser backup causes this. If you did not, someone may have changed this browser's data.",
-    title: "This wallet is out of date",
+    lede: () => th("onboarding.recoveryGate.rollbackLede"),
+    title: () => th("onboarding.recoveryGate.rollbackTitle"),
   },
   unverified: {
-    lede: "Bramble cannot confirm this is the latest copy of your wallet.",
-    title: "Check this wallet",
+    lede: () => th("onboarding.recoveryGate.unverifiedLede"),
+    title: () => th("onboarding.recoveryGate.unverifiedTitle"),
   },
 };
 
@@ -46,8 +47,8 @@ export const recoveryGate = (
   const head = `
     ${brand}
     <div class="gate-head">
-      <h1>${copy.title}</h1>
-      <p class="lede">${copy.lede}</p>
+      <h1>${copy.title()}</h1>
+      <p class="lede">${copy.lede()}</p>
     </div>`;
   if (recovery === "invalid") {
     return `<section class="screen flow gate" data-recovery="${recovery}">${head}</section>`;
@@ -59,16 +60,16 @@ export const recoveryGate = (
       ${passwordField}
       <p id="form-result" role="status"></p>
       <div class="gate-cta">
-        <p class="hint">Unlocking it disconnects every site.</p>
+        <p class="hint">${th("onboarding.recoveryGate.disconnects")}</p>
         ${button({
           disabled: !status.ready,
-          label: "Unlock anyway",
+          label: t("onboarding.recoveryGate.unlockAnyway"),
           type: "submit",
         })}
       </div>
     </form>
     <div class="gate-alt">
-      <p class="hint">Or reinstall Bramble and restore your wallet from its recovery phrase.</p>
+      <p class="hint">${th("onboarding.recoveryGate.reinstall")}</p>
     </div>
   </section>`;
 };

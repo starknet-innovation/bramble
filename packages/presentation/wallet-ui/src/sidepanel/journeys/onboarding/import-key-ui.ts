@@ -9,6 +9,7 @@
  */
 
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
@@ -95,7 +96,7 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
   form.querySelector("#key-method-button")?.addEventListener("click", () => {
     active = true;
     deps.onEnter();
-    deps.passwordContinue?.lastChild?.replaceWith("Create wallet");
+    deps.passwordContinue?.lastChild?.replaceWith(t("onboarding.key.createWallet"));
     refreshGate();
     deps.showStep("import-key");
   });
@@ -142,8 +143,8 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
           refreshGate();
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Account import failed"), "error", form);
-          if (result) result.textContent = errorLine(error, "Account import failed");
+          showToast(errorDetails(error, t("onboarding.create.accountFailed")), "error", form);
+          if (result) result.textContent = errorLine(error, t("onboarding.create.accountFailed"));
           finder.offer({ error });
           buttonBusy(continueButton, false);
           refreshGate();
@@ -154,12 +155,12 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
   const runCreate = async (): Promise<void> => {
     const contract = contractSelect?.value;
     if (!isCreatableAccountContractType(contract)) {
-      showToast("Choose a supported account contract", "error", form);
+      showToast(t("onboarding.create.unsupportedContract"), "error", form);
       return;
     }
     const rawKey = rawInput?.value.trim() ?? "";
     if (rawKey.length === 0) {
-      showToast("Enter the account's private key", "error", form);
+      showToast(t("onboarding.key.enterKey"), "error", form);
       return;
     }
     // Only ticks made for exactly this key, salt, and network are sent; a list
@@ -172,7 +173,7 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
         deps.showStep("import-key");
       }
       if (pick === null) {
-        showToast("Choose the accounts to import", "error", form);
+        showToast(t("onboarding.key.chooseAccounts"), "error", form);
         return;
       }
     }
@@ -187,13 +188,13 @@ export const bindKeyImport = (deps: KeyImportUiDeps): KeyImportBinding => {
         sent.salt,
         pick ?? undefined,
       );
-      showToast("Wallet created", "success", form);
+      showToast(t("onboarding.create.created"), "success", form);
       await deps.render(await wallet.loadStatus());
     } catch (error) {
-      const message = errorMessage(error, "Account import failed");
-      showToast(message, "error", form, errorDetails(error, "Account import failed"));
+      const message = errorMessage(error, t("onboarding.create.accountFailed"));
+      showToast(message, "error", form, errorDetails(error, t("onboarding.create.accountFailed")));
       if (result) {
-        result.textContent = errorLine(error, "Account import failed");
+        result.textContent = errorLine(error, t("onboarding.create.accountFailed"));
       }
       buttonBusy(deps.passwordContinue, false);
     }

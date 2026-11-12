@@ -155,6 +155,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-phrase-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  // Onboarding copy catalog: its sentences and message ids name the passphrase
+  // the reader types ("Vault passphrase", "Incorrect passphrase"). It holds
+  // text only — never a value — and nothing in it reads, logs, or stores one.
+  "packages/presentation/wallet-ui/src/i18n/messages/onboarding.ts",
   // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
   "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",

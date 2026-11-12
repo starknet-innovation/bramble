@@ -3,12 +3,13 @@
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
 import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { friendlyAccountName } from "../../shared/parts";
 import {
-  BACKUP_VERIFY_COPY,
+  backupVerifyCopy,
   backupVerifyPositions,
   backupVerifyState,
   DEFAULT_BACKUP_VERIFY_POSITIONS,
@@ -154,10 +155,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     if (recoveryResult) {
       recoveryResult.textContent = incomplete
         ? words.some((word) => word.length > 0)
-          ? `Enter all ${importWordCount} words to continue.`
+          ? t("onboarding.phrase.enterAll", { count: String(importWordCount) })
           : ""
         : unknown
-          ? "Highlighted words are not in the BIP39 English list."
+          ? t("onboarding.phrase.unknownWords")
           : "";
     }
     invalidatePreview();
@@ -190,7 +191,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     }
     if (passphraseResult) {
       passphraseResult.textContent =
-        confirmation.length > 0 && !matches ? "Enter the same passphrase in both fields." : "";
+        confirmation.length > 0 && !matches ? t("onboarding.passphrase.sameInBoth") : "";
     }
     invalidatePreview();
   };
@@ -210,7 +211,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       const position = verifyPositions[index];
       const label = input.closest("label")?.querySelector("span");
       if (label && position !== undefined) {
-        label.textContent = `Word ${position}`;
+        label.textContent = t("onboarding.verify.word", { position: String(position) });
       }
     });
   };
@@ -222,7 +223,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     const shown = state === "mismatch" && !reportMismatch ? "incomplete" : state;
     verifyContinue?.toggleAttribute("disabled", state !== "confirmed");
     if (verifyResult) {
-      verifyResult.textContent = BACKUP_VERIFY_COPY[shown];
+      verifyResult.textContent = backupVerifyCopy(shown);
       verifyResult.classList.toggle("is-invalid", shown === "mismatch");
     }
   };
@@ -267,7 +268,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   form.querySelector("#recovery-method-button")?.addEventListener("click", () => {
     requiresVerification = false;
     keyImport.deactivate();
-    passwordContinue?.lastChild?.replaceWith("Find my accounts");
+    passwordContinue?.lastChild?.replaceWith(t("onboarding.create.findAccounts"));
     showStep("recovery");
   });
   form.querySelector("#ledger-method-button")?.addEventListener("click", () => showStep("ledger"));
@@ -294,7 +295,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     setMnemonic: (phrase) => {
       mnemonic = phrase;
       keyImport.deactivate();
-      passwordContinue?.lastChild?.replaceWith("Find my accounts");
+      passwordContinue?.lastChild?.replaceWith(t("onboarding.create.findAccounts"));
     },
     showPasswordStep: () => showStep("password"),
     wallet,
@@ -315,7 +316,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         mnemonic = generated.trim();
         applyVerifyPositions(mnemonic);
         keyImport.deactivate();
-        passwordContinue?.lastChild?.replaceWith("Review account");
+        passwordContinue?.lastChild?.replaceWith(t("onboarding.create.reviewAccount"));
         requiresVerification = true;
         generatedPhrase.reset();
         fillWords(generatedInputs, mnemonic.split(/\s+/), "generated");
@@ -323,7 +324,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           input.value = "";
         }
         if (generateResult) {
-          generateResult.textContent = "Reveal the phrase, save it offline, then continue.";
+          generateResult.textContent = t("onboarding.generated.reveal");
         }
         showStep("generated");
         buttonBusy(createNew, false);
@@ -333,8 +334,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           buttonBusy(createNew, false);
           return;
         }
-        const message = errorMessage(error, "Recovery phrase failed");
-        showToast(message, "error", form, errorDetails(error, "Recovery phrase failed"));
+        const fallback = t("onboarding.create.phraseFailed");
+        const message = errorMessage(error, fallback);
+        showToast(message, "error", form, errorDetails(error, fallback));
         buttonBusy(createNew, false);
       },
     );
@@ -382,16 +384,16 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       return;
     }
     if (requiresVerification && !verificationSatisfied()) {
-      showToast("Confirm your recovery phrase first", "error", form);
+      showToast(t("onboarding.create.verifyFirst"), "error", form);
       return;
     }
     buttonBusy(passwordContinue, true);
     if (passphraseResult) {
-      passphraseResult.textContent = "Deriving the public account address…";
+      passphraseResult.textContent = t("onboarding.create.deriving");
     }
     const contractType = accountContractType();
     if (!contractType) {
-      showToast("Choose a supported account contract", "error", form);
+      showToast(t("onboarding.create.unsupportedContract"), "error", form);
       buttonBusy(passwordContinue, false);
       return;
     }
@@ -426,11 +428,12 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         if (generation !== previewGeneration) {
           return;
         }
-        const message = errorMessage(error, "Could not derive this account");
+        const fallback = t("onboarding.create.deriveFailed");
         if (passphraseResult) {
-          passphraseResult.textContent = errorLine(error, "Could not derive this account");
+          passphraseResult.textContent = errorLine(error, fallback);
         }
-        showToast(message, "error", form, errorDetails(error, "Could not derive this account"));
+        const message = errorMessage(error, fallback);
+        showToast(message, "error", form, errorDetails(error, fallback));
         buttonBusy(passwordContinue, false);
       },
     );
@@ -440,14 +443,14 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     event.preventDefault();
     if (!previewMatchesInput) {
       if (result) {
-        result.textContent = "Wait for the account to finish deriving.";
+        result.textContent = t("onboarding.create.waitDeriving");
       }
       return;
     }
     buttonBusy(submitButton, true);
     const contractType = accountContractType();
     if (!contractType) {
-      showToast("Choose a supported account contract", "error", form);
+      showToast(t("onboarding.create.unsupportedContract"), "error", form);
       buttonBusy(submitButton, false);
       return;
     }
@@ -455,14 +458,15 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       .createAccount(mnemonic, selectedNetworkId(), passphraseInput?.value ?? "", contractType)
       .then(
         async () => {
-          showToast("Wallet created", "success", form);
+          showToast(t("onboarding.create.created"), "success", form);
           await deps.render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          const message = errorMessage(error, "Account import failed");
-          showToast(message, "error", form, errorDetails(error, "Account import failed"));
+          const fallback = t("onboarding.create.accountFailed");
+          const message = errorMessage(error, fallback);
+          showToast(message, "error", form, errorDetails(error, fallback));
           if (result) {
-            result.textContent = errorLine(error, "Account import failed");
+            result.textContent = errorLine(error, fallback);
           }
           buttonBusy(submitButton, false);
         },
