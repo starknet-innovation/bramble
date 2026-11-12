@@ -8,12 +8,95 @@
  * figure at all rather than a guessed one. Pure — no DOM, no clock.
  */
 import type { DisplayCurrency, TokenConfig } from "@bramble/settings/preferences";
-import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { ActivityEntry, ActivityStatus } from "@bramble/transactions/activity";
 import type { IconName } from "@bramble/ui-kit/icons";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { t, type UiMessageKey } from "../../../i18n/messages";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { accountLabel } from "../../shared/parts";
 import { compactAmount } from "./token-row";
+
+// The verb and kind words are classification keys as well as copy: the
+// Activity filter matches on the English title (`data-activity-action`), so the
+// model keeps English and these translate it only where it is shown.
+const TITLE_TEXT = {
+  Received: "portfolio.activity.title.received",
+  Sent: "portfolio.activity.title.sent",
+  Swapped: "portfolio.activity.title.swapped",
+  Unstaked: "portfolio.activity.title.unstaked",
+  "Claimed rewards": "portfolio.activity.title.claimedRewards",
+  Staked: "portfolio.activity.title.staked",
+  Unshielded: "portfolio.activity.title.unshielded",
+  Shielded: "portfolio.activity.title.shielded",
+  "Private transfer": "portfolio.activity.title.privateTransfer",
+  "Private transaction": "portfolio.activity.title.privateTransaction",
+  Revoked: "portfolio.activity.title.revoked",
+  Approved: "portfolio.activity.title.approved",
+  Deployed: "portfolio.activity.title.deployed",
+  Declared: "portfolio.activity.title.declared",
+  Interacted: "portfolio.activity.title.interacted",
+} as const satisfies Readonly<Record<string, UiMessageKey>>;
+const KIND_TEXT = {
+  Transfer: "portfolio.activity.kind.transfer",
+  Swap: "portfolio.activity.kind.swap",
+  Unstake: "portfolio.activity.kind.unstake",
+  "Claim rewards": "portfolio.activity.kind.claimRewards",
+  Stake: "portfolio.activity.kind.stake",
+  "Private transaction": "portfolio.activity.kind.privateTransaction",
+  Approval: "portfolio.activity.kind.approval",
+  Deployment: "portfolio.activity.kind.deployment",
+  "Contract declaration": "portfolio.activity.kind.contractDeclaration",
+  "Contract interaction": "portfolio.activity.kind.contractInteraction",
+} as const satisfies Readonly<Record<string, UiMessageKey>>;
+
+type TitleKey = (typeof TITLE_TEXT)[keyof typeof TITLE_TEXT];
+type KindKey = (typeof KIND_TEXT)[keyof typeof KIND_TEXT];
+
+/** A row verb (`ActivityAppearance.title`) in the active language. */
+export const activityTitleText = (title: string): string => {
+  const key = (TITLE_TEXT as Readonly<Record<string, TitleKey>>)[title];
+  return key === undefined ? title : t(key);
+};
+
+/** A row kind (`ActivityAppearance.label`) in the active language. */
+export const activityKindText = (label: string): string => {
+  const key = (KIND_TEXT as Readonly<Record<string, KindKey>>)[label];
+  return key === undefined ? label : t(key);
+};
+
+/** A transaction status as the row and the filter show it, capitalised. */
+export const activityStatusTitle = (status: ActivityStatus): string => t(STATUS_TITLE_KEYS[status]);
+
+/** A transaction status as a lowercase word, for the row's accessible name. */
+export const activityStatusWord = (status: ActivityStatus): string => t(STATUS_WORD_KEYS[status]);
+
+const STATUS_TITLE_KEYS = {
+  accepted: "portfolio.activity.statusTitle.accepted",
+  pending: "portfolio.activity.statusTitle.pending",
+  preconfirmed: "portfolio.activity.statusTitle.preconfirmed",
+  rejected: "portfolio.activity.statusTitle.rejected",
+  reverted: "portfolio.activity.statusTitle.reverted",
+} as const satisfies Readonly<Record<ActivityStatus, UiMessageKey>>;
+const STATUS_WORD_KEYS = {
+  accepted: "portfolio.activity.status.accepted",
+  pending: "portfolio.activity.status.pending",
+  preconfirmed: "portfolio.activity.status.preconfirmed",
+  rejected: "portfolio.activity.status.rejected",
+  reverted: "portfolio.activity.status.reverted",
+} as const satisfies Readonly<Record<ActivityStatus, UiMessageKey>>;
+
+/** The counterparty fact's term and its copy control's name, by role. */
+export const counterpartyText = (
+  role: "counterparty" | "recipient" | "sender",
+): { readonly copy: string; readonly term: string } =>
+  role === "recipient"
+    ? { copy: t("portfolio.activity.copyRecipient"), term: t("portfolio.activity.recipient") }
+    : role === "sender"
+      ? { copy: t("portfolio.activity.copySender"), term: t("portfolio.activity.sender") }
+      : {
+          copy: t("portfolio.activity.copyCounterparty"),
+          term: t("portfolio.activity.counterparty"),
+        };
 
 // Decimal places an activity row shows at most.
 const ACTIVITY_FRACTION_PLACES = 4;
@@ -215,10 +298,10 @@ const LEADING_FIGURE = /^~?\d[\d,]*(?:\.\d+)?\s+\S+\s*/;
 const TRAILING_PRIVATELY = /\s+privately$/i;
 
 /**
- * Upper-cases the first character of a display string (status words, detail
+ * Upper-cases the first character of a display string (summary detail
  * remainders); an empty string passes through.
  */
-export const capitalise = (value: string): string =>
+const capitalise = (value: string): string =>
   value.length === 0 ? value : `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
 
 // What the recorded counterparty was to this account: the sender of value that
@@ -233,12 +316,6 @@ type CounterpartyRole = "counterparty" | "recipient" | "sender";
 type ActivityCounterparty = {
   readonly address: string;
   readonly role: CounterpartyRole;
-};
-
-const COUNTERPARTY_PREPOSITION: Readonly<Record<CounterpartyRole, string>> = {
-  counterparty: "With",
-  recipient: "To",
-  sender: "From",
 };
 
 const activityCounterparty = (
@@ -266,12 +343,17 @@ const activityDetail = (
   hasAmount: boolean,
 ): string | null => {
   if (counterparty) {
-    return `${COUNTERPARTY_PREPOSITION[counterparty.role]} ${accountLabel(counterparty.address)}`;
+    const address = accountLabel(counterparty.address);
+    return counterparty.role === "sender"
+      ? t("portfolio.activity.from", { address })
+      : counterparty.role === "recipient"
+        ? t("portfolio.activity.to", { address })
+        : t("portfolio.activity.with", { address });
   }
   const summary = compactSummary(entry.summary.trim());
   if (appearance.type === "swap") {
     const pair = SWAP_PAIR.exec(summary);
-    if (pair?.[1] && pair[2]) return `${pair[1]} to ${pair[2]}`;
+    if (pair?.[1] && pair[2]) return t("portfolio.activity.pair", { from: pair[1], to: pair[2] });
   }
   if (appearance.type === "other") return summary.length === 0 ? null : summary;
   let remainder = summary.replace(LEADING_VERB, "");

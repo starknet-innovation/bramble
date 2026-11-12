@@ -19,6 +19,7 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import type { AllowanceListing, WalletStatus } from "../../../popup/responses/responses";
 import {
   accountLabel,
@@ -49,7 +50,7 @@ const tokenFor = (
 const displayAmount = (amount: string, token: TokenConfig | null): string =>
   token && /^\d+$/.test(amount)
     ? `${compactAmount(formatTokenAmount(BigInt(amount), token.decimals))} ${token.symbol}`
-    : `${compactAmount(amount)} base units`;
+    : t("portfolio.allowance.baseUnits", { amount: compactAmount(amount) });
 
 // A record the wallet can only bound from below (an increase applied on top of
 // a grant it never saw) is labelled as such rather than printed as if it were
@@ -59,53 +60,49 @@ const displayAmount = (amount: string, token: TokenConfig | null): string =>
 // this wallet cannot state, which "at least 0" would read as harmless.
 const amountLabel = (allowance: AllowanceView, token: TokenConfig | null): string =>
   isUnlimitedAllowance(allowance.amount)
-    ? "Unlimited"
+    ? t("portfolio.allowance.unlimited")
     : !allowance.lowerBound
       ? displayAmount(allowance.amount, token)
       : allowance.amount === "0"
-        ? "an unknown amount"
-        : `at least ${displayAmount(allowance.amount, token)}`;
+        ? t("portfolio.allowance.unknownAmount")
+        : t("portfolio.allowance.atLeast", { amount: displayAmount(allowance.amount, token) });
 
 // A contract the wallet cannot call a token: an ERC721 `approve(to, item_id)`
 // is the same three felts as an ERC20 `approve(spender, amount)`, so the figure
 // above may be an item id. The revoke control is withheld with it — sending
 // `approve(spender, 0)` at a collection approves item #0 rather than revoking —
 // and the background refuses that broadcast too.
-const UNCONFIRMED_TOKEN_NOTE =
-  "This wallet cannot confirm this contract is a token, so the value may be an NFT item id rather than an amount. Revoke it from the site that asked for it.";
+const unconfirmedTokenNote = (): string => t("portfolio.allowance.unconfirmedToken");
 
 // What the listing could not vouch for. Shown above the list, and above the
 // "none found" line too, because an empty list from a partial reading is not a
 // statement that nothing is outstanding (Sherlock 181, 183, 190).
-const NOTICE_COPY: Readonly<Record<AllowanceNotice, string>> = {
-  "multisig-unread":
-    "A watched multisig could not be read, so approvals it granted may be missing.",
-  "retention-full": `This wallet keeps ${ALLOWANCE_LIMITS.entriesPerScope} approvals per account and drops the smallest first, so some may be missing.`,
-  "scan-incomplete":
-    "This list may be incomplete. Some older approvals on your tokens could not be checked.",
-};
-
-const UNAVAILABLE_COPY = "Allowances could not be loaded. Refresh to try again.";
+const noticeCopy = (notice: AllowanceNotice): string =>
+  notice === "multisig-unread"
+    ? t("portfolio.allowance.multisigUnread")
+    : notice === "retention-full"
+      ? t("portfolio.allowance.retentionFull", {
+          count: String(ALLOWANCE_LIMITS.entriesPerScope),
+        })
+      : t("portfolio.allowance.scanIncomplete");
 
 // Before the first answer, a count of zero or "none found" would be a claim
 // the wallet has not checked.
-const LOADING_COPY = "Loading allowances…";
 
 const noticeLines = (notices: readonly AllowanceNotice[]): string =>
   notices
-    .map((notice) => `<p class="hint allowance-notice">${escapeHtml(NOTICE_COPY[notice])}</p>`)
+    .map((notice) => `<p class="hint allowance-notice">${escapeHtml(noticeCopy(notice))}</p>`)
     .join("");
 
 // A revoke this wallet sent that the chain has not confirmed. The row keeps
 // the grant's amount and its revoke control: if the revoke reverted, the grant
 // still stands (Sherlock 192).
-const REVOKING_NOTE = "Revoke sent. It stays listed until the network confirms it.";
-
-const SOURCE_LABELS: Readonly<Record<AllowanceView["source"], string>> = {
-  external: "on-chain",
-  multisig: "granted by a multisig you sign for",
-  wallet: "this wallet",
-};
+const sourceLabel = (source: AllowanceView["source"]): string =>
+  source === "external"
+    ? t("portfolio.allowance.sourceChain")
+    : source === "multisig"
+      ? t("portfolio.allowance.sourceMultisig")
+      : t("portfolio.allowance.sourceWallet");
 
 // One allowance per row: the spender leads (it is who can move funds), shown
 // truncated with a copy control for the full address so it can be checked
@@ -119,10 +116,10 @@ const SOURCE_LABELS: Readonly<Record<AllowanceView["source"], string>> = {
 const allowanceRow = (allowance: AllowanceView, token: TokenConfig | null): string => `
   <li class="allowance-row">
     <div class="allowance-copy">
-      <span class="allowance-spender"><code title="${escapeHtml(allowance.spender)}">${escapeHtml(accountLabel(allowance.spender))}</code>${inlineCopyButton(allowance.spender, "Copy spender address")}</span>
-      <p class="hint"><span class="allowance-amount" title="${escapeHtml(allowance.token)}">${escapeHtml(amountLabel(allowance, token))}</span>${token ? "" : ` of <span title="${escapeHtml(allowance.token)}">${escapeHtml(accountLabel(allowance.token))}</span>`} · ${escapeHtml(SOURCE_LABELS[allowance.source])}${inlineCopyButton(allowance.token, "Copy token contract address")}</p>
-      ${allowance.unconfirmedToken ? `<p class="hint">${escapeHtml(UNCONFIRMED_TOKEN_NOTE)}</p>` : ""}
-      ${allowance.revoking ? `<p class="hint">${escapeHtml(REVOKING_NOTE)}</p>` : ""}
+      <span class="allowance-spender"><code title="${escapeHtml(allowance.spender)}">${escapeHtml(accountLabel(allowance.spender))}</code>${inlineCopyButton(allowance.spender, t("portfolio.allowance.copySpender"))}</span>
+      <p class="hint"><span class="allowance-amount" title="${escapeHtml(allowance.token)}">${escapeHtml(amountLabel(allowance, token))}</span>${token ? "" : ` ${th("portfolio.allowance.of")} <span title="${escapeHtml(allowance.token)}">${escapeHtml(accountLabel(allowance.token))}</span>`} · ${escapeHtml(sourceLabel(allowance.source))}${inlineCopyButton(allowance.token, t("portfolio.activity.copyTokenContract"))}</p>
+      ${allowance.unconfirmedToken ? `<p class="hint">${escapeHtml(unconfirmedTokenNote())}</p>` : ""}
+      ${allowance.revoking ? `<p class="hint">${th("portfolio.allowance.revoking")}</p>` : ""}
       <p class="allowance-review" data-allowance-review-for="${escapeHtml(allowance.id)}" role="status" hidden></p>
     </div>
     ${
@@ -130,7 +127,7 @@ const allowanceRow = (allowance: AllowanceView, token: TokenConfig | null): stri
         ? ""
         : button({
             attributes: { "data-revoke-allowance": allowance.id },
-            label: "Revoke",
+            label: t("portfolio.allowance.revoke"),
             size: "small",
             tone: "danger",
             variant: "ghost",
@@ -158,36 +155,36 @@ export const allowancesFlow = (
   );
   return (
     flowHeader(
-      "Allowances",
+      t("portfolio.allowance.title"),
       status,
       listing.loading
         ? undefined
         : listing.unavailable
-          ? "Not loaded"
-          : `${scoped.length} outstanding`,
+          ? t("portfolio.allowance.notLoaded")
+          : t("portfolio.allowance.outstanding", { count: String(scoped.length) }),
     ) +
     flowScreen(
       "allowances",
       `<section class="section">
         <div class="section-head">
-          <p class="lede">Revoking sets a spender's allowance to zero after you confirm its network fee.</p>
-          ${iconButton({ attributes: { id: "allowance-refresh" }, icon: "refresh", label: "Refresh allowances" })}
+          <p class="lede">${th("portfolio.allowance.lede")}</p>
+          ${iconButton({ attributes: { id: "allowance-refresh" }, icon: "refresh", label: t("portfolio.allowance.refresh") })}
         </div>
         ${contextHelp(
           "allowance-scan-scope",
-          "What this list includes",
-          "It includes approvals granted here and approvals discovered on-chain for tracked ERC-20 tokens. 'At least' means the wallet can only prove a lower bound. NFT approvals and untracked tokens are outside this scan; unconfirmed contracts keep no revoke control because an ERC-20 revoke call could grant an NFT instead.",
+          t("portfolio.allowance.scopeTitle"),
+          t("portfolio.allowance.scopeBody"),
         )}
         ${account === null || listing.unavailable ? "" : noticeLines(listing.notices)}
         ${
           account === null
-            ? emptyState("Unlock an account on this network to manage allowances.")
+            ? emptyState(t("portfolio.allowance.noAccount"))
             : listing.loading
-              ? emptyState(LOADING_COPY)
+              ? emptyState(t("portfolio.allowance.loading"))
               : listing.unavailable
-                ? emptyState(UNAVAILABLE_COPY, "alert")
+                ? emptyState(t("portfolio.allowance.unavailable"), "alert")
                 : scoped.length === 0
-                  ? emptyState("No allowances on tokens you track.")
+                  ? emptyState(t("portfolio.allowance.none"))
                   : `<ul class="allowance-list">${scoped.map((allowance) => allowanceRow(allowance, tokenFor(allowance, preferences))).join("")}</ul>`
         }
         <p id="allowance-result" role="status"></p>

@@ -6,6 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import { th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
 
 /** The programme's published portfolio threshold, in US dollars. */
@@ -42,10 +43,10 @@ export const vipEligible = (input: {
 export const vipNotice = (eligible: boolean, siteUrl: string | null = VIP_SITE_URL): string => {
   if (!eligible || siteUrl === null || !siteUrl.startsWith("https://")) return "";
   return `<div class="vip-notice" data-vip-notice>
-      <p class="hero-stale">${icon("star")}<span>Eligible for Starknet VIP</span></p>
+      <p class="hero-stale">${icon("star")}<span>${th("portfolio.vip.eligible")}</span></p>
       <div class="vip-notice-actions">
-        <a class="vip-link" href="${escapeHtml(siteUrl)}" target="_blank" rel="noopener noreferrer">See Starknet VIP${icon("externalLink")}</a>
-        <button class="ghost" id="vip-notice-hide" type="button">Don't show again</button>
+        <a class="vip-link" href="${escapeHtml(siteUrl)}" target="_blank" rel="noopener noreferrer">${th("portfolio.vip.see")}${icon("externalLink")}</a>
+        <button class="ghost" id="vip-notice-hide" type="button">${th("portfolio.vip.hide")}</button>
       </div>
     </div>`;
 };

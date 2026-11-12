@@ -6,6 +6,7 @@
  */
 
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { confirmSecondTap } from "../../shared/two-tap-confirm";
 import { bindNftSendForm, type NftSendDeps } from "./nft-send-ui";
@@ -33,7 +34,7 @@ const bindAddForm = (deps: NftUiDeps): void => {
     const data = new FormData(form);
     buttonBusy(submitButton, true);
     if (result) {
-      result.textContent = "Checking ownership...";
+      result.textContent = t("collectibles.checking");
     }
     void deps.wallet
       .addNft(
@@ -44,13 +45,13 @@ const bindAddForm = (deps: NftUiDeps): void => {
       )
       .then(
         async () => {
-          showToast("NFT added", "success", deps.app);
+          showToast(t("collectibles.added"), "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't add that NFT"), "error", deps.app);
+          showToast(errorDetails(error, t("collectibles.addFailed")), "error", deps.app);
           if (result) {
-            result.textContent = errorLine(error, "Couldn't add that NFT");
+            result.textContent = errorLine(error, t("collectibles.addFailed"));
           }
           buttonBusy(submitButton, false);
         },
@@ -143,11 +144,11 @@ const bindHideDiscovered = (deps: NftUiDeps): void => {
         .then(() => deps.wallet.setNftSpam(target.id, true))
         .then(
           async () => {
-            showToast("NFT hidden", "success", deps.app);
+            showToast(t("collectibles.hidden"), "success", deps.app);
             await rerender(deps);
           },
           (error: unknown) => {
-            showToast(errorDetails(error, "Couldn't update that NFT"), "error", deps.app);
+            showToast(errorDetails(error, t("collectibles.updateFailed")), "error", deps.app);
             buttonBusy(button, false);
           },
         );
@@ -173,7 +174,7 @@ const bindShowArt = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't show the art"), "error", deps.app);
+          showToast(errorDetails(error, t("collectibles.showArtFailed")), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -203,7 +204,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't update that NFT"), "error", deps.app);
+          showToast(errorDetails(error, t("collectibles.updateFailed")), "error", deps.app);
           buttonBusy(button, false);
         },
       );
@@ -222,7 +223,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
       // and carries the label as its accessible name.
       if (
         !confirmSecondTap(button, {
-          label: "Tap again to remove",
+          label: t("collectibles.confirmRemove"),
           replaceContent: !button.classList.contains("icon-button"),
         })
       ) {
@@ -231,11 +232,11 @@ const bindRowActions = (deps: NftUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.removeNft(id).then(
         async () => {
-          showToast("NFT removed", "success", deps.app);
+          showToast(t("collectibles.removed"), "success", deps.app);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Couldn't remove that NFT"), "error", deps.app);
+          showToast(errorDetails(error, t("collectibles.removeFailed")), "error", deps.app);
           buttonBusy(button, false);
         },
       );

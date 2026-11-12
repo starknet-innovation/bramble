@@ -20,6 +20,7 @@ import {
   PRIVACY_OTHER_WALLET,
   PRIVACY_OTHER_WALLET_NEXT,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import { t, th } from "../../../i18n/messages";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -71,13 +72,13 @@ const trackedRow = (
   const spam = isLikelySpam(token);
   const fiat = balance ? tokenFiatValue(balance.formatted, price) : null;
   const toggle = spam
-    ? '<span class="token-flag">Likely spam</span>'
+    ? `<span class="token-flag">${th("portfolio.tokens.likelySpam")}</span>`
     : button({
         attributes: {
           "data-token-hidden": String(isHidden),
           "data-token-toggle": token.id,
         },
-        label: isHidden ? "Show" : "Hide",
+        label: isHidden ? t("portfolio.tokens.show") : t("portfolio.tokens.hide"),
         size: "small",
         variant: "secondary",
       });
@@ -98,7 +99,7 @@ const trackedRow = (
         : iconButton({
             attributes: { "data-token-remove": token.id },
             icon: "x",
-            label: `Remove ${token.symbol}`,
+            label: t("portfolio.tokens.remove", { symbol: token.symbol }),
             tone: "danger",
           })
     }
@@ -121,21 +122,25 @@ export const tokensFlow = (
   );
   const balanceById = new Map(balances.map((balance) => [balance.id, balance]));
   return (
-    flowHeader("Tokens", status, `${tracked.length} tracked`) +
+    flowHeader(
+      t("portfolio.tabs.tokens"),
+      status,
+      t("portfolio.tokens.trackedCount", { count: String(tracked.length) }),
+    ) +
     flowScreen(
       "tokens",
       `<section class="section">
-        <div class="menu-list" role="group" aria-label="Token actions">
-          ${walletMenuRow("token-catalog", "Pick tokens from the avnu list", "coins")}
-          ${walletMenuRow("token-add", "Add by contract", "plus")}
-          ${walletMenuRow("token-discover", "Find held tokens", "search")}
+        <div class="menu-list" role="group" aria-label="${th("portfolio.tokens.actions")}">
+          ${walletMenuRow("token-catalog", t("portfolio.tokens.pickCatalog"), "coins")}
+          ${walletMenuRow("token-add", t("portfolio.tokens.addByContract"), "plus")}
+          ${walletMenuRow("token-discover", t("portfolio.tokens.findHeld"), "search")}
         </div>
       </section>
       <section class="section">
-        <p class="eyebrow">Tracked tokens</p>
+        <p class="eyebrow">${th("portfolio.tokens.tracked")}</p>
         ${
           tracked.length === 0
-            ? emptyState("No tokens tracked on this network yet.")
+            ? emptyState(t("portfolio.tokens.noneTracked"))
             : `<ul class="token-list">${tracked
                 .map((token) =>
                   trackedRow(
@@ -148,7 +153,7 @@ export const tokensFlow = (
                 )
                 .join("")}</ul>`
         }
-        <p class="hint">Hidden and likely-spam tokens stay off home but remain listed here.</p>
+        <p class="hint">${th("portfolio.tokens.hiddenHint")}</p>
       </section>`,
     )
   );
@@ -158,7 +163,7 @@ export const tokensFlow = (
  * Renders manual token import as a focused contract-identity task.
  */
 export const tokenAddFlow = (status: WalletStatus): string =>
-  flowHeader("Add token", status, "Track a token by its contract") +
+  flowHeader(t("portfolio.tokenAdd.title"), status, t("portfolio.tokenAdd.subtitle")) +
   flowScreen(
     "token-add",
     `<section class="section">
@@ -166,14 +171,14 @@ export const tokenAddFlow = (status: WalletStatus): string =>
         ${textField({
           autocomplete: "off",
           className: "mono",
-          hint: "Name, symbol, and decimals are read from the contract before it is saved.",
-          label: "Contract address",
+          hint: t("portfolio.tokenAdd.hint"),
+          label: t("portfolio.tokenAdd.field"),
           name: "address",
           placeholder: "0x…",
           required: true,
           spellcheck: false,
         })}
-        ${button({ icon: "check", label: "Read and add token", type: "submit" })}
+        ${button({ icon: "check", label: t("portfolio.tokenAdd.submit"), type: "submit" })}
         <p id="token-add-result" role="status"></p>
       </form>
     </section>`,
@@ -183,15 +188,15 @@ export const tokenAddFlow = (status: WalletStatus): string =>
  * Renders curated token discovery as its own scan-and-review task.
  */
 export const tokenDiscoverFlow = (status: WalletStatus): string =>
-  flowHeader("Find held tokens", status, "Scan the Starknet token registry") +
+  flowHeader(t("portfolio.tokens.findHeld"), status, t("portfolio.tokenDiscover.subtitle")) +
   flowScreen(
     "token-discover",
     `<section class="section">
-      <p class="hint">Likely-spam tokens stay hidden from Home.</p>
+      <p class="hint">${th("portfolio.tokenDiscover.hint")}</p>
       ${button({
         attributes: { id: "detect-tokens" },
         icon: "refresh",
-        label: "Scan for tokens",
+        label: t("portfolio.tokenDiscover.scan"),
       })}
       <div id="detect-results"></div>
       <p id="detect-result" role="status"></p>
@@ -201,7 +206,7 @@ export const tokenDiscoverFlow = (status: WalletStatus): string =>
 const sparkline = (points: readonly number[]): string => {
   const path = sparklinePath(points, 100, 32);
   if (path.length === 0) {
-    return emptyState("Price history unavailable.");
+    return emptyState(t("portfolio.detail.noHistory"));
   }
   return `<svg class="sparkline sparkline-${sparklineTrend(points)}" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${path}" /></svg>`;
 };
@@ -217,18 +222,18 @@ const tokenActions = (tokenId: string, stakable: boolean): string =>
   `<div class="token-privacy-actions">${button({
     attributes: { "data-send-token": tokenId },
     icon: "send",
-    label: "Send",
+    label: t("portfolio.home.send"),
   })}${button({
     attributes: { "data-swap-token": tokenId },
     icon: "swap",
-    label: "Swap",
+    label: t("portfolio.home.swap"),
     variant: "secondary",
   })}</div>${
     stakable
       ? button({
           attributes: { "data-stake-token": tokenId },
           icon: "trendingUp",
-          label: "Stake",
+          label: t("portfolio.detail.stake"),
           variant: "secondary",
         })
       : ""
@@ -248,19 +253,26 @@ const privacyActions = (
     return button({
       attributes: { "data-privacy-open": tokenId },
       icon: "shield",
-      label: "Shield",
+      label: t("portfolio.token.shield"),
     });
   if (privacy.error) return "";
   if (privacy.value?.registration === "registered")
-    return `<div class="token-privacy-actions">${button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: "Shield" })}${button({ attributes: { "data-send-unshield": tokenId }, label: "Unshield", variant: "secondary" })}</div>`;
+    return `<div class="token-privacy-actions">${button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: t("portfolio.token.shield") })}${button({ attributes: { "data-send-unshield": tokenId }, label: t("portfolio.detail.unshield"), variant: "secondary" })}</div>`;
   // A deployed, unregistered account's first shield registers in the same
   // transaction (mc-wallet 789), so it is offered directly: one pool fee, not two.
   if (seen === true && privacy.value?.registration === "unregistered")
-    return button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: "Shield" });
+    return button({
+      attributes: { "data-send-shield": tokenId },
+      icon: "shield",
+      label: t("portfolio.token.shield"),
+    });
   return button({
     attributes: { "data-privacy-open": tokenId },
     icon: "shield",
-    label: privacy.value?.registration === "pending" ? "Registration pending" : "Go private",
+    label:
+      privacy.value?.registration === "pending"
+        ? t("portfolio.detail.registrationPending")
+        : t("portfolio.detail.goPrivate"),
   });
 };
 
@@ -297,13 +309,13 @@ export const tokenDetailFlow = (
     flowScreen(
       "token-detail",
       `<section class="section">
-        <p class="eyebrow">Price</p>
-        <p class="token-detail-price">${escapeHtml(price === null ? "Unavailable" : formatFiat(price, currency))}</p>
+        <p class="eyebrow">${th("portfolio.detail.price")}</p>
+        <p class="token-detail-price">${escapeHtml(price === null ? t("portfolio.token.unavailable") : formatFiat(price, currency))}</p>
         ${sparkline(chart)}
-        <p class="hint">7-day price from CoinGecko. Shown for information only.</p>
+        <p class="hint">${th("portfolio.detail.priceSource")}</p>
       </section>
       <section class="section">
-        <p class="eyebrow">Your balance</p>
+        <p class="eyebrow">${th("portfolio.detail.yourBalance")}</p>
         <div class="token-side">
           <span class="token-amount">${escapeHtml(balance?.formatted ? `${compactAmount(balance.formatted)} ${token.symbol}` : "—")}</span>
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
@@ -311,26 +323,26 @@ export const tokenDetailFlow = (
         ${
           privacy.blockerKind === "other-wallet"
             ? `<div class="private-balance-summary muted">
-                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="private-balance-label">${icon("lock")}<span>${th("portfolio.token.privateBalance")}</span></span>
                 <span class="token-fiat">${escapeHtml(PRIVACY_OTHER_WALLET)} ${escapeHtml(PRIVACY_OTHER_WALLET_NEXT)}</span>
               </div>`
             : privacy.error && deployment !== false
               ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
-                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
-                <span class="token-fiat">Try again</span>
+                <span class="private-balance-label">${icon("lock")}<span>${th("portfolio.token.privateBalance")}</span></span>
+                <span class="token-fiat">${th("portfolio.tokens.retry")}</span>
               </button>`
               : registered
                 ? `<div class="private-balance-summary">
-                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="private-balance-label">${icon("lock")}<span>${th("portfolio.token.privateBalance")}</span></span>
                 <span class="token-side">
                   <strong class="token-amount">${escapeHtml(`${compactAmount(privateBalance?.formatted ?? "0")} ${token.symbol}`)}</strong>
                   ${privateFiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(privateFiat, currency))}</span>`}
                 </span>
               </div>`
                 : privacy.value
-                  ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
-                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
-                <span class="token-fiat">${registrationPending ? "Registration pending…" : "Register to start shielding"}</span>
+                  ? `<div class="private-balance-summary muted" title="${registrationPending ? th("portfolio.detail.waitingIndexer") : th("portfolio.token.register")}">
+                <span class="private-balance-label">${icon("lock")}<span>${th("portfolio.token.privateBalance")}</span></span>
+                <span class="token-fiat">${registrationPending ? th("portfolio.token.registrationPending") : th("portfolio.token.register")}</span>
               </div>`
                   : ""
         }
@@ -338,21 +350,21 @@ export const tokenDetailFlow = (
         ${privacyActions(token.id, privacy, deployment)}
       </section>
       <section class="section">
-        <p class="eyebrow">Contract</p>
+        <p class="eyebrow">${th("portfolio.detail.contract")}</p>
         ${receipt([
           {
             action: {
               attributes: { "data-copy": token.address },
               icon: "copy",
-              label: "Copy token address",
+              label: t("portfolio.detail.copyAddress"),
             },
-            label: "Address",
+            label: t("portfolio.detail.address"),
             value: accountLabel(token.address),
             valueStyle: "code",
           },
-          { label: "Symbol", value: token.symbol },
-          { label: "Decimals", value: String(token.decimals) },
-          { label: "Network", value: networkDisplayName(status.network) },
+          { label: t("portfolio.detail.symbol"), value: token.symbol },
+          { label: t("portfolio.detail.decimals"), value: String(token.decimals) },
+          { label: t("portfolio.activity.network"), value: networkDisplayName(status.network) },
         ])}
       </section>`,
     )

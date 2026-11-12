@@ -8,6 +8,7 @@
  */
 
 import { activityToCsv } from "@bramble/transactions/activity";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, showToast, type ToastTone } from "../../shared/dom";
@@ -43,10 +44,10 @@ export const activityExportToast = (
 ): { readonly message: string; readonly tone: ToastTone } =>
   historyUnavailable
     ? {
-        message: "Exported this device's records only — on-chain history was unavailable.",
+        message: t("portfolio.activity.exportedDeviceOnly"),
         tone: "error",
       }
-    : { message: "Activity exported", tone: "success" };
+    : { message: t("portfolio.activity.exported"), tone: "success" };
 
 // The search box keeps its caret across a repaint (a background refresh rebuilds
 // the screen string). Set while the field has focus, cleared on a real blur, so a
@@ -91,7 +92,12 @@ const applyActivityView = (app: Element | null): void => {
     filter.token !== "all";
   const result = app.querySelector("#activity-result");
   if (result)
-    result.textContent = filtered ? `${visible.length} of ${rows.length} transactions` : "";
+    result.textContent = filtered
+      ? t("portfolio.activity.visibleCount", {
+          total: String(rows.length),
+          visible: String(visible.length),
+        })
+      : "";
   const summaryEl = app.querySelector<HTMLElement>("#activity-party-summary");
   if (!summaryEl) return;
   const summary =
@@ -215,7 +221,7 @@ export const bindActivity = ({ app, render, repaint, wallet }: ActivityUiDeps): 
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
-        showToast(errorDetails(error, "Export failed"), "error", exportButton);
+        showToast(errorDetails(error, t("portfolio.activity.exportFailed")), "error", exportButton);
         buttonBusy(exportButton, false);
       },
     );

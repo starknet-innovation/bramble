@@ -3,6 +3,7 @@
  * through the verified send path and refreshes the tracked list.
  */
 import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
@@ -32,7 +33,7 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
       .loadStatus()
       .then(render)
       .catch((error: unknown) => {
-        showToast(errorDetails(error, "Allowance refresh failed"), "error", refresh);
+        showToast(errorDetails(error, t("portfolio.allowance.refreshFailed")), "error", refresh);
         buttonBusy(refresh, false);
       });
   });
@@ -68,7 +69,7 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
             buttonBusy(button, false);
             return;
           }
-          showToast("Revoke submitted", "success", button);
+          showToast(t("portfolio.allowance.submitted"), "success", button);
           if (result) {
             result.textContent = `Submitted ${response}`;
           }
