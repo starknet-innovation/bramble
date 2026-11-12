@@ -5,6 +5,8 @@
  * beside it); the validator screen then reads and verifies everything on chain, and an action there is prepared by the
  * background from that address alone.
  */
+
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy } from "../../shared/dom";
@@ -48,7 +50,7 @@ export const bindStakingDirectory = (deps: StakingDirectoryUiDeps): void => {
     if (staker === null) {
       if (error) {
         error.hidden = false;
-        error.textContent = "Enter a valid Starknet address.";
+        error.textContent = t("staking.directory.invalidAddress");
       }
       field?.focus();
       return;

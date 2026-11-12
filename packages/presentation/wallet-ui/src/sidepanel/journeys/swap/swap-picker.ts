@@ -14,6 +14,7 @@
 
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { errorDetails, showToast } from "../../shared/dom";
@@ -136,8 +137,8 @@ const dropdownGroups = (deps: SwapPickerDeps): readonly TokenDropdownGroup[] => 
       symbol: entry.symbol,
     }));
   return [
-    { label: "Your tokens", options: mine },
-    { label: "More tokens", options: rest, search: true },
+    { label: t("swap.picker.yours"), options: mine },
+    { label: t("swap.picker.more"), options: rest, search: true },
   ];
 };
 
@@ -180,7 +181,7 @@ const addThenSelect = (
     })
     .catch((error: unknown) => {
       pendingAdd = null;
-      showToast(errorDetails(error, "Could not add that token"), "error", root);
+      showToast(errorDetails(error, t("swap.picker.addFailed")), "error", root);
     });
 };
 
