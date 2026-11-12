@@ -36,8 +36,8 @@ test("each warning's reference renders to exactly its English, fact included", (
     "https://example.org",
   ]) {
     const insight = originInsights(origin, { firstSeenAt: null });
-    expect(insight.warningTexts.map(insightEnglish)).toEqual([...insight.warnings]);
-    expect(insight.warningTexts.every(isInsightText)).toBe(true);
+    expect(insight.warningTexts?.map(insightEnglish)).toEqual([...insight.warnings]);
+    expect(insight.warningTexts?.every(isInsightText)).toBe(true);
   }
   expect(originInsights("https://example.org", { connected: true }).warnings).toEqual([
     "You have connected to this site before.",

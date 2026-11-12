@@ -31,4 +31,6 @@ export const REVIEW_MESSAGE_PINS: Readonly<Record<string, string>> = {
   "review.flag.undecodedSwap": "d770d6ec4edbc42d",
   "review.flag.unknownContract": "f65657f934bfa2df",
   "review.flag.unlimitedApproval": "3b76249d27297f33",
+  "review.sign.name": "5e291d7bcb2dd847",
+  "review.switchNetwork": "6702f8ab98b307f0",
 };

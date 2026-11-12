@@ -8,6 +8,7 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
+import { reviewTextsFor } from "@bramble/transactions/review-messages";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
@@ -175,7 +176,7 @@ export const queueInvokeApproval = async (
       .filter((token) => input.calls.some((call) => sameFelt(call.contractAddress, token.address)))
       .map((token) => ({ address: token.address, symbol: token.symbol })),
     summaries: report.calls.map((call) => call.summary),
-    summaryTexts: report.calls.map((call) => call.text),
+    summaryTexts: reviewTextsFor(report.calls),
   });
   notifyApprovalsChanged();
   const revision = deps.approvals.beginFeeEstimate(approval.id);

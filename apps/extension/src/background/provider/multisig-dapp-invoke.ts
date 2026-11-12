@@ -18,6 +18,7 @@ import { preparedArgentMultisigFee } from "@bramble/starknet/multisig-invoke";
 import { REVIEWED_FEE_EXCEEDED, REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
 import { activityOrigin } from "@bramble/transactions/activity";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
+import { reviewTextsFor } from "@bramble/transactions/review-messages";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
@@ -126,7 +127,7 @@ const queueMultisigDappInvoke = async (
       .filter((token) => input.calls.some((call) => sameFelt(call.contractAddress, token.address)))
       .map((token) => ({ address: token.address, symbol: token.symbol })),
     summaries: report.calls.map((call) => call.summary),
-    summaryTexts: report.calls.map((call) => call.text),
+    summaryTexts: reviewTextsFor(report.calls),
   });
   notifyApprovalsChanged();
   const revision = deps.approvals.beginFeeEstimate(approval.id);

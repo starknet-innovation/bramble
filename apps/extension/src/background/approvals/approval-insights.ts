@@ -34,7 +34,7 @@ export const enrichApprovals = async (
         ...approval,
         blocked: insight.blocked,
         insights: insight.warnings,
-        insightTexts: insight.warningTexts,
+        ...(insight.warningTexts === undefined ? {} : { insightTexts: insight.warningTexts }),
       };
     }),
   );

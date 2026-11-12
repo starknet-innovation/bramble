@@ -9,6 +9,8 @@ import {
   reviewEnglish,
   reviewMessages,
   reviewText,
+  reviewTextsFor,
+  withReviewText,
 } from "@bramble/transactions/review-messages";
 import { REVIEW_MESSAGE_PINS } from "./review-message-pins";
 
@@ -81,5 +83,22 @@ describe("isReviewText", () => {
     ]) {
       expect(isReviewText(value), JSON.stringify(value)).toBe(false);
     }
+  });
+});
+
+describe("references only ride when the panel would accept them", () => {
+  test("an empty fact drops the reference, never the English", () => {
+    expect(
+      withReviewText(reviewText("review.call.unknown", { contract: "0x1…2", entrypoint: "" })),
+    ).toEqual({});
+    const ok = reviewText("review.flag.selfTransfer");
+    expect(withReviewText(ok)).toEqual({ text: ok });
+  });
+
+  test("lines pair with references only when every line has one", () => {
+    const ok = reviewText("review.flag.selfTransfer");
+    expect(reviewTextsFor([{ text: ok }, { text: ok }])).toEqual([ok, ok]);
+    expect(reviewTextsFor([{ text: ok }, {}])).toBeUndefined();
+    expect(reviewTextsFor([])).toEqual([]);
   });
 });

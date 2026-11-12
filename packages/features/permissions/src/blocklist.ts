@@ -21,7 +21,7 @@
 
 import type { MessageRef } from "@bramble/core/i18n";
 import { normalizeHostname } from "@bramble/core/service-url";
-import { insightEnglish, insightText } from "./insight-messages";
+import { insightEnglish, insightText, isInsightText } from "./insight-messages";
 
 /**
  * Bundled baseline of known-bad registrable domains — the always-on offline floor.
@@ -119,15 +119,18 @@ export type OriginInsight = {
   readonly blocked: boolean;
   /** English warnings, rendered from `warningTexts`. */
   readonly warnings: readonly string[];
-  /** The same warnings as references, for the UI to render in the reader's language. */
-  readonly warningTexts: readonly MessageRef[];
+  /**
+   * The same warnings as references, index for index, for the UI to render in
+   * the reader's language. Absent when any would not pass the panel's bounds.
+   */
+  readonly warningTexts?: readonly MessageRef[];
 };
 
 // Decided as references; the English is derived so the two never disagree.
 const insightResult = (blocked: boolean, texts: readonly MessageRef[]): OriginInsight => ({
   blocked,
   warnings: texts.map(insightEnglish),
-  warningTexts: texts,
+  ...(texts.every(isInsightText) ? { warningTexts: texts } : {}),
 });
 
 const hostnameOf = (origin: string): string | null => {

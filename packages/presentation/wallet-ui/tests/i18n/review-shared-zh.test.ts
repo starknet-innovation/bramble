@@ -295,3 +295,28 @@ describe("site warnings on cards", () => {
     expect(html).toContain("此钱包首次见到此网站");
   });
 });
+
+describe("background lines on switch and typed-data cards", () => {
+  test("switch and OutsideExecution lines render from their references", async () => {
+    const { reviewEnglish, reviewText } = await import("@bramble/transactions/review-messages");
+    const sw = reviewText("review.switchNetwork", { network: "Starknet Sepolia" });
+    const name = reviewText("review.sign.name", { name: "OutsideExecution · AVNU" });
+    const call = reviewText("review.call.send", { amount: "5 STRK", to: "0x1234…abcd" });
+    zh();
+    const switchHtml = card({
+      kind: "switch-chain",
+      summaries: [reviewEnglish(sw)],
+      summaryTexts: [sw],
+    });
+    expect(switchHtml).toContain("切换网络至 Starknet Sepolia");
+    expect(switchHtml).not.toContain("Switch network to");
+    const signHtml = card({
+      kind: "sign-typed-data",
+      summaries: [reviewEnglish(name), reviewEnglish(call)],
+      summaryTexts: [name, call],
+      typedData: { domain: {}, message: {}, primaryType: "OutsideExecution", types: {} },
+    });
+    expect(signHtml).toContain("发送 5 STRK 至 0x1234…abcd");
+    expect(signHtml).not.toContain("Send 5 STRK to");
+  });
+});

@@ -243,7 +243,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => {
       ${requestIdentity(approval.origin, t("approval.sign.title"))}
       <p class="hint">${status.locked ? th("approval.sign.locked") : th("approval.sign.hint")}</p>
       ${reviewOutcome(t("approval.sign.outcome"))}
-      ${reviewCallsList(approval.summaries?.slice(1) ?? [])}
+      ${reviewCallsList(reviewLines(approval.summaries ?? [], approval.summaryTexts).slice(1))}
     </div>
     ${view.html}
     ${reviewPanel([
