@@ -355,7 +355,7 @@ into generated `androidTest` assets the same way.
 
 ## 5. UniFFI surface
 
-**No new UniFFI surface.** Android uses only what `mobile/core/src/lib.rs` already exports, through
+**No new UniFFI surface.** Android uses only what wallet-core's `crates/bramble-core/src/lib.rs` already exports, through
 the Kotlin bindings that `mobile/scripts/build-core-android.sh` generates into
 `app/build/generated/uniffi` (package `org.bramble.core`, never committed):
 
@@ -469,7 +469,7 @@ tests that mirror the iOS XCUITests.
 
 ## 10. Out of scope or blocked
 
-- Blocked on nothing in krusty-kms 0.11.0 (all displayed values are bramble-core code; only `kms.rs` calls krusty); compiling and running are blocked on the toolchain (section 8).
+- Blocked on nothing in krusty-kms 0.11.0 (all displayed values are bramble-core code; krusty is reached only through wallet-core); compiling and running are blocked on the toolchain (section 8).
 - Deferred to siblings: friendly names, the 10…8 review address and unselected review card
   (`accounts`/`design-mobile`); discovery (`accounts`); account-type chooser, multisig, Nostr
   (`accounts`/`nostr-multisig`); fiat and activity (`portfolio-activity`); send, swap, shield

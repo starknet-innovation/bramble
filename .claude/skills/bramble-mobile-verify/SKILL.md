@@ -22,7 +22,7 @@ If one fails, stop and say which tool is missing. Android needs `~/.zprofile`'s 
 
 | Goal | Command |
 | --- | --- |
-| Core logic | `cd mobile/core && cargo test --locked` |
+| Core logic | wallet-core: `cargo test -p bramble-core --features mobile,testing`; here `cd mobile/core && cargo test --locked` checks only the pin's catalogs and Krusty |
 | iOS logic | `xcodebuild … -only-testing:BrambleTests test` |
 | Android logic | `cd mobile/android && ./gradlew :app:testDebugUnitTest` |
 | A flow, repeatably | `-only-testing:BrambleUITests/<Class>` · `connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=<fqcn>` |

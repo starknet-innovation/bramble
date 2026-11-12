@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds the Rust core for iOS and generates its Swift bindings.
+# Builds the Rust core (wallet-core's bramble-core, the dependency of mobile/core) for iOS and
+# generates its Swift bindings.
 #
 #   mobile/ios/Generated/BrambleCoreFFI.xcframework   device (arm64) + simulator (arm64)
 #   mobile/ios/Generated/Swift/BrambleCore.swift      UniFFI bindings compiled into the app
@@ -12,7 +13,7 @@ MOBILE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CORE_DIR="$MOBILE_DIR/core"
 OUT_DIR="$MOBILE_DIR/ios/Generated"
 TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim)
-CARGO_FLAGS=(--locked --lib)
+CARGO_FLAGS=(--locked -p bramble-core --lib)
 [[ "$PROFILE" == "release" ]] && CARGO_FLAGS+=(--release)
 
 for target in "${TARGETS[@]}"; do
@@ -21,9 +22,9 @@ for target in "${TARGETS[@]}"; do
 done
 
 # Bindings come from the host build's metadata, so they match the exact source compiled above.
-(cd "$CORE_DIR" && cargo build --locked --lib)
+(cd "$CORE_DIR" && cargo build --locked -p bramble-core --lib)
 rm -rf "$OUT_DIR" && mkdir -p "$OUT_DIR/Swift" "$OUT_DIR/headers"
-(cd "$CORE_DIR" && cargo run --locked --quiet --features bindgen --bin uniffi-bindgen -- \
+(cd "$CORE_DIR" && cargo run --locked --quiet --bin uniffi-bindgen -- \
   generate --library target/debug/libbramble_core.dylib --language swift --out-dir "$OUT_DIR/bindings")
 
 mv "$OUT_DIR/bindings/BrambleCore.swift" "$OUT_DIR/Swift/"

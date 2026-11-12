@@ -285,26 +285,24 @@ fn accept_frame(&self, relay: u32, frame: String) -> RelayStep;  // judges EVENT
 fn relay_ended(&self, relay: u32);            // timeout, socket error, or the socket closed
 ```
 
-The judge is `nostr-relay-socket.ts` as implemented, not a stricter variant:
+Since M11 the judges are wallet-core's `nostr::{relay_url, relay, sync, sync_window}`, which mirror
+`nostr-relay-socket.ts` and `nostr-relay.ts` as implemented: oversized (`> 140_000` bytes), non-JSON,
+non-array or over-long frames are ignored and the subscription stays open; every EVENT frame counts
+toward the 50-frame close, accepted or not, and is kept only if it passes `isNostrEvent`, is kind 1059
+and carries our `p` tag; EOSE answers `Finish{close_frame: ["CLOSE",id]}`; CLOSED, timeout, socket error
+and close (`relay_ended`) keep the relay's events and fail it only if it has none. Checkpoint-seen ids
+are skipped **before** the round-robin bound of 50, then candidates sort by `created_at` desc, `id` asc,
+and the core opens them itself (§4). Every relay failed → "Nostr relays are unavailable" (the core's
+messages, as the extension's), shown as "Secure co-signer updates are unavailable".
 
-- **Ignored frames.** A frame is silently ignored, and the subscription stays open, when it is over
-  140,000 bytes (UTF-8 length; strictly greater, `> 140_000`; the UTF-8 length is never below the
-  UTF-16 length the extension also checks), is not JSON, is not an array, or has more than 4 elements.
-  Frames naming another subscription, and frame types other than EVENT, EOSE and CLOSED, are ignored.
-- **EVENT.** Every EVENT frame for our subscription counts toward the cap, accepted or not
-  (`pending.frames`). It is kept only if it passes `isNostrEvent`, is kind 1059 and carries our `p` tag.
-  When the frame count reaches 50, the answer is `Finish{close_frame: ["CLOSE",id]}`.
-- **EOSE** answers `Finish{close_frame: ["CLOSE",id]}` with the kept events.
-- **CLOSED, timeout, socket error, close** (`relay_ended`) finish the relay with its kept events if it has
-  any, and fail it only if it has none, as `#fail` and `#finishSubscription` do.
+**[mobile] One page per relay until 2.7.** The core pages (an `until` cursor below the oldest wrap, up
+to 4 pages) through a third `RelayStep`, `NextPage`; the UniFFI enum cannot gain it before the bindings
+regenerate, so mobile runs the core's judge with a page cap of 1, where `NextPage` never occurs (mapped
+to `Finish` as a fail-safe). A burst of newer wraps can therefore still hide an older one from mobile.
 
-At finish: every relay failed → "Secure co-signer updates are unavailable". Otherwise round-robin
-interleave up to 50, sort by `created_at` desc then `id` asc, drop checkpoint-seen ids, and the core
-opens them itself (§4).
-
-`NostrPublishPlan` has the same shape: an `EVENT` frame, and `OK` judging where a false ack whose
-message starts with `duplicate:` counts as accepted. It is **built and tested now**, but not
-exported until intent sharing lands.
+Publishing (`publish_many_nostr_gift_wraps`: batch validation, `OK` judging where a false ack whose
+message starts with `duplicate:` counts as accepted, the counts) is the core's too, wrapped with mobile's
+`wss:` rule; it is not exported until intent sharing lands.
 
 The host moves bytes and enforces the connect and request timeouts that `relay_policy` returns
 (8 s each, `RELAY_TIMEOUT_MS`), reporting either as `relay_ended`. It opens at most
@@ -427,11 +425,9 @@ from `extension-parity.json` so that sibling branches do not conflict. It is wri
 5. **Wallet card**: accept/reject cases of `contact-card.test.ts` (512 cap, prefix, extra parts, network,
    zero felt, bad Nostr key, `-` placeholders).
 6. **Relay URL**: `isNostrRelayUrl` verdicts plus a `mobile` column differing only for `ws://`.
-7. **Frames and trust**: the socket module is not pure, so its REQ/CLOSE/EVENT/OK/CLOSED cases are
-   mirrored 1:1 from `tests/background/multisig/nostr-relay.test.ts` (each Rust test names its TS twin).
-   Added cases pin the ignore-and-continue rules: an oversized frame, then a valid event and EOSE, yields
-   that event; a timeout after 2 kept events yields 2; a relay that sends 50 rejected EVENT frames is
-   closed. `trustedSharedIntent` needs a fully verified intent (invoke-v3 re-hash and Stark signature
+7. **Frames and trust**: the frame cases mirrored from `nostr-relay.test.ts` live with the judges in
+   wallet-core; `nostr_coordination_parity.rs` replays the paging, batch and acknowledgement fixtures
+   through mobile, except `ws:` loopback and the cases that need a second page. `trustedSharedIntent` needs a fully verified intent (invoke-v3 re-hash and Stark signature
    checks, §8), so its generated vectors wait for import. Until then the Rust trust judge is covered by unit
    tests, including a saved contact that forges a snapshot listing itself.
 8. **Authority read**: recorded JSON-RPC bodies per `MultisigAuthorityStatus`, including an error-24 re-pin.

@@ -1,5 +1,5 @@
 /**
- * Transaction parity vectors for the mobile Rust core (`mobile/core/src/send`): fee policy,
+ * Transaction parity vectors for the mobile Rust core (wallet-core's `bramble-core`, `src/send`): fee policy,
  * amount grammar and call encoding, presentation rules, status judgement, and timing. Every value
  * is produced by the extension's own production code (starknet.js 10.8.0 as the extension pins
  * it, the wallet's fee policy, verifier and formatters), never by Krusty and never by hand. The
