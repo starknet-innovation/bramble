@@ -8,8 +8,8 @@ import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import {
-  SHADOW_ACCOUNTS_CONFIRM_SWEEP,
   shadowAccountsCheck,
+  shadowAccountsConfirmSweep,
   shadowAccountsEmpty,
   shadowAccountsNothingHeld,
   shadowAccountsOtherAnonymizer,
@@ -66,7 +66,7 @@ const bindSweep = (
       (preparation) => {
         const review = element("ul", undefined, "review-calls");
         for (const summary of preparation.summaries) review.append(element("li", summary));
-        const confirm = control(SHADOW_ACCOUNTS_CONFIRM_SWEEP);
+        const confirm = control(shadowAccountsConfirmSweep());
         sweep.replaceWith(review, confirm);
         confirm.addEventListener("click", () => {
           buttonBusy(confirm, true);

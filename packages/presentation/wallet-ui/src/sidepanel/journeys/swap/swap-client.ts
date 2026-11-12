@@ -8,7 +8,7 @@
 import { isSha256Digest } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@bramble/core/json";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
-import { isReviewedRiskFlag } from "../../../popup/responses/review-flags";
+import { isReviewedRiskFlag, type ReviewedRiskFlag } from "../../../popup/responses/review-flags";
 import type { RuntimeApi } from "../../runtime/runtime";
 import { lostReplySend, responseError } from "../../runtime/runtime-errors";
 
@@ -34,7 +34,7 @@ export type SwapQuoteView = {
  * reaches the final confirmation step.
  */
 export type SwapPreparationView = {
-  readonly flags: readonly { readonly code: string; readonly message: string }[];
+  readonly flags: readonly ReviewedRiskFlag[];
   readonly id: string;
   // Minimum output the frozen route carries, decoded from its calldata by the
   // background build policy. The confirm card shows THIS rather than a figure

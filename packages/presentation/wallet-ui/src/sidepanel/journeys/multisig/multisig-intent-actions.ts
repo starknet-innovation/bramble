@@ -4,6 +4,8 @@ import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField } from "@bramble/ui-kit/fields";
+import { t, th } from "../../../i18n/messages";
+import { reviewStepsMultisigMessages } from "../../../i18n/messages/review-steps-multisig";
 import { icon } from "../../shared/icons";
 import { accountLabel } from "../../shared/parts";
 
@@ -12,39 +14,55 @@ import { accountLabel } from "../../shared/parts";
  * nonce it was signed for may have been used by a co-signer, for this version or
  * their own fee-updated one, so "nothing was sent" is never claimed here.
  */
-export const STALE_INTENT_MAY_HAVE_BEEN_SENT = "This may already have been sent by another signer.";
+export const STALE_INTENT_MAY_HAVE_BEEN_SENT =
+  reviewStepsMultisigMessages.en["review.multisig.stale.mayHaveBeenSent"];
 
 /**
  * What a stale card says when the node refused this version's signed fee while
  * the account nonce was still its own (mc-wallet 673). It reports that refusal
  * and nothing more: it does not claim no co-signer could send the package later.
  */
-/** What a stale card says when the private proof's block span closed before send. */
-const STALE_INTENT_PROOF_EXPIRED =
-  "This private transaction expired. Refresh it. Collected signatures no longer apply.";
-
 /**
  * What a stale card says when the node refused this version's signed fee while
  * the account nonce was still its own (mc-wallet 673). It reports that refusal
  * and nothing more: it does not claim no co-signer could send the package later.
  */
 export const STALE_INTENT_FEE_REFUSED =
-  "The network refused this version: the fee rose above what was signed.";
+  reviewStepsMultisigMessages.en["review.multisig.stale.feeRefused"];
 
 /** A stale version whose exact hash the sequencer rejected (mc-wallet 673). */
-export const STALE_INTENT_NOT_SENT = "This version was not sent.";
+export const STALE_INTENT_NOT_SENT =
+  reviewStepsMultisigMessages.en["review.multisig.stale.notSent"];
 
 /** Beside a rejected version while the nonce shows something else may have gone out. */
-export const STALE_INTENT_OTHER_VERSION = "Another signer may have sent a different version.";
+export const STALE_INTENT_OTHER_VERSION =
+  reviewStepsMultisigMessages.en["review.multisig.stale.otherVersion"];
 
 /** A stale version included and reverted: settled, its nonce and fee spent. */
-export const STALE_INTENT_REVERTED = "Failed on chain, fee paid, nothing transferred.";
+export const STALE_INTENT_REVERTED =
+  reviewStepsMultisigMessages.en["review.multisig.stale.reverted"];
 
 /** The only way to send a rejected or reverted version's calls again. */
-export const PROPOSE_AGAIN = "Propose again";
+export const PROPOSE_AGAIN = reviewStepsMultisigMessages.en["review.multisig.action.proposeAgain"];
+
+// The constants above are the English each sentence is pinned to (tests compare
+// against them); what renders is the catalog in the active language.
 
 /** Short label for a stale multisig version; it says nothing about whether it was sent. */
-export const STALE_INTENT_LABEL = "Out of date";
+export const staleIntentLabel = (): string => t("review.multisig.stale.label");
+
+/** "This may already have been sent by another signer." in the active language. */
+export const staleIntentMayHaveBeenSent = (): string => t("review.multisig.stale.mayHaveBeenSent");
+
+const approvalsText = (count: number): string =>
+  t(count === 1 ? "review.multisig.approvalsOne" : "review.multisig.approvalsMany", {
+    count: String(count),
+  });
+
+const freshApprovalsText = (count: number): string =>
+  t(count === 1 ? "review.multisig.freshApprovalsOne" : "review.multisig.freshApprovalsMany", {
+    count: String(count),
+  });
 
 type SignerOption = { readonly label: string; readonly value: string };
 type IntentAction = {
@@ -65,11 +83,11 @@ const intentAction = (
   if (!hasFreshAuthority) {
     return {
       canSign: false,
-      note: "The signers changed since this transaction was frozen. Signing and submission stay blocked.",
+      note: t("review.multisig.note.signersChanged"),
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-view": "multisig-signers" },
-        label: "Review current signers",
+        label: t("review.multisig.action.reviewSigners"),
         variant: "secondary",
       }),
     };
@@ -79,7 +97,10 @@ const intentAction = (
       canSign: false,
       note: "",
       packageIsPrimary: false,
-      primary: button({ attributes: { "data-ms-submit": intent.id }, label: "Submit transaction" }),
+      primary: button({
+        attributes: { "data-ms-submit": intent.id },
+        label: t("review.multisig.action.submit"),
+      }),
     };
   }
   if (intent.state === "stale" && intent.staleOutcome !== undefined) {
@@ -90,36 +111,46 @@ const intentAction = (
     // Only a recorded fee refusal at an unmoved nonce reads as refused; a moved
     // nonce, a signer change, or an older record without a reason may have
     // been sent by a co-signer (Sherlock 177, audit M3).
-    const lead =
+    const lead = t(
       intent.staleReason === "fee"
-        ? STALE_INTENT_FEE_REFUSED
+        ? "review.multisig.stale.feeRefused"
         : intent.staleReason === "proof"
-          ? STALE_INTENT_PROOF_EXPIRED
-          : STALE_INTENT_MAY_HAVE_BEEN_SENT;
-    const approvals = `${intent.configSnapshot.threshold} approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
-    const freshApprovals = `${intent.configSnapshot.threshold} fresh approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
+          ? "review.multisig.stale.proofExpired"
+          : "review.multisig.stale.mayHaveBeenSent",
+    );
+    const threshold = intent.configSnapshot.threshold;
+    const facts = {
+      approvals: approvalsText(threshold),
+      fresh: freshApprovalsText(threshold),
+      lead,
+    };
     return {
       canSign: false,
       // Neither sentence says nothing was sent (audit M3).
       note: retryable
-        ? hasReplacement
-          ? `${lead} Continue the fee-updated transaction and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
-          : `${lead} Update the network fee and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
-        : `${lead} This version is out of date — create a new transaction to continue.`,
+        ? t(
+            hasReplacement
+              ? "review.multisig.note.continueFeeUpdated"
+              : "review.multisig.note.updateFee",
+            facts,
+          )
+        : t("review.multisig.note.outOfDate", { lead }),
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-ms-refresh-intent": intent.id },
-        label: hasReplacement
-          ? "Continue fee-updated transaction"
-          : retryable
-            ? "Update network fee"
-            : "Create current transaction",
+        label: t(
+          hasReplacement
+            ? "review.multisig.action.continueFeeUpdated"
+            : retryable
+              ? "review.multisig.action.updateFee"
+              : "review.multisig.action.createCurrent",
+        ),
       }),
       ...(retryable
         ? {
             secondary: button({
               attributes: { "data-ms-submit": intent.id },
-              label: "Try unchanged fee again",
+              label: t("review.multisig.action.tryUnchangedFee"),
               variant: "secondary",
             }),
           }
@@ -133,26 +164,26 @@ const intentAction = (
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-ms-sign": intent.id },
-        label: "Sign reviewed transaction",
+        label: t("review.multisig.action.sign"),
       }),
     };
   }
   if (intent.state === "collecting") {
     return {
       canSign: false,
-      note: hasLocalSigner
-        ? "This wallet has already signed. Share the package to collect the remaining signature."
-        : "No eligible signer is available in this wallet. Share the package with a signer.",
+      note: t(
+        hasLocalSigner ? "review.multisig.note.alreadySigned" : "review.multisig.note.noSigner",
+      ),
       packageIsPrimary: true,
       primary: button({
         attributes: { "data-ms-copy-package": intent.id },
-        label: "Copy transaction package",
+        label: t("review.multisig.action.copyPackage"),
       }),
     };
   }
   return {
     canSign: false,
-    note: "Nothing left to do here.",
+    note: t("review.multisig.note.nothingLeft"),
     packageIsPrimary: false,
     primary: "",
   };
@@ -166,22 +197,30 @@ const settledStaleAction = (
   intent: ArgentMultisigSigningIntent,
   hasReplacement: boolean,
 ): IntentAction => {
-  const lead =
+  const lead = t(
     intent.staleOutcome === "reverted"
-      ? STALE_INTENT_REVERTED
+      ? "review.multisig.stale.reverted"
       : intent.staleOutcome === "rejected"
-        ? `${STALE_INTENT_NOT_SENT} ${STALE_INTENT_OTHER_VERSION}`
-        : STALE_INTENT_NOT_SENT;
-  const freshApprovals = `${intent.configSnapshot.threshold} fresh approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
+        ? "review.multisig.stale.notSentOther"
+        : "review.multisig.stale.notSent",
+  );
+  const fresh = freshApprovalsText(intent.configSnapshot.threshold);
   return {
     canSign: false,
-    note: hasReplacement
-      ? `${lead} Continue the new proposal and collect ${freshApprovals}.`
-      : `${lead} ${PROPOSE_AGAIN} to collect ${freshApprovals}.`,
+    note: t(
+      hasReplacement
+        ? "review.multisig.note.continueNewProposal"
+        : "review.multisig.note.proposeAgain",
+      { fresh, lead },
+    ),
     packageIsPrimary: false,
     primary: button({
       attributes: { "data-ms-propose-again": "true", "data-ms-refresh-intent": intent.id },
-      label: hasReplacement ? "Continue new proposal" : PROPOSE_AGAIN,
+      label: t(
+        hasReplacement
+          ? "review.multisig.action.continueNewProposal"
+          : "review.multisig.action.proposeAgain",
+      ),
     }),
   };
 };
@@ -200,7 +239,9 @@ const collaborationTools = (
           "data-ms-signature-index": String(index),
         },
         icon: "copy",
-        label: `Signature from ${accountLabel(signature.publicKey)}`,
+        label: t("review.multisig.collab.signatureFrom", {
+          key: accountLabel(signature.publicKey),
+        }),
         size: "small",
         variant: "ghost",
       }),
@@ -208,7 +249,7 @@ const collaborationTools = (
     .join("");
   return `<details class="disclosure multisig-collaboration">
     <summary>
-      <span class="menu-copy"><strong>Co-signer handoff</strong><small>${intent.signatures.length} of ${intent.configSnapshot.threshold} signatures collected</small></span>
+      <span class="menu-copy"><strong>${th("review.multisig.collab.handoff")}</strong><small>${th("review.multisig.collab.collected", { signed: String(intent.signatures.length), threshold: String(intent.configSnapshot.threshold) })}</small></span>
       <span class="disclosure-mark">${icon("chevronRight")}</span>
     </summary>
     <div class="disclosure-body">
@@ -217,8 +258,8 @@ const collaborationTools = (
           ? ""
           : `<section class="multisig-handoff-section">
               <div class="multisig-handoff-copy">
-                <strong>Share the reviewed transaction</strong>
-                <p>Copies the transaction and every signature collected so far for another Bramble signer.</p>
+                <strong>${th("review.multisig.collab.shareTitle")}</strong>
+                <p>${th("review.multisig.collab.shareHint")}</p>
               </div>
               <div class="multisig-collaboration-actions">
                 ${
@@ -226,7 +267,7 @@ const collaborationTools = (
                     ? button({
                         attributes: { "data-ms-share": intent.id },
                         icon: "send",
-                        label: "Share securely with co-signers",
+                        label: t("review.multisig.action.shareSecurely"),
                         size: "small",
                         variant: "secondary",
                       })
@@ -235,7 +276,7 @@ const collaborationTools = (
                 ${button({
                   attributes: { "data-ms-copy-package": intent.id },
                   icon: "copy",
-                  label: "Copy full transaction package",
+                  label: t("review.multisig.collab.copyFullPackage"),
                   size: "small",
                   variant: "secondary",
                 })}
@@ -246,12 +287,12 @@ const collaborationTools = (
         canImport
           ? `<section class="multisig-handoff-section">
               <div class="multisig-handoff-copy">
-                <strong>Add a co-signer signature</strong>
-                <p>Paste one signature fragment returned by a signer. It is verified before it counts toward the threshold.</p>
+                <strong>${th("review.multisig.collab.addTitle")}</strong>
+                <p>${th("review.multisig.collab.addHint")}</p>
               </div>
               <form data-ms-signature-form="${escapeHtml(intent.id)}">
-                ${textareaField({ label: "Signature fragment", name: "signature", placeholder: '{"publicKey":"0x…","r":"0x…","s":"0x…"}', required: true, rows: 3, spellcheck: false })}
-                ${button({ label: "Verify and add signature", size: "small", type: "submit", variant: "secondary" })}
+                ${textareaField({ label: t("review.multisig.collab.fragment"), name: "signature", placeholder: '{"publicKey":"0x…","r":"0x…","s":"0x…"}', required: true, rows: 3, spellcheck: false })}
+                ${button({ label: t("review.multisig.collab.verifyAdd"), size: "small", type: "submit", variant: "secondary" })}
               </form>
             </section>`
           : ""
@@ -260,7 +301,7 @@ const collaborationTools = (
         signatures
           ? `<details class="disclosure multisig-fragment-exports">
               <summary>
-                <span class="menu-copy"><strong>Individual signature fragments</strong><small>Advanced handoff · ${intent.signatures.length} available</small></span>
+                <span class="menu-copy"><strong>${th("review.multisig.collab.fragmentsTitle")}</strong><small>${th("review.multisig.collab.fragmentsAvailable", { count: String(intent.signatures.length) })}</small></span>
                 <span class="disclosure-mark">${icon("chevronRight")}</span>
               </summary>
               <div class="disclosure-body multisig-collaboration-actions">${signatures}</div>
@@ -291,12 +332,15 @@ export const multisigIntentActions = (
     hasReplacement,
   );
   const note = isReplacement
-    ? `The network fee was updated, which created a different transaction hash. Approvals from the previous attempt cannot authorize this version. ${intent.signatures.length} of ${intent.configSnapshot.threshold} fresh ${intent.configSnapshot.threshold === 1 ? "approval" : "approvals"} collected.`
+    ? t("review.multisig.note.replacement", {
+        fresh: freshApprovalsText(intent.configSnapshot.threshold),
+        signed: String(intent.signatures.length),
+      })
     : action.note;
   return `${
     action.canSign
       ? selectField({
-          label: "Signer in this wallet",
+          label: t("review.multisig.signerSelect"),
           name: "signerAccountId",
           options: availableSigners,
         })
@@ -311,12 +355,12 @@ export const multisigIntentActions = (
           ? button({
               attributes: { "data-ms-share": intent.id },
               icon: "send",
-              label: "Share securely with co-signers",
+              label: t("review.multisig.action.shareSecurely"),
               variant: "secondary",
             })
           : ""
       }
-      ${button({ attributes: { "data-view": "multisig-home" }, label: "Go to multisig account", variant: "ghost" })}
+      ${button({ attributes: { "data-view": "multisig-home" }, label: t("review.multisig.action.goToAccount"), variant: "ghost" })}
     </div>
     ${
       intent.state === "stale"
@@ -342,23 +386,23 @@ export const multisigIntentOutcome = (intent: ArgentMultisigSigningIntent): stri
       <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
     </span>
     <div class="send-outcome-copy">
-      <p class="send-outcome-kicker">Submitted to Starknet</p>
-      <h2>Transaction submitted</h2>
+      <p class="send-outcome-kicker">${th("review.multisig.outcome.kicker")}</p>
+      <h2>${th("review.multisig.outcome.title")}</h2>
       <p>${escapeHtml(intent.summary)}</p>
       <div class="address-line">
         <code title="${escapeHtml(hash)}">${escapeHtml(accountLabel(hash))}</code>
         ${button({
           attributes: { "data-copy": hash },
           icon: "copy",
-          label: "Copy transaction hash",
+          label: t("review.multisig.outcome.copyHash"),
           size: "small",
           variant: "ghost",
         })}
       </div>
     </div>
     <div class="send-actions">
-      ${button({ attributes: { "data-view": "activity" }, icon: "activity", label: "View in Activity" })}
-      ${button({ attributes: { "data-view": "multisig-home" }, label: "Back to multisig", variant: "secondary" })}
+      ${button({ attributes: { "data-view": "activity" }, icon: "activity", label: t("review.multisig.outcome.activity") })}
+      ${button({ attributes: { "data-view": "multisig-home" }, label: t("review.multisig.outcome.back"), variant: "secondary" })}
     </div>
   </section>`;
 };

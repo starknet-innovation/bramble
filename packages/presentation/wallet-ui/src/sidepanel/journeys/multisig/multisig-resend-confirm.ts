@@ -8,6 +8,8 @@
  * calls the user was warned about.
  */
 
+import { t } from "../../../i18n/messages";
+
 const confirmed = new WeakSet<HTMLButtonElement>();
 
 /** Whether this control's next press carries the user's confirmation. */
@@ -27,8 +29,8 @@ export const armResendConfirmation = (
   confirmed.add(button);
   const label = labelNode(button);
   const idle = label?.textContent ?? null;
-  if (label) label.textContent = "Send anyway";
-  else button.append("Send anyway");
+  if (label) label.textContent = t("review.multisig.action.sendAnyway");
+  else button.append(t("review.multisig.action.sendAnyway"));
   const form = button.form;
   if (!form) return;
   const disarm = (): void => {

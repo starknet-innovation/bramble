@@ -43,11 +43,8 @@ export const shadowAccountsUnlisted = (nonces: string): string =>
 /** The sweep control, which starts the sweep's review. */
 export const shadowAccountsSweep = (): string => t("privacy.shadow.sweep");
 
-/**
- * The sweep's confirmation, after its review is shown. Signing text: it stays
- * English until the review-screens change translates it under pinning.
- */
-export const SHADOW_ACCOUNTS_CONFIRM_SWEEP = "Confirm sweep";
+/** The sweep's confirmation, after its review is shown. Signing text, pinned. */
+export const shadowAccountsConfirmSweep = (): string => t("review.privacy.confirmSweep");
 
 /** After the relay accepted the sweep. */
 export const shadowAccountsSweepSent = (): string => t("privacy.shadow.sweepSent");

@@ -162,7 +162,7 @@ const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
     feeTokenDecimals: decimalsOfToken(context, feeModel.feeToken),
     feeTokenSymbol:
       symbolOfToken(context, feeModel.feeToken) ??
-      (sameFelt(feeModel.feeToken, STRK_TOKEN_ADDRESS) ? "STRK" : "fee token"),
+      (sameFelt(feeModel.feeToken, STRK_TOKEN_ADDRESS) ? "STRK" : t("review.send.fee.token")),
     poolFeeFri: state?.poolFeeFri ? rawBalance(state.poolFeeFri) : null,
     recipient: fields.recipient || null,
     recipientRegistration: context.recipientRegistration,
@@ -213,7 +213,10 @@ export const transferPoolFeeAmount = (context: TransferRouteContext): string | n
   if (sameFelt(input.feeTokenAddress, STRK_TOKEN_ADDRESS)) return formatFri(amount.toString());
   return input.feeTokenDecimals === null
     ? null
-    : `up to ${formatTokenAmount(amount, input.feeTokenDecimals)} ${input.feeTokenSymbol}`;
+    : t("review.send.fee.upTo", {
+        amount: formatTokenAmount(amount, input.feeTokenDecimals),
+        symbol: input.feeTokenSymbol,
+      });
 };
 
 /**

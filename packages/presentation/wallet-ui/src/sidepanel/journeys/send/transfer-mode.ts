@@ -84,41 +84,27 @@ export type TransferModeCopy = {
   readonly reviewNote: string;
   /** Heading of the success receipt. */
   readonly successTitle: string;
-  /** The operation as a lower-case verb, for "Review …" and "Authorize …". */
-  readonly verb: string;
+  /** Heading of the review step. */
+  readonly reviewTitle: string;
   /** The operation in progress, for the broadcast title. */
   readonly progressive: string;
 };
 
-// Review-step copy stays English: the confirm control and the note beside it
-// are signing text, translated with the review under pinned English sources.
-const REVIEW_COPY: Readonly<
-  Record<TransferMode, Pick<TransferModeCopy, "confirmLabel" | "reviewNote" | "verb">>
-> = {
-  send: {
-    confirmLabel: "Confirm and send",
-    reviewNote: "Confirm only if the recipient, amount, and decoded action are correct.",
-    verb: "send",
-  },
-  shield: {
-    confirmLabel: "Confirm and shield",
-    reviewNote:
-      "This moves value from your public balance into your private one. Confirm only if the amount and decoded action are correct.",
-    verb: "shield",
-  },
-  unshield: {
-    confirmLabel: "Confirm and unshield",
-    reviewNote:
-      "This moves value from your private balance back into your public one. Confirm only if the amount and decoded action are correct.",
-    verb: "unshield",
-  },
-};
+// The confirm control, the note beside it and the review heading are signing
+// text: their catalog (review-steps-send) is pinned to its English.
+const reviewCopy = (
+  mode: TransferMode,
+): Pick<TransferModeCopy, "confirmLabel" | "reviewNote" | "reviewTitle"> => ({
+  confirmLabel: t(`review.send.confirm.${mode}`),
+  reviewNote: t(`review.send.note.${mode}`),
+  reviewTitle: t(`review.send.title.${mode}`),
+});
 
 // Built on each call so it follows the active UI language.
 const copyFor = (mode: TransferMode): TransferModeCopy => {
   const key = <S extends string>(suffix: S) => `send.mode.${mode}.${suffix}` as const;
   return {
-    ...REVIEW_COPY[mode],
+    ...reviewCopy(mode),
     amountLabel: t(key("amount")),
     closeLabel: t(key("close")),
     noun: t(key("noun")),
@@ -173,8 +159,7 @@ export const transferStageTitle = (stage: TransferStage, mode: TransferMode = "s
   const copy = copyFor(mode);
   if (stage === "recipient") return copy.noun;
   if (stage === "details" || stage === "reviewing") return copy.noun;
-  // The review step's header is signing text: English until the review moves.
-  if (stage === "review") return `Review ${copy.verb}`;
+  if (stage === "review") return copy.reviewTitle;
   // Authorizing, broadcasting and confirming are one wait as far as the reader
   // is concerned: the wallet is sending, and the steps between are its own.
   if (stage === "authorizing" || stage === "broadcasting" || stage === "confirming") {

@@ -13,7 +13,7 @@ import type { ConfirmationOutcome } from "../../shared/confirm-submitted";
 import { renderFragment } from "../../shared/dom";
 import { formatFiat } from "../../shared/fiat";
 import { applyOutcomeHash } from "../../shared/outcome-hash";
-import { reviewPanel } from "../../shared/review-render";
+import { reviewPanel, riskFlagMessages } from "../../shared/review-render";
 import { compactAmount } from "../portfolio/token-row";
 import { setText } from "../send/transfer-progress-ui";
 import type { SwapPreparationView, SwapQuoteView } from "./swap-client";
@@ -138,7 +138,7 @@ export const paintSwapConfirm = (
   );
   const risk = root.querySelector("#swap-risk-review");
   if (risk) {
-    renderFragment(risk, reviewPanel(input.preparation.flags.map((flag) => flag.message)));
+    renderFragment(risk, reviewPanel(riskFlagMessages(input.preparation.flags)));
   }
 };
 

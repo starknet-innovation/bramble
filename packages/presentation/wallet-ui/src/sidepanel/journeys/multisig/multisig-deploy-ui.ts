@@ -111,10 +111,12 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const reviewEnabled = button?.disabled === false;
   // Names what the one action does: deploy the held review, else check fee.
-  const setDeployLabel = (): void =>
+  const setDeployLabel = (): void => {
+    const held = form && reviews.get(form);
     button?.lastChild?.replaceWith(
-      form && reviews.get(form) ? "Deploy multisig" : "Check fee and address",
+      t(held ? "review.multisig.deploy.deploy" : "review.multisig.deploy.check"),
     );
+  };
   const reviewRoot = deps.app?.querySelector<HTMLElement>("#multisig-deploy-review");
   const signerAccountInput = form?.querySelector<HTMLInputElement>('input[name="signerAccountId"]');
   const signerKeyInput = form?.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]');

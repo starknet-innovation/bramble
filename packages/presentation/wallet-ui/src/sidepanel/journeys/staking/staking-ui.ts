@@ -26,6 +26,8 @@
  * clears its line, so nothing can hide a transaction that may be on chain or
  * invite a second one. A repaint brings the row back fresh.
  */
+
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
@@ -167,9 +169,9 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
       if (field) field.readOnly = false;
     };
     const fail = (error: unknown): void => {
-      showToast(errorDetails(error, "Staking failed"), failureTone(error), button);
+      showToast(errorDetails(error, t("review.staking.failed")), failureTone(error), button);
       if (review) {
-        review.textContent = errorLine(error, "Staking failed");
+        review.textContent = errorLine(error, t("review.staking.failed"));
         review.dataset["severity"] = failureTone(error);
       }
       // A confirm whose reply was lost may be on chain: the control stays down
@@ -193,7 +195,7 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
       generation = disarmRow(row ?? null);
       buttonBusy(button, true);
       if (field) field.readOnly = true;
-      show(armed ? "Submitting…" : "Estimating the maximum fee…");
+      show(t(armed ? "review.staking.submitting" : "review.staking.estimating"));
       offerCancel(row ?? null, button, !armed);
       // A confirm being submitted stays the primary button it was tapped as.
       if (armed) button.classList.remove("secondary");
@@ -201,8 +203,8 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
         row?.setAttribute(SUBMITTING, "");
         void wallet.executeStaking(armed).then(() => {
           row?.removeAttribute(SUBMITTING);
-          showToast("Staking transaction submitted", "success", button);
-          if (review) review.textContent = "Submitted. Follow it in Activity.";
+          showToast(t("review.staking.submitted"), "success", button);
+          if (review) review.textContent = t("review.staking.submittedFollow");
         }, fail);
         return;
       }
@@ -214,8 +216,11 @@ export const bindStaking = ({ app, wallet }: StakingUiDeps): void => {
           if (!isLatest(row ?? null, generation)) return release();
           const fee = formatFeeEstimate(preparation.reviewedFee);
           ARMED.set(button, preparation.id);
-          if (review) review.textContent = `${preparation.review} Maximum network fee: ${fee}.`;
-          button.replaceChildren(`Confirm · ${fee}`);
+          // `preparation.review` is the background's English sentence.
+          if (review) {
+            review.textContent = t("review.staking.review", { fee, review: preparation.review });
+          }
+          button.replaceChildren(t("review.staking.confirm", { fee }));
           button.classList.remove("secondary");
           buttonBusy(button, false);
           if (field) field.readOnly = false;

@@ -285,7 +285,9 @@ export const applyTransferUi = (
   setText(
     form,
     "send-confirm-label",
-    state.fields?.signer === "ledger" ? "Approve with Ledger" : transferModeCopy(mode).confirmLabel,
+    state.fields?.signer === "ledger"
+      ? t("review.send.approveLedger")
+      : transferModeCopy(mode).confirmLabel,
   );
 
   const route = state.fields ? transferRoute(state.fields) : null;

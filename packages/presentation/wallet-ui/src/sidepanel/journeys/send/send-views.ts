@@ -355,7 +355,7 @@ export const sendFlow = (
               <div class="send-review-summary" id="send-review-summary"></div>
               <div class="send-review-fee" id="send-review-fee" aria-live="polite"></div>
               <div class="send-review-risks" id="send-review-risks" role="note"></div>
-              ${canSend ? "" : '<p class="send-review-note" id="send-review-note">Send is unavailable.</p>'}
+              ${canSend ? "" : `<p class="send-review-note" id="send-review-note">${th("review.send.unavailable")}</p>`}
               <div class="send-actions">
                 <button id="send-confirm-button" type="submit" ${canSend ? "" : "disabled"}>${icon("check")}<span id="send-confirm-label">${escapeHtml(copy.confirmLabel)}</span></button>
               </div>

@@ -24,6 +24,10 @@ import { reviewApprovalMessages } from "./messages/review-approvals";
 import { reviewDetailMessages } from "./messages/review-details";
 import { reviewFeeMessages } from "./messages/review-fees";
 import { reviewSignMessages } from "./messages/review-sign";
+import { reviewStepsAccountMessages } from "./messages/review-steps-account";
+import { reviewStepsMultisigMessages } from "./messages/review-steps-multisig";
+import { reviewStepsSendMessages } from "./messages/review-steps-send";
+import { reviewStepsSwapMessages } from "./messages/review-steps-swap";
 import { sendMessages } from "./messages/send";
 import { settingsMessages } from "./messages/settings";
 import { shellMessages } from "./messages/shell";
@@ -49,6 +53,10 @@ export const UI_AREA_CATALOGS = {
   "review-details": reviewDetailMessages,
   "review-fees": reviewFeeMessages,
   "review-sign": reviewSignMessages,
+  "review-steps-account": reviewStepsAccountMessages,
+  "review-steps-multisig": reviewStepsMultisigMessages,
+  "review-steps-send": reviewStepsSendMessages,
+  "review-steps-swap": reviewStepsSwapMessages,
   send: sendMessages,
   settings: settingsMessages,
   "shell-screens": shellScreenMessages,
@@ -71,6 +79,10 @@ const en = {
   ...reviewDetailMessages.en,
   ...reviewFeeMessages.en,
   ...reviewSignMessages.en,
+  ...reviewStepsAccountMessages.en,
+  ...reviewStepsMultisigMessages.en,
+  ...reviewStepsSendMessages.en,
+  ...reviewStepsSwapMessages.en,
   ...sendMessages.en,
   ...settingsMessages.en,
   ...shellScreenMessages.en,
@@ -96,6 +108,10 @@ export const uiCatalogs = {
     ...reviewDetailMessages["zh-Hans"],
     ...reviewFeeMessages["zh-Hans"],
     ...reviewSignMessages["zh-Hans"],
+    ...reviewStepsAccountMessages["zh-Hans"],
+    ...reviewStepsMultisigMessages["zh-Hans"],
+    ...reviewStepsSendMessages["zh-Hans"],
+    ...reviewStepsSwapMessages["zh-Hans"],
     ...sendMessages["zh-Hans"],
     ...settingsMessages["zh-Hans"],
     ...shellScreenMessages["zh-Hans"],

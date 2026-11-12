@@ -58,7 +58,8 @@ const GUARD_LITERAL = /"((?:Unlock session|Krusty KMS) [^"]+)"/g;
 // A fallback can be a UI catalog message, passed as `t("key")` or bound first
 // as `const fallback = t("key")`, and a reply can carry one as `error: t("key")`;
 // each is read as its English source text, which is what an English reader
-// sees and what the copy tables are keyed on.
+// sees and what the copy tables are keyed on. A `{fact}` placeholder reads as
+// `x`, exactly as a `${…}` in a template literal does below.
 const FALLBACK_MESSAGE =
   /\b(?:responseError|errorText|errorDetails|errorLine|errorMessage)\(\s*[^,()]+(?:\([^()]*\))?\s*,\s*t\(\s*"([\w.]+)"/g;
 const FALLBACK_BINDING = /\bconst\s+fallback\s*=\s*t\(\s*"([\w.]+)"/g;
@@ -68,7 +69,7 @@ const catalogFallbacks = (src: string): readonly string[] =>
   [FALLBACK_MESSAGE, FALLBACK_BINDING, REPLY_MESSAGE].flatMap((pattern) =>
     [...src.matchAll(pattern)].flatMap((match) => {
       const text = match[1] === undefined ? undefined : englishMessages[match[1]];
-      return text === undefined ? [] : [text];
+      return text === undefined ? [] : [text.replace(/\{[A-Za-z][A-Za-z0-9]*\}/gu, "x")];
     }),
   );
 // Refusals a policy returns rather than throws (`return "…"`, or a ternary

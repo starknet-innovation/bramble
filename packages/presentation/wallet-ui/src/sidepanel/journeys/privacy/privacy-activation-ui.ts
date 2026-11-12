@@ -62,8 +62,8 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
         if (typeof response !== "string") {
           DEPLOYMENT_FEES.set(button, response);
           const fee = formatFeeEstimate(response);
-          button.lastChild?.replaceWith(`Confirm deploy · ${fee}`);
-          showToast(`Maximum deployment fee: ${fee}`, "success", button);
+          button.lastChild?.replaceWith(t("review.privacy.confirmDeploy", { fee }));
+          showToast(t("review.privacy.maxDeploymentFee", { fee }), "success", button);
           buttonBusy(button, false);
           return;
         }

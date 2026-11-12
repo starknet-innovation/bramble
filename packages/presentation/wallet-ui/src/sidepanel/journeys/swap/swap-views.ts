@@ -100,14 +100,14 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
         <button id="swap-review" type="button" disabled>${icon("swap")}<span id="swap-review-label">${th("swap.edit.review")}</span></button>
       </section>
       <section class="swap-stage" id="swap-confirm" hidden>
-        <h2 class="swap-review-title">Review swap</h2>
+        <h2 class="swap-review-title">${th("review.swap.title")}</h2>
         <div id="swap-confirm-receipt"></div>
         <div id="swap-risk-review"></div>
         <div class="swap-actions">
           ${button({
             attributes: { id: "swap-confirm-button" },
             icon: "check",
-            label: "Confirm swap",
+            label: t("review.swap.confirm"),
           })}
         </div>
       </section>
@@ -164,24 +164,24 @@ export type SwapConfirmFigures = {
  * screen before signing.
  */
 export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
-  `<div class="swap-review-pair" aria-label="What will happen">
+  `<div class="swap-review-pair" aria-label="${th("review.swap.pairLabel")}">
     <div class="swap-review-asset">
       ${tokenGlyph(figures.sellAddress, figures.sellSymbol)}
-      <span><small>You sell</small><strong>${escapeHtml(compactAmount(figures.sellAmount))} ${escapeHtml(figures.sellSymbol)}</strong></span>
+      <span><small>${th("review.swap.sell")}</small><strong>${escapeHtml(compactAmount(figures.sellAmount))} ${escapeHtml(figures.sellSymbol)}</strong></span>
     </div>
     <span class="swap-review-arrow">${icon("arrowDown")}</span>
     <div class="swap-review-asset">
       ${tokenGlyph(figures.buyAddress, figures.buySymbol)}
-      <span><small>You receive</small><strong>${escapeHtml(compactAmount(figures.buyAmount))} ${escapeHtml(figures.buySymbol)}</strong></span>
+      <span><small>${th("review.swap.receive")}</small><strong>${escapeHtml(compactAmount(figures.buyAmount))} ${escapeHtml(figures.buySymbol)}</strong></span>
     </div>
   </div>
   <div class="receipt-group">
-    <p class="decision-label">Cost</p>
+    <p class="decision-label">${th("review.swap.cost")}</p>
     ${receipt([
       {
-        label: "Minimum received",
+        label: t("review.swap.minimumReceived"),
         value: `${compactAmount(figures.minBuyAmount)} ${figures.buySymbol}`,
       },
-      { label: "Estimated fee", value: formatFeeEstimate(figures.networkFee) },
+      { label: t("review.swap.estimatedFee"), value: formatFeeEstimate(figures.networkFee) },
     ])}
   </div>`;

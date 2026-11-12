@@ -190,7 +190,7 @@ describe("swap quote line and outcome in Simplified Chinese", () => {
 });
 
 describe("the swap confirm stage", () => {
-  test("stays in English until the signing-text review translates it", () => {
+  test("renders in Chinese from the pinned review catalog; a flag without a reference stays as sent", () => {
     setUiLocale("zh-Hans");
     const host = document.createElement("div");
     host.innerHTML = swapFlow(status, account);
@@ -215,10 +215,13 @@ describe("the swap confirm stage", () => {
       valueDelta: null,
     });
     const confirm = host.querySelector("#swap-confirm")?.textContent ?? "";
-    expect(confirm).toContain("Review swap");
-    expect(confirm).toContain("You sell");
-    expect(confirm).toContain("Minimum received");
+    expect(confirm).toContain("检查兑换");
+    expect(confirm).toContain("你卖出");
+    expect(confirm).toContain("最少收到");
+    expect(confirm).toContain("1.9 ETH");
+    // The flag carries no review reference, so its English is shown unchanged.
     expect(confirm).toContain("Unknown contract");
+    expect(confirm).not.toContain("Review swap");
   });
 });
 

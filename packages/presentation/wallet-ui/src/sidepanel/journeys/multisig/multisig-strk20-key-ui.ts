@@ -57,14 +57,46 @@ export const showMultisigStrk20Authorizations = (
     card.append(title);
     for (const text of review.lines) card.append(line(owner, text));
     if (review.offer === "sign") {
-      card.append(control(owner, "Sign", review.id, "msStrk20Sign", handlers.onSign));
+      card.append(
+        control(
+          owner,
+          t("review.multisig.strk20.sign"),
+          review.id,
+          "msStrk20Sign",
+          handlers.onSign,
+        ),
+      );
     } else if (review.offer === "share") {
-      card.append(control(owner, "Share", review.id, "msStrk20Share", handlers.onShare));
+      card.append(
+        control(
+          owner,
+          t("review.multisig.strk20.share"),
+          review.id,
+          "msStrk20Share",
+          handlers.onShare,
+        ),
+      );
     } else {
-      card.append(control(owner, "Send", review.id, "msStrk20Send", handlers.onSend));
+      card.append(
+        control(
+          owner,
+          t("review.multisig.strk20.send"),
+          review.id,
+          "msStrk20Send",
+          handlers.onSend,
+        ),
+      );
     }
     if (review.refresh) {
-      card.append(control(owner, "Refresh", review.id, "msStrk20Refresh", handlers.onRefresh));
+      card.append(
+        control(
+          owner,
+          t("review.multisig.strk20.refresh"),
+          review.id,
+          "msStrk20Refresh",
+          handlers.onRefresh,
+        ),
+      );
     }
     list.append(card);
   }

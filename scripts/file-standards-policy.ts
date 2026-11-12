@@ -163,6 +163,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // co-signer signatures the reader collects ("Signature copied", "That
   // signature isn't valid"). Text only; nothing in it reads or stores one.
   "packages/presentation/wallet-ui/src/i18n/messages/multisig.ts",
+  // Multisig review catalog (signing text): it names the co-signer signatures a
+  // reviewer collects and verifies ("Signature fragment"). Text only, pinned.
+  "packages/presentation/wallet-ui/src/i18n/messages/review-steps-multisig.ts",
   // Ledger journey copy catalog: its chooser and first-run sentences name a
   // "Private key" import route and the passphrase. Text only, like the above.
   "packages/presentation/wallet-ui/src/i18n/messages/ledger.ts",
