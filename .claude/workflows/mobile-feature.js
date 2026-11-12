@@ -37,10 +37,11 @@ Ground rules for this task (in addition to AGENTS.md):
 - Other workstreams (vault-security, transactions, portfolio-activity, accounts, design-mobile,
   nostr-multisig, android-parity) run in parallel on sibling branches and will be merged together. Stay
   inside this workstream's scope, do not refactor code outside it, and keep edits to shared files
-  (mobile/core/src/lib.rs exports, Cargo.toml, WalletStore.swift, WalletShell.swift, SettingsViews.swift)
+  (mobile/core/Cargo.toml, WalletStore.swift, WalletShell.swift, SettingsViews.swift)
   small and additive. Put new logic in new files.
 - Read mobile/SCOPE.md and mobile/README.md first. The mobile architecture is fixed: all key custody and
-  protocol logic lives in the Rust core mobile/core (crate bramble-core, UniFFI), built on the published
+  protocol logic lives in the Rust core, wallet-core's crate bramble-core (UniFFI; mobile/core is a shell that
+  pins it, and changes to it are wallet-core PRs), built on the published
   krusty-kms crates pinned at =0.11.0 (same release as the extension's @starknetfoundation/krusty-kms-wasm).
   The core is sans-IO: it builds JSON-RPC bodies and judges responses; Swift/Kotlin only move bytes.
 - Private keys, the recovery phrase, viewing keys, and vault keys never cross the FFI boundary except where
