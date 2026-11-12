@@ -72,3 +72,18 @@ describe("panel validators", () => {
     expect(isOptionalSummaryTexts([{ facts: {}, key: "x.y" }], 1)).toBe(false);
   });
 });
+
+describe("site warnings", () => {
+  test("render through the same agreement check", async () => {
+    const { insightEnglish, insightText } = await import("@bramble/permissions/insight-messages");
+    const { isOptionalInsightTexts } = await import("../../src/popup/responses/review-flags");
+    const text = insightText("siteInsight.riskyTld", { tld: "xyz" });
+    setUiLocale("zh-Hans");
+    expect(reviewLine(text, insightEnglish(text))).toBe(".xyz 顶级域名常被用于诈骗；务必谨慎。");
+    expect(
+      reviewLine(text, "The .top top-level domain is frequently used for scams; be cautious."),
+    ).toBe("The .top top-level domain is frequently used for scams; be cautious.");
+    expect(isOptionalInsightTexts([text], 1)).toBe(true);
+    expect(isOptionalInsightTexts([text], 2)).toBe(false);
+  });
+});

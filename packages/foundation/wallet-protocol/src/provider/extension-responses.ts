@@ -170,6 +170,8 @@ export type PendingApproval = {
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
+  /** `insights` as site-warning references, index for index, for the reader's language. */
+  readonly insightTexts?: readonly MessageRef[];
   readonly kind: ApprovalKind;
   /**
    * Invoke from a multisig whose threshold is above 1. Approving saves an

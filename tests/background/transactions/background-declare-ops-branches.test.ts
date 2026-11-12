@@ -146,7 +146,7 @@ describe("handleDeclareOps error envelopes", () => {
       handleDeclareOps(
         opsDeps({
           guard: {
-            insights: () => ({ blocked: true, warnings: ["blocked"] }),
+            insights: () => ({ blocked: true, warnings: ["blocked"], warningTexts: [] }),
             isBlocked: () => true,
           },
         }),

@@ -122,6 +122,9 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/core",
     "@bramble/ledger-protocol",
     "@bramble/multisig",
+    // Site-warning catalog only (`insight-messages`): the panel renders the
+    // background's phishing warnings in the reader's language.
+    "@bramble/permissions",
     "@bramble/portfolio",
     "@bramble/privacy",
     "@bramble/settings",

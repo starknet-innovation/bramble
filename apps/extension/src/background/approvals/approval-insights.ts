@@ -9,7 +9,8 @@ import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
 import type { PendingApproval } from "./approvals";
 
 /**
- * Attaches `blocked` and `insights` to each pending approval. Privacy and
+ * Attaches `blocked`, `insights` and their references (`insightTexts`) to each
+ * pending approval. Privacy and
  * transaction approvals may come from an already-connected origin; the
  * reputation layer still treats the pending action as a fresh trust decision.
  *
@@ -33,6 +34,7 @@ export const enrichApprovals = async (
         ...approval,
         blocked: insight.blocked,
         insights: insight.warnings,
+        insightTexts: insight.warningTexts,
       };
     }),
   );

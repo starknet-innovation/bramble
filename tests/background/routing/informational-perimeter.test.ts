@@ -18,7 +18,7 @@ const otherPageSender: RuntimeSender = { id: "extension-id", url: "https://other
 const handlerWith = (blocked: boolean) =>
   createMessageHandler(createWallet(), testExtension, {
     originGuard: {
-      insights: () => ({ blocked, warnings: blocked ? ["blocked"] : [] }),
+      insights: () => ({ blocked, warnings: blocked ? ["blocked"] : [], warningTexts: [] }),
       isBlocked: () => blocked,
     },
     session: createUnlockSession(),

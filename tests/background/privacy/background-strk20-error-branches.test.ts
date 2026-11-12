@@ -201,7 +201,7 @@ const rpcStub = (
 });
 
 const blockAllGuard: OriginGuard = {
-  insights: () => ({ blocked: true, warnings: ["blocked"] }),
+  insights: () => ({ blocked: true, warnings: ["blocked"], warningTexts: [] }),
   isBlocked: () => true,
 };
 
