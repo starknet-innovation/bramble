@@ -8,7 +8,9 @@
  * Absent while loading, with no route, or when a complete list is empty. A
  * failed read is one short line. An incomplete list says so, never "none".
  */
+
 import { escapeHtml } from "@bramble/core/html";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { th } from "../../../i18n/messages";
 import type { StakingState } from "./staking-directory-client";
 import { stakingPositionCard } from "./staking-home";
@@ -22,7 +24,7 @@ export const stakingPositionsSection = (state: StakingState): string => {
   if ("loading" in positions || "off" in positions) return "";
   if ("unavailable" in positions) {
     return `<p class="eyebrow">${th("staking.positions.title")}</p>
-      <p class="hint" role="alert">${escapeHtml(positions.unavailable)}</p>`;
+      <p class="hint" role="alert">${escapeHtml(localizeErrorCopy(positions.unavailable))}</p>`;
   }
   if (positions.complete && positions.rows.length === 0) return "";
   const listed = "entries" in directory ? directory.entries : [];

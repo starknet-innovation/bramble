@@ -10,11 +10,13 @@
  * exit window the staking contract reports (7 days on Mainnet), and earns no
  * rewards while it waits. No yield figure is shown (see the PR's decisions).
  */
+
 import { escapeHtml } from "@bramble/core/html";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { flowHeader, flowScreen } from "../../shared/parts";
@@ -106,7 +108,7 @@ const stakingRow = (row: StakingRow): string => `
       <strong>${escapeHtml(row.symbol)}</strong>
       ${
         row.refusal
-          ? `<p class="hint">${escapeHtml(row.refusal)}</p>`
+          ? `<p class="hint">${escapeHtml(localizeErrorCopy(row.refusal))}</p>`
           : `<p class="hint">${th("staking.validator.commission", { commission: row.commission ?? "", delegated: row.delegated ?? "", symbol: row.symbol })}</p>
              ${positionLines(row)}
              ${rowActions(row)}`
@@ -128,7 +130,7 @@ const validatorSection = (
     "loading" in state
       ? emptyState(t("staking.validator.loading"))
       : "unavailable" in state
-        ? emptyState(state.unavailable, "alert")
+        ? emptyState(localizeErrorCopy(state.unavailable), "alert")
         : `<p class="lede">${th("staking.validator.exitWindow", { window: exitWindowText(state.exitWindowSeconds) })}</p>
            ${
              state.rows.length === 0

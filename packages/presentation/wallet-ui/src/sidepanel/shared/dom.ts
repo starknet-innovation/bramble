@@ -5,6 +5,7 @@
  */
 import { friendlyNetworkError } from "@bramble/core/network-error";
 import { resolveSpring } from "@bramble/ui-kit/spring";
+import { localizeErrorCopy } from "../../i18n/error-copy";
 import { t } from "../../i18n/messages";
 import { friendlyError } from "../runtime/friendly-error";
 import { icon } from "./icons";
@@ -16,7 +17,7 @@ import { animate } from "./motion";
  */
 export const errorMessage = (error: unknown, fallback: string): string => {
   const raw = errorDetails(error, fallback);
-  return friendlyNetworkError(raw) ?? raw;
+  return localizeErrorCopy(friendlyNetworkError(raw) ?? raw);
 };
 
 /** Complete safe diagnostic carried by an Error for an explicit user copy action. */
@@ -36,7 +37,7 @@ export const errorDetails = (error: unknown, fallback: string): string =>
  * a refusal raised before anything was sent (issue 652 review, F2).
  */
 export const errorLine = (error: unknown, fallback: string): string =>
-  friendlyError(errorDetails(error, fallback)).message;
+  localizeErrorCopy(friendlyError(errorDetails(error, fallback)).message);
 
 /**
  * Marks a button busy so repeated submits are impossible while work runs.
@@ -222,7 +223,7 @@ export const showToast = (
   details: string = message,
 ): void =>
   renderToast(
-    tone === "success" ? message : friendlyError(message).message,
+    tone === "success" ? message : localizeErrorCopy(friendlyError(message).message),
     tone,
     context,
     details,
@@ -251,7 +252,7 @@ export const showNoticeToast = (
 export const showRefusalToast = (
   message: string,
   context: Document | Element | null | undefined,
-): void => renderToast(friendlyError(message).message, "error", context, null);
+): void => renderToast(localizeErrorCopy(friendlyError(message).message), "error", context, null);
 
 const renderToast = (
   display: string,

@@ -14,6 +14,7 @@ import {
   PRIVACY_OTHER_WALLET,
   PRIVACY_OTHER_WALLET_NEXT,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -366,7 +367,7 @@ const blocked = (
   const reason =
     journey.blocker.kind === "other-wallet"
       ? ""
-      : `<p class="hint">${escapeHtml(journey.blocker.message)}</p>`;
+      : `<p class="hint">${escapeHtml(localizeErrorCopy(journey.blocker.message))}</p>`;
   return `
   <section class="privacy-outcome privacy-blocked" role="status" aria-live="polite" data-privacy-blocker="${journey.blocker.kind}">
     <span class="privacy-outcome-mark" aria-hidden="true">${icon("shield")}</span>

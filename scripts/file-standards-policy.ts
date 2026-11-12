@@ -36,6 +36,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Classifies diagnostics the background threw ("Invalid mnemonic", "…signature
   // key mismatch") by their words; matched here, never read, logged, or persisted.
   "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal.ts",
+  // Chinese for the error copy above, keyed by its exact English, so the keys
+  // quote the same sentences ("…passphrase…", "…signature…"). Text only.
+  "packages/presentation/wallet-ui/src/i18n/error-copy-zh-a.ts",
+  "packages/presentation/wallet-ui/src/i18n/error-copy-zh-b.ts",
   // Decides whether a rejected send is known not sent; it names the Ledger
   // catalog code "signature-verify-failed" as a lookup key and reads no secret.
   "packages/presentation/wallet-ui/src/sidepanel/shared/submit-outcome.ts",
@@ -146,6 +150,8 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/gate-views.ts",
   "packages/platform/ledger-protocol/src/client.ts",
   "packages/platform/ledger-protocol/src/errors.ts",
+  // Translations of errors.ts's sentences by rejection code ("signature-verify-failed").
+  "packages/platform/ledger-protocol/src/errors-i18n.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/first-run.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/onboard-entry.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/runtime-client.ts",

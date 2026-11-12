@@ -33,7 +33,8 @@ import {
   ledgerBrokerChannelName,
   ledgerBrokerSessionFromHash,
 } from "@bramble/ledger-protocol/broker";
-import { LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import { ledgerMessageIn } from "@bramble/ledger-protocol/errors-i18n";
 import { darkSkin } from "@bramble/ui-kit/dark-skin";
 import { applySkin } from "@bramble/ui-kit/skin";
 import { brandMark, element, textElement } from "./dom";
@@ -44,7 +45,7 @@ import {
   ledgerGrantFailure,
   transportForConnectionMethod,
 } from "./grant-flow";
-import { gt, setGrantLocale } from "./messages";
+import { grantLocale, gt, setGrantLocale } from "./messages";
 import { LEDGER_GRANT_STYLES } from "./styles";
 import { ledgerHandshakeProgress, ledgerTransitionProgress } from "./transition-progress";
 
@@ -296,7 +297,7 @@ const render = (): void => {
     const appIsClosed = error.code === "no-app-open";
     setStatus(
       appIsClosed ? gt("ledgerGrant.openStarknet") : gt("ledgerGrant.notReady"),
-      ledgerMessage(error.code),
+      ledgerMessageIn(error.code, grantLocale()),
       "danger",
       `Support code · ${diagnosticId(transport, appIsClosed ? "APP" : "DEVICE")}`,
     );

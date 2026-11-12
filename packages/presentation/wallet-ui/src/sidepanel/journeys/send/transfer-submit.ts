@@ -11,6 +11,7 @@
 import { shieldStrkNeed } from "@bramble/transactions/fee-funds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t } from "../../../i18n/messages";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { friendlyError } from "../../runtime/friendly-error";
@@ -318,7 +319,7 @@ export const submitRejection = (
       follow: false,
       state: {
         ...cleared,
-        error: friendlyError(details).message,
+        error: localizeErrorCopy(friendlyError(details).message),
         priorWrite,
         stage: "failed",
         submissionUnknown: false,
@@ -331,7 +332,9 @@ export const submitRejection = (
       follow: false,
       state: {
         ...cleared,
-        error: t("review.send.notSent", { reason: friendlyError(details).message }),
+        error: t("review.send.notSent", {
+          reason: localizeErrorCopy(friendlyError(details).message),
+        }),
         stage: "failed",
         submissionUnknown: false,
       },

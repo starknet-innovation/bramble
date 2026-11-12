@@ -5,6 +5,7 @@
  */
 
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t } from "../../../i18n/messages";
 import type { TransferReviewResponse, WalletStatus } from "../../../popup/responses/responses";
 import { friendlyError } from "../../runtime/friendly-error";
@@ -342,10 +343,12 @@ export const bindNftSendForm = (deps: NftSendDeps): void => {
           }
           // Classified like every other sink, so a Ledger code reads as the
           // device catalog's sentence rather than the code itself.
-          const message = friendlyError(details).message;
-          showToast(message, "error", deps.app, details);
+          // Classified on the English; shown in the reader's language.
+          const english = friendlyError(details).message;
+          const message = localizeErrorCopy(english);
+          showToast(english, "error", deps.app, details);
           if (result) {
-            result.textContent = /nothing was (?:submitted|signed)/i.test(message)
+            result.textContent = /nothing was (?:submitted|signed)/i.test(english)
               ? message
               : t("review.nft.notSubmitted", { message });
           }

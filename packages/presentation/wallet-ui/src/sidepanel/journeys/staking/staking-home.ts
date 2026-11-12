@@ -9,12 +9,14 @@
  * Rows and buttons are real buttons: the Stake button opens the validator
  * list; a row opens that validator.
  */
+
 import { escapeHtml } from "@bramble/core/html";
 import type { TokenConfig } from "@bramble/settings/preferences";
 import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
 import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t, th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
 import { compactAmount } from "../portfolio/token-row";
@@ -70,7 +72,7 @@ const homeStakingPanel = (state: StakingState): string => {
       : "off" in positions
         ? ""
         : "unavailable" in positions
-          ? `<p class="hint" role="alert">${escapeHtml(positions.unavailable)}</p>`
+          ? `<p class="hint" role="alert">${escapeHtml(localizeErrorCopy(positions.unavailable))}</p>`
           : positions.rows.length === 0 && positions.complete
             ? emptyState(t("staking.home.empty"))
             : `${

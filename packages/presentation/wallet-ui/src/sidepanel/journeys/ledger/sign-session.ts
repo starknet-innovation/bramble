@@ -31,8 +31,8 @@ import {
   asLedgerRejection,
   LedgerRejection,
   type LedgerRejectionCode,
-  ledgerMessage,
 } from "@bramble/ledger-protocol/errors";
+import { ledgerMessageIn } from "@bramble/ledger-protocol/errors-i18n";
 import {
   closeLedgerSessionQuietly,
   type LedgerConnector,
@@ -40,6 +40,7 @@ import {
   type LedgerDeviceSession,
 } from "@bramble/ledger-protocol/session";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { uiLocale } from "../../../i18n/locale";
 import type { LedgerSignRequestSummary } from "../../../popup/responses/responses";
 import { LEDGER_SIGN_UNFINISHED } from "../../runtime/friendly-error-copy";
 import type { LedgerSignOutcome } from "./runtime-client";
@@ -126,7 +127,7 @@ const UNFINISHED_PHASE: LedgerSignPhase = {
 const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
   code,
   kind: "error",
-  message: ledgerMessage(code),
+  message: ledgerMessageIn(code, uiLocale()),
 });
 
 /**
