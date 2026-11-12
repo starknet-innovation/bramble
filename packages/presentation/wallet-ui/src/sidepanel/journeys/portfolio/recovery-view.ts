@@ -8,6 +8,7 @@
  */
 import { escapeHtml } from "@bramble/core/html";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
+import { t, th } from "../../../i18n/messages";
 import type { SignabilityVerdict } from "../../../popup/responses/responses";
 import type { RecoveryReview } from "../../../popup/responses/responses-recovery";
 import { icon } from "../../shared/icons";
@@ -35,28 +36,27 @@ const formatUtcInstant = (epochSeconds: number): string => {
   const year = yoe + era * 400 + (month <= 2 ? 1 : 0);
   const hour = Math.floor(secondOfDay / 3600);
   const minute = Math.floor((secondOfDay % 3600) / 60);
-  return `${pad(day)}/${pad(month)}/${pad(year % 100)} at ${pad(hour)}h${pad(minute)} UTC`;
+  return t("review.recovery.instant", {
+    date: `${pad(day)}/${pad(month)}/${pad(year % 100)}`,
+    time: `${pad(hour)}h${pad(minute)}`,
+  });
 };
 
 const at = (epochSeconds: number): string => formatUtcInstant(epochSeconds);
 
 // Ready: cancel_escape needs the owner AND the guardian to sign together, so
 // neither the guardian nor the phrase can stop a removal alone.
-const READY_CANCEL = "Cancelling needs this account's key and your guardian together, in Ready.";
+const readyCancel = (): string => t("review.recovery.readyCancel");
 // trigger_escape_owner is accepted only when the guardian signs: a live owner
 // escape is a key replacement the guardian approved.
-const OWNER_ESCAPE = "Your guardian has started replacing this account's key.";
+const ownerEscape = (): string => t("review.recovery.ownerEscape");
 // trigger_escape_guardian(Some(new)) is accepted when the owner alone signs:
 // a guardian escape to a new guardian was started with this account's
 // key. Completing it installs that guardian, so it is never shown as a removal.
-const GUARDIAN_CHANGE = "A change to a new guardian, started with this account's key, is pending.";
+const guardianChange = (): string => t("review.recovery.guardianChange");
 
 // trigger_escape_guardian(None) is rejected while a backup guardian is set, so
 // the phrase cannot remove the guardian; a failed read is shown, not guessed.
-const BACKUP_PRESENT =
-  "This account has a backup guardian, so the recovery phrase can't remove its guardian.";
-const BACKUP_UNKNOWN =
-  "Couldn't check this account's backup guardian, so recovery isn't offered. Try again later.";
 
 const detail = (text: string): string => `<p class="read-only-detail">${escapeHtml(text)}</p>`;
 
@@ -74,47 +74,47 @@ export const readOnlyNotice = (
   // Not read only: it signs once deployed, which is its own reviewed step.
   if (signability.reason === "undeployed") {
     return `<div class="read-only-notice" data-read-only="undeployed">
-      <p class="hero-stale">${icon("rocket")}<span>Not deployed</span></p>
+      <p class="hero-stale">${icon("rocket")}<span>${th("review.recovery.notDeployed")}</span></p>
       <p class="read-only-detail">${escapeHtml(UNDEPLOYED_BRAAVOS_REFUSAL)}</p>
     </div>`;
   }
   const recovery = "recovery" in signability ? signability.recovery : undefined;
   const kind = signability.reason === "guardian" ? "argent" : "braavos";
   const recoverable = signability.reason === "strong-signer" || signability.reason === "guardian";
-  const noun = kind === "argent" ? "the guardian" : "2FA";
   const button = (label: string): string =>
-    `<button class="button button-secondary" id="recover-account" type="button" data-recover-kind="${kind}">${label}</button>`;
+    `<button class="button button-secondary" id="recover-account" type="button" data-recover-kind="${kind}">${escapeHtml(label)}</button>`;
+  const recover = (): string => button(t("review.recovery.recover"));
   const pendingUntil = recovery?.pendingUntil ?? null;
   const expiresAt = recovery?.expiresAt;
   const stage = recovery?.stage;
   let body = "";
   if (recoverable && keyless) {
-    body = detail(`Removing ${noun} isn't available for Ledger accounts.`);
+    body = detail(
+      t(kind === "argent" ? "review.recovery.ledgerGuardian" : "review.recovery.ledgerTwoFactor"),
+    );
   } else if (kind === "argent" && stage === "backup-guardian") {
-    body = detail(BACKUP_PRESENT);
+    body = detail(t("review.recovery.backupPresent"));
   } else if (kind === "argent" && stage === "backup-unknown") {
-    body = detail(BACKUP_UNKNOWN);
+    body = detail(t("review.recovery.backupUnknown"));
   } else if (kind === "argent" && stage === "ready" && expiresAt !== undefined) {
-    body = `${detail(`Guardian removal is ready. Complete it before ${at(expiresAt)}.`)}${button("Complete recovery")}`;
+    body = `${detail(t("review.recovery.readyToComplete", { at: at(expiresAt) }))}${button(t("review.recovery.completeRecovery"))}`;
   } else if (kind === "argent" && stage === "expired" && expiresAt !== undefined) {
-    body = `${detail(`The last guardian removal expired on ${at(expiresAt)} without being completed.`)}${button("Recover account")}`;
+    body = `${detail(t("review.recovery.expired", { at: at(expiresAt) }))}${recover()}`;
   } else if (kind === "argent" && stage === "owner-escape") {
-    body = `${detail(OWNER_ESCAPE)}${button("Recover account")}`;
+    body = `${detail(ownerEscape())}${recover()}`;
   } else if (kind === "argent" && stage === "guardian-change") {
-    body = `${detail(GUARDIAN_CHANGE)}${button("Recover account")}`;
+    body = `${detail(guardianChange())}${recover()}`;
   } else if (kind === "argent" && pendingUntil !== null && expiresAt !== undefined) {
     body = detail(
-      `Removing the guardian — you can complete it after ${at(pendingUntil)}, until ${at(expiresAt)}. ${READY_CANCEL}`,
+      t("review.recovery.guardianPending", { from: at(pendingUntil), until: at(expiresAt) }),
     );
   } else if (kind === "braavos" && pendingUntil !== null) {
-    body = detail(
-      `Removing 2FA — usable on ${at(pendingUntil)}. Your Braavos device can still stop this.`,
-    );
+    body = detail(t("review.recovery.braavos.pending", { at: at(pendingUntil) }));
   } else if (recoverable && stage === undefined) {
-    body = button("Recover account");
+    body = recover();
   }
   return `<div class="read-only-notice" data-read-only="true">
-      <p class="hero-stale">${icon("eye")}<span>Read only</span></p>
+      <p class="hero-stale">${icon("eye")}<span>${th("review.recovery.readOnly")}</span></p>
       <div class="read-only-body" data-recovery-body>${body}</div>
     </div>`;
 };
@@ -129,45 +129,47 @@ const recoveryConfirmCopy = (
   readonly title: string;
   readonly warning: string | null;
 } => {
-  const fee = `Maximum network fee: ${formatFeeEstimate(review.fee)}`;
+  const fee = t("review.recovery.maxFee", { fee: formatFeeEstimate(review.fee) });
   if (kind === "braavos") {
     return {
-      confirm: "Remove 2FA",
+      confirm: t("review.recovery.braavos.confirm"),
       lines: [
-        "This permanently removes 2FA from this account, along with any multisig or withdrawal limit on it. After that, your recovery phrase alone controls the account.",
-        `Takes effect after ${at(review.readyAt)}. Until then, you can cancel it from your Braavos device.`,
+        t("review.recovery.braavos.consequence"),
+        t("review.recovery.braavos.timing", { at: at(review.readyAt) }),
         fee,
       ],
-      title: "Remove 2FA from this account?",
+      title: t("review.recovery.braavos.title"),
       warning: null,
     };
   }
   if (review.step === "complete") {
     return {
-      confirm: "Remove guardian",
-      lines: [
-        "This removes the guardian from this account now. After that, your recovery phrase alone controls the account.",
-        fee,
-      ],
-      title: "Complete guardian removal?",
+      confirm: t("review.recovery.complete.confirm"),
+      lines: [t("review.recovery.complete.consequence"), fee],
+      title: t("review.recovery.complete.title"),
       warning: null,
     };
   }
   return {
-    confirm: "Start removal",
+    confirm: t("review.recovery.start.confirm"),
     lines: [
-      "This starts removing the guardian. Once it is removed, your recovery phrase alone controls the account.",
+      t("review.recovery.start.consequence"),
       review.expiresAt === null
-        ? `You can complete the removal after ${at(review.readyAt)}.`
-        : `You can complete the removal after ${at(review.readyAt)}, until ${at(review.expiresAt)}. After that, it expires.`,
-      READY_CANCEL,
+        ? t("review.recovery.start.timing", { at: at(review.readyAt) })
+        : t("review.recovery.start.timingWindow", {
+            from: at(review.readyAt),
+            until: at(review.expiresAt),
+          }),
+      readyCancel(),
       fee,
     ],
-    title: "Remove the guardian from this account?",
+    title: t("review.recovery.start.title"),
     warning:
       review.replaces === null
         ? null
-        : `${review.replaces.kind === "owner-escape" ? OWNER_ESCAPE : GUARDIAN_CHANGE} Continuing cancels that change. If you asked for it, don't continue.`,
+        : t("review.recovery.replaces", {
+            change: review.replaces.kind === "owner-escape" ? ownerEscape() : guardianChange(),
+          }),
   };
 };
 
@@ -215,7 +217,7 @@ export const buildRecoveryConfirm = (
   cancel.type = "button";
   cancel.className = "secondary";
   cancel.id = "recovery-cancel";
-  cancel.textContent = "Cancel";
+  cancel.textContent = t("review.recovery.cancel");
   const confirm = doc.createElement("button");
   confirm.type = "button";
   confirm.className = "danger";

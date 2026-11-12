@@ -115,13 +115,13 @@ describe("Send and Receive in Simplified Chinese", () => {
     expect(sendBalanceLine("private", null, "STRK")).toBe("隐私余额不可用");
   });
 
-  test("mode copy follows the language, but the review step stays English", () => {
+  test("mode copy and the pinned review step both follow the language", () => {
     setUiLocale("zh-Hans");
     expect(transferStageTitle("details", "shield")).toBe("转入隐私余额");
     expect(transferStageTitle("failed", "unshield")).toBe("转出隐私余额失败");
     expect(transferModeCopy("send").successTitle).toBe("发送完成");
-    expect(transferStageTitle("review", "send")).toBe("Review send");
-    expect(transferModeCopy("send").confirmLabel).toBe("Confirm and send");
+    expect(transferStageTitle("review", "send")).toBe("检查发送");
+    expect(transferModeCopy("send").confirmLabel).toBe("确认并发送");
     expect(transferSuccessSummary("shield", "1", "ETH", "")).toBe("1 ETH 已转入你的隐私余额");
   });
 

@@ -14,11 +14,12 @@ import {
 } from "@bramble/multisig/chain";
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { t, th } from "../../../i18n/messages";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import { accountLabel, inlineCopyButton } from "../../shared/parts";
 
 const signerKeyItem = (key: string): string =>
-  `<li><code title="${escapeHtml(key)}">${escapeHtml(accountLabel(key))}</code>${inlineCopyButton(key, "Copy signer public key")}</li>`;
+  `<li><code title="${escapeHtml(key)}">${escapeHtml(accountLabel(key))}</code>${inlineCopyButton(key, t("review.multisig.change.copyKey"))}</li>`;
 
 /**
  * Renders each prepared call with its entrypoint, target contract (copyable in
@@ -28,9 +29,9 @@ export const exactCalls = (intent: ArgentMultisigSigningIntent): string =>
   intent.prepared.calls
     .map(
       (call, index) => `<li class="review-panel">
-        <p><strong>Call ${index + 1}</strong> · <code>${escapeHtml(call.entrypoint)}</code></p>
-        <p>Contract · <code title="${escapeHtml(call.contractAddress)}">${escapeHtml(accountLabel(call.contractAddress))}</code>${inlineCopyButton(call.contractAddress, `Copy call ${index + 1} contract address`)}</p>
-        <p>Calldata · <code>${escapeHtml(call.calldata.join(" ") || "none")}</code></p>
+        <p><strong>${th("review.multisig.exact.call", { index: String(index + 1) })}</strong> · <code>${escapeHtml(call.entrypoint)}</code></p>
+        <p>${th("review.multisig.exact.contract")} <code title="${escapeHtml(call.contractAddress)}">${escapeHtml(accountLabel(call.contractAddress))}</code>${inlineCopyButton(call.contractAddress, t("review.multisig.exact.copyContract", { index: String(index + 1) }))}</p>
+        <p>${th("review.multisig.exact.calldata")} <code>${escapeHtml(call.calldata.join(" ") || t("review.multisig.exact.none"))}</code></p>
       </li>`,
     )
     .join("");
@@ -68,8 +69,22 @@ export const configReviewFor = (
 // One "Add <key>" / "Remove <key>" line of the exact change, kept whole when
 // it is short enough to read and truncated otherwise; the key copies whole.
 const changedSignerLine = (verb: "Add" | "Remove", key: string): string => {
-  const line = `${verb} ${key}`;
-  return `<p><code title="${escapeHtml(line)}">${escapeHtml(line.length > 24 ? `${line.slice(0, 14)}…${line.slice(-6)}` : line)}</code>${inlineCopyButton(key, `Copy signer public key to ${verb.toLowerCase()}`)}</p>`;
+  const line = t(verb === "Add" ? "review.multisig.change.add" : "review.multisig.change.remove", {
+    key,
+  });
+  const copyLabel = t(
+    verb === "Add" ? "review.multisig.change.copyAdd" : "review.multisig.change.copyRemove",
+  );
+  return `<p><code title="${escapeHtml(line)}">${escapeHtml(line.length > 24 ? `${line.slice(0, 14)}…${line.slice(-6)}` : line)}</code>${inlineCopyButton(key, copyLabel)}</p>`;
+};
+
+// "Label · figures": everything after the first " · " is the figure, set in
+// bold as before; a line without the separator is bold whole.
+const strongAfterLabel = (line: string): string => {
+  const at = line.indexOf(" · ");
+  return at < 0
+    ? `<strong>${escapeHtml(line)}</strong>`
+    : `${escapeHtml(line.slice(0, at + 3))}<strong>${escapeHtml(line.slice(at + 3))}</strong>`;
 };
 
 /**
@@ -92,15 +107,27 @@ export const configReviewView = (
         : change.signerPublicKeys.map((key) =>
             changedSignerLine(change.kind === "add_signers" ? "Add" : "Remove", key),
           );
-  return `<section class="review-panel" aria-label="Signer authority change">
+  return `<section class="review-panel" aria-label="${th("review.multisig.change.label")}">
     <p class="review-flag"><strong>${escapeHtml(review.summary)}</strong></p>
-    <p>Threshold · <strong>${current.threshold} of ${current.signerPublicKeys.length} before → ${review.nextConfig.threshold} of ${review.nextConfig.signerPublicKeys.length} after</strong></p>
-    <p>Current signers</p>
+    <p>${strongAfterLabel(
+      t("review.multisig.change.threshold", {
+        after: String(review.nextConfig.threshold),
+        afterTotal: String(review.nextConfig.signerPublicKeys.length),
+        before: String(current.threshold),
+        beforeTotal: String(current.signerPublicKeys.length),
+      }),
+    )}</p>
+    <p>${th("review.multisig.change.current")}</p>
     <ol>${current.signerPublicKeys.map(signerKeyItem).join("")}</ol>
-    <p>Exact change</p>
+    <p>${th("review.multisig.change.exact")}</p>
     ${changedSigners.join("")}
-    <p>Resulting threshold · <strong>${review.nextConfig.threshold} of ${review.nextConfig.signerPublicKeys.length}</strong></p>
-    <p>Resulting signers</p>
+    <p>${strongAfterLabel(
+      t("review.multisig.change.resultingThreshold", {
+        threshold: String(review.nextConfig.threshold),
+        total: String(review.nextConfig.signerPublicKeys.length),
+      }),
+    )}</p>
+    <p>${th("review.multisig.change.resultingSigners")}</p>
     <ol>${review.nextConfig.signerPublicKeys.map(signerKeyItem).join("")}</ol>
   </section>`;
 };

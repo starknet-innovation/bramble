@@ -414,7 +414,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     buttonBusy(confirmButton, true);
     submitting = true;
     const restingContent = confirmButton.innerHTML;
-    confirmButton.innerHTML = `${icon("refresh")}Submitting swap…`;
+    confirmButton.innerHTML = `${icon("refresh")}${th("review.swap.submitting")}`;
     const executed = quote;
     const claimedPreparation = preparation;
     const sellText = `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`;
@@ -428,7 +428,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
       // The hash is a handoff, not an outcome. The screen stays on the
       // review, saying what it is doing, until the chain answers.
       const epoch = ++confirmEpoch;
-      confirmButton.innerHTML = `${icon("refresh")}Confirming…`;
+      confirmButton.innerHTML = `${icon("refresh")}${th("review.swap.confirming")}`;
       const outcome = await awaitConfirmation({
         ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
         hash: transactionHash,
@@ -481,8 +481,8 @@ export const bindSwap = (deps: SwapUiDeps): void => {
         return;
       }
       submitting = false;
-      showToast(errorDetails(error, "Swap failed"), "error", root);
-      setResult(root, errorLine(error, "Swap failed"));
+      showToast(errorDetails(error, t("review.swap.failed")), "error", root);
+      setResult(root, errorLine(error, t("review.swap.failed")));
       confirmButton.innerHTML = restingContent;
       buttonBusy(confirmButton, false);
       preparation = null;

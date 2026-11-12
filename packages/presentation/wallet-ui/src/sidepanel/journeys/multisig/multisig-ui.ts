@@ -15,7 +15,7 @@ import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom
 import { formatFiat } from "../../shared/fiat";
 import { balanceShortcut, tokenInputFiat } from "../send/send-model";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
-import { STALE_INTENT_MAY_HAVE_BEEN_SENT } from "./multisig-intent-actions";
+import { staleIntentMayHaveBeenSent } from "./multisig-intent-actions";
 import { bindMultisigIntentCards } from "./multisig-intent-ui";
 import { parseArgentMultisigIntentPackage } from "./multisig-model";
 import { armResendConfirmation, resendConfirmed } from "./multisig-resend-confirm";
@@ -377,7 +377,7 @@ const bindImport = (deps: MultisigUiDeps): void => {
       const result = await deps.multisig.importIntent(intentPackage);
       deps.openIntent(result.intent.accountId, result.intent.id);
       return result.intent.state === "stale"
-        ? `${t("multisig.import.restored")} ${STALE_INTENT_MAY_HAVE_BEEN_SENT}`
+        ? `${t("multisig.import.restored")} ${staleIntentMayHaveBeenSent()}`
         : t("multisig.import.verified");
     });
   });

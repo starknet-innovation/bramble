@@ -113,30 +113,35 @@ export const deploymentFundingStage = (
  * paint the same review.
  */
 export const deploymentReviewMarkup = (review: ArgentMultisigDeploymentReview): string =>
-  `${reviewOutcome(`Deploy a ${review.threshold}-of-${review.signerPublicKeys.length} Ready multisig.`)}
-    <div class="multisig-deployment-target" aria-label="Predicted multisig address">
-      <span>Predicted address</span>
+  `${reviewOutcome(
+    t("review.multisig.deploy.outcome", {
+      threshold: String(review.threshold),
+      total: String(review.signerPublicKeys.length),
+    }),
+  )}
+    <div class="multisig-deployment-target" aria-label="${th("review.multisig.deploy.predictedLabel")}">
+      <span>${th("review.multisig.deploy.predicted")}</span>
       <code title="${escapeHtml(review.address)}">${escapeHtml(accountLabel(review.address))}</code>
-      ${copyButton(review.address, "Copy predicted multisig address")}
+      ${copyButton(review.address, t("review.multisig.deploy.copyPredicted"))}
     </div>
-    ${reviewPanel([], "Deployment creates a new on-chain multisig account. Its address, signer set, threshold, and salt cannot be edited after this submission.")}
-    ${reviewCostNote(`Maximum network fee: ${formatFeeEstimate(review.fee)}`)}
+    ${reviewPanel([], t("review.multisig.deploy.consequence"))}
+    ${reviewCostNote(t("review.multisig.deploy.maxFee", { fee: formatFeeEstimate(review.fee) }))}
     <details class="disclosure" data-disclosure="multisig-deployment-technical">
       <summary>
-        <span class="menu-copy"><strong>Technical details</strong><small>Exact constructor authority and signer</small></span>
+        <span class="menu-copy"><strong>${th("review.multisig.deploy.technical")}</strong><small>${th("review.multisig.deploy.technicalHint")}</small></span>
         <span class="disclosure-mark">${icon("chevronRight")}</span>
       </summary>
       <div class="disclosure-body">
         <dl class="request-detail">
-          <div><dt>Address</dt><dd><code>${escapeHtml(review.address)}</code>${copyButton(review.address, "Copy multisig address")}</dd></div>
-          <div><dt>Contract</dt><dd>Ready Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
-          <div><dt>Class hash</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, "Copy Ready Multisig class hash")}</dd></div>
-          <div><dt>Network</dt><dd><code>${escapeHtml(review.networkId)}</code></dd></div>
-          <div><dt>Signers</dt><dd>${review.signerPublicKeys.length}</dd></div>
-          <div><dt>Public keys</dt><dd><code>${escapeHtml(review.signerPublicKeys.join(" "))}</code></dd></div>
-          <div><dt>Threshold</dt><dd>${review.threshold}</dd></div>
-          <div><dt>Salt</dt><dd><code>${escapeHtml(review.salt)}</code></dd></div>
-          <div><dt>Deployment signer</dt><dd><code>${escapeHtml(review.signerAccountId)}</code></dd></div>
+          <div><dt>${th("review.multisig.deploy.address")}</dt><dd><code>${escapeHtml(review.address)}</code>${copyButton(review.address, t("review.multisig.deploy.copyAddress"))}</dd></div>
+          <div><dt>${th("review.multisig.deploy.contract")}</dt><dd>Ready Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
+          <div><dt>${th("review.multisig.deploy.classHash")}</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, t("review.multisig.deploy.copyClassHash"))}</dd></div>
+          <div><dt>${th("review.multisig.deploy.network")}</dt><dd><code>${escapeHtml(review.networkId)}</code></dd></div>
+          <div><dt>${th("review.multisig.deploy.signers")}</dt><dd>${review.signerPublicKeys.length}</dd></div>
+          <div><dt>${th("review.multisig.deploy.publicKeys")}</dt><dd><code>${escapeHtml(review.signerPublicKeys.join(" "))}</code></dd></div>
+          <div><dt>${th("review.multisig.deploy.threshold")}</dt><dd>${review.threshold}</dd></div>
+          <div><dt>${th("review.multisig.deploy.salt")}</dt><dd><code>${escapeHtml(review.salt)}</code></dd></div>
+          <div><dt>${th("review.multisig.deploy.signer")}</dt><dd><code>${escapeHtml(review.signerAccountId)}</code></dd></div>
         </dl>
       </div>
     </details>`;
@@ -444,7 +449,7 @@ export const multisigDeployFlow = (
             </div>
             <div id="multisig-deploy-review" aria-live="polite"></div>
             <div class="multisig-deploy-actions">
-              ${button({ disabled: classState !== true || !deploymentSigner, label: "Check fee and address", type: "submit" })}
+              ${button({ disabled: classState !== true || !deploymentSigner, label: t("review.multisig.deploy.check"), type: "submit" })}
             </div>
             <p id="multisig-deploy-result" role="status"></p>
           </div>

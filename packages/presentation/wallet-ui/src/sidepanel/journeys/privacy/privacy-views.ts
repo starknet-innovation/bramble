@@ -115,9 +115,7 @@ const shortAddress = (value: string): string =>
 const activationOutcome = (
   preparation: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>["preparation"],
 ): string =>
-  preparation.poolFeeFri
-    ? "Going private sets up a private balance for this account. Registering costs a one-time pool fee, paid from your public STRK."
-    : "Going private sets up a private balance for this account.";
+  t(preparation.poolFeeFri ? "review.privacy.outcomeWithPoolFee" : "review.privacy.outcome");
 
 const preparationDetails = (
   journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>,
@@ -127,49 +125,59 @@ const preparationDetails = (
   return `<section class="privacy-review">
     <header class="decision-head">
       <span class="decision-seal">${icon("shield")}</span>
-      <span><p class="decision-label">Reviewed intent</p><h2>Activate private balances</h2></span>
+      <span><p class="decision-label">${th("review.privacy.reviewedIntent")}</p><h2>${th("review.privacy.activate")}</h2></span>
     </header>
-    <section class="decision-layer decision-outcome" aria-label="What will happen">
-      <p class="decision-label">What will happen</p>
+    <section class="decision-layer decision-outcome" aria-label="${th("review.privacy.whatWillHappen")}">
+      <p class="decision-label">${th("review.privacy.whatWillHappen")}</p>
       <p>${escapeHtml(activationOutcome(preparation))}</p>
     </section>
-    ${reviewPanel([
-      "Registration is public. It stores this account's viewing-key commitment on-chain and opens its private channel. It does not reveal the viewing key or your private balance.",
-    ])}
-    <section class="decision-layer decision-boundary" aria-label="Cost">
-      <p class="decision-label">Cost</p>
+    ${reviewPanel([t("review.privacy.registrationPublic")])}
+    <section class="decision-layer decision-boundary" aria-label="${th("review.privacy.cost")}">
+      <p class="decision-label">${th("review.privacy.cost")}</p>
       ${receipt([
         {
-          label: "Maximum network fee",
+          label: t("review.privacy.maxFee"),
           value: preparation.networkFee
             ? formatFeeEstimate(preparation.networkFee)
-            : preparation.route === "private-relay"
-              ? "Sponsored"
-              : "Unavailable",
+            : t(
+                preparation.route === "private-relay"
+                  ? "review.privacy.sponsored"
+                  : "review.privacy.unavailable",
+              ),
         },
         ...(preparation.poolFeeFri
-          ? [{ label: "Pool fee", value: `${formatFri(preparation.poolFeeFri)} from public STRK` }]
+          ? [
+              {
+                label: t("review.privacy.poolFee"),
+                value: t("review.privacy.poolFeeValue", {
+                  amount: formatFri(preparation.poolFeeFri),
+                }),
+              },
+            ]
           : []),
         {
-          label: "Submission",
-          value:
-            preparation.route === "private-relay" ? "Private relay" : "Public account transaction",
+          label: t("review.privacy.submission"),
+          value: t(
+            preparation.route === "private-relay"
+              ? "review.privacy.privateRelay"
+              : "review.privacy.publicAccountTransaction",
+          ),
         },
       ])}
     </section>
     <details class="send-review-disclosure" data-disclosure="privacy-activation-technical">
-      <summary><span>Technical details</span>${icon("chevronDown")}</summary>
+      <summary><span>${th("review.privacy.technical")}</span>${icon("chevronDown")}</summary>
       <div class="send-review-disclosure-body">
     ${receipt([
-      { label: "Network", value: networkDisplayName(status.network) },
+      { label: t("review.privacy.network"), value: networkDisplayName(status.network) },
       ...(preparation.authorization
         ? [
             {
-              label: "Public approval calls",
+              label: t("review.privacy.publicApprovalCalls"),
               value: String(preparation.authorization.publicCallCount),
             },
             {
-              label: "Authorization window",
+              label: t("review.privacy.authorizationWindow"),
               value: `${shortAddress(preparation.authorization.executeAfter)} → ${shortAddress(preparation.authorization.executeBefore)}`,
               valueStyle: "code" as const,
             },
@@ -177,9 +185,9 @@ const preparationDetails = (
               action: {
                 attributes: { "data-copy": preparation.authorization.caller },
                 icon: "copy" as const,
-                label: "Copy authorization caller address",
+                label: t("review.privacy.copyCaller"),
               },
-              label: "Authorization caller",
+              label: t("review.privacy.authorizationCaller"),
               value: shortAddress(preparation.authorization.caller),
               valueStyle: "code" as const,
             },
@@ -189,9 +197,9 @@ const preparationDetails = (
         action: {
           attributes: { "data-copy": preparation.poolAddress },
           icon: "copy",
-          label: "Copy privacy pool address",
+          label: t("review.privacy.copyPool"),
         },
-        label: "Privacy pool",
+        label: t("review.privacy.pool"),
         value: shortAddress(preparation.poolAddress),
         valueStyle: "code",
       },
@@ -205,7 +213,7 @@ const preparationDetails = (
     ${button({
       attributes: { id: "privacy-confirm" },
       icon: "shield",
-      label: "Activate private balances",
+      label: t("review.privacy.activate"),
     })}
   </section>`;
 };

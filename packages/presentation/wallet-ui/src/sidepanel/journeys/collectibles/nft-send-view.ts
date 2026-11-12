@@ -11,6 +11,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { t, th } from "../../../i18n/messages";
 import type { DiscoveredNft, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
@@ -34,17 +35,17 @@ export const nftSendFlow = (
   );
   if (!nft) {
     return (
-      flowHeader("Send NFT", status) +
+      flowHeader(t("review.nft.title"), status) +
       flowScreen(
         "nft-send",
-        `<section class="section">${emptyState("This NFT is no longer available.")}</section>`,
+        `<section class="section">${emptyState(t("review.nft.unavailable"))}</section>`,
       )
     );
   }
   const contacts =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return (
-    flowHeader("Send NFT", status, nft.title) +
+    flowHeader(t("review.nft.title"), status, nft.title) +
     flowScreen(
       "nft-send",
       `<section class="section nft-send-identity">
@@ -53,17 +54,17 @@ export const nftSendFlow = (
           ${icon("image")}
         </div>
         ${receipt([
-          { label: "NFT", value: nft.title },
+          { label: t("review.nft.nft"), value: nft.title },
           {
             action: {
               attributes: { "data-copy": nft.contract },
               icon: "copy",
-              label: "Copy collection contract address",
+              label: t("review.nft.copyCollection"),
             },
-            label: "Collection",
+            label: t("review.nft.collection"),
             value: nft.collection || accountLabel(nft.contract),
           },
-          { label: "Token id", value: nft.tokenId, valueStyle: "code" },
+          { label: t("review.nft.tokenId"), value: nft.tokenId, valueStyle: "code" },
         ])}
       </section>
       <section class="section">
@@ -77,7 +78,7 @@ export const nftSendFlow = (
             autocomplete: "off",
             className: "mono",
             disabled: account === null,
-            label: "Send to",
+            label: t("review.nft.sendTo"),
             name: "recipient",
             placeholder: "0x…",
             required: true,
@@ -87,8 +88,8 @@ export const nftSendFlow = (
             contacts.length === 0
               ? ""
               : `<div class="stack-tight">
-                  <p class="eyebrow">Address book</p>
-                  <div class="menu-list" role="group" aria-label="Saved recipients">
+                  <p class="eyebrow">${th("review.nft.addressBook")}</p>
+                  <div class="menu-list" role="group" aria-label="${th("review.nft.savedRecipients")}">
                     ${contacts
                       .map((contact) =>
                         menuRow({
@@ -106,7 +107,7 @@ export const nftSendFlow = (
           ${button({
             disabled: account === null,
             icon: "send",
-            label: "Review transfer",
+            label: t("review.nft.review"),
             type: "submit",
           })}
           <p id="nft-send-result" role="status" aria-live="polite"></p>

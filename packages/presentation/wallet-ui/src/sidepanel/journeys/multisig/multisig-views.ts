@@ -35,7 +35,7 @@ import {
 import {
   multisigIntentActions,
   multisigIntentOutcome,
-  STALE_INTENT_LABEL,
+  staleIntentLabel,
 } from "./multisig-intent-actions";
 import { type CompactIntentList, intentDeleteButton } from "./multisig-intent-list";
 import { configReviewFor, configReviewView, exactCalls } from "./multisig-intent-review";
@@ -219,7 +219,7 @@ const intentCard = (
   return `<article class="allowance-row multisig-intent" data-ms-intent="${escapeHtml(intent.id)}">
     <header class="decision-head">
       <span class="decision-seal">${icon("users")}</span>
-      <span><p class="decision-label">${isReplacement ? "Fee-updated transaction" : intent.state === "stale" ? STALE_INTENT_LABEL : "Reviewed transaction"}</p><h2>${escapeHtml(intent.summary)}</h2></span>
+      <span><p class="decision-label">${isReplacement ? th("review.multisig.card.feeUpdated") : intent.state === "stale" ? th("review.multisig.stale.label") : th("review.multisig.card.reviewed")}</p><h2>${escapeHtml(intent.summary)}</h2></span>
     </header>
     ${reviewCallsList(
       transactionReview.calls.map((call) => call.summary),
@@ -227,63 +227,73 @@ const intentCard = (
     )}
     ${reviewPanel([
       ...riskFlagMessages(transactionReview.flags),
-      ...(hasFreshAuthority
-        ? []
-        : [
-            "The on-chain signers no longer match this transaction. Signing and submission are disabled.",
-          ]),
+      ...(hasFreshAuthority ? [] : [t("review.multisig.card.signersChanged")]),
     ])}
-    <section class="decision-layer decision-boundary" aria-label="Cost">
-      <p class="decision-label">Cost</p>
+    <section class="decision-layer decision-boundary" aria-label="${th("review.multisig.card.cost")}">
+      <p class="decision-label">${th("review.multisig.card.cost")}</p>
       ${receipt([
-        { label: "Maximum network fee", value: formatFeeEstimate(fee) },
+        { label: t("review.multisig.card.maxFee"), value: formatFeeEstimate(fee) },
         {
-          label: "Signatures",
-          value: `${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
+          label: t("review.multisig.card.signatures"),
+          value: t("review.multisig.card.signatureCount", {
+            signed: String(intent.signatures.length),
+            threshold: String(intent.configSnapshot.threshold),
+          }),
         },
       ])}
     </section>
     <details class="disclosure decision-technical" data-disclosure="multisig-intent-${escapeHtml(intent.id)}">
       <summary>
-        <span class="menu-copy"><strong>Technical details</strong><small>Exact identity, calls, and configuration</small></span>
+        <span class="menu-copy"><strong>${th("review.multisig.technical.title")}</strong><small>${th("review.multisig.technical.hint")}</small></span>
         <span class="disclosure-mark">${icon("chevronRight")}</span>
       </summary>
       <div class="disclosure-body">
         ${receipt(
           [
             {
-              label: "Transaction hash",
+              label: t("review.multisig.technical.hash"),
               action: {
                 attributes: { "data-copy": intent.prepared.transactionHash },
                 icon: "copy",
-                label: "Copy transaction hash",
+                label: t("review.multisig.technical.copyHash"),
               },
               value: accountLabel(intent.prepared.transactionHash),
               valueStyle: "code",
             },
             {
-              label: "Sender",
+              label: t("review.multisig.technical.sender"),
               action: {
                 attributes: { "data-copy": intent.prepared.senderAddress },
                 icon: "copy",
-                label: "Copy sender",
+                label: t("review.multisig.technical.copySender"),
               },
               value: accountLabel(intent.prepared.senderAddress),
               valueStyle: "code",
             },
             {
-              label: "Class hash",
+              label: t("review.multisig.technical.classHash"),
               action: {
                 attributes: { "data-copy": intent.configSnapshot.classHash },
                 icon: "copy",
-                label: "Copy class hash",
+                label: t("review.multisig.technical.copyClassHash"),
               },
               value: accountLabel(intent.configSnapshot.classHash),
               valueStyle: "code",
             },
-            { label: "Chain ID", value: intent.prepared.chainId, valueStyle: "code" },
-            { label: "Nonce", value: intent.prepared.nonce, valueStyle: "code" },
-            { label: "Calls", value: String(intent.prepared.calls.length) },
+            {
+              label: t("review.multisig.technical.chainId"),
+              value: intent.prepared.chainId,
+              valueStyle: "code",
+            },
+            {
+              label: t("review.multisig.technical.nonce"),
+              value: intent.prepared.nonce,
+              valueStyle: "code",
+            },
+            {
+              label: t("review.multisig.technical.calls"),
+              value: String(intent.prepared.calls.length),
+            },
           ],
           { "data-ms-exact-identity": "true" },
         )}
@@ -352,8 +362,8 @@ const compactIntentList = (
             ? t("multisig.intents.readyToSubmit")
             : intent.state === "stale"
               ? intent.signatures.length === intent.configSnapshot.threshold
-                ? `${STALE_INTENT_LABEL} · ${t("multisig.intents.readyToRetry")}`
-                : `${STALE_INTENT_LABEL} · ${t("multisig.intents.needsReview")}`
+                ? `${staleIntentLabel()} · ${t("multisig.intents.readyToRetry")}`
+                : `${staleIntentLabel()} · ${t("multisig.intents.needsReview")}`
               : t("multisig.intents.awaiting")
       } · ${t("multisig.intents.signatureCount", { signed: String(intent.signatures.length), threshold: String(intent.configSnapshot.threshold) })}`,
     })),
