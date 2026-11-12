@@ -33,4 +33,12 @@ export const REVIEW_MESSAGE_PINS: Readonly<Record<string, string>> = {
   "review.flag.unlimitedApproval": "3b76249d27297f33",
   "review.sign.name": "5e291d7bcb2dd847",
   "review.switchNetwork": "6702f8ab98b307f0",
+  "review.stakeAction.cancelUnstake": "5685a6279a04b568",
+  "review.stakeAction.claim": "1d393b0f3ffd258c",
+  "review.stakeAction.claimElsewhere": "fcae9c8d2e8f9fa8",
+  "review.stakeAction.stake": "faa6fa9deb371c4f",
+  "review.stakeAction.stakeElsewhere": "e988d05e3e4e23a6",
+  "review.stakeAction.unstake": "bda35e9cdd434d2c",
+  "review.stakeAction.validator": "d4bb68fab0da74bb",
+  "review.stakeAction.withdraw": "e8635b91f5306df8",
 };

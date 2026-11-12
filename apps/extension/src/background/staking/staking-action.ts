@@ -21,8 +21,9 @@ import type { TokenConfig } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import { activityToken } from "@bramble/transactions/activity";
+import { reviewEnglish, withReviewText } from "@bramble/transactions/review-messages";
 import { buildStakingCalls, stakingActivitySummary } from "@bramble/transactions/staking-calls";
-import { stakingReviewSentence } from "@bramble/transactions/staking-review";
+import { stakingReviewText, stakingValidatorText } from "@bramble/transactions/staking-review";
 import { refuseOnPoisonedRecipient, verifyCalls } from "@bramble/transactions/verify";
 import { shortAddress } from "@bramble/transactions/verify-decode";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
@@ -77,6 +78,13 @@ const assetsFor = (context: StakingContext, pool: string) => ({
   ...verificationContext(context.account, context.preferences),
   knownContracts: [pool],
 });
+
+// The review as English plus, when the panel would accept it, its reference.
+const stakingReview = (input: Parameters<typeof stakingReviewText>[0]) => {
+  const text = stakingReviewText(input);
+  const reference = withReviewText(text).text;
+  return { review: reviewEnglish(text), ...(reference ? { reviewText: reference } : {}) };
+};
 
 /**
  * `wallet.stakingPrepare`: builds, verifies and prices one action, and freezes
@@ -134,11 +142,12 @@ export const prepareStakingResponse = async (
     amount: input.amount,
     calls,
     pool: reading.pool.pool,
-    review: stakingReviewSentence({
+    ...stakingReview({
       ...facts,
       account: context.account.address,
       action: input.action,
       member: reading.member,
+      validator: stakingValidatorText(input.staker),
     }),
     reviewedFee,
     summary: stakingActivitySummary({

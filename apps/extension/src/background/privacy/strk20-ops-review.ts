@@ -12,9 +12,12 @@
  * not-configured path is.
  */
 
+import type { MessageRef } from "@bramble/core/i18n";
+import { strk20English } from "@bramble/privacy/review-messages";
 import {
   type Strk20AssetLookup,
   type Strk20ShadowAccountReview,
+  strk20BatchTexts,
   summarizeStrk20Batch,
 } from "@bramble/privacy/service";
 import { activityOrigin } from "@bramble/transactions/activity";
@@ -82,17 +85,24 @@ export const batchReview = (
   resolved: ResolvedAccount,
   origin: string,
   actions: readonly Strk20Action[],
-): { readonly anonymizer?: string; readonly summaries: readonly string[] } => {
+): {
+  readonly anonymizer?: string;
+  readonly summaries: readonly string[];
+  /** The same lines as review references, for the producer to extend and pair. */
+  readonly texts: readonly MessageRef[];
+} => {
   const anonymizer = needsAnonymizer(actions) ? configuredAnonymizer(resolved) : undefined;
   const shadow: Strk20ShadowAccountReview | undefined =
     anonymizer === undefined ? undefined : { anonymizer, origin: activityOrigin(origin) };
+  const texts = strk20BatchTexts(actions, {
+    assetFor: trustedAssetLookup(resolved),
+    depositor: resolved.account.address,
+    ...(shadow ? { shadow } : {}),
+  });
   return {
     ...(anonymizer === undefined ? {} : { anonymizer }),
-    summaries: summarizeStrk20Batch(actions, {
-      assetFor: trustedAssetLookup(resolved),
-      depositor: resolved.account.address,
-      ...(shadow ? { shadow } : {}),
-    }),
+    summaries: texts.map(strk20English),
+    texts,
   };
 };
 
@@ -165,6 +175,7 @@ export const queueStrk20Disclosure = async (
     readonly origin: string;
     readonly request: Strk20DisclosureRequest;
     readonly summaries: readonly string[];
+    readonly summaryTexts?: readonly MessageRef[] | undefined;
   },
 ): Promise<RuntimeResponse> => {
   const recording = disclosureScopeRecording(input.request);
@@ -198,6 +209,7 @@ export const queueStrk20Disclosure = async (
               : [],
       ),
       summaries: input.summaries,
+      summaryTexts: input.summaryTexts,
     });
     input.admission.release();
     notifyApprovalsChanged();

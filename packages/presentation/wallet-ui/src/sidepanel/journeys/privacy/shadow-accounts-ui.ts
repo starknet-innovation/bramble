@@ -4,6 +4,7 @@
  * only when the user taps, and builds, reviews, and confirms a sweep. Every
  * value is written through `textContent`; nothing here is an HTML sink.
  */
+import { reviewLines } from "../../../i18n/review";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
@@ -65,7 +66,9 @@ const bindSweep = (
     void wallet.prepareShadowSweep(scope.origin, scope.label, account.nonce).then(
       (preparation) => {
         const review = element("ul", undefined, "review-calls");
-        for (const summary of preparation.summaries) review.append(element("li", summary));
+        for (const summary of reviewLines(preparation.summaries, preparation.summaryTexts)) {
+          review.append(element("li", summary));
+        }
         const confirm = control(shadowAccountsConfirmSweep());
         sweep.replaceWith(review, confirm);
         confirm.addEventListener("click", () => {

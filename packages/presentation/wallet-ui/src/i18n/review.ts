@@ -11,14 +11,20 @@
  */
 import { type Locale, type MessageRef, renderMessageRef } from "@bramble/core/i18n";
 import { insightMessages } from "@bramble/permissions/insight-messages";
+import { strk20ReviewMessages } from "@bramble/privacy/review-messages";
 import { reviewMessages } from "@bramble/transactions/review-messages";
 import { uiLocale } from "./locale";
 
 type SentenceCatalogs = Readonly<Record<Locale, Readonly<Record<string, string>>>>;
 
 // Every catalog whose references cross from the background. Keys are
-// namespaced per catalog (`review.*`, `siteInsight.*`), so one lookup serves all.
-const CATALOGS: readonly SentenceCatalogs[] = [reviewMessages, insightMessages];
+// namespaced per catalog (`review.*`, `siteInsight.*`, `strk20Review.*`), so one
+// lookup serves all.
+const CATALOGS: readonly SentenceCatalogs[] = [
+  reviewMessages,
+  insightMessages,
+  strk20ReviewMessages,
+];
 
 const template =
   (locale: Locale) =>

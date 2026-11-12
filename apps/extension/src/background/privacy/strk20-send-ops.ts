@@ -13,11 +13,12 @@
  * tracked route shares is answered here too.
  */
 
+import { strk20Lines, strk20Text } from "@bramble/privacy/review-messages";
 import {
   quoteStrk20Actions,
   readStrk20Balances,
   readStrk20RegistrationStatus,
-  summarizeStrk20Plan,
+  strk20PlanText,
 } from "@bramble/privacy/service";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
@@ -30,7 +31,6 @@ import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
 import { createApprovalContext } from "../approvals/approval-context";
 import { observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import { depositPreparation } from "./strk20-deposit-ops";
 import { strk20FeeAssetFor } from "./strk20-fee-reference";
@@ -139,14 +139,15 @@ const transferPreparation = async (
       plan,
       poolAddress: config.poolAddress,
       recipient,
-      summaries: [
-        `Send ${input.amount} ${context.token.symbol} privately to ${recipient}`,
-        summarizeStrk20Plan(
-          plan,
-          strk20FeeAssetFor(context.accountContext.account.networkId, plan),
-        ),
-        "The transfer moves shielded balance; the amount and recipient stay off-chain",
-      ],
+      ...strk20Lines([
+        strk20Text("strk20Review.wallet.send", {
+          amount: input.amount,
+          recipient,
+          symbol: context.token.symbol,
+        }),
+        strk20PlanText(plan, strk20FeeAssetFor(context.accountContext.account.networkId, plan)),
+        strk20Text("strk20Review.wallet.sendNote"),
+      ]),
       token: context.token,
     };
     const approvalContext = await createApprovalContext(
@@ -220,14 +221,20 @@ const withdrawPreparation = async (
       plan,
       poolAddress: config.poolAddress,
       recipient,
-      summaries: [
-        `Unshield ${input.amount} ${context.token.symbol} to ${own ? "this account" : recipient}`,
-        summarizeStrk20Plan(
-          plan,
-          strk20FeeAssetFor(context.accountContext.account.networkId, plan),
-        ),
-        "The withdrawal is public: the amount and destination become visible on-chain",
-      ],
+      ...strk20Lines([
+        own
+          ? strk20Text("strk20Review.wallet.unshieldSelf", {
+              amount: input.amount,
+              symbol: context.token.symbol,
+            })
+          : strk20Text("strk20Review.wallet.unshieldTo", {
+              amount: input.amount,
+              recipient,
+              symbol: context.token.symbol,
+            }),
+        strk20PlanText(plan, strk20FeeAssetFor(context.accountContext.account.networkId, plan)),
+        strk20Text("strk20Review.wallet.unshieldNote"),
+      ]),
       token: context.token,
     };
     const approvalContext = await createApprovalContext(

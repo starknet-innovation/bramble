@@ -10,6 +10,7 @@
 import { isSha256Digest } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
+import { isReviewText, type ReviewText } from "@bramble/transactions/review-messages";
 import { stakerAddress } from "@bramble/transactions/staking-networks";
 import { isTransferResponse } from "../../../popup/responses/responses";
 import { refusalText, relabelLostReply, responseError } from "../../runtime/runtime-errors";
@@ -137,6 +138,8 @@ export type StakingPreparation = {
   readonly id: string;
   /** The background's sentence for what will be signed. */
   readonly review: string;
+  /** `review` as a reference, for the reader's language; absent from older backgrounds. */
+  readonly reviewText?: ReviewText;
   readonly reviewedFee: FeeEstimate;
 };
 
@@ -148,14 +151,20 @@ const readPreparation = (response: unknown): StakingPreparation | null => {
     hasOnlyKnownKeys(response, ["ok", "stakingPreparation"]) &&
     response["ok"] === true &&
     isRecord(value) &&
-    hasOnlyKnownKeys(value, ["id", "review", "reviewedFee"]) &&
+    hasOnlyKnownKeys(value, ["id", "review", "reviewText", "reviewedFee"]) &&
+    (value["reviewText"] === undefined || isReviewText(value["reviewText"])) &&
     typeof value["id"] === "string" &&
     isSha256Digest(value["id"]) &&
     typeof value["review"] === "string" &&
     value["review"].length > 0 &&
     value["review"].length <= MAX_REVIEW &&
     isFeeEstimate(value["reviewedFee"])
-    ? { id: value["id"], review: value["review"], reviewedFee: value["reviewedFee"] }
+    ? {
+        id: value["id"],
+        review: value["review"],
+        ...(isReviewText(value["reviewText"]) ? { reviewText: value["reviewText"] } : {}),
+        reviewedFee: value["reviewedFee"],
+      }
     : null;
 };
 

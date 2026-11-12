@@ -5,13 +5,14 @@
  */
 
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import { strk20Lines, strk20Text } from "@bramble/privacy/review-messages";
 import {
   formatStrk20PoolFee,
   quoteStrk20Plan,
   STRK20_SERVICE_UNAVAILABLE,
-  summarizeStrk20Plan,
+  strk20PlanText,
 } from "@bramble/privacy/service";
-import { SHADOW_INVOKE_ANONYMIZER } from "@bramble/privacy/shadow-account-copy";
+import { shadowInvokeAnonymizerText } from "@bramble/privacy/shadow-account-copy";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
@@ -187,14 +188,14 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
         token: token.address,
         type: "register",
       },
-      summaries: [
-        "Activate private balances for this account",
-        `Privacy pool ${config.poolAddress}`,
-        `Registration preflight token ${token.address}`,
-        `Approve and pay the reviewed ${formatStrk20PoolFee(poolFeeFri)} pool fee`,
-        "Publishes a viewing-key commitment, never the viewing key",
-        "Opens this account's own private channel",
-      ],
+      ...strk20Lines([
+        strk20Text("strk20Review.register.activate"),
+        strk20Text("strk20Review.register.pool", { address: config.poolAddress }),
+        strk20Text("strk20Review.register.preflightToken", { token: token.address }),
+        strk20Text("strk20Review.register.poolFee", { fee: formatStrk20PoolFee(poolFeeFri) }),
+        strk20Text("strk20Review.register.commitment"),
+        strk20Text("strk20Review.register.channel"),
+      ]),
     });
   });
 };
@@ -225,13 +226,19 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
       kind: "strk20-balances",
       origin: input.origin,
       request: { tokens: input.tokens, type: "balances" },
-      summaries:
+      ...strk20Lines(
         input.tokens.length === 0
-          ? ["Share all private token balances"]
+          ? [strk20Text("strk20Review.balances.all")]
           : [
-              `Share private balances for ${input.tokens.length} token${input.tokens.length === 1 ? "" : "s"}`,
-              ...input.tokens.map((token) => `Token ${token}`),
+              strk20Text(
+                input.tokens.length === 1
+                  ? "strk20Review.balances.one"
+                  : "strk20Review.balances.many",
+                { count: String(input.tokens.length) },
+              ),
+              ...input.tokens.map((token) => strk20Text("strk20Review.balances.token", { token })),
             ],
+      ),
     });
   });
 };
@@ -305,12 +312,10 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
         simulate: input.simulate,
         type: "prepare",
       },
-      summaries: [
-        ...review.summaries,
-        input.simulate
-          ? "Simulate only — no submittable proof"
-          : "Generate a submittable private proof for this site",
-      ],
+      ...strk20Lines([
+        ...review.texts,
+        strk20Text(input.simulate ? "strk20Review.prepare.simulate" : "strk20Review.prepare.proof"),
+      ]),
     });
   });
 };
@@ -363,10 +368,10 @@ const queueStrk20Invoke = async (
         ...actionTokenAddresses(input.actions),
         ...("feeAction" in plan ? [plan.feeAction.token] : []),
       ]),
-      summaries: [
-        ...review.summaries,
-        summarizeStrk20Plan(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
-      ],
+      ...strk20Lines([
+        ...review.texts,
+        strk20PlanText(plan, strk20FeeAssetFor(resolved.account.networkId, plan)),
+      ]),
     });
     admission.release();
     notifyApprovalsChanged();
@@ -443,12 +448,14 @@ const handleStrk20ShadowAccountCommitment: Strk20OpsHandler = async (deps, messa
         ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
         type: "shadowAccount",
       },
-      summaries: [
-        `Share a private shadow account commitment for ${input.origin}`,
-        `Site-chosen scope label ${input.dappName}`,
-        ...(input.nonce === undefined ? [] : [`Nonce ${input.nonce}`]),
-        SHADOW_INVOKE_ANONYMIZER(anonymizer),
-      ],
+      ...strk20Lines([
+        strk20Text("strk20Review.shadowShare.commitment", { origin: input.origin }),
+        strk20Text("strk20Review.shadowShare.label", { label: input.dappName }),
+        ...(input.nonce === undefined
+          ? []
+          : [strk20Text("strk20Review.shadowShare.nonce", { nonce: input.nonce })]),
+        shadowInvokeAnonymizerText(anonymizer),
+      ]),
     });
   });
 };

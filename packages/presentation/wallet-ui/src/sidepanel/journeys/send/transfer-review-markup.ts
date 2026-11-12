@@ -2,9 +2,11 @@
  * Shared decoded-transfer review markup used by Send and NFT transfer flows,
  * and the Send receipt shown once the transfer lands.
  */
+
 import { escapeHtml } from "@bramble/core/html";
 import { t, th } from "../../../i18n/messages";
 import { reviewStepsSendMessages } from "../../../i18n/messages/review-steps-send";
+import { reviewLines } from "../../../i18n/review";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { accountLabel, inlineCopyButton } from "../../shared/parts";
 import {
@@ -109,7 +111,7 @@ export const reviewRisksHtml = (review: TransferReview, newResolvedRecipient = f
  * face. All untrusted review copy passes through the shared escaped renderers.
  */
 const reviewDetailsHtml = (review: TransferReview): string =>
-  `${reviewCallsList(review.summaries)}${reviewPanel(
+  `${reviewCallsList(reviewLines(review.summaries, review.summaryTexts))}${reviewPanel(
     [...riskFlagMessages(review.flags), ...(review.requiresDeployment ? [firstSendDeploys()] : [])],
     t("review.send.noWarnings"),
   )}`;

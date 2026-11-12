@@ -136,6 +136,8 @@ export type ApprovalQueue = {
     readonly request: Strk20DisclosureRequest;
     readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
     readonly summaries: readonly string[];
+    /** `summaries` as review references, index for index; absent when any line has none. */
+    readonly summaryTexts?: NonNullable<PendingApproval["summaryTexts"]> | undefined;
   }) => PendingApproval;
   readonly requestStrk20Invoke: (input: {
     /**
@@ -157,6 +159,8 @@ export type ApprovalQueue = {
     /** The anonymizer the card named; required when the batch holds a shadow invoke. */
     readonly shadowAccountAnonymizer?: string;
     readonly summaries: readonly string[];
+    /** `summaries` as review references, index for index; absent when any line has none. */
+    readonly summaryTexts?: NonNullable<PendingApproval["summaryTexts"]> | undefined;
   }) => PendingApproval;
   /**
    * Holds a site's private request on a notice the user can only close: the

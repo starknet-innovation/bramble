@@ -2,6 +2,7 @@
  * Strict extension-runtime client for wallet-owned STRK20 journeys.
  */
 
+import type { MessageRef } from "@bramble/core/i18n";
 import { isSha256Digest } from "@bramble/core/ids";
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord, isStringArray } from "@bramble/core/json";
 import type { PaymasterAuthorizationReview } from "@bramble/privacy/paymaster-typed-data";
@@ -16,6 +17,7 @@ import {
 import { isTokenId } from "@bramble/wallet-model/preferences";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/wallet-protocol/fee-estimate";
 import { STRK20_LIMITS } from "@bramble/wallet-protocol/strk20";
+import { isOptionalSummaryTexts } from "../../../popup/responses/review-flags";
 import { responseError } from "../../runtime/runtime-errors";
 import {
   isPoolFee,
@@ -91,6 +93,8 @@ export type PrivacyPreparation = {
   /** Only on `sponsored-relay`: who pays the pool fee and gas (mc-wallet 789). */
   readonly sponsor?: PrivacySponsor;
   readonly summaries: readonly string[];
+  /** `summaries` as review references, index for index, when the background sent them. */
+  readonly summaryTexts?: readonly MessageRef[];
   readonly symbol: string;
   readonly tokenId: string;
 };
@@ -181,6 +185,7 @@ export const readPrivacyPreparation = (
       "route",
       "sponsor",
       "summaries",
+      "summaryTexts",
       "symbol",
       "tokenId",
     ]) ||
@@ -204,6 +209,7 @@ export const readPrivacyPreparation = (
     typeof value["poolAddress"] !== "string" ||
     !isNonZeroStarkFieldElement(value["poolAddress"]) ||
     !isSummaryList(value["summaries"]) ||
+    !isOptionalSummaryTexts(value["summaryTexts"], value["summaries"].length) ||
     !isDisplayString(value["symbol"]) ||
     !isTokenId(value["tokenId"]) ||
     (expected.tokenId !== undefined && value["tokenId"] !== expected.tokenId) ||
@@ -242,6 +248,9 @@ export const readPrivacyPreparation = (
     route: value["route"],
     ...(sponsor ? { sponsor } : {}),
     summaries: [...value["summaries"]],
+    ...(Array.isArray(value["summaryTexts"])
+      ? { summaryTexts: structuredClone(value["summaryTexts"] as readonly MessageRef[]) }
+      : {}),
     symbol: value["symbol"],
     tokenId: value["tokenId"],
   };

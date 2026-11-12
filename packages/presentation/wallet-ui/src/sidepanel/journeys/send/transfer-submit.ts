@@ -140,6 +140,7 @@ export const preparedReview = (
           },
         }),
     summaries: [...preparation.summaries],
+    ...(preparation.summaryTexts === undefined ? {} : { summaryTexts: preparation.summaryTexts }),
   } as TransferReview;
 };
 

@@ -2,10 +2,11 @@
  * Pure popup validators for pre-sign transfer review responses.
  */
 
+import type { MessageRef } from "@bramble/core/i18n";
 import { hasOnlyKnownKeys, isJson, isRecord } from "@bramble/core/json";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
-import { isReviewedRiskFlag, type ReviewedRiskFlag } from "./review-flags";
+import { isOptionalSummaryTexts, isReviewedRiskFlag, type ReviewedRiskFlag } from "./review-flags";
 
 /**
  * Pre-sign transfer review accepted from the background boundary.
@@ -34,6 +35,8 @@ export type TransferReviewResponse = {
     /** True when a device will be asked to sign both the deployment and the send. */
     readonly signsTwice?: boolean;
     readonly summaries: readonly string[];
+    /** `summaries` as review references, index for index, when the background sent them. */
+    readonly summaryTexts?: readonly MessageRef[];
   };
 };
 
@@ -85,6 +88,7 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
       "requiresDeployment",
       "signsTwice",
       "summaries",
+      "summaryTexts",
     ])
   ) {
     return false;
@@ -118,6 +122,7 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     Array.isArray(review["summaries"]) &&
     review["summaries"].every(
       (summary) => typeof summary === "string" && summary.length > 0 && summary.length <= 300,
-    )
+    ) &&
+    isOptionalSummaryTexts(review["summaryTexts"], review["summaries"].length)
   );
 };

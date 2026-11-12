@@ -39,3 +39,9 @@ export const switchSummaryTexts = (
     ? {}
     : { summaryTexts: [sentence.summaryText] };
 };
+
+/** A producer's summary references, cloned onto the approval when present. */
+export const copySummaryTexts = (
+  texts: PendingApproval["summaryTexts"] | undefined,
+): Pick<PendingApproval, "summaryTexts"> =>
+  texts === undefined ? {} : { summaryTexts: texts.map((text) => cloneApprovalValue(text)) };

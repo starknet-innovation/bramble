@@ -16,6 +16,7 @@ import {
 } from "@bramble/wallet-protocol/privacy-blocker";
 import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t, th } from "../../../i18n/messages";
+import { reviewLines } from "../../../i18n/review";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { networkDisplayName } from "../../shared/network-label";
@@ -206,7 +207,9 @@ const preparationDetails = (
       },
     ])}
     <ul class="privacy-facts">
-      ${preparation.summaries.map((summary) => `<li>${escapeHtml(summary)}</li>`).join("")}
+      ${reviewLines(preparation.summaries, preparation.summaryTexts)
+        .map((summary) => `<li>${escapeHtml(summary)}</li>`)
+        .join("")}
     </ul>
       </div>
     </details>

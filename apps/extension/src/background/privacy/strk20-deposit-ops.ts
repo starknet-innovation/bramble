@@ -10,16 +10,18 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import type { MessageRef } from "@bramble/core/i18n";
 import type { Strk20PhaseSink } from "@bramble/privacy/phases";
+import { strk20Lines, strk20Text } from "@bramble/privacy/review-messages";
 import {
   type PreparedStrk20AccountSubmission,
   prepareStrk20AccountActions,
   quoteStrk20Actions,
   readStrk20RegistrationStatus,
   type Strk20AccountPlan,
-  summarizeStrk20Plan,
+  strk20PlanText,
 } from "@bramble/privacy/service";
-import { summarizeSponsoredShield } from "@bramble/privacy/sponsored-shield";
+import { sponsoredShieldText } from "@bramble/privacy/sponsored-shield";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
@@ -97,24 +99,26 @@ const depositRegistration = async (
 // public link, exactly as a registration on its own does.
 const depositSummaries = (input: {
   readonly activate: boolean;
-  readonly feeLine: string;
+  readonly feeLine: MessageRef;
   readonly recipient: string;
   readonly toSelf: boolean;
   readonly value: string;
-}): string[] => [
-  input.activate
-    ? `Activate private balances and shield ${input.value}`
-    : input.toSelf
-      ? `Shield ${input.value}`
-      : `Shield ${input.value} into ${input.recipient}'s private balance`,
-  ...(input.activate
-    ? ["Registration is public and links this wallet address to its viewing key"]
-    : []),
-  input.feeLine,
-  input.toSelf
-    ? "The deposit is public; the resulting balance can be spent privately"
-    : "The deposit is public: your address and the amount are on chain, and only the recipient stays hidden",
-];
+}) =>
+  strk20Lines([
+    input.activate
+      ? strk20Text("strk20Review.wallet.activateShield", { value: input.value })
+      : input.toSelf
+        ? strk20Text("strk20Review.wallet.shield", { value: input.value })
+        : strk20Text("strk20Review.wallet.shieldTo", {
+            recipient: input.recipient,
+            value: input.value,
+          }),
+    ...(input.activate ? [strk20Text("strk20Review.wallet.registerPublic")] : []),
+    input.feeLine,
+    strk20Text(
+      input.toSelf ? "strk20Review.wallet.depositSelfNote" : "strk20Review.wallet.depositOtherNote",
+    ),
+  ]);
 
 // What the frozen route adds to a shield's preparation, and its review line.
 // The sponsored route sends the user nothing to estimate: the relay submits,
@@ -131,13 +135,13 @@ const shieldRoute = async (
     return {
       allowanceGrants: sponsored.approveCalls,
       calls: sponsoredDepositCalls(sponsored, prepared.calls),
-      feeLine: summarizeSponsoredShield(sponsored.plan, plan.poolFeeFri),
+      feeLine: sponsoredShieldText(sponsored.plan, plan.poolFeeFri),
       sponsorship: { plan: sponsored.plan, relay: sponsored.relay },
     };
   }
   report({ phase: "estimating the network fee" });
   return {
-    feeLine: summarizeStrk20Plan(
+    feeLine: strk20PlanText(
       plan,
       strk20FeeAssetFor(context.accountContext.account.networkId, plan),
     ),
@@ -244,7 +248,7 @@ const depositPreparationWork = async (
       poolAddress: config.poolAddress,
       recipient,
       ...(activate ? { activates: true as const } : {}),
-      summaries: depositSummaries({
+      ...depositSummaries({
         activate,
         feeLine,
         recipient,
