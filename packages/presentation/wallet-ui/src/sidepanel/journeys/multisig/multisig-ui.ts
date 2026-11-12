@@ -8,6 +8,7 @@ import {
   STRK_TOKEN_ADDRESS,
   sameFelt,
 } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import { UNDEPLOYED_REMOVAL_PROMPT } from "../../runtime/friendly-error-copy-multisig";
 import { failureTone } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
@@ -48,9 +49,9 @@ const run = (
       await rerender(deps);
     },
     (error: unknown) => {
-      setResult(deps, resultId, errorLine(error, "That request didn't go through"));
+      setResult(deps, resultId, errorLine(error, t("multisig.request.notThrough")));
       showToast(
-        errorDetails(error, "Ready multisig request failed"),
+        errorDetails(error, t("multisig.request.failed")),
         failureTone(error),
         button ?? deps.app,
       );
@@ -88,17 +89,19 @@ const bindAdd = (deps: MultisigUiDeps): void => {
         ).length;
         showToast(
           view.deployed === false
-            ? "Undeployed multisig added · complete setup to deploy"
+            ? t("multisig.sync.undeployedAdded")
             : matched === 0
-              ? "Multisig synced · watch-only"
-              : `Multisig synced · ${matched} wallet signer${matched === 1 ? "" : "s"} found`,
+              ? t("multisig.sync.watchOnly")
+              : t(matched === 1 ? "multisig.sync.signersOne" : "multisig.sync.signersMany", {
+                  count: String(matched),
+                }),
           "success",
           button ?? deps.app,
         );
         deps.openDetail(view.record.id, "multisig-home");
       })
       .catch((error: unknown) => {
-        showToast(errorDetails(error, "Sync Ready multisig failed"), "error", button ?? deps.app);
+        showToast(errorDetails(error, t("multisig.sync.failed")), "error", button ?? deps.app);
         buttonBusy(button, false);
       });
   });
@@ -154,7 +157,7 @@ const bindList = (deps: MultisigUiDeps): void => {
           throw error;
         }
         deps.openList();
-        return "Multisig removed from this wallet";
+        return t("multisig.removed");
       });
     });
   });
@@ -174,7 +177,17 @@ const updateTransferAmount = (form: HTMLFormElement): void => {
   const estimate = tokenInputFiat(amount, priceText ? Number(priceText) : undefined);
   const target = form.querySelector("#multisig-fiat-estimate");
   if (target) {
-    target.textContent = `Estimated value ${estimate === null ? "—" : formatFiat(estimate, form.dataset["currency"] === "eur" || form.dataset["currency"] === "gbp" ? form.dataset["currency"] : "usd")}`;
+    target.textContent = t("multisig.propose.estimate", {
+      value:
+        estimate === null
+          ? "—"
+          : formatFiat(
+              estimate,
+              form.dataset["currency"] === "eur" || form.dataset["currency"] === "gbp"
+                ? form.dataset["currency"]
+                : "usd",
+            ),
+    });
   }
 };
 
@@ -197,7 +210,9 @@ const applyTransferAsset = (form: HTMLFormElement, button: HTMLButtonElement): v
   if (symbol) symbol.textContent = values.tokenSymbol;
   const balance = form.querySelector("#multisig-balance-label");
   if (balance) {
-    balance.textContent = `Balance ${values.tokenFormatted || "—"} ${values.tokenSymbol}`;
+    balance.textContent = t("multisig.propose.balance", {
+      balance: `${values.tokenFormatted || "—"} ${values.tokenSymbol}`,
+    });
   }
   const isFeeToken = sameFelt(values.tokenAddress, STRK_TOKEN_ADDRESS);
   form
@@ -316,7 +331,7 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
       buttonBusy(button, preparing);
       if (preparing) form.setAttribute("aria-busy", "true");
       else form.removeAttribute("aria-busy");
-      if (label) label.textContent = preparing ? "Preparing review…" : idleLabel;
+      if (label) label.textContent = preparing ? t("multisig.propose.preparing") : idleLabel;
     };
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -329,12 +344,12 @@ const bindPrepare = (deps: MultisigUiDeps): void => {
         )
         .then(
           (result) => {
-            showToast("Transaction ready for multisig review", "success", button ?? deps.app);
+            showToast(t("multisig.propose.ready"), "success", button ?? deps.app);
             deps.openIntent(multisigId, result.intent.id);
           },
           (error: unknown) => {
             showToast(
-              errorDetails(error, "Prepare Ready multisig transaction failed"),
+              errorDetails(error, t("multisig.propose.prepareFailed")),
               "error",
               button ?? deps.app,
             );
@@ -355,15 +370,15 @@ const bindImport = (deps: MultisigUiDeps): void => {
       String(new FormData(form).get("intentPackage") ?? ""),
     );
     if (!intentPackage) {
-      showToast("Intent package is invalid", "error", form);
+      showToast(t("multisig.import.invalid"), "error", form);
       return;
     }
     run(deps, button, "multisig-track-result", async () => {
       const result = await deps.multisig.importIntent(intentPackage);
       deps.openIntent(result.intent.accountId, result.intent.id);
       return result.intent.state === "stale"
-        ? `Signed attempt restored. ${STALE_INTENT_MAY_HAVE_BEEN_SENT}`
-        : "Intent verified and ready to review";
+        ? `${t("multisig.import.restored")} ${STALE_INTENT_MAY_HAVE_BEEN_SENT}`
+        : t("multisig.import.verified");
     });
   });
 };

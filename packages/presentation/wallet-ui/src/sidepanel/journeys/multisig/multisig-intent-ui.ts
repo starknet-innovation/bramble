@@ -4,6 +4,7 @@ import {
   ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE,
   isArgentMultisigFeeExpiredMessage,
 } from "@bramble/starknet/multisig-invoke";
+import { t } from "../../../i18n/messages";
 import { failureTone } from "../../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorMessage, showToast } from "../../shared/dom";
 import { feeReplacementIntentFor, parseArgentMultisigSignature } from "./multisig-model";
@@ -67,7 +68,7 @@ const run = (
       }
     },
     (error: unknown) => {
-      const details = errorMessage(error, "Ready multisig request failed");
+      const details = errorMessage(error, t("multisig.request.failed"));
       const message = isArgentMultisigFeeExpiredMessage(details)
         ? ARGENT_MULTISIG_FEE_EXPIRED_MESSAGE
         : details;
@@ -88,10 +89,12 @@ const bindCopies = (deps: MultisigUiDeps): void => {
           return copyText(
             button,
             JSON.stringify({ intent, kind: "bramble.argent-multisig-intent", version: 1 }),
-            "Transaction package copied",
+            t("multisig.intents.packageCopied"),
           );
         })
-        .catch((error: unknown) => showToast(errorDetails(error, "Copy failed"), "error", button));
+        .catch((error: unknown) =>
+          showToast(errorDetails(error, t("multisig.copyFailed")), "error", button),
+        );
     });
   });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-copy-signature]").forEach((button) => {
@@ -103,9 +106,11 @@ const bindCopies = (deps: MultisigUiDeps): void => {
         .then((intent) => {
           const signature = intent?.signatures[index];
           if (!signature) throw new Error("That signature is unavailable");
-          return copyText(button, JSON.stringify(signature), "Signature copied");
+          return copyText(button, JSON.stringify(signature), t("multisig.intents.signatureCopied"));
         })
-        .catch((error: unknown) => showToast(errorDetails(error, "Copy failed"), "error", button));
+        .catch((error: unknown) =>
+          showToast(errorDetails(error, t("multisig.copyFailed")), "error", button),
+        );
     });
   });
 };
@@ -122,7 +127,10 @@ const bindActions = (deps: MultisigUiDeps): void => {
             `Reached ${result.recipients} of ${result.totalRecipients} co-signers. Share again to retry the remaining delivery.`,
           );
         }
-        return `Shared securely with ${result.recipients} co-signer${result.recipients === 1 ? "" : "s"}`;
+        return t(
+          result.recipients === 1 ? "multisig.intents.sharedOne" : "multisig.intents.sharedMany",
+          { count: String(result.recipients) },
+        );
       });
     });
   });
@@ -135,7 +143,10 @@ const bindActions = (deps: MultisigUiDeps): void => {
       if (!id || !signer) return;
       run(deps, button, async () => {
         const result = await deps.multisig.signIntent(id, signer);
-        return `Exact transaction signed (${result.intent.signatures.length}/${result.intent.configSnapshot.threshold})`;
+        return t("multisig.intents.signed", {
+          signed: String(result.intent.signatures.length),
+          threshold: String(result.intent.configSnapshot.threshold),
+        });
       });
     });
   });
@@ -149,7 +160,9 @@ const bindActions = (deps: MultisigUiDeps): void => {
         async () => {
           try {
             const result = await deps.multisig.submitIntent(id);
-            return `Transaction submitted to Starknet: ${result.transactionHash ?? result.intent.prepared.transactionHash}`;
+            return t("multisig.intents.submitted", {
+              hash: result.transactionHash ?? result.intent.prepared.transactionHash,
+            });
           } catch (error) {
             await deps.render(await deps.wallet.loadStatus());
             throw error;
@@ -172,8 +185,8 @@ const bindActions = (deps: MultisigUiDeps): void => {
           throw error;
         }
         return button.dataset["msProposeAgain"] === "true"
-          ? "Ready to review."
-          : "Fee updated. Ready to review.";
+          ? t("multisig.intents.readyToReview")
+          : t("multisig.intents.feeUpdatedReady");
       });
     });
   });
@@ -188,12 +201,12 @@ const bindSignatureImports = (deps: MultisigUiDeps): void => {
         String(new FormData(form).get("signature") ?? ""),
       );
       if (!id || !signature) {
-        showToast("That signature isn't valid", "error", form);
+        showToast(t("multisig.intents.invalidSignature"), "error", form);
         return;
       }
       run(deps, form.querySelector('button[type="submit"]'), async () => {
         await deps.multisig.importSignature(id, signature);
-        return "Signature verified and imported";
+        return t("multisig.intents.signatureImported");
       });
     });
   });
@@ -208,15 +221,15 @@ const bindDeletes = (deps: MultisigUiDeps): void => {
       if (!id || !accountId) return;
       if (control.dataset["confirm"] !== "true") {
         control.dataset["confirm"] = "true";
-        control.textContent = "Confirm delete";
-        control.setAttribute("aria-label", "Tap again to delete");
-        control.setAttribute("title", "Tap again to delete");
+        control.textContent = t("multisig.intents.confirmDelete");
+        control.setAttribute("aria-label", t("multisig.intents.tapAgain"));
+        control.setAttribute("title", t("multisig.intents.tapAgain"));
         return;
       }
       run(deps, control, async () => {
         await deps.multisig.removeIntent(id);
         deps.openDetail(accountId, "multisig-home");
-        return "Saved transaction deleted";
+        return t("multisig.intents.deleted");
       });
     });
   });
@@ -240,14 +253,16 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
           const result = await deps.multisig.syncIntents(multisigId);
           updatedIntentIds = result.intentIds;
           if (result.imported === 0 && result.strk20Key === "stored") {
-            return "A co-owner's viewing key arrived.";
+            return t("multisig.sync.keyArrived");
           }
           if (result.imported === 0 && result.strk20Key === "conflict") {
-            return "A co-owner sent a different viewing key. This wallet kept its own.";
+            return t("multisig.sync.keyConflict");
           }
           return result.imported === 0
-            ? "No new co-signer updates"
-            : `${result.imported} signing intent${result.imported === 1 ? "" : "s"} updated${result.imported === 1 ? "" : ". Review them in Intents"}`;
+            ? t("multisig.sync.none")
+            : result.imported === 1
+              ? t("multisig.sync.updatedOne", { count: String(result.imported) })
+              : t("multisig.sync.updatedMany", { count: String(result.imported) });
         },
         {
           reconcile: true,

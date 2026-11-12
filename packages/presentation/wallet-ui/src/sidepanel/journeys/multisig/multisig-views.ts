@@ -13,6 +13,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -54,25 +55,28 @@ export { multisigProposeFlow } from "./multisig-propose-view";
 
 const configLabel = (view: ArgentMultisigView): string =>
   view.config
-    ? `${view.config.threshold} of ${view.config.signerGuids.length} signers${view.authorityStatus === "unsupported-signers" ? " · Watch only" : ""}`
+    ? `${t("multisig.config.threshold", { threshold: String(view.config.threshold), total: String(view.config.signerGuids.length) })}${view.authorityStatus === "unsupported-signers" ? ` · ${t("multisig.config.watchOnly")}` : ""}`
     : {
-        available: "Configuration unavailable",
-        "invalid-config": "Invalid configuration",
-        "network-unavailable": "Authority unavailable",
-        undeployed: "Not deployed",
-        "unsupported-class": "Unsupported account class",
-        "unsupported-signers": "Unsupported signer types",
+        available: t("multisig.config.unavailable"),
+        "invalid-config": t("multisig.config.invalid"),
+        "network-unavailable": t("multisig.config.authorityUnavailable"),
+        undeployed: t("multisig.config.notDeployed"),
+        "unsupported-class": t("multisig.config.unsupportedClass"),
+        "unsupported-signers": t("multisig.config.unsupportedSigners"),
       }[view.authorityStatus];
 
 const authorityMessage = (view: ArgentMultisigView): string | null =>
   ({
     available: null,
-    "invalid-config": "The account returned an invalid signer configuration. Signing is disabled.",
-    "network-unavailable": "Signer authority could not be refreshed. Check the network and retry.",
+    "invalid-config": t("multisig.authority.invalidConfig"),
+    "network-unavailable": t("multisig.authority.networkUnavailable"),
     undeployed: null,
-    "unsupported-class":
-      "This address is not the pinned Ready Multisig 0.2 account. It is available to inspect only.",
-    "unsupported-signers": `This account includes ${view.unsupportedSigners.length === 1 ? "a signer type" : "signer types"} this wallet cannot sign with. It remains available to watch and receive.`,
+    "unsupported-class": t("multisig.authority.unsupportedClass"),
+    "unsupported-signers": t(
+      view.unsupportedSigners.length === 1
+        ? "multisig.authority.unsupportedSignerOne"
+        : "multisig.authority.unsupportedSignerMany",
+    ),
   })[view.authorityStatus];
 
 const multisigRow = (view: ArgentMultisigView, openCount: number): string => `
@@ -81,7 +85,7 @@ const multisigRow = (view: ArgentMultisigView, openCount: number): string => `
       attributes: { "data-multisig-open": view.record.id },
       icon: "wallet",
       label: multisigDisplayName(view.record),
-      supportingText: `${configLabel(view)}${openCount > 0 ? ` · ${openCount} open` : ""}`,
+      supportingText: `${configLabel(view)}${openCount > 0 ? ` · ${t("multisig.list.open", { count: String(openCount) })}` : ""}`,
     })}
   </li>`;
 
@@ -101,33 +105,35 @@ export const multisigsFlow = (
       .length;
   return (
     flowHeader(
-      "Multisig accounts",
+      t("multisig.list.title"),
       status,
-      `${scoped.length} account${scoped.length === 1 ? "" : "s"}`,
+      t(scoped.length === 1 ? "multisig.list.countOne" : "multisig.list.countMany", {
+        count: String(scoped.length),
+      }),
     ) +
     flowScreen(
       "multisigs",
       `${
         loadError
-          ? '<div class="review-panel" role="alert"><p class="review-flag">The background could not refresh the Ready multisig registry. Retry before signing.</p></div>'
+          ? `<div class="review-panel" role="alert"><p class="review-flag">${th("multisig.list.registryFailed")}</p></div>`
           : ""
       }
       <section class="section">
-        <div class="menu-list" role="group" aria-label="Multisig actions">
-          ${walletMenuRow("multisig-watch", "Add multisig account", "plus")}
-          ${walletMenuRow("multisig-deploy", "Create a multisig account", "users")}
+        <div class="menu-list" role="group" aria-label="${th("multisig.list.actions")}">
+          ${walletMenuRow("multisig-watch", t("multisig.list.add"), "plus")}
+          ${walletMenuRow("multisig-deploy", t("multisig.list.create"), "users")}
         </div>
       </section>
       <section class="section">
-        <p class="eyebrow">Multisig accounts</p>
+        <p class="eyebrow">${th("multisig.list.title")}</p>
         ${
           account === null
             ? noAccountEmpty(status)
             : scoped.length === 0
-              ? emptyState("No multisig accounts are saved on this network yet.")
+              ? emptyState(t("multisig.list.empty"))
               : `<ul class="allowance-list">${scoped.map((view) => multisigRow(view, openCount(view.record))).join("")}</ul>`
         }
-        ${loadError ? button({ attributes: { id: "multisig-list-retry" }, label: "Retry" }) : ""}
+        ${loadError ? button({ attributes: { id: "multisig-list-retry" }, label: t("multisig.retry") }) : ""}
       </section>`,
     )
   );
@@ -303,7 +309,7 @@ const intentList = (
     ? all.filter((intent) => intent.id === selectedIntentId)
     : actionableArgentMultisigIntents(all);
   if (selectedIntentId && scoped[0]) return intentCard(scoped[0], view, status, preferences, all);
-  if (selectedIntentId) return emptyState("This transaction is no longer available.");
+  if (selectedIntentId) return emptyState(t("multisig.intents.gone"));
   const submitted = scoped.find((intent) => intent.state === "submitted");
   if (submitted) return intentCard(submitted, view, status, preferences, all);
   const awaiting = scoped.filter(
@@ -311,11 +317,11 @@ const intentList = (
   );
   const stale = scoped.filter((intent) => intent.state === "stale");
   if (awaiting.length === 0 && stale.length === 0) {
-    return emptyState("Nothing to sign.");
+    return emptyState(t("multisig.intents.nothing"));
   }
   return `<div class="multisig-intent-stack">
-    ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">Waiting for a signature</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
-    ${stale.length === 0 ? "" : `<section><p class="eyebrow">Needs attention</p><div class="allowance-list">${stale.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
+    ${awaiting.length === 0 ? "" : `<section><p class="eyebrow">${th("multisig.intents.waiting")}</p><div class="allowance-list">${awaiting.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
+    ${stale.length === 0 ? "" : `<section><p class="eyebrow">${th("multisig.intents.attention")}</p><div class="allowance-list">${stale.map((intent) => intentCard(intent, view, status, preferences, all)).join("")}</div></section>`}
   </div><p id="multisig-intent-result" role="status"></p>`;
 };
 
@@ -327,12 +333,12 @@ const compactIntentList = (
   const all = intents.filter((intent) => intent.accountId === record.id);
   const scoped = actionableArgentMultisigIntents(all);
   const heading = scoped.every((intent) => intent.state === "stale")
-    ? "Needs attention"
+    ? t("multisig.intents.attention")
     : scoped.some((intent) => intent.state === "stale")
-      ? "Transactions needing you"
-      : "Waiting for a signature";
+      ? t("multisig.intents.needingYou")
+      : t("multisig.intents.waiting");
   return {
-    emptyMessage: "Nothing to sign. Import a transaction to review it here.",
+    emptyMessage: t("multisig.intents.nothingImport"),
     heading,
     items: scoped.map((intent) => ({
       accountId: record.id,
@@ -341,15 +347,15 @@ const compactIntentList = (
       label: intent.summary,
       supportingText: `${
         isFeeReplacementIntent(intent, all)
-          ? "Fee updated · fresh approvals"
+          ? t("multisig.intents.feeUpdated")
           : intent.state === "ready"
-            ? "Ready to submit"
+            ? t("multisig.intents.readyToSubmit")
             : intent.state === "stale"
               ? intent.signatures.length === intent.configSnapshot.threshold
-                ? `${STALE_INTENT_LABEL} · ready to retry`
-                : `${STALE_INTENT_LABEL} · needs review`
-              : "Awaiting signatures"
-      } · ${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
+                ? `${STALE_INTENT_LABEL} · ${t("multisig.intents.readyToRetry")}`
+                : `${STALE_INTENT_LABEL} · ${t("multisig.intents.needsReview")}`
+              : t("multisig.intents.awaiting")
+      } · ${t("multisig.intents.signatureCount", { signed: String(intent.signatures.length), threshold: String(intent.configSnapshot.threshold) })}`,
     })),
   };
 };
@@ -370,10 +376,10 @@ export const multisigDetailFlow = (
 ): string => {
   if (!view) {
     return (
-      (screen === "multisig-home" ? "" : flowHeader("Multisig", status)) +
+      (screen === "multisig-home" ? "" : flowHeader(t("multisig.detail.title"), status)) +
       (screen === "multisig-home" ? dockScreen : flowScreen)(
         screen,
-        emptyState("This multisig is no longer watched."),
+        emptyState(t("multisig.detail.unwatched")),
       )
     );
   }
@@ -393,14 +399,14 @@ export const multisigDetailFlow = (
   ).length;
   const authorityIssue = authorityMessage(view);
   const effectiveAuthorityIssue = loadError
-    ? "Signer authority could not be refreshed. Retry before preparing or signing."
+    ? t("multisig.authority.refreshFailedRetry")
     : authorityIssue;
   const authorityWarning =
     screen === "multisig-home" || (!loadError && authorityIssue === null)
       ? ""
       : view.deployed === false
-        ? '<div class="review-panel" role="status"><p class="review-flag">This account is not deployed yet. Deploy it before preparing or signing transactions.</p></div>'
-        : `<div class="review-panel" role="alert"><p class="review-flag">${escapeHtml(loadError ? "The latest signer-authority refresh failed. Signing remains disabled until retry succeeds." : (authorityIssue ?? "Current signer authority is unavailable."))}</p></div>`;
+        ? `<div class="review-panel" role="status"><p class="review-flag">${th("multisig.detail.notDeployed")}</p></div>`
+        : `<div class="review-panel" role="alert"><p class="review-flag">${escapeHtml(loadError ? t("multisig.authority.latestRefreshFailed") : (authorityIssue ?? t("multisig.authority.currentUnavailable")))}</p></div>`;
   if (screen === "multisig-detail") {
     return (
       flowHeader(multisigDisplayName(record), status, configLabel(view)) +

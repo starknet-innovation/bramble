@@ -4,6 +4,7 @@ import { escapeHtml } from "@bramble/core/html";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
+import { t } from "../../../i18n/messages";
 import { tokenGlyph } from "../portfolio/token-row";
 
 type CompactIntentItem = {
@@ -27,7 +28,7 @@ export type CompactIntentList = {
 export const intentDeleteButton = (id: string, accountId: string): string =>
   button({
     attributes: { "data-ms-delete-intent": id, "data-ms-intent-account": accountId },
-    label: "Delete saved transaction",
+    label: t("multisig.intents.delete"),
     size: "small",
     tone: "danger",
     variant: "ghost",
@@ -68,7 +69,7 @@ export const compactIntentListView = (
     className: "tab-more",
     icon: "chevronRight",
     iconPosition: "after",
-    label: "Import transaction",
+    label: t("multisig.intents.import"),
     size: "small",
     variant: "ghost",
   })}`;

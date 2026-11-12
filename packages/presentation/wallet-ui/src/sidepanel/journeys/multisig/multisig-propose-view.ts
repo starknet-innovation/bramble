@@ -5,6 +5,7 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl, textareaField, textField } from "@bramble/ui-kit/fields";
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -63,7 +64,7 @@ const recipientRow = (recipient: ProposeRecipient): string => `
     <span class="send-recipient-copy">
       <strong>${escapeHtml(recipient.label)}</strong>
       <code>${escapeHtml(accountLabel(recipient.address))}</code>
-      <small>${recipient.source}</small>
+      <small>${th(recipient.source === "My account" ? "multisig.propose.myAccount" : "multisig.signers.addressBook")}</small>
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -81,13 +82,13 @@ const assetRow = (asset: SendAsset): string => `
     <span class="send-asset-glyph">${tokenGlyph(asset.address, asset.symbol)}</span>
     <span class="send-asset-copy">
       <strong>${escapeHtml(asset.symbol)}</strong>
-      <span>${asset.spam ? "Likely spam · " : ""}${escapeHtml(asset.name)}</span>
+      <span>${asset.spam ? `${th("multisig.propose.likelySpam")} · ` : ""}${escapeHtml(asset.name)}</span>
     </span>
-    <span class="send-asset-value"><strong>${escapeHtml(sendBalanceLabel(asset.formatted))}</strong><span>Balance</span></span>
+    <span class="send-asset-value"><strong>${escapeHtml(sendBalanceLabel(asset.formatted))}</strong><span>${th("multisig.propose.balanceLabel")}</span></span>
   </button>`;
 
 const assetPicker = (assets: readonly SendAsset[], selected: SendAsset | undefined): string => {
-  if (!selected) return emptyState("No tracked tokens are available for this multisig.");
+  if (!selected) return emptyState(t("multisig.propose.noTokens"));
   return `<details class="multisig-asset-picker" data-disclosure="multisig-transfer-asset">
     <summary class="send-token-trigger">
       <span id="multisig-selected-token-glyph">${tokenGlyph(selected.address, selected.symbol)}</span>
@@ -96,19 +97,19 @@ const assetPicker = (assets: readonly SendAsset[], selected: SendAsset | undefin
     </summary>
     <div class="disclosure-body">
       <label class="send-search send-asset-search">
-        <span class="sr-only">Search tokens</span>
+        <span class="sr-only">${th("multisig.propose.searchTokens")}</span>
         <span class="send-search-control">${icon("search")}${inputControl({
-          ariaLabel: "Search tokens",
+          ariaLabel: t("multisig.propose.searchTokens"),
           attributes: { id: "multisig-asset-search" },
           autocomplete: "off",
-          placeholder: "Search tokens",
+          placeholder: t("multisig.propose.searchTokens"),
           spellcheck: false,
           type: "search",
         })}</span>
       </label>
-      <div class="send-list-heading"><strong>Your tokens</strong><span>Multisig balance</span></div>
+      <div class="send-list-heading"><strong>${th("multisig.propose.yourTokens")}</strong><span>${th("multisig.home.balance")}</span></div>
       <div class="send-asset-list">${assets.map(assetRow).join("")}</div>
-      <p class="send-asset-empty" id="multisig-asset-empty" hidden>No matching token.</p>
+      <p class="send-asset-empty" id="multisig-asset-empty" hidden>${th("multisig.propose.noToken")}</p>
     </div>
   </details>`;
 };
@@ -135,12 +136,12 @@ const transferComposer = (
       data-ms-prepare="transfer"
       data-multisig-id="${escapeHtml(view.record.id)}">
     <div class="multisig-compose-origin">
-      <p class="send-section-title">From</p>
+      <p class="send-section-title">${th("multisig.propose.from")}</p>
       <div class="send-origin-account">
         <span class="send-recipient-avatar">${accountAvatar(view.record.address)}</span>
         <span class="send-recipient-copy">
           <strong>${escapeHtml(multisigDisplayName(view.record))}</strong>
-          <span class="copy-line"><code title="${escapeHtml(view.record.address)}">${escapeHtml(accountLabel(view.record.address))}</code>${inlineCopyButton(view.record.address, "Copy multisig address")}</span>
+          <span class="copy-line"><code title="${escapeHtml(view.record.address)}">${escapeHtml(accountLabel(view.record.address))}</code>${inlineCopyButton(view.record.address, t("multisig.signers.copyAddress"))}</span>
         </span>
       </div>
     </div>
@@ -148,29 +149,29 @@ const transferComposer = (
       attributes: { id: "multisig-recipient" },
       autocomplete: "off",
       className: "mono",
-      label: "To",
+      label: t("multisig.propose.to"),
       name: "recipient",
-      placeholder: "Address or saved name",
+      placeholder: t("multisig.propose.toPlaceholder"),
       required: true,
       spellcheck: false,
     })}
     <details class="disclosure multisig-recipient-picker" data-disclosure="multisig-transfer-recipient">
       <summary>
-        <span class="menu-copy"><strong>Choose saved recipient</strong><small>My accounts and address book</small></span>
+        <span class="menu-copy"><strong>${th("multisig.propose.chooseRecipient")}</strong><small>${th("multisig.propose.chooseRecipientNote")}</small></span>
         <span class="disclosure-mark">${icon("chevronRight")}</span>
       </summary>
       <div class="disclosure-body send-recipient-list">
-        ${recipients.length > 0 ? recipients.map(recipientRow).join("") : emptyState("No saved recipients are available on this network.")}
-        <p class="send-recipient-empty" id="multisig-recipient-empty" hidden>No matching recipient.</p>
+        ${recipients.length > 0 ? recipients.map(recipientRow).join("") : emptyState(t("multisig.propose.noRecipients"))}
+        <p class="send-recipient-empty" id="multisig-recipient-empty" hidden>${th("multisig.propose.noRecipient")}</p>
       </div>
     </details>
-    <p class="send-section-title">Amount</p>
+    <p class="send-section-title">${th("multisig.propose.amount")}</p>
     <div class="send-amount-card">
       ${assetPicker(assets, selected)}
       <label class="send-amount-field">
-        <span class="sr-only">Amount to send</span>
+        <span class="sr-only">${th("multisig.propose.amountToSend")}</span>
         ${inputControl({
-          ariaLabel: "Amount to send",
+          ariaLabel: t("multisig.propose.amountToSend"),
           attributes: { id: "multisig-amount" },
           autocomplete: "off",
           inputmode: "decimal",
@@ -179,13 +180,13 @@ const transferComposer = (
         })}
       </label>
       <div class="send-amount-meta">
-        <span id="multisig-balance-label">Balance ${escapeHtml(selected ? `${sendBalanceLabel(selected.formatted)} ${selected.symbol}` : "—")}</span>
+        <span id="multisig-balance-label">${th("multisig.propose.balance", { balance: selected ? `${sendBalanceLabel(selected.formatted)} ${selected.symbol}` : "—" })}</span>
         <span class="send-amount-shortcuts">
-          <button id="multisig-max" type="button"${feeToken || !selected?.balance ? " hidden" : ""}>Max</button>
+          <button id="multisig-max" type="button"${feeToken || !selected?.balance ? " hidden" : ""}>${th("multisig.propose.max")}</button>
         </span>
       </div>
-      <p class="send-fiat-estimate" id="multisig-fiat-estimate">Estimated value —</p>
-      <p class="hint" id="multisig-amount-guidance"${feeToken ? "" : " hidden"}>Leave enough STRK for the network fee.</p>
+      <p class="send-fiat-estimate" id="multisig-fiat-estimate">${th("multisig.propose.estimate", { value: "—" })}</p>
+      <p class="hint" id="multisig-amount-guidance"${feeToken ? "" : " hidden"}>${th("multisig.propose.leaveFee")}</p>
     </div>
     <input name="tokenAddress" type="hidden" value="${escapeHtml(selected?.address ?? "")}" />
     <input name="tokenBalance" type="hidden" value="${escapeHtml(selected?.balance ?? "")}" />
@@ -193,23 +194,23 @@ const transferComposer = (
     <input name="tokenFormatted" type="hidden" value="${escapeHtml(selected?.formatted ?? "")}" />
     <input name="tokenPrice" type="hidden" value="${selected?.price ?? ""}" />
     <input name="tokenSymbol" type="hidden" value="${escapeHtml(selected?.symbol ?? "token")}" />
-    ${button({ disabled: !selected, icon: "send", label: "Review transaction", type: "submit" })}
+    ${button({ disabled: !selected, icon: "send", label: t("multisig.propose.review"), type: "submit" })}
   </form>`;
 };
 
 const advancedComposer = (view: ArgentMultisigView): string => `
   <details class="disclosure multisig-advanced-call" data-disclosure="multisig-advanced-call">
     <summary>
-      <span class="menu-copy"><strong>Advanced contract call</strong><small>Enter exact Starknet call data</small></span>
+      <span class="menu-copy"><strong>${th("multisig.propose.advanced")}</strong><small>${th("multisig.propose.advancedNote")}</small></span>
       <span class="disclosure-mark">${icon("chevronRight")}</span>
     </summary>
     <div class="disclosure-body">
-      <p class="hint">Use this only when a token transfer does not describe the action. Every felt will be frozen exactly as entered.</p>
+      <p class="hint">${th("multisig.propose.advancedHint")}</p>
       <form class="multisig-compose-form" data-ms-prepare="contract" data-multisig-id="${escapeHtml(view.record.id)}">
-        ${textField({ className: "mono", label: "Target contract", name: "contractAddress", placeholder: "0x…", required: true, spellcheck: false })}
-        ${textField({ className: "mono", label: "Entrypoint", name: "entrypoint", placeholder: "transfer", required: true, spellcheck: false })}
-        ${textareaField({ className: "mono", hint: "Whitespace-separated canonical felts. Leave empty only when the entrypoint takes no calldata.", label: "Calldata", name: "calldata", rows: 3, spellcheck: false })}
-        ${button({ label: "Review contract call", type: "submit", variant: "secondary" })}
+        ${textField({ className: "mono", label: t("multisig.propose.target"), name: "contractAddress", placeholder: "0x…", required: true, spellcheck: false })}
+        ${textField({ className: "mono", label: t("multisig.propose.entrypoint"), name: "entrypoint", placeholder: "transfer", required: true, spellcheck: false })}
+        ${textareaField({ className: "mono", hint: t("multisig.propose.calldataHint"), label: t("multisig.propose.calldata"), name: "calldata", rows: 3, spellcheck: false })}
+        ${button({ label: t("multisig.propose.reviewCall"), type: "submit", variant: "secondary" })}
       </form>
     </div>
   </details>`;
@@ -226,23 +227,23 @@ export const multisigProposeFlow = (
 ): string => {
   if (!view) {
     return (
-      flowHeader("New transaction", status) +
-      flowScreen("multisig-propose", emptyState("This multisig is no longer watched."))
+      flowHeader(t("multisig.propose.title"), status) +
+      flowScreen("multisig-propose", emptyState(t("multisig.detail.unwatched")))
     );
   }
   if (!view.config || view.authorityStatus !== "available") {
     const message =
       view.authorityStatus === "unsupported-signers"
-        ? "This account uses signer types this wallet cannot sign with. It remains available to watch and receive."
+        ? t("multisig.propose.unsupportedSigners")
         : view.authorityStatus === "unsupported-class"
-          ? "This address is not the pinned Ready Multisig 0.2 account."
+          ? t("multisig.signers.unsupportedClass")
           : view.authorityStatus === "invalid-config"
-            ? "The account returned an invalid signer configuration."
+            ? t("multisig.propose.invalidConfig")
             : view.authorityStatus === "undeployed"
-              ? "Deploy this account before creating a transaction."
-              : "Signer authority could not be refreshed. Check the network and retry.";
+              ? t("multisig.propose.deployFirst")
+              : t("multisig.authority.networkUnavailable");
     return (
-      flowHeader("New transaction", status, multisigDisplayName(view.record)) +
+      flowHeader(t("multisig.propose.title"), status, multisigDisplayName(view.record)) +
       flowScreen("multisig-propose", emptyState(message))
     );
   }
@@ -253,7 +254,7 @@ export const multisigProposeFlow = (
     prices: {},
   };
   return (
-    flowHeader("New transaction", status, multisigDisplayName(view.record)) +
+    flowHeader(t("multisig.propose.title"), status, multisigDisplayName(view.record)) +
     flowScreen(
       "multisig-propose",
       `<section class="section multisig-compose-flow">

@@ -10,12 +10,20 @@
 import { escapeHtml } from "@bramble/core/html";
 import { type Locale, type MessageArgs, translator } from "@bramble/core/i18n";
 import { uiLocale } from "./locale";
+import { multisigMessages } from "./messages/multisig";
+import { multisigProposeMessages } from "./messages/multisig-propose";
+import { multisigSetupMessages } from "./messages/multisig-setup";
+import { multisigSignerMessages } from "./messages/multisig-signers";
 import { onboardingMessages } from "./messages/onboarding";
 import { sendMessages } from "./messages/send";
 import { settingsMessages } from "./messages/settings";
 import { swapStakingMessages } from "./messages/swap-staking";
 
 const en = {
+  ...multisigProposeMessages.en,
+  ...multisigSetupMessages.en,
+  ...multisigSignerMessages.en,
+  ...multisigMessages.en,
   ...onboardingMessages.en,
   ...sendMessages.en,
   ...settingsMessages.en,
@@ -26,6 +34,10 @@ const en = {
 export const uiCatalogs = {
   en,
   "zh-Hans": {
+    ...multisigProposeMessages["zh-Hans"],
+    ...multisigSetupMessages["zh-Hans"],
+    ...multisigSignerMessages["zh-Hans"],
+    ...multisigMessages["zh-Hans"],
     ...onboardingMessages["zh-Hans"],
     ...sendMessages["zh-Hans"],
     ...settingsMessages["zh-Hans"],

@@ -5,6 +5,7 @@ import { inputControl, textareaField } from "@bramble/ui-kit/fields";
 import { icon } from "@bramble/ui-kit/icons";
 import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
 import { parseWalletContactCard } from "@bramble/wallet-model/preferences";
+import { t, th } from "../../../i18n/messages";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
 import { accountAvatar, accountLabel } from "../../shared/parts";
@@ -37,7 +38,7 @@ const knownParticipant = ({
     <span class="option-copy">
       <strong>${escapeHtml(label)}</strong>
       <code>${escapeHtml(accountLabel(address))}</code>
-      <span class="option-sub">${escapeHtml(source)} · Key ${escapeHtml(accountLabel(publicKeyX))}</span>
+      <span class="option-sub">${escapeHtml(source)} · ${th("multisig.participant.key", { key: accountLabel(publicKeyX) })}</span>
     </span>
     <span class="option-mark">${icon("plus")}</span>
   </button>`;
@@ -52,44 +53,44 @@ export const multisigParticipantScreen = (
 ): string => `
   <section class="multisig-participant-screen" data-participant-network="${escapeHtml(networkId)}" data-participant-screen hidden>
     <header class="multisig-participant-head">
-      ${iconButton({ attributes: { "data-close-participant-picker": true }, icon: "chevronLeft", label: "Back to signer setup", variant: "ghost" })}
-      <div><h2>Add participant</h2><p>Use an account address, public key, or full wallet card.</p></div>
+      ${iconButton({ attributes: { "data-close-participant-picker": true }, icon: "chevronLeft", label: t("multisig.participant.back"), variant: "ghost" })}
+      <div><h2>${th("multisig.signers.addParticipant")}</h2><p>${th("multisig.participant.lede")}</p></div>
     </header>
     ${
       options.length > 0
         ? `<details class="disclosure multisig-participant-known">
-            <summary><span class="menu-copy"><strong>Choose known participant</strong><small>${options.length} from this wallet and Address book</small></span><span class="disclosure-mark">${icon("chevronRight")}</span></summary>
+            <summary><span class="menu-copy"><strong>${th("multisig.participant.chooseKnown")}</strong><small>${th("multisig.participant.knownCount", { count: String(options.length) })}</small></span><span class="disclosure-mark">${icon("chevronRight")}</span></summary>
             <div class="disclosure-body"><div class="option-list" role="list">${options.map(knownParticipant).join("")}</div></div>
           </details>`
         : ""
     }
     <div class="multisig-participant-external">
-      <h3>${options.length > 0 ? "Add someone else" : "Participant details"}</h3>
-      <div class="multisig-participant-methods" role="group" aria-label="Participant detail type">
+      <h3>${options.length > 0 ? th("multisig.participant.someoneElse") : th("multisig.participant.details")}</h3>
+      <div class="multisig-participant-methods" role="group" aria-label="${th("multisig.participant.methodType")}">
         <button data-participant-method="address" type="button" aria-pressed="true">
-          <span>${icon("wallet")}</span><strong>Address</strong><small>Look up key</small>
+          <span>${icon("wallet")}</span><strong>${th("multisig.signers.address")}</strong><small>${th("multisig.participant.lookUpKey")}</small>
         </button>
         <button data-participant-method="public-key" type="button" aria-pressed="false">
-          <span>${icon("link")}</span><strong>Public key</strong><small>Use shared key</small>
+          <span>${icon("link")}</span><strong>${th("multisig.participant.publicKey")}</strong><small>${th("multisig.participant.useSharedKey")}</small>
         </button>
         <button data-participant-method="wallet-card" type="button" aria-pressed="false">
-          <span>${icon("qrCode")}</span><strong>Wallet card</strong><small>Add full contact</small>
+          <span>${icon("qrCode")}</span><strong>${th("multisig.participant.walletCard")}</strong><small>${th("multisig.participant.addFullContact")}</small>
         </button>
       </div>
       <div data-participant-field="address">
-        <label><span>Participant account address</span>${inputControl({ ariaLabel: "Participant account address", attributes: { "data-participant-address-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
-        <p class="hint">For deployed Bramble or Ready accounts.</p>
+        <label><span>${th("multisig.participant.addressLabel")}</span>${inputControl({ ariaLabel: t("multisig.participant.addressLabel"), attributes: { "data-participant-address-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
+        <p class="hint">${th("multisig.participant.addressHint")}</p>
       </div>
       <div data-participant-field="public-key" hidden>
-        <label><span>Participant public key</span>${inputControl({ ariaLabel: "Participant public key", attributes: { "data-participant-key-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
-        <p class="hint">Use a key shared by the participant.</p>
+        <label><span>${th("multisig.participant.keyLabel")}</span>${inputControl({ ariaLabel: t("multisig.participant.keyLabel"), attributes: { "data-participant-key-input": true }, autocapitalize: "none", className: "mono", placeholder: "0x…", spellcheck: false })}</label>
+        <p class="hint">${th("multisig.participant.keyHint")}</p>
       </div>
       <div data-participant-field="wallet-card" hidden>
-        <label><span>Participant name</span>${inputControl({ ariaLabel: "Participant name", attributes: { "data-participant-label-input": true }, autocomplete: "off", placeholder: "e.g. Adrien" })}</label>
-        ${textareaField({ className: "mono", label: "Shared wallet card", name: "participantWalletCard", placeholder: "mcw:contact:1:…", rows: 4, spellcheck: false })}
-        <p class="hint">Adds their Starknet address, signer key, and secure coordination key to Address book.</p>
+        <label><span>${th("multisig.participant.name")}</span>${inputControl({ ariaLabel: t("multisig.participant.name"), attributes: { "data-participant-label-input": true }, autocomplete: "off", placeholder: t("multisig.participant.namePlaceholder") })}</label>
+        ${textareaField({ className: "mono", label: t("multisig.participant.sharedCard"), name: "participantWalletCard", placeholder: "mcw:contact:1:…", rows: 4, spellcheck: false })}
+        <p class="hint">${th("multisig.participant.cardHint")}</p>
       </div>
-      ${button({ attributes: { "data-confirm-participant": true }, label: "Find signer key" })}
+      ${button({ attributes: { "data-confirm-participant": true }, label: t("multisig.participant.findKey") })}
       <p data-participant-result role="status" aria-live="polite"></p>
     </div>
   </section>`;
@@ -188,10 +189,10 @@ export const bindMultisigParticipantPicker = (
     });
     confirm.textContent =
       method === "address"
-        ? "Find signer key"
+        ? t("multisig.participant.findKey")
         : method === "wallet-card"
-          ? "Add participant"
-          : "Add public key";
+          ? t("multisig.signers.addParticipant")
+          : t("multisig.participant.addKey");
     result.textContent = "";
     (method === "address"
       ? addressInput
@@ -204,16 +205,16 @@ export const bindMultisigParticipantPicker = (
     const card = parseWalletContactCard(walletCardInput?.value.trim() ?? "");
     const label = labelInput?.value.trim() ?? "";
     const message = !card
-      ? "Paste a valid Bramble card."
+      ? t("multisig.participant.invalidCard")
       : card.networkId !== screen.dataset["participantNetwork"]
-        ? "That wallet card belongs to a different network."
+        ? t("multisig.participant.otherNetwork")
         : !card.publicKeyX || !card.nostrPublicKey
-          ? "Ask the participant to share a full wallet card with signer and coordination keys."
+          ? t("multisig.participant.askFullCard")
           : label.length === 0 || label.length > 64
-            ? "Enter a participant name between 1 and 64 characters."
+            ? t("multisig.participant.nameLength")
             : null;
     if (message || !card?.publicKeyX || !card.nostrPublicKey) {
-      result.textContent = message ?? "Wallet card is incomplete.";
+      result.textContent = message ?? t("multisig.participant.cardIncomplete");
       showToast(result.textContent, "error", walletCardInput ?? confirm);
       return;
     }
@@ -222,7 +223,7 @@ export const bindMultisigParticipantPicker = (
       label,
       nostrPublicKey: card.nostrPublicKey,
       publicKeyX: card.publicKeyX,
-      source: "Wallet card",
+      source: t("multisig.participant.walletCard"),
     } as const;
     buttonBusy(confirm, true);
     try {
@@ -237,9 +238,10 @@ export const bindMultisigParticipantPicker = (
       });
       complete();
     } catch (error) {
-      const failure = errorMessage(error, "Contact save failed");
-      result.textContent = errorLine(error, "Contact save failed");
-      showToast(failure, "error", confirm, errorDetails(error, "Contact save failed"));
+      const fallback = t("multisig.participant.saveFailed");
+      const failure = errorMessage(error, fallback);
+      result.textContent = errorLine(error, fallback);
+      showToast(failure, "error", confirm, errorDetails(error, fallback));
     } finally {
       buttonBusy(confirm, false);
     }
@@ -247,27 +249,27 @@ export const bindMultisigParticipantPicker = (
   const submitPublicKey = async (): Promise<void> => {
     const publicKeyX = normalizeFeltInput(publicKeyInput.value);
     if (!isNonZeroStarkFieldElement(publicKeyX)) {
-      result.textContent = "Enter a valid non-zero Starknet public key.";
+      result.textContent = t("multisig.participant.invalidKey");
       showToast(result.textContent, "error", publicKeyInput);
       publicKeyInput.focus();
       return;
     }
     finish({
-      label: `Signer ${accountLabel(publicKeyX)}`,
+      label: t("multisig.participant.signerLabel", { key: accountLabel(publicKeyX) }),
       publicKeyX,
-      source: "Shared public key",
+      source: t("multisig.participant.sharedKey"),
     });
   };
   const submitAddress = async (): Promise<void> => {
     const address = normalizeFeltInput(addressInput.value);
     if (!isNonZeroStarkFieldElement(address)) {
-      result.textContent = "Enter a valid non-zero Starknet account address.";
+      result.textContent = t("multisig.participant.invalidAddress");
       showToast(result.textContent, "error", addressInput);
       addressInput.focus();
       return;
     }
     buttonBusy(confirm, true);
-    result.textContent = "Checking the account contract and signer key…";
+    result.textContent = t("multisig.participant.checking");
     try {
       const signer = await deps.multisig.resolveSigner(
         address,
@@ -275,13 +277,16 @@ export const bindMultisigParticipantPicker = (
       );
       finish({
         address: signer.address,
-        label: signer.accountContractType === "argent" ? "Ready account" : "Bramble account",
+        label:
+          signer.accountContractType === "argent"
+            ? t("multisig.participant.readyAccount")
+            : t("multisig.participant.brambleAccount"),
         publicKeyX: signer.publicKeyX,
-        source: "Account address",
+        source: t("multisig.participant.accountAddress"),
       });
     } catch (error) {
-      result.textContent = errorLine(error, "Couldn't look up that signer");
-      showToast(errorDetails(error, "Signer key lookup failed"), "error", confirm);
+      result.textContent = errorLine(error, t("multisig.participant.lookupFailed"));
+      showToast(errorDetails(error, t("multisig.participant.lookupFailedShort")), "error", confirm);
     } finally {
       buttonBusy(confirm, false);
     }
@@ -320,9 +325,11 @@ export const bindMultisigParticipantPicker = (
         ...(control.dataset["participantAddress"]
           ? { address: control.dataset["participantAddress"] }
           : {}),
-        label: control.dataset["participantLabel"] ?? `Signer ${accountLabel(publicKeyX)}`,
+        label:
+          control.dataset["participantLabel"] ??
+          t("multisig.participant.signerLabel", { key: accountLabel(publicKeyX) }),
         publicKeyX,
-        source: control.dataset["participantSource"] ?? "Known participant",
+        source: control.dataset["participantSource"] ?? t("multisig.participant.known"),
       });
     });
   });
