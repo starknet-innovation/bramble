@@ -119,13 +119,14 @@ const queueMultisigDappInvoke = async (
     calls: input.calls,
     context,
     fee: PENDING_INVOKE_FEE,
-    flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+    flags: report.flags.map((flag) => ({ ...flag })),
     ...(threshold !== undefined && threshold > 1 ? { multisigThreshold: threshold } : {}),
     origin: input.origin,
     reviewAssets: trusted.tokens
       .filter((token) => input.calls.some((call) => sameFelt(call.contractAddress, token.address)))
       .map((token) => ({ address: token.address, symbol: token.symbol })),
     summaries: report.calls.map((call) => call.summary),
+    summaryTexts: report.calls.map((call) => call.text),
   });
   notifyApprovalsChanged();
   const revision = deps.approvals.beginFeeEstimate(approval.id);

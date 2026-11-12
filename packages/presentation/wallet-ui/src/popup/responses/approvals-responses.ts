@@ -11,7 +11,6 @@ import {
   isJson,
   isOwnDataProperty,
   isRecord,
-  isRiskFlagCode,
   isSafeDecimals,
   isTokenName,
   isTokenSymbol,
@@ -38,6 +37,7 @@ import {
 } from "@bramble/wallet-protocol/extension-responses";
 import { readProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { readStrk20Action, readStrk20Actions } from "@bramble/wallet-protocol/strk20";
+import { isOptionalSummaryTexts, isReviewedRiskFlag } from "./review-flags";
 
 /**
  * Shared approval and connected-site wire shapes after runtime validation.
@@ -123,13 +123,7 @@ const isInsightText = (value: unknown): value is string =>
 const isSummaryText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= APPROVAL_SUMMARY_MAX_LENGTH;
 
-const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["code", "message"]) &&
-  isRiskFlagCode(value["code"]) &&
-  typeof value["message"] === "string" &&
-  value["message"].length > 0 &&
-  value["message"].length <= 300;
+const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag => isReviewedRiskFlag(value);
 
 const isApprovalContext = (value: unknown): value is ApprovalContext =>
   isRecord(value) &&
@@ -252,6 +246,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "reviewAssets",
       "requiresDeployment",
       "summaries",
+      "summaryTexts",
       "token",
       "typedData",
     ]) ||
@@ -279,6 +274,10 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       !(Array.isArray(value["insights"]) && value["insights"].every(isInsightText))) ||
     (value["summaries"] !== undefined &&
       !(Array.isArray(value["summaries"]) && value["summaries"].every(isSummaryText))) ||
+    !isOptionalSummaryTexts(
+      value["summaryTexts"],
+      Array.isArray(value["summaries"]) ? value["summaries"].length : 0,
+    ) ||
     (value["reviewAssets"] !== undefined &&
       !(
         Array.isArray(value["reviewAssets"]) && value["reviewAssets"].every(isApprovalReviewAsset)

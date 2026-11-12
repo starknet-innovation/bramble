@@ -78,7 +78,7 @@ export const reviewOutsideExecution = (
     return refusal;
   }
   return {
-    flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+    flags: report.flags.map((flag) => ({ ...flag })),
     summaries: report.calls.map((call) => call.summary),
   };
 };

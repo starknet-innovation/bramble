@@ -16,6 +16,7 @@ import {
   PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import { reviewLines } from "../../../i18n/review";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
@@ -124,7 +125,10 @@ const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[
 };
 
 const approvalCalls = (approval: PendingApproval): string =>
-  reviewCallsList(approval.summaries ?? [], approval.reviewAssets ?? []);
+  reviewCallsList(
+    reviewLines(approval.summaries ?? [], approval.summaryTexts),
+    approval.reviewAssets ?? [],
+  );
 
 // Fixed copy per spam reason (audit 171): the card the user decides on says why
 // the token looks wrong, and that the wallet will store it hidden.
@@ -166,7 +170,10 @@ const invokeDeploymentReview = (
 // the other signers and not sent yet. Every line is the same consequence.
 const invokeOutcome = (approval: PendingApproval, proposal: boolean): string =>
   reviewOutcomeSection(
-    (reviewCallItems(approval.summaries ?? [], approval.reviewAssets ?? []) ||
+    (reviewCallItems(
+      reviewLines(approval.summaries ?? [], approval.summaryTexts),
+      approval.reviewAssets ?? [],
+    ) ||
       `<p>${escapeHtml("Sign and submit the decoded transaction from the active account.")}</p>`) +
       (proposal
         ? `<p>${escapeHtml("Saves this for the other signers. It is not sent yet.")}</p>`

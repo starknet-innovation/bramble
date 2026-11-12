@@ -2,9 +2,10 @@
  * Pure popup validators for pre-sign transfer review responses.
  */
 
-import { hasOnlyKnownKeys, isJson, isRecord, isRiskFlagCode } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isJson, isRecord } from "@bramble/core/json";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
+import { isReviewedRiskFlag, type ReviewedRiskFlag } from "./review-flags";
 
 /**
  * Pre-sign transfer review accepted from the background boundary.
@@ -28,7 +29,7 @@ export type TransferReviewResponse = {
       readonly label: string;
       readonly tokenAddress: string;
     }[];
-    readonly flags: readonly { readonly code: string; readonly message: string }[];
+    readonly flags: readonly ReviewedRiskFlag[];
     readonly requiresDeployment: boolean;
     /** True when a device will be asked to sign both the deployment and the send. */
     readonly signsTwice?: boolean;
@@ -54,13 +55,7 @@ export const isFeeReviewResponse = (value: unknown): value is FeeReviewResponse 
   value["ok"] === true &&
   isFeeEstimate(value["feeReview"]);
 
-const isRiskFlagShape = (value: unknown): value is { code: string; message: string } =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["code", "message"]) &&
-  isRiskFlagCode(value["code"]) &&
-  typeof value["message"] === "string" &&
-  value["message"].length > 0 &&
-  value["message"].length <= 300;
+const isRiskFlagShape = (value: unknown): value is ReviewedRiskFlag => isReviewedRiskFlag(value);
 
 /**
  * Checks a fee estimate before any extension page renders it. Re-exported from

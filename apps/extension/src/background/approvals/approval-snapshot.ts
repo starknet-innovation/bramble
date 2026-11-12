@@ -181,7 +181,17 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
     : { reviewAssets: approval.reviewAssets.map((asset) => ({ ...asset })) }),
   ...watchSnapshot(approval),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
-  ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
+  ...(approval.summaryTexts === undefined
+    ? {}
+    : { summaryTexts: approval.summaryTexts.map((text) => cloneApprovalValue(text)) }),
+  ...(approval.flags === undefined
+    ? {}
+    : {
+        flags: approval.flags.map((flag) => ({
+          ...flag,
+          ...(flag.text === undefined ? {} : { text: cloneApprovalValue(flag.text) }),
+        })),
+      }),
   ...(approval.typedData === undefined
     ? {}
     : { typedData: cloneApprovalValue(approval.typedData) }),

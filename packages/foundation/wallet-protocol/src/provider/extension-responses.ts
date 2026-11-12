@@ -4,6 +4,7 @@
  * still validate unknown runtime messages before trusting them.
  */
 
+import type { MessageRef } from "@bramble/core/i18n";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { VaultRecovery } from "@bramble/wallet-model/vault-recovery";
@@ -54,6 +55,8 @@ export type ApprovalContext = {
 export type ApprovalRiskFlag = {
   readonly code: string;
   readonly message: string;
+  /** `message` as a key and its facts, so the panel can render it in the reader's language. */
+  readonly text?: MessageRef;
 };
 
 /**
@@ -184,6 +187,11 @@ export type PendingApproval = {
   readonly reviewAssets?: readonly ApprovalReviewAsset[];
   readonly requiresDeployment?: boolean;
   readonly summaries?: readonly string[];
+  /**
+   * `summaries` as keys and facts, index for index, so the panel can render
+   * them in the reader's language. Absent when a producer only has English.
+   */
+  readonly summaryTexts?: readonly MessageRef[];
   readonly token?: WatchAssetToken;
   /** A watch-asset card for a collectible carries this instead of `token`. */
   readonly nft?: WatchAssetNft;

@@ -99,6 +99,8 @@ export type ApprovalQueue = {
     readonly proof?: Strk20Proof;
     readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
     readonly summaries: readonly string[];
+    /** `summaries` as review sentences, index for index. */
+    readonly summaryTexts?: NonNullable<PendingApproval["summaryTexts"]>;
   }) => PendingApproval;
   readonly requestSignTypedData: (input: {
     readonly context: ApprovalContext;

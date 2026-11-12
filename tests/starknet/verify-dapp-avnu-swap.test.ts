@@ -87,7 +87,7 @@ describe("a dapp multi_route_swap is decoded on the review card", () => {
   test("beneficiary = this account: states the spend, the floor, and the payee, with no warning", () => {
     const report = verifyCalls([swapCall(poisoningAccount.address)], context);
 
-    expect(report.calls[0]).toEqual({
+    expect(report.calls[0]).toMatchObject({
       contractAddress: ROUTER,
       entrypoint: AVNU_MULTI_ROUTE_SWAP,
       kind: "swap",
@@ -117,7 +117,7 @@ describe("a dapp multi_route_swap is decoded on the review card", () => {
     expect(report.calls[0]?.summary).toBe(
       "Swap 500 USDC for at least 0.19 ETH, paid to 0x777b…bbcc",
     );
-    expect(report.flags).toContainEqual({
+    expect(report.flags.map(({ code, message }) => ({ code, message }))).toContainEqual({
       code: "foreign-beneficiary",
       message:
         "This swap pays its proceeds to 0x777b…bbcc, not to this account. Reject it unless you meant to send them there.",
@@ -140,13 +140,13 @@ describe("a dapp multi_route_swap is decoded on the review card", () => {
     };
     const report = verifyCalls([truncated], context);
 
-    expect(report.calls[0]).toEqual({
+    expect(report.calls[0]).toMatchObject({
       contractAddress: ROUTER,
       entrypoint: AVNU_MULTI_ROUTE_SWAP,
       kind: "unknown",
       summary: "Call multi_route_swap on 0x4270…3b0f",
     });
-    expect(report.flags).toContainEqual({
+    expect(report.flags.map(({ code, message }) => ({ code, message }))).toContainEqual({
       code: "undecoded-swap",
       message:
         "The wallet could not read this swap's payee or minimum output. Reject it unless you trust this site.",

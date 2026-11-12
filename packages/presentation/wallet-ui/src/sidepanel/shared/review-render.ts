@@ -12,8 +12,10 @@
 import { escapeHtml } from "@bramble/core/html";
 import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
+import type { ReviewText } from "@bramble/transactions/review-messages";
 import { button } from "@bramble/ui-kit/controls";
 import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
+import { reviewLine } from "../../i18n/review";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
 import { icon } from "./icons";
 import { formatFri } from "./parts";
@@ -411,8 +413,9 @@ export const reviewPanel = (items: readonly string[], clearCopy?: string): strin
  * Extracts the user-facing messages from risk flags so both review surfaces
  * feed the shared panel the same way. Accepts any flag-shaped value (the
  * background's `ApprovalRiskFlag` and the transfer review's flag share this
- * structure), keeping the two callers on one path.
+ * structure), keeping the two callers on one path. Each line renders in the
+ * reader's language when its reference agrees with its English (see `reviewLine`).
  */
 export const riskFlagMessages = (
-  flags: readonly { readonly message: string }[],
-): readonly string[] => flags.map((flag) => flag.message);
+  flags: readonly { readonly message: string; readonly text?: ReviewText }[],
+): readonly string[] => flags.map((flag) => reviewLine(flag.text, flag.message));

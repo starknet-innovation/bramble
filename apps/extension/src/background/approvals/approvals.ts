@@ -82,7 +82,14 @@ const copyReviewAssets = (assets: NonNullable<PendingApproval["reviewAssets"]>) 
   assets.length === 0 ? {} : { reviewAssets: assets.map((asset) => ({ ...asset })) };
 
 const copyFlags = (flags: NonNullable<PendingApproval["flags"]>) =>
-  flags.length === 0 ? {} : { flags: flags.map((flag) => ({ ...flag })) };
+  flags.length === 0
+    ? {}
+    : {
+        flags: flags.map((flag) => ({
+          ...flag,
+          ...(flag.text === undefined ? {} : { text: cloneApprovalValue(flag.text) }),
+        })),
+      };
 
 /**
  * Creates a deduplicating approval queue. Connection prompts dedupe per origin;
@@ -293,7 +300,10 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         calls: input.calls.map(cloneApprovalCall),
         context: { ...input.context },
         ...invokeFeeReviewFields(input.fee),
-        flags: input.flags.map((flag) => ({ ...flag })),
+        flags: input.flags.map((flag) => ({
+          ...flag,
+          ...(flag.text === undefined ? {} : { text: cloneApprovalValue(flag.text) }),
+        })),
         ...(input.multisigThreshold === undefined
           ? {}
           : { multisigThreshold: input.multisigThreshold }),
@@ -303,6 +313,9 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         ...(input.proof === undefined ? {} : { proof: cloneApprovalValue(input.proof) }),
         ...copyReviewAssets(input.reviewAssets ?? []),
         summaries: [...input.summaries],
+        ...(input.summaryTexts === undefined
+          ? {}
+          : { summaryTexts: input.summaryTexts.map((text) => cloneApprovalValue(text)) }),
       });
     },
     requestSignTypedData({ context, origin, review, summary, typedData }) {
