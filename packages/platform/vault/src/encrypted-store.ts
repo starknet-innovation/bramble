@@ -191,6 +191,13 @@ export type EncryptedStore = {
 const MAX_CACHED_KEYS = 8;
 
 /**
+ * AES-GCM additional-data scope for one storage key. Not a secret: it binds an
+ * envelope to that key, and decryption under any other scope fails closed.
+ * Pure, and it does not validate `key`.
+ */
+export const encryptedStoreScope = (key: string): string => `bramble:encrypted-store:${key}`;
+
+/**
  * Creates an encrypted store for one key in the provided backend. The store
  * memoizes derived AES keys per (passphrase fingerprint, salt, iterations) so
  * the PBKDF2 work runs once per unlock rather than on every read or signature;
@@ -210,7 +217,7 @@ export const createEncryptedStore = (
   mirrorFreshness = false,
 ): EncryptedStore => {
   assertStorageKey(key);
-  const scope = `bramble:encrypted-store:${key}`;
+  const scope = encryptedStoreScope(key);
   const freshness = createFreshnessAuthority(
     key,
     freshnessStore,

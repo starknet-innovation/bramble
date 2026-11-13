@@ -8,8 +8,8 @@
  * Accounts, as an imported wallet gets them: recovery restores OpenZeppelin index 0, Braavos index
  * 1 and a Ready (`argentx-bip44`) Argent on Mainnet (Braavos is never created and Ready only
  * arrives by recovery); the creation path then adds OpenZeppelin index 1 and an Argent on this
- * wallet's own ladder on Mainnet, and OpenZeppelin index 0 on Sepolia. `bun run mobile:parity` writes it;
- * `bun run check` fails on drift. Every value is public.
+ * wallet's own ladder on Mainnet, and OpenZeppelin index 0 on Sepolia.
+ * `bun run mobile:parity` writes it; `bun run check` fails on drift. Every value is public.
  */
 
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
@@ -17,6 +17,7 @@ import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
 import {
   createEncryptedStore,
   decryptJson,
+  encryptedStoreScope,
   isEncryptedEnvelope,
 } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
@@ -31,7 +32,7 @@ export const VAULT_PARITY_FIXTURE_PATH = "mobile/core/tests/fixtures/vault-v13.j
 export const VAULT_PARITY_PASSWORD = "parity vault passphrase";
 
 /** The AES-GCM scope the extension's encrypted store binds its vault to. */
-export const VAULT_PARITY_SCOPE = `bramble:encrypted-store:${VAULT_STORE_KEY}`;
+export const VAULT_PARITY_SCOPE = encryptedStoreScope(VAULT_STORE_KEY);
 
 const vaultPassphrase = VAULT_PARITY_PASSWORD;
 const mnemonic = PARITY_MNEMONIC;

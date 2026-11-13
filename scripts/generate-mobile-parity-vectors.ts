@@ -93,10 +93,20 @@ if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...scanPaths]).exitCode
   throw new Error("biome could not format the recovery-scan fixtures");
 }
 
+/** The committed vault seal, or `undefined` only when the fixture file is missing. */
+const readCommittedVaultSeal = async (): Promise<unknown> => {
+  let text: string;
+  try {
+    text = await readFile(VAULT_PARITY_FIXTURE_PATH, "utf8");
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+  return (JSON.parse(text) as { readonly sealed?: unknown }).sealed;
+};
+
 // The v13 vault keeps its committed seal when the extension still opens it to the same payload.
-const committedVault = await readFile(VAULT_PARITY_FIXTURE_PATH, "utf8")
-  .then((text) => (JSON.parse(text) as { readonly sealed?: unknown }).sealed)
-  .catch(() => undefined);
+const committedVault = await readCommittedVaultSeal();
 await writeFile(
   VAULT_PARITY_FIXTURE_PATH,
   `${JSON.stringify(await computeVaultParity(committedVault), null, 2)}\n`,
