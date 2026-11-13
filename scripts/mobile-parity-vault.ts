@@ -17,7 +17,6 @@ import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
 import {
   createEncryptedStore,
   decryptJson,
-  encryptedStoreScope,
   isEncryptedEnvelope,
 } from "@bramble/vault/encrypted-store";
 import { createWalletVaultService } from "@bramble/vault/service";
@@ -32,7 +31,7 @@ export const VAULT_PARITY_FIXTURE_PATH = "mobile/core/tests/fixtures/vault-v13.j
 export const VAULT_PARITY_PASSWORD = "parity vault passphrase";
 
 /** The AES-GCM scope the extension's encrypted store binds its vault to. */
-export const VAULT_PARITY_SCOPE = encryptedStoreScope(VAULT_STORE_KEY);
+export const VAULT_PARITY_SCOPE = `bramble:encrypted-store:${VAULT_STORE_KEY}`;
 
 const vaultPassphrase = VAULT_PARITY_PASSWORD;
 const mnemonic = PARITY_MNEMONIC;
