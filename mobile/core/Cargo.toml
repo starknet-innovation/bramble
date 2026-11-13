@@ -1,0 +1,38 @@
+[package]
+# Not `bramble-core`: that is the dependency below, which the build scripts select with
+# `cargo build -p bramble-core --lib`.
+name = "bramble-mobile-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.92"
+license = "MIT"
+publish = false
+description = "Builds wallet-core's bramble-core for Bramble's iOS and Android apps and generates its bindings"
+
+# Its own workspace, so the profiles below apply when the scripts build the dependency.
+[workspace]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+# The mobile wallet core (vault, accounts, send, portfolio, history, privacy, multisig coordination,
+# the UniFFI surface): wallet-core's `bramble-core` with its `mobile` feature and without the
+# extension's raw-key and phrase exports. Crate, lib and UniFFI module names are mobile's
+# (`bramble_core`, `BrambleCore`, `org.bramble.core`). Krusty KMS comes only through it. Pinned
+# to the release that holds the 2.7 port (wallet-core PR #50).
+bramble-core = { git = "https://github.com/starknet-innovation/wallet-core", tag = "v0.3.0", default-features = false, features = ["mobile"] }
+# The Swift and Kotlin bindings generator, at the version bramble-core exports through.
+uniffi = { version = "=0.31.2", features = ["cli"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+
+# PBKDF2 at the extension's 600k iterations is unusably slow unoptimised, so dependencies (the
+# core among them) are optimised even in debug.
+[profile.dev.package."*"]
+opt-level = 3

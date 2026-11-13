@@ -40,7 +40,8 @@ import { type NostrRelayTransport, nativeNostrRelayTransport } from "./nostr-rel
 
 export { coordinationRelayUrls } from "./multisig-nostr-publish";
 
-const MULTISIG_NOSTR_IDENTIFIER = "bramble.multisig";
+/** Application-data identifier every multisig gift wrap carries; mirrored by the mobile core. */
+export const MULTISIG_NOSTR_IDENTIFIER = "bramble.multisig";
 
 const readIntentId = (message: unknown): string | null =>
   isRecord(message) &&

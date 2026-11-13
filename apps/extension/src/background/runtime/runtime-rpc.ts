@@ -367,7 +367,11 @@ const starkscanHttp: StarkscanHttp = untrustedFetch;
 // rescue; transaction history is explorer-first (the RPC scan reaches back
 // only a few days of blocks) with the RPC scan as the keyless fallback. Both
 // obey the user's per-network `explorerFallback` choice.
-const DEFAULT_EXPLORER_API_URL = "https://starkscan.co/v1";
+/**
+ * The bundled explorer read-lane base. Exported only so the mobile parity fixture proves the
+ * mobile core requests the same host (`scripts/mobile-parity-portfolio`); nothing else reads it.
+ */
+export const DEFAULT_EXPLORER_API_URL = "https://starkscan.co/v1";
 const starkscanClients = new Map<string, ReturnType<typeof createStarkscanClient>>();
 // NFT discovery gets its own client per base: the same host, transport and
 // override, but its own rate-limit cooldown, so an NFT failure never blocks

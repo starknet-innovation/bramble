@@ -22,4 +22,5 @@ vendor/ledger-app-bin/
 /dist.zip
 .claude/*
 !.claude/skills
+!.claude/workflows
 .wrangler/

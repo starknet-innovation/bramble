@@ -16,6 +16,7 @@
 import { LEDGER_E2E_WORKFLOW, ledgerE2eWorkflowFailures } from "./ledger-e2e-workflow-policy";
 import { mainnetE2eBoundaryFailures } from "./mainnet-e2e-boundary";
 import { mainnetE2eWorkflowFailures } from "./mainnet-e2e-workflow-policy";
+import { MOBILE_WORKFLOW, mobileWorkflowFailures } from "./mobile-workflow-policy";
 import { dynamicExecutionFailures } from "./vendor-pin-policy";
 import { websiteDeployFailures } from "./website-deploy-policy";
 import {
@@ -434,6 +435,7 @@ const NAMED_POLICIES: Readonly<Record<string, (source: string) => string[]>> = {
   "ci.yml": ciFailures,
   [LEDGER_E2E_WORKFLOW]: ledgerE2eWorkflowFailures,
   "mainnet-e2e.yml": mainnetE2eWorkflowFailures,
+  [MOBILE_WORKFLOW]: mobileWorkflowFailures,
   "nightly.yml": nightlyFailures,
   "release-build.yml": releaseBuildFailures,
   "release-integration.yml": releaseIntegrationFailures,

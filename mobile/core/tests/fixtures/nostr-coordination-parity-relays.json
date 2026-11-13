@@ -1,0 +1,267 @@
+{
+  "acknowledgements": [
+    {
+      "ids": [0, 1],
+      "name": "both relays accept",
+      "relays": [
+        { "replies": [[true, ""], [true, ""]], "url": "wss://relay.primal.net" },
+        { "replies": [[true, ""], [true, ""]], "url": "wss://nos.lol" }
+      ],
+      "acknowledgements": [2, 2]
+    },
+    {
+      "ids": [0, 1],
+      "name": "one relay blocks one wrap",
+      "relays": [
+        { "replies": [[true, ""], [true, ""]], "url": "wss://relay.primal.net" },
+        { "replies": [[true, ""], [false, "blocked: parity"]], "url": "wss://nos.lol" }
+      ],
+      "acknowledgements": [2, 1]
+    },
+    {
+      "ids": [0],
+      "name": "a duplicate refusal counts as stored",
+      "relays": [
+        { "replies": [[false, "duplicate: already have it"]], "url": "wss://relay.primal.net" },
+        { "replies": [[false, "Duplicate: Already Have It"]], "url": "wss://nos.lol" }
+      ],
+      "acknowledgements": [2]
+    },
+    {
+      "ids": [0],
+      "name": "a refusal that only mentions duplicate does not count",
+      "relays": [
+        { "replies": [[false, "error: duplicate: no"]], "url": "wss://relay.primal.net" },
+        { "replies": [[true, ""]], "url": "wss://nos.lol" }
+      ],
+      "acknowledgements": [1]
+    },
+    {
+      "ids": [0, 1],
+      "name": "one relay fails",
+      "relays": [
+        { "replies": "socket error", "url": "wss://relay.primal.net" },
+        { "replies": [[true, ""], [true, ""]], "url": "wss://nos.lol" }
+      ],
+      "acknowledgements": [1, 1]
+    },
+    {
+      "ids": [0, 1, 2],
+      "name": "one custom relay",
+      "relays": [
+        {
+          "replies": [[true, ""], [false, "blocked: parity"], [true, ""]],
+          "url": "wss://relay.team.example"
+        }
+      ],
+      "acknowledgements": [1, 0, 1]
+    },
+    {
+      "ids": [0],
+      "name": "every relay refuses",
+      "relays": [
+        { "replies": [[false, "blocked: parity"]], "url": "wss://relay.primal.net" },
+        { "replies": "socket error", "url": "wss://nos.lol" }
+      ],
+      "error": "Nostr relays are unavailable"
+    },
+    { "ids": [0], "name": "no relays", "relays": [], "error": "Invalid Nostr relay configuration" },
+    {
+      "ids": [0],
+      "name": "three relays",
+      "relays": [
+        { "replies": [[true, ""]], "url": "wss://relay.primal.net" },
+        { "replies": [[true, ""]], "url": "wss://nos.lol" },
+        { "replies": [[true, ""]], "url": "wss://relay.team.example" }
+      ],
+      "error": "Invalid Nostr relay configuration"
+    },
+    {
+      "ids": [0],
+      "name": "the same relay twice",
+      "relays": [
+        { "replies": [[true, ""]], "url": "wss://relay.team.example" },
+        { "replies": [[true, ""]], "url": "wss://relay.team.example" }
+      ],
+      "error": "Invalid Nostr relay configuration"
+    },
+    {
+      "ids": [0],
+      "name": "an insecure relay",
+      "relays": [{ "replies": [[true, ""]], "url": "ws://relay.example" }],
+      "error": "Invalid Nostr relay configuration"
+    }
+  ],
+  "event": {
+    "content": "ciphertext",
+    "created_at": 1,
+    "id": "0000000000000000000000000000000000000000000000000000000000000000",
+    "kind": 1059,
+    "pubkey": "2222222222222222222222222222222222222222222222222222222222222222",
+    "sig": "33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333",
+    "tags": [["p", "4444444444444444444444444444444444444444444444444444444444444444"]]
+  },
+  "giftWrapBatches": {
+    "relayUrls": ["wss://relay.team.example"],
+    "cases": [
+      { "extra": [], "ids": [0, 1], "name": "two wraps", "acknowledgements": [1, 1] },
+      {
+        "extra": [],
+        "ids": [
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+          25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
+          47, 48, 49
+        ],
+        "name": "at the bound",
+        "acknowledgements": [
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+        ]
+      },
+      {
+        "extra": [],
+        "ids": [
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+          25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
+          47, 48, 49, 50
+        ],
+        "name": "over the bound",
+        "error": "Invalid Nostr gift wrap batch"
+      },
+      { "extra": [], "ids": [], "name": "empty", "error": "Invalid Nostr gift wrap batch" },
+      {
+        "extra": [
+          {
+            "eventJson": "{\"content\":\"ciphertext\",\"created_at\":1,\"id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"kind\":1,\"pubkey\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"sig\":\"33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333\",\"tags\":[[\"p\",\"4444444444444444444444444444444444444444444444444444444444444444\"]]}",
+            "recipientPublicKey": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ],
+        "ids": [],
+        "name": "wrong kind",
+        "error": "Invalid Nostr gift wrap"
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "{\"content\":\"ciphertext\",\"created_at\":1,\"id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"kind\":1059,\"pubkey\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"sig\":\"33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333\",\"tags\":[]}",
+            "recipientPublicKey": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ],
+        "ids": [],
+        "name": "missing p tag",
+        "error": "Invalid Nostr gift wrap"
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "{\"content\":\"ciphertext\",\"created_at\":1,\"id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"kind\":1059,\"pubkey\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"sig\":\"33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333\",\"tags\":[[\"p\",\"5555555555555555555555555555555555555555555555555555555555555555\"]]}",
+            "recipientPublicKey": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ],
+        "ids": [],
+        "name": "p tag for another recipient",
+        "error": "Invalid Nostr gift wrap"
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "{\"content\":\"ciphertext\",\"created_at\":1,\"id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"kind\":1059,\"pubkey\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"sig\":\"33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333\",\"tags\":[[\"p\",\"4444444444444444444444444444444444444444444444444444444444444444\",\"wss://relay.team.example\"]]}",
+            "recipientPublicKey": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ],
+        "ids": [],
+        "name": "p tag with a relay hint",
+        "acknowledgements": [1]
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "{\"content\":\"ciphertext\",\"created_at\":1,\"id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"kind\":1059,\"pubkey\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"sig\":\"33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333\",\"tags\":[[\"p\",\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"]]}",
+            "recipientPublicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          }
+        ],
+        "ids": [],
+        "name": "recipient not canonical",
+        "error": "Invalid Nostr gift wrap"
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "not json",
+            "recipientPublicKey": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ],
+        "ids": [],
+        "name": "unparseable event",
+        "error": "Invalid Nostr gift wrap"
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "{\"content\":\"ciphertext\",\"created_at\":1,\"id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"kind\":1059,\"pubkey\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"sig\":\"33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333\",\"tags\":[[\"p\",\"4444444444444444444444444444444444444444444444444444444444444444\"]],\"extra\":1}",
+            "recipientPublicKey": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ],
+        "ids": [],
+        "name": "event with an unknown key",
+        "error": "Invalid Nostr gift wrap"
+      },
+      {
+        "extra": [],
+        "ids": [0, 1, 0],
+        "name": "duplicate ids",
+        "error": "Invalid Nostr gift wrap batch"
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "{\"content\":\"ciphertext\",\"created_at\":1,\"id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"kind\":1059,\"pubkey\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"sig\":\"33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333\",\"tags\":[[\"p\",\"5555555555555555555555555555555555555555555555555555555555555555\"]]}",
+            "recipientPublicKey": "5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        ],
+        "ids": [0],
+        "name": "one id for two recipients",
+        "error": "Invalid Nostr gift wrap batch"
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "{\"content\":\"ciphertext\",\"created_at\":1,\"id\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"kind\":1059,\"pubkey\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"sig\":\"33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333\",\"tags\":[[\"p\",\"5555555555555555555555555555555555555555555555555555555555555555\"]]}",
+            "recipientPublicKey": "5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        ],
+        "ids": [0],
+        "name": "two recipients",
+        "acknowledgements": [1, 1]
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "not json",
+            "recipientPublicKey": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ],
+        "ids": [
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+          25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46,
+          47, 48, 49
+        ],
+        "name": "over the bound with an invalid wrap",
+        "error": "Invalid Nostr gift wrap batch"
+      },
+      {
+        "extra": [
+          {
+            "eventJson": "{\"content\":\"ciphertext\",\"created_at\":1,\"id\":\"0000000000000000000000000000000000000000000000000000000000000001\",\"kind\":1,\"pubkey\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"sig\":\"33333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333333\",\"tags\":[[\"p\",\"4444444444444444444444444444444444444444444444444444444444444444\"]]}",
+            "recipientPublicKey": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        ],
+        "ids": [0, 0],
+        "name": "invalid wrap after a duplicate",
+        "error": "Invalid Nostr gift wrap"
+      }
+    ]
+  },
+  "idOf": "event number n is its id as 64-digit lowercase hex; every other field is from `event`",
+  "recipient": "4444444444444444444444444444444444444444444444444444444444444444"
+}

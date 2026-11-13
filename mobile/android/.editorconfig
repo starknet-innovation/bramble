@@ -1,0 +1,21 @@
+# ktlint 1.8.0 (pinned in mobile/scripts/lint-tools.sh), official Kotlin style.
+# Run: bash mobile/scripts/lint.sh kotlin
+# Inline ktlint-disable / @Suppress is not used anywhere (AGENTS.md): fix the code instead.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{kt,kts}]
+ktlint_code_style = ktlint_official
+# Experimental rules are enabled too, for the strictest set ktlint offers.
+ktlint_experimental = enabled
+# Must match detekt's MaxLineLength in config/detekt.yml.
+max_line_length = 120
+# Jetpack Compose names @Composable functions in PascalCase by convention.
+ktlint_function_naming_ignore_when_annotated_with = Composable

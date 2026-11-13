@@ -14,13 +14,15 @@
  *   docs/chrome-web-store/assets/icon-128.png          (store listing copy)
  *   docs/chrome-web-store/assets/promo-small-source.svg (its `#mark` path refreshed)
  *   docs/chrome-web-store/assets/promo-small-440x280.png
+ *   mobile/ios/Bramble/Resources/Assets.xcassets/AppIcon.appiconset (1024px, single-size)
+ *   mobile/android/app/src/main/res/mipmap-{m,h,xh,xxh,xxxh}dpi/ic_launcher.png
  *
  * Rasterised with the Playwright Chromium already installed for the E2E suite
  * (`bun run test:e2e:install`), one page per size so every PNG is a crisp
  * integer render rather than a downscale. Run: `bun run scripts/render-brand-assets.ts`.
  * Trusted inputs only: this reads checked-in SVGs and writes checked-in files.
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { type Browser, chromium } from "@playwright/test";
 
 const SOURCE = "apps/website/public/brand/mark.svg";
@@ -30,6 +32,19 @@ const STORE_DIR = "docs/chrome-web-store/assets";
 const PROMO_SOURCE = `${STORE_DIR}/promo-small-source.svg`;
 const ICON_SIZES = [16, 24, 32, 48, 128] as const;
 const PROMO = { height: 280, width: 440 } as const;
+// The mobile launcher icons are the same composition: iOS masks the corners itself from one
+// 1024px master; Android takes a square PNG per density bucket.
+const IOS_ICON_DIR = "mobile/ios/Bramble/Resources/Assets.xcassets/AppIcon.appiconset";
+const IOS_ICON_SIZE = 1024;
+const ANDROID_ICON_SIZES = { hdpi: 72, mdpi: 48, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 } as const;
+const IOS_ICON_CONTENTS = `${JSON.stringify(
+  {
+    images: [{ filename: "icon-1024.png", idiom: "universal", platform: "ios", size: "1024x1024" }],
+    info: { author: "xcode", version: 1 },
+  },
+  null,
+  2,
+)}\n`;
 
 // Website palette (apps/website/DESIGN.md): cream ground, ink mark.
 const GROUND = "#fff5ec";
@@ -139,9 +154,25 @@ try {
       await writeFile(`${STORE_DIR}/icon-128.png`, png);
     }
   }
+  await mkdir(IOS_ICON_DIR, { recursive: true });
+  await writeFile(
+    `${IOS_ICON_DIR}/icon-1024.png`,
+    await renderSvg(browser, iconSvg, { height: IOS_ICON_SIZE, width: IOS_ICON_SIZE }, GROUND),
+  );
+  await writeFile(`${IOS_ICON_DIR}/Contents.json`, IOS_ICON_CONTENTS);
+  for (const [density, size] of Object.entries(ANDROID_ICON_SIZES)) {
+    const dir = `mobile/android/app/src/main/res/mipmap-${density}`;
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      `${dir}/ic_launcher.png`,
+      await renderSvg(browser, iconSvg, { height: size, width: size }, GROUND),
+    );
+  }
   const promoPng = await renderSvg(browser, promoSvg, PROMO, "transparent");
   await writeFile(`${STORE_DIR}/promo-small-${PROMO.width}x${PROMO.height}.png`, promoPng);
 } finally {
   await browser.close();
 }
-console.log(`rendered icons (${ICON_SIZES.join(", ")}px) and the store promo from ${SOURCE}`);
+console.log(
+  `rendered icons (${ICON_SIZES.join(", ")}px), mobile launcher icons, and the store promo from ${SOURCE}`,
+);

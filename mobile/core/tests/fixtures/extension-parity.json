@@ -1,0 +1,297 @@
+{
+  "accounts": [
+    {
+      "accountIndex": 0,
+      "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "networkId": "SN_SEPOLIA",
+      "publicKeyX": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+      "signatureR": "0x6a4ee14cdd66ba20473b5ad91c73401f71ffd77fe1afa042eaa0877e5a091bd",
+      "signatureS": "0x3d18b5fb72c48c6e963e6da191d917c24fe01bd588b7ec9b985426770c57abf"
+    },
+    {
+      "accountIndex": 1,
+      "address": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "networkId": "SN_SEPOLIA",
+      "publicKeyX": "0x7873b5322cbee02f90349e3dea6af8daa6e26dec9b13940b7ab7358617f32bd",
+      "signatureR": "0x2de57205bbfe957c6052bd4205e44429dc5b4ac4c5c8e794bff8066d01c9f75",
+      "signatureS": "0x25d984d9a0003f2c91336dd74b1d581971944f0a0b3f24dd048b403d8ba2515"
+    },
+    {
+      "accountIndex": 0,
+      "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+      "classHash": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "networkId": "SN_MAIN",
+      "publicKeyX": "0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e",
+      "signatureR": "0x6a4ee14cdd66ba20473b5ad91c73401f71ffd77fe1afa042eaa0877e5a091bd",
+      "signatureS": "0x3d18b5fb72c48c6e963e6da191d917c24fe01bd588b7ec9b985426770c57abf"
+    }
+  ],
+  "dekSlot": {
+    "password": "parity-dek-slot-password",
+    "plaintext": {
+      "dek": "WlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlo="
+    },
+    "scope": "bramble.mobile.dek.v1",
+    "sealed": {
+      "cipher": "AES-256-GCM",
+      "commit": "IFG/JpU7ltOecFN/Gc9Aww==",
+      "data": "XLHwfPb1V1jja4FD3t4LusBNKqx/ZNkGon3KDtMTmDARe7WBOtuc09qbxUFRdB2tP+Up4xz/9HR/gPiU3e4l8rJ0NOpkig==",
+      "iterations": 600000,
+      "iv": "7qPbVdjVbqAcMa4T",
+      "kdf": "PBKDF2-SHA-256",
+      "lineage": "e7ea8d2b0c67c30ed067417df17d2758",
+      "salt": "sE6z2kHgfg476/Qvg64FOg==",
+      "scope": "bramble.mobile.dek.v1",
+      "version": 3
+    }
+  },
+  "envelope": {
+    "password": "parity-vector-password",
+    "plaintext": {
+      "hello": "bramble",
+      "n": 7
+    },
+    "scope": "bramble.parity",
+    "sealed": {
+      "cipher": "AES-256-GCM",
+      "commit": "CsBHt6BQ0Cenb9eNsyflrg==",
+      "data": "VytNJdM22UDgY1pQsgrOU63k7eCVE/EKMLoFO1Rnkh4uKe1jI/XWim4=",
+      "iterations": 600000,
+      "iv": "ELQx7XJnLyBpAzzG",
+      "kdf": "PBKDF2-SHA-256",
+      "lineage": "0c555becf302a0691fdafe45cc443c42",
+      "salt": "CmvNPNO3aNUtdLJOnfOuKw==",
+      "scope": "bramble.parity",
+      "version": 3
+    }
+  },
+  "messageHash": "0x3f2d1b0a99887766554433221100ffeeddccbbaa99887766554433221100abc",
+  "mnemonic": "habit hope tip crystal because grunt nation idea electric witness alert like",
+  "ui": {
+    "avatars": [
+      {
+        "address": "0x0",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-0)\" /> <g class=\"avatar-bird\" transform=\"translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-0)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 19.5 L2.5 15 L4 23 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"9.5\" ry=\"8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-0)\" /> <circle cx=\"22\" cy=\"13\" r=\"6\" fill=\"var(--bramble-account-avatar-body-0)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <path d=\"M27.5 11.5 L31.5 13.5 L27.5 15.5 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <circle cx=\"24.1\" cy=\"12.3\" r=\"1.8\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.6\" cy=\"12.3\" r=\"1\" fill=\"var(--bramble-account-avatar-ink)\" /> </g> </svg>"
+      },
+      {
+        "address": "0x1",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-1)\" /> <g class=\"avatar-bird\" transform=\"translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-0)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 19.5 L2.5 15 L4 23 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"9.5\" ry=\"8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-0)\" /> <circle cx=\"22\" cy=\"13\" r=\"6\" fill=\"var(--bramble-account-avatar-body-0)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <path d=\"M27.5 11.5 L31.5 13.5 L27.5 15.5 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <circle cx=\"24.1\" cy=\"12.3\" r=\"1.8\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.6\" cy=\"12.3\" r=\"1\" fill=\"var(--bramble-account-avatar-ink)\" /> </g> </svg>"
+      },
+      {
+        "address": "0x208361e3911b1d93a704400b88e7e53a89171fce64dbb48f8479e4f44b398d9",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-1)\" /> <g class=\"avatar-bird\" transform=\"translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-0)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 19.5 L2.5 15 L4 23 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"10.5\" ry=\"8.8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-0)\" /> <circle cx=\"22\" cy=\"13\" r=\"6.5\" fill=\"var(--bramble-account-avatar-body-0)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <path d=\"M27 11 Q32.5 11 31.5 15.5 Q29.5 14 27 15 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <circle cx=\"24.275\" cy=\"12.3\" r=\"2.4\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.974999999999998\" cy=\"12.3\" r=\"1.3\" fill=\"var(--bramble-account-avatar-ink)\" /> </g> </svg>"
+      },
+      {
+        "address": "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-3)\" /> <g class=\"avatar-bird\" transform=\"translate(36 0) scale(-1 1) translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-0)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 20 L3 16.5 L5 20.5 L2.5 21.5 L5 23.5 L3.5 26 L10 23 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <path d=\"M19.5 8.5 L18 4 L21 7.2 L21.5 2.8 L23 7 L25.5 3.8 L24.8 8 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"10.5\" ry=\"8.8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-0)\" /> <circle cx=\"22\" cy=\"13\" r=\"6.5\" fill=\"var(--bramble-account-avatar-body-0)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <path d=\"M27.5 12 L33.5 13.8 L27.5 15 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <circle cx=\"24.275\" cy=\"12.600000000000001\" r=\"1.8\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.775\" cy=\"12.8\" r=\"1\" fill=\"var(--bramble-account-avatar-ink)\" /><path d=\"M22.075 10.700000000000001 L26.275 9.700000000000001\" stroke=\"var(--bramble-account-avatar-paper)\" stroke-width=\"1\" stroke-linecap=\"round\" /> </g> </svg>"
+      },
+      {
+        "address": "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-3)\" /> <g class=\"avatar-bird\" transform=\"translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-0)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 19.5 L2.5 15 L4 23 Z\" fill=\"var(--bramble-account-avatar-accent-1)\" /> <path d=\"M19.5 8.5 L18 4 L21 7.2 L21.5 2.8 L23 7 L25.5 3.8 L24.8 8 Z\" fill=\"var(--bramble-account-avatar-accent-1)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"10.5\" ry=\"8.8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-0)\" /> <circle cx=\"22\" cy=\"13\" r=\"6.5\" fill=\"var(--bramble-account-avatar-body-0)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-1)\" /> <path d=\"M27.5 11.5 L31.5 13.5 L27.5 15.5 Z\" fill=\"var(--bramble-account-avatar-accent-1)\" /> <circle cx=\"24.275\" cy=\"12.3\" r=\"1.8\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.775\" cy=\"12.3\" r=\"1\" fill=\"var(--bramble-account-avatar-ink)\" /> </g> </svg>"
+      },
+      {
+        "address": "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-1)\" /> <g class=\"avatar-bird\" transform=\"translate(36 0) scale(-1 1) translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-1)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 20 L3 16.5 L5 20.5 L2.5 21.5 L5 23.5 L3.5 26 L10 23 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <path d=\"M21 7.8 Q19.8 3.5 23.2 2.5 Q22.2 5 24 7.4 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"10.5\" ry=\"8.8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-1)\" /> <circle cx=\"22\" cy=\"13\" r=\"6.5\" fill=\"var(--bramble-account-avatar-body-1)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <path d=\"M27.5 11.5 L31.5 13.5 L27.5 15.5 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <circle cx=\"24.275\" cy=\"12.3\" r=\"1.8\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.775\" cy=\"12.3\" r=\"1\" fill=\"var(--bramble-account-avatar-ink)\" /> </g> </svg>"
+      },
+      {
+        "address": "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-3)\" /> <g class=\"avatar-bird\" transform=\"translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-1)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 19.5 L2.5 15 L4 23 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <path d=\"M21 7.8 Q19.8 3.5 23.2 2.5 Q22.2 5 24 7.4 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"10.5\" ry=\"8.8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-1)\" /> <circle cx=\"22\" cy=\"13\" r=\"6.5\" fill=\"var(--bramble-account-avatar-body-1)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <path d=\"M27.5 12 L33.5 13.8 L27.5 15 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <circle cx=\"24.275\" cy=\"12.3\" r=\"2.4\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.974999999999998\" cy=\"12.3\" r=\"1.3\" fill=\"var(--bramble-account-avatar-ink)\" /> </g> </svg>"
+      },
+      {
+        "address": "0xabcdef",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-3)\" /> <g class=\"avatar-bird\" transform=\"translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-3)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 19.5 L2.5 15 L4 23 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"9.5\" ry=\"8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-3)\" /> <circle cx=\"22\" cy=\"13\" r=\"6\" fill=\"var(--bramble-account-avatar-body-3)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <path d=\"M27 11 Q32.5 11 31.5 15.5 Q29.5 14 27 15 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <circle cx=\"24.1\" cy=\"12.3\" r=\"2.4\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.8\" cy=\"12.3\" r=\"1.3\" fill=\"var(--bramble-account-avatar-ink)\" /> </g> </svg>"
+      },
+      {
+        "address": "0x123456789",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-1)\" /> <g class=\"avatar-bird\" transform=\"translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-1)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 20 L3 16.5 L5 20.5 L2.5 21.5 L5 23.5 L3.5 26 L10 23 Z\" fill=\"var(--bramble-account-avatar-accent-1)\" /> <path d=\"M21 7.8 Q19.8 3.5 23.2 2.5 Q22.2 5 24 7.4 Z\" fill=\"var(--bramble-account-avatar-accent-1)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"10.5\" ry=\"8.8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-1)\" /> <circle cx=\"22\" cy=\"13\" r=\"6.5\" fill=\"var(--bramble-account-avatar-body-1)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-1)\" /> <path d=\"M27.5 12 L33.5 13.8 L27.5 15 Z\" fill=\"var(--bramble-account-avatar-accent-1)\" /> <circle cx=\"24.275\" cy=\"12.600000000000001\" r=\"1.8\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.775\" cy=\"12.8\" r=\"1\" fill=\"var(--bramble-account-avatar-ink)\" /><path d=\"M22.075 10.700000000000001 L26.275 9.700000000000001\" stroke=\"var(--bramble-account-avatar-paper)\" stroke-width=\"1\" stroke-linecap=\"round\" /> </g> </svg>"
+      },
+      {
+        "address": "0xa7b9",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-1)\" /> <g class=\"avatar-bird\" transform=\"translate(36 0) scale(-1 1) translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-4)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 21 L2.5 24.5 L4.5 27 L10 24 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <path d=\"M17.5 10 Q18.5 4 22 4.2 Q21.5 5.6 25 5 Q23.5 6.8 26.5 8 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"9\" ry=\"7.2\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-4)\" /> <circle cx=\"22\" cy=\"13\" r=\"5.5\" fill=\"var(--bramble-account-avatar-body-4)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <path d=\"M27 11 Q32.5 11 31.5 15.5 Q29.5 14 27 15 Z\" fill=\"var(--bramble-account-avatar-accent-2)\" /> <circle cx=\"23.925\" cy=\"12.3\" r=\"2.4\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.625\" cy=\"12.3\" r=\"1.3\" fill=\"var(--bramble-account-avatar-ink)\" /> </g> </svg>"
+      },
+      {
+        "address": "not an address",
+        "svg": "<svg class=\"avatar\" viewBox=\"0 0 36 36\" aria-hidden=\"true\"> <rect width=\"36\" height=\"36\" fill=\"var(--bramble-account-avatar-ground-0)\" /> <g class=\"avatar-bird\" transform=\"translate(18 18) scale(1.14) translate(-17.5 -17)\"> <path d=\"M14.5 27 V30.5 M18.5 27 V30.5\" fill=\"none\" stroke=\"var(--bramble-account-avatar-body-0)\" stroke-width=\"1.4\" stroke-linecap=\"round\" /> <path d=\"M9 19.5 L2.5 15 L4 23 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <ellipse cx=\"16\" cy=\"20\" rx=\"9.5\" ry=\"8\" transform=\"rotate(-18 16 20)\" fill=\"var(--bramble-account-avatar-body-0)\" /> <circle cx=\"22\" cy=\"13\" r=\"6\" fill=\"var(--bramble-account-avatar-body-0)\" /> <ellipse cx=\"19\" cy=\"22.5\" rx=\"5.5\" ry=\"4\" fill=\"var(--bramble-account-avatar-paper)\" fill-opacity=\"0.2\" /> <path d=\"M8.5 18.5 Q14.5 14.5 20.5 19 Q15 25 8.5 18.5 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <path d=\"M27.5 11.5 L31.5 13.5 L27.5 15.5 Z\" fill=\"var(--bramble-account-avatar-accent-0)\" /> <circle cx=\"24.1\" cy=\"12.3\" r=\"1.8\" fill=\"var(--bramble-account-avatar-paper)\" /><circle cx=\"24.6\" cy=\"12.3\" r=\"1\" fill=\"var(--bramble-account-avatar-ink)\" /> </g> </svg>"
+      }
+    ],
+    "passphrases": [
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "empty",
+        "ratio": 0,
+        "value": ""
+      },
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "weak",
+        "ratio": 0.08,
+        "value": "a"
+      },
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "weak",
+        "ratio": 0.32641942487090914,
+        "value": "short"
+      },
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "        x"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.32641942487090914,
+        "value": "aaaaaaaa"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "abcdefgh"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "password"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "Password1"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "Password1!"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "correct horse battery staple"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "correct horse battery staple!9"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "Tr0ub4dor&3"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "p@ssw0rd2024"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "1etmein!"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "!!monkey12"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "abcabcabc"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "qwertyuiop"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "zyxwvuts"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "Dragon$$"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "Shadow_99"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "kestrel-umber-quartz"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "Mx7#qLp2!vR9"
+      },
+      {
+        "acceptable": true,
+        "hint": "Strong",
+        "level": "strong",
+        "ratio": 1,
+        "value": "ünïcödé-pässphrase"
+      },
+      {
+        "acceptable": true,
+        "hint": "Weak",
+        "level": "weak",
+        "ratio": 0.39409329057487913,
+        "value": "🔒🔒🔒🔒🔒🔒🔒🔒🔒"
+      },
+      {
+        "acceptable": false,
+        "hint": "Enter at least 8 characters",
+        "level": "weak",
+        "ratio": 0.4,
+        "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "format": "bramble.mobile.vault",
+  "version": 2,
+  "lineage": "5ca48004eb02c946d499dc171a570349",
+  "passwordSlot": {
+    "cipher": "AES-256-GCM",
+    "commit": "algcikg+/vSLrgxVka5b+g==",
+    "data": "S9U+U3WbD+otG0oYq6c8x2qi6rwxR4VHugjoyG9gQ2RQE2AE8Yo88+9GvViU+vs+R0IxSd24WChQy4qOveIJ9RVI/Kq2eQ==",
+    "iterations": 600000,
+    "iv": "g/NniOXFW9U5+/RF",
+    "kdf": "PBKDF2-SHA-256",
+    "lineage": "5ca48004eb02c946d499dc171a570349",
+    "salt": "4N2n0i+uuWJWruHITBdV9g==",
+    "scope": "bramble.mobile.dek.v1",
+    "version": 3
+  },
+  "biometricSlot": {
+    "id": "9a314dd9743238833c5b7e09475a3dac",
+    "iv": "uWsCzw7JPNJ1eX8A",
+    "data": "ku/btR/aHKOaV5e7rLrzMO5vn/E0J60YvFvLnk1f3RbNbGcKr0/7vgzevWoLD9bN",
+    "domain": ""
+  },
+  "payload": {
+    "scope": "bramble.mobile.payload.v2",
+    "iv": "zowbY/CC8QaZQmVi",
+    "commit": "pvRX7pKNeE8fvL2xEIfokA==",
+    "data": "r6MOoCbjdHLLWfkT/bN7L5JPFYAKTVjuYXQm2MzO4U/VTRPzrHMBOLITYvihsev3PrGsgeEuTmirb/I4L8Z0BFq9qyHup86STpi40CK62JeHqPDMJcZZFqTvmVVK2x0iCwxmP/iKO/gDiA34i4aggQN1QkS0HN6JcqBs9aNGT8OuostXpMBH+3YYks1fKiR2M/hgOp78JGXHvudkooHLJlwB"
+  }
+}
