@@ -24,6 +24,7 @@ import {
 import { ACCOUNTS_PARITY_FIXTURE_PATHS, computeAccountParity } from "./mobile-parity-accounts";
 import { PORTFOLIO_PARITY_FIXTURE_PATH, renderPortfolioParity } from "./mobile-parity-portfolio";
 import { ACCOUNTS_SCAN_FIXTURE_PATHS, computeScanParity } from "./mobile-parity-scan";
+import { computeVaultParity, VAULT_PARITY_FIXTURE_PATH } from "./mobile-parity-vault";
 
 const envelopePassword = "parity-vector-password";
 const envelopeScope = "bramble.parity";
@@ -91,6 +92,16 @@ const scanPaths = Object.values(ACCOUNTS_SCAN_FIXTURE_PATHS);
 if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...scanPaths]).exitCode !== 0) {
   throw new Error("biome could not format the recovery-scan fixtures");
 }
+
+// The v13 vault keeps its committed seal when the extension still opens it to the same payload.
+const committedVault = await readFile(VAULT_PARITY_FIXTURE_PATH, "utf8")
+  .then((text) => (JSON.parse(text) as { readonly sealed?: unknown }).sealed)
+  .catch(() => undefined);
+await writeFile(
+  VAULT_PARITY_FIXTURE_PATH,
+  `${JSON.stringify(await computeVaultParity(committedVault), null, 2)}\n`,
+);
+console.log(`wrote ${VAULT_PARITY_FIXTURE_PATH}`);
 
 // The transaction fixture and Send copy tables are part of the same `bun run mobile:parity` run.
 await import("./generate-mobile-transaction-vectors");
