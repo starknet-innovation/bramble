@@ -5,10 +5,10 @@
  * would hold; nothing is assembled by hand. The core ports v13's validators and must accept this
  * payload, and a vault it builds for the same phrase and accounts must equal it.
  *
- * Accounts, as an imported wallet gets them: recovery restores OpenZeppelin index 0, Braavos and a
- * Ready (`argentx-bip44`) Argent on Mainnet, Braavos at index 1 (Braavos is never created here and Ready only arrives
- * by recovery); the creation path then adds OpenZeppelin index 1 and an Argent on this wallet's
- * own ladder on Mainnet, and OpenZeppelin index 0 on Sepolia. `bun run mobile:parity` writes it;
+ * Accounts, as an imported wallet gets them: recovery restores OpenZeppelin index 0, Braavos index
+ * 1 and a Ready (`argentx-bip44`) Argent on Mainnet (Braavos is never created and Ready only
+ * arrives by recovery); the creation path then adds OpenZeppelin index 1 and an Argent on this
+ * wallet's own ladder on Mainnet, and OpenZeppelin index 0 on Sepolia. `bun run mobile:parity` writes it;
  * `bun run check` fails on drift. Every value is public.
  */
 
