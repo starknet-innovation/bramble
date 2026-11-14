@@ -69,11 +69,11 @@ const argentRelease = (label: string): string => {
 const BRAAVOS_CURRENT_IMPLEMENTATION =
   "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a";
 
-describe("schema v10 (three steps below current)", () => {
-  test("sits three steps below the current version", () => {
+describe("schema v10 (four steps below current)", () => {
+  test("sits four steps below the current version", () => {
     // v11 added the Ready-scheme derivation kind, v12 the shadow-account
     // scopes, and v13 the multisig STRK20 viewing key.
-    expect(CURRENT_SCHEMA_VERSION).toBe(13);
+    expect(CURRENT_SCHEMA_VERSION).toBe(14);
   });
 
   test("admits Argent at every release an account could have been deployed with", () => {
@@ -128,7 +128,7 @@ describe("migration v9 -> v10", () => {
       ...v9,
       multisigStrk20KeyConflicts: [],
       multisigStrk20ViewingKeys: [],
-      schemaVersion: 13,
+      schemaVersion: 14,
       shadowAccountScopes: [],
     });
   });

@@ -4,9 +4,11 @@
  * vendored privacy SDK and starknet.js share the same exact-origin policy.
  */
 
+import { isRecord } from "@bramble/core/json";
 import { STRK20_GATEWAY_BASE } from "@bramble/privacy/config";
 import type { Strk20Service } from "@bramble/privacy/service";
 import type { KeyValueStore } from "@bramble/store/kv";
+import type { AccountAnalytics } from "./account-analytics";
 
 /** Persistent, non-secret installation metadata kept outside the vault. */
 export const ANALYTICS_INSTALLATION_ID_KEY = "bramble:analytics-installation-id";
@@ -18,6 +20,8 @@ const INSTALLATION_HEADER = "X-MC-Installation-ID";
 const VERSION_HEADER = "X-MC-App-Version";
 const PLATFORM_HEADER = "X-MC-Platform";
 const RELEASE_CHANNEL_HEADER = "X-MC-Release-Channel";
+const ACCOUNT_HEADER = "X-MC-Account-ID";
+const PROVENANCE_HEADER = "X-MC-Account-Provenance";
 const FLOW_HEADER = "X-MC-Flow-ID";
 const ANALYTICS_HEADERS = [
   INSTALLATION_HEADER,
@@ -25,6 +29,8 @@ const ANALYTICS_HEADERS = [
   PLATFORM_HEADER,
   RELEASE_CHANNEL_HEADER,
   FLOW_HEADER,
+  ACCOUNT_HEADER,
+  PROVENANCE_HEADER,
 ] as const;
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -42,7 +48,7 @@ export type GatewayAnalyticsMetadata = {
 /** Product-analytics fetch boundary plus a STRK20 workflow scope. */
 export type GatewayAnalytics = {
   readonly fetch: GatewayHttp;
-  readonly withFlow: <T>(run: () => Promise<T>) => Promise<T>;
+  readonly withFlow: <T>(run: () => Promise<T>, accountId?: string) => Promise<T>;
 };
 
 // The wrapped service owns the flow lock; work invoked from one of its own
@@ -62,6 +68,11 @@ export const runNestedGatewayAnalyticsService = <T>(
 ): Promise<T> => run(nestedFlowServices.get(service) ?? service);
 
 type GatewayAnalyticsOptions = {
+  readonly account?: (
+    input: RequestInfo | URL,
+    init?: RequestInit,
+    scopedAccountId?: string,
+  ) => Promise<AccountAnalytics | null>;
   readonly enabled: () => boolean | Promise<boolean>;
   readonly http: GatewayHttp;
   readonly metadata: GatewayAnalyticsMetadata;
@@ -151,6 +162,7 @@ export const analyticsReleaseChannel = (
  * metadata reject redirects so identifiers cannot escape the gateway origin.
  */
 export const createGatewayAnalytics = ({
+  account,
   enabled,
   http,
   metadata,
@@ -158,6 +170,7 @@ export const createGatewayAnalytics = ({
   store,
 }: GatewayAnalyticsOptions): GatewayAnalytics => {
   let installationId: Promise<string | null> | undefined;
+  let activeAccountId: string | undefined;
   let activeFlowId: string | undefined;
   let flowQueue: Promise<void> = Promise.resolve();
 
@@ -185,12 +198,42 @@ export const createGatewayAnalytics = ({
     return installationId;
   };
 
-  const addAnalyticsHeaders = async (input: RequestInfo | URL, headers: Headers): Promise<void> => {
+  const addAccountHeaders = async (
+    input: RequestInfo | URL,
+    headers: Headers,
+    init?: RequestInit,
+  ): Promise<void> => {
+    // Account metadata failure must never affect wallet work or other telemetry.
+    try {
+      const details = await account?.(input, init, activeAccountId);
+      if (
+        details &&
+        /^[0-9a-f]{64}$/.test(details.id) &&
+        ["created", "imported", "unknown"].includes(details.provenance)
+      ) {
+        headers.set(ACCOUNT_HEADER, details.id);
+        headers.set(PROVENANCE_HEADER, details.provenance);
+      }
+    } catch {
+      /* Optional account attribution is unavailable. */
+    }
+  };
+
+  const addAnalyticsHeaders = async (
+    input: RequestInfo | URL,
+    headers: Headers,
+    init?: RequestInit,
+  ): Promise<void> => {
     if (!(await isEnabled()) || !metadataIsValid(metadata)) {
       return;
     }
     const id = await readInstallationId();
     if (id === null || !(await isEnabled())) {
+      return;
+    }
+    await addAccountHeaders(input, headers, init);
+    if (!(await isEnabled())) {
+      stripAnalyticsHeaders(headers);
       return;
     }
     headers.set(INSTALLATION_HEADER, id);
@@ -208,7 +251,7 @@ export const createGatewayAnalytics = ({
     if (!isGatewayRequest(input)) {
       return http(input, stripped ? { ...init, headers } : init);
     }
-    await addAnalyticsHeaders(input, headers);
+    await addAnalyticsHeaders(input, headers, init);
     return http(input, {
       ...init,
       headers,
@@ -216,17 +259,18 @@ export const createGatewayAnalytics = ({
     });
   };
 
-  const withFlow = async <T>(run: () => Promise<T>): Promise<T> => {
-    if (!(await isEnabled())) return run();
+  const withFlow = async <T>(run: () => Promise<T>, accountId?: string): Promise<T> => {
+    const enabledAtStart = await isEnabled();
     let release = (): void => undefined;
     const previous = flowQueue;
     flowQueue = new Promise<void>((resolve) => {
       release = resolve;
     });
     await previous;
+    activeAccountId = accountId;
     try {
       try {
-        const generated = randomUuid();
+        const generated = enabledAtStart ? randomUuid() : "";
         activeFlowId = validUuid(generated) ? generated : undefined;
       } catch {
         // Optional metadata must neither reject wallet work nor strand the queue.
@@ -235,6 +279,7 @@ export const createGatewayAnalytics = ({
       return await run();
     } finally {
       activeFlowId = undefined;
+      activeAccountId = undefined;
       release();
     }
   };
@@ -257,26 +302,31 @@ export const withGatewayAnalyticsFlows = (
   const register = service.register;
   const registrationStatus = service.registrationStatus;
   const shadowAccountCommitment = service.shadowAccountCommitment;
+  const scope = <T>(input: unknown, run: () => Promise<T>): Promise<T> => {
+    const account = isRecord(input) ? input["account"] : undefined;
+    const id = isRecord(account) && typeof account["id"] === "string" ? account["id"] : undefined;
+    return withFlow(run, id);
+  };
   const wrapped: Strk20Service = {
     ...service,
-    prepare: (input) => withFlow(() => service.prepare(input)),
-    privateBalances: (input) => withFlow(() => service.privateBalances(input)),
-    quoteActions: (input) => withFlow(() => service.quoteActions(input)),
-    submitActions: (input) => withFlow(() => service.submitActions(input)),
-    submitPrepared: (input) => withFlow(() => service.submitPrepared(input)),
-    ...(poolFee ? { poolFee: (input) => withFlow(() => poolFee(input)) } : {}),
+    prepare: (input) => scope(input, () => service.prepare(input)),
+    privateBalances: (input) => scope(input, () => service.privateBalances(input)),
+    quoteActions: (input) => scope(input, () => service.quoteActions(input)),
+    submitActions: (input) => scope(input, () => service.submitActions(input)),
+    submitPrepared: (input) => scope(input, () => service.submitPrepared(input)),
+    ...(poolFee ? { poolFee: (input) => scope(input, () => poolFee(input)) } : {}),
     ...(prepareAccountActions
-      ? { prepareAccountActions: (input) => withFlow(() => prepareAccountActions(input)) }
+      ? { prepareAccountActions: (input) => scope(input, () => prepareAccountActions(input)) }
       : {}),
     ...(prepareRegistration
-      ? { prepareRegistration: (input) => withFlow(() => prepareRegistration(input)) }
+      ? { prepareRegistration: (input) => scope(input, () => prepareRegistration(input)) }
       : {}),
-    ...(register ? { register: (input) => withFlow(() => register(input)) } : {}),
+    ...(register ? { register: (input) => scope(input, () => register(input)) } : {}),
     ...(registrationStatus
-      ? { registrationStatus: (input) => withFlow(() => registrationStatus(input)) }
+      ? { registrationStatus: (input) => scope(input, () => registrationStatus(input)) }
       : {}),
     ...(shadowAccountCommitment
-      ? { shadowAccountCommitment: (input) => withFlow(() => shadowAccountCommitment(input)) }
+      ? { shadowAccountCommitment: (input) => scope(input, () => shadowAccountCommitment(input)) }
       : {}),
   };
   nestedFlowServices.set(wrapped, service);

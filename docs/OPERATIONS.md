@@ -106,7 +106,7 @@ Neither identifier is derived from an account, address, site, extension id, or b
 The gateway HMAC-pseudonymizes both identifiers before logging and retains no raw identifier,
 request body, response body, address, hash, calldata, or signature. Operators must call the metric a
 "pseudonymous installation," never a person, user, wallet, or account. Disabling analytics stops all
-five headers immediately; storage failure also omits the complete set without blocking wallet
+analytics headers immediately; storage failure also omits the complete set without blocking wallet
 traffic. Analytics access events expire after 90 days.
 
 ## Privacy-safe diagnostics
@@ -156,3 +156,28 @@ the package checksum and records the command output in a private incident-drill 
 - Trusted-tester cohort completes the UX protocol in `docs/UX_VALIDATION.md` with no open P0/P1.
 - Krusty provenance and Ledger compatibility boundaries in the release checklist are closed.
 - Public rollout starts only after the release owner and incident deputy sign the release issue.
+
+## Account usage analytics
+
+Vault schema v14 retains optional `accountProvenance` bindings. New software-account
+creation records `created`; raw-key and explicit seed imports record `imported`.
+Phrase recovery, device accounts without an explicit origin, and migrated accounts
+remain unknown. Derivation scheme and deployment status never fill missing origins.
+Network projections preserve a known source origin. Encrypted backups retain these
+bindings; phrase-only recovery cannot reconstruct them.
+
+With product analytics and technical-data consent enabled, the background attaches
+`X-MC-Account-ID` (SHA-256 of `mc-account:v1:<networkId>:<canonical address>`) and
+`X-MC-Account-Provenance` (`created`, `imported`, or `unknown`) only to the exact
+wallet gateway origin. Account attribution uses an owned RPC subject or the explicit
+account context of a serialized STRK20 operation. Accountless calls, locked vaults,
+ambiguous multi-account batches and unsupported request shapes omit account metadata.
+No selected-account fallback is used. These are untrusted usage observations, not
+proof of ownership or authorization. Custom RPCs and redirects never receive them.
+
+The gateway HMACs the digest again before writing its separate account registry.
+Daily observations expire after 35 days; lifetime pseudonyms and first-seen days
+persist for cumulative counts, independently of the 90-day access-log archive.
+The daily report includes new, active and cumulative accounts, each with imported
+and unknown subsets. Counts start with this rollout and cover attributed, opted-in
+requests with successful upstream HTTP responses, not transaction finality.

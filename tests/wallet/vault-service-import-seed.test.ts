@@ -71,6 +71,7 @@ describe("importSeedAccounts", () => {
     expect(vault.importedSeeds).toEqual([{ id: "phrase-1", mnemonic: importedMnemonic }]);
     // Every imported account holds its signing key like any software account.
     for (const account of accounts) {
+      expect(vault.accountProvenance?.[account.id]).toBe("imported");
       expect(vault.signingKeys.some((key) => key.accountId === account.id)).toBe(true);
     }
     expect(vault.mnemonic).toBe(foundingMnemonic);
