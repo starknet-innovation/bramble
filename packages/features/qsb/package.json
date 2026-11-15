@@ -23,7 +23,8 @@
     "./withdrawal-destination": "./src/withdrawal/destination.ts",
     "./withdrawal-manifest": "./src/withdrawal/manifest.ts",
     "./withdrawal-psbt": "./src/withdrawal/withdrawal-psbt.ts",
-    "./withdrawal-responses": "./src/coordinator/withdrawal-responses.ts"
+    "./withdrawal-responses": "./src/coordinator/withdrawal-responses.ts",
+    "./pqb-runtime": "./src/pqb/runtime.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

@@ -69,4 +69,14 @@ describe("the QSB preimage reveal", () => {
   test("the emergency transition is called only by the vault method", () => {
     expect(naming(/\brecordQsbEmergencyExposure\(/)).toEqual([VAULT_METHOD]);
   });
+  test("PQB authorization is reachable only through its journal-gated session", () => {
+    expect(naming(/\bkms\.authorize\(/)).toEqual([
+      "packages/platform/vault/src/service/qsb-pqb-access.ts",
+    ]);
+    expect(naming(/\bvault\.authorize\(/)).toEqual(["packages/platform/kms-krusty/src/pqb.ts"]);
+    const source = readFileSync("packages/platform/vault/src/service/qsb-pqb-access.ts", "utf8");
+    expect(source.indexOf("await recordExposureIn(")).toBeLessThan(
+      source.indexOf("kms.authorize("),
+    );
+  });
 });

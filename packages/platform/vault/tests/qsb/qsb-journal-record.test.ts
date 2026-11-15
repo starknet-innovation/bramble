@@ -37,7 +37,7 @@ describe("the QSB journal record", () => {
   });
 
   const invalid: readonly (readonly [string, unknown])[] = [
-    ["another schema version", { ...journalFor(writerAccount()), schemaVersion: 2 }],
+    ["another schema version", { ...journalFor(writerAccount()), schemaVersion: 3 }],
     ["another profile", { ...journalFor(writerAccount()), profile: "QSB-HORS-v2" }],
     ["a test network", { ...journalFor(writerAccount()), network: "bitcoin-testnet" }],
     ["a malformed account id", { ...journalFor(writerAccount()), accountId: "SN_MAIN:0x1" }],

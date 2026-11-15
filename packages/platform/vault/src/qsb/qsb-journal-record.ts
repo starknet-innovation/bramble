@@ -39,7 +39,9 @@ import {
  * future shape bumps it and adds one adjacent, deterministic migration, as the
  * vault does; until then any other version is refused.
  */
-export const QSB_JOURNAL_SCHEMA_VERSION = 1;
+export const QSB_JOURNAL_SCHEMA_VERSION = 2;
+/** Journal container identity; individual entries retain their separate QSB/PQB derivations. */
+export const QSB_JOURNAL_PROFILE = "bramble-bitcoin-vaults-v2";
 
 /**
  * One account's journal. `accountId`, `journalId`, `network`, `profile`, and
@@ -52,7 +54,7 @@ export type QsbJournal = {
   readonly journalId: string;
   readonly network: typeof QSB_NETWORK;
   readonly nextV: number;
-  readonly profile: typeof QSB_PROFILE;
+  readonly profile: typeof QSB_JOURNAL_PROFILE;
   readonly schemaVersion: typeof QSB_JOURNAL_SCHEMA_VERSION;
   readonly vaults: readonly QsbVaultRecord[];
 };
@@ -73,7 +75,7 @@ const hasJournalFields = (value: Record<string, unknown>): boolean =>
   isQsbAccountId(value["accountId"]) &&
   isQsbJournalId(value["journalId"]) &&
   value["network"] === QSB_NETWORK &&
-  value["profile"] === QSB_PROFILE &&
+  value["profile"] === QSB_JOURNAL_PROFILE &&
   isQsbHighWaterMark(value["nextV"]) &&
   Array.isArray(value["vaults"]) &&
   value["vaults"].every(isQsbVaultRecord);
@@ -114,7 +116,7 @@ export const emptyQsbJournal = (
   journalId: account.journalId,
   network: QSB_NETWORK,
   nextV: 0,
-  profile: QSB_PROFILE,
+  profile: QSB_JOURNAL_PROFILE,
   schemaVersion: QSB_JOURNAL_SCHEMA_VERSION,
   vaults: [],
 });
@@ -185,14 +187,15 @@ export const bindQsbJournal = (
   if (read.status !== "present") {
     return unavailable(read.status);
   }
-  if (!isQsbJournal(read.value)) {
+  const migrated = migrateQsbJournal(read.value);
+  if (!isQsbJournal(migrated)) {
     return unavailable("invalid");
   }
-  if (!matchesAccount(read.value, account)) {
+  if (!matchesAccount(migrated, account)) {
     return unavailable("mismatched");
   }
-  return respectsProvenance(read.value, account)
-    ? { account, journal: read.value, status: "bound" }
+  return respectsProvenance(migrated, account)
+    ? { account, journal: migrated, status: "bound" }
     : unavailable("invalid");
 };
 
@@ -219,3 +222,25 @@ export const qsbAccountView = (binding: QsbJournalBinding): QsbAccountView => ({
   provenance: binding.account.seedContext.provenance,
   writer: isQsbWriter(binding),
 });
+
+/** Adjacent v1 → v2 migration: preserve every legacy record and high-water mark. Invalid/future data remains invalid. */
+export const migrateQsbJournal = (value: unknown): unknown => {
+  if (!isRecord(value) || value["schemaVersion"] !== 1) return value;
+  if (value["profile"] !== QSB_PROFILE) return undefined;
+  if (
+    !Array.isArray(value["vaults"]) ||
+    value["vaults"].some(
+      (v) =>
+        !isRecord(v) ||
+        Object.hasOwn(v, "pqb") ||
+        (isRecord(v["disclosure"]) && Object.hasOwn(v["disclosure"], "menus")),
+    )
+  )
+    return undefined;
+  const next = {
+    ...value,
+    profile: QSB_JOURNAL_PROFILE,
+    schemaVersion: QSB_JOURNAL_SCHEMA_VERSION,
+  };
+  return isQsbJournal(next) ? next : undefined;
+};

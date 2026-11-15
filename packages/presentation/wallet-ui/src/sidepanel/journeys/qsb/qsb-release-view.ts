@@ -5,7 +5,9 @@
  * shell, with its deposit eyebrow, warning and password field, lives beside
  * its binding in ./qsb-release-ui.
  */
+
 import { receiptRows } from "@bramble/ui-kit/content";
+import { PQB_DISCLOSED_SECRETS } from "@bramble/wallet-model/pqb";
 import type { QsbWithdrawalReview } from "@bramble/wallet-model/qsb-withdrawals";
 import { btcText } from "./qsb-vault-model";
 import { QSB_KEYS_RELEASED } from "./qsb-withdrawal-model";
@@ -21,7 +23,13 @@ import { QSB_KEYS_RELEASED } from "./qsb-withdrawal-model";
 export const qsbReleaseReviewRows = (review: QsbWithdrawalReview): string =>
   receiptRows([
     { label: "Network", value: "Bitcoin mainnet" },
-    { label: "Releases", value: QSB_KEYS_RELEASED },
+    {
+      label: "Releases",
+      value:
+        review.secrets === PQB_DISCLOSED_SECRETS
+          ? `${PQB_DISCLOSED_SECRETS} one-time keys and 4 signatures`
+          : QSB_KEYS_RELEASED,
+    },
     { label: "Deposit", value: btcText(review.fundingSat), valueStyle: "code" },
     { label: "From your balance", value: `+ ${btcText(review.helperSat)}`, valueStyle: "code" },
     { label: "Network fee", value: `− ${btcText(review.feeSat)}`, valueStyle: "code" },

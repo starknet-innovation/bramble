@@ -26,6 +26,11 @@ export const SECRET_MATERIAL_PATTERN =
  * boundary.
  */
 export const SECRET_MATERIAL_FILES = new Set([
+  // PQB KMS types and the serialized, journal-before-authorization boundary.
+  "packages/platform/vault/src/qsb/pqb-kms.ts",
+  "packages/platform/vault/src/service/qsb-pqb-access.ts",
+  "packages/features/qsb/src/pqb/runtime.ts",
+  "packages/platform/kms-krusty/src/pqb.ts",
   // Translates raw background diagnostics into reader-facing sentences. Three
   // of its lookup keys name secret-material fields because that is the exact
   // text the background threw; nothing here reads, logs, or persists one.

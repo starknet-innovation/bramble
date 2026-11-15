@@ -218,7 +218,7 @@ export const prepareQsbDeposit = async (
     feeSat: Number(selection.feeSat),
     inputCount: inputs.length,
     vsize: selection.vsize,
-    withdrawalFeeSat: Number(qsbWithdrawalFeeSat(rateMsat)),
+    withdrawalFeeSat: Number(qsbWithdrawalFeeSat(rateMsat, record.pqb ? "PQB" : "A")),
   };
   return { built, psbt, quote, record, server };
 };

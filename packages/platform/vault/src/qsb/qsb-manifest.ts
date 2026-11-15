@@ -157,7 +157,7 @@ const toManifestVault = (vault: QsbVaultRecord): QsbManifestVault => ({
  * importer could trust; a missing journal is never exported as an empty one.
  */
 export const exportQsbManifest = (binding: QsbJournalBinding): QsbManifestV1 | null =>
-  binding.status === "bound"
+  binding.status === "bound" && binding.journal.vaults.every((v) => !v.pqb)
     ? {
         format: QSB_MANIFEST_FORMAT,
         version: QSB_MANIFEST_VERSION,

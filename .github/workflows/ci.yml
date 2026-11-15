@@ -221,6 +221,10 @@ jobs:
       # source of the ordered heavy pipeline the gate expects.
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      # The public PQB adapter is pure JS and uses the installed locked dependencies.
+      # Unit/coverage tests exercise its exact shipped bytes, including on feature PRs.
+      - name: Vendor public PQB adapter
+        run: bun run vendor:pqb
       - run: bun run check:lint
       - run: bun run check:types
       # check:files runs both file- and config-standards.
@@ -272,7 +276,7 @@ jobs:
       - run: bun run check:files
       - run: bun run vendor:argent
       - run: bun run vendor:privacy
-      - run: bun run vendor:qsb
+      - run: bun run vendor:qsb && bun run vendor:pqb
       - run: bun run check
       # Enforce the global unit-test coverage floor (scripts/check-coverage.ts).
       # Kept out of the aggregate `check` so the offline gate stays fast; a

@@ -10,6 +10,8 @@ rules and `README.md` the feature-level docs. Treat every change as security-sen
 bun install --frozen-lockfile
 bun run vendor:argent        # required once before check/build (verifies pinned official contracts)
 bun run vendor:privacy       # required once before check/build (builds pinned official privacy SDK)
+bun run vendor:qsb           # pinned Config A Python sources
+bun run vendor:pqb           # pinned public PQB SDK adapter (also needed by unit tests)
 bun run check                # types + lint + standards + manifest + vendored pins + tests
 bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)

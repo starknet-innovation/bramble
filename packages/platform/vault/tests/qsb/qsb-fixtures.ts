@@ -10,6 +10,7 @@ import type { QsbAccountRecord } from "@bramble/vault/qsb-account";
 import {
   type BoundQsbJournal,
   bindQsbJournal,
+  QSB_JOURNAL_PROFILE,
   QSB_JOURNAL_SCHEMA_VERSION,
   type QsbJournal,
 } from "@bramble/vault/qsb-journal-record";
@@ -172,7 +173,7 @@ export const journalFor = (
   journalId: account.journalId,
   network: "bitcoin-mainnet",
   nextV,
-  profile: "QSB-HORS-v1",
+  profile: QSB_JOURNAL_PROFILE,
   schemaVersion: QSB_JOURNAL_SCHEMA_VERSION,
   vaults,
 });

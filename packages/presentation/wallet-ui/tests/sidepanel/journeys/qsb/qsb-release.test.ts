@@ -81,6 +81,16 @@ const send = (panel: Panel, typed = "correct horse battery"): void => {
 };
 
 describe("the release review", () => {
+  test("PQB states all 17 keys and four signatures without retaining the Config A warning", async () => {
+    const panel = await release({
+      withdrawalReview: { resolve: { ...withdrawalReview(3), secrets: 17 } },
+    });
+    expect(step(panel)).toBe("review");
+    expect(text(find(panel, "#qsb-release-review"))).toContain("17 one-time keys and 4 signatures");
+    expect(text(find(panel, "#qsb-binding-warning"))).toContain("these 17 keys");
+    expect(text(find(panel, "#qsb-binding-warning"))).not.toContain("these 15 keys");
+  });
+
   test("states what the BIP requires, under a prominent unverified-binding warning", async () => {
     const panel = await release({});
     expect(panel.visited).toEqual(["qsb-account", "qsb-release"]);

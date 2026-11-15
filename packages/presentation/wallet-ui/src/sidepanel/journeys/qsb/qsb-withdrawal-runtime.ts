@@ -16,7 +16,9 @@
  * lost reply to a write becomes `SubmissionUnknownError` in the panel's send
  * wrapper (see runtime-errors.ts).
  */
+
 import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "@bramble/core/json";
+import { PQB_DISCLOSED_SECRETS } from "@bramble/wallet-model/pqb";
 import type { QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
 import {
   QSB_DISCLOSED_SECRETS,
@@ -98,7 +100,7 @@ export const isQsbWithdrawalReview = (value: unknown): value is QsbWithdrawalRev
   value["binding"] === "unverified" &&
   (value["custody"] === "conformant" || value["custody"] === "emergency") &&
   value["network"] === "bitcoin-mainnet" &&
-  value["secrets"] === QSB_DISCLOSED_SECRETS &&
+  (value["secrets"] === QSB_DISCLOSED_SECRETS || value["secrets"] === PQB_DISCLOSED_SECRETS) &&
   typeof value["digest"] === "string" &&
   DIGEST.test(value["digest"]) &&
   isQsbDestination(value["destination"]) &&

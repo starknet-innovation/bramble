@@ -20,13 +20,16 @@
  * this `T` (the review says `binding: "unverified"`); the pinned pipeline's
  * own assembly in `prepare` is what ties them. Pure.
  */
+
 import { bytesToHex, hexToBytes } from "@bramble/core/hex";
+import { isPqbSelection } from "@bramble/wallet-model/pqb";
 import { hasExactKeys } from "../coordinator/response-grammar";
 import { parseQsbTransaction } from "../deposit/transactions";
 import type { QsbWithdrawalManifest } from "./manifest";
 
 /** A coordinator solution: sequence, locktime and two subsets of 9 indices. */
 export type QsbSolution = {
+  readonly pqb?: { readonly pinning: string; readonly round0: string; readonly round1: string };
   readonly locktime: number;
   readonly round1: readonly number[];
   readonly round2: readonly number[];
@@ -64,12 +67,38 @@ const isSubset = (value: unknown): value is readonly number[] =>
  * exactly its four fields, 32-bit sequence and locktime, two subsets of 9
  * distinct indices below 150. Null otherwise.
  */
-export const readQsbSolution = (value: unknown): QsbSolution | null =>
-  hasExactKeys(value, ["locktime", "round1", "round2", "sequence"]) &&
-  isUint32(value["sequence"]) &&
-  isUint32(value["locktime"]) &&
-  isSubset(value["round1"]) &&
-  isSubset(value["round2"])
+export const readQsbSolution = (value: unknown): QsbSolution | null => {
+  if (hasExactKeys(value, ["locktime", "round1", "round2", "sequence", "pqb"])) {
+    const hits = value["pqb"];
+    if (
+      !hasExactKeys(hits, ["pinning", "round0", "round1"]) ||
+      ![hits["pinning"], hits["round0"], hits["round1"]].every(
+        (x) => typeof x === "string" && x.length > 0 && x.length <= 200,
+      ) ||
+      !isUint32(value["sequence"]) ||
+      !isUint32(value["locktime"]) ||
+      !Array.isArray(value["round1"]) ||
+      !Array.isArray(value["round2"]) ||
+      !isPqbSelection({ round0: value["round1"], round1: value["round2"], menus: [0, 0, 0] })
+    )
+      return null;
+    return {
+      sequence: value["sequence"],
+      locktime: value["locktime"],
+      round1: [...value["round1"]],
+      round2: [...value["round2"]],
+      pqb: {
+        pinning: hits["pinning"] as string,
+        round0: hits["round0"] as string,
+        round1: hits["round1"] as string,
+      },
+    };
+  }
+  return hasExactKeys(value, ["locktime", "round1", "round2", "sequence"]) &&
+    isUint32(value["sequence"]) &&
+    isUint32(value["locktime"]) &&
+    isSubset(value["round1"]) &&
+    isSubset(value["round2"])
     ? {
         locktime: value["locktime"],
         round1: [...value["round1"]],
@@ -77,6 +106,7 @@ export const readQsbSolution = (value: unknown): QsbSolution | null =>
         sequence: value["sequence"],
       }
     : null;
+};
 
 /** The solution as JSON in the coordinator's key order: what `prepare` reads. */
 export const qsbSolutionJson = (solution: QsbSolution): string =>
@@ -85,6 +115,7 @@ export const qsbSolutionJson = (solution: QsbSolution): string =>
     locktime: solution.locktime,
     round1: solution.round1,
     round2: solution.round2,
+    ...(solution.pqb ? { pqb: solution.pqb } : {}),
   });
 
 /**
@@ -99,6 +130,7 @@ export const isQsbSolutionInRange = (solution: QsbSolution): boolean =>
 
 /** The indices the solution discloses: each subset sorted, its first 8 and 7. */
 export const qsbDisclosedIndices = (solution: QsbSolution): QsbDisclosedIndices => {
+  if (solution.pqb) return { round0: [...solution.round1], round1: [...solution.round2] };
   const ascending = (values: readonly number[]): number[] => [...values].sort((a, b) => a - b);
   return {
     round0: ascending(solution.round1).slice(0, 8),

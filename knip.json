@@ -2,8 +2,13 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.ts", "tests/**/*.test.ts", "tools/vendor-dataset/*.ts"],
-      "ignoreDependencies": ["pyodide"],
+      "entry": [
+        "scripts/*.ts",
+        "tests/**/*.test.ts",
+        "tools/vendor-dataset/*.ts",
+        "scripts/pqb-sdk-entry.js"
+      ],
+      "ignoreDependencies": ["pyodide", "zod", "@scure/base"],
       "project": ["scripts/**/*.ts", "tests/**/*.ts", "tools/**/*.ts"]
     },
     "apps/extension": {
@@ -19,7 +24,8 @@
       "ignoreUnresolved": [
         "/dependencies/krusty-kms/krusty_kms_wasm.js",
         "/dependencies/pyodide/pyodide.asm.js",
-        "/dependencies/pyodide/pyodide.mjs"
+        "/dependencies/pyodide/pyodide.mjs",
+        "/dependencies/pqb/sdk.mjs"
       ],
       "project": ["src/**/*.ts"]
     },

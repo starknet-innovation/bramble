@@ -10,6 +10,7 @@
  *
  * Every value here is public test data; the phrase holds nothing.
  */
+
 import { createHash } from "node:crypto";
 import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 import { createQsbCoordinator } from "@bramble/qsb/client";
@@ -30,6 +31,7 @@ import { createMessageHandler } from "../../apps/extension/src/background/routin
 import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { extensionSender, testExtension } from "./background-wallet-stub";
+import { pqbSdk } from "./pqb-fixture";
 import {
   type FakeCoordinatorState,
   fakeCoordinatorState,
@@ -66,10 +68,16 @@ export type QsbVaultHarness = {
   readonly grant: (granted: boolean) => void;
 };
 
-const realKrusty = async (): Promise<KmsPort> => ({
-  ...createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm")),
-  generateMnemonic: async () => QSB_HARNESS_PHRASE,
-});
+// These existing journeys exercise legacy Config A explicitly. PQB has its own real-runtime cases.
+const realKrusty = async (protocol: "A" | "PQB"): Promise<KmsPort> => {
+  const { pqb, ...legacy } = createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm"));
+  void pqb;
+  return {
+    ...legacy,
+    ...(protocol === "PQB" ? { pqb } : {}),
+    generateMnemonic: async () => QSB_HARNESS_PHRASE,
+  };
+};
 
 /**
  * A wallet with one confirmed QSB writer account `qsb-1`, its owner funded
@@ -80,6 +88,7 @@ const realKrusty = async (): Promise<KmsPort> => ({
  */
 export const qsbVaultHarness = async (
   options: {
+    readonly protocol?: "A" | "PQB";
     readonly funds?: readonly number[];
     readonly imported?: boolean;
     readonly kms?: (kms: KmsPort) => KmsPort;
@@ -99,7 +108,7 @@ export const qsbVaultHarness = async (
     { ...emptyVault(), mnemonic: STARKNET_PHRASE },
     QSB_HARNESS_PASSPHRASE,
   );
-  const kms = (options.kms ?? ((base) => base))(await realKrusty());
+  const kms = (options.kms ?? ((base) => base))(await realKrusty(options.protocol ?? "A"));
   let journals = 0;
   const service = createWalletVaultService({
     encryptedStore: createEncryptedStore(backend, "bramble:vault"),
@@ -139,7 +148,9 @@ export const qsbVaultHarness = async (
   let now = Date.UTC(2026, 10, 4, 12, 0, 0);
   const clock = () => now;
   let drawn = 0;
-  const runtime = fakeQsbRuntime();
+  const runtime = Object.assign(fakeQsbRuntime(), {
+    ...(options.protocol === "PQB" ? { pqb: await pqbSdk() } : {}),
+  });
   const fake = fakeQsbFetch(state, clock);
   let granted = true;
   const deps: QsbVaultDeps = {

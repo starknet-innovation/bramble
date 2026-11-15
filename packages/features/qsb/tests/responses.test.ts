@@ -50,6 +50,7 @@ describe("deployment answers", () => {
       operationsEnabled: true,
       ownerLimits: { allowlisted: null },
       solverReleaseId: CONFIG.solverReleaseId,
+      solverProtocol: null,
     });
     for (const solverReleaseId of [undefined, null, "Bad Release", 7]) {
       expect(readQsbConfig({ ...CONFIG, solverReleaseId })?.solverReleaseId).toBeNull();

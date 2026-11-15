@@ -20,7 +20,8 @@
     "./qsb-withdrawals": "./src/accounts/qsb-withdrawals.ts",
     "./recovery": "./src/accounts/recovery.ts",
     "./vault-recovery": "./src/preferences/vault-recovery.ts",
-    "./signing": "./src/accounts/signing.ts"
+    "./signing": "./src/accounts/signing.ts",
+    "./pqb": "./src/accounts/pqb.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

@@ -116,7 +116,7 @@ const hasVaultFields = (value: Record<string, unknown>): boolean =>
   typeof value["createdAt"] === "string" &&
   DATETIME.test(value["createdAt"]) &&
   value["network"] === QSB_COORDINATOR_NETWORK &&
-  value["config"] === "A" &&
+  (value["config"] === "A" || value["config"] === "PQB") &&
   isBoundedString(value["paymentAddress"], 14, 100) &&
   isBoundedString(value["publicStateJson"], 0, MAX_PUBLIC_STATE) &&
   typeof value["status"] === "string" &&

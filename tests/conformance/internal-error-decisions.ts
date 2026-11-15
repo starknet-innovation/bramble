@@ -136,6 +136,8 @@ export const UI_FALLBACKS: ReadonlySet<string> = new Set([
 // qsb-vault-refusals.ts), so none can reach the panel; each names the check
 // that stopped it, so each is shown as written should one ever surface.
 export const QSB_RUNTIME_DIAGNOSTICS: ReadonlySet<string> = new Set([
+  // PQB calls share the same failClosed background boundary.
+  "Invalid Krusty PQB input or result",
   "Invalid BIP-322 signing input",
   "Invalid Bitcoin derivation input",
   "Invalid PSBT signing input",

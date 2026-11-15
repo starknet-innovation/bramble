@@ -1,13 +1,20 @@
 /**
  * Privileged cryptographic capability required by the encrypted vault.
  */
+
 import type { StarkSignature } from "@bramble/wallet-model/signing";
+import type { PqbKms } from "./qsb/pqb-kms";
 
 /** Authenticated public application data recovered inside Krusty. */
 export type NostrApplicationData = {
   readonly content: string;
   readonly identifier: string;
   readonly senderPublicKey: string;
+  readonly envelope?: {
+    readonly wrapId: string;
+    readonly rumorId: string;
+    readonly createdAt: string;
+  };
 };
 
 /**
@@ -67,6 +74,8 @@ export type BitcoinP2wpkhKeypair = {
  * implementations must validate every input and output and fail closed.
  */
 export type KmsPort = {
+  /** PQB capability. Absence refuses PQB; legacy QSB capability is independent. */
+  readonly pqb?: PqbKms;
   /**
    * BIP-84 `m/84'/0'/{accountIndex}'/{change}/{addressIndex}` of a phrase, on
    * Bitcoin mainnet. `change` is 0 or 1; both indices are below 2^31.

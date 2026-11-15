@@ -74,8 +74,12 @@ const unfinished = (journal: BoundJournal, listed: QsbVaultList): QsbVaultRecord
 
 const allocate = async (access: QsbVaultAccess, journal: BoundJournal): Promise<QsbVaultRecord> => {
   const v = journal.nextV;
-  const { root } = await access.commitments(v);
-  const result = await access.commit({ kind: "allocate", root, v });
+  const pqb = access.pqb !== undefined;
+  const root = pqb
+    ? (await access.pqb?.material(v))?.scriptSha256
+    : (await access.commitments(v)).root;
+  if (!root) throw qsbRefusal("runtimeUnavailable");
+  const result = await access.commit({ kind: "allocate", root, v, ...(pqb ? { pqb: true } : {}) });
   if (!result.ok) {
     throw journalRefusal(result.refusal);
   }

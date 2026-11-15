@@ -35,7 +35,7 @@
  *   withdrawal again, never a new one.
  * `wallet.qsbVaults` reports each deposit's withdrawal in its `withdrawal`
  * field (`QsbWithdrawalView`).
- */
+ */ import type { PQB_DISCLOSED_SECRETS } from "./pqb";
 
 /** One-time secrets a withdrawal releases: 8 of round 0 and 7 of round 1. */
 export const QSB_DISCLOSED_SECRETS = 15;
@@ -133,7 +133,7 @@ export type QsbWithdrawalReview = {
   readonly helperSat: number;
   readonly network: "bitcoin-mainnet";
   readonly outputSat: number;
-  readonly secrets: typeof QSB_DISCLOSED_SECRETS;
+  readonly secrets: typeof QSB_DISCLOSED_SECRETS | typeof PQB_DISCLOSED_SECRETS;
   readonly v: number;
   readonly vsize: number;
 };

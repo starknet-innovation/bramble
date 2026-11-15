@@ -45,7 +45,7 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 | --- | --- | --- | --- | --- |
 | `bramble:vault` | `storage.local`, AES-GCM | mnemonic, signing keys, account deployment salts, optional viewing keys, grants | schema v10; account ids unique; strict cross-references; capacity below | fail closed |
 | `bramble:vault-migration` | `storage.local`, AES-GCM | temporary full migrated vault | exists only during a verified schema commit | authenticated recovery, then remove |
-| `bramble:qsb-journal:<journalId>` | `storage.local`, AES-GCM, same vault passphrase, commit records like the vault's | one QSB account's disclosure journal: allocation high-water mark and vault records (no phrase, no preimage) | journal schema v1; header bound to `accountId` and the random 256-bit `journalId`; 64 records and 256 KiB per journal; 8 accounts | fail closed for that account: not a writer, every allocation and disclosure refused, never recreated empty |
+| `bramble:qsb-journal:<journalId>` | `storage.local`, AES-GCM, same vault passphrase, commit records like the vault's | one QSB account's disclosure journal: allocation high-water mark and vault records (no phrase, no preimage) | journal schema v2 (adjacent v1 migration); header bound to `accountId` and the random 256-bit `journalId`; 64 records and 256 KiB per journal; 8 accounts | fail closed for that account: not a writer, every allocation and disclosure refused, never recreated empty |
 | `bramble:qsb-deposit:<journalId>` | `storage.local`, AES-GCM, same vault passphrase, commit records like the vault's | one QSB account's pending deposits: signed deposit transactions kept before they are sent (public chain data, no key) | record schema v1; header bound to `accountId` and `journalId`; at most 4 deposits of at most 12,000 bytes, 100 KiB per record; created by the first deposit | fail closed for that account: every deposit and resend refused; the listing shows no pending deposit |
 | `bramble:qsb-withdrawal:<journalId>` | `storage.local`, AES-GCM, same vault passphrase, commit records like the vault's | one QSB account's withdrawals: each deposit's intent (canonical manifest and hash, frozen helper, destination, fee, payout, job id), its signed transaction and last outcome (public chain data and public coordinator ids; no key, no preimage) | record schema v1; header bound to `accountId` and `journalId`; at most 16 withdrawals, signed bytes of at most 2,000 bytes, 96 KiB per record; created by the first intent | fail closed for that account: every withdrawal refused, and every deposit that picks coins, since a frozen helper could not be excluded; the listing shows no withdrawal |
 | `bramble:vault:commit:<lineage>`, `bramble:vault-migration:commit:<lineage>`, `bramble:qsb-journal:<journalId>:commit:<lineage>`, `bramble:qsb-deposit:<journalId>:commit:<lineage>`, `bramble:qsb-withdrawal:<journalId>:commit:<lineage>` | `storage.sync`, plain, trusted contexts only | non-secret commit record that vouches for the current envelope | one per lineage; at most 214 bytes each (see the `storage.sync` budget below) | rollback refused; a missing primary-vault or journal record is restored from the local mirror |
@@ -432,3 +432,25 @@ Deliberately deferred:
 - A destructive account-removal feature. When introduced, it must atomically remove signing keys,
   optional secrets, grants, labels/groups, and account-scoped public caches, with migration and
   rollback tests.
+
+
+**PQB entries (journal v2).** New deposits use Krusty KMS 3.1.0's separate PQB BIP85 child
+at the journal's reserved index. Existing entries retain `QSB-HORS-v1`; their absence of
+`pqb` is intentional and never selects the PQB derivation. The container profile is
+`bramble-bitcoin-vaults-v2`. The v1 → v2 migration changes only the header version/profile,
+validates the complete old shape and preserves every reserved index, state, funding and disclosure.
+It refuses a v1 container carrying PQB fields. No account phrase or stored signing key changes.
+
+PQB entries carry `pqb: true`, and their allocation root is the exact locking-script SHA256.
+Their disclosure adds the ordered three menu choices to the transaction, digest and disjoint
+8+9 HORS indices. The digest binds input 1, the script, all those selections and every byte of
+the unsigned transaction. The vault service copies requests before asynchronous work and runs
+both custody paths through the same durable exposure write before Krusty authorizes anything.
+Only exact retries are accepted after exposure. The selected signatures and preimages are used
+for local assembly; only the resulting transaction is retained, in the encrypted withdrawal store.
+Missing or rolled-back history continues to fail closed.
+
+The version-1 QSB secret-manifest codec cannot describe PQB derivation or menu choices. It
+refuses export of a journal containing PQB rather than mislabelling or omitting records. Phrase
+recovery uses the existing explicit emergency path, matching scripts derived under each protocol;
+restored records remain `unknown`. See [PQB integration](QSB_PQB.md) for the runtime and evidence.

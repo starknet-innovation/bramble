@@ -33,6 +33,8 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap. An
   approval on a contract the wallet cannot confirm is a token is listed without an amount claim and
   without a revoke control: on an NFT contract the same call would grant rather than revoke.
+- **Experimental Bitcoin vaults** — dedicated recovery phrases, journaled deposits and withdrawals,
+  and Krusty-backed PQB support. See [PQB integration and validation limits](docs/QSB_PQB.md).
 - **Clean Mono UI** — solid near-neutral surfaces with a single accent, purposeful spring motion, and View Transitions, with full reduced-motion support.
 
 Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also available). Mainnet moves real funds. All cryptography runs through the exact, lockfile-pinned **Krusty KMS** WASM package, and there is no local signing fallback.
@@ -51,6 +53,8 @@ Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also ava
 bun install --frozen-lockfile
 bun run vendor:argent     # pinned official Argent release and artifact verification
 bun run vendor:privacy    # pinned official Starknet Privacy SDK browser bundle
+bun run vendor:qsb        # pinned Config A Python runtime sources
+bun run vendor:pqb        # pinned public PQB SDK adapter
 bun run build             # -> dist/
 ```
 

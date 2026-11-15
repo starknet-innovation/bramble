@@ -13,6 +13,7 @@
  */
 import { isLowercaseHexBytes } from "@bramble/core/hex";
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isPqbSelection } from "@bramble/wallet-model/pqb";
 import { QSB_MAX_VAULTS_PER_ACCOUNT } from "@bramble/wallet-model/qsb-vaults";
 import { spendsOutpointOnce } from "./qsb-transaction";
 
@@ -73,6 +74,7 @@ export type QsbFunding = {
  * sorted), the binding transaction `T` as hex, and its digest `D`.
  */
 export type QsbDisclosure = {
+  readonly menus?: readonly number[];
   readonly digest: string;
   readonly round0: readonly number[];
   readonly round1: readonly number[];
@@ -85,6 +87,8 @@ export type QsbDisclosure = {
  * is null exactly when the script is.
  */
 export type QsbVaultRecord = {
+  /** Absent for legacy QSB-HORS-v1 records; true selects the separate PQB child derivation. */
+  readonly pqb?: true;
   readonly disclosure: QsbDisclosure | null;
   readonly funding: QsbFunding | null;
   readonly root: string;
@@ -123,15 +127,27 @@ const isRoundIndices = (value: unknown, count: number): value is readonly number
   value.every((index) => isIndexBelow(index, QSB_SECRETS_PER_ROUND)) &&
   new Set(value).size === count;
 
-const isDisclosure = (value: unknown): value is QsbDisclosure =>
+const isDisclosure = (value: unknown, pqb: boolean): value is QsbDisclosure =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["digest", "round0", "round1", "transaction"]) &&
-  isRoundIndices(value["round0"], QSB_DISCLOSURE_COUNTS.round0) &&
-  isRoundIndices(value["round1"], QSB_DISCLOSURE_COUNTS.round1) &&
+  hasOnlyKnownKeys(value, [
+    "digest",
+    "round0",
+    "round1",
+    "transaction",
+    ...(pqb ? ["menus"] : []),
+  ]) &&
+  (pqb
+    ? Array.isArray(value["round0"]) &&
+      Array.isArray(value["round1"]) &&
+      Array.isArray(value["menus"]) &&
+      isPqbSelection({ round0: value["round0"], round1: value["round1"], menus: value["menus"] })
+    : isRoundIndices(value["round0"], QSB_DISCLOSURE_COUNTS.round0) &&
+      isRoundIndices(value["round1"], QSB_DISCLOSURE_COUNTS.round1)) &&
   isLowercaseHexBytes(value["transaction"], 1, QSB_MAX_TRANSACTION_BYTES) &&
   isQsbHash32(value["digest"]);
 
 const VAULT_RECORD_KEYS = [
+  "pqb",
   "disclosure",
   "funding",
   "root",
@@ -143,13 +159,14 @@ const VAULT_RECORD_KEYS = [
 
 const hasVaultFields = (value: Record<string, unknown>): boolean =>
   hasOnlyKnownKeys(value, VAULT_RECORD_KEYS) &&
+  (!Object.hasOwn(value, "pqb") || value["pqb"] === true) &&
   isIndexBelow(value["v"], QSB_VAULT_INDEX_LIMIT) &&
   isQsbHash32(value["root"]) &&
   (value["scriptPubKey"] === null || isScriptPubKey(value["scriptPubKey"])) &&
   (value["scriptHash"] === null || isQsbHash32(value["scriptHash"])) &&
   (value["funding"] === null || isFunding(value["funding"])) &&
   isVaultState(value["state"]) &&
-  (value["disclosure"] === null || isDisclosure(value["disclosure"]));
+  (value["disclosure"] === null || isDisclosure(value["disclosure"], value["pqb"] === true));
 
 // The BIP manifest's cross-field rules: a script and its hash travel together,
 // funding needs a script, a disclosure needs both, `exposed` needs all three,
@@ -157,6 +174,7 @@ const hasVaultFields = (value: Record<string, unknown>): boolean =>
 // exactly once. `retired` and `unknown` keep whatever their history holds.
 const hasConsistentVaultFields = (record: QsbVaultRecord): boolean =>
   (record.scriptPubKey === null) === (record.scriptHash === null) &&
+  (!record.pqb || record.scriptHash === null || record.root === record.scriptHash) &&
   (record.funding === null || record.scriptPubKey !== null) &&
   (record.state !== "exposed" || record.disclosure !== null) &&
   (record.state !== "allocated" || record.disclosure === null) &&

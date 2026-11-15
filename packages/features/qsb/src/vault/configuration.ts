@@ -14,6 +14,7 @@
  *
  * Pure: no clock, randomness, storage or network.
  */
+import { PQB_VAULT_PROTOCOL } from "@bramble/wallet-model/pqb";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 
@@ -25,10 +26,10 @@ export const QSB_VAULT_PROTOCOL = {
 
 /** A vault's configuration record, as `vaultConfiguration` builds it. */
 export type QsbVaultConfiguration = {
-  readonly config: "A";
-  readonly generatorCommit: typeof QSB_VAULT_PROTOCOL.generatorCommit;
+  readonly config: "A" | "PQB";
+  readonly generatorCommit: string;
   readonly network: string;
-  readonly protocol: typeof QSB_VAULT_PROTOCOL.protocol;
+  readonly protocol: "pqb-v1" | typeof QSB_VAULT_PROTOCOL.protocol;
   readonly publicStateHash: string;
   readonly scriptBytesHash: string;
   readonly scriptHash: string;
@@ -62,14 +63,19 @@ export const qsbVaultConfiguration = (vault: {
   readonly publicStateJson: string;
   readonly scriptHash: string;
   readonly scriptHex: string;
-}): QsbVaultConfiguration => ({
-  protocol: QSB_VAULT_PROTOCOL.protocol,
-  generatorCommit: QSB_VAULT_PROTOCOL.generatorCommit,
-  network: vault.network,
-  config: "A",
-  scriptHash: vault.scriptHash,
-  scriptBytesHash: bytesToHex(
-    sha256(Uint8Array.from(vault.scriptHex.match(/../g) ?? [], (x) => Number.parseInt(x, 16))),
-  ),
-  publicStateHash: qsbFingerprint(JSON.parse(vault.publicStateJson)),
-});
+}): QsbVaultConfiguration => {
+  const publicState = JSON.parse(vault.publicStateJson);
+  const config = publicState.config === "PQB" ? "PQB" : "A";
+  const identity = config === "PQB" ? PQB_VAULT_PROTOCOL : QSB_VAULT_PROTOCOL;
+  return {
+    protocol: identity.protocol,
+    generatorCommit: identity.generatorCommit,
+    network: vault.network,
+    config,
+    scriptHash: vault.scriptHash,
+    scriptBytesHash: bytesToHex(
+      sha256(Uint8Array.from(vault.scriptHex.match(/../g) ?? [], (x) => Number.parseInt(x, 16))),
+    ),
+    publicStateHash: qsbFingerprint(publicState),
+  };
+};

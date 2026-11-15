@@ -20,6 +20,7 @@
  */
 import "/dependencies/pyodide/pyodide.asm.js";
 import { ripemd160 } from "@noble/hashes/legacy.js";
+import * as pqb from "/dependencies/pqb/sdk.mjs";
 import { loadPyodide } from "/dependencies/pyodide/pyodide.mjs";
 import { resolveExtensionApi } from "../../extension-api";
 import type { BackgroundBrowser } from "../runtime/background-browser";
@@ -44,22 +45,25 @@ const ignorePythonOutput = (): void => undefined;
  * are reachable from one, and `finish` drops its interpreter afterwards;
  * `scripts/check-qsb-runtime.ts` pins the packaged files it reads.
  */
-export const qsbRuntime: QsbRuntime = createQsbRuntime({
-  loadInterpreter: () =>
-    loadPyodide({
-      indexURL: packagedUrl("dependencies/pyodide/"),
-      // The pipeline needs no JavaScript globals. An empty object keeps Python's
-      // `import js` from reaching this worker's `fetch` and `chrome.*` APIs.
-      jsglobals: Object.create(null),
-      stderr: ignorePythonOutput,
-      stdout: ignorePythonOutput,
-    }),
-  readFile: async (file) => {
-    const response = await fetch(packagedUrl(`vendor/qsb/${file}`));
-    if (!response.ok) {
-      throw new Error("QSB runtime cannot read a packaged file");
-    }
-    return new Uint8Array(await response.arrayBuffer());
-  },
-  ripemd160,
-});
+export const qsbRuntime: QsbRuntime = {
+  pqb,
+  ...createQsbRuntime({
+    loadInterpreter: () =>
+      loadPyodide({
+        indexURL: packagedUrl("dependencies/pyodide/"),
+        // The pipeline needs no JavaScript globals. An empty object keeps Python's
+        // `import js` from reaching this worker's `fetch` and `chrome.*` APIs.
+        jsglobals: Object.create(null),
+        stderr: ignorePythonOutput,
+        stdout: ignorePythonOutput,
+      }),
+    readFile: async (file) => {
+      const response = await fetch(packagedUrl(`vendor/qsb/${file}`));
+      if (!response.ok) {
+        throw new Error("QSB runtime cannot read a packaged file");
+      }
+      return new Uint8Array(await response.arrayBuffer());
+    },
+    ripemd160,
+  }),
+};

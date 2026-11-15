@@ -122,7 +122,7 @@ const fundedJourney = async (extension: LoadedExtension): Promise<void> => {
     withdrawal: NO_WITHDRAWAL,
   });
   const [registered] = [...state.vaults.values()];
-  expect(String(registered?.vault["scriptHex"]).length).toBe(9_923 * 2);
+  expect(String(registered?.vault["scriptHex"]).length).toBe(4_908 * 2);
 
   const quoted = await send(sidepanel, {
     accountId,

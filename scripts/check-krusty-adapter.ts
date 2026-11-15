@@ -14,14 +14,14 @@ import { deriveAccount } from "@bramble/vault/accounts";
 import { DEFAULT_NETWORK, isStarkFieldElement } from "@bramble/wallet-model/networks";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
-const packageVersion = "0.15.0";
+const packageVersion = "3.1.0";
 const packageRoot = `node_modules/${packageName}`;
 const packageManifest = `${packageRoot}/package.json`;
 const wasmPackage = `${packageRoot}/krusty_kms_wasm.js`;
 const wasmBinary = `${packageRoot}/krusty_kms_wasm_bg.wasm`;
 const expectedRuntimeDigests: Readonly<Record<string, string>> = {
-  [wasmPackage]: "59223955d6ef33c4d629369021b9b05f1005c6daddf268d2ca5b357a961b007c",
-  [wasmBinary]: "f3faef93b41afe4e30c19fb8bd241f04c2c2c6ee418719ebaebfdb911b3e65a1",
+  [wasmPackage]: "03d504c63aa94f599f82fd23a7495c9f75555b699d5bad52e9f444a4c14caf23",
+  [wasmBinary]: "6fe9493b8bd82d8b2229859152ad2a0c02b09b2f153adbccea66a6f873dc95d5",
 };
 
 // A published BIP-39 test phrase, never a wallet phrase: it exists so the
@@ -236,4 +236,13 @@ if (
   revealed.map(hash160).join() !== expectedCommitments.join()
 ) {
   throw new Error("Krusty KMS QSB disclosure known answers do not match the BIP");
+}
+
+// Independent SDK public-wallet vector: same BIP84 test phrase, separate PQB BIP85 child.
+if (!kms.pqb) throw new Error("Krusty KMS PQB capability missing");
+const pqbMaterial = await kms.pqb.material(bip84Phrase, 0);
+if (
+  pqbMaterial.scriptSha256 !== "1f97168daad4a6409d2b6d4538caacb2aa3277f52a356e5b7ddad7f79a45a0f4"
+) {
+  throw new Error("Krusty KMS PQB public material does not match the independent SDK vector");
 }

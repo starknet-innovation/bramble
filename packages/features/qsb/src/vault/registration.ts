@@ -12,8 +12,10 @@
  * Pure: the id and the creation time are the caller's, drawn at its
  * randomness and clock boundaries.
  */
+
 import { isRecord } from "@bramble/core/json";
 import { QSB_COORDINATOR_NETWORK } from "../coordinator/origin";
+import { isPqbPublicState } from "../pqb/public-state";
 import { qsbVaultConfiguration } from "./configuration";
 
 /** The three public fields the bridge returns for one vault. */
@@ -64,6 +66,7 @@ const parsed = (text: string): unknown => {
  */
 export const isQsbPublicState = (text: string): boolean => {
   const state = text.length <= QSB_MAX_PUBLIC_STATE_LENGTH ? parsed(text) : undefined;
+  if (isPqbPublicState(state)) return true;
   if (!isRecord(state) || Object.keys(state).some((key) => !PUBLIC_STATE_FIELDS.includes(key))) {
     return false;
   }
@@ -96,7 +99,7 @@ export const qsbVaultRegistration = (input: {
     return null;
   }
   return {
-    config: "A",
+    config: JSON.parse(script.publicStateJson).config === "PQB" ? "PQB" : "A",
     configuration: qsbVaultConfiguration({ ...script, network: QSB_COORDINATOR_NETWORK }),
     createdAt: input.createdAt,
     id: input.id,

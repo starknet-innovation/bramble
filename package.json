@@ -13,7 +13,7 @@
     "build": "bun run --filter @bramble/extension build",
     "build:firefox": "bun run --filter @bramble/extension build:firefox",
     "build:all": "bun run --filter @bramble/extension build:all",
-    "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:qsb && bun run test && bun run check:workspaces",
+    "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:qsb && bun run check:pqb && bun run test && bun run check:workspaces",
     "check:audit": "bun audit --audit-level=high",
     "check:copy": "bun run scripts/check-copy.ts",
     "check:coverage": "bun run scripts/check-coverage.ts",
@@ -45,7 +45,9 @@
     "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
     "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
     "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
-    "vendor:qsb": "bun run scripts/vendor-qsb.ts"
+    "vendor:qsb": "bun run scripts/vendor-qsb.ts",
+    "vendor:pqb": "bun run scripts/vendor-pqb.ts",
+    "check:pqb": "bun run scripts/check-pqb-sdk.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
@@ -82,9 +84,11 @@
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
     "@scure/btc-signer": "2.4.1",
-    "@starknetfoundation/krusty-kms-wasm": "0.15.0",
+    "@starknetfoundation/krusty-kms-wasm": "3.1.0",
     "pyodide": "0.29.3",
-    "starknet": "10.8.0"
+    "starknet": "10.8.0",
+    "zod": "4.6.7",
+    "@scure/base": "2.4.0"
   },
   "overrides": {
     "happy-dom": "21.0.4",

@@ -339,3 +339,9 @@ describe("lost replies", () => {
     }
   });
 });
+
+test("PQB reviews admit exactly 17 preimages; other disclosure counts remain invalid", () => {
+  expect(isQsbWithdrawalReview({ ...withdrawalReview(3), secrets: 17 })).toBe(true);
+  for (const secrets of [0, 8, 16, 18, 300])
+    expect(isQsbWithdrawalReview({ ...withdrawalReview(3), secrets })).toBe(false);
+});

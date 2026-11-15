@@ -19,6 +19,9 @@ sandboxes:
   Argent account-contract release and verify its official artifacts.
 - `bun run vendor:privacy` needs network access plus Node.js 24 and npm. It
   builds the exact pinned official Privacy SDK browser bundle and verifies its digest.
+- `bun run vendor:qsb` fetches the pinned Config A Python sources.
+- `bun run vendor:pqb` fetches the pinned public PQB SDK source and builds its adapter with Bun.
+  Run it before unit/coverage tests too; these exercise the exact packaged adapter.
 
 Without the package and vendored outputs, `check:krusty`, `check:argent`, `check:privacy`, and `build` fail;
 that is expected offline. Run the rest of the gates and say so.
@@ -41,6 +44,8 @@ Run this before opening a pull request:
 ```bash
 bun run vendor:argent
 bun run vendor:privacy
+bun run vendor:qsb
+bun run vendor:pqb
 bun run check
 bun run test:e2e:install
 bun run build

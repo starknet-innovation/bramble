@@ -149,7 +149,7 @@ jobs:
       - name: Verify privacy and contract toolchain
         id: vendor
         continue-on-error: true
-        run: bun run vendor:argent && bun run vendor:privacy && bun run vendor:qsb
+        run: bun run vendor:argent && bun run vendor:privacy && bun run vendor:qsb && bun run vendor:pqb
       - name: Build extension
         id: build
         continue-on-error: true

@@ -125,11 +125,15 @@ export const sameQsbDisclosure = (
     left.digest === right.digest &&
     left.transaction === right.transaction &&
     sameIndices(left.round0, right.round0) &&
-    sameIndices(left.round1, right.round1));
+    sameIndices(left.round1, right.round1) &&
+    (left.menus === undefined
+      ? right.menus === undefined
+      : right.menus !== undefined && sameIndices(left.menus, right.menus)));
 
 // Equal on everything committed before a disclosure: index, root, script, and
 // funding. Exposure adds only the disclosure on top of these.
 const sameCommitments = (left: QsbVaultRecord, right: QsbVaultRecord): boolean =>
+  left.pqb === right.pqb &&
   left.v === right.v &&
   left.root === right.root &&
   left.scriptPubKey === right.scriptPubKey &&
@@ -160,7 +164,7 @@ const writerJournal = (binding: QsbJournalBinding): BoundQsbJournal | QsbJournal
  */
 export const allocateQsbVault = (
   binding: QsbJournalBinding,
-  request: { readonly root: string; readonly v: number },
+  request: { readonly root: string; readonly v: number; readonly pqb?: true },
 ): QsbJournalResult => {
   const bound = writerJournal(binding);
   if (typeof bound === "string") return refused(bound);
@@ -170,6 +174,7 @@ export const allocateQsbVault = (
   if (!isLowercaseHexBytes(request.root, 32, 32)) return refused("invalid-request");
   if (journal.vaults.length >= MAX_QSB_VAULTS_PER_ACCOUNT) return refused("journal-full");
   const vault: QsbVaultRecord = {
+    ...(request.pqb ? { pqb: true } : {}),
     disclosure: null,
     funding: null,
     root: request.root,

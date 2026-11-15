@@ -15,6 +15,7 @@
  * `invalid_request`, `idempotency_conflict`, `state_conflict`,
  * `solver_not_served`) is kept as refused and answers `jobRefused`.
  */
+
 import { QsbCoordinatorFailure } from "@bramble/qsb/client";
 import { qsbWithdrawalVsize } from "@bramble/qsb/fees";
 import {
@@ -88,7 +89,8 @@ export const quoteQsbWithdrawal = (
     if (held.destination !== request.destination || held.signed || held.outcome === "refused") {
       throw withdrawalRefusal("notWithdrawable");
     }
-    return intendedQuote(held);
+    const record = await withdrawableRecord(access, request.v, ["allocated", "exposed", "unknown"]);
+    return intendedQuote(held, record.pqb ? "PQB" : "A");
   });
 
 const isFinalRefusal = (error: unknown): boolean =>
@@ -185,9 +187,11 @@ const keptIntent = async (
   if (held.signed || held.outcome === "refused") throw withdrawalRefusal("notWithdrawable");
   const manifest = readQsbManifest(JSON.parse(held.manifestJson));
   if (!manifest) throw withdrawalRefusal("notWithdrawable");
-  const release = requireWithdrawalsOpen(await context.deps.coordinator.config());
+  const record = await withdrawableRecord(context.access, held.v, ["allocated", "exposed"]);
+  const config = await context.deps.coordinator.config();
+  const release = requireWithdrawalsOpen(config, record.pqb ? "PQB" : "A");
   if (manifest.solverReleaseId !== release) throw withdrawalRefusal("jobRefused");
-  const vsize = qsbWithdrawalVsize(manifest.outputScript.length / 2);
+  const vsize = qsbWithdrawalVsize(manifest.outputScript.length / 2, record.pqb ? "PQB" : "A");
   if ((BigInt(held.feeSat) * 1000n) / BigInt(vsize) < (await minerFloorMsat(context.deps))) {
     throw withdrawalRefusal("floorRisen");
   }

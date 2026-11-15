@@ -34,7 +34,7 @@ import { type QsbJournalRefusal, recordQsbExposure } from "../qsb/qsb-journal";
 import { recordQsbEmergencyExposure } from "../qsb/qsb-journal-emergency";
 import { isQsbWriter, type QsbJournalBinding } from "../qsb/qsb-journal-record";
 import { writeQsbJournal } from "../qsb/qsb-journal-store";
-import type { QsbVaultRecord } from "../qsb/qsb-vault-record";
+import type { QsbDisclosure, QsbVaultRecord } from "../qsb/qsb-vault-record";
 import {
   type QsbWithdrawalRecord,
   qsbWithdrawalsRecord,
@@ -204,12 +204,40 @@ const exposureRefusal = (refusal: QsbJournalRefusal): Error => {
 // The bound journal a release may record on: the writer's for a conformant
 // release, a read-only account's for an emergency one, refused otherwise
 // before anything is computed or recorded.
-const custodyBinding = async (slot: QsbSlot, emergency: boolean): Promise<Bound> => {
+/** Refuses any release whose requested custody differs from the current account. */
+export const custodyBinding = async (slot: QsbSlot, emergency: boolean): Promise<Bound> => {
   const binding = await boundIn(slot);
   const writer = isQsbWriter(binding);
   if (!writer && !emergency) throw refused(QSB_VAULT_REFUSALS.notWriter);
   if (writer && emergency) throw refused(QSB_WITHDRAWAL_REFUSALS.custodyChanged);
   return binding;
+};
+
+/** Persists either custody path before disclosure; shared by the separate PQB protocol. */
+export const recordExposureIn = async (
+  slot: QsbSlot,
+  binding: Bound,
+  vault: QsbVaultRecord,
+  disclosure: QsbDisclosure,
+  emergency: boolean,
+): Promise<void> => {
+  const result = emergency
+    ? recordQsbEmergencyExposure(binding, vault.v, disclosure)
+    : recordQsbExposure(binding, { ...vault, disclosure, state: "exposed" });
+  if (!result.ok) throw exposureRefusal(result.refusal);
+  if (result.journal !== binding.journal) {
+    const written = await writeQsbJournal(
+      slot.journal,
+      slot.account,
+      result.journal,
+      slot.vaultPassphrase,
+      "replace",
+    );
+    if (!written.ok)
+      throw exposureRefusal(
+        written.refusal === "journal-full" ? "journal-full" : "journal-unavailable",
+      );
+  }
 };
 
 const releaseIn = async (
@@ -227,23 +255,7 @@ const releaseIn = async (
     round1: [...request.round1],
     transaction: request.transaction,
   };
-  const result = request.emergency
-    ? recordQsbEmergencyExposure(binding, request.v, disclosure)
-    : recordQsbExposure(binding, { ...vault, disclosure, state: "exposed" });
-  if (!result.ok) throw exposureRefusal(result.refusal);
-  if (result.journal !== binding.journal) {
-    const written = await writeQsbJournal(
-      slot.journal,
-      slot.account,
-      result.journal,
-      slot.vaultPassphrase,
-      "replace",
-    );
-    if (!written.ok)
-      throw exposureRefusal(
-        written.refusal === "journal-full" ? "journal-full" : "journal-unavailable",
-      );
-  }
+  await recordExposureIn(slot, binding, vault, disclosure, request.emergency);
   // The disclosure is durable: only now may a preimage leave.
   return kms.revealQsbPreimages(slot.account.mnemonic, request.v, request.round0, request.round1);
 };

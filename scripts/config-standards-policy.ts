@@ -73,7 +73,10 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   // Bitcoin transactions. MIT, no install scripts, every dependency exact; its
   // signing is never called (Krusty signs, and a test enforces it).
   "@scure/btc-signer": "2.4.1",
-  "@starknetfoundation/krusty-kms-wasm": "0.15.0",
+  // Public PQB SDK schema and address-code imports, bundled from the pinned source.
+  "@scure/base": "2.4.0",
+  zod: "4.6.7",
+  "@starknetfoundation/krusty-kms-wasm": "3.1.0",
   // The QSB pipeline's Python runtime, the exact release qsb-app pins. Its
   // shipped files are digest-pinned by scripts/check-qsb-runtime.ts.
   pyodide: "0.29.3",
@@ -86,6 +89,9 @@ export const PINNED_RUNTIME_FILES = [
   "content/index.js",
   "dependencies/krusty-kms/krusty_kms_wasm.js",
   "dependencies/krusty-kms/krusty_kms_wasm_bg.wasm",
+  "dependencies/pqb/LICENSE",
+  "dependencies/pqb/THIRD_PARTY_NOTICES.md",
+  "dependencies/pqb/sdk.mjs",
   "dependencies/pyodide/pyodide-lock.json",
   "dependencies/pyodide/pyodide.asm.js",
   "dependencies/pyodide/pyodide.asm.wasm",
@@ -150,7 +156,7 @@ export const EXPECTED_CI_COMMANDS = [
   "bun run check:files",
   "bun run vendor:argent",
   "bun run vendor:privacy",
-  "bun run vendor:qsb",
+  "bun run vendor:qsb && bun run vendor:pqb",
   "bun run check",
   "bun run check:coverage",
   "bun run build",
@@ -197,7 +203,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "build:all": "bun run --filter @bramble/extension build:all",
   "build:firefox": "bun run --filter @bramble/extension build:firefox",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:qsb && bun run test && bun run check:workspaces",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:qsb && bun run check:pqb && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
   // Warns only, never fails: wording is a judgement call. See docs/COPY_STYLE.md.
   "check:copy": "bun run scripts/check-copy.ts",
@@ -233,6 +239,8 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",
   "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
   "vendor:qsb": "bun run scripts/vendor-qsb.ts",
+  "vendor:pqb": "bun run scripts/vendor-pqb.ts",
+  "check:pqb": "bun run scripts/check-pqb-sdk.ts",
 };
 
 export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {

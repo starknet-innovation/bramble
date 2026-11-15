@@ -39,6 +39,7 @@ import {
   type QsbSignedWithdrawal,
   qsbWithdrawalCommits,
 } from "@bramble/qsb/withdrawal-psbt";
+import type { PqbDisclosure } from "@bramble/vault/pqb-kms";
 import type { QsbVaultRecord } from "@bramble/vault/qsb-vault-record";
 import type { QsbWithdrawalRecord } from "@bramble/vault/qsb-withdrawal-store";
 import type { QsbVaultAccess } from "@bramble/vault/service-types";
@@ -151,9 +152,21 @@ const signHelper = async (
 };
 
 // `finish` with the preimages, which are dropped as soon as it returns.
-const finished = async (reviewed: QsbReviewedWithdrawal, preimages: string[]): Promise<string> => {
+const finished = async (
+  reviewed: QsbReviewedWithdrawal,
+  preimages: string[] | PqbDisclosure,
+): Promise<string> => {
   try {
-    const raw = await reviewed.context.deps.runtime.finish(reviewed.prepared, preimages);
+    const pqb = reviewed.prepared.pqb;
+    const runtime = reviewed.context.deps.runtime;
+    const raw =
+      pqb && runtime.pqb && !Array.isArray(preimages)
+        ? runtime.pqb.finish(pqb.material, pqb.prepared, preimages)
+        : Array.isArray(preimages) && !pqb
+          ? await runtime.finish(reviewed.prepared, preimages)
+          : (() => {
+              throw outcomeUnknown();
+            })();
     if (
       !qsbWithdrawalCommits({
         manifest: reviewed.manifest,
@@ -168,14 +181,14 @@ const finished = async (reviewed: QsbReviewedWithdrawal, preimages: string[]): P
   } catch {
     throw outcomeUnknown();
   } finally {
-    preimages.fill("");
+    if (Array.isArray(preimages)) preimages.fill("");
   }
 };
 
 // Everything after the disclosure: never a refusal.
 const afterDisclosure = async (
   reviewed: QsbReviewedWithdrawal,
-  preimages: string[],
+  preimages: string[] | PqbDisclosure,
 ): Promise<QsbWithdrawalReply> => {
   const { access, deps } = reviewed.context;
   const { held } = reviewed;
@@ -218,6 +231,15 @@ export const releaseQsbWithdrawal = async (
     const floor = await minerFloorMsat(deps);
     if (rateMsat(checked.held.feeSat, checked.review.vsize) < floor) {
       throw withdrawalRefusal("floorRisen");
+    }
+    if (checked.prepared.pqb && access.pqb) {
+      const witness = await access.pqb.release(
+        request.v,
+        checked.prepared.pqb.prepared,
+        request.digest,
+        request.emergency,
+      );
+      return { preimages: witness, reviewed: checked };
     }
     const released = await access.releasePreimages({
       digest: request.digest,

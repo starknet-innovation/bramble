@@ -26,7 +26,24 @@ import {
   requireFunction,
   requireStringField,
 } from "./krusty-values";
+import { krustyPqbMethods } from "./pqb";
 import { krustyQsbRevealMethods } from "./qsb-reveal";
+
+const readNostrEnvelope = (opened: Record<string, unknown>) => {
+  if (!["wrapId", "rumorId", "createdAt"].some((k) => Object.hasOwn(opened, k))) return {};
+  const { wrapId, rumorId, createdAt } = opened;
+  if (
+    typeof wrapId !== "string" ||
+    !/^[0-9a-f]{64}$/.test(wrapId) ||
+    typeof rumorId !== "string" ||
+    !/^[0-9a-f]{64}$/.test(rumorId) ||
+    typeof createdAt !== "string" ||
+    !/^(0|[1-9][0-9]{0,19})$/.test(createdAt) ||
+    BigInt(createdAt) > 18446744073709551615n
+  )
+    throw new WalletError("Krusty KMS returned invalid Nostr application data");
+  return { envelope: { wrapId, rumorId, createdAt } };
+};
 
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
@@ -90,6 +107,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
 
   return {
     ...krustyBitcoinMethods(module, ready),
+    pqb: krustyPqbMethods(module, ready),
     ...krustyQsbRevealMethods(module, ready),
     async deriveNostrPublicKey(mnemonic, addressIndex, accountIndex, passphrase) {
       await ready;
@@ -239,7 +257,14 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       }
       if (
         !isRecord(opened) ||
-        !hasOnlyKnownKeys(opened, ["content", "identifier", "senderPublicKey"]) ||
+        !hasOnlyKnownKeys(opened, [
+          "content",
+          "identifier",
+          "senderPublicKey",
+          "wrapId",
+          "rumorId",
+          "createdAt",
+        ]) ||
         !isNostrApplicationData(opened["content"]) ||
         typeof opened["identifier"] !== "string" ||
         !isNostrIdentifier(opened["identifier"]) ||
@@ -247,7 +272,9 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       ) {
         throw new WalletError("Krusty KMS returned invalid Nostr application data");
       }
+      const envelope = readNostrEnvelope(opened);
       return {
+        ...envelope,
         content: opened["content"],
         identifier: opened["identifier"],
         senderPublicKey: opened["senderPublicKey"],

@@ -68,7 +68,7 @@ jobs:
       - name: Vendor QSB pipeline sources
         run: |
           set -o pipefail
-          if ! bun run vendor:qsb; then
+          if ! (bun run vendor:qsb && bun run vendor:pqb); then
             {
               echo "### Release integration: \`vendor:qsb\` FAILED"
               echo ""

@@ -197,6 +197,7 @@ describe("repository vendoring steps", () => {
       "scripts/vendor-argent-contracts.ts",
       "scripts/vendor-privacy-sdk.ts",
       "scripts/vendor-qsb.ts",
+      "scripts/vendor-pqb.ts",
     ]);
   });
 

@@ -23,6 +23,9 @@ const P2WPKH_SCRIPT_BYTES = 22;
 const WITHDRAWAL_OUTPUT_SCRIPT_BYTES = 34;
 // Upper bound on a Config A QSB scriptSig (QSB_CONFIG_A_MAX_SCRIPTSIG).
 const QSB_CONFIG_A_MAX_SCRIPTSIG = 1_185;
+// Pinned SDK PQB_MAX_SCRIPTSIG: puzzle keys, dummy keys, chained preimages,
+// indices, selected signatures and cosignature key; checked against the SDK.
+const PQB_MAX_SCRIPTSIG = 166 + 17 * 34 + 8 * 21 + 9 * 33 + 20 * 3 + 4 * 74 + 34;
 
 const varintSize = (n: number): number => (n < 0xfd ? 1 : n <= 0xffff ? 3 : 5);
 
@@ -114,19 +117,13 @@ export const qsbFormatFeeRate = (rateMsat: bigint): string => {
  * input at its largest scriptSig (1,185 bytes), so it is an upper bound:
  * P2WPKH 1,338 vB, P2SH 1,339, P2PKH 1,341, P2WSH and P2TR 1,350.
  */
-export const qsbWithdrawalVsize = (outputScriptBytes: number): number => {
+export const qsbWithdrawalVsize = (
+  outputScriptBytes: number,
+  config: "A" | "PQB" = "A",
+): number => {
+  const scriptSigBytes = config === "PQB" ? PQB_MAX_SCRIPTSIG : QSB_CONFIG_A_MAX_SCRIPTSIG;
   const outputs = 1 + 8 + varintSize(outputScriptBytes) + outputScriptBytes;
-  const base =
-    4 +
-    1 +
-    41 +
-    32 +
-    4 +
-    varintSize(QSB_CONFIG_A_MAX_SCRIPTSIG) +
-    QSB_CONFIG_A_MAX_SCRIPTSIG +
-    4 +
-    outputs +
-    4;
+  const base = 4 + 1 + 41 + 32 + 4 + varintSize(scriptSigBytes) + scriptSigBytes + 4 + outputs + 4;
   const witness = 2 + (1 + 1 + 72 + 1 + 33) + 1;
   return Math.ceil((base * 4 + witness) / 4);
 };
@@ -136,5 +133,5 @@ export const qsbWithdrawalVsize = (outputScriptBytes: number): number => {
  * P2WPKH helper input, the QSB input at its largest scriptSig, and one output
  * of the largest standard size, so the estimate is an upper bound.
  */
-export const qsbWithdrawalFeeSat = (rateMsat: bigint): bigint =>
-  qsbFeeAt(qsbWithdrawalVsize(WITHDRAWAL_OUTPUT_SCRIPT_BYTES), rateMsat);
+export const qsbWithdrawalFeeSat = (rateMsat: bigint, config: "A" | "PQB" = "A"): bigint =>
+  qsbFeeAt(qsbWithdrawalVsize(WITHDRAWAL_OUTPUT_SCRIPT_BYTES, config), rateMsat);

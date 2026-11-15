@@ -52,6 +52,7 @@ import {
 } from "@bramble/vault/qsb-vault-record";
 import type { QsbWithdrawalRecord } from "@bramble/vault/qsb-withdrawal-store";
 import type { QsbVaultAccess } from "@bramble/vault/service-types";
+import { PQB_VAULT_PROTOCOL } from "@bramble/wallet-model/pqb";
 import { QSB_MAX_SAT } from "@bramble/wallet-model/qsb-vaults";
 import { requireCoordinatorAccess } from "./qsb-vault-gates";
 import { listQsbVaults, type QsbVaultsListing, qsbConfirmedFunding } from "./qsb-vault-list";
@@ -76,6 +77,38 @@ const ADOPTABLE: ReadonlySet<QsbJobStatus> = new Set<QsbJobStatus>([
   "searching",
 ]);
 
+const matchPqbVault = async (
+  deps: QsbVaultDeps,
+  access: QsbVaultAccess,
+  unmatched: ReadonlyMap<string, QsbPublicVault>,
+  v: number,
+): Promise<Match | undefined> => {
+  if (
+    !access.pqb ||
+    !deps.runtime.pqb ||
+    ![...unmatched.values()].some(
+      (server) => server.configuration["protocol"] === PQB_VAULT_PROTOCOL.protocol,
+    )
+  )
+    return undefined;
+  const material = await access.pqb.material(v),
+    server = unmatched.get(material.scriptSha256);
+  if (!server || server.scriptHex !== material.script) return undefined;
+  return {
+    record: {
+      pqb: true,
+      disclosure: null,
+      funding: null,
+      root: material.scriptSha256,
+      scriptHash: material.scriptSha256,
+      scriptPubKey: material.script,
+      state: "unknown",
+      v,
+    },
+    server,
+  };
+};
+
 // Each listed vault this phrase built, found by deriving index after index.
 const matchVaults = async (
   deps: QsbVaultDeps,
@@ -85,6 +118,17 @@ const matchVaults = async (
   const unmatched = new Map(listed.map((server) => [server.scriptHash, server]));
   const matches: Match[] = [];
   for (let v = 0; v < MAX_QSB_VAULTS_PER_ACCOUNT && unmatched.size > 0; v += 1) {
+    const pqb = await matchPqbVault(deps, access, unmatched, v);
+    if (pqb) {
+      unmatched.delete(pqb.server.scriptHash);
+      matches.push(pqb);
+    }
+    if (
+      ![...unmatched.values()].some(
+        (server) => server.configuration["protocol"] !== PQB_VAULT_PROTOCOL.protocol,
+      )
+    )
+      continue;
     const derived = await access.commitments(v);
     const { script } = await buildQsbVault(deps, derived);
     const hash = await qsbScriptHash(script.scriptHex);

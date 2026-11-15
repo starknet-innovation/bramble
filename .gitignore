@@ -22,3 +22,6 @@ vendor/starknet-privacy/
 .claude/*
 !.claude/skills
 .wrangler/
+
+vendor/pqb/
+vendor/pqb-built/

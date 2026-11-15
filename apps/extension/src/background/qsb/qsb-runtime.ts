@@ -109,6 +109,8 @@ export type QsbPublicProbe = {
 
 /** The QSB runtime the worker holds; it boots its interpreter on first use. */
 export type QsbRuntime = {
+  /** PQB uses the pinned SDK public adapter; Config A keeps its Python runtime. */
+  readonly pqb?: import("@bramble/qsb/pqb-runtime").PqbRuntime;
   /** Runs the public-only probe; boots and verifies the interpreter first if needed. */
   readonly publicProbe: () => Promise<QsbPublicProbe>;
   /**

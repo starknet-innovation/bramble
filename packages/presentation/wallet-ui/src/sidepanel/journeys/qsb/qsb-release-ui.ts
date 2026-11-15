@@ -21,10 +21,12 @@
  * again and drops every reply in flight. The screen shell renders here, beside
  * the binding that owns that field, as the backup screen's does.
  */
+
 import { escapeHtml } from "@bramble/core/html";
 import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
+import { PQB_DISCLOSED_SECRETS } from "@bramble/wallet-model/pqb";
 import { QSB_VAULT_REFUSALS, type QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
 import {
   QSB_WITHDRAWAL_REFUSALS,
@@ -86,7 +88,7 @@ export const qsbReleaseFlow = (status: WalletStatus): string =>
           </div>
           <div class="qsb-binding-warning" id="qsb-binding-warning" role="note">
             ${icon("alert")}
-            <p><strong>${escapeHtml(QSB_UNVERIFIED_TITLE)}:</strong> ${escapeHtml(QSB_UNVERIFIED_BODY)}</p>
+            <p><strong>${escapeHtml(QSB_UNVERIFIED_TITLE)}:</strong> <span id="qsb-binding-copy">${escapeHtml(QSB_UNVERIFIED_BODY)}</span></p>
           </div>
           ${receipt([], { id: "qsb-release-review" })}
           ${textField({
@@ -258,6 +260,12 @@ export const bindQsbRelease = (deps: QsbReleaseDeps): QsbReleaseSession => {
         return unavailable(refusal(QSB_WITHDRAWAL_REFUSALS.bindingRefused), "none");
       }
       review = next;
+      const bindingCopy = find<HTMLElement>("#qsb-binding-copy");
+      if (bindingCopy)
+        bindingCopy.textContent =
+          next.secrets === PQB_DISCLOSED_SECRETS
+            ? `Bramble cannot independently confirm that these ${PQB_DISCLOSED_SECRETS} keys allow only this withdrawal.`
+            : QSB_UNVERIFIED_BODY;
       const custody = find<HTMLElement>("#qsb-custody-warning");
       if (custody) custody.hidden = next.custody !== "emergency";
       const rows = find<HTMLElement>("#qsb-release-review");

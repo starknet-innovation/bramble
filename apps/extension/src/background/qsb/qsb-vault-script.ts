@@ -30,10 +30,23 @@ export type QsbBuiltVault = {
  */
 export const rebuildQsbVault = async (
   deps: QsbVaultDeps,
-  access: Pick<QsbVaultAccess, "commitments">,
-  record: { readonly root: string; readonly v: number },
+  access: Pick<QsbVaultAccess, "commitments" | "pqb">,
+  record: { readonly root: string; readonly v: number; readonly pqb?: true },
   mismatch: QsbVaultRefusal,
 ): Promise<QsbBuiltVault> => {
+  if (record.pqb) {
+    const material = await access.pqb?.material(record.v);
+    if (!material || material.scriptSha256 !== record.root || !deps.runtime.pqb)
+      throw qsbRefusal(mismatch);
+    return {
+      commitments: [material.commitments],
+      script: {
+        scriptHex: material.script,
+        scriptHash: material.scriptSha256,
+        publicStateJson: deps.runtime.pqb.publicState(material),
+      },
+    };
+  }
   const derived = await access.commitments(record.v);
   if (derived.root !== record.root) {
     throw qsbRefusal(mismatch);

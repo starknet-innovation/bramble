@@ -31,7 +31,8 @@
     "./shadow-account-scopes": "./src/accounts/shadow-account-scopes.ts",
     "./store-migration": "./src/schema/store-migration.ts",
     "./strk20-viewing-key": "./src/accounts/strk20-viewing-key.ts",
-    "./vault-account": "./src/accounts/vault-account.ts"
+    "./vault-account": "./src/accounts/vault-account.ts",
+    "./pqb-kms": "./src/qsb/pqb-kms.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

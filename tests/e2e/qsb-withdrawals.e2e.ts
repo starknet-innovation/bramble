@@ -3,19 +3,24 @@
  * background: a funded, confirmed deposit is quoted and started, the
  * coordinator's job is followed from searching to ready, and then — because
  * no GPU search can solve a Bramble-derived vault here — the solved result
- * is a solution the pinned Pyodide pipeline cannot assemble. The review must
+ * is a solution the pinned SDK cannot assemble. The review must
  * refuse it as `bindingRefused` and the release must disclose nothing: the
  * journal keeps the vault `allocated`, no request reaches `…/submit`, and
- * none of the 15 secrets that solution would disclose, recomputed here from
- * the account's own phrase with the BIP's equations, appears in any request.
+ * none of the 17 preimages and selected signatures that solution would disclose, derived offline through Krusty from
+ * the account's own phrase, appears in any request.
  *
  * The coordinator is the suite's stand-in (tests/support), answered by
  * Playwright routes, on a copy of `dist/` granted its origin at install.
  */
-import { createHash, createHmac, pbkdf2Sync } from "node:crypto";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { type QsbSolution, qsbWithdrawalTransaction } from "@bramble/qsb/withdrawal-binding";
+import { readQsbManifest } from "@bramble/qsb/withdrawal-manifest";
 import { QSB_WITHDRAWAL_REFUSALS } from "@bramble/wallet-model/qsb-withdrawals";
+import * as krusty from "@starknetfoundation/krusty-kms-wasm";
 import { fakeCoordinatorState, paymentToAddress } from "../support/qsb-coordinator-fake";
-import { FAKE_SOLUTION, solveFakeJob } from "../support/qsb-withdrawal-fake";
+import { solveFakeJob } from "../support/qsb-withdrawal-fake";
 import type { LoadedExtension } from "./extension-fixture";
 import { expect, test } from "./fixtures";
 import {
@@ -34,24 +39,24 @@ import {
 
 const DESTINATION = "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu";
 
-// QSB-HORS-v1 (BIP "QSB Wallet Secret Management"): the BIP-39 seed, its
-// SLIP-0021 key at "QSB-HORS", and one secret, net 0. Independent of Krusty.
-const horsKey = (mnemonic: string): Buffer => {
-  const seed = pbkdf2Sync(mnemonic.normalize("NFKD"), "mnemonic", 2048, 64, "sha512");
-  const master = createHmac("sha512", "Symmetric key seed").update(seed).digest();
-  const node = createHmac("sha512", master.subarray(0, 32))
-    .update(Buffer.concat([Buffer.from([0]), Buffer.from("QSB-HORS")]))
-    .digest();
-  return node.subarray(32, 64);
+// Structurally valid, deliberately unsolved public hits. The built SDK must refuse them.
+const FAKE_SOLUTION: QsbSolution = {
+  sequence: 0x80000000,
+  locktime: 500000000,
+  round1: [0, 1, 2, 3, 4, 5, 6, 7],
+  round2: [8, 9, 10, 11, 12, 13, 14, 15, 16],
+  pqb: {
+    pinning: "500000000 2147483648 0 0 0 0",
+    round0: "0,1,2,3,4,5,6,7 0 0 0 0",
+    round1: "0,1,2,3,4,5,6,7,8 0 0 0 0",
+  },
 };
-const horsSecret = (key: Buffer, v: number, r: number, i: number): string => {
-  const message = Buffer.alloc(20);
-  message.write("QSB-HORS-v1", 0, "ascii");
-  message.writeUInt32BE(v, 13);
-  message.writeUInt8(r, 17);
-  message.writeUInt16BE(i, 18);
-  return createHmac("sha256", key).update(message).digest("hex").slice(0, 40);
-};
+krusty.initSync({
+  module: new Uint8Array(
+    readFileSync("node_modules/@starknetfoundation/krusty-kms-wasm/krusty_kms_wasm_bg.wasm"),
+  ),
+});
+const kms = createKrustyKms(krusty);
 
 type Withdrawal = { readonly state: string; readonly withdrawal: Record<string, unknown> };
 
@@ -65,6 +70,7 @@ const journey = async (extension: LoadedExtension): Promise<void> => {
   const { accountId, mnemonic } = await createWriterAccount(sidepanel);
   const owner = String((await send(sidepanel, { accountId, type: "wallet.qsbVaults" }))["address"]);
   state = fakeCoordinatorState(owner, paymentToAddress(owner, [300_000], "qsb e2e funds"));
+  state.config["solverProtocol"] = "pqb-v1";
   const vault0 = async (): Promise<Withdrawal> =>
     (
       (await send(sidepanel, { accountId, type: "wallet.qsbVaults" }))["vaults"] as Withdrawal[]
@@ -119,16 +125,22 @@ const journey = async (extension: LoadedExtension): Promise<void> => {
   ).toEqual(refused);
   expect(await vault0()).toMatchObject({ state: "allocated", withdrawal: { status: "ready" } });
   expect(state.calls).not.toContain("POST /jobs/:id/submit");
-  const key = horsKey(mnemonic);
-  const sorted = (values: readonly number[]) => [...values].sort((a, b) => a - b);
-  const secrets = [
-    ...sorted(FAKE_SOLUTION.round1)
-      .slice(0, 8)
-      .map((i) => horsSecret(key, 0, 0, i)),
-    ...sorted(FAKE_SOLUTION.round2)
-      .slice(0, 7)
-      .map((i) => horsSecret(key, 0, 1, i)),
-  ];
+  const pqb = kms.pqb;
+  const job = state.jobs.get(String(jobId));
+  const manifest = readQsbManifest(job?.manifest);
+  if (!pqb || !manifest) throw new Error("PQB fixture missing");
+  const material = await pqb.material(mnemonic, 0);
+  const transaction = qsbWithdrawalTransaction(manifest, FAKE_SOLUTION);
+  if (!transaction) throw new Error("invalid fixture transaction");
+  // Offline test-only disclosure: independently identify what must never have left the browser.
+  const witness = await pqb.authorize(mnemonic, 0, {
+    transaction,
+    scriptHash: material.scriptSha256,
+    round0: FAKE_SOLUTION.round1,
+    round1: FAKE_SOLUTION.round2,
+    menus: [0, 0, 0],
+  });
+  const secrets = [...witness.round0, ...witness.round1, ...witness.menus, witness.cosignature];
   const sent = bodies.join("\n");
   expect(secrets.filter((secret) => sent.includes(secret))).toEqual([]);
   expect(bodies.some((body) => body.includes("/v1/jobs "))).toBe(true);

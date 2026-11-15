@@ -24,6 +24,7 @@
  * or without its own emergency disclosure, for an exact retry). The release
  * must echo it.
  */
+
 import { bytesToHex } from "@bramble/core/hex";
 import { QsbCoordinatorFailure } from "@bramble/qsb/client";
 import { qsbWithdrawalVsize } from "@bramble/qsb/fees";
@@ -47,11 +48,13 @@ import {
 import type { QsbJob, QsbSolvedResult } from "@bramble/qsb/withdrawal-responses";
 import type { QsbWithdrawalRecord } from "@bramble/vault/qsb-withdrawal-store";
 import type { QsbVaultAccess } from "@bramble/vault/service-types";
+import { PQB_DISCLOSED_SECRETS } from "@bramble/wallet-model/pqb";
 import {
   QSB_DISCLOSED_SECRETS,
   type QsbCustody,
   type QsbWithdrawalReview,
 } from "@bramble/wallet-model/qsb-withdrawals";
+import { preparedDisclosureDigest, preparePqbReview } from "./qsb-pqb-review";
 import type { QsbDepositContext } from "./qsb-vault-prepare";
 import {
   coordinatorRefusal,
@@ -203,6 +206,9 @@ const preparedFor = async (
   ) {
     refuse();
   }
+  if (record.pqb)
+    return preparePqbReview(context, record, built.script.scriptHex, manifest, solution);
+  if (solution.pqb) return refuse();
   const prepared = await context.deps.runtime
     .prepare(
       built.script.publicStateJson,
@@ -226,6 +232,7 @@ const reviewOf = (
   manifest: QsbWithdrawalManifest,
   digest: string,
   custody: QsbCustody,
+  pqb: boolean,
 ): QsbWithdrawalReview => ({
   binding: "unverified",
   custody,
@@ -236,9 +243,9 @@ const reviewOf = (
   helperSat: Number(manifest.helper.value),
   network: "bitcoin-mainnet",
   outputSat: Number(manifest.outputValue),
-  secrets: QSB_DISCLOSED_SECRETS,
+  secrets: pqb ? PQB_DISCLOSED_SECRETS : QSB_DISCLOSED_SECRETS,
   v: held.v,
-  vsize: qsbWithdrawalVsize(manifest.outputScript.length / 2),
+  vsize: qsbWithdrawalVsize(manifest.outputScript.length / 2, pqb ? "PQB" : "A"),
 });
 
 // The account's custody: emergency exactly when it is not the writer.
@@ -281,11 +288,7 @@ export const reviewedWithdrawal = async (
     const server = listed.vaults.find((vault) => vault.id === job.vaultId) ?? refuse();
     const previous = await previousTransactions(context, manifest, record, server);
     const prepared = await preparedFor(context, record, server, manifest, solution);
-    const { digest } = await access.revealDigest(
-      prepared.transaction,
-      prepared.round0,
-      prepared.round1,
-    );
+    const digest = await preparedDisclosureDigest(access, v, prepared);
     return {
       context,
       fundingPreviousTxHex: previous.funding,
@@ -294,7 +297,7 @@ export const reviewedWithdrawal = async (
       manifest,
       prepared,
       record,
-      review: reviewOf(held, manifest, digest, custody),
+      review: reviewOf(held, manifest, digest, custody, record.pqb === true),
       solution,
     };
   } catch (error) {

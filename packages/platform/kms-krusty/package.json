@@ -15,6 +15,7 @@
   "dependencies": {
     "@bramble/core": "workspace:*",
     "@bramble/vault": "workspace:*",
-    "@bramble/wallet-model": "workspace:*"
+    "@bramble/wallet-model": "workspace:*",
+    "@starknetfoundation/krusty-kms-wasm": "3.1.0"
   }
 }

@@ -16,6 +16,7 @@
  * is that rate on the withdrawal's upper-bound size; and the payout clears
  * the destination's dust floor.
  */
+
 import { bytesToHex } from "@bramble/core/hex";
 import { qsbFeeAt, qsbFormatFeeRate, qsbWithdrawalVsize } from "@bramble/qsb/fees";
 import type { QsbOutpoint } from "@bramble/qsb/responses";
@@ -169,8 +170,9 @@ const withdrawalQuote = (input: {
   readonly fundingSat: number;
   readonly helperSat: number;
   readonly rateMsat: bigint;
+  readonly config: "A" | "PQB";
 }): QsbWithdrawalQuote => {
-  const vsize = qsbWithdrawalVsize(input.destination.outputScript.length / 2);
+  const vsize = qsbWithdrawalVsize(input.destination.outputScript.length / 2, input.config);
   const feeSat = qsbFeeAt(vsize, input.rateMsat);
   const outputSat = BigInt(input.fundingSat) + BigInt(input.helperSat) - feeSat;
   if (outputSat < BigInt(input.destination.dustSat)) throw withdrawalRefusal("dustOutput");
@@ -199,7 +201,8 @@ export const withdrawalTerms = async (
   if ((await keptWithdrawals(access)).some((held) => held.v === request.v)) {
     throw withdrawalRefusal("notWithdrawable");
   }
-  const solverReleaseId = requireWithdrawalsOpen(await deps.coordinator.config());
+  const config = await deps.coordinator.config();
+  const solverReleaseId = requireWithdrawalsOpen(config, record.pqb ? "PQB" : "A");
   const { server } = await confirmedServerVault(context, record);
   const frozen = await frozenOutpoints(access, record);
   const coins = await session.call((token) => deps.coordinator.paymentUtxos(token));
@@ -207,6 +210,7 @@ export const withdrawalTerms = async (
   if (!helper) throw withdrawalRefusal("helperNeeded");
   const rateMsat = (await minerFloorMsat(deps)) * BigInt(QSB_WITHDRAWAL_FEE_MULTIPLIER);
   const quote = withdrawalQuote({
+    config: record.pqb ? "PQB" : "A",
     destination,
     fundingSat: record.funding.valueSat,
     helperSat: helper.valueSat,
@@ -219,9 +223,12 @@ export const withdrawalTerms = async (
  * The quote a withdrawal already intended here stands at: its own terms,
  * for the very destination it pays. Its rate is the fee over the size bound.
  */
-export const intendedQuote = (held: QsbWithdrawalRecord): QsbWithdrawalQuote => {
+export const intendedQuote = (
+  held: QsbWithdrawalRecord,
+  config: "A" | "PQB" = "A",
+): QsbWithdrawalQuote => {
   const destination = payableDestination(held.destination);
-  const vsize = qsbWithdrawalVsize(destination.outputScript.length / 2);
+  const vsize = qsbWithdrawalVsize(destination.outputScript.length / 2, config);
   return {
     destination: held.destination,
     feeRate: qsbFormatFeeRate((BigInt(held.feeSat) * 1000n) / BigInt(vsize)),

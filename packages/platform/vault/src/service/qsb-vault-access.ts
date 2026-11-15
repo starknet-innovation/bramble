@@ -44,6 +44,7 @@ import { writeQsbJournal } from "../qsb/qsb-journal-store";
 import { mergeImportedQsbJournal } from "../qsb/qsb-merge";
 import type { Vault } from "../schema/schema";
 import type { QsbAccountWiring } from "./qsb-account-types";
+import { qsbPqbAccess } from "./qsb-pqb-access";
 import { currentQsbSlot, type QsbSlot, qsbSlotBinding, qsbSlotRefusal } from "./qsb-vault-slot";
 import type {
   QsbJournalChange,
@@ -59,6 +60,7 @@ type QsbVaultDeps = {
     KmsPort,
     | "deriveBitcoinP2wpkhKeypair"
     | "deriveQsbCommitments"
+    | "pqb"
     | "qsbRevealDigest"
     | "revealQsbPreimages"
     | "signBip322SimpleUnprefixed"
@@ -195,6 +197,7 @@ const sessionOver = (
   };
   return {
     accountId: opened.id,
+    ...(deps.kms.pqb ? { pqb: qsbPqbAccess(deps.kms.pqb, inSlot) } : {}),
     commit: (change) => inSlot((slot) => commitIn(slot, change)),
     commitments: (v) => inSlot((slot) => deps.kms.deriveQsbCommitments(slot.account.mnemonic, v)),
     holdDeposit: (deposit) => inSlot((slot) => holdIn(slot, deposit)),

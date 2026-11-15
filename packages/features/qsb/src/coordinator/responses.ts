@@ -25,6 +25,8 @@ export type { QsbOutpoint } from "./response-grammar";
 
 /** The deployment switches a QSB request is gated on. */
 export type QsbConfig = {
+  /** Absent on older coordinators; PQB withdrawals require an explicit match. */
+  readonly solverProtocol?: string | null;
   readonly exactSubmitEnabled: boolean;
   readonly network: string;
   readonly operationsEnabled: boolean;
@@ -97,6 +99,8 @@ export const readQsbConfig = (value: unknown): QsbConfig | null => {
     typeof network === "string" &&
     typeof operationsEnabled === "boolean"
     ? {
+        solverProtocol:
+          typeof value["solverProtocol"] === "string" ? value["solverProtocol"] : null,
         exactSubmitEnabled,
         network,
         operationsEnabled,

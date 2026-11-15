@@ -13,7 +13,10 @@
  * sign-in proof, signed PSBT bytes) and the journal's vault records, never
  * the account record or its header. A session ends with its task; using it afterwards throws.
  */
+
+import type { PqbDisclosureRequest } from "@bramble/wallet-model/pqb";
 import type { QsbCommitments, QsbRevealDigest } from "../kms-port";
+import type { PqbDisclosure, PqbKms } from "../qsb/pqb-kms";
 import type { QsbPendingDeposit } from "../qsb/qsb-deposit-store";
 import type { QsbJournalRefusal } from "../qsb/qsb-journal";
 import type { ImportedQsbJournal } from "../qsb/qsb-merge";
@@ -54,7 +57,7 @@ export type QsbJournalState =
  * nothing.
  */
 export type QsbJournalChange =
-  | { readonly kind: "allocate"; readonly root: string; readonly v: number }
+  | { readonly kind: "allocate"; readonly root: string; readonly v: number; readonly pqb?: true }
   | {
       readonly kind: "associate";
       readonly scriptHash: string;
@@ -82,6 +85,17 @@ export type QsbJournalChangeResult =
 export type QsbVaultAccess = QsbWithdrawalAccess & {
   /** The id of the account this session is over. */
   readonly accountId: string;
+  /** PQB public derivation and journal-gated disclosure. No seed crosses the session. */
+  readonly pqb?: {
+    readonly material: (v: number) => ReturnType<PqbKms["material"]>;
+    readonly prepare: (v: number, request: PqbDisclosureRequest) => ReturnType<PqbKms["prepare"]>;
+    readonly release: (
+      v: number,
+      request: PqbDisclosureRequest,
+      digest: string,
+      emergency: boolean,
+    ) => Promise<PqbDisclosure>;
+  };
   /**
    * Applies `change` to the journal as it is now and, when it changed
    * anything, durably replaces the journal with the result. A journal lost

@@ -40,7 +40,7 @@ export type QsbVaultDeps = {
   readonly locks: QsbAccountLocks;
   /** Epoch milliseconds. */
   readonly now: () => number;
-  readonly runtime: Pick<QsbRuntime, "finish" | "prepare"> & {
+  readonly runtime: Pick<QsbRuntime, "finish" | "prepare" | "pqb"> & {
     readonly setupFromCommitments: (commitments: QsbHorsCommitments) => Promise<QsbVaultSetup>;
   };
   readonly sessions: QsbSessions;

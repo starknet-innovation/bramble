@@ -56,6 +56,8 @@ export const DEVELOPMENT_SOURCE_FILES = new Set(["apps/terminal/src/data/extende
  * Exact computed module-load allowances required by build and test adapters.
  */
 export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
+  ["tests/support/pqb-fixture.ts", 1],
+  ["scripts/check-pqb-sdk.ts", 1],
   ["packages/presentation/wallet-ui/tests/support/groups-harness.ts", 1],
   ["scripts/check-privacy-sdk.ts", 1],
   ["scripts/qsb-pyodide.ts", 1],

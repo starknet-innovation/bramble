@@ -40,7 +40,9 @@ import {
 } from "./qsb-coordinator-fake";
 import { FAKE_SOLUTION, solveFakeJob } from "./qsb-withdrawal-fake";
 
-const krusty = createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm"));
+// Existing catalog journeys deliberately cover the legacy Config A preimage flow.
+const { pqb, ...krusty } = createKrustyKms(await import("@starknetfoundation/krusty-kms-wasm"));
+void pqb;
 const owner = await krusty.deriveBitcoinP2wpkhKeypair(SECRET_QSB_MNEMONIC, 0, 0, 0);
 
 /** The stub QSB account's owner private key: no reply may ever carry it. */

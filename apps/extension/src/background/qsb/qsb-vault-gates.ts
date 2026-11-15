@@ -9,8 +9,11 @@
  * written or sent. An absent or malformed configuration never enables
  * anything; the client already refused it as unreachable.
  */
+
+import { QSB_VAULT_PROTOCOL } from "@bramble/qsb/configuration";
 import { QSB_COORDINATOR_NETWORK } from "@bramble/qsb/origin";
 import type { QsbConfig } from "@bramble/qsb/responses";
+import { PQB_VAULT_PROTOCOL } from "@bramble/wallet-model/pqb";
 import { qsbRefusal } from "./qsb-vault-refusals";
 import type { QsbVaultDeps } from "./qsb-vault-session";
 
@@ -41,9 +44,18 @@ export const requireOwnerAllowed = (config: QsbConfig): void => {
  * will not serve this owner, has operations or MARA submission switched off,
  * or serves no solver release a job could pin.
  */
-export const requireWithdrawalsOpen = (config: QsbConfig): string => {
+export const requireWithdrawalsOpen = (
+  config: QsbConfig,
+  vaultConfig: "A" | "PQB" = "A",
+): string => {
   requireOwnerAllowed(config);
   if (!config.operationsEnabled || !config.exactSubmitEnabled || config.solverReleaseId === null) {
+    throw qsbRefusal("coordinatorDisabled");
+  }
+  const expected =
+    vaultConfig === "PQB" ? PQB_VAULT_PROTOCOL.protocol : QSB_VAULT_PROTOCOL.protocol;
+  const declared = config.solverProtocol;
+  if (vaultConfig === "PQB" ? declared !== expected : declared != null && declared !== expected) {
     throw qsbRefusal("coordinatorDisabled");
   }
   return config.solverReleaseId;

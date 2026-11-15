@@ -60,6 +60,7 @@ const conflicting = <T>(
 const sameText = (left: string | null, right: string | null): boolean => left === right;
 
 const conflicts = (local: QsbVaultRecord, incoming: QsbVaultRecord): boolean =>
+  local.pqb !== incoming.pqb ||
   local.root !== incoming.root ||
   conflicting(local.scriptPubKey, incoming.scriptPubKey, sameText) ||
   conflicting(local.scriptHash, incoming.scriptHash, sameText) ||
@@ -76,6 +77,7 @@ const mergeVault = (local: QsbVaultRecord, incoming: QsbVaultRecord): QsbVaultRe
     return { ...local, state };
   }
   return {
+    ...(local.pqb ? { pqb: true } : {}),
     disclosure: local.disclosure ?? incoming.disclosure,
     funding: local.funding ?? incoming.funding,
     root: local.root,

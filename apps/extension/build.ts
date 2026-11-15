@@ -126,6 +126,7 @@ await run(["bun", "run", "check:krusty"]);
 await run(["bun", "run", "check:argent"]);
 await run(["bun", "run", "check:privacy"]);
 await run(["bun", "run", "check:qsb"]);
+await run(["bun", "run", "check:pqb"]);
 /**
  * Writes one target's complete output directory: its bundles, its manifest, and
  * its static assets. Every path below is derived from `target`, so two
@@ -147,7 +148,7 @@ const emit = async (target: BuildTarget): Promise<void> => {
     await Bun.build({
       define: buildStamp,
       entrypoints: [join(extensionRoot, "src/background/index.ts")],
-      external: [krustyModule, privacySdkModule, ...pyodideModules],
+      external: [krustyModule, privacySdkModule, "/dependencies/pqb/sdk.mjs", ...pyodideModules],
       format: "esm",
       minify: true,
       outdir: join(outdir, "background"),
@@ -257,6 +258,13 @@ const emit = async (target: BuildTarget): Promise<void> => {
   await cp(
     join(krustyPackage, "krusty_kms_wasm_bg.wasm"),
     join(krustyOutdir, "krusty_kms_wasm_bg.wasm"),
+  );
+  await mkdir(join(outdir, "dependencies/pqb"), { recursive: true });
+  await cp("vendor/pqb-built/sdk.mjs", join(outdir, "dependencies/pqb/sdk.mjs"));
+  await cp("vendor/pqb/src/pqb-core/LICENSE", join(outdir, "dependencies/pqb/LICENSE"));
+  await cp(
+    "vendor/pqb/src/pqb-core/THIRD_PARTY_NOTICES.md",
+    join(outdir, "dependencies/pqb/THIRD_PARTY_NOTICES.md"),
   );
   await mkdir(join(outdir, "dependencies/pyodide"), { recursive: true });
   for (const file of PYODIDE_RUNTIME_FILES) {

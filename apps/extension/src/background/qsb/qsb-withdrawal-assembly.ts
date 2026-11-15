@@ -47,6 +47,10 @@ const MAX_RAW_TRANSACTION_BYTES = 75_000;
  * must be handed back.
  */
 export type QsbPreparedWithdrawal = {
+  readonly pqb?: {
+    readonly material: import("@bramble/wallet-model/pqb").PqbPublicMaterial;
+    readonly prepared: import("@bramble/wallet-model/pqb").PqbPrepared;
+  };
   readonly json: string;
   readonly round0: readonly number[];
   readonly round1: readonly number[];
