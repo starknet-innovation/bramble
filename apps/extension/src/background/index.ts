@@ -209,7 +209,7 @@ const readPreferences = (): Promise<WalletPreferences> => preferenceStore.read()
 const nativeFetch = globalThis.fetch.bind(globalThis);
 const browserNavigator = globalThis.navigator as Navigator & { readonly brave?: unknown };
 const gatewayAnalytics = createGatewayAnalytics({
-  account: async (input, init, scopedAccountId) => {
+  account: async (input, init) => {
     const passphrase = session.peekPassphrase();
     if (!passphrase) return null;
     const service = await wallet;
@@ -217,7 +217,7 @@ const gatewayAnalytics = createGatewayAnalytics({
     const vault = await service.readVault(passphrase);
     if (session.peekPassphrase() !== passphrase) return null;
     const inventory = { accounts: vault.accounts, provenance: vault.accountProvenance ?? {} };
-    return requestAccountAnalytics(inventory, input, init, scopedAccountId);
+    return requestAccountAnalytics(inventory, input, init);
   },
   enabled: async () => {
     await preferenceSignalsReady;

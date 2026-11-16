@@ -68,8 +68,9 @@ SHA-256 digest of its network and public address, plus whether it was explicitly
 created or imported. Missing provenance is reported as unknown. The gateway replaces
 this digest with a keyed pseudonym and stores first-seen and provenance days to count
 new, active and cumulative accounts across installations. It does not store the raw
-address or digest in this registry. Accountless or ambiguous requests omit these
-fields. Daily account observations expire after 35 days; cumulative pseudonyms remain
+address or digest in this registry. Accountless, ambiguous and unsupported requests omit these
+fields. Opaque private-service transports also omit account metadata because their
+SDK work can outlive the originating operation. Daily account observations expire after 35 days; cumulative pseudonyms remain
 for the lifetime of account reporting. Turning analytics off stops further transmission
 and does not erase previously retained observations. No keys, phrases, balances or
 transaction details are included in account analytics.

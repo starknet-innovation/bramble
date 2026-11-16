@@ -4,7 +4,6 @@
  * vendored privacy SDK and starknet.js share the same exact-origin policy.
  */
 
-import { isRecord } from "@bramble/core/json";
 import { STRK20_GATEWAY_BASE } from "@bramble/privacy/config";
 import type { Strk20Service } from "@bramble/privacy/service";
 import type { KeyValueStore } from "@bramble/store/kv";
@@ -48,7 +47,7 @@ export type GatewayAnalyticsMetadata = {
 /** Product-analytics fetch boundary plus a STRK20 workflow scope. */
 export type GatewayAnalytics = {
   readonly fetch: GatewayHttp;
-  readonly withFlow: <T>(run: () => Promise<T>, accountId?: string) => Promise<T>;
+  readonly withFlow: <T>(run: () => Promise<T>) => Promise<T>;
 };
 
 // The wrapped service owns the flow lock; work invoked from one of its own
@@ -71,7 +70,6 @@ type GatewayAnalyticsOptions = {
   readonly account?: (
     input: RequestInfo | URL,
     init?: RequestInit,
-    scopedAccountId?: string,
   ) => Promise<AccountAnalytics | null>;
   readonly enabled: () => boolean | Promise<boolean>;
   readonly http: GatewayHttp;
@@ -170,7 +168,6 @@ export const createGatewayAnalytics = ({
   store,
 }: GatewayAnalyticsOptions): GatewayAnalytics => {
   let installationId: Promise<string | null> | undefined;
-  let activeAccountId: string | undefined;
   let activeFlowId: string | undefined;
   let flowQueue: Promise<void> = Promise.resolve();
 
@@ -203,9 +200,11 @@ export const createGatewayAnalytics = ({
     headers: Headers,
     init?: RequestInit,
   ): Promise<void> => {
-    // Account metadata failure must never affect wallet work or other telemetry.
+    // The SDK can outlive a timed-out operation. Never infer an account from
+    // whichever operation currently holds the global flow queue.
+    if (isStrk20GatewayRequest(input)) return;
     try {
-      const details = await account?.(input, init, activeAccountId);
+      const details = await account?.(input, init);
       if (
         details &&
         /^[0-9a-f]{64}$/.test(details.id) &&
@@ -259,7 +258,7 @@ export const createGatewayAnalytics = ({
     });
   };
 
-  const withFlow = async <T>(run: () => Promise<T>, accountId?: string): Promise<T> => {
+  const withFlow = async <T>(run: () => Promise<T>): Promise<T> => {
     const enabledAtStart = await isEnabled();
     let release = (): void => undefined;
     const previous = flowQueue;
@@ -267,7 +266,6 @@ export const createGatewayAnalytics = ({
       release = resolve;
     });
     await previous;
-    activeAccountId = accountId;
     try {
       try {
         const generated = enabledAtStart ? randomUuid() : "";
@@ -279,7 +277,6 @@ export const createGatewayAnalytics = ({
       return await run();
     } finally {
       activeFlowId = undefined;
-      activeAccountId = undefined;
       release();
     }
   };
@@ -302,31 +299,30 @@ export const withGatewayAnalyticsFlows = (
   const register = service.register;
   const registrationStatus = service.registrationStatus;
   const shadowAccountCommitment = service.shadowAccountCommitment;
-  const scope = <T>(input: unknown, run: () => Promise<T>): Promise<T> => {
-    const account = isRecord(input) ? input["account"] : undefined;
-    const id = isRecord(account) && typeof account["id"] === "string" ? account["id"] : undefined;
-    return withFlow(run, id);
-  };
+  const submitAcceptedRelay = service.submitAcceptedRelay;
   const wrapped: Strk20Service = {
     ...service,
-    prepare: (input) => scope(input, () => service.prepare(input)),
-    privateBalances: (input) => scope(input, () => service.privateBalances(input)),
-    quoteActions: (input) => scope(input, () => service.quoteActions(input)),
-    submitActions: (input) => scope(input, () => service.submitActions(input)),
-    submitPrepared: (input) => scope(input, () => service.submitPrepared(input)),
-    ...(poolFee ? { poolFee: (input) => scope(input, () => poolFee(input)) } : {}),
+    prepare: (input) => withFlow(() => service.prepare(input)),
+    privateBalances: (input) => withFlow(() => service.privateBalances(input)),
+    quoteActions: (input) => withFlow(() => service.quoteActions(input)),
+    submitActions: (input) => withFlow(() => service.submitActions(input)),
+    submitPrepared: (input) => withFlow(() => service.submitPrepared(input)),
+    ...(submitAcceptedRelay
+      ? { submitAcceptedRelay: (input) => withFlow(() => submitAcceptedRelay(input)) }
+      : {}),
+    ...(poolFee ? { poolFee: (input) => withFlow(() => poolFee(input)) } : {}),
     ...(prepareAccountActions
-      ? { prepareAccountActions: (input) => scope(input, () => prepareAccountActions(input)) }
+      ? { prepareAccountActions: (input) => withFlow(() => prepareAccountActions(input)) }
       : {}),
     ...(prepareRegistration
-      ? { prepareRegistration: (input) => scope(input, () => prepareRegistration(input)) }
+      ? { prepareRegistration: (input) => withFlow(() => prepareRegistration(input)) }
       : {}),
-    ...(register ? { register: (input) => scope(input, () => register(input)) } : {}),
+    ...(register ? { register: (input) => withFlow(() => register(input)) } : {}),
     ...(registrationStatus
-      ? { registrationStatus: (input) => scope(input, () => registrationStatus(input)) }
+      ? { registrationStatus: (input) => withFlow(() => registrationStatus(input)) }
       : {}),
     ...(shadowAccountCommitment
-      ? { shadowAccountCommitment: (input) => scope(input, () => shadowAccountCommitment(input)) }
+      ? { shadowAccountCommitment: (input) => withFlow(() => shadowAccountCommitment(input)) }
       : {}),
   };
   nestedFlowServices.set(wrapped, service);

@@ -64,13 +64,49 @@ describe("account analytics", () => {
         body: new Uint8Array([1]),
       }),
     ).toBeNull();
+  });
+
+  test("only reviewed paymaster methods resolve paymaster-shaped parameters", async () => {
+    const params = { transaction: { invoke: { user_address: account.address } } };
+    for (const method of [undefined, "unsupported", "paymaster_unknown", "starknet_estimateFee"]) {
+      expect(
+        await requestAccountAnalytics(inventory, `${origin}/rpc/mainnet`, init({ method, params })),
+      ).toBeNull();
+    }
+    for (const method of ["paymaster_buildTransaction", "paymaster_executeTransaction"]) {
+      expect(
+        (
+          await requestAccountAnalytics(
+            inventory,
+            `${origin}/api/gasless/mainnet`,
+            init({ method, params }),
+          )
+        )?.provenance,
+      ).toBe("unknown");
+    }
+  });
+
+  test("unresolved members invalidate the whole batch instead of disappearing", async () => {
+    for (const member of [
+      { method: "starknet_estimateFee", params: { request: [{ sender_address: "0x999" }] } },
+      { params: {} },
+      { method: "starknet_blockNumber", params: {} },
+    ]) {
+      expect(
+        await requestAccountAnalytics(
+          inventory,
+          `${origin}/rpc/mainnet`,
+          init([nonce(account.address), member]),
+        ),
+      ).toBeNull();
+    }
+    expect(await requestAccountAnalytics(inventory, `${origin}/rpc/mainnet`, init([]))).toBeNull();
     expect(
       (
         await requestAccountAnalytics(
           inventory,
-          `${origin}/api/strk20/prover`,
-          { body: new Uint8Array([1]) },
-          account.id,
+          `${origin}/rpc/mainnet`,
+          init([nonce("0x123"), nonce("0x00123")]),
         )
       )?.provenance,
     ).toBe("unknown");

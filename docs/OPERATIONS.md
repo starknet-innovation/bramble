@@ -169,9 +169,14 @@ bindings; phrase-only recovery cannot reconstruct them.
 With product analytics and technical-data consent enabled, the background attaches
 `X-MC-Account-ID` (SHA-256 of `mc-account:v1:<networkId>:<canonical address>`) and
 `X-MC-Account-Provenance` (`created`, `imported`, or `unknown`) only to the exact
-wallet gateway origin. Account attribution uses an owned RPC subject or the explicit
-account context of a serialized STRK20 operation. Accountless calls, locked vaults,
-ambiguous multi-account batches and unsupported request shapes omit account metadata.
+wallet gateway origin. Account attribution requires every member of an RPC batch to resolve to the same
+owned subject, using only the reviewed RPC/paymaster method allowlist. Accountless
+calls, locked vaults, unresolved or ambiguous batches and unsupported request shapes
+omit account metadata. Opaque STRK20 discovery/prover/paymaster transports always omit
+account identifiers: timed-out SDK work can keep issuing requests after its operation
+releases the flow queue, so the currently active operation is not a safe account
+binding. Ordinary identifiable RPC calls made during privacy work remain eligible.
+The optional accepted-relay service operation participates in the flow queue too.
 No selected-account fallback is used. These are untrusted usage observations, not
 proof of ownership or authorization. Custom RPCs and redirects never receive them.
 
@@ -181,3 +186,7 @@ persist for cumulative counts, independently of the 90-day access-log archive.
 The daily report includes new, active and cumulative accounts, each with imported
 and unknown subsets. Counts start with this rollout and cover attributed, opted-in
 requests with successful upstream HTTP responses, not transaction finality.
+
+An authenticated historical staging vault is migrated through the same supported
+schema chain before recovery into an unreadable primary. Missing, empty, malformed,
+future-version and unauthenticated stages are never used as empty replacement vaults.

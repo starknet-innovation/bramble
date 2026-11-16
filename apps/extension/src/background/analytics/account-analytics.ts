@@ -51,8 +51,11 @@ const subject = (request: unknown): unknown => {
       const first = firstParam(params);
       return field(field(first, "invoke_transaction") ?? first, "sender_address");
     }
-    default:
+    case "paymaster_buildTransaction":
+    case "paymaster_executeTransaction":
       return paymasterSubject(params);
+    default:
+      return null;
   }
 };
 
@@ -78,12 +81,10 @@ const rpcAccount = async (
   if (networkId === undefined) return undefined;
   const decoded = await requestBody(input, init);
   const requests: readonly unknown[] = Array.isArray(decoded) ? decoded : [decoded];
-  const subjects = new Set(
-    requests
-      .map(subject)
-      .map(felt)
-      .filter((value) => value !== null),
-  );
+  const resolved = requests.map(subject).map(felt);
+  // One unresolved member makes the whole batch's account context ambiguous.
+  if (resolved.length === 0 || resolved.includes(null)) return undefined;
+  const subjects = new Set(resolved);
   if (subjects.size !== 1) return undefined;
   return inventory.accounts.find(
     (entry) => entry.networkId === networkId && subjects.has(entry.address),
@@ -91,20 +92,17 @@ const rpcAccount = async (
 };
 
 /**
- * Resolves a single owned request subject, or an explicitly scoped privacy
- * account. Ambiguous batches, opaque bodies and inventory failures omit it.
+ * Resolves one owned request subject. Opaque SDK traffic has no transport-bound
+ * account context; it is always omitted, including after timed-out operations.
  */
 export const requestAccountAnalytics = async (
   inventory: AnalyticsAccounts,
   input: RequestInfo | URL,
   init?: RequestInit,
-  scopedAccountId?: string,
 ): Promise<AccountAnalytics | null> => {
   const url = new URL(input instanceof Request ? input.url : String(input));
-  const account =
-    scopedAccountId !== undefined && url.pathname.startsWith("/api/strk20/")
-      ? inventory.accounts.find((entry) => entry.id === scopedAccountId)
-      : await rpcAccount(inventory, url, input, init);
+  if (url.pathname === "/api/strk20" || url.pathname.startsWith("/api/strk20/")) return null;
+  const account = await rpcAccount(inventory, url, input, init);
   if (account === undefined) return null;
   const identity = new TextEncoder().encode(
     `mc-account:v1:${account.networkId}:${account.address}`,
