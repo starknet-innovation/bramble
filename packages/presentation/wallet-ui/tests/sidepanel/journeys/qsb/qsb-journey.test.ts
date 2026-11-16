@@ -118,7 +118,8 @@ describe("the QSB journey", () => {
     p.app()?.querySelector<HTMLButtonElement>('[data-qsb-open="qsb-2"]')?.click();
     await flush();
     expect(p.visited).toEqual(["qsb-account"]);
-    expect(p.calls.vaults).toEqual(["qsb-2"]);
+    // Once by the list, for its "withdrawal ready" line, once by the account.
+    expect(p.calls.vaults).toEqual(["qsb-2", "qsb-2"]);
     p.app()?.querySelector<HTMLButtonElement>('[data-qsb-deposit="0"]')?.click();
     await flush();
     expect(p.visited).toEqual(["qsb-account", "qsb-deposit"]);

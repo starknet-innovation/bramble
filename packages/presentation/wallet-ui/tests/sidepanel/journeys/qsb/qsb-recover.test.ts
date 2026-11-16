@@ -55,8 +55,9 @@ const accountStep = (panel: Panel) => shownStep(panel.app(), "data-qsb-account-s
 const releaseStep = (panel: Panel) => shownStep(panel.app(), "data-qsb-release-step");
 const row = (panel: Panel, v: number) => find(panel, `[data-qsb-vault="${v}"]`);
 
+// A plain title, then the sentence the BIP requires of every emergency step.
 const RECOVER_WARNING =
-  "Outside custody conformance: Bramble cannot know whether another install already released keys for these deposits. Recover only if the install that created this QSB vault is gone.";
+  "Emergency recovery: This is outside custody conformance. Bramble cannot know whether another install already released keys for these deposits. Recover only if the install that created this QSB vault is gone.";
 
 // Opens QSB vault `account` showing `vaults`.
 const opened = async (
@@ -114,10 +115,10 @@ describe("Recover deposits", () => {
     recovered.resolve(reading([recoveredVault(0, "ready"), recoveredVault(1, "none")]));
     await flush();
     expect(accountStep(panel)).toBe("detail");
-    expect(text(row(panel, 0))).toBe(
-      "Deposit 1 Ready to release 0.00100000 BTC 4a5e1e…a33b Review",
+    expect(text(row(panel, 0))).toBe("Deposit 1 Ready to finish 0.00100000 BTC 4a5e1e…a33b Finish");
+    expect(text(row(panel, 1))).toBe(
+      "Deposit 2 Unavailable This deposit can't be funded or withdrawn here. 0.00100000 BTC 4a5e1e…a33b",
     );
-    expect(text(row(panel, 1))).toBe("Deposit 2 Unavailable 0.00100000 BTC 4a5e1e…a33b");
   });
 
   test("a refusal lands as its line on the QSB vault screen", async () => {
@@ -143,7 +144,10 @@ describe("recovered deposits", () => {
       depositedVault(2, "confirmed"),
     ];
     const readOnly = await opened({ vaults: { resolve: reading(vaults) } });
-    expect(find(readOnly, '[data-qsb-review="0"]')?.textContent).toBe("Review");
+    expect(find(readOnly, '[data-qsb-review="0"]')?.textContent).toBe("Finish");
+    expect(find(readOnly, '[data-qsb-review="0"]')?.getAttribute("aria-label")).toBe(
+      "Finish the withdrawal of deposit 1",
+    );
     expect(text(row(readOnly, 1))).toContain("Withdrawal sent");
     expect(find(readOnly, "[data-qsb-withdraw]")).toBe(null);
     const writer = await opened(
@@ -179,7 +183,7 @@ describe("the emergency release review", () => {
     const custody = find<HTMLElement>(panel, "#qsb-custody-warning");
     expect(custody?.hidden).toBe(false);
     expect(text(custody)).toBe(
-      "Outside custody conformance: Bramble cannot confirm that no other install released keys for this deposit.",
+      "Emergency recovery: This is outside custody conformance. Bramble cannot confirm that no other install released keys for this deposit.",
     );
     expect(custody?.nextElementSibling?.id).toBe("qsb-binding-warning");
     expect(custody?.parentElement?.firstElementChild).toBe(custody ?? null);

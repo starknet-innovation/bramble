@@ -20,6 +20,10 @@ const deposit = (name: string, id: string) => checkpointStory(name, "qsb-deposit
 
 export const Account = account("QSB vault · every deposit state", "qsb-account");
 export const AccountEmpty = account("QSB vault · no deposits", "qsb-account-empty");
+export const AccountNoBalance = account(
+  "QSB vault · funded, empty balance",
+  "qsb-account-no-balance",
+);
 export const AccountOffline = account("QSB vault · service out of reach", "qsb-account-offline");
 export const AccountAccess = account("QSB vault · access not granted", "qsb-account-access");
 export const AccountAccessDenied = account(
@@ -44,10 +48,9 @@ export const DepositAmountRefused = deposit(
   "qsb-deposit-amount-refused",
 );
 export const DepositReview = deposit("Fund · review", "qsb-deposit-review");
-export const DepositAccepted = deposit("Fund · costs accepted", "qsb-deposit-accepted");
 export const DepositSending = deposit("Fund · sending", "qsb-deposit-sending");
 export const DepositSent = deposit("Fund · sent", "qsb-deposit-sent");
-export const DepositUncertain = deposit("Fund · not confirmed yet", "qsb-deposit-uncertain");
+export const DepositUncertain = deposit("Fund · status unknown", "qsb-deposit-uncertain");
 export const DepositRejected = deposit("Fund · refused", "qsb-deposit-rejected");
 export const DepositQuoteChanged = deposit("Fund · cost changed", "qsb-deposit-quote-changed");
 export const DepositUnknown = deposit("Fund · status unknown", "qsb-deposit-unknown");
@@ -100,7 +103,7 @@ export const DepositAmountNarrow = narrowSidepanelStory(
 export const DepositReviewNarrow = narrowSidepanelStory(
   "Fund review · 320px",
   "qsb-deposit",
-  "qsb-deposit-accepted",
+  "qsb-deposit-review",
   [(document) => assertValueFits(document, "#qsb-deposit-quote .receipt-row dd")],
 );
 export const DepositSentNarrow = narrowSidepanelStory(

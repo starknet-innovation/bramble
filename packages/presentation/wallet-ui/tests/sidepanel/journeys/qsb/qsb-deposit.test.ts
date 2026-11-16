@@ -55,12 +55,6 @@ const refused = (panel: Panel, selector: string): boolean =>
   find(panel, selector)?.classList.contains("is-invalid") ?? false;
 const depositButton = (panel: Panel) =>
   find<HTMLButtonElement>(panel, '#qsb-review-form button[type="submit"]');
-const accept = (panel: Panel): void => {
-  const box = find<HTMLInputElement>(panel, 'input[name="qsbAccept"]');
-  if (!box) throw new Error("missing checkbox");
-  box.checked = true;
-  box.dispatchEvent(new Event("change", { bubbles: true }));
-};
 
 // Opens vault 0 of the ready account from its account screen, as a tap on
 // Deposit does. The panel's `script` stays live between reads.
@@ -92,7 +86,11 @@ describe("the deposit amount", () => {
     expect(panel.visited).toEqual(["qsb-account", "qsb-deposit"]);
     expect(step(panel)).toBe("amount");
     expect(text(panel, "#qsb-deposit-vault")).toBe("QSB vault 2 · Deposit 1");
-    expect(text(panel, "#qsb-amount-available")).toBe("Confirmed balance: 0.00250000 BTC");
+    expect(text(panel, "#qsb-amount-available")).toBe(
+      "Confirmed balance: 0.00250000 BTC · Minimum: 0.00010000 BTC",
+    );
+    // No placeholder figure that could read as a default or a minimum.
+    expect(find(panel, 'input[name="qsbAmount"]')?.hasAttribute("placeholder")).toBe(false);
     expect(document.activeElement?.getAttribute("name")).toBe("qsbAmount");
   });
 
@@ -145,28 +143,29 @@ describe("the deposit review", () => {
     const panel = await reviewed({});
     expect(panel.calls.quote).toEqual([["qsb-2", 0, 100_000]]);
     expect(step(panel)).toBe("review");
+    // The later withdrawal's cost is shown at today's rate as a ceiling,
+    // never as a promise; the review carries no statements beyond its costs.
     expect(text(panel, "#qsb-deposit-quote")).toBe(
       "Amount 0.00100000 BTC Network fee 0.00000564 BTC Fee rate 2.5 sat/vB " +
-        "Change to you 0.00149436 BTC",
+        "Change to you 0.00149436 BTC Withdrawal fee at today's rate up to 0.00001200 BTC",
     );
-    // The withdrawal-fee estimate is validated in the reply but never shown,
-    // and the review carries no statements beyond its costs.
-    expect(text(panel, '[data-qsb-deposit-step="review"]')).not.toContain("Withdrawal");
-    expect(text(panel, '[data-qsb-deposit-step="review"]')).not.toContain("0.00001200");
     expect(find(panel, '[data-qsb-deposit-step="review"] .review-panel')).toBe(null);
+    expect(find(panel, '[data-qsb-deposit-step="review"] input[type="checkbox"]')).toBe(null);
     expect(text(panel, '[data-qsb-deposit-step="review"]')).toBe(
       "Amount 0.00100000 BTC Network fee 0.00000564 BTC Fee rate 2.5 sat/vB " +
-        "Change to you 0.00149436 BTC I accept these costs Fund Change amount",
+        "Change to you 0.00149436 BTC Withdrawal fee at today's rate up to 0.00001200 BTC " +
+        "Fund Change amount",
     );
   });
 
-  test("Deposit stays disabled until the costs are accepted", async () => {
-    const panel = await reviewed({});
-    expect(depositButton(panel)?.disabled).toBe(true);
-    submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
-    expect(panel.calls.deposit).toEqual([]);
-    accept(panel);
-    expect(depositButton(panel)?.disabled).toBe(false);
+  test("Fund is the decision: disabled until a quote is shown, enabled once it is", async () => {
+    const waiting = await depositScreen({ quote: { wait: deferred<typeof QUOTE>().promise } });
+    expect(depositButton(waiting)?.disabled).toBe(true);
+    submitForm(find<HTMLFormElement>(waiting, "#qsb-review-form"));
+    expect(waiting.calls.deposit).toEqual([]);
+    const shown = await reviewed({});
+    expect(depositButton(shown)?.disabled).toBe(false);
+    expect(shown.calls.deposit).toEqual([]);
   });
 
   test("a quote with no change says so", async () => {
@@ -174,13 +173,14 @@ describe("the deposit review", () => {
     expect(text(panel, "#qsb-deposit-quote")).toContain("Change to you None");
   });
 
-  test("Change amount goes back with the amount kept and the acceptance dropped", async () => {
+  test("Change amount goes back with the amount kept and the old quote dropped", async () => {
     const panel = await reviewed({});
-    accept(panel);
     find<HTMLButtonElement>(panel, "#qsb-review-back")?.click();
     expect(step(panel)).toBe("amount");
     expect(find<HTMLInputElement>(panel, 'input[name="qsbAmount"]')?.value).toBe("0.001");
-    expect(find<HTMLInputElement>(panel, 'input[name="qsbAccept"]')?.checked).toBe(false);
+    expect(depositButton(panel)?.disabled).toBe(true);
+    submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
+    expect(panel.calls.deposit).toEqual([]);
   });
 });
 
@@ -188,7 +188,6 @@ describe("submitting a deposit", () => {
   test("sends the quote's own fee once, however often it is asked, and shows it sent", async () => {
     const sent = deferred<ReturnType<typeof depositResult>>();
     const panel = await reviewed({ deposit: { wait: sent.promise } });
-    accept(panel);
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     expect(step(panel)).toBe("sending");
@@ -213,12 +212,11 @@ describe("submitting a deposit", () => {
     expect(find<HTMLButtonElement>(panel, "#qsb-outcome-resend")?.hidden).toBe(true);
   });
 
-  test("not confirmed yet offers Resend, which resends once", async () => {
+  test("status unknown offers Resend, which resends once", async () => {
     const panel = await reviewed({ deposit: { resolve: depositResult(0, "uncertain") } });
-    accept(panel);
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     await flush();
-    expect(text(panel, "#qsb-outcome-title")).toBe("Not confirmed yet");
+    expect(text(panel, "#qsb-outcome-title")).toBe("Deposit status unknown");
     expect(text(panel, "#qsb-outcome-line")).toBe("Resend sends the same transaction again.");
     // A pending deposit is not on the network yet: no link.
     expect(find<HTMLAnchorElement>(panel, "#qsb-outcome-tx")?.hidden).toBe(true);
@@ -233,12 +231,11 @@ describe("submitting a deposit", () => {
 
   test("a refused deposit says the vault can take a new one; Done goes back", async () => {
     const panel = await reviewed({ deposit: { resolve: depositResult(0, "rejected") } });
-    accept(panel);
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     await flush();
     expect(text(panel, "#qsb-outcome-title")).toBe("Deposit refused");
     expect(text(panel, "#qsb-outcome-line")).toBe(
-      "MARA refused it. The deposit can be funded again.",
+      "The miner, MARA, refused it. The deposit can be funded again.",
     );
     find<HTMLButtonElement>(
       panel,
@@ -247,11 +244,10 @@ describe("submitting a deposit", () => {
     expect(panel.app().querySelector("#qsb-account")).not.toBe(null);
   });
 
-  test("a changed quote is quoted again and asked again, never sent on the old tick", async () => {
+  test("a changed quote is quoted again and sent only when Fund is pressed again", async () => {
     const panel = await reviewed({
       deposit: { reject: new Error(QSB_VAULT_REFUSALS.quoteChanged) },
     });
-    accept(panel);
     panel.script.quote = { resolve: { ...QUOTE, feeRate: "4", feeSat: 900 } };
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     await flush();
@@ -266,9 +262,10 @@ describe("submitting a deposit", () => {
     expect(text(panel, "#qsb-deposit-quote")).toContain(
       "Network fee 0.00000900 BTC Fee rate 4 sat/vB",
     );
-    expect(depositButton(panel)?.disabled).toBe(true);
+    // The new review stands on its own; nothing is sent until the user decides.
+    expect(depositButton(panel)?.disabled).toBe(false);
+    expect(panel.calls.deposit).toEqual([["qsb-2", 0, 100_000, 564]]);
     panel.script.deposit = { resolve: depositResult(0, "submitted") };
-    accept(panel);
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     await flush();
     expect(panel.calls.deposit).toEqual([
@@ -281,7 +278,6 @@ describe("submitting a deposit", () => {
     const panel = await reviewed({
       deposit: { reject: new Error(QSB_VAULT_REFUSALS.insufficientFunds) },
     });
-    accept(panel);
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     await flush();
     expect(step(panel)).toBe("review");
@@ -294,7 +290,6 @@ describe("submitting a deposit", () => {
 
   test("a lost reply is status unknown, with no way to send again from here", async () => {
     const panel = await reviewed({ deposit: { reject: new SubmissionUnknownError("lost", null) } });
-    accept(panel);
     submitForm(find<HTMLFormElement>(panel, "#qsb-review-form"));
     await flush();
     expect(step(panel)).toBe("outcome");

@@ -17,7 +17,12 @@ import {
   type QsbVaultView,
 } from "@bramble/wallet-model/qsb-vaults";
 import { friendlyError } from "../../runtime/friendly-error";
-import { QSB_IMPORT_READ_ONLY, qsbAccountLabel, qsbAccountState } from "./qsb-model";
+import {
+  QSB_CUSTODY_NOTE,
+  QSB_IMPORT_READ_ONLY,
+  qsbAccountLabel,
+  qsbAccountState,
+} from "./qsb-model";
 import { isQsbTxid } from "./qsb-vault-runtime";
 
 const SAT_PER_BTC = 100_000_000n;
@@ -125,9 +130,23 @@ const QSB_VAULT_LABEL: Readonly<Record<QsbVaultDisplay, string>> = {
   sent: "Sent",
   unavailable: "Unavailable",
   unfunded: "Unfunded",
-  waiting: "Waiting to send",
+  waiting: "Status unknown",
   withdrawn: "Withdrawn",
 };
+
+/**
+ * The line a few row states need under their label: what Resend does for a
+ * deposit signed here but not known to have reached MARA, and why an
+ * unavailable deposit offers nothing.
+ */
+const QSB_VAULT_HINT: Readonly<Partial<Record<QsbVaultDisplay, string>>> = {
+  unavailable: "This deposit can't be funded or withdrawn here.",
+  waiting: "Resend sends the same transaction again.",
+};
+
+/** The line under a row state's label, or null. */
+export const qsbVaultHint = (vault: QsbVaultView): string | null =>
+  QSB_VAULT_HINT[qsbVaultDisplay(vault)] ?? null;
 
 /** The row's status line: its label, and a funded vault's confirmations when known. */
 export const qsbVaultStatusText = (vault: QsbVaultView): string => {
@@ -211,11 +230,19 @@ export const QSB_ACCESS_LINE = "Bramble needs access to the QSB service.";
 export const QSB_ALLOW_ACCESS = "Allow access";
 /** While a QSB vault's deposits load. */
 export const QSB_VAULTS_LOADING = "Loading deposits…";
-/** A QSB vault with no deposits yet. */
+/** A QSB vault with no deposits yet, when it can't take one here. */
 export const QSB_VAULTS_EMPTY = "No deposits yet.";
-/** The New deposit confirm step's one fact. */
+/** A QSB vault with no deposits yet that can take one: the three steps, in order. */
+export const QSB_VAULT_STEPS: readonly string[] = [
+  "Send bitcoin to the address above.",
+  "Create a deposit.",
+  "Fund it from your balance.",
+];
+/** The New deposit confirm step's one fact, and what follows it. */
 export const QSB_VAULT_CONFIRM =
-  "Bramble sets up a new deposit with the QSB service. It can be funded once.";
+  "Bramble sets up a new deposit with the QSB service, then asks how much to fund. A deposit can be funded once.";
+/** Beside the no-deposits line of a QSB vault whose phrase is not backed up. */
+export const QSB_BACK_UP_LABEL = "Back up phrase";
 /** While the background signs in and registers the deposit. */
 export const QSB_VAULT_CREATING = "Creating deposit…";
 /** The control that recovers a read-only QSB vault's deposits, and its screen's button. */
@@ -224,8 +251,7 @@ export const QSB_RECOVER_LABEL = "Recover deposits";
  * The Recover deposits screen's warning body, under the custody title. A
  * warning: no contractions.
  */
-export const QSB_RECOVER_BODY =
-  "Bramble cannot know whether another install already released keys for these deposits. Recover only if the install that created this QSB vault is gone.";
+export const QSB_RECOVER_BODY = `${QSB_CUSTODY_NOTE} Bramble cannot know whether another install already released keys for these deposits. Recover only if the install that created this QSB vault is gone.`;
 /** While the background recovers the deposits. */
 export const QSB_RECOVERING = "Recovering…";
 /** While a funding or a resend is in flight. */
@@ -236,19 +262,26 @@ export const QSB_SUBMISSION_COPY: Readonly<
   Record<QsbSubmission, { readonly line: string; readonly title: string }>
 > = {
   rejected: {
-    line: "MARA refused it. The deposit can be funded again.",
+    line: "The miner, MARA, refused it. The deposit can be funded again.",
     title: "Deposit refused",
   },
   submitted: { line: "The deposit shows as funded once it's mined.", title: "Deposit sent" },
-  uncertain: { line: "Resend sends the same transaction again.", title: "Not confirmed yet" },
+  uncertain: { line: "Resend sends the same transaction again.", title: "Deposit status unknown" },
 };
 
 /** A submission outcome as one status line: `Deposit sent. The vault shows…`. */
 export const qsbSubmissionLine = (submission: QsbSubmission): string =>
   `${QSB_SUBMISSION_COPY[submission].title}. ${QSB_SUBMISSION_COPY[submission].line}`;
 
-/** A deposit whose reply was lost: its heading. */
-export const QSB_DEPOSIT_UNKNOWN_TITLE = "Deposit status unknown";
+/** A deposit whose reply was lost: its heading, the same as a lost resend's. */
+export const QSB_DEPOSIT_UNKNOWN_TITLE = QSB_SUBMISSION_COPY.uncertain.title;
+
+/**
+ * Under the amount field: the confirmed balance and the minimum deposit,
+ * both before the user types, so neither arrives as an error.
+ */
+export const qsbAmountHint = (balanceSat: number): string =>
+  `Confirmed balance: ${btcText(balanceSat)} · Minimum: ${btcText(QSB_MIN_DEPOSIT_SAT)}`;
 
 /** Whether a rejected deposit was refused only because its cost moved since the quote. */
 export const isQsbQuoteChanged = (error: unknown): boolean =>

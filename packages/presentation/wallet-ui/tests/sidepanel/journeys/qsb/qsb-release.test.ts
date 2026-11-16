@@ -97,11 +97,12 @@ describe("the release review", () => {
     expect(step(panel)).toBe("review");
     expect(panel.calls.withdrawalReview).toEqual([["qsb-2", 3]]);
     expect(find(panel, "#qsb-release-vault")?.textContent).toBe("QSB vault 2 · Deposit 4");
-    // Both inputs the release spends, as the Withdraw summary summed them.
+    // Outcome first, then both inputs the release spends, as the Withdraw
+    // summary summed them; every row the BIP requires is still here.
     expect(text(find(panel, "#qsb-release-review"))).toBe(
-      "Network Bitcoin mainnet Releases 15 one-time keys Deposit 0.00100000 BTC " +
-        "From your balance + 0.00010000 BTC Network fee − 0.00000900 BTC " +
-        `You receive 0.00109100 BTC To ${DESTINATION} Size 1180 vB`,
+      `You receive 0.00109100 BTC To ${DESTINATION} Network Bitcoin mainnet ` +
+        "Deposit 0.00100000 BTC From your balance + 0.00010000 BTC " +
+        "Network fee − 0.00000900 BTC Releases 15 one-time keys Size 1180 vB",
     );
     const warning = find(panel, "#qsb-binding-warning");
     expect(text(warning)).toBe(
@@ -209,11 +210,11 @@ describe("releasing", () => {
     expect(second?.value).toBe("");
   });
 
-  test("not confirmed yet offers Resend, which resends the same withdrawal", async () => {
+  test("status unknown offers Resend, which resends the same withdrawal", async () => {
     const panel = await release({ release: { resolve: withdrawalResult(3, "uncertain") } });
     send(panel);
     await flush();
-    expect(text(find(panel, "#qsb-release-title"))).toBe("Not confirmed yet");
+    expect(text(find(panel, "#qsb-release-title"))).toBe("Withdrawal status unknown");
     expect(text(find(panel, "#qsb-release-line"))).toBe("Resend sends the same withdrawal again.");
     panel.script.withdrawalResend = { resolve: withdrawalResult(3, "confirmed") };
     find<HTMLButtonElement>(panel, "#qsb-release-resend")?.click();

@@ -11,7 +11,9 @@ import { escapeHtml } from "@bramble/core/html";
 import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import type { QsbOwnerFunds, QsbVaultView } from "@bramble/wallet-model/qsb-vaults";
+import { QSB_WITHDRAWAL_REFUSALS } from "@bramble/wallet-model/qsb-withdrawals";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import { friendlyError } from "../../runtime/friendly-error";
 import { icon } from "../../shared/icons";
 import { accountLabel, flowHeader, flowScreen } from "../../shared/parts";
 import { QSB_NAME } from "./qsb-model";
@@ -20,6 +22,7 @@ import {
   QSB_ACCESS_LINE,
   QSB_ADDRESS_HINT,
   QSB_ALLOW_ACCESS,
+  QSB_BACK_UP_LABEL,
   QSB_FUNDS_UNAVAILABLE,
   QSB_RECOVER_BODY,
   QSB_RECOVER_LABEL,
@@ -27,6 +30,7 @@ import {
   QSB_TX_LINK_LABEL,
   QSB_VAULT_CONFIRM,
   QSB_VAULT_CREATING,
+  QSB_VAULT_STEPS,
   QSB_VAULTS_EMPTY,
   QSB_VAULTS_LOADING,
   type QsbRecoverOffer,
@@ -34,10 +38,12 @@ import {
   qsbDepositLabel,
   qsbDepositLink,
   qsbVaultDisplay,
+  qsbVaultHint,
   qsbVaultStatusText,
 } from "./qsb-vault-model";
 import {
   QSB_CUSTODY_TITLE,
+  qsbReviewable,
   qsbWithdrawable,
   qsbWithdrawalDisplay,
   qsbWithdrawalHint,
@@ -134,21 +140,27 @@ export type QsbVaultRowOptions = {
   readonly writer: boolean;
   /** Whether vault `v` has a write in flight (funding, resend, start or release). */
   readonly busy: (v: number) => boolean;
+  /**
+   * The confirmed balance, or null when unknown (no grant, or the service
+   * could not be reached). At 0 a withdrawal can't pay its helper input, so
+   * Withdraw gives way to the line saying what to do; unknown keeps Withdraw.
+   */
+  readonly balanceSat: number | null;
 };
 
 // The one action a row offers: its control's data attribute, label and
 // screen-reader verb ("Fund deposit 1").
 type RowAction = { readonly attribute: string; readonly label: string; readonly verb: string };
 
-// A found withdrawal the account may review: the writer's own, or a read-only
-// account's recovered one, whose deposit stays `unknown`.
-const reviewable = (vault: QsbVaultView, writer: boolean): boolean =>
-  writer ? vault.state !== "unknown" : vault.state === "unknown";
+// A funded deposit the writer could withdraw but for an empty balance.
+const needsBalance = (vault: QsbVaultView, options: QsbVaultRowOptions): boolean =>
+  options.writer && options.balanceSat === 0 && qsbWithdrawable(vault);
 
-const rowAction = (vault: QsbVaultView, writer: boolean): RowAction | null => {
+const rowAction = (vault: QsbVaultView, options: QsbVaultRowOptions): RowAction | null => {
+  const { writer } = options;
   const withdrawal = qsbWithdrawalDisplay(vault);
-  if (withdrawal === "ready" && reviewable(vault, writer)) {
-    return { attribute: "data-qsb-review", label: "Review", verb: "Review the withdrawal of" };
+  if (qsbReviewable(vault, writer)) {
+    return { attribute: "data-qsb-review", label: "Finish", verb: "Finish the withdrawal of" };
   }
   if (withdrawal === "uncertain") {
     return {
@@ -163,14 +175,14 @@ const rowAction = (vault: QsbVaultView, writer: boolean): RowAction | null => {
   if (qsbVaultDisplay(vault) === "waiting") {
     return { attribute: "data-qsb-resend", label: "Resend", verb: "Resend" };
   }
-  if (writer && qsbWithdrawable(vault)) {
+  if (writer && qsbWithdrawable(vault) && !needsBalance(vault, options)) {
     return { attribute: "data-qsb-withdraw", label: "Withdraw", verb: "Withdraw" };
   }
   return null;
 };
 
 const vaultAction = (vault: QsbVaultView, options: QsbVaultRowOptions): string => {
-  const action = rowAction(vault, options.writer);
+  const action = rowAction(vault, options);
   if (action === null) return "";
   const busy = options.busy(vault.v);
   return button({
@@ -186,16 +198,22 @@ const vaultAction = (vault: QsbVaultView, options: QsbVaultRowOptions): string =
   });
 };
 
+const hintLine = (line: string | null): string =>
+  line === null ? "" : `<span class="hint">${escapeHtml(line)}</span>`;
+
 // The row's status line and hint: its withdrawal's once one has started,
-// otherwise its deposit's.
-const vaultStatus = (vault: QsbVaultView): string => {
+// otherwise its deposit's, or why Withdraw is not offered yet.
+const vaultStatus = (vault: QsbVaultView, options: QsbVaultRowOptions): string => {
   const withdrawal = qsbWithdrawalDisplay(vault);
-  if (withdrawal === null)
-    return `<span class="hint">${escapeHtml(qsbVaultStatusText(vault))}</span>`;
-  const hint = qsbWithdrawalHint(withdrawal);
-  return `<span class="hint">${escapeHtml(qsbWithdrawalStatusText(withdrawal, vault))}</span>${
-    hint === null ? "" : `<span class="hint">${escapeHtml(hint)}</span>`
-  }`;
+  if (withdrawal === null) {
+    const hint = needsBalance(vault, options)
+      ? friendlyError(QSB_WITHDRAWAL_REFUSALS.helperNeeded).message
+      : qsbVaultHint(vault);
+    return hintLine(qsbVaultStatusText(vault)) + hintLine(hint);
+  }
+  return (
+    hintLine(qsbWithdrawalStatusText(withdrawal, vault)) + hintLine(qsbWithdrawalHint(withdrawal))
+  );
 };
 
 // The withdrawal's transaction once MARA has it, otherwise the deposit's.
@@ -214,30 +232,43 @@ const vaultRow = (vault: QsbVaultView, options: QsbVaultRowOptions): string =>
   `<li class="allowance-row" data-qsb-vault="${vault.v}">
     <span class="allowance-copy">
       <strong>${escapeHtml(qsbDepositLabel(vault.v))}</strong>
-      ${vaultStatus(vault)}
+      ${vaultStatus(vault, options)}
       ${vault.deposit.amountSat === null ? "" : `<span class="hint">${escapeHtml(btcText(vault.deposit.amountSat))}</span>`}
       ${vaultLink(vault)}
     </span>
     ${vaultAction(vault, options)}
   </li>`;
 
-/** The vault list: the empty state, or one row per vault in index order. */
+// A writer's empty vault list: how a deposit comes to be, in three steps.
+const vaultSteps = (): string =>
+  `<ol class="qsb-steps" aria-label="How to deposit">${QSB_VAULT_STEPS.map(
+    (step) => `<li>${escapeHtml(step)}</li>`,
+  ).join("")}</ol>`;
+
+/**
+ * The vault list: for none, the three steps to a deposit when the account can
+ * take one, otherwise the empty state; else one row per vault in index order.
+ */
 export const qsbVaultRows = (
   vaults: readonly QsbVaultView[],
   options: QsbVaultRowOptions,
 ): string =>
   vaults.length === 0
-    ? emptyState(QSB_VAULTS_EMPTY)
+    ? options.writer
+      ? vaultSteps()
+      : emptyState(QSB_VAULTS_EMPTY)
     : `<ul class="allowance-list">${vaults.map((vault) => vaultRow(vault, options)).join("")}</ul>`;
 
 /**
  * Below the list: New deposit for a writer, otherwise the line saying why
- * not, then Recover deposits when `recover` offers it.
+ * not (with Back up phrase beside it when `backUp`, the one fix), then
+ * Recover deposits when `recover` offers it.
  */
 export const qsbVaultActionMarkup = (
   noVaultLine: string | null,
   busy: boolean,
   recover: QsbRecoverOffer = "none",
+  backUp = false,
 ): string =>
   (noVaultLine === null
     ? button({
@@ -248,6 +279,13 @@ export const qsbVaultActionMarkup = (
         variant: "secondary",
       })
     : `<p class="hint">${escapeHtml(noVaultLine)}</p>`) +
+  (backUp
+    ? button({
+        attributes: { id: "qsb-vault-backup" },
+        icon: "lock",
+        label: QSB_BACK_UP_LABEL,
+      })
+    : "") +
   (recover === "none"
     ? ""
     : button({

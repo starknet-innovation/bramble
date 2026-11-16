@@ -13,6 +13,10 @@
  * and drops every reply still in flight; the journey calls it whenever this
  * screen is left or repainted.
  *
+ * A created deposit opens its Fund screen at once; a QSB vault still to be
+ * backed up offers Back up phrase beside the line saying why it takes no
+ * deposits.
+ *
  * A read-only QSB vault offers Recover deposits (the screen's main action
  * while it shows no deposits): a step under the outside-custody-conformance
  * warning, then the recovery, whose reply is the QSB vault read again.
@@ -36,7 +40,7 @@ import {
   qsbVaultActionMarkup,
   qsbVaultRows,
 } from "./qsb-account-view";
-import { qsbAccountLabel, qsbWriteFailure } from "./qsb-model";
+import { qsbAccountLabel, qsbAccountState, qsbWriteFailure } from "./qsb-model";
 import type { QsbWallet } from "./qsb-runtime";
 import {
   qsbDepositInFlight,
@@ -61,6 +65,8 @@ export type QsbAccountDeps = {
   readonly accountId: () => string | null;
   /** The screen's title, renamed "QSB vault <n>" for the one open; skipped when absent. */
   readonly heading: HTMLElement | null;
+  /** Opens this QSB vault's phrase backup; Back up phrase does this. */
+  readonly openBackup: (accountId: string) => void;
   readonly openDeposit: (accountId: string, v: number) => void;
   /** Opens the release review of deposit `v`'s found withdrawal. */
   readonly openRelease: (accountId: string, v: number) => void;
@@ -239,12 +245,11 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
     );
   };
 
+  // A created deposit has one next step, so the screen goes straight to it.
   const attachCreate = (flight: Promise<QsbVaultView>): void =>
     attachWrite("create", flight, (vault) => {
-      if (reading === null) return load();
-      reading = withVault(reading, vault);
-      notice = "";
-      paint();
+      const current = deps.accountId();
+      if (current !== null) deps.openDeposit(current, vault.v);
     });
 
   // A recovery's reply is the QSB vault read again.
@@ -331,7 +336,11 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
   const paintAction = (id: string, held: QsbAccountView, current: QsbVaultsReading): void => {
     const writing = writes.pendingCreate(id) !== null || writes.pendingRecover(id) !== null;
     const offer = qsbRecoverOffer(held, current.vaults);
-    if (!region(action, qsbVaultActionMarkup(qsbNoVaultLine(held), writing, offer))) return;
+    const backUp = qsbAccountState(held) === "backup-needed";
+    if (!region(action, qsbVaultActionMarkup(qsbNoVaultLine(held), writing, offer, backUp))) return;
+    find<HTMLButtonElement>("#qsb-vault-backup")?.addEventListener("click", () =>
+      deps.openBackup(id),
+    );
     find<HTMLButtonElement>("#qsb-vault-new")?.addEventListener("click", () => {
       confirming = "create";
       show("confirm");
@@ -388,10 +397,9 @@ export const bindQsbAccount = (deps: QsbAccountDeps): QsbAccountSession => {
       writes.pendingDeposit(id, v) !== null ||
       writes.pendingStart(id, v) !== null ||
       writes.pendingWithdrawal(id, v) !== null;
-    if (
-      vaultList &&
-      region(vaultList, qsbVaultRows(current.vaults, { busy, writer: account.writer }))
-    ) {
+    const balanceSat = accessHeld ? (current.funds?.totalSat ?? null) : null;
+    const rows = qsbVaultRows(current.vaults, { balanceSat, busy, writer: account.writer });
+    if (vaultList && region(vaultList, rows)) {
       bindRows(vaultList, id);
     }
     paintAction(id, account, current);

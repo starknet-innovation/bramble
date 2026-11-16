@@ -43,7 +43,9 @@ test("creates, backs up and imports QSB vaults", async ({ extension }) => {
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
 
   await openQsbAccounts(sidepanel);
-  await expect(sidepanel.locator("#qsb-accounts-list")).toContainText("No QSB vaults yet.");
+  await expect(sidepanel.locator("#qsb-accounts-list")).toContainText(
+    "No QSB (Quantum Safe Bitcoin) vaults yet.",
+  );
 
   // Create: the account exists before its phrase is shown, and the phrase is
   // shown only against the re-typed password.

@@ -133,7 +133,7 @@ export const createQsbJourney = (deps: QsbJourneyDeps): QsbJourney => {
   const bindScreen = (app: Element): Session | null => {
     const list = app.querySelector<HTMLElement>("#qsb-accounts-list");
     if (list) {
-      bindQsbAccounts({ create, list, openAccount, openBackup, root: app, wallet });
+      bindQsbAccounts({ access, create, list, openAccount, openBackup, root: app, wallet });
       return null;
     }
     const detail = app.querySelector<HTMLElement>("#qsb-account");
@@ -142,6 +142,7 @@ export const createQsbJourney = (deps: QsbJourneyDeps): QsbJourney => {
         access,
         accountId: () => account,
         heading: app.querySelector<HTMLElement>(".flow-title h1"),
+        openBackup,
         openDeposit,
         openRelease,
         openWithdraw,

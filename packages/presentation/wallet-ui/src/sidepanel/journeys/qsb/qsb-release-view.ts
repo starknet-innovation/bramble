@@ -14,15 +14,21 @@ import { QSB_KEYS_RELEASED } from "./qsb-withdrawal-model";
 
 /**
  * The review's rows for a validated review: what the BIP requires before
- * release — the network and the one-time keys it releases, then both inputs
- * the transaction spends (the deposit and the helper from the QSB vault's
- * balance, which Bramble signs), the network fee, what the full destination
- * receives, and the size. The same sum, in the same order, as the Withdraw
- * summary the terms were accepted on.
+ * release, outcome first — what the full destination receives, where, and on
+ * which network — then both inputs the transaction spends (the deposit and
+ * the helper from the QSB vault's balance, which Bramble signs), the network
+ * fee, the one-time keys it releases, and the size. The same sum, in the same
+ * order, as the Withdraw summary the terms were accepted on; every row the BIP
+ * requires is still here.
  */
 export const qsbReleaseReviewRows = (review: QsbWithdrawalReview): string =>
   receiptRows([
+    { label: "You receive", value: btcText(review.outputSat), valueStyle: "code" },
+    { label: "To", value: review.destination, valueStyle: "code" },
     { label: "Network", value: "Bitcoin mainnet" },
+    { label: "Deposit", value: btcText(review.fundingSat), valueStyle: "code" },
+    { label: "From your balance", value: `+ ${btcText(review.helperSat)}`, valueStyle: "code" },
+    { label: "Network fee", value: `− ${btcText(review.feeSat)}`, valueStyle: "code" },
     {
       label: "Releases",
       value:
@@ -30,10 +36,5 @@ export const qsbReleaseReviewRows = (review: QsbWithdrawalReview): string =>
           ? `${PQB_DISCLOSED_SECRETS} one-time keys and 4 signatures`
           : QSB_KEYS_RELEASED,
     },
-    { label: "Deposit", value: btcText(review.fundingSat), valueStyle: "code" },
-    { label: "From your balance", value: `+ ${btcText(review.helperSat)}`, valueStyle: "code" },
-    { label: "Network fee", value: `− ${btcText(review.feeSat)}`, valueStyle: "code" },
-    { label: "You receive", value: btcText(review.outputSat), valueStyle: "code" },
-    { label: "To", value: review.destination, valueStyle: "code" },
     { label: "Size", value: `${review.vsize} vB`, valueStyle: "code" },
   ]);

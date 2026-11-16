@@ -104,7 +104,16 @@ export const JOURNEY_STYLES = `
   #qsb-account > [data-qsb-account-step="detail"] { gap: ${SPACE.lg}; }
   /* A row's own action keeps its one-line label at 320 px; the name beside it
      gives way instead. */
-  [data-qsb-back-up], [data-qsb-deposit], [data-qsb-resend] { flex: none; }
+  [data-qsb-back-up], [data-qsb-deposit], [data-qsb-resend], [data-qsb-review],
+  [data-qsb-withdraw], [data-qsb-resend-withdrawal] { flex: none; }
+  /* An empty QSB vault's three steps to a deposit: numbered, in the hint tone. */
+  .qsb-steps {
+    color: var(--bramble-muted);
+    display: grid;
+    gap: ${SPACE.xs};
+    margin: 0;
+    padding-left: ${SPACE.lg};
+  }
   /* The BIP's unverified-binding statement before a release: a warning in the
      danger tone, never a footnote. */
   .qsb-binding-warning {

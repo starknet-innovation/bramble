@@ -53,7 +53,9 @@ const text = (node: Element | null | undefined): string => {
 const row = (app: HTMLElement, v: number) => app.querySelector(`[data-qsb-vault="${v}"]`);
 
 // Opens `account` from the list, as a tap on its row does. The panel's
-// `script` stays live: a test may change an answer between reads.
+// `script` stays live: a test may change an answer between reads. The list's
+// own read of each account's deposits (for its "withdrawal ready" line) is
+// forgotten, so `calls.vaults` counts only this screen's reads.
 const opened = async (
   script: QsbScript,
   account: (typeof QSB_VIEWS)[keyof typeof QSB_VIEWS] = QSB_VIEWS.ready,
@@ -61,6 +63,7 @@ const opened = async (
   const panel = qsbPanel({ list: { resolve: [account] }, ...script });
   panel.paint("qsb-accounts");
   await flush();
+  panel.calls.vaults.splice(0);
   panel.app().querySelector<HTMLButtonElement>(`[data-qsb-open="${account.id}"]`)?.click();
   await flush();
   return panel;
@@ -79,13 +82,17 @@ describe("a QSB account", () => {
     );
     expect(text(app.querySelector("#qsb-balance"))).toBe("Confirmed balance 0.00250000 BTC");
     expect(text(row(app, 0))).toBe("Deposit 1 Unfunded Fund");
-    expect(text(row(app, 1))).toBe("Deposit 2 Waiting to send 0.00100000 BTC Resend");
+    expect(text(row(app, 1))).toBe(
+      "Deposit 2 Status unknown Resend sends the same transaction again. 0.00100000 BTC Resend",
+    );
     expect(text(row(app, 2))).toBe("Deposit 3 Sent 0.00100000 BTC 4a5e1e…a33b");
     expect(text(row(app, 3))).toBe(
       "Deposit 4 Funded · 3 confirmations 0.00100000 BTC 4a5e1e…a33b Withdraw",
     );
     expect(text(row(app, 4))).toBe("Deposit 5 Withdrawn 0.00100000 BTC 4a5e1e…a33b");
-    expect(text(row(app, 5))).toBe("Deposit 6 Unavailable");
+    expect(text(row(app, 5))).toBe(
+      "Deposit 6 Unavailable This deposit can't be funded or withdrawn here.",
+    );
     expect(app.querySelector("#qsb-vault-new")?.textContent).toBe("New deposit");
     expect(app.querySelector('[data-qsb-deposit="0"]')?.getAttribute("aria-label")).toBe(
       "Fund deposit 1",
@@ -136,7 +143,10 @@ describe("a QSB account", () => {
   test("an account that cannot make vaults gets a line instead, and no Deposit", async () => {
     for (const [account, line] of [
       [QSB_VIEWS.readOnly, "An imported phrase can't take new deposits here. Recover deposits"],
-      [QSB_VIEWS.backupNeeded, "Back up this QSB vault's phrase to take new deposits."],
+      [
+        QSB_VIEWS.backupNeeded,
+        "Back up this QSB vault's phrase to take new deposits. Back up phrase",
+      ],
       [QSB_VIEWS.historyUnavailable, "Bramble can't read this QSB vault's history right now."],
     ] as const) {
       const panel = await opened({ vaults: { resolve: reading(EVERY_VAULT) } }, account);
@@ -147,9 +157,30 @@ describe("a QSB account", () => {
     }
   });
 
-  test("an empty account says so", async () => {
+  test("Back up phrase, the one fix for a QSB vault not backed up, opens its backup", async () => {
+    const panel = await opened({ vaults: { resolve: reading([]) } }, QSB_VIEWS.backupNeeded);
+    panel.app().querySelector<HTMLButtonElement>("#qsb-vault-backup")?.click();
+    expect(panel.visited).toEqual(["qsb-account", "qsb-backup"]);
+    for (const account of [QSB_VIEWS.ready, QSB_VIEWS.readOnly, QSB_VIEWS.historyUnavailable]) {
+      const other = await opened({ vaults: { resolve: reading([]) } }, account);
+      expect(other.app().querySelector("#qsb-vault-backup")).toBe(null);
+    }
+  });
+
+  test("an empty account that can take deposits lists the three steps to one", async () => {
     const panel = await opened({ vaults: { resolve: reading([]) } });
+    const steps = Array.from(panel.app().querySelectorAll("#qsb-vaults .qsb-steps li"));
+    expect(steps.map((item) => item.textContent)).toEqual([
+      "Send bitcoin to the address above.",
+      "Create a deposit.",
+      "Fund it from your balance.",
+    ]);
+  });
+
+  test("an empty account that can't take deposits only says it has none", async () => {
+    const panel = await opened({ vaults: { resolve: reading([]) } }, QSB_VIEWS.readOnly);
     expect(text(panel.app().querySelector("#qsb-vaults"))).toBe("No deposits yet.");
+    expect(panel.app().querySelector(".qsb-steps")).toBe(null);
   });
 
   test("a service out of reach shows a line and a retry; the vaults still show", async () => {
@@ -212,7 +243,7 @@ describe("a QSB account", () => {
 });
 
 describe("New vault", () => {
-  test("confirms, creates once, and lands back on the account with the new vault", async () => {
+  test("confirms, creates once, and opens the new deposit's Fund screen", async () => {
     const created = deferred<ReturnType<typeof unfundedVault>>();
     const panel = await opened({
       createVault: { wait: created.promise },
@@ -222,7 +253,7 @@ describe("New vault", () => {
     app.querySelector<HTMLButtonElement>("#qsb-vault-new")?.click();
     expect(step(app)).toBe("confirm");
     expect(text(app.querySelector('[data-qsb-account-step="confirm"]'))).toBe(
-      "New deposit Bramble sets up a new deposit with the QSB service. It can be funded once. Create deposit Cancel",
+      "New deposit Bramble sets up a new deposit with the QSB service, then asks how much to fund. A deposit can be funded once. Create deposit Cancel",
     );
     app.querySelector<HTMLButtonElement>("#qsb-vault-create")?.click();
     app.querySelector<HTMLButtonElement>("#qsb-vault-create")?.click();
@@ -237,8 +268,24 @@ describe("New vault", () => {
     expect(panel.calls.createVault).toEqual(["qsb-2"]);
     created.resolve(unfundedVault(1));
     await flush();
-    expect(step(panel.app())).toBe("detail");
-    expect(text(row(panel.app(), 1))).toBe("Deposit 2 Unfunded Fund");
+    expect(panel.visited.at(-1)).toBe("qsb-deposit");
+    expect(panel.app().querySelector("#qsb-deposit-vault")?.textContent).toBe(
+      "QSB vault 2 · Deposit 2",
+    );
+  });
+
+  test("a creation answered after the screen was left opens nothing", async () => {
+    const created = deferred<ReturnType<typeof unfundedVault>>();
+    const panel = await opened({
+      createVault: { wait: created.promise },
+      vaults: { resolve: reading([]) },
+    });
+    panel.app().querySelector<HTMLButtonElement>("#qsb-vault-new")?.click();
+    panel.app().querySelector<HTMLButtonElement>("#qsb-vault-create")?.click();
+    panel.paint("qsb-accounts");
+    created.resolve(unfundedVault(0));
+    await flush();
+    expect(panel.visited).not.toContain("qsb-deposit");
   });
 
   test("Cancel creates nothing", async () => {
@@ -345,9 +392,12 @@ describe("the deposit poll", () => {
     const busy = await opened({ vaults: { resolve: reading([depositedVault(0, "pending")]) } });
     busy.paint("qsb-accounts");
     expect(busy.timers.pending()).toBe(0);
+    await flush();
+    // The list reads the deposits once for its own rows; the poll adds nothing.
+    const listed = busy.calls.vaults.length;
     setVisibility("hidden");
     setVisibility("visible");
     await flush();
-    expect(busy.calls.vaults).toHaveLength(1);
+    expect(busy.calls.vaults).toHaveLength(listed);
   });
 });

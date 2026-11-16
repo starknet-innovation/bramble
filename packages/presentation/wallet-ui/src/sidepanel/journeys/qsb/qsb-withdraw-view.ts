@@ -6,12 +6,12 @@
 import { escapeHtml } from "@bramble/core/html";
 import { emptyState, receipt, receiptRows } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
-import { checkboxField, textField } from "@bramble/ui-kit/fields";
+import { textField } from "@bramble/ui-kit/fields";
 import type { QsbWithdrawalQuote } from "@bramble/wallet-model/qsb-withdrawals";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { flowHeader, flowScreen } from "../../shared/parts";
 import { btcText, QSB_ALLOW_ACCESS, QSB_VAULTS_LOADING } from "./qsb-vault-model";
-import { QSB_WITHDRAW_STARTING, QSB_WITHDRAW_TERMS } from "./qsb-withdrawal-model";
+import { QSB_HELPER_HINT, QSB_WITHDRAW_STARTING, QSB_WITHDRAW_TERMS } from "./qsb-withdrawal-model";
 
 /** The steps the Withdraw screen moves between; see {@link bindQsbWithdraw}. */
 export type QsbWithdrawStep = "destination" | "loading" | "starting" | "summary" | "unavailable";
@@ -47,8 +47,8 @@ export const qsbWithdrawFlow = (status: WalletStatus): string =>
       <section class="section" data-qsb-withdraw-step="summary" hidden>
         <form id="qsb-withdraw-form" class="stack" novalidate>
           ${receipt([], { id: "qsb-withdraw-quote" })}
+          <p class="hint">${escapeHtml(QSB_HELPER_HINT)}</p>
           <p class="hint">${escapeHtml(QSB_WITHDRAW_TERMS)}</p>
-          ${checkboxField({ name: "qsbWithdrawAccept", text: "I accept these costs" })}
           <p id="qsb-withdraw-result" role="status"></p>
           ${button({ disabled: true, label: "Start withdrawal", type: "submit" })}
           ${button({ attributes: { id: "qsb-withdraw-back" }, label: "Change address", variant: "ghost" })}
@@ -59,16 +59,17 @@ export const qsbWithdrawFlow = (status: WalletStatus): string =>
   );
 
 /**
- * The summary's rows for a validated quote, as the sum the destination
- * receives: the deposit, plus the helper from the QSB vault's own balance,
- * less the network fee; then where it goes and at what rate.
+ * The summary's rows for a validated quote, outcome first: what the
+ * destination receives and where it goes, then the sum behind it (the
+ * deposit, plus the helper from the QSB vault's own balance, less the network
+ * fee) and the fee rate.
  */
 export const qsbWithdrawQuoteRows = (quote: QsbWithdrawalQuote): string =>
   receiptRows([
+    { label: "You receive", value: btcText(quote.outputSat), valueStyle: "code" },
+    { label: "To", value: quote.destination, valueStyle: "code" },
     { label: "Deposit", value: btcText(quote.fundingSat), valueStyle: "code" },
     { label: "From your balance", value: `+ ${btcText(quote.helperSat)}`, valueStyle: "code" },
     { label: "Network fee", value: `− ${btcText(quote.feeSat)}`, valueStyle: "code" },
-    { label: "You receive", value: btcText(quote.outputSat), valueStyle: "code" },
-    { label: "To", value: quote.destination, valueStyle: "code" },
     { label: "Fee rate", value: `${quote.feeRate} sat/vB`, valueStyle: "code" },
   ]);

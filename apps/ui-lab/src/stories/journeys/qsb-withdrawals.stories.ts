@@ -23,7 +23,6 @@ export const Destination = story("Withdraw · destination", "qsb-withdraw-destin
 export const NotAnAddress = story("Withdraw · not an address", "qsb-withdraw-invalid");
 export const HelperNeeded = story("Withdraw · helper needed", "qsb-withdraw-helper");
 export const Summary = story("Withdraw · summary", "qsb-withdraw-summary");
-export const Accepted = story("Withdraw · costs accepted", "qsb-withdraw-accepted");
 export const Starting = story("Withdraw · starting", "qsb-withdraw-starting");
 export const QuoteChanged = story("Withdraw · cost changed", "qsb-withdraw-quote-changed");
 export const WithdrawAccess = story("Withdraw · access not granted", "qsb-withdraw-access");
@@ -32,7 +31,7 @@ export const Mismatch = story("Release · doesn't check out", "qsb-release-misma
 export const Refused = story("Release · refused", "qsb-release-refused");
 export const Sending = story("Release · sending", "qsb-release-sending");
 export const Sent = story("Release · sent", "qsb-release-sent");
-export const Uncertain = story("Release · not confirmed yet", "qsb-release-uncertain");
+export const Uncertain = story("Release · status unknown", "qsb-release-uncertain");
 export const Confirmed = story("Release · withdrawn", "qsb-release-confirmed");
 export const Conflict = story("Release · conflict", "qsb-release-conflict");
 export const ReviewChanged = story("Release · review changed", "qsb-release-changed");
@@ -55,7 +54,7 @@ export const RowsNarrow = narrowSidepanelStory(
 export const SummaryNarrow = narrowSidepanelStory(
   "Withdraw summary · 320px",
   "qsb-withdrawals",
-  "qsb-withdraw-accepted",
+  "qsb-withdraw-summary",
   [(document) => assertValueFits(document, "#qsb-withdraw-quote .receipt-row dd")],
 );
 export const DestinationNarrow = narrowSidepanelStory(

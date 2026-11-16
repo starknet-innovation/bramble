@@ -1,10 +1,11 @@
 /**
  * Deposit into one unfunded QSB vault: an amount in BTC
  * (parsed to satoshis without floating point, at least the minimum deposit and
- * at most the confirmed balance), a quote, a review of every cost with the
- * three facts the user accepts, then the submission and its outcome.
+ * at most the confirmed balance, both shown before typing), a quote, a review
+ * of every cost, then the submission and its outcome. Fund itself is the
+ * acceptance: no tick box stands between the review and the decision.
  *
- * The deposit sends the quote's own `feeSat`, the fee the user accepted; a
+ * The deposit sends the quote's own `feeSat`, the fee shown in review; a
  * deposit the background would now price differently is refused as
  * `quoteChanged`, and the screen re-quotes and asks again. Writes go through
  * the journey's single-flight guard, so a double tap, a repaint or coming back
@@ -29,7 +30,6 @@ import { isQsbAccessNeeded, type QsbAccess, withQsbAccess } from "./qsb-access";
 import { type QsbDepositStep, qsbQuoteRows } from "./qsb-deposit-view";
 import { qsbWriteFailure } from "./qsb-model";
 import {
-  btcText,
   checkQsbDepositAmount,
   isQsbQuoteChanged,
   QSB_ACCESS_LINE,
@@ -37,6 +37,7 @@ import {
   QSB_DEPOSIT_UNKNOWN_TITLE,
   QSB_FUNDS_UNAVAILABLE,
   QSB_SUBMISSION_COPY,
+  qsbAmountHint,
   qsbDepositable,
   qsbDepositLink,
   qsbDepositTitle,
@@ -72,8 +73,8 @@ type QsbWriteOrigin =
 
 /**
  * Binds the deposit steps under `root` and loads the vault and its balance.
- * Missing controls are skipped. Deposit stays disabled until a quote is shown
- * and "I accept these costs" is ticked.
+ * Missing controls are skipped. Fund stays disabled until a quote is shown;
+ * each new quote is a new review the user decides on again.
  */
 export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
   const { access, root, wallet, writes } = deps;
@@ -84,7 +85,6 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
   const amountSubmit = amountForm?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const amountResult = find<HTMLElement>("#qsb-amount-result");
   const reviewForm = find<HTMLFormElement>("#qsb-review-form");
-  const accept = reviewForm?.querySelector<HTMLInputElement>('input[name="qsbAccept"]');
   const depositSubmit = reviewForm?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const reviewResult = find<HTMLElement>("#qsb-review-result");
   const outcomeTx = find<HTMLAnchorElement>("#qsb-outcome-tx");
@@ -144,14 +144,12 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
     return flight;
   };
   const syncAccept = (): void => {
-    if (depositSubmit) depositSubmit.disabled = !(quote !== null && accept?.checked === true);
+    if (depositSubmit) depositSubmit.disabled = quote === null;
   };
   const review = (next: QsbDepositQuote, line: string): void => {
     quote = next;
     const rows = find<HTMLElement>("#qsb-deposit-quote");
     if (rows) renderFragment(rows, qsbQuoteRows(next));
-    // A new cost is a new decision: it is never accepted on the old one's tick.
-    if (accept) accept.checked = false;
     syncAccept();
     say(reviewResult, line, false);
     show("review", true);
@@ -258,7 +256,7 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
         if (!held) return unavailable(QSB_ACCESS_LINE, "allow");
         if (reading.funds === null) return unavailable(QSB_FUNDS_UNAVAILABLE, "retry");
         balanceSat = reading.funds.totalSat;
-        text("#qsb-amount-available", `Confirmed balance: ${btcText(balanceSat)}`);
+        text("#qsb-amount-available", qsbAmountHint(balanceSat));
         say(amountResult, line, refused);
         show("amount", true);
       },
@@ -280,11 +278,10 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
     }
     quoteFor(check.sat, "");
   });
-  accept?.addEventListener("change", syncAccept);
   reviewForm?.addEventListener("submit", (event) => {
     event.preventDefault();
     const target = deps.target();
-    if (target === null || quote === null || accept?.checked !== true) return;
+    if (target === null || quote === null) return;
     const { amountSat, feeSat } = quote;
     attach(
       guarded(() => writes.deposit(target.accountId, target.v, amountSat, feeSat)),
@@ -293,7 +290,6 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
   });
   find<HTMLButtonElement>("#qsb-review-back")?.addEventListener("click", () => {
     quote = null;
-    if (accept) accept.checked = false;
     syncAccept();
     show("amount", true);
   });
@@ -330,7 +326,6 @@ export const bindQsbDeposit = (deps: QsbDepositDeps): QsbDepositSession => {
       balanceSat = null;
       quote = null;
       if (amountInput) amountInput.value = "";
-      if (accept) accept.checked = false;
       syncAccept();
       say(reviewResult, "", false);
     },

@@ -92,12 +92,18 @@ export const qsbBackupWords = (
 /** Shown while the list loads from the vault. */
 export const QSB_LOADING = "Loading QSB vaults…";
 /** The list's empty state. */
-export const QSB_EMPTY = "No QSB vaults yet.";
+export const QSB_EMPTY = "No QSB (Quantum Safe Bitcoin) vaults yet.";
 /** While the background creates an account. */
 export const QSB_CREATING = "Creating QSB vault…";
 /** Under the phrase, where Bramble hands it over. A warning: no contractions. */
 export const QSB_PHRASE_WARNING =
   "Anyone with these words controls this QSB vault's bitcoin. Bramble cannot recover them for you.";
+/**
+ * The sentence that opens every emergency step's warning: the BIP requires
+ * the emergency path to identify itself as outside custody conformance, under
+ * a plain title. A warning: no contractions.
+ */
+export const QSB_CUSTODY_NOTE = "This is outside custody conformance.";
 /** The import screen's consequence, stated before the user commits. */
 export const QSB_IMPORT_READ_ONLY = "An imported phrase can't take new deposits here.";
 /** After an import, naming the row it added. */

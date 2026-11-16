@@ -137,7 +137,7 @@ describe("the account screen", () => {
     expect(text(panel.app().querySelector("#qsb-balance"))).toBe(`${ACCESS_LINE} Allow access`);
   });
 
-  test("New vault asks in its click; once granted it creates and re-reads", async () => {
+  test("New vault asks in its click; once granted it creates and opens Fund", async () => {
     const panel = await account(
       { createVault: { resolve: unfundedVault(2) }, vaults: { resolve: ungranted() } },
       false,
@@ -150,11 +150,12 @@ describe("the account screen", () => {
     await flush();
     await flush();
     expect(panel.calls.createVault).toEqual(["qsb-2"]);
-    expect(shownStep(panel.app(), "data-qsb-account-step")).toBe("detail");
-    expect(panel.app().querySelector('[data-qsb-vault="2"]')).not.toBe(null);
-    expect(text(panel.app().querySelector("#qsb-balance"))).toBe(
-      "Confirmed balance 0.00250000 BTC",
+    expect(panel.visited.at(-1)).toBe("qsb-deposit");
+    expect(panel.app().querySelector("#qsb-deposit-vault")?.textContent).toBe(
+      "QSB vault 2 · Deposit 3",
     );
+    // The Fund screen reads the deposit with the grant now held.
+    expect(shownStep(panel.app(), "data-qsb-deposit-step")).toBe("amount");
   });
 
   test("New vault denied: nothing is sent and the screen says why", async () => {
@@ -309,11 +310,6 @@ describe("the deposit screen", () => {
     await flush();
     await flush();
     expect(step(panel)).toBe("review");
-    const box = panel.app().querySelector<HTMLInputElement>('input[name="qsbAccept"]');
-    if (box) {
-      box.checked = true;
-      box.dispatchEvent(new Event("change", { bubbles: true }));
-    }
     panel
       .app()
       .querySelector<HTMLFormElement>("#qsb-review-form")
@@ -338,11 +334,6 @@ describe("the deposit screen", () => {
       .querySelector<HTMLFormElement>("#qsb-amount-form")
       ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await flush();
-    const box = panel.app().querySelector<HTMLInputElement>('input[name="qsbAccept"]');
-    if (box) {
-      box.checked = true;
-      box.dispatchEvent(new Event("change", { bubbles: true }));
-    }
     const form = panel.app().querySelector<HTMLFormElement>("#qsb-review-form");
     form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await flush();

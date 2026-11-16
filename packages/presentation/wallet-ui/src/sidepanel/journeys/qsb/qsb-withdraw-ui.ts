@@ -2,10 +2,10 @@
  * Start the withdrawal of one funded QSB deposit: a destination address, a
  * quote, a summary of what the destination receives (the deposit plus the
  * helper, less the network fee) with the one line that the search can take
- * hours and the fee can't change later, then Start withdrawal once the costs
- * are accepted, and back to the QSB vault screen.
+ * hours and the fee can't change later, then Start withdrawal (itself the
+ * acceptance; no tick box), and back to the QSB vault screen.
  *
- * The start sends the quote's own `feeSat`, the fee the user accepted; a
+ * The start sends the quote's own `feeSat`, the fee shown in the summary; a
  * withdrawal the background would now price differently is refused as
  * `quoteChanged`, and the screen quotes again and asks again. Starts go
  * through the journey's single-flight guard, so a double tap or coming back
@@ -51,8 +51,8 @@ const refusal = (diagnostic: string): string => friendlyError(diagnostic).messag
 
 /**
  * Binds the Withdraw steps under `root` and loads the deposit. Missing
- * controls are skipped. Start withdrawal stays disabled until a quote is shown
- * and "I accept these costs" is ticked.
+ * controls are skipped. Start withdrawal stays disabled until a quote is
+ * shown; each new quote is a new summary the user decides on again.
  */
 export const bindQsbWithdraw = (deps: QsbWithdrawDeps): QsbWithdrawSession => {
   const { access, root, wallet, writes } = deps;
@@ -65,7 +65,6 @@ export const bindQsbWithdraw = (deps: QsbWithdrawDeps): QsbWithdrawSession => {
   const review = destinationForm?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const destinationResult = find<HTMLElement>("#qsb-destination-result");
   const summaryForm = find<HTMLFormElement>("#qsb-withdraw-form");
-  const accept = summaryForm?.querySelector<HTMLInputElement>('input[name="qsbWithdrawAccept"]');
   const start = summaryForm?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const summaryResult = find<HTMLElement>("#qsb-withdraw-result");
   // Bumped by `wipe`: an answer after it belongs to a screen the user left.
@@ -118,14 +117,12 @@ export const bindQsbWithdraw = (deps: QsbWithdrawDeps): QsbWithdrawSession => {
     return flight;
   };
   const syncAccept = (): void => {
-    if (start) start.disabled = !(quote !== null && accept?.checked === true);
+    if (start) start.disabled = quote === null;
   };
   const summary = (next: QsbWithdrawalQuote, line: string): void => {
     quote = next;
     const rows = find<HTMLElement>("#qsb-withdraw-quote");
     if (rows) renderFragment(rows, qsbWithdrawQuoteRows(next));
-    // A new cost is a new decision: it is never accepted on the old one's tick.
-    if (accept) accept.checked = false;
     syncAccept();
     say(summaryResult, line, false);
     show("summary", true);
@@ -217,11 +214,10 @@ export const bindQsbWithdraw = (deps: QsbWithdrawDeps): QsbWithdrawSession => {
     }
     quoteFor(destination, "");
   });
-  accept?.addEventListener("change", syncAccept);
   summaryForm?.addEventListener("submit", (event) => {
     event.preventDefault();
     const target = deps.target();
-    if (target === null || quote === null || accept?.checked !== true) return;
+    if (target === null || quote === null) return;
     const { destination, feeSat } = quote;
     attach(
       guarded(() => writes.startWithdrawal(target.accountId, target.v, destination, feeSat)),
@@ -230,7 +226,6 @@ export const bindQsbWithdraw = (deps: QsbWithdrawDeps): QsbWithdrawSession => {
   });
   find<HTMLButtonElement>("#qsb-withdraw-back")?.addEventListener("click", () => {
     quote = null;
-    if (accept) accept.checked = false;
     syncAccept();
     show("destination", true);
   });
@@ -260,7 +255,6 @@ export const bindQsbWithdraw = (deps: QsbWithdrawDeps): QsbWithdrawSession => {
       ticket += 1;
       quote = null;
       if (destinationInput) destinationInput.value = "";
-      if (accept) accept.checked = false;
       syncAccept();
       say(summaryResult, "", false);
     },

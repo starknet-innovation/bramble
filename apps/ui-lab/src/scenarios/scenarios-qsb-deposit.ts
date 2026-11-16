@@ -1,7 +1,6 @@
 /**
- * QSB Fund deposit checkpoints: the amount and its refusals, the review
- * before and after the costs are accepted, the funding in flight, and
- * every outcome (sent, not confirmed yet, refused, a changed quote, a lost
+ * QSB Fund deposit checkpoints: the amount and its refusals, the review,
+ * the funding in flight, and every outcome (sent, status unknown, refused, a changed quote, a lost
  * reply), plus a vault whose service is out of reach. Production templates
  * and bindings run against a fixture client; nothing is signed or sent.
  */
@@ -21,21 +20,13 @@ import { nextTurn, updateForm } from "../runtime/scenario-runtime";
 import type { FrameContext, ScenarioCheckpoint, WalletScenario } from "../runtime/types";
 import { clickQsb, qsbLabJourney } from "./scenarios-qsb-vaults";
 
-type Stage = "accepted" | "amount" | "review" | "sent";
+type Stage = "amount" | "review" | "sent";
 
 const submit = (context: FrameContext, selector: string): void => {
   const form = context.app.querySelector<HTMLFormElement>(selector);
   const view = context.document.defaultView;
   if (!form || !view) throw new Error(`Missing QSB form ${selector}`);
   form.dispatchEvent(new view.Event("submit", { bubbles: true, cancelable: true }));
-};
-
-const tick = (context: FrameContext): void => {
-  const box = context.app.querySelector<HTMLInputElement>('input[name="qsbAccept"]');
-  const view = context.document.defaultView;
-  if (!box || !view) throw new Error("Missing QSB acceptance");
-  box.checked = true;
-  box.dispatchEvent(new view.Event("change", { bubbles: true }));
 };
 
 // Drives the production deposit binding to `stage` with `amount` typed.
@@ -57,8 +48,6 @@ const depositTo = async (
   submit(context, "#qsb-amount-form");
   await nextTurn();
   if (stage === "amount" || stage === "review") return;
-  tick(context);
-  if (stage === "accepted") return;
   submit(context, "#qsb-review-form");
   await nextTurn();
   await nextTurn();
@@ -87,7 +76,7 @@ export const qsbDepositScenario: WalletScenario = {
     depositCheckpoint(
       "qsb-deposit-amount",
       "Fund · amount",
-      "The amount in BTC, beside the confirmed balance it is checked against.",
+      "The amount in BTC, beside the confirmed balance and the minimum it is checked against.",
       { balance: "0.0025 BTC" },
       (context) => depositTo(context, {}, "amount", ""),
     ),
@@ -101,16 +90,9 @@ export const qsbDepositScenario: WalletScenario = {
     depositCheckpoint(
       "qsb-deposit-review",
       "Fund · review",
-      "Every cost from the quote: amount, network fee and rate, and change back to the owner address. Fund waits for the costs to be accepted.",
-      { accepted: false, depositEnabled: false },
+      "Every cost from the quote: amount, network fee and rate, change back to the owner address, and the later withdrawal fee at today's rate. Fund is the acceptance.",
+      { depositEnabled: true },
       (context) => depositTo(context, {}, "review"),
-    ),
-    depositCheckpoint(
-      "qsb-deposit-accepted",
-      "Fund · costs accepted",
-      "Ticking the costs enables Fund; a new quote clears the tick.",
-      { accepted: true, depositEnabled: true },
-      (context) => depositTo(context, {}, "accepted"),
     ),
     depositCheckpoint(
       "qsb-deposit-sending",
@@ -128,7 +110,7 @@ export const qsbDepositScenario: WalletScenario = {
     ),
     depositCheckpoint(
       "qsb-deposit-uncertain",
-      "Fund · not confirmed yet",
+      "Fund · status unknown",
       "The service did not confirm it has the deposit; Resend sends the same transaction again.",
       { submission: "uncertain" },
       (context) => depositTo(context, { deposit: async () => outcome(0, "uncertain") }, "sent"),
@@ -136,14 +118,14 @@ export const qsbDepositScenario: WalletScenario = {
     depositCheckpoint(
       "qsb-deposit-rejected",
       "Fund · refused",
-      "MARA refused the deposit; it is unfunded again and can be funded again.",
+      "The miner, MARA, refused the deposit; it is unfunded again and can be funded again.",
       { submission: "rejected" },
       (context) => depositTo(context, { deposit: async () => outcome(0, "rejected") }, "sent"),
     ),
     depositCheckpoint(
       "qsb-deposit-quote-changed",
       "Fund · cost changed",
-      "The cost moved after the review: the screen quotes again and asks again, with the tick cleared.",
+      "The cost moved after the review: the screen quotes again and asks again; nothing is sent until Fund is pressed on the new quote.",
       { refusal: "quote changed" },
       async (context) => {
         let quotes = 0;

@@ -20,11 +20,13 @@ import {
   isQsbQuoteChanged,
   parseBtcAmount,
   QSB_AMOUNT_LINE,
+  qsbAmountHint,
   qsbDepositInFlight,
   qsbDepositLabel,
   qsbDepositLink,
   qsbNoVaultLine,
   qsbVaultDisplay,
+  qsbVaultHint,
   qsbVaultStatusText,
 } from "../../../../src/sidepanel/journeys/qsb/qsb-vault-model";
 import { friendlyError } from "../../../../src/sidepanel/runtime/friendly-error";
@@ -104,7 +106,7 @@ describe("vault rows", () => {
   test("each state has one label", () => {
     expect(EVERY_VAULT.map(qsbVaultStatusText)).toEqual([
       "Unfunded",
-      "Waiting to send",
+      "Status unknown",
       "Sent",
       "Funded · 3 confirmations",
       "Withdrawn",
@@ -112,6 +114,23 @@ describe("vault rows", () => {
     ]);
     expect(qsbVaultStatusText(depositedVault(0, "confirmed", 1))).toBe("Funded · 1 confirmation");
     expect(qsbVaultStatusText(depositedVault(0, "confirmed", null))).toBe("Funded");
+  });
+
+  test("a deposit not known to have reached MARA, or unusable, says why under its label", () => {
+    expect(EVERY_VAULT.map(qsbVaultHint)).toEqual([
+      null,
+      "Resend sends the same transaction again.",
+      null,
+      null,
+      null,
+      "This deposit can't be funded or withdrawn here.",
+    ]);
+  });
+
+  test("the amount hint states the balance and the contract's minimum before typing", () => {
+    expect(qsbAmountHint(250_000)).toBe(
+      `Confirmed balance: 0.00250000 BTC · Minimum: ${btcText(QSB_MIN_DEPOSIT_SAT)}`,
+    );
   });
 
   test("a retired key set reads as withdrawn only when it was funded", () => {

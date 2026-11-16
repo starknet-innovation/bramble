@@ -6,7 +6,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import { emptyState, receipt, receiptRows } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
-import { checkboxField, textField } from "@bramble/ui-kit/fields";
+import { textField } from "@bramble/ui-kit/fields";
 import type { QsbDepositQuote } from "@bramble/wallet-model/qsb-vaults";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { flowHeader, flowScreen } from "../../shared/parts";
@@ -49,7 +49,6 @@ export const qsbDepositFlow = (status: WalletStatus): string =>
             label: "Amount in BTC",
             maxlength: 20,
             name: "qsbAmount",
-            placeholder: "0.001",
             spellcheck: false,
           })}
           <p class="hint" id="qsb-amount-available"></p>
@@ -60,7 +59,6 @@ export const qsbDepositFlow = (status: WalletStatus): string =>
       <section class="section" data-qsb-deposit-step="review" hidden>
         <form id="qsb-review-form" class="stack" novalidate>
           ${receipt([], { id: "qsb-deposit-quote" })}
-          ${checkboxField({ name: "qsbAccept", text: "I accept these costs" })}
           <p id="qsb-review-result" role="status"></p>
           ${button({ disabled: true, label: "Fund", type: "submit" })}
           ${button({ attributes: { id: "qsb-review-back" }, label: "Change amount", variant: "ghost" })}
@@ -79,8 +77,10 @@ export const qsbDepositFlow = (status: WalletStatus): string =>
 
 /**
  * The review's cost rows for a validated quote: what goes into the deposit,
- * the network fee and its rate, and the change back to the owner address (or
- * none). The quote's withdrawal-fee estimate is validated but not shown.
+ * the network fee and its rate, the change back to the owner address (or
+ * none), then what withdrawing it later would cost at today's rate. That
+ * estimate prices the largest standard destination, so it is a ceiling at
+ * this rate only; the label names the rate so it never reads as a promise.
  */
 export const qsbQuoteRows = (quote: QsbDepositQuote): string =>
   receiptRows([
@@ -91,5 +91,10 @@ export const qsbQuoteRows = (quote: QsbDepositQuote): string =>
       label: "Change to you",
       value: quote.changeSat === 0 ? "None" : btcText(quote.changeSat),
       valueStyle: quote.changeSat === 0 ? "text" : "code",
+    },
+    {
+      label: "Withdrawal fee at today's rate",
+      value: `up to ${btcText(quote.withdrawalFeeSat)}`,
+      valueStyle: "code",
     },
   ]);

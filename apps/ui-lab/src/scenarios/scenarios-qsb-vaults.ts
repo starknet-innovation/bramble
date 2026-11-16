@@ -80,14 +80,14 @@ export const qsbVaultsScenario: WalletScenario = {
     accountCheckpoint(
       "qsb-account",
       "QSB vault · every deposit state",
-      "The owner address with its copy and one line on what to do with it, the confirmed balance, and one row per deposit: Unfunded (Fund), Waiting to send (Resend), Sent and Funded (each linked to mempool.space), Withdrawn, and Unavailable.",
+      "The owner address with its copy and one line on what to do with it, the confirmed balance, and one row per deposit: Unfunded (Fund), Status unknown (Resend), Sent and Funded (each linked to mempool.space), Withdrawn, and Unavailable.",
       { actions: "deposit, resend, new vault", vaults: 6 },
       {},
     ),
     accountCheckpoint(
       "qsb-account-empty",
       "QSB vault · no deposits",
-      "A QSB vault with funds and no deposits yet: the empty line and New deposit.",
+      "A QSB vault with funds and no deposits yet: the three numbered steps to a deposit, and New deposit.",
       { vaults: 0 },
       { reading: async () => labReading([]) },
     ),
@@ -142,7 +142,7 @@ export const qsbVaultsScenario: WalletScenario = {
     accountCheckpoint(
       "qsb-account-backup-needed",
       "QSB vault · backup needed",
-      "A phrase not yet backed up cannot take new deposits; the line says what unlocks it.",
+      "A phrase not yet backed up cannot take new deposits; the line says why, with Back up phrase beside it.",
       { writer: false },
       { accounts: [QSB_LAB_ACCOUNTS.backupNeeded], reading: async () => labReading([]) },
       undefined,
@@ -160,9 +160,21 @@ export const qsbVaultsScenario: WalletScenario = {
       (context) => clickQsb(context, '[data-qsb-resend="0"]'),
     ),
     accountCheckpoint(
+      "qsb-account-no-balance",
+      "QSB vault · funded, empty balance",
+      "A funded deposit with a confirmed balance of 0 offers no Withdraw: the row says to send a little bitcoin to the address first, since a withdrawal spends some of it.",
+      { balance: "0 BTC", withdraw: "not offered" },
+      {
+        reading: async () => ({
+          ...labReading([deposited(0, "confirmed")]),
+          funds: { totalSat: 0, utxoCount: 0 },
+        }),
+      },
+    ),
+    accountCheckpoint(
       "qsb-vault-confirm",
       "New deposit · confirm",
-      "One confirm step states what a new deposit is before the background signs in and registers it.",
+      "One confirm step states what a new deposit is, and that funding follows, before the background signs in and registers it.",
       { step: "confirm" },
       { reading: async () => labReading([deposited(0, "confirmed")]) },
       openNewVault,
@@ -178,7 +190,7 @@ export const qsbVaultsScenario: WalletScenario = {
     accountCheckpoint(
       "qsb-vault-created",
       "New deposit · created",
-      "Back on the QSB vault with the new deposit, unfunded and ready to be funded once.",
+      "The new deposit's one next step opens at once: the journey navigates to Fund deposit for it (see the event log).",
       { created: "Vault 2" },
       {
         create: async () => unfunded(1),

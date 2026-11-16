@@ -37,20 +37,12 @@ const submit = (context: FrameContext, selector: string): void => {
   form.dispatchEvent(new view.Event("submit", { bubbles: true, cancelable: true }));
 };
 
-const tick = (context: FrameContext, name: string): void => {
-  const box = context.app.querySelector<HTMLInputElement>(`input[name="${name}"]`);
-  const view = context.document.defaultView;
-  if (!box || !view) throw new Error(`Missing QSB checkbox ${name}`);
-  box.checked = true;
-  box.dispatchEvent(new view.Event("change", { bubbles: true }));
-};
-
 const settle = async (): Promise<void> => {
   await nextTurn();
   await nextTurn();
 };
 
-type WithdrawStage = "accepted" | "destination" | "start" | "summary";
+type WithdrawStage = "destination" | "start" | "summary";
 
 // Drives the production Withdraw binding for deposit 1 to `stage`.
 const withdrawTo = async (
@@ -72,8 +64,6 @@ const withdrawTo = async (
   submit(context, "#qsb-destination-form");
   await settle();
   if (stage === "destination" || stage === "summary") return;
-  tick(context, "qsbWithdrawAccept");
-  if (stage === "accepted") return;
   submit(context, "#qsb-withdraw-form");
   await settle();
 };
@@ -137,7 +127,7 @@ export const qsbWithdrawScenario: WalletScenario = {
       "qsb-account",
       "qsb-withdrawals-rows",
       "Deposits · every withdrawal state",
-      "One row per withdrawal state: Withdrawing (it can take hours), Withdrawal paused, Withdrawal failed (its bitcoin stays locked), Ready to release (Review), Sending, Withdrawal sent (linked), Not confirmed yet (Resend), Withdrawn with its confirmations, and Spent elsewhere.",
+      "One row per withdrawal state: Withdrawing (it can take hours; come back to finish it), Withdrawal paused, Withdrawal failed (its bitcoin stays locked), Ready to finish (Finish), Sending, Withdrawal sent (linked), Status unknown (Resend), Withdrawn with its confirmations, and Spent elsewhere.",
       { rows: 9 },
       async (context) => {
         const journey = qsbLabJourney(context, {
@@ -195,16 +185,9 @@ export const qsbWithdrawScenario: WalletScenario = {
     withdrawCheckpoint(
       "qsb-withdraw-summary",
       "Withdraw · summary",
-      "What the destination receives as a sum (deposit, plus the helper from your address, less the network fee), the full destination, the fee rate, and the one line that the search can take hours and the fee can't change later.",
-      { accepted: false, startEnabled: false },
+      "Outcome first: what the destination receives and the full destination, then the sum behind it (deposit, plus the helper from the balance, less the network fee) and the fee rate; one line on the helper, and one that the search can take hours, the fee can't change later, and the user finishes it here.",
+      { startEnabled: true },
       (context) => withdrawTo(context, {}, "summary"),
-    ),
-    withdrawCheckpoint(
-      "qsb-withdraw-accepted",
-      "Withdraw · costs accepted",
-      "Ticking the costs enables Start withdrawal; a new quote clears the tick.",
-      { accepted: true, startEnabled: true },
-      (context) => withdrawTo(context, {}, "accepted"),
     ),
     withdrawCheckpoint(
       "qsb-withdraw-starting",
@@ -216,7 +199,7 @@ export const qsbWithdrawScenario: WalletScenario = {
     withdrawCheckpoint(
       "qsb-withdraw-quote-changed",
       "Withdraw · cost changed",
-      "The cost moved after the summary: the screen quotes again and asks again, with the tick cleared.",
+      "The cost moved after the summary: the screen quotes again and asks again; nothing starts until Start withdrawal is pressed on the new quote.",
       { refusal: "quote changed" },
       async (context) => {
         let quotes = 0;
@@ -304,7 +287,7 @@ export const qsbWithdrawScenario: WalletScenario = {
     ),
     releaseCheckpoint(
       "qsb-release-uncertain",
-      "Release · not confirmed yet",
+      "Release · status unknown",
       "The service could not say whether MARA has it; Resend sends the same withdrawal again.",
       { submission: "uncertain" },
       (context) =>

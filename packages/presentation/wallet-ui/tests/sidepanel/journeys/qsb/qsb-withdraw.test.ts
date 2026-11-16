@@ -99,12 +99,6 @@ const toSummary = async (panel: Panel, typed = DESTINATION): Promise<void> => {
   submitForm(find<HTMLFormElement>(panel, "#qsb-destination-form"));
   await flush();
 };
-const accept = (panel: Panel): void => {
-  const box = find<HTMLInputElement>(panel, 'input[name="qsbWithdrawAccept"]');
-  if (!box) throw new Error("missing checkbox");
-  box.checked = true;
-  box.dispatchEvent(new Event("change", { bubbles: true }));
-};
 const startButton = (panel: Panel) =>
   find<HTMLButtonElement>(panel, '#qsb-withdraw-form button[type="submit"]');
 
@@ -114,13 +108,13 @@ describe("deposit rows", () => {
       vaults: { resolve: reading(STATES.map((status, v) => withdrawingVault(v, status))) },
     });
     expect(STATES.map((_, v) => text(row(panel, v)))).toEqual([
-      "Deposit 1 Withdrawing This can take hours. 0.00100000 BTC 4a5e1e…a33b",
+      "Deposit 1 Withdrawing This can take hours. Come back here to finish it. 0.00100000 BTC 4a5e1e…a33b",
       "Deposit 2 Withdrawal paused 0.00100000 BTC 4a5e1e…a33b",
       "Deposit 3 Withdrawal failed Its bitcoin stays locked in this deposit. 0.00100000 BTC 4a5e1e…a33b",
-      "Deposit 4 Ready to release 0.00100000 BTC 4a5e1e…a33b Review",
+      "Deposit 4 Ready to finish 0.00100000 BTC 4a5e1e…a33b Finish",
       "Deposit 5 Sending 0.00100000 BTC 4a5e1e…a33b",
       "Deposit 6 Withdrawal sent 0.00100000 BTC f4184f…9e16",
-      "Deposit 7 Not confirmed yet 0.00100000 BTC 4a5e1e…a33b Resend",
+      "Deposit 7 Status unknown Resend sends the same withdrawal again. 0.00100000 BTC 4a5e1e…a33b Resend",
       "Deposit 8 Withdrawn · 2 confirmations 0.00100000 BTC f4184f…9e16",
       "Deposit 9 Spent elsewhere 0.00100000 BTC 4a5e1e…a33b",
     ]);
@@ -129,7 +123,7 @@ describe("deposit rows", () => {
       `https://mempool.space/tx/${WITHDRAWAL_TXID}`,
     );
     expect(find(panel, '[data-qsb-review="3"]')?.getAttribute("aria-label")).toBe(
-      "Review the withdrawal of deposit 4",
+      "Finish the withdrawal of deposit 4",
     );
     expect(find(panel, '[data-qsb-resend-withdrawal="6"]')?.getAttribute("aria-label")).toBe(
       "Resend the withdrawal of deposit 7",
@@ -151,6 +145,38 @@ describe("deposit rows", () => {
     await flush();
     expect(find(panel, "[data-qsb-withdraw]")).toBe(null);
     expect(find(panel, "[data-qsb-review]")).toBe(null);
+  });
+
+  test("an empty balance can't pay the helper: the line says what to do, and no Withdraw", async () => {
+    const empty = await account({
+      vaults: {
+        resolve: {
+          ...reading([depositedVault(0, "confirmed")]),
+          funds: { totalSat: 0, utxoCount: 0 },
+        },
+      },
+    });
+    expect(find(empty, "[data-qsb-withdraw]")).toBe(null);
+    expect(text(row(empty, 0))).toBe(
+      "Deposit 1 Funded · 3 confirmations Send a little bitcoin to this QSB vault's address and wait for it to confirm. 0.00100000 BTC 4a5e1e…a33b",
+    );
+    // An unknown balance (service out of reach, or no grant) never hides Withdraw.
+    const unknown = await account({
+      vaults: { resolve: { ...reading([depositedVault(0, "confirmed")]), funds: null } },
+    });
+    expect(find(unknown, '[data-qsb-withdraw="0"]')).not.toBe(null);
+    const ungranted = await account(
+      {
+        vaults: {
+          resolve: {
+            ...reading([depositedVault(0, "confirmed")]),
+            funds: { totalSat: 0, utxoCount: 0 },
+          },
+        },
+      },
+      false,
+    );
+    expect(find(ungranted, '[data-qsb-withdraw="0"]')).not.toBe(null);
   });
 
   test("Withdraw and Review ask for the grant in their click; a denial opens nothing", async () => {
@@ -215,7 +241,7 @@ describe("deposit rows", () => {
     panel.script.vaults = { resolve: reading([withdrawingVault(0, "ready")]) };
     panel.timers.advance(QSB_VAULT_POLL_MS);
     await flush();
-    expect(text(row(panel, 0))).toContain("Ready to release");
+    expect(text(row(panel, 0))).toContain("Ready to finish");
     expect(panel.timers.pending()).toBe(0);
   });
 });
@@ -243,29 +269,48 @@ describe("the Withdraw flow", () => {
     expect(panel.calls.withdrawalQuote).toEqual([["qsb-2", 0, DESTINATION]]);
   });
 
-  test("sums what the destination receives and waits for the costs to be accepted", async () => {
+  test("leads with what the destination receives; Start is the decision once quoted", async () => {
     const panel = await withdraw({});
     await toSummary(panel);
     expect(step(panel)).toBe("summary");
     expect(text(find(panel, "#qsb-withdraw-quote"))).toBe(
-      "Deposit 0.00100000 BTC From your balance + 0.00010000 BTC Network fee − 0.00000900 BTC " +
-        `You receive 0.00109100 BTC To ${DESTINATION} Fee rate 4 sat/vB`,
+      `You receive 0.00109100 BTC To ${DESTINATION} ` +
+        "Deposit 0.00100000 BTC From your balance + 0.00010000 BTC Network fee − 0.00000900 BTC " +
+        "Fee rate 4 sat/vB",
     );
-    expect(text(find(panel, '[data-qsb-withdraw-step="summary"]'))).toContain(
-      "This can take hours, and the fee can't change later.",
+    const summary = text(find(panel, '[data-qsb-withdraw-step="summary"]'));
+    expect(summary).toContain(
+      "The withdrawal also spends a little from this QSB vault's balance. It goes to the same address, less the network fee.",
     );
+    expect(summary).toContain(
+      "This can take hours, and the fee can't change later. When it's ready, you finish it from this QSB vault.",
+    );
+    expect(find(panel, '[data-qsb-withdraw-step="summary"] input[type="checkbox"]')).toBe(null);
+    expect(startButton(panel)?.disabled).toBe(false);
+    expect(panel.calls.withdrawalStart).toEqual([]);
+  });
+
+  test("Start stays disabled until a quote is shown; Change address drops it", async () => {
+    const waiting = await withdraw({
+      withdrawalQuote: { wait: deferred<typeof WITHDRAWAL_QUOTE>().promise },
+    });
+    expect(startButton(waiting)?.disabled).toBe(true);
+    submitForm(find<HTMLFormElement>(waiting, "#qsb-withdraw-form"));
+    expect(waiting.calls.withdrawalStart).toEqual([]);
+    const panel = await withdraw({});
+    await toSummary(panel);
+    expect(startButton(panel)?.disabled).toBe(false);
+    find<HTMLButtonElement>(panel, "#qsb-withdraw-back")?.click();
+    expect(step(panel)).toBe("destination");
     expect(startButton(panel)?.disabled).toBe(true);
     submitForm(find<HTMLFormElement>(panel, "#qsb-withdraw-form"));
     expect(panel.calls.withdrawalStart).toEqual([]);
-    accept(panel);
-    expect(startButton(panel)?.disabled).toBe(false);
   });
 
   test("starts once with the quote's own fee, then goes back to the QSB vault", async () => {
     const started = deferred<ReturnType<typeof withdrawingVault>>();
     const panel = await withdraw({ withdrawalStart: { wait: started.promise } });
     await toSummary(panel);
-    accept(panel);
     submitForm(find<HTMLFormElement>(panel, "#qsb-withdraw-form"));
     submitForm(find<HTMLFormElement>(panel, "#qsb-withdraw-form"));
     expect(step(panel)).toBe("starting");
@@ -278,15 +323,16 @@ describe("the Withdraw flow", () => {
     await flush();
     await flush();
     expect(panel.app().querySelector("#qsb-account")).not.toBe(null);
-    expect(text(row(panel, 0))).toContain("Withdrawing This can take hours.");
+    expect(text(row(panel, 0))).toContain(
+      "Withdrawing This can take hours. Come back here to finish it.",
+    );
   });
 
-  test("a changed quote is quoted again and asked again", async () => {
+  test("a changed quote is quoted again and started only when Start is pressed again", async () => {
     const panel = await withdraw({
       withdrawalStart: { reject: new Error(QSB_WITHDRAWAL_REFUSALS.quoteChanged) },
     });
     await toSummary(panel);
-    accept(panel);
     panel.script.withdrawalQuote = {
       resolve: { ...WITHDRAWAL_QUOTE, feeRate: "6", feeSat: 1_350, outputSat: 108_650 },
     };
@@ -298,7 +344,15 @@ describe("the Withdraw flow", () => {
       "The cost changed. Review the new quote.",
     );
     expect(text(find(panel, "#qsb-withdraw-quote"))).toContain("You receive 0.00108650 BTC");
-    expect(startButton(panel)?.disabled).toBe(true);
+    expect(startButton(panel)?.disabled).toBe(false);
+    expect(panel.calls.withdrawalStart).toEqual([["qsb-2", 0, DESTINATION, 900]]);
+    panel.script.withdrawalStart = { resolve: withdrawingVault(0, "searching") };
+    submitForm(find<HTMLFormElement>(panel, "#qsb-withdraw-form"));
+    await flush();
+    expect(panel.calls.withdrawalStart).toEqual([
+      ["qsb-2", 0, DESTINATION, 900],
+      ["qsb-2", 0, DESTINATION, 1_350],
+    ]);
   });
 
   test("a refusal keeps the summary; a lost reply never reads as failed", async () => {
@@ -306,7 +360,6 @@ describe("the Withdraw flow", () => {
       withdrawalStart: { reject: new Error(QSB_WITHDRAWAL_REFUSALS.helperNeeded) },
     });
     await toSummary(refused);
-    accept(refused);
     submitForm(find<HTMLFormElement>(refused, "#qsb-withdraw-form"));
     await flush();
     expect(step(refused)).toBe("summary");
@@ -317,7 +370,6 @@ describe("the Withdraw flow", () => {
       withdrawalStart: { reject: new SubmissionUnknownError("lost", null) },
     });
     await toSummary(lost);
-    accept(lost);
     submitForm(find<HTMLFormElement>(lost, "#qsb-withdraw-form"));
     await flush();
     expect(step(lost)).toBe("unavailable");

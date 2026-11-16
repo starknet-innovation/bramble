@@ -9,6 +9,7 @@ import {
   QSB_DISCLOSED_SECRETS,
   type QsbWithdrawalSubmission,
 } from "@bramble/wallet-model/qsb-withdrawals";
+import { QSB_CUSTODY_NOTE } from "./qsb-model";
 import { qsbVaultDisplay } from "./qsb-vault-model";
 import { isQsbTxid } from "./qsb-vault-runtime";
 
@@ -55,22 +56,24 @@ const LABEL: Readonly<Record<QsbWithdrawalDisplay, string>> = {
   conflict: "Spent elsewhere",
   failed: "Withdrawal failed",
   paused: "Withdrawal paused",
-  ready: "Ready to release",
+  ready: "Ready to finish",
   searching: "Withdrawing",
   sending: "Sending",
   sent: "Withdrawal sent",
-  uncertain: "Not confirmed yet",
+  uncertain: "Status unknown",
   withdrawn: "Withdrawn",
 };
 
 /**
  * The one line a few states need under their label. A failed withdrawal is
  * final: a deposit gets one search, ever, so its bitcoin can't move through
- * Bramble, and the row says so rather than only "failed".
+ * Bramble, and the row says so rather than only "failed". A search says up
+ * front that the user comes back to finish it; a lost reply says what Resend does.
  */
 const HINT: Readonly<Partial<Record<QsbWithdrawalDisplay, string>>> = {
   failed: "Its bitcoin stays locked in this deposit.",
-  searching: "This can take hours.",
+  searching: "This can take hours. Come back here to finish it.",
+  uncertain: "Resend sends the same withdrawal again.",
 };
 
 /** A withdrawal row's status line: its label, and a mined one's confirmations when known. */
@@ -83,6 +86,19 @@ export const qsbWithdrawalStatusText = (display: QsbWithdrawalDisplay, vault: Qs
 /** The line under a withdrawal state's label, or null. */
 export const qsbWithdrawalHint = (display: QsbWithdrawalDisplay): string | null =>
   HINT[display] ?? null;
+
+/**
+ * Whether this account may review vault `vault`'s found withdrawal: a writer
+ * its own, a read-only account only a recovered one, whose deposit stays
+ * `unknown` (the emergency release).
+ */
+export const qsbReviewable = (vault: QsbVaultView, writer: boolean): boolean =>
+  qsbWithdrawalDisplay(vault) === "ready" &&
+  (writer ? vault.state !== "unknown" : vault.state === "unknown");
+
+/** Whether any deposit's withdrawal waits on this account's review and release. */
+export const qsbReleaseWaiting = (vaults: readonly QsbVaultView[], writer: boolean): boolean =>
+  vaults.some((vault) => qsbReviewable(vault, writer));
 
 /** Whether a funded deposit with no withdrawal yet may start one. */
 export const qsbWithdrawable = (vault: QsbVaultView): boolean =>
@@ -117,7 +133,14 @@ export const qsbWithdrawalLink = (vault: QsbVaultView): string | null => {
 };
 
 /** The Withdraw summary's one line under its costs. */
-export const QSB_WITHDRAW_TERMS = "This can take hours, and the fee can't change later.";
+export const QSB_WITHDRAW_TERMS =
+  "This can take hours, and the fee can't change later. When it's ready, you finish it from this QSB vault.";
+/**
+ * Under the summary: why the withdrawal also spends from the QSB vault's own
+ * balance, and where that goes (the same destination, as the sum above shows).
+ */
+export const QSB_HELPER_HINT =
+  "The withdrawal also spends a little from this QSB vault's balance. It goes to the same address, less the network fee.";
 /** While the withdrawal is being fixed and its search started. */
 export const QSB_WITHDRAW_STARTING = "Starting…";
 /** While the release review loads. */
@@ -137,14 +160,14 @@ export const QSB_UNVERIFIED_BODY = `Bramble cannot independently confirm that th
 
 /**
  * The title of the warning every emergency step carries (recovering a read-only
- * QSB vault's deposits, and releasing one): the BIP requires the emergency path
- * to identify itself as outside custody conformance. A warning: no
+ * QSB vault's deposits, and releasing one), in the user's words. The BIP
+ * requires the emergency path to identify itself as outside custody
+ * conformance, so each body opens with {@link QSB_CUSTODY_NOTE}. A warning: no
  * contractions.
  */
-export const QSB_CUSTODY_TITLE = "Outside custody conformance";
+export const QSB_CUSTODY_TITLE = "Emergency recovery";
 /** The emergency release review's warning body; see {@link QSB_CUSTODY_TITLE}. */
-export const QSB_EMERGENCY_RELEASE_BODY =
-  "Bramble cannot confirm that no other install released keys for this deposit.";
+export const QSB_EMERGENCY_RELEASE_BODY = `${QSB_CUSTODY_NOTE} Bramble cannot confirm that no other install released keys for this deposit.`;
 
 /** The release review's "keys released" value. */
 export const QSB_KEYS_RELEASED = `${QSB_DISCLOSED_SECRETS} one-time keys`;
@@ -156,15 +179,18 @@ export const QSB_WITHDRAWAL_COPY: Readonly<
   conflict: { line: "Another transaction spent this deposit.", title: "Spent elsewhere" },
   confirmed: { line: "The withdrawal is mined.", title: "Withdrawn" },
   submitted: { line: "It shows as withdrawn once it's mined.", title: "Withdrawal sent" },
-  uncertain: { line: "Resend sends the same withdrawal again.", title: "Not confirmed yet" },
+  uncertain: {
+    line: "Resend sends the same withdrawal again.",
+    title: "Withdrawal status unknown",
+  },
 };
 
 /** A release or resend outcome as one status line: `Withdrawal sent. It shows…`. */
 export const qsbWithdrawalLine = (submission: QsbWithdrawalSubmission): string =>
   `${QSB_WITHDRAWAL_COPY[submission].title}. ${QSB_WITHDRAWAL_COPY[submission].line}`;
 
-/** A release whose reply was lost: its heading. */
-export const QSB_RELEASE_UNKNOWN_TITLE = "Withdrawal status unknown";
+/** A release whose reply was lost: its heading, the same as a lost resend's. */
+export const QSB_RELEASE_UNKNOWN_TITLE = QSB_WITHDRAWAL_COPY.uncertain.title;
 
 /** Typed destination text, trimmed; an all-uppercase bech32 address (BIP-173 allows it) is lowercased. */
 export const qsbTypedDestination = (text: string): string => {

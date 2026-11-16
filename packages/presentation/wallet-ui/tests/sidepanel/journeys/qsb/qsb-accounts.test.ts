@@ -14,6 +14,7 @@ import {
   qsbAccountRows,
   qsbAccountsFlow,
 } from "../../../../src/sidepanel/journeys/qsb/qsb-accounts";
+import type { QsbVaultsReading } from "../../../../src/sidepanel/journeys/qsb/qsb-vault-runtime";
 import { walletViewLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
@@ -24,6 +25,12 @@ import {
   type Scripted,
   scriptedQsbWallet,
 } from "../../../support/qsb-harness";
+import {
+  reading,
+  recoveredVault,
+  unfundedVault,
+  withdrawingVault,
+} from "../../../support/qsb-vault-fixtures";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -31,15 +38,29 @@ beforeEach(() => {
   document.body.replaceChildren();
 });
 
-const mount = (list: Scripted<readonly (typeof QSB_VIEWS)[keyof typeof QSB_VIEWS][]>) => {
+// The list never prompts for the coordinator grant; `granted` is what its
+// check answers, and `vaults` what each account's deposits read as.
+const mount = (
+  list: Scripted<readonly (typeof QSB_VIEWS)[keyof typeof QSB_VIEWS][]>,
+  options: { readonly granted?: boolean; readonly vaults?: Scripted<QsbVaultsReading> } = {},
+) => {
   const app = mountApp(qsbAccountsFlow(qsbStatus));
-  const { calls, wallet } = scriptedQsbWallet({ list });
+  const { calls, wallet } = scriptedQsbWallet(
+    options.vaults ? { list, vaults: options.vaults } : { list },
+  );
+  let checks = 0;
   const opened: string[] = [];
   const shown: string[] = [];
   let created = 0;
   const listNode = app.querySelector<HTMLElement>("#qsb-accounts-list");
   if (!listNode) throw new Error("missing list");
   bindQsbAccounts({
+    access: {
+      check: async () => {
+        checks += 1;
+        return options.granted ?? false;
+      },
+    },
     create: () => {
       created += 1;
     },
@@ -49,7 +70,15 @@ const mount = (list: Scripted<readonly (typeof QSB_VIEWS)[keyof typeof QSB_VIEWS
     root: app,
     wallet,
   });
-  return { app, calls, created: () => created, list: listNode, opened, shown };
+  return {
+    app,
+    calls,
+    checks: () => checks,
+    created: () => created,
+    list: listNode,
+    opened,
+    shown,
+  };
 };
 
 // Each text node of the row, in order: the row's own markup puts no spaces
@@ -133,7 +162,7 @@ describe("QSB accounts", () => {
   test("an empty wallet says so", async () => {
     const { list } = mount({ resolve: [] });
     await flush();
-    expect(list.textContent).toBe("No QSB vaults yet.");
+    expect(list.textContent).toBe("No QSB (Quantum Safe Bitcoin) vaults yet.");
   });
 
   test("a failed read shows the refusal's reviewed sentence, not the raw diagnostic", async () => {
@@ -155,6 +184,86 @@ describe("QSB accounts", () => {
     expect(html.match(/data-qsb-open=/g)).toHaveLength(2);
     expect(html).toContain('<span class="hint">Backup needed</span>');
     expect(html).toContain('<span class="hint">Ready</span>');
-    expect(qsbAccountRows([])).toContain("No QSB vaults yet.");
+    expect(qsbAccountRows([])).toContain("No QSB (Quantum Safe Bitcoin) vaults yet.");
+    const waiting = qsbAccountRows([QSB_VIEWS.ready], new Set(["qsb-2"]));
+    expect(waiting).toContain('<span class="hint">Withdrawal ready to finish</span>');
+    expect(waiting).not.toContain(">Ready<");
+  });
+
+  test("a withdrawal waiting on the user shows on its row, with the grant held", async () => {
+    const { app, calls } = mount(
+      { resolve: [QSB_VIEWS.ready, QSB_VIEWS.backupNeeded] },
+      { granted: true, vaults: { resolve: reading([withdrawingVault(0, "ready")]) } },
+    );
+    await flush();
+    await flush();
+    expect(rowText(app, "qsb-2")).toBe("QSB vault 2 Withdrawal ready to finish");
+    // An account still to be backed up holds no deposits: never read.
+    expect(calls.vaults).toEqual(["qsb-2"]);
+    expect(rowText(app, "qsb-1")).toBe("QSB vault 1 Backup needed Back up");
+  });
+
+  test("a row says its state when nothing waits, or the writer can't review it", async () => {
+    for (const [account, vaults] of [
+      [QSB_VIEWS.ready, [unfundedVault(0), withdrawingVault(1, "searching")]],
+      // A writer never reviews a recovered (unknown) withdrawal.
+      [QSB_VIEWS.ready, [recoveredVault(0, "ready")]],
+      // A read-only account reviews only a recovered one.
+      [QSB_VIEWS.readOnly, [withdrawingVault(0, "ready")]],
+    ] as const) {
+      const { app } = mount(
+        { resolve: [account] },
+        { granted: true, vaults: { resolve: reading(vaults) } },
+      );
+      await flush();
+      await flush();
+      expect(rowText(app, account.id)).not.toContain("Withdrawal ready");
+    }
+    const recovered = mount(
+      { resolve: [QSB_VIEWS.readOnly] },
+      { granted: true, vaults: { resolve: reading([recoveredVault(0, "ready")]) } },
+    );
+    await flush();
+    await flush();
+    expect(rowText(recovered.app, "qsb-3")).toBe("QSB vault 3 Withdrawal ready to finish");
+  });
+
+  test("without the grant the list reads no deposits and asks for nothing", async () => {
+    const { app, calls, checks } = mount(
+      { resolve: [QSB_VIEWS.ready, QSB_VIEWS.readOnly] },
+      { granted: false, vaults: { resolve: reading([withdrawingVault(0, "ready")]) } },
+    );
+    await flush();
+    await flush();
+    expect(checks()).toBe(1);
+    expect(calls.vaults).toEqual([]);
+    expect(rowText(app, "qsb-2")).toBe("QSB vault 2 Ready");
+  });
+
+  test("a failed deposit read leaves its row as it was", async () => {
+    const { app, opened, shown } = mount(
+      { resolve: [QSB_VIEWS.ready] },
+      { granted: true, vaults: { reject: new Error("wallet unavailable") } },
+    );
+    await flush();
+    await flush();
+    expect(rowText(app, "qsb-2")).toBe("QSB vault 2 Ready");
+    app.querySelector<HTMLButtonElement>('[data-qsb-open="qsb-2"]')?.click();
+    expect(shown).toEqual(["qsb-2"]);
+    expect(opened).toEqual([]);
+  });
+
+  test("the repainted rows still open their account and backup", async () => {
+    const { app, opened, shown } = mount(
+      { resolve: [QSB_VIEWS.ready, QSB_VIEWS.backupNeeded] },
+      { granted: true, vaults: { resolve: reading([withdrawingVault(0, "ready")]) } },
+    );
+    await flush();
+    await flush();
+    expect(rowText(app, "qsb-2")).toContain("Withdrawal ready to finish");
+    app.querySelector<HTMLButtonElement>('[data-qsb-open="qsb-2"]')?.click();
+    app.querySelector<HTMLButtonElement>('[data-qsb-back-up="qsb-1"]')?.click();
+    expect(shown).toEqual(["qsb-2"]);
+    expect(opened).toEqual(["qsb-1"]);
   });
 });
