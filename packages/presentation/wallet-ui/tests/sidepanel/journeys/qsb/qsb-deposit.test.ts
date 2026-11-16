@@ -87,7 +87,7 @@ describe("the deposit amount", () => {
     expect(step(panel)).toBe("amount");
     expect(text(panel, "#qsb-deposit-vault")).toBe("QSB vault 2 · Deposit 1");
     expect(text(panel, "#qsb-amount-available")).toBe(
-      "Confirmed balance: 0.00250000 BTC · Minimum: 0.00010000 BTC",
+      "Confirmed balance: 0.00250000 BTC · Minimum: 0.0001 BTC",
     );
     // No placeholder figure that could read as a default or a minimum.
     expect(find(panel, 'input[name="qsbAmount"]')?.hasAttribute("placeholder")).toBe(false);

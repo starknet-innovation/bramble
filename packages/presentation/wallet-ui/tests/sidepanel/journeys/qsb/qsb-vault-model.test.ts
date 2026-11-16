@@ -128,9 +128,7 @@ describe("vault rows", () => {
   });
 
   test("the amount hint states the balance and the contract's minimum before typing", () => {
-    expect(qsbAmountHint(250_000)).toBe(
-      `Confirmed balance: 0.00250000 BTC · Minimum: ${btcText(QSB_MIN_DEPOSIT_SAT)}`,
-    );
+    expect(qsbAmountHint(250_000)).toBe("Confirmed balance: 0.00250000 BTC · Minimum: 0.0001 BTC");
   });
 
   test("a retired key set reads as withdrawn only when it was funded", () => {

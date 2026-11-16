@@ -276,12 +276,16 @@ export const qsbSubmissionLine = (submission: QsbSubmission): string =>
 /** A deposit whose reply was lost: its heading, the same as a lost resend's. */
 export const QSB_DEPOSIT_UNKNOWN_TITLE = QSB_SUBMISSION_COPY.uncertain.title;
 
+// The minimum as typed, without trailing zeros (`0.0001 BTC`), matching the
+// too-small refusal; balances keep all 8 decimals.
+const minimumText = `${formatBtc(QSB_MIN_DEPOSIT_SAT).replace(/\.?0+$/, "")} BTC`;
+
 /**
  * Under the amount field: the confirmed balance and the minimum deposit,
  * both before the user types, so neither arrives as an error.
  */
 export const qsbAmountHint = (balanceSat: number): string =>
-  `Confirmed balance: ${btcText(balanceSat)} · Minimum: ${btcText(QSB_MIN_DEPOSIT_SAT)}`;
+  `Confirmed balance: ${btcText(balanceSat)} · Minimum: ${minimumText}`;
 
 /** Whether a rejected deposit was refused only because its cost moved since the quote. */
 export const isQsbQuoteChanged = (error: unknown): boolean =>
