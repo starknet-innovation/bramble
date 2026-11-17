@@ -21,6 +21,7 @@ import {
   INDETERMINATE_RPC_WRITE_MESSAGE,
   IndeterminateRpcWriteError,
 } from "@bramble/starknet/provider";
+import { GATEWAY_CODE_PATTERN, gatewayErrorCode } from "@bramble/starknet/rpc-gateway-refusal";
 import {
   PAYMASTER_TIMEOUT_MS,
   type PaymasterHttp,
@@ -39,8 +40,6 @@ export const GASLESS_RPC_ID = 1;
  * `screening_unavailable`. The gateway has not forwarded those attempts.
  */
 export const GASLESS_SCREENING_RETRIES = 2;
-
-const CODE_PATTERN = /^[a-z0-9_]{1,64}$/;
 
 /**
  * Execute codes that mean the relay was not asked. Any other execute answer
@@ -67,17 +66,19 @@ const pause = (ms: number): Promise<void> =>
   });
 
 const gatewayCode = (body: unknown): GaslessGatewayCode | null => {
-  if (!isRecord(body) || typeof body["error"] !== "string" || !CODE_PATTERN.test(body["error"])) {
+  const code = gatewayErrorCode(body);
+  if (code === null) {
     return null;
   }
-  if (!hasOnlyKnownKeys(body, ["error"])) {
-    return null;
-  }
-  return isGaslessGatewayCode(body["error"]) ? body["error"] : "unrecognised";
+  return isGaslessGatewayCode(code) ? code : "unrecognised";
 };
 
 const relayCode = (error: unknown): GaslessGatewayCode => {
-  if (!isRecord(error) || typeof error["data"] !== "string" || !CODE_PATTERN.test(error["data"])) {
+  if (
+    !isRecord(error) ||
+    typeof error["data"] !== "string" ||
+    !GATEWAY_CODE_PATTERN.test(error["data"])
+  ) {
     return "unrecognised";
   }
   return isGaslessGatewayCode(error["data"]) ? error["data"] : "unrecognised";

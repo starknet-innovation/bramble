@@ -5,6 +5,7 @@ import { readBoundedText } from "@bramble/core/http-json";
 import { isRecord } from "@bramble/core/json";
 import type { RpcProviderOptions } from "starknet";
 import { type RpcOutcome, recordRpcDiagnostic, rpcEndpointClass } from "./rpc-diagnostics";
+import { gatewayBroadcastRefusal, RpcGatewayRefusalError } from "./rpc-gateway-refusal";
 
 /**
  * Marker for an endpoint transport failure. The curated message retains no
@@ -87,7 +88,9 @@ const jsonRpcShaped = (text: string): boolean => {
 // node that already accepted the transaction, and calling that "nothing was
 // submitted" invites a resend under a new nonce. For a broadcast, only the
 // node's own rate-limit code (or HTTP 429, handled before the body is read)
-// proves the request was turned away; everything else stays ambiguous.
+// proves the request was turned away, apart from the gateway's own coded
+// refusals that `gatewayBroadcastRefusal` reads first (issue 910); everything
+// else stays ambiguous.
 const endpointRefusal = (text: string, broadcast: boolean): boolean => {
   if (text.length > REFUSAL_BODY_LIMIT_BYTES) return !broadcast && !jsonRpcShaped(text);
   try {
@@ -118,6 +121,8 @@ const boundedRpcResponse = async (
         },
       )
     : "";
+  const gatewayRefusal = broadcast ? gatewayBroadcastRefusal(response.status, text) : null;
+  if (gatewayRefusal) throw gatewayRefusal;
   if (endpointRefusal(text, broadcast)) {
     throw new RpcRefusedError(RPC_REFUSED_MESSAGE, response.headers.get("retry-after"));
   }
@@ -129,7 +134,7 @@ const boundedRpcResponse = async (
 };
 
 const diagnosticOutcome = (error: unknown, deadline: AbortSignal): RpcOutcome =>
-  error instanceof RpcRefusedError
+  error instanceof RpcRefusedError || error instanceof RpcGatewayRefusalError
     ? "rate-limited"
     : deadline.aborted || (error instanceof DOMException && error.name === "TimeoutError")
       ? "timeout"
