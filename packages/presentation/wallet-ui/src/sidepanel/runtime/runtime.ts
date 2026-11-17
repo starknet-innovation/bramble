@@ -60,6 +60,7 @@ export type {
 import { createAccountRuntimeClient } from "./runtime-accounts";
 import { createDeployRuntimeClient } from "./runtime-deploy";
 import { lostReplySend, refusalText, relabelLostReply, responseError } from "./runtime-errors";
+import { createFeatureFlagRuntimeClient } from "./runtime-feature-flags";
 import { createAccountGroupClient } from "./runtime-groups";
 import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
@@ -343,6 +344,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     },
     ...createAccountGroupClient(sendMessage),
     ...createSettingsRuntimeClient(sendMessage),
+    ...createFeatureFlagRuntimeClient(sendMessage),
     /** Sends under the reviewed fees. A missing ceiling is refused before signing. */
     async submitTransfer(
       accountId: string,

@@ -22,12 +22,15 @@ const FLAGS_PACKAGE_SRC = "packages/features/flags/src/";
 const BACKGROUND_FLAGS = "apps/extension/src/background/flags/";
 
 // The only shipped files allowed to see flag code outside the flag modules
-// themselves. Each is wiring or a type union; none decides anything.
+// themselves. Each is wiring or a type union; none decides anything except
+// the side panel's reader, whose values decide only what the panel shows
+// (`shared/feature-gates.ts` hides gated elements and screens).
 const ALLOWED_IMPORTERS = new Set([
   "apps/extension/src/background/index.ts",
   "apps/extension/src/background/routing/message-context.ts",
   "apps/extension/src/background/routing/messages.ts",
   "apps/extension/src/background/runtime/runtime-types.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime-feature-flags.ts",
 ]);
 
 // Security decision paths, named so a violation reads as the rule it breaks.

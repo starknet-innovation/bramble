@@ -78,7 +78,7 @@ describe("feature-flag client", () => {
   test("bundled defaults before any document", async () => {
     const client = clientFor(serve(new Error("offline")));
     expect(await client.snapshot("SN_MAIN")).toEqual({
-      flags: { "swap.enabled": true },
+      flags: { "qsb.vaults": false, "swap.enabled": true },
       sequence: null,
       source: "bundled",
     });
@@ -91,7 +91,8 @@ describe("feature-flag client", () => {
     const client = clientFor(serve(await killed(3)), { store });
     expect(await client.refresh()).toBe("accepted");
     expect(await client.snapshot("SN_MAIN")).toEqual({
-      flags: { "swap.enabled": false },
+      // No qsb.vaults rule in the document: the toggle flag stays at its bundled off.
+      flags: { "qsb.vaults": false, "swap.enabled": false },
       sequence: 3,
       source: "remote",
     });

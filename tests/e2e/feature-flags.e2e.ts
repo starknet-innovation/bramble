@@ -83,7 +83,7 @@ test("fetches the signed flag document privately and fails closed on a foreign k
 
   const page = await extension.openExtensionPage("popup.html");
   expect(await sendRuntimeMessage(page, { type: "wallet.featureFlags" })).toEqual({
-    flags: { "swap.enabled": true },
+    flags: { "qsb.vaults": false, "swap.enabled": true },
     ok: true,
     sequence: null,
     source: "bundled",
