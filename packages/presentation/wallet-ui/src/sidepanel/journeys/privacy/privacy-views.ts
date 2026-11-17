@@ -20,10 +20,11 @@ import { networkDisplayName } from "../../shared/network-label";
 import { flowHeader, flowScreen, formatFri, inlineCopyButton } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { formatFeeEstimate, reviewPanel } from "../../shared/review-render";
-import type {
-  PrivacyBlockerKind,
-  PrivacyDisclosureState,
-  PrivacyJourneyState,
+import {
+  PRIVACY_NETWORK_UNAVAILABLE,
+  type PrivacyBlockerKind,
+  type PrivacyDisclosureState,
+  type PrivacyJourneyState,
 } from "./privacy-model";
 import { type PreparationProgress, preparationProgressText } from "./privacy-preparation-job";
 
@@ -302,7 +303,7 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
       label: "Choose a network",
     }),
     body: "Switch to a network with a privacy pool.",
-    title: "Not available on this network",
+    title: PRIVACY_NETWORK_UNAVAILABLE,
   },
   "other-wallet": {
     action: "",
