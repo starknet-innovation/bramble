@@ -2,31 +2,35 @@
  * Shared deterministic harness for privileged Argent multisig messages.
  */
 
-import type { ArgentUnsupportedSigner } from "@mc-wallet/multisig/chain";
-import type { NostrCoordinationStore } from "@mc-wallet/multisig/coordination";
-import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
-import type { MultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { ArgentUnsupportedSigner } from "@bramble/multisig/chain";
+import type { NostrCoordinationStore } from "@bramble/multisig/coordination";
+import { type MultisigStore, memoryMultisigStore } from "@bramble/multisig/repository";
+import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
+import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
+import { createPreferencesStore } from "@bramble/settings/preferences";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   argentAccountAddress,
   argentMultisigAddress,
   argentSignerGuid,
-} from "@mc-wallet/starknet/account-contracts";
-import { prepareArgentMultisigInvokeV3WithProvider } from "@mc-wallet/starknet/multisig-invoke";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { NostrApplicationData } from "@mc-wallet/vault/kms-port";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { WalletVaultService } from "@mc-wallet/vault/service-types";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/starknet/account-contracts";
+import { prepareArgentMultisigInvokeV3WithProvider } from "@bramble/starknet/multisig-invoke";
+import { createMemoryStore } from "@bramble/store/kv";
+import { memoryActivityLog, systemClock } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import type { NostrApplicationData } from "@bramble/vault/kms-port";
+import type { Vault } from "@bramble/vault/schema";
+import type { WalletVaultService } from "@bramble/vault/service-types";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { ec, RpcProvider } from "starknet";
 import type { NostrRelayTransport } from "../../apps/extension/src/background/multisig/nostr-relay";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "./background-wallet-stub";
+import { multisigStrk20WalletMethods } from "./multisig-strk20-wallet";
 
 const HARNESS_PRIVATE_A = "0x123";
 const HARNESS_PRIVATE_B = "0x456";
@@ -36,7 +40,8 @@ export const HARNESS_KEYS = [HARNESS_PUBLIC_A, HARNESS_PUBLIC_B].sort((left, rig
   BigInt(argentSignerGuid(left)) < BigInt(argentSignerGuid(right)) ? -1 : 1,
 );
 const HARNESS_CONFIG = { signerPublicKeys: HARNESS_KEYS, threshold: 2 } as const;
-const HARNESS_MULTISIG = argentMultisigAddress(HARNESS_CONFIG, "0x0");
+/** The harness multisig account address. */
+export const HARNESS_MULTISIG = argentMultisigAddress(HARNESS_CONFIG, "0x0");
 export const HARNESS_MULTISIG_ID = `SN_MAIN:${HARNESS_MULTISIG}`;
 export const HARNESS_TARGET = "0x222";
 const HARNESS_SUBMIT_HASH = "0x7cd";
@@ -71,21 +76,24 @@ export const harnessContentSender: RuntimeSender = {
 const provider = new RpcProvider({ nodeUrl: "http://127.0.0.1:5050/rpc" });
 provider.getChainId = async () => "0x534e5f4d41494e";
 provider.getNonceForAddress = async () => "0x7";
-provider.getEstimateFeeBulk = (async () => [
-  {
-    data_gas_consumed: 0n,
-    data_gas_price: 0n,
-    gas_consumed: 0n,
-    gas_price: 0n,
-    overall_fee: 44n,
-    resourceBounds: {
-      l1_data_gas: { max_amount: 1n, max_price_per_unit: 2n },
-      l1_gas: { max_amount: 3n, max_price_per_unit: 4n },
-      l2_gas: { max_amount: 5n, max_price_per_unit: 6n },
+// The fee quote, with the L2 gas price a test may raise between preparations.
+const estimateWith = (l2GasPrice: bigint) =>
+  (async () => [
+    {
+      data_gas_consumed: 0n,
+      data_gas_price: 0n,
+      gas_consumed: 0n,
+      gas_price: 0n,
+      overall_fee: 44n,
+      resourceBounds: {
+        l1_data_gas: { max_amount: 1n, max_price_per_unit: 2n },
+        l1_gas: { max_amount: 3n, max_price_per_unit: 4n },
+        l2_gas: { max_amount: 5n, max_price_per_unit: l2GasPrice },
+      },
+      unit: "FRI" as const,
     },
-    unit: "FRI" as const,
-  },
-]) as RpcProvider["getEstimateFeeBulk"];
+  ]) as RpcProvider["getEstimateFeeBulk"];
+provider.getEstimateFeeBulk = estimateWith(6n);
 
 /**
  * Harness controls for fresh-chain and response-loss branches.
@@ -125,13 +133,29 @@ export type MultisigHarnessOptions = {
   readonly resolveSignerAccount?: () => MultisigSignerAccount;
   readonly multisigStore?: MultisigStore;
   readonly getNonce?: () => string;
-  readonly getTransactionStatuses?: (
-    transactionHash: string,
-  ) => Promise<
-    Readonly<Record<string, { finalizedOnL1: boolean; found: boolean; status: "pending" }>>
+  /** The L2 gas price each preparation is quoted at; 6 when absent. */
+  readonly l2GasPrice?: () => bigint;
+  /** Replaces the default balance read, e.g. with the real reader over a fake provider. */
+  readonly getTokenBalances?: RuntimeRpc["getTokenBalances"];
+  readonly getTransactionStatuses?: (transactionHash: string) => Promise<
+    Readonly<
+      Record<
+        string,
+        {
+          finalizedOnL1: boolean;
+          found: boolean;
+          seen?: boolean;
+          status: Awaited<ReturnType<RuntimeRpc["getTransactionStatuses"]>>[string]["status"];
+        }
+      >
+    >
   >;
   readonly nonce?: string;
   readonly nostrCoordinationStore?: NostrCoordinationStore;
+  /** Caps the in-memory viewing-key collection so a test can fill it. */
+  readonly strk20KeyCapacity?: number;
+  /** Privacy service used by multisig STRK20 sessions. Absent, those sessions fail closed. */
+  readonly strk20?: RuntimeRpc["strk20"];
   readonly now?: () => number;
   readonly onSigned?: () => void;
   readonly submitAccountDeployment?: () => Promise<string>;
@@ -149,8 +173,10 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     [harnessAccountB.id, HARNESS_PRIVATE_B],
   ]);
   const multisigStore = options.multisigStore ?? memoryMultisigStore();
+  const strk20MultisigStore = createMultisigStrk20Store(createMemoryStore());
   const storedPreferences = createPreferencesStore({ store: createMemoryStore() });
-  const activity = memoryActivityLog();
+  // The background and its activity log share one clock, as in production.
+  const activity = memoryActivityLog(options.now ?? systemClock);
   const allowanceStore = memoryAllowanceStore();
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
@@ -168,6 +194,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
   };
   let activeAccountId = harnessAccountA.id;
   const wallet = {
+    ...multisigStrk20WalletMethods(options.strk20KeyCapacity),
     async addDerivedAccount() {
       return harnessAccountA;
     },
@@ -268,7 +295,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
       };
     },
   };
-  const handler = createMessageHandler(wallet, "extension-id", {
+  const handler = createMessageHandler(wallet, testExtension, {
     activity,
     allowanceStore,
     multisigStore,
@@ -278,7 +305,9 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     ...(options.now ? { now: options.now } : {}),
     ...(options.coordination ? { nostrRelayTransport: options.coordination.transport } : {}),
     preferencesStore,
+    strk20MultisigStore,
     runtimeRpc: {
+      ...(options.strk20 ? { strk20: options.strk20 } : {}),
       async estimateAccountDeploymentFee() {
         if (options.deploymentEstimateError) throw options.deploymentEstimateError;
         return { overallFee: "44", unit: "FRI" };
@@ -294,7 +323,9 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
       async getNftOwner() {
         return harnessAccountA.address;
       },
-      async getTokenBalances({ tokens }) {
+      async getTokenBalances(input) {
+        if (options.getTokenBalances) return options.getTokenBalances(input);
+        const { tokens } = input;
         const balance = options.deploymentBalance;
         return balance === null || balance === undefined
           ? []
@@ -337,6 +368,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
         },
         async prepareInvoke(input) {
           provider.getNonceForAddress = async () => options.getNonce?.() ?? options.nonce ?? "0x7";
+          provider.getEstimateFeeBulk = estimateWith(options.l2GasPrice?.() ?? 6n);
           return prepareArgentMultisigInvokeV3WithProvider(
             provider,
             input.account,
@@ -406,6 +438,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
     multisigStore,
     preferencesStore,
     session,
+    strk20MultisigStore,
     submitCount: () => submitCount,
   };
 };

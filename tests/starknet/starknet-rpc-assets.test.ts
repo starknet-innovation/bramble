@@ -9,13 +9,13 @@
  * tests/starknet/starknet-rpc.test.ts asserts the transfer-call guard.
  */
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   buildErc20ApproveCall,
   getNftOwner,
   getNftOwnership,
   getNftTokenUri,
-} from "@mc-wallet/starknet/rpc-assets";
+} from "@bramble/starknet/rpc-assets";
 import { byteArray, RpcProvider } from "starknet";
 import { digestApprovalPayload } from "../../apps/extension/src/background/approvals/approval-context";
 

@@ -5,6 +5,7 @@ import { ErrorBanner, SkeletonRows, TokenIcon } from "../../components/index";
 import { formatCompactUsd } from "../../data/index";
 import type { VesuMarket } from "../../data/index";
 import { lendingMarketKey, riskTone, type LendingSort } from "./lending-model";
+import { loadFailedMessage } from "../../protocols/support/user-error";
 
 type Props = {
   readonly markets: readonly VesuMarket[];
@@ -105,7 +106,7 @@ export const LendingMarketTable = ({
     </div>
     <div className="lending-market-scroll">
       {error !== null && markets.length === 0 ? (
-        <ErrorBanner message={`Couldn't load Vesu: ${error}`} />
+        <ErrorBanner message={loadFailedMessage("Vesu", error)} />
       ) : isLoading && markets.length === 0 ? (
         <SkeletonRows rows={10} />
       ) : markets.length === 0 ? (

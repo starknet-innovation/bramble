@@ -5,8 +5,8 @@
  * allowance recorded under a different account.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletOpsDeps } from "../../../apps/extension/src/background/accounts/wallet-ops";
 import { handleAllowanceOps } from "../../../apps/extension/src/background/portfolio/allowance-ops";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -47,6 +47,9 @@ const deps = (options: Options = {}): WalletOpsDeps => {
         return [];
       },
       async record() {},
+      async recordIfAbsent() {
+        return true;
+      },
       async takeFailureNotices() {
         return [];
       },
@@ -59,6 +62,7 @@ const deps = (options: Options = {}): WalletOpsDeps => {
         return (options.listRecords ?? []) as never;
       },
       async record() {},
+      async settleRevocations() {},
     } as unknown as WalletOpsDeps["allowanceStore"],
     preferencesStore: {
       async read() {
@@ -121,7 +125,7 @@ describe("handleAllowanceOps external discovery", () => {
         rpcOverrides: {
           async getExternalAllowances() {
             scanned = true;
-            return [];
+            return { allowances: [], complete: true };
           },
         },
       }),

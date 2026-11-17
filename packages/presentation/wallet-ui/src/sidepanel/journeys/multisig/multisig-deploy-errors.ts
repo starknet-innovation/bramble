@@ -1,7 +1,8 @@
 /** User-facing recovery copy for Argent multisig deployment failures. */
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import { accountLabel } from "../../shared/parts";
-import { formatFeeEstimate } from "../../shared/review-render";
+import { FEE_FUNDING_SHORTFALL } from "../../shell/deploy-errors";
+import { deploymentFundingMinimumText } from "./multisig-deploy-view";
 
 /**
  * Background error emitted when a one-time deployment review is stale.
@@ -12,7 +13,7 @@ export const EXPIRED_DEPLOYMENT_REVIEW =
  * Concise recovery copy for a deterministic address already present on-chain.
  */
 export const ALREADY_DEPLOYED_MESSAGE =
-  "This multisig is already deployed. Open it from Shared accounts instead of deploying it again.";
+  "This multisig is already deployed. Open it from Multisigs instead of deploying it again.";
 
 /**
  * Removes raw RPC detail from known deployment-review failures.
@@ -30,8 +31,8 @@ export const deploymentFailureToast = (
   if (raw === EXPIRED_DEPLOYMENT_REVIEW) {
     return "The fee review expired. Review the deployment again before confirming.";
   }
-  if (/exceed balance|insufficient.*balance|address needs STRK/i.test(raw)) {
-    return `Fund ${accountLabel(review.address)} with at least ${formatFeeEstimate(review.fee)}, then review the deployment again.`;
+  if (FEE_FUNDING_SHORTFALL.test(raw)) {
+    return `Fund ${accountLabel(review.address)} with at least ${deploymentFundingMinimumText(review)}, then review the deployment again.`;
   }
   return raw;
 };

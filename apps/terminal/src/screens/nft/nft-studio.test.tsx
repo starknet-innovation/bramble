@@ -8,7 +8,7 @@ const wallet = vi.hoisted(() => ({
     account: null,
     address: "0x1234",
     chainId: "SN_MAIN",
-    walletName: "MC Wallet",
+    walletName: "Bramble",
     isConnected: true,
     isConnecting: false,
     error: null,

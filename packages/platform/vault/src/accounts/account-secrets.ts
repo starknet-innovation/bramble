@@ -3,7 +3,7 @@
  * vault-internal data: none of these types may enter public account projections,
  * extension messages, preferences, activity, or UI state.
  */
-import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "@bramble/core/json";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -11,7 +11,7 @@ import {
   STARKNET_NETWORKS,
   type StarknetNetworkId,
   sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 type AccountSecretOwner = {
   readonly derivation: { readonly kind: string };

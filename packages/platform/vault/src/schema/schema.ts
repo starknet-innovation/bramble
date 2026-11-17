@@ -1,11 +1,10 @@
 /**
  * Versioned vault schema and validators for decrypted wallet state.
  */
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@bramble/core/json";
+import { isWalletOrigin } from "@bramble/core/origin";
 import {
   type AccountRef,
-  ARGENT_ACCOUNT_CLASS_HASH,
   canonicalAccountId,
   canonicalAccountRef,
   canonicalLegacyAccountRef,
@@ -13,96 +12,43 @@ import {
   isAccountRef,
   isLegacyAccountRef,
   isLegacyV6AccountRef,
+  isLegacyV8AccountRef,
+  isLegacyV9AccountRef,
+  isLegacyV10AccountRef,
   type LegacyAccountRef,
   type LegacyV6AccountRef,
-} from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt, isStarkPrivateKey, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/accounts";
+import { canonicalFelt, isStarkPrivateKey } from "@bramble/wallet-model/networks";
+import { isMnemonicText } from "@bramble/wallet-model/passphrase";
+import {
+  hasValidShadowAccountScopes,
+  type ShadowAccountScopeRef,
+} from "../accounts/shadow-account-scopes";
+import { hasValidSeedBindings, type ImportedSeedRef } from "./schema-seeds";
+import type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
+
+/** Re-exports the imported-seed record type from its size-budget split. */
+export type { ImportedSeedRef } from "./schema-seeds";
+/** Re-exports the legacy type surface from its size-budget split. */
+export type { OriginGrant, SigningKeyRef, VaultV1, VaultV2, VaultV3 } from "./schema-types";
+
 import {
   type AccountSecretRef,
   hasValidAccountSecretBindings,
   isAccountSecretRef,
 } from "../accounts/account-secrets";
+import {
+  hasValidMultisigStrk20VaultData,
+  type MultisigStrk20KeyConflict,
+  type MultisigStrk20ViewingKeyRef,
+} from "../accounts/multisig-strk20-key";
 
 /**
  * Current vault schema version accepted by validators and writers.
- *
- * Version 7 retains the exact Argent deployment salt. Version 6 records
- * account-contract semantics explicitly. Version 5
- * canonicalized account identities and their dependent references.
- * Version 4 introduced optional account secrets separated from public
- * {@link AccountRef} metadata.
+ * Version 13 retains a multisig's shared STRK20 viewing key (#826).
+ * The older steps are recorded in `docs/ARCHITECTURE.md`.
  */
-export const CURRENT_SCHEMA_VERSION = 7;
-
-/**
- * Encrypted-vault reference from an account id to its private key.
- */
-export type SigningKeyRef = {
-  readonly accountId: string;
-  readonly privateKey: string;
-};
-
-/**
- * Origin permission grant scoped to selected account ids.
- */
-export type OriginGrant = {
-  readonly accountIds: readonly string[];
-  readonly origin: string;
-};
-
-/**
- * Legacy vault schema without a retained recovery phrase. Only reachable
- * through migration; new writes always use the current schema.
- */
-export type VaultV1 = {
-  readonly accounts: readonly LegacyAccountRef[];
-  readonly activeAccountId: string | null;
-  readonly originGrants: readonly OriginGrant[];
-  readonly schemaVersion: 1;
-  readonly signingKeys: readonly SigningKeyRef[];
-};
-
-/**
- * Legacy schema-v2 vault, reachable only through migration. Its accounts are
- * key-backed only (`starknet-bip44` or `imported-raw-key`); a keyless Ledger
- * account is invalid at this version. `mnemonic` retains the recovery phrase
- * (null for vaults migrated from v1). New writes always use {@link VaultV4}.
- */
-export type VaultV2 = {
-  readonly accounts: readonly LegacyAccountRef[];
-  readonly activeAccountId: string | null;
-  readonly mnemonic: string | null;
-  readonly originGrants: readonly OriginGrant[];
-  readonly schemaVersion: 2;
-  readonly signingKeys: readonly SigningKeyRef[];
-};
-
-/**
- * Legacy schema-v3 vault. Identical in shape to v2 but its accounts may
- * include the keyless {@link LedgerAccountRef} variant, so the account↔signingKey
- * bijection is relaxed to require a key for every non-Ledger account only.
- *
- * `mnemonic` is `null` when the vault retains no recovery phrase. That covers two
- * cases and needs no shape change beyond v2: a vault migrated from schema v1
- * (where the phrase was never stored, so its seed accounts stay signable through
- * their retained keys but phrase-dependent operations are read-only), and a
- * Ledger-only wallet created with no seed material at all. The phrase-coverage
- * rule is enforced at the mutation boundary, not the schema: `addDerivedAccount`
- * refuses to derive a new HD account when `mnemonic` is null (it has nothing to
- * derive from), and `createLedgerVault` only ever writes null over a fresh store.
- * The grandfathered legacy null-with-seed shape stays valid at this schema so
- * those v1-migrated wallets never fail closed — which is exactly why the coverage
- * rule cannot be a validator invariant.
- */
-export type VaultV3 = {
-  readonly accounts: readonly LegacyAccountRef[];
-  readonly activeAccountId: string | null;
-  readonly mnemonic: string | null;
-  readonly originGrants: readonly OriginGrant[];
-  readonly schemaVersion: 3;
-  readonly signingKeys: readonly SigningKeyRef[];
-};
+export const CURRENT_SCHEMA_VERSION = 13;
 
 /**
  * Current encrypted vault schema. Optional account secrets are deliberately
@@ -146,9 +92,61 @@ export type VaultV7 = Omit<VaultV4, "accounts" | "schemaVersion"> & {
 };
 
 /**
+ * Legacy encrypted vault schema. Version 8 retains imported seeds so accounts
+ * recovered from another wallet's phrase stay re-derivable and revealable; its
+ * Ledger derivations may only follow Bramble's `LedgerW` scheme.
+ */
+export type VaultV8 = Omit<VaultV7, "schemaVersion"> & {
+  readonly importedSeeds: readonly ImportedSeedRef[];
+  readonly schemaVersion: 8;
+};
+
+/**
+ * Schema-v9 vault, accepted only by the adjacent v10 migration. Admits a Ledger
+ * derivation under Ready's `argentx` path scheme beside Bramble's `LedgerW`; the
+ * record shape is unchanged from v8.
+ */
+export type VaultV9 = Omit<VaultV8, "schemaVersion"> & { readonly schemaVersion: 9 };
+
+/**
+ * Current encrypted vault schema. Version 10 admits Braavos accounts, and Argent
+ * accounts at any release they could have been deployed with; the record shape
+ * is unchanged, only the values a record may hold have widened.
+ */
+export type VaultV10 = Omit<VaultV9, "schemaVersion"> & { readonly schemaVersion: 10 };
+
+/**
+ * Schema-v11 vault, accepted only by the adjacent v12 migration. Version 11
+ * admits accounts derived with Ready's ETH-seeded scheme (`argentx-bip44`,
+ * issue 505); the record shape is unchanged from v10.
+ */
+export type VaultV11 = Omit<VaultV10, "schemaVersion"> & { readonly schemaVersion: 11 };
+
+/**
+ * Current encrypted vault schema. Version 12 adds the shadow-account scope
+ * records (#443): which sites, labels, and exact nonces each account drove a
+ * shadow account through, so the wallet can find and sweep funds a site left.
+ * They reveal which sites someone used privately and so live only here.
+ */
+export type VaultV12 = Omit<VaultV11, "schemaVersion"> & {
+  readonly schemaVersion: 12;
+  readonly shadowAccountScopes: readonly ShadowAccountScopeRef[];
+};
+
+/**
+ * Current encrypted vault. One shared STRK20 viewing key per multisig, chain,
+ * and pool, plus a conflict mark when a co-owner offered a different key.
+ */
+export type VaultV13 = Omit<VaultV12, "schemaVersion"> & {
+  readonly multisigStrk20KeyConflicts: readonly MultisigStrk20KeyConflict[];
+  readonly multisigStrk20ViewingKeys: readonly MultisigStrk20ViewingKeyRef[];
+  readonly schemaVersion: 13;
+};
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV7;
+export type Vault = VaultV13;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -177,13 +175,17 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV7 => ({
+export const emptyVault = (): Vault => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
+  importedSeeds: [],
   mnemonic: null,
+  multisigStrk20KeyConflicts: [],
+  multisigStrk20ViewingKeys: [],
   originGrants: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
+  shadowAccountScopes: [],
   signingKeys: [],
 });
 
@@ -206,32 +208,45 @@ const hasValidKeyBindings = (
       (account.derivation.kind !== "ledger"),
   );
 
+// Which account validator a vault version's records must satisfy. Every shape
+// before "current" holds no Braavos and pins Argent to the release this wallet
+// creates; every shape before "v9" also pins Ledger derivations to Bramble's
+// `LedgerW` scheme. Those are the only records such vaults could have stored.
+type VaultAccountShape = "current" | "v10" | "v9" | "v7v8" | "v6" | "v1v5";
+
 type VaultReferenceOptions = {
+  readonly accounts: VaultAccountShape;
   readonly canonical: boolean;
-  readonly currentAccounts: boolean;
-  readonly legacyV6Accounts?: boolean;
   readonly ledgerAllowed: boolean;
+};
+
+const isVaultAccountShape = (
+  account: unknown,
+  shape: VaultAccountShape,
+  canonical: boolean,
+): account is AccountRef | LegacyAccountRef | LegacyV6AccountRef => {
+  switch (shape) {
+    case "current":
+      return canonical ? isAccountRef(account) : canonicalAccountRef(account) !== null;
+    case "v10":
+      return isLegacyV10AccountRef(account);
+    case "v9":
+      return isLegacyV9AccountRef(account);
+    case "v7v8":
+      return isLegacyV8AccountRef(account);
+    case "v6":
+      return isLegacyV6AccountRef(account);
+    default:
+      return canonical ? isLegacyAccountRef(account) : canonicalLegacyAccountRef(account) !== null;
+  }
 };
 
 const isVaultAccount = (
   account: unknown,
   options: VaultReferenceOptions,
-): account is AccountRef | LegacyAccountRef | LegacyV6AccountRef => {
-  const valid = options.currentAccounts
-    ? options.canonical
-      ? isAccountRef(account)
-      : canonicalAccountRef(account) !== null
-    : options.legacyV6Accounts
-      ? isLegacyV6AccountRef(account)
-      : options.canonical
-        ? isLegacyAccountRef(account)
-        : canonicalLegacyAccountRef(account) !== null;
-  if (!valid) {
-    return false;
-  }
-  const parsed = account as AccountRef | LegacyAccountRef | LegacyV6AccountRef;
-  return options.ledgerAllowed || parsed.derivation.kind !== "ledger";
-};
+): account is AccountRef | LegacyAccountRef | LegacyV6AccountRef =>
+  isVaultAccountShape(account, options.accounts, options.canonical) &&
+  (options.ledgerAllowed || account.derivation.kind !== "ledger");
 
 const hasValidVaultReferences = (
   value: Record<string, unknown>,
@@ -272,11 +287,7 @@ const hasValidVaultReferences = (
 
 const hasValidCurrentVaultReferences = (
   value: Record<string, unknown>,
-  options: {
-    readonly canonical: boolean;
-    readonly currentAccounts: boolean;
-    readonly legacyV6Accounts?: boolean;
-  },
+  options: Omit<VaultReferenceOptions, "ledgerAllowed">,
 ): boolean =>
   Array.isArray(value["accounts"]) &&
   Array.isArray(value["accountSecrets"]) &&
@@ -285,24 +296,9 @@ const hasValidCurrentVaultReferences = (
   hasValidAccountSecretBindings(
     value["accounts"].filter(
       (account): account is AccountRef | LegacyAccountRef | LegacyV6AccountRef =>
-        options.currentAccounts
-          ? options.canonical
-            ? isAccountRef(account)
-            : canonicalAccountRef(account) !== null
-          : options.legacyV6Accounts
-            ? isLegacyV6AccountRef(account)
-            : canonicalLegacyAccountRef(account) !== null,
+        isVaultAccountShape(account, options.accounts, options.canonical),
     ),
     value["accountSecrets"],
-  );
-
-const hasValidAccountContractBindings = (value: Record<string, unknown>): boolean =>
-  Array.isArray(value["accounts"]) &&
-  value["accounts"].every(
-    (account) =>
-      isAccountRef(account) &&
-      (account.accountContractType !== "argent" ||
-        sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)),
   );
 
 /**
@@ -320,11 +316,7 @@ export const isVaultV1 = (value: unknown): value is VaultV1 =>
     "signingKeys",
   ]) &&
   value["schemaVersion"] === 1 &&
-  hasValidVaultReferences(value, {
-    canonical: false,
-    currentAccounts: false,
-    ledgerAllowed: false,
-  });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: false, ledgerAllowed: false });
 
 const V2_V3_KEYS = [
   "accounts",
@@ -346,11 +338,7 @@ export const isVaultV2 = (value: unknown): value is VaultV2 =>
   hasOnlyKnownKeys(value, V2_V3_KEYS) &&
   value["schemaVersion"] === 2 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: false,
-    currentAccounts: false,
-    ledgerAllowed: false,
-  });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: false, ledgerAllowed: false });
 
 /**
  * Validates the current vault schema and internal references, admitting the
@@ -362,11 +350,7 @@ export const isVaultV3 = (value: unknown): value is VaultV3 =>
   hasOnlyKnownKeys(value, V2_V3_KEYS) &&
   value["schemaVersion"] === 3 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: false,
-    currentAccounts: false,
-    ledgerAllowed: true,
-  });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: false, ledgerAllowed: true });
 
 const V4_KEYS = [...V2_V3_KEYS, "accountSecrets"] as const;
 
@@ -380,12 +364,8 @@ export const isVaultV4 = (value: unknown): value is VaultV4 =>
   hasOnlyKnownKeys(value, V4_KEYS) &&
   value["schemaVersion"] === 4 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: false,
-    currentAccounts: false,
-    ledgerAllowed: true,
-  }) &&
-  hasValidCurrentVaultReferences(value, { canonical: false, currentAccounts: false });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: false, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v1v5", canonical: false });
 
 /**
  * Validates the current canonical vault schema and all internal references.
@@ -396,12 +376,8 @@ export const isVaultV5 = (value: unknown): value is VaultV5 =>
   hasOnlyKnownKeys(value, V4_KEYS) &&
   value["schemaVersion"] === 5 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: true,
-    currentAccounts: false,
-    ledgerAllowed: true,
-  }) &&
-  hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: false });
+  hasValidVaultReferences(value, { accounts: "v1v5", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v1v5", canonical: true });
 
 /**
  * Validates legacy schema-v6 vaults for the adjacent v7 migration.
@@ -412,31 +388,112 @@ export const isVaultV6 = (value: unknown): value is VaultV6 =>
   hasOnlyKnownKeys(value, V4_KEYS) &&
   value["schemaVersion"] === 6 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: true,
-    currentAccounts: false,
-    legacyV6Accounts: true,
-    ledgerAllowed: true,
-  }) &&
-  hasValidCurrentVaultReferences(value, {
-    canonical: true,
-    currentAccounts: false,
-    legacyV6Accounts: true,
-  });
+  hasValidVaultReferences(value, { accounts: "v6", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v6", canonical: true });
 
 /**
- * Validates the current schema-v7 vault and all internal references.
+ * Validates legacy schema-v7 vaults for the adjacent v8 migration. Ledger
+ * derivations are pinned to Bramble's `LedgerW` scheme.
  */
 export const isVaultV7 = (value: unknown): value is VaultV7 =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, V4_KEYS) &&
-  value["schemaVersion"] === CURRENT_SCHEMA_VERSION &&
+  value["schemaVersion"] === 7 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, {
-    canonical: true,
-    currentAccounts: true,
-    ledgerAllowed: true,
-  }) &&
-  hasValidAccountContractBindings(value) &&
-  hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: true });
+  hasValidVaultReferences(value, { accounts: "v7v8", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v7v8", canonical: true });
+
+const V8_KEYS = [...V4_KEYS, "importedSeeds"] as const;
+
+/**
+ * Validates legacy schema-v8 vaults for the adjacent v9 migration. Ledger
+ * derivations are pinned to Bramble's `LedgerW` scheme; a v8 record naming
+ * Ready's `argentx` scheme is refused, as no v8 writer ever produced one.
+ */
+export const isVaultV8 = (value: unknown): value is VaultV8 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V8_KEYS) &&
+  value["schemaVersion"] === 8 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, { accounts: "v7v8", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v7v8", canonical: true }) &&
+  hasValidSeedBindings(value);
+
+/**
+ * Validates legacy schema-v9 vaults for the adjacent v10 migration. Records hold
+ * no Braavos account and Argent only at the release this wallet creates, as no
+ * v9 writer ever produced anything else.
+ */
+export const isVaultV9 = (value: unknown): value is VaultV9 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V8_KEYS) &&
+  value["schemaVersion"] === 9 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, { accounts: "v9", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v9", canonical: true }) &&
+  hasValidSeedBindings(value);
+
+/**
+ * Validates canonical schema-v10 vaults for their one-step migration: the
+ * current shape, but no Ready-scheme (`argentx-bip44`) account record. Legacy
+ * vault validators only.
+ */
+export const isVaultV10 = (value: unknown): value is VaultV10 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V8_KEYS) &&
+  value["schemaVersion"] === 10 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, { accounts: "v10", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "v10", canonical: true }) &&
+  hasValidSeedBindings(value);
+
+/**
+ * Validates schema-v11 vaults and all internal references, admitting accounts
+ * derived with Ready's ETH-seeded scheme alongside everything v10 held. Also
+ * the body of the v12 validator, which adds only the scope records.
+ */
+export const isVaultV11 = (value: unknown): value is VaultV11 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V8_KEYS) &&
+  value["schemaVersion"] === 11 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, { accounts: "current", canonical: true, ledgerAllowed: true }) &&
+  hasValidCurrentVaultReferences(value, { accounts: "current", canonical: true }) &&
+  hasValidSeedBindings(value);
+
+const V12_KEYS = [...V8_KEYS, "shadowAccountScopes"] as const;
+
+/**
+ * Validates a schema-v12 vault: everything v11 holds, plus shadow-account
+ * scope records. Accepted only by the adjacent v13 migration.
+ */
+export const isVaultV12 = (value: unknown): value is VaultV12 => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, V12_KEYS) || value["schemaVersion"] !== 12) {
+    return false;
+  }
+  const { shadowAccountScopes, ...rest } = value;
+  return (
+    isVaultV11({ ...rest, schemaVersion: 11 }) &&
+    hasValidShadowAccountScopes(rest["accounts"] as VaultV11["accounts"], shadowAccountScopes)
+  );
+};
+const V13_KEYS = [...V12_KEYS, "multisigStrk20KeyConflicts", "multisigStrk20ViewingKeys"] as const;
+
+/**
+ * Validates the current schema-v13 vault, including multisig viewing keys.
+ */
+export const isVaultV13 = (value: unknown): value is VaultV13 => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, V13_KEYS) || value["schemaVersion"] !== 13) {
+    return false;
+  }
+  const { multisigStrk20KeyConflicts, multisigStrk20ViewingKeys, ...rest } = value;
+  return (
+    isVaultV12({ ...rest, schemaVersion: 12 }) &&
+    hasValidMultisigStrk20VaultData(multisigStrk20ViewingKeys, multisigStrk20KeyConflicts)
+  );
+};

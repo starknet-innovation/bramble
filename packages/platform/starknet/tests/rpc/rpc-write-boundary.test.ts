@@ -4,10 +4,10 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { createRpcProvider, resetRpcEndpointCooldownsForTests } from "@mc-wallet/starknet/provider";
-import { IndeterminateRpcWriteError, submitInvokeTransaction } from "@mc-wallet/starknet/rpc";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { WalletError } from "@bramble/core/errors";
+import { createRpcProvider, resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
+import { IndeterminateRpcWriteError, submitInvokeTransaction } from "@bramble/starknet/rpc";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { type Call, CallData, hash, logger, type RpcProvider } from "starknet";
 
 logger.setLogLevel("FATAL");

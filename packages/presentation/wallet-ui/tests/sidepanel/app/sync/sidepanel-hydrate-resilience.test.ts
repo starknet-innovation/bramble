@@ -1,6 +1,6 @@
 /** Cached hydration resilience and ambient multisig refresh invariants. */
 import { describe, expect, test } from "bun:test";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { hydrateView } from "../../../../src/sidepanel/app/sync/hydrate";
@@ -28,6 +28,7 @@ describe("cached hydration resilience", () => {
         activeView: "activity",
         cache,
         deployment: {},
+        signability: {},
         multisig: {},
         paint: () => undefined,
         ...(refreshReason ? { refreshReason } : {}),
@@ -53,6 +54,94 @@ describe("cached hydration resilience", () => {
     ]);
   });
 
+  test("starts the live refresh even when the cached paint throws", async () => {
+    // Bad cached data that breaks the paint is exactly what the live refresh
+    // replaces, so a throwing paint must not stop the live jobs (Sherlock 239).
+    const loads: Array<boolean | undefined> = [];
+    let paints = 0;
+    const cache = emptyRenderCache();
+    cache.multisigsNetworkId = "SN_MAIN";
+    await expect(
+      hydrateView({
+        activeView: "activity",
+        cache,
+        deployment: {},
+        signability: {},
+        multisig: {},
+        paint: () => {
+          paints += 1;
+          if (paints === 1) throw new RangeError("Invalid time value");
+        },
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadActivity: async (_accountId?: string, cached?: boolean) => {
+            loads.push(cached);
+            return { entries: [], historyUnavailable: false };
+          },
+        },
+      } as never),
+    ).resolves.toBeUndefined();
+    expect(loads).toEqual([true, false]);
+    expect(paints).toBe(2);
+  });
+
+  test("finishes hydration when the live paint throws", async () => {
+    const cache = emptyRenderCache();
+    cache.multisigsNetworkId = "SN_MAIN";
+    await expect(
+      hydrateView({
+        activeView: "activity",
+        cache,
+        deployment: {},
+        signability: {},
+        multisig: {},
+        paint: () => {
+          throw new RangeError("Invalid time value");
+        },
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+        },
+      } as never),
+    ).resolves.toBeUndefined();
+  });
+
+  test("verifies the class hash for Receive, the screen that shows it", async () => {
+    // The verdict renders beside the class hash in Receive's Pro fields. Loading
+    // it anywhere else is an RPC nothing displays, so the lane follows the
+    // screen: the manage-accounts view no longer asks.
+    const reads: string[] = [];
+    const run = (activeView: "account" | "receive") => {
+      const cache = emptyRenderCache();
+      cache.multisigsNetworkId = "SN_MAIN";
+      return hydrateView({
+        activeView,
+        cache,
+        deployment: {},
+        signability: {},
+        multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
+        paint: () => undefined,
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadClassHashVerification: async () => {
+            reads.push(activeView);
+            return null;
+          },
+        },
+      } as never);
+    };
+
+    await run("receive");
+    await run("account");
+    expect(reads).toEqual(["receive"]);
+  });
+
   test("skips allowance discovery on ambient ticks and refreshes it on entry", async () => {
     let reads = 0;
     const run = (refreshReason: "ambient" | undefined) =>
@@ -60,6 +149,7 @@ describe("cached hydration resilience", () => {
         activeView: "allowances",
         cache: emptyRenderCache(),
         deployment: {},
+        signability: {},
         multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
         paint: () => undefined,
         ...(refreshReason ? { refreshReason } : {}),
@@ -78,41 +168,6 @@ describe("cached hydration resilience", () => {
     expect(reads).toBe(0);
     await run(undefined);
     expect(reads).toBe(1);
-  });
-
-  test("runs live NFT discovery only when entering an NFT surface", async () => {
-    const calls: boolean[] = [];
-    const run = (activeView: "home" | "nfts", refreshReason?: "ambient") =>
-      hydrateView({
-        activeView,
-        cache: emptyRenderCache(),
-        deployment: { load: async () => true },
-        multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
-        paint: () => undefined,
-        ...(refreshReason ? { refreshReason } : {}),
-        selectedMultisigId: null,
-        selectedTokenId: null,
-        status,
-        wallet: {
-          discoverNfts: async (...input: readonly unknown[]) => {
-            calls.push(input[3] === true);
-            return [];
-          },
-          loadActivity: async () => ({ entries: [], historyUnavailable: false }),
-          loadBalances: async () => ({
-            accountId: "SN_MAIN:0x1",
-            balances: [],
-            networkId: "SN_MAIN",
-          }),
-          loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
-          loadWatchedNfts: async () => [],
-        },
-      } as never);
-
-    await run("home");
-    await run("nfts", "ambient");
-    await run("nfts");
-    expect(calls).toEqual([true, true, true, false]);
   });
 
   test("forces the affected balance lane only for action reconciliation", async () => {
@@ -177,6 +232,29 @@ describe("cached hydration resilience", () => {
     });
   });
 
+  test("a failed read with no snapshot replaces loading with the real error", async () => {
+    // Issue 795: loading is only "not read yet". A read that actually failed
+    // must still reach the screen as a failure, never stay a quiet spinner.
+    const cache = emptyRenderCache();
+    expect(cache.balances).toEqual({ loading: true });
+    await hydrateView({
+      activeView: "tokens",
+      cache,
+      deployment: {},
+      multisig: { loadMultisigs: async () => ({ intents: [], multisigs: [] }) },
+      paint: () => undefined,
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        loadBalances: async () => ({ error: "RPC unavailable" }),
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+      },
+    } as never);
+
+    expect(cache.balances).toEqual({ error: "RPC unavailable" });
+  });
+
   test("does not re-read confirmed signer authority on ambient multisig home refreshes", async () => {
     const multisigId = "SN_MAIN:0x7123";
     const cache = emptyRenderCache();
@@ -208,6 +286,7 @@ describe("cached hydration resilience", () => {
         activeView: "multisig-home",
         cache,
         deployment: {},
+        signability: {},
         multisig: {
           loadBalances: async () => ({ error: "offline" }),
           loadMultisigs: async () => cache.multisigs,
@@ -233,7 +312,7 @@ describe("cached hydration resilience", () => {
 
     await run("ambient");
     expect(refreshes).toBe(0);
-    expect(nftReads).toEqual([true]);
+    expect(nftReads).toEqual([]);
     await run("action");
     expect(refreshes).toBe(1);
   });

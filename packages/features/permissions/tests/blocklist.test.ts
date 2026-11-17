@@ -5,7 +5,7 @@
  * reputation context (first-seen and prior-connection).
  */
 import { describe, expect, test } from "bun:test";
-import { isBlockedOrigin, originInsights } from "@mc-wallet/permissions/blocklist";
+import { isBlockedOrigin, originInsights } from "@bramble/permissions/blocklist";
 
 const DAY_MS = 86_400_000;
 
@@ -17,6 +17,11 @@ describe("isBlockedOrigin", () => {
     expect(isBlockedOrigin("https://starknet-airdrop.com")).toBe(true);
     expect(isBlockedOrigin("https://www.starknet-airdrop.com")).toBe(true);
     expect(isBlockedOrigin("https://braavos-airdrop.com")).toBe(true);
+  });
+
+  test("blocks a fully-qualified blocklisted host", () => {
+    expect(isBlockedOrigin("https://starknet-airdrop.com.")).toBe(true);
+    expect(isBlockedOrigin("https://www.starknet-airdrop.com.")).toBe(true);
   });
 
   test("does not block legitimate or unparseable origins", () => {

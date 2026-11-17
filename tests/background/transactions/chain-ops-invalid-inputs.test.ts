@@ -7,10 +7,11 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { typedDataHash } from "@mc-wallet/starknet/typed-data";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { typedDataHash } from "@bramble/starknet/typed-data";
+import { createMemoryStore } from "@bramble/store/kv";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import {
@@ -23,6 +24,7 @@ import {
   executeSignApproval,
   handleChainOps,
 } from "../../../apps/extension/src/background/transactions/chain-ops";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const ORIGIN = "https://dapp.example";
 const PASSPHRASE = "correct horse battery staple";
@@ -56,11 +58,12 @@ const walletStub = (granted: readonly AccountRef[]) =>
 
 const deps = (session: UnlockSession, granted: readonly AccountRef[] = []): ChainOpsDeps =>
   ({
+    activity: memoryActivityLog(),
     // A real queue: the sign handler probes queue admission before it reads the
     // session, so a stub without `canAdmit` would fail on the probe rather than
     // on the branch under test.
     approvals: createApprovalQueue(),
-    extensionId: "extension-id",
+    extension: testExtension,
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     session,
     waiters: {} as ChainOpsDeps["waiters"],
@@ -127,6 +130,23 @@ describe("handleChainOps guard branches", () => {
       matchingSender,
     );
     expect(response).toEqual({ error: "wallet locked" });
+  });
+
+  test("rejects typed data for a different network", async () => {
+    const response = await handleChainOps(
+      deps(unlocked(), [account]),
+      "wallet.signTypedData",
+      {
+        origin: ORIGIN,
+        type: "wallet.signTypedData",
+        typedData: {
+          ...typedData,
+          domain: { ...typedData.domain, chainId: "SN_SEPOLIA" },
+        },
+      },
+      matchingSender,
+    );
+    expect(response).toEqual({ error: "invalid typed data" });
   });
 
   test("rejects a malformed getChainId message", async () => {

@@ -1,26 +1,35 @@
 /**
  * Token management and detail flow screens. The tokens flow adds custom
- * tokens, auto-detects held registry tokens, and hides or reveals tracked
- * ones; the detail flow shows price, a self-drawn 7-day sparkline, holdings,
+ * tokens, auto-detects held registry tokens, hides or reveals tracked ones,
+ * and removes ones that are not built in; the detail flow shows price, a self-drawn 7-day sparkline, holdings,
  * and contract facts. Pure templates — bindings live in ./tokens-ui.ts.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { isLikelySpam } from "@mc-wallet/portfolio/token-registry";
+import { escapeHtml } from "@bramble/core/html";
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type {
   DisplayCurrency,
   TokenConfig,
   WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button, iconButton } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
+import { isDefaultToken, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  PRIVACY_OTHER_WALLET,
+  PRIVACY_OTHER_WALLET_NEXT,
+} from "@bramble/wallet-protocol/privacy-blocker";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
+import { networkDisplayName } from "../../shared/network-label";
 import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
-import type { PrivacyDisclosureState } from "../privacy/privacy-model";
+import {
+  deploymentKnownFromPrivacy,
+  type PrivacyDisclosureState,
+  privacyIneligibleKind,
+} from "../privacy/privacy-model";
 import { sparklinePath, sparklineTrend } from "./sparkline";
 import { compactAmount, tokenGlyph } from "./token-row";
 
@@ -83,6 +92,16 @@ const trackedRow = (
       ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
     </div>
     ${toggle}
+    ${
+      isDefaultToken(token)
+        ? ""
+        : iconButton({
+            attributes: { "data-token-remove": token.id },
+            icon: "x",
+            label: `Remove ${token.symbol}`,
+            tone: "danger",
+          })
+    }
   </li>`;
 };
 
@@ -107,6 +126,7 @@ export const tokensFlow = (
       "tokens",
       `<section class="section">
         <div class="menu-list" role="group" aria-label="Token actions">
+          ${walletMenuRow("token-catalog", "Pick tokens from the avnu list", "coins")}
           ${walletMenuRow("token-add", "Add by contract", "plus")}
           ${walletMenuRow("token-discover", "Find held tokens", "search")}
         </div>
@@ -167,8 +187,7 @@ export const tokenDiscoverFlow = (status: WalletStatus): string =>
   flowScreen(
     "token-discover",
     `<section class="section">
-      <p class="lede">Check well-known Starknet token contracts for balances held by the active account.</p>
-      <p class="hint">Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home.</p>
+      <p class="hint">Likely-spam tokens stay hidden from Home.</p>
       ${button({
         attributes: { id: "detect-tokens" },
         icon: "refresh",
@@ -185,6 +204,64 @@ const sparkline = (points: readonly number[]): string => {
     return emptyState("Price history unavailable.");
   }
   return `<svg class="sparkline sparkline-${sparklineTrend(points)}" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${path}" /></svg>`;
+};
+
+// Send and Swap for the token on screen, above the privacy pair. Both are
+// always offered: an empty balance is discovered on the amount step, exactly as
+// it is when Send is opened from Home. Send seeds the asset and nothing else —
+// the recipient is still chosen on the first step — while Shield and Unshield
+// below carry a recipient and open on the amount.
+// "Stake" follows on its own row, like the single privacy action below, and
+// only where staking is on and the token is stakable (../staking/staking-entry).
+const tokenActions = (tokenId: string, stakable: boolean): string =>
+  `<div class="token-privacy-actions">${button({
+    attributes: { "data-send-token": tokenId },
+    icon: "send",
+    label: "Send",
+  })}${button({
+    attributes: { "data-swap-token": tokenId },
+    icon: "swap",
+    label: "Swap",
+    variant: "secondary",
+  })}</div>${
+    stakable
+      ? button({
+          attributes: { "data-stake-token": tokenId },
+          icon: "trendingUp",
+          label: "Stake",
+          variant: "secondary",
+        })
+      : ""
+  }`;
+
+// Deployment and funding are steps on the way to shielding, not alternatives
+// to it, so the control keeps the verb and the privacy screen it opens names
+// whichever prerequisite is in the way.
+const privacyActions = (
+  tokenId: string,
+  privacy: PrivacyDisclosureState,
+  deployment: boolean | null,
+): string => {
+  const seen = deploymentKnownFromPrivacy(deployment, privacy);
+  if (privacyIneligibleKind(privacy)) return "";
+  if (seen === false)
+    return button({
+      attributes: { "data-privacy-open": tokenId },
+      icon: "shield",
+      label: "Shield",
+    });
+  if (privacy.error) return "";
+  if (privacy.value?.registration === "registered")
+    return `<div class="token-privacy-actions">${button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: "Shield" })}${button({ attributes: { "data-send-unshield": tokenId }, label: "Unshield", variant: "secondary" })}</div>`;
+  // A deployed, unregistered account's first shield registers in the same
+  // transaction (mc-wallet 789), so it is offered directly: one pool fee, not two.
+  if (seen === true && privacy.value?.registration === "unregistered")
+    return button({ attributes: { "data-send-shield": tokenId }, icon: "shield", label: "Shield" });
+  return button({
+    attributes: { "data-privacy-open": tokenId },
+    icon: "shield",
+    label: privacy.value?.registration === "pending" ? "Registration pending" : "Go private",
+  });
 };
 
 /**
@@ -204,14 +281,17 @@ export const tokenDetailFlow = (
     loading: false,
     value: null,
   },
+  deployment: boolean | null = null,
+  stakable = false,
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
   const privateFiat = privateBalance
     ? tokenFiatValue(privateBalance.formatted, price ?? undefined)
     : null;
-  const registered = privacy.value?.registration === "registered";
-  const registrationPending = privacy.value?.registration === "pending";
+  const seen = deploymentKnownFromPrivacy(deployment, privacy);
+  const registered = seen !== false && privacy.value?.registration === "registered";
+  const registrationPending = seen !== false && privacy.value?.registration === "pending";
   return (
     flowHeader(token.symbol, status, token.name) +
     flowScreen(
@@ -225,49 +305,37 @@ export const tokenDetailFlow = (
       <section class="section">
         <p class="eyebrow">Your balance</p>
         <div class="token-side">
-          <span class="token-amount">${escapeHtml(balance ? `${compactAmount(balance.formatted)} ${token.symbol}` : `0 ${token.symbol}`)}</span>
+          <span class="token-amount">${escapeHtml(balance?.formatted ? `${compactAmount(balance.formatted)} ${token.symbol}` : "—")}</span>
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
         ${
-          privacy.error
-            ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
+          privacy.blockerKind === "other-wallet"
+            ? `<div class="private-balance-summary muted">
+                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="token-fiat">${escapeHtml(PRIVACY_OTHER_WALLET)} ${escapeHtml(PRIVACY_OTHER_WALLET_NEXT)}</span>
+              </div>`
+            : privacy.error && deployment !== false
+              ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-fiat">Try again</span>
               </button>`
-            : registered
-              ? `<div class="private-balance-summary">
+              : registered
+                ? `<div class="private-balance-summary">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-side">
                   <strong class="token-amount">${escapeHtml(`${compactAmount(privateBalance?.formatted ?? "0")} ${token.symbol}`)}</strong>
                   ${privateFiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(privateFiat, currency))}</span>`}
                 </span>
               </div>`
-              : privacy.value
-                ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
+                : privacy.value
+                  ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-fiat">${registrationPending ? "Registration pending…" : "Register to start shielding"}</span>
               </div>`
-                : ""
+                  : ""
         }
-        ${
-          privacy.error
-            ? ""
-            : registered
-              ? `<div class="token-privacy-actions">${button({
-                  attributes: { "data-send-shield": token.id },
-                  icon: "shield",
-                  label: "Shield",
-                })}${button({
-                  attributes: { "data-send-unshield": token.id },
-                  label: "Unshield",
-                  variant: "secondary",
-                })}</div>`
-              : button({
-                  attributes: { "data-privacy-open": token.id },
-                  icon: "shield",
-                  label: registrationPending ? "Registration pending" : "Go private",
-                })
-        }
+        ${tokenActions(token.id, stakable)}
+        ${privacyActions(token.id, privacy, deployment)}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>
@@ -284,7 +352,7 @@ export const tokenDetailFlow = (
           },
           { label: "Symbol", value: token.symbol },
           { label: "Decimals", value: String(token.decimals) },
-          { label: "Network", value: status.network },
+          { label: "Network", value: networkDisplayName(status.network) },
         ])}
       </section>`,
     )

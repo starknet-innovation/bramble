@@ -2,18 +2,18 @@
  * Resource-bounded parsers for dapp-reachable STRK20 runtime messages. These
  * values are untrusted even after the provider bridge normalizes them.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { normalizeWalletOrigin } from "@bramble/core/origin";
 import {
   isStrk20DappName,
   isStrk20Felt,
   readStrk20Actions,
   readStrk20Tokens,
   type Strk20Action,
-} from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-protocol/strk20";
 
 /**
- * Parses the MC-only one-time registration capability. Rejects parameters and
+ * Parses the legacy one-time registration capability. Rejects parameters and
  * malformed origins before the request reaches the approval queue.
  */
 export const readStrk20RegisterMessage = (message: unknown): { readonly origin: string } | null => {
@@ -90,7 +90,7 @@ export const readStrk20InvokeMessage = (
 /**
  * Parses a bounded dapp-scoped private identity commitment request.
  */
-export const readStrk20SubaccountMessage = (
+export const readStrk20ShadowAccountMessage = (
   message: unknown,
 ): {
   readonly dappName: string;
@@ -100,7 +100,7 @@ export const readStrk20SubaccountMessage = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["dappName", "nonce", "origin", "type"]) ||
-    message["type"] !== "wallet.strk20SubaccountCommitment" ||
+    message["type"] !== "wallet.strk20ShadowAccountCommitment" ||
     !isStrk20DappName(message["dappName"]) ||
     (message["nonce"] !== undefined && !isStrk20Felt(message["nonce"]))
   ) {

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.11/schema.json",
   "files": {
     "includes": [
       "**",
@@ -9,8 +9,10 @@
       "!.playwright-cli",
       "!apps/terminal",
       "!apps/ui-lab",
+      "!apps/website",
       "!bun.lock",
       "!dist",
+      "!dist-firefox",
       "!node_modules",
       "!output",
       "!playwright-report",

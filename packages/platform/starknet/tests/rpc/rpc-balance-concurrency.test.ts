@@ -1,7 +1,7 @@
 /** Token balance reads stay bounded so one screen cannot saturate an endpoint. */
 import { expect, test } from "bun:test";
-import { getTokenBalances } from "@mc-wallet/starknet/rpc";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+import { getTokenBalances } from "@bramble/starknet/rpc";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RpcProvider } from "starknet";
 
 const ACCOUNT_ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";

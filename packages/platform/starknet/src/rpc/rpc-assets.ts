@@ -3,13 +3,13 @@
  * Split from ./rpc.ts to keep each module within the size budget.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   sameFelt,
   uint256Felts,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import {
   byteArray,
   type Call,

@@ -8,8 +8,8 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import { prefersReducedMotion } from "../../shared/motion";
 import { type NavDirection, navDirection } from "../navigation/nav-direction";
 import type { WalletView } from "../screens/views";
+import { settleViewTransition, type ViewTransition } from "./stage-transition";
 
-type ViewTransition = { readonly finished: Promise<void> };
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => void) => ViewTransition;
 };
@@ -82,7 +82,7 @@ export const transitionScene = (
       committed = true;
       commit(false);
     });
-    void transition.finished.then(cleanup, cleanup);
+    settleViewTransition(transition, cleanup);
   } catch {
     cleanup();
     if (!committed) commit(true);

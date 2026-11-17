@@ -5,11 +5,16 @@
  * it is safe to reset to the locked/empty state whenever the vault is locked.
  */
 
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { WalletStatus } from "../../../popup/responses/responses";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import type { SignabilityVerdict, WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
-import { emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
+import { type BalanceLoadingState, emptyStatus, type SidepanelWallet } from "../../runtime/runtime";
+import type { ConnectedSitesState } from "../screens/support-flows";
 
 // The price snapshot as the runtime client returns it; the cache's price fields
 // derive from this so their types cannot drift from loadPrices.
@@ -29,21 +34,32 @@ type LoadedMultisigs = Exclude<Awaited<ReturnType<MultisigClient["loadMultisigs"
  */
 export type RenderData = {
   allowances: Awaited<ReturnType<SidepanelWallet["loadAllowances"]>>;
+  staking: StakingState;
   multisigs: LoadedMultisigs;
   multisigsError: boolean;
   multisigsNetworkId: string | null;
   multisigClassDeclared: boolean | "error" | null;
   multisigBalanceId: string | null;
-  multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
-  multisigNftId: string | null;
-  multisigNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
-  balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>>;
+  multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>> | BalanceLoadingState;
+  // `{ loading: true }` until the first read for the current scope lands, so
+  // "not read yet" never renders as a failed read (issue 795).
+  balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>> | BalanceLoadingState;
   chart: readonly number[];
+  // The token id the chart belongs to. The chart is one slot shared by every
+  // token detail screen, so it is drawn only for the token it was read for
+  // (Sherlock 210).
+  chartTokenId: string | null;
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
-  connectedSites: Awaited<ReturnType<SidepanelWallet["connectedSites"]>>;
+  connectedSites: ConnectedSitesState;
   deployment: boolean | null;
-  discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
-  indexedNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
+  // NFT lanes: indexer candidates and explicit watches, each
+  // re-proved on-chain, merged into the gallery snapshot.
+  discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["nfts"];
+  indexedNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["nfts"];
+  // How complete the indexer said its list was; "none" until it answers.
+  nftCoverage: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>["coverage"];
+  watchedNfts: Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>;
+  signability: SignabilityVerdict | null;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
   preferences: WalletPreferences | null;
   changes: LoadedPrices["changes"];
@@ -52,27 +68,35 @@ export type RenderData = {
   priceStale: LoadedPrices["stale"];
   status: WalletStatus;
   transactions: LoadedActivity["entries"];
-  watchedNfts: Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>;
   historyUnavailable: LoadedActivity["historyUnavailable"];
+  relays: LoadedActivity["relays"];
 };
-
-/**
- * Empty account-scoped NFT lanes used on account/network switches so an old
- * gallery never flashes while fresh ownership proofs are in flight.
- */
-const emptyNftCache = (): Pick<RenderData, "discoveredNfts" | "indexedNfts" | "watchedNfts"> => ({
-  discoveredNfts: [],
-  indexedNfts: [],
-  watchedNfts: [],
-});
 
 /**
  * Empty account-scoped activity lane used during account/network switches so
  * transactions and degraded-history state never flash under another account.
  */
-const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "transactions"> => ({
+const emptyActivityCache = (): Pick<
+  RenderData,
+  "historyUnavailable" | "relays" | "transactions"
+> => ({
   historyUnavailable: false,
+  relays: [],
   transactions: [],
+});
+
+/**
+ * Empty account-scoped NFT lanes used on account/network switches so an old
+ * gallery never flashes while fresh ownership proofs are in flight.
+ */
+const emptyNftCache = (): Pick<
+  RenderData,
+  "discoveredNfts" | "indexedNfts" | "nftCoverage" | "watchedNfts"
+> => ({
+  discoveredNfts: [],
+  indexedNfts: [],
+  nftCoverage: "none",
+  watchedNfts: [],
 });
 
 /**
@@ -94,12 +118,13 @@ export const updateRenderScope = (
       ? {
           ...emptyActivityCache(),
           ...emptyNftCache(),
-          balances: { error: "balances unavailable" },
+          balances: { loading: true },
+          staking: STAKING_LOADING,
           multisigBalanceId: null,
-          multisigBalances: { error: "multisig balances unavailable" },
+          multisigBalances: { loading: true },
+          deployment: null,
+          signability: null,
           multisigClassDeclared: null,
-          multisigNftId: null,
-          multisigNfts: [],
           multisigsError: false,
           ...(networkChanged ? { multisigsNetworkId: null } : {}),
         }
@@ -109,26 +134,29 @@ export const updateRenderScope = (
 };
 
 /**
- * A fresh render cache in the locked/empty state. `balances` carries the
- * "wallet locked" error marker so the home screen renders the locked shell
- * until real balances hydrate; every list starts empty and every optional
- * value null. Used to prime the cache at boot and to reset it on lock.
+ * A fresh render cache in the locked/empty state. `balances` and
+ * `multisigBalances` start as loading, not as an error: with no snapshot yet the home screen shows its
+ * loading shell until real balances hydrate, and only a read that actually
+ * failed renders the failed-load panel. Every list starts empty and every
+ * optional value null. Used to prime the cache at boot and to reset it on lock.
  */
 export const emptyRenderCache = (): RenderData => ({
-  allowances: [],
+  // Not yet read: the screen shows no count and no "none found".
+  allowances: { entries: [], loading: true, notices: [], unavailable: false },
+  staking: STAKING_LOADING,
   multisigs: { intents: [], multisigs: [] },
   multisigsError: false,
   multisigsNetworkId: null,
   multisigClassDeclared: null,
   multisigBalanceId: null,
-  multisigBalances: { error: "multisig balances unavailable" },
-  multisigNftId: null,
-  multisigNfts: [],
-  balances: { error: "wallet locked" },
+  multisigBalances: { loading: true },
+  balances: { loading: true },
   chart: [],
+  chartTokenId: null,
   classHashVerification: null,
-  connectedSites: [],
+  connectedSites: "loading",
   deployment: null,
+  signability: null,
   ...emptyActivityCache(),
   ...emptyNftCache(),
   pending: [],

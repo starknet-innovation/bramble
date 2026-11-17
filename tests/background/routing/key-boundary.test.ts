@@ -17,6 +17,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { isCreateAccountResponse } from "../../../packages/presentation/wallet-ui/src/popup/responses/responses";
 import { isLedgerAccountsResponse } from "../../../packages/presentation/wallet-ui/src/popup/responses/responses-ledger";
+import { testExtension } from "../../support/background-wallet-stub";
 import { viewingKeyDerivations } from "../../support/key-boundary-collaborators";
 import {
   contentSender,
@@ -29,6 +30,7 @@ import {
 import { makeKeyBoundaryHarness } from "../../support/key-boundary-harness";
 import { handledWalletMessages, KEY_BOUNDARY_MESSAGES } from "../../support/key-boundary-messages";
 import type { KeyBoundaryLiveIds, KeyBoundaryMessage } from "../../support/key-boundary-types";
+import { awaitStrk20Job } from "../../support/strk20-background";
 
 const typeOf = (message: Record<string, unknown>): string => String(message["type"] ?? "");
 
@@ -92,9 +94,16 @@ describe("key boundary", () => {
     // Pinned so excusing a new entry from the liveness rule is a deliberate,
     // reviewed edit rather than the quiet way to make this suite green again.
     expect(excused.map((entry) => typeOf(entry.message)).sort()).toEqual([
+      "wallet.createKeyVault",
+      "wallet.prepareArgentMultisigStrk20",
+      "wallet.refreshArgentMultisigStrk20",
       "wallet.removeMultisig",
       "wallet.shareArgentMultisigIntent",
+      "wallet.shareArgentMultisigStrk20Authorization",
+      "wallet.shareArgentMultisigStrk20Key",
+      "wallet.signArgentMultisigStrk20Authorization",
       "wallet.status",
+      "wallet.submitArgentMultisigStrk20Relay",
       "wallet.syncArgentMultisigIntents",
       "wallet.unlock",
     ]);
@@ -109,7 +118,15 @@ describe("key boundary", () => {
       // error that the secret scan would then wave through.
       harness.unlock();
       const request = await requestFor(entry, harness.liveIds);
-      const error = errorOf(await harness.settle(request, entry.sender));
+      // A shield, an activation, or an execution answers with a tracked job;
+      // liveness is judged on what its poll settles on, as the panel sees it.
+      const error = errorOf(
+        await awaitStrk20Job(
+          harness.settle,
+          await harness.settle(request, entry.sender),
+          entry.sender,
+        ),
+      );
       if (entry.negative === undefined && error !== null) {
         inert.push(`${typeOf(request)}: ${error}`);
       }
@@ -130,7 +147,13 @@ describe("key boundary", () => {
       harness.unlock();
       const request = await requestFor(entry, harness.liveIds);
       const before = viewingKeyDerivations.value;
-      await harness.settle(request, entry.sender);
+      // A shield answers with a tracked job and derives inside it, so the
+      // derivation is counted once the job has settled, as the panel sees it.
+      await awaitStrk20Job(
+        harness.settle,
+        await harness.settle(request, entry.sender),
+        entry.sender,
+      );
       if (viewingKeyDerivations.value > before) {
         derived.push(typeOf(request));
       }
@@ -138,8 +161,9 @@ describe("key boundary", () => {
     // Without a derivation, the SECRET_VIEWING_KEY grep below is unarmed for
     // that entry: the handler answers without the background ever producing the
     // account-scoped key, so a build that started echoing it would still pass.
-    // Pinned exactly — every STRK20 entry but the network-config write reaches
-    // the key today, and no non-STRK20 handler has any business deriving one.
+    // Pinned exactly — every STRK20 entry but the network-config write and the
+    // job-status poll (which only reports a settled job) reaches the key today,
+    // and no non-STRK20 handler has any business deriving one.
     expect(derived.sort()).toEqual([
       "wallet.strk20Balances",
       "wallet.strk20Execute",
@@ -147,12 +171,14 @@ describe("key boundary", () => {
       "wallet.strk20PrepareDeposit",
       "wallet.strk20PrepareInvoke",
       "wallet.strk20PrepareRegistration",
+      "wallet.strk20PrepareShadowSweep",
       "wallet.strk20PrepareTransfer",
       "wallet.strk20PrepareWithdraw",
       "wallet.strk20RecipientStatus",
       "wallet.strk20Register",
+      "wallet.strk20ShadowAccountBalances",
+      "wallet.strk20ShadowAccountCommitment",
       "wallet.strk20State",
-      "wallet.strk20SubaccountCommitment",
     ]);
   });
 
@@ -179,7 +205,10 @@ describe("key boundary", () => {
       harness.unlock();
       const request = await requestFor(entry, harness.liveIds);
       const response = await harness.settle(request, entry.sender);
-      const serialized = JSON.stringify(response);
+      // Both halves of a tracked job are scanned: the running envelope the
+      // request answers with, and the outcome its poll settles on.
+      const settled = await awaitStrk20Job(harness.settle, response, entry.sender);
+      const serialized = JSON.stringify([response, settled]);
       const messageType = typeOf(request);
       const sanctionedReveal =
         messageType === "wallet.generateMnemonic" || messageType === "wallet.revealSecrets";
@@ -274,7 +303,7 @@ describe("key boundary", () => {
           };
         },
       },
-      "extension-id",
+      testExtension,
       { session },
     );
     const response = await handler(

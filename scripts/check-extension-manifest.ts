@@ -6,6 +6,7 @@
  * only when this file is the entry point.
  */
 import { readFile } from "node:fs/promises";
+import { toFirefoxManifest } from "../apps/extension/firefox-manifest";
 import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
 
 /**
@@ -185,12 +186,17 @@ if (import.meta.main) {
   const packageJson = await readJson("package.json");
 
   const expectedBackgroundServiceWorker = "background/index.js";
-  // Remote NFT artwork may live on any HTTPS host. The side panel enforces the
-  // privacy boundary instead: it creates no remote <img> for an unsolicited NFT
-  // until the user explicitly opens it, while watched NFTs are already solicited.
-  // Scripts and objects remain packaged-only.
+  // Deny by default (Sherlock 245): every resource type not named below is
+  // packaged-only. Remote NFT artwork may live on any HTTPS host. The side panel
+  // enforces the privacy boundary instead: it creates no remote <img> for an
+  // unsolicited NFT until the user explicitly opens it, while watched NFTs are
+  // already solicited. Scripts and objects remain packaged-only. Styles allow
+  // inline because the side panel mounts its stylesheet as a <style> element.
+  // Connections reach HTTPS services and WSS relays, plus the loopback devnet
+  // over HTTP or WS, which is the only plain-text endpoint a network accepts.
+  // No page navigates by form or rebases its URLs.
   const expectedExtensionCsp =
-    "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https:; frame-src 'self';";
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; frame-src 'self'; base-uri 'none'; form-action 'none';";
   // CSP for the sandboxed animation renderer (sandbox/render.html). It runs an
   // NFT's untrusted on-chain data:text/html in an isolated security principal:
   // `allow-scripts` (no `allow-same-origin`) lets the canvas animate but grants no
@@ -215,8 +221,8 @@ if (import.meta.main) {
     // Keyless availability fallback when a Foundation node is unreachable.
     "https://api.cartridge.gg/*",
     "https://api.coingecko.com/*",
-    // Read-only indexed activity and complete token-holdings snapshots. This
-    // never participates in signing or transaction submission.
+    // Read-only indexed activity and per-token balance reads (the RPC outage
+    // fallback). This never participates in signing or transaction submission.
     "https://starkscan.co/*",
     // AVNU swap aggregator (quotes + build calldata) for the in-wallet swap
     // flow, per network. Responses are validated in
@@ -225,10 +231,8 @@ if (import.meta.main) {
     // signed.
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
-    // Maintained web3 phishing feed (issue #34): the default source for the live
-    // malicious-origin blocklist. Configurable per deployment via the feed's
-    // `source` option; pinned here so the manifest stays an explicit allowlist.
-    "https://metamask.github.io/*",
+    // No entry for the live phishing feed: it is read through CORS, and a new
+    // host here would be a privilege increase on update (issue 772).
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*",
   ];
@@ -240,7 +244,16 @@ if (import.meta.main) {
     "http://127.0.0.1/*",
     "http://localhost/*",
   ];
-  const expectedActionTitle = "Open MC Wallet";
+  const expectedActionTitle = "Open Bramble";
+  // The toolbar slot is 16 device-independent pixels, so Chrome picks by scale
+  // factor: the 16px asset at 1x, 24px at 1.5x, 32px at 2x. Declaring them here
+  // rather than letting `icons` serve the toolbar keeps Chrome from downscaling a
+  // 48 or 128 into a 16px slot, which is where a detailed mark turns to mush.
+  const expectedActionIcon = {
+    "16": "icons/icon-16.png",
+    "24": "icons/icon-24.png",
+    "32": "icons/icon-32.png",
+  } as const;
   const expectedIcons = {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -287,13 +300,16 @@ if (import.meta.main) {
       "action",
       "background",
       "content_security_policy",
+      "author",
       "content_scripts",
       "description",
+      "homepage_url",
       "host_permissions",
       "icons",
       "manifest_version",
       "name",
       "optional_host_permissions",
+      "options_ui",
       "permissions",
       "sandbox",
       "side_panel",
@@ -349,7 +365,7 @@ if (import.meta.main) {
     : null;
   if (!contentSecurityPolicy || contentSecurityPolicy["extension_pages"] !== expectedExtensionCsp) {
     failures.push(
-      "manifest CSP must allow only packaged scripts, Krusty WASM, and self/data/HTTPS images",
+      "manifest CSP must deny by default and allow only packaged scripts, Krusty WASM, self/data/HTTPS images, inline styles, and HTTPS, WSS or loopback connections",
     );
   }
   if (!contentSecurityPolicy || contentSecurityPolicy["sandbox"] !== expectedSandboxCsp) {
@@ -369,11 +385,18 @@ if (import.meta.main) {
   }
   await requireFile(`${sourceRoot}/${backgroundPath.replace(/\.js$/, ".ts")}`);
 
-  const action = hasOnlyKeys(manifest["action"], ["default_title"]) ? manifest["action"] : null;
+  const action = hasOnlyKeys(manifest["action"], ["default_icon", "default_title"])
+    ? manifest["action"]
+    : null;
   if (action?.["default_title"] !== expectedActionTitle) {
     failures.push("manifest action must open the wallet side panel");
   }
-
+  const actionIcon = isRecord(action?.["default_icon"]) ? action["default_icon"] : null;
+  for (const [size, path] of Object.entries(expectedActionIcon)) {
+    if (actionIcon?.[size] !== path)
+      failures.push(`manifest action ${size}px icon must stay ${path}`);
+    await requireFile(`${publicRoot}/${path}`);
+  }
   const sidePanel = hasOnlyKeys(manifest["side_panel"], ["default_path"])
     ? manifest["side_panel"]
     : null;
@@ -382,7 +405,11 @@ if (import.meta.main) {
   if (sidePanelPath !== expectedSidePanel) {
     failures.push("manifest side panel path must stay pinned");
   }
-
+  // Arc never draws the side panel (#690); "Extension options" opens this page in a tab instead.
+  const options = JSON.stringify(manifest["options_ui"]);
+  if (options !== JSON.stringify({ page: expectedSidePanel, open_in_tab: true })) {
+    failures.push("manifest options page must stay the wallet page, opened in a tab");
+  }
   const sandbox = hasOnlyKeys(manifest["sandbox"], ["pages"]) ? manifest["sandbox"] : null;
   if (!sandbox || !hasOnly(sandbox["pages"], [expectedSandboxPage])) {
     failures.push("manifest sandbox pages must stay pinned to the collectible renderer");
@@ -448,6 +475,17 @@ if (import.meta.main) {
       ? resourceGroup["resources"]
       : [];
     await requireFile(`${sourceRoot}/${providerPath?.toString().replace(/\.js$/, ".ts")}`);
+  }
+
+  // The Gecko manifest is derived from this one rather than written beside it,
+  // and the transform refuses to guess: a top-level key nobody has classified
+  // for Firefox throws. Deriving it here means that decision is forced when the
+  // Chrome manifest changes — the gate that runs in CI and before every build —
+  // rather than the next time somebody happens to build the Firefox target.
+  try {
+    toFirefoxManifest(manifest);
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
   }
 
   if (failures.length > 0) {

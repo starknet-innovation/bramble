@@ -20,7 +20,7 @@ import type { UnlockSessionExpiryTimer } from "./session";
  * creating it again replaces the previous alarm, which is precisely the
  * "replace any pending wake" contract the session expects from `schedule`.
  */
-const SESSION_EXPIRY_ALARM = "mc-wallet:session-expiry";
+const SESSION_EXPIRY_ALARM = "bramble:session-expiry";
 
 /**
  * The slice of `chrome.alarms` this module uses. Declared structurally so the

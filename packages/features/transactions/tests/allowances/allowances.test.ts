@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { AllowanceOwner } from "../../src/allowances/allowance-store";
 import {
   type ApprovedAssets,

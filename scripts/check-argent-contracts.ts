@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
-} from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/starknet/account-contracts";
 import { hash } from "starknet";
 import { vendorProvenanceFailures, vendorRevisionPin } from "./vendor-pin-policy";
 

@@ -11,15 +11,20 @@
  * per-harness state record so one scan cannot leak into the next.
  */
 
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { prepareArgentMultisigInvokeV3WithProvider } from "@mc-wallet/starknet/multisig-invoke";
-import { avnuRouterAddress, type SwapService } from "@mc-wallet/transactions/avnu";
-import { grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { Strk20Service } from "@bramble/privacy/service";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { prepareArgentMultisigInvokeV3WithProvider } from "@bramble/starknet/multisig-invoke";
+import { avnuRouterAddress, type SwapService } from "@bramble/transactions/avnu";
+import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
+import type { Vault } from "@bramble/vault/schema";
+import {
+  canonicalShadowAccountScope,
+  type ShadowAccountScopeRef,
+  withShadowAccountScope,
+} from "@bramble/vault/shadow-account-scopes";
+import { ARGENT_ACCOUNT_CLASS_HASH, type LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { ec, RpcProvider } from "starknet";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { avnuRouteCalldata } from "./avnu-route-fixture";
@@ -36,6 +41,7 @@ import {
   strk20ViewingKeyRecord,
 } from "./key-boundary-fixtures";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
+import { makeStakingChain, stakingReader } from "./staking-chain";
 import { makeStrk20Service } from "./strk20-background";
 
 /** The tracked mainnet ETH record the doubles quote balances and calls in. */
@@ -50,9 +56,13 @@ const vault = {
   accounts: [account],
   accountSecrets: [strk20ViewingKeyRecord],
   activeAccountId: account.id,
+  importedSeeds: [],
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: KEY_BOUNDARY_ORIGIN }],
-  schemaVersion: 7,
+  schemaVersion: 13,
+  multisigStrk20KeyConflicts: [],
+  multisigStrk20ViewingKeys: [],
+  shadowAccountScopes: [],
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 
@@ -87,15 +97,27 @@ const ledgerAccount: LedgerAccountRef = {
  */
 export const viewingKeyDerivations = { value: 0 };
 
+// Shadow-account scopes the key-boundary wallet double has recorded.
+const recordedScopes: { value: readonly ShadowAccountScopeRef[] } = { value: [] };
+
 /** The salted stub vault service the scan runs the router against. */
 export const walletStub = {
+  acceptMultisigStrk20Key: async () => "stored" as const,
   async addDerivedAccount() {
     return account;
   },
+  createMultisigStrk20Key: async () => "created" as const,
+  forgetMultisigStrk20Key: async () => false,
+  forgetMultisigStrk20Keys: async () => false,
+  multisigStrk20KeyStatus: async () => "absent" as const,
+  packageMultisigStrk20Key: async () => null,
   async addLedgerAccount(): Promise<LedgerAccountRef> {
     return ledgerAccount;
   },
   async createAccount() {
+    return account;
+  },
+  async createKeyVault() {
     return account;
   },
   async createLedgerVault(): Promise<LedgerAccountRef> {
@@ -116,7 +138,20 @@ export const walletStub = {
   async importRawKeyAccount() {
     return account;
   },
+  async importSeedAccounts() {
+    return [account];
+  },
   async previewAccount() {
+    return account;
+  },
+  // Public viewing keys only: the point-of-use check compares them with the pool.
+  async previewImportedStrk20ViewingPublicKey() {
+    return { address: account.address, viewingPublicKey: "0x1" };
+  },
+  async previewStrk20ViewingPublicKey() {
+    return "0x1";
+  },
+  async previewImportedAccount() {
     return account;
   },
   async recoverAccounts() {
@@ -141,11 +176,41 @@ export const walletStub = {
   async grantOrigin() {
     return [account];
   },
+  // Recorded through the vault's own merge: real record shape, still privileged.
+  async recordShadowAccountScope({
+    vaultPassphrase,
+    ...input
+  }: { readonly vaultPassphrase: string } & ShadowAccountScopeRef) {
+    if (vaultPassphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
+    const scope = canonicalShadowAccountScope(input);
+    const next = scope ? withShadowAccountScope(recordedScopes.value, scope) : null;
+    if (next) {
+      recordedScopes.value = next;
+    }
+  },
+  async listShadowAccountScopes() {
+    return recordedScopes.value;
+  },
   async readVault(passphrase: string) {
     if (passphrase !== SECRET_PASSPHRASE) {
       throw new Error("bad passphrase");
     }
     return vault;
+  },
+  // Checks the passphrase without writing; a wrong one never reaches the grant clear.
+  async assertRecoverableVault(passphrase: string) {
+    if (passphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
+  },
+  // Accepts like a vault awaiting recovery, so the scan reads the unlocked
+  // status that "Unlock anyway" returns rather than a refusal.
+  async recoverUnverifiedVault(passphrase: string) {
+    if (passphrase !== SECRET_PASSPHRASE) {
+      throw new Error("bad passphrase");
+    }
   },
   async revokeOrigin() {
     return [];
@@ -279,10 +344,10 @@ const required = <Method>(method: Method | undefined, name: string): Method => {
  * handler that echoed it would go unnoticed. Every method wrapped here is a
  * method whose real implementation reaches the key: the official adapter builds
  * its transfers client with a `viewingKeyProvider` (see
- * @mc-wallet/privacy's official-sdk-transfers), and `prepare`,
- * `privateBalances`, `registrationStatus`, `register`, `subaccountCommitment`
- * `prepareRegistration`, `prepareAccountActions`, `subaccountCommitment` and
- * `submitActions` all go through that client. `poolFee`, `quoteActions` and
+ * @bramble/privacy's official-sdk-transfers), and `prepare`,
+ * `privateBalances`, `registrationStatus`, `register`, `shadowAccountCommitment`
+ * `prepareRegistration`, `prepareAccountActions`, `shadowAccountCommitment`,
+ * `shadowAccounts` and `submitActions` all go through that client. `poolFee`, `quoteActions` and
  * `submitPrepared` do not, so they are left unwrapped rather than over-claiming.
  */
 const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
@@ -313,9 +378,14 @@ const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
       await input.viewingKey();
       return state.strk20Registered ? ("registered" as const) : ("unregistered" as const);
     },
-    async subaccountCommitment(input) {
+    async shadowAccountCommitment(input) {
       await input.viewingKey();
-      return base.subaccountCommitment(input);
+      return base.shadowAccountCommitment(input);
+    },
+    // The real listing derives the partial commitment from the viewing key.
+    async shadowAccounts(input) {
+      await input.viewingKey();
+      return required(base.shadowAccounts, "shadowAccounts")(input);
     },
     async submitActions(input) {
       await input.viewingKey();
@@ -333,9 +403,54 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
     async getDeploymentStatus({ accountAddress }) {
       return sameFelt(accountAddress, account.address) && state.accountDeployed;
     },
+    // Import by address: the chain reports the fixture key as the owner, so a
+    // lookup reaches a live candidate rather than a refusal.
+    async getAccountOwner() {
+      return {
+        classHash: ARGENT_ACCOUNT_CLASS_HASH,
+        family: "argent" as const,
+        kind: "owner" as const,
+        ownerPublicKey: account.publicKeyX,
+      };
+    },
     async submitAccountDeployment() {
       Object.assign(state, { accountDeployed: true });
       return { transactionHash: "0x7de" };
+    },
+    async reviewBraavosRecovery() {
+      return {
+        delaySeconds: 345_600,
+        effectiveAfter: 1_000,
+        fee: { overallFee: "1", unit: "FRI" },
+      };
+    },
+    async submitBraavosRecovery() {
+      return { pendingUntil: 1_000, transactionHash: "0x7ec" };
+    },
+    async getBraavosRecoveryState() {
+      return { delaySeconds: 345_600, pendingUntil: null };
+    },
+    async reviewArgentRecovery() {
+      return {
+        expiresAt: 2_000,
+        fee: { overallFee: "1", unit: "FRI" as const },
+        readyAt: 1_000,
+        replaces: null,
+        step: "start" as const,
+      };
+    },
+    async submitArgentRecovery() {
+      return { expiresAt: 2_000, readyAt: 1_000, transactionHash: "0x7ed" };
+    },
+    async getArgentRecoveryState() {
+      return {
+        expiresAt: null,
+        guardianBackup: "absent" as const,
+        pendingChange: null,
+        readyAt: null,
+        securityPeriodSeconds: 604_800,
+        status: "none" as const,
+      };
     },
     async getNftOwner() {
       return account.address;
@@ -372,8 +487,12 @@ export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
         return input.prepared.transactionHash;
       },
     },
+    readAtPinnedBlock: stakingReader(makeStakingChain()),
     strk20: strk20ServiceFor(state),
     async verifyAccountClassHash() {
       return { onChainClassHash: account.classHash, status: "verified" };
+    },
+    async resolveStarkName() {
+      return { address: account.address, status: "resolved" };
     },
   });

@@ -7,9 +7,9 @@ import {
   isLookalikeAddress,
   refuseOnAccountSelfCall,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { AddressBookEntry, TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/transactions/verify";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { AddressBookEntry, TokenConfig } from "@bramble/wallet-model/preferences";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 

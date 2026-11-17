@@ -2,33 +2,30 @@
  * MV3 background entrypoint. All privileged wallet state stays behind this worker.
  */
 
-import { untrustedFetch } from "@mc-wallet/core/http-json";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { createNostrCoordinationStore } from "@mc-wallet/multisig/coordination";
-import { createMultisigStore } from "@mc-wallet/multisig/repository";
-import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
-import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
-import { createPhishingFeed } from "@mc-wallet/permissions/phishing-feed";
-import { createPriceService, unavailablePriceService } from "@mc-wallet/portfolio/prices";
-import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
+import { untrustedFetch } from "@bramble/core/http-json";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
+import { createNostrCoordinationStore } from "@bramble/multisig/coordination";
+import { createMultisigStore } from "@bramble/multisig/repository";
+import { createOriginGuard } from "@bramble/permissions/blocklist";
+import { createOriginHistoryStore } from "@bramble/permissions/origin-history";
+import { createPhishingFeed } from "@bramble/permissions/phishing-feed";
+import { createPriceService, unavailablePriceService } from "@bramble/portfolio/prices";
+import { createStrk20MaturityStore } from "@bramble/privacy/maturity-store";
+import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
-} from "@mc-wallet/privacy/official-sdk-service";
-import { unavailableStrk20Service } from "@mc-wallet/privacy/service";
-import {
-  type ApprovalSurfacePreference,
-  createPreferencesStore,
-  type WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { setReliabilityDiagnosticsEnabled } from "@mc-wallet/starknet/rpc-diagnostics";
-import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
-import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
-import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { createWalletVaultService } from "@mc-wallet/vault/service";
-import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@mc-wallet/vault/store-migration";
-import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+} from "@bramble/privacy/official-sdk-service";
+import { unavailableStrk20Service } from "@bramble/privacy/service";
+import { createPreferencesStore, type WalletPreferences } from "@bramble/settings/preferences";
+import { setReliabilityDiagnosticsEnabled } from "@bramble/starknet/rpc-diagnostics";
+import { systemClock } from "@bramble/transactions/activity";
+import { createSwapService, unavailableSwapService } from "@bramble/transactions/avnu";
+import { createRelaySignatureLog } from "@bramble/transactions/relay-signatures";
+import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
+import { createWalletVaultService } from "@bramble/vault/service";
+import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@bramble/vault/store-migration";
+import type { WalletEventMessage } from "@bramble/wallet-protocol/events";
 import * as krustyModule from "/dependencies/krusty-kms/krusty_kms_wasm.js";
 import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import {
@@ -37,83 +34,83 @@ import {
   createBrowserSyncStore,
   requireTrustedStorageAccess,
 } from "../browser-storage";
+import { resolveExtensionApi } from "../extension-api";
+import { createPendingDeployments } from "./accounts/pending-deployments";
 import { createWalletReader } from "./accounts/wallet-reader";
+import { observeTechnicalDataConsent, technicalDataAllowed } from "./analytics/data-consent";
+import {
+  analyticsPlatform,
+  analyticsReleaseChannel,
+  createGatewayAnalytics,
+  randomAnalyticsUuid,
+  withGatewayAnalyticsFlows,
+} from "./analytics/gateway-analytics";
+import { createApprovalKeepAlive } from "./approvals/approval-keepalive";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
-import {
-  type ApprovalSurfaceBrowser,
-  configureApprovalSurface,
-  createApprovalSurfaceOpener,
-} from "./approvals/approval-surface";
+import { createApprovalSurfaceOpener, showPendingApprovals } from "./approvals/approval-surface";
+import { createApprovalSurfaceControl } from "./approvals/approval-surface-control";
 import { createApprovalQueue } from "./approvals/approvals";
+import { createSignatureWaiters } from "./approvals/signature-waiters";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
-import {
-  type OnboardingSurfaceBrowser,
-  openOnboardingOnInstall,
-} from "./onboarding/onboarding-surface";
+import { openOnboardingOnInstall } from "./onboarding/onboarding-surface";
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
+import { createRankedAllowanceStore } from "./portfolio/allowance-log";
 import { createBalanceSnapshotStore } from "./portfolio/balance-snapshots";
 import { createNftSnapshotStore } from "./portfolio/nft-snapshots";
+import { createStrk20FeeReference } from "./privacy/strk20-fee-reference";
+import { createStrk20JobRegistry } from "./privacy/strk20-preparation-jobs";
+import { createStrk20WalletPreparationStore } from "./privacy/strk20-wallet-preparations";
+import {
+  encryptedMultisigGrantStore,
+  MULTISIG_ORIGIN_GRANTS_KEY,
+  memoryMultisigGrantStore,
+} from "./provider/multisig-grants";
 import { createMessageHandler } from "./routing/messages";
-import type { RuntimeSender } from "./routing/senders";
-import { walletEventBroadcasts } from "./runtime/events";
+import type { BackgroundBrowser } from "./runtime/background-browser";
+import { announcesApprovalsChange, walletEventBroadcasts } from "./runtime/events";
+import { schedulePhishingFeedRefresh } from "./runtime/phishing-feed-alarm";
 import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
 import {
   createActiveStateCoordinator,
   reconcileUnlockedActiveAccount,
 } from "./runtime/runtime-state";
-import type { SessionAlarmsApi } from "./runtime/session-expiry-alarm";
 import { createBackgroundUnlockSession } from "./runtime/unlock-session-boot";
+import { createUpdateReady } from "./runtime/update-ready";
 import { createBackgroundPreferences } from "./settings/preferences-adapter";
-import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
+import { createPricedActivityLog } from "./transactions/activity-valuation";
+import { startTransactionMonitor } from "./transactions/tx-monitor";
 
-type RuntimeApi = {
-  readonly getURL?: (path: string) => string;
-  readonly id: string;
-  readonly onInstalled: {
-    readonly addListener: (listener: (details: { readonly reason?: string }) => void) => void;
-  };
-  readonly onMessage: {
-    readonly addListener: (
-      listener: (
-        message: unknown,
-        sender: RuntimeSender,
-        sendResponse: (response: unknown) => void,
-      ) => true,
-    ) => void;
-  };
-  readonly sendMessage?: (message: unknown) => Promise<unknown>;
-};
-
-// Two alarm consumers, one API: recurring reconciliation cadences
-// (./transactions/tx-monitor) and the one-shot unlock deadline
-// (./privacy/session-expiry-alarm).
-type AlarmsGlobal = { readonly alarms?: AlarmsApi & SessionAlarmsApi };
-
-type TabsApi = {
-  readonly query: (
-    queryInfo: Record<string, never>,
-  ) => Promise<readonly { readonly id?: number }[]>;
-  readonly sendMessage: (tabId: number, message: unknown) => Promise<unknown>;
-};
-
-type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: ApprovalSurfaceBrowser &
-    OnboardingSurfaceBrowser &
-    AlarmsGlobal & {
-      readonly runtime?: RuntimeApi;
-      readonly tabs?: TabsApi;
-    };
-};
-
-const extensionApi = (globalThis as ExtensionGlobal).chrome;
+const extensionApi = resolveExtensionApi<BackgroundBrowser>();
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
-let approvalSurfacePreference: ApprovalSurfacePreference = "side-panel";
-const updateApprovalSurface = (preference: ApprovalSurfacePreference): void => {
-  approvalSurfacePreference = preference;
-  void configureApprovalSurface(extensionApi, preference).catch(() => undefined);
-};
+declare const __MC_BUILD_BRANCH__: string | undefined;
+let productAnalyticsEnabled = false;
+// The request surface: the user's choice, and the side-panel learning that
+// serves it as the popup on a browser that never draws side panels (Arc, #690).
+const approvalSurface = createApprovalSurfaceControl({
+  approvals: () => approvals.list(),
+  browser: extensionApi,
+  extensionId: runtime?.id ?? "",
+  now: systemClock,
+  store: createBrowserLocalStore,
+  wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+});
 const approvals = createApprovalQueue();
+// The held-response registry lives here rather than inside the router context
+// so the worker keepalive below can watch it alongside the approval queue: a
+// held dapp response is the thing a suspension destroys, and the two counts
+// together are what "a decision is still pending" means (#350).
+const signatureWaiters = createSignatureWaiters();
+// Firefox tears down a non-persistent event page on its idle timer even while
+// a prompt is unanswered, and the queue and the waiters above are in-memory
+// only, so one parent API call per interval is what holds the page open until
+// the user decides. The interval runs only while something is pending.
+const approvalKeepAlive = createApprovalKeepAlive({
+  isPending: () => approvals.list().length > 0 || signatureWaiters.pending() > 0,
+  ...(runtime?.getPlatformInfo
+    ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
+    : {}),
+});
 const sessionStore = (() => {
   try {
     return createBrowserSessionStore();
@@ -123,33 +120,44 @@ const sessionStore = (() => {
 })();
 const multisigDeploymentReviews = createArgentMultisigDeploymentReviews(sessionStore);
 const recoveryDiscovery = createRecoveryDiscoveryCache(sessionStore);
-// The vault store is created up front so the unlock session can drop its
-// cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
-// operations for the life of an unlock rather than re-derived every time.
-const vaultStores: { readonly primary: EncryptedStore; readonly staging: EncryptedStore } | null =
-  (() => {
-    try {
-      const store = createBrowserLocalStore();
-      const freshnessStore = createBrowserSyncStore();
-      return {
-        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore),
-        staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY, freshnessStore),
-      };
-    } catch {
-      return null;
-    }
-  })();
+const vaultStores: {
+  readonly grants: EncryptedStore;
+  readonly primary: EncryptedStore;
+  readonly staging: EncryptedStore;
+} | null = (() => {
+  try {
+    const store = createBrowserLocalStore();
+    const freshnessStore = createBrowserSyncStore();
+    return {
+      // Only the primary mirrors its commit record into `storage.local`, so a
+      // lost `storage.sync` record does not lock the vault; see
+      // `createEncryptedStore` for why staging must not.
+      grants: createEncryptedStore(
+        store,
+        MULTISIG_ORIGIN_GRANTS_KEY,
+        freshnessStore,
+        sessionStore,
+        true,
+      ),
+      primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore, sessionStore, true),
+      staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY, freshnessStore, sessionStore),
+    };
+  } catch {
+    return null;
+  }
+})();
 const session = createBackgroundUnlockSession({
   alarms: extensionApi?.alarms,
   sessionStore,
   clearKeyCaches: () => {
-    for (const store of [vaultStores?.primary, vaultStores?.staging]) {
+    for (const store of [vaultStores?.primary, vaultStores?.staging, vaultStores?.grants]) {
       store?.clearKeys();
     }
+    // Declared below; this runs only when the session locks, long after.
+    void wallet.then((service) => service?.clearGrantCache());
   },
 });
-// Storage lockdown is a startup prerequisite, not a best-effort side effect.
-// Requests remain fail-closed if Chrome cannot remove content-script access.
+// Storage lockdown is a startup prerequisite. Requests fail closed if it cannot run.
 const storageReady = requireTrustedStorageAccess();
 const sessionReady = storageReady.then(() => session.restore());
 const wallet = vaultStores
@@ -167,34 +175,71 @@ const preferences = storageReady
   .then(() => createPreferencesStore({ store: createBrowserLocalStore() }))
   .catch(() => null);
 const preferenceStore = createBackgroundPreferences({
-  onApprovalSurface: updateApprovalSurface,
+  onApprovalSurface: approvalSurface.update,
+  onProductAnalytics: (enabled) => {
+    productAnalyticsEnabled = enabled;
+  },
   onReliabilityDiagnostics: setReliabilityDiagnosticsEnabled,
   store: preferences,
 });
-void preferences
+// The browser's data-collection consent outranks the wallet's preference one
+// way only: it can withhold analytics, never enable what the user turned off
+// (Firefox asks at install for the optional `technicalAndInteraction`). Re-read
+// on every permission change so a revoke takes effect without a restart.
+let technicalDataConsent = true;
+const refreshTechnicalDataConsent = async (): Promise<void> => {
+  technicalDataConsent = await technicalDataAllowed(extensionApi?.permissions);
+};
+observeTechnicalDataConsent(extensionApi?.permissions, () => {
+  void refreshTechnicalDataConsent();
+});
+const preferenceSignalsReady = preferences
   .then(async (store) => {
-    const stored = await store?.read();
-    updateApprovalSurface(stored?.approvalSurface ?? "side-panel");
+    const reading = Promise.resolve(store).then((resolved) => resolved?.read() ?? null);
+    // Started exactly once whether or not the read succeeds: a failed read
+    // falls back to the side panel, and the learner still loads.
+    void approvalSurface.start(reading.then((stored) => stored?.approvalSurface));
+    const stored = await reading;
+    productAnalyticsEnabled = store ? (stored?.productAnalytics ?? true) : false;
     setReliabilityDiagnosticsEnabled(stored?.reliabilityDiagnostics ?? false);
+    await refreshTechnicalDataConsent();
   })
   .catch(() => undefined);
-// The read-only slice of the fail-closed adapter above, handed to collaborators
-// that must never mutate preferences. It inherits the adapter's single
-// "preferences unavailable" refusal, so a storage lockdown failure rejects here
-// instead of silently answering from a half-built store — the explorer read
-// lane (MCW-V09-129) treats that rejection as "not permitted", narrowing
-// disclosure rather than widening it.
+// The read-only slice of the fail-closed adapter above. A storage lockdown
+// failure rejects here instead of answering from a half-built store, and the
+// explorer read lane (MCW-V09-129) treats that as "not permitted".
 const readPreferences = (): Promise<WalletPreferences> => preferenceStore.read();
-const activityLog = (() => {
-  try {
-    return createActivityLog({ store: createBrowserLocalStore() });
-  } catch {
-    return undefined;
-  }
-})();
+const nativeFetch = globalThis.fetch.bind(globalThis);
+const browserNavigator = globalThis.navigator as Navigator & { readonly brave?: unknown };
+const gatewayAnalytics = createGatewayAnalytics({
+  enabled: async () => {
+    await preferenceSignalsReady;
+    return productAnalyticsEnabled && technicalDataConsent;
+  },
+  http: nativeFetch,
+  metadata: {
+    appVersion: runtime?.getManifest?.().version ?? "",
+    platform: analyticsPlatform(browserNavigator.userAgent, browserNavigator.brave !== undefined),
+    releaseChannel: analyticsReleaseChannel(
+      typeof __MC_BUILD_BRANCH__ === "string" ? __MC_BUILD_BRANCH__ : "",
+    ),
+  },
+  randomUuid: randomAnalyticsUuid,
+  store: createBrowserLocalStore(),
+});
+// The pinned privacy SDK performs discovery and proving through its own
+// uninjectable fetch calls. One permanent exact-origin wrapper is therefore the
+// shared boundary for it and starknet.js; every non-gateway request is passed
+// through unchanged.
+globalThis.fetch = gatewayAnalytics.fetch as typeof globalThis.fetch;
+const activityLog = createPricedActivityLog(createBrowserLocalStore(), {
+  prices: () => priceService,
+  readPreferences,
+});
 // Public chain data only. The adapter is restricted to trusted extension
 // contexts at startup; wallet secrets remain exclusively in the encrypted vault.
 const balanceSnapshots = createBalanceSnapshotStore(createBrowserLocalStore());
+const pendingDeployments = createPendingDeployments(createBrowserLocalStore());
 const nftSnapshots = createNftSnapshotStore(createBrowserLocalStore());
 const originHistory = (() => {
   try {
@@ -205,7 +250,7 @@ const originHistory = (() => {
 })();
 const allowanceLog = (() => {
   try {
-    return createAllowanceStore({ store: createBrowserLocalStore() });
+    return createRankedAllowanceStore(createBrowserLocalStore(), readPreferences);
   } catch {
     return undefined;
   }
@@ -226,17 +271,13 @@ const swapService = (() => {
     return unavailableSwapService;
   }
 })();
-// Durable intent and operation claims are part of the signing safety model.
-// If local storage is unavailable, fail background initialization rather than
-// silently accepting signatures or broadcasts into a volatile registry.
-const multisigLog = createMultisigStore({ store: createBrowserLocalStore() });
+// Durable intent claims. Missing local storage must fail startup, not sign into memory.
+const multisigBrowserStore = createBrowserLocalStore();
+const multisigLog = createMultisigStore({ store: multisigBrowserStore });
+const strk20MultisigLog = createMultisigStrk20Store(multisigBrowserStore);
 const nostrCoordinationLog = createNostrCoordinationStore({ store: createBrowserLocalStore() });
-// Live phishing feed: fetched from the configured source under an explicit host
-// permission, cached in local storage, and refreshed on the first worker wake
-// after its TTL. The guard reads the feed's in-memory snapshot on every check,
-// so a refresh takes effect with no re-wiring; the bundled seed list in
-// blocklist.ts is always enforced, so protection never drops below baseline
-// even before the first fetch or when the source is unreachable.
+// Live phishing feed, cached locally and refreshed on an alarm. The bundled seed
+// list is always enforced, before the first fetch and offline too.
 const phishingFeed = (() => {
   try {
     return createPhishingFeed({ fetch: untrustedFetch, store: createBrowserLocalStore() });
@@ -245,17 +286,18 @@ const phishingFeed = (() => {
   }
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
-void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
-// Fails closed to the stub service when session storage is unavailable, which
-// is the only thing that can throw here (`createStrk20MaturityStore` itself is
-// pure construction). The reason cannot be logged — the standards check bars
-// logging from production sources — so it surfaces where a user can see it
-// instead: `unavailableStrk20Service` reports "no privacy runtime is wired in
-// this build" rather than the generic unavailable line, which is what
-// distinguishes this fallback from a live service that failed.
+void storageReady
+  .then(() => {
+    if (phishingFeed) schedulePhishingFeedRefresh(extensionApi?.alarms, phishingFeed.refresh);
+  })
+  .catch(() => undefined);
+// Fails closed to the stub service when browser storage is unavailable, the
+// only thing that can throw here (markers live in local storage, mc-wallet
+// 668). It cannot be logged, so `unavailableStrk20Service` says "no privacy
+// runtime is wired in this build" instead of a live failure's line.
 const strk20MaturityStore = (() => {
   try {
-    return createStrk20MaturityStore(createBrowserSessionStore());
+    return createStrk20MaturityStore(createBrowserLocalStore());
   } catch {
     return undefined;
   }
@@ -266,11 +308,16 @@ const strk20MaturityStore = (() => {
 const runtimeRpc = {
   ...createDefaultRuntimeRpc({ readPreferences }),
   strk20: strk20MaturityStore
-    ? createOfficialStrk20Service({
-        maturityStore: strk20MaturityStore,
-        nowSeconds: () => Math.floor(systemClock() / 1_000),
-        sdk: privacySdkModule as unknown as PrivacySdkRuntime,
-      })
+    ? withGatewayAnalyticsFlows(
+        createOfficialStrk20Service({
+          feeReference: createStrk20FeeReference(priceService),
+          http: gatewayAnalytics.fetch,
+          maturityStore: strk20MaturityStore,
+          nowSeconds: () => Math.floor(systemClock() / 1_000),
+          sdk: privacySdkModule as unknown as PrivacySdkRuntime,
+        }),
+        gatewayAnalytics.withFlow,
+      )
     : unavailableStrk20Service,
 };
 const walletReader = createWalletReader(wallet);
@@ -282,24 +329,73 @@ const runtimeReady = sessionReady.then(async () => {
     await reconcileUnlockedActiveAccount(walletReader, session, store, activeStateCoordinator);
   }
 });
-const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
+// A private proof outlives one runtime request, so it runs as a tracked job
+// the panel polls. While one runs, a cheap extension API call every 20 s is
+// what Chrome's lifecycle guidance prescribes to keep the worker from idling
+// out; the call's result is irrelevant and its failure is ignored.
+const workerKeepAlive = runtime?.getPlatformInfo
+  ? { keepAlive: () => void runtime.getPlatformInfo?.()?.catch(() => undefined) }
+  : {};
+const strk20Jobs = createStrk20JobRegistry({ ...workerKeepAlive, now: systemClock });
+// A reviewed preparation is held only in worker memory too, so the same
+// extension API call keeps the worker alive while a confirmation sits on
+// screen; an unconfirmed review retires after its lifetime and drops the hold.
+const strk20Preparations = createStrk20WalletPreparationStore({
+  ...workerKeepAlive,
+  now: systemClock,
+});
+// This extension's own identity. The origin MUST come from the runtime: on
+// Firefox `runtime.id` is the add-on id while pages are served from
+// `moz-extension://<per-install uuid>`, so an origin built from the id matches
+// nothing. An unreadable origin stays empty, which fails the gate closed.
+const extensionOrigin = (): string => {
+  try {
+    const url = runtime?.getURL?.("");
+    return url === undefined ? "" : new URL(url).origin;
+  } catch {
+    return "";
+  }
+};
+const extension = { id: runtime?.id ?? "", origin: extensionOrigin() };
+// Applies a downloaded update as soon as nothing is in progress (mc-wallet 708).
+const updateReady = createUpdateReady({
+  isBusy: () =>
+    approvals.list().length > 0 ||
+    signatureWaiters.pending() > 0 ||
+    strk20Jobs.active() ||
+    (strk20Preparations.held?.() ?? false),
+  runtime,
+});
+const handleMessage = createMessageHandler(walletReader, extension, {
   activeStateCoordinator,
   approvals,
+  waiters: signatureWaiters,
   balanceSnapshots,
   nftSnapshots,
+  pendingDeployments,
   session,
   preferencesStore: preferenceStore,
   runtimeRpc,
   originGuard,
+  sidePanelLearning: approvalSurface.learner,
+  ...(phishingFeed ? { phishingFeedHealth: phishingFeed.health } : {}),
   ...(activityLog ? { activity: activityLog } : {}),
   ...(originHistory ? { originHistory } : {}),
   prices: priceService,
   recoveryDiscovery,
+  relaySignatures: createRelaySignatureLog({ now: systemClock, store: createBrowserLocalStore() }),
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   multisigDeploymentReviews,
   multisigStore: multisigLog,
+  strk20MultisigStore: strk20MultisigLog,
+  multisigGrants: vaultStores
+    ? encryptedMultisigGrantStore(vaultStores.grants)
+    : memoryMultisigGrantStore(),
   nostrCoordinationStore: nostrCoordinationLog,
+  strk20Jobs,
+  strk20Preparations,
+  updates: updateReady,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm
@@ -340,15 +436,34 @@ const broadcastEvent = (event: WalletEventMessage): void => {
   });
 };
 
+// On Firefox a dapp-triggered approval cannot raise the wallet, so the toolbar
+// mark is the only sign something waits; it tracks the queue on every path,
+// including approve/deny `claim`s, which announce through the broadcasts below.
+const refreshPendingApprovals = (): void => {
+  showPendingApprovals(extensionApi, approvals.list().length);
+};
+
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {
-  for (const event of walletEventBroadcasts(message, response)) {
+  const events = walletEventBroadcasts(message, response);
+  for (const event of events) {
     broadcastEvent(event);
+  }
+  if (announcesApprovalsChange(events)) {
+    refreshPendingApprovals();
+    approvalKeepAlive.sync();
   }
 };
 
 // A held signTypedData request queues an approval and defers its response, so
-// it pushes an approvals-changed signal at queue time via this notifier.
-setApprovalNotifier(() => broadcastEvent({ event: "approvalsChanged", type: "wallet.event" }));
+// it pushes an approvals-changed signal at queue time via this notifier, which
+// also covers the lazy expiry sweep. The same signal is where the pending
+// decision starts and stops the worker keepalive, so a prompt left open keeps
+// the event page alive and a decision or sweep releases it.
+setApprovalNotifier(() => {
+  broadcastEvent({ event: "approvalsChanged", type: "wallet.event" });
+  refreshPendingApprovals();
+  approvalKeepAlive.sync();
+});
 
 runtime?.onInstalled.addListener((details) => {
   void openOnboardingOnInstall(extensionApi, details.reason);
@@ -361,20 +476,22 @@ const openApprovalSurface = createApprovalSurfaceOpener({
   extensionId: runtime?.id ?? "",
   guard: originGuard,
   now: systemClock,
-  preference: () => approvalSurfacePreference,
+  preference: approvalSurface.effective,
+  rescue: approvalSurface.rescue,
 });
+// Toolbar listeners (Firefox's sidebar, Chromium's side-panel learning), bound
+// at the top level: an idle worker drops any listener added later.
+approvalSurface.bind();
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   openApprovalSurface(message, sender);
-  void runtimeReady
-    .then(() => handleMessage(message, sender))
-    .then(
-      (response) => {
-        sendResponse(response);
-        broadcastWalletEvents(message, response);
-      },
-      () => {
-        sendResponse({ error: "wallet request failed" });
-      },
-    );
+  void updateReady.track(runtimeReady.then(() => handleMessage(message, sender))).then(
+    (response) => {
+      sendResponse(response);
+      broadcastWalletEvents(message, response);
+    },
+    () => {
+      sendResponse({ error: "wallet request failed" });
+    },
+  );
   return true;
 });

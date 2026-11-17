@@ -10,6 +10,57 @@ import type { KeyBoundaryMessage } from "./key-boundary-types";
 /** Every privileged Argent multisig runtime message, with live durable ids. */
 export const MULTISIG_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.nostrPublicKey" }, sender: extensionSender },
+  {
+    live: async (ids) => ({ multisigId: ids.multisigId }),
+    message: { multisigId: "", type: "wallet.argentMultisigStrk20KeyStatus" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ multisigId: ids.multisigId }),
+    message: { multisigId: "", type: "wallet.createArgentMultisigStrk20Key" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ multisigId: ids.multisigId }),
+    message: { multisigId: "", type: "wallet.shareArgentMultisigStrk20Key" },
+    negative: "no saved Nostr co-signer card deliberately prevents external relay I/O",
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ multisigId: ids.multisigId }),
+    message: { multisigId: "", type: "wallet.forgetArgentMultisigStrk20Key" },
+    sender: extensionSender,
+  },
+  {
+    live: async (ids) => ({ multisigId: ids.multisigId }),
+    message: { multisigId: "", type: "wallet.argentMultisigStrk20Panel" },
+    sender: extensionSender,
+  },
+  {
+    message: { kind: "register", multisigId: "", type: "wallet.prepareArgentMultisigStrk20" },
+    negative: "the key-boundary harness has no STRK20 prover, so preparation refuses",
+    sender: extensionSender,
+  },
+  {
+    message: { id: "SN_MAIN:0x1:0x2", type: "wallet.signArgentMultisigStrk20Authorization" },
+    negative: "the key-boundary harness has no multisig STRK20 scalar, so signing refuses",
+    sender: extensionSender,
+  },
+  {
+    message: { id: "SN_MAIN:0x1:0x2", type: "wallet.shareArgentMultisigStrk20Authorization" },
+    negative: "no saved Nostr co-signer card deliberately prevents external relay I/O",
+    sender: extensionSender,
+  },
+  {
+    message: { id: "SN_MAIN:0x1:0x2", type: "wallet.refreshArgentMultisigStrk20" },
+    negative: "the key-boundary harness has no stored proof, so refresh refuses",
+    sender: extensionSender,
+  },
+  {
+    message: { id: "SN_MAIN:0x1:0x2", type: "wallet.submitArgentMultisigStrk20Relay" },
+    negative: "the key-boundary harness has no relay request, so submission refuses",
+    sender: extensionSender,
+  },
   { message: { type: "wallet.multisigs" }, sender: extensionSender },
   {
     live: async (ids) => ({ multisigId: ids.multisigId }),

@@ -1,9 +1,10 @@
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { AllowanceNotice, AllowanceView } from "@bramble/transactions/allowance-discovery";
 import type {
+  AllowanceListing,
   ArgentMultisigView,
   BalanceState,
   ConnectedSite,
@@ -11,9 +12,11 @@ import type {
   PendingApproval,
   PrivacyDisclosureState,
   PrivacyJourneyState,
+  SignabilityVerdict,
+  StakingState,
   WalletStatus,
-} from "@mc-wallet/wallet-ui/lab";
-import { dashboard, type WalletView } from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
+import { dashboard, type WalletView } from "@bramble/wallet-ui/lab";
 import {
   balances,
   discoveredNft,
@@ -23,9 +26,26 @@ import {
   USDC_ADDRESS,
 } from "../fixtures/fixtures";
 
+// A staking state with no stakes, used when a checkpoint opens a Home tab
+// without describing staking: the Staking tab is shown, empty.
+const NO_STAKES: StakingState = {
+  directory: { loading: true },
+  positions: { complete: true, rows: [] },
+  selected: null,
+  validator: { loading: true },
+};
+
+// The staking state passed to the dashboard, carrying the open Home tab.
+const stakingFor = (options: DashboardOptions): StakingState | undefined =>
+  options.homeTab === undefined
+    ? options.staking
+    : { ...(options.staking ?? NO_STAKES), homeTab: options.homeTab };
+
 export type DashboardOptions = {
   readonly activity?: readonly ActivityEntry[];
   readonly allowances?: readonly AllowanceView[];
+  readonly allowanceNotices?: readonly AllowanceNotice[];
+  readonly allowancesUnavailable?: boolean;
   readonly balanceState?: BalanceState;
   readonly changes?: Readonly<Record<string, number>>;
   readonly chart?: readonly number[];
@@ -33,14 +53,22 @@ export type DashboardOptions = {
   readonly connectedSites?: readonly ConnectedSite[];
   readonly deployment?: boolean | null;
   readonly discoveredNfts?: readonly DiscoveredNft[];
+  readonly addFolderOpen?: boolean;
+  readonly collapsedFolders?: readonly string[];
   readonly expandedGroupId?: string | null;
   readonly historyUnavailable?: boolean;
+  /**
+   * The open Home portfolio tab, kept where production keeps it: in the
+   * staking state (`StakingState.homeTab`). Tokens unless a checkpoint opens
+   * another.
+   */
+  readonly homeTab?: "nfts" | "staking" | "tokens";
   readonly multisigClassDeclared?: boolean | "error" | null;
   readonly multisigIntents?: readonly ArgentMultisigSigningIntent[];
-  readonly multisigNfts?: readonly DiscoveredNft[];
   readonly multisigs?: readonly ArgentMultisigView[];
   readonly multisigsError?: boolean;
-  readonly openAssignId?: string | null;
+  /** How complete the NFT indexer said its list was. */
+  readonly nftCoverage?: "complete" | "incomplete" | "none" | "unavailable";
   readonly pending?: readonly PendingApproval[];
   readonly preferences?: WalletPreferences | null;
   readonly priceAsOf?: number | null;
@@ -52,10 +80,21 @@ export type DashboardOptions = {
   readonly selectedMultisigIntentId?: string | null;
   readonly selectedNftId?: string | null;
   readonly selectedTokenId?: string | null;
+  /** The Home signability verdict; absent renders a normal, signable account. */
+  readonly signability?: SignabilityVerdict | null;
   readonly snoozed?: readonly string[];
+  readonly staking?: StakingState;
   readonly status?: WalletStatus;
   readonly view?: WalletView;
 };
+
+// The allowance manager's listing for a scenario: fixture rows plus whatever
+// the scenario says the background could not vouch for.
+const allowanceListing = (options: DashboardOptions): AllowanceListing => ({
+  entries: options.allowances ?? [],
+  notices: options.allowanceNotices ?? [],
+  unavailable: options.allowancesUnavailable ?? false,
+});
 
 /**
  * Named-options adapter around the production dashboard's positional render
@@ -92,30 +131,34 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     options.prices ?? { [USDC_ADDRESS]: 1 },
     options.chart ?? [],
     options.selectedTokenId ?? null,
-    options.allowances ?? [],
+    allowanceListing(options),
     options.selectedNftId ?? null,
     options.changes ?? {},
     options.multisigs ?? [],
     options.multisigIntents ?? [],
     options.selectedMultisigId ?? null,
     options.multisigClassDeclared ?? null,
-    null,
+    options.collapsedFolders,
     options.expandedGroupId ?? null,
     options.priceStale ?? false,
     options.priceAsOf ?? null,
     options.discoveredNfts ?? [discoveredNft],
-    options.openAssignId ?? null,
+    options.addFolderOpen ?? false,
     options.classHashVerification ?? null,
     options.historyUnavailable ?? false,
     options.snoozed ?? [],
     options.multisigsError ?? false,
     options.balanceState ?? { balances },
     options.selectedMultisigId ?? null,
-    options.multisigNfts ?? [],
-    options.selectedMultisigId ?? null,
     privacy,
     options.privacyJourney ?? { stage: "idle" },
     null,
     selectedMultisigIntentId,
+    null,
+    options.signability ?? null,
+    [],
+    false,
+    stakingFor(options),
+    options.nftCoverage ?? "none",
   );
 };

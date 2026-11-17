@@ -1,10 +1,10 @@
-import { WalletAccount } from "starknet";
+import { WalletAccountV6 } from "starknet";
 import type { AccountInterface } from "starknet";
 import { STARKNET_NETWORKS } from "../../protocols/support/networks";
 import {
   INJECTION_TIMEOUT_MS,
   type StarknetWindowObject,
-  waitForInjectedMcWallet,
+  waitForInjectedBramble,
 } from "./starknet-window";
 
 export type WalletRequest = (call: {
@@ -126,6 +126,50 @@ export const walletNetwork = (
   );
 };
 
+type WalletAccountV6Provider = Parameters<typeof WalletAccountV6.connect>[1];
+
+type WalletStandardConnectResult = {
+  readonly accounts: readonly { readonly address: string }[];
+};
+
+/**
+ * Adapts an injected window.starknet object to the wallet-standard feature
+ * map WalletAccountV6.connect reads. The injected provider is untrusted: only
+ * `request` is forwarded, and connect results are re-normalized to addresses.
+ */
+const walletStandardProvider = (wallet: StarknetWindowObject): WalletAccountV6Provider => {
+  if (typeof wallet.request !== "function") {
+    throw new Error("Wallet does not support the request API.");
+  }
+  const request = wallet.request as WalletRequest;
+  return {
+    features: {
+      "standard:connect": {
+        connect: async ({
+          silent = false,
+        }: { readonly silent?: boolean } = {}): Promise<WalletStandardConnectResult> => {
+          const result = await request({
+            ...(silent ? { params: { silent_mode: true } } : {}),
+            type: "wallet_requestAccounts",
+          });
+          return {
+            accounts: normalizeAddresses(result).map((address) => ({ address })),
+          };
+        },
+      },
+      "standard:events": {
+        on: (event: string, listener: (...args: never[]) => void): (() => void) => {
+          wallet.on(event, listener);
+          return () => wallet.off(event, listener);
+        },
+      },
+      "starknet:walletApi": {
+        request,
+      },
+    },
+  } as WalletAccountV6Provider;
+};
+
 /** Resolves an executable account against the wallet's actual active network. */
 export const resolveAccount = async (
   wallet: StarknetWindowObject,
@@ -137,14 +181,16 @@ export const resolveAccount = async (
   const nodeUrl =
     walletNetwork(chainId)?.rpcUrls[0] ?? STARKNET_NETWORKS.SN_MAIN.rpcUrls[0];
   try {
-    const account = await WalletAccount.connect({ nodeUrl }, wallet as never);
-    return account as unknown as AccountInterface;
+    return (await WalletAccountV6.connect(
+      { nodeUrl },
+      walletStandardProvider(wallet),
+    )) as unknown as AccountInterface;
   } catch {
     return null;
   }
 };
 
-/** Finds MC Wallet first, while preserving standards-based Starknet wallet fallback. */
+/** Finds Bramble first, while preserving standards-based Starknet wallet fallback. */
 export const resolveWallet = async (): Promise<StarknetWindowObject | null> => {
-  return waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
+  return waitForInjectedBramble(INJECTION_TIMEOUT_MS);
 };

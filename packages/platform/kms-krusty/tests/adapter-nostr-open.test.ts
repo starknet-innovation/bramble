@@ -5,7 +5,7 @@
  * any malformed or missing field.
  */
 import { describe, expect, test } from "bun:test";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const GIFT_WRAP_ID = "ab".repeat(32);
@@ -32,6 +32,7 @@ const openWith = (result: unknown): Promise<unknown> => {
     throw new Error("not used");
   };
   return createKrustyKms({
+    deriveArgentLegacyKeypair: unused,
     deriveNostrPublicKey: unused,
     deriveOzAccountAddress: unused,
     deriveScopedStrk20ViewingKey: unused,

@@ -1,0 +1,83 @@
+{
+  "s-brv/TA-27": {
+    "id": "s-brv/TA-27",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRV",
+    "vendorDerivation": "braavos-direct",
+    "index": 0,
+    "address": "0x602c071226162e65cd3bbadda035944bc95ca1d1e52e8510525b06e2c0e3de0",
+    "pubkey": "0xc0e88f8bb81a8d6a58de42dd072e6cab2e48ad3614b7fb460cbdb499724483",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "Braavos 1.0.0, current implementation",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": [
+      "funded STRK 0x67a2ba5ebc3be6a0768bf08973341d7dea10832d7499b440512e32104b3090d",
+      "deployed 0x61285a68b02bb16dbcc7f4845ceb40ce0b78645b978aab0310225669fa2dca2"
+    ]
+  },
+  "s-brv/TA-28": {
+    "id": "s-brv/TA-28",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRV",
+    "vendorDerivation": "braavos-direct",
+    "index": 1,
+    "address": "0x4183d14b58550f40bb3ab4419b7ca1385b0dcf7b93312b9475bb7bd14fe695a",
+    "pubkey": "0x147852bab3117e37e67aba9f4e4903afac558eb60b98ffe70bd3505b0bee9a9",
+    "classAtDeploy": null,
+    "expected": "Braavos funded counterfactual, deployable",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "funded": "STRK"
+    },
+    "log": ["funded STRK 0xa6144ba29afce7776000e7359b3650cac8cbdc1252389b6f7d8e1ed5478385"]
+  },
+  "s-brv/TA-29": {
+    "id": "s-brv/TA-29",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRV",
+    "vendorDerivation": "braavos-direct",
+    "index": 2,
+    "address": "0x7216679029ff6427a24cfc16ab6bbbe697ed73b6a331e69cf7867c10a566d3d",
+    "pubkey": "0x49e225114de2a5f57c59b0f31504311c123dbf9116671c68fa245e72050fb30",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "2FA: stark-key signing must be refused",
+    "detectability": "D2",
+    "backedBy": "simulated",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a",
+      "secp256r1": {
+        "x": "0x51c934b1acc7a8da78036a74ce4dd9c8d5b4878e567b65f22d1799af2e9d631b",
+        "y": "0x6dd2c28fa5ccca7a3d812404e63603656553f7c05e7f2084f5cee2c521f2803"
+      }
+    },
+    "log": [
+      "funded STRK 0x51b0f211864e99888b9f78859f1e289f269ce5c37275ba1c7f4b53a44f509d3",
+      "deployed 0x68238b564ebce4e28690b349e0e434a3ba0290e9008905e7b75b7f7dbca3c26"
+    ]
+  },
+  "s-brv/TA-61": {
+    "id": "s-brv/TA-61",
+    "seed": "BRAMBLE_DATASET_SEED_S_BRV",
+    "vendorDerivation": "braavos-direct",
+    "index": 3,
+    "address": "0x48d3792a24031c0a02853af3dd85408a4e255cd1e2d173fd16851d0acddc62e",
+    "pubkey": "0x56e25121c926cb718303a949ec7c77ee568f47db341b87de2d352761a5413c6",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "Braavos on the 1.1.0 implementation: listed, view only (release)",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x2c8c7e6fbcfb3e8e15a46648e8914c6aa1fc506fc1e7fb3d1e19630716174bc"
+    },
+    "log": [
+      "funded STRK 0x72ffeca3181ff3b1bbeff7fd30299c5a4390539ea63354600c21476a34e1096",
+      "deployed 0x433cdb6ef6033c3ab5cdcf0f27dd9904f2be78dccf4396d76c5d37a3a178031"
+    ]
+  }
+}

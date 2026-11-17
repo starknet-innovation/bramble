@@ -4,17 +4,17 @@
  * signed by the wallet.
  */
 
-import { isSafeDecimals } from "@mc-wallet/core/json";
-import { isLikelySpam } from "@mc-wallet/portfolio/token-registry";
+import { isSafeDecimals } from "@bramble/core/json";
+import { isLikelySpam } from "@bramble/portfolio/token-registry";
 import type {
   DisplayCurrency,
   TokenConfig,
   WalletPreferences,
-} from "@mc-wallet/settings/preferences";
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
-import type { ValueBucket } from "@mc-wallet/transactions/send-routes";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
+import type { ValueBucket } from "@bramble/transactions/send-routes";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { CURRENCY_SYMBOLS } from "../../shared/fiat";
 import { compareStrkFirst } from "../portfolio/token-flows";
@@ -28,6 +28,12 @@ import { compactAmount } from "../portfolio/token-row";
  */
 export type SendIntent = {
   readonly accountId: string;
+  /**
+   * Amount to prefill, in the token's exact base units (decimal digits). The
+   * user can still edit it and must still review and confirm; omitted, the
+   * amount opens empty.
+   */
+  readonly amount?: string;
   /** Shared account selected when a setup-owned funding send completes. */
   readonly completeMultisigId?: string;
   /** Continues a shortcut-owned funding send into its saved deployment setup. */
@@ -85,7 +91,9 @@ export const sendAssets = (
     .sort((left, right) => Number(left.spam) - Number(right.spam) || compareStrkFirst(left, right));
 
 /**
- * Returns every account on the active network, the sending account included.
+ * Returns every visible account on the active network, the sending account
+ * included. Accounts the user has hidden are excluded: the drawer and the
+ * restore list on the manage-accounts screen are where they reappear.
  *
  * The origin is a legitimate recipient rather than a mistake: shielding moves
  * value from an account's public balance into its own private one, so the
@@ -95,9 +103,20 @@ export const sendAssets = (
 export const sendRecipientAccounts = (
   accounts: readonly AccountRef[],
   networkId: string,
-): readonly AccountRef[] => accounts.filter((account) => account.networkId === networkId);
+  hiddenAccountIds: readonly string[] = [],
+): readonly AccountRef[] => {
+  const hidden = new Set(hiddenAccountIds);
+  return accounts.filter((account) => account.networkId === networkId && !hidden.has(account.id));
+};
 
-const finitePositive = (value: string): number | null => {
+/**
+ * Parses a strictly positive, finite decimal amount from a field string, or
+ * null when the text is empty, non-numeric or not greater than zero. The fee
+ * preview gates on this rule, the same strictly-positive-finite test the submit
+ * path applies inline, so a half-typed amount (for example a comma decimal) is
+ * refused at the amount step too.
+ */
+export const finitePositive = (value: string): number | null => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
@@ -159,10 +178,44 @@ export const balanceShortcut = (
 };
 
 /**
+ * The amount field's opening text for a shortcut: its base-unit `amount`
+ * formatted exactly for the opening asset's decimals. Anything that is not a
+ * positive base-unit integer, or an asset whose decimals the token boundaries
+ * do not admit, opens empty, as an intent without an amount does.
+ */
+export const intentAmountText = (
+  intent: SendIntent | null,
+  decimals: number | undefined,
+): string =>
+  intent?.amount !== undefined && /^[0-9]{1,78}$/.test(intent.amount) && isSafeDecimals(decimals)
+    ? balanceShortcut(intent.amount, decimals, "max")
+    : "";
+
+/**
  * Short balance copy shared by recipient/account and token rows.
  */
 export const sendBalanceLabel = (formatted: string): string =>
   formatted.length === 0 ? "—" : compactAmount(formatted);
+
+/**
+ * The amount card's balance line for the bucket being spent from. Every writer
+ * of `#send-balance-label` — the first paint, an asset pick, a bucket flip, and
+ * the repaint after discovery or a recipient check settles — renders through
+ * here, so the line keeps one shape (and one width) for the life of the screen:
+ * a later writer that printed the balance at full token precision widened the
+ * card past the narrowest side panel. A balance that has not been read is named
+ * as such, never shown as zero.
+ */
+export const sendBalanceLine = (
+  source: ValueBucket,
+  formatted: string | null,
+  symbol: string,
+): string => {
+  const scope = source === "private" ? "Private balance" : "Balance";
+  return formatted === null
+    ? `${scope} unavailable`
+    : `${scope} ${sendBalanceLabel(formatted)} ${symbol}`;
+};
 
 /**
  * Currency-aware input prefix for fiat-entry mode.

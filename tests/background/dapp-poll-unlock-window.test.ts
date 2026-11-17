@@ -15,8 +15,8 @@
  * malformed or origin-mismatched message never even reaches the session.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import { DAPP_MESSAGES } from "../../apps/extension/src/background/routing/senders";
 import {
@@ -27,6 +27,7 @@ import {
   contentSender,
   createWallet,
   grantedOrigin,
+  testExtension,
   vaultPassphrase,
 } from "../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
@@ -60,7 +61,7 @@ const makeHarness = async () => {
   };
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
   await preferencesStore.setActiveNetwork("SN_SEPOLIA");
-  const handler = createMessageHandler(createWallet(), "extension-id", {
+  const handler = createMessageHandler(createWallet(), testExtension, {
     preferencesStore,
     runtimeRpc: makeRuntimeRpc(),
     session,
@@ -129,10 +130,10 @@ const POLLABLE_MESSAGES: Readonly<Record<string, Record<string, unknown>>> = {
     type: "wallet.strk20PrepareInvoke",
   },
   "wallet.strk20Register": { origin: grantedOrigin, type: "wallet.strk20Register" },
-  "wallet.strk20SubaccountCommitment": {
+  "wallet.strk20ShadowAccountCommitment": {
     dappName: "poller",
     origin: grantedOrigin,
-    type: "wallet.strk20SubaccountCommitment",
+    type: "wallet.strk20ShadowAccountCommitment",
   },
   "wallet.switchChain": {
     chainId: "0x534e5f4d41494e",
@@ -179,8 +180,9 @@ describe("dapp polling cannot hold the wallet unlocked", () => {
   test("covers every dapp-reachable message that can reach the session", () => {
     // Guards the list above against drift: a new dapp message must either be
     // exercised here or be one of the read-only version queries that never
-    // touch the session. `wallet.getChainId`, `wallet.watchAsset` and
-    // `wallet.addStarknetChain` read preferences and the approval queue only.
+    // touch the session. `wallet.getChainId` and `wallet.watchAsset` read
+    // preferences and the approval queue only; `wallet.addStarknetChain`
+    // consults the built-in network list only.
     const sessionFree = new Set([
       "wallet.addStarknetChain",
       "wallet.getChainId",

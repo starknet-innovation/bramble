@@ -8,9 +8,10 @@
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
-} from "@mc-wallet/starknet/account-contracts";
-import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/starknet/account-contracts";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
+import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "@bramble/wallet-model/accounts";
+import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 
 /**
  * Normalises a felt-encoded hash to its canonical `0x` hex form so hashes that
@@ -20,9 +21,22 @@ import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
  */
 const buildRegistry = (): ReadonlyMap<string, string> => {
   const entries: readonly (readonly [string, string])[] = [
-    [OPENZEPPELIN_ACCOUNT_CLASS_HASH, "OpenZeppelin (AccountUpgradeable)"],
-    [ARGENT_ACCOUNT_CONTRACT.classHash, "Argent Account"],
-    [ARGENT_MULTISIG_CONTRACT.classHash, "Argent Multisig"],
+    [OPENZEPPELIN_ACCOUNT_CLASS_HASH, "Bramble Account (OpenZeppelin AccountUpgradeable)"],
+    [ARGENT_ACCOUNT_CONTRACT.classHash, "Ready Account (Argent)"],
+    [ARGENT_MULTISIG_CONTRACT.classHash, "Ready Multisig (Argent)"],
+    // Every other class an account can be deployed with, from the class table:
+    // a restored account stores the class that fixed its address.
+    ...deploymentClasses()
+      .filter((entry) => !sameFelt(entry.classHash, ARGENT_ACCOUNT_CONTRACT.classHash))
+      .map(
+        (entry) =>
+          [
+            entry.classHash,
+            entry.family === "argent"
+              ? `Ready Account (Argent ${entry.label.replace(/^argent /, "")})`
+              : "Braavos Account",
+          ] as const,
+      ),
   ];
   const registry = new Map<string, string>();
   for (const [hash, label] of entries) {

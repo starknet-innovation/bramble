@@ -1,7 +1,7 @@
 /**
  * Domain types shared by Starkscan clients and indexed wallet adapters.
  */
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
 
 /**
  * Starkscan-backed networks. Local devnet deliberately remains RPC-only.
@@ -91,44 +91,6 @@ export type StarkscanTransfer = {
 };
 
 /**
- * One fungible-token balance in an indexed holdings snapshot.
- */
-export type StarkscanTokenHolding = {
-  readonly tokenAddress: string;
-  readonly normalizedTokenAddress: string;
-  readonly indexedBalanceRaw: string;
-  readonly symbol: string | null;
-  readonly name: string | null;
-  readonly decimals: number | null;
-};
-
-/**
- * Completeness proof attached to an indexed holdings snapshot.
- */
-export type StarkscanHoldingsCompleteness = {
-  readonly exact: boolean;
-  readonly truncated: boolean;
-  readonly complete: boolean;
-  readonly reasonCode: string;
-  readonly reason: string;
-  readonly lagBlocks: number | null;
-  readonly capped: boolean;
-  readonly cap: number | null;
-};
-
-/**
- * Indexed fungible-token holdings for one address.
- */
-export type StarkscanTokenHoldings = {
-  readonly chainId: StarkscanChainId;
-  readonly ownerAddress: string;
-  readonly items: readonly StarkscanTokenHolding[];
-  readonly exact: boolean;
-  readonly truncated: boolean;
-  readonly completeness: StarkscanHoldingsCompleteness;
-};
-
-/**
  * Current or block-pinned balance for one token and owner.
  */
 export type StarkscanTokenBalance = {
@@ -193,4 +155,37 @@ export type StarkscanBlock = {
 export type StarkscanPageOptions = {
   readonly cursor?: string;
   readonly limit?: number;
+};
+
+/**
+ * One current ERC-721 position from `address/{address}/nft-positions`. The
+ * collection name is the token deployer's own text: callers sanitise it.
+ */
+export type StarkscanNftPosition = {
+  readonly tokenAddress: string;
+  readonly tokenId: string;
+  readonly collectionName: string | null;
+  readonly collectionIndexed: boolean;
+};
+
+/**
+ * Coverage Starkscan declares for one NFT positions page. It is never global:
+ * ERC-1155 and history before the indexed floor are outside its scope.
+ */
+export type StarkscanNftCoverage = {
+  readonly status: "partial" | "ready";
+  readonly declaredScope: string;
+  readonly completeWithinScope: boolean;
+  readonly reasonCodes: readonly string[];
+};
+
+/**
+ * One snapshot-pinned page of current ERC-721 ownership for an address.
+ */
+export type StarkscanNftPositions = {
+  readonly chainId: string;
+  readonly ownerAddress: string;
+  readonly items: readonly StarkscanNftPosition[];
+  readonly hasMore: boolean;
+  readonly coverage: StarkscanNftCoverage;
 };

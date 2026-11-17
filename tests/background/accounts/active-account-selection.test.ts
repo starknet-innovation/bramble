@@ -1,11 +1,14 @@
 /** Fail-closed cross-store account-selection invariants. */
 import { describe, expect, test } from "bun:test";
+import { RefusedBeforeWrite } from "@bramble/core/errors";
 import {
+  createPreferencesStore,
   defaultWalletPreferences,
   type WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import {
   runGuardedNetworkMutation,
@@ -16,6 +19,8 @@ import { selectActiveAccount } from "../../../apps/extension/src/background/runt
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 
 const vaultPassphrase = "correct horse battery staple";
+// A vault is stored, so only the vault's own refusal proves nothing was written.
+const vaultPresent = { status: async () => ({ hasVault: true }) };
 const mainnetAccount: AccountRef = {
   accountContractType: "openzeppelin",
   address: "0xabc",
@@ -51,6 +56,11 @@ describe("active account selection", () => {
     let selections = 0;
     let activeNetworkId = sepoliaAccount.networkId;
     const preferencesStore = {
+      // The guard reads the active network first, to undo it on a refusal
+      // the vault raises before writing.
+      async read() {
+        return defaultWalletPreferences();
+      },
       async setActiveNetwork(networkId: typeof activeNetworkId) {
         activeNetworkId = networkId;
         throw new Error("injected preference failure");
@@ -78,6 +88,9 @@ describe("active account selection", () => {
       const session = createUnlockSession();
       session.unlock(vaultPassphrase);
       const preferencesStore = {
+        async read() {
+          return defaultWalletPreferences();
+        },
         async setActiveNetwork() {
           return defaultWalletPreferences();
         },
@@ -89,7 +102,7 @@ describe("active account selection", () => {
       const result =
         mutation === "add"
           ? runUnlockedNetworkMutation(session, preferencesStore, "SN_MAIN", async () => fail())
-          : runVaultCreationWithNetwork(session, preferencesStore, "SN_MAIN", fail);
+          : runVaultCreationWithNetwork(session, preferencesStore, vaultPresent, "SN_MAIN", fail);
       await expect(result).rejects.toThrow(`injected ${mutation} failure`);
       expect(session.isUnlocked()).toBe(false);
     }
@@ -100,6 +113,9 @@ describe("active account selection", () => {
     session.unlock(vaultPassphrase);
     let activeNetworkId = sepoliaAccount.networkId;
     const preferencesStore = {
+      async read() {
+        return defaultWalletPreferences();
+      },
       async setActiveNetwork(networkId: typeof activeNetworkId) {
         activeNetworkId = networkId;
         return defaultWalletPreferences();
@@ -127,6 +143,9 @@ describe("active account selection", () => {
     const releaseWrite = Promise.withResolvers<void>();
     let selections = 0;
     const preferencesStore = {
+      async read() {
+        return defaultWalletPreferences();
+      },
       async setActiveNetwork() {
         writeStarted.resolve();
         await releaseWrite.promise;
@@ -160,6 +179,9 @@ describe("active account selection", () => {
     session.unlock("replacement horse battery staple");
     let preferenceWrites = 0;
     const preferencesStore = {
+      async read() {
+        return defaultWalletPreferences();
+      },
       async setActiveNetwork() {
         preferenceWrites += 1;
         return defaultWalletPreferences();
@@ -179,5 +201,24 @@ describe("active account selection", () => {
     ).rejects.toThrow("stale selection");
     expect(preferenceWrites).toBe(0);
     expect(session.peekPassphrase()).toBe("replacement horse battery staple");
+  });
+
+  test("a first-run refusal before the write undoes the network it stored", async () => {
+    // Every first-run create (key, Ledger, phrase, recovery) routes through
+    // here with no session; an existing vault must not switch the network.
+    const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+    await preferencesStore.setActiveNetwork("SN_SEPOLIA");
+    await expect(
+      runVaultCreationWithNetwork(
+        createUnlockSession(),
+        preferencesStore,
+        vaultPresent,
+        "SN_MAIN",
+        async () => {
+          throw new RefusedBeforeWrite("Wallet already exists");
+        },
+      ),
+    ).rejects.toThrow("Wallet already exists");
+    expect((await preferencesStore.read()).activeNetworkId).toBe("SN_SEPOLIA");
   });
 });

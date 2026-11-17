@@ -7,9 +7,9 @@
  * the image) for a discovered token that was never manually watched.
  */
 import { describe, expect, test } from "bun:test";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { account, preferences } from "@bramble/testkit/sidepanel";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { nftSendFlow } from "../../../../src/sidepanel/journeys/collectibles/nft-send-view";
 import {
@@ -91,9 +91,12 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain('loading="eager"');
   });
 
-  test("shows the indexer-aware empty state when nothing is discovered or watched", () => {
+  test("shows the watch-first empty state when nothing is discovered or watched", () => {
     const html = nftGalleryFlow(status, account, preferences, []);
-    expect(html).toContain("NFT indexer");
+    // The indexer setting is withheld while the journey is parked, so the empty
+    // state points at the only route a user has: watching a token they own.
+    expect(html).toContain("Watch one you own");
+    expect(html).not.toContain("NFT indexer");
     expect(html).toContain('data-view="nft-watch"');
     expect(html).toContain("0 shown");
   });
@@ -117,6 +120,7 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain('data-view="nft-hidden"');
     const hidden = nftHiddenFlow(status, withSpam, account);
     expect(hidden).toContain('data-nft-spam-value="false"');
+    expect(hidden).toContain('data-copy="0x511a2b3"');
     expect(html).toContain("0 shown");
   });
 
@@ -195,6 +199,18 @@ describe("NFT gallery auto-discovery", () => {
     const send = nftSendFlow(status, account, preferences, "SN_MAIN:0x511a2b3:5", [discovered]);
     expect(send).toContain('id="nft-review-panel"');
     expect(send).toContain("Review transfer");
+  });
+
+  test("detail and send receipts copy the collection contract in full", () => {
+    const detail = nftDetailFlow(status, account, preferences, discovered.id, [discovered]);
+    expect(detail).toContain(
+      `<dt>Contract</dt><dd><code>0x511a…a2b3</code><button class="icon-button" data-copy="${discovered.contract}" type="button" aria-label="Copy contract address"`,
+    );
+    // The send receipt names the collection, so the control says what it copies.
+    const send = nftSendFlow(status, account, preferences, discovered.id, [discovered]);
+    expect(send).toContain(
+      `<dt>Collection</dt><dd>Everai<button class="icon-button" data-copy="${discovered.contract}" type="button" aria-label="Copy collection contract address"`,
+    );
   });
 
   test("send offers matching address-book recipients and disables without an account", () => {

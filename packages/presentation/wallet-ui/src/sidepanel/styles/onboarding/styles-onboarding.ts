@@ -3,7 +3,8 @@
  * stage, while one restrained orbital motif gives setup a distinct motion
  * language without introducing new colour semantics.
  */
-import { EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
+import { EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "@bramble/ui-kit/tokens";
+import { LEDGER_OVERLAY_LAYERS } from "../core/styles-structure";
 
 const ONBOARDING_TRANSITION = {
   enterMs: 300,
@@ -16,23 +17,53 @@ const ONBOARDING_TRANSITION = {
  * Full-page onboarding and compact toolbar-handoff styles.
  */
 export const ONBOARDING_STYLES = `
-  body.onboarding-surface { min-width: 320px; }
+  /* Landscape on the non-scrolling root, so it covers the gutter and stays
+     put as a step grows. The body keeps the mirrored gutter and scrolls. */
+  html:has(body.onboarding-surface) {
+    background-attachment: fixed;
+    background-blend-mode: multiply;
+    background-color: light-dark(var(--bramble-panel), color-mix(in srgb, var(--bramble-bg) 55%, var(--bramble-text)));
+    background-image: url("brand/onboarding-landscape.webp");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    height: 100%;
+    overflow: hidden;
+    scrollbar-gutter: auto;
+  }
+  body.onboarding-surface {
+    background: transparent;
+    height: 100%;
+    min-width: 320px;
+    overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
+  }
+  /* No dock here, so the panel's toast slot would cover the card's bottom
+     action; top-right stays clear of the card and its back control. */
+  .onboarding-surface .toast-stack {
+    bottom: auto;
+    left: auto;
+    top: ${SPACE.lg};
+    width: min(360px, calc(100vw - ${SPACE.lg} - ${SPACE.lg}));
+    /* Above the Ledger overlay, which here is transparent around its card. */
+    z-index: ${LEDGER_OVERLAY_LAYERS.sign + 1};
+  }
   .onboarding-surface #app { min-height: 100vh; }
   .onboarding-surface .shell {
-    --onboarding-canvas-y: clamp(16px, 3vh, 48px);
+    --onboarding-canvas-y: clamp(${SPACE.lg}, 3vh, ${SPACE.xxxl});
     align-items: center;
     justify-content: center;
     margin: 0 auto;
     max-width: none;
     min-height: 100vh;
-    padding: var(--onboarding-canvas-y) clamp(24px, 5vw, 64px);
+    padding: var(--onboarding-canvas-y) clamp(${SPACE.xl}, 5vw, ${SPACE.xxxl});
     width: 100%;
   }
   .onboarding-wizard {
     align-items: stretch;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.xl};
-    box-shadow: var(--mc-elev-md);
+    box-shadow: var(--bramble-elev-md);
     display: block;
     flex: none;
     gap: 0;
@@ -55,8 +86,10 @@ export const ONBOARDING_STYLES = `
     min-height: inherit;
     outline: none;
     overflow-y: auto;
-    padding: 38px clamp(24px, 7vw, 42px) 30px;
+    padding: ${SPACE.xxl} clamp(${SPACE.xl}, 7vw, ${SPACE.xxl});
     position: relative;
+    /* Mirrored like the document's, so a classic scrollbar keeps the step centred (issue 795). */
+    scrollbar-gutter: stable both-edges;
   }
   .onboarding-wizard > .onboarding-step {
     inset: 0;
@@ -82,7 +115,7 @@ export const ONBOARDING_STYLES = `
     display: grid;
     gap: ${SPACE.sm};
     justify-items: center;
-    margin: 46px auto ${SPACE.md};
+    margin: ${SPACE.xxxl} auto ${SPACE.md};
     max-width: 420px;
     text-align: center;
   }
@@ -96,9 +129,9 @@ export const ONBOARDING_STYLES = `
   .onboarding-step-head .lede { line-height: 1.55; max-width: 42ch; text-wrap: balance; }
   .onboarding-step-icon {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: inline-flex;
     height: 54px;
     justify-content: center;
@@ -119,10 +152,16 @@ export const ONBOARDING_STYLES = `
     width: 100%;
   }
   .onboarding-step-cta button, .onboarding-welcome-actions button { width: 100%; }
+  /* The hit shell is only the button's box. A disabled Continue lets the click
+     fall through to that shell, not into the CTA padding above it. */
+  .verify-continue-hit { display: grid; }
+  #verify-continue:disabled { pointer-events: none; }
 
+  /* The gate fills the shell through flex: 1 (.gate, .screen). A 100vh
+     min-height here added the shell's own padding on top of the viewport and
+     left the first-run panel permanently scrollable. */
   .onboarding-gate {
     justify-content: center;
-    min-height: 100vh;
     padding: ${SPACE.xl};
   }
   .onboarding-gate .gate-head { max-width: 34ch; }
@@ -132,11 +171,15 @@ export const ONBOARDING_STYLES = `
     margin-top: auto;
     width: 100%;
   }
+  /* The handoff link is the screen's primary action, so it takes the primary
+     button's fill, ink, and hover — and pins its ink on hover, because the
+     welcome screen's quiet text-link variant of the same class brightens its
+     ink on hover, which on a filled control would wash the label out. */
   .onboarding-gate .onboarding-launch {
     align-items: center;
-    background: var(--mc-text);
-    border-radius: ${RADIUS.md};
-    color: var(--mc-bg);
+    background: var(--bramble-accent);
+    border-radius: ${RADIUS.full};
+    color: var(--bramble-accent-text);
     display: inline-flex;
     font-size: ${TYPE.body.size};
     font-weight: ${WEIGHT.semibold};
@@ -144,12 +187,20 @@ export const ONBOARDING_STYLES = `
     min-height: 46px;
     padding: 0 ${SPACE.lg};
     text-decoration: none;
+    transition: background ${MOTION.pressMs}ms ${MOTION.ease};
+  }
+  .onboarding-gate .onboarding-launch:active { background: var(--bramble-accent-press); }
+  @media (hover: hover) and (pointer: fine) {
+    .onboarding-gate .onboarding-launch:hover {
+      background: var(--bramble-accent-hover);
+      color: var(--bramble-accent-text);
+    }
   }
 
   .onboarding-option, .onboarding-account {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     gap: ${SPACE.md};
     justify-content: initial;
@@ -171,13 +222,13 @@ export const ONBOARDING_STYLES = `
     width: 40px;
   }
   .onboarding-option-icon, .onboarding-account-avatar {
-    background: var(--mc-panel);
-    color: var(--mc-text);
+    background: var(--bramble-panel);
+    color: var(--bramble-text);
   }
   .onboarding-option-icon .icon { height: 18px; width: 18px; }
   .onboarding-option > .icon {
     align-self: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     height: 18px;
     transition: transform ${MOTION.liftMs}ms var(--ease-out);
     width: 18px;
@@ -193,9 +244,19 @@ export const ONBOARDING_STYLES = `
     font-weight: ${WEIGHT.semibold};
   }
   .onboarding-option-copy span, .onboarding-account-copy span {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     line-height: ${TYPE.caption.line};
+  }
+  /* A wallet address is data, not a caption: read it in the mono voice at the
+     body size, at full text strength, so it is not smaller or quieter than the
+     account name above it. Matches the app's other address surfaces. */
+  .onboarding-account-copy [data-preview-address] {
+    color: var(--bramble-text);
+    font-family: var(--bramble-font-mono);
+    font-size: ${TYPE.body.size};
+    line-height: ${TYPE.body.line};
+    overflow-wrap: anywhere;
   }
   .onboarding-account {
     grid-template-columns: 44px minmax(0, 1fr) 40px;
@@ -206,21 +267,19 @@ export const ONBOARDING_STYLES = `
     font-weight: ${WEIGHT.bold};
   }
   .onboarding-account-check {
-    background: var(--mc-text);
-    color: var(--mc-bg);
+    background: var(--bramble-text);
+    color: var(--bramble-bg);
     transform: scale(1);
     transition:
       opacity ${MOTION.liftMs}ms var(--ease-out),
       transform ${MOTION.liftMs}ms var(--ease-out);
   }
   .onboarding-account-check .icon { height: 17px; width: 17px; }
-  .onboarding-account[aria-pressed="false"] .onboarding-account-check {
-    opacity: 0;
-    transform: scale(0.92);
-  }
-  .onboarding-account[aria-pressed="true"] {
-    background: var(--mc-soft-press);
-    box-shadow: var(--mc-elev-sm);
+  /* A single account is reviewed, not chosen: the row is a static read-out of
+     the account that will be created, its check always shown. */
+  .onboarding-account {
+    background: var(--bramble-soft-press);
+    box-shadow: var(--bramble-elev-sm);
   }
 
   .recovery-grid {
@@ -237,7 +296,7 @@ export const ONBOARDING_STYLES = `
   .recovery-word-cell:has(> input[hidden]) { display: none; }
   /* user-select: the position is a marker, not phrase text to copy. */
   .recovery-word-cell > span:first-child {
-    font-family: var(--mc-font-mono);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.micro.size};
     font-variant-numeric: tabular-nums;
     min-width: 2ch;
@@ -247,20 +306,20 @@ export const ONBOARDING_STYLES = `
   /* Trades side padding for glyphs so an 8-character word still fits at 320px. */
   .recovery-word {
     flex: 1;
-    font-family: var(--mc-font-mono);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.caption.size};
     min-width: 0;
     padding: 0 ${SPACE.xs};
     text-align: center;
   }
   .recovery-word.is-invalid {
-    background: color-mix(in srgb, var(--mc-danger) 12%, transparent);
-    color: var(--mc-danger);
+    background: color-mix(in srgb, var(--bramble-danger) 12%, transparent);
+    color: var(--bramble-danger);
   }
   .recovery-suggestions {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-elev-md);
+    box-shadow: var(--bramble-elev-md);
     display: grid;
     gap: 2px;
     padding: ${SPACE.xs};
@@ -270,8 +329,8 @@ export const ONBOARDING_STYLES = `
   .recovery-suggestion {
     background: transparent;
     border-radius: ${RADIUS.sm};
-    color: var(--mc-text);
-    font-family: var(--mc-font-mono);
+    color: var(--bramble-text);
+    font-family: var(--bramble-font-mono);
     font-size: ${TYPE.caption.size};
     justify-content: flex-start;
     min-height: 32px;
@@ -280,7 +339,7 @@ export const ONBOARDING_STYLES = `
   }
   .recovery-suggestion:hover,
   .recovery-suggestion:focus-visible {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
   }
   .recovery-grid.is-masked .recovery-word {
     filter: blur(6px);
@@ -290,81 +349,66 @@ export const ONBOARDING_STYLES = `
   /* A label forwards clicks to its control even when the control is
      pointer-events:none, so the cell must opt out too. */
   .recovery-grid.is-masked .recovery-word-cell { pointer-events: none; }
+  .recovery-actions { display: flex; gap: ${SPACE.xs}; justify-content: center; }
   .onboarding-inline-action {
     background: transparent;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     justify-self: center;
     min-height: 36px;
     padding: 0 ${SPACE.md};
   }
   .password-requirement {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: grid;
     font-size: ${TYPE.caption.size};
     gap: 7px;
   }
   .password-requirement-bar {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
     height: 4px;
     overflow: hidden;
   }
+  /* The fill follows the strength estimate as the value is typed and its
+     colour steps through the danger → warning → positive bands; the text
+     turns positive only once the confirmation matches. */
   .password-requirement-bar > span {
-    background: var(--mc-muted);
+    background: var(--bramble-muted);
     display: block;
     height: 100%;
-    transform: scaleX(0.32);
+    transform: scaleX(var(--meter-fill, 0));
     transform-origin: left;
     transition:
       background ${MOTION.enterMs}ms var(--ease-out),
       transform ${MOTION.enterMs}ms var(--ease-out);
   }
-  .password-requirement.is-ready { color: var(--mc-positive); }
-  .password-requirement.is-ready .password-requirement-bar > span {
-    background: var(--mc-positive);
-    transform: scaleX(1);
-  }
+  .password-requirement[data-strength="weak"] .password-requirement-bar > span { background: var(--bramble-danger); }
+  .password-requirement[data-strength="fair"] .password-requirement-bar > span { background: var(--bramble-warning); }
+  .password-requirement[data-strength="strong"] .password-requirement-bar > span { background: var(--bramble-positive); }
+  .password-requirement.is-ready { color: var(--bramble-positive); }
 
   .onboarding-complete {
     align-content: center;
     align-items: center;
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.xl};
-    box-shadow: var(--mc-elev-md);
+    box-shadow: var(--bramble-elev-md);
     display: flex;
     flex: none;
     justify-content: center;
     margin: auto;
     min-height: min(660px, calc(100vh - 48px));
-    padding: clamp(32px, 8vw, 68px);
+    padding: clamp(${SPACE.xxl}, 8vw, calc(${SPACE.xxxl} + ${SPACE.lg}));
     text-align: center;
     width: min(100%, 520px);
   }
   .onboarding-complete .gate-brand { margin: 0; }
   .onboarding-complete .gate-head { max-width: 38ch; }
   .onboarding-complete-mark {
-    background: var(--mc-positive);
-    color: var(--mc-accent-text);
+    background: var(--bramble-positive);
+    color: var(--bramble-accent-text);
   }
-  .onboarding-complete-details {
-    display: grid;
-    gap: ${SPACE.sm};
-    width: min(100%, 360px);
-  }
-  .onboarding-complete-detail {
-    align-items: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
-    color: var(--mc-muted);
-    display: flex;
-    font-size: ${TYPE.caption.size};
-    gap: ${SPACE.sm};
-    min-height: 44px;
-    padding: 0 ${SPACE.md};
-    text-align: left;
-  }
-  .onboarding-complete-detail .icon { color: var(--mc-text); height: 16px; width: 16px; }
   .onboarding-complete-actions {
     display: grid;
     gap: ${SPACE.sm};
@@ -375,6 +419,9 @@ export const ONBOARDING_STYLES = `
 
   html[data-onboarding-direction]::view-transition-old(root),
   html[data-onboarding-direction]::view-transition-new(root) { animation: none; }
+  /* The snapshot sits in the top layer. A transition that never settles would
+     otherwise swallow every click on the live step. */
+  ::view-transition { pointer-events: none; }
   ::view-transition-group(onboarding-stage) {
     animation-duration: ${ONBOARDING_TRANSITION.enterMs}ms;
     animation-timing-function: ${EASE.out};
@@ -414,24 +461,23 @@ export const ONBOARDING_STYLES = `
   }
   @media (hover: hover) and (pointer: fine) {
     button.onboarding-option:not(:disabled):hover,
-    button.onboarding-account:not(:disabled):hover,
     button.onboarding-contract:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
     button.onboarding-option:not(:disabled):hover .onboarding-option-copy span,
     button.onboarding-option:not(:disabled):hover > .icon {
-      color: var(--mc-muted);
+      color: var(--bramble-muted);
     }
     button.onboarding-option:not(:disabled):hover > .icon { transform: translateX(3px); }
     button.onboarding-inline-action:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
   }
   @media (max-height: 760px) {
-    .onboarding-step { min-height: inherit; padding-bottom: 22px; padding-top: 30px; }
-    .onboarding-step-head { margin-bottom: ${SPACE.sm}; margin-top: 40px; }
+    .onboarding-step { min-height: inherit; padding-bottom: ${SPACE.xl}; padding-top: ${SPACE.xxl}; }
+    .onboarding-step-head { margin-bottom: ${SPACE.sm}; margin-top: ${SPACE.xxl}; }
   }
   @media (max-width: 520px) {
     .onboarding-surface .shell { padding: 0; }

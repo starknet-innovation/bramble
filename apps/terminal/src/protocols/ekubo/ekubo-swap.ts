@@ -6,11 +6,11 @@
  * within the module size budget. Nothing here touches the network — the on-chain
  * reads live in ekubo.ts; these are pure serializers and integer math.
  *
- * ⚠️ Contract shapes (entrypoint names, struct field order, fee/tick-spacing
- * constants, sqrt-ratio bounds) are transcribed from the Ekubo recon and must be
- * re-verified against docs.ekubo.org / the deployed RouterV3 ABI before any
- * mainnet swap is signed. starknet-js compiles plain objects depth-first in
- * property order, so the field order below IS the Cairo ABI order.
+ * The sqrt-ratio bounds and the fee tiers are verified against Ekubo's own
+ * source and mainnet state (see each constant). The entrypoint names and struct
+ * field order are transcribed from the Ekubo recon; starknet-js compiles plain
+ * objects depth-first in property order, so the field order below IS the Cairo
+ * ABI order.
  */
 import { type Call, CallData, cairo } from "starknet";
 import { WalletError } from "../support/errors";
@@ -24,12 +24,6 @@ import { EKUBO_ADDRESSES } from "../constants";
 const BPS_DENOMINATOR = 10_000n;
 
 /**
- * Default swap slippage tolerance (0.5%) applied when a caller omits one.
- * ⚠️ Product default — confirm against the terminal's chosen tolerance.
- */
-export const DEFAULT_SLIPPAGE_BPS = 50;
-
-/**
  * `skip_ahead` gas hint for the router; 0 disables the optimization.
  */
 export const EKUBO_SKIP_AHEAD = "0";
@@ -37,7 +31,12 @@ export const EKUBO_SKIP_AHEAD = "0";
 /**
  * Ekubo sqrt-ratio bounds (0.128 fixed-point, u256). Used as the unbounded limit
  * when reading a quote and as clamps for the slippage-derived swap limit.
- * ⚠️ VERIFY against the deployed core contract constants.
+ *
+ * Source: EkuboProtocol/starknet-contracts `src/math/ticks.cairo`,
+ * `constants::MIN_SQRT_RATIO` / `MAX_SQRT_RATIO`, identical in every tag from
+ * v1.0.0 to v5.1.0 (commit 66dc73abadf6cb0bc2f4a728c004ff7558ab6fcb). Core's
+ * `swap` accepts a limit within both bounds inclusive (`src/core.cairo`, the
+ * `LIMIT_MAG` assertion), so clamping to them never makes a swap revert.
  */
 const MIN_SQRT_RATIO = 18446748437148339061n;
 /**
@@ -79,9 +78,9 @@ export type EkuboRoute = {
 
 /**
  * A standard Ekubo fee tier: the u128 fee (fraction × 2^128) and its paired tick
- * spacing. Quoting tries each tier and keeps the best-priced pool.
- * ⚠️ VERIFY these exact integers — a wrong fee/tick-spacing pair addresses a
- * non-existent pool and the quote reverts or returns zero.
+ * spacing. Quoting tries each tier and keeps the best-priced pool. A wrong
+ * fee/tick-spacing pair addresses a pool that does not exist, so the quote for
+ * that tier fails and the tier is skipped.
  */
 export type EkuboFeeTier = {
   readonly label: string;
@@ -90,13 +89,26 @@ export type EkuboFeeTier = {
 };
 
 /**
- * Canonical Ekubo fee tiers, cheapest first.
+ * Canonical Ekubo fee tiers, cheapest first. Each fee is the exact u128 value
+ * the existing mainnet pools were created with; a key that is off in the last
+ * digits names a pool that does not exist. The 0.01%, 0.05% and 0.30% fees are
+ * `BigInt(rate * 2 ** 128)` in double precision, but the 1.00% pools use the
+ * exact `floor(2^128 / 100)`, so none of these may be recomputed from the rate.
+ *
+ * Source: every (fee, tick spacing) pair below was read back from mainnet
+ * Core (`EKUBO_ADDRESSES.core`) with `get_pool_price` at block 16329354
+ * (2026-10-13) and returned a non-zero sqrt ratio for the ETH/USDC, STRK/USDC
+ * and STRK/ETH pools; the same pairs are listed for those pools by Ekubo's API
+ * (`prod-api.ekubo.org/pair/<chainId>/<token0>/<token1>/pools`, whose
+ * `core_address` is the same Core). The 1.00% fee shipped before this was the
+ * double-precision value, which keys no initialised pool on any pair checked.
+ * `bun run check:api` re-checks the four keys against mainnet.
  */
 export const EKUBO_FEE_TIERS: readonly EkuboFeeTier[] = [
-  { fee: 34028236692093846346337460743176821n, label: "0.01%", tickSpacing: 200n },
-  { fee: 170141183460469231731687303715884106n, label: "0.05%", tickSpacing: 1000n },
-  { fee: 1020847100762815390390123822295304634n, label: "0.30%", tickSpacing: 5982n },
-  { fee: 3402823669209384634633746074317682115n, label: "1.00%", tickSpacing: 19802n },
+  { fee: 34028236692093847977029636859101184n, label: "0.01%", tickSpacing: 200n },
+  { fee: 170141183460469235273462165868118016n, label: "0.05%", tickSpacing: 1000n },
+  { fee: 1020847100762815411640772995208708096n, label: "0.30%", tickSpacing: 5982n },
+  { fee: 3402823669209384634633746074317682114n, label: "1.00%", tickSpacing: 19802n },
 ];
 
 /**
@@ -176,6 +188,14 @@ export const buildQuoteCalldata = (
     route: routeNode(poolKey, sellIsToken0 ? MIN_SQRT_RATIO : MAX_SQRT_RATIO, EKUBO_SKIP_AHEAD),
     token_amount: tokenAmount(sellToken, sellAmountRaw),
   });
+
+/**
+ * Compiles calldata for Core `get_pool_price(pool_key)`: the `PoolKey` struct
+ * alone (five felts). Core rejects any longer input, so the RouterV3 quote
+ * calldata must never be reused here (Sherlock 133).
+ */
+export const buildPoolPriceCalldata = (poolKey: EkuboPoolKey): string[] =>
+  CallData.compile({ pool_key: poolKeyStruct(poolKey) });
 
 /**
  * Parses a RouterV3 `quote_swap` / `swap` `Delta { amount0: i129, amount1: i129 }`

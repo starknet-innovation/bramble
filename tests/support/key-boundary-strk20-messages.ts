@@ -33,7 +33,7 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
         ohttpEnabled: false,
         poolAddress: "0x1",
         proverUrl: "https://prover.example",
-        subaccountAnonymizerAddress: "0x2",
+        shadowAccountAnonymizerAddress: "0x2",
       },
       networkId: "SN_SEPOLIA",
       type: "wallet.setStrk20NetworkConfig",
@@ -63,13 +63,42 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   },
   {
     message: {
-      dappName: "mc-terminal",
+      dappName: "bramble-terminal",
       origin,
-      type: "wallet.strk20SubaccountCommitment",
+      type: "wallet.strk20ShadowAccountCommitment",
     },
     sender: contentSender,
   },
   { message: { type: "wallet.strk20State" }, sender: extensionSender },
+  // The update prompt (#708): neither touches key material. `applyUpdate`
+  // answers "nothing to restart" in the harness, which has no browser runtime.
+  { message: { type: "wallet.updateStatus" }, sender: extensionSender },
+  { message: { type: "wallet.applyUpdate" }, sender: extensionSender },
+  // The one-time "opens as a popup" notice (#690): reads and clears a flag.
+  { message: { type: "wallet.sidePanelNotice" }, sender: extensionSender },
+  { message: { type: "wallet.dismissSidePanelNotice" }, sender: extensionSender },
+  // The side panel page reports itself visible (#690): marks a learning flag.
+  { message: { type: "wallet.sidePanelVisible" }, sender: extensionSender },
+  // Settings → Privacy → Unlock anyway (#668): clears a stuck submitting
+  // marker; it reads no key material.
+  { message: { type: "wallet.strk20ReleasePendingWrite" }, sender: extensionSender },
+  // The Shadow accounts view (#443). The commitment entry above records the
+  // scope these name, so each reaches the vault's records and, for the last
+  // two, the viewing-key-derived listing.
+  { message: { type: "wallet.strk20ShadowAccounts" }, sender: extensionSender },
+  {
+    message: { label: "bramble-terminal", origin, type: "wallet.strk20ShadowAccountBalances" },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      label: "bramble-terminal",
+      nonce: "0x0",
+      origin,
+      type: "wallet.strk20PrepareShadowSweep",
+    },
+    sender: extensionSender,
+  },
   {
     live: async (ids) => ({ tokenId: ids.tokenId }),
     message: {
@@ -78,6 +107,16 @@ export const STRK20_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
       tokenId: "",
       type: "wallet.strk20PrepareDeposit",
     },
+    sender: extensionSender,
+  },
+  {
+    // A shield's review, an activation's review, and an execution's hash no
+    // longer ride their own requests: each is what this poll answers with once
+    // its tracked job has settled, so this reply — and, in the scan itself, the
+    // settled reply of every job-starting entry below — is what must be grepped
+    // for the viewing key.
+    live: async (ids) => ({ jobId: await ids.strk20PreparationJobId() }),
+    message: { jobId: "", type: "wallet.strk20PreparationStatus" },
     sender: extensionSender,
   },
   {

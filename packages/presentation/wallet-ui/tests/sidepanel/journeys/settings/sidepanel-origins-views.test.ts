@@ -5,7 +5,7 @@
  * accept the connected-sites and enriched pending-approval shapes.
  */
 import { describe, expect, test } from "bun:test";
-import { account, preferences } from "@mc-wallet/testkit/sidepanel";
+import { account, preferences } from "@bramble/testkit/sidepanel";
 import {
   isConnectedSitesResponse,
   isPendingApprovalsResponse,

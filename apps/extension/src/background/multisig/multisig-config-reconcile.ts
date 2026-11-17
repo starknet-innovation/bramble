@@ -8,16 +8,17 @@ import {
   type ArgentUnsupportedSigner,
   nextArgentMultisigPublicConfig,
   parseArgentMultisigConfigChange,
-} from "@mc-wallet/multisig/chain";
-import type {
-  ArgentMultisigRecord,
-  ArgentMultisigSigningIntent,
-  MultisigStore,
-} from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { type StarknetNetworkId, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/multisig/chain";
+import {
+  type ArgentMultisigRecord,
+  type ArgentMultisigSigningIntent,
+  type MultisigStore,
+  staleArgentMultisigIntent,
+} from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { type StarknetNetworkId, sameFelt } from "@bramble/wallet-model/networks";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 
 /**
@@ -59,7 +60,7 @@ export const markChangedIntentsStale = async (
       (intent.configSnapshot.threshold !== config.threshold ||
         !sameArgentSignerGuids(intent.configSnapshot.signerGuids, config.signerGuids))
     ) {
-      await store.upsertIntent({ ...intent, state: "stale" });
+      await store.upsertIntent(staleArgentMultisigIntent(intent, "config"));
     }
   }
 };
@@ -140,7 +141,7 @@ export const enrichArgentAddressOnlyWatch = async (
       },
     };
     return {
-      record: (await deps.multisigStore.upsertMultisig(observed)) === "stored" ? observed : record,
+      record: (await deps.multisigStore.enrichMultisig(observed)) === "stored" ? observed : record,
       unsupportedSigners: [],
     };
   }
@@ -163,7 +164,7 @@ export const enrichArgentAddressOnlyWatch = async (
     currentConfig: { signerPublicKeys: discovered.signerPublicKeys, threshold: config.threshold },
   };
   return {
-    record: (await deps.multisigStore.upsertMultisig(enriched)) === "stored" ? enriched : record,
+    record: (await deps.multisigStore.enrichMultisig(enriched)) === "stored" ? enriched : record,
     unsupportedSigners: discovered.unsupportedSigners,
   };
 };

@@ -3,17 +3,14 @@
  * and counterfactual account deployment parameters.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   ARGENT_MULTISIG_CONTRACT,
   argentAccountAddress,
   argentMultisigAddress,
-} from "@mc-wallet/starknet/account-contracts";
-import {
-  resetRpcEndpointCooldownsForTests,
-  WRONG_CHAIN_MESSAGE,
-} from "@mc-wallet/starknet/provider";
+} from "@bramble/starknet/account-contracts";
+import { resetRpcEndpointCooldownsForTests, WRONG_CHAIN_MESSAGE } from "@bramble/starknet/provider";
 import {
   accountDeployment,
   buildErc20TransferCall,
@@ -30,8 +27,8 @@ import {
   timedRpcFetch,
   withRpcFallback,
   withRpcWrite,
-} from "@mc-wallet/starknet/rpc";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/starknet/rpc";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { CallData, hash, shortString } from "starknet";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -445,7 +442,7 @@ describe("endpoint refusals versus submission ambiguity", () => {
   });
 
   test("a real JSON-RPC error and a large body are left alone", async () => {
-    // `error` as an OBJECT with a code is the node answering; never a refusal.
+    // Contract errors remain semantic even though the one rate-limit code is a refusal.
     await expect(
       refusalFetch('{"jsonrpc":"2.0","id":1,"error":{"code":20,"message":"Contract not found"}}')(
         "https://selected.example",

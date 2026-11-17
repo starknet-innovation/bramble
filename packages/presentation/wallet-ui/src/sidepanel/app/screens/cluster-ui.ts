@@ -1,32 +1,94 @@
 /**
- * Wiring for the token, allowance, NFT, and connected-sites cluster screens.
- * Extracted from the side panel entrypoint to keep it within the size budget;
- * navigation side effects are passed in as callbacks so this module holds no
- * module-level state.
+ * Wiring for the asset cluster: swap, tokens, the AVNU token catalog,
+ * allowances, collectibles, and connected sites. Extracted from the side panel entrypoint to
+ * keep it within the size budget; navigation side effects are passed in as
+ * callbacks and every state read goes through the shared render cache, so this
+ * module holds no module-level state.
  */
-import type { WalletStatus } from "../../../popup/responses/responses";
 import { bindNfts } from "../../journeys/collectibles/nft-ui";
 import { bindAllowances } from "../../journeys/portfolio/allowance-ui";
+import { bindTokenCatalog } from "../../journeys/portfolio/token-catalog-ui";
 import { bindTokens } from "../../journeys/portfolio/tokens-ui";
+import { bindShadowAccounts } from "../../journeys/privacy/shadow-accounts-ui";
 import { bindConnectedSites } from "../../journeys/settings/origins-ui";
+import { bindStakingDirectory } from "../../journeys/staking/staking-directory-ui";
+import { bindHomeStaking } from "../../journeys/staking/staking-home-ui";
+import { bindStaking } from "../../journeys/staking/staking-ui";
+import type { SwapClient } from "../../journeys/swap/swap-client";
+import { bindSwap } from "../../journeys/swap/swap-ui";
 import type { SidepanelWallet } from "../../runtime/runtime";
+import type { RenderData } from "../rendering/render-cache";
 
 /**
- * Callbacks and context the cluster screen bindings close over.
+ * Callbacks and context the cluster screen bindings close over. `cache` is the
+ * shell's live render cache, read through accessors at event time rather than
+ * captured, so a binding installed on one paint still sees current state.
  */
 export type ClusterUiDeps = {
   readonly app: Element | null;
-  readonly openNft: (id: string) => void;
+  readonly cache: RenderData;
+  /** Leaves the swap screen for a dock screen, from its receipt or its header. */
+  readonly leaveSwap: (view: "activity" | "home") => void;
+  /**
+   * Opens Send or Swap on a chosen asset. Send still asks for the recipient:
+   * the asset is the only thing carried over, so the caller sets no intent —
+   * an intent names a recipient and would skip that step.
+   */
+  readonly openWithToken: (view: "send" | "swap", tokenId: string) => void;
   readonly openToken: (tokenId: string) => void;
-  readonly render: (status: WalletStatus) => Promise<void>;
+  /** Opens a collectible's detail screen (while NFTs are turned on). */
+  readonly openNft: (id: string) => void;
+  /** Leaves a finished collectible transfer, or opens staking from a token. */
+  readonly navigate: (view: "activity" | "home" | "staking") => void;
+  readonly render: (status: RenderData["status"]) => Promise<void>;
+  readonly swap: SwapClient;
   readonly wallet: SidepanelWallet;
 };
 
+// The token detail screen's own Send, Swap and Stake. Send and Swap carry the
+// asset and hand over to that journey; Stake opens the staking list. None of
+// them prepares anything itself.
+const bindTokenDetailActions = (deps: ClusterUiDeps): void => {
+  const { cache } = deps;
+  deps.app
+    ?.querySelector<HTMLButtonElement>("[data-stake-token]")
+    ?.addEventListener("click", () => {
+      // The staking list, not whichever validator was open last.
+      cache.staking = { ...cache.staking, selected: null, validator: { loading: true } };
+      deps.navigate("staking");
+    });
+  for (const [attribute, key, view] of [
+    ["data-send-token", "sendToken", "send"],
+    ["data-swap-token", "swapToken", "swap"],
+  ] as const) {
+    deps.app?.querySelectorAll<HTMLButtonElement>(`[${attribute}]`).forEach((button) => {
+      button.addEventListener("click", () => {
+        const tokenId = button.dataset[key];
+        if (tokenId) deps.openWithToken(view, tokenId);
+      });
+    });
+  }
+};
+
 /**
- * Binds the connected-sites, tokens, allowances, and NFT cluster screens.
+ * Binds the swap, connected-sites, tokens, catalog, and allowance screens. The
+ * NFT bindings install on the NFTs screens and the Home NFTs tab.
  */
 export const bindClusterScreens = (deps: ClusterUiDeps): void => {
-  const { app, render, wallet } = deps;
+  const { app, cache, render, wallet } = deps;
+  bindTokenDetailActions(deps);
+  bindSwap({
+    app,
+    balances: () => cache.balances,
+    currency: () => cache.preferences?.displayCurrency ?? "usd",
+    navigateActivity: () => deps.leaveSwap("activity"),
+    navigateHome: () => deps.leaveSwap("home"),
+    preferences: () => cache.preferences,
+    render,
+    status: () => cache.status,
+    swap: deps.swap,
+    wallet,
+  });
   bindConnectedSites({ app, render, wallet });
   bindTokens({
     app,
@@ -35,6 +97,41 @@ export const bindClusterScreens = (deps: ClusterUiDeps): void => {
     render,
     wallet,
   });
+  bindTokenCatalog({
+    app,
+    // The catalog AVNU publishes is the swap client's own read; the tokens
+    // screen shows the same list rather than fetching a second copy.
+    catalog: () => deps.swap.tokens(),
+    preferences: () => cache.preferences,
+    refresh: () => wallet.loadStatus(),
+    render,
+    status: () => cache.status,
+    wallet,
+  });
   bindAllowances({ app, render, wallet });
-  bindNfts({ app, openDetail: deps.openNft, render, wallet });
+  bindStaking({ app, render, wallet });
+  bindHomeStaking({
+    app,
+    navigate: deps.navigate,
+    render,
+    setState: (state) => {
+      cache.staking = state;
+    },
+    state: () => cache.staking,
+    status: () => cache.status,
+  });
+  bindStakingDirectory({
+    app,
+    render,
+    setState: (state) => {
+      cache.staking = state;
+    },
+    state: () => cache.staking,
+    status: () => cache.status,
+    wallet,
+  });
+  // Gallery markup (the NFTs screens and the Home NFTs tab) exists only while
+  // NFTs are turned on, so on every other paint these find nothing to install.
+  bindNfts({ app, navigate: deps.navigate, openDetail: deps.openNft, render, wallet });
+  bindShadowAccounts({ app, wallet });
 };

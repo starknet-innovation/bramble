@@ -13,12 +13,9 @@ import {
   type LedgerTransitionPort,
   ledgerApduHidDevices,
   readLedgerOsAndRestoreStarknet,
-} from "@mc-wallet/ledger-protocol/device-transition";
-import { LedgerRejection } from "@mc-wallet/ledger-protocol/errors";
-import {
-  ledgerAppStateResponse,
-  ledgerNanoXOsResponse,
-} from "@mc-wallet/testkit/ledger-management";
+} from "@bramble/ledger-protocol/device-transition";
+import { LedgerRejection } from "@bramble/ledger-protocol/errors";
+import { ledgerAppStateResponse, ledgerNanoXOsResponse } from "@bramble/testkit/ledger-management";
 
 type ApduCall = { readonly cla: number; readonly data: readonly number[]; readonly ins: number };
 type Response = Uint8Array | Error;

@@ -5,13 +5,15 @@
  * through the frozen preparation.
  */
 import { describe, expect, test } from "bun:test";
-import type { Strk20Service, Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import type { Strk20Service, Strk20SubmissionPlan } from "@bramble/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { POISONED_RECIPIENT, poolPreferences } from "../../support/poisoned-recipients";
 import {
   buildStrk20Handler,
+  executeStrk20Preparation,
+  prepareStrk20Deposit,
   STRK20_CALL_AND_PROOF,
   STRK20_CONTENT_SENDER,
   STRK20_EXTENSION_SENDER,
@@ -89,7 +91,7 @@ const service = (capture: {
     }
     return "registered";
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return STRK20_RECIPIENT;
   },
   async submitActions({ actions, beforeProof, plan }) {
@@ -197,12 +199,9 @@ describe("background unshield operations", () => {
       ),
     ).toBe(true);
 
-    await expect(
-      handler(
-        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
-        STRK20_EXTENSION_SENDER,
-      ),
-    ).resolves.toEqual({ ok: true, transactionHash: "0x444" });
+    await expect(executeStrk20Preparation(handler, prepared.strk20Preparation.id)).resolves.toEqual(
+      { ok: true, transactionHash: "0x444" },
+    );
     expect(capture.submissions).toEqual([
       {
         actions: [
@@ -275,6 +274,15 @@ describe("background private-send operations", () => {
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ error: "Enter a valid Starknet address" });
+    // The check observes the session rather than renewing it, so it still
+    // answers only while the wallet is unlocked.
+    await handler({ type: "wallet.lock" }, STRK20_EXTENSION_SENDER);
+    await expect(
+      handler(
+        { address: STRK20_RECIPIENT, tokenId: token.id, type: "wallet.strk20RecipientStatus" },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: "wallet locked" });
   });
 
   test("prepares and executes a relay-only private send with the frozen batch", async () => {
@@ -315,12 +323,9 @@ describe("background private-send operations", () => {
       ),
     ).toBe(true);
 
-    await expect(
-      handler(
-        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
-        STRK20_EXTENSION_SENDER,
-      ),
-    ).resolves.toEqual({ ok: true, transactionHash: "0x444" });
+    await expect(executeStrk20Preparation(handler, prepared.strk20Preparation.id)).resolves.toEqual(
+      { ok: true, transactionHash: "0x444" },
+    );
     expect(capture.submissions).toEqual([
       {
         actions: [
@@ -329,7 +334,8 @@ describe("background private-send operations", () => {
         plan: RELAY_PLAN,
       },
     ]);
-    // The preparation is one-shot: a second execute cannot double-submit.
+    // The preparation is one-shot: a second execute cannot double-submit, and
+    // is refused on its own request rather than through a job.
     await expect(
       handler(
         { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
@@ -362,12 +368,11 @@ describe("background private-send operations", () => {
     expect(prepared).toMatchObject({ ok: true });
     const proofsAfterPreparation = proofCalls;
     capture.recipientRegistered = false;
-    await expect(
-      handler(
-        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
-        STRK20_EXTENSION_SENDER,
-      ),
-    ).resolves.toEqual({ error: "The recipient has not activated private balances" });
+    // Decided inside the submission job, at the final gate before the proof:
+    // the refusal is what the poll settles on.
+    await expect(executeStrk20Preparation(handler, prepared.strk20Preparation.id)).resolves.toEqual(
+      { error: "The recipient has not activated private balances" },
+    );
     expect(proofCalls).toBe(proofsAfterPreparation);
     expect(capture.submissions).toEqual([]);
   });
@@ -406,12 +411,12 @@ describe("background private-send operations", () => {
     )) as { readonly strk20Preparation: { readonly id: string } };
 
     expect(prepared).toMatchObject({ ok: true });
-    await expect(
-      handler(
-        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
-        STRK20_EXTENSION_SENDER,
-      ),
-    ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
+    // The contact is saved after the execute gate has passed, inside the
+    // submission job's final policy read: the refusal is what the poll settles
+    // on, and no proof was started.
+    await expect(executeStrk20Preparation(handler, prepared.strk20Preparation.id)).resolves.toEqual(
+      { error: expect.stringContaining("closely mimics") },
+    );
     expect(proofCalls).toBe(0);
     expect(capture.submissions).toEqual([]);
   });
@@ -431,25 +436,19 @@ describe("background private-send operations", () => {
       publicBalance: "2000000000000000000",
       strk20: service(capture),
     });
-    const prepared = (await handler(
-      {
-        amount: "0.5",
-        recipient: STRK20_RECIPIENT,
-        tokenId: token.id,
-        type: "wallet.strk20PrepareDeposit",
-      },
-      STRK20_EXTENSION_SENDER,
-    )) as { readonly strk20Preparation: { readonly id: string } };
+    const prepared = (await prepareStrk20Deposit(handler, {
+      amount: "0.5",
+      recipient: STRK20_RECIPIENT,
+      tokenId: token.id,
+      type: "wallet.strk20PrepareDeposit",
+    })) as { readonly strk20Preparation: { readonly id: string } };
 
     expect(prepared).toMatchObject({ ok: true });
     const proofsAfterPreparation = proofCalls;
     capture.recipientRegistered = false;
-    await expect(
-      handler(
-        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
-        STRK20_EXTENSION_SENDER,
-      ),
-    ).resolves.toEqual({ error: "The recipient has not activated private balances" });
+    await expect(executeStrk20Preparation(handler, prepared.strk20Preparation.id)).resolves.toEqual(
+      { error: "The recipient has not activated private balances" },
+    );
     expect(proofCalls).toBe(proofsAfterPreparation);
     expect(capture.submissions).toEqual([]);
   });

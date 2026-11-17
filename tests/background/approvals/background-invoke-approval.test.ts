@@ -5,17 +5,18 @@
  * on deny. Blocked or unconnected origins never reach the queue.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "@mc-wallet/core/errors";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { verifyCalls } from "@mc-wallet/transactions/verify";
+import { WalletError } from "@bramble/core/errors";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { verifyCalls } from "@bramble/transactions/verify";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { unavailablePreferencesStore } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import {
   flushHeld,
   latestApprovalId,
@@ -152,7 +153,7 @@ const makeThrowingSignHarness = () => {
       throw new WalletError("device rejected the transaction");
     },
   };
-  const handler = createMessageHandler(wallet, "extension-id", {
+  const handler = createMessageHandler(wallet, testExtension, {
     activity,
     approvals,
     preferencesStore: unavailablePreferencesStore,
@@ -324,7 +325,7 @@ describe("dApp invoke fee estimate (#189)", () => {
     await expect(held).resolves.toEqual({ error: "request rejected" });
   });
 
-  test("an undeployed account carries no fee, no failure, and never estimates", async () => {
+  test("an undeployed account prices its invoke and flags an unpriced deployment", async () => {
     let estimated = 0;
     const { handler } = makeHarness([account], unavailablePreferencesStore, {
       async estimateInvokeFee() {
@@ -336,11 +337,14 @@ describe("dApp invoke fee estimate (#189)", () => {
       },
     });
 
+    // Issue 851: the invoke is still priced; the deployment half (unpriced by
+    // this stub) is a retryable failure, so approval stays refused until it is.
     const { held, pending } = await queueInvoke(handler);
-    expect(pending.fee).toBeNull();
+    expect(pending.fee).toEqual({ overallFee: "1", unit: "FRI" });
     expect(pending.feeEstimateFailed).toBe(false);
     expect(pending.requiresDeployment).toBe(true);
-    expect(estimated).toBe(0);
+    expect(pending).toMatchObject({ deploymentFee: null, deploymentFeeEstimateFailed: true });
+    expect(estimated).toBe(1);
 
     await handler({ id: pending.id, type: "wallet.denyOrigin" }, extensionSender);
     await expect(held).resolves.toEqual({ error: "request rejected" });
@@ -432,25 +436,36 @@ describe("dApp invoke fee estimate (#189)", () => {
 // carries the shared predicate's verdict, and an unreadable balance fails open.
 describe("dApp invoke fee affordability (issue 191)", () => {
   test("the verdict rides the fee review and fails open on a balance error", async () => {
-    const short = makeHarness([account], unavailablePreferencesStore, {
-      async getTokenBalances({ tokens }) {
-        return tokens.map((token) => ({ ...token, balance: "0", formatted: "0" }));
-      },
-    });
-    const first = await queueInvoke(short.handler);
-    expect(first.pending.fee).toEqual({ overallFee: "1", unit: "FRI" });
-    expect(first.pending.feeAffordability).toBe("insufficient");
-    await short.handler({ id: first.pending.id, type: "wallet.denyOrigin" }, extensionSender);
-    await expect(first.held).resolves.toEqual({ error: "request rejected" });
+    // A short STRK balance asks mainnet gasless whether the account is deployed.
+    // Block that read so the card settles on the affordability verdict.
+    const original = globalThis.fetch;
+    globalThis.fetch = (() => Promise.reject(new Error("offline"))) as unknown as typeof fetch;
+    try {
+      const short = makeHarness([account], unavailablePreferencesStore, {
+        async getTokenBalances({ tokens }) {
+          return tokens.map((token) => ({ ...token, balance: "0", formatted: "0" }));
+        },
+      });
+      const first = await queueInvoke(short.handler);
+      expect(first.pending.fee).toEqual({ overallFee: "1", unit: "FRI" });
+      expect(first.pending.feeAffordability).toBe("insufficient");
+      await short.handler({ id: first.pending.id, type: "wallet.denyOrigin" }, extensionSender);
+      await expect(first.held).resolves.toEqual({ error: "request rejected" });
 
-    const unreadable = makeHarness([account], unavailablePreferencesStore, {
-      async getTokenBalances(): Promise<never> {
-        throw new WalletError("balance unavailable");
-      },
-    });
-    const second = await queueInvoke(unreadable.handler);
-    expect(second.pending.feeAffordability).toBe("unknown");
-    await unreadable.handler({ id: second.pending.id, type: "wallet.denyOrigin" }, extensionSender);
-    await expect(second.held).resolves.toEqual({ error: "request rejected" });
+      const unreadable = makeHarness([account], unavailablePreferencesStore, {
+        async getTokenBalances(): Promise<never> {
+          throw new WalletError("balance unavailable");
+        },
+      });
+      const second = await queueInvoke(unreadable.handler);
+      expect(second.pending.feeAffordability).toBe("unknown");
+      await unreadable.handler(
+        { id: second.pending.id, type: "wallet.denyOrigin" },
+        extensionSender,
+      );
+      await expect(second.held).resolves.toEqual({ error: "request rejected" });
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 });

@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "MC Wallet",
-  "version": "0.10.0",
-  "description": "Starknet browser extension wallet shell.",
+  "name": "Bramble: Starknet Wallet",
+  "version": "0.10.10",
+  "description": "Self-custodial Starknet wallet with private balances, Ledger and multisig support.",
+  "author": "Starknet Holdings",
+  "homepage_url": "https://bramble.fi",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -10,14 +12,19 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Open MC Wallet"
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "24": "icons/icon-24.png",
+      "32": "icons/icon-32.png"
+    },
+    "default_title": "Open Bramble"
   },
   "background": {
     "service_worker": "background/index.js",
     "type": "module"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https:; frame-src 'self';",
+    "extension_pages": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; frame-src 'self'; base-uri 'none'; form-action 'none';",
     "sandbox": "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; frame-src blob:; base-uri 'none'; form-action 'none'"
   },
   "sandbox": {
@@ -34,6 +41,10 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
+  "options_ui": {
+    "page": "sidepanel.html",
+    "open_in_tab": true
+  },
   "host_permissions": [
     "https://wallet.nodes.starknet.org/*",
     "https://mainnet.nodes.starknet.org/*",
@@ -43,7 +54,6 @@
     "https://starkscan.co/*",
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
-    "https://metamask.github.io/*",
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*"
   ],

@@ -1,0 +1,217 @@
+# Changelog archive (v0.10.5)
+
+Entries moved out of [CHANGELOG.md](CHANGELOG.md) to keep it under the 500-line file limit. Earlier entries are in [CHANGELOG_ARCHIVE_0.9.md](CHANGELOG_ARCHIVE_0.9.md) and [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md).
+
+## [0.10.5] - 2026-10-07
+
+### Added
+
+- **285:** settings entry point for the own-account rescan
+- **285:** background rescan of the wallet's own accounts
+- **accounts:** hide accounts without removing them
+- **privacy:** state the STRK the registration needs
+- move deployment out of Home and into Security & permissions
+- quote one fee when a send also creates the account
+- put the address first on Receive, everything else behind Pro
+- rework token picking, the Send flow, and the address book
+
+### Fixed
+
+- **deps:** pin patched sharp and shell-quote in the reviewed overrides
+- **settings:** stop the own-phrase scan on lock and test its background handlers
+- **send:** reserve a non-STRK configured fee token instead of waiting forever
+- **accounts:** never fall back to a hidden account when choosing the active one
+- **onboarding:** read the account address in the data voice, not a caption
+- **firefox:** hold the event page open while an approval is pending
+- **deps:** pin patched source-map-js in the reviewed overrides
+- **security:** compare denylisted hosts without a trailing dot
+- **privacy:** warn, don't fail, when a registration reply is lost
+- **privacy:** hold the worker open while a reviewed preparation awaits confirmation
+- cap added tokens per network and keep one record per address
+- keep a late phrase validation from undoing the import wipe
+- say nothing is signed while the Ledger grant handshake runs
+- bound the custom networks dapps can store in preferences
+- keep deployment submit errors out of the Cost box
+- keep portfolio balances live when one tracked token reverts
+- leave the import-key form ready after a successful import
+- don't let a stale suggestion panel rewrite a pasted recovery word
+- never report a Firefox phrase copy as cleared
+- restore safety facts the copy review dropped
+- keep the guarded phrase copy's clipboard promise
+- clear the imported recovery phrase after an in-wallet import
+- don't let Tab or Enter replace a complete recovery word
+- don't claim a STRK20 approval charges no fee when it lists a relay fee
+- state the Mainnet consequence where the acknowledgement used to be
+- keep the wrong-network warning visible on Receive by default
+- don't tell users to retry a submission whose outcome is unknown
+- don't say "Transaction not sent" for a transaction the chain reverted
+- show a failed deploy or NFT transfer as a failure, not a success
+- bind the network picker to its buttons only
+- name a pasted recipient that is already a known account or contact
+- settle a stuck privacy marker without racing or trusting a bad nonce
+- tolerate a missing app root on the clipboard wait
+- clear the copied phrase before onboarding closes
+- commit a backup mismatch on Enter, and only from Continue
+- report a backup mismatch when Continue is pressed
+- align Manage tokens when the token list is absent
+- name both class hashes in the Receive mismatch alert
+- hide an empty send folder hint while it is minimized
+- forget a collapsed folder once that folder is gone
+- keep the folder drop highlight while the pointer is inside it
+- show a dropped account and count unfiled ones in My accounts
+- keep drawer folder names and leave account drags alone
+- show default folders on the manage view
+- re-estimate when the two fees cannot be added
+- withhold a fee total when the two estimates cannot be added
+- an undeployed account on Home is a state, not a fault
+- restoring a Ready Ledger account belongs under Import
+- treat only a real contract prefix as an address search
+- keep the save-address handoff until save or leave
+- match token search on name and address, best hit first
+- ignore a swap catalog reply that is no longer current
+- type the onboarding watchdog timer as one setTimeout
+
+### Documentation
+
+- keep the word for secret material out of non-boundary comments
+- **transfer-fee-review:** stop claiming no estimate ever signs
+- **deployment:** describe the Braavos deployment truthfully
+- **build:** verify the AMO rebuild against the submitted archive
+- **ui-lab:** recount the checkpoint total for this bundle
+- **accounts:** match the hide guard's comment to the visible-first fallback
+
+### Maintenance
+
+- split the flow-chrome and list rules out of styles-base
+- **recovery-ui:** kill the detached-flag mutant
+- reconcile the bundle's overlapping recovery and signability tests
+- drive the Braavos deployment estimate and submission end to end
+- cover scene selection and the recovery runtime client
+- **ledger:** count the find-accounts route in the no-transport import chooser
+- **285:** cover the find-accounts screen in the UI Lab
+- **285:** cover the find-accounts flow and its reviewed copy
+- pin the audit 134/153 hunks no test protected
+- keep the Send render under the complexity cap, and format
+- regenerate bun.lock and move the policy pins with the group bump
+- **deps:** bump the minor-and-patch group with 8 updates
+- keep onboarding-ui.ts within the 500-line cap
+- split the Send close cases out of the transfer-ui suite
+- assert the extension e2e paths the suite only named
+- add derek-flossman to codeowners
+
+### Other
+
+- Drop the unreachable key-less refusal from the recovery context
+- Bind the escape acknowledgement to the escape's kind as well as its ready_at
+- Let recovery gate reads fail over and re-pin instead of refusing
+- Refuse a Ready escape step inside the account's 12-hour limit in words
+- Never show a deployed account as not deployed on an RPC flake
+- State each recovery refusal's true cause
+- Pin the recovery gates to one accepted block
+- Never show a Ready escape to a new guardian as a guardian removal
+- Bind the owner-escape acknowledgement to the escape the review showed
+- Refuse Ready recovery for an account with a backup guardian
+- Confirm 2FA and guardian removal with the fee and a truthful consequence
+- Bind recovery submits to the reviewed account and journal them
+- Read the Ready escape window from chain and bind its submit to the confirmation
+- Bind the Braavos 2FA removal to a validated, confirmed fee
+- Say truthfully who can cancel a Ready guardian removal
+- ui-lab: checkpoint the undeployed Braavos Home state
+- dApp approval card says to deploy an undeployed Braavos account first
+- Send review says to deploy an undeployed Braavos account first
+- Home asks an undeployed Braavos account to deploy first
+- Refuse deploy-then-act for an undeployed Braavos account
+- Validate the signability response's account id with isAccountId
+- Correct stale Braavos comments and a family-specific RPC diagnostic
+- Re-pin the Braavos and submit-path live checks on block skew
+- Sign Braavos only on implementation classes, for the first stark signer
+- Split scene markup selection out of the side-panel entrypoint
+- Recover a Ready account with a guardian using the recovery phrase
+- Show the recovery unlock as an absolute UTC datetime
+- Recover a Braavos 2FA account with the recovery phrase
+- Deploy funded Braavos counterfactuals from the wallet
+- Sign for stark-only Braavos accounts
+- Disable Shield for a read-only account, and cover the signability poll
+- Home says an account is read only before any button is pressed
+- Document the AMO source-submission rebuild
+- Reserve the STRK20 pool fee in the token the relay charges it in
+- fix/privacy: keep the settle watch from re-arming after its window closes
+- fix/privacy: keep the home private balance fresh after a settled send
+- Gate the Ledger transport on browser support
+- Show the STRK20 pool fee as a STRK amount, not a raw felt
+- Say an account is view-only before it is picked, and in plain words after
+- Refuse the Ready-scheme kind in the v7/v8 legacy validator too
+- Find Ready and Braavos accounts on the ladders their apps actually use
+- Accept the optional api_version on every Wallet API method
+- Accept valid_until and api_version on wallet_strk20Balances
+- Keep the recovery scan going while it keeps finding accounts
+- Pin the swap review enrichment and the checker's secret-material pattern
+- Let the shared client classify non-OK silent reads in the grant tab
+- Review OutsideExecution signs against own accounts and paid recipients
+- Never re-quote a swap whose reply was lost, and pin header Back
+- Split the fallback preferences store out of runtime-state
+- Report a lost swap reply as status unknown with its signed hash
+- Protect the trust-set enrichments and the secret-material rule with tests
+- Report a lost private execution worker as status unknown
+- Stop Enter in the multisig token search from submitting the composer
+- Replay a lost Send reply through the full stack
+- Trust payees of NFT and multisig sends as paid recipients
+- Re-quote after a failed swap and hold header Back while it confirms
+- Purge planted history rows persisted before the decoder filter
+- Report a lost Send reply as status unknown and re-review every retry
+- Flag lookalikes in every zero-padded display spelling
+- Only reject a vanished transaction the wallet actually saw on chain
+- Keep the trust-set vault read inside the secret boundary modules
+- Fail closed on replaced STRK20 markers and keep post-deploy outcomes honest
+- Escape the account label in three innerHTML rows
+- Accept the Ledger signHash recovery byte in the grant tab
+- Stop Enter in Send searches from submitting a stale recipient
+- Widen the poisoning check to padded windows, own accounts and paid recipients
+- Drop planted zero-value and untracked-token rows from history
+- Persist the phishing feed cache in byte-budgeted chunks
+- Drop a cached price the feed answers without
+- pin the removal of the SDK builder's simulate
+- privacy-views: state the activation network fee in its own unit
+- track freshness per address so a stale leg cannot bound a relay fee
+- state a relayed private-send fee in its own token
+- refuse a stale price snapshot as the converted relay-fee reference
+- refuse a relayed private broadcast once the wallet is locked
+- stop the recipient-status probe renewing the unlock session
+- prove STRK20 simulations through the prover, not the RPC node
+- Pin the chain-switch landing to this origin's grant and the active account
+- Restore the copy review's final commits that #475 left out
+- Name the payee of a dapp STRK20 deposit that credits another account
+- Decode dapp AVNU swaps on the review card and flag foreign payees
+- Pin the dapp token source through the real wiring and curated checks
+- Split the verifier context out of verify-decode
+- Label STRK20 review cards from the trusted token set
+- Stop trusting dapp-watched tokens the wallet cannot vouch for
+- Flag OutsideExecution allowance top-ups against standing allowances
+- Land a chain switch on the origin's stored grant, not its visible account
+- Stop trusting spoofed tokens on watch-asset and review cards
+- Apply invoke call defences to OutsideExecution sign requests
+- Stop an approved chain switch from granting an unconnected account
+- Reset RPC cooldowns per case in the history-scan degradation tests
+- Accept the unpatched node-forge advisory with a scoped, documented ignore
+- Drop deployment verdicts that answer for a different account
+- Bump wrangler and patch stale lock entries to clear high advisories
+- Make every word count across the wallet (#466, rebased onto release/v0.10.5)
+- Say who sent what to whom on the Send receipt, and link it to Starkscan
+- send and swap a token from its detail screen
+- Copy button beside every address on a static screen
+- Lower the Firefox floor to ESR and withhold the sandboxed renderer
+- resolve a lost account-mode send on-chain, not by restarting
+- offer the Reveal screen's guarded copy for a new phrase
+- scroll dock screens only when content reaches the dock
+- say when the backup words don't match
+- give each surface one radius and one text column
+- name every account on the manage screen, identifiers to Receive
+- Group Send's recipients under their folders, and lower-case avnu
+- reword a groups comment the secret-material scan matched
+- Group the account drawer into folders you can drag between
+- warn Ledger users on NFT sends that deploy, and link the security hub
+- reset the QR when Pro closes and describe the address to assistive tech
+- fix token pick re-measure, catalog races, and dropdown listeners
+- follow the token dropdown, Pro address form, and catalog view
+- open the account's own channel during registration
+- bump to 0.10.5

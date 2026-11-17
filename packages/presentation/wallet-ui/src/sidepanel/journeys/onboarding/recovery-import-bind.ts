@@ -8,7 +8,8 @@
  */
 
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
+import { bindRecoveryWordEntry } from "./recovery-word-state";
 
 type WordAssist = {
   readonly hideSuggestions: () => void;
@@ -24,6 +25,7 @@ type RecoveryImportBind = {
   readonly importedMnemonic: () => string;
   readonly importWordCount: () => 12 | 24;
   readonly isRecoveryActive: () => boolean;
+  readonly recoveryClear: HTMLButtonElement | null;
   readonly recoveryContinue: HTMLButtonElement | null;
   readonly recoveryResult: HTMLElement | null;
   readonly refreshRecovery: () => void;
@@ -54,6 +56,7 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
     importedMnemonic,
     importWordCount,
     isRecoveryActive,
+    recoveryClear,
     recoveryContinue,
     recoveryResult,
     refreshPassword,
@@ -71,34 +74,13 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
     buttonBusy(recoveryContinue, false);
   };
 
-  for (const [index, input] of importInputs.entries()) {
-    input.addEventListener("input", () => {
-      invalidateValidation();
-      const pastedWords = input.value.trim().split(/\s+/).filter(Boolean);
-      if (pastedWords.length === 12 || pastedWords.length === 24) {
-        fillWords(importInputs, pastedWords, "import");
-      }
-      refreshRecovery();
-    });
-    input.addEventListener("keydown", (event) => {
-      if (event.key === " " && input.value.trim().length > 0) {
-        event.preventDefault();
-        importInputs[index + 1]?.focus();
-      } else if (event.key === "Backspace" && input.value.length === 0) {
-        importInputs[index - 1]?.focus();
-      }
-    });
-    input.addEventListener("paste", (event) => {
-      invalidateValidation();
-      const words = event.clipboardData?.getData("text").trim().split(/\s+/).filter(Boolean) ?? [];
-      if (words.length !== 12 && words.length !== 24) {
-        return;
-      }
-      event.preventDefault();
-      fillWords(importInputs, words, "import");
-      refreshRecovery();
-    });
-  }
+  bindRecoveryWordEntry({
+    clear: recoveryClear,
+    fillWords: (words) => fillWords(importInputs, words, "import"),
+    inputs: importInputs,
+    onBeforeChange: invalidateValidation,
+    onChange: refreshRecovery,
+  });
 
   recoveryContinue?.addEventListener("click", () => {
     const phrase = importedMnemonic();
@@ -135,6 +117,7 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
         if (recoveryResult) {
           recoveryResult.textContent = "";
         }
+        showToast("Valid recovery phrase", "success", recoveryContinue);
         wordAssist.hideSuggestions();
         showPasswordStep();
         refreshPassword();
@@ -150,9 +133,14 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): RecoveryIm
         }
         const message = errorMessage(error, "Could not check this recovery phrase");
         if (recoveryResult) {
-          recoveryResult.textContent = message;
+          recoveryResult.textContent = errorLine(error, "Could not check this recovery phrase");
         }
-        showToast(message, "error", recoveryContinue);
+        showToast(
+          message,
+          "error",
+          recoveryContinue,
+          errorDetails(error, "Could not check this recovery phrase"),
+        );
         buttonBusy(recoveryContinue, false);
       },
     );

@@ -1,6 +1,6 @@
 /**
  * Development-only Wallet UI surface consumed by UI Lab and integration tests.
- * Production extension entrypoints must import `@mc-wallet/wallet-ui/start` instead.
+ * Production extension entrypoints must import `@bramble/wallet-ui/start` instead.
  */
 
 /**
@@ -32,14 +32,32 @@ export * from "./sidepanel/journeys/portfolio/home-ui";
 export * from "./sidepanel/journeys/portfolio/token-row";
 export * from "./sidepanel/journeys/privacy/privacy-model";
 export * from "./sidepanel/journeys/privacy/privacy-runtime";
+export { bindShadowAccounts } from "./sidepanel/journeys/privacy/shadow-accounts-ui";
+export * from "./sidepanel/journeys/send/send-model";
 export * from "./sidepanel/journeys/send/send-views";
 export * from "./sidepanel/journeys/send/transfer-ui";
+/** Staking screen state and bindings, for the UI Lab checkpoints. */
+export type { StakingState } from "./sidepanel/journeys/staking/staking-directory-client";
+/** Binds the staking list (paste, open, sort, more) against fixture state. */
+export { bindStakingDirectory } from "./sidepanel/journeys/staking/staking-directory-ui";
+/** Binds the staking screen against a fixture client. */
+export { bindStaking } from "./sidepanel/journeys/staking/staking-ui";
 export * from "./sidepanel/journeys/swap/swap-client";
 export * from "./sidepanel/journeys/swap/swap-ui";
 export * from "./sidepanel/runtime/runtime";
+/** The chain's answer a receipt is built from, and the table that maps a status onto it. */
+export {
+  type ConfirmationOutcome,
+  confirmationOutcome,
+} from "./sidepanel/shared/confirm-submitted";
 export { showToast } from "./sidepanel/shared/dom";
+/** Builds and writes a settled-transaction receipt, as every journey does. */
+export { outcomeReceiptFor, paintOutcomeReceipt } from "./sidepanel/shared/outcome-receipt";
 export * from "./sidepanel/shared/parts";
 export * from "./sidepanel/shared/review-render";
+export * from "./sidepanel/shared/token-dropdown";
 export * from "./sidepanel/shell/account-types";
 export * from "./sidepanel/shell/dashboard-bindings";
+/** The deployment receipt's copy, so lab checkpoints paint what the binder ships. */
+export { DEPLOY_RECEIPT_COPY } from "./sidepanel/shell/shell-bindings";
 export * from "./sidepanel/styles/index";

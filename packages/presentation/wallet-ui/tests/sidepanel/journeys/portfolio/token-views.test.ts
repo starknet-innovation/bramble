@@ -3,10 +3,11 @@
  * flow, and the token detail flow with a self-drawn sparkline.
  */
 import { describe, expect, test } from "bun:test";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { BalancesResponse, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
+import type { PrivacyDisclosureState } from "../../../../src/sidepanel/journeys/privacy/privacy-model";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const SPOOF = "0x00abc0000000000000000000000000000000000000000000000000000000abc";
@@ -82,16 +83,63 @@ const balances: BalancesResponse["balances"] = [
   },
 ];
 const prices = { [ETH]: 2000, [SPOOF]: 1 };
+// Private discovery has settled (nothing shielded), so Home may print its
+// total rather than hold "—" for the private part (issue 795).
+const settledPrivacy: PrivacyDisclosureState = {
+  error: null,
+  loading: false,
+  value: {
+    accountId: account.id,
+    balances: [],
+    networkId: "SN_MAIN",
+    poolFeeFri: "0x1",
+    relayConfigured: true,
+    registration: "unregistered",
+  },
+};
 
 describe("token views", () => {
   test("home shows fiat totals, hides spam, and links to the tokens flow", () => {
-    const html = dashboard("home", status, [], preferences, { balances }, null, [], [], prices);
+    const html = dashboard(
+      "home",
+      status,
+      [],
+      preferences,
+      { balances },
+      null,
+      [],
+      [],
+      prices,
+      // Every argument up to the privacy state keeps its default.
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      settledPrivacy,
+    );
 
     expect(html).toContain('class="hero-total"');
     expect(html).toContain('data-live-value="2000">$2,000.00</p>');
     expect(html).toContain(">1.00</p>");
     expect(html).not.toContain("Fake USD");
-    expect(html).toContain("1 hidden");
+    expect(html).toContain("1 not shown");
     expect(html).toContain('data-view="tokens"');
     expect(html).toMatch(/data-token-detail="SN_MAIN:ETH:/);
   });
@@ -110,6 +158,13 @@ describe("token views", () => {
     expect(dashboard("token-discover", status, [], preferences, { balances: [] })).toContain(
       'id="detect-tokens"',
     );
+  });
+
+  test("tokens flow offers Remove for added tokens but never for built-in ones", () => {
+    const html = dashboard("tokens", status, [], preferences, { balances }, null, [], [], prices);
+
+    expect(html).toContain(`data-token-remove="${spoofToken.id}"`);
+    expect(html).not.toContain(`data-token-remove="${ethToken.id}"`);
   });
 
   test("token detail flow draws price, sparkline, and contract facts", () => {

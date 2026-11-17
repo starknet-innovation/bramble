@@ -2,11 +2,11 @@
  * Background network message checks prove network switches keep account state reactive.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import type { EnsureNetworkAccountInput, WalletStatus } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import type { EnsureNetworkAccountInput, WalletStatus } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import {
@@ -14,6 +14,7 @@ import {
   unavailablePreferencesStore,
 } from "../../../apps/extension/src/background/runtime/runtime-state";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import {
   flushHeld,
   latestApprovalId,
@@ -98,9 +99,13 @@ describe("background network messages", () => {
             accounts,
             accountSecrets: [],
             activeAccountId,
+            importedSeeds: [],
             mnemonic: null,
             originGrants: [],
-            schemaVersion: 7 as const,
+            schemaVersion: 13 as const,
+            multisigStrk20KeyConflicts: [],
+            multisigStrk20ViewingKeys: [],
+            shadowAccountScopes: [],
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",
@@ -117,7 +122,7 @@ describe("background network messages", () => {
           return { ...status, accountCount: accounts.length, activeAccountId };
         },
       },
-      "extension-id",
+      testExtension,
       {
         preferencesStore: {
           ...unavailablePreferencesStore,
@@ -178,9 +183,11 @@ describe("background network messages", () => {
           activeAccountId = mainnetAccount.id;
           return mainnetAccount;
         },
+        // The real vault rule: a page sees at most the active account, and
+        // only while the grant covers it.
         async getGrantedAccounts(origin: string) {
-          return origin === "https://example.com"
-            ? accounts.filter((stored) => grantedAccountIds.includes(stored.id))
+          return origin === "https://example.com" && grantedAccountIds.includes(activeAccountId)
+            ? accounts.filter((stored) => stored.id === activeAccountId)
             : [];
         },
         async generateMnemonic() {
@@ -195,9 +202,13 @@ describe("background network messages", () => {
             accounts,
             accountSecrets: [],
             activeAccountId,
+            importedSeeds: [],
             mnemonic: null,
             originGrants: [{ accountIds: grantedAccountIds, origin: "https://example.com" }],
-            schemaVersion: 7 as const,
+            schemaVersion: 13 as const,
+            multisigStrk20KeyConflicts: [],
+            multisigStrk20ViewingKeys: [],
+            shadowAccountScopes: [],
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",
@@ -215,7 +226,7 @@ describe("background network messages", () => {
           return { ...status, accountCount: accounts.length, activeAccountId };
         },
       },
-      "extension-id",
+      testExtension,
       {
         preferencesStore: {
           ...unavailablePreferencesStore,
@@ -274,7 +285,9 @@ describe("background network messages", () => {
     );
 
     // Switching the chain is held behind an approval; approving performs the
-    // switch and returns the new chain id to the dapp.
+    // switch and returns the new chain id to the dapp. The origin holds no
+    // Mainnet account, so the switch shares none: it queues the reconnect
+    // prompt, which names the account, instead (audit 124).
     const switchHeld = handler(
       {
         chainId: "0x534e5f4d41494e",
@@ -287,8 +300,20 @@ describe("background network messages", () => {
     const switchId = await latestApprovalId(handler, sender);
     await expect(
       handler({ id: switchId, type: "wallet.approveOrigin" }, sender),
-    ).resolves.toMatchObject({ chainId: "0x534e5f4d41494e", ok: true, pending: [] });
+    ).resolves.toMatchObject({
+      chainId: "0x534e5f4d41494e",
+      ok: true,
+      pending: [{ existingGrant: true, kind: "connect", origin: "https://example.com" }],
+    });
     await expect(switchHeld).resolves.toEqual({ chainId: "0x534e5f4d41494e", ok: true });
+    expect(grantedAccountIds).toEqual([account.id]);
+    const reconnectId = await latestApprovalId(handler, sender);
+    await expect(
+      handler(
+        { id: reconnectId, reviewedAccountId: mainnetAccount.id, type: "wallet.approveOrigin" },
+        sender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
 
     // A connected dapp invoke is queued as an approval, not auto-submitted.
     const invokeHeld = handler(

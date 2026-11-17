@@ -4,9 +4,9 @@
  * private data degrades to public-only totals instead of hiding the portfolio.
  */
 import { describe, expect, test } from "bun:test";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { account } from "@mc-wallet/testkit/sidepanel";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
+import { account } from "@bramble/testkit/sidepanel";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 import {
@@ -81,26 +81,24 @@ const privateDashboard = (privacy: PrivacyDisclosureState): string =>
     { [token.address]: 2_000 },
     [],
     null,
-    [],
+    { entries: [], notices: [], unavailable: false },
     null,
     { [token.address]: 5 },
     [],
     [],
     null,
     null,
-    null,
+    [],
     null,
     false,
     null,
     [],
-    null,
+    false,
     null,
     false,
     [],
     false,
     { balances: [] },
-    null,
-    [],
     null,
     privacy,
   );
@@ -156,6 +154,8 @@ describe("unified portfolio scope", () => {
 
     // Summary shows the combined amount; the dropdown shows the split.
     expect(row).toContain(">1.75<");
+    // The collapsed summary carries the split too (issue 664).
+    expect(row).toContain('<p class="token-split">1.25 public · 0.50 private</p>');
     expect(row).toContain("Public balance");
     expect(row).toContain("1.25 ETH");
     expect(row).toContain("Private balance");
@@ -171,8 +171,21 @@ describe("unified portfolio scope", () => {
     expect(row).not.toContain("shield-confirm");
   });
 
+  // Audit M5: a token held privately whose public balance was never read (a
+  // failed read with no snapshot, or one just auto-tracked) must not read as
+  // "0 public": the split line is skipped and the public line shows "—".
+  test("an unknown public balance is never shown as zero", () => {
+    const html = homeTabs({ balances: [] }, preferences, {}, {}, "usd", privateState());
+    const row = html.slice(html.indexOf("token-unified"));
+
+    expect(row).toContain("Private balance");
+    expect(row).not.toContain("token-split");
+    expect(row).not.toContain("0.00 public");
+    expect(row).toMatch(/Public balance<\/span>\s*<span class="token-breakdown-value">—<\/span>/);
+  });
+
   test("an unregistered account greys the private line into the activation entry", () => {
-    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status, [], {
+    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", {
       error: null,
       loading: false,
       value: {
@@ -194,7 +207,7 @@ describe("unified portfolio scope", () => {
   });
 
   test("a pending registration reports itself instead of offering to register again", () => {
-    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status, [], {
+    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", {
       error: null,
       loading: false,
       value: {
@@ -223,7 +236,10 @@ describe("unified portfolio scope", () => {
     expect(hero).not.toContain("private balances are still refreshing");
     expect(html).toContain('class="account-net degraded"');
     expect(html).toContain("Private balances are still refreshing.");
-    expect(hero).toContain("$2,500.00");
+    // The hero holds "—" rather than print a public-only total that jumps
+    // when the private part lands (issue 795).
+    expect(hero).not.toContain("$2,500.00");
+    expect(hero).toContain('data-live-value="unknown">—</p>');
     expect(hero).toContain('data-total-complete="false"');
     expect(html).toContain("Discovering…");
   });
@@ -254,8 +270,6 @@ describe("unified portfolio scope", () => {
       { [token.address]: 2_000 },
       {},
       "usd",
-      status,
-      [],
       privateState(),
     );
 

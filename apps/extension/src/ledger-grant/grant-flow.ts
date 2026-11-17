@@ -7,7 +7,7 @@
 import type {
   LedgerGrantTransportDiagnostics,
   LedgerTransportKind,
-} from "@mc-wallet/ledger-browser/grant-transport";
+} from "@bramble/ledger-browser/grant-transport";
 
 /**
  * User-visible connection choices. Cable contains both WebUSB and WebHID

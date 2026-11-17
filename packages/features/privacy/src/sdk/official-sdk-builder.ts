@@ -4,8 +4,8 @@
  * to audit independently.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { WalletError } from "@bramble/core/errors";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { BigNumberish } from "starknet";
 import { STRK20_SERVICE_UNAVAILABLE } from "../service";
 import type {
@@ -36,7 +36,7 @@ const expandInvokeCalldata = (
   });
 
 const collectPolicy = (
-  action: Extract<Strk20Action, { readonly type: "subaccount_invoke" }>,
+  action: Extract<Strk20Action, { readonly type: "shadow_account_invoke" }>,
 ): unknown =>
   action.collect_policy.type === "exact"
     ? { amount: BigInt(action.collect_policy.amount), type: "exact" }
@@ -72,8 +72,8 @@ const addAction = (builder: SdkBuilder, action: Strk20Action, open: symbol): Sdk
       })
       .done();
   }
-  if (action.type === "subaccount_invoke") {
-    return builder.subaccounts(action.dapp_name).invoke(action.nonce, {
+  if (action.type === "shadow_account_invoke") {
+    return builder.shadowAccounts(action.dapp_name).invoke(action.nonce, {
       calls: action.calls.map((call) => ({
         calldata: [...call.calldata],
         contractAddress: call.contract_address,
@@ -90,12 +90,18 @@ const addAction = (builder: SdkBuilder, action: Strk20Action, open: symbol): Sdk
 
 /**
  * Maps a validated Wallet API action batch onto the pinned SDK builder.
+ *
+ * `activate` (#789) puts the account's one-time registration in front of the
+ * batch: the SDK compiles `SetViewingKey`, then opens the self channel once
+ * (`autoSetup` deduplicates it), then the deposits, all in one `apply_actions`.
+ * Missing SDK support fails closed, as for a registration on its own.
  */
 export const strk20BuilderFor = (
   sdk: PrivacySdkRuntime,
   transfers: SdkTransfers,
   actions: readonly Strk20Action[],
   surplusRecipient: string,
+  activate = false,
 ): SdkBuilder => {
   let builder = transfers.build({
     autoDiscover: { channels: "refresh", notes: "refresh" },
@@ -104,6 +110,12 @@ export const strk20BuilderFor = (
     autoSetup: true,
     registryConst: true,
   });
+  if (activate) {
+    if (!builder.register) {
+      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    }
+    builder = builder.register();
+  }
   for (const action of actions) {
     builder = addAction(builder, action, sdk.Open);
   }
@@ -114,15 +126,21 @@ export const strk20BuilderFor = (
 };
 
 /**
- * Creates the explicit registration-only builder; missing SDK support fails
- * closed before any proof or transaction can be produced.
+ * Creates the explicit registration builder; missing SDK support fails closed
+ * before any proof or transaction can be produced.
+ *
+ * `autoSetup` stays on so the registration batch also opens the account's own
+ * channel. The pinned SDK warns (`USER_LINKAGE`) when one batch opens more than
+ * one channel and the wallet refuses on any warning, so a registration that left
+ * the self channel unopened made the account's first shield to another wallet
+ * need two channels at once, and it always failed as a privacy leak.
  */
 export const strk20RegistrationBuilderFor = (transfers: SdkTransfers): SdkBuilder => {
   const builder = transfers.build({
     autoDiscover: { channels: "refresh", notes: "refresh" },
     autoRegister: false,
     autoSelectNotes: "naive",
-    autoSetup: false,
+    autoSetup: true,
     registryConst: true,
   });
   if (!builder.register) {

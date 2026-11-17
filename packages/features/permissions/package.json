@@ -1,12 +1,14 @@
 {
-  "name": "@mc-wallet/permissions",
+  "name": "@bramble/permissions",
+  "description": "Phishing and blocklist decisions, the live phishing feed and its cache, and the history of origins a user has connected.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
     "./blocklist": "./src/blocklist.ts",
     "./origin-history": "./src/origin-history.ts",
-    "./phishing-feed": "./src/phishing-feed.ts"
+    "./phishing-feed": "./src/phishing-feed.ts",
+    "./phishing-feed-cache": "./src/phishing-feed-cache.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",
@@ -14,7 +16,7 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/store": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/store": "workspace:*"
   }
 }

@@ -1,6 +1,6 @@
 /** Mutation serialization tests. */
 import { expect, test } from "bun:test";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
+import { serializeStoreMutations } from "@bramble/store/mutation";
 
 test("mutations serialize after failures while reads remain direct", async () => {
   const order: string[] = [];

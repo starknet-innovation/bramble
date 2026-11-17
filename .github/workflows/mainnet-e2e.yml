@@ -1,0 +1,499 @@
+name: Mainnet E2E
+
+# Live mainnet E2E for the active release branch, 06:00 UTC. Manual dispatch only from main;
+# never a PR or fork; runs never overlap (nonce). preflight/post: trusted main code, RPC secret,
+# baseline and RPC hash as job outputs. build: release commit, no secret. execute: the key, no
+# install or build, test output withheld. See docs/MAINNET_E2E_CI.md.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Override the release branch to run against (e.g. release/v0.10.9). Blank = auto-resolve."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mainnet-e2e
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.pick.outputs.branch }}
+      revision: ${{ steps.pick.outputs.revision }}
+    steps:
+      - name: Resolve active release branch
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTIVE_RELEASE_BRANCH: ${{ vars.ACTIVE_RELEASE_BRANCH }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_BRANCH: ${{ github.event.inputs.branch }}
+          TRIGGER_REF: ${{ github.ref }}
+          REPOSITORY_FORK: ${{ github.event.repository.fork }}
+        run: |
+          set -euo pipefail
+          if [ "${REPOSITORY_FORK}" = "true" ] || [ "$GITHUB_REPOSITORY" != "starknet-innovation/bramble" ]; then
+            echo "::notice::Mainnet E2E does not run outside starknet-innovation/bramble."
+            echo "branch=" >> "$GITHUB_OUTPUT"
+            echo "revision=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$TRIGGER_REF" != "refs/heads/main" ]; then
+            echo "::error::Mainnet E2E manual runs must use the workflow from main."; exit 1
+          fi
+          available="$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name')"
+          candidate=""
+          if [ -n "${INPUT_BRANCH:-}" ]; then
+            echo "Using workflow_dispatch input: $INPUT_BRANCH"
+            candidate="$INPUT_BRANCH"
+          elif [ -n "${ACTIVE_RELEASE_BRANCH:-}" ]; then
+            echo "Using vars.ACTIVE_RELEASE_BRANCH: $ACTIVE_RELEASE_BRANCH"
+            candidate="$ACTIVE_RELEASE_BRANCH"
+          else
+            echo "Auto-resolving the highest-semver release/* branch ..."
+            branches="$(printf '%s\n' "$available" | grep -E '^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$' || true)"
+            if [ -z "$branches" ]; then
+              echo "No release/* branch found and vars.ACTIVE_RELEASE_BRANCH is unset — nothing to run."
+              echo "branch=" >> "$GITHUB_OUTPUT"
+              echo "revision=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            best="$(printf '%s\n' "$branches" | sed 's#^release/v##' | sort -V | tail -1)"
+            candidate="release/v$best"
+          fi
+
+          if [[ ! "$candidate" =~ ^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Mainnet E2E branch must match release/vX.Y or release/vX.Y.Z exactly."; exit 1
+          fi
+          if ! grep -Fxq -- "$candidate" <<< "$available"; then
+            echo "::error::Mainnet E2E branch '$candidate' does not exist in $GITHUB_REPOSITORY."; exit 1
+          fi
+          encoded_candidate="${candidate//\//%2F}"
+          revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_candidate" --jq '.sha')"
+          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Mainnet E2E branch did not resolve to an immutable commit."; exit 1
+          fi
+          echo "Resolved: $candidate at $revision"
+          echo "branch=$candidate" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+  gate:
+    needs: resolve
+    if: needs.resolve.outputs.branch != ''
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - name: Skip until maintainers enable the hot wallet
+        id: decide
+        env:
+          CONFIGURED: ${{ vars.MAINNET_E2E_CONFIGURED }}
+          BRANCH: ${{ needs.resolve.outputs.branch }}
+        run: |
+          set -euo pipefail
+          if [ "$CONFIGURED" != "true" ]; then
+            echo "::notice::Mainnet E2E is not configured. Set vars.MAINNET_E2E_CONFIGURED=true after creating the mainnet-e2e environment. See docs/MAINNET_E2E_CI.md."
+            echo "### Mainnet E2E skipped for \`$BRANCH\`. \`vars.MAINNET_E2E_CONFIGURED\` is not true, so no runner started and no secret was read. See docs/MAINNET_E2E_CI.md." >> "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Mainnet E2E is configured for $BRANCH."
+          echo "run=true" >> "$GITHUB_OUTPUT"
+
+  preflight:
+    needs: [resolve, gate]
+    if: needs.gate.outputs.run == 'true'
+    environment:
+      name: mainnet-e2e-balance
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      strk_before_raw: ${{ steps.balance.outputs.strk_before_raw }}
+      usdc_before_raw: ${{ steps.balance.outputs.usdc_before_raw }}
+      rpc_sha256: ${{ steps.balance.outputs.rpc_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - name: Install trusted dependencies from main
+        run: bun install --frozen-lockfile
+      - name: Preflight hot-wallet balance
+        id: balance
+        env:
+          MAINNET_E2E_ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
+          MAINNET_E2E_RPC_URL: ${{ secrets.MAINNET_E2E_RPC_URL }}
+          MAINNET_E2E_SPEND_TIER: ${{ vars.MAINNET_E2E_STRK20 == 'true' && 'strk20' || 'standard' }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MAINNET_E2E_ADDRESS" ] || [ -z "$MAINNET_E2E_RPC_URL" ]; then
+            echo "::error::Set vars.MAINNET_E2E_ADDRESS and the mainnet-e2e-balance secret MAINNET_E2E_RPC_URL."; exit 1
+          fi
+          echo "::add-mask::$MAINNET_E2E_RPC_URL"
+          MAINNET_E2E_REPORT_FILE="$GITHUB_OUTPUT" bun run scripts/mainnet-e2e-balance.ts preflight
+
+  build:
+    needs: [resolve, gate]
+    if: needs.gate.outputs.run == 'true'
+    permissions:
+      contents: read
+    timeout-minutes: 60
+    runs-on:
+      - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+    outputs:
+      bundle_sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out resolved release commit
+        env:
+          REVISION: ${{ needs.resolve.outputs.revision }}
+          FETCH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Mainnet E2E revision must be a full lowercase SHA-1."; exit 1
+          fi
+          basic="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$basic"
+          GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic" \
+            git fetch --no-tags --depth=1 origin "$REVISION"
+          if [ "$(git rev-parse FETCH_HEAD)" != "$REVISION" ]; then
+            echo "::error::Fetched mainnet revision does not match the resolved commit."; exit 1
+          fi
+          git checkout --detach "$REVISION"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Verify pinned upstreams
+        run: bun run vendor:argent && bun run vendor:privacy
+      - name: Build extension
+        run: bun run build
+      - name: Install E2E browser into the workspace
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+        run: bun run test:e2e:install
+      - name: Pack the build
+        id: pack
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/mainnet-e2e-bundle.tar"
+          tar --exclude=./.git -cf "$bundle" .
+          echo "sha256=$(sha256sum "$bundle" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mainnet-e2e-bundle
+          path: ${{ runner.temp }}/mainnet-e2e-bundle.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  execute:
+    needs: [resolve, gate, preflight, build]
+    if: needs.gate.outputs.run == 'true' && needs.preflight.result == 'success' && needs.build.result == 'success' && github.repository == 'starknet-innovation/bramble' && github.event.repository.fork != true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    environment:
+      name: mainnet-e2e
+    permissions:
+      contents: read
+    timeout-minutes: 120
+    runs-on:
+      - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+    outputs:
+      playwright: ${{ steps.playwright.outputs.result }}
+      gasless: ${{ steps.gasless.outputs.result }}
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
+    steps:
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mainnet-e2e-bundle
+          path: ${{ runner.temp }}/bundle
+      - name: Unpack the build
+        env:
+          BUNDLE_SHA256: ${{ needs.build.outputs.bundle_sha256 }}
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/bundle/mainnet-e2e-bundle.tar"
+          echo "$BUNDLE_SHA256  $bundle" | sha256sum -c --quiet
+          tar -xf "$bundle" -C "$GITHUB_WORKSPACE"
+      - name: Check and mask mainnet secrets
+        id: secrets
+        env:
+          MAINNET_E2E_ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
+          MAINNET_E2E_PRIVATE_KEY: ${{ secrets.MAINNET_E2E_PRIVATE_KEY }}
+          MAINNET_E2E_RPC_URL: ${{ secrets.MAINNET_E2E_RPC_URL }}
+          MAINNET_E2E_DISCOVERY_URL: ${{ secrets.MAINNET_E2E_DISCOVERY_URL }}
+          MAINNET_E2E_PROVER_URL: ${{ secrets.MAINNET_E2E_PROVER_URL }}
+          MAINNET_E2E_STRK20: ${{ vars.MAINNET_E2E_STRK20 == 'true' && 'true' || 'false' }}
+          PREFLIGHT_RPC_SHA256: ${{ needs.preflight.outputs.rpc_sha256 }}
+        run: |
+          set -euo pipefail
+          mask() {
+            [ -z "$1" ] && return 0
+            case "$1" in *$'\n'*|*$'\r'*) echo "::error::A mainnet secret contains a newline."; exit 1 ;; esac
+            echo "::add-mask::$1"
+          }
+          mask "$MAINNET_E2E_PRIVATE_KEY"
+          if [ -n "${MAINNET_E2E_PRIVATE_KEY}" ]; then
+            stripped="${MAINNET_E2E_PRIVATE_KEY#0x}"
+            mask "$stripped"
+            mask "${stripped,,}"
+            mask "${stripped^^}"
+          fi
+          mask "$MAINNET_E2E_RPC_URL"
+          mask "$MAINNET_E2E_DISCOVERY_URL"
+          mask "$MAINNET_E2E_PROVER_URL"
+          missing=()
+          [ -z "$MAINNET_E2E_ADDRESS" ] && missing+=("vars.MAINNET_E2E_ADDRESS")
+          [ -z "$MAINNET_E2E_PRIVATE_KEY" ] && missing+=("MAINNET_E2E_PRIVATE_KEY")
+          [ -z "$MAINNET_E2E_RPC_URL" ] && missing+=("MAINNET_E2E_RPC_URL")
+          if [ "$MAINNET_E2E_STRK20" = "true" ]; then
+            [ -z "$MAINNET_E2E_DISCOVERY_URL" ] && missing+=("MAINNET_E2E_DISCOVERY_URL")
+            [ -z "$MAINNET_E2E_PROVER_URL" ] && missing+=("MAINNET_E2E_PROVER_URL")
+          fi
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::mainnet-e2e is enabled but not fully configured. Missing: ${missing[*]}"; exit 1
+          fi
+          actual="$(printf '%s' "$MAINNET_E2E_RPC_URL" | sha256sum | cut -d' ' -f1)"
+          if [[ ! "$PREFLIGHT_RPC_SHA256" =~ ^[0-9a-f]{64}$ ]] || [ "$actual" != "$PREFLIGHT_RPC_SHA256" ]; then
+            echo "::error::The mainnet-e2e RPC is not the one preflight validated."; exit 1
+          fi
+          [[ "$MAINNET_E2E_RPC_URL" == https://* ]] || { echo "::error::The mainnet RPC must be HTTPS."; exit 1; }
+          host="${MAINNET_E2E_RPC_URL#https://}"; host="${host%%[/?#]*}"; host="${host##*@}"; host="${host%%:*}"; host="${host%.}"
+          case "${host,,}" in wallet.nodes.starknet.org|mainnet.nodes.starknet.org) echo "::error::The mainnet RPC must be a dedicated test endpoint."; exit 1 ;; esac
+          body="$(printf 'url = "%s"\n' "$MAINNET_E2E_RPC_URL" | curl -K - -sfg --proto '=https' -m 20 -w '\n%{http_code}' -H 'content-type: application/json' \
+            -d '{"id":1,"jsonrpc":"2.0","method":"starknet_chainId","params":[]}' 2>/dev/null)" || body=""
+          chain="$([ "${body##*$'\n'}" = 200 ] && jq -ser '.[0].result' <<< "${body%$'\n'*}" 2>/dev/null)" || chain=""
+          if [ "${chain,,}" != "0x534e5f4d41494e" ]; then
+            echo "::error::The mainnet RPC is unavailable or not mainnet. CI does not fall back."; exit 1
+          fi
+      # Only spec is the STRK20 lifecycle (strk20 tier). Zero executed tests fail.
+      - name: Playwright mainnet
+        id: playwright
+        if: vars.MAINNET_E2E_STRK20 == 'true'
+        env:
+          BRAMBLE_MAINNET_E2E_CI: "1"
+          BRAMBLE_MAINNET_E2E_ENVIRONMENT: mainnet-e2e
+          MAINNET_E2E_SPEND_TIER: strk20
+          BRAMBLE_MAINNET_E2E_ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
+          BRAMBLE_MAINNET_E2E_PRIVATE_KEY: ${{ secrets.MAINNET_E2E_PRIVATE_KEY }}
+          BRAMBLE_MAINNET_E2E_RPC_URL: ${{ secrets.MAINNET_E2E_RPC_URL }}
+          BRAMBLE_STRK20_E2E_CI: "1"
+          BRAMBLE_STRK20_E2E_ACCOUNT_ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
+          BRAMBLE_STRK20_E2E_PRIVATE_KEY: ${{ secrets.MAINNET_E2E_PRIVATE_KEY }}
+          BRAMBLE_STRK20_E2E_RPC_URL: ${{ secrets.MAINNET_E2E_RPC_URL }}
+          BRAMBLE_STRK20_E2E_DISCOVERY_URL: ${{ secrets.MAINNET_E2E_DISCOVERY_URL }}
+          BRAMBLE_STRK20_E2E_PROVER_URL: ${{ secrets.MAINNET_E2E_PROVER_URL }}
+          BRAMBLE_STRK20_E2E_DEPOSIT_STRK: "0.05"
+          BRAMBLE_STRK20_E2E_MAINNET_ACK: I_UNDERSTAND_THIS_WRITES_TO_MAINNET
+          BRAMBLE_STRK20_E2E_PUBLIC_CALLER_ACK: I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS
+          GASLESS_E2E_ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
+          GASLESS_E2E_PRIVATE_KEY: ${{ secrets.MAINNET_E2E_PRIVATE_KEY }}
+          GASLESS_E2E_RPC_URL: ${{ secrets.MAINNET_E2E_RPC_URL }}
+          GASLESS_E2E_NETWORK: mainnet
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/playwright-mainnet.json"
+          echo "result=failed" >> "$GITHUB_OUTPUT"
+          set +e
+          PLAYWRIGHT_JSON_OUTPUT_FILE="$report" bun run test:e2e:mainnet --reporter=json >/dev/null 2>&1
+          status=$?
+          set -e
+          counts="$(jq -ser 'if length == 1 then .[0].stats else error("malformed") end | [.expected, .unexpected, .flaky, .skipped] | if all(type == "number" and . >= 0 and . <= 999999 and . == floor) then map(floor | tostring) | join(" ") else error("malformed") end' "$report" 2>/dev/null)" && [[ "$counts" =~ ^[0-9]{1,6}( [0-9]{1,6}){3}$ ]] || { echo "::error::Playwright mainnet report is malformed."; exit 1; }; read -r expected unexpected flaky skipped <<< "$counts"
+          rm -f "$report"
+          echo "Playwright mainnet: exit $status, passed $expected, failed $unexpected, flaky $flaky, skipped $skipped."
+          if [ "$expected" -eq 0 ]; then
+            echo "::error::Playwright mainnet executed no passing test."; exit 1
+          fi
+          if [ "$status" -ne 0 ] || [ "$unexpected" -ne 0 ] || [ "$flaky" -ne 0 ]; then
+            echo "::error::Playwright mainnet failed. Output is withheld in CI; rerun locally for details."; exit 1
+          fi
+          echo "result=passed" >> "$GITHUB_OUTPUT"
+      - name: Gasless mainnet
+        id: gasless
+        if: steps.secrets.outcome == 'success' && steps.playwright.outcome != 'failure'
+        env:
+          BRAMBLE_MAINNET_E2E_CI: "1"
+          BRAMBLE_MAINNET_E2E_ENVIRONMENT: mainnet-e2e
+          MAINNET_E2E_SPEND_TIER: ${{ vars.MAINNET_E2E_STRK20 == 'true' && 'strk20' || 'standard' }}
+          GASLESS_E2E_ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
+          GASLESS_E2E_PRIVATE_KEY: ${{ secrets.MAINNET_E2E_PRIVATE_KEY }}
+          GASLESS_E2E_RPC_URL: ${{ secrets.MAINNET_E2E_RPC_URL }}
+          GASLESS_E2E_NETWORK: mainnet
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/gasless-mainnet.log"
+          echo "result=failed" >> "$GITHUB_OUTPUT"
+          set +e
+          bun run test:mainnet >"$log" 2>&1
+          status=$?
+          set -e
+          available=0 succeeded=0 skipped=0
+          grep -Fxq "paymaster_isAvailable: true" "$log" && available=1
+          grep -Eq '^Success\. Fee [0-9]+ ' "$log" && succeeded=1
+          grep -Fq "Skipping gasless mainnet test" "$log" && skipped=1
+          rm -f "$log"
+          echo "Gasless mainnet: exit $status, paymaster available $available, sent $succeeded, skipped $skipped."
+          if [ "$status" -ne 0 ] || [ "$available" -ne 1 ] || [ "$succeeded" -ne 1 ] || [ "$skipped" -ne 0 ]; then
+            echo "::error::Gasless mainnet failed. Output is withheld in CI; rerun locally for details."; exit 1
+          fi
+          echo "result=passed" >> "$GITHUB_OUTPUT"
+      - name: Require the gasless send
+        if: always()
+        env: { GASLESS: "${{ steps.gasless.outputs.result }}" }
+        run: '[ "$GASLESS" = passed ] || { echo "::error::The gasless mainnet send did not pass."; exit 1; }'
+
+  post:
+    needs: [resolve, gate, preflight, build, execute]
+    if: always() && needs.preflight.result == 'success'
+    environment:
+      name: mainnet-e2e-balance
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      verdict: ${{ steps.balance.outputs.verdict }}
+      strk_before: ${{ steps.balance.outputs.strk_before }}
+      strk_after: ${{ steps.balance.outputs.strk_after }}
+      strk_delta: ${{ steps.balance.outputs.strk_delta }}
+      usdc_before: ${{ steps.balance.outputs.usdc_before }}
+      usdc_after: ${{ steps.balance.outputs.usdc_after }}
+      usdc_delta: ${{ steps.balance.outputs.usdc_delta }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - name: Install trusted dependencies from main
+        run: bun install --frozen-lockfile
+      - name: Post-run balance
+        id: balance
+        env:
+          MAINNET_E2E_ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
+          MAINNET_E2E_RPC_URL: ${{ secrets.MAINNET_E2E_RPC_URL }}
+          MAINNET_E2E_SPEND_TIER: ${{ vars.MAINNET_E2E_STRK20 == 'true' && 'strk20' || 'standard' }}
+          MAINNET_E2E_STRK_BEFORE_RAW: ${{ needs.preflight.outputs.strk_before_raw }}
+          MAINNET_E2E_USDC_BEFORE_RAW: ${{ needs.preflight.outputs.usdc_before_raw }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MAINNET_E2E_RPC_URL"
+          MAINNET_E2E_REPORT_FILE="$GITHUB_OUTPUT" bun run scripts/mainnet-e2e-balance.ts post
+      - name: Summary
+        if: always()
+        env:
+          BRANCH: ${{ needs.resolve.outputs.branch }}
+          REVISION: ${{ needs.resolve.outputs.revision }}
+          ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
+          VERDICT: ${{ steps.balance.outputs.verdict }}
+          STRK: ${{ steps.balance.outputs.strk_before }} | ${{ steps.balance.outputs.strk_after }} | ${{ steps.balance.outputs.strk_delta }}
+          USDC: ${{ steps.balance.outputs.usdc_before }} | ${{ steps.balance.outputs.usdc_after }} | ${{ steps.balance.outputs.usdc_delta }}
+          BUILD: ${{ needs.build.result }}
+          EXECUTE: ${{ needs.execute.result }}
+          PLAYWRIGHT: ${{ needs.execute.outputs.playwright || 'not run' }}
+          GASLESS: ${{ needs.execute.outputs.gasless || 'not run' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Mainnet E2E — \`$BRANCH\`"
+            echo "Commit \`$REVISION\`. Account \`$ADDRESS\`. Balance verdict \`${VERDICT:-unavailable}\`."
+            echo "| Token | Before | After | Spent |"
+            echo "| --- | --- | --- | --- |"
+            echo "| STRK | $STRK |"
+            echo "| USDC | $USDC |"
+            echo "- Build (no secrets): $BUILD"
+            echo "- Live tests: $EXECUTE (Playwright $PLAYWRIGHT, gasless $GASLESS)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  report:
+    needs: [resolve, gate, preflight, build, execute, post]
+    if: always() && needs.gate.outputs.run == 'true' && (needs.preflight.result == 'failure' || needs.build.result == 'failure' || needs.execute.result == 'failure' || needs.post.result == 'failure')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Upsert mainnet tracking issue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BRANCH: ${{ needs.resolve.outputs.branch }}
+          REVISION: ${{ needs.resolve.outputs.revision }}
+          ADDRESS: ${{ vars.MAINNET_E2E_ADDRESS }}
+          TIER: ${{ vars.MAINNET_E2E_STRK20 == 'true' && 'strk20' || 'standard' }}
+          VERDICT: ${{ needs.post.outputs.verdict }}
+          STRK_BEFORE: ${{ needs.post.outputs.strk_before }}
+          STRK_AFTER: ${{ needs.post.outputs.strk_after }}
+          STRK_DELTA: ${{ needs.post.outputs.strk_delta }}
+          USDC_BEFORE: ${{ needs.post.outputs.usdc_before }}
+          USDC_AFTER: ${{ needs.post.outputs.usdc_after }}
+          USDC_DELTA: ${{ needs.post.outputs.usdc_delta }}
+          JOBS: preflight ${{ needs.preflight.result }}, build ${{ needs.build.result }}, tests ${{ needs.execute.result }}, post-run balance ${{ needs.post.result }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = process.env.BRANCH || "unknown";
+            const amount = (value) => /^-?[0-9]{1,12}(\.[0-9]{1,18})?$/.test(value || "") ? value : "unavailable";
+            const felt = (value) => /^0x[0-9a-fA-F]{1,64}$/.test(value || "") ? value : "unavailable";
+            const verdicts = ["ok", "above-maximum", "below-minimum", "over-cap", "unavailable"];
+            const verdict = verdicts.includes(process.env.VERDICT) ? process.env.VERDICT : "unavailable";
+            const tier = process.env.TIER === "strk20" || process.env.TIER === "standard" ? process.env.TIER : "unavailable";
+            const revision = /^[0-9a-f]{40}$/.test(process.env.REVISION || "") ? process.env.REVISION : "unavailable";
+            const title = `Mainnet E2E: ${branch} — failing checks`;
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const body = [
+              `Automated mainnet E2E run for \`${branch}\` failed or the hot wallet is outside its spend policy.`,
+              "",
+              `**Run:** ${runUrl}`,
+              `**Commit:** \`${revision}\``,
+              `**Spend tier:** \`${tier}\``,
+              `**Balance verdict:** \`${verdict}\``,
+              `**Account:** \`${felt(process.env.ADDRESS)}\``,
+              `**Jobs:** ${/^[a-z ,-]+$/.test(process.env.JOBS || "") ? process.env.JOBS : "unavailable"}`,
+              `**Last updated:** ${new Date().toISOString()}`,
+              "",
+              "| Token | Before | After | Spent |",
+              "| --- | --- | --- | --- |",
+              `| STRK | ${amount(process.env.STRK_BEFORE)} | ${amount(process.env.STRK_AFTER)} | ${amount(process.env.STRK_DELTA)} |`,
+              `| USDC | ${amount(process.env.USDC_BEFORE)} | ${amount(process.env.USDC_AFTER)} | ${amount(process.env.USDC_DELTA)} |`,
+              "",
+              "below-minimum: fund the hot wallet. above-maximum: move the excess off. over-cap: this run spent more than the per-run cap.",
+              "Upserted by .github/workflows/mainnet-e2e.yml. Close once the branch is green.",
+            ].join("\n");
+            const existingList = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: "open", labels: "ci-cd", per_page: 100,
+            });
+            const existing = existingList.find((item) => item.title === title && !item.pull_request);
+            if (existing) {
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+              core.info(`Updated tracking issue #${existing.number}.`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner, repo, title, body,
+                labels: ["ci-cd", "release"],
+              });
+              core.info(`Created tracking issue #${created.data.number}.`);
+            }

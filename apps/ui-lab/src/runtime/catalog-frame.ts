@@ -25,7 +25,7 @@ export const CATALOG_META: Meta<CatalogArgs> = {
     docs: {
       description: {
         component:
-          "Production MC Wallet components rendered with the extension stylesheet and skin tokens. These specimens contain fixture data only.",
+          "Production Bramble components rendered with the extension stylesheet and skin tokens. These specimens contain fixture data only.",
       },
     },
   },
@@ -52,7 +52,7 @@ export const catalogFrame = (
   frame.srcdoc = walletFrameDocument(
     `<article class="catalog-page">
       <header class="catalog-heading">
-        <p class="eyebrow">MC Wallet design system</p>
+        <p class="eyebrow">Bramble design system</p>
         <h1>${title}</h1>
         <p>${description}</p>
       </header>

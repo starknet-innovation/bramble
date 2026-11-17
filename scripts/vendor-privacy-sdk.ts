@@ -18,12 +18,13 @@
  */
 import { mkdir, readFile } from "node:fs/promises";
 import { lockedPackageFailures, privacyBuildPackages } from "./vendor-pin-policy";
+import { workspaceDigest } from "./workspace-digest";
 
 const repo = "https://github.com/starkware-libs/starknet-privacy.git";
 const target = "vendor/starknet-privacy";
 const sdk = `${target}/sdk`;
 const lockPath = `${sdk}/package-lock.json`;
-const PRIVACY_SDK_REVISION = "722d1cfbddfc0e7d65f45084cfced08f092d2f3c";
+const PRIVACY_SDK_REVISION = "b40bf109c8e5b97d9d6e8ec6db48b16b9d10a106";
 // The pinned upstream build source. Its contents are covered by the commit pin
 // above; the only thing this file supplies is a locked runtime for it.
 const BUILD_SOURCE = "scripts/build-browser.ts";
@@ -45,17 +46,19 @@ const run = async (
   }
 };
 
-// Porcelain status of the wallet checkout. Captured either side of the upstream
-// build so a build that reaches out of its own directory and edits wallet
-// source, a build script, or a verifier is refused instead of being blessed by
-// the artifact digests that run afterwards.
+// Content digest of the whole wallet checkout outside the build's own vendored
+// tree, ignored paths included. Captured either side of the upstream build so
+// a build that reaches out of its own directory and edits wallet source, a
+// build script, a verifier, node_modules or dist/ is refused instead of being
+// blessed by the artifact digests that run afterwards. Porcelain status could
+// not see ignored paths, which are exactly the ones that decide what ships
+// (Sherlock 256).
 const walletState = async (): Promise<string> => {
-  const child = Bun.spawn(["git", "status", "--porcelain"], { stderr: "inherit", stdout: "pipe" });
-  const output = await new Response(child.stdout).text();
-  if ((await child.exited) !== 0) {
+  try {
+    return await workspaceDigest(".", [target]);
+  } catch {
     throw new Error("cannot snapshot the wallet checkout; refusing to run the upstream build");
   }
-  return output;
 };
 
 const installedVersion = async (name: string): Promise<string> => {

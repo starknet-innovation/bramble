@@ -12,10 +12,9 @@ export type PriceEntry = {
   readonly change24h: number | null;
 };
 
-/** The map usePrices exposes: lookup by lowercased contract address or by symbol. */
+/** The map usePrices exposes: lookup by canonical contract address only. */
 export type PricesData = {
   readonly byAddress: Readonly<Record<string, PriceEntry>>;
-  readonly bySymbol: Readonly<Record<string, PriceEntry>>;
 };
 
 /** A normalized market/token row for the Tokens list and Discover rankings. */

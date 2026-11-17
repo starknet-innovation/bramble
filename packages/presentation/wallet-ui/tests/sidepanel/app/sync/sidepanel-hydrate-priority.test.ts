@@ -3,7 +3,7 @@
  * jobs, and stale hydration generations cannot mutate or repaint the cache.
  */
 import { describe, expect, test } from "bun:test";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
 import { hydrateView } from "../../../../src/sidepanel/app/sync/hydrate";
@@ -47,8 +47,6 @@ describe("home hydration priority", () => {
     const prices = deferred<Awaited<ReturnType<SidepanelWallet["loadPrices"]>>>();
     const activity = deferred<Awaited<ReturnType<SidepanelWallet["loadActivity"]>>>();
     const deployment = deferred<boolean>();
-    const nfts = deferred<Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>>();
-    const watched = deferred<Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>>();
     const cache = emptyRenderCache();
     const deferredStarts: string[] = [];
     let paints = 0;
@@ -61,6 +59,9 @@ describe("home hydration priority", () => {
           return deployment.promise;
         },
       },
+      signability: {
+        load: async () => null,
+      },
       multisig: emptyMultisigClient,
       paint: () => {
         paints += 1;
@@ -69,16 +70,6 @@ describe("home hydration priority", () => {
       selectedTokenId: null,
       status,
       wallet: {
-        discoverNfts: (
-          _includeWatched: boolean,
-          _scope?: string,
-          _multisigId?: string,
-          cached?: boolean,
-        ) => {
-          if (!cached) deferredStarts.push("nfts");
-          return nfts.promise;
-        },
-        loadWatchedNfts: () => watched.promise,
         loadActivity: (_accountId?: string, cached?: boolean) => {
           if (cached) return Promise.resolve({ entries: [], historyUnavailable: false });
           deferredStarts.push("activity");
@@ -96,6 +87,8 @@ describe("home hydration priority", () => {
           cached
             ? Promise.resolve({ asOf: 1, changes: {}, prices: { "0x1": 1 }, stale: true })
             : prices.promise,
+
+        loadStakingPositions: async () => ({ off: true }),
       },
     } as never);
 
@@ -112,38 +105,29 @@ describe("home hydration priority", () => {
     expect(deferredStarts).toEqual(["deployment", "activity"]);
 
     deployment.resolve(true);
-    activity.resolve({ entries: [], historyUnavailable: false });
-    nfts.resolve([]);
-    watched.resolve([]);
+    activity.resolve({ entries: [], historyUnavailable: false, relays: [] });
     await run;
     expect(paints).toBeGreaterThanOrEqual(2);
     expect(cache.deployment).toBe(true);
   });
 
-  test("streams watched NFT metadata into the home cache", async () => {
-    const cache = emptyRenderCache();
+  test("does not request NFT data for Home while the gallery is parked", async () => {
+    const reads: string[] = [];
     await hydrateView({
       activeView: "home",
-      cache,
+      cache: emptyRenderCache(),
       deployment: { load: async () => true },
+      signability: { load: async () => null },
       multisig: emptyMultisigClient,
       paint: () => undefined,
       selectedMultisigId: null,
       selectedTokenId: null,
       status,
       wallet: {
-        discoverNfts: async () => [],
-        loadWatchedNfts: async () => [
-          {
-            collection: "MC Punks",
-            contract: "0x123",
-            id: "SN_MAIN:0x123:0",
-            image: "https://cdn.example/punk.png",
-            name: "Punk #0",
-            networkId: "SN_MAIN",
-            tokenId: "0",
-          },
-        ],
+        discoverNfts: async () => {
+          reads.push("discover");
+          return [];
+        },
         loadActivity: async () => ({ entries: [], historyUnavailable: false }),
         loadBalances: async () => ({
           accountId: "SN_MAIN:0x1",
@@ -151,64 +135,15 @@ describe("home hydration priority", () => {
           networkId: "SN_MAIN",
         }),
         loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+        loadStakingPositions: async () => ({ off: true }),
+        loadWatchedNfts: async () => {
+          reads.push("watched");
+          return [];
+        },
       },
     } as never);
 
-    expect(cache.discoveredNfts).toHaveLength(1);
-  });
-
-  test("paints watched artwork before slower portfolio jobs finish", async () => {
-    const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
-    const prices = deferred<Awaited<ReturnType<SidepanelWallet["loadPrices"]>>>();
-    const indexed = deferred<Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>>();
-    const watched = deferred<Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>>();
-    const cache = emptyRenderCache();
-    let paints = 0;
-    const run = hydrateView({
-      activeView: "home",
-      cache,
-      deployment: { load: async () => true },
-      multisig: emptyMultisigClient,
-      paint: () => {
-        paints += 1;
-      },
-      selectedMultisigId: null,
-      selectedTokenId: null,
-      status,
-      wallet: {
-        discoverNfts: () => indexed.promise,
-        loadActivity: async () => ({ entries: [], historyUnavailable: false }),
-        loadBalances: (cached?: boolean) =>
-          cached
-            ? Promise.resolve({ error: "balance snapshot unavailable" as const })
-            : balances.promise,
-        loadPrices: (cached?: boolean) =>
-          cached
-            ? Promise.resolve({ asOf: null, changes: {}, prices: {}, stale: true })
-            : prices.promise,
-        loadWatchedNfts: () => watched.promise,
-      },
-    } as never);
-
-    watched.resolve([
-      {
-        collection: "MC Punks",
-        contract: "0x123",
-        id: "SN_MAIN:0x123:0",
-        image: "https://cdn.example/punk.png",
-        name: "Punk #0",
-        networkId: "SN_MAIN",
-        tokenId: "0",
-      },
-    ]);
-    await flush();
-    expect(cache.discoveredNfts).toHaveLength(1);
-    expect(paints).toBeGreaterThanOrEqual(2);
-
-    balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
-    prices.resolve({ asOf: null, changes: {}, prices: {}, stale: false });
-    indexed.resolve([]);
-    await run;
+    expect(reads).toEqual([]);
   });
 
   test("drops stale hydration results and paints", async () => {
@@ -238,31 +173,40 @@ describe("home hydration priority", () => {
     balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
     await run;
     expect(paints).toBe(0);
-    expect(cache.balances).toEqual({ error: "wallet locked" });
+    expect(cache.balances).toEqual({ loading: true });
   });
 
-  test("rejects a balance response scoped to another account", async () => {
-    const cache = emptyRenderCache();
-    await hydrateView({
-      activeView: "tokens",
-      cache,
-      deployment: {},
-      multisig: emptyMultisigClient,
-      paint: () => undefined,
-      selectedMultisigId: null,
-      selectedTokenId: null,
-      status,
-      wallet: {
-        loadBalances: async () => ({
-          accountId: "SN_MAIN:0x999",
-          balances: [],
-          networkId: "SN_MAIN",
-        }),
-        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
-      },
-    } as never);
+  test("drops a balance response scoped to another account", async () => {
+    // A reply racing an account switch is neither shown nor a failure: the
+    // screen keeps what it had for this account (issue 795).
+    const own = { accountId: "SN_MAIN:0x1", asOf: 7, balances: [], networkId: "SN_MAIN" };
+    for (const [before, after] of [
+      [undefined, { loading: true }],
+      [own, own],
+    ] as const) {
+      const cache = emptyRenderCache();
+      if (before) Object.assign(cache, { balances: before });
+      await hydrateView({
+        activeView: "tokens",
+        cache,
+        deployment: {},
+        multisig: emptyMultisigClient,
+        paint: () => undefined,
+        selectedMultisigId: null,
+        selectedTokenId: null,
+        status,
+        wallet: {
+          loadBalances: async () => ({
+            accountId: "SN_MAIN:0x999",
+            balances: [],
+            networkId: "SN_MAIN",
+          }),
+          loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+        },
+      } as never);
 
-    expect(cache.balances).toEqual({ error: "balances unavailable" });
+      expect(cache.balances as unknown).toEqual(after);
+    }
   });
 
   test("hydrates a multisig home from the shared account balance scope", async () => {
@@ -366,12 +310,8 @@ describe("home hydration priority", () => {
     expect(signerBalanceReads).toBe(0);
     expect(cache.multisigBalanceId).toBe(multisigId);
     expect(cache.multisigBalances).toEqual(sharedBalances);
-    expect(sharedNftReads).toEqual([
-      [true, `${status.networkId}:${multisigId}`, multisigId, true],
-      [true, `${status.networkId}:${multisigId}`, multisigId],
-    ]);
-    expect(cache.multisigNftId).toBe(multisigId);
-    expect(cache.multisigNfts).toHaveLength(1);
+    // The multisig Collectibles tab is parked: no NFT discovery runs for it.
+    expect(sharedNftReads).toEqual([]);
     expect(multisigReads).toEqual([true, false]);
   });
 

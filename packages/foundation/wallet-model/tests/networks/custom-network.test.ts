@@ -4,7 +4,7 @@
  * URL, while a normal https endpoint is still accepted.
  */
 import { describe, expect, test } from "bun:test";
-import { isCustomRpcUrl } from "@mc-wallet/wallet-model/custom-network";
+import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
 
 describe("isCustomRpcUrl length/type guard", () => {
   test("rejects an empty string", () => {

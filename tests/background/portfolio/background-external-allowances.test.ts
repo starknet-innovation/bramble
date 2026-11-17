@@ -6,14 +6,14 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore, defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { isUnlimitedAllowance } from "@mc-wallet/transactions/allowance-discovery";
-import type { TrackedAllowanceScan } from "@mc-wallet/transactions/allowance-scan";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import { verificationContext } from "@mc-wallet/transactions/verify-decode";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createPreferencesStore, defaultWalletPreferences } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import { isUnlimitedAllowance } from "@bramble/transactions/allowance-discovery";
+import type { TrackedAllowanceScan } from "@bramble/transactions/allowance-scan";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import { verificationContext } from "@bramble/transactions/verify-decode";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   allowanceOwner,
   recordApproveAllowances,
@@ -21,6 +21,7 @@ import {
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -95,15 +96,18 @@ const makeHarness = (
   const invokeCalls: (readonly unknown[])[] = [];
   const trackedReads: TrackedAllowanceScan[] = [];
   const allowanceStore = memoryAllowanceStore();
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     allowanceStore,
     runtimeRpc: makeRuntimeRpc({
       // Faithful to the real scan: it can only answer about the tokens it was
       // handed, which is `preferences.tokens` for the active network.
       async getExternalAllowances(input) {
-        return input.tokens.some((token) => BigInt(token) === BigInt(TOKEN))
-          ? [{ amount: "5000", spender: SPENDER, token: TOKEN }]
-          : [];
+        return {
+          allowances: input.tokens.some((token) => BigInt(token) === BigInt(TOKEN))
+            ? [{ amount: "5000", spender: SPENDER, token: TOKEN }]
+            : [],
+          complete: true,
+        };
       },
       async getTrackedAllowances(input) {
         trackedReads.push(input);
@@ -162,6 +166,7 @@ const recordDelta = (
     calls: [{ calldata: [SPENDER, amount, "0x0"], contractAddress: token, entrypoint }],
     owner: allowanceOwner(account),
     store: allowanceStore,
+    transactionHash: "0x7ab",
   });
 
 const recordIncrease = (
@@ -318,7 +323,7 @@ describe("NFT collection approvals are not ERC20 allowances", () => {
     session.unlock("correct horse battery staple");
     const invokeCalls: (readonly unknown[])[] = [];
     const allowanceStore = memoryAllowanceStore();
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       allowanceStore,
       preferencesStore,
       runtimeRpc: makeRuntimeRpc({
@@ -352,6 +357,7 @@ describe("NFT collection approvals are not ERC20 allowances", () => {
         ],
         owner: allowanceOwner(account),
         store: allowanceStore,
+        transactionHash: "0x7ab",
       });
     return { allowanceStore, fileApprove, handler, invokeCalls };
   };

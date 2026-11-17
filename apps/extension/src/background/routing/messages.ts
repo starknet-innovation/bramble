@@ -1,16 +1,18 @@
 /** Typed extension message handling for the background service worker. */
-import { activeAccountSecrets } from "@mc-wallet/vault/service";
-import { DEFAULT_NETWORK } from "@mc-wallet/wallet-model/networks";
-import { readCreateAccountInput } from "../accounts/account-creation-inputs";
-import { readImportAccountInput } from "../accounts/import-inputs";
+import { WalletError } from "@bramble/core/errors";
+import { redactEndpoints } from "@bramble/core/service-url";
+import { activeAccountSecrets } from "@bramble/vault/service";
 import { handleWalletOps, type WalletOpsDeps } from "../accounts/wallet-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { handleApprovalDecision } from "../approvals/approval-decisions";
 import { enrichApprovals } from "../approvals/approval-insights";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import { handleSidePanelNoticeOps } from "../approvals/side-panel-notice-ops";
 import { handleLedgerOps } from "../ledger/ledger-ops";
+import { MULTISIG_ACTIVE_STATE_MESSAGES } from "../multisig/multisig-active-messages";
 import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
 import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
+import { handleMultisigStrk20Actions } from "../multisig/multisig-strk20-actions";
 import { handleMultisigTxOps } from "../multisig/multisig-tx-ops";
 import { handleOnboardingOps } from "../onboarding/onboarding-ops";
 import { handleAllowanceOps } from "../portfolio/allowance-ops";
@@ -20,12 +22,10 @@ import { handleTokenOps } from "../portfolio/token-ops";
 import { handleStrk20Ops } from "../privacy/strk20-ops";
 import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
 import { handleAddChainOps } from "../provider/add-chain-ops";
+import { grantedDappAccounts } from "../provider/dapp-account";
 import { handleProviderOps } from "../provider/provider-ops";
 import {
-  runUnlockedNetworkMutation,
-  runVaultCreationWithNetwork,
-} from "../runtime/active-network-mutation";
-import {
+  accountForNetwork,
   reconcileActiveAccount,
   reconcileUnlockedActiveAccount,
   selectActiveAccount,
@@ -33,16 +33,18 @@ import {
   switchActiveNetwork,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { createUnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, createUnlockSession } from "../runtime/session";
+import { handleUpdateOps } from "../runtime/update-ready";
 import { handleOriginOps } from "../settings/origins-ops";
 import { handlePreferenceOps } from "../settings/preference-ops";
+import { handleStakingOps } from "../staking/staking-ops";
 import { supportDiagnosticsResponse } from "../support/diagnostics";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
 import { handleSwapOps } from "../transactions/swap-ops";
+import { handleAccountCreationOps, type RouterHandler } from "./account-creation-handlers";
 import { type MessageHandlerOptions, type RouterContext, routerContext } from "./message-context";
 import {
-  readAddAccountInput,
   readGetGrantedAccountsInput,
   readRequestAccountsInput,
   readRevealSecretsInput,
@@ -52,6 +54,11 @@ import {
   readUnlockInput,
 } from "./message-inputs";
 import {
+  handleDiscoverReadyKeyAccounts,
+  handleFindKeyAccountByAddress,
+} from "./ready-key-handlers";
+import {
+  type ExtensionIdentity,
   isClaimedSenderOrigin,
   isExtensionPageSender,
   parseGatedMessage,
@@ -59,12 +66,6 @@ import {
 } from "./senders";
 import { unlockFailureError } from "./unlock-errors";
 
-type RouterHandler = (
-  ctx: RouterContext,
-  messageType: string,
-  message: unknown,
-  sender: RuntimeSender | undefined,
-) => Promise<RuntimeResponse | null>;
 const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   activeStateCoordinator: ctx.activeStateCoordinator,
   activity: ctx.activity,
@@ -74,7 +75,10 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   multisigStore: ctx.multisigStore,
   ...(ctx.nftSnapshots ? { nftSnapshots: ctx.nftSnapshots } : {}),
   now: ctx.now,
+  pendingDeployments: ctx.pendingDeployments,
   preferencesStore: ctx.preferencesStore,
+  prices: ctx.prices,
+  relaySignatures: ctx.relaySignatures,
   runtimeRpc: ctx.runtimeRpc,
   session: ctx.session,
   wallet: ctx.wallet,
@@ -82,29 +86,19 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
 const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
   multisigDeploymentReviews: ctx.multisigDeploymentReviews,
+  multisigGrants: ctx.multisigGrants,
   multisigStore: ctx.multisigStore,
   nostrCoordinationStore: ctx.nostrCoordinationStore,
+  ...(ctx.strk20MultisigStore ? { strk20MultisigStore: ctx.strk20MultisigStore } : {}),
   ...(ctx.nostrRelayTransport ? { nostrRelayTransport: ctx.nostrRelayTransport } : {}),
   now: ctx.now,
 });
-
-const MULTISIG_ACTIVE_STATE_MESSAGES = new Set([
-  "wallet.addMultisig",
-  "wallet.deployArgentMultisig",
-  "wallet.importArgentMultisigIntent",
-  "wallet.importArgentMultisigSignature",
-  "wallet.prepareArgentMultisigIntent",
-  "wallet.removeArgentMultisigIntent",
-  "wallet.removeMultisig",
-  "wallet.reviewArgentMultisigDeployment",
-  "wallet.signArgentMultisigIntent",
-  "wallet.submitArgentMultisigIntent",
-]);
 
 const handleMultisig: RouterHandler = async (ctx, messageType, message) => {
   const handle = async (): Promise<RuntimeResponse | null> => {
     const deps = buildMultisigDeps(ctx);
     return (
+      (await handleMultisigStrk20Actions(deps, messageType, message)) ??
       (await handleMultisigOps(deps, messageType, message)) ??
       (await handleMultisigTxOps(deps, messageType, message)) ??
       handleMultisigCoordinationOps(deps, messageType, message)
@@ -113,74 +107,6 @@ const handleMultisig: RouterHandler = async (ctx, messageType, message) => {
   return MULTISIG_ACTIVE_STATE_MESSAGES.has(messageType)
     ? ctx.activeStateCoordinator.run(handle)
     : handle();
-};
-
-const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.createAccount") {
-    return null;
-  }
-  const input = readCreateAccountInput(message);
-  if (!input) {
-    return { error: "invalid create account request" };
-  }
-  const networkId = input.networkId ?? DEFAULT_NETWORK.id;
-  return ctx.activeStateCoordinator.run(async () => {
-    const account = await runVaultCreationWithNetwork(
-      ctx.session,
-      ctx.preferencesStore,
-      networkId,
-      () => ctx.wallet.createAccount(input),
-    );
-    ctx.session.unlock(input.vaultPassphrase);
-    return { account, ok: true };
-  });
-};
-
-const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.addAccount") {
-    return null;
-  }
-  const input = readAddAccountInput(message);
-  if (!input) {
-    return { error: "invalid add account request" };
-  }
-  return ctx.activeStateCoordinator.run(async () => {
-    const account = await runUnlockedNetworkMutation(
-      ctx.session,
-      ctx.preferencesStore,
-      input.networkId,
-      (vaultPassphrase) =>
-        ctx.wallet.addDerivedAccount({
-          accountContractType: input.accountContractType,
-          networkId: input.networkId,
-          vaultPassphrase,
-        }),
-    );
-    return account ? { account, ok: true } : { error: "wallet locked" };
-  });
-};
-
-const handleImportAccount: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.importAccount") {
-    return null;
-  }
-  const input = readImportAccountInput(message);
-  if (!input) {
-    return { error: "invalid import account request" };
-  }
-  const importRawKeyAccount = ctx.wallet.importRawKeyAccount;
-  if (!importRawKeyAccount) {
-    return { error: "wallet unavailable" };
-  }
-  return ctx.activeStateCoordinator.run(async () => {
-    const account = await runUnlockedNetworkMutation(
-      ctx.session,
-      ctx.preferencesStore,
-      input.networkId,
-      (vaultPassphrase) => importRawKeyAccount({ ...input, vaultPassphrase }),
-    );
-    return account ? { account, ok: true } : { error: "wallet locked" };
-  });
 };
 
 const handleGenerateMnemonic: RouterHandler = async (ctx, messageType, message) => {
@@ -200,9 +126,30 @@ const handleRevealSecrets: RouterHandler = async (ctx, messageType, message) => 
   if (!input) {
     return { error: "invalid reveal request" };
   }
-  const { mnemonic, privateKey } = activeAccountSecrets(
-    await ctx.wallet.readVault(input.vaultPassphrase),
+  // A wrong passphrase fails AES-GCM authentication, whose DOMException text
+  // the panel cannot word; classify it as unlock does, so the reveal answers
+  // "Incorrect passphrase" and a corrupt envelope keeps its own message.
+  const vault = await ctx.wallet.readVault(input.vaultPassphrase).catch((error: unknown) => {
+    throw unlockFailureError(error);
+  });
+  const preferences = await ctx.preferencesStore.read();
+  // The account the panel shows as active, which is per network, not the
+  // vault's stored pointer: when the pointer names an account on another
+  // network the two differ, and the screen's imported-key warning described
+  // the wrong account (Sherlock 191).
+  const account = accountForNetwork(
+    vault,
+    preferences.activeNetworkId,
+    vault.activeAccountId,
+    preferences.hiddenAccountIds,
   );
+  // A network with no account has no active key to show, but the wallet's
+  // recovery phrase is still the user's backup: reveal it on its own rather
+  // than refusing, as the screen shows no account to describe.
+  if (!account) {
+    return { mnemonic: vault.mnemonic, ok: true, privateKey: null };
+  }
+  const { mnemonic, privateKey } = activeAccountSecrets(vault, account.id);
   return { mnemonic, ok: true, privateKey };
 };
 
@@ -214,10 +161,10 @@ const handleGetGrantedAccounts: RouterHandler = async (ctx, messageType, message
   if (!input) {
     return { error: "invalid granted accounts request" };
   }
-  if (input.vaultPassphrase && !isExtensionPageSender(sender, ctx.extensionId)) {
+  if (input.vaultPassphrase && !isExtensionPageSender(sender, ctx.extension)) {
     return { error: "privileged sender required" };
   }
-  if (!isClaimedSenderOrigin(sender, ctx.extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, ctx.extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   // A blocklisted origin must see no accounts even if it holds an old grant.
@@ -225,14 +172,18 @@ const handleGetGrantedAccounts: RouterHandler = async (ctx, messageType, message
     return { accounts: [], ok: true };
   }
   // Peek, never renew: re-querying grants must not extend the unlock lifetime.
+  const authorized = captureSessionAuthorization(ctx.session);
   const vaultPassphrase = input.vaultPassphrase ?? ctx.session.peekPassphrase();
   if (!vaultPassphrase) {
-    return { error: "wallet locked" };
+    // A passive dapp grant query returns the same empty result while locked as
+    // it does while unlocked-but-unconnected. Extension pages that explicitly
+    // supplied a passphrase still receive authentication failures below, but a
+    // site cannot use `mc_accounts` as a lock-state oracle.
+    return { accounts: [], ok: true };
   }
-  return {
-    accounts: await ctx.wallet.getGrantedAccounts(input.origin, vaultPassphrase),
-    ok: true,
-  };
+  const accounts = await grantedDappAccounts(ctx, input.origin, vaultPassphrase);
+  if (!input.vaultPassphrase && !authorized.isCurrent()) return { accounts: [], ok: true };
+  return { accounts, ok: true };
 };
 
 const handlePendingApprovals: RouterHandler = async (ctx, messageType, message) => {
@@ -256,7 +207,7 @@ const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, s
   if (!input) {
     return { error: "invalid request accounts request" };
   }
-  if (!isClaimedSenderOrigin(sender, ctx.extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, ctx.extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if (ctx.guard.isBlocked(input.origin)) {
@@ -266,14 +217,17 @@ const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, s
   // from any open page and answers without a prompt, so a site could otherwise
   // hold the wallet unlocked forever just by calling it on a timer.
   const passphrase = ctx.session.peekPassphrase();
+  const authorized = captureSessionAuthorization(ctx.session);
   if (passphrase) {
-    const accounts = await ctx.wallet.getGrantedAccounts(input.origin, passphrase);
+    const accounts = await grantedDappAccounts(ctx, input.origin, passphrase);
     if (accounts.length > 0) {
       // Record the origin only once it is actually connecting, so the enricher
       // still reports "first time seen" for a new site's approval.
       await ctx.originHistory.record(input.origin);
-      return { accounts, ok: true };
     }
+    // A lock that lands during the read falls through to what a locked wallet
+    // answers, so the race is not a lock-state signal of its own (Sherlock 148).
+    if (authorized.isCurrent() && accounts.length > 0) return { accounts, ok: true };
   }
   if (input.silent) {
     return { accounts: [], ok: true };
@@ -333,15 +287,37 @@ const handleStatus: RouterHandler = async (ctx, messageType, message) => {
 const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.diagnostics") return null;
   return readTypeOnlyInput(message, "wallet.diagnostics")
-    ? supportDiagnosticsResponse(ctx.wallet, ctx.session, ctx.preferencesStore)
+    ? supportDiagnosticsResponse(
+        ctx.wallet,
+        ctx.session,
+        ctx.preferencesStore,
+        ctx.phishingFeedHealth,
+      )
     : { error: "invalid diagnostics request" };
 };
 
+// `wallet.unlockUnverified` is the recovery screen's "Unlock anyway". Passphrase and
+// recovery state are checked before multisig connections are dropped, and those are
+// dropped before the vault is accepted, so a mistyped passphrase leaves them in place.
+// The service refuses a vault that verifies, so this cannot skip the freshness check.
+const acceptUnverifiedVault = async (
+  wallet: WalletStatusReader,
+  grants: { readonly clear: () => Promise<void> },
+  vaultPassphrase: string,
+): Promise<void> => {
+  if (!wallet.recoverUnverifiedVault || !wallet.assertRecoverableVault) {
+    throw new WalletError("wallet unavailable");
+  }
+  await wallet.assertRecoverableVault(vaultPassphrase);
+  await grants.clear();
+  await wallet.recoverUnverifiedVault(vaultPassphrase);
+};
+
 const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.unlock") {
+  if (messageType !== "wallet.unlock" && messageType !== "wallet.unlockUnverified") {
     return null;
   }
-  const input = readUnlockInput(message);
+  const input = readUnlockInput(message, messageType);
   if (!input) {
     return { error: "invalid unlock request" };
   }
@@ -350,6 +326,9 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
     return await ctx.activeStateCoordinator.run(async () => {
       if (ctx.session.generation() !== generation) {
         return { error: "wallet locked" };
+      }
+      if (messageType === "wallet.unlockUnverified") {
+        await acceptUnverifiedVault(ctx.wallet, ctx.multisigGrants, input.vaultPassphrase);
       }
       await ctx.wallet.readVault(input.vaultPassphrase);
       if (ctx.session.generation() !== generation) {
@@ -386,7 +365,6 @@ const handlePreferences: RouterHandler = async (ctx, messageType, message) => {
 };
 
 // Ordered handlers own disjoint message types and return null otherwise.
-//
 // Deliberately absent (MCW-V09-124): there is no `wallet.signHash` message. An
 // arbitrary field element signed with the account key, under no approval and no
 // domain separation, is a signing oracle; hash signing is reachable only from
@@ -401,6 +379,7 @@ const HANDLERS: readonly RouterHandler[] = [
     handleSwapOps(
       {
         ...buildOpsDeps(ctx),
+        prices: ctx.prices,
         swap: ctx.swap,
         swapPreparations: ctx.swapPreparations,
       },
@@ -408,6 +387,8 @@ const HANDLERS: readonly RouterHandler[] = [
       message,
     ),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
+  (ctx, messageType, message) =>
+    handleStakingOps(buildOpsDeps(ctx), messageType, message, ctx.staking),
   (ctx, messageType, message) => handleNftOps(buildOpsDeps(ctx), messageType, message),
   handleMultisig,
   handlePreferences,
@@ -421,6 +402,9 @@ const HANDLERS: readonly RouterHandler[] = [
     handleStrk20WalletOps(
       {
         ...buildOpsDeps(ctx),
+        prices: ctx.prices,
+        ...(ctx.sponsoredShield ? { sponsoredShield: ctx.sponsoredShield } : {}),
+        strk20Jobs: ctx.strk20Jobs,
         strk20Preparations: ctx.strk20Preparations,
       },
       messageType,
@@ -428,15 +412,18 @@ const HANDLERS: readonly RouterHandler[] = [
     ),
   (ctx, messageType, message) => handleOriginOps(ctx, messageType, message),
   (ctx, messageType, message) => handleTokenOps(ctx, messageType, message),
-  handleCreateAccount,
-  handleAddAccount,
-  handleImportAccount,
+  handleAccountCreationOps,
+  handleDiscoverReadyKeyAccounts,
+  handleFindKeyAccountByAddress,
   (ctx, messageType, message) => handleApprovalDecision(ctx, messageType, message),
   handleGenerateMnemonic,
   (ctx, messageType, message) => handleOnboardingOps(ctx, messageType, message),
   handleRevealSecrets,
   handleGetGrantedAccounts,
   handleDiagnostics,
+  async (ctx, messageType, message) => handleUpdateOps(ctx.updates, messageType, message),
+  (ctx, messageType, message, sender) =>
+    handleSidePanelNoticeOps(ctx.sidePanelLearning, messageType, message, sender),
   handlePendingApprovals,
   handleRequestAccounts,
   handleSetActiveAccount,
@@ -466,7 +453,7 @@ const handleRuntimeMessage = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse> => {
-  const gated = parseGatedMessage(message, sender, ctx.extensionId);
+  const gated = parseGatedMessage(message, sender, ctx.extension);
   if ("error" in gated) {
     return gated;
   }
@@ -474,26 +461,33 @@ const handleRuntimeMessage = async (
   return response ?? { error: "unsupported message" };
 };
 
+// The wallet's own pages see a thrown error's message; a page sender never
+// does. On the public routes that message can be a node's or gateway's own
+// text, which may echo the configured RPC URL and its key, so endpoints are
+// redacted before it leaves (the panel redacts every refusal again on receipt).
 const runtimeErrorResponse = (
   error: unknown,
   revealError: boolean,
 ): { readonly error: string } => ({
-  error: revealError && error instanceof Error ? error.message : "wallet request failed",
+  error:
+    revealError && error instanceof Error
+      ? redactEndpoints(error.message)
+      : "wallet request failed",
 });
 
 /** Creates the trusted background runtime message dispatcher. */
 export const createMessageHandler = (
   wallet: WalletStatusReader,
-  extensionId: string,
+  extension: ExtensionIdentity,
   options: MessageHandlerOptions = {},
 ) => {
   const session = options.session ?? createUnlockSession();
-  const ctx = routerContext(wallet, extensionId, options, session);
+  const ctx = routerContext(wallet, extension, options, session);
   return async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
       return await handleRuntimeMessage(ctx, message, sender);
     } catch (error) {
-      return runtimeErrorResponse(error, isExtensionPageSender(sender, extensionId));
+      return runtimeErrorResponse(error, isExtensionPageSender(sender, extension));
     }
   };
 };

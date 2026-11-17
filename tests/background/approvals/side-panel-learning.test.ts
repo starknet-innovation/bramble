@@ -1,0 +1,329 @@
+/**
+ * Side-panel learning (#690). Arc exposes `chrome.sidePanel` and `open()`
+ * resolves, but no panel is ever drawn. A toolbar click is the only teacher:
+ * a side panel seen means the built-in behavior for good (Chrome), none seen
+ * after a resolved open means the side panel is served as the popup (Arc). The
+ * learner writes only its own record. No path here opens a window, and every
+ * unknown answer keeps today's behavior.
+ */
+import { describe, expect, test } from "bun:test";
+import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
+import {
+  createSidePanelLearner,
+  SIDE_PANEL_LEARN_TIMEOUT_MS,
+  SIDE_PANEL_LEARNING_STORE_KEY,
+} from "../../../apps/extension/src/background/approvals/side-panel-learning";
+import { PANEL_URL, settleAll, surfaceHarness } from "../../support/side-panel-learning-harness";
+
+const UNSUPPORTED = { notice: true, state: "unsupported" };
+const VERIFIED = { notice: false, state: "verified" };
+
+describe("side-panel learning", () => {
+  test("leaves the toolbar as the browser kept it until it has loaded", async () => {
+    // Arc after a restart: the popup the last worker set is still in place.
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, UNSUPPORTED);
+    const persisted = { native: false, popup: "popup.html" };
+    const run = surfaceHarness({ persisted, store });
+    // Even a choice saved before the load configures nothing yet.
+    run.userChooses("popup");
+    await settleAll();
+    expect(run.calls.popupSet).toEqual([]);
+    expect(run.calls.native).toEqual([]);
+    await run.click();
+    expect(run.calls.popupClicks).toEqual([7]);
+    expect(run.calls.opens).toEqual([]);
+    await run.load();
+    expect(run.toolbar()).toEqual(persisted);
+    expect(run.calls.popupSet).toEqual(["popup.html"]);
+  });
+
+  test("a side panel shown during the window verifies the browser and restores the built-in behavior", async () => {
+    const run = surfaceHarness({ showsAfter: 2 });
+    await run.load();
+    expect(run.toolbar().native).toBe(false);
+    await run.click();
+    // The window ended as soon as the page reported itself visible.
+    expect(run.calls.waits).toBe(2);
+    expect(run.calls.opens).toEqual([7]);
+    expect(run.learner.state()).toBe("verified");
+    expect(run.toolbar()).toEqual({ native: true, popup: "" });
+    expect(await run.stored()).toEqual(VERIFIED);
+    expect(run.calls.popups).toEqual([]);
+  });
+
+  test("a resolved open with no panel serves the side panel as the popup", async () => {
+    const run = surfaceHarness();
+    await run.load();
+    await run.click();
+    expect(run.calls.opens).toEqual([7]);
+    // The whole window was watched before deciding.
+    expect(run.calls.waits).toBe(SIDE_PANEL_LEARN_TIMEOUT_MS / 250);
+    expect(run.learner.state()).toBe("unsupported");
+    expect(await run.stored()).toEqual(UNSUPPORTED);
+    expect(run.control.effective()).toBe("popup");
+    expect(run.toolbar()).toEqual({ native: false, popup: "popup.html" });
+    expect(run.calls.popups).toEqual([{ windowId: 7 }]);
+    // Opened once the popup was set, which Chrome requires.
+    expect(run.calls.shown).toEqual([7]);
+    // The user's own choice is untouched.
+    expect(run.control.preference()).toBe("side-panel");
+    expect(await run.learner.notice()).toBe(true);
+  });
+
+  test("the popup is opened only once the toolbar has it, which Chrome requires", async () => {
+    // A slow browser: setting the popup takes a macrotask.
+    const run = surfaceHarness({
+      configureDelay: () => new Promise((resolve) => setTimeout(resolve, 0)),
+    });
+    await run.load();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    run.clickNow();
+    for (let i = 0; i < 5; i += 1) {
+      await settleAll();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(run.learner.state()).toBe("unsupported");
+    expect(run.calls.shown).toEqual([7]);
+  });
+
+  test("a cold worker woken by the click opens the panel first, then learns from it", async () => {
+    const run = surfaceHarness();
+    // Nothing is loaded yet.
+    run.clickNow();
+    expect(run.calls.opens).toEqual([7]);
+    expect(run.calls.waits).toBe(0);
+    await run.load();
+    expect(run.learner.state()).toBe("unsupported");
+  });
+
+  test("a click with the popup in effect means applying it failed: reapply and open it", async () => {
+    // The load's configuration and its one retry are both refused.
+    let refusals = 2;
+    const run = surfaceHarness({ configureFails: () => refusals-- > 0, preference: "popup" });
+    await run.load();
+    expect(run.calls.popupSet).toEqual([]);
+    await run.click();
+    expect(run.calls.opens).toEqual([7]);
+    expect(run.toolbar().popup).toBe("popup.html");
+    expect(run.calls.popups).toEqual([{ windowId: 7 }]);
+    expect(run.learner.state()).toBe("unknown");
+  });
+
+  test("a refused open learns nothing", async () => {
+    const run = surfaceHarness({ openRejects: true });
+    await run.load();
+    await run.click();
+    expect(run.learner.state()).toBe("unknown");
+    expect(run.control.effective()).toBe("side-panel");
+    expect(run.calls.popups).toEqual([]);
+    expect(await run.stored()).toBeUndefined();
+  });
+
+  test("a click with no window opens nothing", async () => {
+    const run = surfaceHarness();
+    await run.load();
+    for (const listener of run.listeners) {
+      listener({});
+      listener(undefined);
+    }
+    await settleAll();
+    expect(run.calls.opens).toEqual([]);
+  });
+
+  test("a second click while one is being learned opens the panel but learns once", async () => {
+    const run = surfaceHarness();
+    await run.load();
+    run.clickNow();
+    run.clickNow();
+    await settleAll();
+    expect(run.calls.opens).toEqual([7, 7]);
+    const single = surfaceHarness();
+    await single.load();
+    await single.click();
+    expect(run.calls.waits).toBe(single.calls.waits);
+    expect(run.calls.popups).toEqual([{ windowId: 7 }]);
+  });
+
+  test("a side panel document alive but never shown proves nothing (Arc)", async () => {
+    // Arc may load sidepanel.html and keep it alive without drawing it.
+    const store = createMemoryStore();
+    const run = surfaceHarness({ panelDocument: true, store });
+    await run.load();
+    expect(run.learner.state()).toBe("unknown");
+    await run.click();
+    expect(run.learner.state()).toBe("unsupported");
+    // Nor does it heal the record at the next worker start.
+    const restarted = surfaceHarness({ panelDocument: true, store });
+    await restarted.load();
+    expect(restarted.learner.state()).toBe("unsupported");
+    expect(restarted.control.effective()).toBe("popup");
+    expect(run.calls.queries + restarted.calls.queries).toBe(0);
+  });
+
+  test("what was learned before is kept across worker restarts", async () => {
+    for (const [stored, effective, native] of [
+      [VERIFIED, "side-panel", true],
+      [UNSUPPORTED, "popup", false],
+      [{ state: "bogus" }, "side-panel", false],
+      [null, "side-panel", false],
+    ] as const) {
+      const store = createMemoryStore();
+      if (stored) await store.set(SIDE_PANEL_LEARNING_STORE_KEY, stored);
+      const run = surfaceHarness({ store });
+      await run.load();
+      expect(run.control.effective()).toBe(effective);
+      expect(run.toolbar().native).toBe(native);
+    }
+  });
+
+  test("no storage or an unreadable store opens the panel but learns nothing", async () => {
+    const unreadable = createMemoryStore();
+    const failing: KeyValueStore = {
+      ...unreadable,
+      get: async () => {
+        throw new Error("corrupt");
+      },
+    };
+    for (const store of [null, "throws" as const, failing]) {
+      const run = surfaceHarness({ store });
+      await run.load();
+      expect(run.toolbar().native).toBe(true);
+      await run.click();
+      // Today's behavior: Chromium opens the panel by itself.
+      expect(run.calls.nativeOpens).toEqual([7]);
+      // Nothing is watched, and a panel seen writes nothing over the store.
+      expect(run.calls.waits).toBe(0);
+      await run.sidePanelShows();
+      expect(run.learner.state()).not.toBe("unsupported");
+      expect(run.control.effective()).toBe("side-panel");
+      expect(run.toolbar().native).toBe(true);
+    }
+    expect(await unreadable.get(SIDE_PANEL_LEARNING_STORE_KEY)).toBeUndefined();
+    // Firefox: the learner registers no toolbar listener of its own.
+    expect(surfaceHarness({ withSidePanel: false }).listeners).toEqual([]);
+  });
+
+  test("without storage a click that still reaches the listener learns nothing", async () => {
+    // Say the browser refused to restore its built-in click: the listener
+    // still opens the panel, and watches nothing.
+    let click: (tab?: { readonly windowId?: number }) => void = () => undefined;
+    const calls = { opens: 0, waits: 0 };
+    const learner = createSidePanelLearner({
+      browser: {
+        action: {
+          onClicked: {
+            addListener: (listener) => {
+              click = listener;
+            },
+          },
+        },
+        sidePanel: {
+          open: async () => {
+            calls.opens += 1;
+          },
+        },
+      },
+      configure: async () => undefined,
+      extensionId: "bramble",
+      sidePanelUrl: PANEL_URL,
+      store: () => null,
+      surface: () => "side-panel",
+      wait: async () => {
+        calls.waits += 1;
+      },
+    });
+    learner.bind();
+    await learner.load();
+    click({ windowId: 7 });
+    await settleAll();
+    expect(calls).toEqual({ opens: 1, waits: 0 });
+    expect(learner.state()).toBe("unknown");
+  });
+
+  test("the side panel page talking to the worker verifies the browser", async () => {
+    const run = surfaceHarness();
+    await run.load();
+    // The options page shows the same file in a tab; the popup is another
+    // file; another extension is not this one.
+    for (const sender of [
+      { id: "bramble", tab: { id: 3 }, url: PANEL_URL },
+      { id: "bramble", url: "chrome-extension://bramble/popup.html" },
+      { id: "other", url: PANEL_URL },
+      // Lookalikes: the URL must name the side panel page exactly.
+      { id: "bramble", url: "chrome-extension://bramble/sidepanel.html.evil.html" },
+      { id: "bramble", url: "chrome-extension://bramble/sidepanel.htmlx?view=home" },
+      { id: "bramble", url: "chrome-extension://bramble/x/sidepanel.html" },
+      { id: "bramble", url: "chrome-extension://bramblex/sidepanel.html" },
+      { id: "bramble", url: "not a url" },
+      undefined,
+    ]) {
+      run.learner.observeVisible(sender);
+      await settleAll();
+      expect(run.learner.state()).toBe("unknown");
+    }
+    run.learner.observeVisible({ id: "bramble", url: `${PANEL_URL}?view=home` });
+    await settleAll();
+    expect(run.learner.state()).toBe("verified");
+    expect(run.toolbar().native).toBe(true);
+  });
+
+  test("with no side panel URL no sender can verify the browser", async () => {
+    const learner = createSidePanelLearner({
+      browser: { action: { onClicked: { addListener: () => undefined } } },
+      configure: async () => undefined,
+      extensionId: "bramble",
+      sidePanelUrl: "",
+      store: () => createMemoryStore(),
+      surface: () => "side-panel",
+      wait: async () => undefined,
+    });
+    await learner.load();
+    learner.observeVisible({ id: "bramble", url: PANEL_URL });
+    await settleAll();
+    expect(learner.state()).toBe("unknown");
+  });
+
+  test("the notice shows once and its dismissal is kept", async () => {
+    const run = surfaceHarness();
+    await run.load();
+    await run.click();
+    expect(await run.learner.notice()).toBe(true);
+    await run.learner.dismissNotice();
+    await run.learner.dismissNotice();
+    expect(await run.learner.notice()).toBe(false);
+    expect(await run.stored()).toEqual({ ...UNSUPPORTED, notice: false });
+  });
+
+  test("a dismissal that can't be stored still hides the notice for this session", async () => {
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, UNSUPPORTED);
+    const run = surfaceHarness({ store, writeFails: () => true });
+    await run.load();
+    await run.learner.dismissNotice();
+    expect(await run.learner.notice()).toBe(false);
+    expect(run.control.effective()).toBe("popup");
+  });
+
+  test("a notice read before the stored state loads waits for it", async () => {
+    const store = createMemoryStore();
+    await store.set(SIDE_PANEL_LEARNING_STORE_KEY, UNSUPPORTED);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const slow: KeyValueStore = {
+      ...store,
+      get: async (key) => {
+        await gate;
+        return store.get(key);
+      },
+    };
+    const run = surfaceHarness({ store: slow });
+    const early = run.learner.notice();
+    const loading = run.load();
+    release();
+    await loading;
+    expect(await early).toBe(true);
+  });
+});

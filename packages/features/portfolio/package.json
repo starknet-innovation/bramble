@@ -1,5 +1,6 @@
 {
-  "name": "@mc-wallet/portfolio",
+  "name": "@bramble/portfolio",
+  "description": "Token balances, the token registry, prices, NFTs and portfolio discovery.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -19,9 +20,9 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/store": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*",
-    "starknet": "10.0.2"
+    "@bramble/core": "workspace:*",
+    "@bramble/store": "workspace:*",
+    "@bramble/wallet-model": "workspace:*",
+    "starknet": "10.8.0"
   }
 }

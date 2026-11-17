@@ -1,0 +1,244 @@
+/**
+ * The opt-in mainnet loader skips when nothing names an account, and its
+ * messages never include the private key. The receipt reader checks the fee
+ * transfer the live script asserts.
+ */
+import { describe, expect, test } from "bun:test";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { hash } from "starknet";
+import { OPENZEPPELIN_ACCOUNT_CLASS_HASH } from "../../packages/foundation/wallet-model/src/accounts/accounts";
+import { STARKNET_NETWORKS } from "../../packages/foundation/wallet-model/src/networks/networks";
+import {
+  GASLESS_MAINNET_SKIP_MESSAGE,
+  loadGaslessMainnetAccount,
+} from "../../scripts/gasless-mainnet-account";
+import { receiptSucceeded, transferredAmount } from "../../scripts/gasless-mainnet-receipt";
+import {
+  displayRpcUrl,
+  requireCiMainnetRpc,
+  selectMainnetRpc,
+} from "../../scripts/gasless-mainnet-rpc";
+
+const KEY = "0x333333333333333333333333333333333333333333333333333333333333333";
+const ADDRESS = "0x1234";
+const FILES = new Map<string, string>();
+
+const readText = (path: string): Promise<string | null> => Promise.resolve(FILES.get(path) ?? null);
+
+describe("gasless mainnet account loader", () => {
+  test("skips when no account is named", async () => {
+    const loaded = await loadGaslessMainnetAccount({
+      cwd: "/tmp/empty",
+      env: {},
+      home: "/tmp/home",
+      readText,
+    });
+    expect(loaded).toEqual({ kind: "skip", message: GASLESS_MAINNET_SKIP_MESSAGE });
+    expect(GASLESS_MAINNET_SKIP_MESSAGE).not.toContain(KEY);
+  });
+
+  test("reads a named sncast mainnet account without putting the key in the label", async () => {
+    const home = await mkdtemp(join(tmpdir(), "gasless-e2e-"));
+    const accounts = join(home, "accounts.json");
+    const toml = join(home, "snfoundry.toml");
+    await writeFile(
+      accounts,
+      JSON.stringify({
+        "alpha-mainnet": {
+          gasless: {
+            address: ADDRESS,
+            class_hash: OPENZEPPELIN_ACCOUNT_CLASS_HASH,
+            deployed: true,
+            private_key: KEY,
+            public_key: "0x55",
+          },
+        },
+      }),
+    );
+    await writeFile(
+      toml,
+      `[sncast.mainnet]\naccount = "gasless"\naccounts-file = "${accounts}"\nurl = "https://rpc.example/mainnet"\n`,
+    );
+    const loaded = await loadGaslessMainnetAccount({
+      cwd: home,
+      env: { snfoundry: toml },
+      home,
+      readText: async (path) => {
+        try {
+          return await Bun.file(path).text();
+        } catch {
+          return null;
+        }
+      },
+    });
+    expect(loaded.kind).toBe("ready");
+    if (loaded.kind !== "ready") return;
+    expect(loaded.account.address).toBe(ADDRESS);
+    expect(loaded.account.privateKey).toBe(KEY);
+    expect(loaded.account.rpcUrl).toBe("https://rpc.example/mainnet");
+    expect(loaded.account.rpcSource).toBe("snfoundry url");
+    expect(loaded.account.label).toContain("gasless");
+    expect(loaded.account.label).not.toContain(KEY);
+  });
+
+  test("refuses a non-mainnet network", async () => {
+    const loaded = await loadGaslessMainnetAccount({
+      cwd: "/tmp",
+      env: { network: "sepolia", account: "gasless" },
+      home: "/tmp",
+      readText,
+    });
+    expect(loaded).toEqual({ kind: "error", message: "This test runs on Starknet mainnet only." });
+  });
+});
+
+describe("gasless mainnet RPC", () => {
+  const json = (status: number, body: unknown): Response =>
+    new Response(JSON.stringify(body), { status });
+
+  test("keeps an RPC that answers mainnet and hides a query key when printing", async () => {
+    const url = "https://rpc.example/mainnet?api_key=secret";
+    const chosen = await selectMainnetRpc({
+      configuredSource: "GASLESS_E2E_RPC_URL",
+      configuredUrl: url,
+      fetchImpl: async () =>
+        json(200, { id: 1, jsonrpc: "2.0", result: STARKNET_NETWORKS.SN_MAIN.chainId }),
+    });
+    expect(chosen).toEqual({ note: null, source: "GASLESS_E2E_RPC_URL", url });
+    expect(displayRpcUrl(url)).toBe("https://rpc.example/mainnet");
+    expect(displayRpcUrl(url)).not.toContain("secret");
+  });
+
+  test("replaces a host that is not a Starknet RPC with the wallet default", async () => {
+    const chosen = await selectMainnetRpc({
+      configuredSource: "snfoundry url",
+      configuredUrl: "http://wallet.nodes.starknet.org",
+      fetchImpl: async () => json(404, { error: "route_not_allowed" }),
+    });
+    expect(chosen.source).toBe("wallet default");
+    expect(chosen.url).toBe(STARKNET_NETWORKS.SN_MAIN.rpcUrls[0]);
+    expect(chosen.note).toContain("http://wallet.nodes.starknet.org");
+    expect(chosen.note).toContain("did not answer starknet_chainId");
+  });
+});
+
+describe("gasless mainnet RPC in Mainnet E2E CI", () => {
+  const SECRET = "https://rpc.example/v0_10/super-secret-key";
+  const mainnet = (): Promise<Response> =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({ id: 1, jsonrpc: "2.0", result: STARKNET_NETWORKS.SN_MAIN.chainId }),
+        { status: 200 },
+      ),
+    );
+  const refused = async (input: Parameters<typeof requireCiMainnetRpc>[0]): Promise<string> => {
+    try {
+      await requireCiMainnetRpc(input);
+    } catch (error) {
+      return String(error);
+    }
+    throw new Error("expected a refusal");
+  };
+
+  test("keeps the configured dedicated mainnet RPC", async () => {
+    const chosen = await requireCiMainnetRpc({
+      configuredSource: "GASLESS_E2E_RPC_URL",
+      configuredUrl: SECRET,
+      fetchImpl: mainnet,
+    });
+    expect(chosen).toEqual({ note: null, source: "GASLESS_E2E_RPC_URL", url: SECRET });
+  });
+
+  test("fails closed instead of falling back to the wallet RPC", async () => {
+    const cases: Array<[Parameters<typeof requireCiMainnetRpc>[0], string]> = [
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: SECRET,
+          fetchImpl: () => Promise.reject(new Error(SECRET)),
+        },
+        "starknet_chainId failed",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: SECRET,
+          fetchImpl: async () => new Response("{}", { status: 503 }),
+        },
+        "starknet_chainId failed",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: SECRET,
+          fetchImpl: async () => new Response(JSON.stringify({ result: "0x534e5f5345504f4c4941" })),
+        },
+        "did not answer Starknet mainnet",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: "http://rpc.example/super-secret-key",
+          fetchImpl: mainnet,
+        },
+        "HTTPS",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: "https://wallet.nodes.starknet.org/rpc/v0_10?k=super-secret-key",
+          fetchImpl: mainnet,
+        },
+        "dedicated test RPC",
+      ],
+      [
+        {
+          configuredSource: "GASLESS_E2E_RPC_URL",
+          configuredUrl: "https://MAINNET.nodes.starknet.org./super-secret-key",
+          fetchImpl: mainnet,
+        },
+        "Mainnet E2E RPC URL must",
+      ],
+      [
+        { configuredSource: "wallet default", configuredUrl: SECRET, fetchImpl: mainnet },
+        "never falls back",
+      ],
+    ];
+    for (const [input, reason] of cases) {
+      const message = await refused(input);
+      expect(message).toContain(reason);
+      expect(message).not.toContain("super-secret-key");
+    }
+  });
+});
+
+describe("gasless mainnet receipt", () => {
+  test("reads a successful fee transfer to the forwarder", () => {
+    const token = "0x33068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb";
+    const from = "0x1234";
+    const to = "0x127021a1b5a52d3174c2ab077c2b043c80369250d29428cee956d76ee51584f";
+    const receipt = {
+      execution_status: "SUCCEEDED",
+      events: [
+        {
+          data: ["0x3e8", "0x0"],
+          from_address: token,
+          keys: [hash.getSelectorFromName("Transfer"), from, to],
+        },
+      ],
+    };
+    expect(receiptSucceeded(receipt)).toBe(true);
+    expect(transferredAmount(receipt, token, from, to)).toBe(1000n);
+    expect(receiptSucceeded({ execution_status: "REVERTED" })).toBe(false);
+  });
+});
+
+describe("gasless mainnet docs", () => {
+  test("names the OpenZeppelin class the wallet will sign", async () => {
+    const doc = await Bun.file("docs/GASLESS_MAINNET.md").text();
+    expect(doc).toContain(OPENZEPPELIN_ACCOUNT_CLASS_HASH);
+    expect(doc).toContain("bun run test:mainnet");
+  });
+});

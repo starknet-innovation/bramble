@@ -1,30 +1,34 @@
 /** Focused side-panel task screens opened from the wallet dock. */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import { receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import { withDefaultGroups } from "@bramble/settings/groups";
+import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
+import { receipt } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
-import type { ConnectedSite, TokenBalance, WalletStatus } from "../../../popup/responses/responses";
-import { multisigAccountOptions } from "../../journeys/multisig/multisig-account-options";
+import type {
+  AllowanceListing,
+  TokenBalance,
+  WalletStatus,
+} from "../../../popup/responses/responses";
+import { addressFinderFields } from "../../journeys/onboarding/address-finder-view";
+import { recoveryScanFields, recoveryWordInputs } from "../../journeys/onboarding/onboarding-views";
 import { allowancesFlow } from "../../journeys/portfolio/allowance-views";
 import type { PrivacyDisclosureState } from "../../journeys/privacy/privacy-model";
+import { shadowAccountsFlow } from "../../journeys/privacy/shadow-accounts-view";
 import {
   type PoolNoticeAction,
   privacyPoolNotice,
   receiveAddressView,
 } from "../../journeys/send/receive-view";
-import { accountGroupsLine } from "../../journeys/settings/group-controls";
+import { FIRST_SEND_DEPLOYS } from "../../journeys/send/transfer-review-markup";
+import { accountNamesSection, hiddenAccountsSection } from "../../journeys/settings/account-names";
 import { groupsSection } from "../../journeys/settings/group-members";
-import { icon } from "../../shared/icons";
 import {
-  accountAvatar,
   accountDisplayName,
   accountLabel,
   flowHeader,
@@ -32,8 +36,6 @@ import {
   noAccountEmpty,
   type WalletView,
 } from "../../shared/parts";
-import { reviewOutcome, reviewPanel } from "../../shared/review-render";
-import { knownAccountType } from "../../shell/account-types";
 
 // Fees use STRK and registration invokes a deployed account. Deployment blocks
 // only on a conclusive `false`, so a fresh read does not flicker into the form.
@@ -53,15 +55,23 @@ const poolNoticeAction = (ctx: {
 import type { SendIntent } from "../../journeys/send/send-model";
 import { sendFlow } from "../../journeys/send/send-views";
 import { advancedNetworkFlow, networkFlow } from "../../journeys/settings/network-views";
+import { privacyUnlockFlow } from "../../journeys/settings/privacy-unlock";
 import {
   appearanceFlow,
   backupExportFlow,
   backupRestoreFlow,
   requestSettingsFlow,
-  securityFlow,
 } from "../../journeys/settings/settings-views";
+import {
+  STAKING_LOADING,
+  type StakingState,
+} from "../../journeys/staking/staking-directory-client";
+import { stakingFlow } from "../../journeys/staking/staking-views";
 import { swapFlow } from "../../journeys/swap/swap-views";
-import { addressBookFlow, connectedSitesFlow } from "./support-flows";
+import { networkDisplayName } from "../../shared/network-label";
+import { outcomeReceiptSection } from "../../shared/outcome-receipt";
+import { DEPLOY_NEEDS_STRK } from "../../shell/deploy-errors";
+import { addressBookFlow, type ConnectedSitesState, connectedSitesFlow } from "./support-flows";
 
 export { sendFlow } from "../../journeys/send/send-views";
 export { backupHubFlow as backupFlow } from "../../journeys/settings/settings-views";
@@ -74,6 +84,7 @@ const receiveFlow = (
   account: AccountRef | null,
   privacy: PrivacyDisclosureState,
   poolAction: PoolNoticeAction,
+  classHashVerification: ClassHashVerification | null,
 ): string =>
   flowHeader("Receive", status) +
   flowScreen(
@@ -83,6 +94,8 @@ const receiveFlow = (
         account
           ? receiveAddressView({
               address: account.address,
+              classHash: account.classHash,
+              classHashVerification,
               copyLabel: "Copy address",
               hint: `Only send ${status.network} assets to this address.`,
               networkId: status.networkId,
@@ -96,6 +109,26 @@ const receiveFlow = (
   );
 
 /**
+ * The deploy screen's notes for an account that is not deployed (issue 662).
+ * A balance read that found no STRK says so before the press rather than after
+ * a node rejection; an unread balance (`null`) says nothing. An account whose
+ * first send deploys it is told deploying here is optional; an undeployed
+ * Braavos account is refused on a first send, so it is not.
+ */
+const deployNotes = (
+  account: AccountRef,
+  deployment: boolean | null,
+  fundedForFees: boolean | null,
+): string => {
+  if (deployment !== false) return "";
+  const notes = [
+    ...(fundedForFees === false ? [DEPLOY_NEEDS_STRK] : []),
+    ...(account.accountContractType === "braavos" ? [] : [FIRST_SEND_DEPLOYS]),
+  ];
+  return notes.map((note) => `<p class="hint">${escapeHtml(note)}</p>`).join("");
+};
+
+/**
  * Account deployment follows the same review and receipt model as other
  * fee-paying transactions instead of expanding controls into Home.
  */
@@ -104,52 +137,109 @@ const deployAccountFlow = (
   account: AccountRef | null,
   preferences: WalletPreferences | null,
   deployment: boolean | null,
+  fundedForFees: boolean | null,
 ): string =>
-  flowHeader(
-    "Deploy account",
-    status,
-    account ? accountDisplayName(account, preferences) : undefined,
-  ) +
+  flowHeader("Deploy account", status) +
   flowScreen(
     "deploy-account",
     `<section class="section">
       ${
         account
-          ? `<section id="deploy-review-stage">
-              ${reviewOutcome("Deploy this account contract on Starknet so it can submit transactions.")}
+          ? `<section class="section" id="deploy-review-stage">
               ${receipt([
                 { label: "Account", value: accountDisplayName(account, preferences) },
-                { label: "Address", value: accountLabel(account.address), valueStyle: "code" },
                 {
-                  label: "Contract",
-                  value: knownAccountType(account.classHash) ?? "Starknet account",
+                  action: {
+                    attributes: { "data-copy": account.address },
+                    icon: "copy",
+                    label: "Copy address",
+                  },
+                  label: "Address",
+                  value: accountLabel(account.address),
+                  valueStyle: "code",
                 },
-                { label: "Network", value: status.network },
+                { label: "Network", value: networkDisplayName(status.network) },
               ])}
-              ${reviewPanel([], "Deployment creates this account on-chain. Its address and signing authority do not change.")}
+              ${deployNotes(account, deployment, fundedForFees)}
               <div id="deploy-review" aria-live="polite"></div>
               ${button({
                 attributes: { id: "deploy-button" },
                 disabled: deployment !== false,
                 icon: "check",
-                label: deployment === true ? "Account already deployed" : "Review deployment",
+                label: deployment === true ? "Account already deployed" : "Deploy",
               })}
               <p id="deploy-result" role="status"></p>
             </section>
-            <section class="send-outcome send-success" id="deploy-success" role="status" aria-live="polite" hidden>
-              <span class="send-outcome-mark" aria-hidden="true">
-                <svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg>
-              </span>
-              <div class="send-outcome-copy">
-                <p class="send-outcome-kicker">Submitted to Starknet</p>
-                <h2>Deployment submitted</h2>
-                <p>Your account will be ready once Starknet confirms this transaction.</p>
-                <code id="deploy-hash"></code>
-              </div>
-              ${button({ attributes: { "data-view": "home" }, icon: "home", label: "Back to home" })}
-            </section>`
+            ${outcomeReceiptSection("deploy-success")}`
           : noAccountEmpty(status)
       }
+    </section>`,
+  );
+
+/**
+ * Renders the in-wallet recovery-phrase import: enter another wallet's phrase,
+ * scan its indices with the shared grouped picker, and import the selected
+ * accounts into the unlocked vault. The phrase lives only in its form fields
+ * until the single privileged import request.
+ */
+export const importPhraseFlow = (status: WalletStatus): string =>
+  flowHeader("Import a recovery phrase", status, `Add existing accounts on ${status.network}`) +
+  flowScreen(
+    "import-phrase",
+    `<section class="section">
+      <p class="review-flag" role="note">Anyone with this phrase controls its accounts.</p>
+      <form id="import-phrase-form" class="stack" novalidate>
+        <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
+        <div class="recovery-actions">
+          <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
+          <button class="onboarding-inline-action" id="phrase-clear" type="button">Clear</button>
+        </div>
+        <p id="recovery-result" role="status"></p>
+        ${button({
+          attributes: { id: "import-phrase-search" },
+          disabled: true,
+          label: "Find its accounts",
+        })}
+        <div id="import-phrase-scan" hidden>
+${recoveryScanFields()}
+          ${button({
+            attributes: { id: "recover-accounts-button" },
+            disabled: true,
+            label: "Import selected accounts",
+          })}
+        </div>
+      </form>
+    </section>`,
+  );
+
+/**
+ * Renders the rescan of this wallet's own accounts, reached from the add-account
+ * chooser. Reuses the shared grouped scan; there is nothing to type on this
+ * screen, because the background reads the phrase the wallet already holds.
+ */
+export const findAccountsFlow = (status: WalletStatus): string =>
+  flowHeader(
+    "Find my other accounts",
+    status,
+    `Search this wallet's accounts on ${status.network}`,
+  ) +
+  flowScreen(
+    "find-accounts",
+    `<section class="section">
+      <p class="review-flag" role="note">Only accounts derived from this wallet's own phrase are searched.</p>
+      <form id="find-accounts-form" class="stack" novalidate>
+        <p class="hint">Searching uses the phrase this wallet already holds; there is nothing to type here.</p>
+        ${button({ attributes: { id: "find-accounts-search" }, label: "Search for accounts" })}
+        <div id="find-accounts-scan" hidden>
+${recoveryScanFields()}
+          ${button({
+            attributes: { id: "recover-accounts-button" },
+            disabled: true,
+            label: "Add selected accounts",
+          })}
+        </div>
+        <p id="find-accounts-result" role="status"></p>
+      </form>
     </section>`,
   );
 
@@ -162,15 +252,15 @@ export const importKeyFlow = (status: WalletStatus): string =>
   flowScreen(
     "import-key",
     `<section class="section">
-      <p class="review-flag" role="note">Anyone with this key controls the account. Paste it only on a device you trust.</p>
+      <p class="review-flag" role="note">Anyone with this key controls the account.</p>
       <form id="import-key-form" class="stack">
         ${selectField({
           hint: "Choose the contract that already owns this key. A different choice derives a different address.",
           label: "Account contract",
           name: "accountContractType",
           options: [
-            { label: "OpenZeppelin Account — Recommended", value: "openzeppelin" },
-            { label: "Argent Account", value: "argent" },
+            { label: "Bramble (recommended)", value: "openzeppelin" },
+            { label: "Ready", value: "argent" },
           ],
           selected: "openzeppelin",
         })}
@@ -185,12 +275,13 @@ export const importKeyFlow = (status: WalletStatus): string =>
         })}
         ${textField({
           autocomplete: "off",
-          hint: "Argent only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for MC Wallet's public-key salt.",
-          label: "Argent deployment salt (optional)",
+          hint: "Ready accounts only. Enter the original DEPLOY_ACCOUNT salt to recover an externally created account; leave blank for Bramble's public-key salt.",
+          label: "Ready deployment salt (optional)",
           name: "deploymentSalt",
           placeholder: "0x…",
           spellcheck: false,
         })}
+        ${addressFinderFields("key", { hidden: true })}
         ${button({
           icon: "wallet",
           label: "Import account",
@@ -202,151 +293,35 @@ export const importKeyFlow = (status: WalletStatus): string =>
   );
 
 /**
- * Renders the on-chain class-hash verification state shown beneath the account's
- * class hash. `null` is the still-loading state (kept visually distinct from a
- * confirmed result); a `mismatch` is a security signal and is surfaced as an
- * assertive alert. Only an exact on-chain match reads as verified.
- */
-export const classHashVerificationBadge = (verification: ClassHashVerification | null): string => {
-  if (verification === null) {
-    return `<p class="verify-status pending" role="status">${icon("refresh")}Verifying on-chain…</p>`;
-  }
-  switch (verification.status) {
-    case "verified":
-      return `<p class="verify-status verified" role="status">${icon("shield")}Verified on-chain</p>`;
-    case "mismatch":
-      return `<p class="verify-status mismatch" role="alert">${icon("alert")}On-chain mismatch — the contract deployed at this address runs class <code>${escapeHtml(verification.onChainClassHash)}</code>, not the class shown above. Do not trust this account until resolved.</p>`;
-    case "undeployed":
-      return `<p class="verify-status pending" role="status">${icon("alert")}Not deployed yet — the class hash cannot be verified on-chain until this account is deployed.</p>`;
-    case "unreachable":
-      return `<p class="verify-status pending" role="status">${icon("alert")}Could not reach the network — shown from local data and not yet verified on-chain.</p>`;
-  }
-};
-
-/**
- * Manage accounts & groups flow: the single management surface reached from the
- * drawer's "Manage accounts & groups" entry and the Settings menu. Switch the
- * active account, add one, manage groups (create/rename/change-icon/delete plus
- * bulk assignment) in the Groups accordion, name the account, and inspect
- * identifiers. `expandedGroupId` selects the one open Groups panel — a group's
- * bulk members editor or the "Create a group" panel (null = all collapsed).
+ * Manage accounts & folders flow: the single management surface reached from the
+ * drawer's "Manage accounts & folders" entry and the Settings menu. Name every
+ * account on this network, add one, and manage groups (create/rename/
+ * change-icon/delete plus bulk assignment) in the Groups accordion.
+ * `expandedGroupId` selects the one open Groups panel — a group's bulk members
+ * editor or the "Create a folder" panel (null = all collapsed). Both default
+ * folders are shown even when the wallet has never stored a group, matching the
+ * drawer, so they can be renamed here.
+ *
+ * Switching accounts is the drawer's job and is not repeated here, and the
+ * account's identifiers (address, signer public key, class hash) live on
+ * Receive, which is the screen that exists to hand them out.
  */
 export const accountFlow = (
   status: WalletStatus,
-  account: AccountRef | null,
   preferences: WalletPreferences | null,
   expandedGroupId: string | null = null,
-  classHashVerification: ClassHashVerification | null = null,
-  multisigs: readonly ArgentMultisigView[] = [],
-  selectedMultisigId: string | null = null,
 ): string => {
-  const networkAccounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
-  const networkMultisigs = multisigs.filter(
-    (stored) => stored.record.networkId === status.networkId,
-  );
-  const accountType = account ? knownAccountType(account.classHash) : null;
-  const groups = preferences?.groups ?? [];
-  // One grouped picker owns the whole "which account" task: every account row,
-  // then "Add account" as the group's terminal action — not a separate boxed
-  // section. The active account's editable name and its identifiers follow as
-  // one receipt, truncated with copy controls, so the screen reads top to
-  // bottom: pick → organise → inspect.
+  const groups = withDefaultGroups(preferences?.groups ?? []);
+  // The screen reads top to bottom: name the accounts, then file them. Both
+  // halves read the same seeded folder list, so a wallet that has never stored
+  // a group still shows "My accounts" and "Archived accounts" on both.
   return (
-    flowHeader("Accounts & groups", status, `On ${status.network}`) +
+    flowHeader("Accounts & folders", status) +
     flowScreen(
       "account",
-      `<section class="section">
-        <p class="eyebrow">Accounts</p>
-        <div class="option-list" role="group" aria-label="Accounts">
-          ${networkAccounts
-            .map((stored) => {
-              const memberGroups = groups.filter((group) => group.accountIds.includes(stored.id));
-              const selected = selectedMultisigId === null && stored.id === account?.id;
-              return `<button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${selected}">
-                    <span class="option-avatar">${accountAvatar(stored.address)}</span>
-                    <span class="option-copy">
-                      <span class="option-name"><strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>${accountGroupsLine(memberGroups)}</span>
-                      <code>${accountLabel(stored.address)}</code>
-                    </span>
-                    ${selected ? `<span class="option-mark">${icon("check")}</span>` : ""}
-                  </button>`;
-            })
-            .join("")}
-          ${multisigAccountOptions(networkMultisigs, selectedMultisigId)}
-          ${menuRow({
-            attributes: {
-              id: "new-account",
-              title: `Derives the next account on ${status.network} from this wallet's recovery phrase.`,
-            },
-            className: "row-action",
-            icon: "plus",
-            label: "Add account",
-          })}
-        </div>
-        ${networkAccounts.length === 0 && networkMultisigs.length === 0 ? noAccountEmpty(status) : ""}
-        <p id="picker-result" role="status"></p>
-        <p id="new-account-result" role="status"></p>
-      </section>
-      ${groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks)}
-      ${
-        account
-          ? `<section class="section">
-              <p class="eyebrow">${selectedMultisigId === null ? "Active account" : "Current signer"}</p>
-              <form id="label-form">
-                ${textField({
-                  autocomplete: "off",
-                  hint: "Shown instead of the address. Leave empty to clear.",
-                  label: "Name",
-                  maxlength: 64,
-                  name: "label",
-                  placeholder: accountLabel(account.address),
-                  value: preferences?.accountLabels?.[account.id] ?? "",
-                })}
-                ${button({
-                  icon: "check",
-                  label: "Save name",
-                  type: "submit",
-                  variant: "secondary",
-                })}
-                <p id="label-result" role="status"></p>
-              </form>
-              ${receipt([
-                {
-                  action: {
-                    attributes: { "data-copy": account.address },
-                    icon: "copy",
-                    label: "Copy address",
-                  },
-                  label: "Address",
-                  value: accountLabel(account.address),
-                  valueStyle: "code",
-                },
-                {
-                  action: {
-                    attributes: { "data-copy": account.publicKeyX },
-                    icon: "copy",
-                    label: "Copy signer public key",
-                  },
-                  label: "Signer public key",
-                  value: accountLabel(account.publicKeyX),
-                  valueStyle: "code",
-                },
-                {
-                  action: {
-                    attributes: { "data-copy": account.classHash },
-                    icon: "copy",
-                    label: "Copy class hash",
-                  },
-                  label: "Class hash",
-                  value: accountLabel(account.classHash),
-                  valueStyle: "code",
-                },
-                ...(accountType ? [{ label: "Type", value: accountType }] : []),
-              ])}
-              ${classHashVerificationBadge(classHashVerification)}
-            </section>`
-          : ""
-      }`,
+      accountNamesSection(status, preferences, groups) +
+        hiddenAccountsSection(status, preferences) +
+        groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks),
     )
   );
 };
@@ -360,19 +335,23 @@ export const simpleFlowScreen = (
   activeView: WalletView,
   ctx: {
     readonly account: AccountRef | null;
-    readonly allowances: readonly AllowanceView[];
+    readonly allowances: AllowanceListing;
+    readonly staking?: StakingState;
     readonly balances: readonly TokenBalance[];
     readonly changes: Readonly<Record<string, number>>;
     readonly classHashVerification: ClassHashVerification | null;
-    readonly connectedSites: readonly ConnectedSite[];
+    readonly connectedSites: ConnectedSitesState;
     readonly currency: DisplayCurrency;
     readonly deployment: boolean | null;
     readonly expandedGroupId: string | null;
+    /** Whether a successful balance read found STRK; `null` when unread. */
+    readonly fundedForFees?: boolean | null;
     readonly multisigs?: readonly ArgentMultisigView[];
     readonly selectedMultisigId?: string | null;
     readonly preferences: WalletPreferences | null;
     readonly prices: Readonly<Record<string, number>>;
     readonly privacy: PrivacyDisclosureState;
+    readonly selectedTokenId?: string | null;
     readonly sendIntent?: SendIntent | null;
     readonly status: WalletStatus;
   },
@@ -389,41 +368,54 @@ export const simpleFlowScreen = (
         ctx.currency,
         (ctx.multisigs ?? []).map((view) => view.record),
         ctx.sendIntent ?? null,
+        ctx.selectedTokenId ?? null,
       );
     case "swap":
       return swapFlow(ctx.status, ctx.account);
     case "receive":
-      return receiveFlow(ctx.status, ctx.account, ctx.privacy, poolNoticeAction(ctx));
+      return receiveFlow(
+        ctx.status,
+        ctx.account,
+        ctx.privacy,
+        poolNoticeAction(ctx),
+        ctx.classHashVerification,
+      );
     case "deploy-account":
-      return deployAccountFlow(ctx.status, ctx.account, ctx.preferences, ctx.deployment);
+      return deployAccountFlow(
+        ctx.status,
+        ctx.account,
+        ctx.preferences,
+        ctx.deployment,
+        ctx.fundedForFees ?? null,
+      );
     case "network":
       return networkFlow(ctx.status, ctx.preferences);
     case "advanced-network":
       return advancedNetworkFlow(ctx.status, ctx.preferences);
     case "account":
-      return accountFlow(
-        ctx.status,
-        ctx.account,
-        ctx.preferences,
-        ctx.expandedGroupId,
-        ctx.classHashVerification,
-        ctx.multisigs,
-        ctx.selectedMultisigId,
-      );
+      return accountFlow(ctx.status, ctx.preferences, ctx.expandedGroupId);
     case "import-key":
       return importKeyFlow(ctx.status);
+    case "import-phrase":
+      return importPhraseFlow(ctx.status);
+    case "find-accounts":
+      return findAccountsFlow(ctx.status);
     case "address-book":
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":
       return connectedSitesFlow(ctx.status, ctx.connectedSites);
+    case "staking":
+      return stakingFlow(ctx.status, ctx.account, ctx.staking ?? STAKING_LOADING);
     case "allowances":
-      return allowancesFlow(ctx.status, ctx.account, ctx.allowances);
+      return allowancesFlow(ctx.status, ctx.account, ctx.allowances, ctx.preferences);
+    case "shadow-accounts":
+      return shadowAccountsFlow(ctx.status);
     case "appearance":
       return appearanceFlow(ctx.status, ctx.preferences);
     case "request-settings":
       return requestSettingsFlow(ctx.status, ctx.preferences);
-    case "security":
-      return securityFlow(ctx.status);
+    case "privacy-unlock":
+      return privacyUnlockFlow(ctx.status);
     case "backup-export":
       return backupExportFlow(ctx.status);
     case "backup-restore":

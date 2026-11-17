@@ -195,6 +195,7 @@ describe("repository vendoring steps", () => {
   test("every vendor script is discovered from package.json", async () => {
     expect(await vendorScriptPaths()).toEqual([
       "scripts/vendor-argent-contracts.ts",
+      "scripts/vendor-ledger-app.ts",
       "scripts/vendor-privacy-sdk.ts",
     ]);
   });

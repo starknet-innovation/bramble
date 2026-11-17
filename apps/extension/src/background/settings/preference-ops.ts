@@ -3,7 +3,7 @@
  * address book management, account labels, display settings, RPC overrides,
  * and backup import. All are privileged extension-page messages.
  */
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { WalletPreferences, WalletPreferencesStore } from "@bramble/settings/preferences";
 import {
   readRemoveNftInput,
   readSetNftIndexerUrlInput,
@@ -23,6 +23,7 @@ import {
   readSetGroupIconInput,
   readSetNostrRelayUrlInput,
   readSetRpcOverrideInput,
+  readSetSelectedMultisigInput,
   readSetStrk20NetworkConfigInput,
   readTypeOnlyInput,
 } from "../routing/message-inputs";
@@ -132,6 +133,11 @@ const PREFERENCE_HANDLERS: Readonly<Record<string, PreferenceHandler>> = {
     readSetRpcOverrideInput,
     "invalid rpc override request",
     (store, input) => store.setRpcOverride(input),
+  ),
+  "wallet.setSelectedMultisig": parseThen(
+    readSetSelectedMultisigInput,
+    "invalid multisig selection",
+    (store, input) => store.setSelectedMultisig(input),
   ),
   "wallet.setStrk20NetworkConfig": parseThen(
     readSetStrk20NetworkConfigInput,

@@ -4,12 +4,13 @@
  * user currently has active.
  */
 import { describe, expect, test } from "bun:test";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -74,7 +75,7 @@ const makeHarness = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const allowanceStore = memoryAllowanceStore();
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     allowanceStore,
     runtimeRpc: makeRuntimeRpc(),
     session,

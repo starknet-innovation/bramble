@@ -53,7 +53,8 @@ describe("createSidepanelRuntime — emptyStatus and no-runtime fallback", () =>
     expect(await wallet.loadStatus()).toEqual(unavailableStatus());
     expect((await wallet.loadStatus()).hasVault).toBe(true);
     expect(await wallet.loadBalances()).toEqual({ error: "balances unavailable" });
-    expect(await wallet.connectedSites()).toEqual([]);
+    // A failed read is a failure, never an empty list (Sherlock 234).
+    await expect(wallet.connectedSites()).rejects.toThrow("connected sites unavailable");
     await expect(wallet.generateMnemonic()).rejects.toThrow("wallet unavailable");
   });
 });
@@ -270,11 +271,12 @@ describe("approvals and connected sites", () => {
     );
   });
 
-  test("connectedSites returns the sites, or [] when the guard fails", async () => {
+  test("connectedSites returns the sites, and throws when the guard fails", async () => {
     expect(await runtimeReturning(connectedSitesResponse).connectedSites()).toEqual(
       connectedSitesResponse.sites,
     );
-    expect(await runtimeReturning(errorEnvelope).connectedSites()).toEqual([]);
+    // Sherlock 234: an empty list would read as "no site is connected".
+    await expect(runtimeReturning(errorEnvelope).connectedSites()).rejects.toThrow();
   });
 
   test("revokeOrigin returns the remaining sites and throws on failure", async () => {
@@ -330,7 +332,7 @@ describe("activity feed", () => {
         historyUnavailable: true,
         ok: true,
       }).loadActivity(),
-    ).toEqual({ entries: [activityEntry], historyUnavailable: true });
+    ).toEqual({ entries: [activityEntry], historyUnavailable: true, relays: [] });
   });
 
   test("loadActivity carries an explicit shared-account scope", async () => {
@@ -349,13 +351,15 @@ describe("activity feed", () => {
     expect(await runtimeReturning({ activity: [activityEntry], ok: true }).loadActivity()).toEqual({
       entries: [activityEntry],
       historyUnavailable: false,
+      relays: [],
     });
   });
 
-  test("loadActivity returns an empty, non-degraded feed when the guard fails", async () => {
+  test("loadActivity reports unavailable history when the response guard fails", async () => {
     expect(await runtimeReturning(errorEnvelope).loadActivity()).toEqual({
       entries: [],
-      historyUnavailable: false,
+      historyUnavailable: true,
+      relays: [],
     });
   });
 });
@@ -406,6 +410,7 @@ describe("token and preference wrappers", () => {
       wallet.setDisplay({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        productAnalytics: true,
         reliabilityDiagnostics: true,
         theme: "dark",
       }),
@@ -413,6 +418,7 @@ describe("token and preference wrappers", () => {
     expect(sent[0]).toEqual({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
       type: "wallet.setDisplay",
@@ -430,8 +436,14 @@ describe("token and preference wrappers", () => {
       hasVault: true,
       locked: false,
       networkId: "SN_MAIN",
+      phishingFeed: null,
+      privacy: [
+        { count: 1, durationMs: 41_000, kind: "deposit", outcome: "ok", phase: "proving" },
+        { count: 1, durationMs: 62_500, kind: "deposit", outcome: "timeout", phase: "job" },
+      ],
       ready: true,
       rpc: [{ count: 3, endpoint: "wallet-gateway", latencyMs: 42, outcome: "ok" }],
+      storage: [{ count: 1, outcome: "trimmed", store: "activity" }],
     } as const;
     await expect(runtimeReturning({ diagnostics, ok: true }).loadDiagnostics()).resolves.toEqual(
       diagnostics,
@@ -474,22 +486,13 @@ describe("token and preference wrappers", () => {
       discoveryUrl: "https://discovery.example",
       poolAddress: "0x1",
       proverUrl: "https://prover.example",
-      subaccountAnonymizerAddress: "0x2",
+      shadowAccountAnonymizerAddress: "0x2",
     };
     await expect(
       runtimeReturning(preferencesResponse).setStrk20NetworkConfig("SN_MAIN", config),
     ).resolves.toBeUndefined();
     await expect(runtimeReturning({}).setStrk20NetworkConfig("SN_MAIN", config)).rejects.toThrow(
       "privacy service configuration failed",
-    );
-  });
-
-  test("setNftIndexerUrl resolves on preferences and throws otherwise", async () => {
-    await expect(
-      runtimeReturning(preferencesResponse).setNftIndexerUrl("https://idx"),
-    ).resolves.toBeUndefined();
-    await expect(runtimeReturning({}).setNftIndexerUrl("https://idx")).rejects.toThrow(
-      "indexer endpoint update failed",
     );
   });
 });

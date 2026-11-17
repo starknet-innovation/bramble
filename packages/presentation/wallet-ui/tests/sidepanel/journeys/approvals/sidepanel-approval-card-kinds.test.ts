@@ -1,13 +1,16 @@
 /**
  * Approval-card rendering per kind: exercises every renderer reached through
  * `approvalCard` — connection, sign-typed-data, strk20-invoke,
- * switch-chain, add-chain, declare — plus the watch-asset empty-token guard.
+ * switch-chain, declare — plus the watch-asset empty-token guard.
  * Complements sidepanel-approval-card.test.ts, which covers invoke and
  * watch-asset (with token) only.
  */
 import { describe, expect, test } from "bun:test";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import type { ArgentMultisigView } from "../../../../src/popup/responses/multisig-responses";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { approvalCard } from "../../../../src/sidepanel/journeys/approvals/approval-cards";
+import { accountDisplayName } from "../../../../src/sidepanel/shared/parts";
 
 const account = {
   accountContractType: "openzeppelin" as const,
@@ -38,16 +41,87 @@ const ID = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
 const ORIGIN = "https://dapp.example";
 
 describe("approvalCard renders each approval kind", () => {
-  test("connection request shows the connect copy and enabled Approve", () => {
+  // Spec item 15: the account a connection will share is named on the card
+  // face, echoed back with the decision, and Deny precedes Approve in DOM order.
+  test("connection request names the reviewed account and network on the card face", () => {
     const approval: PendingApproval = { id: ID, kind: "connect", origin: ORIGIN };
     const html = approvalCard(approval, status);
+    const active = status.accounts.find((entry) => entry.id === status.activeAccountId);
 
     expect(html).toContain("Connection request");
     expect(html).toContain(ORIGIN);
-    expect(html).toContain("Share the granted account addresses with this site");
-    expect(html).toContain(`data-approval-action="approve" data-approval-id="${ID}"`);
+    expect(html).toContain("Shares this account&#39;s address with this site");
+    expect(html).not.toContain("accounts already shared");
+    // The identity is on the face, not inside the technical disclosure.
+    expect(html.indexOf("<dt>Account</dt>")).toBeGreaterThan(-1);
+    expect(html).not.toContain("request-technical");
+    // The familiar display name leads, stacked over the address it shares.
+    expect(html).toContain(`<strong>${accountDisplayName(account, null)}</strong>`);
+    expect(html).toContain(`title="${active?.address}"`);
+    expect(html).toContain(`<dt>Network</dt><dd>${status.network}</dd>`);
+    expect(html).toContain(`data-approval-account="${status.activeAccountId}"`);
+    expect(html).toContain(`data-approval-action="approve"`);
+    // The consent action names what it does; the escape hatch reads as escaping.
+    expect(html).toContain(">Connect account</");
+    expect(html).toContain(">Cancel</");
     // Not locked, not blocked: the approve button is enabled.
     expect(html).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
+    // Deny is reached first by keyboard and eye.
+    expect(html.indexOf('data-approval-action="deny"')).toBeLessThan(
+      html.indexOf('data-approval-action="approve"'),
+    );
+  });
+
+  test("connection request states the grant delta only when a grant already exists", () => {
+    const html = approvalCard(
+      { existingGrant: true, id: ID, kind: "connect", origin: ORIGIN },
+      status,
+    );
+    expect(html).toContain("Adds this account to the ones already shared with this site");
+    expect(html).not.toContain("Shares this account&#39;s address");
+    // Both branches state that the share lasts until the site is disconnected;
+    // the returning-grant branch used to drop it.
+    expect(html).toContain("until you disconnect it");
+  });
+
+  test("a locked connection request withholds the account echo and Approve", () => {
+    const html = approvalCard(
+      { id: ID, kind: "connect", origin: ORIGIN },
+      { ...status, activeAccountId: null, locked: true },
+    );
+    expect(html).toContain("Unlock the wallet to see which account will be shared.");
+    expect(html).not.toContain("data-approval-account=");
+    expect(html).toContain("disabled");
+  });
+
+  test("a selected multisig is named when it is the only visible account", () => {
+    const multisigId = "SN_MAIN:0xabc123";
+    const view = {
+      authorityStatus: "available",
+      config: null,
+      record: {
+        accountContractType: "argent-multisig",
+        address: "0xabc123",
+        classHash: "0x1",
+        id: multisigId,
+        name: "Treasury",
+        networkId: "SN_MAIN",
+      },
+      unsupportedSigners: [],
+    } as ArgentMultisigView;
+    const html = approvalCard(
+      { id: ID, kind: "connect", origin: ORIGIN },
+      status,
+      { hiddenAccountIds: [account.id] } as unknown as WalletPreferences,
+      { multisigs: [view], selectedMultisigId: multisigId },
+    );
+    expect(html).toContain("Treasury");
+    expect(html).toContain(`data-connect-choice="${multisigId}"`);
+    expect(html).toContain('data-connect-kind="multisig"');
+    expect(html).toContain(`data-approval-account="${multisigId}"`);
+    expect(html).not.toContain("<dt>Account</dt>");
+    expect(html).not.toContain(accountDisplayName(account, null));
+    expect(html).not.toContain(account.address);
   });
 
   test("sign-typed-data request decodes the SNIP-12 payload", () => {
@@ -78,7 +152,8 @@ describe("approvalCard renders each approval kind", () => {
     const html = approvalCard(approval, status);
 
     expect(html).toContain("Sign request");
-    expect(html).toContain("only sign messages you understand");
+    expect(html).toContain("Signatures can authorize transfers or account access");
+    expect(html).not.toContain("Signing does not move funds");
     // The decoded domain and message fields are rendered.
     expect(html).toContain("MyDapp");
     expect(html).toContain("Hello");
@@ -135,7 +210,7 @@ describe("approvalCard renders each approval kind", () => {
           collect_policy: { amount: "0xa", type: "exact" },
           dapp_name: "Example",
           nonce: "0x7",
-          type: "subaccount_invoke",
+          type: "shadow_account_invoke",
         },
       ],
       id: ID,
@@ -158,6 +233,9 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("0x7");
     expect(html).toContain("0x1, 0x2");
     expect(html).toContain("Relay fee action · Withdrawal");
+    // A listed relay fee is a charge, so the card must not claim there is none.
+    expect(html).not.toContain("charges no fee");
+    expect(html).toContain("no public wallet fee");
     expect(html).toContain("0x99");
     expect(html).toContain("3 actions · including relay fee");
     expect(html).toContain("public deposit approval");
@@ -187,7 +265,7 @@ describe("approvalCard renders each approval kind", () => {
     {
       action: "Share commitment",
       hint: "may link sessions for this site",
-      kind: "strk20-subaccount",
+      kind: "strk20-shadow-account",
       title: "Private identity request",
     },
   ] as const) {
@@ -248,23 +326,6 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("Switch network");
   });
 
-  test("add-chain request shows the add-network copy with an always-enabled Approve", () => {
-    const approval: PendingApproval = {
-      id: ID,
-      kind: "add-chain",
-      origin: ORIGIN,
-      summaries: ["Add network Custom Devnet"],
-    };
-    // Even a locked wallet leaves add-network enabled (addChainCard passes false).
-    const html = approvalCard(approval, lockedStatus);
-
-    expect(html).toContain("Add network request");
-    expect(html).toContain("asking to add a custom Starknet network");
-    expect(html).toContain("Add network Custom Devnet");
-    expect(html).toContain("Add network");
-    expect(html).not.toContain(`data-approval-id="${ID}" type="button" disabled`);
-  });
-
   test("declare request shows the declare-contract copy and locks Declare while locked", () => {
     const approval: PendingApproval = {
       id: ID,
@@ -319,5 +380,68 @@ describe("approvalCard renders each approval kind", () => {
   test("watch-asset request without a token renders nothing", () => {
     const approval: PendingApproval = { id: ID, kind: "watch-asset", origin: ORIGIN };
     expect(approvalCard(approval, status)).toBe("");
+  });
+
+  test("watch-asset shows the token contract truncated and copies it in full", () => {
+    const address = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+    const html = approvalCard(
+      {
+        id: ID,
+        kind: "watch-asset",
+        origin: ORIGIN,
+        token: { address, decimals: 6, name: "USD Coin", networkId: "SN_MAIN", symbol: "USDC" },
+      },
+      status,
+    );
+
+    expect(html).toContain(
+      `<dt>Address</dt><dd><code title="${address}">0x053c…68a8</code><button class="icon-button ghost copy-inline" data-copy="${address}" type="button" aria-label="Copy token address"`,
+    );
+    expect(html).not.toContain(`<code>${address}</code>`);
+  });
+
+  test("an already-tracked watch-asset is a close-only notice (audit M1)", () => {
+    const address = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+    const html = approvalCard(
+      {
+        alreadyTracked: true,
+        id: ID,
+        kind: "watch-asset",
+        origin: ORIGIN,
+        token: { address, decimals: 6, name: "USD Coin", networkId: "SN_MAIN", symbol: "USDC" },
+      },
+      status,
+    );
+    expect(html).toContain("data-approval-notice");
+    expect(html).toContain("Already in this wallet");
+    expect(html).toContain("<strong>USDC</strong>");
+    expect(html).toContain('data-approval-action="deny"');
+    expect(html).toContain("Close");
+    expect(html).not.toContain('data-approval-action="approve"');
+  });
+
+  test("technical details name the signing account by address, truncated and copyable", () => {
+    const html = approvalCard(
+      {
+        context: {
+          accountId: account.id,
+          chainId: "0x534e5f4d41494e",
+          networkId: "SN_MAIN",
+          payloadDigest: `sha256:${"a".repeat(64)}`,
+        },
+        id: ID,
+        kind: "invoke",
+        origin: ORIGIN,
+        summaries: ["Transfer 1 STRK"],
+      },
+      status,
+    );
+
+    // The account id's network prefix never leaks into the shown value.
+    expect(html).toContain(
+      `<dt>Account</dt><dd><code title="${account.address}">0x1234…bcde</code><button class="icon-button ghost copy-inline" data-copy="${account.address}" type="button" aria-label="Copy account address"`,
+    );
+    expect(html).not.toContain("SN_MAI…");
+    expect(html).not.toContain(`data-copy="${account.id}"`);
   });
 });

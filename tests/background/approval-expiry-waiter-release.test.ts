@@ -12,9 +12,9 @@
  * runner too.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { errorForMessage, userRefusedOp } from "@mc-wallet/wallet-protocol/rpc-errors";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
+import { errorForMessage, userRefusedOp } from "@bramble/wallet-protocol/rpc-errors";
 import {
   APPROVAL_TTL_MS,
   createApprovalQueue,
@@ -35,6 +35,7 @@ import {
   createWallet,
   extensionSender,
   grantedOrigin,
+  testExtension,
 } from "../support/background-wallet-stub";
 import { flushHeld } from "../support/held";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
@@ -191,7 +192,7 @@ describe("the router context binds expiry to the queue it is given", () => {
   test("held dapp requests settle when their approval expires", async () => {
     const clock = { now: START };
     const approvals = createApprovalQueue({ now: () => clock.now });
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       approvals,
       preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
       runtimeRpc: makeRuntimeRpc(),

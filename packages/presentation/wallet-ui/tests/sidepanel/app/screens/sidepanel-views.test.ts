@@ -1,8 +1,7 @@
 /** Side-panel template and navigation contract checks. */
 import { describe, expect, test } from "bun:test";
-import { account, preferences, secondAccount } from "@mc-wallet/testkit/sidepanel";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
-import type { TokenBalance, WalletStatus } from "../../../../src/popup/responses/responses";
+import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
+import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard, WALLET_VIEWS } from "../../../../src/sidepanel/app/screens/views";
 import {
   activityEmptyCopy,
@@ -35,7 +34,6 @@ describe("sidepanel views", () => {
 
     expect(WALLET_VIEWS).toContain("receive");
     expect(html).toContain('class="wallet-dock"');
-    expect(html).toContain('role="tablist"');
     expect(dock).toContain('data-view="home"');
     expect(dock).toContain('data-view="activity"');
     expect(dock).toContain('data-view="settings"');
@@ -43,7 +41,10 @@ describe("sidepanel views", () => {
     expect(dock).not.toContain('data-view="receive"');
     expect(html).toContain('aria-controls="wallet-screen-home"');
     expect(html).toContain('aria-selected="true"');
-    expect(dock).toContain('class="nav-label"');
+    // Each root is named by a visible caption, not a hover-only tooltip.
+    expect(dock).toContain('aria-label="Home" aria-controls="wallet-screen-home"');
+    expect(dock).toContain('<span class="nav-label">Home</span>');
+    expect(dock).not.toContain('title="Home"');
     expect(dock).not.toContain('class="nav-tooltip"');
   });
 
@@ -100,7 +101,7 @@ describe("sidepanel views", () => {
     expect(requests).toContain('data-approval-surface="popup"');
     expect(requests).toMatch(/data-approval-surface="side-panel"[^>]*aria-pressed="true"/);
     expect(html).not.toContain('data-theme-id="system"');
-    // The dock is a solid anchored bottom bar (Clean Mono — no glass material).
+    // The dock is a solid floating pill (Clean Mono — no glass material).
     expect(html).toContain('class="wallet-dock"');
   });
 
@@ -129,14 +130,17 @@ describe("sidepanel views", () => {
     expect(html).not.toContain("wallet-dock");
   });
 
-  test("account flow lists network accounts and shows active identifiers", () => {
+  test("account flow lists every network account as an editable name", () => {
     const html = dashboard("account", status, [], preferences, { balances: [] });
 
-    expect(html).toMatch(new RegExp(`data-account-id="${account.id}"[^>]*aria-pressed="true"`));
-    expect(html).toMatch(
-      new RegExp(`data-account-id="${secondAccount.id}"[^>]*aria-pressed="false"`),
-    );
-    expect(html).toContain(account.classHash);
+    for (const stored of [account, secondAccount]) {
+      expect(html).toContain(`data-account-name-form="${stored.id}"`);
+      expect(html).toContain(`data-account-name="${stored.id}"`);
+    }
+    // Switching accounts and inspecting identifiers both moved off this screen —
+    // to the drawer and to Receive respectively.
+    expect(html).not.toContain("data-account-id=");
+    expect(html).not.toContain(account.classHash);
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
@@ -157,10 +161,12 @@ describe("sidepanel views", () => {
     expect(html).toContain(`data-approval-id="${pending[0]?.id}"`);
   });
 
-  test("swap flow renders the AVNU screen skeleton with staged sections", () => {
+  test("swap flow renders the avnu screen skeleton with staged sections", () => {
     const html = dashboard("swap", status, [], preferences, { balances: [] });
 
-    expect(html).toContain("Best route via AVNU");
+    // The rail names the three steps; the route is not the header's business.
+    expect(html).toMatch(/data-swap-step="edit"[\s\S]*"confirm"[\s\S]*"success"/);
+    expect(html).not.toContain("Best route via avnu");
     expect(html).toContain('id="swap-sell-amount"');
     expect(html).toContain('id="swap-flip"');
     expect(html).toContain('id="swap-review"');
@@ -169,57 +175,46 @@ describe("sidepanel views", () => {
     expect(html).not.toMatch(/<dl[^>]*id="swap-confirm-receipt"/);
     expect(html).toMatch(/id="swap-warning"[^>]*hidden/);
     expect(html).toMatch(/id="swap-success"[^>]*hidden/);
-    expect(html).toContain('class="swap-success-ring"');
-    expect(html).toContain('class="swap-success-check"');
-    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
+    expect(html).toContain('class="send-success-ring"');
+    expect(html).toContain('class="send-success-check"');
+    // Swap owns its back arrow so it can step from the review to the quote.
+    expect(html).toMatch(/id="swap-header-back"[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
 
-  test("explains why sending is unavailable instead of failing silently", () => {
+  test("disables review when the network has no tracked token to send", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
-    expect(html).toContain("No tokens are tracked on this network yet");
     expect(html).toMatch(/id="send-review-button" type="submit" disabled/);
   });
 
-  test("shows a deployment recovery chip only when the account is not deployed", () => {
+  test("Home says nothing about an account that is not on chain yet", () => {
+    // Home used to carry a "Deploy account" / "Fund with STRK" chip in the
+    // danger colour. The first send creates the account and quotes both fees as
+    // one, so the state is normal and the shortcut lives in Settings instead.
     const undeployed = dashboard("home", status, [], preferences, { balances: [] }, false);
-    const deployed = dashboard("home", status, [], preferences, { balances: [] }, true);
-    const unknown = dashboard("home", status, [], preferences, { balances: [] }, null);
 
-    expect(undeployed).toContain('class="deploy-notice"');
-    expect(deployed).not.toContain('class="deploy-notice"');
-    expect(unknown).not.toContain('class="deploy-notice"');
-  });
-
-  test("deploying stays disabled until the account can pay the fee in STRK", () => {
-    // Fees are paid in STRK, so only a STRK balance unlocks deployment.
-    const strkBalance = {
-      address: STRK_TOKEN_ADDRESS,
-      balance: "0x1",
-      decimals: 18,
-      formatted: "0.000000000000000001",
-      id: `SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`,
-      name: "Starknet Token",
-      networkId: "SN_MAIN" as const,
-      symbol: "STRK",
-    };
-    const empty = dashboard("home", status, [], preferences, { balances: [] }, false);
-    const funded = dashboard("home", status, [], preferences, { balances: [strkBalance] }, false);
-
-    expect(empty).toContain('data-view="receive"');
-    expect(empty).toContain("Fund with STRK");
-    expect(funded).toContain('data-view="deploy-account"');
-    expect(funded).toContain("Deploy account");
+    expect(undeployed).not.toContain("deploy-notice");
+    expect(undeployed).not.toContain("Deploy account");
+    expect(undeployed).not.toContain('data-view="deploy-account"');
+    // The dedicated deployment flow is reachable from the Settings hub itself,
+    // one tap in rather than four.
+    expect(dashboard("settings", status, [], preferences, { balances: [] }, false)).toContain(
+      'data-view="deploy-account"',
+    );
   });
 
   test("deploys a single-signer account in a dedicated transaction flow", () => {
     const html = dashboard("deploy-account", status, [], preferences, { balances: [] }, false);
     expect(html).toContain('id="wallet-screen-deploy-account"');
     expect(html).toContain('id="deploy-review-stage"');
-    expect(html).toContain("What will happen");
-    expect(html).toContain("Risk and recovery");
-    expect(html).toContain("Review deployment");
+    expect(html).not.toContain("What will happen");
+    expect(html).not.toContain("Risk and recovery");
+    // The receipt states the account, address and network, the header names the
+    // screen, and the fee is quoted onto it — so the control is the action.
+    expect(html).not.toContain("Deployment creates this account on-chain.");
+    expect(html).toContain(">Deploy<");
+    expect(html).not.toContain("Continue to approval");
     expect(html).toMatch(/id="deploy-success"[^>]*hidden/);
     expect(html).not.toContain("wallet-dock");
   });
@@ -227,13 +222,13 @@ describe("sidepanel views", () => {
   test("send flow reviews before it sends, without a fee-speed control", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
-    expect(html).toContain('id="review-panel"');
+    expect(html).toContain('id="send-review-risks"');
     expect(html).not.toContain('name="speed"');
     expect(html).not.toContain(">Speed<");
     expect(html).toContain("Review send");
     expect(html).toContain('class="liquid-dots"');
     expect(html).toContain('data-liquid-dots="send"');
-    expect(html).toContain('id="mc-liquid-dots-send"');
+    expect(html).toContain('id="bramble-liquid-dots-send"');
     expect(html).not.toContain("send-spin");
   });
 
@@ -251,14 +246,12 @@ describe("sidepanel views", () => {
     ]);
 
     expect(html).toContain('class="tx-kind-icon tx-kind-transfer accepted"');
-    expect(html).toContain("Send 1.5 ETH to");
+    expect(html).toContain("Sent 1.5 ETH");
     expect(html).toContain('id="activity-export"');
     expect(html).toContain('id="activity-refresh"');
 
     const empty = dashboard("activity", status, [], preferences, { balances: [] });
-    expect(empty).toContain(
-      "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.",
-    );
+    expect(empty).toContain("No activity yet. Transactions for this account appear here.");
     expect(empty).not.toContain("Couldn't load on-chain history");
 
     // historyUnavailable is the final positional arg: the full-screen degraded
@@ -277,25 +270,23 @@ describe("sidepanel views", () => {
       {},
       [],
       null,
-      [],
+      { entries: [], notices: [], unavailable: false },
       null,
       {},
       [],
       [],
       null,
       null,
-      null,
+      [],
       null,
       false,
       null,
       [],
-      null,
+      false,
       null,
       true,
     );
-    expect(degraded).toContain(
-      "load on-chain history. Showing transactions recorded on this device only",
-    );
+    expect(degraded).toContain("load on-chain history. Showing this device&#39;s records only.");
     expect(degraded).toContain("No transactions recorded on this device yet.");
   });
 
@@ -305,7 +296,7 @@ describe("sidepanel views", () => {
     // in-panel retry button wired to reload balances.
     expect(visibleHomeBalances({ error: "fetch failed" }, preferences)).toEqual([]);
 
-    const html = homeTabs({ error: "fetch failed" }, preferences, {}, {}, "usd", status);
+    const html = homeTabs({ error: "fetch failed" }, preferences, {}, {}, "usd");
     expect(html).toContain("panel-error");
     expect(html).toContain("data-reload-balances");
     expect(html).toContain("Try again");
@@ -330,71 +321,31 @@ describe("sidepanel views", () => {
     expect(home).toContain('class="avatar"');
 
     const accountFlowHtml = dashboard("account", status, [], labeled, { balances: [] });
-    expect(accountFlowHtml).toContain('id="label-form"');
+    expect(accountFlowHtml).toContain(`data-account-name-form="${account.id}"`);
     expect(accountFlowHtml).toContain('value="Savings"');
     expect(accountFlowHtml).toContain('class="option-avatar"');
+    // An unnamed account shows the generated name it falls back to, rather than
+    // an empty box that hides what the wallet calls it.
+    expect(accountFlowHtml).toMatch(
+      new RegExp(
+        `placeholder="[A-Z][a-z]+ [A-Z][a-z]+" value="" data-account-name="${secondAccount.id}"`,
+      ),
+    );
   });
 
-  test("avatars are deterministic Beam characters from the identity palette", () => {
+  test("avatars are deterministic birds from the identity palette", () => {
     // Account identity colour stays within the dedicated local tokens—no
     // gradients, remote imagery, raw colour values, or inset frames.
     const html = dashboard("home", status, [], preferences, { balances: [] });
     expect(html).toContain('class="avatar"');
-    expect(html).toContain('class="avatar-character"');
-    expect(html).toContain('class="avatar-eyes"');
-    expect(html).toContain('class="avatar-mouth"');
-    expect(html).toMatch(/fill="var\(--mc-account-avatar-\d\)"/);
-    expect(html).toMatch(/var\(--mc-account-avatar-(?:ink|paper)\)/);
+    expect(html).toContain('class="avatar-bird"');
+    expect(html).toMatch(/fill="var\(--bramble-account-avatar-ground-\d\)"/);
+    expect(html).toMatch(/fill="var\(--bramble-account-avatar-body-\d\)"/);
+    expect(html).toMatch(/var\(--bramble-account-avatar-(?:ink|paper)\)/);
     expect(html).not.toContain('class="avatar-frame"');
     expect(html).not.toContain("linearGradient");
     expect(html).not.toContain("<defs>");
     expect(html).not.toMatch(/fill="#/);
-  });
-
-  test("home hero carries the value and 24h delta without redundant identity copy", () => {
-    const tokenBalance: TokenBalance = {
-      address: "0x00aa",
-      balance: "10000000000000000000",
-      decimals: 18,
-      formatted: "10",
-      id: "SN_MAIN:TKN:0x00aa",
-      name: "Token",
-      networkId: "SN_MAIN",
-      symbol: "TKN",
-    };
-    // positional args: …, balances(5), deployment(6), transactions(7),
-    // connectedSites(8), prices(9), chart(10), selectedTokenId(11),
-    // allowances(12), selectedNftId(13), changes(14). The chart series (10) is
-    // still accepted for the token-detail flow but the home hero no longer
-    // renders a sparkline from it.
-    const html = dashboard(
-      "home",
-      status,
-      [],
-      preferences,
-      { balances: [tokenBalance] },
-      null,
-      [],
-      [],
-      { "0x00aa": 5 },
-      [1, 2, 3, 4],
-      null,
-      [],
-      null,
-      { "0x00aa": 4 },
-    );
-    const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
-    expect(hero).not.toContain('class="hero-eyebrow"');
-    expect(hero).not.toContain("Total balance");
-    expect(hero).not.toContain('data-copy="');
-    // 24h delta line: coloured magnitude + a muted "· 24h" window; +4% ⇒ up.
-    expect(hero).toContain('class="hero-change"');
-    expect(hero).toContain('class="hero-change-amt"');
-    expect(hero).toContain("· 24h");
-    // The portfolio area chart was removed — the hero has no sparkline markup.
-    expect(hero).not.toContain("hero-spark");
-    expect(hero).not.toContain("spark-line");
-    expect(hero).not.toContain("7d ago");
   });
 
   test("backup hub separates export and restore into focused screens", () => {
@@ -406,7 +357,6 @@ describe("sidepanel views", () => {
     expect(backupExport).toContain('id="backup-export"');
     const backupRestore = dashboard("backup-restore", status, [], preferences, { balances: [] });
     expect(backupRestore).toContain('id="backup-import"');
-    expect(backupRestore).toContain("Saved contacts and tracked assets");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain('class="wallet-dock"');
   });
@@ -416,8 +366,6 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="new-account"');
     expect(html).toContain("Add account");
-    expect(html).toContain("Signer public key");
-    expect(html).toContain(`data-copy="${account.publicKeyX}"`);
   });
 
   test("reveal flow re-authenticates and masks secrets until tapped", () => {

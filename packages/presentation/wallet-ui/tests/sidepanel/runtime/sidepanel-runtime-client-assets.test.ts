@@ -10,6 +10,7 @@
  * sidepanel-runtime-client.test.ts.
  */
 import { describe, expect, test } from "bun:test";
+import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
 import { createSidepanelRuntime } from "../../../src/sidepanel/runtime/runtime";
 import { unavailableStatus } from "../../../src/sidepanel/runtime/runtime-status";
 import {
@@ -88,6 +89,13 @@ describe("NFT wrappers", () => {
     );
   });
 
+  test("removeToken sends the token id, resolves on preferences, throws otherwise", async () => {
+    const { sent, wallet } = captureRuntime(preferencesResponse);
+    await expect(wallet.removeToken("SN_MAIN:PRZ:0xbad")).resolves.toBeUndefined();
+    expect(sent[0]).toEqual({ tokenId: "SN_MAIN:PRZ:0xbad", type: "wallet.removeToken" });
+    await expect(runtimeReturning({}).removeToken("id-1")).rejects.toThrow("remove token failed");
+  });
+
   test("removeNft resolves on preferences and throws otherwise", async () => {
     await expect(runtimeReturning(preferencesResponse).removeNft("id-1")).resolves.toBeUndefined();
     await expect(runtimeReturning({}).removeNft("id-1")).rejects.toThrow("remove NFT failed");
@@ -135,10 +143,10 @@ describe("NFT wrappers", () => {
   });
 
   test("NFT loaders select full, indexed-only, and watched lanes", async () => {
-    expect(await runtimeReturning({ nfts: [discoveredNft], ok: true }).discoverNfts()).toEqual([
-      discoveredNft,
-    ]);
-    expect(await runtimeReturning(errorEnvelope).discoverNfts()).toEqual([]);
+    const full = await runtimeReturning({ nfts: [discoveredNft], ok: true }).discoverNfts();
+    expect(full).toEqual({ coverage: "none", nfts: [discoveredNft] });
+    const refused = await runtimeReturning(errorEnvelope).discoverNfts();
+    expect(refused).toEqual({ coverage: "unavailable", nfts: [] });
 
     const indexed = captureRuntime({ nfts: [discoveredNft], ok: true });
     await indexed.wallet.discoverNfts(false);
@@ -217,11 +225,16 @@ describe("NFT wrappers", () => {
 });
 
 describe("allowances", () => {
-  test("loadAllowances returns the allowance views or []", async () => {
+  test("loadAllowances returns the listing, and marks an error as unavailable", async () => {
     expect(
       await runtimeReturning({ allowances: [allowanceView], ok: true }).loadAllowances(),
-    ).toEqual([allowanceView]);
-    expect(await runtimeReturning(errorEnvelope).loadAllowances()).toEqual([]);
+    ).toEqual({ entries: [allowanceView], notices: [], unavailable: false });
+    expect((await runtimeReturning(errorEnvelope).loadAllowances()).unavailable).toBe(true);
+  });
+
+  test("a failed send reads as unavailable, not as a load that never ends", async () => {
+    const failing = { sendMessage: () => Promise.reject(new Error("no connection")) };
+    expect((await createSidepanelRuntime(failing).loadAllowances()).unavailable).toBe(true);
   });
 
   test("revokeAllowance returns the tx hash and throws on failure", async () => {
@@ -283,6 +296,21 @@ describe("transfers and review", () => {
     await expect(runtimeReturning({}).submitTransfer(account.id, "t", "0x1", "1")).rejects.toThrow(
       "transfer failed",
     );
+  });
+
+  // Audit #173: the typed refusal must survive the boundary, or a lost reply
+  // turns back into "transfer failed" and the screen says "not sent".
+  test("submitTransfer rejects a lost-reply refusal as SubmissionUnknownError", async () => {
+    const error = await runtimeReturning({
+      error: "status unknown",
+      submissionUnknown: true,
+      transactionHash: "0x5eed",
+    })
+      .submitTransfer(account.id, "t", "0x1", "1")
+      .catch((rejection: unknown) => rejection);
+    expect(error).toBeInstanceOf(SubmissionUnknownError);
+    expect((error as SubmissionUnknownError).transactionHash).toBe("0x5eed");
+    expect((error as Error).message).toBe("status unknown");
   });
 });
 
@@ -381,6 +409,26 @@ describe("account groups", () => {
     expect(sent[0]).toEqual({ icon: "folder", name: "Work", type: "wallet.createGroup" });
   });
 
+  test("createGroup returns the new folder when the archive sorts last", async () => {
+    const seeded = {
+      ...preferencesWithGroup,
+      preferences: {
+        ...preferencesWithGroup.preferences,
+        groups: [
+          { accountIds: [], icon: "wallet" as const, id: "my-accounts", name: "My accounts" },
+          ...preferencesWithGroup.preferences.groups,
+          {
+            accountIds: [],
+            icon: "folder" as const,
+            id: "archived-accounts",
+            name: "Archived accounts",
+          },
+        ],
+      },
+    };
+    expect(await runtimeReturning(seeded).createGroup("Work", "folder")).toBe("work");
+  });
+
   test("createGroup throws when the returned preferences carry no groups", async () => {
     // preferences valid but groups empty -> no created entry -> falls through to throw.
     await expect(
@@ -430,6 +478,19 @@ describe("account groups", () => {
     });
     await expect(runtimeReturning({}).setAccountInGroup(account.id, "work", false)).rejects.toThrow(
       "group membership update failed",
+    );
+  });
+
+  test("setAccountHidden forwards the toggle and resolves, or throws", async () => {
+    const { sent, wallet } = captureRuntime(preferencesResponse);
+    await expect(wallet.setAccountHidden(account.id, true)).resolves.toBeUndefined();
+    expect(sent[0]).toEqual({
+      accountId: account.id,
+      hidden: true,
+      type: "wallet.setAccountHidden",
+    });
+    await expect(runtimeReturning({}).setAccountHidden(account.id, false)).rejects.toThrow(
+      "account visibility update failed",
     );
   });
 });

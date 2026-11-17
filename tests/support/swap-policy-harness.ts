@@ -11,16 +11,17 @@
  * eventually disagree about what "honest" means.
  */
 
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import { createActivityLog } from "@mc-wallet/transactions/activity";
-import { avnuRouterAddress, type SwapCall, type SwapService } from "@mc-wallet/transactions/avnu";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { createMemoryStore } from "@bramble/store/kv";
+import { createActivityLog } from "@bramble/transactions/activity";
+import { avnuRouterAddress, type SwapCall, type SwapService } from "@bramble/transactions/avnu";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { type AvnuRouteFixture, avnuRouteCalldata } from "./avnu-route-fixture";
+import { testExtension } from "./background-wallet-stub";
 
 const mainnetToken = (symbol: string): string =>
   DEFAULT_TOKENS.find((token) => token.networkId === "SN_MAIN" && token.symbol === symbol)
@@ -150,11 +151,25 @@ const walletStub = {
 };
 
 /**
+ * The node's half of a swap submit: receives what the handler passes to
+ * `runtimeRpc.submitInvokeTransaction`. Defaults to a broadcast that lands.
+ */
+export type SwapSubmit = (input: {
+  readonly calls: readonly unknown[];
+  readonly onSigned?: (signed: {
+    readonly nonce: string;
+    readonly senderAddress: string;
+    readonly transactionHash: string;
+  }) => Promise<void>;
+}) => Promise<{ readonly calls: readonly unknown[]; readonly transactionHash: string }>;
+
+/**
  * Drives the REAL background message handler over an injected AVNU service
  * that returns `build` verbatim, so every assertion runs through the same
- * validation, policy, freeze, and submit path production uses.
+ * validation, policy, freeze, and submit path production uses. `submit`
+ * replaces the node's reply (for example, a lost one).
  */
-export const makeSwapHarness = (build: readonly SwapCall[]) => {
+export const makeSwapHarness = (build: readonly SwapCall[], submit?: SwapSubmit) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   let tick = 0;
@@ -186,21 +201,21 @@ export const makeSwapHarness = (build: readonly SwapCall[]) => {
       };
     },
   };
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     activity,
     runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "1", unit: "FRI" };
       },
-      async submitInvokeTransaction({ calls }: { readonly calls: readonly unknown[] }) {
-        submitted.push(calls);
-        return { calls: [], transactionHash: "0x5aa9" };
+      async submitInvokeTransaction(input: Parameters<SwapSubmit>[0]) {
+        submitted.push(input.calls);
+        return submit ? submit(input) : { calls: [], transactionHash: "0x5aa9" };
       },
     } as never,
     session,
     swap,
   });
-  return { handler, submitted };
+  return { activity, handler, submitted };
 };
 
 /** Sends the reviewed wallet.swapPrepare for `build` and keeps what was submitted. */

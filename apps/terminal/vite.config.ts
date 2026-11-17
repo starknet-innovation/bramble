@@ -2,12 +2,13 @@ import type { Server as HttpServer } from "node:http";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import { isMissingAvnuCandleHistory } from "./src/data/avnu/avnu-proxy";
+import { devProxyUpstream } from "./src/data/core/dev-proxy-upstream";
 import { attachExtendedWebSocketBridge } from "./src/data/extended/dev-bridge";
 import { AVNU_API, EXTENDED_API_BASE } from "./src/protocols/constants";
 
-// Standalone SPA build for the MC Wallet Trade Terminal. This app is NOT part
+// Standalone SPA build for the Bramble Trade Terminal. This app is NOT part
 // of the extension bundle — it is served as an ordinary web app and connects to
-// the MC Wallet extension at runtime via the injected window.starknet_mcWallet
+// the Bramble extension at runtime via the injected window.starknet_bramble
 // provider.
 //
 // DEV PROXY (CORS fix)
@@ -22,7 +23,7 @@ const extendedWsTarget = `wss://${new URL(EXTENDED_API_BASE).host}`;
 const extendedRestPrefix = "/proxy/extended";
 const avnuMarketsPrefix = "/proxy/avnu-markets";
 const starkscanPrefix = "/proxy/starkscan";
-const extendedUserAgent = "MC-Wallet-Terminal/0.1";
+const extendedUserAgent = "Bramble-Terminal/0.1";
 
 // Forward market-data GETs with a clean server-side header set. Extended needs
 // the proxy for CORS; AVNU uses it so missing candle history can become a clean
@@ -68,9 +69,16 @@ const marketDataMiddleware = (): Plugin => ({
               ? AVNU_API.impulse
               : "https://starkscan.co";
           const upstreamPath = path.slice(prefix.length);
-          const upstream = new URL(upstreamPath, target);
+          const upstream = devProxyUpstream(path, prefix, target);
+          if (upstream === null) {
+            response.statusCode = 404;
+            response.setHeader("content-type", "application/json");
+            response.end(JSON.stringify({ error: "Route not allowed" }));
+            return;
+          }
           const result = await fetch(upstream, {
             headers: { accept: "application/json", "user-agent": extendedUserAgent },
+            redirect: "error",
           });
           if (isAvnuMarkets && isMissingAvnuCandleHistory(upstreamPath, result.status)) {
             response.statusCode = 200;

@@ -2,7 +2,6 @@
  * Shared side-panel helpers for extension E2E tests.
  */
 
-import { BACKUP_VERIFY_POSITIONS } from "@mc-wallet/wallet-ui/lab";
 import type { Page, Route } from "@playwright/test";
 import { expect } from "@playwright/test";
 
@@ -11,6 +10,14 @@ export const VAULT_PASSPHRASE = "correct horse battery staple";
 /** Valid 12-word phrase used to exercise the import-wallet path without generation. */
 export const IMPORT_MNEMONIC =
   "habit hope tip crystal because grunt nation idea electric witness alert like";
+
+/**
+ * How long a test waits for the first-run recovery scan to report "Search complete".
+ * The scan derives and reads several account shapes per index (more since #777, which
+ * tries every Argent release on both key ladders), so under a loaded runner it can
+ * outlast Playwright's 5 s expect default. Kept below the 45 s test timeout.
+ */
+export const RECOVERY_SCAN_TIMEOUT_MS = 30_000;
 
 const phraseWords = (phrase: string): readonly string[] =>
   phrase.trim().split(/\s+/).filter(Boolean);
@@ -25,71 +32,108 @@ const fullScreenSetup = async (
   await onboarding.goto(new URL("onboarding.html", walletSurface.url()).toString());
   return {
     finish: async () => {
-      await expect(onboarding.getByRole("heading", { name: "You’re all set" })).toBeVisible();
-      await onboarding.close();
+      // Completion hands itself off: it opens the side panel and closes its
+      // own tab. Headless Chromium resolves that open too, so the tab may
+      // already be gone by the time we look; accept either state.
+      await expect
+        .poll(
+          async () =>
+            onboarding.isClosed() ||
+            (await onboarding
+              .getByRole("heading", { name: "You’re all set" })
+              .isVisible()
+              .catch(() => false)),
+          { timeout: 15_000 },
+        )
+        .toBe(true);
+      if (!onboarding.isClosed()) {
+        await onboarding.close();
+      }
       await walletSurface.reload();
     },
     page: onboarding,
   };
 };
 
-const acknowledgeMainnetIfPresent = async (sidepanel: Page): Promise<void> => {
-  const checkbox = sidepanel.locator('input[name="mainnetAck"]');
-  if ((await checkbox.count()) === 0 || !(await checkbox.isVisible())) {
-    return;
-  }
-  await checkbox.check();
-};
-
 /**
- * Fills backup-verification inputs using the same positions as onboarding UI.
+ * Fills the backup-verification inputs. Which words are asked varies per wallet,
+ * so the positions are read off the field labels rather than assumed — which
+ * also proves the labels name the words the predicate actually checks.
  */
 const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> => {
   const words = phraseWords(phrase);
   await expect(sidepanel.getByRole("heading", { name: "Confirm your backup" })).toBeVisible();
-  for (const [index, position] of BACKUP_VERIFY_POSITIONS.entries()) {
+  const labels = await sidepanel.locator(".verify-grid label > span:first-child").allTextContents();
+  expect(labels.length).toBeGreaterThan(0);
+  for (const [index, label] of labels.entries()) {
+    const position = Number(label.replace(/\D+/g, ""));
     await sidepanel.locator(`input[name="verify-${index}"]`).fill(words[position - 1] ?? "");
   }
   await expect(sidepanel.locator("#verify-result")).toHaveText("Backup confirmed.");
 };
 
-const protectAndSelectAccount = async (
+const protectAndFinishSetup = async (
   sidepanel: Page,
   passphrase: string = VAULT_PASSPHRASE,
 ): Promise<void> => {
   await sidepanel.locator('input[name="vaultPassphrase"]').fill(passphrase);
   await sidepanel.locator('input[name="vaultPassphraseConfirm"]').fill(passphrase);
-  await sidepanel.getByRole("button", { name: "Choose account contract" }).click();
-  await expect(
-    sidepanel.getByRole("heading", { name: "Choose your account contract" }),
-  ).toBeVisible();
-  await sidepanel.getByRole("button", { name: "Review OpenZeppelin account" }).click();
+  await sidepanel.getByRole("button", { name: "Review account" }).click();
   await expect(sidepanel.getByRole("heading", { name: "Review your account" })).toBeVisible();
-  await sidepanel.locator("#account-preview").click();
-  await acknowledgeMainnetIfPresent(sidepanel);
-  await expect(sidepanel.getByRole("button", { name: "Add selected account" })).toBeEnabled();
-  await sidepanel.getByRole("button", { name: "Add selected account" }).click();
+  // The sole derived account is presented, not chosen: the confirm action
+  // enables as soon as the account preview resolves.
+  const finish = sidepanel.getByRole("button", { name: "Finish setup" });
+  await expect(finish).toBeEnabled();
+  await finish.click();
+};
+
+type RecoveryRpcCall = {
+  readonly id?: string | number | null;
+  readonly method?: unknown;
+};
+
+const isRecoveryRpcCall = (value: unknown): value is RecoveryRpcCall =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// Class hash and balance are the reads recovery needs: contract-not-found and a
+// zero uint256. Every other method, including one batched into the same HTTP
+// request, gets a JSON-RPC error. Aborting the connection would fail import on
+// an incidental method the scan does not use.
+const recoveryRpcResponse = (
+  call: RecoveryRpcCall,
+): {
+  readonly error?: { readonly code: number; readonly message: string };
+  readonly id: string | number | null;
+  readonly jsonrpc: "2.0";
+  readonly result?: readonly string[];
+} => {
+  const id = call.id ?? null;
+  if (call.method === "starknet_getClassHashAt") {
+    return { error: { code: 20, message: "Contract not found" }, id, jsonrpc: "2.0" };
+  }
+  if (call.method === "starknet_call") {
+    return { id, jsonrpc: "2.0", result: ["0x0", "0x0"] };
+  }
+  return { error: { code: -32601, message: "Method not found" }, id, jsonrpc: "2.0" };
 };
 
 const mockEmptyRecoveryChain = async (page: Page): Promise<() => Promise<void>> => {
   const pattern = "https://*.starknet.org/**";
   const handler = async (route: Route): Promise<void> => {
-    const request = route.request().postDataJSON() as {
-      readonly id?: unknown;
-      readonly method?: unknown;
-    };
-    const id = request.id ?? 1;
-    if (request.method === "starknet_getClassHashAt") {
+    let body: unknown;
+    try {
+      body = route.request().postDataJSON();
+    } catch {
       await route.fulfill({
-        json: { error: { code: 20, message: "Contract not found" }, id, jsonrpc: "2.0" },
+        json: { error: { code: -32700, message: "Parse error" }, id: null, jsonrpc: "2.0" },
       });
       return;
     }
-    if (request.method === "starknet_call") {
-      await route.fulfill({ json: { id, jsonrpc: "2.0", result: ["0x0", "0x0"] } });
+    if (Array.isArray(body)) {
+      await route.fulfill({ json: body.filter(isRecoveryRpcCall).map(recoveryRpcResponse) });
       return;
     }
-    await route.abort();
+    await route.fulfill({ json: recoveryRpcResponse(isRecoveryRpcCall(body) ? body : {}) });
   };
   await page.context().route(pattern, handler);
   return () => page.context().unroute(pattern, handler);
@@ -100,9 +144,14 @@ const protectAndRecoverAccounts = async (onboarding: Page, passphrase: string): 
   await onboarding.locator('input[name="vaultPassphraseConfirm"]').fill(passphrase);
   await onboarding.getByRole("button", { name: "Find my accounts" }).click();
   await expect(onboarding.getByRole("heading", { name: "Find your accounts" })).toBeVisible();
-  await expect(onboarding.locator("#recovery-scan-status")).toContainText("Search complete");
-  await onboarding.locator('#recovery-account-list input[type="checkbox"]').first().check();
-  await onboarding.locator('input[name="recoveryMainnetAck"]').check();
+  await expect(onboarding.locator("#recovery-scan-status")).toContainText("Search complete", {
+    timeout: RECOVERY_SCAN_TIMEOUT_MS,
+  });
+  // The mocked chain reports no activity, so the Bramble group starts closed
+  // with nothing auto-selected: open it and pick the first index by hand.
+  const brambleGroup = onboarding.locator('[data-recovery-group="openzeppelin"]');
+  await brambleGroup.locator("summary").click();
+  await brambleGroup.locator('input[type="checkbox"]').first().check();
   await onboarding.getByRole("button", { name: "Restore selected accounts" }).click();
 };
 
@@ -122,11 +171,11 @@ export const createWalletFromGeneratedPhrase = async (sidepanel: Page): Promise<
   const phrase = await phraseInputs.evaluateAll((inputs) =>
     inputs.map((input) => (input as HTMLInputElement).value).join(" "),
   );
-  await onboarding.getByRole("button", { name: "Show recovery phrase" }).click();
+  await onboarding.getByRole("button", { name: "Show recovery phrase", exact: true }).click();
   await onboarding.getByRole("button", { name: "I saved my phrase" }).click();
   await fillBackupVerify(onboarding, phrase);
   await onboarding.getByRole("button", { name: "Continue" }).click();
-  await protectAndSelectAccount(onboarding);
+  await protectAndFinishSetup(onboarding);
   await setup.finish();
   await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
 };
@@ -229,6 +278,29 @@ export const openPendingWalletSurface = async (
     )
     .toBeGreaterThan(0);
   await sidepanel.reload();
+};
+
+/**
+ * Opens a pending transaction review and asserts Approve stays withheld.
+ *
+ * The suite blocks egress, so the fee cannot be priced. The card must keep
+ * Approve disabled. Callers still owe the dapp a deny or the held promise
+ * stays pending; this helper does not decide the request.
+ */
+export const expectInvokeApprovalWithheld = async (
+  sidepanel: Page,
+  origin: string,
+): Promise<void> => {
+  await openPendingWalletSurface(sidepanel);
+  await expect(sidepanel.getByText("Review request")).toBeVisible();
+  await expect(sidepanel.getByText("Transaction request", { exact: true }).first()).toBeVisible();
+  await expect(sidepanel.getByTitle(origin).first()).toBeVisible();
+  await expect(
+    sidepanel.getByText(
+      "Couldn't estimate the network fee right now. Check your connection and retry before sending.",
+    ),
+  ).toBeVisible();
+  await expect(sidepanel.locator('[data-approval-action="approve"]')).toBeDisabled();
 };
 
 /**

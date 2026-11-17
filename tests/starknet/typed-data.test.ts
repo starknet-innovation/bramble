@@ -3,18 +3,24 @@
  * mapping, and the origin-gated background signing path.
  */
 import { describe, expect, test } from "bun:test";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import {
+  isTypedDataShape,
+  typedDataHash,
+  typedDataHashForChain,
+} from "@bramble/starknet/typed-data";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import {
   readProviderRequestArguments,
   toProviderPayload,
   toRuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
+} from "@bramble/wallet-protocol/bridge";
+import { unknownError } from "@bramble/wallet-protocol/rpc-errors";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 import { flushHeld, waitForPendingApprovals } from "../support/held";
 
 const account: AccountRef = {
@@ -32,7 +38,7 @@ const account: AccountRef = {
 // MCW-V09-101 forgery is closed by the name grammar rather than by a revision
 // ban — and is exercised in `typed-data-revisions.test.ts`.
 const typedData = {
-  domain: { chainId: "SN_MAIN", name: "MC Test", revision: "1", version: "1" },
+  domain: { chainId: "SN_MAIN", name: "Bramble Test", revision: "1", version: "1" },
   message: { content: "hello" },
   primaryType: "Message",
   types: {
@@ -70,6 +76,33 @@ describe("typed data hashing", () => {
   test("rejects unhashable typed data", () => {
     expect(() => typedDataHash({ ...typedData, types: {} }, account.address)).toThrow();
     expect(() => typedDataHash(null, account.address)).toThrow("Invalid typed data");
+  });
+
+  test("binds dapp signing to the active chain", () => {
+    const mainnetHash = typedDataHashForChain(
+      typedData,
+      account.address,
+      STARKNET_NETWORKS.SN_MAIN.chainId,
+    );
+    expect(mainnetHash).toBe(typedDataHash(typedData, account.address));
+    expect(() =>
+      typedDataHashForChain(typedData, account.address, STARKNET_NETWORKS.SN_SEPOLIA.chainId),
+    ).toThrow("active network");
+  });
+
+  test("refuses a typed-data domain with no signed chain id", () => {
+    const chainless = {
+      ...typedData,
+      domain: { name: "Bramble Test", revision: "1", version: "1" },
+      types: {
+        ...typedData.types,
+        StarknetDomain: typedData.types.StarknetDomain.filter((field) => field.name !== "chainId"),
+      },
+    };
+    expect(isTypedDataShape(chainless)).toBe(true);
+    expect(() =>
+      typedDataHashForChain(chainless, account.address, STARKNET_NETWORKS.SN_MAIN.chainId),
+    ).toThrow("active network");
   });
 });
 
@@ -170,7 +203,7 @@ describe("wallet.signTypedData handler", () => {
           };
         },
       },
-      "extension-id",
+      testExtension,
       { session },
     );
   })();

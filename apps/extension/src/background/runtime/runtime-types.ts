@@ -3,25 +3,32 @@ import type {
   ArgentMultisigAuthorityStatus,
   ArgentMultisigConfig,
   ArgentUnsupportedSigner,
-} from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
 import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import type { MultisigSignerAccount } from "@mc-wallet/multisig/signer-account";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
-import type { FeeEstimate, TokenBalance } from "@mc-wallet/starknet/rpc";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import type { SwapCatalogToken } from "@mc-wallet/transactions/avnu";
-import type { RiskFlag } from "@mc-wallet/transactions/verify";
-import type { ConnectedSite } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { RecoveryAccountCandidate } from "@mc-wallet/wallet-model/recovery";
-import type { WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
+} from "@bramble/multisig/repository";
+import type { MultisigSignerAccount } from "@bramble/multisig/signer-account";
+import type { NftCoverage } from "@bramble/portfolio/nft-indexer";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import type { DeploySponsorship } from "@bramble/privacy/sponsored-deploy";
+import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/preferences";
+import type { FeeEstimate, TokenBalance } from "@bramble/starknet/rpc";
+import type { ActivityEntry } from "@bramble/transactions/activity";
+import type { AllowanceNotice, AllowanceView } from "@bramble/transactions/allowance-discovery";
+import type { SwapCatalogToken } from "@bramble/transactions/avnu";
+import type { ConnectedSite } from "@bramble/vault/service";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type {
+  KeyAddressCandidate,
+  ReadOnlyReason,
+  RecoveryAccountCandidate,
+} from "@bramble/wallet-model/recovery";
+import type { WalletStatus } from "@bramble/wallet-protocol/extension-responses";
+import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
+import type { DappMultisigAccount } from "@bramble/wallet-protocol/results";
+import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { PendingApproval } from "../approvals/approvals";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
 import type {
@@ -32,13 +39,31 @@ import type {
   Strk20BalancesResponse,
   Strk20PrepareResponse,
   Strk20RecipientStatusResponse,
-  Strk20SubaccountCommitmentResponse,
+  Strk20ShadowAccountBalancesResponse,
+  Strk20ShadowAccountCommitmentResponse,
+  Strk20ShadowAccountsResponse,
   Strk20WalletPreparationResponse,
   Strk20WalletStateResponse,
 } from "../privacy/runtime-strk20-types";
+import type { StakingPreparationResponse } from "../staking/staking-preparations";
+import type { StakingResponse } from "../staking/staking-view";
 import type { SupportDiagnosticsResponse } from "../support/diagnostics";
-import type { SwapPreparationReview } from "../transactions/swap-preparations";
+import type { SwapPreparationResponse } from "../transactions/swap-preparations";
 import type { NostrCoordinationResponse } from "./nostr-types";
+import type {
+  AccountRecoveryState,
+  RecoverAccountResponse,
+  RecoveryReviewResponse,
+} from "./recovery-types";
+import type {
+  ClassHashVerificationResponse,
+  StarkNameResolutionResponse,
+} from "./runtime-lookup-types";
+import type {
+  FeeReviewResponse,
+  TransferResponse,
+  TransferReviewResponse,
+} from "./runtime-review-types";
 
 /** Successful account-import response. */
 type CreateAccountResponse = {
@@ -68,14 +93,13 @@ type ValidateMnemonicResponse = {
 type RevealSecretsResponse = {
   readonly mnemonic: string | null;
   readonly ok: true;
-  readonly privateKey: string;
+  /** `null` on a network with no account: only the recovery phrase is revealed. */
+  readonly privateKey: string | null;
 };
 
-/**
- * Account list response scoped by origin grants.
- */
+/** Account list response scoped by origin grants. */
 type AccountsResponse = {
-  readonly accounts: readonly AccountRef[];
+  readonly accounts: readonly (AccountRef | DappMultisigAccount)[];
   readonly ok: true;
 };
 
@@ -141,8 +165,8 @@ type PermissionsResponse = {
 };
 
 /**
- * Watch-asset outcome returned when the requested token is already tracked and
- * no approval prompt is needed.
+ * Watch-asset outcome returned once the user approves the card, or closes the
+ * already-tracked notice (audit M1). Never returned before the user acts.
  */
 type WatchAssetResponse = {
   readonly ok: true;
@@ -177,9 +201,10 @@ type DetectTokensResponse = {
 };
 
 /**
- * Auto-discovered, on-chain-verified owned NFTs returned to extension pages.
+ * Auto-discovered, on-chain-verified owned NFTs, with the indexer's coverage.
  */
 type DiscoverNftsResponse = {
+  readonly coverage?: NftCoverage;
   readonly nfts: readonly DiscoveredNft[];
   readonly ok: true;
 };
@@ -203,9 +228,8 @@ type TokenChartResponse = {
 };
 
 /**
- * Verified AVNU token catalog returned to extension pages for the swap
- * picker. Directory data only — a selected untracked token is re-validated
- * on-chain by the add-token flow before the wallet trusts it.
+ * Verified AVNU token catalog for the swap picker. Directory data only — a
+ * selected untracked token is re-validated on-chain before the wallet trusts it.
  */
 type SwapTokensResponse = {
   readonly ok: true;
@@ -225,50 +249,10 @@ type SwapQuoteResponse = {
     readonly quoteId: string;
     readonly sellAmount: string;
     readonly sellAmountInUsd: number;
+    // Value delta priced from the wallet's own feed (Sherlock 137); absent
+    // when the feed has no price for either token.
+    readonly valueDeltaPercent?: number;
   };
-};
-
-/**
- * Frozen executable swap review returned before the final one-time confirm.
- */
-type SwapPreparationResponse = {
-  readonly ok: true;
-  readonly swapPreparation: SwapPreparationReview;
-};
-
-/**
- * Transfer submission response returned to extension pages.
- */
-type TransferResponse = {
-  readonly ok: true;
-  readonly transactionHash: string;
-};
-
-/**
- * Pre-sign transfer review returned to extension pages.
- */
-type TransferReviewResponse = {
-  readonly ok: true;
-  readonly review: {
-    readonly deploymentFee?: FeeEstimate | null;
-    readonly deploymentFeeEstimateFailed?: boolean;
-    readonly fee: FeeEstimate | null;
-    /**
-     * Warn-only fee-affordability verdict from the shared predicate (issue
-     * 191); "unknown" means no claim was possible and must never block.
-     */
-    readonly feeAffordability: "insufficient" | "ok" | "unknown";
-    readonly feeEstimateFailed: boolean;
-    readonly flags: readonly RiskFlag[];
-    readonly requiresDeployment: boolean;
-    readonly summaries: readonly string[];
-  };
-};
-
-/** Fee a wallet-initiated operation must display before its confirmation. */
-type FeeReviewResponse = {
-  readonly feeReview: FeeEstimate;
-  readonly ok: true;
 };
 
 /**
@@ -293,6 +277,7 @@ type TransactionAlertsResponse = {
  */
 type AllowancesResponse = {
   readonly allowances: readonly AllowanceView[];
+  readonly notices?: readonly AllowanceNotice[];
   readonly ok: true;
 };
 
@@ -306,15 +291,15 @@ type DeploymentStatusResponse = {
 };
 
 /**
- * On-chain class-hash verification returned to extension pages. `verification`
- * carries the discriminated {@link ClassHashVerification} outcome so the UI can
- * distinguish verified / mismatch / undeployed / unreachable without re-reading
- * the chain.
+ * Active-account signability verdict for the Home read-only flag; `reason`
+ * accompanies `readOnly: true` and never carries secret material.
  */
-type ClassHashVerificationResponse = {
+type AccountSignabilityResponse = {
   readonly accountId: string;
   readonly ok: true;
-  readonly verification: ClassHashVerification;
+  readonly readOnly: boolean;
+  readonly reason?: ReadOnlyReason;
+  readonly recovery?: AccountRecoveryState;
 };
 
 /**
@@ -346,10 +331,7 @@ type DeploymentDataResponse = {
  */
 type RequestAccountsResponse =
   | AccountsResponse
-  | {
-      readonly ok: false;
-      readonly pending: PendingApproval;
-    };
+  | { readonly ok: false; readonly pending: PendingApproval };
 
 /**
  * Fresh chain view paired with immutable Argent account provenance.
@@ -428,6 +410,7 @@ type LedgerSignPendingResponse = {
 type LedgerAccountStatusResponse = {
   readonly balance: string | null;
   readonly deployed: boolean | null;
+  readonly funded: boolean | null;
   readonly ok: true;
 };
 
@@ -435,6 +418,9 @@ type LedgerAccountStatusResponse = {
  * Union of supported background message responses.
  */
 export type RuntimeResponse =
+  | AccountSignabilityResponse
+  | RecoveryReviewResponse
+  | RecoverAccountResponse
   | AccountsResponse
   | ActivityResponse
   | AddChainResponse
@@ -443,6 +429,7 @@ export type RuntimeResponse =
   | DeclareResponse
   | ChainIdResponse
   | ClassHashVerificationResponse
+  | StarkNameResolutionResponse
   | ConnectedSitesResponse
   | CreateAccountResponse
   | DeploymentDataResponse
@@ -455,6 +442,7 @@ export type RuntimeResponse =
       readonly nextIndex: number;
       readonly ok: true;
     }
+  | { readonly candidate: KeyAddressCandidate; readonly ok: true }
   | FeeReviewResponse
   | SupportedVersionsResponse
   | TransferReviewResponse
@@ -469,6 +457,12 @@ export type RuntimeResponse =
   | MultisigResponse
   | NostrCoordinationResponse
   | { readonly ok: true; readonly signer: MultisigSignerAccount }
+  | { readonly ok: true; readonly updateReady: boolean }
+  | { readonly notice: boolean; readonly ok: true }
+  | { readonly ok: true; readonly restarting: boolean }
+  | { readonly ok: true; readonly released: boolean }
+  | { readonly ok: true; readonly sponsorship: DeploySponsorship }
+  | { readonly ok: true; readonly sponsored: false }
   | MultisigsResponse
   | { readonly ok: true }
   | PendingApprovalResponse
@@ -481,7 +475,9 @@ export type RuntimeResponse =
   | Strk20BalancesResponse
   | Strk20PrepareResponse
   | Strk20RecipientStatusResponse
-  | Strk20SubaccountCommitmentResponse
+  | Strk20ShadowAccountBalancesResponse
+  | Strk20ShadowAccountCommitmentResponse
+  | Strk20ShadowAccountsResponse
   | Strk20WalletPreparationResponse
   | Strk20WalletStateResponse
   | SupportDiagnosticsResponse
@@ -491,7 +487,10 @@ export type RuntimeResponse =
   | TokenChartResponse
   | TransactionAlertsResponse
   | TransferResponse
+  | StakingResponse
+  | StakingPreparationResponse
+  | SubmissionUnknownResponse
   | ValidateMnemonicResponse
   | WalletStatus
   | WatchAssetResponse
-  | { readonly error: string };
+  | { readonly error: string; readonly privacyBlocker?: PrivacyBlockerKind };

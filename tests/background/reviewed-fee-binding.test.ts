@@ -17,13 +17,14 @@
  * declare case in tests/background/background-declare-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { InvokeInput, TransferInput } from "@mc-wallet/starknet/rpc";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { InvokeInput, TransferInput } from "@bramble/starknet/rpc";
+import { memoryActivityLog } from "@bramble/transactions/activity";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
 import {
   invokeAccount as account,
@@ -256,7 +257,7 @@ const makeSendHarness = (overrides: Partial<RuntimeRpc> = {}) => {
   session.unlock(vaultPassphrase);
   const transfers: TransferInput[] = [];
   const invoked: InvokeInput[] = [];
-  const handler = createMessageHandler(walletStub([account]), "extension-id", {
+  const handler = createMessageHandler(walletStub([account]), testExtension, {
     activity: memoryActivityLog(),
     preferencesStore: fixedPreferencesStore(preferences),
     runtimeRpc: makeRuntimeRpc({

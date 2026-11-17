@@ -4,14 +4,14 @@
  * audited — and tested — independently of the submission orchestration.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isRecord } from "@mc-wallet/core/json";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import {
   isStrk20CallAndProof,
   STRK20_LIMITS,
   type Strk20CallAndProof,
-} from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-protocol/strk20";
 import type { Strk20NetworkConfig } from "../config";
 import { STRK20_PRIVACY_LEAK, STRK20_SERVICE_UNAVAILABLE } from "../service";
 import type { SdkWarning } from "./official-sdk-runtime";

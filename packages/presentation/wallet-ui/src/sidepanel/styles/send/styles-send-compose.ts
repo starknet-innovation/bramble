@@ -5,29 +5,19 @@
  */
 import {
   CONTROL,
-  EASE,
   MOTION,
   RADIUS,
-  SHADOW,
   SIZE,
   SPACE,
+  TRACKING,
   TYPE,
   WEIGHT,
-} from "@mc-wallet/ui-kit/tokens";
+} from "@bramble/ui-kit/tokens";
 
 /**
  * Send composition stylesheet fragment consumed after the shared Send layer.
  */
 export const SEND_COMPOSE_STYLES = `
-  .sr-only {
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    height: 1px;
-    overflow: hidden;
-    position: absolute;
-    text-wrap: nowrap;
-    width: 1px;
-  }
   .send-flow-header .flow-title { text-align: center; }
   .send-flow-header .flow-title h1 {
     font-size: ${TYPE.display.size};
@@ -38,7 +28,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-flow form { gap: ${SPACE.md}; }
   .send-stage { align-content: start; }
   .send-stage-kicker {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.label.size};
     font-weight: ${WEIGHT.semibold};
     margin: 0;
@@ -47,8 +37,8 @@ export const SEND_COMPOSE_STYLES = `
   .send-origin-context { display: grid; gap: ${SPACE.sm}; }
   .send-origin-account {
     align-items: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.lg};
+    background: var(--bramble-elevated);
+    border-radius: ${RADIUS.md};
     display: flex;
     min-height: ${SIZE.control};
     padding-left: ${SPACE.md};
@@ -56,7 +46,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-asset-copy span,
   .send-recipient-copy code,
   .send-asset-value span {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
   }
   .send-origin-context strong { font-size: ${TYPE.body.size}; }
@@ -77,79 +67,102 @@ export const SEND_COMPOSE_STYLES = `
   }
 
   .send-search { gap: ${SPACE.sm}; }
+  /* Both stage headings share one explicit weight: the paragraph would
+     otherwise inherit body weight while the label's span inherits the
+     semibold label rule, and the pair read as two different headings. */
   .send-section-title,
   .send-search > span:first-child:not(.sr-only) {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-size: ${TYPE.title.size};
+    font-weight: ${WEIGHT.semibold};
+    letter-spacing: ${TRACKING.title};
+    line-height: ${TYPE.title.line};
     margin: 0;
   }
+  /* The search box is one field made of an icon and an input, so the box, not
+     the input, carries the field's radius and its bottom edge. Left on the
+     input, the edge stopped short of the icon and curled up at the input's
+     own corner, reading as a broken underline. */
   .send-search-control {
     align-items: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.lg};
+    background: var(--bramble-elevated);
+    border-bottom: 1px solid var(--bramble-border);
+    border-radius: ${RADIUS.md};
     display: flex;
     gap: ${SPACE.sm};
     min-height: ${SIZE.control};
+    overflow: hidden;
     padding-left: ${SPACE.md};
   }
-  .send-search-control > .icon { color: var(--mc-muted); flex: none; }
+  .send-search-control > .icon { color: var(--bramble-muted); flex: none; }
   .send-search-control input {
+    align-self: stretch;
     background: transparent;
-    border-radius: 0 ${RADIUS.lg} ${RADIUS.lg} 0;
+    border-bottom: 0;
+    border-radius: 0;
+    min-height: 0;
     padding-left: 0;
   }
   .send-search-control input:focus-visible { outline: 0; }
   .send-search-control:has(input:focus-visible) {
-    box-shadow: inset 0 0 0 2px var(--mc-focus-ring);
+    box-shadow: inset 0 0 0 2px var(--bramble-focus-ring);
   }
-  .send-recipient-tabs {
-    border-bottom: 1px solid var(--mc-hairline);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-  .send-recipient-tabs button {
-    background: transparent;
-    border-radius: 0;
-    color: var(--mc-muted);
-    min-height: ${CONTROL.hit};
-    padding: 0 ${SPACE.sm};
-    position: relative;
-  }
-  .send-recipient-tabs button[aria-selected="true"] { color: var(--mc-text); }
-  .send-recipient-tabs button[aria-selected="true"]::after {
-    background: var(--mc-text);
-    border-radius: ${RADIUS.full};
-    bottom: -1px;
-    content: "";
-    height: 2px;
-    inset-inline: ${SPACE.sm};
-    position: absolute;
-  }
+  /* The icon and the input are one control: hover tints the whole box, never
+     just the input's share of it. The bare amount field sits inside a card
+     rather than a box of its own, so it takes no hover fill at all. */
+  .send-search-control { transition: background ${MOTION.pressMs}ms ${MOTION.ease}; }
   @media (hover: hover) and (pointer: fine) {
-    .send-recipient-tabs button:not(:disabled):hover {
-      background: transparent;
-      color: var(--mc-text);
-    }
-  }
-  .send-recipient-tabs button:not(:disabled):active {
-    background: transparent;
-    color: var(--mc-text);
+    .send-search-control:has(input:not(:disabled):hover) { background: var(--bramble-hover); }
+    .send-search-control input:not(:disabled):hover,
+    .send-amount-field input:not(:disabled):hover { background: transparent; }
   }
   .send-recipient-list, .send-asset-list { display: grid; gap: ${SPACE.sm}; }
+  /* The name-resolution readout sits directly under the field that caused it:
+     the resolving line while the read runs, and the reason it did not commit
+     when it fails. Muted, because it annotates the field rather than warning. */
+  .send-recipient-note {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.label.size};
+    line-height: ${TYPE.label.line};
+    margin: 0;
+    /* A name can be a single long token; without this it sets the stage's
+       min-content width and widens the whole panel past the viewport. */
+    overflow-wrap: anywhere;
+  }
   .send-list-heading {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     font-size: ${TYPE.label.size};
     gap: ${SPACE.sm};
     justify-content: space-between;
   }
   .send-list-heading > .icon { height: ${CONTROL.icon}; width: ${CONTROL.icon}; }
-  .send-list-heading > strong:first-of-type { color: var(--mc-text); margin-right: auto; }
+  .send-list-heading > strong:first-of-type { color: var(--bramble-text); margin-right: auto; }
+  /* Recipient folders: the same grouping the account drawer shows, so an
+     account is found under the folder the user filed it into. */
+  .send-recipient-folder { display: grid; gap: ${SPACE.sm}; }
+  button.send-folder-head {
+    background: transparent;
+    padding: 0;
+    text-align: start;
+    width: 100%;
+  }
+  .send-folder-count {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.micro.size};
+    font-variant-numeric: tabular-nums;
+  }
+  /* The mark is chevronRight. An open folder rotates it to point down, the
+     same way a disclosure mark does, so the glyph follows data-collapsed. */
+  .send-folder-mark { display: inline-flex; }
+  .send-folder-mark .icon { height: 14px; width: 14px; }
+  .send-recipient-folder[data-collapsed="false"] .send-folder-mark { transform: rotate(90deg); }
+  .send-folder-empty { margin: 0; }
   .send-recipient-row, .send-asset-row {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: grid;
     min-height: ${SIZE.tile};
     padding: ${SPACE.md};
@@ -158,14 +171,14 @@ export const SEND_COMPOSE_STYLES = `
   @media (hover: hover) and (pointer: fine) {
     .send-recipient-row:not(:disabled):hover,
     .send-asset-row:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
   }
   .send-recipient-row:not(:disabled):active,
   .send-asset-row:not(:disabled):active {
-    background: var(--mc-soft-press);
-    color: var(--mc-text);
+    background: var(--bramble-soft-press);
+    color: var(--bramble-text);
   }
   .send-recipient-row:focus-visible,
   .send-asset-row:focus-visible {
@@ -175,7 +188,7 @@ export const SEND_COMPOSE_STYLES = `
     align-items: center;
     grid-template-columns: ${SIZE.mark} minmax(0, 1fr) auto;
   }
-  .send-recipient-row > .icon { color: var(--mc-muted); height: 16px; width: 16px; }
+  .send-recipient-row > .icon { color: var(--bramble-muted); height: 16px; width: 16px; }
   .send-recipient-avatar {
     border-radius: ${RADIUS.full};
     height: ${SIZE.mark};
@@ -191,7 +204,7 @@ export const SEND_COMPOSE_STYLES = `
     text-wrap: nowrap;
   }
   .send-recipient-copy small {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.micro.size};
     overflow: hidden;
     text-overflow: ellipsis;
@@ -199,8 +212,8 @@ export const SEND_COMPOSE_STYLES = `
   }
   #send-recipient-continue { width: 100%; }
   .send-amount-card {
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.xl};
+    background: var(--bramble-panel);
+    border-radius: ${RADIUS.lg};
     display: grid;
     gap: ${SPACE.md};
     padding: ${SPACE.lg};
@@ -209,24 +222,24 @@ export const SEND_COMPOSE_STYLES = `
       box-shadow ${MOTION.pressMs}ms ${MOTION.ease};
   }
   .send-amount-card:has(.send-amount-field input:focus-visible) {
-    box-shadow: inset 0 0 0 2px var(--mc-focus-ring);
+    box-shadow: inset 0 0 0 2px var(--bramble-focus-ring);
   }
   .send-token-trigger {
-    background: var(--mc-elevated);
-    color: var(--mc-text);
+    background: var(--bramble-elevated);
+    color: var(--bramble-text);
     justify-self: start;
     min-height: ${CONTROL.hit};
     padding: 0 ${SPACE.md};
   }
   @media (hover: hover) and (pointer: fine) {
     .send-token-trigger:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
   }
   .send-token-trigger:not(:disabled):active {
-    background: var(--mc-soft-press);
-    color: var(--mc-text);
+    background: var(--bramble-soft-press);
+    color: var(--bramble-text);
   }
   .send-token-trigger > span:first-child,
   .send-token-trigger > span:first-child > svg,
@@ -243,6 +256,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-amount-field input {
     background: transparent;
     border-radius: 0;
+    text-overflow: ellipsis;
     font-size: ${TYPE.amount.size};
     font-variant-numeric: tabular-nums;
     font-weight: ${WEIGHT.semibold};
@@ -255,85 +269,148 @@ export const SEND_COMPOSE_STYLES = `
     outline: 0;
   }
   .send-amount-prefix {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.display.size};
     font-weight: ${WEIGHT.semibold};
   }
   .send-amount-meta {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
+    flex-wrap: wrap;
     font-size: ${TYPE.caption.size};
     gap: ${SPACE.sm};
     justify-content: space-between;
   }
-  .send-amount-shortcuts { align-items: center; display: flex; gap: ${SPACE.xs}; }
+  /* The balance line is rewritten after first paint — an asset pick, a bucket
+     flip, the repaint once discovery or the recipient check settles — with
+     whatever the balance carries. It must never widen the card: the label may
+     shrink and, as a last resort, break inside a long figure, while the
+     shortcuts keep their size and drop below it when the two no longer share a
+     line. A row that could not shrink grew the whole stage past the panel. */
+  .send-amount-meta > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .send-amount-shortcuts {
+    align-items: center;
+    display: flex;
+    flex: none;
+    gap: ${SPACE.xs};
+    margin-left: auto;
+  }
   .send-amount-shortcuts button {
     background: transparent;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     min-height: ${CONTROL.hitSmall};
     padding: 0 ${SPACE.sm};
   }
   .send-amount-shortcuts #send-unit-toggle {
-    background: var(--mc-elevated);
-    color: var(--mc-text);
+    background: var(--bramble-elevated);
+    color: var(--bramble-text);
   }
   @media (hover: hover) and (pointer: fine) {
     .send-amount-shortcuts button:not(:disabled):hover {
-      background: var(--mc-hover);
-      color: var(--mc-text);
+      background: var(--bramble-hover);
+      color: var(--bramble-text);
     }
   }
   .send-amount-shortcuts button:not(:disabled):active {
-    background: var(--mc-soft-press);
-    color: var(--mc-text);
+    background: var(--bramble-soft-press);
+    color: var(--bramble-text);
   }
   .send-amount-shortcuts .icon { height: 14px; width: 14px; }
   .send-fiat-estimate {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     margin: -${SPACE.sm} 0 0;
     text-align: right;
   }
+  /* The Amount screen's fee preview sits under the value it is a cost beside:
+     the same muted caption voice, so neither figure reads as an action. */
+  .send-fee-lines { display: grid; gap: ${SPACE.xs}; }
+  .send-fee-line {
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    margin: 0;
+    text-align: right;
+  }
   .send-context-receipt {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
     margin: 0;
     padding: 0 ${SPACE.lg};
   }
+  /* A fact's label sits on the first line of its value — beside the name, not
+     halfway down a name-over-address pair — while the row as a whole stays
+     centred in its height: the wrapping line box is what gets centred, and the
+     zero flex basis on the value keeps the pair on that one line. */
   .send-context-receipt > div,
   .send-review-facts > div {
-    align-items: center;
+    align-content: center;
+    align-items: baseline;
     display: flex;
+    flex-wrap: wrap;
     gap: ${SPACE.md};
     justify-content: space-between;
     min-height: ${SIZE.rowCompact};
     position: relative;
   }
+  .send-context-receipt dt,
+  .send-review-facts dt { flex: none; }
+  /* A value that leads with a mark (the network dot, the token logo) is one
+     visual line as tall as the mark: the label centres on it instead. */
+  .send-context-receipt > div:has(> dd.network-inline-value),
+  .send-review-facts > div:has(.send-review-amount) { align-items: center; }
   .send-context-receipt > div + div::before,
   .send-review-facts > div + div::before {
-    background: var(--mc-hairline);
+    background: var(--bramble-hairline);
     content: "";
     height: 1px;
     inset: 0 0 auto;
     position: absolute;
   }
   .send-context-receipt dt,
-  .send-review-facts dt { color: var(--mc-muted); font-size: ${TYPE.label.size}; }
+  .send-review-facts dt { color: var(--bramble-muted); font-size: ${TYPE.label.size}; }
   /* An account row in the receipt: identity on the left, and for the two
-     accounts, the balance that account's value moves through on the right. */
+     accounts, the balance that account's value moves through on the right.
+     Its label is one short word, so the row gives the value everything the
+     label leaves rather than the generic 70% cap. On a panel too narrow for
+     the address, its copy control, and the toggle side by side, the toggle
+     wraps under the identity instead of the address being clipped. */
   .send-context-receipt dd:has(.send-route-toggle) {
     align-items: center;
     display: flex;
-    gap: ${SPACE.md};
+    flex-wrap: wrap;
+    gap: ${SPACE.xs} ${SPACE.md};
+    justify-content: flex-end;
+    max-width: none;
+    padding-block: ${SPACE.xs};
+  }
+  /* The identity column is repainted with the chosen account's own name; a
+     long single word must clip beside its toggle, not push the receipt out. */
+  .send-context-account { display: grid; justify-items: end; min-width: 0; }
+  .send-context-account strong,
+  .send-context-account code {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  /* The network row keeps its mark beside the name; the generic dd grid
+     below would otherwise stack them. */
+  .send-context-receipt dd.network-inline-value {
+    align-items: center;
+    display: flex;
+    gap: ${SPACE.sm};
     justify-content: flex-end;
   }
-  .send-context-account { display: grid; justify-items: end; }
   .send-context-receipt dd,
   .send-review-facts dd {
     display: grid;
+    flex: 1 1 0;
     gap: 2px;
     justify-items: end;
     margin: 0;
@@ -341,11 +418,45 @@ export const SEND_COMPOSE_STYLES = `
     min-width: 0;
   }
   .send-context-receipt code,
-  .send-review-facts code { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
+  .send-review-facts code { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
+  /* The reviewed recipient sits on the shared .copy-line (address and copy
+     control on one line); the address clips first so the control never
+     leaves the fact. */
+  .send-review-address code { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  /* A native disclosure reveals a party's full address in place, so a keyboard
+     user inspects the exact value without leaving the review; the revealed
+     value wraps inside the fact rather than widening the panel. */
+  .address-reveal { max-width: 100%; min-width: 0; }
+  .address-reveal > summary {
+    color: var(--bramble-accent);
+    cursor: pointer;
+    font-size: ${TYPE.micro.size};
+    list-style: none;
+    text-align: right;
+  }
+  .address-reveal > summary::-webkit-details-marker { display: none; }
+  .address-reveal > code {
+    display: block;
+    font-size: ${TYPE.micro.size};
+    overflow-wrap: anywhere;
+    text-align: right;
+    word-break: break-all;
+  }
+  /* A name-resolved recipient shows the whole address, because the address is
+     what the reader is asked to check; it wraps rather than clipping. The
+     provenance line sits under it, muted like the other annotation copy. */
+  .send-review-address-full code { overflow-wrap: anywhere; text-wrap: wrap; }
+  .send-review-source { color: var(--bramble-muted); font-size: ${TYPE.micro.size}; }
   #send-review-button { margin-top: auto; width: 100%; }
+  /* The busy review button swaps its send glyph for the shared Liquid Dots
+     mark, so a running preparation reads as work rather than as a dimmed
+     control — the same treatment the working screen uses, at button scale. */
+  #send-review-button .liquid-dots { display: none; }
+  #send-review-button[data-busy] .liquid-dots { display: inline-flex; }
+  #send-review-button[data-busy] > .icon { display: none; }
 
   .send-asset-stage { gap: ${SPACE.lg}; }
-  .send-asset-search .send-search-control { background: var(--mc-panel); }
+  .send-asset-search .send-search-control { background: var(--bramble-panel); }
   .send-asset-row {
     align-items: center;
     grid-template-columns: ${SIZE.mark} minmax(0, 1fr) auto;
@@ -364,136 +475,13 @@ export const SEND_COMPOSE_STYLES = `
     text-wrap: nowrap;
   }
   .send-asset-spam {
-    color: var(--mc-danger);
+    color: var(--bramble-danger);
     font-style: normal;
     font-weight: ${WEIGHT.semibold};
   }
   .send-asset-value { display: grid; gap: 2px; justify-items: end; }
   .send-asset-value strong { font-variant-numeric: tabular-nums; }
-  .send-asset-change[data-direction="down"] { color: var(--mc-danger); }
-  .send-asset-change[data-direction="up"] { color: var(--mc-positive); }
+  .send-asset-change[data-direction="down"] { color: var(--bramble-danger); }
+  .send-asset-change[data-direction="up"] { color: var(--bramble-positive); }
 
-  .send-review-summary {
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.xl};
-    display: grid;
-    padding: ${SPACE.lg};
-  }
-  .proposal-review-stack { display: grid; gap: ${SPACE.sm}; }
-  .send-review-hero {
-    align-items: center;
-    display: grid;
-    gap: ${SPACE.md};
-    grid-template-columns: ${SIZE.mark} minmax(0, 1fr);
-    padding-bottom: ${SPACE.lg};
-  }
-  .send-review-token,
-  .send-review-token > svg,
-  .send-review-token .token-mark { height: ${SIZE.mark}; width: ${SIZE.mark}; }
-  .send-review-hero > span:last-child { display: grid; gap: ${SPACE.xs}; }
-  .send-review-hero strong {
-    font-size: ${TYPE.display.size};
-    font-variant-numeric: tabular-nums;
-  }
-  .send-review-hero small { color: var(--mc-muted); }
-  .send-review-facts { border-top: 1px solid var(--mc-hairline); margin: 0; }
-  .send-review-fee {
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.lg};
-    display: grid;
-    gap: ${SPACE.sm};
-    padding: ${SPACE.md} ${SPACE.lg};
-  }
-  .send-review-fee:empty { display: none; }
-  .send-review-disclosure {
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.lg};
-    overflow: hidden;
-  }
-  .send-review-disclosure summary {
-    align-items: center;
-    cursor: pointer;
-    display: flex;
-    font-size: ${TYPE.body.size};
-    font-weight: ${WEIGHT.semibold};
-    justify-content: space-between;
-    list-style: none;
-    min-height: ${SIZE.rowCompact};
-    padding: 0 ${SPACE.lg};
-  }
-  .send-review-disclosure summary::-webkit-details-marker { display: none; }
-  .send-review-disclosure summary .icon {
-    color: var(--mc-muted);
-    transition: transform ${MOTION.tabMs}ms ${EASE.out};
-  }
-  .send-review-disclosure[open] summary .icon { transform: rotate(180deg); }
-  .send-review-disclosure-body {
-    border-top: 1px solid var(--mc-hairline);
-    display: grid;
-    gap: ${SPACE.md};
-    padding: ${SPACE.md};
-  }
-  .send-review-note { color: var(--mc-muted); font-size: ${TYPE.caption.size}; margin: 0; }
-
-  .send-task-list { box-shadow: ${SHADOW.xs}; }
-  .send-task-list li { min-height: ${CONTROL.hit}; }
-  .send-liveness { color: var(--mc-muted); margin: -${SPACE.sm} 0 0; }
-
-  .send-outcome {
-    align-content: center;
-    display: grid;
-    gap: ${SPACE.lg};
-    justify-items: center;
-    min-height: 390px;
-    text-align: center;
-  }
-  .send-outcome-mark { display: inline-flex; height: 76px; width: 76px; }
-  .send-outcome-mark svg {
-    fill: none;
-    height: 100%;
-    stroke: currentColor;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 3.2;
-    width: 100%;
-  }
-  .send-success .send-outcome-mark { color: var(--mc-positive); }
-  .send-failure .send-outcome-mark { color: var(--mc-danger); }
-  .send-failure-ring {
-    animation: send-draw 420ms ${EASE.out} forwards;
-    stroke-dasharray: 158;
-    stroke-dashoffset: 158;
-  }
-  .send-failure-mark {
-    animation: send-draw 280ms ${EASE.out} 360ms forwards;
-    stroke-dasharray: 46;
-    stroke-dashoffset: 46;
-  }
-  .send-outcome-copy {
-    display: grid;
-    gap: ${SPACE.sm};
-    justify-items: center;
-    max-width: 32ch;
-  }
-  .send-outcome-copy h2 { font-size: ${TYPE.headline.size}; }
-  .send-outcome-copy p { margin: 0; }
-  .send-outcome-copy code {
-    color: var(--mc-muted);
-    font-size: ${TYPE.micro.size};
-    max-width: 30ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
-  .send-outcome-kicker {
-    color: var(--mc-muted);
-    font-size: ${TYPE.caption.size};
-    font-weight: ${WEIGHT.semibold};
-  }
-  .send-outcome .send-actions { width: 100%; }
-
-  @media (prefers-reduced-motion: reduce) {
-    .send-review-disclosure summary .icon { transition: none; }
-    .send-failure-ring, .send-failure-mark { animation: none; stroke-dashoffset: 0; }
-  }
 `;

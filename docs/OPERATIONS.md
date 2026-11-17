@@ -6,7 +6,7 @@ permalink: /operations/
 
 # Production operations
 
-This is the public operational contract for MC Wallet. It covers the extension, the wallet-operated
+This is the public operational contract for Bramble. It covers the extension, the wallet-operated
 Starknet gateway, releases, and support diagnostics. It never authorizes operators to request a
 recovery phrase, private key, signing payload, address, transaction hash, calldata, origin, or raw
 RPC body.
@@ -29,6 +29,9 @@ an availability incident, open a maintainer-visible incident record with start t
 owner, affected release, user impact, decisions, and next update. Never paste a user's diagnostic
 file into a public issue.
 
+Issues opened by anyone outside the team are labelled **Public** by
+`.github/workflows/label-public-issues.yml`; triage that label for public reports.
+
 ## Gateway monitoring
 
 `.github/workflows/gateway-health.yml` probes the bundled wallet gateway and direct Foundation
@@ -48,6 +51,64 @@ Run the same probe locally without account data:
 bun run scripts/check-gateway-health.ts
 ```
 
+## Phishing feed
+
+The service worker downloads MetaMask's public eth-phishing-detect list (`DEFAULT_PHISHING_FEED_URL`)
+about every six hours. It reads the list with no host permission, which relies on the source answering
+with `Access-Control-Allow-Origin: *` (issue 772). Sites are matched on the device against the live list
+and the bundled baseline in `blocklist.ts`; the baseline always applies.
+
+**Monitoring.** `.github/workflows/phishing-feed-check.yml` runs `scripts/check-phishing-feed.ts` daily.
+It fails on `http-error`, `no-cors`, `malformed`, `timeout` or `transport-error`. It also fails on
+`too-small` (fewer than 50,000 domains) and `near-cap` (90% of `MAX_PHISHING_DOMAINS` or
+`MAX_PHISHING_DOMAIN_CHARS`). Route failed runs to the release owner, as for the gateway probe. On a
+user's device, **Download diagnostics** includes a `phishingFeed` row: domain count, age in whole
+hours, consecutive failed fetches, whether the cache write failed, and `stale` (no list, or older
+than 24 hours).
+
+Run the check locally:
+
+```sh
+bun run scripts/check-phishing-feed.ts
+```
+
+**What users keep when it fails.** A failed fetch or an unparseable body keeps the last good list.
+Protection stops updating but doesn't drop below that list and the baseline. A list that parses
+**replaces** the cached one at the next refresh, whether it grew, shrank, or was wrongly edited.
+
+**Runbook**
+
+1. `http-error`, `no-cors`, `timeout`, `transport-error`: check the URL in a browser and with
+   `curl -I`. If the source moved, point `DEFAULT_PHISHING_FEED_URL` at the new location in a reviewed
+   release. Prefer a source that allows any origin. Adding a new host permission instead makes
+   Chrome disable the wallet on update for users whose grants don't cover it.
+2. `malformed`: the upstream format changed. Users keep their last good list. Read the upstream
+   repository's recent commits before changing the parser.
+3. `too-small`: the list still parses, so it has **already replaced** users' lists at their next
+   refresh, and protection from the live list shrank with it. Investigate the same day: read the upstream
+   commits, and if the shrink is a mistake, report it upstream or ship a release that changes the source.
+4. `near-cap`: raise `MAX_PHISHING_DOMAINS` or `MAX_PHISHING_DOMAIN_CHARS` within the documented
+   chunk and `storage.local` budgets (`phishing-feed-cache.ts`), with the budget tests.
+5. Legitimate sites blocked (a wrong or malicious upstream edit): the list only blocks, so funds and
+   keys are not at risk, but affected users can't connect those sites. Report it upstream. A
+   corrected list reaches users within about six hours of the fix. If upstream won't fix it, ship a
+   release that changes the source. The wallet has no remote switch or per-site override today.
+
+## Product analytics
+
+Product analytics are enabled by default with an in-product disclosure. A user may turn them off at
+any time under **Settings → Network → Advanced endpoints → Product analytics**. Only requests to
+`wallet.nodes.starknet.org` receive the complete analytics header set; custom RPCs and third-party
+services receive none. The installation UUID is random non-secret local metadata, while STRK20
+discovery, proving, and paymaster calls share a fresh transient flow UUID for one service operation.
+Neither identifier is derived from an account, address, site, extension id, or browser profile.
+
+The gateway HMAC-pseudonymizes both identifiers before logging and retains no raw identifier,
+request body, response body, address, hash, calldata, or signature. Operators must call the metric a
+"pseudonymous installation," never a person, user, wallet, or account. Disabling analytics stops all
+five headers immediately; storage failure also omits the complete set without blocking wallet
+traffic. Analytics access events expire after 90 days.
+
 ## Privacy-safe diagnostics
 
 Reliability counters are disabled by default. A user may enable them under **Settings → Network →
@@ -57,10 +118,13 @@ fixed service/endpoint classes, outcomes, and average latency. Disabling the set
 sets of counters. No diagnostic is uploaded automatically.
 
 **Download diagnostics** creates a JSON file containing build metadata, coarse wallet state
-(network, locked/ready/vault booleans, and account count), plus distinct `rpc` and `explorer`
-aggregate rows. Explorer traffic is never counted as RPC. Exact URLs, addresses, origins, hashes,
-calldata, RPC methods, raw errors, bodies, secrets, device identities, and timestamps are
-structurally absent. A support responder must ask the user to inspect the file and share it
+(network, locked/ready/vault booleans, and account count), plus distinct `rpc`, `explorer`, and
+`privacy` aggregate rows. Explorer traffic is never counted as RPC. A `privacy` row aggregates
+one phase of a tracked privacy job (a shield's or activation's proof, or a confirmed execution) by
+job kind, fixed phase label, and outcome class — `ok`, `timeout`, `unavailable`, `locked`, or
+`error` — with the average duration, so a stuck attempt shows where it stalled without saying
+what was being proved. Exact URLs, addresses, origins, hashes, calldata, RPC methods, raw errors,
+bodies, secrets, device identities, and timestamps are structurally absent. A support responder must ask the user to inspect the file and share it
 voluntarily; support must never ask for any other wallet export.
 
 ## Incident procedure

@@ -5,11 +5,17 @@
  * validateMnemonic returning a real boolean vs a non-boolean WASM result.
  */
 import { describe, expect, test } from "bun:test";
-import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
+import { createKrustyKms } from "@bramble/kms-krusty/adapter";
 
 const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 
 const createModule = (overrides: Record<string, unknown> = {}) => ({
+  deriveArgentLegacyKeypair() {
+    return {
+      private_key: "0x321",
+      public_key_x: "0xcba",
+    };
+  },
   deriveNostrPublicKey() {
     return { public_key: "11".repeat(32) };
   },
@@ -31,8 +37,8 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
   openNostrApplicationData() {
     return JSON.stringify({
       content: "payload",
+      identifier: "bramble.multisig",
       createdAt: "1",
-      identifier: "mc-wallet.multisig",
       rumorId: "55".repeat(32),
       senderPublicKey: "22".repeat(32),
       wrapId: "11".repeat(32),

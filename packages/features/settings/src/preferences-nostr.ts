@@ -1,6 +1,6 @@
 /** Nostr coordination relay preference mutation. */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isNostrRelayUrl } from "@mc-wallet/wallet-model/nostr";
+import { WalletError } from "@bramble/core/errors";
+import { isNostrRelayUrl } from "@bramble/wallet-model/nostr";
 import type { WalletPreferences } from "./preferences-types";
 
 /** Returns preferences with a validated custom relay, or the reviewed defaults restored. */

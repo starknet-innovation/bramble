@@ -6,14 +6,15 @@
  * session.
  */
 import { describe, expect, test } from "bun:test";
-import { memoryOriginHistory } from "@mc-wallet/permissions/origin-history";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { memoryOriginHistory } from "@bramble/permissions/origin-history";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { walletEventBroadcasts } from "../../../apps/extension/src/background/runtime/events";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { flushHeld } from "../../support/held";
 
 const account: AccountRef = {
@@ -96,7 +97,7 @@ const extensionSender: RuntimeSender = {
 const unlockedHandler = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(wallet, "extension-id", {
+  return createMessageHandler(wallet, testExtension, {
     approvals: createApprovalQueue(),
     originHistory: memoryOriginHistory(),
     session,
@@ -117,7 +118,7 @@ describe("connected-sites messages", () => {
   });
 
   test("refuses connected-sites while locked", async () => {
-    const handler = createMessageHandler(wallet, "extension-id", {
+    const handler = createMessageHandler(wallet, testExtension, {
       session: createUnlockSession(),
     });
     await expect(handler({ type: "wallet.connectedSites" }, extensionSender)).resolves.toEqual({
@@ -171,7 +172,7 @@ describe("origin reputation on account requests", () => {
   test("records first-seen and surfaces insights on pending approvals", async () => {
     const session = createUnlockSession();
     const approvals = createApprovalQueue();
-    const handler = createMessageHandler(wallet, "extension-id", {
+    const handler = createMessageHandler(wallet, testExtension, {
       approvals,
       originHistory: memoryOriginHistory(() => 1000),
       session,

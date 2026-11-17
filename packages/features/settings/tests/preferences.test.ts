@@ -6,8 +6,8 @@ import {
   createPreferencesStore,
   defaultWalletPreferences,
   PREFERENCES_STORE_KEY,
-} from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+} from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 
 // The stored spelling of "0x123": every entry address is canonicalized by the
 // shared id builder (MCW-V09-110), so the id is derived from this form.
@@ -20,7 +20,20 @@ describe("createPreferencesStore", () => {
     expect(preferences.activeNetworkId).toBe("SN_MAIN");
     expect(preferences.approvalSurface).toBe("side-panel");
     expect(preferences.addressBook).toEqual([]);
+    expect(preferences.productAnalytics).toBe(true);
     expect(preferences.tokens.some((token) => token.networkId === "SN_DEVNET")).toBe(true);
+  });
+
+  test("enables analytics for legacy preferences while preserving an explicit opt-out", async () => {
+    const store = createMemoryStore();
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>)["productAnalytics"];
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+
+    const preferences = createPreferencesStore({ store });
+    expect((await preferences.read()).productAnalytics).toBe(true);
+    await preferences.setDisplay({ productAnalytics: false });
+    expect((await preferences.read()).productAnalytics).toBe(false);
   });
 
   test("persists active network and address book entries", async () => {
@@ -95,9 +108,17 @@ describe("createPreferencesStore", () => {
 
     const preferences = await createPreferencesStore({ store }).read();
     // The account is kept only in the first group (stable order); the singly
-    // filed account is untouched.
-    expect(preferences.groups?.[0]?.accountIds).toEqual(["SN_MAIN:0x1", "SN_MAIN:0x2"]);
-    expect(preferences.groups?.[1]?.accountIds).toEqual([]);
+    // filed account is untouched. The read also seeds the two default folders,
+    // so the user's own groups sit between them.
+    const byId = (id: string) => preferences.groups?.find((group) => group.id === id);
+    expect(byId("work")?.accountIds).toEqual(["SN_MAIN:0x1", "SN_MAIN:0x2"]);
+    expect(byId("personal")?.accountIds).toEqual([]);
+    expect(preferences.groups?.map((group) => group.id)).toEqual([
+      "my-accounts",
+      "work",
+      "personal",
+      "archived-accounts",
+    ]);
   });
 
   test("stores, prefers, and clears custom RPC endpoints per network", async () => {
@@ -155,7 +176,7 @@ describe("createPreferencesStore", () => {
       },
       poolAddress: "0x1",
       proverUrl: "https://prover.example/strk20",
-      subaccountAnonymizerAddress: "0x2",
+      shadowAccountAnonymizerAddress: "0x2",
     };
     await preferences.setStrk20NetworkConfig({ config, networkId: "SN_MAIN" });
     await expect(preferences.read()).resolves.toMatchObject({
@@ -175,7 +196,7 @@ describe("createPreferencesStore", () => {
           discoveryUrl: "https://discovery.example",
           poolAddress: "0x1",
           proverUrl: "http://prover.example",
-          subaccountAnonymizerAddress: "0x2",
+          shadowAccountAnonymizerAddress: "0x2",
         },
         networkId: "SN_MAIN",
       }),
@@ -213,8 +234,10 @@ describe("createPreferencesStore", () => {
     if (!currentMainnet?.paymaster) {
       throw new Error("missing bundled STRK20 Mainnet routing");
     }
+    // The Vercel-era snapshot predates the bundled anonymizer.
+    const { shadowAccountAnonymizerAddress: _none, ...currentRouting } = currentMainnet;
     const retiredMainnet = {
-      ...currentMainnet,
+      ...currentRouting,
       discoveryUrl: "https://mc-wallet-terminal.vercel.app/api/strk20/discovery",
       ohttpEnabled: true,
       paymaster: {
@@ -270,6 +293,7 @@ describe("createPreferencesStore", () => {
     await preferences.setDisplay({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
     });
@@ -280,6 +304,7 @@ describe("createPreferencesStore", () => {
     expect(stored.accountLabels?.[accountId]).toBe("Savings");
     expect(stored.approvalSurface).toBe("popup");
     expect(stored.displayCurrency).toBe("eur");
+    expect(stored.productAnalytics).toBe(true);
     expect(stored.reliabilityDiagnostics).toBe(true);
     expect(stored.theme).toBe("dark");
     expect(stored.addressBook).toEqual([]);
@@ -348,6 +373,24 @@ describe("createPreferencesStore", () => {
     expect((await createPreferencesStore({ store }).read()).hiddenTokens).toBeUndefined();
   });
 
+  test("hides and reveals accounts and stays compatible with legacy backups", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+    const accountId = "SN_MAIN:0x1";
+
+    await preferences.setAccountHidden({ accountId, hidden: true });
+    expect((await preferences.read()).hiddenAccountIds).toEqual([accountId]);
+    await preferences.setAccountHidden({ accountId, hidden: true });
+    expect((await preferences.read()).hiddenAccountIds).toEqual([accountId]);
+    await preferences.setAccountHidden({ accountId, hidden: false });
+    expect((await preferences.read()).hiddenAccountIds).toEqual([]);
+
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>)["hiddenAccountIds"];
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+    expect((await createPreferencesStore({ store }).read()).hiddenAccountIds).toBeUndefined();
+  });
+
   test("creates, edits, assigns, and removes account groups", async () => {
     const store = createMemoryStore();
     const preferences = createPreferencesStore({ store });
@@ -356,13 +399,19 @@ describe("createPreferencesStore", () => {
     await preferences.createGroup({ icon: "briefcase", name: "Trading" });
     await preferences.createGroup({ icon: "coins", name: "Trading" });
     const created = await preferences.read();
-    expect(created.groups?.map((group) => group.id)).toEqual(["trading", "trading-2"]);
+    // Between the two default folders, which every read guarantees.
+    expect(created.groups?.map((group) => group.id)).toEqual([
+      "my-accounts",
+      "trading",
+      "trading-2",
+      "archived-accounts",
+    ]);
 
     await preferences.setAccountInGroup({ accountId, groupId: "trading", member: true });
     await preferences.renameGroup({ id: "trading", name: "Active Trading" });
     await preferences.setGroupIcon({ icon: "rocket", id: "trading" });
     const updated = await preferences.read();
-    expect(updated.groups?.[0]).toMatchObject({
+    expect(updated.groups?.find((group) => group.id === "trading")).toMatchObject({
       accountIds: [accountId],
       icon: "rocket",
       id: "trading",
@@ -372,8 +421,13 @@ describe("createPreferencesStore", () => {
     await preferences.setAccountInGroup({ accountId, groupId: "trading", member: false });
     await preferences.removeGroup({ id: "trading-2" });
     const finalState = await preferences.read();
-    expect(finalState.groups).toHaveLength(1);
-    expect(finalState.groups?.[0]?.accountIds).toEqual([]);
+    // "trading-2" is gone; the survivor sits between the two defaults.
+    expect(finalState.groups?.map((group) => group.id)).toEqual([
+      "my-accounts",
+      "trading",
+      "archived-accounts",
+    ]);
+    expect(finalState.groups?.find((group) => group.id === "trading")?.accountIds).toEqual([]);
   });
 
   test("rejects invalid group input and malformed stored groups", async () => {

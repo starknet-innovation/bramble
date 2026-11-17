@@ -3,17 +3,20 @@
  * notice, action tiles, and undeployed-account notice.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { callout } from "@mc-wallet/ui-kit/content";
-import { button, iconButton, iconLink } from "@mc-wallet/ui-kit/controls";
-import { dockNavigation } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
+import { callout } from "@bramble/ui-kit/content";
+import { iconButton, iconLink } from "@bramble/ui-kit/controls";
+import { dockNavigation } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { explorerAccountUrl } from "@bramble/wallet-model/networks";
+import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { type IconName, icon } from "../shared/icons";
+import { networkDisplayName } from "../shared/network-label";
 import { accountAvatar, accountDisplayName, type WalletView } from "../shared/parts";
-import { STARKSCAN_URL } from "./starkscan-link";
 
 /**
  * Renders the unlocked account header and its trusted destinations.
@@ -29,18 +32,23 @@ export const walletHeader = (
     ? (multisig.name ?? "Multisig account")
     : account
       ? accountDisplayName(account, preferences)
-      : "MC Wallet";
+      : "Bramble";
   const address = multisig?.address ?? account?.address;
-  const network = status.network
-    .replace(/^Starknet Mainnet$/, "Starknet")
-    .replace(/^Starknet\s+/, "");
+  // Opens the identity this header is showing, not the explorer's front page:
+  // that account view is the only thing wanted from here, and Home no longer
+  // carries an explorer tile. Null on devnet or before an account exists, which
+  // renders a disabled control rather than a link that cannot resolve.
+  const explorerUrl = address
+    ? explorerAccountUrl(multisig?.networkId ?? status.networkId, address)
+    : null;
+  const network = networkDisplayName(status.network);
   const networkDetail = networkIssue
     ? `<span id="network-status-detail" class="sr-only">${escapeHtml(networkIssue)}</span>`
     : "";
   return `
   <header class="wallet-header">
     <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false"${networkIssue ? ' aria-describedby="network-status-detail"' : ""} title="Manage accounts">
-      <span class="brand-mark">${address ? accountAvatar(address) : icon("wallet")}</span>
+      <span class="brand-mark">${address ? accountAvatar(address) : BRAMBLE_MARK}</span>
       <span class="account-meta">
         <span class="account-name"><strong>${escapeHtml(name)}</strong>${icon("chevronDown")}</span>
         <span class="account-net${networkIssue ? " degraded" : ""}"${networkIssue ? ` title="${escapeHtml(networkIssue)}"` : ""}><span class="dot" aria-hidden="true"></span><span class="account-network-label">${escapeHtml(network)}</span>${networkDetail}</span>
@@ -53,14 +61,24 @@ export const walletHeader = (
         label: "Connected sites",
         variant: "ghost",
       })}
-      ${iconLink({
-        attributes: { id: "starkscan-button" },
-        href: STARKSCAN_URL,
-        icon: "externalLink",
-        label: "Open Starkscan",
-        target: "_blank",
-        variant: "ghost",
-      })}
+      ${
+        explorerUrl === null
+          ? iconButton({
+              attributes: { id: "starkscan-button" },
+              disabled: true,
+              icon: "externalLink",
+              label: "Explorer unavailable on this network",
+              variant: "ghost",
+            })
+          : iconLink({
+              attributes: { id: "starkscan-button" },
+              href: explorerUrl,
+              icon: "externalLink",
+              label: "View this account on the block explorer",
+              target: "_blank",
+              variant: "ghost",
+            })
+      }
       ${iconButton({
         attributes: { id: "lock-button" },
         icon: "lock",
@@ -151,29 +169,55 @@ export const explorerTile = (url: string | null): string => {
 };
 
 /**
- * Renders the counterfactual-account status when chain state is conclusively
- * undeployed. Home only directs the user to the next task; fee review and
- * submission stay in their dedicated transaction journeys.
+ * Renders the home action that shields public value into the private pool.
+ *
+ * Emits the same attributes the token-detail surface uses, so the existing
+ * privacy bindings pick it up with no wiring of its own: `data-send-shield`
+ * opens Send in its Shield mode once privacy is ready, and `data-privacy-open`
+ * starts activation when it is not — and when activation cannot proceed either
+ * (no STRK for the fee, undeployed account, pending registration, no pool on
+ * this network), that binding lands on the privacy screen with the reason and
+ * the next step, so the tile is never a dead click. Disabled only when there is
+ * no token to name — no account, or a network with none tracked — following the
+ * explorer tile in staying put rather than reflowing the row.
  */
-export const deployNotice = (
-  account: AccountRef | null,
-  deployment: boolean | null,
-  fundedForFees = true,
-): string =>
-  account === null || deployment !== false
-    ? ""
-    : `<div class="deploy-notice">
-        ${button({
-          attributes: {
-            "data-view": fundedForFees ? "deploy-account" : "receive",
-            title: fundedForFees
-              ? "This account contract is not on-chain yet. Deploying it enables transactions."
-              : "Deploying costs a network fee. Receive STRK into this account first.",
-          },
-          className: "deploy-chip",
-          icon: "alert",
-          label: fundedForFees ? "Deploy account" : "Fund with STRK",
-          size: "small",
-          variant: "secondary",
-        })}
-      </div>`;
+export const shieldTile = (
+  tokenId: string | null,
+  ready: boolean,
+  deployment: boolean | null = null,
+  fundedForFees: boolean | null = true,
+  readOnly = false,
+  otherWallet = false,
+): string => {
+  const needsDeploy = deployment === false;
+  const needsFunds = needsDeploy && fundedForFees === false;
+  const body = `<span class="tile-icon">${icon("shield")}</span>
+      <span class="tile-label">Shield</span>`;
+  // Another wallet registered this account. The tile still opens the privacy
+  // screen, which states why shield and unshield are off, and does not offer
+  // to activate.
+  if (otherWallet && tokenId !== null) {
+    return `<button class="action-tile" data-privacy-open="${escapeHtml(tokenId)}" type="button" aria-label="${escapeHtml(PRIVACY_OTHER_WALLET)}">${body}</button>`;
+  }
+  // A read-only account cannot sign the activation or the shield, so the tile
+  // is a true disabled control, not a link into a flow that fails at the end.
+  if (readOnly) {
+    return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable — this account is read only">${body}</button>`;
+  }
+  if (tokenId === null) {
+    return `<button class="action-tile" type="button" disabled aria-label="Shield unavailable until a token is tracked">${body}</button>`;
+  }
+  // One tile, one word, whatever the account still needs: deployment and
+  // funding are steps on the way to shielding, and the privacy screen this
+  // opens names whichever one is in the way. The accessible name carries that
+  // reason, so a screen reader is told before the tap rather than after.
+  const attribute = ready && !needsDeploy ? "data-send-shield" : "data-privacy-open";
+  const label = needsFunds
+    ? "Shield — add STRK to this account first"
+    : needsDeploy
+      ? "Shield — deploy this account first"
+      : ready
+        ? "Shield public value into your private balance"
+        : "Activate private balances";
+  return `<button class="action-tile" ${attribute}="${escapeHtml(tokenId)}" type="button" aria-label="${label}">${body}</button>`;
+};

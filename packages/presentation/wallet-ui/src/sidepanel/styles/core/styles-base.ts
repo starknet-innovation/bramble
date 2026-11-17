@@ -1,8 +1,8 @@
 /**
  * Base layer of the side panel stylesheet: skin-derived custom properties,
  * reset, layout primitives, the account-bar header, portfolio hero, action
- * tiles, dock, flow chrome, and list rows. Composed with the component layer
- * in ./styles.ts and the home/motion layer in ./styles-home.ts.
+ * tiles, and dock. Flow chrome and list rows live in ./styles-lists.ts.
+ * Composed with the component layer in ./styles.ts and the home/motion layer in ./styles-home.ts.
  *
  * Surface rules ("Clean Mono"): solid fills only (no gradients, no glass),
  * structure carried by gentle low elevation and hairline edges; list rows are
@@ -20,7 +20,8 @@ import {
   TRACKING,
   TYPE,
   WEIGHT,
-} from "@mc-wallet/ui-kit/tokens";
+} from "@bramble/ui-kit/tokens";
+import { DOCK_OFFSET, DOCK_PADDING } from "./styles-dock";
 
 /**
  * Base stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -31,33 +32,45 @@ export const BASE_STYLES = `
     /* Default to the dark scheme of the default midnight skin; the entrypoint
        pins the resolved scheme (dark / light) inline before first paint. */
     color-scheme: dark;
-    --mc-font-mono: ${FONT.mono};
-    --mc-font-ui: ${FONT.ui};
+    --bramble-font-mono: ${FONT.mono};
+    --bramble-font-ui: ${FONT.ui};
     /* Recessed group fill (tab tracks, permission/sign panels). */
-    --mc-soft: var(--mc-sunken);
-    --mc-hover: color-mix(in srgb, var(--mc-text) 6%, var(--mc-elevated));
-    --mc-soft-press: color-mix(in srgb, var(--mc-text) 11%, var(--mc-elevated));
-    --mc-focus-ring: color-mix(in srgb, var(--mc-accent) 72%, var(--mc-bg));
-    --mc-accent-hover: color-mix(in srgb, var(--mc-text) 10%, var(--mc-accent));
-    --mc-accent-press: color-mix(in srgb, var(--mc-text) 18%, var(--mc-accent));
+    --bramble-soft: var(--bramble-sunken);
+    --bramble-hover: color-mix(in srgb, var(--bramble-text) 6%, var(--bramble-elevated));
+    --bramble-soft-press: color-mix(in srgb, var(--bramble-text) 11%, var(--bramble-elevated));
+    --bramble-focus-ring: color-mix(in srgb, var(--bramble-accent) 72%, var(--bramble-bg));
+    --bramble-accent-hover: color-mix(in srgb, var(--bramble-text) 10%, var(--bramble-accent));
+    --bramble-accent-press: color-mix(in srgb, var(--bramble-text) 18%, var(--bramble-accent));
     /* The action tint stays whisper-quiet — enough to read as "active" without
        becoming a second field of contrast. */
-    --mc-accent-soft: color-mix(in srgb, var(--mc-accent) 13%, var(--mc-panel));
-    --mc-positive-soft: color-mix(in srgb, var(--mc-positive) 13%, var(--mc-panel));
-    --mc-danger-soft: color-mix(in srgb, var(--mc-danger) 12%, var(--mc-panel));
-    --mc-shadow: var(--mc-elev-lg);
-    --mc-shadow-sm: var(--mc-elev-sm);
-    /* Anchored bottom-bar footprint: one source of truth consumed by the dock
-       itself, the dock-screen scroll clearance, and the toast stack offset. */
-    --mc-dock-h: calc(${CONTROL.nav} + ${SPACE.sm});
+    --bramble-accent-soft: color-mix(in srgb, var(--bramble-accent) 13%, var(--bramble-panel));
+    --bramble-positive-soft: color-mix(in srgb, var(--bramble-positive) 13%, var(--bramble-panel));
+    --bramble-danger-soft: color-mix(in srgb, var(--bramble-danger) 12%, var(--bramble-panel));
+    --bramble-warning-soft: color-mix(in srgb, var(--bramble-warning) 14%, var(--bramble-panel));
+    --bramble-shadow: var(--bramble-elev-lg);
+    --bramble-shadow-sm: var(--bramble-elev-sm);
+    /* Floating-dock footprint from the panel's bottom edge — the pill (a 52px
+       root plus its padding) and the gap beneath it — one source of truth for
+       the dock-screen scroll clearance and the toast stack offset. */
+    --bramble-dock-h: calc(${CONTROL.dockItem} + ${DOCK_PADDING} * 2 + ${DOCK_OFFSET});
     /* Token fallbacks remain neutral so unverified assets do not acquire a
        decorative identity that could imply trust. */
-    --mc-avatar-0: hsl(0 0% 42%);
-    --mc-avatar-1: hsl(0 0% 52%);
-    --mc-avatar-2: hsl(0 0% 62%);
-    --mc-avatar-3: hsl(0 0% 72%);
+    --bramble-avatar-0: hsl(0 0% 42%);
+    --bramble-avatar-1: hsl(0 0% 52%);
+    --bramble-avatar-2: hsl(0 0% 62%);
+    --bramble-avatar-3: hsl(0 0% 72%);
   }
   * { box-sizing: border-box; }
+  /* The document is the scroll container — .shell is min-height: 100vh and
+     nothing between it and the viewport scrolls — so any row that grows past
+     the viewport summons the document scrollbar. Without a reserved gutter the
+     scrollbar takes its width from the content box and every element on the
+     screen reflows narrower, which reads as the whole UI shifting sideways.
+     The token rows are <details> elements: expanding one is exactly that case.
+     both-edges mirrors the gutter on the left: a classic (Windows) scrollbar
+     otherwise reserves its width on the right alone, and every screen sits off
+     centre with a wider right margin (issue 795). Overlay scrollbars reserve nothing. */
+  html { scrollbar-gutter: stable both-edges; }
   html, body, #app {
     max-width: 100%;
     min-height: 100%;
@@ -65,9 +78,9 @@ export const BASE_STYLES = `
     width: 100%;
   }
   body {
-    background: var(--mc-bg);
-    color: var(--mc-text);
-    font-family: var(--mc-font-ui);
+    background: var(--bramble-bg);
+    color: var(--bramble-text);
+    font-family: var(--bramble-font-ui);
     font-size: ${TYPE.body.size};
     -webkit-font-smoothing: antialiased;
     line-height: ${TYPE.body.line};
@@ -81,10 +94,28 @@ export const BASE_STYLES = `
   }
   body.popup-surface #app { min-height: 600px; }
   h1, h2, h3, p, ul { margin: 0; }
+  /* Visually hidden, still read aloud. The box is pinned to its containing
+     block's top corner rather than left at its static position: the scope
+     announcer is appended after #app, whose full height already fills the
+     panel, so there its 1px box made the document 1px taller than the
+     viewport and Windows drew a permanent scrollbar. */
+  .sr-only {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    left: 0;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    text-wrap: nowrap;
+    top: 0;
+    width: 1px;
+  }
   ul { list-style: none; padding: 0; }
   h1 { font-size: ${TYPE.display.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.display.line}; }
   h2 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.01em; line-height: ${TYPE.title.line}; }
-  p { color: var(--mc-muted); }
+  p { color: var(--bramble-muted); }
   .shell {
     display: flex;
     flex-direction: column;
@@ -105,11 +136,20 @@ export const BASE_STYLES = `
     width: 100%;
   }
   .screen > * { max-width: 100%; min-width: 0; }
-  /* Dock screens scroll their content UNDER the anchored bottom bar. Reserve
-     clearance below the content equal to the bar footprint plus a breathing
-     gap, so the last row never hides beneath it at any scroll position. Flow
-     screens carry no dock. */
-  .screen:not(.flow) { padding-bottom: calc(var(--mc-dock-h) + ${SPACE.lg}); }
+  /* Dock screens scroll their content UNDER the anchored bottom bar. With the
+     shell's own bottom padding, the clearance is exactly the bar footprint, so
+     a screen scrolls only once its content would reach the pill. Any breathing
+     gap reserved on top of that is space the user never sees, and it made a
+     screen whose content already cleared the dock scroll by a few pixels. At
+     the end of a long screen the last row meets the pill's edge, and the
+     pill's shadow separates the two. Flow screens carry no dock. */
+  .screen:not(.flow) { padding-bottom: calc(var(--bramble-dock-h) - ${SPACE.md}); }
+  /* An empty status line that ends a dock screen holds nothing yet, and there
+     is nothing below it to keep from shifting, so it takes no room: out of flow
+     it drops both its reserved line and the grid gap before it. It stays in the
+     document, so the live region still announces a message written into it. */
+  .screen:not(.flow) > [role="status"]:empty:last-child,
+  .screen:not(.flow) > :last-child > [role="status"]:empty:last-child { position: absolute; }
 
   /* Layout primitives */
   .row, .address-line, .context-line, .callout, .token-row {
@@ -121,24 +161,28 @@ export const BASE_STYLES = `
   .row, .address-line { justify-content: space-between; }
   .row.wrap { flex-wrap: wrap; justify-content: flex-start; }
   .stack { display: grid; gap: ${SPACE.sm}; }
-  .stack-tight { display: grid; gap: 3px; min-width: 0; }
+  /* Single-column text stacks beside fixed-width controls. The column is
+     minmax(0, 1fr), not the implicit auto track, so an unbreakable word (a dapp
+     origin, a saved label) can never widen the row past its card and push the
+     trailing control under the card's overflow clip at narrow panel widths;
+     the word wraps as a last resort instead. */
+  .stack-tight { display: grid; gap: 3px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+  .stack-tight > * { min-width: 0; overflow-wrap: anywhere; }
   .button-row {
     display: grid;
     gap: ${SPACE.sm};
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     min-width: 0;
   }
-  /* Section heads share the 8px horizontal inset of the de-boxed list rows
-     beneath them, so headings and row content sit on one left edge. The same
-     inset applies to heading rows (a .row leading with an h2) so the Activity
-     screen's titles line up with the transaction text below them. */
+  /* Section heads sit on the page's text column with no inset of their own:
+     de-boxed list rows (tokens, activity) put their content on that same
+     column and bleed only their hover fill past it, so a heading, its rows,
+     and the cards around them share one left edge. */
   .section-head {
     align-items: baseline;
     display: flex;
     justify-content: space-between;
-    padding: 0 ${SPACE.sm};
   }
-  .section > .row:has(> h2) { padding: 0 ${SPACE.sm}; }
   .section-head h2 { font-size: ${TYPE.body.size}; font-weight: 700; }
   .activity-head h1 {
     font-size: ${TYPE.display.size};
@@ -147,7 +191,7 @@ export const BASE_STYLES = `
     line-height: ${TYPE.display.line};
   }
   .eyebrow {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.caption.size};
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -160,31 +204,31 @@ export const BASE_STYLES = `
     display: flex;
     gap: ${SPACE.sm};
     justify-content: space-between;
-    padding: 2px 0 ${SPACE.xs};
+    padding: ${SPACE.xxs} 0 ${SPACE.xs};
   }
   button.account-trigger {
     align-items: center;
     background: transparent;
     border-radius: ${RADIUS.full};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     flex: 0 1 auto;
     gap: 10px;
     justify-content: flex-start;
     min-height: 0;
     min-width: 0;
-    padding: 4px 12px 4px 4px;
+    padding: ${SPACE.xs} ${SPACE.md} ${SPACE.xs} ${SPACE.xs};
     text-align: left;
   }
   @media (hover: hover) and (pointer: fine) {
-    button.account-trigger:not(:disabled):hover { background: var(--mc-hover); }
+    button.account-trigger:not(:disabled):hover { background: var(--bramble-hover); }
   }
-  button.account-trigger:not(:disabled):active { background: var(--mc-soft-press); }
+  button.account-trigger:not(:disabled):active { background: var(--bramble-soft-press); }
   .brand-mark {
     align-items: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     flex: none;
     height: 36px;
@@ -200,7 +244,7 @@ export const BASE_STYLES = `
     min-width: 0;
   }
   .account-name strong {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-size: ${TYPE.body.size};
     font-weight: 700;
     overflow: hidden;
@@ -208,7 +252,7 @@ export const BASE_STYLES = `
     text-wrap: nowrap;
   }
   .account-name .icon {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     flex: none;
     height: 12px;
     transition: transform ${MOTION.tabMs}ms ${MOTION.ease};
@@ -217,7 +261,7 @@ export const BASE_STYLES = `
   .account-trigger[aria-expanded="true"] .account-name .icon { transform: rotate(180deg); }
   .account-net {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     font-size: ${TYPE.caption.size};
     gap: 6px;
@@ -230,7 +274,7 @@ export const BASE_STYLES = `
   .account-network-label { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .account-net.degraded .dot {
     animation: network-status-pulse 2400ms var(--ease-in-out) infinite;
-    background: var(--mc-warning);
+    background: var(--bramble-warning);
   }
   @keyframes network-status-pulse {
     0%, 100% { opacity: 1; }
@@ -251,7 +295,7 @@ export const BASE_STYLES = `
   /* The total carries real presence: large, heavy, tightly tracked, optically
      sized, and tabular so digits never jitter as prices stream. */
   .hero-total {
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-optical-sizing: auto;
     font-size: ${TYPE.portfolio.size};
     font-variant-numeric: tabular-nums;
@@ -269,20 +313,29 @@ export const BASE_STYLES = `
     font-weight: 650;
     gap: 6px;
   }
-  .hero-change .hero-change-amt { color: var(--mc-positive); }
-  .hero-change.down .hero-change-amt { color: var(--mc-danger); }
-  .hero-change .hero-change-win { color: var(--mc-muted); font-weight: 500; }
+  .hero-change .hero-change-amt { color: var(--bramble-positive); }
+  .hero-change.down .hero-change-amt { color: var(--bramble-danger); }
+  .hero-change .hero-change-win { color: var(--bramble-muted); font-weight: 500; }
+  /* Held while the total still reads "—": keeps the line's space only. */
+  .hero-change.is-held { visibility: hidden; }
   /* Shielded-balance qualifier stays quiet beneath the total; network
      freshness now belongs to the persistent header status. */
   .hero-stale {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: inline-flex;
     font-size: ${TYPE.caption.size};
     font-weight: 500;
     gap: 5px;
   }
   .hero-stale .icon { height: 13px; width: 13px; }
+  /* Read-only flag: label, optional recovery detail, and recover button stacked
+     in one quiet column beneath the total. */
+  .read-only-notice { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xs}; }
+  .read-only-notice .read-only-detail {
+    color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; max-width: 32ch; text-align: center;
+  }
+  .read-only-notice #recover-account { margin-top: ${SPACE.xxs}; }
 
   /* The frequent money actions are equal rounded-square tools. Their common
      shape makes the row instantly scannable; distinctive glyph silhouettes,
@@ -294,11 +347,17 @@ export const BASE_STYLES = `
     grid-auto-columns: minmax(0, 1fr);
     grid-auto-flow: column;
   }
+  /* The four home actions wear the floating dock's selected-root treatment —
+     the accent's soft tint with accent ink, flat, no shadow — so the two
+     pieces of chrome on the home screen read as one family. Hover and press
+     stay on-family: a little more accent layered over the soft tint (the
+     accent-side twin of the neutral --bramble-hover / --bramble-soft-press
+     recipes), never the neutral hover fill. */
   .action-tile {
     align-content: center;
-    background: var(--mc-elevated);
+    background: var(--bramble-accent-soft);
     border-radius: ${RADIUS.lg};
-    color: var(--mc-text);
+    color: var(--bramble-accent);
     display: grid;
     gap: ${SPACE.xs};
     justify-items: center;
@@ -312,120 +371,27 @@ export const BASE_STYLES = `
     width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
-    .action-tile:not(:disabled):hover { background: var(--mc-hover); transform: translateY(-2px); }
-    .action-tile:not(:disabled):hover .tile-label { color: var(--mc-text); }
+    .action-tile:not(:disabled):hover {
+      background: color-mix(in srgb, var(--bramble-accent) 6%, var(--bramble-accent-soft));
+      transform: translateY(-2px);
+    }
   }
-  .action-tile:not(:disabled):active { background: var(--mc-soft-press); transform: scale(0.97); }
+  .action-tile:not(:disabled):active {
+    background: color-mix(in srgb, var(--bramble-accent) 11%, var(--bramble-accent-soft));
+    transform: scale(0.97);
+  }
   button.action-tile:disabled { cursor: not-allowed; opacity: 0.4; }
   .tile-icon {
     align-items: center;
-    color: var(--mc-text);
+    color: var(--bramble-accent);
     display: inline-flex;
     justify-content: center;
   }
-  .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: ${WEIGHT.semibold}; }
+  .tile-label { color: var(--bramble-accent); font-size: ${TYPE.caption.size}; font-weight: ${WEIGHT.semibold}; }
   .tile-icon .icon {
     height: ${CONTROL.majorIcon};
     stroke-width: 1.85;
     width: ${CONTROL.majorIcon};
   }
 
-  /* Flow screens: back control + goal title */
-  .flow-header {
-    align-items: center;
-    display: flex;
-    gap: ${SPACE.sm};
-    min-width: 0;
-    padding: 2px 0 ${SPACE.xs};
-  }
-  .flow-title { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .flow-title h1 { font-size: ${TYPE.display.size}; }
-  .flow-title p {
-    color: var(--mc-muted);
-    font-size: ${TYPE.caption.size};
-    overflow-wrap: anywhere;
-  }
-
-  /* Grouped lists: ONE soft container per group of related rows, flat rows
-     inside split by inset hairline dividers — never a border per row. This is
-     the structural backbone of every settings and picker screen: the group
-     communicates "these belong together", the divider carries separation, and
-     no ring chrome competes with the content. The flex layout is declared on
-     rows directly (not inherited): anchor rows (Help & docs) never pass
-     through the base button rule. */
-  .menu-list, .option-list {
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.lg};
-    display: grid;
-    gap: 0;
-    overflow: hidden;
-  }
-  .menu-list > * + *, .option-list > * + * { position: relative; }
-  .menu-list > * + *::before, .option-list > * + *::before {
-    background: var(--mc-hairline);
-    content: "";
-    height: 1px;
-    left: ${SPACE.lg};
-    position: absolute;
-    right: 0;
-    top: 0;
-  }
-  button.menu-row, button.option-row, a.menu-row {
-    align-items: center;
-    background: transparent;
-    border-radius: 0;
-    color: var(--mc-text);
-    display: flex;
-    gap: ${SPACE.sm};
-    justify-content: flex-start;
-    min-height: 52px;
-    padding: 0 ${SPACE.lg};
-    text-align: left;
-    text-decoration: none;
-    transition: background ${MOTION.pressMs}ms ${MOTION.ease};
-    width: 100%;
-  }
-  @media (hover: hover) and (pointer: fine) {
-    button.menu-row:not(:disabled):hover, button.option-row:not(:disabled):hover, a.menu-row:hover {
-      background: var(--mc-hover);
-    }
-    button.option-row[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
-  }
-  button.menu-row:not(:disabled):active, button.option-row:not(:disabled):active {
-    background: var(--mc-soft-press);
-  }
-  button.option-row[aria-pressed="true"] { background: var(--mc-accent-soft); }
-  /* Action row: a group-terminal action (e.g. "Add account") reads as accent
-     text inside the group rather than a standalone boxed button. */
-  button.menu-row.row-action { color: var(--mc-accent); }
-  button.menu-row.row-action .menu-icon { color: var(--mc-accent); }
-  .menu-icon, .menu-chevron { color: var(--mc-muted); display: inline-flex; flex: none; }
-  .menu-icon .icon { height: 20px; width: 20px; }
-  .avatar {
-    border-radius: ${RADIUS.full};
-    display: block;
-    height: 100%;
-    overflow: hidden;
-    width: 100%;
-  }
-  .brand-mark .icon { height: 20px; width: 20px; }
-  .option-avatar {
-    align-items: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
-    display: inline-flex;
-    flex: none;
-    height: 36px;
-    justify-content: center;
-    overflow: hidden;
-    width: 36px;
-  }
-  input[type="file"] { padding: ${SPACE.sm} ${SPACE.md}; }
-  .option-mark { color: var(--mc-accent); display: inline-flex; flex: none; }
-  .menu-copy, .option-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .menu-copy strong, .option-copy strong { font-size: ${TYPE.body.size}; font-weight: 600; }
-  .menu-value { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  .option-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  .option-sub { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
 `;

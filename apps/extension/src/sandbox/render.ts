@@ -23,14 +23,14 @@ const readHash = (): string => {
 
 const html = decodeHtmlDataUri(readHash());
 if (html === null) {
-  document.body.textContent = "This collectible's animation could not be rendered.";
+  document.body.textContent = "This NFT's animation could not be rendered.";
 } else {
   // The blob document inherits this manifest sandbox's egress-blocking CSP.
   // A second iframe sandbox gives the animation a separate opaque principal,
   // while allow-scripts retains the explicit on-chain animation capability.
   const frame = document.createElement("iframe");
   frame.id = "nft-animation-document";
-  frame.title = "Collectible animation document";
+  frame.title = "NFT animation document";
   frame.referrerPolicy = "no-referrer";
   frame.setAttribute("sandbox", "allow-scripts");
   document.documentElement.style.height = "100%";

@@ -5,14 +5,16 @@
  * preference mutations handled in preference-ops.ts.
  */
 
-import { buildErc721TransferCall, buildErc1155TransferCall } from "@mc-wallet/portfolio/nft";
-import { unavailableNftIndexer } from "@mc-wallet/portfolio/nft-indexer";
-import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
-import type { NftStandard } from "@mc-wallet/starknet/rpc";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import { refuseOnPoisonedRecipient, verifyCalls } from "@mc-wallet/transactions/verify";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { buildErc721TransferCall, buildErc1155TransferCall } from "@bramble/portfolio/nft";
+import { unavailableNftIndexer } from "@bramble/portfolio/nft-indexer";
+import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
+import { nftsShown } from "@bramble/settings/preferences";
+import type { NftStandard } from "@bramble/starknet/rpc";
+import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { refuseOnPoisonedRecipient, verifyCalls } from "@bramble/transactions/verify";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import {
   activeAccountContext,
   networkRpcUrls,
@@ -20,10 +22,11 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
+import { withTrustedRecipients } from "../transactions/trusted-recipients";
+import { enrichWatchedNfts, mergeNftCandidates, watchedCandidates } from "./nft-candidates";
 import {
   type NftTarget,
   readAddNftInput,
@@ -33,6 +36,7 @@ import {
   readTransferNftInput,
 } from "./nft-inputs";
 import { cachedNfts } from "./nft-snapshot-cache";
+import { submitNftTransfer } from "./nft-transfer-submit";
 
 // Bounds how many on-chain ERC721 owner / ERC1155 balance re-proofs run at once
 // during discovery.
@@ -45,7 +49,7 @@ const OWNER_CHECK_CONCURRENCY = 5;
 // returns the detected transfer standard. The optional unified reader supports
 // ERC1155; older test doubles fall back to their ERC721 owner reader.
 const ownedNftStandard = async (
-  deps: WalletOpsDeps,
+  deps: Pick<WalletOpsDeps, "runtimeRpc">,
   target: NftTarget,
   accountAddress: string,
   rpcUrls: readonly string[],
@@ -69,12 +73,14 @@ const ownedNftStandard = async (
 
 // Re-proves ownership of one discovery candidate on-chain, returning the NFT
 // when the active account still owns it and null when it does not or the read
-// faults — the indexer's ownership claim is never trusted on its own.
+// faults — the indexer's ownership claim is never trusted on its own. A fault
+// is reported through `onFault`, so discovery can say its list may be short.
 const verifyOwnedNft = async (
   deps: WalletOpsDeps,
   nft: DiscoveredNft,
   accountAddress: string,
   rpcUrls: readonly string[],
+  onFault: () => void,
 ): Promise<DiscoveredNft | null> => {
   try {
     const standard = await ownedNftStandard(
@@ -89,6 +95,7 @@ const verifyOwnedNft = async (
     );
     return standard === null ? null : nft;
   } catch {
+    onFault();
     return null;
   }
 };
@@ -102,100 +109,17 @@ const filterOwnedNfts = async (
   candidates: readonly DiscoveredNft[],
   accountAddress: string,
   rpcUrls: readonly string[],
+  onFault: () => void = () => undefined,
 ): Promise<DiscoveredNft[]> => {
   const owned: DiscoveredNft[] = [];
   for (let start = 0; start < candidates.length; start += OWNER_CHECK_CONCURRENCY) {
     const batch = candidates.slice(start, start + OWNER_CHECK_CONCURRENCY);
     const verified = await Promise.all(
-      batch.map((nft) => verifyOwnedNft(deps, nft, accountAddress, rpcUrls)),
+      batch.map((nft) => verifyOwnedNft(deps, nft, accountAddress, rpcUrls, onFault)),
     );
     owned.push(...verified.filter((nft): nft is DiscoveredNft => nft !== null));
   }
   return owned;
-};
-
-const watchedCandidates = (
-  preferences: Awaited<ReturnType<WalletOpsDeps["preferencesStore"]["read"]>>,
-  networkId: string,
-  ownerAddress: string,
-): readonly DiscoveredNft[] =>
-  (preferences.nfts ?? [])
-    .filter(
-      (nft) =>
-        nft.networkId === networkId &&
-        nft.spam !== true &&
-        (nft.owner === undefined || sameFelt(nft.owner, ownerAddress)),
-    )
-    .map((nft) => ({
-      collection: "",
-      contract: nft.contract,
-      id: nft.id,
-      image: "",
-      name: nft.label ?? "",
-      networkId: nft.networkId,
-      tokenId: nft.tokenId,
-    }));
-
-const mergeNftCandidates = (
-  indexed: readonly DiscoveredNft[],
-  watched: readonly DiscoveredNft[],
-): readonly DiscoveredNft[] => {
-  const merged = new Map(indexed.map((nft) => [nft.id, nft]));
-  for (const nft of watched) {
-    if (!merged.has(nft.id)) {
-      merged.set(nft.id, nft);
-    }
-  }
-  return [...merged.values()];
-};
-
-const enrichWatchedNft = async (
-  deps: WalletOpsDeps,
-  nft: DiscoveredNft,
-  watchedIds: ReadonlySet<string>,
-  rpcUrls: readonly string[],
-): Promise<DiscoveredNft> => {
-  if (!watchedIds.has(nft.id) || !deps.runtimeRpc.getNftMetadata) {
-    return nft;
-  }
-  try {
-    const metadata = await deps.runtimeRpc.getNftMetadata({
-      contractAddress: nft.contract,
-      rpcUrls,
-      tokenId: nft.tokenId,
-    });
-    return metadata === null
-      ? nft
-      : {
-          ...nft,
-          ...(metadata.animationUrl ? { animationUrl: metadata.animationUrl } : {}),
-          attributes: metadata.attributes,
-          collection: metadata.collection || nft.collection,
-          description: metadata.description,
-          externalUrl: metadata.externalUrl,
-          image: metadata.image || nft.image,
-          name: metadata.name || nft.name,
-        };
-  } catch {
-    return nft;
-  }
-};
-
-const enrichWatchedNfts = async (
-  deps: WalletOpsDeps,
-  owned: readonly DiscoveredNft[],
-  watchedIds: ReadonlySet<string>,
-  rpcUrls: readonly string[],
-): Promise<DiscoveredNft[]> => {
-  const enriched: DiscoveredNft[] = [];
-  for (let start = 0; start < owned.length; start += OWNER_CHECK_CONCURRENCY) {
-    const batch = owned.slice(start, start + OWNER_CHECK_CONCURRENCY);
-    const resolved = await Promise.all(
-      batch.map((nft) => enrichWatchedNft(deps, nft, watchedIds, rpcUrls)),
-    );
-    enriched.push(...resolved);
-  }
-  return enriched;
 };
 
 const loadWatchedNfts = async (
@@ -210,11 +134,13 @@ const loadWatchedNfts = async (
   return enrichWatchedNfts(deps, owned, new Set(watched.map((nft) => nft.id)), rpcUrls);
 };
 
-const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<RuntimeResponse> => {
-  const input = readAddNftInput(message);
-  if (!input) {
-    return { error: "invalid add nft request" };
-  }
+/** Watches an NFT the active account is re-proved to own (watch form and site card alike). */
+export const watchOwnedNft = async (
+  deps: Pick<WalletOpsDeps, "nftSnapshots" | "preferencesStore" | "runtimeRpc" | "session"> & {
+    readonly wallet: WalletStatusReader;
+  },
+  input: NftTarget & { readonly label?: string },
+): Promise<RuntimeResponse> => {
   const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
     return { error: context.error };
@@ -239,6 +165,11 @@ const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<Runt
   return { ok: true, preferences: updated };
 };
 
+const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<RuntimeResponse> => {
+  const input = readAddNftInput(message);
+  return input ? watchOwnedNft(deps, input) : { error: "invalid add nft request" };
+};
+
 type NftTransferInput = NonNullable<ReturnType<typeof readTransferNftInput>>;
 
 // Resolves the active account, re-proves ownership, detects the transfer
@@ -252,7 +183,11 @@ const prepareNftTransfer = async (deps: WalletOpsDeps, input: NftTransferInput) 
   if (input.networkId !== context.networkId) {
     return { error: "switch to the NFT's network first" } as const;
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    context.accounts,
+  );
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
   // Watched NFTs are not scoped to an account, so both review and confirmation
   // prove ownership for the active account instead of trusting gallery state.
@@ -319,6 +254,9 @@ const handleReviewNftTransfer = async (
       // remain intact, including the submission-blocking poisoning check.
       flags: report.flags.filter((flag) => flag.code !== "unknown-contract"),
       requiresDeployment: fees.requiresDeployment,
+      // Same DTO and renderer as the ERC-20 review: when the send also deploys
+      // the account, a Ledger signs both, and the review says so here too.
+      signsTwice: fees.requiresDeployment && context.account.derivation.kind === "ledger",
       summaries: report.calls.map((decoded) => decoded.summary),
     },
   };
@@ -350,24 +288,16 @@ const handleTransferNft = async (
   }
   // Same bind as the ERC20 send: the fee the review step rendered is the
   // ceiling this send may sign under (MCW-V09-119).
-  const result = await deps.runtimeRpc.submitInvokeTransaction({
-    account: context.account,
-    calls: [call],
+  return submitNftTransfer(deps, {
+    call,
+    context,
     isAuthorized: authorized.isCurrent,
+    recipient: input.recipient,
     ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
     reviewedFee: input.reviewedFee,
     rpcUrls,
-    signHash: signerForContext(deps, context),
-  });
-  await recordSubmittedActivity(deps.activity, {
-    accountId: context.account.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: context.networkId,
     summary: report.calls[0]?.summary ?? `Send NFT #${input.tokenId}`,
   });
-  await deps.nftSnapshots?.clear(context.account.id, context.networkId).catch(() => undefined);
-  return { ok: true, transactionHash: result.transactionHash };
 };
 
 const handleDiscoverNfts = async (
@@ -405,24 +335,39 @@ const handleDiscoverNfts = async (
       const preferences = await deps.preferencesStore.read();
       const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
       const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
-      const candidates = await indexer.listOwnedNfts({
+      const discovery = await indexer.listOwnedNfts({
         address: owner,
-        indexerUrl: preferences.nftIndexerUrl ?? null,
+        // With NFTs turned off neither a saved indexer nor Starkscan runs and
+        // no address leaves.
+        indexerUrl: nftsShown(preferences) ? (preferences.nftIndexerUrl ?? null) : null,
         networkId: context.networkId,
+        starkscan: nftsShown(preferences),
       });
       const watched = watchedCandidates(preferences, context.networkId, owner);
       const watchedIds = new Set(watched.map((nft) => nft.id));
       const candidatesToVerify = input.includeWatched
-        ? mergeNftCandidates(candidates, watched)
-        : candidates.filter((nft) => !watchedIds.has(nft.id));
+        ? mergeNftCandidates(discovery.nfts, watched)
+        : discovery.nfts.filter((nft) => !watchedIds.has(nft.id));
       // Indexer ownership remains untrusted: every fresh snapshot re-proves it.
-      const owned = await filterOwnedNfts(deps, candidatesToVerify, owner, rpcUrls);
+      // A failed read neither shows nor rules out a candidate, so a list that
+      // claimed to be whole becomes incomplete rather than silently shorter.
+      let readFailed = false;
+      const owned = await filterOwnedNfts(deps, candidatesToVerify, owner, rpcUrls, () => {
+        readFailed = true;
+      });
       // Unsolicited airdrops still never trigger attacker-controlled metadata.
-      return input.includeWatched ? enrichWatchedNfts(deps, owned, watchedIds, rpcUrls) : owned;
+      return {
+        coverage:
+          readFailed && discovery.coverage === "complete" ? "incomplete" : discovery.coverage,
+        nfts: input.includeWatched
+          ? await enrichWatchedNfts(deps, owned, watchedIds, rpcUrls)
+          : owned,
+      };
     },
     input.cached,
   );
-  return { nfts: hydrated, ok: true };
+  // Coverage says whether an empty or short list is the whole answer.
+  return { coverage: hydrated.coverage ?? "none", nfts: hydrated.nfts, ok: true };
 };
 
 const handleLoadWatchedNfts = async (
@@ -438,24 +383,24 @@ const handleLoadWatchedNfts = async (
   if (context.error !== undefined) {
     return { error: context.error };
   }
-  return {
-    nfts: await cachedNfts(
-      deps,
-      { accountId: context.account.id, lane: "watched", networkId: context.networkId },
-      async () => {
-        const preferences = await deps.preferencesStore.read();
-        return loadWatchedNfts(
+  const watched = await cachedNfts(
+    deps,
+    { accountId: context.account.id, lane: "watched", networkId: context.networkId },
+    async () => {
+      const preferences = await deps.preferencesStore.read();
+      return {
+        nfts: await loadWatchedNfts(
           deps,
           preferences,
           context.networkId,
           context.account.address,
           networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
-        );
-      },
-      input.cached,
-    ),
-    ok: true,
-  };
+        ),
+      };
+    },
+    input.cached,
+  );
+  return { nfts: watched.nfts, ok: true };
 };
 
 /**

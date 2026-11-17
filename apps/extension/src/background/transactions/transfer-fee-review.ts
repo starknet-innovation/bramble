@@ -1,8 +1,11 @@
 /** Separate invoke/deployment fee review for wallet-funded direct transfers. */
 
-import { type FeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
-import type { FeeSpeed } from "@mc-wallet/starknet/rpc-submit";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { UndeployedBraavosError } from "@bramble/starknet/deployment";
+import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import type { FeeSpeed } from "@bramble/starknet/rpc-submit";
+import { isDeployableBraavos } from "@bramble/wallet-model/account-families";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 
@@ -20,9 +23,68 @@ export type WalletFundedFeeReview = {
 };
 
 /**
+ * The two estimates behind any invoke review whose deployment status is known:
+ * the invoke itself and, for an undeployed account, its deployment, in
+ * parallel. Nothing is broadcast. A failed component is null for the caller to
+ * offer a retry; the platform's typed Braavos deploy-first refusal is rethrown
+ * so the caller can answer it. Shared by the Send review and the dapp invoke
+ * review so both price the same transaction the same way.
+ */
+export const estimateInvokeAndDeployment = async (
+  runtimeRpc: RuntimeRpc,
+  input: {
+    readonly account: AccountRef;
+    readonly calls: readonly Call[];
+    readonly deployed: boolean;
+    readonly proof?: Strk20Proof;
+    readonly rpcUrls: readonly string[];
+    readonly signHash: Parameters<RuntimeRpc["estimateInvokeFee"]>[0]["signHash"];
+    readonly speed?: FeeSpeed;
+  },
+): Promise<{ readonly deploymentFee: FeeEstimate | null; readonly fee: FeeEstimate | null }> => {
+  const [fee, deploymentFee] = await Promise.all([
+    runtimeRpc
+      .estimateInvokeFee({
+        account: input.account,
+        calls: input.calls,
+        ...(input.proof ? { proof: input.proof } : {}),
+        rpcUrls: input.rpcUrls,
+        signHash: input.signHash,
+        ...(input.speed ? { speed: input.speed } : {}),
+      })
+      .catch((error: unknown) => {
+        // The platform's own deploy-then-act refusal, should the two
+        // deployment reads disagree; every other failure stays retryable.
+        if (error instanceof UndeployedBraavosError) throw error;
+        return null;
+      }),
+    !input.deployed && runtimeRpc.estimateAccountDeploymentFee
+      ? runtimeRpc
+          .estimateAccountDeploymentFee({
+            account: input.account,
+            rpcUrls: input.rpcUrls,
+            signHash: input.signHash,
+          })
+          .catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  return { deploymentFee, fee };
+};
+
+/**
  * Estimates the exact invoke and, when required, the counterfactual account
- * deployment. Neither estimate signs or broadcasts; an unreadable deployment
- * status or either missing component fails the combined review closed.
+ * deployment. Nothing is broadcast; an unreadable deployment status or either
+ * missing component fails the combined review closed.
+ *
+ * An undeployed Braavos account is the one exception that throws: it can only
+ * deploy through its own reviewed step, so the review rejects with
+ * {@link UndeployedBraavosError} (whose message says to deploy first) rather
+ * than degrading to a retryable "fee unavailable" no retry can fix. That
+ * refusal comes before either estimate on purpose: a Braavos deployment
+ * estimate signs a query-version deploy with the account key (its constructor
+ * validates even then), whereas the estimates that do run here sign nothing
+ * private — Argent validates on a mock query authorization, other families skip
+ * validation.
  */
 export const reviewWalletFundedFees = async (
   runtimeRpc: RuntimeRpc,
@@ -47,26 +109,13 @@ export const reviewWalletFundedFees = async (
       totalFee: null,
     };
   }
-  const [fee, deploymentFee] = await Promise.all([
-    runtimeRpc
-      .estimateInvokeFee({
-        account: input.account,
-        calls: input.calls,
-        rpcUrls: input.rpcUrls,
-        signHash: input.signHash,
-        ...(input.speed ? { speed: input.speed } : {}),
-      })
-      .catch(() => null),
-    !deployed && runtimeRpc.estimateAccountDeploymentFee
-      ? runtimeRpc
-          .estimateAccountDeploymentFee({
-            account: input.account,
-            rpcUrls: input.rpcUrls,
-            signHash: input.signHash,
-          })
-          .catch(() => null)
-      : Promise.resolve(null),
-  ]);
+  if (!deployed && isDeployableBraavos(input.account)) {
+    throw new UndeployedBraavosError();
+  }
+  const { deploymentFee, fee } = await estimateInvokeAndDeployment(runtimeRpc, {
+    ...input,
+    deployed,
+  });
   const requiresDeployment = !deployed;
   const totalFee = requiresDeployment
     ? fee && deploymentFee

@@ -1,21 +1,23 @@
 /** Focused add, signer, receive, and intent-import screens for Argent multisig. */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField, textField } from "@mc-wallet/ui-kit/fields";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
   accountAvatar,
   accountDisplayName,
+  accountFamilyName,
   accountLabel,
   flowHeader,
   flowScreen,
+  inlineCopyButton,
   noAccountEmpty,
 } from "../../shared/parts";
 import { receiveAddressView } from "../send/receive-view";
@@ -23,7 +25,7 @@ import { type MultisigParticipantOption, multisigParticipantScreen } from "./mul
 import { multisigDisplayName } from "./multisig-views";
 
 const argentMultisigContractLabel = (): string =>
-  `Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}`;
+  `Ready Multisig ${ARGENT_MULTISIG_CONTRACT.version}`;
 
 type SignerIdentity = {
   readonly address: string;
@@ -48,7 +50,7 @@ const authorityFailureMessage = (status: ArgentMultisigView["authorityStatus"]):
     "invalid-config": "This account returned an invalid signer configuration. Signing is disabled.",
     "network-unavailable": "Signer authority could not be refreshed. Check the network and retry.",
     undeployed: "This account is not deployed yet. Complete deployment before managing signers.",
-    "unsupported-class": "This address is not the pinned Argent Multisig 0.2 account.",
+    "unsupported-class": "This address is not the pinned Ready Multisig 0.2 account.",
     "unsupported-signers": "This account includes signer types this wallet cannot manage.",
   })[status];
 
@@ -60,7 +62,7 @@ const signerIdentities = (
   publicKeys.map((publicKey) => {
     const account = status.accounts.find((candidate) => sameFelt(candidate.publicKeyX, publicKey));
     if (account) {
-      const contract = account.accountContractType === "argent" ? "Argent" : "OpenZeppelin";
+      const contract = accountFamilyName(account.accountContractType);
       return {
         address: account.address,
         detail: `${contract}${account.derivation.kind === "ledger" ? " · Ledger" : ""} · Key ${accountLabel(publicKey)}`,
@@ -99,7 +101,7 @@ const availableSignerParticipants = (
     )
     .map((account) => ({
       address: account.address,
-      label: `${accountDisplayName(account, preferences)} · ${account.accountContractType === "argent" ? "Argent" : "OpenZeppelin"}${account.derivation.kind === "ledger" ? " · Ledger" : ""}`,
+      label: `${accountDisplayName(account, preferences)} · ${accountFamilyName(account.accountContractType)}${account.derivation.kind === "ledger" ? " · Ledger" : ""}`,
       publicKeyX: account.publicKeyX,
       source: "Wallet account",
     })),
@@ -149,14 +151,14 @@ const setupOption = (
  * Renders the shared-account gateway without mutating chain state.
  */
 export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Argent Multisig", status, "Multiple signers approve together") +
+  flowHeader("Multisig", status, "Multiple signers approve together") +
   flowScreen(
     "multisig-add",
     `<section class="section">
       ${account ? "" : noAccountEmpty(status)}
-      <div class="multisig-setup-options" role="group" aria-label="Argent multisig setup">
-        ${setupOption("multisig-deploy", "users", "Create a multisig", "Set participants, fund, and deploy.")}
-        ${setupOption("multisig-watch", "search", "Add a shared address", "Sync it or resume setup.")}
+      <div class="multisig-setup-options" role="group" aria-label="Multisig setup">
+        ${setupOption("multisig-deploy", "users", "Create a multisig account", "Set participants, fund, and deploy.")}
+        ${setupOption("multisig-watch", "search", "Add an existing multisig", "Enter its address.")}
       </div>
     </section>`,
   );
@@ -165,7 +167,7 @@ export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null
  * Renders address-only discovery; authority is read from chain and matched locally.
  */
 export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Add shared account", status, "Sync or resume an Argent multisig") +
+  flowHeader("Add multisig account", status) +
   flowScreen(
     "multisig-watch",
     `<section class="section">
@@ -174,14 +176,13 @@ export const multisigWatchFlow = (status: WalletStatus, account: AccountRef | nu
         ${textField({
           autocomplete: "off",
           className: "mono",
-          hint: "If deployed, signer authority syncs from Starknet. If not, the address is saved and deployment setup is verified before use.",
           label: "Multisig address",
           name: "address",
           placeholder: "0x…",
           required: true,
           spellcheck: false,
         })}
-        ${button({ disabled: account === null, label: "Add shared account", type: "submit" })}
+        ${button({ disabled: account === null, label: "Add multisig account", type: "submit" })}
         <p id="multisig-add-result" role="status"></p>
       </form>
     </section>`,
@@ -199,7 +200,7 @@ export const multisigSignersFlow = (
   if (!view) {
     return (
       flowHeader("Signers", status) +
-      flowScreen("multisig-signers", emptyState("This Argent multisig is no longer watched."))
+      flowScreen("multisig-signers", emptyState("This multisig is no longer watched."))
     );
   }
   const { record, config } = view;
@@ -252,7 +253,16 @@ export const multisigSignersFlow = (
       <section class="section multisig-authority-summary">
         ${receipt([
           { label: "Contract", value: argentMultisigContractLabel() },
-          { label: "Address", value: accountLabel(record.address), valueStyle: "code" },
+          {
+            action: {
+              attributes: { "data-copy": record.address },
+              icon: "copy",
+              label: "Copy multisig address",
+            },
+            label: "Address",
+            value: accountLabel(record.address),
+            valueStyle: "code",
+          },
           { label: "Required", value: config ? String(config.threshold) : "Unavailable" },
           {
             label: "Current signers",
@@ -265,7 +275,8 @@ export const multisigSignersFlow = (
                 .map(
                   (identity) => `<article class="multisig-signer-identity" role="listitem">
                     <span class="option-avatar">${accountAvatar(identity.address)}</span>
-                    <span class="option-copy"><strong>${escapeHtml(identity.label)}</strong><span class="option-sub">${escapeHtml(identity.detail)}</span></span>
+                    <span class="option-copy"><strong>${escapeHtml(identity.label)}</strong><span class="option-sub" title="${escapeHtml(identity.publicKey)}">${escapeHtml(identity.detail)}</span></span>
+                    ${inlineCopyButton(identity.publicKey, `Copy ${identity.label} signer public key`)}
                     <details class="disclosure multisig-signer-manage">
                       <summary aria-label="Manage ${escapeHtml(identity.label)}"><span>${icon("moreHorizontal")}</span></summary>
                       <div class="disclosure-body">
@@ -359,6 +370,7 @@ export const multisigSignersFlow = (
                     <div class="multisig-participant-selection" data-participant-selection hidden>
                       <span class="option-avatar">${icon("user")}</span>
                       <span class="option-copy"><strong data-participant-selection-name></strong><span class="option-sub" data-participant-selection-detail></span></span>
+                      ${inlineCopyButton("", "Copy participant address", { "data-participant-selection-copy": true, hidden: true })}
                     </div>
                     ${button({ attributes: { "data-open-participant-picker": true }, icon: "plus", label: "Choose participant", variant: "secondary" })}
                     ${selectField({
@@ -409,7 +421,7 @@ export const multisigReceiveFlow = (
   if (!view) {
     return (
       flowHeader("Receive", status) +
-      flowScreen("multisig-receive", emptyState("This Argent multisig is no longer watched."))
+      flowScreen("multisig-receive", emptyState("This multisig is no longer watched."))
     );
   }
   return (
@@ -430,7 +442,7 @@ export const multisigReceiveFlow = (
  * Renders full frozen-intent import for independent co-signers.
  */
 export const multisigTrackFlow = (status: WalletStatus, view: ArgentMultisigView | null): string =>
-  flowHeader("Import signing intent", status, view ? multisigDisplayName(view.record) : undefined) +
+  flowHeader("Import transaction", status, view ? multisigDisplayName(view.record) : undefined) +
   flowScreen(
     "multisig-track",
     view
@@ -442,5 +454,5 @@ export const multisigTrackFlow = (status: WalletStatus, view: ArgentMultisigView
             <p id="multisig-track-result" role="status"></p>
           </form>
         </section>`
-      : emptyState("Select a watched Argent multisig first."),
+      : emptyState("Select a watched multisig first."),
   );

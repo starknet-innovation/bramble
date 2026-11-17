@@ -9,7 +9,7 @@
  * refusal — a re-check must never flip an enabled control off under the user.
  */
 
-import type { PoolRegistration } from "@mc-wallet/transactions/send-routes";
+import type { PoolRegistration } from "@bramble/transactions/send-routes";
 import type { SidepanelWallet } from "../../runtime/runtime";
 
 const CHECK_DEBOUNCE_MS = 400;

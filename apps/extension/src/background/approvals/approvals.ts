@@ -1,47 +1,30 @@
-/**
- * Background-only dapp approval queue. Requests are intentionally not persisted.
- * Admission is bounded globally and per origin, and unanswered prompts expire,
- * so an untrusted page cannot hold the wallet's consent surface hostage — see
- * `./approval-limits` for those rules and `./approval-snapshot` for what a
- * queued approval is allowed to show its readers.
- */
+/** Unpersisted dapp approval queue. Admission is bounded and unanswered prompts expire. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isUuid } from "@mc-wallet/core/ids";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
-import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import { systemClock } from "@mc-wallet/transactions/activity";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { ProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
-import type { ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
-import type { Strk20Action, Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
-import type { Call } from "starknet";
+import { WalletError } from "@bramble/core/errors";
+import { isUuid } from "@bramble/core/ids";
+import { isWalletOrigin } from "@bramble/core/origin";
+import { systemClock } from "@bramble/transactions/activity";
+import { matchesStrk20DisclosureKind } from "../privacy/strk20-approval-types";
 import {
-  matchesStrk20DisclosureKind,
-  type Strk20DisclosureApprovalKind,
-  type Strk20DisclosureRequest,
-} from "../privacy/strk20-approval-types";
-import type { ApprovalContext } from "./approval-context";
-import type { ApprovalFeeRevision } from "./approval-limits";
-import {
+  APPROVAL_TOO_LARGE,
+  type ApprovalReservation,
   approvalAdmissionRefusal,
   approvalCapacityVictim,
   isExpiredApproval,
+  type QueuedApproval,
 } from "./approval-limits";
 import {
-  type ApprovalPayload,
   cloneApprovalCall,
   cloneApprovalValue,
   readStoredApprovalPayload,
 } from "./approval-payload";
+import { fitsSidePanel } from "./approval-review-size";
 import {
   type ApprovalRequest,
-  type ApprovalRiskFlag,
   approvalSnapshot,
-  type DeclarationReview,
   type InvokeFeeReview,
+  invokeFeeReviewFields,
   type PendingApproval,
-  type WatchAssetToken,
 } from "./approval-snapshot";
 
 /** Queue admission caps and the abandoned-approval TTL. */
@@ -66,124 +49,40 @@ export type {
   WatchAssetToken,
 } from "./approval-snapshot";
 
+import type {
+  ApprovalClaim,
+  ApprovalDropObserver,
+  ApprovalQueue,
+  ApprovalQueueOptions,
+} from "./approval-queue-types";
+import { requireRenderableSummaries } from "./approval-summary-bound";
+import { sameWatchTarget, watchTarget } from "./approval-watch-target";
+
+/**
+ * The queue contract, re-exported so existing wiring keeps one import site.
+ */
+export type { ApprovalClaim, ApprovalQueue, ApprovalQueueOptions } from "./approval-queue-types";
+
 type ApprovalEntry = ApprovalRequest & { readonly feeRevision: number; readonly queuedAt: number };
 
-/**
- * Observer invoked after approval ids are removed without a user decision.
- * External state keyed by those ids must be released here.
- */
-type ApprovalDropObserver = (ids: readonly string[]) => void;
-
-/**
- * Atomically claimed snapshot and private payload. The id cannot be reclaimed.
- */
-export type ApprovalClaim = {
-  readonly approval: PendingApproval;
-  readonly payload: ApprovalPayload | null;
-};
-/**
- * In-memory dapp approval queue; all claim and admission failures are explicit.
- */
-export type ApprovalQueue = {
-  /**
-   * Claims the fee slot of a queued invoke or declare approval, invalidating
-   * every claim outstanding on it.
-   */
-  readonly beginFeeEstimate: (id: string) => ApprovalFeeRevision | null;
-  /**
-   * The refusal one more approval for `origin` would fail with, or null when
-   * there is room. A probe; dapp surfaces apply `requireApprovalAdmission`.
-   */
-  readonly canAdmit: (origin: string) => string | null;
-  readonly claim: (id: string) => ApprovalClaim | null;
-  readonly get: (id: string) => PendingApproval | null;
-  readonly list: () => readonly PendingApproval[];
-  /**
-   * Registers the {@link ApprovalDropObserver} for this queue. Exactly one
-   * observer is held — a second call replaces the first — because the runtime
-   * registers it once while wiring the router context. Registration is the only
-   * way expiry becomes visible: the sweep is lazy and fires no event of its own.
-   */
-  readonly observeDrops: (observe: ApprovalDropObserver) => void;
-  readonly payload: (id: string) => ApprovalPayload | null;
-  readonly request: (origin: string) => PendingApproval;
-  readonly requestAddChain: (input: {
-    readonly chain: ProviderChain;
-    readonly origin: string;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestDeclare: (input: {
-    readonly context: ApprovalContext;
-    readonly declare: ProviderDeclare;
-    readonly declaration: DeclarationReview;
-    readonly origin: string;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestInvoke: (input: {
-    readonly calls: readonly Call[];
-    readonly context: ApprovalContext;
-    readonly fee: InvokeFeeReview;
-    readonly flags: readonly ApprovalRiskFlag[];
-    readonly origin: string;
-    readonly proof?: Strk20Proof;
-    readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestSignTypedData: (input: {
-    readonly context: ApprovalContext;
-    readonly origin: string;
-    readonly summary: string;
-    readonly typedData: unknown;
-  }) => PendingApproval;
-  readonly requestStrk20Disclosure: (input: {
-    readonly context: ApprovalContext;
-    readonly kind: Strk20DisclosureApprovalKind;
-    readonly origin: string;
-    readonly request: Strk20DisclosureRequest;
-    readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestStrk20Invoke: (input: {
-    readonly actions: readonly Strk20Action[];
-    readonly context: ApprovalContext;
-    readonly origin: string;
-    readonly plan: Strk20SubmissionPlan;
-    readonly reviewAssets?: NonNullable<PendingApproval["reviewAssets"]>;
-    readonly summaries: readonly string[];
-  }) => PendingApproval;
-  readonly requestSwitchChain: (input: {
-    readonly chainId: string;
-    readonly networkId: StarknetNetworkId;
-    readonly origin: string;
-    readonly summary: string;
-  }) => PendingApproval;
-  readonly requestWatchAsset: (input: {
-    readonly origin: string;
-    readonly token: WatchAssetToken;
-  }) => PendingApproval;
-  /** Writes a fee review only while its queue revision remains current. */
-  readonly updateFee: (
-    revision: ApprovalFeeRevision,
-    update:
-      | { readonly declaration: DeclarationReview; readonly kind: "declare" }
-      | { readonly kind: "invoke"; readonly review: InvokeFeeReview },
-  ) => PendingApproval | null;
-};
-
-/**
- * Construction options for the approval queue.
- */
-export type ApprovalQueueOptions = {
-  /**
-   * Wall-clock reader used to stamp and age queued approvals. Injected so the
-   * TTL sweep is deterministic under test; defaults to the system clock, which
-   * keeps this module free of a clock boundary of its own.
-   */
-  readonly now?: () => number;
+// A fresh fee review replaces deploy-first, the deployment half, and any
+// previous gasless offers.
+const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): ApprovalEntry => {
+  const {
+    deployFirst: _stale,
+    deploymentFee: _deployment,
+    deploymentFeeEstimateFailed: _deploymentFailed,
+    gaslessFees: _previous,
+    ...current
+  } = approval;
+  return { ...current, ...invokeFeeReviewFields(review) };
 };
 
 const copyReviewAssets = (assets: NonNullable<PendingApproval["reviewAssets"]>) =>
   assets.length === 0 ? {} : { reviewAssets: assets.map((asset) => ({ ...asset })) };
+
+const copyFlags = (flags: NonNullable<PendingApproval["flags"]>) =>
+  flags.length === 0 ? {} : { flags: flags.map((flag) => ({ ...flag })) };
 
 /**
  * Creates a deduplicating approval queue. Connection prompts dedupe per origin;
@@ -210,6 +109,8 @@ const copyReviewAssets = (assets: NonNullable<PendingApproval["reviewAssets"]>) 
  */
 export const createApprovalQueue = (options: ApprovalQueueOptions = {}): ApprovalQueue => {
   const pending = new Map<string, ApprovalEntry>();
+  // Requests admitted to expensive work ahead of their enqueue, per origin.
+  const reservations = new Map<string, number>();
   const now = options.now ?? systemClock;
   let dropObserver: ApprovalDropObserver = () => undefined;
 
@@ -243,6 +144,40 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
     return pending.get(id) ?? null;
   };
 
+  // What admission counts: the live queue plus every outstanding reservation,
+  // each as one more prompt for its origin. Concurrent requests that have
+  // passed admission but not yet queued therefore count against the caps
+  // (Sherlock 151), instead of all passing a probe that reads the queue alone.
+  const admissionView = (): readonly QueuedApproval[] => {
+    const at = now();
+    const held = [...reservations].flatMap(([origin, count]) =>
+      Array.from({ length: count }, () => ({ origin, queuedAt: at })),
+    );
+    return [...queued(), ...held];
+  };
+
+  const reserve = (origin: string): ApprovalReservation => {
+    const refusal = approvalAdmissionRefusal(admissionView(), origin);
+    if (refusal) {
+      throw new WalletError(refusal);
+    }
+    reservations.set(origin, (reservations.get(origin) ?? 0) + 1);
+    let released = false;
+    const release = (): void => {
+      if (released) {
+        return;
+      }
+      released = true;
+      const remaining = (reservations.get(origin) ?? 1) - 1;
+      if (remaining > 0) {
+        reservations.set(origin, remaining);
+      } else {
+        reservations.delete(origin);
+      }
+    };
+    return { arrivedAt: now(), release };
+  };
+
   const get = (id: string): PendingApproval | null => {
     const approval = entry(id);
     return approval ? approvalSnapshot(approval) : null;
@@ -260,19 +195,34 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
     };
   };
 
-  const enqueue = (approval: ApprovalRequest): PendingApproval => {
+  // `arrivedAt` dates an approval from its request's admission (audit N3); it
+  // can only bring the deadline forward, never extend it.
+  const enqueue = (approval: ApprovalRequest, arrivedAt?: number): PendingApproval => {
+    requireRenderableSummaries(approval);
     const live = queued();
     const refusal = approvalAdmissionRefusal(live, approval.origin);
     if (refusal) {
       throw new WalletError(refusal);
+    }
+    // Refused before a victim is evicted: an approval the panel cannot show
+    // must not cost another site its prompt either. Decided from the site's
+    // input alone, so the outcome cannot reveal the user's contacts or tokens.
+    const snapshot = approvalSnapshot(approval);
+    if (!fitsSidePanel(snapshot)) {
+      throw new WalletError(APPROVAL_TOO_LARGE);
     }
     const victim = approvalCapacityVictim(live);
     if (victim) {
       pending.delete(victim.id);
       dropObserver([victim.id]);
     }
-    pending.set(approval.id, { ...approval, feeRevision: 0, queuedAt: now() });
-    return approvalSnapshot(approval);
+    const at = now();
+    pending.set(approval.id, {
+      ...approval,
+      feeRevision: 0,
+      queuedAt: Math.min(arrivedAt ?? at, at),
+    });
+    return snapshot;
   };
 
   return {
@@ -285,7 +235,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       pending.set(id, { ...approval, feeRevision: revision });
       return { id, revision };
     },
-    canAdmit: (origin) => approvalAdmissionRefusal(queued(), origin),
+    canAdmit: (origin) => approvalAdmissionRefusal(admissionView(), origin),
     claim,
     get,
     list() {
@@ -294,50 +244,32 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
     observeDrops(observe) {
       dropObserver = observe;
     },
+    reserve,
     payload(id) {
       const approval = entry(id);
       return approval ? readStoredApprovalPayload(approval) : null;
     },
-    request(origin) {
+    request(origin, options) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       const existing = queued().find(
         (approval) => approval.kind === "connect" && approval.origin === origin,
       );
       if (existing) {
         return approvalSnapshot(existing);
       }
-      return enqueue({ id: crypto.randomUUID(), kind: "connect", origin });
-    },
-    requestAddChain({ chain, origin, summaries }) {
-      if (!isWalletOrigin(origin)) {
-        throw new WalletError("Invalid origin");
-      }
-
-      const existing = queued().find(
-        (approval) =>
-          approval.kind === "add-chain" &&
-          approval.origin === origin &&
-          approval.chain?.chainId === chain.chainId,
-      );
-      if (existing) {
-        return approvalSnapshot(existing);
-      }
       return enqueue({
-        chain,
+        ...(options?.existingGrant === undefined ? {} : { existingGrant: options.existingGrant }),
         id: crypto.randomUUID(),
-        kind: "add-chain",
+        kind: "connect",
         origin,
-        summaries: [...summaries],
       });
     },
     requestDeclare({ context, declaration, declare, origin, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       return enqueue({
         context: { ...context },
         declaration: {
@@ -352,85 +284,125 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [...summaries],
       });
     },
-    requestInvoke({ calls, context, fee, flags, origin, proof, reviewAssets = [], summaries }) {
-      if (!isWalletOrigin(origin)) {
+    requestInvoke(input) {
+      if (!isWalletOrigin(input.origin)) {
         throw new WalletError("Invalid origin");
       }
-
       return enqueue({
-        calls: calls.map(cloneApprovalCall),
-        context: { ...context },
-        fee: fee.fee && { ...fee.fee },
-        feeAffordability: fee.feeAffordability,
-        feeEstimateFailed: fee.feeEstimateFailed,
-        feeEstimatePending: fee.feeEstimatePending,
-        flags: flags.map((flag) => ({ ...flag })),
+        ...(input.activitySummary === undefined ? {} : { activitySummary: input.activitySummary }),
+        calls: input.calls.map(cloneApprovalCall),
+        context: { ...input.context },
+        ...invokeFeeReviewFields(input.fee),
+        flags: input.flags.map((flag) => ({ ...flag })),
+        ...(input.multisigThreshold === undefined
+          ? {}
+          : { multisigThreshold: input.multisigThreshold }),
         id: crypto.randomUUID(),
         kind: "invoke",
-        origin,
-        ...(proof === undefined ? {} : { proof: cloneApprovalValue(proof) }),
-        ...copyReviewAssets(reviewAssets),
-        requiresDeployment: fee.requiresDeployment,
-        summaries: [...summaries],
+        origin: input.origin,
+        ...(input.proof === undefined ? {} : { proof: cloneApprovalValue(input.proof) }),
+        ...copyReviewAssets(input.reviewAssets ?? []),
+        summaries: [...input.summaries],
       });
     },
-    requestSignTypedData({ context, origin, summary, typedData }) {
+    requestSignTypedData({ context, origin, review, summary, typedData }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       return enqueue({
         context: { ...context },
+        ...(review ? { flags: review.flags.map((flag) => ({ ...flag })) } : {}),
         id: crypto.randomUUID(),
         kind: "sign-typed-data",
         origin,
-        summaries: [summary],
+        summaries: [summary, ...(review?.summaries ?? [])],
         typedData: cloneApprovalValue(typedData),
       });
     },
-    requestStrk20Disclosure({ context, kind, origin, request, reviewAssets = [], summaries }) {
+    requestStrk20Disclosure({
+      arrivedAt,
+      context,
+      flags = [],
+      kind,
+      origin,
+      request,
+      reviewAssets = [],
+      summaries,
+    }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
       if (!matchesStrk20DisclosureKind(kind, request)) {
         throw new WalletError("Invalid STRK20 approval");
       }
-      return enqueue({
-        ...(request.type === "prepare"
-          ? { actionReviews: cloneApprovalValue(request.actions) }
-          : {}),
-        context: { ...context },
-        id: crypto.randomUUID(),
-        kind,
-        origin,
-        ...copyReviewAssets(reviewAssets),
-        strk20Request: cloneApprovalValue(request),
-        summaries: [...summaries],
-      });
+      return enqueue(
+        {
+          ...(request.type === "prepare"
+            ? { actionReviews: cloneApprovalValue(request.actions) }
+            : {}),
+          context: { ...context },
+          ...copyFlags(flags),
+          id: crypto.randomUUID(),
+          kind,
+          origin,
+          ...copyReviewAssets(reviewAssets),
+          strk20Request: cloneApprovalValue(request),
+          summaries: [...summaries],
+        },
+        arrivedAt,
+      );
     },
-    requestStrk20Invoke({ actions, context, origin, plan, reviewAssets = [], summaries }) {
+    requestStrk20Invoke({
+      actions,
+      arrivedAt,
+      context,
+      flags = [],
+      origin,
+      plan,
+      reviewAssets = [],
+      shadowAccountAnonymizer,
+      summaries,
+    }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
-      return enqueue({
-        actionReviews: cloneApprovalValue(actions),
-        actions: cloneApprovalValue(actions),
-        context: { ...context },
-        id: crypto.randomUUID(),
-        kind: "strk20-invoke",
-        origin,
-        ...copyReviewAssets(reviewAssets),
-        ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
-        strk20Plan: cloneApprovalValue(plan),
-        summaries: [...summaries],
-      });
+      return enqueue(
+        {
+          ...(shadowAccountAnonymizer === undefined ? {} : { shadowAccountAnonymizer }),
+          actionReviews: cloneApprovalValue(actions),
+          actions: cloneApprovalValue(actions),
+          context: { ...context },
+          ...copyFlags(flags),
+          id: crypto.randomUUID(),
+          kind: "strk20-invoke",
+          origin,
+          ...copyReviewAssets(reviewAssets),
+          ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
+          strk20Plan: cloneApprovalValue(plan),
+          summaries: [...summaries],
+        },
+        arrivedAt,
+      );
+    },
+    requestStrk20Unavailable({ arrivedAt, notice, origin, refusal }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
+      }
+      return enqueue(
+        {
+          id: crypto.randomUUID(),
+          kind: "strk20-unavailable",
+          ...(notice === undefined ? {} : { notice }),
+          noticeRefusal: refusal,
+          origin,
+        },
+        arrivedAt,
+      );
     },
     requestSwitchChain({ chainId, networkId, origin, summary }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       const existing = queued().find(
         (approval) =>
           approval.kind === "switch-chain" &&
@@ -449,22 +421,26 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         summaries: [summary],
       });
     },
-    requestWatchAsset({ origin, token }) {
+    requestWatchAsset(request) {
+      const { origin } = request;
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
-
       const existing = queued().find(
         (approval) =>
           approval.kind === "watch-asset" &&
           approval.origin === origin &&
-          approval.token?.address === token.address &&
-          approval.token?.networkId === token.networkId,
+          sameWatchTarget(approval, request),
       );
       if (existing) {
         return approvalSnapshot(existing);
       }
-      return enqueue({ id: crypto.randomUUID(), kind: "watch-asset", origin, token: { ...token } });
+      return enqueue({
+        ...watchTarget(request),
+        id: crypto.randomUUID(),
+        kind: "watch-asset",
+        origin,
+      });
     },
     updateFee({ id, revision }, update) {
       const approval = entry(id);
@@ -483,14 +459,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
           },
         });
       } else if (approval.kind === "invoke" && update.kind === "invoke") {
-        pending.set(id, {
-          ...approval,
-          fee: update.review.fee && { ...update.review.fee },
-          feeAffordability: update.review.feeAffordability,
-          feeEstimateFailed: update.review.feeEstimateFailed,
-          feeEstimatePending: update.review.feeEstimatePending,
-          requiresDeployment: update.review.requiresDeployment,
-        });
+        pending.set(id, withInvokeFeeReview(approval, update.review));
       }
       return get(id);
     },

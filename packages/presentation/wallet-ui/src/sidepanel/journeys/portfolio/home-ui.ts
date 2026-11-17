@@ -6,12 +6,14 @@
  * replaying their animations.
  */
 
-import { resolveSpring } from "@mc-wallet/ui-kit/spring";
+import { resolveSpring } from "@bramble/ui-kit/spring";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import type { RefreshReason } from "../../app/sync/refresh-scheduler";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { buttonBusy, errorDetails, showToast } from "../../shared/dom";
 import { prefersReducedMotion, projectMomentum } from "../../shared/motion";
-import { type HomeTab, isHomeTab } from "./home-tabs";
+import { bindRecoverAccount } from "./recovery-ui";
+import { bindVipNotice } from "./vip-notice-ui";
 
 /**
  * State accessors and services the home bindings close over. State lives in
@@ -21,19 +23,15 @@ export type HomeUiDeps = {
   readonly app: Element | null;
   readonly drawerOpen: () => boolean;
   readonly setDrawerOpen: (open: boolean) => void;
-  readonly drawerGroupFilter: () => string | null;
-  readonly setDrawerGroupFilter: (filter: string | null) => void;
-  readonly homeTab: () => HomeTab;
-  readonly setHomeTab: (tab: HomeTab) => void;
   readonly networkId: () => string;
-  readonly render: (status: WalletStatus) => Promise<void>;
+  readonly render: (status: WalletStatus, refreshReason?: RefreshReason) => Promise<void>;
   readonly selectPortfolio?: (multisigId: string | null) => void;
   readonly startAddAccount?: () => void;
   readonly wallet: SidepanelWallet;
 };
 
 // Settle spring shared by the drawer's release animation and its CSS transitions
-// (the iOS sheet spring, damping 0.8 / response 0.3 — see @mc-wallet/ui-kit/tokens SPRING).
+// (the iOS sheet spring, damping 0.8 / response 0.3 — see @bramble/ui-kit/tokens SPRING).
 const DRAWER_SPRING = resolveSpring("drawer");
 // Movement (px) before a press becomes a drag, so a tap inside the sheet still
 // clicks its control instead of being stolen by the gesture.
@@ -98,10 +96,17 @@ const bindDrawerDrag = (root: HTMLElement, isOpen: () => boolean, close: () => v
     backdrop.style.opacity = dismiss ? "0" : "1";
   };
 
+  // Account rows are HTML5 drag sources. A gesture that starts on one is the
+  // filing drag, so the sheet-dismiss gesture leaves that pointer alone.
+  const startsOnAccountRow = (event: PointerEvent): boolean => {
+    const target = event.target;
+    return target instanceof Element && target.closest("[data-drag-account]") !== null;
+  };
+
   drawer.addEventListener("pointerdown", (event: PointerEvent) => {
     // Ignore extra touch points once a gesture is in progress so a second
     // finger cannot reset the origin and jump the sheet mid-drag.
-    if (!isOpen() || event.button !== 0 || armed) {
+    if (!isOpen() || event.button !== 0 || armed || startsOnAccountRow(event)) {
       return;
     }
     armed = true;
@@ -173,8 +178,7 @@ const bindDrawer = (deps: HomeUiDeps): void => {
   // Every shell repaint recreates the drawer node, so re-applying a persisted
   // open state must be silent: we skip `is-opening` and, since the fresh node's
   // baseline is the closed transform, suppress the panel transition for one
-  // frame so it snaps open in place (mirroring bindTabs' moveIndicator) rather
-  // than sliding again.
+  // frame so it snaps open in place rather than sliding again.
   const applyOpen = (open: boolean, animateEnter: boolean): void => {
     root.setAttribute("data-open", String(open));
     trigger.setAttribute("aria-expanded", String(open));
@@ -247,7 +251,7 @@ const bindDrawer = (deps: HomeUiDeps): void => {
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Account switch failed"), "error", button);
+          showToast(errorDetails(error, "Account switch failed"), "error", button);
           buttonBusy(button, false);
         },
       );
@@ -266,21 +270,6 @@ const bindDrawer = (deps: HomeUiDeps): void => {
       }
       setOpen(false, false);
       deps.selectPortfolio?.(id);
-      void deps.wallet.loadStatus().then(deps.render);
-    });
-  });
-
-  // Folder filter chips narrow the listed accounts to a group's members; the
-  // selection persists across re-renders via the entrypoint module var, so the
-  // drawer reopens showing the same folder.
-  root.querySelectorAll<HTMLButtonElement>("[data-group-filter]").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      const value = chip.dataset["groupFilter"];
-      const next = !value || value === "all" ? null : value;
-      if (next === deps.drawerGroupFilter()) {
-        return;
-      }
-      deps.setDrawerGroupFilter(next);
       void deps.wallet.loadStatus().then(deps.render);
     });
   });
@@ -381,45 +370,10 @@ const bindPortfolioMenu = (deps: HomeUiDeps): void => {
   }
 };
 
-const bindTabs = (deps: HomeUiDeps): void => {
-  const tabsRoot = deps.app?.querySelector<HTMLElement>(".home-tabs");
-  if (!tabsRoot) {
-    return;
-  }
-
-  const applyTab = (tab: HomeTab): void => {
-    tabsRoot.setAttribute("data-active-tab", tab);
-    tabsRoot.querySelectorAll<HTMLButtonElement>("[data-home-tab]").forEach((button) => {
-      button.setAttribute("aria-selected", String(button.dataset["homeTab"] === tab));
-    });
-    tabsRoot.querySelectorAll<HTMLElement>("[data-tab-panel]").forEach((panel) => {
-      const target = panel;
-      const on = target.dataset["tabPanel"] === tab;
-      target.hidden = !on;
-    });
-  };
-
-  // Restore the remembered tab before first paint.
-  applyTab(deps.homeTab());
-
-  tabsRoot.querySelectorAll<HTMLButtonElement>("[data-home-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const tab = button.dataset["homeTab"];
-      if (!isHomeTab(tab) || tab === deps.homeTab()) {
-        return;
-      }
-      deps.setHomeTab(tab);
-      applyTab(tab);
-    });
-  });
-};
-
-/**
- * Binds the account drawer and portfolio tabs on the home screen. Safe to call
- * on every render; screens without these regions are skipped.
- */
+/** Wires the Home drawer, portfolio menu, the read-only recover-account entry and the VIP notice. */
 export const bindHomeUi = (deps: HomeUiDeps): void => {
   bindDrawer(deps);
-  bindTabs(deps);
   bindPortfolioMenu(deps);
+  bindRecoverAccount(deps);
+  bindVipNotice(deps);
 };

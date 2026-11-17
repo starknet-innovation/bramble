@@ -1,14 +1,14 @@
 /** Canonicalization and validation for frozen Argent multisig V3 invokes. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@mc-wallet/core/json";
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isOwnDataProperty, isRecord } from "@bramble/core/json";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   sameFelt,
   UINT128_LIMIT,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 import type { EDataAvailabilityMode, ResourceBoundsBN } from "starknet";
 import { hash, transaction } from "starknet";
 import { type FeeEstimate, feeBoundsMaxSpend } from "./fee-bounds";
@@ -233,6 +233,9 @@ export const argentMultisigTransactionHash = (
       nonce: prepared.nonce,
       nonceDataAvailabilityMode: daMode(prepared.nonceDataAvailabilityMode),
       paymasterData: [...prepared.paymasterData],
+      ...(prepared.proofFacts && prepared.proofFacts.length > 0
+        ? { proofFacts: [...prepared.proofFacts] }
+        : {}),
       resourceBounds: argentMultisigRpcResourceBounds(prepared.resourceBounds),
       senderAddress: prepared.senderAddress,
       tip: prepared.tip,
@@ -285,6 +288,13 @@ const isPreparedResourceBound = (value: unknown): value is PreparedResourceBound
   isCanonicalFelt(value["maxPricePerUnit"]) &&
   BigInt(value["maxPricePerUnit"]) < UINT128_LIMIT;
 
+const isCanonicalProofFacts = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.length <= ARGENT_MULTISIG_INVOKE_LIMITS.proofFacts &&
+  isDenseArray(value) &&
+  value.every(isCanonicalFelt);
+
 const isPreparedResourceBounds = (value: unknown): value is PreparedResourceBounds =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["l1DataGas", "l1Gas", "l2Gas"]) &&
@@ -310,6 +320,7 @@ export const isPreparedArgentMultisigInvokeV3 = (
       "nonce",
       "nonceDataAvailabilityMode",
       "paymasterData",
+      "proofFacts",
       "resourceBounds",
       "senderAddress",
       "tip",
@@ -337,7 +348,8 @@ export const isPreparedArgentMultisigInvokeV3 = (
     value["nonceDataAvailabilityMode"] !== "L1" ||
     value["feeDataAvailabilityMode"] !== "L1" ||
     !isCanonicalFelt(value["transactionHash"]) ||
-    !isNonZeroStarkFieldElement(value["transactionHash"])
+    !isNonZeroStarkFieldElement(value["transactionHash"]) ||
+    (value["proofFacts"] !== undefined && !isCanonicalProofFacts(value["proofFacts"]))
   ) {
     return false;
   }
@@ -410,6 +422,7 @@ export const samePreparedArgentMultisigInvokeV3 = (
     left.nonce,
     left.nonceDataAvailabilityMode,
     left.paymasterData,
+    left.proofFacts ?? [],
     [left.resourceBounds.l1DataGas.maxAmount, left.resourceBounds.l1DataGas.maxPricePerUnit],
     [left.resourceBounds.l1Gas.maxAmount, left.resourceBounds.l1Gas.maxPricePerUnit],
     [left.resourceBounds.l2Gas.maxAmount, left.resourceBounds.l2Gas.maxPricePerUnit],
@@ -427,6 +440,7 @@ export const samePreparedArgentMultisigInvokeV3 = (
       right.nonce,
       right.nonceDataAvailabilityMode,
       right.paymasterData,
+      right.proofFacts ?? [],
       [right.resourceBounds.l1DataGas.maxAmount, right.resourceBounds.l1DataGas.maxPricePerUnit],
       [right.resourceBounds.l1Gas.maxAmount, right.resourceBounds.l1Gas.maxPricePerUnit],
       [right.resourceBounds.l2Gas.maxAmount, right.resourceBounds.l2Gas.maxPricePerUnit],

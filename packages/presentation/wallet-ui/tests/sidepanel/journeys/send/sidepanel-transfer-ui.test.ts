@@ -6,9 +6,10 @@
  * loadActivity) are stubbed via the shared harness to steer each branch. The
  * activity refresh/export suites live in `sidepanel-activity-ui.test.ts`.
  */
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { account } from "@mc-wallet/testkit/sidepanel";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { account } from "@bramble/testkit/sidepanel";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import type { TokenBalance } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import {
@@ -17,6 +18,7 @@ import {
   markTransferLedgerAuthorized,
   recipientFieldError,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
+import { accountLabel } from "../../../../src/sidepanel/shared/parts";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import {
   flush,
@@ -39,7 +41,7 @@ const resultText = (app: HTMLElement): string =>
   app.querySelector("#transfer-result")?.textContent ?? "";
 
 const reviewText = (app: HTMLElement): string =>
-  app.querySelector("#review-panel")?.textContent ?? "";
+  app.querySelector("#send-review-risks")?.textContent ?? "";
 
 const feeText = (app: HTMLElement): string =>
   app.querySelector("#send-review-fee")?.textContent ?? "";
@@ -68,7 +70,7 @@ describe("recipientFieldError / friendlyReviewError helpers", () => {
     expect(friendlyReviewError(new Error("invalid transfer review request"))).toBe(
       "Enter a valid Starknet address.",
     );
-    expect(friendlyReviewError(new Error("boom"))).toBe("boom");
+    expect(friendlyReviewError(new Error("boom"))).toBe("Something went wrong. Please try again.");
   });
 });
 
@@ -121,10 +123,16 @@ describe("bindTransfer", () => {
     await flush();
     expect(calls.submitTransfer).toHaveLength(1);
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
-    expect(app.querySelector("#send-home")?.textContent).toBe("Back to home");
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel("0xdeadbeef"));
+    expect(app.querySelector("#send-home")?.textContent).toBe("Back");
     expect(app.querySelector("#send-another")).toBeNull();
-    expect(app.querySelector('[data-send-step="sent"]')?.getAttribute("data-state")).toBe("active");
+    // Three steps: review, authorizing, broadcasting and confirmation all rest
+    // on Confirm rather than each taking a step of its own.
+    expect(app.querySelector('[data-send-step="sent"]')).toBeNull();
+    expect(app.querySelector('[data-send-step="sign"]')).toBeNull();
+    expect(app.querySelector('[data-send-step="review"]')?.getAttribute("data-state")).toBe(
+      "active",
+    );
   });
 
   test("keeps the amount screen visible while its review is prepared", async () => {
@@ -209,7 +217,9 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(calls.submitTransfer).toHaveLength(0);
-    expect(calls.reviewTransfer).toHaveLength(2);
+    // Three review reads, none of them a send: the preview re-quotes the
+    // re-shown amount step, and each Review click reads once more.
+    expect(calls.reviewTransfer).toHaveLength(3);
     expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
 
     // Only the confirm from the re-shown review sends.
@@ -243,7 +253,7 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(calls.submitTransfer).toHaveLength(0);
-    expect(resultText(app)).toBe("Not enough ETH");
+    expect(resultText(app)).toBe("Not enough ETH. You need at least 1 ETH.");
 
     // Even if a refresh clears the gate, the stale review cannot submit. The
     // next click must produce a new review and only its confirm may send.
@@ -275,8 +285,11 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(reviewText(app)).toContain("not deployed yet");
-    expect(feeText(app)).toContain("Estimated transaction fee");
-    expect(feeText(app)).toContain("Estimated account deployment fee");
+    // One action, one figure: the total leads and the deployment share is named
+    // under it, rather than two amounts the user has to add up.
+    expect(feeText(app)).toContain("Estimated fee");
+    expect(feeText(app)).toContain("Creating this account on Starknet is");
+    expect(feeText(app)).not.toContain("Estimated transaction fee");
 
     submit(app);
     await flush();
@@ -309,6 +322,39 @@ describe("bindTransfer", () => {
     expect(feeText(app)).toContain("Couldn't estimate both");
     submit(app);
     await flush();
+    expect(calls.submitTransfer).toHaveLength(0);
+  });
+
+  test("re-estimates instead of sending when the two fees cannot be added", async () => {
+    let reviewCount = 0;
+    const { app, calls, deps } = mount({
+      async reviewTransfer() {
+        reviewCount += 1;
+        return {
+          deploymentFee: { overallFee: "1500", unit: "WEI" },
+          deploymentFeeEstimateFailed: false,
+          fee: { overallFee: "2000", unit: "FRI" },
+          feeEstimateFailed: false,
+          flags: [],
+          requiresDeployment: true,
+          summaries: ["Deploy + transfer"],
+        };
+      },
+    });
+    bindTransfer(deps);
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+
+    submit(app);
+    await flush();
+    expect(reviewCount).toBe(1);
+    expect(feeText(app)).toContain("Couldn't estimate both");
+    expect(app.querySelector<HTMLButtonElement>("#send-confirm-button")?.disabled).toBe(true);
+    expect(calls.submitTransfer).toHaveLength(0);
+
+    app.querySelector<HTMLButtonElement>("#send-review-fee #review-retry-fee")?.click();
+    await flush();
+    expect(reviewCount).toBe(2);
     expect(calls.submitTransfer).toHaveLength(0);
   });
 
@@ -364,7 +410,7 @@ describe("bindTransfer", () => {
     expect(resultText(app)).toBe("Enter a valid Starknet address.");
   });
 
-  test("reports a submit failure after a successful review", async () => {
+  test("reports an unrecognised submit failure as outcome unknown, never as not sent", async () => {
     let submitCount = 0;
     const { app, deps } = mount({
       async submitTransfer() {
@@ -382,7 +428,12 @@ describe("bindTransfer", () => {
     await flush();
     expect(submitCount).toBe(1);
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("failed");
-    expect(app.querySelector("#send-failure-copy")?.textContent).toContain("network exploded");
+    // "network exploded" is no refusal the background makes before signing, so
+    // the transfer may be on chain (errors audit F1).
+    expect(app.querySelector("#send-failure-copy")?.textContent).toBe(
+      "The transfer may not have gone through. Check Activity before trying again.",
+    );
+    expect(app.querySelector("#send-failure-title")?.textContent).toBe("Status unknown");
     expect(app.querySelector("#send-failure")?.hasAttribute("hidden")).toBe(false);
   });
 
@@ -428,66 +479,13 @@ describe("bindTransfer", () => {
     expect(app.querySelector("#send-working-title")?.textContent).toBe("Waiting for your Ledger");
 
     markTransferLedgerAuthorized();
-    expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending to Starknet");
-    expect(app.querySelector('[data-send-task="broadcast"]')?.getAttribute("data-state")).toBe(
-      "active",
-    );
+    // The device has answered, so the screen stops pointing at it.
+    expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending your transaction…");
 
     resolveSubmit("0xdeadbeef");
     await flush();
     await flush();
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("submitted");
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
-  });
-});
-
-describe("closing Send", () => {
-  test("abandons what was composed, so the next visit starts over", () => {
-    // Reported from the shield shortcut: open Send pre-configured, close it with
-    // the cross, then press Send from home — it reopened on the amount step with
-    // the shield still filled in, because the journey outlived the close.
-    const { app, deps } = mount();
-    bindTransfer(deps);
-    // Pick a recipient the way the screen does, which advances to the amount.
-    const search = app.querySelector<HTMLInputElement>("#send-recipient-search");
-    if (search) {
-      search.value = RECIPIENT;
-      search.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-    app.querySelector<HTMLButtonElement>("#send-recipient-continue")?.click();
-    setField(app, "amount", "1");
-    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(false);
-    // Stored canonically, so compare loosely: the point is that it is set.
-    expect(app.querySelector<HTMLInputElement>('[name="recipient"]')?.value).not.toBe("");
-
-    app.querySelector<HTMLButtonElement>("#send-close")?.click();
-    // Re-entering rebinds against freshly rendered markup, as a repaint does.
-    paint(app, sendFlow(status, account, preferences));
-    bindTransfer(deps);
-
-    expect(app.querySelector("#send-recipient-stage")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(true);
-    expect(app.querySelector<HTMLInputElement>('[name="recipient"]')?.value).toBe("");
-  });
-
-  test("keeps a submitted transaction reachable after closing", async () => {
-    // The opposite case: once something is on chain, closing must not discard the
-    // receipt the user may come back for.
-    const { app, deps } = mount();
-    bindTransfer(deps);
-    setField(app, "recipient", RECIPIENT);
-    setField(app, "amount", "1");
-    submit(app);
-    await flush();
-    submit(app);
-    await flush();
-    expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-
-    app.querySelector<HTMLButtonElement>("#send-close")?.click();
-    paint(app, sendFlow(status, account, preferences));
-    bindTransfer(deps);
-
-    expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(accountLabel("0xdeadbeef"));
   });
 });

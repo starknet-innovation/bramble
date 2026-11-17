@@ -12,13 +12,14 @@ import {
   defaultWalletPreferences,
   type WalletPreferences,
   type WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
-import { memoryActivityLog } from "@mc-wallet/transactions/activity";
-import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+} from "@bramble/settings/preferences";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import {
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "../../apps/extension/src/background/privacy/strk20-op-context";
+import { createStrk20JobRegistry } from "../../apps/extension/src/background/privacy/strk20-preparation-jobs";
 import { createStrk20WalletPreparationStore } from "../../apps/extension/src/background/privacy/strk20-wallet-preparations";
 import {
   executeInvokeApproval,
@@ -47,7 +48,7 @@ const preferences = (): WalletPreferences => ({
       discoveryUrl: "https://discovery.example",
       poolAddress: "0x123",
       proverUrl: "https://prover.example",
-      subaccountAnonymizerAddress: "0x456",
+      shadowAccountAnonymizerAddress: "0x456",
     },
   },
 });
@@ -65,6 +66,7 @@ const makeDeps = (
   } as unknown as WalletPreferencesStore,
   runtimeRpc: makeRuntimeRpc(),
   session,
+  strk20Jobs: createStrk20JobRegistry({ now: () => UNLOCKED_AT }),
   strk20Preparations: createStrk20WalletPreparationStore(),
   wallet: createWallet(captureSign ? { captureSign } : {}),
 });
@@ -149,7 +151,7 @@ const preparedSubmissionDeps = (
 const preparedApproval = {
   origin: grantedOrigin,
   payload: {
-    calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "apply_actions" }],
+    calls: [{ calldata: [], contractAddress: "0x123", entrypoint: "apply_actions" }],
     proof: { data: "opaque", output: ["0x1"], proof_facts: ["0x2"] },
   },
 };

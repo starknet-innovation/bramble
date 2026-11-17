@@ -6,7 +6,7 @@
  * a plain fake.
  */
 import { describe, expect, test } from "bun:test";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   account,
   captureRuntime,
@@ -20,7 +20,7 @@ const ledgerAccount = {
   classHash: "0xabc",
   derivation: {
     accountIndex: 0,
-    eip2645application: "LedgerW",
+    eip2645application: "LedgerW" as const,
     kind: "ledger" as const,
     path: ledgerAccountPath(0),
   },
@@ -40,6 +40,37 @@ describe("Ledger runtime wrappers", () => {
       publicKeyX: "0xabc",
       type: "wallet.addLedgerAccount",
     });
+  });
+
+  test("a named path scheme rides along in every Ledger envelope, and only then", async () => {
+    const { sent, wallet } = captureRuntime({ account, ok: true });
+    await wallet.addLedgerAccount("SN_MAIN", 12, "0xabc", "argent", "argentx");
+    expect(sent[0]).toEqual({
+      accountContractType: "argent",
+      accountIndex: 12,
+      eip2645application: "argentx",
+      networkId: "SN_MAIN",
+      publicKeyX: "0xabc",
+      type: "wallet.addLedgerAccount",
+    });
+    await wallet.createLedgerVault("SN_MAIN", 12, "0xabc", "pass", "argent", "argentx");
+    expect(sent[1]).toMatchObject({
+      eip2645application: "argentx",
+      type: "wallet.createLedgerVault",
+    });
+    const entries = [{ accountIndex: 12, publicKeyX: "0xabc" }];
+    const derive = captureRuntime({ accounts: [], ok: true });
+    await derive.wallet.deriveLedgerAccounts("SN_MAIN", entries, "argent", "argentx");
+    expect(derive.sent[0]).toEqual({
+      accountContractType: "argent",
+      eip2645application: "argentx",
+      entries,
+      networkId: "SN_MAIN",
+      type: "wallet.deriveLedgerAccounts",
+    });
+    // Bramble's own scheme is still sent explicitly when the caller names it.
+    await derive.wallet.deriveLedgerAccounts("SN_MAIN", entries, "openzeppelin", "LedgerW");
+    expect(derive.sent[1]).toMatchObject({ eip2645application: "LedgerW" });
   });
 
   test("addLedgerAccount throws its fallback on an unrecognised reply", async () => {
@@ -82,10 +113,16 @@ describe("Ledger runtime wrappers", () => {
   });
 
   test("ledgerAccountStatus returns the resolved on-chain state", async () => {
-    const { sent, wallet } = captureRuntime({ balance: "1.5 STRK", deployed: true, ok: true });
+    const { sent, wallet } = captureRuntime({
+      balance: "1.5 STRK",
+      deployed: true,
+      funded: true,
+      ok: true,
+    });
     expect(await wallet.ledgerAccountStatus("0x123", "SN_MAIN")).toEqual({
       balance: "1.5 STRK",
       deployed: true,
+      funded: true,
     });
     expect(sent[0]).toEqual({
       address: "0x123",
@@ -98,6 +135,7 @@ describe("Ledger runtime wrappers", () => {
     expect(await runtimeReturning({ ok: false }).ledgerAccountStatus("0x123", "SN_MAIN")).toEqual({
       balance: null,
       deployed: null,
+      funded: null,
     });
   });
 

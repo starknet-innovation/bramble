@@ -69,4 +69,25 @@ describe("transaction alert delivery", () => {
     await expect(refresh()).resolves.toBeUndefined();
     expect(toastTexts()).toEqual([]);
   });
+
+  test("shows a notice exactly as written, whatever its quoted summary says", async () => {
+    // The summary is dapp-chosen; words like 429 or "rejected" in it must not
+    // rewrite the wallet's revert warning into unrelated copy (Sherlock 219).
+    document.body.replaceChildren();
+    const notice =
+      'Starknet reverted "Pay invoice 429 timeout rejected" after confirming it. Check its activity details before retrying.';
+    await withTransactionAlerts(
+      document,
+      {
+        async loadTransactionAlerts() {
+          return [notice];
+        },
+      },
+      async () => undefined,
+    )();
+    expect(toastTexts()).toEqual([notice]);
+    expect(
+      document.querySelector<HTMLButtonElement>(".toast.error [data-copy], .toast.error button"),
+    ).not.toBeNull();
+  });
 });

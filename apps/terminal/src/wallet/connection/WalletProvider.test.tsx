@@ -5,12 +5,12 @@ import { CallData } from "starknet";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  waitForInjectedMcWallet: vi.fn(),
+  waitForInjectedBramble: vi.fn(),
 }));
 
 vi.mock("./starknet-window", () => ({
   INJECTION_TIMEOUT_MS: 0,
-  waitForInjectedMcWallet: mocks.waitForInjectedMcWallet,
+  waitForInjectedBramble: mocks.waitForInjectedBramble,
 }));
 
 import { useWallet, WalletProvider } from "./WalletProvider";
@@ -41,10 +41,10 @@ const makeWallet = () => {
   });
   return {
     account,
-    id: "mc-wallet",
+    id: "bramble",
     isPreauthorized: vi.fn(async () => false),
     invoke,
-    name: "MC Wallet",
+    name: "Bramble",
     on: vi.fn((event: WalletEvent, listener: (...args: never[]) => void) => {
       listeners.set(event, listener);
     }),
@@ -107,8 +107,12 @@ const DeclareProbe = (): ReactNode => {
 };
 
 const TransactionProbe = ({
+  handoffCheck,
   reviewMode,
-}: { readonly reviewMode?: "wallet" } = {}): ReactNode => {
+}: {
+  readonly handoffCheck?: () => Promise<void>;
+  readonly reviewMode?: "wallet";
+} = {}): ReactNode => {
   const wallet = useWallet();
   const [result, setResult] = useState("idle");
   return (
@@ -130,10 +134,14 @@ const TransactionProbe = ({
               ],
               description: "Move one test asset.",
               details: [{ label: "Recipient", value: "0x2" }],
+              ...(handoffCheck === undefined ? {} : { handoffCheck }),
               ...(reviewMode === undefined ? {} : { reviewMode }),
               title: "Send test asset",
             })
-            .then((value) => setResult(value.transaction_hash))
+            .then(
+              (value) => setResult(value.transaction_hash),
+              (cause: Error) => setResult(`rejected: ${cause.message}`),
+            )
         }
       >
         {reviewMode === "wallet" ? "Fast send" : "Send"}
@@ -172,7 +180,7 @@ describe("WalletProvider", () => {
 
   test("requests accounts and reacts to wallet account and network events", async () => {
     const wallet = makeWallet();
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     renderProvider();
 
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -193,7 +201,7 @@ describe("WalletProvider", () => {
   test("surfaces a rejected approval instead of falling back silently", async () => {
     const wallet = makeWallet();
     wallet.request.mockRejectedValueOnce(Object.assign(new Error("Connection rejected"), { code: 113 }));
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     renderProvider();
 
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
@@ -207,7 +215,7 @@ describe("WalletProvider", () => {
     Object.assign(wallet, { enable });
     wallet.isPreauthorized = vi.fn().mockResolvedValue(true);
     wallet.request.mockResolvedValueOnce([]);
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     renderProvider();
 
     await waitFor(() =>
@@ -222,7 +230,7 @@ describe("WalletProvider", () => {
 
   test("wraps Sierra declarations in the wallet RPC declare_transaction shape", async () => {
     const wallet = makeWallet();
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     render(
       <WalletProvider>
         <DeclareProbe />
@@ -252,7 +260,7 @@ describe("WalletProvider", () => {
 
   test("requests wallet-approved ERC20 tracking with metadata revalidated by the wallet", async () => {
     const wallet = makeWallet();
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     render(
       <WalletProvider>
         <WatchAssetProbe />
@@ -273,7 +281,7 @@ describe("WalletProvider", () => {
     wallet.invoke
       .mockRejectedValueOnce(Object.assign(new Error("User rejected"), { code: 113 }))
       .mockResolvedValueOnce({ transaction_hash: "0xabc" });
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     render(
       <WalletProvider>
         <TransactionProbe />
@@ -327,7 +335,7 @@ describe("WalletProvider", () => {
           release = () => resolve({ transaction_hash: "0xabc" });
         }),
     );
-    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
     render(
       <WalletProvider>
         <TransactionProbe reviewMode="wallet" />
@@ -340,10 +348,155 @@ describe("WalletProvider", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fast send" }));
     await waitFor(() => expect(wallet.invoke).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("button", { name: "Continue in wallet" })).toBeNull();
-    expect(screen.getByText("Request sent to MC Wallet")).toBeTruthy();
+    expect(screen.getByText("Request sent to Bramble")).toBeTruthy();
     await act(async () => release());
     await waitFor(() =>
       expect(screen.getByTestId("transaction-result").textContent).toBe("0xabc"),
     );
+  });
+
+  test("re-runs the handoff check on every attempt, and a refusal never reaches the wallet", async () => {
+    const wallet = makeWallet();
+    const handoffCheck = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("Could not verify the Vesu pool on chain"))
+      .mockResolvedValueOnce(undefined);
+    mocks.waitForInjectedBramble.mockResolvedValue(wallet);
+    render(
+      <WalletProvider>
+        <TransactionProbe handoffCheck={handoffCheck} />
+      </WalletProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("transaction-address").textContent).toBe("0x1234"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("heading", { name: "Send test asset" })).toBeTruthy();
+    // Quote-time state is not re-read while the user is still reviewing.
+    expect(handoffCheck).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue in wallet" }));
+    expect(await screen.findByText("Could not verify the Vesu pool on chain")).toBeTruthy();
+    expect(handoffCheck).toHaveBeenCalledTimes(1);
+    expect(wallet.invoke).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("transaction-result").textContent).toBe("0xabc"),
+    );
+    expect(handoffCheck).toHaveBeenCalledTimes(2);
+    expect(wallet.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  // The Multiply price anchor's refusals (#646) reach the dialog as their
+  // reviewed sentences, not mistaken for a wallet decline, and nothing is sent.
+  for (const sentence of [
+    "The swap price is too far from the market price. Try again later.",
+    "Couldn't get a market price for this swap, so it can't be checked. Try again, or choose another market.",
+  ]) {
+    test(`shows a handoff price refusal as written: ${sentence.slice(0, 24)}…`, async () => {
+      const wallet = makeWallet();
+      const handoffCheck = vi.fn<() => Promise<void>>().mockRejectedValue(new Error(sentence));
+      mocks.waitForInjectedBramble.mockResolvedValue(wallet);
+      render(
+        <WalletProvider>
+          <TransactionProbe handoffCheck={handoffCheck} />
+        </WalletProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-address").textContent).toBe("0x1234"),
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Continue in wallet" }));
+      expect(await screen.findByText(sentence)).toBeTruthy();
+      expect(screen.getByText("Not submitted")).toBeTruthy();
+      expect(wallet.invoke).not.toHaveBeenCalled();
+    });
+  }
+
+  describe("a wallet account or network change (Sherlock 222)", () => {
+    const CHANGED = "rejected: Wallet account or network changed before approval.";
+
+    const connectTransaction = async (
+      wallet: ReturnType<typeof makeWallet>,
+      reviewMode?: "wallet",
+    ): Promise<void> => {
+      mocks.waitForInjectedBramble.mockResolvedValue(wallet);
+      render(
+        <WalletProvider>
+          <TransactionProbe {...(reviewMode === undefined ? {} : { reviewMode })} />
+        </WalletProvider>,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-address").textContent).toBe("0x1234"),
+      );
+      await waitFor(() => expect(wallet.listeners.has("accountsChanged")).toBe(true));
+    };
+
+    test("drops a request under review instead of sending it for the new account", async () => {
+      const wallet = makeWallet();
+      await connectTransaction(wallet);
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+      expect(await screen.findByRole("heading", { name: "Send test asset" })).toBeTruthy();
+
+      await act(async () => {
+        wallet.listeners.get("accountsChanged")?.(["0xabcd"] as never);
+        await Promise.resolve();
+      });
+
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-result").textContent).toBe(CHANGED),
+      );
+      expect(screen.queryByRole("button", { name: "Continue in wallet" })).toBeNull();
+      expect(wallet.invoke).not.toHaveBeenCalled();
+    });
+
+    test("drops a request under review when only the network changes", async () => {
+      const wallet = makeWallet();
+      await connectTransaction(wallet);
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+      expect(await screen.findByRole("heading", { name: "Send test asset" })).toBeTruthy();
+
+      await act(async () => {
+        wallet.listeners.get("networkChanged")?.("SN_SEPOLIA" as never);
+        await Promise.resolve();
+      });
+
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-result").textContent).toBe(CHANGED),
+      );
+      expect(wallet.invoke).not.toHaveBeenCalled();
+    });
+
+    test("leaves a request the wallet is handling to the wallet, but never retries it", async () => {
+      const wallet = makeWallet();
+      let decline!: () => void;
+      wallet.invoke.mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            decline = () => reject(Object.assign(new Error("User rejected"), { code: 113 }));
+          }),
+      );
+      await connectTransaction(wallet, "wallet");
+      fireEvent.click(screen.getByRole("button", { name: "Fast send" }));
+      await waitFor(() => expect(wallet.invoke).toHaveBeenCalledTimes(1));
+
+      await act(async () => {
+        wallet.listeners.get("accountsChanged")?.(["0xabcd"] as never);
+        await Promise.resolve();
+      });
+      expect(screen.getByText("Request sent to Bramble")).toBeTruthy();
+
+      await act(async () => decline());
+      fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+
+      await waitFor(() =>
+        expect(screen.getByTestId("transaction-result").textContent).toBe(CHANGED),
+      );
+      expect(wallet.invoke).toHaveBeenCalledTimes(1);
+    });
   });
 });

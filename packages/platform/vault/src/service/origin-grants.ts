@@ -7,7 +7,7 @@
  * results are deterministic (no locale-sensitive ordering).
  */
 
-import type { ConnectedSite } from "@mc-wallet/core/origin";
+import type { ConnectedSite } from "@bramble/core/origin";
 import type { Vault } from "../schema/schema";
 
 /**
@@ -26,7 +26,10 @@ import type { Vault } from "../schema/schema";
  * site can never correlate two of the user's accounts. Ids are returned
  * unresolved; the caller maps them to accounts.
  */
-export const grantedAccountIdsFor = (vault: Vault, origin: string): readonly string[] => {
+export const grantedAccountIdsFor = (
+  vault: Pick<Vault, "activeAccountId" | "originGrants">,
+  origin: string,
+): readonly string[] => {
   const activeAccountId = vault.activeAccountId;
   if (activeAccountId === null) {
     return [];

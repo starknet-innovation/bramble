@@ -4,13 +4,13 @@
  * one deliberate transfer task using the existing verified invoke boundary.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { escapeHtml } from "@bramble/core/html";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { emptyState, receipt } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { textField } from "@bramble/ui-kit/fields";
+import { menuRow } from "@bramble/ui-kit/navigation";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import type { DiscoveredNft, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
@@ -34,17 +34,17 @@ export const nftSendFlow = (
   );
   if (!nft) {
     return (
-      flowHeader("Send collectible", status) +
+      flowHeader("Send NFT", status) +
       flowScreen(
         "nft-send",
-        `<section class="section">${emptyState("This collectible is no longer available.")}</section>`,
+        `<section class="section">${emptyState("This NFT is no longer available.")}</section>`,
       )
     );
   }
   const contacts =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return (
-    flowHeader("Send collectible", status, nft.title) +
+    flowHeader("Send NFT", status, nft.title) +
     flowScreen(
       "nft-send",
       `<section class="section nft-send-identity">
@@ -53,8 +53,13 @@ export const nftSendFlow = (
           ${icon("image")}
         </div>
         ${receipt([
-          { label: "Collectible", value: nft.title },
+          { label: "NFT", value: nft.title },
           {
+            action: {
+              attributes: { "data-copy": nft.contract },
+              icon: "copy",
+              label: "Copy collection contract address",
+            },
             label: "Collection",
             value: nft.collection || accountLabel(nft.contract),
           },
@@ -97,7 +102,6 @@ export const nftSendFlow = (
                   </div>
                 </div>`
           }
-          <p class="hint">Ownership and token standard are checked again on-chain. Nothing is submitted until the decoded review is confirmed.</p>
           <div id="nft-review-panel" aria-live="polite"></div>
           ${button({
             disabled: account === null,

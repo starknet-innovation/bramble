@@ -3,8 +3,9 @@
  * wallet; this module only fetches the bundled class and reads transaction or
  * ownership state from the wallet's active network.
  */
-import { RpcProvider } from "starknet";
+import type { RpcProvider } from "starknet";
 import { STARKNET_NETWORKS, type StarknetNetwork } from "../protocols/support/networks";
+import { createBoundedProvider } from "../protocols/support/provider";
 
 const networkForChainId = (chainId: string | null): StarknetNetwork => {
   const normalized = chainId?.toUpperCase() ?? "";
@@ -20,7 +21,7 @@ const networkForChainId = (chainId: string | null): StarknetNetwork => {
 };
 
 const providerForChain = (chainId: string | null): RpcProvider =>
-  new RpcProvider({ nodeUrl: networkForChainId(chainId).rpcUrls[0] });
+  createBoundedProvider(networkForChainId(chainId).rpcUrls[0]);
 
 /** Waits for a submitted declaration, deployment, mint, or transfer to settle. */
 export const waitForPunkTransaction = async (

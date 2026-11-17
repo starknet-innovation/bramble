@@ -4,8 +4,8 @@
  * actually in use, and must stay silent on networks the wallet hosts.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { networkFlow } from "../../../../src/sidepanel/journeys/settings/network-views";
 

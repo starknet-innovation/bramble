@@ -24,7 +24,7 @@ import {
   REVIEWED_FEE_HEADROOM,
   reviewedSpendFor,
   sumFeeEstimates,
-} from "@mc-wallet/starknet/fee-bounds";
+} from "@bramble/starknet/fee-bounds";
 import { isFeeShape } from "../../packages/presentation/wallet-ui/src/popup/responses/responses-transfer";
 import { REPO_DIR, repoRelative, workspaceSourceFiles } from "../support/workspace-sources";
 

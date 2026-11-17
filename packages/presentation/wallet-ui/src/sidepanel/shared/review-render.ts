@@ -9,10 +9,11 @@
  * never trusts its inputs, so callers may pass decoded summaries and flag
  * messages directly.
  */
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import { button } from "@mc-wallet/ui-kit/controls";
-import type { UiAttributes } from "@mc-wallet/ui-kit/html-attributes";
+import { escapeHtml } from "@bramble/core/html";
+import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
+import { formatTokenAmount } from "@bramble/starknet/rpc";
+import { button } from "@bramble/ui-kit/controls";
+import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
 import { icon } from "./icons";
 import { formatFri } from "./parts";
@@ -26,7 +27,27 @@ import { formatFri } from "./parts";
 export type ReviewFeeState = {
   readonly deploymentFee?: FeeEstimate | null;
   readonly deploymentFeeEstimateFailed?: boolean;
+  /**
+   * Set when the account signs on a device: deployment and the transaction are
+   * two transactions, so the device prompts twice. Said here rather than left
+   * as a surprise between the confirm press and the second prompt.
+   */
+  readonly signsTwice?: boolean;
   readonly fee: FeeEstimate | null;
+  /**
+   * A shield's STRK requirement from the shared `shieldStrkNeed` helper (issue
+   * 665): `need` is every STRK figure the shield may take, with the network
+   * fee at its signing ceiling, and `short` how much the public balance lacks.
+   * `includesAmount` is set when the shielded token is STRK itself, and
+   * `blocksConfirm` when the shortfall disables Confirm. A positive `short`
+   * replaces the generic `feeAffordability` notice with the figures.
+   */
+  readonly shieldStrkNeed?: {
+    readonly blocksConfirm: boolean;
+    readonly includesAmount: boolean;
+    readonly need: bigint;
+    readonly short: bigint;
+  };
   /**
    * Verdict of the shared fee-affordability predicate (issue 191). Only
    * "insufficient" renders a warning; "ok"/"unknown"/absent render nothing
@@ -36,37 +57,164 @@ export type ReviewFeeState = {
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
   readonly feeEstimatePending?: boolean;
+  /**
+   * Explicit alternatives when STRK does not cover the fee. The wallet does
+   * not select one; each entry is a control the user can choose.
+   */
+  readonly gaslessFees?: readonly {
+    readonly amount: string;
+    readonly decimals: number;
+    readonly label: string;
+    readonly tokenAddress: string;
+  }[];
   readonly requiresDeployment?: boolean;
+};
+
+// formatFri shows six of STRK's eighteen decimals and drops the rest. A
+// figure the user must hold or add is rounded up to that step instead, so the
+// amount shown is never less than the amount needed.
+const FRI_SHOWN_STEP = 10n ** 12n;
+
+/**
+ * Rounds a FRI amount up to the precision {@link formatFri} shows, in exact
+ * base units. Pure; a caller that prefills or states an amount the user must
+ * hold or add uses this so the figure is never below what is needed.
+ */
+export const friShownAtLeast = (raw: bigint): bigint =>
+  ((raw + FRI_SHOWN_STEP - 1n) / FRI_SHOWN_STEP) * FRI_SHOWN_STEP;
+
+/**
+ * The one wording for a STRK amount the user must hold or add: rounded up
+ * by {@link friShownAtLeast}, then formatted as STRK. Escapes nothing;
+ * callers place it in a text sink.
+ */
+export const friAtLeast = (raw: bigint): string =>
+  formatFri(`0x${friShownAtLeast(raw).toString(16)}`);
+
+// A shield short of STRK names what it needs and what to add (issue 665) in
+// place of the generic notice. "Up to", because the network share is the most
+// the wallet may sign for, not the estimate.
+const shortfallHtml = (state: ReviewFeeState): string => {
+  const shield = state.shieldStrkNeed;
+  if (shield === undefined || shield.short <= 0n) {
+    return balanceShortfallHtml(state);
+  }
+  const needs = shield.includesAmount
+    ? `This shield needs up to ${friAtLeast(shield.need)}, including the amount.`
+    : `This shield needs up to ${friAtLeast(shield.need)} in fees.`;
+  return `<p class="review-flag" role="alert">${icon("alert")}${escapeHtml(
+    `${needs} Add ${friAtLeast(shield.short)}, then review again.`,
+  )}</p>`;
 };
 
 // Warn-only shortfall notice appended under the fee line when the shared
 // predicate says the STRK balance cannot cover the transaction (issue 191).
-const shortfallHtml = (state: ReviewFeeState): string =>
+const balanceShortfallHtml = (state: ReviewFeeState): string =>
   state.feeAffordability === "insufficient"
     ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
     : "";
 
-const reviewBoundary = (content: string): string =>
-  `<section class="decision-layer decision-boundary" aria-label="Maximum cost and constraints">
-    <p class="decision-label">Maximum cost and constraints</p>
+const gaslessChoiceHtml = (state: ReviewFeeState, attributes: UiAttributes): string => {
+  // Offers are attached only after the spend-aware shortfall check. The
+  // fee-only verdict can still be "ok" when the calls themselves spend the
+  // STRK a fee-only comparison ignores, so a present list is rendered as-is.
+  if (state.gaslessFees === undefined || state.gaslessFees.length === 0) {
+    return "";
+  }
+  return state.gaslessFees
+    .map((offer) => {
+      let formatted = "";
+      try {
+        formatted = formatTokenAmount(BigInt(offer.amount), offer.decimals);
+      } catch {
+        return "";
+      }
+      return button({
+        attributes: {
+          ...attributes,
+          "data-gasless-amount": offer.amount,
+          "data-gasless-decimals": String(offer.decimals),
+          "data-gasless-label": offer.label,
+          "data-gasless-token": offer.tokenAddress,
+        },
+        label: `Pay up to ${formatted} ${offer.label}`,
+        variant: "secondary",
+      });
+    })
+    .join("");
+};
+
+/**
+ * Whether this review has no single figure the user can consent to.
+ *
+ * A failed component, or two estimates that cannot be added (unlike units, a
+ * malformed amount), fails closed. Callers withhold the reviewed key and
+ * disable Confirm so the next click re-estimates instead of sending a figure
+ * the review did not quote. A deployment whose fee is simply not ready yet
+ * (no failure flag, no deployment estimate) is not blocked: that screen says
+ * the fee comes after deployment.
+ */
+export const reviewFeeBlocked = (state: ReviewFeeState): boolean =>
+  state.feeEstimateFailed === true ||
+  state.deploymentFeeEstimateFailed === true ||
+  (state.requiresDeployment === true &&
+    state.fee != null &&
+    state.deploymentFee != null &&
+    sumFeeEstimates(state.fee, state.deploymentFee) === null);
+
+// `rule: false` drops the hairline above the section, for a surface that already
+// separates its own blocks and does not want a divider drawn inside them. The
+// label must be true of the content: "Cost" over fee lines only.
+const reviewBoundary = (content: string, rule = true, label = "Cost"): string =>
+  `<section class="decision-layer${rule ? " decision-boundary" : ""}" aria-label="${label}">
+    <p class="decision-label">${label}</p>
     ${content}
   </section>`;
+
+/**
+ * Wraps already-composed fee markup in the Cost box.
+ *
+ * `reviewFeeSection` builds and boxes its own lines, but the Send review also
+ * composes fee lines for routes with no estimate to section — a relay's
+ * sponsored gas, a deposit priced at submission. Those were the ones left
+ * outside a box, beside a Visibility section that had one.
+ */
+export const reviewCostSection = (trustedMarkup: string): string =>
+  reviewBoundary(trustedMarkup, false);
 
 /**
  * Renders a plain-language consequence for decisions that do not carry decoded
  * calls (connections, signatures, and configuration changes).
  */
 export const reviewOutcome = (copy: string): string =>
+  reviewOutcomeSection(`<p>${escapeHtml(copy)}</p>`);
+
+/**
+ * Wraps already-composed, already-escaped markup in the one "What will happen"
+ * section. For a decision whose consequence has more than one part (the decoded
+ * calls, then that a multisig saves them for its other signers), so the card
+ * reads as one consequence under one heading rather than two in a row.
+ */
+export const reviewOutcomeSection = (trustedMarkup: string): string =>
   `<section class="decision-layer decision-outcome" aria-label="What will happen">
     <p class="decision-label">What will happen</p>
-    <p>${escapeHtml(copy)}</p>
+    ${trustedMarkup}
   </section>`;
 
 /**
- * Renders a non-fee constraint statement through the same decision hierarchy
- * as a transaction fee ceiling.
+ * Renders a constraint statement — what the decision does not sign, charge or
+ * authorize — through the same decision hierarchy as a fee ceiling. Labelled
+ * "Cost and limits", not "Cost": a line such as "the signed result can still
+ * authorize site-specific actions" is not fee information. Escapes `copy`.
  */
 export const reviewConstraints = (copy: string): string =>
+  reviewBoundary(`<p>${escapeHtml(copy)}</p>`, true, "Cost and limits");
+
+/**
+ * Renders one plain-text fee line (a maximum fee, or why there is none yet)
+ * in the Cost box. Escapes `copy`.
+ */
+export const reviewCostNote = (copy: string): string =>
   reviewBoundary(`<p>${escapeHtml(copy)}</p>`);
 
 /**
@@ -79,6 +227,14 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
   fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
 
 /**
+ * The one wording for an estimated network fee, shared by the pre-sign reviews
+ * and the Send Amount screen so the same figure can never be phrased two ways.
+ * Escapes nothing; callers place it in a text sink.
+ */
+export const estimatedFeeText = (fee: NonNullable<ReviewFeeState["fee"]>): string =>
+  `Estimated fee: ${formatFeeEstimate(fee)}`;
+
+/**
  * Renders the shared fee section of a pre-sign review: the estimated fee when
  * one exists, the not-yet-deployed notice, or the estimate-failed alert with a
  * retry button carrying the caller's attributes (Send wires an id, the dApp
@@ -86,14 +242,69 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
  * surface. Escapes everything; a missing estimate is always a named state,
  * never a fabricated amount.
  */
-export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttributes): string => {
+export const reviewFeeSection = (
+  state: ReviewFeeState,
+  retryAttributes: UiAttributes,
+  options: {
+    readonly extra?: string;
+    /** Attributes copied onto each gasless choice, such as the approval id. */
+    readonly gaslessAttributes?: UiAttributes;
+    /**
+     * The pool's own charge, in FRI. Given it, the section adds the total of
+     * what will actually leave the account — the arithmetic belongs here
+     * because only this function knows which network figure it printed.
+     */
+    readonly poolFeeFri?: string;
+    readonly rule?: boolean;
+  } = {},
+): string => {
+  const { extra = "", gaslessAttributes = {}, poolFeeFri, rule = true } = options;
+  // Two fees on one screen is two numbers to add up. Stated only when both are
+  // known and share a denomination; an unlike pair fails closed rather than
+  // printing a total that means nothing.
+  const totalLine = (network: FeeEstimate): string => {
+    // Unlike denominations fail closed: a total that adds FRI to anything else
+    // would understate the cost exactly as a missing half does.
+    if (poolFeeFri === undefined || network.unit !== "FRI") {
+      return "";
+    }
+    try {
+      // Both figures reach here as base units, but the pool quotes hex and an
+      // estimate may be decimal, so each is parsed rather than compared as text.
+      const total = BigInt(network.overallFee) + BigInt(poolFeeFri);
+      return `<p class="review-fee review-fee-total">Total fees: ${escapeHtml(
+        formatFri(`0x${total.toString(16)}`),
+      )}</p>`;
+    } catch {
+      return "";
+    }
+  };
+  // Every branch closes the same way, so a caller's extra cost line lands
+  // inside the section rather than orphaned under it.
+  const boundary = (content: string, network?: FeeEstimate): string =>
+    reviewBoundary(`${content}${extra}${network ? totalLine(network) : ""}`, rule);
   if (state.feeEstimatePending === true) {
-    return reviewBoundary('<p class="review-fee" role="status">Estimating network fee…</p>');
+    return boundary('<p class="review-fee" role="status">Estimating network fee…</p>');
   }
   if (state.requiresDeployment === true && state.fee && state.deploymentFee) {
-    return reviewBoundary(
-      `<div class="review-fee"><p>Estimated transaction fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p><p>Estimated account deployment fee: ${escapeHtml(formatFeeEstimate(state.deploymentFee))}</p></div>${shortfallHtml(state)}`,
-    );
+    // One action, one figure. Creating the account and sending are two
+    // transactions on chain and the user pays for both, so the total leads and
+    // the deployment share is named under it — quoting the transaction alone
+    // understates what leaves the account, and quoting two figures asks the
+    // user to add them up.
+    const total = sumFeeEstimates(state.fee, state.deploymentFee);
+    // Unlike units or a malformed estimate fail closed: quoting one component
+    // as the total would understate the cost the same way a missing half does.
+    if (total) {
+      return boundary(
+        `<div class="review-fee"><p>${escapeHtml(
+          estimatedFeeText(total),
+        )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
+          formatFeeEstimate(state.deploymentFee),
+        )} of that${state.signsTwice === true ? ", and your Ledger asks to sign both" : ""}.</p></div>${shortfallHtml(state)}`,
+        total,
+      );
+    }
   }
   if (
     state.requiresDeployment === true &&
@@ -101,12 +312,12 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
     state.deploymentFeeEstimateFailed === undefined &&
     state.feeEstimateFailed !== true
   ) {
-    return reviewBoundary(
+    return boundary(
       '<p class="review-fee">The network fee is estimated once this account is deployed.</p>',
     );
   }
   if (state.requiresDeployment === true) {
-    return reviewBoundary(
+    return boundary(
       `<p class="review-flag" role="alert">Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.</p>${button(
         {
           attributes: retryAttributes,
@@ -117,12 +328,13 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
     );
   }
   if (state.fee) {
-    return reviewBoundary(
-      `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`,
+    return boundary(
+      `<p class="review-fee">${escapeHtml(estimatedFeeText(state.fee))}</p>${shortfallHtml(state)}${gaslessChoiceHtml(state, gaslessAttributes)}`,
+      state.fee,
     );
   }
   if (state.feeEstimateFailed === true) {
-    return reviewBoundary(
+    return boundary(
       `<p class="review-flag" role="alert">Couldn't estimate the network fee right now. Check your connection and retry before sending.</p>${button(
         {
           attributes: retryAttributes,
@@ -144,33 +356,47 @@ export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttri
 export const reviewCallsList = (
   summaries: readonly string[],
   assets: readonly { readonly address: string; readonly symbol: string }[] = [],
+): string => {
+  const items = reviewCallItems(summaries, assets);
+  return items ? reviewOutcomeSection(items) : "";
+};
+
+/**
+ * The decoded call summaries alone, as the `review-calls` list with no section
+ * around it, for a caller that adds a line under the same heading. Returns an
+ * empty string when there are no summaries. Escapes every summary.
+ */
+export const reviewCallItems = (
+  summaries: readonly string[],
+  assets: readonly { readonly address: string; readonly symbol: string }[] = [],
 ): string =>
   summaries.length === 0
     ? ""
-    : `<section class="decision-layer decision-outcome" aria-label="What will happen">
-        <p class="decision-label">What will happen</p>
-        <ul class="review-calls">${summaries
-          .map((summary) => {
-            const words = new Set(summary.toUpperCase().match(/[A-Z0-9.]+/gu) ?? []);
-            const marks = assets
-              .filter((asset) => words.has(asset.symbol.toUpperCase()))
-              .map((asset) => tokenGlyph(asset.address, asset.symbol))
-              .join("");
-            return `<li class="review-call">${marks ? `<span class="review-call-assets">${marks}</span>` : ""}<span>${escapeHtml(summary)}</span></li>`;
-          })
-          .join("")}</ul>
-      </section>`;
+    : `<ul class="review-calls">${summaries
+        .map((summary) => {
+          const words = new Set(summary.toUpperCase().match(/[A-Z0-9.]+/gu) ?? []);
+          const marks = assets
+            .filter((asset) => words.has(asset.symbol.toUpperCase()))
+            .map((asset) => tokenGlyph(asset.address, asset.symbol))
+            .join("");
+          return `<li class="review-call">${marks ? `<span class="review-call-assets">${marks}</span>` : ""}<span>${escapeHtml(summary)}</span></li>`;
+        })
+        .join("")}</ul>`;
 
 /**
  * Renders risk-flag and insight lines inside the shared review panel. Returns an
  * empty string when there is nothing to surface, so an absent panel leaves no
  * empty box behind rather than an empty bordered region.
+ *
+ * The "Risk and recovery" label belongs to the flag list. `clearCopy` is the
+ * opposite of a flag — a neutral statement about what the action does, shown
+ * when nothing was flagged — so it renders unlabelled rather than under a
+ * heading announcing a risk the panel is not reporting.
  */
 export const reviewPanel = (items: readonly string[], clearCopy?: string): string =>
   items.length === 0
     ? clearCopy
       ? `<div class="review-panel decision-layer decision-risk" role="note">
-          <p class="decision-label">Risk and recovery</p>
           <p>${escapeHtml(clearCopy)}</p>
         </div>`
       : ""

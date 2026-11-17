@@ -11,30 +11,35 @@ import {
   isJson,
   isRecord,
   type Json,
-} from "@mc-wallet/core/json";
-import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/core/json";
+import { isAccountRef } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isHexChainId,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
+import { type DappMultisigAccount, isDappMultisigAccount } from "./dapp-account";
 import { errorForMessage, unknownError, type WalletRpcError } from "./rpc-errors";
 
 /**
  * The one hex chain-id grammar, re-exported for the page-facing provider. The
- * injected script may only reach `@mc-wallet/wallet-protocol`, and a private
+ * injected script may only reach `@bramble/wallet-protocol`, and a private
  * regex there would be a second definition of the form this module already
  * validates switch-chain params against — the drift MCW-V09-130 closed. Pure
  * predicate: it never throws and admits nothing `isHexChainId` rejects.
  */
-export { isHexChainId } from "@mc-wallet/wallet-model/networks";
+export { isHexChainId } from "@bramble/wallet-model/networks";
 export {
   type ProviderInvokeCall,
   providerInvokeCalls,
   providerInvokeRequest,
 } from "../transactions/invoke";
+/** Public multisig account a site may be shown. */
+export type { DappMultisigAccount };
+/** Type guard for that public multisig account. */
+export { isDappMultisigAccount };
 
 import {
   providerStrk20Balances,
@@ -42,6 +47,7 @@ import {
   providerStrk20Commitment,
 } from "../privacy/strk20-bridge";
 import type { ProviderMethod } from "./methods";
+import { isApiVersion, isOptionalApiVersion } from "./versions";
 
 /**
  * Page-facing account view: only the already-public address and network id.
@@ -77,11 +83,10 @@ export type ProviderDeploymentData = {
 };
 
 /**
- * API_VERSION pattern accepted from dapps (semantic version, including a
- * prerelease suffix used by published Wallet-API release candidates).
+ * API_VERSION pattern accepted from dapps, re-exported from its single source
+ * in versions.ts so existing `results` consumers keep one import.
  */
-export const API_VERSION_PATTERN =
-  /^[0-9]+\.[0-9]+(?:\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)?$/;
+export { API_VERSION_PATTERN } from "./versions";
 
 /**
  * Spec declare result carried to the page (`{ transaction_hash, class_hash }`),
@@ -212,10 +217,7 @@ export const readApiVersionParam = (params: Json | undefined): string | null | u
   if (params["api_version"] === undefined) {
     return undefined;
   }
-  return typeof params["api_version"] === "string" &&
-    API_VERSION_PATTERN.test(params["api_version"])
-    ? params["api_version"]
-    : null;
+  return isApiVersion(params["api_version"]) ? params["api_version"] : null;
 };
 
 /**
@@ -228,9 +230,7 @@ export const isRequestAccountsParams = (params: Json | undefined): boolean =>
   (isRecord(params) &&
     hasOnlyKnownKeys(params, ["api_version", "silent_mode"]) &&
     (params["silent_mode"] === undefined || typeof params["silent_mode"] === "boolean") &&
-    (params["api_version"] === undefined ||
-      (typeof params["api_version"] === "string" &&
-        API_VERSION_PATTERN.test(params["api_version"]))));
+    isOptionalApiVersion(params["api_version"]));
 
 /**
  * Narrows an unknown value to a spec declare result whose `transaction_hash` is
@@ -259,34 +259,18 @@ export const providerStringArrayResult = (result: unknown): readonly string[] | 
 
 /**
  * Reads a spec switch-chain param (`{ chainId }`) matching the CHAIN_ID pattern.
- * The spec-defined optional `silent_mode` (boolean) is accepted so a conforming
- * request carrying it is not rejected; the flag itself is not acted on here.
+ * The spec-defined optional `silent_mode` (boolean) and `api_version` are
+ * accepted so a conforming request carrying them is not rejected; neither is
+ * acted on here, and a malformed value still rejects the request.
  */
 export const providerSwitchChainId = (params: Json | undefined): string | null =>
   isRecord(params) &&
-  hasOnlyKnownKeys(params, ["chainId", "silent_mode"]) &&
+  hasOnlyKnownKeys(params, ["api_version", "chainId", "silent_mode"]) &&
   (params["silent_mode"] === undefined || typeof params["silent_mode"] === "boolean") &&
+  isOptionalApiVersion(params["api_version"]) &&
   isHexChainId(params["chainId"])
     ? params["chainId"]
     : null;
-
-/**
- * Extracts the SNIP-12 typed data from sign params, accepting the spec
- * `{ typed_data }` wrapper, the legacy `{ typedData }` wrapper, and a bare
- * typed-data object passed directly as params.
- */
-export const readTypedDataParam = (params: Json | undefined): Json | null => {
-  if (params === undefined) {
-    return null;
-  }
-  if (isRecord(params) && Object.hasOwn(params, "typed_data") && isJson(params["typed_data"])) {
-    return params["typed_data"];
-  }
-  if (isRecord(params) && Object.hasOwn(params, "typedData") && isJson(params["typedData"])) {
-    return params["typedData"];
-  }
-  return params;
-};
 
 // Pads a list of felts to PADDED_FELT, returning null if any entry will not pad.
 const padFeltList = (values: readonly unknown[]): string[] | null => {
@@ -363,9 +347,19 @@ const signaturePayload: ResultMapper = (result) => {
     signature.slice(2).every(isCanonicalSignatureFelt);
   return isOz || isArgent ? { result: [...signature] } : failed();
 };
+// A site list is either vault accounts or a multisig projection. Both expose
+// an address; the multisig projection carries no key material.
+const isListedDappAccount = (
+  value: unknown,
+): value is {
+  readonly address: string;
+  readonly id: string;
+  readonly networkId: StarknetNetworkId;
+} => isAccountRef(value) || isDappMultisigAccount(value);
+
 // Validates the trusted account list (dapps never see indices or public keys).
 const readAccountRefs = (result: unknown) =>
-  parseAccountsResult(result, isAccountRef, (account) => account.id);
+  parseAccountsResult(result, isListedDappAccount, (account) => account.id);
 const accountsViewPayload: ResultMapper = (result) => {
   const accounts = readAccountRefs(result);
   return accounts ? { result: { accounts: accounts.map(toPublicAccount), ok: true } } : failed();
@@ -431,7 +425,7 @@ const RESULT_MAPPERS: Record<ProviderResultMethod, ResultMapper> = {
   wallet_strk20Balances: (result) => okFieldPayload(result, "balances", providerStrk20Balances),
   wallet_strk20PrepareInvoke: (result) =>
     okFieldPayload(result, "callAndProof", providerStrk20CallAndProof),
-  wallet_strk20SubaccountCommitment: (result) =>
+  wallet_strk20ShadowAccountCommitment: (result) =>
     okFieldPayload(result, "commitment", providerStrk20Commitment),
 };
 
@@ -469,8 +463,8 @@ const resultMapperFor = (method: ProviderResultMethod): ResultMapper => {
       return RESULT_MAPPERS.wallet_strk20InvokeTransaction;
     case "wallet_strk20PrepareInvoke":
       return RESULT_MAPPERS.wallet_strk20PrepareInvoke;
-    case "wallet_strk20SubaccountCommitment":
-      return RESULT_MAPPERS.wallet_strk20SubaccountCommitment;
+    case "wallet_strk20ShadowAccountCommitment":
+      return RESULT_MAPPERS.wallet_strk20ShadowAccountCommitment;
     case "wallet_switchStarknetChain":
       return RESULT_MAPPERS.wallet_switchStarknetChain;
     case "wallet_watchAsset":

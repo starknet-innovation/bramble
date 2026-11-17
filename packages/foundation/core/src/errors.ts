@@ -9,6 +9,19 @@ export class WalletError extends Error {
 }
 
 /**
+ * A refusal raised before the operation that throws it has written anything
+ * durable, so the state is exactly as it was. A guard that locks the session on
+ * any failure, because a storage failure leaves the outcome ambiguous, may
+ * treat this one as unambiguous and only undo its own earlier writes.
+ */
+export class RefusedBeforeWrite extends WalletError {
+  public constructor(message: string) {
+    super(message);
+    this.name = "RefusedBeforeWrite";
+  }
+}
+
+/**
  * Throws a wallet error when an internal invariant is violated.
  */
 export const invariant = (condition: boolean, message: string): void => {

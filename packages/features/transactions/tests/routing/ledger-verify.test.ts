@@ -4,8 +4,8 @@
  * malformed input — this is the last check before a transaction is broadcast.
  */
 import { describe, expect, test } from "bun:test";
-import { verifyStarkSignature } from "@mc-wallet/transactions/ledger-verify";
-import type { DeviceSignature } from "@mc-wallet/wallet-model/signing";
+import { verifyStarkSignature } from "@bramble/transactions/ledger-verify";
+import type { DeviceSignature } from "@bramble/wallet-model/signing";
 import { ec } from "starknet";
 
 const { starkCurve } = ec;

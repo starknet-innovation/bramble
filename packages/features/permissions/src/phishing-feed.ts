@@ -24,9 +24,19 @@ import {
   type BoundedHttpResponse,
   fetchBoundedJson,
   HTTP_BODY_LIMITS,
-} from "@mc-wallet/core/http-json";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
+} from "@bramble/core/http-json";
+import { isRecord } from "@bramble/core/json";
+import type { KeyValueStore } from "@bramble/store/kv";
+import {
+  MAX_PHISHING_DOMAIN_CHARS,
+  MAX_PHISHING_DOMAINS,
+  normalizePhishingDomain,
+  phishingDomainChars,
+  readPhishingCache,
+  writePhishingCache,
+} from "./phishing-feed-cache";
+
+export { PHISHING_FEED_STORE_KEY } from "./phishing-feed-cache";
 
 // Clock boundary for this module: the feed's TTL is the only time it reads, and
 // callers may inject their own clock. Kept local so the phishing feed does not
@@ -34,27 +44,24 @@ import type { KeyValueStore } from "@mc-wallet/store/kv";
 const systemClock = (): number => Date.now();
 
 /**
- * Browser-storage key for the cached phishing feed. Plain (non-secret) data.
- */
-export const PHISHING_FEED_STORE_KEY = "mc-wallet:phishing-feed";
-const PHISHING_CACHE_VERSION = 1;
-
-/**
  * Default maintained source: MetaMask's eth-phishing-detect config, the
- * de-facto web3 phishing list. Configurable per deployment via the `source`
- * option; the background must declare a matching host permission.
+ * de-facto web3 phishing list, read from the repository's `src/config.json`.
+ * The old GitHub Pages copy (`metamask.github.io/.../v1/config.json`) returns
+ * 404, so the live list never loaded (issue 772). It is served as `text/plain`;
+ * the bounded fetch doesn't check the content type, and it rejects redirects.
+ * It is read without a host permission: the file allows any origin
+ * (`Access-Control-Allow-Origin: *`) and the extension CSP allows HTTPS
+ * connections. Granting a new host here would let Chrome disable the wallet on
+ * update for users whose existing grants don't cover it. Configurable per deployment via the
+ * `source` option; another source needs CORS or a reviewed host permission.
  */
 export const DEFAULT_PHISHING_FEED_URL =
-  "https://metamask.github.io/eth-phishing-detect/v1/config.json";
+  "https://raw.githubusercontent.com/MetaMask/eth-phishing-detect/main/src/config.json";
 
 // Refresh cadence: refetch only when the cache is older than this. The MV3
 // worker warms the feed on startup, so in practice the list refreshes on the
 // first wake after the TTL lapses.
 const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
-// Bounds the in-memory set and persisted cache so a hostile or oversized feed
-// cannot exhaust storage; well above the size of current public web3 lists.
-const MAX_DOMAINS = 100_000;
-const HOST_PATTERN = /^[a-z0-9.-]+$/;
 
 /**
  * Minimal HTTP response subset consumed from the injected fetch: the shared
@@ -74,23 +81,66 @@ export type PhishingFeedFetch = BoundedHttpFetch;
 
 /**
  * The live feed: a synchronous snapshot accessor for enforcement plus an async
- * refresh the background drives on a cadence.
+ * refresh the background drives on a cadence. `cacheWriteFailed` reports
+ * whether the most recent attempt to persist a fetched list failed (for
+ * example on a storage quota error), so the failure is observable rather than
+ * silently costing the next worker wake its cached protection. `health`
+ * reports how current the list is, for support diagnostics.
  */
 export type PhishingFeed = {
   readonly blockedDomains: () => ReadonlySet<string>;
+  readonly cacheWriteFailed: () => boolean;
+  readonly health: () => PhishingFeedHealth;
   readonly refresh: () => Promise<ReadonlySet<string>>;
 };
 
-type PhishingCache = {
-  readonly domains: readonly string[];
-  readonly fetchedAt: number;
-  readonly schemaVersion: typeof PHISHING_CACHE_VERSION;
-  readonly source: string;
+/**
+ * A list older than this is reported stale: four refresh windows missed. A
+ * source that quietly stops answering (the old feed returned 404 unnoticed,
+ * issue 772) then shows in diagnostics instead of only in reduced protection.
+ */
+export const PHISHING_FEED_STALE_AFTER_MS = 4 * DEFAULT_TTL_MS;
+
+/**
+ * How current the live list is. Counts and whole hours only, no timestamps:
+ * `ageHours` is the age of the list in use (null before one has loaded), and
+ * `consecutiveFailures` counts fetches that failed since the last success in
+ * this worker. `stale` is true when nothing has loaded or the list is older
+ * than {@link PHISHING_FEED_STALE_AFTER_MS}.
+ */
+export type PhishingFeedHealth = {
+  readonly ageHours: number | null;
+  readonly cacheWriteFailed: boolean;
+  readonly consecutiveFailures: number;
+  readonly domains: number;
+  readonly stale: boolean;
 };
 
-const normalizeDomain = (value: string): string | null => {
-  const domain = value.trim().toLowerCase().replace(/\.$/, "");
-  return domain.includes(".") && HOST_PATTERN.test(domain) ? domain : null;
+const HOUR_MS = 60 * 60 * 1000;
+
+// Normalizes and de-duplicates entries up to both caps: the count keeps the
+// cache inside its chunk budget, the size keeps it from crowding the wallet's
+// own storage. Non-string and malformed entries are skipped.
+const boundedDomains = (raw: readonly unknown[]): readonly string[] => {
+  const seen = new Set<string>();
+  const domains: string[] = [];
+  let chars = 0;
+  for (const entry of raw) {
+    const domain = typeof entry === "string" ? normalizePhishingDomain(entry) : null;
+    if (domain === null || seen.has(domain)) {
+      continue;
+    }
+    chars += phishingDomainChars(domain);
+    if (chars > MAX_PHISHING_DOMAIN_CHARS) {
+      break;
+    }
+    seen.add(domain);
+    domains.push(domain);
+    if (domains.length >= MAX_PHISHING_DOMAINS) {
+      break;
+    }
+  }
+  return domains;
 };
 
 /**
@@ -104,66 +154,7 @@ export const parsePhishingFeed = (body: unknown): readonly string[] | null => {
     return null;
   }
   const raw = body["blocklist"] ?? body["blacklist"];
-  if (!Array.isArray(raw)) {
-    return null;
-  }
-  const seen = new Set<string>();
-  const domains: string[] = [];
-  for (const entry of raw) {
-    if (typeof entry !== "string") {
-      continue;
-    }
-    const domain = normalizeDomain(entry);
-    if (domain === null || seen.has(domain)) {
-      continue;
-    }
-    seen.add(domain);
-    domains.push(domain);
-    if (domains.length >= MAX_DOMAINS) {
-      break;
-    }
-  }
-  return domains;
-};
-
-const readPhishingCache = (
-  value: unknown,
-  expectedSource: string,
-  currentTime: number,
-): PhishingCache | null => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["domains", "fetchedAt", "schemaVersion", "source"]) ||
-    !Array.isArray(value["domains"]) ||
-    value["domains"].length > MAX_DOMAINS ||
-    typeof value["fetchedAt"] !== "number" ||
-    !Number.isFinite(value["fetchedAt"]) ||
-    value["fetchedAt"] < 0 ||
-    value["fetchedAt"] > currentTime ||
-    value["schemaVersion"] !== PHISHING_CACHE_VERSION ||
-    value["source"] !== expectedSource
-  ) {
-    return null;
-  }
-  const domains: string[] = [];
-  const seen = new Set<string>();
-  for (const entry of value["domains"]) {
-    if (typeof entry !== "string") {
-      return null;
-    }
-    const domain = normalizeDomain(entry);
-    if (domain === null || seen.has(domain)) {
-      return null;
-    }
-    seen.add(domain);
-    domains.push(domain);
-  }
-  return {
-    domains,
-    fetchedAt: value["fetchedAt"],
-    schemaVersion: PHISHING_CACHE_VERSION,
-    source: expectedSource,
-  };
+  return Array.isArray(raw) ? boundedDomains(raw) : null;
 };
 
 /**
@@ -187,15 +178,26 @@ export const createPhishingFeed = ({
   readonly ttlMs?: number;
 }): PhishingFeed => {
   let snapshot: ReadonlySet<string> = new Set();
+  let writeFailed = false;
+  // When the list in use was fetched, and fetches failed since the last success.
+  let loadedAt: number | null = null;
+  let failures = 0;
 
-  const setSnapshot = (domains: readonly string[]): ReadonlySet<string> => {
+  const setSnapshot = (domains: readonly string[], fetchedAt: number): ReadonlySet<string> => {
     snapshot = new Set(domains);
+    loadedAt = fetchedAt;
     return snapshot;
   };
 
-  const readCache = async (currentTime: number): Promise<PhishingCache | null> => {
-    const stored = await store.get(PHISHING_FEED_STORE_KEY).catch(() => undefined);
-    return readPhishingCache(stored, source, currentTime);
+  const health = (): PhishingFeedHealth => {
+    const age = loadedAt === null ? null : Math.max(0, now() - loadedAt);
+    return {
+      ageHours: age === null ? null : Math.floor(age / HOUR_MS),
+      cacheWriteFailed: writeFailed,
+      consecutiveFailures: failures,
+      domains: snapshot.size,
+      stale: age === null || age > PHISHING_FEED_STALE_AFTER_MS,
+    };
   };
 
   // Never throws: a non-ok status, a transport error, an over-budget body, an
@@ -213,13 +215,15 @@ export const createPhishingFeed = ({
 
   return {
     blockedDomains: () => snapshot,
+    cacheWriteFailed: () => writeFailed,
+    health,
     async refresh() {
       const currentTime = now();
-      const cache = await readCache(currentTime);
+      const cache = await readPhishingCache(store, source, currentTime);
       if (cache) {
         // Promote the last good list into memory before any network work, so a
         // slow or failing fetch still leaves the cached protection in place.
-        setSnapshot(cache.domains);
+        setSnapshot(cache.domains, cache.fetchedAt);
       }
       if (cache && currentTime - cache.fetchedAt < ttlMs) {
         return snapshot;
@@ -228,17 +232,20 @@ export const createPhishingFeed = ({
       if (fetched === null) {
         // Unreachable or malformed: keep the cached snapshot (or the empty set,
         // with the bundled baseline list still enforced by isBlockedOrigin).
+        failures += 1;
         return snapshot;
       }
-      await store
-        .set(PHISHING_FEED_STORE_KEY, {
-          domains: fetched,
-          fetchedAt: now(),
-          schemaVersion: PHISHING_CACHE_VERSION,
-          source,
-        })
-        .catch(() => undefined);
-      return setSnapshot(fetched);
+      failures = 0;
+      const fetchedAt = now();
+      // Persisting is best effort for this refresh (the fetched list is live
+      // either way) but the failure is recorded, not swallowed.
+      try {
+        await writePhishingCache(store, { domains: fetched, fetchedAt, source });
+        writeFailed = false;
+      } catch {
+        writeFailed = true;
+      }
+      return setSnapshot(fetched, fetchedAt);
     },
   };
 };

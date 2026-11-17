@@ -4,34 +4,54 @@
  * switches. Split from messages.ts to keep it within the size budget.
  */
 
-import { walletErrorMessage } from "@mc-wallet/core/errors";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { serializeAccountSignature } from "@mc-wallet/starknet/account-contracts";
-import { typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { walletErrorMessage } from "@bramble/core/errors";
+import type { MultisigStore } from "@bramble/multisig/repository";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import { serializeAccountSignature } from "@bramble/starknet/account-contracts";
+import { requireLiveAuthorizableClass } from "@bramble/starknet/deployment";
+import { withRpcFallback } from "@bramble/starknet/provider";
+import { typedDataHashForChain } from "@bramble/starknet/typed-data";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import type { AllowanceStore } from "@bramble/transactions/allowance-store";
+import type { RelaySignatureLog } from "@bramble/transactions/relay-signatures";
+import type { Vault } from "@bramble/vault/schema";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
+import type { RpcProvider } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
+import { withApprovalReservation } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import type { PendingApproval } from "../approvals/approval-snapshot";
 import type { ApprovalQueue } from "../approvals/approvals";
+import { promptReconnectForStaleGrant } from "../approvals/reconnect-prompt";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { grantedDappAccounts, isGrantedMultisig } from "../provider/dapp-account";
+import { queuedMultisigSignBlock, signMultisigIfGranted } from "../provider/multisig-dapp-sign";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import {
   readOriginRequestInput,
-  readSignTypedDataInput,
+  type readSignTypedDataInput,
   readSwitchChainInput,
 } from "../routing/message-inputs";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
+import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import {
   type ActiveStateCoordinator,
+  networkRpcUrls,
   runActiveStateMutation,
   switchActiveNetwork,
+  vaultAccountAddresses,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import {
@@ -39,20 +59,40 @@ import {
   type PassiveUnlockSession,
   type UnlockSession,
 } from "../runtime/session";
+import { reviewOutsideExecution } from "./outside-execution-review";
+import { recordRelaySignature } from "./relay-record";
+import { resolveSignGrant } from "./sign-grant";
+import { admitSignTypedData } from "./sign-typed-data-admission";
+import { withTrustedRecipients } from "./trusted-recipients";
+import { describeTypedData } from "./typed-data-summary";
 
 /**
  * Dependencies for the provider chain and signing operations.
  */
 export type ChainOpsDeps = {
   readonly activeStateCoordinator?: ActiveStateCoordinator;
+  /**
+   * Activity log, read for the recipients this wallet paid: the OutsideExecution
+   * review refuses their lookalikes as the invoke route does (audit 163).
+   */
+  readonly activity: Pick<ActivityLog, "list">;
+  /**
+   * Recorded allowance log, read for OutsideExecution risk flags only (an
+   * unreadable log flags each call on its own amount). Optional so partial
+   * test stubs stay valid.
+   */
+  readonly allowanceStore?: Pick<AllowanceStore, "list">;
   readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
   /**
    * Panel round-trip queue for keyless Ledger accounts. Optional so partial
    * test stubs stay valid; a Ledger typed-data sign with no queue fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  /** Watched shared accounts, trusted as the user's own; optional like the invoke route's. */
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   /**
    * Non-renewing session view: every handler here is reachable from a page on
@@ -65,63 +105,67 @@ export type ChainOpsDeps = {
 };
 
 /**
- * Builds a short, user-facing summary of a SNIP-12 typed-data request for the
- * approval card (primary type and, when present, the domain name).
- */
-const describeTypedData = (typedData: unknown): string => {
-  if (typeof typedData !== "object" || typedData === null) {
-    return "typed data";
-  }
-  const record = typedData as Record<string, unknown>;
-  const primaryType = typeof record["primaryType"] === "string" ? record["primaryType"] : "message";
-  const domain =
-    typeof record["domain"] === "object" && record["domain"] !== null
-      ? (record["domain"] as Record<string, unknown>)
-      : {};
-  const name = typeof domain["name"] === "string" ? domain["name"] : "";
-  return name ? `${primaryType} · ${name}` : primaryType;
-};
-
-/**
  * Signs a user-approved SNIP-12 request: re-resolves the active account for the
  * origin (a locked wallet or revoked grant fails safely) and returns the
  * signature, or an error response the caller can deliver back to the dapp.
  */
 export const executeSignApproval = async (
-  deps: Pick<ChainOpsDeps, "ledgerSignQueue" | "preferencesStore" | "session" | "wallet">,
+  deps: Pick<
+    ChainOpsDeps,
+    | "activity"
+    | "ledgerSignQueue"
+    | "multisigGrants"
+    | "multisigStore"
+    | "preferencesStore"
+    | "session"
+    | "wallet"
+  > & {
+    readonly runtimeRpc?: Pick<RuntimeRpc, "getClassHashAt" | "multisig">;
+    /** Signed OutsideExecution messages, recorded for Activity (issue 299). */
+    readonly relaySignatures?: Pick<RelaySignatureLog, "record">;
+    /** Overrides endpoint construction. Unset, each endpoint builds its own client. */
+    readonly rpcProviderFor?: (nodeUrl: string) => RpcProvider;
+  },
   input: {
     readonly context?: ApprovalContext;
     readonly origin: string;
     readonly typedData: unknown;
   },
 ): Promise<RuntimeResponse> => {
-  const { preferencesStore, session, wallet } = deps;
-  const passphrase = session.peekPassphrase();
-  if (!passphrase) {
-    return { error: "wallet locked" };
-  }
-  const preferences = await preferencesStore.read();
-  if (input.context && preferences.activeNetworkId !== input.context.networkId) {
-    return { error: "approval context changed" };
-  }
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  const account = input.context
-    ? granted.find(
-        (stored) =>
-          stored.id === input.context?.accountId &&
-          stored.networkId === input.context.networkId &&
-          stored.networkId === preferences.activeNetworkId,
-      )
-    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
+  const resolved = await resolveSignGrant(deps, input);
+  if ("error" in resolved) return resolved;
+  const { account, authorized, passphrase, preferences } = resolved;
+  const { wallet } = deps;
   let messageHash: string;
   try {
-    messageHash = typedDataHash(input.typedData, account.address);
+    messageHash = typedDataHashForChain(
+      input.typedData,
+      account.address,
+      STARKNET_NETWORKS[account.networkId].chainId,
+    );
   } catch {
     return { error: "invalid typed data" };
   }
+  const trusted = await withTrustedRecipients(
+    deps,
+    preferences,
+    await vaultAccountAddresses(wallet, passphrase),
+  );
+  if (!authorized.isCurrent()) return { error: "wallet locked" };
+  const review = reviewOutsideExecution(input.typedData, account, trusted);
+  if (review && "error" in review) {
+    return review;
+  }
+  const multisigSigned = await signMultisigIfGranted(
+    deps,
+    account,
+    input.typedData,
+    passphrase,
+    networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+    input.origin,
+  );
+  if (multisigSigned) return multisigSigned;
+  if (isGrantedMultisig(account)) return { error: "Argent multisig not found" };
   // A keyless Ledger account signs typed data on the device (verified against
   // publicKeyX) instead of the vault; accountHashSigner makes the same choice as
   // every other submitting path. A device rejection/timeout/verify-failure, or a
@@ -130,7 +174,28 @@ export const executeSignApproval = async (
   // settles the held dapp request with the real reason instead of leaving it to
   // hang on an unhandled throw. Fails closed — no signature returned on error.
   try {
+    // OpenZeppelin is the only family whose encoding does not depend on a live
+    // class. Every other family is checked before the key is used: a Braavos
+    // account must run a known implementation with the wallet key as its first
+    // stark signer and no active 2FA, and an unupgraded Argent 0.3.x account
+    // cannot verify the 0.4 encoding this wallet emits.
+    if (account.accountContractType !== "openzeppelin") {
+      await withRpcFallback(
+        networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+        (provider) => requireLiveAuthorizableClass(provider, account),
+        deps.rpcProviderFor,
+      );
+    }
     const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
+    // A relay authorization the site can submit later is listed in Activity as
+    // signed, never as a transaction. Recording can neither fail nor delay the
+    // signature: it never rejects, and the reply does not wait for the write.
+    void recordRelaySignature(deps.relaySignatures, {
+      account,
+      messageHash,
+      origin: input.origin,
+      typedData: input.typedData,
+    });
     return {
       ok: true,
       signature: serializeAccountSignature(account.accountContractType, signature),
@@ -146,76 +211,128 @@ type ChainOpsHandler = (
   sender: RuntimeSender | undefined,
 ) => Promise<RuntimeResponse>;
 
-const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
-  const input = readSignTypedDataInput(message);
-  if (!input) {
-    return { error: "invalid sign typed data request" };
-  }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
-    return { error: "sender origin mismatch" };
-  }
-  // A blocklisted origin gets no signing prompt even if it still holds an old
-  // connection grant — the phishing feed is the defense for the post-grant
-  // case. Mirror the sibling dapp surfaces (provider-ops, declare, strk20).
-  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
-    return { error: "origin blocked" };
-  }
-  // Refuse a flooding origin BEFORE the expensive work, not after it. Hashing a
-  // maximum-size SNIP-12 document can monopolize synchronous Pedersen work in
-  // the service worker that also serves the panel, and reading the grants decrypts
-  // the vault — paying both for a request the queue cap will refuse anyway is
-  // how a per-origin cap that bounds memory leaves CPU unbounded.
-  requireApprovalAdmission(approvals, input.origin);
+/** Queues a typed-data approval under the origin's admission reservation. */
+const queueSignTypedData = async (
+  deps: ChainOpsDeps,
+  input: NonNullable<ReturnType<typeof readSignTypedDataInput>>,
+  summary: string,
+  release: () => void,
+): Promise<{ readonly approval: PendingApproval } | RuntimeResponse> => {
+  const { approvals, preferencesStore, session, wallet } = deps;
   // Read the session only after the message is well-formed and its origin is
   // both claimed truthfully and unblocked: the background must validate type,
-  // origin, and capability before it acts on a message at all.
+  // origin, and capability before it acts on a message at all. The
+  // authorization is re-checked after every await, so a lock that lands
+  // mid-request admits no card (Sherlock 166).
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  const granted = await grantedDappAccounts(deps, input.origin, passphrase);
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
   const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
+    // Mirror provider-ops: a formerly granted origin gets a reconnect prompt
+    // beside the refusal so its stuck signing spinner explains itself.
+    promptReconnectForStaleGrant(approvals, granted, input.origin);
     return { error: "origin not connected" };
   }
+  const blocked = await queuedMultisigSignBlock(deps, account, passphrase);
+  if (blocked) return blocked;
   try {
-    typedDataHash(input.typedData, account.address);
+    typedDataHashForChain(
+      input.typedData,
+      account.address,
+      STARKNET_NETWORKS[account.networkId].chainId,
+    );
   } catch {
     return { error: "invalid typed data" };
+  }
+  // An OutsideExecution authorizes calls the site can submit later without a
+  // prompt, so it gets the invoke route's refusals and flags (audit 144),
+  // including the standing-allowance totals the invoke route flags against.
+  // The trusted set is the invoke route's: contacts plus the user's own
+  // accounts and the recipients this wallet paid (audit 163). A lookalike
+  // recipient is queued with its flag, not refused, so the answer cannot reveal
+  // the address book (Sherlock 140); the signing-time review refuses it.
+  const review = reviewOutsideExecution(
+    input.typedData,
+    account,
+    await withTrustedRecipients(deps, preferences, await vaultAccountAddresses(wallet, passphrase)),
+    (await deps.allowanceStore?.list().catch(() => [])) ?? [],
+    "queue",
+  );
+  if (review && "error" in review) {
+    return review;
+  }
+  const context = await createApprovalContext(account, { typedData: input.typedData });
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
   }
   // Never auto-sign: queue a per-request approval and hold this response until
   // the user decides in the side panel. The signature is computed and returned
   // through this same channel on approval, so it reaches only the requesting
   // origin and tab.
   const approval = approvals.requestSignTypedData({
-    context: await createApprovalContext(account, { typedData: input.typedData }),
+    context,
     origin: input.origin,
-    summary: describeTypedData(input.typedData),
+    ...(review ? { review } : {}),
+    summary,
     typedData: input.typedData,
   });
+  release();
   notifyApprovalsChanged();
-  return waiters.register(approval.id);
+  return { approval };
 };
 
-const handleGetChainId: ChainOpsHandler = async (deps, message) => {
-  // The content bridge sends { origin, type }; chain id is public data so the
-  // origin is not gated, but the message must still be well-formed.
-  if (!readOriginRequestInput(message, "wallet.getChainId")) {
+const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
+  const admitted = admitSignTypedData(deps, message, sender);
+  if ("refusal" in admitted) {
+    return admitted.refusal;
+  }
+  const { input } = admitted;
+  // The reservation counts this request against the caps until it queues, so
+  // concurrent requests cannot all pass admission before any of them does the
+  // expensive work below (Sherlock 151).
+  const queued = await withApprovalReservation(deps.approvals, input.origin, (release) =>
+    queueSignTypedData(deps, input, describeTypedData(input.typedData), release),
+  );
+  // Registered once the reservation is released: the queued approval now
+  // counts against the caps itself, and the held response settles only when
+  // the user decides.
+  return "approval" in queued ? deps.waiters.register(queued.approval.id) : queued;
+};
+
+const handleGetChainId: ChainOpsHandler = async (deps, message, sender) => {
+  // The chain id is public data, but the origin is corroborated and checked
+  // against the blocklist like every other dapp surface, so a blocked origin
+  // learns nothing from this wallet, including which network is active
+  // (Sherlock 165).
+  const input = readOriginRequestInput(message, "wallet.getChainId");
+  if (!input) {
     return { error: "invalid chain id request" };
+  }
+  if (!isClaimedSenderOrigin(sender, deps.extension, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
+    return { error: "origin blocked" };
   }
   const preferences = await deps.preferencesStore.read();
   return { chainId: STARKNET_NETWORKS[preferences.activeNetworkId].chainId, ok: true };
 };
 
 const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
-  const { approvals, extensionId, session, waiters, wallet } = deps;
+  const { approvals, extension, session, waiters } = deps;
   const input = readSwitchChainInput(message);
   if (!input) {
     return { error: "invalid switch chain request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   // Fail closed on a blocklisted origin before surfacing a switch prompt, even
@@ -227,12 +344,14 @@ const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
   if (!networkId) {
     return { error: "unsupported chain" };
   }
+  const authorized = captureSessionAuthorization(session);
   const passphrase = session.peekPassphrase();
-  const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
+  const granted = passphrase ? await grantedDappAccounts(deps, input.origin, passphrase) : [];
   // Only an origin that already holds a connection grant may ask to switch the
   // network — and even then it may only ask: the switch never happens without
-  // an explicit user approval. A locked or unconnected site is refused.
-  if (granted.length === 0) {
+  // an explicit user approval. A locked or unconnected site is refused, and a
+  // lock that lands during the grant read counts as locked (Sherlock 166).
+  if (granted.length === 0 || !authorized.isCurrent()) {
     return { error: "origin not connected" };
   }
   const approval = approvals.requestSwitchChain({
@@ -271,14 +390,65 @@ export const handleChainOps = async (
   return handler ? handler(deps, message, sender) : null;
 };
 
+// The id of a vault account on `networkId` that `origin`'s stored grant
+// covers, or undefined when the grant holds none there.
+const heldAccountOn = (
+  vault: Pick<Vault, "accounts" | "originGrants">,
+  origin: string,
+  networkId: StarknetNetworkId,
+): string | undefined => {
+  const grantIds = vault.originGrants.find((grant) => grant.origin === origin)?.accountIds ?? [];
+  return vault.accounts.find(
+    (account) => account.networkId === networkId && grantIds.includes(account.id),
+  )?.id;
+};
+
+// A partial approval stub omits the preferences store. Production always has
+// one, so a multisig grant is visible; the stub still rechecks the vault grant.
+const grantedForSwitch = (
+  deps: Pick<ChainOpsDeps, "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet">,
+  origin: string,
+  passphrase: string,
+) =>
+  deps.preferencesStore
+    ? grantedDappAccounts(deps, origin, passphrase)
+    : deps.wallet.getGrantedAccounts(origin, passphrase);
+
+// Queues the reconnect prompt only when the account the switch landed on is
+// really outside the origin's grant, never for a dapp still connected after it.
+const promptWhenLandedOutsideGrant = async (
+  deps: Pick<ChainOpsDeps, "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet"> & {
+    readonly approvals?: Pick<ApprovalQueue, "request">;
+  },
+  origin: string,
+  passphrase: string,
+  connected: readonly unknown[],
+): Promise<void> => {
+  if (!deps.approvals) {
+    return;
+  }
+  const landed = await grantedForSwitch(deps, origin, passphrase);
+  if (landed.length === 0) {
+    promptReconnectForStaleGrant(deps.approvals, connected, origin);
+  }
+};
+
 /**
- * Applies a user-approved chain switch: sets the active network, keeps the
- * origin's grant on the new network, and returns the new chain id for the dapp.
- * Refuses with `origin not connected` when the origin is not connected at
- * approval time, so an approved card can never reconnect a disconnected site.
+ * Applies a user-approved chain switch: sets the active network and returns the
+ * new chain id for the dapp. Refuses with `origin not connected` when the origin
+ * is not connected at approval time, so an approved card can never reconnect a
+ * disconnected site. The switch never grants an account: the card names none,
+ * so the origin keeps exactly the accounts it was granted. When it holds one on
+ * the target network the switch lands there; when it holds none, the standard
+ * reconnect (connect) prompt is queued instead, which names the account to share.
  */
 export const executeSwitchChainApproval = async (
-  deps: Pick<ChainOpsDeps, "activeStateCoordinator" | "preferencesStore" | "wallet"> & {
+  deps: Pick<
+    ChainOpsDeps,
+    "activeStateCoordinator" | "multisigGrants" | "multisigStore" | "preferencesStore" | "wallet"
+  > & {
+    /** Queue for the reconnect prompt; unset (partial test stubs) queues nothing. */
+    readonly approvals?: Pick<ApprovalQueue, "request">;
     /**
      * The full session: applying the approval switches the active network, and
      * that cross-store mutation locks its own generation when it cannot be
@@ -297,30 +467,33 @@ export const executeSwitchChainApproval = async (
     }
     // A switch-chain approval carries no account context, so the shared claim
     // validator skips it and this is the only place the grant is re-checked.
-    // Read it BEFORE switching: the switch re-selects the active account, and the
-    // auto-grant below would otherwise hand the origin a fresh account — silently
-    // reconnecting a site the user disconnected by switching accounts, with no
-    // connect prompt. A revoked or disconnected origin is refused instead.
-    const connected = await wallet.getGrantedAccounts(input.origin, passphrase);
+    // Read it BEFORE switching: a revoked or disconnected origin is refused
+    // rather than having the approved card switch the network on its behalf.
+    const connected = await grantedForSwitch(deps, input.origin, passphrase);
     if (connected.length === 0) {
       return { error: "origin not connected" };
     }
-    const account = await switchActiveNetwork(wallet, session, preferencesStore, input.networkId);
+    // `connected` is at most the active account (the page-visible view), so the
+    // account the origin holds on the target network comes from its stored
+    // grant, which keeps every account the user ever approved for it.
+    const held = heldAccountOn(await wallet.readVault(passphrase), input.origin, input.networkId);
     if (!authorized.isCurrent()) {
       return { error: "wallet locked" };
     }
-    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-    if (account && !granted.some((item) => item.id === account.id)) {
-      await wallet.grantOrigin({
-        accountId: account.id,
-        isAuthorized: authorized.isCurrent,
-        origin: input.origin,
-        vaultPassphrase: passphrase,
-      });
-    }
+    await switchActiveNetwork(
+      wallet,
+      session,
+      preferencesStore,
+      input.networkId,
+      undefined,
+      held ? { preferredAccountId: held } : {},
+    );
     if (!authorized.isCurrent()) {
       return { error: "wallet locked" };
     }
+    // Exposure only narrows (audit 124): an account the user never connected
+    // is not shared because they approved a network change.
+    await promptWhenLandedOutsideGrant(deps, input.origin, passphrase, connected);
     return { chainId: STARKNET_NETWORKS[input.networkId].chainId, ok: true };
   });
 };

@@ -8,10 +8,11 @@
  * The device is a fake signer (a starknet.js key) — no hardware or transport.
  */
 import { describe, expect, test } from "bun:test";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import type { WalletPreferences } from "@bramble/settings/preferences";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import type { Vault } from "@bramble/vault/schema";
+import type { LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import { ec } from "starknet";
 import type { WalletStatusReader } from "../../../apps/extension/src/background/accounts/wallet-reader";
 import {
@@ -22,6 +23,7 @@ import { createMessageHandler } from "../../../apps/extension/src/background/rou
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 import { executeSignApproval } from "../../../apps/extension/src/background/transactions/chain-ops";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const { starkCurve } = ec;
@@ -136,9 +138,13 @@ const handlerWith = (ledgerSignQueue: LedgerSignQueue) => {
   const signHashResults: { publicKey: string; r: string; s: string }[] = [];
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     ledgerSignQueue,
     runtimeRpc: makeRuntimeRpc({
+      // An undeployed account, as a deployment needs (mc-wallet 712).
+      async getDeploymentStatus() {
+        return false;
+      },
       async submitAccountDeployment(input) {
         // Stand in for the real deploy-hash signing: hand the signer the hash and
         // capture the verified signature it returns before "broadcasting".
@@ -194,7 +200,7 @@ describe("Ledger signing flow through the dispatcher", () => {
     session.unlock(vaultPassphrase);
     // A queue whose request never resolves would hang; instead assert the branch
     // still requires a queue by removing it via an override that throws.
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       ledgerSignQueue: {
         pending: () => [],
         reject: () => false,
@@ -205,6 +211,9 @@ describe("Ledger signing flow through the dispatcher", () => {
         },
       },
       runtimeRpc: makeRuntimeRpc({
+        async getDeploymentStatus() {
+          return false;
+        },
         async submitAccountDeployment(input) {
           await input.signHash(DEPLOY_HASH);
           return { transactionHash: "0x0" };
@@ -261,16 +270,28 @@ describe("privileged Ledger messages", () => {
     expect(response).toEqual({ error: "invalid create ledger vault request" });
   });
 
-  test("reads a candidate's on-chain deployed status and STRK balance", async () => {
+  test("reads a candidate's deployed status and first non-zero token balance", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc({
         async getDeploymentStatus() {
           return true;
         },
         async getTokenBalances() {
+          // ETH is zero and STRK holds value: funded comes from ANY non-zero
+          // known-token balance, and the display shows the held token.
           return [
+            {
+              address: "0x2",
+              balance: "0",
+              decimals: 18,
+              formatted: "0",
+              id: "SN_MAIN:ETH:0x2",
+              name: "Ether",
+              networkId: "SN_MAIN",
+              symbol: "ETH",
+            },
             {
               address: "0x1",
               balance: "1500000000000000000",
@@ -291,13 +312,13 @@ describe("privileged Ledger messages", () => {
       { address: ledgerAccount.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
       extensionSender,
     );
-    expect(response).toEqual({ balance: "1.5 STRK", deployed: true, ok: true });
+    expect(response).toEqual({ balance: "1.5 STRK", deployed: true, funded: true, ok: true });
   });
 
   test("degrades a candidate's status to unavailable when the RPC fails", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       runtimeRpc: makeRuntimeRpc({
         getDeploymentStatus: () => Promise.reject(new Error("rpc down")),
         getTokenBalances: () => Promise.reject(new Error("rpc down")),
@@ -309,7 +330,7 @@ describe("privileged Ledger messages", () => {
       { address: ledgerAccount.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
       extensionSender,
     );
-    expect(response).toEqual({ balance: null, deployed: null, ok: true });
+    expect(response).toEqual({ balance: null, deployed: null, funded: null, ok: true });
   });
 
   test("rejects a malformed ledger-account-status request", async () => {
@@ -339,7 +360,7 @@ describe("privileged Ledger messages", () => {
     const queue = createLedgerSignQueue();
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub, "extension-id", {
+    const handler = createMessageHandler(walletStub, testExtension, {
       ledgerSignQueue: queue,
       session,
     });
@@ -368,6 +389,7 @@ describe("privileged Ledger messages", () => {
     session.unlock(vaultPassphrase);
     const result = await executeSignApproval(
       {
+        activity: memoryActivityLog(),
         ledgerSignQueue: deviceQueue(PRIVATE_KEY),
         preferencesStore: {
           async read() {
@@ -395,6 +417,7 @@ describe("privileged Ledger messages", () => {
     // did). No signature is leaked to the dapp on error.
     const result = await executeSignApproval(
       {
+        activity: memoryActivityLog(),
         ledgerSignQueue: deviceQueue("0xdeadbeef"),
         preferencesStore: {
           async read() {
@@ -422,6 +445,7 @@ describe("privileged Ledger messages", () => {
     // applier settles the dapp waiter rather than hanging on an unhandled throw.
     const result = await executeSignApproval(
       {
+        activity: memoryActivityLog(),
         preferencesStore: {
           async read() {
             return { activeNetworkId: "SN_MAIN" } as unknown as WalletPreferences;

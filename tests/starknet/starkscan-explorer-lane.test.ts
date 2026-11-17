@@ -1,25 +1,27 @@
 /**
  * MCW-V09-129: the explorer gateway lane is opt-in, not merely last-resort.
  *
- * The trust ordering (RPC first, gateway only after every configured endpoint
- * fails, RPC failure re-thrown) is pinned by ./starkscan-rpc-first.test.ts.
- * These cases pin the permission on top of it: who gets the outage rescue by
- * default, who does not, and that an explicit choice overrides the default in
- * both directions. Every case drives a *failing* RPC, so a gateway that is
- * never contacted here is a gateway the wallet refused to contact.
+ * The balance trust ordering (RPC first, gateway only after every configured
+ * endpoint fails, RPC failure re-thrown) is pinned by
+ * ./starkscan-rpc-first.test.ts; history's explorer-first ordering by
+ * packages/features/transactions/tests/history/starkscan-history-first.test.ts.
+ * These cases pin the permission on top of both: who gets the lane by default,
+ * who does not, and that an explicit choice overrides the default in both
+ * directions. Every case drives a *failing* RPC, so a gateway that is never
+ * contacted here is a gateway the wallet refused to contact.
  */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import {
   createStarkscanClient,
   type StarkscanClient,
   type StarkscanHttp,
-} from "@mc-wallet/transactions/starkscan";
+} from "@bramble/transactions/starkscan";
 import {
+  createExplorerFirstHistory,
   createRpcFirstBalances,
-  createRpcFirstHistory,
-} from "@mc-wallet/transactions/starkscan-wallet";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/transactions/starkscan-wallet";
+import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RpcProvider } from "starknet";
 
 const ACCOUNT = "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";
@@ -44,31 +46,12 @@ const historyInput = {
   tokens: [strk],
 } as const;
 
-const holdingsBody = {
+const balanceBody = {
+  balanceRaw: "77",
+  blockTag: "latest",
   chainId: "SN_MAIN",
-  completeness: {
-    cap: null,
-    capped: false,
-    complete: true,
-    exact: true,
-    lagBlocks: 0,
-    reason: "Complete snapshot.",
-    reasonCode: "complete",
-    truncated: false,
-  },
-  exact: true,
-  items: [
-    {
-      decimals: 18,
-      indexedBalanceRaw: "77",
-      name: "Starknet Token",
-      normalizedTokenAddress: TOKEN,
-      symbol: "STRK",
-      tokenAddress: TOKEN,
-    },
-  ],
   ownerAddress: ACCOUNT,
-  truncated: false,
+  tokenAddress: TOKEN,
 };
 
 const transfersBody = {
@@ -128,7 +111,7 @@ const balancesWith = (prefs: WalletPreferences, client: StarkscanClient) =>
 
 describe("explorer gateway lane is opt-in per network", () => {
   test("built-in RPCs keep the outage rescue with no stored choice", async () => {
-    const explorer = gateway(holdingsBody);
+    const explorer = gateway(balanceBody);
     const balances = await balancesWith(preferences({}), explorer.client)(balanceInput, failingRpc);
 
     expect(balances[0]?.balance).toBe("77");
@@ -136,7 +119,7 @@ describe("explorer gateway lane is opt-in per network", () => {
   });
 
   test("a configured rpcOverride refuses the lane and surfaces the RPC failure", async () => {
-    const explorer = gateway(holdingsBody);
+    const explorer = gateway(balanceBody);
     const prefs = preferences({ rpcOverrides: { SN_MAIN: MY_NODE } });
 
     await expect(balancesWith(prefs, explorer.client)(balanceInput, failingRpc)).rejects.toThrow(
@@ -146,7 +129,7 @@ describe("explorer gateway lane is opt-in per network", () => {
   });
 
   test("an override user who opts back in gets the lane again", async () => {
-    const explorer = gateway(holdingsBody);
+    const explorer = gateway(balanceBody);
     const prefs = preferences({
       explorerFallback: { SN_MAIN: true },
       rpcOverrides: { SN_MAIN: MY_NODE },
@@ -159,7 +142,7 @@ describe("explorer gateway lane is opt-in per network", () => {
   });
 
   test("a built-in-RPC user who opts out is never disclosed to the gateway", async () => {
-    const explorer = gateway(holdingsBody);
+    const explorer = gateway(balanceBody);
     const prefs = preferences({ explorerFallback: { SN_MAIN: false } });
 
     await expect(balancesWith(prefs, explorer.client)(balanceInput, failingRpc)).rejects.toThrow(
@@ -169,7 +152,7 @@ describe("explorer gateway lane is opt-in per network", () => {
   });
 
   test("the choice is per network: Sepolia's override does not gate Mainnet", async () => {
-    const explorer = gateway(holdingsBody);
+    const explorer = gateway(balanceBody);
     const prefs = preferences({ rpcOverrides: { SN_SEPOLIA: MY_NODE } });
 
     const balances = await balancesWith(prefs, explorer.client)(balanceInput, failingRpc);
@@ -179,7 +162,7 @@ describe("explorer gateway lane is opt-in per network", () => {
   });
 
   test("a preferences read that throws fails closed rather than open", async () => {
-    const explorer = gateway(holdingsBody);
+    const explorer = gateway(balanceBody);
     const balances = createRpcFirstBalances({
       client: explorer.client,
       readPreferences: async () => {
@@ -193,7 +176,7 @@ describe("explorer gateway lane is opt-in per network", () => {
 
   test("history obeys the same refusal and keeps the RPC failure", async () => {
     const explorer = gateway(transfersBody);
-    const history = createRpcFirstHistory({
+    const history = createExplorerFirstHistory({
       client: explorer.client,
       readPreferences: async () => preferences({ rpcOverrides: { SN_MAIN: MY_NODE } }),
     });
@@ -202,9 +185,9 @@ describe("explorer gateway lane is opt-in per network", () => {
     expect(explorer.urls).toEqual([]);
   });
 
-  test("history still falls back for a permitted network", async () => {
+  test("history asks a permitted explorer first, even for an override user", async () => {
     const explorer = gateway(transfersBody);
-    const history = createRpcFirstHistory({
+    const history = createExplorerFirstHistory({
       client: explorer.client,
       readPreferences: async () =>
         preferences({
@@ -213,7 +196,9 @@ describe("explorer gateway lane is opt-in per network", () => {
         }),
     });
 
-    expect(await history(historyInput, failingRpc)).toHaveLength(1);
+    const discovered = await history(historyInput, failingRpc);
+    expect(discovered.entries).toHaveLength(1);
+    expect(discovered.lane).toBe("explorer");
     expect(explorer.urls).toHaveLength(1);
   });
 });

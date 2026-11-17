@@ -7,9 +7,9 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
-import { colorSchemeForChoice, skinForChoice } from "@mc-wallet/ui-kit/theme";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { defaultSkin } from "@bramble/ui-kit/default-skin";
+import { colorSchemeForChoice, skinForChoice } from "@bramble/ui-kit/theme";
 
 describe("skinForChoice", () => {
   test("dark/light resolve to the Clean Mono skins", () => {

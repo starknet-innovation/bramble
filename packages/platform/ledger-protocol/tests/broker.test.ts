@@ -8,15 +8,15 @@ import {
   isLedgerBrokerResponse,
   ledgerBrokerChannelName,
   ledgerBrokerSessionFromHash,
-} from "@mc-wallet/ledger-protocol/broker";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+} from "@bramble/ledger-protocol/broker";
+import { ledgerAccountPath, READY_EIP2645_APPLICATION } from "@bramble/wallet-model/ledger-path";
 
 const SESSION_ID = "2db2df18-12db-4d66-9b38-02dc16460ce3";
 
 describe("Ledger broker session capability", () => {
   test("accepts a canonical v4 UUID fragment and derives its isolated channel", () => {
     expect(ledgerBrokerSessionFromHash(`#session=${SESSION_ID}`)).toBe(SESSION_ID);
-    expect(ledgerBrokerChannelName(SESSION_ID)).toBe(`mc-wallet-ledger-v1:${SESSION_ID}`);
+    expect(ledgerBrokerChannelName(SESSION_ID)).toBe(`bramble-ledger-v1:${SESSION_ID}`);
   });
 
   test("rejects missing, malformed, and invalidly encoded capabilities", () => {
@@ -42,6 +42,34 @@ describe("isLedgerBrokerCommand", () => {
       }),
     ).toBe(true);
     expect(isLedgerBrokerCommand({ kind: "close" })).toBe(true);
+  });
+
+  test("lets Ready's path scheme reach the device, but no hand-mixed variant of it", () => {
+    // A restored Ready account signs at the exact path Ready enumerated.
+    const ready = ledgerAccountPath(12, READY_EIP2645_APPLICATION);
+    expect(
+      isLedgerBrokerCommand({ id: 2, kind: "command", method: "getPubKey", path: ready }),
+    ).toBe(true);
+    expect(
+      isLedgerBrokerCommand({
+        hash: "0x123",
+        id: 3,
+        kind: "command",
+        method: "signHash",
+        path: ready,
+      }),
+    ).toBe(true);
+    // Ready's application over Bramble's layout (hardened index, trailing 0) and
+    // Ready's multisig change level are not paths this wallet ever built.
+    for (const path of [
+      "m/2645'/1195502025'/1148870696'/0'/12'/0",
+      "m/2645'/1195502025'/1148870696'/1'/0'/12",
+      "m/2645'/1195502025'/1148870696'/0'/0'/12'",
+    ]) {
+      expect(isLedgerBrokerCommand({ id: 2, kind: "command", method: "getPubKey", path })).toBe(
+        false,
+      );
+    }
   });
 
   test("rejects arbitrary paths, invalid hashes, duplicate ids, and extra fields", () => {

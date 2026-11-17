@@ -28,12 +28,14 @@ export const scopeChangeAnnouncement = (change: "account" | "network"): string =
 
 /**
  * Creates the scene renderer around one mount and its post-render binder.
+ * Deferred transition callbacks cannot replace a newer render.
  */
 export const createSceneRenderer = (
   app: Element | null,
   bind: () => void,
 ): ((content: string, animate: boolean, direction: NavDirection) => void) => {
   const mount = app;
+  let generation = 0;
   const renderShell = (content: string, animate: boolean): void => {
     if (!mount) {
       return;
@@ -46,6 +48,7 @@ export const createSceneRenderer = (
   };
 
   return (content, animate, direction) => {
+    const current = ++generation;
     const doc = mount?.ownerDocument;
     if (!animate || doc === undefined) {
       renderShell(content, animate);
@@ -53,6 +56,7 @@ export const createSceneRenderer = (
       return;
     }
     transitionScene(doc, direction, (animateFallback) => {
+      if (current !== generation) return;
       renderShell(content, animateFallback);
       bind();
     });

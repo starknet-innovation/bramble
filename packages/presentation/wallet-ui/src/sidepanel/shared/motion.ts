@@ -13,7 +13,7 @@
  * should be animated, and in-flight animations on the same element
  * are cancelled before a new one starts so gestures can retarget mid-flight.
  */
-const MOTION_ID = "mc-motion";
+const MOTION_ID = "bramble-motion";
 
 /**
  * Reports whether the user has requested reduced motion in the element or
@@ -41,7 +41,7 @@ const cutToFinal = (el: Element, keyframes: Keyframe[]): void => {
 };
 
 /**
- * Interruptible WAAPI animation. Cancels any in-flight mc-motion animation on
+ * Interruptible WAAPI animation. Cancels any in-flight bramble-motion animation on
  * the element first (so a new gesture retargets instead of colliding), then
  * animates. Under reduced motion it cuts straight to the final keyframe and
  * returns `null`. Defaults to `fill: "both"` and the strong ease-out curve.

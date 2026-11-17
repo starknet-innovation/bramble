@@ -1,5 +1,5 @@
 /**
- * STRK20 schema checks prove strict, spec-0.10.4-rc.0 action validation and envelope
+ * STRK20 schema checks prove strict, spec-0.10.4 action validation and envelope
  * shape guards. These exercise the request/response conformance surface (the
  * `type`-discriminated action union, required recipient, "OPEN" transfer, flat
  * invoke with placeholder calldata) and result shapes — not a live
@@ -14,7 +14,7 @@ import {
   readStrk20Actions,
   readStrk20InvokeCall,
   readStrk20Tokens,
-} from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-protocol/strk20";
 
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const recipient = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -89,7 +89,7 @@ describe("strk20 action schemas", () => {
     });
   });
 
-  test("parses all sub-account collection policies and bounds their calls", () => {
+  test("parses all shadow account collection policies and bounds their calls", () => {
     const call = { calldata: ["0x1"], contract_address: token, entry_point: "swap" };
     for (const collect_policy of [
       { type: "all" },
@@ -100,37 +100,41 @@ describe("strk20 action schemas", () => {
         readStrk20Action({
           calls: [call],
           collect_policy,
-          dapp_name: "MC Terminal",
+          dapp_name: "Bramble Terminal",
           nonce: "0x1",
-          type: "subaccount_invoke",
+          type: "shadow_account_invoke",
         }),
-      ).toMatchObject({ collect_policy, dapp_name: "MC Terminal", type: "subaccount_invoke" });
+      ).toMatchObject({
+        collect_policy,
+        dapp_name: "Bramble Terminal",
+        type: "shadow_account_invoke",
+      });
     }
     expect(
       readStrk20Action({
         calls: [],
         collect_policy: { type: "all" },
-        dapp_name: "MC Terminal",
+        dapp_name: "Bramble Terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toBeNull();
     expect(
       readStrk20Action({
         calls: [call],
         collect_policy: { amount: "not-a-felt", type: "exact" },
-        dapp_name: "MC Terminal",
+        dapp_name: "Bramble Terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toBeNull();
     expect(
       readStrk20Action({
         calls: Array.from({ length: 17 }, () => call),
         collect_policy: { type: "all" },
-        dapp_name: "MC Terminal",
+        dapp_name: "Bramble Terminal",
         nonce: "0x1",
-        type: "subaccount_invoke",
+        type: "shadow_account_invoke",
       }),
     ).toBeNull();
   });
