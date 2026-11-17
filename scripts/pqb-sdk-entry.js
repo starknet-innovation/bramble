@@ -4,8 +4,8 @@ import "./pqb-sdk-prelude.js";
 import {
   checkPqbHit,
   pqbPacket,
-  pqbPublicStateSchema,
   pqbTransaction,
+  validatePqbPublicState,
 } from "../vendor/pqb/src/lib/pqb.ts";
 import {
   encodings,
@@ -36,6 +36,8 @@ import {
 } from "../vendor/pqb/src/pqb-core/tx.ts";
 
 const table = dummyPool(109, 0).map(([a, b]) => derSig(BigInt(a), BigInt(b)));
+// Every public state is checked by the SDK's script-bound validator: the schema, and the ordered
+// round table matching the locking script's own D/F/C pushes.
 export function publicState(material) {
   const stages = material.menus.map((m) => ({
     menu: {
@@ -43,17 +45,21 @@ export function publicState(material) {
       variants: m.recoveryPoints.map((points, i) => ({ add_n: i >= 2, odd: i % 2 === 1, points })),
     },
   }));
-  return JSON.stringify(
-    pqbPublicStateSchema.parse({
-      config: "PQB",
-      full_script_hex: material.script,
-      round_table: table.map(hex),
-      stages,
-    }),
-  );
+  const text = JSON.stringify({
+    config: "PQB",
+    full_script_hex: material.script,
+    round_table: table.map(hex),
+    stages,
+  });
+  return JSON.stringify(validatePqbPublicState(text));
 }
 export function validatePublicState(text) {
-  return pqbPublicStateSchema.safeParse(JSON.parse(text)).success;
+  try {
+    validatePqbPublicState(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 // The public parts of SDK assemblePqb, without seed-derived Lock/witnessPlan inputs.
 export function prepare(material, manifest, solution) {

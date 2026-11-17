@@ -14,8 +14,8 @@ const digest = async (path: string): Promise<string> =>
     .digest("hex");
 const artifacts: Readonly<Record<string, string>> = {
   "scripts/pqb-sdk-prelude.js": "da6fd615f5aaab2e258a124be285194d144500c4ce582ed359e381fbdaa14a19",
-  "scripts/pqb-sdk-entry.js": "2606a0a85dce6c2848fbdb8befe7d22c6517d0c28e41ef78a2ac3397e6c22a2e",
-  "vendor/pqb-built/sdk.mjs": "88e611fe212fc15e3a38ff5d46e9be95526545678c794b4a1d08f9b9bbf5d43f",
+  "scripts/pqb-sdk-entry.js": "d09d00f414087b3862abd22c3267f6ad4140140696c06c9555bd36f46e8d67a0",
+  "vendor/pqb-built/sdk.mjs": "a6bef5321f8bed4efc163436dbcdeadb0029ece710be51e02e61e611e5084277",
   "vendor/pqb/src/pqb-core/LICENSE":
     "d13e6ac8092492ce31a7a79fb9e461ab1fd1ce667405c4c94a7d12f2d7bc9ecc",
   "vendor/pqb/src/pqb-core/THIRD_PARTY_NOTICES.md":

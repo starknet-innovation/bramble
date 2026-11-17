@@ -1,7 +1,7 @@
 /** Vendors the public-only PQB SDK adapter. Runs no upstream scripts or secret-taking generator. */
 import { mkdir } from "node:fs/promises";
 
-const PQB_APP_REVISION = "f76891fb1a67f25d5dc97afd4e23ede707cd77d1";
+const PQB_APP_REVISION = "5a1d71209c6fce1c491110d2296994cbfd633c99";
 const target = "vendor/pqb";
 const run = async (args: string[]): Promise<void> => {
   const child = Bun.spawn(args, { stdout: "inherit", stderr: "inherit" });

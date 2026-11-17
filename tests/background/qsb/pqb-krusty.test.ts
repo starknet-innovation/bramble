@@ -25,6 +25,21 @@ describe("published PQB capability", () => {
     expect(witness).toEqual(vector.witness);
     expect(sdk.finish(material, vector.prepared, witness)).toBe(vector.raw);
   });
+  test("accepts a public state only when its round table is the ordered table in its own script", () => {
+    expect(sdk.validatePublicState(vector.publicStateJson)).toBe(true);
+    const state = JSON.parse(vector.publicStateJson) as { round_table: string[] };
+    const swapped = [...state.round_table];
+    [swapped[0], swapped[1]] = [swapped[1] ?? "", swapped[0] ?? ""];
+    // Still schema-valid (same 9-byte entries, all distinct); only the order no longer matches.
+    expect(sdk.validatePublicState(JSON.stringify({ ...state, round_table: swapped }))).toBe(false);
+    // A script whose own first table push differs from the shared table is refused outright.
+    const [first = "", second = ""] = state.round_table;
+    const script = vector.material.script.replace(first, second);
+    expect(script).not.toBe(vector.material.script);
+    expect(() => sdk.publicState({ ...vector.material, script })).toThrow(
+      "PQB round table does not match the ordered table in its locking script.",
+    );
+  });
   test("rejects changed roots, cross-round reuse and malformed transactions", async () => {
     const pqb =
       kms.pqb ??

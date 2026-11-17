@@ -12,8 +12,9 @@ remain unchanged. PQB derives one separate BIP85 child per reserved vault index 
   and QSB known answers remain gates. Nostr envelope metadata is validated and retained by the
   adapter. Stored Starknet signing keys are preserved; 3.x's corrected Argent legacy derivation
   applies to new derivations (see upstream's `docs/migration-3.0.md` for historical recovery).
-- `scripts/vendor-pqb.ts` pins qsb-app **f76891fb1a67f25d5dc97afd4e23ede707cd77d1**, the current
-  SDK source used by its PQB runtime. Its upstream PQB source is Fireblocks commit
+- `scripts/vendor-pqb.ts` pins qsb-app **5a1d71209c6fce1c491110d2296994cbfd633c99**, the current
+  SDK source used by its PQB runtime. Every PQB public state passes the SDK's script-bound
+  `validatePqbPublicState`: its ordered round table must match the locking script's own pushes. Its upstream PQB source is Fireblocks commit
   **eccdd09772edf14ab37fc63992b0626ad7ff2221**.
 - Run `bun run vendor:pqb` before check/build on a fresh checkout. It fetches only the selected
   source directories and builds the adapter with the repository's pinned Bun. No upstream
