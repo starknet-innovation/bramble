@@ -43,14 +43,11 @@ export const BUNDLED_FLAGS: FlagCatalog = {
 export const FEATURE_FLAG_CHANNEL: FlagChannel = "production";
 
 /**
- * Flags CDN origin.
- *
- * PLACEHOLDER: bramble-ff has not fixed its custom domain yet (`TODO flags
- * domain` in its README). Change this before release. Read through CORS (the
+ * Flags CDN origin: the bramble-ff R2 custom domain. Read through CORS (the
  * CDN answers `Access-Control-Allow-Origin: *`), so no `host_permissions`
  * entry is needed or wanted (issue 772).
  */
-export const FEATURE_FLAG_ORIGIN = "https://flags.starknet.org";
+export const FEATURE_FLAG_ORIGIN = "https://flags.bramble.fi";
 
 /** The one document URL this build fetches: fixed path, no query string. */
 export const FEATURE_FLAG_URL = `${FEATURE_FLAG_ORIGIN}/v1/${FEATURE_FLAG_CHANNEL}.json`;
