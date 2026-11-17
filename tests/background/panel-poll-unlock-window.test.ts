@@ -85,6 +85,7 @@ const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
   "wallet.loadStakingValidator": "wallet.stakingOverview",
   "wallet.loadBalances": "wallet.getBalances",
   "wallet.loadClassHashVerification": "wallet.verifyClassHash",
+  "wallet.loadExperimentalFeatures": "wallet.featureFlags",
   "wallet.loadPrices": "wallet.prices",
   "wallet.loadTokenChart": "wallet.tokenChart",
   "wallet.loadWatchedNfts": "wallet.loadWatchedNfts",
@@ -111,7 +112,9 @@ const AMBIENT_MESSAGES: readonly string[] = [
 // charts are network data cached per network, not per account. Listing them
 // keeps the "this handler actually reached the session" assertion honest for
 // everything else.
-const SESSION_FREE = new Set(["wallet.prices", "wallet.tokenChart"]);
+// `wallet.featureFlags` answers from worker memory and local flag storage;
+// only the override writes, which panels never poll, check the session.
+const SESSION_FREE = new Set(["wallet.featureFlags", "wallet.prices", "wallet.tokenChart"]);
 
 // One user-initiated read per product line, to prove the narrowing did not
 // simply switch everything to peeking. Each is reached only by a click or a

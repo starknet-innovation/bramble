@@ -60,6 +60,7 @@ import type {
 } from "../../journeys/privacy/privacy-model";
 import { privacyFlow } from "../../journeys/privacy/privacy-views";
 import type { SendIntent } from "../../journeys/send/send-model";
+import type { ExperimentalFeaturesState } from "../../journeys/settings/experimental-features-runtime";
 import { revealFlow } from "../../journeys/settings/reveal-ui";
 import { settingsScreen } from "../../journeys/settings/settings-views";
 import {
@@ -274,6 +275,7 @@ export const dashboard = (
   privateTotalWaitOver = false,
   staking: StakingState = STAKING_LOADING,
   nftCoverage: NftCoverage = "none",
+  experimentalFeatures: ExperimentalFeaturesState = "loading",
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -336,6 +338,7 @@ export const dashboard = (
     currency,
     deployment,
     expandedGroupId,
+    experimentalFeatures,
     fundedForFees,
     multisigs,
     preferences,

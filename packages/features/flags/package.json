@@ -8,6 +8,7 @@
     "./catalog": "./src/catalog.ts",
     "./contract": "./src/contract.ts",
     "./evaluate": "./src/evaluate.ts",
+    "./overrides": "./src/overrides.ts",
     "./state": "./src/state.ts",
     "./verify": "./src/verify.ts"
   },

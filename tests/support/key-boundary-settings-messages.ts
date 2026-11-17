@@ -12,4 +12,9 @@ export const SETTINGS_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.preferences" }, sender: extensionSender },
   { message: { type: "wallet.diagnostics" }, sender: extensionSender },
   { message: { type: "wallet.featureFlags" }, sender: extensionSender },
+  {
+    message: { key: "swap.enabled", type: "wallet.setFeatureFlagOverride", value: false },
+    sender: extensionSender,
+  },
+  { message: { type: "wallet.clearFeatureFlagOverrides" }, sender: extensionSender },
 ];

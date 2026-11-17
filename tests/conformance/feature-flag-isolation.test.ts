@@ -28,6 +28,10 @@ const ALLOWED_IMPORTERS = new Set([
   "apps/extension/src/background/routing/message-context.ts",
   "apps/extension/src/background/routing/messages.ts",
   "apps/extension/src/background/runtime/runtime-types.ts",
+  // Settings > Experimental features: the panel's client for the flag
+  // messages, and the read-only message list that names `wallet.featureFlags`.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/experimental-features-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime-errors.ts",
 ]);
 
 // Security decision paths, named so a violation reads as the rule it breaks.

@@ -15,6 +15,7 @@ import {
   startFeatureFlagRefresh,
 } from "../../../apps/extension/src/background/flags/feature-flag-alarm";
 import {
+  bundledFeatureFlags,
   createFeatureFlagClient,
   FEATURE_FLAG_REFRESH_MS,
 } from "../../../apps/extension/src/background/flags/feature-flag-client";
@@ -79,6 +80,9 @@ describe("feature-flag client", () => {
     const client = clientFor(serve(new Error("offline")));
     expect(await client.snapshot("SN_MAIN")).toEqual({
       flags: { "swap.enabled": true },
+      killed: [],
+      overridable: [],
+      overridden: [],
       sequence: null,
       source: "bundled",
     });
@@ -92,6 +96,9 @@ describe("feature-flag client", () => {
     expect(await client.refresh()).toBe("accepted");
     expect(await client.snapshot("SN_MAIN")).toEqual({
       flags: { "swap.enabled": false },
+      killed: [],
+      overridable: [],
+      overridden: [],
       sequence: 3,
       source: "remote",
     });
@@ -228,15 +235,26 @@ describe("wallet.featureFlags message", () => {
     const chains: (string | null)[] = [];
     const handler = createMessageHandler(createWallet(), testExtension, {
       featureFlags: {
+        ...bundledFeatureFlags,
         snapshot: async (chain) => {
           chains.push(chain);
-          return { flags: { "swap.enabled": false }, sequence: 9, source: "remote" };
+          return {
+            flags: { "swap.enabled": false },
+            killed: [],
+            overridable: [],
+            overridden: [],
+            sequence: 9,
+            source: "remote",
+          };
         },
       },
     });
     expect(await handler({ type: "wallet.featureFlags" }, extensionSender)).toEqual({
       flags: { "swap.enabled": false },
+      killed: [],
       ok: true,
+      overridable: [],
+      overridden: [],
       sequence: 9,
       source: "remote",
     });

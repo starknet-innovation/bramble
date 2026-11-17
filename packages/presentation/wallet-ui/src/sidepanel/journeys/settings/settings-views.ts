@@ -84,6 +84,7 @@ export const settingsScreen = (
           "settings",
           (preferences?.displayCurrency ?? "usd").toUpperCase(),
         )}
+        ${walletMenuRow("experimental-features", "Experimental features", "terminal")}
       </div>
     </section>
     <section class="section">
