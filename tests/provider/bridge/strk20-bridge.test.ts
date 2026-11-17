@@ -59,7 +59,7 @@ describe("strk20 bridge params", () => {
       { valid_until: 1_790_000_000 },
       { valid_until: 0 },
       { api_version: "0.10.4" },
-      { api_version: "0.10.4-rc.2", valid_until: 1_790_000_000 },
+      { api_version: "0.10.5", valid_until: 1_790_000_000 },
     ]) {
       expect(
         toRuntimeMessage(request("wallet_strk20Balances", { tokens: [token], ...extra }), origin),
@@ -75,6 +75,7 @@ describe("strk20 bridge params", () => {
       { valid_until: Number.MAX_SAFE_INTEGER + 1 },
       { valid_until: null },
       { api_version: "not.a.version.x" },
+      { api_version: "0.10.4-rc.2" },
       { api_version: 10 },
       { authorization: "forever" },
     ]) {
@@ -86,7 +87,7 @@ describe("strk20 bridge params", () => {
 
   test("accepts the optional api_version on prepare, invoke, and commitment and drops it", () => {
     const actions = [{ amount: "0x0a", token, type: "deposit" as const }];
-    for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
+    for (const api_version of ["0.10", "0.10.4", "0.10.5"]) {
       expect(
         toRuntimeMessage(request("wallet_strk20PrepareInvoke", { actions, api_version }), origin),
       ).toEqual({ actions, origin, simulate: false, type: "wallet.strk20PrepareInvoke" });
@@ -155,7 +156,7 @@ describe("strk20 bridge params", () => {
 
   test("rejects a malformed api_version on prepare, invoke, and commitment", () => {
     const actions = [{ amount: "0x0a", token, type: "deposit" as const }];
-    for (const api_version of ["not.a.version.x", "", "v0.10.4", 10, null]) {
+    for (const api_version of ["not.a.version.x", "", "v0.10.4", "0.10.4-rc.0", 10, null]) {
       for (const [method, params] of [
         ["wallet_strk20PrepareInvoke", { actions, api_version }],
         ["wallet_strk20PrepareInvoke", { actions, api_version, simulate: true }],

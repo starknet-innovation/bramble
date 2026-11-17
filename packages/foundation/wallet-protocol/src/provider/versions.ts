@@ -20,22 +20,24 @@
 export const SUPPORTED_SPECS: readonly [string, ...string[]] = ["0.10.0"];
 
 /**
- * Wallet-API versions this wallet implements (API_VERSION values).
- * `0.10.5-rc.0` (starkware-libs/starknet-specs tag v0.10.5-rc.0, 2026-11-09)
- * adds the STRK20 `register` action on top of stable `0.10.4`, whose names this
- * wallet speaks: `wallet_strk20ShadowAccountCommitment` and
- * `shadow_account_invoke` (first shipped in 0.10.4-rc.1), plus the
- * `valid_until` balance param. `0.10.4-rc.0` is not advertised: it still names
- * `wallet_strk20SubaccountCommitment` / `subaccount_invoke`, which are refused.
+ * Wallet-API versions this wallet implements (API_VERSION values). Stable
+ * `0.10.5` (starkware-libs/starknet-specs tag v0.10.5, 2026-11-16; its
+ * wallet_rpc.json differs from v0.10.5-rc.0 only in `info.version`) adds the
+ * STRK20 `register` action on top of stable `0.10.4`, whose names this wallet
+ * speaks: `wallet_strk20ShadowAccountCommitment` and `shadow_account_invoke`
+ * (first shipped in 0.10.4-rc.1), plus the `valid_until` balance param.
+ * Release-candidate tags are never advertised: API_VERSION carries no
+ * pre-release suffix (see API_VERSION_PATTERN).
  */
-export const SUPPORTED_WALLET_API: readonly [string, ...string[]] = ["0.10.5-rc.0"];
+export const SUPPORTED_WALLET_API: readonly [string, ...string[]] = ["0.10.5"];
 
 /**
- * API_VERSION pattern accepted from dapps (semantic version, including a
- * prerelease suffix used by published Wallet-API release candidates).
+ * API_VERSION pattern accepted from dapps: `X.Y` or `X.Y.Z`, exactly the
+ * wallet_rpc.json API_VERSION pattern `^[0-9]+\.[0-9]+(\.[0-9]+)?$`. The spec
+ * dropped the pre-release suffix on 2026-06-29 (starknet-specs PR 397), so a
+ * release-candidate string such as `0.10.4-rc.0` is malformed, not unsupported.
  */
-export const API_VERSION_PATTERN =
-  /^[0-9]+\.[0-9]+(?:\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)?$/;
+export const API_VERSION_PATTERN = /^[0-9]+\.[0-9]+(?:\.[0-9]+)?$/;
 
 /**
  * True when `value` is a well-formed API_VERSION string. Shape only: whether
