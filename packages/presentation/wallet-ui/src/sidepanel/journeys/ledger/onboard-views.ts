@@ -23,6 +23,7 @@ import {
 } from "@bramble/wallet-model/ledger-path";
 import { icon } from "../../shared/icons";
 import { accountLabel, accountsDetectedText } from "../../shared/parts";
+import { QSB_FEATURE_FLAG } from "../qsb/qsb-model";
 import type { LedgerOnboardAddKind } from "./onboard-session";
 import {
   type LedgerCandidate,
@@ -61,7 +62,10 @@ const chooserOption = (
   label: string,
   supportingText: string,
 ): string => `
-    <button class="add-account-option" data-add-kind="${kind}" type="button">
+    <button class="add-account-option" data-add-kind="${kind}"${
+      // QSB choices stay hidden until the side panel's gate reads the flag as on.
+      kind.startsWith("qsb-") ? ` data-feature="${QSB_FEATURE_FLAG}"` : ""
+    } type="button">
       <span class="add-account-option-icon">${icon(iconName)}</span>
       <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
       <span class="add-account-option-check">${icon("chevronRight")}</span>

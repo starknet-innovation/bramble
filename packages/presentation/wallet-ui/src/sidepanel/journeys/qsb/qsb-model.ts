@@ -18,6 +18,13 @@ import type { QsbBackupWord } from "./qsb-runtime";
 
 /** The account type's name: the add tile, the backup subtitle, one account's screen. */
 export const QSB_NAME = "QSB vault";
+/**
+ * The bramble-ff flag that shows QSB vaults. Each entry point carries it as
+ * `data-feature`, which keeps it hidden until the side panel's feature gate
+ * reads the flag as on; the gate also refuses every \`qsb-*\` screen while it
+ * is off. Markup only: this file reads no flag.
+ */
+export const QSB_FEATURE_FLAG = "qsb.vaults";
 /** The accounts list's title, and the drawer row that opens it. */
 export const QSB_TITLE = "QSB vaults";
 /** What the 24 words are called on the QSB screens, where others say "recovery phrase". */
