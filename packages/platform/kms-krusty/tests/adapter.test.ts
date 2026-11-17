@@ -31,8 +31,11 @@ const createModule = (signatureR = "0x1") => ({
   openNostrApplicationData() {
     return JSON.stringify({
       content: "payload",
+      createdAt: "1",
       identifier: "mc-wallet.multisig",
+      rumorId: "55".repeat(32),
       senderPublicKey: "22".repeat(32),
+      wrapId: "11".repeat(32),
     });
   },
   signStarkHash() {
@@ -323,8 +326,11 @@ describe("createKrustyKms", () => {
         calls.push(args);
         return JSON.stringify({
           content: "payload",
+          createdAt: "1",
           identifier: "mc-wallet.multisig",
+          rumorId: "55".repeat(32),
           senderPublicKey: "22".repeat(32),
+          wrapId: "11".repeat(32),
         });
       },
       wrapNostrApplicationData(...args: unknown[]) {

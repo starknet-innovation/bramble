@@ -12,6 +12,7 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import {
   isNostrApplicationData,
+  isNostrEventId,
   isNostrPublicKey,
   MAX_NOSTR_APPLICATION_DATA_BYTES,
   MAX_NOSTR_EVENT_JSON_BYTES,
@@ -25,6 +26,11 @@ const KRUSTY_RESULT_CLASSES = new Set(["WasmKeypair", "WasmNostrPublicKey", "Was
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
 const isNostrIdentifier = (value: string): boolean =>
   value.length > 0 && value.length <= 128 && /^[ -~]+$/.test(value);
+const U64_MAX = (1n << 64n) - 1n;
+// Krusty 3.x reports the rumor `created_at` (a u64) as a canonical decimal
+// string so JavaScript never rounds it.
+const isNostrTimestamp = (value: unknown): boolean =>
+  typeof value === "string" && /^(0|[1-9][0-9]{0,19})$/.test(value) && BigInt(value) <= U64_MAX;
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   if (typeof value !== "object" || value === null) {
@@ -235,12 +241,13 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
     },
     async openNostrApplicationData(mnemonic, addressIndex, accountIndex, eventJson, passphrase) {
       await ready;
+      const giftWrap = parseNostrEventJson(eventJson);
       if (
         !isMnemonicText(mnemonic) ||
         !isMnemonicPassphrase(passphrase) ||
         !isDerivationIndex(addressIndex) ||
         !isDerivationIndex(accountIndex) ||
-        parseNostrEventJson(eventJson)?.kind !== 1_059
+        giftWrap?.kind !== 1_059
       ) {
         throw new WalletError("Invalid Nostr application-data input");
       }
@@ -266,11 +273,24 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       }
       if (
         !isRecord(opened) ||
-        !hasOnlyKnownKeys(opened, ["content", "identifier", "senderPublicKey"]) ||
+        !hasOnlyKnownKeys(opened, [
+          "content",
+          "createdAt",
+          "identifier",
+          "rumorId",
+          "senderPublicKey",
+          "wrapId",
+        ]) ||
         !isNostrApplicationData(opened["content"]) ||
         typeof opened["identifier"] !== "string" ||
         !isNostrIdentifier(opened["identifier"]) ||
-        !isNostrPublicKey(opened["senderPublicKey"])
+        !isNostrPublicKey(opened["senderPublicKey"]) ||
+        // Replay metadata added in Krusty 3.0. It is validated so a malformed
+        // result fails closed, and the wrap id must name the event we passed
+        // in; it is not yet surfaced to callers.
+        opened["wrapId"] !== giftWrap.id ||
+        !isNostrEventId(opened["rumorId"]) ||
+        !isNostrTimestamp(opened["createdAt"])
       ) {
         throw new WalletError("Krusty KMS returned invalid Nostr application data");
       }

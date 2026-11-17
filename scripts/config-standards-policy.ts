@@ -42,7 +42,7 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@mc-wallet/wallet-ui": "workspace:*",
   "@mc-wallet/wallet-model": "workspace:*",
   "@mc-wallet/wallet-protocol": "workspace:*",
-  "@starknetfoundation/krusty-kms-wasm": "0.10.0",
+  "@starknetfoundation/krusty-kms-wasm": "3.1.0",
   starknet: "10.0.2",
 };
 

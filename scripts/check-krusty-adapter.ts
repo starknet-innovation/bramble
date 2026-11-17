@@ -14,14 +14,14 @@ import { deriveAccount } from "@mc-wallet/vault/accounts";
 import { DEFAULT_NETWORK, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
-const packageVersion = "0.10.0";
+const packageVersion = "3.1.0";
 const packageRoot = `node_modules/${packageName}`;
 const packageManifest = `${packageRoot}/package.json`;
 const wasmPackage = `${packageRoot}/krusty_kms_wasm.js`;
 const wasmBinary = `${packageRoot}/krusty_kms_wasm_bg.wasm`;
 const expectedRuntimeDigests: Readonly<Record<string, string>> = {
-  [wasmPackage]: "a3e2d11f8ebae305341a65955b36b6f8869fdb28c8775c0754e36660cc00dfc9",
-  [wasmBinary]: "0f851abcc7ca23f95e23c182fdcc10ad165da21dd1f71437eb314fd72bc2af51",
+  [wasmPackage]: "03d504c63aa94f599f82fd23a7495c9f75555b699d5bad52e9f444a4c14caf23",
+  [wasmBinary]: "6fe9493b8bd82d8b2229859152ad2a0c02b09b2f153adbccea66a6f873dc95d5",
 };
 
 // A published BIP-39 test phrase, never a wallet phrase: it exists so the

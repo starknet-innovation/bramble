@@ -31,8 +31,11 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
   openNostrApplicationData() {
     return JSON.stringify({
       content: "payload",
+      createdAt: "1",
       identifier: "mc-wallet.multisig",
+      rumorId: "55".repeat(32),
       senderPublicKey: "22".repeat(32),
+      wrapId: "11".repeat(32),
     });
   },
   signStarkHash() {
