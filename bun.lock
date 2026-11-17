@@ -6,6 +6,7 @@
       "name": "mc-wallet",
       "dependencies": {
         "@mc-wallet/core": "workspace:*",
+        "@mc-wallet/flags": "workspace:*",
         "@mc-wallet/kms-krusty": "workspace:*",
         "@mc-wallet/ledger-protocol": "workspace:*",
         "@mc-wallet/multisig": "workspace:*",
@@ -41,6 +42,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@mc-wallet/core": "workspace:*",
+        "@mc-wallet/flags": "workspace:*",
         "@mc-wallet/kms-krusty": "workspace:*",
         "@mc-wallet/ledger-browser": "workspace:*",
         "@mc-wallet/ledger-protocol": "workspace:*",
@@ -117,6 +119,14 @@
         "typescript": "6.0.3",
         "vite": "8.2.1",
         "vitest": "4.1.10",
+      },
+    },
+    "packages/features/flags": {
+      "name": "@mc-wallet/flags",
+      "version": "0.0.0",
+      "dependencies": {
+        "@mc-wallet/core": "workspace:*",
+        "@mc-wallet/store": "workspace:*",
       },
     },
     "packages/features/multisig": {
@@ -466,6 +476,8 @@
     "@mc-wallet/core": ["@mc-wallet/core@workspace:packages/foundation/core"],
 
     "@mc-wallet/extension": ["@mc-wallet/extension@workspace:apps/extension"],
+
+    "@mc-wallet/flags": ["@mc-wallet/flags@workspace:packages/features/flags"],
 
     "@mc-wallet/kms-krusty": ["@mc-wallet/kms-krusty@workspace:packages/platform/kms-krusty"],
 

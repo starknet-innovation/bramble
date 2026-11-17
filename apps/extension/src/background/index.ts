@@ -45,6 +45,9 @@ import {
   createApprovalSurfaceOpener,
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
+import { startFeatureFlagRefresh } from "./flags/feature-flag-alarm";
+import { bundledFeatureFlags, createFeatureFlagClient } from "./flags/feature-flag-client";
+import { drawInstallBucket } from "./flags/install-bucket";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
 import {
   type OnboardingSurfaceBrowser,
@@ -67,6 +70,7 @@ import { createBackgroundPreferences } from "./settings/preferences-adapter";
 import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
 
 type RuntimeApi = {
+  readonly getManifest?: () => { readonly version?: unknown };
   readonly getURL?: (path: string) => string;
   readonly id: string;
   readonly onInstalled: {
@@ -84,9 +88,10 @@ type RuntimeApi = {
   readonly sendMessage?: (message: unknown) => Promise<unknown>;
 };
 
-// Two alarm consumers, one API: recurring reconciliation cadences
-// (./transactions/tx-monitor) and the one-shot unlock deadline
-// (./privacy/session-expiry-alarm).
+// Three alarm consumers, one API: recurring reconciliation cadences
+// (./transactions/tx-monitor), the one-shot unlock deadline
+// (./runtime/session-expiry-alarm), and the feature-flag refresh
+// (./flags/feature-flag-alarm). Each ignores the others' alarm names.
 type AlarmsGlobal = { readonly alarms?: AlarmsApi & SessionAlarmsApi };
 
 type TabsApi = {
@@ -244,6 +249,30 @@ const phishingFeed = (() => {
     return null;
   }
 })();
+// Signed remote feature flags (bramble-ff). Fails closed to the bundled
+// defaults in @mc-wallet/flags/catalog when storage, the CDN, or verification
+// is unavailable. Refreshed on startup and every 30 minutes by alarm.
+const featureFlags = (() => {
+  try {
+    const version = runtime?.getManifest?.().version;
+    return createFeatureFlagClient({
+      drawBucket: drawInstallBucket,
+      fetch: untrustedFetch,
+      now: systemClock,
+      store: createBrowserLocalStore(),
+      version: typeof version === "string" ? version : null,
+    });
+  } catch {
+    return null;
+  }
+})();
+if (featureFlags) {
+  startFeatureFlagRefresh({
+    alarms: extensionApi?.alarms,
+    client: featureFlags,
+    ready: storageReady,
+  });
+}
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
 void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
 // Fails closed to the stub service when session storage is unavailable, which
@@ -286,6 +315,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   activeStateCoordinator,
   approvals,
   balanceSnapshots,
+  featureFlags: featureFlags ?? bundledFeatureFlags,
   nftSnapshots,
   session,
   preferencesStore: preferenceStore,

@@ -52,6 +52,7 @@
   },
   "dependencies": {
     "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/flags": "workspace:*",
     "@mc-wallet/kms-krusty": "workspace:*",
     "@mc-wallet/ledger-protocol": "workspace:*",
     "@mc-wallet/multisig": "workspace:*",

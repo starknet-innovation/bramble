@@ -168,6 +168,10 @@ const SECRET_MATERIAL_FILES = new Set([
   // Pure public-key verification consolidated for Ledger and KMS probe
   // callers; it receives no private key or vault credential.
   "packages/platform/starknet/src/transactions/signature-verify.ts",
+  // bramble-ff feature-flag documents carry the publisher's public Ed25519
+  // signature over public flag data; verified against bundled public keys
+  // only. No wallet key, vault credential, or signing path is involved.
+  "packages/features/flags/src/verify.ts",
   // Public account ABI serialization and signer façades. These files carry
   // public keys/signature fragments; private-key operations remain in Krusty.
   "packages/platform/starknet/src/accounts/account-contracts.ts",
@@ -420,6 +424,9 @@ for (const file of await walk(".")) {
   if (
     isProductionTypeScript(file) &&
     file !== "packages/platform/vault/src/encrypted-store.ts" &&
+    // Feature-flag rollout bucket: one uniform draw per install, stored
+    // locally, never transmitted (rule 4 of the bramble-ff client contract).
+    file !== "apps/extension/src/background/flags/install-bucket.ts" &&
     /\bcrypto\.getRandomValues\b/.test(text)
   ) {
     failures.push(`${file} must keep raw random bytes behind crypto/storage boundaries`);

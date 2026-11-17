@@ -23,6 +23,7 @@ import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { RecoveryAccountCandidate } from "@mc-wallet/wallet-model/recovery";
 import type { WalletStatus } from "@mc-wallet/wallet-protocol/extension-responses";
 import type { PendingApproval } from "../approvals/approvals";
+import type { FeatureFlagsResponse } from "../flags/feature-flag-client";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
 import type {
   ArgentMultisigDeploymentReview,
@@ -449,6 +450,7 @@ export type RuntimeResponse =
   | DeploymentStatusResponse
   | DetectTokensResponse
   | DiscoverNftsResponse
+  | FeatureFlagsResponse
   | {
       readonly candidates: readonly RecoveryAccountCandidate[];
       readonly complete: boolean;

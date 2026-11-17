@@ -44,6 +44,7 @@
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
     "https://metamask.github.io/*",
+    "https://flags.starknet.org/*",
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*"
   ],

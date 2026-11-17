@@ -229,6 +229,12 @@ if (import.meta.main) {
     // malicious-origin blocklist. Configurable per deployment via the feed's
     // `source` option; pinned here so the manifest stays an explicit allowlist.
     "https://metamask.github.io/*",
+    // Signed remote feature flags (bramble-ff). GET of one fixed document,
+    // verified against bundled Ed25519 keys; it can only toggle code that
+    // already ships and never reaches signing, RPC, fees, or permissions.
+    // PLACEHOLDER host: keep in step with FEATURE_FLAG_ORIGIN in
+    // packages/features/flags/src/catalog.ts until bramble-ff fixes its domain.
+    "https://flags.starknet.org/*",
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*",
   ];

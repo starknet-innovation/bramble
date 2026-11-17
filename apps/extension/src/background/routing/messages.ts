@@ -8,6 +8,7 @@ import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { handleApprovalDecision } from "../approvals/approval-decisions";
 import { enrichApprovals } from "../approvals/approval-insights";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import { handleFeatureFlagOps } from "../flags/feature-flag-ops";
 import { handleLedgerOps } from "../ledger/ledger-ops";
 import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
 import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
@@ -36,7 +37,7 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import { createUnlockSession } from "../runtime/session";
 import { handleOriginOps } from "../settings/origins-ops";
 import { handlePreferenceOps } from "../settings/preference-ops";
-import { supportDiagnosticsResponse } from "../support/diagnostics";
+import { handleDiagnosticsOps } from "../support/diagnostics-ops";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
 import { handleSwapOps } from "../transactions/swap-ops";
@@ -330,13 +331,6 @@ const handleStatus: RouterHandler = async (ctx, messageType, message) => {
   return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
 };
 
-const handleDiagnostics: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.diagnostics") return null;
-  return readTypeOnlyInput(message, "wallet.diagnostics")
-    ? supportDiagnosticsResponse(ctx.wallet, ctx.session, ctx.preferencesStore)
-    : { error: "invalid diagnostics request" };
-};
-
 const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.unlock") {
     return null;
@@ -436,7 +430,8 @@ const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleOnboardingOps(ctx, messageType, message),
   handleRevealSecrets,
   handleGetGrantedAccounts,
-  handleDiagnostics,
+  handleDiagnosticsOps,
+  handleFeatureFlagOps,
   handlePendingApprovals,
   handleRequestAccounts,
   handleSetActiveAccount,

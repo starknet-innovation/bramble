@@ -33,6 +33,7 @@ type Workspace = {
 const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   "@mc-wallet/extension": [
     "@mc-wallet/core",
+    "@mc-wallet/flags",
     "@mc-wallet/kms-krusty",
     "@mc-wallet/ledger-browser",
     "@mc-wallet/ledger-protocol",
@@ -51,6 +52,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@mc-wallet/wallet-ui",
   ],
   "@mc-wallet/core": [],
+  "@mc-wallet/flags": ["@mc-wallet/core", "@mc-wallet/store"],
   "@mc-wallet/kms-krusty": ["@mc-wallet/core", "@mc-wallet/vault", "@mc-wallet/wallet-model"],
   "@mc-wallet/ledger-browser": [
     "@mc-wallet/core",
@@ -138,6 +140,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   ],
   "mc-wallet": [
     "@mc-wallet/core",
+    "@mc-wallet/flags",
     "@mc-wallet/kms-krusty",
     "@mc-wallet/ledger-browser",
     "@mc-wallet/ledger-protocol",
