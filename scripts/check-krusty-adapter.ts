@@ -135,6 +135,7 @@ const knownViewingKey = await kms.deriveStrk20ViewingKey(
   referenceViewingKeyPool,
 );
 const readyKeypair = await kms.deriveArgentLegacyKeypair(readyLeadingZeroMnemonic, 0);
+const readyPublicKey = await kms.deriveArgentLegacyPublicKey(readyLeadingZeroMnemonic, 0);
 
 if (
   !("publicKeyY" in knownAccount) ||
@@ -146,7 +147,9 @@ if (
   knownSignature.s !== referenceSignature.s ||
   knownViewingKey !== referenceViewingKey ||
   // Compared, never printed: a failure names no key material.
-  readyKeypair.privateKey !== readyLeadingZeroKey
+  readyKeypair.privateKey !== readyLeadingZeroKey ||
+  // The public-only export must agree with the keypair it stands in for.
+  readyPublicKey !== readyKeypair.publicKeyX
 ) {
   throw new Error("Krusty KMS known-answer vectors do not match the reviewed build");
 }

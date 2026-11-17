@@ -22,6 +22,7 @@ import {
   findNetworkAccount,
   selectSourceAccount,
 } from "../accounts/network-account";
+import { findPreFixReadyAccountIds } from "../accounts/ready-key-drift";
 import {
   deriveVaultStrk20ViewingKey,
   previewImportedStrk20ViewingPublicKey,
@@ -162,6 +163,11 @@ export const createWalletVaultService = ({
         input.chainId,
         input.poolAddress,
       );
+    },
+    async hasPreFixReadyKey(input) {
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
+      const accounts = vault.accounts.filter((account) => account.id === input.accountId);
+      return (await findPreFixReadyAccountIds(kms, { ...vault, accounts })).length > 0;
     },
     async ensureNetworkAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);

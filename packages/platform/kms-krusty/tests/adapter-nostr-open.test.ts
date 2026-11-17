@@ -33,6 +33,7 @@ const openWith = (result: unknown): Promise<unknown> => {
   };
   return createKrustyKms({
     deriveArgentLegacyKeypair: unused,
+    deriveArgentLegacyPublicKey: unused,
     deriveNostrPublicKey: unused,
     deriveOzAccountAddress: unused,
     deriveScopedStrk20ViewingKey: unused,

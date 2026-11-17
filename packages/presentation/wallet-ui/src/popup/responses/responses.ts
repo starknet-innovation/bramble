@@ -185,14 +185,18 @@ export type DeploymentStatusResponse = {
 /** A recoverable account's on-chain recovery state, validated in ./responses-recovery. */
 export type { RecoveryState } from "./responses-recovery";
 
-/** The Home flag's input: signable, or read-only with its reason. */
-export type SignabilityVerdict =
+/**
+ * The Home flag's input: signable, or read-only with its reason.
+ * `preFixReadyKey` marks a Ready account whose stored key predates Krusty 3.0.
+ */
+export type SignabilityVerdict = (
   | { readonly readOnly: false }
   | {
       readonly readOnly: true;
       readonly reason: ReadOnlyReason;
       readonly recovery?: RecoveryState;
-    };
+    }
+) & { readonly preFixReadyKey?: true };
 
 /**
  * Active-account signability verdict for the Home read-only flag. `reason` is
