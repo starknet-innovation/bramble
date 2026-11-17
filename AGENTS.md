@@ -1,4 +1,4 @@
-# Agent Guide — MC Wallet
+# Agent Guide — Bramble
 
 Browser-extension wallet for Starknet. Bun + strict TypeScript, no framework. This file is the
 operational guide for coding agents; `CONTRIBUTING.md` holds the binding architecture/security
@@ -13,19 +13,32 @@ bun run vendor:privacy       # required once before check/build (builds pinned o
 bun run check                # types + lint + standards + manifest + vendored pins + tests
 bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
+bun run build:firefox        # writes dist-firefox/ (loadable in Firefox via about:debugging)
+bun run build:all            # both targets, from one run of the prerequisite gates
 bun run test:e2e             # Playwright extension E2E (requires dist/; egress blocked)
+bun run check:firefox        # Mozilla's validator over dist-firefox/ (needs build:firefox first)
 bun run package:extension    # writes artifacts/*.zip + .sha256
 bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
+bun run verify:sepolia       # live Sepolia import scorecard (needs dist/ + seed file; ~15 min)
 ```
 
 - `bun run dev:session` is development-only: it onboards from the repository's published test phrase,
   so its accounts are public. It switches to Sepolia after onboarding and keeps its wallet in a
   git-ignored `.dev-profile/`. Read the header of `tests/e2e/dev-session.ts` before overriding
-  `MC_DEV_MNEMONIC`.
+  `BRAMBLE_DEV_MNEMONIC`.
+
+- `bun run verify:sepolia [out.json] [previous.json]` imports every Sepolia vendor test account
+  through the built extension and scores it. It needs the git-ignored `.env.vendor-seeds.local`
+  (password manager only) and live network, so it is not a gate. Agents without that file skip
+  it and say so; never ask for, create, or commit the seeds. See `tools/vendor-dataset/README.md`.
 
 - The E2E suite blackholes DNS, so no test can reach a live host; `test:e2e:mainnet` opts back in
-  via `MC_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
-  flag is set.
+  via `BRAMBLE_E2E_LIVE_NETWORK` (set by its own config). The default suite refuses to start if that
+  flag is set. Live mainnet CI is `.github/workflows/mainnet-e2e.yml`
+  (`docs/MAINNET_E2E_CI.md`), not this suite and not pull-request CI.
+- `bun run test:e2e:mainnet:wallet` is a local-only mainnet UI suite (sncast account, dedicated RPC,
+  spend caps). It is not part of `bun run check` or CI. Unconfigured, it prints a skip and exits 0.
+  See `docs/MAINNET_E2E.md`.
 - Krusty KMS is installed as an exact, lockfile-pinned npm package by `bun install`.
   `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,
@@ -35,8 +48,14 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
   `bun run check:lint`, `bun run test:e2e:build` (build + extension E2E). Always finish with the
   full `bun run check`.
 - `bun run format` (Biome) fixes formatting/lint; Biome owns style, don't hand-format.
-- CI (`.github/workflows/ci.yml`) runs exactly the gates above plus `test:e2e` and
-  `package:extension`. Do not merge around a failing gate.
+- CI (`.github/workflows/ci.yml`) runs exactly the gates above plus `test:e2e`,
+  `package:extension`, and the Gecko pair `package:extension:firefox` + `check:firefox`.
+  Do not merge around a failing gate.
+- The two Firefox gates cover different halves and neither replaces the other. `check:firefox`
+  wraps the validator addons.mozilla.org runs at submission, so it fails on anything AMO calls an
+  ERROR — but AMO warnings (a missing `data_collection_permissions`, a stray `sidePanel`
+  permission) exit zero there. Those are held at source level by
+  `tests/scripts/firefox-manifest.test.ts`, which runs inside `bun run check`.
 
 ## Layout
 
@@ -56,6 +75,8 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
 - **Never** add fallback signing, key derivation, or mnemonic validation — Krusty KMS owns wallet
   crypto; if it is unavailable, fail closed. Keep its published package pinned exactly in
   `package.json` and `bun.lock`; don't bump it casually.
+  The one exception is off-wallet dev tooling that never ships, such as `tools/vendor-dataset`, which
+  derives test-vendor keys to record import fixtures. Nothing in `apps/` or `packages/` may import it.
 - Never log or persist secrets outside the encrypted vault. Secret-material field names are only
   allowed in the boundary modules whitelisted in `scripts/check-file-standards.ts`.
 - Clock/randomness calls live only in explicit boundary modules (inject `clock`/`fetch`/RNG into
@@ -69,12 +90,17 @@ bun run dev:session          # headed browser on a kept profile, onboards/unlock
   colors.
 - Exported APIs need doc comments explaining trust boundaries and failure behavior (checked).
 - New dependencies: pinned exact, justified in the PR, used immediately. Prefer zero.
+- Audit records under `docs/security-audit/` are history. Never alter, reword, downgrade, or
+  delete an existing finding, its severity, or an accepted-advisory row. Record a fix by updating
+  only the finding's status and linking what shipped; record new evidence as a new entry.
 - Never expose an STRK20 viewing key. Software-account viewing keys remain derived on demand and
   unpersisted. A Ledger viewing key may be retained only in encrypted v4 `accountSecrets` through
   the background-only vault service, bound to its exact account, chain, pool, and derivation scheme;
   it must never enter account metadata, preferences, activity, logs, session storage, messages, or
   UI state. Privacy-service responses are untrusted, and only the configured pool's `apply_actions`
-  call may carry a prepared proof into submission.
+  call may carry a prepared proof into submission. A pool-shaped invoke (`apply_actions`, or any
+  call to the configured pool) always takes the STRK20 lane; only a dapp's non-pool SNIP-36 proof
+  goes out as an ordinary invoke.
 
 ## Schema migrations
 
@@ -93,6 +119,29 @@ Migrations must be deterministic. See README "Migration Workflow".
   `tests/background/routing/key-boundary.test.ts` sanctions every path that may expose secret material).
 - Commit style follows the existing history: imperative summary line, optional scope prefix like
   `ci:`, body explains the why.
+
+## Writing copy
+
+Anything a user reads is governed by `docs/COPY_STYLE.md`. **Read its "Every word counts"
+section before adding or editing a user-facing string** — it is eight rules, each one a habit a
+copy review had to delete from this wallet, and the standing feedback is that the extension uses
+too many words for people to read any of them.
+For any UI, UX or copy change, start with the `bramble-ui-ux` skill (`.claude/skills/bramble-ui-ux/SKILL.md`).
+
+- The short version: say the subject once per screen, keep the user's verb on the control, state
+  a consequence rather than collecting a tick, do not narrate the wallet's internals, do not
+  reassure in advance, say what to do rather than how it works, label only what is true, and put
+  a number in one place. Before adding a sentence, check whether the heading or the control
+  already says it, and whether the reader can act on it.
+- `bun run check:copy` warns about the mechanical half and **never fails the build** — wording is
+  a judgement call. A hit is a question, not a verdict; the patterns live in
+  `scripts/copy-policy.ts` and are pinned by `tests/scripts/copy-policy.test.ts` against strings
+  this repository actually shipped and deleted.
+- Two categories are exempt and must not be tightened: activity summaries (dedup guards match on
+  them) and approval/review/signing sentences, which are edited as a reviewed group against "did
+  we lose a fact?" rather than "is this shorter?". A mistranslation there is a security bug.
+- Changing a string usually breaks a test. That is the intended cost — the assertion is how you
+  find every place it is load-bearing. Update it in the same commit.
 
 ## Reuse before writing (anti-drift)
 
@@ -140,7 +189,13 @@ The VM snapshot already has `bun`, and `bun install --frozen-lockfile` installs 
 Krusty KMS package, so no Rust toolchain or Krusty source checkout is needed by this repository.
 The pinned Argent and Privacy vendor outputs are already present, so `bun run check`,
 `bun run build`, and `bun run package:extension` run out of the box.
-- There is **no dev server / watch mode**: this is a Chrome MV3 extension. To run/verify it,
+- There is **no dev server / watch mode**: this is an MV3 extension. To run/verify it,
   `bun run build` then load the `dist/` folder as an unpacked extension at `chrome://extensions`
   (Developer mode on), and open the side panel from the toolbar action. Re-run `bun run build` and
   reload the extension in Chrome to pick up source changes.
+- Firefox: `bun run build:firefox`, then load `dist-firefox/manifest.json` at
+  `about:debugging#/runtime/this-firefox` → "Load Temporary Add-on" (removed when Firefox closes).
+  `npx web-ext run --source-dir dist-firefox` does the same with auto-reload, and
+  `npx web-ext lint --source-dir dist-firefox` runs Mozilla's own validator — including the API
+  checks implied by `strict_min_version`, which is how the AMO data-consent requirement surfaced.
+  The Gecko manifest is derived, never hand-written: see `apps/extension/firefox-manifest.ts`.

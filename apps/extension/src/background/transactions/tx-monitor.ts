@@ -29,8 +29,8 @@ import { reconcileObserved } from "./tx-reconcile";
  * other alarm the extension may grow later.
  */
 const ALARM_TIERS: Readonly<Record<string, ObservationTier>> = {
-  "mc-wallet:tx-observe-fast": "fast",
-  "mc-wallet:tx-observe-slow": "slow",
+  "bramble:tx-observe-fast": "fast",
+  "bramble:tx-observe-slow": "slow",
 };
 
 const PERIOD_MINUTES: Readonly<Record<ObservationTier, number>> = {

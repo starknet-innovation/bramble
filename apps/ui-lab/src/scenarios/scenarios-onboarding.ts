@@ -1,14 +1,12 @@
-import { ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
-import {
-  type AccountContractType,
-  isAccountContractType,
-  type LedgerAccountRef,
-} from "@mc-wallet/wallet-model/accounts";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { ledgerMessage } from "@bramble/ledger-protocol/errors";
+import { isAccountContractType, type LedgerAccountRef } from "@bramble/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 import {
   addAccountChooser,
   bindOnboarding,
   createSidepanelRuntime,
+  DEFAULT_BACKUP_VERIFY_POSITIONS,
+  importAccountChooser,
   ledgerAccountPicker,
   ledgerConnectPrompt,
   ledgerDevicePicker,
@@ -16,7 +14,7 @@ import {
   ledgerReadingPrompt,
   onboarding,
   onboardingComplete,
-} from "@mc-wallet/wallet-ui/lab";
+} from "@bramble/wallet-ui/lab";
 import { argentSoftwareAccount, ledgerAccount, softwareAccount } from "../fixtures/fixtures";
 import { emptyWalletStatus } from "../fixtures/journey-fixtures";
 import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
@@ -25,6 +23,12 @@ import type { FrameContext, WalletScenario } from "../runtime/types";
 const FIXTURE_WORDS =
   "habit hope tip crystal because grunt nation idea electric witness alert like";
 const FIXTURE_PASSPHRASE = "fixture vault passphrase";
+// The lab binds onboarding without a clock, so the confirmation asks for the
+// default positions; reading the answers back out of the fixture keeps these
+// checkpoints correct if those positions ever change.
+const FIXTURE_VERIFY_ANSWERS = DEFAULT_BACKUP_VERIFY_POSITIONS.map(
+  (position) => FIXTURE_WORDS.split(" ")[position - 1] ?? "",
+);
 
 const onboardingWallet = (context: FrameContext) =>
   createSidepanelRuntime({
@@ -106,46 +110,27 @@ const preparePassword = async (context: FrameContext): Promise<void> => {
   await nextTurn();
 };
 
-const selectSoftwareContract = (context: FrameContext, contract: AccountContractType): void => {
-  press(context, `[data-account-contract="${contract}"]`);
+const prepareImportKey = (context: FrameContext): void => {
+  prepareMethod(context);
+  press(context, "#key-method-button");
 };
 
-const prepareSoftwareContract =
-  (contract: AccountContractType) =>
-  async (context: FrameContext): Promise<void> => {
-    await prepareGenerated(true, true)(context);
-    press(context, "#verify-continue");
-    updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
-    updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
-    press(context, "#choose-account-contract-button");
-    selectSoftwareContract(context, contract);
-  };
+const prepareRecoveryAccounts = async (context: FrameContext): Promise<void> => {
+  await preparePassword(context);
+  updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
+  updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
+  press(context, "#password-continue-button");
+  await nextTurn();
+};
 
-const prepareRecoveryAccounts =
-  (acknowledged: boolean) =>
-  async (context: FrameContext): Promise<void> => {
-    await preparePassword(context);
-    updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
-    updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
-    press(context, "#choose-account-contract-button");
-    await nextTurn();
-    if (acknowledged) {
-      context.app.querySelector<HTMLInputElement>('input[name="recoveryMainnetAck"]')?.click();
-    }
-  };
-
-const prepareAccountSelection =
-  (contract: AccountContractType, selected: boolean) =>
-  async (context: FrameContext): Promise<void> => {
-    await prepareSoftwareContract(contract)(context);
-    press(context, "#review-account-button");
-    await nextTurn();
-    if (!selected) {
-      return;
-    }
-    press(context, "#account-preview");
-    context.app.querySelector<HTMLInputElement>('input[name="mainnetAck"]')?.click();
-  };
+const prepareAccountReview = async (context: FrameContext): Promise<void> => {
+  await prepareGenerated(true, true)(context);
+  press(context, "#verify-continue");
+  updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
+  updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
+  press(context, "#password-continue-button");
+  await nextTurn();
+};
 
 const prepareGenerated =
   (reveal: boolean, confirm: boolean) =>
@@ -160,23 +145,24 @@ const prepareGenerated =
       return;
     }
     press(context, "#generated-continue");
-    updateForm(context, 'input[name="verify-0"]', "tip");
-    updateForm(context, 'input[name="verify-1"]', "nation");
-    updateForm(context, 'input[name="verify-2"]', "alert");
+    FIXTURE_VERIFY_ANSWERS.forEach((answer, index) => {
+      updateForm(context, `input[name="verify-${index}"]`, answer);
+    });
   };
 
-const prepareLedgerContract = (
-  context: FrameContext,
-  contract: AccountContractType = "argent",
-): void => {
-  prepareMethod(context);
-  press(context, "#ledger-method-button");
-  press(context, `[data-ledger-account-contract="${contract}"]`);
+// Placeholder answers that cannot match the fixture, the last one committed as
+// a user leaving the field would, so the step reports the mismatch.
+const prepareMismatchedBackup = async (context: FrameContext): Promise<void> => {
+  await prepareGenerated(true, false)(context);
+  press(context, "#generated-continue");
+  updateForm(context, 'input[name="verify-0"]', "one");
+  updateForm(context, 'input[name="verify-1"]', "two");
+  updateForm(context, 'input[name="verify-2"]', "three", true);
 };
 
 const prepareLedger = (context: FrameContext): void => {
-  prepareLedgerContract(context);
-  press(context, "#ledger-contract-continue");
+  prepareMethod(context);
+  press(context, "#ledger-method-button");
 };
 
 export const onboardingScenario: WalletScenario = {
@@ -193,9 +179,18 @@ export const onboardingScenario: WalletScenario = {
       content: () => onboarding(emptyWalletStatus),
       id: "method",
       label: "Choose import method",
-      narrative: "Recovery phrase and Ledger remain explicit, separate security models.",
+      narrative: "Recovery phrase, Ledger, and private key remain explicit security models.",
       prepare: prepareMethod,
-      state: { choices: 2, path: "existing wallet" },
+      state: { choices: 3, path: "existing wallet" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus, false),
+      id: "method-no-ledger",
+      label: "Choose import method (no Ledger transport)",
+      narrative:
+        "A browser with no Web Bluetooth, WebUSB or WebHID is never offered a Ledger path it cannot finish.",
+      prepare: prepareMethod,
+      state: { choices: 2, ledgerTransport: "unavailable" },
     },
     {
       content: () => onboarding(emptyWalletStatus),
@@ -220,68 +215,26 @@ export const onboardingScenario: WalletScenario = {
       label: "Review discovered accounts",
       narrative:
         "Both supported account contracts are searched together; deployed and funded accounts are selected automatically.",
-      prepare: prepareRecoveryAccounts(false),
+      prepare: prepareRecoveryAccounts,
       state: { accountContracts: 2, discovered: 2, scan: "complete" },
     },
     {
       content: () => onboarding(emptyWalletStatus),
-      id: "recovery-accounts-confirmed",
-      label: "Confirm recovered accounts",
+      id: "import-key",
+      label: "Import from a private key",
       narrative:
-        "The user confirms the exact discovered set before one atomic encrypted-vault restoration.",
-      prepare: prepareRecoveryAccounts(true),
-      state: { mainnetAcknowledged: true, selected: 2 },
-    },
-    {
-      content: () => onboarding(emptyWalletStatus),
-      id: "account-contract-openzeppelin",
-      label: "Choose OpenZeppelin account",
-      narrative: "New-wallet setup recommends OpenZeppelin while keeping Argent available.",
-      prepare: prepareSoftwareContract("openzeppelin"),
-      state: { accountContract: "openzeppelin", recommended: true },
-    },
-    {
-      content: () => onboarding(emptyWalletStatus),
-      id: "account-contract-argent",
-      label: "Choose Argent account",
-      narrative: "Argent remains an equally supported account-contract choice before derivation.",
-      prepare: prepareSoftwareContract("argent"),
-      state: { accountContract: "argent", recommended: false },
+        "The first-run key import keeps the Bramble/Ready contract choice for accounts that already exist.",
+      prepare: prepareImportKey,
+      state: { contractChoice: "import only", path: "private key" },
     },
     {
       content: () => onboarding(emptyWalletStatus),
       id: "accounts",
-      label: "Review OpenZeppelin account",
+      label: "Review the Bramble account",
       narrative:
-        "The recommended OpenZeppelin public account is derived without writing a vault and awaits selection.",
-      prepare: prepareAccountSelection("openzeppelin", false),
-      state: {
-        accountContract: "openzeppelin",
-        persisted: false,
-        selected: 0,
-        visibleAccounts: 1,
-      },
-    },
-    {
-      content: () => onboarding(emptyWalletStatus),
-      id: "accounts-argent",
-      label: "Review Argent account",
-      narrative: "The Argent account derives a distinct public address before persistence.",
-      prepare: prepareAccountSelection("argent", false),
-      state: {
-        accountContract: "argent",
-        persisted: false,
-        selected: 0,
-        visibleAccounts: 1,
-      },
-    },
-    {
-      content: () => onboarding(emptyWalletStatus),
-      id: "account-selected",
-      label: "Account selected",
-      narrative: "Selection and real-funds acknowledgement visibly activate the final action.",
-      prepare: prepareAccountSelection("openzeppelin", true),
-      state: { mainnetAcknowledged: true, selected: 1 },
+        "The sole derived account is presented as the one being created, with the final action ready and no selection step.",
+      prepare: prepareAccountReview,
+      state: { persisted: false, visibleAccounts: 1 },
     },
     {
       content: () => onboarding(emptyWalletStatus),
@@ -302,19 +255,12 @@ export const onboardingScenario: WalletScenario = {
     },
     {
       content: () => onboarding(emptyWalletStatus),
-      id: "ledger-contract-openzeppelin",
-      label: "Choose OpenZeppelin Ledger account",
-      narrative: "The recommended account contract is chosen separately from Ledger key custody.",
-      prepare: (context) => prepareLedgerContract(context, "openzeppelin"),
-      state: { accountContract: "openzeppelin", hardware: "Ledger" },
-    },
-    {
-      content: () => onboarding(emptyWalletStatus),
-      id: "ledger-contract-argent",
-      label: "Choose Argent Ledger account",
-      narrative: "Argent remains available without changing the Ledger key boundary.",
-      prepare: (context) => prepareLedgerContract(context, "argent"),
-      state: { accountContract: "argent", hardware: "Ledger" },
+      id: "backup-mismatch",
+      label: "Backup words don't match",
+      narrative:
+        "A committed word that does not match reads as an error to fix, not the empty-form prompt.",
+      prepare: prepareMismatchedBackup,
+      state: { phrase: "visible fixture", verification: "mismatch" },
     },
     {
       content: () => onboarding(emptyWalletStatus),
@@ -359,7 +305,8 @@ const ledgerCandidate = (
     id: `SN_MAIN:${address}`,
     publicKeyX: `0x${index + 80}`,
   };
-  return { account, balance, deployed, duplicate };
+  const funded = balance !== null && Number.parseFloat(balance) > 0;
+  return { account, balance, deployed, duplicate, funded };
 };
 
 export const ledgerOnboardingScenario: WalletScenario = {
@@ -369,16 +316,32 @@ export const ledgerOnboardingScenario: WalletScenario = {
       id: "method",
       label: "Choose account method",
       narrative:
-        "Standard, Ledger, private-key, and shared accounts remain explicit signer models.",
-      state: { choices: 4, secretBoundary: "visible", selected: null },
+        "Standard, Ledger, shared, and import routes are explicit; one click on a tile routes immediately.",
+      state: { choices: 4, secretBoundary: "visible" },
     },
     {
-      content: () => addAccountChooser("multisig"),
-      id: "method-multisig",
-      label: "Choose Multisig account",
+      content: () => addAccountChooser(false),
+      id: "method-no-ledger",
+      label: "Choose account method (no Ledger transport)",
       narrative:
-        "Selection is visible before Continue routes into create or add-existing shared accounts.",
-      state: { choices: 4, selected: "multisig" },
+        "Without a Ledger transport the chooser offers only the routes this browser can finish.",
+      state: { choices: 3, ledgerTransport: "unavailable" },
+    },
+    {
+      content: () => importAccountChooser(),
+      id: "method-import",
+      label: "Import an existing account",
+      narrative:
+        "The import stage offers the recovery-phrase and private-key routes, each a single click.",
+      state: { choices: 2 },
+    },
+    {
+      content: () => importAccountChooser(false),
+      id: "method-import-no-ledger",
+      label: "Import an existing account (no Ledger transport)",
+      narrative:
+        "The Ready Ledger restore route is likewise absent, leaving the phrase and key routes.",
+      state: { choices: 2, ledgerTransport: "unavailable" },
     },
     {
       content: ledgerConnectPrompt,
@@ -425,7 +388,10 @@ export const ledgerOnboardingScenario: WalletScenario = {
               "0 STRK",
             ),
           ],
-          [1, 2],
+          [
+            "SN_MAIN:0x7234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
+            "SN_MAIN:0x8234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
+          ],
         ),
       id: "accounts",
       label: "Select derived accounts",
@@ -453,7 +419,7 @@ export const ledgerOnboardingScenario: WalletScenario = {
               "0 STRK",
             ),
           ],
-          [2],
+          ["SN_MAIN:0x8234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd"],
           "Account 1 was added. Account 2 still needs attention; retrying will not duplicate prior work.",
         ),
       id: "partial-add",

@@ -1,9 +1,9 @@
 /** Presentation-only renderer for a shared account's actionable intent queue. */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { emptyState } from "@mc-wallet/ui-kit/content";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { menuRow } from "@mc-wallet/ui-kit/navigation";
+import { escapeHtml } from "@bramble/core/html";
+import { emptyState } from "@bramble/ui-kit/content";
+import { button } from "@bramble/ui-kit/controls";
+import { menuRow } from "@bramble/ui-kit/navigation";
 import { tokenGlyph } from "../portfolio/token-row";
 
 type CompactIntentItem = {
@@ -27,7 +27,7 @@ export type CompactIntentList = {
 export const intentDeleteButton = (id: string, accountId: string): string =>
   button({
     attributes: { "data-ms-delete-intent": id, "data-ms-intent-account": accountId },
-    label: "Delete saved intent",
+    label: "Delete saved transaction",
     size: "small",
     tone: "danger",
     variant: "ghost",
@@ -68,7 +68,7 @@ export const compactIntentListView = (
     className: "tab-more",
     icon: "chevronRight",
     iconPosition: "after",
-    label: "Import intent",
+    label: "Import transaction",
     size: "small",
     variant: "ghost",
   })}`;

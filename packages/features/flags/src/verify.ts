@@ -14,7 +14,7 @@
  * Never throws: every failure is a {@link FlagRejection} the caller turns into
  * "keep the last good document, else bundled defaults".
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { canonicalBytes, decodeBase64url } from "./canonical";
 import {
   FLAG_SCHEMA_VERSION,
@@ -63,8 +63,9 @@ const reject = (reason: FlagRejection): FlagVerification => ({ ok: false, reason
 
 /**
  * Imports the bundled public keys (`keyId` -> base64url raw 32-byte Ed25519).
- * Throws when any bundled entry is malformed: that is a build defect, and the
- * caller fails closed to bundled flag defaults.
+ * Any malformed bundled entry is a build defect: the whole set is dropped (an
+ * empty map), so every document reads as `unknown-key` and the caller fails
+ * closed to bundled flag defaults.
  */
 export const importTrustedFlagKeys = async (
   keys: Readonly<Record<string, string>>,
@@ -72,8 +73,8 @@ export const importTrustedFlagKeys = async (
   const imported = new Map<string, CryptoKey>();
   for (const [keyId, encoded] of Object.entries(keys)) {
     const raw = decodeBase64url(encoded);
-    if (!KEY_ID_PATTERN.test(keyId) || raw.length !== 32) {
-      throw new TypeError("bundled flag key is malformed");
+    if (!KEY_ID_PATTERN.test(keyId) || raw?.length !== 32) {
+      return new Map();
     }
     imported.set(
       keyId,
@@ -99,7 +100,7 @@ const verifyEd25519 = async (
   try {
     const message = canonicalBytes(payload);
     const proof = decodeBase64url(encoded);
-    return proof.length === 64
+    return message !== null && proof?.length === 64
       ? await crypto.subtle.verify({ name: "Ed25519" }, key, proof, message)
       : null;
   } catch {

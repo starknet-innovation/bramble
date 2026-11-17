@@ -4,13 +4,15 @@
 
 import {
   isTrustedPageMessage,
+  misaddressedProviderResponse,
   providerResponse,
   readProviderRequest,
   toProviderPayload,
   toRuntimeMessage,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { addressesFromPayload, isWalletEventMessage } from "@mc-wallet/wallet-protocol/events";
-import { invalidRequestPayload, unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
+} from "@bramble/wallet-protocol/bridge";
+import { addressesFromPayload, isWalletEventMessage } from "@bramble/wallet-protocol/events";
+import { invalidRequestPayload, unknownError } from "@bramble/wallet-protocol/rpc-errors";
+import { resolveExtensionApi } from "../extension-api";
 import { createProviderEventRefresh } from "./provider-event-refresh";
 import { createProviderRequestAdmission } from "./provider-request-admission";
 
@@ -22,13 +24,7 @@ type RuntimeApi = {
   readonly sendMessage: (message: unknown) => Promise<unknown>;
 };
 
-type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: {
-    readonly runtime?: RuntimeApi;
-  };
-};
-
-const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
+const runtime = resolveExtensionApi<{ readonly runtime?: RuntimeApi }>()?.runtime;
 const pageRequests = createProviderRequestAdmission();
 const eventRefresh = createProviderEventRefresh({
   post: (event) => window.postMessage(event, window.location.origin),
@@ -38,16 +34,21 @@ const eventRefresh = createProviderEventRefresh({
       origin: window.location.origin,
       type: "wallet.getGrantedAccounts",
     });
-    return addressesFromPayload(toProviderPayload(result, "wallet_requestAccounts")) ?? [];
+    return (
+      addressesFromPayload(
+        toProviderPayload(result, "wallet_requestAccounts"),
+        "wallet_requestAccounts",
+      ) ?? []
+    );
   },
 });
 
 const injectProvider = (): void => {
-  if (!runtime || document.documentElement.dataset["mcWalletInjected"] === "true") {
+  if (!runtime || document.documentElement.dataset["brambleInjected"] === "true") {
     return;
   }
 
-  document.documentElement.dataset["mcWalletInjected"] = "true";
+  document.documentElement.dataset["brambleInjected"] = "true";
   const script = document.createElement("script");
   script.src = runtime.getURL("provider/inpage.js");
   script.onload = () => script.remove();
@@ -62,11 +63,19 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 
   const request = readProviderRequest(event.data);
   if (!request) {
+    // A message addressed to this bridge with a well-formed request id but an
+    // invalid body gets a deterministic rejection instead of a silent drop, so
+    // the page's pending promise cannot hang forever. Anything not addressed
+    // to the bridge stays unanswered — foreign window traffic gets nothing.
+    const misaddressed = misaddressedProviderResponse(event.data);
+    if (misaddressed) {
+      window.postMessage(misaddressed, pageOrigin);
+    }
     return;
   }
 
   const postToPage = (payload: Parameters<typeof providerResponse>[1]): void => {
-    const known = addressesFromPayload(payload);
+    const known = addressesFromPayload(payload, request.method);
     if (known) {
       eventRefresh.observeAddresses(known);
     }

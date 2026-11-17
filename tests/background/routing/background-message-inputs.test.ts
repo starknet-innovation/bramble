@@ -1,7 +1,9 @@
 /**
  * Background message parser checks reject ambiguous runtime command shapes.
  */
+
 import { describe, expect, test } from "bun:test";
+import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import {
   readDiscoverRecoveryAccountsInput,
   readPreviewAccountInput,
@@ -145,6 +147,19 @@ describe("background message parsers", () => {
     expect(readUnlockInput({ debug: true, type: "wallet.unlock", vaultPassphrase })).toBeNull();
   });
 
+  test("accepts a submittable invoke proof and refuses a simulate-mode one", () => {
+    const invoke = (proof: unknown) =>
+      readAddInvokeTransactionInput({
+        calls: [{ calldata: [], contractAddress: "0x123", entrypoint: "settle" }],
+        origin: "https://example.com",
+        proof,
+        type: "wallet.addInvokeTransaction",
+      });
+    const proof = { data: "AAAA", output: ["0x1"], proof_facts: ["0x2"] };
+    expect(invoke(proof)?.proof).toEqual(proof);
+    expect(invoke({ data: "", output: [], proof_facts: [] })).toBeNull();
+  });
+
   test("reject malformed account ids before service calls", () => {
     expect(
       readCreateAccountInput({
@@ -255,7 +270,7 @@ describe("background message parsers", () => {
   });
 
   test("reject short vault passphrases before service calls", () => {
-    const shortPassphrase = "too short";
+    const shortPassphrase = "a".repeat(MIN_VAULT_PASSPHRASE_LENGTH - 1);
 
     expect(
       readCreateAccountInput({
@@ -321,6 +336,19 @@ describe("background message parsers", () => {
         vaultPassphrase,
       }),
     ).toBeNull();
+    // Past the hardened ceiling the recovery scan stops at (Sherlock 253).
+    for (const field of ["accountIndex", "addressIndex"]) {
+      const at = (index: number) =>
+        readCreateAccountInput({
+          [field]: index,
+          accountContractType: "openzeppelin",
+          mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+          type: "wallet.createAccount",
+          vaultPassphrase,
+        });
+      expect(at(0x7fffffff)).not.toBeNull();
+      expect(at(0x80000000)).toBeNull();
+    }
   });
 
   test("rejects create-account messages with a non-string mnemonic passphrase", () => {
@@ -458,7 +486,10 @@ describe("background message parsers", () => {
       vaultPassphrase,
     });
     expect(
-      readRevealSecretsInput({ type: "wallet.revealSecrets", vaultPassphrase: "too short" }),
+      readRevealSecretsInput({
+        type: "wallet.revealSecrets",
+        vaultPassphrase: "a".repeat(MIN_VAULT_PASSPHRASE_LENGTH - 1),
+      }),
     ).toBeNull();
     expect(readRevealSecretsInput({ type: "wallet.revealSecrets" })).toBeNull();
     expect(readRevealSecretsInput({ type: "wallet.unlock", vaultPassphrase })).toBeNull();

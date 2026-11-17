@@ -7,6 +7,7 @@ import {
   SkeletonRows,
 } from "../../components/index";
 import { formatCompactUsd, formatPrice, type Resource, type TokenTrade } from "../../data/index";
+import { loadFailedMessage } from "../../protocols/support/user-error";
 
 type TokenTradeTapeProps = {
   readonly connected: boolean;
@@ -60,7 +61,7 @@ export const TokenTradeTape = ({
     );
   }
   if (resource.error !== null && allTrades.length === 0) {
-    return <ErrorBanner message={`Couldn't load spot trades: ${resource.error}`} />;
+    return <ErrorBanner message={loadFailedMessage("spot trades", resource.error)} />;
   }
   if (resource.isLoading && allTrades.length === 0) {
     return <SkeletonRows rows={6} />;

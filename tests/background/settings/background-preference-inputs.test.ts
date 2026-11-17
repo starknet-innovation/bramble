@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  readSetAccountHiddenInput,
   readSetDisplayInput,
   readSetNostrRelayUrlInput,
   readSetStrk20NetworkConfigInput,
@@ -15,15 +16,19 @@ describe("readSetDisplayInput", () => {
       readSetDisplayInput({
         approvalSurface: "popup",
         displayCurrency: "eur",
+        productAnalytics: true,
         reliabilityDiagnostics: true,
         theme: "dark",
         type: "wallet.setDisplay",
+        vipNotice: false,
       }),
     ).toEqual({
       approvalSurface: "popup",
       displayCurrency: "eur",
+      productAnalytics: true,
       reliabilityDiagnostics: true,
       theme: "dark",
+      vipNotice: false,
     });
   });
 
@@ -35,6 +40,15 @@ describe("readSetDisplayInput", () => {
     ).toBeNull();
   });
 
+  test("reads the collectibles preview switch only as a boolean", () => {
+    expect(readSetDisplayInput({ collectiblesPreview: true, type: "wallet.setDisplay" })).toEqual({
+      collectiblesPreview: true,
+    });
+    expect(
+      readSetDisplayInput({ collectiblesPreview: "true", type: "wallet.setDisplay" }),
+    ).toBeNull();
+  });
+
   test("rejects unknown currency or theme values", () => {
     expect(
       readSetDisplayInput({ approvalSurface: "window", type: "wallet.setDisplay" }),
@@ -43,6 +57,60 @@ describe("readSetDisplayInput", () => {
     expect(readSetDisplayInput({ theme: "solarized", type: "wallet.setDisplay" })).toBeNull();
     expect(
       readSetDisplayInput({ reliabilityDiagnostics: "yes", type: "wallet.setDisplay" }),
+    ).toBeNull();
+    expect(readSetDisplayInput({ productAnalytics: "yes", type: "wallet.setDisplay" })).toBeNull();
+    expect(readSetDisplayInput({ type: "wallet.setDisplay", vipNotice: "off" })).toBeNull();
+  });
+});
+
+describe("readSetAccountHiddenInput", () => {
+  test("reads a well-formed hide or reveal toggle", () => {
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        hidden: true,
+        type: "wallet.setAccountHidden",
+      }),
+    ).toEqual({ accountId: "SN_MAIN:0x2a", hidden: true });
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        hidden: false,
+        type: "wallet.setAccountHidden",
+      }),
+    ).toEqual({ accountId: "SN_MAIN:0x2a", hidden: false });
+  });
+
+  test("rejects a non-record, wrong-type, unknown-key, or malformed payload", () => {
+    expect(readSetAccountHiddenInput(null)).toBeNull();
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        hidden: true,
+        type: "wallet.setAccountLabel",
+      }),
+    ).toBeNull();
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        extra: 1,
+        hidden: true,
+        type: "wallet.setAccountHidden",
+      }),
+    ).toBeNull();
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "not-an-account",
+        hidden: true,
+        type: "wallet.setAccountHidden",
+      }),
+    ).toBeNull();
+    expect(
+      readSetAccountHiddenInput({
+        accountId: "SN_MAIN:0x2a",
+        hidden: "yes",
+        type: "wallet.setAccountHidden",
+      }),
     ).toBeNull();
   });
 });
@@ -68,6 +136,18 @@ describe("readSetNostrRelayUrlInput", () => {
       }),
     ).toBeNull();
   });
+
+  // Only the canonical spelling crosses the message boundary (`isServiceUrl`).
+  test("rejects a relay in a spelling the URL parser would rewrite", () => {
+    for (const relayUrl of [
+      "wss://relay.example/k ey",
+      'wss://relay.example/k"ey',
+      "wss:\\\\relay.example",
+      "WSS://relay.example",
+    ]) {
+      expect(readSetNostrRelayUrlInput({ relayUrl, type: "wallet.setNostrRelayUrl" })).toBeNull();
+    }
+  });
 });
 
 describe("readSetStrk20NetworkConfigInput", () => {
@@ -77,7 +157,7 @@ describe("readSetStrk20NetworkConfigInput", () => {
     paymaster: { feeToken: "0x5", url: "https://privacy.example/paymaster" },
     poolAddress: "0x2",
     proverUrl: "https://privacy.example/prover",
-    subaccountAnonymizerAddress: "0x3",
+    shadowAccountAnonymizerAddress: "0x3",
   };
 
   test("accepts only complete, per-network public service routing", () => {
@@ -95,6 +175,30 @@ describe("readSetStrk20NetworkConfigInput", () => {
         type: "wallet.setStrk20NetworkConfig",
       }),
     ).toEqual({ config: null, networkId: "SN_MAIN" });
+  });
+
+  test("rejects routing with an endpoint in a spelling the URL parser would rewrite", () => {
+    for (const field of ["discoveryUrl", "ohttpRelayUrl", "proverUrl"]) {
+      for (const url of ["https://privacy.example/a b", "https:privacy.example/a"]) {
+        expect(
+          readSetStrk20NetworkConfigInput({
+            config: { ...config, [field]: url },
+            networkId: "SN_MAIN",
+            type: "wallet.setStrk20NetworkConfig",
+          }),
+        ).toBeNull();
+      }
+    }
+    expect(
+      readSetStrk20NetworkConfigInput({
+        config: {
+          ...config,
+          paymaster: { ...config.paymaster, url: "https://privacy.example\\p" },
+        },
+        networkId: "SN_MAIN",
+        type: "wallet.setStrk20NetworkConfig",
+      }),
+    ).toBeNull();
   });
 
   test("rejects partial routing, credentials, and insecure remote URLs", () => {

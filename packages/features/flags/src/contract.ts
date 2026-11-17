@@ -12,8 +12,8 @@
  * Pure: no clock, no network, no storage. Throws {@link FlagContractError} on
  * any violation; callers translate that into "keep the last good document".
  */
-import { HTTP_BODY_LIMITS } from "@mc-wallet/core/http-json";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { HTTP_BODY_LIMITS } from "@bramble/core/http-json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 
 /** The only document schema this build understands. */
 export const FLAG_SCHEMA_VERSION = 1;

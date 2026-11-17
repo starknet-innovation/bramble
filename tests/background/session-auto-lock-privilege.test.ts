@@ -8,8 +8,8 @@
  * reads them again.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import {
   createUnlockSession,
@@ -20,6 +20,7 @@ import {
   createWallet,
   extensionSender,
   grantedOrigin,
+  testExtension,
   vaultPassphrase,
 } from "../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
@@ -73,11 +74,15 @@ const makeHarness = async () => {
   const session = createUnlockSession({ now: () => now, ttlMs: TTL_MS });
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
   await preferencesStore.setActiveNetwork("SN_SEPOLIA");
-  const handler = createMessageHandler(createWallet(), "extension-id", {
+  const handler = createMessageHandler(createWallet(), testExtension, {
     preferencesStore,
     runtimeRpc: makeRuntimeRpc({
       async estimateAccountDeploymentFee() {
         return { overallFee: "1", unit: "FRI" };
+      },
+      // An undeployed account, as a deployment needs (mc-wallet 712).
+      async getDeploymentStatus() {
+        return false;
       },
     }),
     session,

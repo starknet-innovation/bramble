@@ -4,26 +4,85 @@
  * proving block before a dependent proof is created.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { IndeterminateRpcWriteError, isTransportRpcError } from "@mc-wallet/starknet/provider";
-import { canonicalFelt, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { WalletError } from "@bramble/core/errors";
+import { IndeterminateRpcWriteError, isTransportRpcError } from "@bramble/starknet/provider";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+} from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import {
   memoryStrk20MaturityStore,
+  STRK20_PRIOR_WRITE_UNRESOLVED,
   type Strk20MaturityScope,
   type Strk20MaturityStore,
+  type Strk20SignedSubmission,
+  type Strk20SubmissionRoute,
 } from "../policy/maturity";
 import { STRK20_SERVICE_UNAVAILABLE } from "../service";
+import {
+  STRK20_WAIT_BUDGETS,
+  type WaitScheduler,
+  withinStrk20WaitBudget,
+} from "./official-sdk-budget";
 
-const PROVING_BLOCK_DEPTH = 10;
+import {
+  PROVING_BLOCK_DEPTH,
+  priorWaitFailure,
+  RejectedPrivacyTransaction,
+  settleSubmitting,
+} from "./official-sdk-maturity-resolution";
+
 const MAX_MATURITY_POLLS = 120;
 const ACCEPTANCE_RETRIES = 240;
 const ACCEPTANCE_LIFECYCLE_RETRIES = 120;
 
-class RejectedPrivacyTransaction extends Error {}
+/**
+ * Persists the signed identity of a privacy write before it is sent. Handed to
+ * each broadcast by {@link Strk20MaturityRuntime.submitAccepted}; a send that
+ * signs its own transaction passes it on as the invoke's `onSigned` hook. A
+ * malformed identity is refused, which aborts the send before anything leaves.
+ */
+export type Strk20SubmissionJournal = (signed: Strk20SignedSubmission) => Promise<void>;
+
+// Canonical form only: the store validates on read and drops what it cannot
+// parse, so a non-canonical felt written here would read back as a clean scope.
+const canonicalSigned = (signed: Strk20SignedSubmission): Strk20SignedSubmission | null => {
+  const transactionHash = canonicalFelt(signed.transactionHash);
+  const senderAddress = canonicalFelt(signed.senderAddress);
+  const nonce = canonicalFelt(signed.nonce);
+  return transactionHash &&
+    isNonZeroStarkFieldElement(transactionHash) &&
+    senderAddress &&
+    isNonZeroStarkFieldElement(senderAddress) &&
+    nonce &&
+    isStarkFieldElement(nonce)
+    ? { nonce, senderAddress, transactionHash }
+    : null;
+};
+
+// Journals a signed write for `scope`. A malformed identity is refused, which
+// aborts the send before anything leaves.
+const journalFor =
+  (store: Strk20MaturityStore, scope: Strk20MaturityScope): Strk20SubmissionJournal =>
+  async (signed) => {
+    const identity = canonicalSigned(signed);
+    if (!identity) {
+      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    }
+    await store.write(scope, { ...identity, state: "submitting" });
+  };
 
 type MaturityRuntimeOptions = {
+  /**
+   * Wall-clock ceiling on one proving-block wait, receipt wait included. The
+   * poll count alone is not a bound: each poll is two node reads that can
+   * each take the transport's full deadline before answering "not yet".
+   */
+  readonly maturityBudgetMs?: number;
   readonly pause?: () => Promise<void>;
+  readonly schedule?: WaitScheduler;
   readonly store?: Strk20MaturityStore;
   readonly waitForAccepted?: (provider: RpcProvider, transactionHash: string) => Promise<number>;
 };
@@ -65,23 +124,55 @@ export type Strk20MaturityRuntime = {
     scope: Strk20MaturityScope,
     transactionHash: string,
   ) => Promise<void>;
+  /**
+   * Prepares and broadcasts one write for `scope`, serialized per scope. The
+   * scope is marked `submitting` before `broadcast` runs; a broadcast that
+   * signs its own transaction should pass `journal` on as the invoke's
+   * `onSigned` hook, so a send whose answer is lost can later be resolved
+   * on-chain rather than only by ending the browser session.
+   *
+   * `route` is recorded on the claim. Pass `account` only when `broadcast`
+   * signs through `journal` (the invoke's `onSigned` hook), because an
+   * `account` claim that never gained a signed identity is later released as
+   * provably unsent. Anything else must pass `relay`, with `relaySlots`
+   * returning the `WriteOnce` slots of the exact call it hands the relay
+   * (`relayClaimSlots`). They are recorded on the claim before `broadcast`
+   * runs; a relay send without them is refused before anything leaves.
+   */
   readonly submitAccepted: <P, T extends { readonly transactionHash: string }>(
     provider: RpcProvider,
     scope: Strk20MaturityScope,
+    route: Strk20SubmissionRoute,
     prepare: () => Promise<P>,
-    broadcast: (prepared: P) => Promise<T>,
+    broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
+    relaySlots?: (prepared: P) => readonly string[] | null,
   ) => Promise<T>;
+  /**
+   * The user's "Unlock anyway" for `scope`: waits for any send on the scope
+   * to settle, then clears its `submitting` marker and returns whether one was
+   * cleared. The earlier write may still land; call it only from an explicit,
+   * informed user action. A send still running refuses with the unresolved
+   * refusal.
+   */
+  readonly releasePendingWrite: (scope: Strk20MaturityScope) => Promise<boolean>;
 };
 
 /**
  * Creates the accepted-receipt and historical-state readiness coordinator.
  */
 export const createStrk20MaturityRuntime = ({
+  maturityBudgetMs = STRK20_WAIT_BUDGETS.maturity,
   pause = defaultPause,
+  schedule,
   store = memoryStrk20MaturityStore(),
   waitForAccepted = defaultWaitForAccepted,
 }: MaturityRuntimeOptions = {}): Strk20MaturityRuntime => {
   const submissionTails = new Map<string, Promise<void>>();
+  // Scopes whose send is between its `submitting` claim and its settled
+  // broadcast in this worker. Such a claim may still be signed, so it is never
+  // released as unsent. The background builds one runtime per worker, and a
+  // send cannot outlive the worker that runs it.
+  const liveSends = new Set<string>();
   const scopeKey = (scope: Strk20MaturityScope): string =>
     `${scope.accountId}|${scope.networkId}|${canonicalFelt(scope.poolAddress) ?? scope.poolAddress}`;
   const serializeSubmission = <T>(
@@ -112,11 +203,19 @@ export const createStrk20MaturityRuntime = ({
     if (!Number.isSafeInteger(block) || block < 0) {
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
-    await store.write(scope, {
+    // The receipt wait is a gap. Record the block only while this hash is
+    // still the scope's marker; a newer send's marker must survive it. If a
+    // newer send replaced the marker meanwhile, this block says nothing about
+    // that send's acceptance, so fail closed instead of returning it as a
+    // proving floor (mc-wallet #474 item 1).
+    const recorded = await store.replaceIfCurrentHash(scope, transactionHash, {
       acceptedBlock: block,
       state: "submitted",
       transactionHash,
     });
+    if (!recorded) {
+      throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+    }
     return block;
   };
 
@@ -124,14 +223,16 @@ export const createStrk20MaturityRuntime = ({
     provider: RpcProvider,
     scope: Strk20MaturityScope,
   ): Promise<number | undefined> => {
-    const record = await store.read(scope);
+    const stored = await store.read(scope);
+    const record =
+      stored?.state === "submitting"
+        ? await settleSubmitting(store, provider, scope, stored, liveSends.has(scopeKey(scope)))
+        : stored;
     if (!record) {
       return undefined;
     }
-    if (record.state === "submitting") {
-      throw new WalletError(
-        `${STRK20_SERVICE_UNAVAILABLE}: submission status is unknown; close every browser window and reopen the browser to recover`,
-      );
+    if (record.state === "released") {
+      return record.acceptedBlock;
     }
     if (record.acceptedBlock !== undefined) {
       return record.acceptedBlock;
@@ -139,35 +240,52 @@ export const createStrk20MaturityRuntime = ({
     try {
       return await acceptedBlock(provider, scope, record.transactionHash);
     } catch (error) {
-      if (error instanceof RejectedPrivacyTransaction) {
-        await store.write(scope, null);
-      }
-      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      return priorWaitFailure(store, scope, record.transactionHash, error);
     }
   };
 
-  const provingBlock = async (
+  // One poll: the deepest block the prover may target right now, if it is
+  // already past the prior write and its historical state is visible.
+  const matureCandidate = async (
+    provider: RpcProvider,
+    priorBlock: number | undefined,
+    isHistoricalStateReady?: (block: number) => Promise<boolean>,
+  ): Promise<number | null> => {
+    const latest = await provider.getBlockNumber();
+    const candidate = Math.max(0, latest - PROVING_BLOCK_DEPTH);
+    const pastPrior = priorBlock === undefined || priorBlock < candidate;
+    return pastPrior && (!isHistoricalStateReady || (await isHistoricalStateReady(candidate)))
+      ? candidate
+      : null;
+  };
+  // Bounded twice over: by poll count, and by wall clock through the budget,
+  // whose lapse is the answer the caller gets when the node keeps saying "not
+  // yet". The loop also reads the budget so it stops polling once the race has
+  // already been lost rather than spending the remaining polls on a dead wait.
+  const provingBlock = (
     provider: RpcProvider,
     scope: Strk20MaturityScope,
     isHistoricalStateReady?: (block: number) => Promise<boolean>,
-  ): Promise<number> => {
-    const priorBlock = await priorAcceptedBlock(provider, scope);
-    for (let attempt = 0; attempt <= MAX_MATURITY_POLLS; attempt += 1) {
-      const latest = await provider.getBlockNumber();
-      const candidate = Math.max(0, latest - PROVING_BLOCK_DEPTH);
-      if (
-        (priorBlock === undefined || priorBlock < candidate) &&
-        (!isHistoricalStateReady || (await isHistoricalStateReady(candidate)))
-      ) {
-        return candidate;
-      }
-      if (attempt === MAX_MATURITY_POLLS) {
-        break;
-      }
-      await pause();
-    }
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  };
+  ): Promise<number> =>
+    withinStrk20WaitBudget(
+      "waiting for pool maturity",
+      maturityBudgetMs,
+      async (budget) => {
+        const priorBlock = await priorAcceptedBlock(provider, scope);
+        for (let attempt = 0; attempt <= MAX_MATURITY_POLLS && !budget.expired(); attempt += 1) {
+          const candidate = await matureCandidate(provider, priorBlock, isHistoricalStateReady);
+          if (candidate !== null) {
+            return candidate;
+          }
+          if (attempt === MAX_MATURITY_POLLS) {
+            break;
+          }
+          await pause();
+        }
+        throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      },
+      schedule,
+    );
   const recordSubmission = async (
     provider: RpcProvider,
     scope: Strk20MaturityScope,
@@ -181,7 +299,7 @@ export const createStrk20MaturityRuntime = ({
       await acceptedBlock(provider, scope, transactionHash);
     } catch (error) {
       if (error instanceof RejectedPrivacyTransaction) {
-        await store.write(scope, null);
+        await store.replaceIfCurrentHash(scope, transactionHash, null);
       }
       throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
     }
@@ -189,24 +307,45 @@ export const createStrk20MaturityRuntime = ({
   const submitPreparedAccepted = <P, T extends { readonly transactionHash: string }>(
     provider: RpcProvider,
     scope: Strk20MaturityScope,
+    route: Strk20SubmissionRoute,
     prepare: () => Promise<P>,
-    broadcast: (prepared: P) => Promise<T>,
+    broadcast: (prepared: P, journal: Strk20SubmissionJournal) => Promise<T>,
+    relaySlots?: (prepared: P) => readonly string[] | null,
   ): Promise<T> =>
     serializeSubmission(scope, async () => {
       const prepared = await prepare();
+      // A relay claim must name the slots its call writes once, or nothing
+      // could ever prove that call dead; refuse before the scope is claimed.
+      const writeOnceSlots = route === "relay" ? (relaySlots?.(prepared) ?? null) : null;
+      if (route === "relay" && writeOnceSlots === null) {
+        throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      }
       const previous = await store.read(scope);
-      await store.write(scope, { state: "submitting" });
+      const key = scopeKey(scope);
+      // Marked live before the claim is queued, so a resolution that reads the
+      // flag afterwards can never queue a release ahead of this claim.
+      liveSends.add(key);
       // A structured RPC rejection is determinate: the sequencer refused the
       // transaction, so no write is in flight and the scope must be released or
       // every later attempt on it fails with a stale `submitting` guard.
       // Transport and unknown failures stay indeterminate — the transaction may
       // have been accepted after the response was lost — so those keep the scope
       // closed rather than risk proving against state a landed write invalidates.
-      const result = await broadcast(prepared).catch(async (error: unknown) => {
-        if (!(error instanceof IndeterminateRpcWriteError) && !isTransportRpcError(error)) {
-          await store.write(scope, previous);
-        }
-        throw error;
+      // The scope stays live until that restore has landed.
+      const result = await (async (): Promise<T> => {
+        await store.write(scope, {
+          route,
+          state: "submitting",
+          ...(writeOnceSlots === null ? {} : { writeOnceSlots }),
+        });
+        return broadcast(prepared, journalFor(store, scope)).catch(async (error: unknown) => {
+          if (!(error instanceof IndeterminateRpcWriteError) && !isTransportRpcError(error)) {
+            await store.write(scope, previous);
+          }
+          throw error;
+        });
+      })().finally(() => {
+        liveSends.delete(key);
       });
       // The pre-broadcast `submitting` claim is already durable. Once the RPC
       // returned an accepted hash, a later journal/receipt failure may leave
@@ -216,9 +355,26 @@ export const createStrk20MaturityRuntime = ({
       return result;
     });
 
+  // "Unlock anyway" acts on the marker the user saw: it is read when the user
+  // asks, refused while a send on the scope is queued or running, and cleared
+  // only if it is still that marker once any queued work has settled. A
+  // marker a later send leaves is never cleared (review of mc-wallet 668).
+  const releasePendingWrite = async (scope: Strk20MaturityScope): Promise<boolean> => {
+    const key = scopeKey(scope);
+    if (liveSends.has(key) || submissionTails.has(key)) {
+      throw new WalletError(STRK20_PRIOR_WRITE_UNRESOLVED);
+    }
+    const seen = await store.read(scope);
+    if (seen?.state !== "submitting") {
+      return false;
+    }
+    return serializeSubmission(scope, () => store.releaseSubmitting(scope, seen));
+  };
+
   return {
     provingBlock,
     recordSubmission,
+    releasePendingWrite,
     submitAccepted: submitPreparedAccepted,
   };
 };

@@ -1,11 +1,13 @@
 {
-  "name": "@mc-wallet/settings",
+  "name": "@bramble/settings",
+  "description": "Account groups, public preferences, network overrides and their validated stores.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": {
     "./groups": "./src/groups.ts",
-    "./preferences": "./src/preferences.ts"
+    "./preferences": "./src/preferences.ts",
+    "./preferences-backup": "./src/preferences-backup.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",
@@ -13,10 +15,10 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/portfolio": "workspace:*",
-    "@mc-wallet/privacy": "workspace:*",
-    "@mc-wallet/store": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/portfolio": "workspace:*",
+    "@bramble/privacy": "workspace:*",
+    "@bramble/store": "workspace:*",
+    "@bramble/wallet-model": "workspace:*"
   }
 }

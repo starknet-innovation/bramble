@@ -5,7 +5,7 @@
  * message — not a guess, and not a value inverted somewhere in the binding.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences, type WalletPreferences } from "@bramble/settings/preferences";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { bindEndpointSettings } from "../../../../src/sidepanel/journeys/settings/endpoint-ui";
 import { advancedNetworkFlow } from "../../../../src/sidepanel/journeys/settings/network-views";
@@ -64,21 +64,43 @@ const walletStub = (calls: Array<readonly [string, boolean, string]>, fail = fal
     setExplorerFallback: async (networkId: string, enabled: boolean, apiUrl: string) => {
       calls.push([networkId, enabled, apiUrl]);
       if (fail) {
-        throw new Error("preferences unavailable");
+        throw new Error("Couldn't load your settings. Try again.");
       }
     },
   }) as unknown as SidepanelWallet;
 
 describe("advanced endpoints explorer-fallback control", () => {
+  test("clearly discloses that product analytics are on by default", () => {
+    const html = advancedNetworkFlow(status, null);
+    const start = html.indexOf('data-disclosure="product-analytics"');
+    expect(start).toBeGreaterThan(-1);
+    const section = html.slice(start, html.indexOf("</details>", start));
+
+    expect(section).toContain("Product analytics");
+    expect(section).toContain("On");
+    // The default matters and stays; "turn off anytime" was true of every
+    // checkbox on the screen and told the reader nothing.
+    expect(section).toContain("on by default");
+    expect(section).not.toContain("turn off anytime");
+    expect(section).toContain('id="product-analytics"');
+    expect(section).toContain("checked");
+  });
+
   test("shows custom coordination relay and diagnostics in infrastructure settings", () => {
     const relayUrl = "wss://relay.team.example";
     const html = advancedNetworkFlow(
       status,
-      preferences({ nostrRelayUrl: relayUrl, reliabilityDiagnostics: true }),
+      preferences({
+        nostrRelayUrl: relayUrl,
+        productAnalytics: true,
+        reliabilityDiagnostics: true,
+      }),
     );
 
     expect(html).toContain('data-disclosure="nostr-relay"');
     expect(html).toContain(`value="${relayUrl}"`);
+    expect(html).toContain('data-disclosure="product-analytics"');
+    expect(html).toContain('id="product-analytics"');
     expect(html).toContain('data-disclosure="reliability-diagnostics"');
     expect(html).toContain('id="reliability-diagnostics"');
   });
@@ -177,7 +199,7 @@ describe("advanced endpoints explorer-fallback control", () => {
     await tick();
 
     expect(app.querySelector("#explorer-fallback-result")?.textContent).toBe(
-      "preferences unavailable",
+      "Couldn't load your settings. Try again.",
     );
   });
 
@@ -203,6 +225,60 @@ describe("advanced endpoints explorer-fallback control", () => {
 
     expect(origins).toEqual([["https://explorer.example/*"]]);
     expect(calls).toEqual([["SN_MAIN", true, MY_EXPLORER]]);
+  });
+
+  // The store accepts only an endpoint's canonical spelling. The panel saves a
+  // typed URL in that spelling, and refuses one it would have to percent-encode
+  // before the browser's host-permission prompt (#674 review).
+  const submitExplorer = async (apiUrl: string) => {
+    document.body.replaceChildren();
+    // Set as an attribute, not through the markup, so a typed quote survives.
+    const app = screen(true);
+    app.querySelector('input[name="apiUrl"]')?.setAttribute("value", apiUrl);
+    const calls: Array<readonly [string, boolean, string]> = [];
+    const origins: string[][] = [];
+    bindEndpointSettings({
+      app,
+      networkId: () => "SN_MAIN",
+      permissions: {
+        request: async ({ origins: requested }) => {
+          origins.push(requested);
+          return true;
+        },
+      },
+      render: async () => undefined,
+      wallet: walletStub(calls),
+    });
+    app.querySelector<HTMLFormElement>("#explorer-fallback-form")?.requestSubmit();
+    await tick();
+    return { calls, origins };
+  };
+
+  test("saves a typed URL in the spelling the store accepts", async () => {
+    for (const typed of [
+      "HTTPS://Explorer.Example:443/v1",
+      "https:\\\\explorer.example\\v1",
+      "https:explorer.example/x/../v1",
+    ]) {
+      const { calls, origins } = await submitExplorer(typed);
+      expect(origins).toEqual([["https://explorer.example/*"]]);
+      expect(calls).toEqual([["SN_MAIN", true, MY_EXPLORER]]);
+    }
+  });
+
+  test("refuses a typed URL it would have to percent-encode, before asking for access", async () => {
+    for (const typed of [
+      "https://explorer.example/v1/a b",
+      'https://explorer.example/v1/a"b',
+      "https://explorer.example/v1?key=a`b",
+    ]) {
+      const { calls, origins } = await submitExplorer(typed);
+      expect(origins).toEqual([]);
+      expect(calls).toEqual([]);
+      expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain(
+        "no spaces, quotes, angle brackets or backticks",
+      );
+    }
   });
 
   test("does not store an endpoint when Chrome denies its host permission", async () => {
@@ -268,5 +344,47 @@ describe("advanced endpoints explorer-fallback control", () => {
     await tick();
 
     expect(saved).toEqual(["wss://relay.team.example"]);
+  });
+
+  test("saves a typed relay in its canonical spelling and refuses one with a space", async () => {
+    const submitRelay = async (relayUrl: string) => {
+      document.body.replaceChildren();
+      const app = document.createElement("div");
+      app.innerHTML = `<form id="nostr-relay-form">
+        <input name="relayUrl" />
+        <button type="submit">Save</button>
+      </form><p id="nostr-relay-result"></p>`;
+      app.querySelector("input")?.setAttribute("value", relayUrl);
+      document.body.append(app);
+      const saved: string[] = [];
+      bindEndpointSettings({
+        app,
+        networkId: () => "SN_MAIN",
+        render: async () => undefined,
+        wallet: {
+          loadStatus: async () => status,
+          setNostrRelayUrl: async (url: string) => {
+            saved.push(url);
+          },
+        } as unknown as SidepanelWallet,
+      });
+      app.querySelector<HTMLFormElement>("#nostr-relay-form")?.requestSubmit();
+      await tick();
+      return saved;
+    };
+
+    expect(await submitRelay("WSS://Relay.Team.Example")).toEqual(["wss://relay.team.example"]);
+    expect(await submitRelay("wss://relay.team.example/k ey")).toEqual([]);
+    expect(document.querySelector(".toast.error .toast-text")?.textContent).toContain(
+      "Enter a secure WSS relay URL",
+    );
+  });
+
+  test("the endpoint note names the browser, not Chrome, now that it also fires on Gecko", () => {
+    const html = advancedNetworkFlow(status, null);
+
+    expect(html).toContain("Your browser asks before granting access to a new service host");
+    // The note fires on every browser build, so no Chrome-only attribution.
+    expect(html).not.toContain("Chrome asks before granting");
   });
 });

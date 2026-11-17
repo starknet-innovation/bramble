@@ -7,16 +7,32 @@
  * notions of what the origin may see.
  */
 
-import { grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
-import type { Vault } from "@mc-wallet/vault/schema";
+import { RefusedBeforeWrite, WalletError } from "@bramble/core/errors";
+import { grantedAccountIdsFor } from "@bramble/vault/origin-grants";
+import type { Vault } from "@bramble/vault/schema";
 import type {
+  CreateKeyVaultInput,
   CreateVaultAccountInput,
   OriginGrantInput,
+  SetActiveAccountInput,
   SignHashInput,
   WalletStatus,
-} from "@mc-wallet/vault/service";
-import type { AccountRef, DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+} from "@bramble/vault/service";
+import type {
+  ListShadowAccountScopesInput,
+  RecordShadowAccountScopeInput,
+} from "@bramble/vault/service-types";
+import {
+  canonicalShadowAccountScope,
+  type ShadowAccountScopeRef,
+  shadowAccountScopesFor,
+  withShadowAccountScope,
+} from "@bramble/vault/shadow-account-scopes";
+import type { AccountRef, DerivedAccountRef } from "@bramble/wallet-model/accounts";
+import type {
+  ExtensionIdentity,
+  RuntimeSender,
+} from "../../apps/extension/src/background/routing/senders";
 
 /**
  * Single stub account used by the dispatcher suites.
@@ -52,6 +68,21 @@ export const secondAccount: DerivedAccountRef = {
 /**
  * The one origin the stub vault holds a grant for.
  */
+/**
+ * A Chromium extension identity, where the page origin really is derived from
+ * the add-on id. Firefox is the case this shape exists for: there `runtime.id`
+ * and the `moz-extension://<uuid>` page origin are unrelated, so production
+ * must read the origin from the runtime rather than build it. Tests that need
+ * that shape state both values explicitly instead of calling this.
+ */
+export const chromiumExtension = (id: string): ExtensionIdentity => ({
+  id,
+  origin: `chrome-extension://${id}`,
+});
+
+/** The extension identity the shared sender fixtures below belong to. */
+export const testExtension: ExtensionIdentity = chromiumExtension("extension-id");
+
 export const grantedOrigin = "https://example.com";
 
 /**
@@ -90,9 +121,34 @@ const status: WalletStatus = {
 export type WalletStubOptions = {
   readonly accounts?: readonly AccountRef[];
   readonly activeAccountId?: () => string;
+  readonly captureSetActiveAccount?: (input: SetActiveAccountInput) => void;
   readonly captureCreate?: (input: CreateVaultAccountInput) => void;
+  readonly captureCreateKeyVault?: (input: CreateKeyVaultInput) => void;
+  /**
+   * Whether `status()` reports a vault. A function is re-read on every call,
+   * so a suite can show a vault appearing between two reads. Defaults to true.
+   * `createKeyVault` refuses before writing while a vault is reported, as the
+   * vault service does.
+   */
+  readonly hasVault?: boolean | (() => boolean);
   readonly captureGrant?: (input: OriginGrantInput) => void;
   readonly captureSign?: (input: SignHashInput) => void;
+  /**
+   * Vault account ids the stub origin grant names. Defaults to the canonical
+   * Sepolia account, which is absent when a suite substitutes `accounts`.
+   */
+  readonly grantAccountIds?: readonly string[];
+  /**
+   * Public viewing key the stub says this wallet would register. Privacy checks
+   * compare it with the pool. Defaults to `0x1`.
+   */
+  readonly viewingPublicKey?: string;
+  /**
+   * Shadow-account scope records the stub vault holds, shared with the suite so
+   * it can read what a request recorded. Merged through the vault's own
+   * helpers, so the stub keeps the real canonicalization and bounds.
+   */
+  readonly shadowAccountScopes?: { value: readonly ShadowAccountScopeRef[] };
 };
 
 /**
@@ -100,18 +156,33 @@ export type WalletStubOptions = {
  */
 export const createWallet = (options: WalletStubOptions = {}) => {
   const accounts = options.accounts ?? [account];
+  const scopes = options.shadowAccountScopes ?? { value: [] };
   const vault = (): Vault => ({
     accounts,
     accountSecrets: [],
     activeAccountId: options.activeAccountId?.() ?? account.id,
+    importedSeeds: [],
     mnemonic: null,
-    originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
-    schemaVersion: 7,
+    originGrants: [{ accountIds: options.grantAccountIds ?? [account.id], origin: grantedOrigin }],
+    schemaVersion: 13,
+    multisigStrk20KeyConflicts: [],
+    multisigStrk20ViewingKeys: [],
+    shadowAccountScopes: scopes.value,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });
+  const reportsVault = (): boolean => {
+    const reported = options.hasVault;
+    if (reported === undefined) return status.hasVault;
+    return typeof reported === "function" ? reported() : reported;
+  };
   return {
     async createAccount(input: CreateVaultAccountInput) {
       options.captureCreate?.(input);
+      return account;
+    },
+    async createKeyVault(input: CreateKeyVaultInput) {
+      if (reportsVault()) throw new RefusedBeforeWrite("Wallet already exists");
+      options.captureCreateKeyVault?.(input);
       return account;
     },
     async addDerivedAccount() {
@@ -125,6 +196,15 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     },
     async previewAccount() {
       return account;
+    },
+    async previewImportedStrk20ViewingPublicKey() {
+      return { address: account.address, viewingPublicKey: "0x1" };
+    },
+    async previewImportedAccount() {
+      return account;
+    },
+    async previewStoredStrk20ViewingPublicKey() {
+      return options.viewingPublicKey ?? "0x1";
     },
     async validateMnemonic() {
       return true;
@@ -142,13 +222,46 @@ export const createWallet = (options: WalletStubOptions = {}) => {
       options.captureGrant?.(input);
       return [account];
     },
+    async recordShadowAccountScope({
+      vaultPassphrase: passphrase,
+      ...input
+    }: RecordShadowAccountScopeInput) {
+      if (passphrase !== vaultPassphrase) {
+        throw new Error("bad passphrase");
+      }
+      const scope = canonicalShadowAccountScope(input);
+      const next = scope ? withShadowAccountScope(scopes.value, scope) : null;
+      if (!next) {
+        throw new WalletError("shadow account record limit reached");
+      }
+      scopes.value = next;
+    },
+    async canRecordShadowAccountScope({
+      vaultPassphrase: passphrase,
+      ...input
+    }: RecordShadowAccountScopeInput) {
+      if (passphrase !== vaultPassphrase) {
+        throw new Error("bad passphrase");
+      }
+      const scope = canonicalShadowAccountScope(input);
+      return scope !== null && withShadowAccountScope(scopes.value, scope) !== null;
+    },
+    async listShadowAccountScopes(input: ListShadowAccountScopesInput) {
+      return shadowAccountScopesFor(
+        scopes.value,
+        input.accountId,
+        input.chainId,
+        input.poolAddress,
+      );
+    },
     async readVault(passphrase: string) {
       if (passphrase !== vaultPassphrase) {
         throw new Error("bad passphrase");
       }
       return vault();
     },
-    async setActiveAccount() {
+    async setActiveAccount(input: SetActiveAccountInput) {
+      options.captureSetActiveAccount?.(input);
       return account;
     },
     async signHash(input: SignHashInput) {
@@ -160,7 +273,7 @@ export const createWallet = (options: WalletStubOptions = {}) => {
       };
     },
     async status() {
-      return status;
+      return { ...status, hasVault: reportsVault() };
     },
   };
 };

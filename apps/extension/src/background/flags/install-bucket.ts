@@ -2,7 +2,7 @@
  * RNG boundary for the feature-flag rollout bucket.
  *
  * The only randomness the flag client uses: one uniform integer in [0, 9999],
- * drawn once per install, stored locally by `@mc-wallet/flags/state`, and
+ * drawn once per install, stored locally by `@bramble/flags/state`, and
  * never sent anywhere. It is not an identifier the wallet transmits and not
  * secret material; it only decides which side of a rollout percentage this
  * install lands on.

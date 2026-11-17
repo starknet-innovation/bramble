@@ -1,0 +1,24 @@
+{
+  "cross-vendor/braavos-0": {
+    "id": "cross-vendor/braavos-0",
+    "seed": "BRAMBLE_DATASET_SEED_READY_MATRIX",
+    "vendorDerivation": "braavos-direct",
+    "index": 0,
+    "address": "0x568a5a1d0b445078620f38a17da1a6ab38be52090cc2640b25db2a116c22a58",
+    "pubkey": "0x60b2e6595df443be9738876d2d373519486b4c0c7f447c0872ee8efc9ed792",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "same seed also carries Ready accounts; a scanner must surface both families",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": [
+      "fee float 0x601df5d32423dba4d7c48bd4084c1ba73c8437635abd8f2ef2bcde6174ed3f",
+      "ERROR: RpcError: RPC: starknet_estimateFee with params {\n  \"request\": [\n    {\n      \"type\": \"DEPLOY_ACCOUNT\",\n      \"constructor_calldata\": [\n        \"0x60b2e6595df443be9738876d2d373519486b4c0c7f447c0872ee8e",
+      "ERROR: RpcError: RPC: starknet_estimateFee with params {\n  \"request\": [\n    {\n      \"type\": \"DEPLOY_ACCOUNT\",\n      \"constructor_calldata\": [\n        \"0x60b2e6595df443be9738876d2d373519486b4c0c7f447c0872ee8e",
+      "deployed 0x4fde4866162b16bb27dad2e04e42158b0dcedaf9f149c373c7e7e07343b57d5"
+    ]
+  }
+}

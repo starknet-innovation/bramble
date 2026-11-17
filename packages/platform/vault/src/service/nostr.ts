@@ -1,6 +1,6 @@
 /** Wallet-level Nostr operations kept inside the encrypted-vault boundary. */
-import { WalletError } from "@mc-wallet/core/errors";
-import { MAX_NOSTR_BATCH_ITEMS } from "@mc-wallet/wallet-model/nostr";
+import { WalletError } from "@bramble/core/errors";
+import { MAX_NOSTR_BATCH_ITEMS } from "@bramble/wallet-model/nostr";
 import type { KmsPort, NostrApplicationData } from "../kms-port";
 import type { Vault } from "../schema/schema";
 import type { WalletVaultService } from "./service-types";

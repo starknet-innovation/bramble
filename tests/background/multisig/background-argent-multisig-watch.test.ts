@@ -4,7 +4,7 @@ import {
   ARGENT_MULTISIG_CONTRACT,
   argentSignerGuid,
   normalizeArgentMultisigConfig,
-} from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/starknet/account-contracts";
 import {
   HARNESS_KEYS,
   harnessExtensionSender,

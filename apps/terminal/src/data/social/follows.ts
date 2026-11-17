@@ -8,8 +8,8 @@ export type FollowedAsset = {
   readonly logoUri: string | null;
 };
 
-const STORAGE_KEY = "mc-terminal:follows:v1";
-const CHANGE_EVENT = "mc-terminal:follows-changed";
+const STORAGE_KEY = "bramble-terminal:follows:v1";
+const CHANGE_EVENT = "bramble-terminal:follows-changed";
 const MAX_FOLLOWS = 100;
 
 const boundedText = (value: unknown, maxLength: number): string | null =>

@@ -3,12 +3,13 @@
  * submissions stay privileged, locked-safe, and scoped to the active network.
  */
 import { describe, expect, test } from "bun:test";
-import type { DeployAccountInput, DeploymentStatusInput } from "@mc-wallet/starknet/rpc";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { DeployAccountInput, DeploymentStatusInput } from "@bramble/starknet/rpc";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const account: AccountRef = {
@@ -73,21 +74,24 @@ const walletStub = {
   },
 };
 
-const makeHandler = (unlocked: boolean) => {
+const makeHandler = (unlocked: boolean, deployed: boolean | Error = false) => {
   const statusCalls: DeploymentStatusInput[] = [];
   const deployCalls: DeployAccountInput[] = [];
+  let estimates = 0;
   const session = createUnlockSession();
   if (unlocked) {
     session.unlock(vaultPassphrase);
   }
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const handler = createMessageHandler(walletStub, testExtension, {
     runtimeRpc: makeRuntimeRpc({
       async estimateAccountDeploymentFee() {
+        estimates += 1;
         return { overallFee: "7", unit: "FRI" };
       },
       async getDeploymentStatus(input) {
         statusCalls.push(input);
-        return false;
+        if (deployed instanceof Error) throw deployed;
+        return deployed;
       },
       async getTokenMetadata() {
         return { decimals: 18, name: "Token", symbol: "TKN" };
@@ -99,7 +103,7 @@ const makeHandler = (unlocked: boolean) => {
     }),
     session,
   });
-  return { deployCalls, handler, statusCalls };
+  return { deployCalls, estimates: () => estimates, handler, statusCalls };
 };
 
 describe("background deployment messages", () => {
@@ -155,5 +159,32 @@ describe("background deployment messages", () => {
     expect(deployCalls[0]?.account).toEqual(account);
     expect(deployCalls[0]?.reviewedFee).toEqual({ overallFee: "7", unit: "FRI" });
     expect(typeof deployCalls[0]?.signHash).toBe("function");
+  });
+
+  // mc-wallet 712: a send from this account may have deployed it already. The
+  // deploy screen's quote then failed as "Couldn't estimate the network fee";
+  // it is refused by name before anything is estimated or signed.
+  test("refuses an account the node already reports deployed, before estimating or signing", async () => {
+    const { deployCalls, estimates, handler } = makeHandler(true, true);
+    expect(await handler({ type: "wallet.deployAccount" }, extensionSender)).toEqual({
+      error: "account already deployed",
+    });
+    expect(
+      await handler(
+        { reviewedFee: { overallFee: "7", unit: "FRI" }, type: "wallet.deployAccount" },
+        extensionSender,
+      ),
+    ).toEqual({ error: "account already deployed" });
+    expect(estimates()).toBe(0);
+    expect(deployCalls).toHaveLength(0);
+  });
+
+  test("a failed status read is no verdict: the deploy path decides as before", async () => {
+    const { estimates, handler } = makeHandler(true, new Error("node down"));
+    expect(await handler({ type: "wallet.deployAccount" }, extensionSender)).toEqual({
+      feeReview: { overallFee: "7", unit: "FRI" },
+      ok: true,
+    });
+    expect(estimates()).toBe(1);
   });
 });

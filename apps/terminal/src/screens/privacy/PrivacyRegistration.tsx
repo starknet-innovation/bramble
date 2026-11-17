@@ -48,7 +48,7 @@ export const PrivacyRegistration = ({
     </dl>
     <div className="registration-boundary">
       <KeyRound />
-      <p>MC Wallet derives the commitment, shows the final review, and signs only after approval.</p>
+      <p>Bramble derives the commitment, shows the final review, and signs only after approval.</p>
     </div>
     {active ? null : (
       <button className="privacy-primary" disabled={busy} onClick={onActivate} type="button">

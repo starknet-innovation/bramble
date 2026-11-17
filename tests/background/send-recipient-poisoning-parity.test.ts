@@ -31,19 +31,20 @@
  * under it is unit-tested below.
  */
 import { describe, expect, test } from "bun:test";
-import type { Strk20Service, Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import { createPreferencesStore, type WalletPreferences } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { Strk20Service, Strk20SubmissionPlan } from "@bramble/privacy/service";
+import { createPreferencesStore, type WalletPreferences } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import type { Vault } from "@mc-wallet/vault/schema";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/verify";
+import type { Vault } from "@bramble/vault/schema";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../support/background-wallet-stub";
 import { latestApprovalId, reviewedApprovalFee } from "../support/held";
 import {
   CLEAN_RECIPIENT,
@@ -55,6 +56,7 @@ import {
 } from "../support/poisoned-recipients";
 import {
   buildStrk20Handler,
+  prepareStrk20Deposit,
   STRK20_CALL_AND_PROOF,
   STRK20_EXTENSION_SENDER,
   STRK20_TOKEN,
@@ -118,7 +120,7 @@ const makeHandler = async (contactSaved = true) => {
     await preferencesStore.saveAddress({ address: CONTACT, label: "Friend", networkId: "SN_MAIN" });
   }
   const submitted: string[] = [];
-  const handler = createMessageHandler(walletStub as never, "extension-id", {
+  const handler = createMessageHandler(walletStub as never, testExtension, {
     preferencesStore,
     runtimeRpc: {
       async estimateInvokeFee() {
@@ -212,26 +214,53 @@ describe("NFT send", () => {
 });
 
 describe("dapp invoke", () => {
-  test("refuses a poisoned recipient instead of queueing a prompt to confirm", async () => {
+  // Queued with the poisoning flag, whose card offers Deny only, instead of
+  // refused on arrival: an instant refusal told the site which addresses the
+  // user has saved or paid (Sherlock 140). Approving it anyway is refused at the
+  // execution-time gate below, and nothing is submitted.
+  test("flags a poisoned recipient and refuses it even when approved", async () => {
     const { handler, submitted } = await makeHandler();
+    const held = handler(
+      {
+        calls: [
+          { calldata: [POISONED, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
+        ],
+        origin,
+        type: "wallet.addInvokeTransaction",
+      },
+      contentSender,
+    );
+    const id = await latestApprovalId(handler, extensionSender);
+    const listed = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
+      readonly pending: readonly { readonly flags?: readonly { readonly code: string }[] }[];
+    };
+    expect(listed.pending.at(-1)?.flags?.map((flag) => flag.code)).toContain("address-poisoning");
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
 
-    await expect(
-      handler(
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
+
+    await expect(held).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
+    expect(submitted).toEqual([]);
+  });
+
+  test("answers a denied poisoned request exactly as a denied clean one (Sherlock 140)", async () => {
+    const denied = async (recipient: string): Promise<unknown> => {
+      const { handler } = await makeHandler();
+      const held = handler(
         {
           calls: [
-            { calldata: [POISONED, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
+            { calldata: [recipient, "0x1", "0x0"], contractAddress: ETH, entrypoint: "transfer" },
           ],
           origin,
           type: "wallet.addInvokeTransaction",
         },
         contentSender,
-      ),
-    ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
-    // No approval was queued: the user is never shown a confirm button for it.
-    await expect(
-      handler({ type: "wallet.pendingApprovals" }, extensionSender),
-    ).resolves.toMatchObject({ pending: [] });
-    expect(submitted).toEqual([]);
+      );
+      const id = await latestApprovalId(handler, extensionSender);
+      await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
+      return held;
+    };
+    expect(await denied(POISONED)).toEqual(await denied(CLEAN));
   });
 
   // The request-time gate reads the address book as it stands when the site
@@ -319,7 +348,7 @@ const poolService = (): Strk20Service => ({
   async registrationStatus() {
     return "registered" as const;
   },
-  async subaccountCommitment() {
+  async shadowAccountCommitment() {
     return "0x1";
   },
   async submitActions() {
@@ -354,12 +383,11 @@ describe("privacy pool routes", () => {
     test(`prepares the ${label} route for an untrusted-looking recipient`, async () => {
       const handler = buildStrk20Handler({ preferences, strk20: poolService() });
 
+      // The shield answers through a tracked job, so the review is what its
+      // poll settles on; the relay quotes answer on the request itself.
       await expect(
-        handler(
-          { amount: "0.5", recipient: CLEAN, tokenId: token.id, type },
-          STRK20_EXTENSION_SENDER,
-        ),
-      ).resolves.toMatchObject({ ok: true });
+        prepareStrk20Deposit(handler, { amount: "0.5", recipient: CLEAN, tokenId: token.id, type }),
+      ).resolves.toMatchObject({ ok: true, strk20Preparation: expect.anything() });
     });
 
     // The preparation gate alone would leave a window: the user composes a send,
@@ -371,10 +399,12 @@ describe("privacy pool routes", () => {
         preferencesRead: () => current,
         strk20: poolService(),
       });
-      const prepared = (await handler(
-        { amount: "0.5", recipient: POISONED, tokenId: token.id, type },
-        STRK20_EXTENSION_SENDER,
-      )) as { readonly strk20Preparation?: { readonly id: string } };
+      const prepared = (await prepareStrk20Deposit(handler, {
+        amount: "0.5",
+        recipient: POISONED,
+        tokenId: token.id,
+        type,
+      })) as { readonly strk20Preparation?: { readonly id: string } };
       const preparationId = prepared.strk20Preparation?.id;
       if (!preparationId) {
         throw new Error(`${label} route did not prepare against an empty address book`);

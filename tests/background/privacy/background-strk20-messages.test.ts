@@ -3,10 +3,11 @@
  * identity commitments, and invokes stay held until explicit approval.
  */
 import { describe, expect, test } from "bun:test";
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import type { InvokeInput } from "@mc-wallet/starknet/rpc";
-import { toProviderPayload } from "@mc-wallet/wallet-protocol/bridge";
+import type { Strk20Service } from "@bramble/privacy/service";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
+import type { InvokeInput } from "@bramble/starknet/rpc";
+import { memoryActivityLog } from "@bramble/transactions/activity";
+import { toProviderPayload } from "@bramble/wallet-protocol/bridge";
 import {
   flushHeld,
   latestApprovalId,
@@ -38,10 +39,12 @@ const approveHeld = approveHeldStrk20;
 
 describe("background strk20 messages", () => {
   test("registers only after an account, network, pool, and token-bound approval", async () => {
+    const activity = memoryActivityLog();
     const registerCalls = { value: 0 };
     const proveCalls = { value: 0 };
     const preparedSubmissions: Parameters<Strk20Service["submitPrepared"]>[0][] = [];
     const handler = buildHandler({
+      activity,
       preparedSubmissions,
       proveCalls,
       registerCalls,
@@ -62,9 +65,32 @@ describe("background strk20 messages", () => {
     expect(preparedSubmissions).toHaveLength(1);
     expect(preparedSubmissions[0]?.reviewedFee).toEqual({ overallFee: "1", unit: "FRI" });
     expect(preparedSubmissions[0]?.calls).toHaveLength(1);
+    expect((await activity.list())[0]?.summary).toBe("Activate private balances");
     expect(toProviderPayload(result, "mc_strk20Register")).toEqual({
       result: { transaction_hash: `0x${"123".padStart(64, "0")}` },
     });
+  });
+
+  test("renders the registration pool fee in STRK, not as a raw felt", async () => {
+    const handler = buildHandler({ registered: false });
+    const held = handler({ origin, type: "wallet.strk20Register" }, contentSender);
+    await flushHeld();
+    const listed = await waitForPendingApprovals<{
+      readonly id: string;
+      readonly kind?: string;
+      readonly summaries?: readonly string[];
+    }>(handler, sender);
+    // The harness's pool fee is 0x1 base units, so its readable form is 1e-18
+    // STRK; the point is that the panel reads a STRK amount, never the felt.
+    expect(listed.at(-1)).toMatchObject({
+      kind: "strk20-register",
+      summaries: expect.arrayContaining([
+        "Approve and pay the reviewed 0.000000000000000001 STRK pool fee",
+      ]),
+    });
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    await held;
   });
 
   test("does not submit registration when the user denies activation", async () => {
@@ -226,21 +252,21 @@ describe("background strk20 messages", () => {
   });
 
   test("derives a dapp-scoped commitment only after approval", async () => {
-    const subaccountCalls = { value: 0 };
-    const handler = buildHandler({ subaccountCalls });
+    const shadowAccountCalls = { value: 0 };
+    const handler = buildHandler({ shadowAccountCalls });
     const result = await approveHeld(
       handler,
       {
         dappName: "Example",
         nonce: "0x1",
         origin,
-        type: "wallet.strk20SubaccountCommitment",
+        type: "wallet.strk20ShadowAccountCommitment",
       },
-      "strk20-subaccount",
-      () => expect(subaccountCalls.value).toBe(0),
+      "strk20-shadow-account",
+      () => expect(shadowAccountCalls.value).toBe(0),
     );
     expect(result).toEqual({ commitment: "0x123", ok: true });
-    expect(subaccountCalls.value).toBe(1);
+    expect(shadowAccountCalls.value).toBe(1);
   });
 
   test("rejects the old `action`-discriminated shape at routing (114)", async () => {
@@ -342,7 +368,7 @@ describe("background strk20 messages", () => {
           discoveryUrl: "https://discovery.example/strk20",
           poolAddress: token,
           proverUrl: "https://prover.example/strk20",
-          subaccountAnonymizerAddress: recipient,
+          shadowAccountAnonymizerAddress: recipient,
         },
       },
     };
@@ -360,7 +386,7 @@ describe("background strk20 messages", () => {
           feeAction: { amount: "0x1", recipient, token, type: "withdraw" },
         };
       },
-      async subaccountCommitment() {
+      async shadowAccountCommitment() {
         return "0x123";
       },
       async submitActions() {
@@ -397,20 +423,20 @@ describe("background strk20 messages", () => {
       },
     },
     {
-      kind: "strk20-subaccount",
-      method: "wallet_strk20SubaccountCommitment",
+      kind: "strk20-shadow-account",
+      method: "wallet_strk20ShadowAccountCommitment",
       payload: {
         dappName: "Example",
         origin,
-        type: "wallet.strk20SubaccountCommitment",
+        type: "wallet.strk20ShadowAccountCommitment",
       },
     },
   ] as const) {
     test(`maps a denied ${request.kind} request to USER_REFUSED_OP (113)`, async () => {
       const balanceCalls = { value: 0 };
       const proveCalls = { value: 0 };
-      const subaccountCalls = { value: 0 };
-      const handler = buildHandler({ balanceCalls, proveCalls, subaccountCalls });
+      const shadowAccountCalls = { value: 0 };
+      const handler = buildHandler({ balanceCalls, proveCalls, shadowAccountCalls });
       const held = handler(request.payload, contentSender);
       await flushHeld();
       const id = await latestApprovalId(handler, sender);
@@ -419,7 +445,7 @@ describe("background strk20 messages", () => {
       expect(toProviderPayload(result, request.method).error?.code).toBe(113);
       expect(balanceCalls.value).toBe(0);
       expect(proveCalls.value).toBe(0);
-      expect(subaccountCalls.value).toBe(0);
+      expect(shadowAccountCalls.value).toBe(0);
     });
   }
 

@@ -1,13 +1,17 @@
+import { hash } from "starknet";
 import type { ApiRequest, ApiResponse } from "../_lib/http.js";
 import {
   authorizeOrigin,
   AVNU_PAYMASTER_URL,
   isRecord,
+  hasOnlyKeys,
+  isFelt,
   PRIVATE_SWAP_FEE_TOKEN,
   PRIVACY_POOL_ADDRESS,
   reject,
   serviceUrl,
 } from "../_lib/security.js";
+import { PAYMASTER_UPSTREAM_TIMEOUT_MS, PROVER_UPSTREAM_TIMEOUT_MS } from "../_lib/upstream-deadlines.js";
 
 export const config = {
   api: { bodyParser: false },
@@ -107,7 +111,12 @@ const paymasterBodyAllowed = (body: Uint8Array): boolean => {
     }
     const transaction = value["params"]["transaction"];
     const parameters = value["params"]["parameters"];
-    if (!isRecord(transaction) || !isRecord(transaction["apply_action"])) {
+    if (
+      !isRecord(transaction) ||
+      transaction["type"] !== "apply_action" ||
+      !hasOnlyKeys(transaction, ["type", "apply_action"]) ||
+      !isRecord(transaction["apply_action"])
+    ) {
       return false;
     }
     if (
@@ -121,6 +130,17 @@ const paymasterBodyAllowed = (body: Uint8Array): boolean => {
       return false;
     }
     const applyAction = transaction["apply_action"];
+    if (method === "paymaster_executeTransaction") {
+      const call = applyAction["apply_actions_call"];
+      if (
+        !hasOnlyKeys(applyAction, ["apply_actions_call", "proof", "proof_facts"]) ||
+        !isRecord(call) ||
+        !hasOnlyKeys(call, ["to", "selector", "calldata"]) ||
+        !isFelt(call["selector"]) ||
+        BigInt(call["selector"]) !== BigInt(hash.getSelectorFromName("apply_actions"))
+      )
+        return false;
+    } else if (!hasOnlyKeys(applyAction, ["pool_address"])) return false;
     const target =
       method === "paymaster_buildTransaction"
         ? applyAction["pool_address"]
@@ -143,12 +163,19 @@ const upstreamFor = (service: Service): string | null => {
   return serviceUrl("STRK20_PAYMASTER_UPSTREAM", AVNU_PAYMASTER_URL);
 };
 
+// The wallet reads a 5xx on a relay broadcast as a lost answer and a 4xx as a
+// refusal (Sherlock 159). A relay's own 4xx says it refused the request, so it
+// stays a 4xx here instead of becoming a 502 the wallet cannot tell apart from
+// a reply that was cut off.
 const copyResponse = async (
+  service: Service,
   upstream: Response,
   response: ApiResponse,
 ): Promise<ApiResponse> => {
   if (!upstream.ok) {
-    return reject(response, 502, "upstream_unavailable");
+    return service === "paymaster" && upstream.status >= 400 && upstream.status < 500
+      ? reject(response, upstream.status, "upstream_rejected")
+      : reject(response, 502, "upstream_unavailable");
   }
   const type = upstream.headers.get("content-type")?.split(";", 1)[0]?.trim();
   if (
@@ -244,10 +271,14 @@ export default async function handler(
       headers,
       method: request.method,
       redirect: "error",
-      signal: AbortSignal.timeout(route.service === "prover" ? 110_000 : 25_000),
+      signal: AbortSignal.timeout(
+        route.service === "prover" ? PROVER_UPSTREAM_TIMEOUT_MS : PAYMASTER_UPSTREAM_TIMEOUT_MS,
+      ),
     });
-  } catch {
-    return reject(response, 502, "upstream_unavailable");
+  } catch (error) {
+    return error instanceof DOMException && error.name === "TimeoutError"
+      ? reject(response, 504, "upstream_timeout")
+      : reject(response, 502, "upstream_unavailable");
   }
-  return copyResponse(upstream, response);
+  return copyResponse(route.service, upstream, response);
 }

@@ -7,7 +7,7 @@
  * is ordinary pre-confirmation noise, and an absent BLOCK is routine skew behind
  * a load-balanced endpoint rather than a chain-state failure.
  */
-import { isRecord } from "@mc-wallet/core/json";
+import { isRecord } from "@bramble/core/json";
 
 /**
  * Checks whether an RPC failure means the queried contract is not deployed.

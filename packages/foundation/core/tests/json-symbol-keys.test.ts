@@ -5,7 +5,7 @@
  * value is not JSON-serializable and must fail the gate.
  */
 import { describe, expect, test } from "bun:test";
-import { isJson } from "@mc-wallet/core/json";
+import { isJson } from "@bramble/core/json";
 
 describe("isJson symbol-key guard", () => {
   test("rejects a plain record with a symbol own-key", () => {

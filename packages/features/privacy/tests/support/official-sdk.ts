@@ -3,8 +3,9 @@
  * runtime so no prover, discovery service, RPC, vault, or hardware is touched.
  */
 
-import type { PrivacySdkRuntime } from "@mc-wallet/privacy/official-sdk-service";
-import type { Strk20AccountContext } from "@mc-wallet/privacy/service";
+import type { PrivacySdkRuntime } from "@bramble/privacy/official-sdk-service";
+import type { Strk20AccountContext } from "@bramble/privacy/service";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 
 export const STRK20_POOL_ADDRESS = "0x123";
@@ -27,7 +28,7 @@ export const STRK20_SDK_CONTEXT: Strk20AccountContext = {
     discoveryUrl: "https://discovery.example",
     poolAddress: STRK20_POOL_ADDRESS,
     proverUrl: "https://prover.example",
-    subaccountAnonymizerAddress: "0x789",
+    shadowAccountAnonymizerAddress: "0x789",
   },
   isAuthorized: () => true,
   rpcUrls: ["https://rpc.example"],
@@ -58,12 +59,19 @@ const poolCallResult = (
  * queried address, with `"0x0"` modelling an unregistered recipient.
  */
 export const strk20ProviderFor =
-  (options: { readonly poolFee?: string; readonly publicKey?: string } = {}) =>
+  (
+    options: {
+      readonly classHash?: string;
+      readonly poolFee?: string;
+      readonly publicKey?: string;
+    } = {},
+  ) =>
   (): RpcProvider =>
     ({
       callContract: async (call: { entrypoint?: string }) =>
         poolCallResult(call?.entrypoint, options.poolFee ?? "0x0", options.publicKey ?? "0x77"),
-      getClassHashAt: async () => "0xdef",
+      getBlockLatestAccepted: async () => ({ block_hash: "0x9", block_number: 100 }),
+      getClassHashAt: async () => options.classHash ?? "0xdef",
       getBlockNumber: async () => 20,
       waitForTransaction: async () => ({
         block_number: 10,
@@ -89,16 +97,16 @@ export type OfficialBuilder = ReturnType<
   ReturnType<PrivacySdkRuntime["createPrivateTransfers"]>["build"]
 >;
 
-export const officialBuilder = (
-  result: unknown,
-  proofInvocation: unknown = { warnings: [] },
-): OfficialBuilder => {
+/**
+ * Self-referential SDK builder double. Proof results come from the transfers
+ * double's `executeWithInvocation`, the only path the adapter proves through.
+ */
+export const officialBuilder = (proofInvocation: unknown = { warnings: [] }): OfficialBuilder => {
   const self = {
     createProofInvocation: async () => proofInvocation,
     invoke: () => self,
     register: () => self,
-    simulate: async () => result,
-    subaccounts: () => ({
+    shadowAccounts: () => ({
       commitment: async () => 0x123n,
       invoke: () => self,
       partialCommitment: async () => 0x456n,
@@ -114,10 +122,25 @@ export const officialBuilder = (
   return self as unknown as OfficialBuilder;
 };
 
+/**
+ * An `apply_actions` calldata the relay route accepts: a one-action
+ * `Span<ServerAction>` whose only action is a `WriteOnce` at
+ * {@link RELAY_WRITE_ONCE_SLOT} (#668), then a `None` screening suffix.
+ */
+export const RELAY_WRITE_ONCE_SLOT = "0x5157";
+export const RELAY_CALLDATA: readonly string[] = [
+  "0x1",
+  "0x0",
+  RELAY_WRITE_ONCE_SLOT,
+  "0x1",
+  "0x1",
+  "0x1",
+];
+
 export const executeResult = (warnings: readonly unknown[] = []) => ({
   callAndProof: {
     call: {
-      calldata: ["0x1"],
+      calldata: [...RELAY_CALLDATA],
       contractAddress: STRK20_POOL_ADDRESS,
       entrypoint: "apply_actions",
     },
@@ -125,3 +148,17 @@ export const executeResult = (warnings: readonly unknown[] = []) => ({
   },
   warnings,
 });
+
+/** The pool's on-chain per-batch charge used by the relay-route cases: 6 STRK in fri. */
+export const STRK20_POOL_FEE_6_STRK = "0x53444835ec580000";
+
+/** The SDK context with a private relay configured, STRK as the default fee token. */
+export const STRK20_RELAY_CONTEXT = {
+  ...STRK20_SDK_CONTEXT,
+  config: {
+    discoveryUrl: "https://discovery.example",
+    paymaster: { feeToken: STRK_TOKEN_ADDRESS, url: "https://relay.example" },
+    poolAddress: STRK20_POOL_ADDRESS,
+    proverUrl: "https://prover.example",
+  },
+};

@@ -1,55 +1,46 @@
 /** Plain wallet preferences kept outside the encrypted vault. */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isJson } from "@mc-wallet/core/json";
-import { isWatchedNft, withNftId } from "@mc-wallet/portfolio/watched-nft";
-import {
-  DEFAULT_STRK20_NETWORKS,
-  isStrk20NetworkConfig,
-  STRK20_MAINNET_POOL,
-  type Strk20NetworkConfig,
-} from "@mc-wallet/privacy/config";
-import { assertStoreAccess, type StoreActor } from "@mc-wallet/store/access";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
-import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
-import {
-  isCustomNetwork,
-  isCustomRpcUrl,
-  normalizeChainId,
-} from "@mc-wallet/wallet-model/custom-network";
+import { WalletError } from "@bramble/core/errors";
+import { isJson } from "@bramble/core/json";
+import { isWatchedNft, withNftId } from "@bramble/portfolio/watched-nft";
+import { DEFAULT_STRK20_NETWORKS, isStrk20NetworkConfig } from "@bramble/privacy/config";
+import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
+import type { KeyValueStore } from "@bramble/store/kv";
+import { serializeStoreMutations } from "@bramble/store/mutation";
+import { isAccountId } from "@bramble/wallet-model/accounts";
+import { isCustomRpcUrl } from "@bramble/wallet-model/custom-network";
 import {
   DEFAULT_NETWORK,
-  DEFAULT_TOKENS,
+  DEFAULT_TRACKED_TOKENS,
   isStarknetNetworkId,
-  STRK_TOKEN_ADDRESS,
-} from "@mc-wallet/wallet-model/networks";
+} from "@bramble/wallet-model/networks";
 
 import {
   isAddressBookEntry,
-  isApprovalSurfacePreference,
-  isDisplayCurrency,
   isLabel,
-  isThemeChoice,
-  isTokenConfig,
   isTokenId,
   withAddressBookId,
   withTokenId,
-} from "@mc-wallet/wallet-model/preferences";
-import {
-  createGroup as createGroupPure,
-  normalizeAccountGroups,
-  removeGroup as removeGroupPure,
-  renameGroup as renameGroupPure,
-  setAccountInGroup as setAccountInGroupPure,
-  setGroupIcon as setGroupIconPure,
-} from "./groups";
+} from "@bramble/wallet-model/preferences";
+import { normalizeAccountGroups } from "./groups";
+import { selectedMultisigPreference, withAccountHidden } from "./preferences-accounts";
+import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
+import { displayFlags, isValidDisplayInput } from "./preferences-display";
 import { withExplorerSettings } from "./preferences-explorer";
+import {
+  withAccountInGroup,
+  withCreatedGroup,
+  withGroupIcon,
+  withoutGroup,
+  withRenamedGroup,
+} from "./preferences-groups";
 import { withNostrRelayUrl } from "./preferences-nostr";
 import {
   isWalletPreferences,
   normalizeStoredPreferences,
   pickImportablePreferences,
 } from "./preferences-stored";
+import { withCurrentStrk20Defaults } from "./preferences-strk20-routing";
+import { withoutToken, withUpsertedToken } from "./preferences-tokens";
 import type { WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /** Re-exported entry types so callers keep importing them from this store. */
@@ -64,19 +55,24 @@ export type {
   RpcOverrides,
   ThemeChoice,
   TokenConfig,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/preferences";
 /** Explorer-lane resolver colocated with the preferences it reads. */
-export { explorerFallbackAllowed } from "@mc-wallet/wallet-model/preferences";
+export { explorerFallbackAllowed } from "@bramble/wallet-model/preferences";
+/** Custom-network count bound, re-exported with the store that applies it. */
+export { MAX_CUSTOM_NETWORKS } from "./preferences-custom-networks";
+/** Added-token bound, recovery-scan probe set and removal check, re-exported with their store. */
+export {
+  MAX_ADDED_TOKENS_PER_NETWORK,
+  recoveryProbeTokens,
+  wasTokenRemoved,
+} from "./preferences-tokens";
 /** Re-exported store schema and capability types. */
-export type {
-  WalletPreferences,
-  WalletPreferencesStore,
-} from "./preferences-types";
+export type { TokenSource, WalletPreferences, WalletPreferencesStore } from "./preferences-types";
 
 /**
  * Browser storage key for non-secret wallet preferences.
  */
-export const PREFERENCES_STORE_KEY = "mc-wallet:preferences";
+export const PREFERENCES_STORE_KEY = "bramble:preferences";
 
 type WalletPreferencesStoreOptions = {
   readonly actor?: StoreActor;
@@ -87,25 +83,8 @@ type WalletPreferencesStoreOptions = {
  * Stored-shape guard, re-exported so existing importers keep one entry point
  * for the store and the record it validates.
  */
+export { nftsShown } from "./preferences-display";
 export { isWalletPreferences } from "./preferences-stored";
-
-const isValidDisplayInput = (
-  input: Parameters<WalletPreferencesStore["setDisplay"]>[0],
-): boolean => {
-  if (input.approvalSurface !== undefined && !isApprovalSurfacePreference(input.approvalSurface)) {
-    return false;
-  }
-  if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
-    return false;
-  }
-  if (
-    input.reliabilityDiagnostics !== undefined &&
-    typeof input.reliabilityDiagnostics !== "boolean"
-  ) {
-    return false;
-  }
-  return input.theme === undefined || isThemeChoice(input.theme);
-};
 
 /**
  * Creates default non-secret wallet preferences.
@@ -120,43 +99,27 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   explorerFallback: {},
   explorerApiUrls: {},
   groups: [],
+  hiddenAccountIds: [],
   hiddenTokens: [],
   nfts: [],
+  productAnalytics: true,
   reliabilityDiagnostics: false,
   rpcOverrides: {},
   schemaVersion: 1,
   strk20Networks: DEFAULT_STRK20_NETWORKS,
   theme: "dark",
-  tokens: DEFAULT_TOKENS.map(withTokenId),
+  tokens: DEFAULT_TRACKED_TOKENS.map(withTokenId),
 });
 
-const RETIRED_STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";
-
-// The old bundled Mainnet snapshot is the only configuration rebased on read.
-// Requiring every default field preserves custom routing and an empty-map opt-out.
-const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined): boolean =>
-  config !== undefined &&
-  config.discoveryUrl === `${RETIRED_STRK20_GATEWAY_BASE}/discovery` &&
-  config.ohttpEnabled === true &&
-  config.ohttpRelayUrl === undefined &&
-  config.paymaster?.feeToken === STRK_TOKEN_ADDRESS &&
-  config.paymaster.url === `${RETIRED_STRK20_GATEWAY_BASE}/paymaster` &&
-  config.poolAddress === STRK20_MAINNET_POOL &&
-  config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
-  config.subaccountAnonymizerAddress === undefined;
-
-const withCurrentStrk20Defaults = (preferences: WalletPreferences): WalletPreferences => {
-  if (preferences.strk20Networks === undefined) {
-    return { ...preferences, strk20Networks: DEFAULT_STRK20_NETWORKS };
-  }
-  if (!isRetiredBundledMainnetRouting(preferences.strk20Networks.SN_MAIN)) {
-    return preferences;
-  }
-  return {
-    ...preferences,
-    strk20Networks: { ...preferences.strk20Networks, ...DEFAULT_STRK20_NETWORKS },
-  };
-};
+// Also stamps the STRK20 defaults migration, so a fresh install's first write
+// records it and a later anonymizer clear is never taken for an old snapshot.
+// Not part of `defaultWalletPreferences`: the backup file is built from those,
+// and an older build must still restore it.
+const withCurrentDefaults = (preferences: WalletPreferences): WalletPreferences => ({
+  ...preferences,
+  productAnalytics: preferences.productAnalytics ?? true,
+  ...withCurrentStrk20Defaults(preferences),
+});
 
 const writePreferences = async (
   store: KeyValueStore,
@@ -168,9 +131,7 @@ const writePreferences = async (
   await store.set(PREFERENCES_STORE_KEY, preferences);
 };
 
-/**
- * Creates the plain preferences store with capability checks.
- */
+/** Creates the plain preferences store with capability checks. */
 export const createPreferencesStore = ({
   actor = "background",
   store,
@@ -183,22 +144,20 @@ export const createPreferencesStore = ({
     // failing the strict entry guards and locking the user out of preferences.
     const stored = normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY));
     if (stored === undefined) {
-      return defaultWalletPreferences();
+      return withCurrentDefaults(defaultWalletPreferences());
     }
     if (!isWalletPreferences(stored)) {
       throw new WalletError("Invalid stored preferences");
     }
-    const withPrivacyDefaults = withCurrentStrk20Defaults(stored);
+    const current = withCurrentDefaults(stored);
     // Self-heal legacy multi-group membership on read (the validator stays
     // permissive so old data loads rather than erroring): collapse each account
     // to a single folder so every consumer sees the single-group invariant.
-    if (withPrivacyDefaults.groups === undefined) {
-      return withPrivacyDefaults;
+    if (current.groups === undefined) {
+      return current;
     }
-    const groups = normalizeAccountGroups(withPrivacyDefaults.groups);
-    return groups === withPrivacyDefaults.groups
-      ? withPrivacyDefaults
-      : { ...withPrivacyDefaults, groups };
+    const groups = normalizeAccountGroups(current.groups);
+    return groups === current.groups ? current : { ...current, groups };
   };
 
   // Merge base for a restore, the recovery path out of a record this build
@@ -207,23 +166,10 @@ export const createPreferencesStore = ({
   const readImportBase = async (): Promise<WalletPreferences> =>
     isWalletPreferences(normalizeStoredPreferences(await store.get(PREFERENCES_STORE_KEY)))
       ? await read()
-      : defaultWalletPreferences();
+      : withCurrentDefaults(defaultWalletPreferences());
 
   return serializeStoreMutations<WalletPreferencesStore>(
     {
-      async addCustomNetwork(network) {
-        if (!isCustomNetwork(network)) {
-          throw new WalletError("Invalid custom network");
-        }
-        const preferences = await read();
-        const key = normalizeChainId(network.chainId);
-        const existing = (preferences.customNetworks ?? []).filter(
-          (stored) => normalizeChainId(stored.chainId) !== key,
-        );
-        const next = { ...preferences, customNetworks: [...existing, network] };
-        await writePreferences(store, next);
-        return next;
-      },
       async addNft(nft) {
         const nextNft = withNftId(nft);
         if (!isWatchedNft(nextNft)) {
@@ -236,11 +182,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async createGroup({ icon, name }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: createGroupPure(preferences.groups ?? [], name, icon),
-        };
+        const next = withCreatedGroup(await read(), name, icon);
         await writePreferences(store, next);
         return next;
       },
@@ -255,7 +197,14 @@ export const createPreferencesStore = ({
         // organisational fields; every trust-bearing setting the review layer
         // reads — including the contacts the address-poisoning guard compares
         // against — keeps its stored value (see `pickImportablePreferences`).
-        const next = { ...(await readImportBase()), ...pickImportablePreferences(backup) };
+        const merged = { ...(await readImportBase()), ...pickImportablePreferences(backup) };
+        // Stored exactly as a read would return it, so the record the caller is
+        // told was applied is the record that comes back: the group repair
+        // (single membership, both default folders) is part of that shape.
+        const next =
+          merged.groups === undefined
+            ? merged
+            : { ...merged, groups: normalizeAccountGroups(merged.groups) };
         await writePreferences(store, next);
         return next;
       },
@@ -272,9 +221,13 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
+      async removeToken({ tokenId }) {
+        const next = withoutToken(await read(), tokenId);
+        await writePreferences(store, next);
+        return next;
+      },
       async removeGroup({ id }) {
-        const preferences = await read();
-        const next = { ...preferences, groups: removeGroupPure(preferences.groups ?? [], id) };
+        const next = withoutGroup(await read(), id);
         await writePreferences(store, next);
         return next;
       },
@@ -291,20 +244,17 @@ export const createPreferencesStore = ({
         return next;
       },
       async renameGroup({ id, name }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: renameGroupPure(preferences.groups ?? [], id, name),
-        };
+        const next = withRenamedGroup(await read(), id, name);
         await writePreferences(store, next);
         return next;
       },
       async setAccountInGroup({ accountId, groupId, member }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: setAccountInGroupPure(preferences.groups ?? [], groupId, accountId, member),
-        };
+        const next = withAccountInGroup(await read(), { accountId, groupId, member });
+        await writePreferences(store, next);
+        return next;
+      },
+      async setAccountHidden({ accountId, hidden }) {
+        const next = withAccountHidden(await read(), accountId, hidden);
         await writePreferences(store, next);
         return next;
       },
@@ -314,11 +264,7 @@ export const createPreferencesStore = ({
         return next;
       },
       async setGroupIcon({ icon, id }) {
-        const preferences = await read();
-        const next = {
-          ...preferences,
-          groups: setGroupIconPure(preferences.groups ?? [], id, icon),
-        };
+        const next = withGroupIcon(await read(), id, icon);
         await writePreferences(store, next);
         return next;
       },
@@ -368,9 +314,7 @@ export const createPreferencesStore = ({
           ...(input.displayCurrency === undefined
             ? {}
             : { displayCurrency: input.displayCurrency }),
-          ...(input.reliabilityDiagnostics === undefined
-            ? {}
-            : { reliabilityDiagnostics: input.reliabilityDiagnostics }),
+          ...displayFlags(input),
           ...(input.theme === undefined ? {} : { theme: input.theme }),
         };
         await writePreferences(store, next);
@@ -383,6 +327,12 @@ export const createPreferencesStore = ({
         }
         const preferences = await read();
         const previous = preferences.addressBook.find((stored) => stored.id === nextEntry.id);
+        // A stored key is replaced only by removing the contact first: the
+        // multisig flow trusts these keys, and a card for a known address must
+        // not swap them under its label (Sherlock 258).
+        if (contactKeysChange(previous, nextEntry)) {
+          throw new WalletError(CONTACT_KEYS_CHANGED);
+        }
         const savedEntry = {
           ...nextEntry,
           ...(nextEntry.nostrPublicKey || !previous?.nostrPublicKey
@@ -397,6 +347,8 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
+      setSelectedMultisig: ({ multisigId }) =>
+        selectedMultisigPreference(read, (next) => writePreferences(store, next), multisigId),
       async setRpcOverride({ networkId, rpcUrl }) {
         if (!isStarknetNetworkId(networkId)) {
           throw new WalletError("Invalid Starknet network");
@@ -475,15 +427,12 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
-      async upsertToken(token) {
-        const nextToken = withTokenId(token);
-        if (!isTokenConfig(nextToken)) {
-          throw new WalletError("Invalid token");
-        }
+      async upsertToken(token, source) {
         const preferences = await read();
-        const tokens = preferences.tokens.filter((stored) => stored.id !== nextToken.id);
-        const next = { ...preferences, tokens: [...tokens, nextToken] };
-        await writePreferences(store, next);
+        const next = withUpsertedToken(preferences, token, source);
+        if (next !== preferences) {
+          await writePreferences(store, next);
+        }
         return next;
       },
     },

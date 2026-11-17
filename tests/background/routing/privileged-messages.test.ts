@@ -12,7 +12,7 @@ import {
 } from "../../../apps/extension/src/background/routing/senders";
 import { handleMessage } from "../../support/unavailable-handler";
 
-const contentSender: RuntimeSender = { id: "mc-wallet-test", url: "https://dapp.example/app" };
+const contentSender: RuntimeSender = { id: "bramble-test", url: "https://dapp.example/app" };
 
 // The two modules through which a page can reach the background at all.
 const DAPP_FACING_SOURCES = [

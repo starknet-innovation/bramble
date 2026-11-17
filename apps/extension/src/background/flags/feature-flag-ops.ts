@@ -6,7 +6,7 @@
  * never mutates, and answers the effective booleans for the active chain plus
  * their source. It returns no bucket, document, or URL.
  */
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { isStarknetNetworkId } from "@bramble/wallet-model/networks";
 import type { RouterContext } from "../routing/message-context";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";

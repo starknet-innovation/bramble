@@ -3,9 +3,9 @@
  * reads a freshly deployed account or recently funded ERC20 balance.
  */
 
-import { decodeUint256Response } from "@mc-wallet/starknet/rpc-assets";
-import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { decodeUint256Response } from "@bramble/starknet/rpc-assets";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
+import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { Call, RpcProvider } from "starknet";
 
 const depositRequirements = (

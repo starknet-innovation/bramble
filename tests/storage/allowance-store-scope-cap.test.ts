@@ -13,7 +13,7 @@
  * account ids are spelled.
  */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   ALLOWANCE_LIMITS,
   type AllowanceInput,
@@ -22,7 +22,7 @@ import {
   createAllowanceStore,
   isAllowanceRecord,
   memoryAllowanceStore,
-} from "@mc-wallet/transactions/allowance-store";
+} from "@bramble/transactions/allowance-store";
 
 const MAIN_ACCOUNT = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const OTHER_MAIN_ACCOUNT =
@@ -93,14 +93,19 @@ for (const [name, make] of cases) {
       expect(ids).toContain(`${MAIN_ACCOUNT}:${CANONICAL_TOKEN}:${spenderAt(CAP)}`);
     });
 
-    test("still upserts by id and removes on a zero amount", async () => {
+    test("still upserts by id, and removes a zero amount once the chain reads zero", async () => {
       const store = make();
       await store.record(input(MAIN_ACCOUNT, 0));
       await store.record({ ...input(MAIN_ACCOUNT, 0), amount: "2000" });
       expect(await store.list()).toHaveLength(1);
       expect((await store.list())[0]?.amount).toBe("2000");
 
+      // A submitted revoke may still revert, so the grant is kept, marked as
+      // revoking (Sherlock 192), until a reading of zero confirms it.
       await store.record({ ...input(MAIN_ACCOUNT, 0), amount: "0" });
+      const [pending] = await store.list();
+      expect(pending).toMatchObject({ amount: "2000", revoking: true });
+      await store.settleRevocations([{ amount: "0", id: pending?.id ?? "" }]);
       expect(await store.list()).toEqual([]);
     });
   });

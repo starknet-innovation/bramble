@@ -4,6 +4,7 @@
  * documented without weakening the aggregate coverage gate.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -22,27 +23,20 @@ beforeEach(() => document.body.replaceChildren());
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-const mount = (
-  html: string,
-  wallet: Partial<SidepanelWallet>,
-  activeAccountId: string | null = "SN_MAIN:0x1",
-) => {
+const mount = (html: string, wallet: Partial<SidepanelWallet>) => {
   const app = document.createElement("div");
   app.innerHTML = html;
   document.body.append(app);
   const calls = { add: 0, render: 0 };
   const deps: SettingsUiDeps = {
-    activeAccountId: () => activeAccountId,
     app,
     expandedGroup: () => null,
     networkId: () => "SN_MAIN",
-    openAssign: () => null,
     refresh: async () => emptyStatus(),
     render: async () => {
       calls.render += 1;
     },
     setExpandedGroup: () => undefined,
-    setOpenAssign: () => undefined,
     startAddAccount: () => {
       calls.add += 1;
     },
@@ -52,10 +46,12 @@ const mount = (
 };
 
 describe("settings UI bindings", () => {
-  test("saves and clears account labels, then rerenders", async () => {
+  test("saves and clears the name of the account whose row was submitted", async () => {
     const updates: Array<readonly [string, string]> = [];
     const { app, calls, deps } = mount(
-      '<form id="label-form"><input name="label" value=" Daily " /><button type="submit">Save</button></form><p id="label-result"></p>',
+      `<form data-account-name-form="SN_MAIN:0x1"><input name="label" value=" Daily " /><button type="submit">Save</button></form>
+       <form data-account-name-form="SN_MAIN:0x2"><input name="label" value="Savings" /><button type="submit">Save</button></form>
+       <p id="label-result"></p>`,
       {
         setAccountLabel: async (accountId, label) => {
           updates.push([accountId, label]);
@@ -64,31 +60,39 @@ describe("settings UI bindings", () => {
     );
     bindAccountLabel(deps);
 
-    app.querySelector<HTMLFormElement>("form")?.requestSubmit();
+    const first = app.querySelector<HTMLFormElement>('[data-account-name-form="SN_MAIN:0x1"]');
+    first?.requestSubmit();
     await tick();
 
     expect(updates).toEqual([["SN_MAIN:0x1", "Daily"]]);
     expect(calls.render).toBe(1);
 
-    const input = app.querySelector<HTMLInputElement>('input[name="label"]');
+    // The second row writes its own account, not whichever one is active: every
+    // account on the screen is renameable and they must not cross.
+    app.querySelector<HTMLFormElement>('[data-account-name-form="SN_MAIN:0x2"]')?.requestSubmit();
+    await tick();
+    expect(updates[1]).toEqual(["SN_MAIN:0x2", "Savings"]);
+
+    const input = first?.querySelector<HTMLInputElement>('input[name="label"]');
     if (input) {
       input.value = " ";
     }
-    app.querySelector<HTMLFormElement>("form")?.requestSubmit();
+    first?.requestSubmit();
     await tick();
-    expect(updates[1]).toEqual(["SN_MAIN:0x1", ""]);
+    expect(updates[2]).toEqual(["SN_MAIN:0x1", ""]);
   });
 
-  test("fails closed without an account and restores the label form after rejection", async () => {
+  test("fails closed without an account id and restores the row after rejection", async () => {
     let calls = 0;
+    // A row that names no account writes nothing: the id comes from the form, so
+    // a malformed one can never fall back to renaming some other account.
     const noAccount = mount(
-      '<form id="label-form"><input name="label" value="Daily" /><button type="submit">Save</button></form>',
+      '<form data-account-name-form=""><input name="label" value="Daily" /><button type="submit">Save</button></form>',
       {
         setAccountLabel: async () => {
           calls += 1;
         },
       },
-      null,
     );
     bindAccountLabel(noAccount.deps);
     noAccount.app.querySelector<HTMLFormElement>("form")?.requestSubmit();
@@ -96,7 +100,7 @@ describe("settings UI bindings", () => {
     expect(calls).toBe(0);
 
     const rejected = mount(
-      '<form id="label-form"><input name="label" value="Daily" /><button type="submit">Save</button></form><p id="label-result"></p>',
+      '<form data-account-name-form="SN_MAIN:0x1"><input name="label" value="Daily" /><button type="submit">Save</button></form><p id="label-result"></p>',
       {
         setAccountLabel: async () => {
           throw new Error("Label service unavailable");
@@ -160,7 +164,9 @@ describe("settings UI bindings", () => {
        <button data-theme-id="light" aria-pressed="false">Light</button>
        <button data-theme-id="dark" aria-pressed="true">Selected</button>
        <select id="currency-select"><option value="eur" selected>EUR</option></select>
+       <input id="product-analytics" type="checkbox" checked />
        <input id="reliability-diagnostics" type="checkbox" checked />
+       <input id="vip-notice-toggle" type="checkbox" />
        <p id="display-result"></p>`,
       {
         setDisplay: async (input) => {
@@ -175,18 +181,22 @@ describe("settings UI bindings", () => {
     app.querySelector<HTMLButtonElement>('[data-theme-id="light"]')?.click();
     app.querySelector<HTMLButtonElement>('[data-theme-id="dark"]')?.click();
     app.querySelector<HTMLSelectElement>("#currency-select")?.dispatchEvent(new Event("change"));
+    app.querySelector<HTMLInputElement>("#product-analytics")?.dispatchEvent(new Event("change"));
     app
       .querySelector<HTMLInputElement>("#reliability-diagnostics")
       ?.dispatchEvent(new Event("change"));
+    app.querySelector<HTMLInputElement>("#vip-notice-toggle")?.dispatchEvent(new Event("change"));
     await tick();
 
     expect(updates).toEqual([
       { approvalSurface: "side-panel" },
       { theme: "light" },
       { displayCurrency: "eur" },
+      { productAnalytics: true },
       { reliabilityDiagnostics: true },
+      { vipNotice: false },
     ]);
-    expect(calls.render).toBe(4);
+    expect(calls.render).toBe(6);
   });
 
   test("restores display controls when each preference mutation rejects", async () => {
@@ -194,7 +204,9 @@ describe("settings UI bindings", () => {
       `<button data-approval-surface="popup" aria-pressed="false">Popup</button>
        <button data-theme-id="dark" aria-pressed="false">Dark</button>
        <select id="currency-select"><option value="gbp" selected>GBP</option></select>
+       <input id="product-analytics" type="checkbox" checked />
        <input id="reliability-diagnostics" type="checkbox" checked />
+       <input id="vip-notice-toggle" type="checkbox" checked />
        <p id="display-result"></p>`,
       {
         setDisplay: async () => {
@@ -207,19 +219,29 @@ describe("settings UI bindings", () => {
     const approval = app.querySelector<HTMLButtonElement>("[data-approval-surface]");
     const theme = app.querySelector<HTMLButtonElement>("[data-theme-id]");
     const currency = app.querySelector<HTMLSelectElement>("#currency-select");
+    const analytics = app.querySelector<HTMLInputElement>("#product-analytics");
     const diagnostics = app.querySelector<HTMLInputElement>("#reliability-diagnostics");
+    const vip = app.querySelector<HTMLInputElement>("#vip-notice-toggle");
     approval?.click();
     theme?.click();
     currency?.dispatchEvent(new Event("change"));
+    if (analytics) analytics.checked = false;
+    analytics?.dispatchEvent(new Event("change"));
     if (diagnostics) diagnostics.checked = false;
     diagnostics?.dispatchEvent(new Event("change"));
+    if (vip) vip.checked = false;
+    vip?.dispatchEvent(new Event("change"));
     await tick();
 
     expect(approval?.disabled).toBe(false);
     expect(theme?.disabled).toBe(false);
     expect(currency?.disabled).toBe(false);
+    expect(analytics?.checked).toBe(true);
+    expect(analytics?.disabled).toBe(false);
     expect(diagnostics?.checked).toBe(true);
     expect(diagnostics?.disabled).toBe(false);
+    expect(vip?.checked).toBe(true);
+    expect(vip?.disabled).toBe(false);
     expect(app.querySelector("#display-result")?.textContent).toBe("Display service unavailable");
   });
 
@@ -233,7 +255,15 @@ describe("settings UI bindings", () => {
         importPreferences: async (value) => {
           imported = value;
         },
-        loadPreferences: async () => ({ displayCurrency: "usd" }) as never,
+        // A contact in the stored preferences must not reach the file
+        // (Sherlock 213): a restore never brings it back.
+        loadPreferences: async () => ({
+          ...defaultWalletPreferences(),
+          addressBook: [
+            { address: "0x123", id: "SN_MAIN:0x123", label: "Ada", networkId: "SN_MAIN" },
+          ],
+          displayCurrency: "usd",
+        }),
       },
     );
     const input = app.querySelector<HTMLInputElement>("#backup-file");
@@ -246,7 +276,11 @@ describe("settings UI bindings", () => {
     const revokeObjectUrl = URL.revokeObjectURL;
     const click = HTMLAnchorElement.prototype.click;
     const schedule = globalThis.setTimeout;
-    URL.createObjectURL = () => "blob:wallet-backup";
+    let exported: Blob | null = null;
+    URL.createObjectURL = (blob) => {
+      exported = blob as Blob;
+      return "blob:wallet-backup";
+    };
     URL.revokeObjectURL = (url) => {
       revoked = String(url);
     };
@@ -276,6 +310,9 @@ describe("settings UI bindings", () => {
 
     expect(downloaded).toBe(1);
     expect(revoked).toBe("blob:wallet-backup");
+    const file = JSON.parse(await (exported as unknown as Blob).text()) as Record<string, unknown>;
+    expect(file["addressBook"]).toEqual([]);
+    expect(file["displayCurrency"]).toBe("usd");
     expect(imported).toEqual({ displayCurrency: "eur" });
     expect(calls.render).toBe(1);
   });

@@ -1,8 +1,8 @@
 /** Exact invoke estimation for deployed and counterfactual accounts. */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import { WalletError } from "@bramble/core/errors";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import type { Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import { type Account, type Call, TransactionType } from "starknet";
 import { accountDeployment } from "../transactions/deployment";
 

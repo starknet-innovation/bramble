@@ -22,6 +22,16 @@ export const ChooseMethod = checkpointStory(
   "ledger-onboarding",
   "method",
 );
+export const ChooseMethodNoLedger = checkpointStory(
+  "Add account · choose method (no Ledger transport)",
+  "ledger-onboarding",
+  "method-no-ledger",
+);
+export const ChooseImportNoLedger = checkpointStory(
+  "Add account · import (no Ledger transport)",
+  "ledger-onboarding",
+  "method-import-no-ledger",
+);
 export const ChooseMultisig = checkpointStory(
   "Add account · choose Multisig",
   "ledger-onboarding",

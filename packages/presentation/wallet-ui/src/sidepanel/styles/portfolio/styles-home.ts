@@ -1,51 +1,50 @@
 /**
  * Home-experience and motion layer of the side panel stylesheet: the account
- * drawer, the tabbed portfolio section, collectible cards, and every keyframe
+ * drawer, the portfolio section, and every keyframe
  * the panel uses (screen entrances, staggered rows, refresh spin, copy
  * confirmation). Composed last in ./styles.ts so its reduced-motion block wins
  * over every earlier animation and transition.
  */
-import { MOTION, RADIUS, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
+import { MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const HOME_STYLES = `
-  .tx-kind-icon {
-    align-items: center;
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.full};
-    color: var(--mc-text);
-    display: flex;
-    flex: none;
-    height: 36px;
-    justify-content: center;
-    width: 36px;
-  }
-  .tx-kind-icon .icon { height: 18px; width: 18px; }
-  .tx-kind-icon.accepted { color: var(--mc-positive); }
-  .tx-kind-icon.pending { color: var(--mc-warning); }
-  .tx-kind-icon.preconfirmed { color: var(--mc-positive); opacity: 0.68; }
-  .tx-kind-icon.rejected, .tx-kind-icon.reverted { color: var(--mc-danger); }
+  /* Read-only flag body and the recovery confirmation that replaces it:
+     consent copy stacked above Cancel / confirm. */
+  .read-only-notice .read-only-body { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xs}; }
+  .recovery-confirm { display: grid; gap: ${SPACE.xs}; max-width: 34ch; text-align: center; }
+  .recovery-confirm .recovery-confirm-title { font-weight: 600; margin: 0; }
+  .recovery-confirm .recovery-confirm-warning { color: var(--bramble-danger); font-size: ${TYPE.caption.size}; margin: 0; }
+  .recovery-confirm .read-only-detail { max-width: none; }
+  .recovery-confirm .button-row { justify-content: center; margin-top: ${SPACE.xs}; }
+  /* Starknet VIP notice (mc-wallet 688): a quiet line under the total, like the
+     read-only flag; its link and dismiss wrap rather than overflow at narrow widths. */
+  .vip-notice { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xxs}; }
+  .vip-notice-actions { align-items: center; display: flex; flex-wrap: wrap; gap: ${SPACE.sm}; justify-content: center; }
+  .vip-notice .vip-link { align-items: center; color: var(--bramble-accent); display: inline-flex; font-size: ${TYPE.caption.size}; gap: ${SPACE.xxs}; }
+  .vip-notice .vip-link .icon { height: 1em; width: 1em; }
+  .vip-notice #vip-notice-hide { font-size: ${TYPE.caption.size}; min-height: 0; padding: 0; }
   /* On-chain class-hash verification shown on the account screen: pending stays
      muted, a confirmed match goes accent, a mismatch is an assertive danger
      block so it cannot be skimmed past. Icon and text share one baseline. */
   .verify-status {
     align-items: center;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     display: flex;
     font-size: ${TYPE.caption.size};
     gap: 6px;
     line-height: ${TYPE.caption.line};
-    margin-top: 6px;
+    margin-top: ${SPACE.sm};
   }
   .verify-status .icon { flex: none; }
-  .verify-status.verified { color: var(--mc-positive); font-weight: 600; }
+  .verify-status.verified { color: var(--bramble-positive); font-weight: 600; }
   .verify-status.mismatch {
     align-items: flex-start;
-    background: color-mix(in srgb, var(--mc-danger) 12%, transparent);
+    background: color-mix(in srgb, var(--bramble-danger) 12%, transparent);
     border-radius: ${RADIUS.md};
-    color: var(--mc-danger);
+    color: var(--bramble-danger);
     font-weight: 600;
     padding: ${SPACE.sm};
   }
@@ -54,7 +53,7 @@ export const HOME_STYLES = `
   .drawer-root { inset: 0; pointer-events: none; position: fixed; z-index: 20; }
   .drawer-root[data-open="true"] { pointer-events: auto; }
   .drawer-backdrop {
-    background: color-mix(in srgb, var(--mc-bg) 58%, transparent);
+    background: color-mix(in srgb, var(--bramble-bg) 58%, transparent);
     inset: 0;
     opacity: 0;
     position: absolute;
@@ -64,10 +63,10 @@ export const HOME_STYLES = `
   /* Left sheet: a solid panel under a soft depth shadow, settling with the
      iOS drawer spring. Enter and exit share one path. */
   .account-drawer {
-    background: var(--mc-panel);
+    background: var(--bramble-panel);
     border-radius: 0 ${RADIUS.xl} ${RADIUS.xl} 0;
     bottom: 0;
-    box-shadow: var(--mc-elev-lg);
+    box-shadow: var(--bramble-elev-lg);
     display: flex;
     flex-direction: column;
     gap: ${SPACE.md};
@@ -90,14 +89,113 @@ export const HOME_STYLES = `
     visibility: visible;
   }
   .drawer-head { align-items: center; display: flex; gap: ${SPACE.sm}; justify-content: space-between; }
-  .drawer-title { display: grid; gap: 1px; min-width: 0; }
+  .drawer-title { display: grid; gap: ${SPACE.xs}; justify-items: start; min-width: 0; }
   .drawer-title p { font-size: ${TYPE.caption.size}; }
-  .drawer-list { align-content: start; display: grid; flex: 1; gap: 6px; overflow-y: auto; }
+  /* The pill is the switch control here, so it takes a button's affordances
+     while keeping the pill's shape. The list is absolute so opening it does not
+     push the account rows down. */
+  .drawer-network { position: relative; }
+  .drawer-network-pill {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: ${RADIUS.full};
+    color: var(--bramble-muted);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 2px;
+    min-height: 0;
+    padding: 0;
+  }
+  .drawer-network-pill:hover { color: var(--bramble-text); }
+  .drawer-network-pill .icon { height: 14px; width: 14px; }
+  .drawer-network-pill[aria-expanded="true"] .icon { transform: rotate(180deg); }
+  /* Elevation and a hairline, never a stroke — the same structure the token
+     dropdown uses. */
+  .drawer-network-menu {
+    background: var(--bramble-panel);
+    border-radius: ${RADIUS.md};
+    box-shadow: ${SHADOW.md};
+    display: grid;
+    inset-inline-start: 0;
+    min-width: 200px;
+    padding: ${SPACE.xs};
+    position: absolute;
+    top: calc(100% + ${SPACE.xs});
+    z-index: 3;
+  }
+  .drawer-network-option {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: ${RADIUS.sm};
+    color: var(--bramble-text);
+    cursor: pointer;
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.sm};
+    justify-content: space-between;
+    min-height: 36px;
+    padding: 0 ${SPACE.sm};
+    text-align: left;
+    width: 100%;
+  }
+  .drawer-network-option:hover { background: var(--bramble-elevated); }
+  .drawer-network-option[aria-current="true"] { color: var(--bramble-accent); }
+  .drawer-network-option .icon { height: 15px; width: 15px; }
+  .drawer-list { align-content: start; display: grid; gap: 6px; }
+  /* The folders are the drawer's one scroll region, so the head stays put and
+     "Add account" stays reachable however many folders there are. */
+  .drawer-folders { display: grid; align-content: start; flex: 1; gap: 6px; overflow-y: auto; scrollbar-gutter: stable; }
+  /* Folders: a heading that collapses its own list, and a section that is the
+     drop target — an account can be dropped onto an empty folder, not only
+     between rows. */
+  .drawer-folder { display: grid; gap: 6px; }
+  .drawer-folder + .drawer-folder { margin-block-start: ${SPACE.sm}; }
+  button.drawer-folder-head {
+    align-items: center;
+    background: transparent;
+    border-radius: ${RADIUS.sm};
+    color: var(--bramble-muted);
+    display: flex;
+    gap: ${SPACE.sm};
+    justify-content: flex-start;
+    min-height: 32px;
+    padding: 0 ${SPACE.xs};
+    text-align: start;
+    width: 100%;
+  }
+  .drawer-folder-copy { display: flex; flex: 1; gap: ${SPACE.xs}; min-width: 0; }
+  .drawer-folder-copy strong { color: var(--bramble-text); font-size: ${TYPE.label.size}; }
+  .drawer-folder-copy small { font-size: ${TYPE.micro.size}; }
+  .drawer-folder-icon, .drawer-folder-mark { display: inline-flex; flex: none; }
+  .drawer-folder-icon .icon, .drawer-folder-mark .icon { height: 14px; width: 14px; }
+  .drawer-folder-empty {
+    border-radius: ${RADIUS.md};
+    color: var(--bramble-muted);
+    font-size: ${TYPE.caption.size};
+    padding: ${SPACE.sm};
+    text-align: center;
+  }
+  .drawer-folder[data-drop-target="true"] {
+    background: var(--bramble-hover);
+    border-radius: ${RADIUS.md};
+  }
+  .drawer-account-item[data-dragging="true"] { opacity: 0.5; }
+  .drawer-add-folder { display: grid; gap: ${SPACE.xs}; justify-items: start; }
+  .drawer-folder-form { display: flex; gap: ${SPACE.xs}; width: 100%; }
+  .drawer-folder-form input { flex: 1; min-width: 0; }
+  .drawer-folder-error:empty { display: none; }
+  .drawer-folder-error {
+    color: var(--bramble-danger);
+    font-size: ${TYPE.caption.size};
+    margin: 0;
+  }
   button.drawer-account {
     align-items: center;
     background: transparent;
     border-radius: ${RADIUS.md};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     display: flex;
     gap: 10px;
     justify-content: flex-start;
@@ -110,14 +208,29 @@ export const HOME_STYLES = `
     width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
-    button.drawer-account:not(:disabled):hover { background: var(--mc-hover); }
-    button.drawer-account[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+    button.drawer-account:not(:disabled):hover { background: var(--bramble-hover); }
+    button.drawer-account[aria-pressed="true"]:not(:disabled):hover { background: var(--bramble-accent-soft); }
+    .drawer-account-row:has(> button.drawer-account:not(:disabled):hover) { background: var(--bramble-hover); }
+    .drawer-account-row:has(> button.drawer-account[aria-pressed="true"]:not(:disabled):hover) { background: var(--bramble-accent-soft); }
+    .drawer-account-row > button.drawer-account:not(:disabled):hover, .drawer-account-row > button.drawer-account[aria-pressed="true"]:not(:disabled):hover { background: transparent; }
   }
-  button.drawer-account:not(:disabled):active { background: var(--mc-soft-press); transform: scale(0.985); }
-  button.drawer-account[aria-pressed="true"] { background: var(--mc-accent-soft); }
+  button.drawer-account:not(:disabled):active { background: var(--bramble-soft-press); transform: scale(0.985); }
+  button.drawer-account[aria-pressed="true"] { background: var(--bramble-accent-soft); }
+  /* An account row and the copy action beside it are one line: the line carries
+     the selected, hover, and press fill so the action sits inside the highlight. */
+  .drawer-account-row {
+    border-radius: ${RADIUS.md};
+    transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
+      transform ${MOTION.liftMs}ms var(--ease-out);
+  }
+  .drawer-account-row:has(> button.drawer-account[aria-pressed="true"]) { background: var(--bramble-accent-soft); }
+  .drawer-account-row:has(> button.drawer-account:not(:disabled):active) { background: var(--bramble-soft-press); transform: scale(0.985); }
+  .drawer-account-row > button.drawer-account, .drawer-account-row > button.drawer-account[aria-pressed="true"] { background: transparent; }
+  .drawer-account-row > button.drawer-account:not(:disabled):active { background: transparent; transform: none; }
   .drawer-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .drawer-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  .drawer-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .drawer-copy code { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; }
   .drawer-foot { display: grid; gap: ${SPACE.sm}; margin-top: auto; padding-top: ${SPACE.sm}; }
   /* Row stagger is gated behind .is-opening (added only on a genuine open) so a
      shell repaint that recreates the drawer node cannot replay it. */
@@ -127,10 +240,16 @@ export const HOME_STYLES = `
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(5) { animation-delay: 120ms; }
 
-  /* Portfolio navigation: two large text destinations and one overflow menu.
+  /* Portfolio navigation: large text destinations and one overflow menu.
      Active state is carried by high-contrast type alone — no underline, pill,
-     or duplicated Activity destination. */
-  .home-tabs { display: grid; gap: ${SPACE.sm}; }
+     or duplicated Activity destination. Only multisig renders tab buttons; the
+     home section is a plain h2 styled by the base heading rule. */
+  /* The single column is minmax(0, 1fr), not the implicit auto track: the
+     tab bar's intrinsic width (three tabs plus the actions menu) must never
+     widen the token list past the panel, where the right-hand amounts were cut
+     off at the 320px minimum. Below 360px the tab gap closes from xl to md so
+     Tokens, NFTs, and Staking still fit beside the menu. */
+  .home-tabs { display: grid; gap: ${SPACE.sm}; grid-template-columns: minmax(0, 1fr); }
   .tab-bar { align-items: center; display: flex; gap: ${SPACE.md}; min-height: 44px; }
   .tab-set {
     display: flex;
@@ -138,9 +257,12 @@ export const HOME_STYLES = `
     gap: ${SPACE.xl};
     min-width: 0;
   }
+  @media (max-width: 359px) {
+    .tab-set { gap: ${SPACE.md}; }
+  }
   button.home-tab {
     background: transparent;
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-size: ${TYPE.title.size};
     font-weight: 700;
     min-height: 40px;
@@ -148,22 +270,24 @@ export const HOME_STYLES = `
     transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms var(--ease-out);
   }
   @media (hover: hover) and (pointer: fine) {
-    button.home-tab:not(:disabled):hover { background: transparent; color: var(--mc-text); }
-    button.home-tab[aria-selected="true"]:not(:disabled):hover { color: var(--mc-text); }
+    button.home-tab:not(:disabled):hover { background: transparent; color: var(--bramble-text); }
+    button.home-tab[aria-selected="true"]:not(:disabled):hover { color: var(--bramble-text); }
   }
   button.home-tab:not(:disabled):active { background: transparent; transform: scale(0.98); }
-  button.home-tab[aria-selected="true"] { color: var(--mc-text); }
+  button.home-tab[aria-selected="true"] { color: var(--bramble-text); }
   .portfolio-actions { flex: none; position: relative; }
-  button.portfolio-menu-trigger { color: var(--mc-muted); height: 40px; width: 40px; }
+  button.portfolio-menu-trigger { color: var(--bramble-muted); height: 40px; width: 40px; }
   button.portfolio-menu-trigger .icon { height: 21px; width: 21px; }
-  button.portfolio-menu-trigger[aria-expanded="true"] { background: var(--mc-hover); color: var(--mc-text); }
+  button.portfolio-menu-trigger[aria-expanded="true"] { background: var(--bramble-hover); color: var(--bramble-text); }
   .portfolio-menu {
-    background: var(--mc-elevated);
+    background: var(--bramble-elevated);
     border-radius: ${RADIUS.lg};
-    box-shadow: var(--mc-elev-lg);
+    box-shadow: var(--bramble-elev-lg);
     display: grid;
     opacity: 1;
-    padding: 6px;
+    /* Concentric corners: the inset is the gap between the menu's radius and
+       its rows', so a row's hover fill follows the menu's curve. */
+    padding: calc(${RADIUS.lg} - ${RADIUS.md});
     position: absolute;
     right: 0;
     top: calc(100% + 6px);
@@ -185,7 +309,7 @@ export const HOME_STYLES = `
   button.portfolio-menu-item {
     background: transparent;
     border-radius: ${RADIUS.md};
-    color: var(--mc-text);
+    color: var(--bramble-text);
     font-size: ${TYPE.body.size};
     font-weight: 500;
     justify-content: flex-start;
@@ -193,17 +317,16 @@ export const HOME_STYLES = `
     padding: 0 ${SPACE.md};
     width: 100%;
   }
-  button.portfolio-menu-item .icon { color: var(--mc-muted); height: 20px; width: 20px; }
+  button.portfolio-menu-item .icon { color: var(--bramble-muted); height: 20px; width: 20px; }
   @media (hover: hover) and (pointer: fine) {
-    button.portfolio-menu-item:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
-    button.portfolio-menu-item:not(:disabled):hover .icon { color: var(--mc-text); }
+    button.portfolio-menu-item:not(:disabled):hover { background: var(--bramble-hover); color: var(--bramble-text); }
+    button.portfolio-menu-item:not(:disabled):hover .icon { color: var(--bramble-text); }
   }
-  .tab-panel { display: grid; gap: ${SPACE.sm}; }
   .panel-error { display: grid; gap: ${SPACE.sm}; justify-items: center; text-align: center; }
   .panel-error .empty { margin: 0; }
   .panel-error button { gap: 4px; }
   button.tab-more {
-    color: var(--mc-muted);
+    color: var(--bramble-muted);
     font-weight: 650;
     gap: 4px;
     justify-content: center;
@@ -212,68 +335,9 @@ export const HOME_STYLES = `
   }
   button.tab-more .icon { height: 14px; width: 14px; }
 
-  /* Collectible tiles: a minimally framed art square over a tight name/token-id
-     caption. The box chrome (elevated fill + edge wrapping the whole card) is
-     gone — the art tile carries the only hairline framing, and the grid rhythm
-     aligns the tiles. Tapping a tile opens its detail; hover tints the name and
-     lifts the art with a soft shadow (no box behind the caption). */
-  .collectible-grid { display: grid; gap: ${SPACE.md}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  /* Positioned so the shared .nft-play-tile / .nft-animation--tile overlay covers
-     the art square; the play affordance is revealed on hover/focus. */
-  .collectible-tile { position: relative; }
-  .collectible-tile:hover .nft-play-tile,
-  .collectible-tile:focus-within .nft-play-tile { opacity: 1; pointer-events: auto; }
-  button.collectible-card {
-    align-content: start;
-    background: transparent;
-    border-radius: ${RADIUS.md};
-    color: var(--mc-text);
-    display: grid;
-    gap: ${SPACE.sm};
-    /* Definite single 1fr column so the art's width:100% resolves to the full
-       card width (not the caption's content width, which base button's
-       justify-content:center would otherwise collapse it to). */
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: stretch;
-    min-height: 0;
-    padding: 0;
-    text-align: left;
-    transition: transform ${MOTION.liftMs}ms var(--ease-out);
-    width: 100%;
-  }
-  button.collectible-card:not(:disabled):hover { background: transparent; }
-  button.collectible-card:not(:disabled):active { background: transparent; transform: scale(0.97); }
-
-  /* Hover feedback is gated to fine pointers so a tap on touch never leaves an
-     element floating (touch fires a phantom :hover). Pointer devices tint the
-     caption and raise the art tile with a soft shadow; the press scale is
-     universal. */
-  @media (hover: hover) and (pointer: fine) {
-    button.collectible-card:not(:disabled):hover strong { color: var(--mc-accent); }
-    button.collectible-card:not(:disabled):hover .collectible-art {
-      box-shadow: var(--mc-shadow-sm);
-    }
-  }
-  .collectible-art {
-    align-items: center;
-    aspect-ratio: 1 / 1;
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
-    color: var(--mc-muted);
-    display: inline-flex;
-    justify-content: center;
-    overflow: hidden;
-    position: relative;
-    transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease};
-    width: 100%;
-  }
-  .collectible-art .icon { height: 28px; width: 28px; }
-  .collectible-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; width: 100%; }
-  .collectible-copy strong { font-size: ${TYPE.label.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  .collectible-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
 
   /* Copy confirmation: the glyph flips to a success-green check, then back */
-  button.copy-confirm { color: var(--mc-positive); }
+  button.copy-confirm { color: var(--bramble-positive); }
   .copy-confirm .icon { animation: glyph-pop ${MOTION.liftMs}ms var(--ease-out) both; }
 
   /* Busy refresh controls spin their glyph until work settles */
@@ -335,14 +399,12 @@ export const HOME_STYLES = `
       transform: none;
       transition: opacity ${MOTION.pressMs}ms ${MOTION.ease};
     }
-    button.collectible-card:not(:disabled):hover,
     .account-trigger[aria-expanded="true"] .account-name .icon { transform: none; }
     .swap-success-ring, .swap-success-check { animation: none; stroke-dashoffset: 0; }
     .swap-success h2, .swap-success .swap-success-summary, .swap-success .hint { animation: none; }
     button:not(:disabled):active,
     button.icon-button:not(:disabled):active,
     button.action-tile:not(:disabled):active,
-    button.collectible-card:not(:disabled):active,
     button.nav-item:not(:disabled):active,
     button.home-tab:not(:disabled):active,
     button.drawer-account:not(:disabled):active,

@@ -1,8 +1,11 @@
 /** MCW-V091-001: accepted hashes survive every best-effort local journal. */
 
 import { describe, expect, test } from "bun:test";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
-import { recordSubmittedActivity } from "../../apps/extension/src/background/transactions/activity-recording";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import {
+  afterBroadcast,
+  recordSubmittedActivity,
+} from "../../apps/extension/src/background/transactions/activity-recording";
 import { latestApprovalId, reviewedApprovalFee } from "../support/held";
 import {
   failingInvokeActivityLog,
@@ -14,11 +17,11 @@ import {
 
 const SUBMITTERS = [
   "apps/extension/src/background/accounts/deployment-ops.ts",
-  "apps/extension/src/background/accounts/wallet-ops.ts",
+  "apps/extension/src/background/accounts/transfer-ops.ts",
   "apps/extension/src/background/portfolio/allowance-ops.ts",
-  "apps/extension/src/background/portfolio/nft-ops.ts",
+  "apps/extension/src/background/portfolio/nft-transfer-submit.ts",
   "apps/extension/src/background/privacy/strk20-approval-execution.ts",
-  "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
+  "apps/extension/src/background/privacy/strk20-wallet-execution.ts",
   "apps/extension/src/background/provider/provider-ops.ts",
   "apps/extension/src/background/transactions/swap-ops.ts",
 ] as const;
@@ -63,6 +66,48 @@ describe("post-broadcast outcome integrity", () => {
     for (const path of SUBMITTERS) {
       const source = await Bun.file(path).text();
       expect(source, path).toContain("recordSubmittedActivity");
+    }
+  });
+
+  test("bookkeeping that throws after a broadcast cannot replace the reply", async () => {
+    let ran = false;
+    await expect(
+      afterBroadcast(async () => {
+        ran = true;
+        throw new Error("vault storage limit reached");
+      }),
+    ).resolves.toBeUndefined();
+    expect(ran).toBe(true);
+  });
+
+  // Errors audit F1/F2: once a hash exists the reply is success or status
+  // unknown. The public send, the NFT send, the swap, and every pool route run all of their
+  // post-hash bookkeeping (not just the writes) through the boundary, for the
+  // accepted hash and for the signed hash of a lost reply alike.
+  test("the send, swap, and pool executors keep every post-hash step behind the boundary", async () => {
+    const expectations: Readonly<Record<string, readonly string[]>> = {
+      "apps/extension/src/background/accounts/transfer-ops.ts": [
+        "await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(pending)));",
+        "recordSubmittedActivity(deps.activity, activityFor(transactionHash, signedFee))",
+      ],
+      "apps/extension/src/background/privacy/strk20-wallet-execution.ts": [
+        "await afterBroadcast(async () => {\n    // Entering the pool",
+      ],
+      "apps/extension/src/background/portfolio/nft-transfer-submit.ts": [
+        "await afterBroadcast(() => recordSubmittedActivity(deps.activity, activityFor(pending)));",
+        "await afterBroadcast(async () => {\n    await recordSubmittedActivity(deps.activity, activityFor(transactionHash));",
+      ],
+      "apps/extension/src/background/provider/multisig-dapp-invoke.ts": [
+        "await afterBroadcast(() => recordPending(result.transactionHash));",
+      ],
+      "apps/extension/src/background/transactions/swap-ops.ts": [
+        "await afterBroadcast(() => recordSubmitted(pending));",
+        "await afterBroadcast(() => recordSubmitted(transactionHash));",
+      ],
+    };
+    for (const [path, snippets] of Object.entries(expectations)) {
+      const source = await Bun.file(path).text();
+      for (const snippet of snippets) expect(source, path).toContain(snippet);
     }
   });
 

@@ -1,5 +1,5 @@
-import type { PendingApproval } from "@mc-wallet/wallet-ui/lab";
-import { bindApprovals, createSidepanelRuntime } from "@mc-wallet/wallet-ui/lab";
+import type { PendingApproval } from "@bramble/wallet-ui/lab";
+import { bindApprovals, createSidepanelRuntime } from "@bramble/wallet-ui/lab";
 import { invokeApproval, watchAssetApproval } from "../fixtures/fixtures";
 import { approvalFixtures } from "../fixtures/journey-fixtures";
 import { walletDashboard } from "../runtime/scenario-dashboard";
@@ -79,6 +79,12 @@ export const approvalsScenario: WalletScenario = {
       requiredApproval("sign"),
     ),
     approvalCheckpoint(
+      "typed-data-nested",
+      "Nested typed-data signature",
+      "Long nested field paths wrap beside their values, so every signed value stays visible.",
+      requiredApproval("signNested"),
+    ),
+    approvalCheckpoint(
       "private-invoke",
       "Private transaction",
       "Private actions and the frozen execution boundary remain inspectable before proof submission.",
@@ -95,12 +101,6 @@ export const approvalsScenario: WalletScenario = {
       "Switch network",
       "The current and requested network change are kept separate from transaction approval.",
       requiredApproval("switchChain"),
-    ),
-    approvalCheckpoint(
-      "add-chain",
-      "Add custom network",
-      "A dApp cannot silently persist custom network infrastructure.",
-      requiredApproval("addChain"),
     ),
     approvalCheckpoint(
       "declare",

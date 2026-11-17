@@ -45,6 +45,24 @@ export const MAINNET_TOKEN_DECIMALS: Readonly<Record<MainnetTokenSymbol, number>
 } as const;
 
 /**
+ * The largest token precision the terminal accepts from a market API. Decimals
+ * drive string padding while a screen renders, so an unbounded value from an
+ * API (`Infinity`, `1e9`, a negative or fractional number) would throw inside
+ * React and blank the screen (Sherlock 155).
+ */
+export const MAX_TOKEN_DECIMALS = 36;
+
+/**
+ * Whether an untrusted value is a usable token precision: an integer from 0 to
+ * {@link MAX_TOKEN_DECIMALS}.
+ */
+export const isTokenDecimals = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= 0 &&
+  value <= MAX_TOKEN_DECIMALS;
+
+/**
  * Ekubo concentrated-liquidity AMM mainnet contracts. Verified in the Ekubo MCP
  * repo constants; re-check against docs.ekubo.org before mainnet swaps.
  */
@@ -105,6 +123,55 @@ export const VESU_ADDRESSES = {
  * Transactions still pass through the terminal review and connected wallet.
  */
 export const VESU_LENDING_ENABLED = true;
+
+/** A curated Vesu vault the terminal may call, pinned with its class and asset. */
+export type CuratedVesuVault = {
+  readonly address: string;
+  readonly assetAddress: string;
+  readonly classHash: string;
+  readonly symbol: string;
+};
+
+/**
+ * The only Vesu vaults a deposit, `request_redeem` or `claim_redeem` may target
+ * (#270). The Vesu API's vault list only decides what is shown; it never
+ * authorizes. Each entry's class hash is read again right before the wallet
+ * sees the calls. Changes only by PR.
+ *
+ * Provenance, verified 2026-11-06 at mainnet block 17546459: both are the
+ * complete `api.vesu.xyz/vaults?onlyVerified=true` list (curated by Noon);
+ * `starknet_getClassHashAt` and `asset()` on https://mainnet.nodes.starknet.org
+ * return the class and asset below.
+ */
+export const VESU_CURATED_VAULTS: readonly CuratedVesuVault[] = [
+  {
+    address: "0x023ccbaf0f70e8dcb29520ab4ea12e2e916fb71204677321e91e525062279e35",
+    assetAddress: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac",
+    classHash: "0x0225ca31b59b9f0e72dbbe72696aae6cf3431c68a2b993e9ecc10a62dd91ea04",
+    symbol: "nWBTC",
+  },
+  {
+    address: "0x04424dec8280f518b35be33139f44ef9fa0855b117f16cda2a30f1b64c27864a",
+    assetAddress: "0x04daa17763b286d1e59b97c283c0b8c949994c361e426a28f743c67bdfe9a32f",
+    classHash: "0x0225ca31b59b9f0e72dbbe72696aae6cf3431c68a2b993e9ecc10a62dd91ea04",
+    symbol: "ntBTC",
+  },
+];
+
+/**
+ * Gate for curated Vesu vault deposits (Sherlock 169). Deposits, redeems and
+ * claims are limited to `VESU_CURATED_VAULTS` and re-check the vault's class at
+ * handoff; this switch still keeps deposits paused until that is reviewed.
+ */
+export const VESU_VAULT_DEPOSITS_ENABLED: boolean = false;
+
+/**
+ * Networks the Create screen (issue 154) may deploy on: a pinned OpenZeppelin
+ * ERC-20, ERC-721 or ERC-1155 preset through the Universal Deployer. Sepolia
+ * first; Mainnet stays off until the Sepolia launch has been reviewed. With no
+ * network listed, the tab is hidden and `#create` falls back to Discover.
+ */
+export const TOKEN_CREATE_NETWORKS: readonly string[] = ["SN_SEPOLIA"];
 
 /**
  * Vesu API base. The recon repo pointed at STAGING; mainnet integrations must

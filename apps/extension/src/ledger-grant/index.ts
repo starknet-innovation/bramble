@@ -17,8 +17,8 @@
  * browser/DOM boundary exercised against Chromium and physical hardware.
  */
 
-import { serveLedgerBroker } from "@mc-wallet/ledger-browser/broker-server";
-import { probeLedgerGrantClient } from "@mc-wallet/ledger-browser/grant-session";
+import { serveLedgerBroker } from "@bramble/ledger-browser/broker-server";
+import { probeLedgerGrantClient } from "@bramble/ledger-browser/grant-session";
 import {
   closeGrantTransport,
   type LedgerGrantTransportDiagnostics,
@@ -26,15 +26,16 @@ import {
   readGrantTransportDiagnostics,
   requestGrantTransport,
   supportedGrantTransportKinds,
-} from "@mc-wallet/ledger-browser/grant-transport";
-import { type LedgerTransport, newStarknetClient } from "@mc-wallet/ledger-browser/webhid";
+} from "@bramble/ledger-browser/grant-transport";
+import { type LedgerTransport, newStarknetClient } from "@bramble/ledger-browser/webhid";
 import {
   ledgerBrokerChannelName,
   ledgerBrokerSessionFromHash,
-} from "@mc-wallet/ledger-protocol/broker";
-import { LedgerRejection, ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { applySkin } from "@mc-wallet/ui-kit/skin";
+} from "@bramble/ledger-protocol/broker";
+import { LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
+import { applySkin } from "@bramble/ui-kit/skin";
+import { brandMark, element, textElement } from "./dom";
 import {
   alternateLedgerTransport,
   type LedgerConnectionMethod,
@@ -43,7 +44,7 @@ import {
   transportForConnectionMethod,
 } from "./grant-flow";
 import { LEDGER_GRANT_STYLES } from "./styles";
-import { ledgerTransitionProgress } from "./transition-progress";
+import { LEDGER_HANDSHAKE_PROGRESS, ledgerTransitionProgress } from "./transition-progress";
 
 type GrantChrome = {
   readonly tabs?: {
@@ -74,27 +75,6 @@ const closeThisTab = async (): Promise<void> => {
     // failure merely because Chrome raced or rejected its tab-removal call.
   }
   grantGlobal.close?.();
-};
-
-const element = <Name extends keyof HTMLElementTagNameMap>(
-  name: Name,
-  className?: string,
-): HTMLElementTagNameMap[Name] => {
-  const node = document.createElement(name);
-  if (className) {
-    node.className = className;
-  }
-  return node;
-};
-
-const textElement = <Name extends keyof HTMLElementTagNameMap>(
-  name: Name,
-  className: string,
-  text: string,
-): HTMLElementTagNameMap[Name] => {
-  const node = element(name, className);
-  node.textContent = text;
-  return node;
 };
 
 const readinessStep = (index: string, text: string): HTMLLIElement => {
@@ -128,7 +108,7 @@ const retryTransportLabel = (transport: LedgerTransportKind): string =>
       : "Try HID cable";
 
 const diagnosticId = (transport: LedgerTransportKind, stage: string): string =>
-  `MC-LDG-${transport.toUpperCase()}-${stage}`;
+  `BRAMBLE-LDG-${transport.toUpperCase()}-${stage}`;
 
 const render = (): void => {
   const app = document.querySelector<HTMLElement>("#app");
@@ -144,13 +124,10 @@ const render = (): void => {
   const shell = element("section", "grant-shell");
   const header = element("header", "grant-header");
   const brand = element("span", "grant-brand");
-  brand.append(
-    textElement("span", "grant-brand-mark", "MC"),
-    textElement("strong", "", "MC Wallet"),
-  );
-  const once = element("span", "grant-once");
-  once.append(element("span", "grant-once-dot"), document.createTextNode("Secure device session"));
-  header.append(brand, once);
+  const brandTile = element("span", "grant-brand-mark");
+  brandTile.append(brandMark());
+  brand.append(brandTile, textElement("strong", "", "Bramble"));
+  header.append(brand);
 
   const hero = element("div", "grant-hero");
   const copy = element("div", "grant-copy");
@@ -159,7 +136,7 @@ const render = (): void => {
     textElement(
       "p",
       "",
-      "Chrome uses this secure tab to keep the device connection alive. It closes automatically when the wallet finishes.",
+      "Your browser needs this tab open to reach your Ledger. It closes when the wallet is done.",
     ),
   );
   hero.append(ledgerVisual(), copy);
@@ -171,7 +148,7 @@ const render = (): void => {
   const validationNotice = textElement(
     "p",
     "grant-footnote",
-    "Hardware preview · MC Wallet's complete physical device matrix is still in progress. Use with trusted-test funds only.",
+    "Hardware preview · Bramble has not been tested against every Ledger model. Use test funds only.",
   );
   const methodOptions = element("div", "grant-method-options");
   const cableMethod = element("button", "grant-method");
@@ -179,12 +156,10 @@ const render = (): void => {
   cableMethod.dataset["active"] = "true";
   cableMethod.setAttribute("aria-pressed", "true");
   cableMethod.append(textElement("strong", "", "USB cable"));
-  cableMethod.append(textElement("span", "", "Primary connection method"));
   const bluetoothMethod = element("button", "grant-method");
   bluetoothMethod.type = "button";
   bluetoothMethod.setAttribute("aria-pressed", "false");
   bluetoothMethod.append(textElement("strong", "", "Bluetooth"));
-  bluetoothMethod.append(textElement("span", "", "Compatibility path for Bluetooth devices"));
   methodOptions.append(cableMethod, bluetoothMethod);
   methods.append(methodsTitle, validationNotice, methodOptions);
 
@@ -216,11 +191,7 @@ const render = (): void => {
   cancel.type = "button";
   actions.append(button, cancel);
 
-  const footnote = textElement(
-    "p",
-    "grant-footnote",
-    "MC Wallet validates the Starknet app, but your keys never leave your Ledger.",
-  );
+  const footnote = textElement("p", "grant-footnote", "Your keys never leave your Ledger.");
 
   const setStatus = (
     title: string,
@@ -232,6 +203,9 @@ const render = (): void => {
     status.dataset["tone"] = tone;
     statusTitle.textContent = title;
     statusCopy.textContent = message;
+    // A phase with nothing for the reader to do shows its title alone rather
+    // than an empty line under it.
+    statusCopy.hidden = message === "";
     statusDetail.hidden = detail === undefined;
     statusDetail.textContent = detail ?? "";
   };
@@ -251,13 +225,11 @@ const render = (): void => {
       ...(selectedMethod === "ble"
         ? [
             readinessStep("1", "Enable Bluetooth, then power your Ledger off and back on"),
-            readinessStep("2", "Stay on the Ledger dashboard and pair it in Chrome"),
-            readinessStep("3", "MC Wallet will check firmware, then open Starknet"),
+            readinessStep("2", "Stay on the Ledger dashboard and pair it in your browser"),
           ]
         : [
             readinessStep("1", "Unlock your Ledger and connect a data-capable USB cable"),
-            readinessStep("2", "MC Wallet will check firmware, then open Starknet"),
-            readinessStep("3", "Choose your Ledger in Chrome, then click Connect"),
+            readinessStep("2", "Choose your Ledger in your browser, then press Connect"),
           ]),
     );
   };
@@ -332,14 +304,10 @@ const render = (): void => {
     if (failure === "permission-dismissed") {
       nextTransport = transport;
       setStatus(
+        "No Ledger selected",
         transport === "ble"
-          ? "Bluetooth pairing closed"
-          : `Chrome did not expose ${transportLabel(transport)}`,
-        transport === "ble"
-          ? "Chrome returned no compatible Ledger Bluetooth service. Choose USB above if the device is cabled."
-          : transport === "hid"
-            ? "Chrome returned no permitted Ledger HID collection. A Ledger that also exposes FIDO can be filtered by Chrome."
-            : "Chrome returned no compatible Ledger vendor interface. Check Chrome's USB-device setting and device log; reconnecting alone may not change this.",
+          ? "No Ledger was found to pair with. Choose USB above if the device is cabled."
+          : "No Ledger was found. Unlock the device, open the Starknet app, and try again.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "PICKER"), diagnostics),
       );
@@ -347,8 +315,8 @@ const render = (): void => {
       return;
     } else if (failure === "permission-blocked") {
       setStatus(
-        "Chrome blocked device access",
-        "Reconnect the Ledger and check Chrome's device permissions for MC Wallet.",
+        "Device access blocked",
+        "Reconnect the Ledger, then allow device access for Bramble in your browser.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "POLICY"), diagnostics),
       );
@@ -358,7 +326,7 @@ const render = (): void => {
       setStatus(
         `${transportLabel(transport)} couldn't open the Ledger`,
         alternate
-          ? `Chrome could not claim that interface. Try the ${transportLabel(alternate)} compatibility transport.`
+          ? `Your browser couldn't open that connection. Try ${transportLabel(alternate)} instead.`
           : "Reconnect the Ledger, close other wallet apps, and try again.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "INTERFACE"), diagnostics),
@@ -368,7 +336,7 @@ const render = (): void => {
     } else {
       setStatus(
         "Ledger connection failed",
-        "Reconnect the cable, unlock the device, keep Starknet open, and close other wallet apps.",
+        "Reconnect the cable, unlock the device, open Starknet, and close other wallet apps.",
         "danger",
         ledgerGrantDiagnostic(diagnosticId(transport, "TRANSPORT"), diagnostics),
       );
@@ -393,7 +361,7 @@ const render = (): void => {
           ? "Bluetooth is unavailable in this browser. Connect with USB instead."
           : "Use the latest Chrome, Brave, or Edge on desktop, then try again.",
         "danger",
-        "Support code · MC-LDG-BROWSER",
+        "Support code · BRAMBLE-LDG-BROWSER",
       );
       resetButton(selectedMethod === "ble" ? "Pair with Bluetooth" : "Connect with USB");
       return;
@@ -402,8 +370,8 @@ const render = (): void => {
     buttonLabel.textContent = `Waiting for ${transportLabel(transport)}…`;
     const chooserAction = transport === "ble" ? "Pair" : "Connect";
     setStatus(
-      "Choose your device in Chrome",
-      `Select your Ledger in Chrome's ${transportLabel(transport)} device list, then click ${chooserAction}.`,
+      "Choose your device in your browser",
+      `Select your Ledger in your browser's ${transportLabel(transport)} device list, then click ${chooserAction}.`,
       "info",
       `Transport · ${transportLabel(transport)}`,
     );
@@ -414,8 +382,8 @@ const render = (): void => {
         activeTransportKind = transport;
       }
       setStatus(
-        "Checking firmware and Starknet",
-        "MC Wallet is checking device software and reading a public account key. Nothing is signed.",
+        LEDGER_HANDSHAKE_PROGRESS.title,
+        LEDGER_HANDSHAKE_PROGRESS.message,
         "info",
         `Transport · ${transportLabel(transport)} · Firmware, app, and key handshake`,
       );
@@ -431,7 +399,7 @@ const render = (): void => {
       });
       setStatus(
         "Ledger connected",
-        `Starknet ${version.major}.${version.minor}.${version.patch} verified. MC Wallet is ready to continue.`,
+        `Starknet ${version.major}.${version.minor}.${version.patch} verified. Bramble is ready to continue.`,
         "success",
         `Transport · ${transportLabel(transport)} · Secure session active`,
       );
@@ -484,10 +452,10 @@ const render = (): void => {
   if (!sessionId) {
     button.disabled = true;
     setStatus(
-      "Open Ledger from MC Wallet",
+      "Open Ledger from Bramble",
       "This hardware tab needs a fresh secure session from the wallet.",
       "danger",
-      "Support code · MC-LDG-SESSION",
+      "Support code · BRAMBLE-LDG-SESSION",
     );
   }
 

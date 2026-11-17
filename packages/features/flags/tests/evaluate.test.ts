@@ -4,10 +4,10 @@
  * local and deterministic.
  */
 import { describe, expect, test } from "bun:test";
-import type { FlagCatalog } from "@mc-wallet/flags/catalog";
-import { BUNDLED_FLAGS } from "@mc-wallet/flags/catalog";
-import { type FlagRule, parseFlagPayload } from "@mc-wallet/flags/contract";
-import { evaluateFlags, type FlagTargeting, flagBucket } from "@mc-wallet/flags/evaluate";
+import type { FlagCatalog } from "@bramble/flags/catalog";
+import { BUNDLED_FLAGS } from "@bramble/flags/catalog";
+import { type FlagRule, parseFlagPayload } from "@bramble/flags/contract";
+import { evaluateFlags, type FlagTargeting, flagBucket } from "@bramble/flags/evaluate";
 import { payload } from "./support/flag-fixture";
 
 const CATALOG: FlagCatalog = {

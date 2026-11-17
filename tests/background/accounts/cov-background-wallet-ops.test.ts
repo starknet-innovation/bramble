@@ -7,13 +7,14 @@
  * behind a locked session with no pending records.
  */
 import { describe, expect, test } from "bun:test";
-import type { ActivityEntry } from "@mc-wallet/transactions/activity";
-import type { Vault } from "@mc-wallet/vault/schema";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { DiscoveredHistory } from "@bramble/transactions/starkscan-wallet";
+import type { Vault } from "@bramble/vault/schema";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import type { RuntimeRpc } from "../../../apps/extension/src/background/runtime/runtime-rpc";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const tokenId = `SN_MAIN:ETH:${ETH}`;
@@ -111,7 +112,7 @@ const makeHandler = (options?: { locked?: boolean; runtimeRpc?: RuntimeRpc }) =>
   if (!options?.locked) {
     session.unlock(vaultPassphrase);
   }
-  return createMessageHandler(walletStub, "extension-id", {
+  return createMessageHandler(walletStub, testExtension, {
     runtimeRpc: options?.runtimeRpc ?? rpc,
     session,
   });
@@ -213,9 +214,9 @@ describe("wallet-ops signer closure and activity feed", () => {
     let historyCalls = 0;
     const historyRpc = {
       ...rpc,
-      async getTransactionHistory(): Promise<readonly ActivityEntry[]> {
+      async getTransactionHistory(): Promise<DiscoveredHistory> {
         historyCalls += 1;
-        return [];
+        return { entries: [], lane: "chain-events" };
       },
     } as unknown as RuntimeRpc;
     const handler = makeHandler({ locked: true, runtimeRpc: historyRpc });

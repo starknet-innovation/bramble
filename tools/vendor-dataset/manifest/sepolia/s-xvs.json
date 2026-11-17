@@ -1,0 +1,20 @@
+{
+  "s-xvs/TA-26": {
+    "id": "s-xvs/TA-26",
+    "seed": "BRAMBLE_DATASET_SEED_S_XVS",
+    "vendorDerivation": "bramble-account",
+    "index": 0,
+    "address": "0x46f00adb96cd1e95442a877e0aad7fb0366afb4d94c910962648fcab76cfbfe",
+    "pubkey": "0x718b997b9715a1397631cccb8f57444157456ce4b981267bc128f93ee4dcf8f",
+    "classAtDeploy": "0x0663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+    "expected": "made in the Xverse app: Xverse class on the own ladder, account 0",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "deployedBy": "Xverse app",
+      "liveClass": "0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024"
+    },
+    "log": ["funded STRK 0x5d3dcb55ff10b06fbd624c6b193ee745e839f98ea390b120531a8901f2079a8"]
+  }
+}

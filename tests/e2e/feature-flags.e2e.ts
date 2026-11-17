@@ -9,7 +9,7 @@
  * kill `swap.enabled`. A production build never trusts a
  * test key, so acceptance itself is covered by the unit suites.
  */
-import { FEATURE_FLAG_URL } from "@mc-wallet/flags/catalog";
+import { FEATURE_FLAG_URL } from "@bramble/flags/catalog";
 import { FEATURE_FLAG_ALARM } from "../../apps/extension/src/background/flags/feature-flag-alarm";
 import {
   createTestPublisher,
@@ -47,7 +47,10 @@ test("fetches the signed flag document privately and fails closed on a foreign k
     });
     await route.fulfill({
       body: document,
-      headers: { "cache-control": "public, max-age=300" },
+      // The wallet holds no host permission for the CDN (issue 772), so the
+      // read only succeeds because the CDN answers CORS like bramble-ff's R2
+      // bucket does.
+      headers: { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" },
       contentType: "application/json",
     });
   });

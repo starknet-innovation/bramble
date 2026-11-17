@@ -1,30 +1,37 @@
 /** Strict response validators for privileged Argent multisig messages. */
-import { hasOnlyKnownKeys, isJson, isRecord } from "@mc-wallet/core/json";
+import {
+  hasOnlyArrayEntries,
+  hasOnlyKnownKeys,
+  isJson,
+  isOwnDataProperty,
+  isRecord,
+  JSON_BUDGETS,
+} from "@bramble/core/json";
 import type {
   ArgentMultisigAuthorityStatus,
   ArgentMultisigConfig,
   ArgentUnsupportedSigner,
-} from "@mc-wallet/multisig/chain";
-import { MULTISIG_LIMITS } from "@mc-wallet/multisig/chain";
+} from "@bramble/multisig/chain";
+import { MULTISIG_LIMITS } from "@bramble/multisig/chain";
 import {
   type ArgentMultisigRecord,
   type ArgentMultisigSigningIntent,
   canReplaceArgentMultisigSigningIntent,
   isArgentMultisigRecord,
   isArgentMultisigSigningIntent,
-} from "@mc-wallet/multisig/repository";
-import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import type { AccountContractType } from "@mc-wallet/wallet-model/accounts";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+} from "@bramble/multisig/repository";
+import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
+import type { FeeAffordability } from "@bramble/transactions/fee-funds";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import { isNostrPublicKey } from "@mc-wallet/wallet-model/nostr";
+} from "@bramble/wallet-model/networks";
+import { isNostrPublicKey } from "@bramble/wallet-model/nostr";
 
 /**
  * Fresh untrusted chain authority paired with one watched account.
@@ -45,7 +52,7 @@ export type ArgentMultisigView = {
  */
 export type ArgentMultisigIntentPackage = {
   readonly intent: ArgentMultisigSigningIntent;
-  readonly kind: "mc-wallet.argent-multisig-intent";
+  readonly kind: "bramble.argent-multisig-intent";
   readonly version: 1;
 };
 
@@ -174,7 +181,7 @@ const isView = (value: unknown): value is ArgentMultisigView =>
 const isIntentPackage = (value: unknown): value is ArgentMultisigIntentPackage =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["intent", "kind", "version"]) &&
-  value["kind"] === "mc-wallet.argent-multisig-intent" &&
+  value["kind"] === "bramble.argent-multisig-intent" &&
   value["version"] === 1 &&
   isArgentMultisigSigningIntent(value["intent"]);
 
@@ -190,6 +197,67 @@ export const isArgentMultisigsResponse = (value: unknown): value is ArgentMultis
   value["multisigs"].every(isView) &&
   Array.isArray(value["intents"]) &&
   value["intents"].every(isArgentMultisigSigningIntent);
+
+// Each entry is budgeted and validated on its own. A co-signer can share
+// several individually legal intents whose sum passes the per-message JSON
+// budget; a whole-envelope gate then blanked every multisig and every saved
+// transaction for the user (Sherlock 160). The list keeps the two bounds that
+// gate used to supply: the provider array cap and the indices-only shape.
+const readEntries = <T>(
+  value: unknown,
+  valid: (entry: unknown) => entry is T,
+): readonly T[] | null => {
+  if (
+    !Array.isArray(value) ||
+    value.length > JSON_BUDGETS.provider.maxArrayLength ||
+    !hasOnlyArrayEntries(value)
+  ) {
+    return null;
+  }
+  const entries: T[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index);
+    if (!isOwnDataProperty(descriptor)) continue;
+    const entry: unknown = descriptor.value;
+    if (isJson(entry) && valid(entry)) entries.push(entry);
+  }
+  return entries;
+};
+
+/**
+ * Reads the watched accounts and saved transactions a `wallet.multisigs`
+ * answer carries. Returns `null` when the envelope itself is malformed or past
+ * the provider array bound; otherwise every returned entry was validated and
+ * budgeted on its own, and an entry that fails is dropped while the rest stay
+ * usable. A co-signer's oversized proposals cannot blank the multisig screens.
+ */
+export const readArgentMultisigs = (
+  value: unknown,
+): Pick<ArgentMultisigsResponse, "intents" | "multisigs"> | null => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, ["intents", "multisigs", "ok"])) return null;
+  const multisigs = readEntries(value["multisigs"], isView);
+  const intents = readEntries(value["intents"], isArgentMultisigSigningIntent);
+  return value["ok"] === true && multisigs && intents ? { intents, multisigs } : null;
+};
+
+/**
+ * Reads one add or refresh answer under the same rules as
+ * `readArgentMultisigs`: the account must validate, and each saved
+ * transaction is budgeted on its own and dropped when it fails.
+ */
+export const readArgentMultisig = (
+  value: unknown,
+): {
+  readonly intents: readonly ArgentMultisigSigningIntent[];
+  readonly multisig: ArgentMultisigView;
+} | null => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, ["intents", "multisig", "ok"])) return null;
+  const multisig = value["multisig"];
+  const intents = readEntries(value["intents"], isArgentMultisigSigningIntent);
+  return value["ok"] === true && isJson(multisig) && isView(multisig) && intents
+    ? { intents, multisig }
+    : null;
+};
 
 /**
  * Validates one add or refresh result and rejects unknown fields.
@@ -365,11 +433,16 @@ export const isNostrSyncResponse = (
   readonly intentIds: readonly string[];
   readonly ok: true;
   readonly received: number;
+  readonly strk20Key: "conflict" | "held" | "none" | "stored";
 } =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["imported", "intentIds", "ok", "received"]) &&
+  hasOnlyKnownKeys(value, ["imported", "intentIds", "ok", "received", "strk20Key"]) &&
   value["ok"] === true &&
+  (value["strk20Key"] === "none" ||
+    value["strk20Key"] === "stored" ||
+    value["strk20Key"] === "held" ||
+    value["strk20Key"] === "conflict") &&
   Number.isSafeInteger(value["imported"]) &&
   Number(value["imported"]) >= 0 &&
   Array.isArray(value["intentIds"]) &&
@@ -384,3 +457,22 @@ export const isNostrSyncResponse = (
  */
 export const isOkResponse = (value: unknown): value is { readonly ok: true } =>
   isRecord(value) && isJson(value) && hasOnlyKnownKeys(value, ["ok"]) && value["ok"] === true;
+
+/**
+ * Status or create result for a multisig's shared private-balance key.
+ * The key itself is never part of the response.
+ */
+export const isMultisigStrk20KeyResponse = (
+  value: unknown,
+): value is {
+  readonly ok: true;
+  readonly state: "absent" | "conflict" | "created" | "held";
+} =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["ok", "state"]) &&
+  value["ok"] === true &&
+  (value["state"] === "absent" ||
+    value["state"] === "held" ||
+    value["state"] === "conflict" ||
+    value["state"] === "created");

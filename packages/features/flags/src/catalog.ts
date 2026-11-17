@@ -46,8 +46,9 @@ export const FEATURE_FLAG_CHANNEL: FlagChannel = "production";
  * Flags CDN origin.
  *
  * PLACEHOLDER: bramble-ff has not fixed its custom domain yet (`TODO flags
- * domain` in its README). Change this, the manifest `host_permissions` entry,
- * and `scripts/check-extension-manifest.ts` together before release.
+ * domain` in its README). Change this before release. Read through CORS (the
+ * CDN answers `Access-Control-Allow-Origin: *`), so no `host_permissions`
+ * entry is needed or wanted (issue 772).
  */
 export const FEATURE_FLAG_ORIGIN = "https://flags.starknet.org";
 

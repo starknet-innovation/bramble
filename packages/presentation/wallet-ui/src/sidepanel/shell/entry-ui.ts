@@ -1,9 +1,9 @@
 /**
  * Small DOM effects used by the side-panel entrypoint.
  */
-import type { ThemeChoice } from "@mc-wallet/settings/preferences";
-import { applySkin } from "@mc-wallet/ui-kit/skin";
-import { colorSchemeForChoice, skinForChoice } from "@mc-wallet/ui-kit/theme";
+import type { ThemeChoice } from "@bramble/settings/preferences";
+import { applySkin } from "@bramble/ui-kit/skin";
+import { colorSchemeForChoice, skinForChoice } from "@bramble/ui-kit/theme";
 import { isWalletView, type WalletView } from "../shared/parts";
 
 /**

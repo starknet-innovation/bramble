@@ -2,9 +2,9 @@
  * Exact deployment-review binding and one-time consumption.
  */
 import { describe, expect, test } from "bun:test";
-import { memoryMultisigStore } from "@mc-wallet/multisig/repository";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { memoryMultisigStore } from "@bramble/multisig/repository";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { createMemoryStore } from "@bramble/store/kv";
 import { createArgentMultisigDeploymentReviews } from "../../../apps/extension/src/background/multisig/multisig-deployment-reviews";
 import {
   HARNESS_KEYS,

@@ -3,10 +3,11 @@
  * change on the right. Split from ./views.ts to keep it within the size budget.
  */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import { tokenLogoSvg } from "@mc-wallet/portfolio/token-logos";
-import type { DisplayCurrency } from "@mc-wallet/settings/preferences";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+import { escapeHtml } from "@bramble/core/html";
+import { tokenLogoSvg } from "@bramble/portfolio/token-logos";
+import type { DisplayCurrency } from "@bramble/settings/preferences";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
@@ -108,7 +109,9 @@ const changeBadge = (change: number | undefined): string => {
   }
   const direction = change >= 0 ? "up" : "down";
   const arrow = change >= 0 ? "↑" : "↓";
-  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%</span>`;
+  // A short visible window keeps the figure honest (a 24h price move, not a
+  // balance change); screen readers get the full name in place of it.
+  return `<span class="token-change ${direction}">${arrow} ${Math.abs(change).toFixed(2)}%<span class="token-change-win" aria-hidden="true"> · 24h</span><span class="sr-only"> 24h price change</span></span>`;
 };
 
 /**
@@ -119,16 +122,26 @@ export type PrivateBreakdown =
   | { readonly kind: "loading" }
   | { readonly kind: "ready"; readonly balance: string; readonly formatted: string }
   | { readonly kind: "unavailable" }
+  /** Another wallet registered this address; shield and unshield stay off. */
+  | { readonly kind: "other-wallet" }
   /** Registration broadcast, not yet visible to the privacy indexer. */
   | { readonly kind: "pending" }
-  | { readonly kind: "unregistered" };
+  | { readonly kind: "unregistered" }
+  | { readonly kind: "undeployed" }
+  /** Undeployed, and the public STRK balance cannot pay the deployment fee. */
+  | { readonly kind: "needs-funds" };
 
 const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown): string => {
   const symbol = token.symbol;
-  if (breakdown.kind === "unregistered") {
-    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="Register to start shielding">
+  if (
+    breakdown.kind === "needs-funds" ||
+    breakdown.kind === "unregistered" ||
+    breakdown.kind === "undeployed"
+  ) {
+    const label = breakdown.kind === "unregistered" ? "Register to start shielding" : "Shield";
+    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="${label}">
         <span class="token-breakdown-label">${icon("lock")}Private balance</span>
-        <span>Register to start shielding</span>
+        <span>${label}</span>
       </button>`;
   }
   const value =
@@ -138,7 +151,9 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
         ? "Discovering…"
         : breakdown.kind === "pending"
           ? "Registration pending…"
-          : "Unavailable";
+          : breakdown.kind === "other-wallet"
+            ? escapeHtml(PRIVACY_OTHER_WALLET)
+            : "Unavailable";
   return `<div class="token-breakdown-row${breakdown.kind === "ready" ? "" : " muted"}">
       <span class="token-breakdown-label">${icon("lock")}Private balance</span>
       <span class="token-breakdown-value">${value}</span>
@@ -146,8 +161,33 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
 };
 
 /**
+ * The collapsed row's split line, e.g. "12.00 public · 5.00 private".
+ */
+export const TOKEN_SPLIT_LINE = (publicAmount: string, privateAmount: string): string =>
+  `${publicAmount} public · ${privateAmount} private`;
+
+// Shown only when part of the total is private: a public-only row's amount is
+// already its public balance, and a second line saying so is noise. Amounts use
+// the row's own column format; the caller escapes nothing, this does. An
+// unknown public balance has no split to state, so no line (audit M5). While
+// discovery is still out the line is held open with "—", so a split that
+// lands fills it in rather than pushing the list down (issue 795); `loading`
+// is only ever derived for an account that can hold private balances.
+const splitLine = (publicFormatted: string | null, breakdown: PrivateBreakdown): string => {
+  if (breakdown.kind === "loading") return '<p class="token-split" aria-hidden="true">—</p>';
+  if (publicFormatted === null || breakdown.kind !== "ready" || BigInt(breakdown.balance) === 0n)
+    return "";
+  const line = TOKEN_SPLIT_LINE(
+    compactAmount(publicFormatted, PORTFOLIO_FRACTION_PLACES),
+    compactAmount(breakdown.formatted, PORTFOLIO_FRACTION_PLACES),
+  );
+  return `<p class="token-split">${escapeHtml(line)}</p>`;
+};
+
+/**
  * Renders one unified token row: the summary shows the combined public plus
- * private amount, and expanding it disloses the public/private split, the
+ * private amount — with a public/private split line beneath it when part of it
+ * is private — and expanding it discloses the split per bucket, the
  * shield/unshield entry, and the asset-screen link. The private line doubles as
  * the registration entry when the account is not registered with the privacy
  * pool, in which case there is nothing to shield yet and no entry is offered.
@@ -159,7 +199,8 @@ export const unifiedBalanceRow = (
   currency: DisplayCurrency,
   breakdown: {
     readonly private: PrivateBreakdown;
-    readonly publicFormatted: string;
+    /** Null when the public balance is unknown: shown as "—", never as zero. */
+    readonly publicFormatted: string | null;
   },
 ): string => {
   const fiat = tokenFiatValue(token.formatted, price);
@@ -170,6 +211,7 @@ export const unifiedBalanceRow = (
         <div class="token-copy">
           <strong>${escapeHtml(token.symbol)}</strong>
           <p data-live-key="token:${escapeHtml(token.id)}:balance" data-live-value="${escapeHtml(token.formatted)}">${escapeHtml(compactAmount(token.formatted, PORTFOLIO_FRACTION_PLACES))}</p>
+          ${splitLine(breakdown.publicFormatted, breakdown.private)}
         </div>
         <div class="token-side">
           <span class="token-amount" data-live-key="token:${escapeHtml(token.id)}:fiat" data-live-value="${fiat === null ? "unknown" : fiat}">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>
@@ -179,7 +221,7 @@ export const unifiedBalanceRow = (
       <div class="token-breakdown">
         <div class="token-breakdown-row">
           <span class="token-breakdown-label">Public balance</span>
-          <span class="token-breakdown-value">${escapeHtml(compactAmount(breakdown.publicFormatted, PORTFOLIO_FRACTION_PLACES))} ${escapeHtml(token.symbol)}</span>
+          <span class="token-breakdown-value">${breakdown.publicFormatted === null ? "—" : `${escapeHtml(compactAmount(breakdown.publicFormatted, PORTFOLIO_FRACTION_PLACES))} ${escapeHtml(token.symbol)}`}</span>
         </div>
         ${privateBreakdownLine(token, breakdown.private)}
         <button class="token-breakdown-more" data-token-detail="${escapeHtml(token.id)}" type="button">See more about ${escapeHtml(token.symbol)}${icon("chevronRight")}</button>

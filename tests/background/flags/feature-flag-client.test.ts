@@ -5,11 +5,11 @@
  * message.
  */
 import { describe, expect, test } from "bun:test";
-import type { BoundedHttpFetch } from "@mc-wallet/core/http-json";
-import { FEATURE_FLAG_URL, TRUSTED_FLAG_KEYS } from "@mc-wallet/flags/catalog";
-import { FEATURE_FLAG_BUCKET_KEY, FEATURE_FLAG_STORE_KEY } from "@mc-wallet/flags/state";
-import { importTrustedFlagKeys } from "@mc-wallet/flags/verify";
-import { createMemoryStore, type KeyValueStore } from "@mc-wallet/store/kv";
+import type { BoundedHttpFetch } from "@bramble/core/http-json";
+import { FEATURE_FLAG_URL, TRUSTED_FLAG_KEYS } from "@bramble/flags/catalog";
+import { FEATURE_FLAG_BUCKET_KEY, FEATURE_FLAG_STORE_KEY } from "@bramble/flags/state";
+import { importTrustedFlagKeys } from "@bramble/flags/verify";
+import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
 import {
   FEATURE_FLAG_ALARM,
   startFeatureFlagRefresh,
@@ -25,7 +25,12 @@ import {
   payload,
   stamp,
 } from "../../../packages/features/flags/tests/support/flag-fixture";
-import { contentSender, createWallet, extensionSender } from "../../support/background-wallet-stub";
+import {
+  contentSender,
+  createWallet,
+  extensionSender,
+  testExtension,
+} from "../../support/background-wallet-stub";
 
 const publisher = await createTestPublisher();
 
@@ -210,7 +215,7 @@ describe("feature-flag refresh scheduling", () => {
       ready: Promise.resolve(),
     });
     await Bun.sleep(0);
-    listener?.({ name: "mc-wallet:tx-monitor-fast" });
+    listener?.({ name: "bramble:tx-monitor-fast" });
     listener?.({ name: FEATURE_FLAG_ALARM });
     await Bun.sleep(0);
     expect(created).toEqual([FEATURE_FLAG_ALARM]);
@@ -221,7 +226,7 @@ describe("feature-flag refresh scheduling", () => {
 describe("wallet.featureFlags message", () => {
   test("answers extension pages with the snapshot for the active chain", async () => {
     const chains: (string | null)[] = [];
-    const handler = createMessageHandler(createWallet(), "extension-id", {
+    const handler = createMessageHandler(createWallet(), testExtension, {
       featureFlags: {
         snapshot: async (chain) => {
           chains.push(chain);
@@ -239,7 +244,7 @@ describe("wallet.featureFlags message", () => {
   });
 
   test("defaults to bundled values and refuses content scripts and extra fields", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
+    const handler = createMessageHandler(createWallet(), testExtension);
     expect(await handler({ type: "wallet.featureFlags" }, extensionSender)).toMatchObject({
       flags: { "swap.enabled": true },
       source: "bundled",

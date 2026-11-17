@@ -10,8 +10,8 @@ import {
   type SendRouteInput,
   spendableForRoute,
   type ValueBucket,
-} from "@mc-wallet/transactions/send-routes";
-import { STRK_TOKEN_ADDRESS } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/send-routes";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 
 const SENDER = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const RECIPIENT = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -23,7 +23,11 @@ const SIX_STRK = 6_000_000_000_000_000_000n;
 // anyone but the sender is refused, so it cannot be the baseline.
 const ready = (overrides: Partial<SendRouteInput> = {}): SendRouteInput => ({
   amountRaw: 10n * SIX_STRK,
+  convertedFeeCeilingRaw: null,
   destination: "private",
+  feeTokenAddress: STRK_TOKEN_ADDRESS,
+  feeTokenDecimals: 18,
+  feeTokenSymbol: "STRK",
   poolFeeFri: SIX_STRK,
   recipient: RECIPIENT,
   recipientRegistration: "registered",
@@ -31,9 +35,10 @@ const ready = (overrides: Partial<SendRouteInput> = {}): SendRouteInput => ({
   senderAddress: SENDER,
   senderRegistration: "registered",
   source: "private",
-  sourceStrkBalanceRaw: 100n * SIX_STRK,
+  sourceFeeBalanceRaw: 100n * SIX_STRK,
   sourceTokenBalanceRaw: 100n * SIX_STRK,
   tokenAddress: STRK_TOKEN_ADDRESS,
+  tokenDecimals: 18,
   tokenSymbol: "STRK",
   ...overrides,
 });
@@ -130,6 +135,31 @@ describe("gates", () => {
     });
   });
 
+  test("lets an unregistered account shield into its own balance, registering in the same batch", () => {
+    // #789: the first shield carries the registration, so only a self-credit
+    // deposit passes; a third-party credit and every private source still wait
+    // for a registration of their own.
+    const self = {
+      recipient: SENDER,
+      senderRegistration: "unregistered",
+      source: "public",
+    } as const;
+    expect(resolveSendRoute(ready(self)).blocked).toBeUndefined();
+    expect(resolveSendRoute(ready(self)).route?.id).toBe("public-private");
+    expect(blockerFor({ ...self, recipient: null }).reason).toBe("Choose a recipient first");
+    expect(blockerFor({ ...self, recipient: RECIPIENT }).reason).toBe(
+      "Activate private balances before sending privately",
+    );
+    expect(
+      blockerFor({
+        recipient: SENDER,
+        senderRegistration: "unregistered",
+        source: "private",
+        destination: "public",
+      }).reason,
+    ).toBe("Activate private balances before sending privately");
+  });
+
   test("refuses to spend a private balance with no relay configured", () => {
     expect(blockerFor({ relayConfigured: false })).toEqual({
       pending: false,
@@ -206,7 +236,7 @@ describe("gates", () => {
     // the amount is not enough.
     expect(blockerFor({ amountRaw: 100n * SIX_STRK })).toEqual({
       pending: false,
-      reason: "Not enough private STRK for this amount plus the pool fee",
+      reason: "Not enough private STRK for this amount plus the pool fee. Keep 6 STRK for the fee.",
     });
     // Exactly balance-minus-fee is sendable.
     expect(resolveSendRoute(ready({ amountRaw: 99n * SIX_STRK })).route?.id).toBe(
@@ -221,30 +251,35 @@ describe("gates", () => {
       "private-private",
     );
     expect(blockerFor({ ...eth, amountRaw: 101n * SIX_STRK }).reason).toBe(
-      "Not enough private ETH",
+      "Not enough private ETH. You need at least 606 ETH.",
     );
-    expect(blockerFor({ ...eth, sourceStrkBalanceRaw: 0n }).reason).toBe(
-      "Not enough private STRK to cover the pool fee",
+    expect(blockerFor({ ...eth, sourceFeeBalanceRaw: 0n }).reason).toBe(
+      "Not enough private STRK to cover the pool fee. Keep 6 STRK for the fee.",
     );
   });
 
   test("names a private shortfall as private", () => {
     expect(blockerFor({ amountRaw: 200n * SIX_STRK, destination: "public" }).reason).toBe(
-      "Not enough private STRK for this amount plus the pool fee",
+      "Not enough private STRK for this amount plus the pool fee. Keep 6 STRK for the fee.",
     );
     expect(
       blockerFor({
         destination: "public",
-        sourceStrkBalanceRaw: 0n,
+        sourceFeeBalanceRaw: 0n,
         tokenAddress: ETH,
         tokenSymbol: "ETH",
       }).reason,
-    ).toBe("Not enough private STRK to cover the pool fee");
+    ).toBe("Not enough private STRK to cover the pool fee. Keep 6 STRK for the fee.");
   });
 });
 
 describe("spendableForRoute", () => {
-  const fee = { poolFeeFri: SIX_STRK, sourceTokenBalanceRaw: 100n * SIX_STRK };
+  const fee = {
+    convertedFeeCeilingRaw: null,
+    feeTokenAddress: STRK_TOKEN_ADDRESS,
+    poolFeeFri: SIX_STRK,
+    sourceTokenBalanceRaw: 100n * SIX_STRK,
+  };
 
   test("reserves the pool fee when it is charged in the token being sent", () => {
     expect(
@@ -267,10 +302,26 @@ describe("spendableForRoute", () => {
     );
   });
 
+  test("reserves the bounded converted fee when it is charged in the token being sent", () => {
+    // #356: a private USDC send whose fee is quoted in USDC must withhold the
+    // converted ceiling from the same balance, not the whole amount.
+    expect(
+      spendableForRoute(routeFor("private", "private"), {
+        convertedFeeCeilingRaw: SIX_STRK,
+        feeTokenAddress: ETH,
+        poolFeeFri: SIX_STRK,
+        sourceTokenBalanceRaw: 100n * SIX_STRK,
+        tokenAddress: ETH,
+      }),
+    ).toBe(99n * SIX_STRK);
+  });
+
   test("withholds a maximum until the live fee is known", () => {
     // Max must not offer an amount the pool would reject.
     expect(
       spendableForRoute(routeFor("private", "private"), {
+        convertedFeeCeilingRaw: null,
+        feeTokenAddress: STRK_TOKEN_ADDRESS,
         poolFeeFri: null,
         sourceTokenBalanceRaw: 100n * SIX_STRK,
         tokenAddress: STRK_TOKEN_ADDRESS,
@@ -278,9 +329,23 @@ describe("spendableForRoute", () => {
     ).toBeNull();
   });
 
+  test("withholds a maximum until a converted ceiling is known", () => {
+    expect(
+      spendableForRoute(routeFor("private", "private"), {
+        convertedFeeCeilingRaw: null,
+        feeTokenAddress: ETH,
+        poolFeeFri: SIX_STRK,
+        sourceTokenBalanceRaw: 100n * SIX_STRK,
+        tokenAddress: ETH,
+      }),
+    ).toBeNull();
+  });
+
   test("floors at zero rather than offering a negative amount", () => {
     expect(
       spendableForRoute(routeFor("public", "private"), {
+        convertedFeeCeilingRaw: null,
+        feeTokenAddress: STRK_TOKEN_ADDRESS,
         poolFeeFri: SIX_STRK,
         sourceTokenBalanceRaw: SIX_STRK / 2n,
         tokenAddress: STRK_TOKEN_ADDRESS,
@@ -366,7 +431,7 @@ describe("unknown balances", () => {
 
   test("waits until the separate STRK fee balance has been read", () => {
     expect(
-      resolveSendRoute(ready({ sourceStrkBalanceRaw: null, tokenAddress: ETH, tokenSymbol: "ETH" }))
+      resolveSendRoute(ready({ sourceFeeBalanceRaw: null, tokenAddress: ETH, tokenSymbol: "ETH" }))
         .blocked,
     ).toEqual({ pending: true, reason: "Checking your private STRK balance…" });
   });
@@ -374,6 +439,8 @@ describe("unknown balances", () => {
   test("withholds a maximum rather than offering one from an unread balance", () => {
     expect(
       spendableForRoute(routeFor("public", "public"), {
+        convertedFeeCeilingRaw: null,
+        feeTokenAddress: STRK_TOKEN_ADDRESS,
         poolFeeFri: SIX_STRK,
         sourceTokenBalanceRaw: null,
         tokenAddress: STRK_TOKEN_ADDRESS,

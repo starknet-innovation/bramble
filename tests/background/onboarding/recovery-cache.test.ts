@@ -1,7 +1,7 @@
 /** Session-only recovery discovery cache validation. */
 import { describe, expect, test } from "bun:test";
-import { createMemoryStore } from "@mc-wallet/store/kv";
-import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMemoryStore } from "@bramble/store/kv";
+import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
 import { createRecoveryDiscoveryCache } from "../../../apps/extension/src/background/onboarding/recovery-cache";
 
 const account: DerivedAccountRef = {
@@ -29,7 +29,7 @@ describe("recovery discovery cache", () => {
     await cache.write(snapshot);
     expect(await cache.read()).toEqual(snapshot);
 
-    await store.set("mc-wallet:recovery-discovery", { ...snapshot, mnemonic: "must not persist" });
+    await store.set("bramble:recovery-discovery", { ...snapshot, mnemonic: "must not persist" });
     expect(await cache.read()).toBeNull();
   });
 });

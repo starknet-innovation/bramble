@@ -1,5 +1,6 @@
 {
-  "name": "@mc-wallet/wallet-protocol",
+  "name": "@bramble/wallet-protocol",
+  "description": "The single source of truth for the dapp provider bridge: methods, events, requests, results, runtime decoders, resource budgets and method security metadata.",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -18,7 +19,11 @@
     "./results": "./src/provider/results.ts",
     "./rpc-errors": "./src/provider/rpc-errors.ts",
     "./runtime-message": "./src/provider/runtime-message.ts",
+    "./privacy-blocker": "./src/privacy/privacy-blocker.ts",
     "./strk20": "./src/privacy/strk20.ts",
+    "./strk20-batch": "./src/privacy/strk20-batch.ts",
+    "./submission-unknown": "./src/transactions/submission-unknown.ts",
+    "./typed-data-params": "./src/provider/typed-data-params.ts",
     "./strk20-bridge": "./src/privacy/strk20-bridge.ts",
     "./watch-asset": "./src/transactions/watch-asset.ts",
     "./versions": "./src/provider/versions.ts"
@@ -29,7 +34,7 @@
     "test": "bun test ./tests"
   },
   "dependencies": {
-    "@mc-wallet/core": "workspace:*",
-    "@mc-wallet/wallet-model": "workspace:*"
+    "@bramble/core": "workspace:*",
+    "@bramble/wallet-model": "workspace:*"
   }
 }

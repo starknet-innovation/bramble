@@ -1,9 +1,21 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
+  "playwright": {
+    "config": [
+      "playwright.config.ts",
+      "playwright.mainnet.config.ts",
+      "playwright.mainnet-wallet.config.ts"
+    ]
+  },
   "workspaces": {
     ".": {
-      "entry": ["scripts/*.ts", "tests/**/*.test.ts"],
-      "project": ["scripts/**/*.ts", "tests/**/*.ts"]
+      "entry": [
+        "scripts/*.ts",
+        "tests/**/*.test.ts",
+        "tests/e2e/ledger/*.speculos.ts",
+        "tools/vendor-dataset/*.ts"
+      ],
+      "project": ["scripts/**/*.ts", "tests/**/*.ts", "tools/**/*.ts"]
     },
     "apps/extension": {
       "entry": [
@@ -25,6 +37,9 @@
     "apps/ui-lab": {
       "entry": [".storybook/*.ts", "src/**/*.stories.ts"],
       "project": [".storybook/*.ts", "src/**/*.ts"]
+    },
+    "apps/website": {
+      "project": ["src/**/*.{ts,tsx,css}"]
     },
     "packages/platform/ledger-browser": {
       "ignoreDependencies": ["buffer"]

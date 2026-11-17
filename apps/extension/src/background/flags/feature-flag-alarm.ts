@@ -11,7 +11,7 @@ import type { AlarmsApi } from "../transactions/tx-monitor";
 import type { FeatureFlagClient } from "./feature-flag-client";
 
 /** Alarm name for the periodic refresh. */
-export const FEATURE_FLAG_ALARM = "mc-wallet:feature-flags";
+export const FEATURE_FLAG_ALARM = "bramble:feature-flags";
 
 /** Refresh cadence in minutes. */
 const FEATURE_FLAG_REFRESH_MINUTES = 30;

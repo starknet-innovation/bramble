@@ -3,8 +3,8 @@
  */
 import { expect, test } from "bun:test";
 
-import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
-import { applySkin, type Skin } from "@mc-wallet/ui-kit/skin";
+import { defaultSkin } from "@bramble/ui-kit/default-skin";
+import { applySkin, type Skin } from "@bramble/ui-kit/skin";
 
 test("applySkin writes every default token to the target root", () => {
   const applied: Record<string, string> = {};
@@ -19,7 +19,7 @@ test("applySkin writes every default token to the target root", () => {
   applySkin(defaultSkin, root);
 
   expect(applied).toEqual(defaultSkin.tokens);
-  expect(applied["--mc-accent-text"]).toBe(defaultSkin.tokens["--mc-accent-text"]);
+  expect(applied["--bramble-accent-text"]).toBe(defaultSkin.tokens["--bramble-accent-text"]);
 });
 
 test("applySkin rejects incomplete replacement skins", () => {
@@ -35,7 +35,7 @@ test("applySkin rejects incomplete replacement skins", () => {
     applySkin(
       {
         name: "missing",
-        tokens: { "--mc-accent": "#000000" } as Skin["tokens"],
+        tokens: { "--bramble-accent": "#000000" } as Skin["tokens"],
       },
       root,
     ),
@@ -76,7 +76,7 @@ test("applySkin rejects extra replacement skin tokens", () => {
     },
   } as unknown as HTMLElement;
   const hidden = { ...defaultSkin.tokens };
-  Object.defineProperty(hidden, "--mc-shadow", { value: "0 0 0 transparent" });
+  Object.defineProperty(hidden, "--bramble-shadow", { value: "0 0 0 transparent" });
   const symbol = { ...defaultSkin.tokens, [Symbol("debug")]: "true" };
 
   expect(() =>
@@ -85,7 +85,7 @@ test("applySkin rejects extra replacement skin tokens", () => {
         name: "extra",
         tokens: {
           ...defaultSkin.tokens,
-          "--mc-shadow": "0 0 0 transparent",
+          "--bramble-shadow": "0 0 0 transparent",
         } as Skin["tokens"],
       },
       root,
@@ -108,12 +108,12 @@ test("applySkin rejects non-data replacement skin tokens", () => {
     },
   } as unknown as HTMLElement;
   const hiddenKnown = { ...defaultSkin.tokens };
-  Object.defineProperty(hiddenKnown, "--mc-accent", {
+  Object.defineProperty(hiddenKnown, "--bramble-accent", {
     enumerable: false,
     value: "#000000",
   });
   const accessorKnown = { ...defaultSkin.tokens };
-  Object.defineProperty(accessorKnown, "--mc-accent", {
+  Object.defineProperty(accessorKnown, "--bramble-accent", {
     enumerable: true,
     get() {
       return "#000000";

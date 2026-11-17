@@ -1,8 +1,8 @@
 /**
  * Pure parsers for allowance-manager runtime messages from extension pages.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 
 // Allowance ids compose `<networkId>:<address>:<token>:<spender>`; with
 // full-length felts they run to ~208 characters, so the cap must sit

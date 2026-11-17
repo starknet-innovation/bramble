@@ -4,7 +4,7 @@ title: Start here for engineers
 permalink: /engineering/
 ---
 
-# MC Wallet — Start Here for Engineers
+# Bramble — Start Here for Engineers
 
 A reading order and two orientation diagrams for people working on the codebase.
 It threads the existing docs together and makes the enforced import-layering and
@@ -17,22 +17,22 @@ does not replace those docs — it points at them.
 
 Read these in order before your first change:
 
-1. **[README.md](https://github.com/starknet-innovation/mc-wallet/blob/main/README.md)** — what the wallet is, the feature set, quick
+1. **[README.md](https://github.com/starknet-innovation/bramble/blob/main/README.md)** — what the wallet is, the feature set, quick
    start, and the offline-runnable check subset.
-2. **[AGENTS.md](https://github.com/starknet-innovation/mc-wallet/blob/main/AGENTS.md)** — the operational engineering guide: setup
+2. **[AGENTS.md](https://github.com/starknet-innovation/bramble/blob/main/AGENTS.md)** — the operational engineering guide: setup
    commands, the workspace layout, the hard rules enforced by `bun run check`, and
    the "reuse before writing" anti-drift notes.
-3. **[CONTRIBUTING.md](https://github.com/starknet-innovation/mc-wallet/blob/main/CONTRIBUTING.md)** — the binding architecture and
+3. **[CONTRIBUTING.md](https://github.com/starknet-innovation/bramble/blob/main/CONTRIBUTING.md)** — the binding architecture and
    security rules, the branch/release/PR workflow, and the taste bar.
 4. **[docs/ARCHITECTURE.md](../architecture/)** — the deep tour: trust
    boundaries, the pinned account/multisig class hashes, the dApp provider
    surface, storage migrations, and the design system.
 5. **[docs/MODULAR_ARCHITECTURE.md](../modular-architecture/)** — the implemented
    package graph, internal capability layout, typed invariants, and enforcement gates.
-6. **[DEVELOPMENT.md](https://github.com/starknet-innovation/mc-wallet/blob/main/DEVELOPMENT.md)** — day-to-day developer workflow.
+6. **[DEVELOPMENT.md](https://github.com/starknet-innovation/bramble/blob/main/DEVELOPMENT.md)** — day-to-day developer workflow.
 7. **[docs/security-audit/](../security-audit/)** — threat model, methodology,
    findings, and the directory-by-directory reviews.
-8. **[RELEASING.md](https://github.com/starknet-innovation/mc-wallet/blob/main/RELEASING.md)** — how a release is cut and promoted.
+8. **[RELEASING.md](https://github.com/starknet-innovation/bramble/blob/main/RELEASING.md)** — how a release is cut and promoted.
 
 For the *why* behind any rule, `CONTRIBUTING.md` and `AGENTS.md` are canonical;
 this page only helps you find them.
@@ -43,7 +43,7 @@ this page only helps you find them.
 
 The repository is one deployable extension organized as private Bun workspaces. The deny-by-default
 adjacency matrix in
-[`scripts/check-workspace-architecture.ts`](https://github.com/starknet-innovation/mc-wallet/blob/main/scripts/check-workspace-architecture.ts)
+[`scripts/check-workspace-architecture.ts`](https://github.com/starknet-innovation/bramble/blob/main/scripts/check-workspace-architecture.ts)
 checks declared `workspace:*` edges, explicit exports, cross-workspace imports, and cycles. Arrows
 below mean “is a dependency of”; dependencies flow upward toward application composition roots.
 
@@ -84,7 +84,7 @@ and capability on every extension message.
 ```mermaid
 flowchart LR
     dapp["dApp page<br/>(untrusted)"]
-    inpage["apps/extension/provider<br/>window.starknet_mcWallet"]
+    inpage["apps/extension/provider<br/>window.starknet_bramble"]
     bridge["wallet-protocol/bridge<br/>maps methods to safe messages"]
     content["apps/extension/content<br/>page ↔ background relay"]
     background["apps/extension/background<br/>validate type / origin / capability"]
@@ -108,7 +108,7 @@ flowchart LR
 Key invariants (see `docs/ARCHITECTURE.md` §dApp Provider and `AGENTS.md`):
 
 - The page never talks to the background directly; it sees only
-  `window.starknet_mcWallet`. Provider and content entrypoints remain on the untrusted side.
+  `window.starknet_bramble`. Provider and content entrypoints remain on the untrusted side.
 - The dapp-reachable method set is the enforced-derived `DAPP_MESSAGES` allowlist
   in `apps/extension/src/background/routing/senders.ts`; a new dapp-facing method must be added there
   deliberately.

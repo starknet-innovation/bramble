@@ -11,10 +11,15 @@ import {
   readProviderRequestArguments,
   readProviderResponse,
   walletRpcException,
-} from "@mc-wallet/wallet-protocol/bridge";
-import { createProviderEventHub, readProviderEvent } from "@mc-wallet/wallet-protocol/events";
-import { isHexChainId } from "@mc-wallet/wallet-protocol/results";
-import { invalidRequestPayload } from "@mc-wallet/wallet-protocol/rpc-errors";
+} from "@bramble/wallet-protocol/bridge";
+import {
+  createProviderEventHub,
+  isPageEventNews,
+  readProviderEvent,
+} from "@bramble/wallet-protocol/events";
+import { isHexChainId } from "@bramble/wallet-protocol/results";
+import { invalidRequestPayload } from "@bramble/wallet-protocol/rpc-errors";
+import { WALLET_ICON } from "./wallet-icon";
 
 type PendingRequest = {
   readonly reject: (error: Error) => void;
@@ -23,18 +28,18 @@ type PendingRequest = {
 
 declare global {
   interface Window {
-    readonly mcWallet?: {
-      readonly isMcWallet: true;
+    readonly bramble?: {
+      readonly isBramble: true;
       readonly request: (args: unknown) => Promise<unknown>;
     };
-    readonly starknet_mcWallet?: {
+    readonly starknet_bramble?: {
       readonly chainId?: string;
       readonly enable: () => Promise<readonly string[]>;
       readonly icon: string;
-      readonly id: "mc-wallet";
+      readonly id: "bramble";
       readonly isConnected: boolean;
       readonly isPreauthorized: () => Promise<boolean>;
-      readonly name: "MC Wallet";
+      readonly name: "Bramble";
       readonly off: (event: unknown, handler: unknown) => void;
       readonly on: (event: unknown, handler: unknown) => void;
       readonly request: (args: unknown) => Promise<unknown>;
@@ -43,11 +48,6 @@ declare global {
     };
   }
 }
-
-// Inline data-URI icon so get-starknet/starknetkit wallet lists can render a
-// mark without any external network request (the CSP blocks remote assets).
-const WALLET_ICON =
-  "data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2032%2032'%3E%3Crect%20width%3D'32'%20height%3D'32'%20rx%3D'8'%20fill%3D'%236c5ce7'%2F%3E%3Cpath%20d%3D'M8%2023V9l8%209%208-9v14'%20fill%3D'none'%20stroke%3D'%23f5f6ff'%20stroke-width%3D'2.5'%20stroke-linejoin%3D'round'%20stroke-linecap%3D'round'%2F%3E%3C%2Fsvg%3E";
 
 const pending = new Map<string, PendingRequest>();
 const events = createProviderEventHub();
@@ -72,6 +72,9 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 
   const providerEvent = readProviderEvent(event.data);
   if (providerEvent) {
+    if (!isPageEventNews(providerEvent, currentChainId)) {
+      return;
+    }
     if (providerEvent.event === "accountsChanged") {
       connectedAddresses = providerEvent.data;
     }
@@ -113,7 +116,17 @@ const request = (args: unknown): Promise<unknown> => {
 
   return new Promise((resolve, reject) => {
     const id = crypto.randomUUID();
-    pending.set(id, { reject, resolve });
+    pending.set(id, {
+      reject,
+      // Every chain-id answer is the chain the page now holds, so the repeat
+      // filter below never compares against a value the dapp has moved past.
+      resolve: (value) => {
+        if (input.method === "wallet_requestChainId" && isHexChainId(value)) {
+          currentChainId = value;
+        }
+        resolve(value);
+      },
+    });
     window.postMessage(
       {
         id,
@@ -151,7 +164,7 @@ const starknetWallet = {
     return addresses;
   },
   icon: WALLET_ICON,
-  id: "mc-wallet" as const,
+  id: "bramble" as const,
   get isConnected(): boolean {
     return connectedAddresses.length > 0;
   },
@@ -162,7 +175,7 @@ const starknetWallet = {
       return false;
     }
   },
-  name: "MC Wallet" as const,
+  name: "Bramble" as const,
   off: events.off,
   on: events.on,
   request,
@@ -172,20 +185,20 @@ const starknetWallet = {
   version: "0.1.0" as const,
 };
 
-if (!window.mcWallet) {
-  Object.defineProperty(window, "mcWallet", {
+if (!window.bramble) {
+  Object.defineProperty(window, "bramble", {
     configurable: false,
     enumerable: false,
     value: Object.freeze({
-      isMcWallet: true,
+      isBramble: true,
       request,
     }),
     writable: false,
   });
 }
 
-if (!window.starknet_mcWallet) {
-  Object.defineProperty(window, "starknet_mcWallet", {
+if (!window.starknet_bramble) {
+  Object.defineProperty(window, "starknet_bramble", {
     configurable: false,
     enumerable: false,
     value: Object.freeze(starknetWallet),
@@ -193,5 +206,5 @@ if (!window.starknet_mcWallet) {
   });
 }
 
-window.dispatchEvent(new Event("mc-wallet#initialized"));
+window.dispatchEvent(new Event("bramble#initialized"));
 window.dispatchEvent(new Event("starknet#initialized"));

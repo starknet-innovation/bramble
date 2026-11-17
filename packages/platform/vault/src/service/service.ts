@@ -1,14 +1,14 @@
 /** Wallet vault service: privileged account metadata persistence behind encryption. */
-import { WalletError } from "@mc-wallet/core/errors";
-import { isWalletOrigin } from "@mc-wallet/core/origin";
-import { assertStoreAccess, type StoreActor } from "@mc-wallet/store/access";
-import { isAccountId, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import { invariant, WalletError } from "@bramble/core/errors";
+import { isWalletOrigin } from "@bramble/core/origin";
+import { assertStoreAccess, type StoreActor } from "@bramble/store/access";
+import { isAccountId, isKeylessAccount } from "@bramble/wallet-model/accounts";
 import {
   canonicalFelt,
   isStarkFieldElement,
   isStarkPrivateKey,
-} from "@mc-wallet/wallet-model/networks";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
+} from "@bramble/wallet-model/networks";
+import { isVaultPassphrase, MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import {
   LEDGER_STRK20_VIEWING_KEY_SCHEME,
   ledgerStrk20ScopeFor,
@@ -16,30 +16,39 @@ import {
   withLedgerStrk20ViewingKey,
   withoutLedgerStrk20ViewingKey,
 } from "../accounts/account-secrets";
-import {
-  deriveAccount,
-  deriveAccountRef,
-  deriveImportedAccount,
-  deriveLedgerAccount,
-  deriveLedgerAccountRefs,
-  nextAccountIndex,
-} from "../accounts/accounts";
+import { deriveAccountRef, deriveImportedAccount } from "../accounts/accounts";
 import {
   deriveNetworkAccount,
   findNetworkAccount,
   selectSourceAccount,
 } from "../accounts/network-account";
-import { deriveVaultStrk20ViewingKey } from "../accounts/strk20-viewing-key";
+import {
+  deriveVaultStrk20ViewingKey,
+  previewImportedStrk20ViewingPublicKey,
+  previewStoredStrk20ViewingPublicKey,
+  previewStrk20ViewingPublicKey,
+} from "../accounts/strk20-viewing-key";
 import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
-import { CURRENT_SCHEMA_VERSION, isVaultV7, type Vault } from "../schema/schema";
+import { migrateVault } from "../schema/migrations";
+import { isVaultV13, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
+import { createGrantCache } from "./grant-cache";
+import { multisigStrk20KeyMethods } from "./multisig-strk20-key";
+
+export {
+  isMultisigStrk20CapacityRefusal,
+  MULTISIG_STRK20_KEY_LIMIT,
+} from "./multisig-strk20-key";
+
 import { nostrWalletMethods } from "./nostr";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
-import { recoverVaultAccounts } from "./recovery";
-import type { WalletVaultService } from "./service-types";
+import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
+import { vaultCreationMethods, writeVault } from "./service-creation";
+import type { VaultRecovery, WalletVaultService } from "./service-types";
+import { shadowAccountScopeMethods } from "./shadow-account-scopes";
 
 export { activeAccountSecrets } from "./reveal";
 /** Re-exports the documented type surface from its size-budget split. */
@@ -47,20 +56,26 @@ export type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
   ConnectedSite,
+  CreateKeyVaultInput,
   CreateLedgerVaultInput,
   CreateVaultAccountInput,
   DeriveLedgerAccountsInput,
   EnsureNetworkAccountInput,
   ForgetLedgerStrk20ViewingKeyInput,
   ImportRawKeyAccountInput,
+  ListShadowAccountScopesInput,
   OpenNostrApplicationDataBatchInput,
   OpenNostrApplicationDataInput,
   OriginGrantInput,
+  PreviewImportedAccountInput,
+  RecordShadowAccountScopeInput,
+  RecoverVaultAccountsInput,
   RevealedSecrets,
   RevokeOriginInput,
   SetActiveAccountInput,
   SignHashInput,
   StoreLedgerStrk20ViewingKeyInput,
+  VaultRecovery,
   WalletStatus,
   WalletVaultService,
   WrapNostrApplicationDataBatchInput,
@@ -74,31 +89,27 @@ type WalletVaultServiceOptions = {
   readonly migrationStore: EncryptedStore;
 };
 
-const writeVault = async (
-  encryptedStore: EncryptedStore,
-  vault: Vault,
-  vaultPassphrase: string,
-): Promise<void> => {
-  if (!isVaultV7(vault)) {
-    throw new WalletError("Invalid vault");
-  }
-  await encryptedStore.write(vault, vaultPassphrase);
-};
-
 /**
  * Creates the background-only wallet service over encrypted storage and KMS.
  */
 export const createWalletVaultService = ({
   actor = "background",
-  encryptedStore,
+  encryptedStore: primaryStore,
   kms,
   migrationStore,
 }: WalletVaultServiceOptions): WalletVaultService => {
   assertStoreAccess("vault", actor);
-  const readVaultSnapshot = async (vaultPassphrase: string): Promise<Vault> => {
+  const grants = createGrantCache();
+  const encryptedStore = grants.watch(primaryStore);
+  const requirePassphrase = (vaultPassphrase: string): void => {
     if (!isVaultPassphrase(vaultPassphrase)) {
-      throw new WalletError("Passphrase must be at least 12 characters");
+      throw new WalletError(
+        `Passphrase must be at least ${MIN_VAULT_PASSPHRASE_LENGTH} characters`,
+      );
     }
+  };
+  const readVaultSnapshot = async (vaultPassphrase: string): Promise<Vault> => {
+    requirePassphrase(vaultPassphrase);
     return readMigratedVault({ primary: encryptedStore, staging: migrationStore }, vaultPassphrase);
   };
 
@@ -112,157 +123,36 @@ export const createWalletVaultService = ({
 
   const readVault = (vaultPassphrase: string): Promise<Vault> =>
     serialized(async () => {
+      // Not every write is serialized, so one that starts or ends during this
+      // read leaves the cache empty rather than holding what it replaced.
+      const startedAt = grants.generation();
       const vault = await readVaultSnapshot(vaultPassphrase);
       await encryptedStore.upgradeLegacyEnvelope(vaultPassphrase).catch(() => undefined);
+      grants.remember(vaultPassphrase, vault, startedAt);
       return vault;
     });
 
+  // Health reads may write (a session shadow, a mirror, the v2 marker), so they
+  // queue behind mutations like any other vault access. An interrupted schema
+  // migration can leave a staged copy that verifies, which a normal unlock
+  // recovers from, so recovery is not offered while one exists. A storage
+  // failure is not a recovery reason: status still answers, and the unlock
+  // reports the failure.
+  const vaultRecovery = (): Promise<VaultRecovery | undefined> =>
+    serialized(async () => {
+      try {
+        const health = await encryptedStore.health();
+        if (health === "absent" || health === "ok" || (await migrationStore.health()) === "ok") {
+          return undefined;
+        }
+        return health;
+      } catch {
+        return undefined;
+      }
+    });
+
   const service: WalletVaultService = {
-    async addDerivedAccount(input) {
-      const vault = await readVaultSnapshot(input.vaultPassphrase);
-      if (!vault.mnemonic) {
-        throw new WalletError("No recovery phrase stored for this wallet");
-      }
-      const { account, privateKey } = await deriveAccount(kms, {
-        accountContractType: input.accountContractType,
-        accountIndex: nextAccountIndex(vault.accounts, input.networkId),
-        mnemonic: vault.mnemonic,
-        networkId: input.networkId,
-      });
-      if (vault.accounts.some((stored) => stored.id === account.id)) {
-        throw new WalletError("Account already exists");
-      }
-
-      await writeVault(
-        encryptedStore,
-        {
-          ...vault,
-          accounts: [...vault.accounts, account],
-          activeAccountId: account.id,
-          signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
-        },
-        input.vaultPassphrase,
-      );
-
-      return account;
-    },
-    async createAccount(input) {
-      const vault = await readVaultSnapshot(input.vaultPassphrase);
-      // Never displace the one recovery phrase the user backed up.
-      const displacesStoredSeed =
-        vault.mnemonic === null ? vault.accounts.length > 0 : vault.mnemonic !== input.mnemonic;
-      if (displacesStoredSeed) {
-        throw new WalletError("Wallet already exists");
-      }
-      const { account, privateKey } = await deriveAccount(kms, input);
-
-      if (vault.accounts.some((stored) => stored.id === account.id)) {
-        throw new WalletError("Account already exists");
-      }
-
-      await writeVault(
-        encryptedStore,
-        {
-          ...vault,
-          accounts: [...vault.accounts, account],
-          activeAccountId: vault.activeAccountId ?? account.id,
-          mnemonic: vault.mnemonic ?? input.mnemonic,
-          schemaVersion: CURRENT_SCHEMA_VERSION,
-          signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
-        },
-        input.vaultPassphrase,
-      );
-
-      return account;
-    },
-    async importRawKeyAccount(input) {
-      const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const { account, privateKey } = await deriveImportedAccount(kms, {
-        accountContractType: input.accountContractType,
-        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
-        networkId: input.networkId,
-        privateKey: input.privateKey,
-      });
-      if (vault.accounts.some((stored) => stored.id === account.id)) {
-        throw new WalletError("Account already exists");
-      }
-
-      await writeVault(
-        encryptedStore,
-        {
-          ...vault,
-          accounts: [...vault.accounts, account],
-          activeAccountId: account.id,
-          signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
-        },
-        input.vaultPassphrase,
-      );
-
-      return account;
-    },
-    async addLedgerAccount(input) {
-      const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const account = await deriveLedgerAccount(kms, {
-        accountContractType: input.accountContractType,
-        accountIndex: input.accountIndex,
-        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
-        networkId: input.networkId,
-        publicKeyX: input.publicKeyX,
-        ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
-      });
-      if (vault.accounts.some((stored) => stored.id === account.id)) {
-        throw new WalletError("Account already exists");
-      }
-
-      // Ledger accounts have no matching signing-key entry.
-      await writeVault(
-        encryptedStore,
-        { ...vault, accounts: [...vault.accounts, account], activeAccountId: account.id },
-        input.vaultPassphrase,
-      );
-
-      return account;
-    },
-    async createLedgerVault(input) {
-      const vault = await readVaultSnapshot(input.vaultPassphrase);
-      // A mnemonic-less Ledger vault can only be created over a fresh store.
-      if (vault.accounts.length > 0 || vault.mnemonic !== null) {
-        throw new WalletError("Wallet already exists");
-      }
-      const account = await deriveLedgerAccount(kms, {
-        accountContractType: input.accountContractType,
-        accountIndex: input.accountIndex,
-        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
-        networkId: input.networkId,
-        publicKeyX: input.publicKeyX,
-        ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
-      });
-
-      // Ledger stays keyless: no mnemonic and no signing-key entry.
-      await writeVault(
-        encryptedStore,
-        {
-          accounts: [account],
-          accountSecrets: [],
-          activeAccountId: account.id,
-          mnemonic: null,
-          originGrants: [],
-          schemaVersion: CURRENT_SCHEMA_VERSION,
-          signingKeys: [],
-        },
-        input.vaultPassphrase,
-      );
-
-      return account;
-    },
-    deriveLedgerAccounts(input) {
-      return deriveLedgerAccountRefs(kms, {
-        accountContractType: input.accountContractType,
-        ...(input.deploymentSalt === undefined ? {} : { deploymentSalt: input.deploymentSalt }),
-        entries: input.entries,
-        networkId: input.networkId,
-      });
-    },
+    ...vaultCreationMethods({ encryptedStore, kms, readVaultSnapshot }),
     async deriveStrk20ViewingKey(input) {
       const vault = await readVault(input.vaultPassphrase);
       return deriveVaultStrk20ViewingKey(
@@ -349,8 +239,24 @@ export const createWalletVaultService = ({
     generateMnemonic() {
       return kms.generateMnemonic();
     },
+    ...multisigStrk20KeyMethods(kms, encryptedStore, readVaultSnapshot),
     ...nostrWalletMethods(kms, readVault),
+    ...shadowAccountScopeMethods(encryptedStore, readVaultSnapshot),
     previewAccount: (input) => deriveAccountRef(kms, input),
+    previewStrk20ViewingPublicKey: (input) => previewStrk20ViewingPublicKey(kms, input),
+    previewImportedStrk20ViewingPublicKey: (input) =>
+      previewImportedStrk20ViewingPublicKey(kms, input),
+    async previewStoredStrk20ViewingPublicKey(input) {
+      const vault = await readVault(input.vaultPassphrase);
+      return previewStoredStrk20ViewingPublicKey(
+        kms,
+        vault,
+        input.accountId,
+        input.chainId,
+        input.poolAddress,
+      );
+    },
+    previewImportedAccount: async (input) => (await deriveImportedAccount(kms, input)).account,
     validateMnemonic: (mnemonic) => kms.validateMnemonic(mnemonic),
     async grantOrigin(input) {
       if (!isWalletOrigin(input.origin)) {
@@ -371,6 +277,10 @@ export const createWalletVaultService = ({
       const accountIds = [...new Set([...(existing?.accountIds ?? []), account.id])];
       requireGrantAuthorization(isAuthorized);
 
+      // Re-checked after encryption, right before the commit starts: a
+      // lock during key derivation abandons the grant with nothing stored. The
+      // rollback covers only a lock during the storage writes themselves
+      // (Sherlock 255).
       await writeVault(
         encryptedStore,
         {
@@ -378,6 +288,7 @@ export const createWalletVaultService = ({
           originGrants: [...grants, { accountIds, origin: input.origin }],
         },
         input.vaultPassphrase,
+        () => requireGrantAuthorization(isAuthorized),
       );
       await rollbackRevokedGrant(isAuthorized, () =>
         writeVault(encryptedStore, vault, input.vaultPassphrase),
@@ -390,12 +301,17 @@ export const createWalletVaultService = ({
         throw new WalletError("Invalid origin");
       }
 
-      const vault = await readVault(vaultPassphrase);
+      // Served from memory between writes, so a site cannot time this read
+      // to learn whether the wallet is unlocked (Sherlock 135).
+      const vault = grants.lookup(vaultPassphrase) ?? (await readVault(vaultPassphrase));
       return grantedAccountIdsFor(vault, origin).map((accountId) =>
         findVaultAccount(vault, accountId),
       );
     },
+    clearGrantCache: grants.clear,
     readVault,
+    importSeedAccounts: (input) =>
+      serialized(() => importSeedVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),
     recoverAccounts: (input) =>
       serialized(() => recoverVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),
     async revokeOrigin(input) {
@@ -446,14 +362,40 @@ export const createWalletVaultService = ({
 
       return kms.signStarkHash(signingKey.privateKey, input.messageHash);
     },
+    assertRecoverableVault: (vaultPassphrase) =>
+      serialized(async () => {
+        requirePassphrase(vaultPassphrase);
+        await encryptedStore.readUnverified(vaultPassphrase);
+      }),
+    recoverUnverifiedVault: (vaultPassphrase) =>
+      serialized(async () => {
+        requirePassphrase(vaultPassphrase);
+        const vault = migrateVault(await encryptedStore.readUnverified(vaultPassphrase));
+        invariant(isVaultV13(vault), "Unsupported vault schema");
+        // A rollback can restore a revoked site connection or a removed viewing
+        // key; the user cannot tell which, so recovery drops them all. A
+        // multisig's shared key is kept: co-owners already hold it, so a rolled
+        // back copy grants nothing new, and it may be the only copy left.
+        await encryptedStore.replaceUnverified(
+          {
+            ...vault,
+            accountSecrets: [],
+            multisigStrk20KeyConflicts: [],
+            originGrants: [],
+          },
+          vaultPassphrase,
+        );
+      }),
     async status() {
       const hasVault = await encryptedStore.exists();
+      const recovery = hasVault ? await vaultRecovery() : undefined;
       return {
         accountCount: 0,
         activeAccountId: null,
         hasVault,
         locked: hasVault,
         ready: true,
+        ...(recovery ? { recovery } : {}),
       };
     },
     async storeLedgerStrk20ViewingKey(input) {
@@ -485,13 +427,19 @@ export const createWalletVaultService = ({
     addDerivedAccount: (input) => serialized(() => service.addDerivedAccount(input)),
     addLedgerAccount: (input) => serialized(() => service.addLedgerAccount(input)),
     createAccount: (input) => serialized(() => service.createAccount(input)),
+    createKeyVault: (input) => serialized(() => service.createKeyVault(input)),
     createLedgerVault: (input) => serialized(() => service.createLedgerVault(input)),
     ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
+    acceptMultisigStrk20Key: (input) => serialized(() => service.acceptMultisigStrk20Key(input)),
+    createMultisigStrk20Key: (input) => serialized(() => service.createMultisigStrk20Key(input)),
     forgetLedgerStrk20ViewingKey: (input) =>
       serialized(() => service.forgetLedgerStrk20ViewingKey(input)),
+    forgetMultisigStrk20Key: (input) => serialized(() => service.forgetMultisigStrk20Key(input)),
+    forgetMultisigStrk20Keys: (input) => serialized(() => service.forgetMultisigStrk20Keys(input)),
     importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),
+    recordShadowAccountScope: (input) => serialized(() => service.recordShadowAccountScope(input)),
     setActiveAccount: (input) => serialized(() => service.setActiveAccount(input)),
     storeLedgerStrk20ViewingKey: (input) =>
       serialized(() => service.storeLedgerStrk20ViewingKey(input)),

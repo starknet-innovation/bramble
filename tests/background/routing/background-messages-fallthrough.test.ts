@@ -13,16 +13,17 @@ import {
   contentSender,
   createWallet,
   extensionSender as sender,
+  testExtension,
   vaultPassphrase,
 } from "../../support/background-wallet-stub";
 
 const handlerLocked = () =>
-  createMessageHandler(createWallet(), "extension-id", { session: createUnlockSession() });
+  createMessageHandler(createWallet(), testExtension, { session: createUnlockSession() });
 
 const handlerUnlocked = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(createWallet(), "extension-id", { session });
+  return createMessageHandler(createWallet(), testExtension, { session });
 };
 
 describe("message router fall-through", () => {

@@ -5,8 +5,8 @@
  * regression that lets a bad payload through would reach it and fail here.
  */
 import { describe, expect, test } from "bun:test";
-import { createPreferencesStore } from "@mc-wallet/settings/preferences";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createPreferencesStore } from "@bramble/settings/preferences";
+import { createMemoryStore } from "@bramble/store/kv";
 import { handlePreferenceOps } from "../../../apps/extension/src/background/settings/preference-ops";
 
 const store = () => createPreferencesStore({ store: createMemoryStore() });
@@ -170,7 +170,7 @@ describe("handlePreferenceOps input validation", () => {
       paymaster: { feeToken: "0x5", url: "https://privacy.example/paymaster" },
       poolAddress: "0x2",
       proverUrl: "https://privacy.example/prover",
-      subaccountAnonymizerAddress: "0x3",
+      shadowAccountAnonymizerAddress: "0x3",
     };
     await expect(
       handlePreferenceOps(preferencesStore, "wallet.setStrk20NetworkConfig", {

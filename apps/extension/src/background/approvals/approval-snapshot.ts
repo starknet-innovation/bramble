@@ -10,9 +10,12 @@
  * can never ride along, and every nested value is copied so a caller mutating
  * what it received cannot reach back into live queue state.
  */
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import type { PendingApproval } from "@mc-wallet/wallet-protocol/extension-responses";
+
+import type { FeeEstimate } from "@bramble/starknet/rpc";
+import type { FeeAffordability } from "@bramble/transactions/fee-funds";
+import type { GaslessFeeOffer } from "@bramble/transactions/gasless-request";
+import type { PendingApproval } from "@bramble/wallet-protocol/extension-responses";
+import type { ProviderInvokeCall } from "@bramble/wallet-protocol/invoke";
 import { type ApprovalPayload, cloneApprovalValue } from "./approval-payload";
 
 /**
@@ -22,19 +25,50 @@ export type {
   ApprovalRiskFlag,
   DeclarationReview,
   PendingApproval,
+  WatchAssetNft,
   WatchAssetToken,
-} from "@mc-wallet/wallet-protocol/extension-responses";
+} from "@bramble/wallet-protocol/extension-responses";
 
 /**
  * Display-only invoke fee state, aligned with Send review classification.
  */
 export type InvokeFeeReview = {
+  /** The account must be deployed through its own step first; no fee. */
+  readonly deployFirst?: true;
+  /** Present only when `requiresDeployment`: the deployment half of the total. */
+  readonly deploymentFee?: FeeEstimate | null;
+  readonly deploymentFeeEstimateFailed?: boolean;
   readonly fee: FeeEstimate | null;
   readonly feeAffordability: FeeAffordability;
   readonly feeEstimateFailed: boolean;
   readonly feeEstimatePending: boolean;
+  /** Tokens the user may pick instead of STRK. Absent when none are offered. */
+  readonly gaslessFees?: readonly GaslessFeeOffer[];
   readonly requiresDeployment: boolean;
 };
+
+/**
+ * Deep-copies a fee review onto a queued invoke. The deployment half and the
+ * gasless offers are written only when present, so a caller replacing an
+ * earlier review must strip those keys first.
+ */
+export const invokeFeeReviewFields = (review: InvokeFeeReview): InvokeFeeReview => ({
+  ...(review.deployFirst === true ? { deployFirst: true } : {}),
+  ...(review.deploymentFee === undefined
+    ? {}
+    : { deploymentFee: review.deploymentFee && { ...review.deploymentFee } }),
+  ...(review.deploymentFeeEstimateFailed === undefined
+    ? {}
+    : { deploymentFeeEstimateFailed: review.deploymentFeeEstimateFailed }),
+  fee: review.fee && { ...review.fee },
+  feeAffordability: review.feeAffordability,
+  feeEstimateFailed: review.feeEstimateFailed,
+  feeEstimatePending: review.feeEstimatePending,
+  ...(review.gaslessFees === undefined
+    ? {}
+    : { gaslessFees: review.gaslessFees.map((fee) => ({ ...fee })) }),
+  requiresDeployment: review.requiresDeployment,
+});
 
 /**
  * One approval as its requester supplies it: the display fields plus the
@@ -43,9 +77,32 @@ export type InvokeFeeReview = {
  */
 export type ApprovalRequest = PendingApproval & ApprovalPayload;
 
+// A notice's wallet-chosen reason, and a watch-asset card's already-tracked
+// mark (audit M1); both absent for every other approval.
+const multisigThresholdSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> =>
+  approval.multisigThreshold === undefined ? {} : { multisigThreshold: approval.multisigThreshold };
+
+const noticeSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.alreadyTracked === true ? { alreadyTracked: true } : {}),
+  ...(approval.notice === undefined ? {} : { notice: approval.notice }),
+});
+
+// A watch-asset card's token or collectible; absent for every other approval.
+const watchSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
+  ...(approval.nft === undefined ? {} : { nft: { ...approval.nft } }),
+});
+
 // Copies an invoke entry's fee review onto its snapshot without materializing
 // absent fields, so non-invoke snapshots stay byte-identical to before.
 const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => ({
+  ...(approval.deployFirst === true ? { deployFirst: true } : {}),
+  ...(approval.deploymentFee === undefined
+    ? {}
+    : { deploymentFee: approval.deploymentFee && { ...approval.deploymentFee } }),
+  ...(approval.deploymentFeeEstimateFailed === undefined
+    ? {}
+    : { deploymentFeeEstimateFailed: approval.deploymentFeeEstimateFailed }),
   ...(approval.fee === undefined ? {} : { fee: approval.fee && { ...approval.fee } }),
   ...(approval.feeAffordability === undefined
     ? {}
@@ -56,10 +113,36 @@ const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> 
   ...(approval.feeEstimatePending === undefined
     ? {}
     : { feeEstimatePending: approval.feeEstimatePending }),
+  ...(approval.gaslessFees === undefined
+    ? {}
+    : { gaslessFees: approval.gaslessFees.map((fee) => ({ ...fee })) }),
   ...(approval.requiresDeployment === undefined
     ? {}
     : { requiresDeployment: approval.requiresDeployment }),
 });
+
+const callReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> => {
+  if (approval.kind !== "invoke" || approval.calls === undefined) {
+    return {};
+  }
+  const reviews = approval.calls
+    .map((call): ProviderInvokeCall | null => {
+      const calldata: unknown = call.calldata;
+      if (
+        !Array.isArray(calldata) ||
+        !calldata.every((item): item is string => typeof item === "string")
+      ) {
+        return null;
+      }
+      return {
+        calldata: [...calldata],
+        contractAddress: call.contractAddress,
+        entrypoint: call.entrypoint,
+      };
+    })
+    .filter((call): call is ProviderInvokeCall => call !== null);
+  return reviews.length === approval.calls.length ? { callReviews: reviews } : {};
+};
 
 /**
  * Deep-copies the display-only view of a queued approval. Fields are listed
@@ -70,6 +153,7 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
   ...(approval.actionReviews === undefined
     ? {}
     : { actionReviews: cloneApprovalValue(approval.actionReviews) }),
+  ...callReviewSnapshot(approval),
   ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
   ...feeReviewSnapshot(approval),
   ...(approval.declaration === undefined
@@ -83,8 +167,11 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
           fee: approval.declaration.fee && { ...approval.declaration.fee },
         },
       }),
+  ...(approval.existingGrant === undefined ? {} : { existingGrant: approval.existingGrant }),
   id: approval.id,
   kind: approval.kind,
+  ...multisigThresholdSnapshot(approval),
+  ...noticeSnapshot(approval),
   origin: approval.origin,
   ...(approval.relayFeeAction === undefined
     ? {}
@@ -92,7 +179,7 @@ export const approvalSnapshot = (approval: ApprovalRequest): PendingApproval => 
   ...(approval.reviewAssets === undefined
     ? {}
     : { reviewAssets: approval.reviewAssets.map((asset) => ({ ...asset })) }),
-  ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
+  ...watchSnapshot(approval),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
   ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
   ...(approval.typedData === undefined

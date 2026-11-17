@@ -4,8 +4,8 @@
  * the client then keeps its last good document or the bundled defaults.
  */
 import { describe, expect, test } from "bun:test";
-import { MAX_FLAG_DOCUMENT_BYTES } from "@mc-wallet/flags/contract";
-import { type FlagVerifyOptions, verifyFlagDocument } from "@mc-wallet/flags/verify";
+import { MAX_FLAG_DOCUMENT_BYTES } from "@bramble/flags/contract";
+import { type FlagVerifyOptions, verifyFlagDocument } from "@bramble/flags/verify";
 import { createTestPublisher, NOW, payload, stamp } from "./support/flag-fixture";
 
 const publisher = await createTestPublisher();

@@ -5,31 +5,29 @@ import {
   type ArgentMultisigSigningIntent,
   argentMultisigIntentId,
   argentMultisigOperationId,
-} from "@mc-wallet/multisig/repository";
-import { argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/multisig/repository";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import {
   ArgentMultisigFeeExpiredError,
   preparedArgentMultisigFee,
   samePreparedArgentMultisigInvokeV3,
-} from "@mc-wallet/starknet/multisig-invoke";
-import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import { verifyStarkSignature } from "@mc-wallet/starknet/signature-verify";
-import { verificationContext } from "@mc-wallet/transactions/verify";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+} from "@bramble/starknet/multisig-invoke";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { verifyStarkSignature } from "@bramble/starknet/signature-verify";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import type { StarkSignature } from "@bramble/wallet-model/signing";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { signerForContext } from "../accounts/wallet-ops";
-import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "../transactions/activity-recording";
+import { afterBroadcast } from "../transactions/activity-recording";
 import { reviewArgentMultisigCalls } from "./multisig-call-review";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
 import {
   argentMultisigIntentPackage,
   locallyDerivedImportedIntent,
   mergeImportedArgentMultisigIntent,
-  normalizedArgentMultisigCalls,
   readImportIntentInput,
   readImportIntentSignatureInput,
   readPrepareIntentInput,
@@ -38,13 +36,15 @@ import {
   sortedArgentMultisigSignatures,
 } from "./multisig-inputs";
 import { currentArgentIntentContext } from "./multisig-intent-context";
-import { recoverSubmittedArgentIntent } from "./multisig-operation-recovery";
+import { recordBroadcastIntent, recoverSubmittedArgentIntent } from "./multisig-operation-recovery";
 import {
   type ArgentMultisigContext,
   configSnapshot,
   currentConfigFor,
   signerAccountFor,
 } from "./multisig-ops";
+import { markFeeRefusedStale, refuseResend } from "./multisig-stale-intents";
+import { multisigStrk20SubmitProof } from "./multisig-strk20-submit";
 
 const preparationContext = async (
   deps: MultisigOpsDeps,
@@ -73,7 +73,6 @@ const preparationContext = async (
   const review = await reviewArgentMultisigCalls(deps, context, input.calls, config);
   return review && "error" in review ? review : { authorized, config, context, record, review };
 };
-
 const importedIntentReview = async (deps: MultisigOpsDeps, intent: ArgentMultisigSigningIntent) => {
   const resolved = await currentArgentIntentContext(deps, intent, false);
   if ("error" in resolved) return resolved;
@@ -124,7 +123,6 @@ const persistSignature = async (
     ? { intent: next, intentPackage: argentMultisigIntentPackage(next), ok: true }
     : { error: `Argent multisig intent ${stored}` };
 };
-
 const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const input = readPrepareIntentInput(message);
   if (!input) {
@@ -141,6 +139,8 @@ const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<R
     },
     rpcUrls: resolved.context.rpcUrls,
   });
+  const resent = await refuseResend(deps, resolved.record.id, prepared, input.confirmResend);
+  if (resent) return resent;
   if (!resolved.authorized.isCurrent()) {
     return { error: "wallet locked" };
   }
@@ -168,7 +168,6 @@ const prepareIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<R
       }
     : { error: `Argent multisig intent ${stored}` };
 };
-
 const importIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const input = readImportIntentInput(message);
   if (!input) {
@@ -198,7 +197,6 @@ const importIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
       }
     : { error: `Argent multisig intent ${stored}` };
 };
-
 const resolveLocalSigning = async (
   deps: MultisigOpsDeps,
   input: NonNullable<ReturnType<typeof readSignIntentInput>>,
@@ -427,21 +425,36 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
   }
   let transactionHash: string;
   try {
+    const { intent, authorized, resolved } = submission;
+    const proof = await multisigStrk20SubmitProof(deps, {
+      intent,
+      isAuthorized: authorized.isCurrent,
+      networkId: resolved.context.record.networkId,
+      rpcUrls: resolved.context.rpcUrls,
+    });
     transactionHash = await multisigRpc(deps).submitPreparedInvoke({
       config: {
-        signerPublicKeys: submission.intent.signatures.map((signature) => signature.publicKey),
-        threshold: submission.resolved.config.threshold,
+        signerPublicKeys: intent.signatures.map((fragment) => fragment.publicKey),
+        threshold: resolved.config.threshold,
       },
-      prepared: submission.intent.prepared,
-      rpcUrls: submission.resolved.context.rpcUrls,
-      signatures: submission.intent.signatures,
-      isAuthorized: submission.authorized.isCurrent,
+      isAuthorized: authorized.isCurrent,
+      prepared: intent.prepared,
+      ...(proof ? { proof } : {}),
+      rpcUrls: resolved.context.rpcUrls,
+      signatures: intent.signatures,
     });
   } catch (error) {
-    if (!(error instanceof IndeterminateRpcWriteError))
-      await deps.multisigStore.releaseOperation(submission.operationId);
+    if (error instanceof IndeterminateRpcWriteError) {
+      // The reply was lost. Keep the claim; a resend reuses that hash and nonce (#681).
+      const pending = submission.intent.prepared.transactionHash;
+      await afterBroadcast(() =>
+        recordBroadcastIntent(deps, submission.intent, submission.resolved.context.record, pending),
+      );
+      return submissionUnknownResponse(error.message, pending);
+    }
+    await deps.multisigStore.releaseOperation(submission.operationId);
     if (error instanceof ArgentMultisigFeeExpiredError) {
-      await deps.multisigStore.upsertIntent({ ...submission.intent, state: "stale" });
+      await markFeeRefusedStale(deps, submission.intent, submission.resolved.context);
       return { error: error.details };
     }
     throw error;
@@ -451,30 +464,17 @@ const submitIntent = async (deps: MultisigOpsDeps, message: unknown): Promise<Ru
     broadcastTransactionHash: transactionHash,
     state: "submitted",
   };
-  // Once broadcast returns a hash the claim must never be released: a failed
-  // journal write is unresolved persistence, not permission to broadcast again.
+  // Once broadcast returns a hash the claim is never released: a failed write is no cue to resend.
   await deps.multisigStore
     .setOperationHash(submission.operationId, transactionHash)
     .catch(() => {});
   await deps.multisigStore.upsertIntent(submitted).catch(() => "invalid" as const);
-  await deps.preferencesStore
-    .read()
-    .then((preferences) =>
-      recordApproveAllowances({
-        assets: verificationContext(submission.resolved.context.record, preferences),
-        calls: normalizedArgentMultisigCalls(submission.intent.prepared.calls),
-        owner: allowanceOwner(submission.resolved.context.record),
-        store: deps.allowanceStore,
-      }),
-    )
-    .catch(() => {});
-  await recordSubmittedActivity(deps.activity, {
-    accountId: submission.intent.accountId,
-    hash: transactionHash,
-    kind: "invoke",
-    networkId: submission.resolved.context.record.networkId,
-    summary: submission.intent.summary,
-  });
+  await recordBroadcastIntent(
+    deps,
+    submission.intent,
+    submission.resolved.context.record,
+    transactionHash,
+  );
   return { intent: submitted, ok: true, transactionHash };
 };
 

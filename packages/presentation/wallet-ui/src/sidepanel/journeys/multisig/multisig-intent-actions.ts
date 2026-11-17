@@ -1,11 +1,50 @@
 /** State-based action hierarchy for one frozen Argent multisig intent. */
 
-import { escapeHtml } from "@mc-wallet/core/html";
-import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
-import { button } from "@mc-wallet/ui-kit/controls";
-import { selectField, textareaField } from "@mc-wallet/ui-kit/fields";
+import { escapeHtml } from "@bramble/core/html";
+import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
+import { button } from "@bramble/ui-kit/controls";
+import { selectField, textareaField } from "@bramble/ui-kit/fields";
 import { icon } from "../../shared/icons";
 import { accountLabel } from "../../shared/parts";
+
+/**
+ * What a stale multisig card can truthfully say about whether it went out: the
+ * nonce it was signed for may have been used by a co-signer, for this version or
+ * their own fee-updated one, so "nothing was sent" is never claimed here.
+ */
+export const STALE_INTENT_MAY_HAVE_BEEN_SENT = "This may already have been sent by another signer.";
+
+/**
+ * What a stale card says when the node refused this version's signed fee while
+ * the account nonce was still its own (mc-wallet 673). It reports that refusal
+ * and nothing more: it does not claim no co-signer could send the package later.
+ */
+/** What a stale card says when the private proof's block span closed before send. */
+const STALE_INTENT_PROOF_EXPIRED =
+  "This private transaction expired. Refresh it. Collected signatures no longer apply.";
+
+/**
+ * What a stale card says when the node refused this version's signed fee while
+ * the account nonce was still its own (mc-wallet 673). It reports that refusal
+ * and nothing more: it does not claim no co-signer could send the package later.
+ */
+export const STALE_INTENT_FEE_REFUSED =
+  "The network refused this version: the fee rose above what was signed.";
+
+/** A stale version whose exact hash the sequencer rejected (mc-wallet 673). */
+export const STALE_INTENT_NOT_SENT = "This version was not sent.";
+
+/** Beside a rejected version while the nonce shows something else may have gone out. */
+export const STALE_INTENT_OTHER_VERSION = "Another signer may have sent a different version.";
+
+/** A stale version included and reverted: settled, its nonce and fee spent. */
+export const STALE_INTENT_REVERTED = "Failed on chain, fee paid, nothing transferred.";
+
+/** The only way to send a rejected or reverted version's calls again. */
+export const PROPOSE_AGAIN = "Propose again";
+
+/** Short label for a stale multisig version; it says nothing about whether it was sent. */
+export const STALE_INTENT_LABEL = "Out of date";
 
 type SignerOption = { readonly label: string; readonly value: string };
 type IntentAction = {
@@ -26,7 +65,7 @@ const intentAction = (
   if (!hasFreshAuthority) {
     return {
       canSign: false,
-      note: "Current signer authority differs from this frozen intent. Signing and submission remain blocked.",
+      note: "The signers changed since this transaction was frozen. Signing and submission stay blocked.",
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-view": "multisig-signers" },
@@ -43,17 +82,30 @@ const intentAction = (
       primary: button({ attributes: { "data-ms-submit": intent.id }, label: "Submit transaction" }),
     };
   }
+  if (intent.state === "stale" && intent.staleOutcome !== undefined) {
+    return settledStaleAction(intent, hasReplacement);
+  }
   if (intent.state === "stale") {
     const retryable = intent.signatures.length === intent.configSnapshot.threshold;
+    // Only a recorded fee refusal at an unmoved nonce reads as refused; a moved
+    // nonce, a signer change, or an older record without a reason may have
+    // been sent by a co-signer (Sherlock 177, audit M3).
+    const lead =
+      intent.staleReason === "fee"
+        ? STALE_INTENT_FEE_REFUSED
+        : intent.staleReason === "proof"
+          ? STALE_INTENT_PROOF_EXPIRED
+          : STALE_INTENT_MAY_HAVE_BEEN_SENT;
     const approvals = `${intent.configSnapshot.threshold} approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
     const freshApprovals = `${intent.configSnapshot.threshold} fresh approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
     return {
       canSign: false,
+      // Neither sentence says nothing was sent (audit M3).
       note: retryable
         ? hasReplacement
-          ? `Nothing was sent. Network fees rose above this signed transaction's limit. Continue the fee-updated transaction and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
-          : `Nothing was sent. Network fees rose above this signed transaction's limit. Update the network fee and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
-        : "Nothing was sent. This version is no longer current. Create a current transaction to continue.",
+          ? `${lead} Continue the fee-updated transaction and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
+          : `${lead} Update the network fee and collect ${freshApprovals}. You can retry this version with its existing ${approvals} if network fees fall.`
+        : `${lead} This version is out of date — create a new transaction to continue.`,
       packageIsPrimary: false,
       primary: button({
         attributes: { "data-ms-refresh-intent": intent.id },
@@ -94,15 +146,43 @@ const intentAction = (
       packageIsPrimary: true,
       primary: button({
         attributes: { "data-ms-copy-package": intent.id },
-        label: "Copy intent package",
+        label: "Copy transaction package",
       }),
     };
   }
   return {
     canSign: false,
-    note: "This intent has no further wallet action.",
+    note: "Nothing left to do here.",
     packageIsPrimary: false,
     primary: "",
+  };
+};
+
+// A stale version whose own hash the chain answered for (mc-wallet 673): the
+// sequencer rejected it, so it was never included, or it reverted, spending
+// its nonce and fee. It is never retried as signed; its calls go out again only
+// through a new proposal that collects fresh signatures at the current nonce.
+const settledStaleAction = (
+  intent: ArgentMultisigSigningIntent,
+  hasReplacement: boolean,
+): IntentAction => {
+  const lead =
+    intent.staleOutcome === "reverted"
+      ? STALE_INTENT_REVERTED
+      : intent.staleOutcome === "rejected"
+        ? `${STALE_INTENT_NOT_SENT} ${STALE_INTENT_OTHER_VERSION}`
+        : STALE_INTENT_NOT_SENT;
+  const freshApprovals = `${intent.configSnapshot.threshold} fresh approval${intent.configSnapshot.threshold === 1 ? "" : "s"}`;
+  return {
+    canSign: false,
+    note: hasReplacement
+      ? `${lead} Continue the new proposal and collect ${freshApprovals}.`
+      : `${lead} ${PROPOSE_AGAIN} to collect ${freshApprovals}.`,
+    packageIsPrimary: false,
+    primary: button({
+      attributes: { "data-ms-propose-again": "true", "data-ms-refresh-intent": intent.id },
+      label: hasReplacement ? "Continue new proposal" : PROPOSE_AGAIN,
+    }),
   };
 };
 
@@ -138,7 +218,7 @@ const collaborationTools = (
           : `<section class="multisig-handoff-section">
               <div class="multisig-handoff-copy">
                 <strong>Share the reviewed transaction</strong>
-                <p>Copies the transaction and every signature collected so far for another MC Wallet signer.</p>
+                <p>Copies the transaction and every signature collected so far for another Bramble signer.</p>
               </div>
               <div class="multisig-collaboration-actions">
                 ${
@@ -155,7 +235,7 @@ const collaborationTools = (
                 ${button({
                   attributes: { "data-ms-copy-package": intent.id },
                   icon: "copy",
-                  label: "Copy full intent package",
+                  label: "Copy full transaction package",
                   size: "small",
                   variant: "secondary",
                 })}

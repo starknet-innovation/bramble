@@ -1,16 +1,16 @@
 /**
- * Indexed holdings and transfer adapter checks for wallet-facing data.
+ * Gateway balance and transfer adapter checks for wallet-facing data.
  */
 import { describe, expect, test } from "bun:test";
-import { resetRpcEndpointCooldownsForTests } from "@mc-wallet/starknet/provider";
-import { createStarkscanClient } from "@mc-wallet/transactions/starkscan";
+import { resetRpcEndpointCooldownsForTests } from "@bramble/starknet/provider";
+import { createStarkscanClient } from "@bramble/transactions/starkscan";
 import {
+  createExplorerFirstHistory,
   createRpcFirstBalances,
-  createRpcFirstHistory,
   getStarkscanTokenBalances,
   getStarkscanTransactionHistory,
-} from "@mc-wallet/transactions/starkscan-wallet";
-import type { ExplorerLanePreferences, TokenConfig } from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/transactions/starkscan-wallet";
+import type { ExplorerLanePreferences, TokenConfig } from "@bramble/wallet-model/preferences";
 import type { RpcProvider } from "starknet";
 
 // The lane-bearing half of the stored defaults: no per-network opt-out and no
@@ -39,6 +39,14 @@ const clientFor = (value: unknown) =>
     baseUrl: "https://starkscan.test/v1",
     http: async () => new Response(JSON.stringify(value)),
   });
+
+const balanceReply = (balanceRaw: string, tokenAddress = TOKEN) => ({
+  balanceRaw,
+  blockTag: "latest",
+  chainId: "SN_MAIN",
+  ownerAddress: ACCOUNT,
+  tokenAddress,
+});
 
 describe("Starkscan wallet adapters", () => {
   test("turns indexed transfers into recent wallet activity", async () => {
@@ -83,7 +91,46 @@ describe("Starkscan wallet adapters", () => {
     });
   });
 
-  test("maps a complete holdings snapshot and treats absent tracked tokens as zero", async () => {
+  test("does not trust explorer display identity for untracked tokens", async () => {
+    const transfer = {
+      actionContext: null,
+      amount: "1",
+      blockNumber: 12,
+      fromAddress: OTHER,
+      logIndex: 1,
+      rawValue: "1",
+      sourceTier: "finalized",
+      standard: "erc20",
+      timestampIso: "2026-07-24T11:29:01.000Z",
+      toAddress: ACCOUNT,
+      tokenAddress: "0x123",
+      tokenDecimals: 0,
+      tokenId: null,
+      tokenName: "Trusted-looking name",
+      tokenSymbol: "ＵＳＤＣ",
+      transferIndex: 0,
+      txHash: "0x40f454",
+      txIndex: 2,
+    };
+    const read = (tokenSymbol: string) =>
+      getStarkscanTransactionHistory(
+        clientFor({ items: [{ ...transfer, tokenSymbol }], nextCursor: null }),
+        {
+          account: ACCOUNT,
+          accountId: `SN_MAIN:${ACCOUNT}`,
+          networkId: "SN_MAIN",
+          rpcUrls: ["https://rpc.example"],
+          tokens: [],
+        },
+      );
+
+    const [entry] = await read("FAKE");
+    expect(entry?.summary).toBe("Received 1 TOKEN from 0x1176…f3d8");
+    expect(entry?.summary).not.toContain(transfer.tokenName);
+    expect(entry?.summary).not.toContain("FAKE");
+  });
+
+  test("reads each tracked token's latest balance, never the retired holdings route", async () => {
     const second: TokenConfig = {
       ...strk,
       address: "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
@@ -91,97 +138,62 @@ describe("Starkscan wallet adapters", () => {
       name: "Ether",
       symbol: "ETH",
     };
-    const balances = await getStarkscanTokenBalances(
-      clientFor({
-        chainId: "SN_MAIN",
-        ownerAddress: ACCOUNT,
-        items: [
-          {
-            tokenAddress: TOKEN,
-            normalizedTokenAddress: TOKEN,
-            indexedBalanceRaw: "1023561579571385199213",
-            symbol: "STRK",
-            name: "Starknet Token",
-            decimals: 18,
-          },
-        ],
-        exact: true,
-        truncated: false,
-        completeness: {
-          exact: true,
-          truncated: false,
-          complete: true,
-          reasonCode: "complete",
-          reason: "Complete snapshot.",
-          lagBlocks: 0,
-          capped: false,
-          cap: null,
-        },
-      }),
-      {
-        accountAddress: ACCOUNT,
-        rpcUrls: ["https://rpc.example"],
-        tokens: [strk, second],
+    const urls: string[] = [];
+    const client = createStarkscanClient({
+      baseUrl: "https://starkscan.test/v1",
+      http: async (url) => {
+        urls.push(url);
+        return new Response(
+          JSON.stringify(
+            url.includes(`/token/${TOKEN}/`)
+              ? balanceReply("1023561579571385199213")
+              : balanceReply("0", second.address),
+          ),
+        );
       },
-    );
+    });
+    const balances = await getStarkscanTokenBalances(client, {
+      accountAddress: ACCOUNT,
+      rpcUrls: ["https://rpc.example"],
+      tokens: [strk, second],
+    });
     expect(balances.map(({ balance, symbol }) => [symbol, balance])).toEqual([
       ["STRK", "1023561579571385199213"],
       ["ETH", "0"],
     ]);
+    expect(urls).toHaveLength(2);
+    expect(urls.every((url) => url.includes("/balance-of/"))).toBe(true);
+    expect(urls.some((url) => url.includes("token-holdings"))).toBe(false);
   });
 
-  test("rejects incomplete holdings so latest-state RPC can take over", async () => {
-    await expect(
-      getStarkscanTokenBalances(
-        clientFor({
-          chainId: "SN_MAIN",
-          ownerAddress: ACCOUNT,
-          items: [],
-          exact: false,
-          truncated: true,
-          completeness: {
-            exact: false,
-            truncated: true,
-            complete: false,
-            reasonCode: "capped",
-            reason: "Snapshot capped.",
-            lagBlocks: 3,
-            capped: true,
-            cap: 100,
-          },
-        }),
-        { accountAddress: ACCOUNT, rpcUrls: ["https://rpc.example"], tokens: [strk] },
-      ),
-    ).rejects.toThrow("incomplete");
+  test("refuses an answer for another owner, token or block", async () => {
+    const input = { accountAddress: ACCOUNT, rpcUrls: ["https://rpc.example"], tokens: [strk] };
+    for (const reply of [
+      { ...balanceReply("1"), ownerAddress: OTHER },
+      balanceReply("1", OTHER),
+      { ...balanceReply("1"), blockTag: "0x1" },
+      { ...balanceReply("1"), chainId: "SN_SEPOLIA" },
+    ]) {
+      await expect(getStarkscanTokenBalances(clientFor(reply), input)).rejects.toThrow(
+        "does not match",
+      );
+    }
   });
 
-  // Ordering is pinned in starkscan-rpc-first.test.ts (MCW-V09-129): the
-  // configured RPC answers first and the gateway is the outage fallback. This
-  // case keeps the fallback wiring itself covered — an unreachable gateway must
-  // not turn an RPC outage into a thrown read.
+  // Ordering is pinned in starkscan-rpc-first.test.ts (balances, MCW-V09-129)
+  // and starkscan-history-first.test.ts (history): balances ask the configured
+  // RPC first with the gateway as the outage fallback; history asks the gateway
+  // first with the RPC scan as the fallback. This case keeps the fallback wiring
+  // itself covered in both directions — an unreachable gateway must not turn an
+  // RPC outage into a thrown balance read, nor an RPC-answerable history read
+  // into a thrown one.
   test("preferred wallet reads keep the indexed fallback wired", async () => {
     const input = {
       accountAddress: ACCOUNT,
       rpcUrls: ["https://rpc.example"],
       tokens: [strk],
     } as const;
-    const complete = clientFor({
-      chainId: "SN_MAIN",
-      ownerAddress: ACCOUNT,
-      items: [],
-      exact: true,
-      truncated: false,
-      completeness: {
-        exact: true,
-        truncated: false,
-        complete: true,
-        reasonCode: "complete",
-        reason: "Complete snapshot.",
-        lagBlocks: 0,
-        capped: false,
-        cap: null,
-      },
-    });
+    const complete = clientFor(balanceReply("0"));
     const offlineRpc = () =>
       ({
         async callContract() {
@@ -223,8 +235,8 @@ describe("Starkscan wallet adapters", () => {
       tokens: [],
     } as const;
     expect(
-      await createRpcFirstHistory({ client: unavailable, readPreferences })(historyInput),
-    ).toEqual([]);
+      await createExplorerFirstHistory({ client: unavailable, readPreferences })(historyInput),
+    ).toEqual({ entries: [], lane: "chain-events" });
   });
 
   test("uses the configured explorer API only after an RPC transport outage", async () => {
@@ -239,23 +251,7 @@ describe("Starkscan wallet adapters", () => {
       explorerFallback: { SN_MAIN: true },
       rpcOverrides: { SN_MAIN: "https://custom-rpc.example" },
     };
-    const selected = clientFor({
-      chainId: "SN_MAIN",
-      completeness: {
-        cap: null,
-        capped: false,
-        complete: true,
-        exact: true,
-        lagBlocks: 0,
-        reason: "Complete snapshot.",
-        reasonCode: "complete",
-        truncated: false,
-      },
-      exact: true,
-      items: [],
-      ownerAddress: ACCOUNT,
-      truncated: false,
-    });
+    const selected = clientFor(balanceReply("0"));
     const selections: string[] = [];
     const balances = await createRpcFirstBalances({
       client: clientFor({}),

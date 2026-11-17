@@ -12,7 +12,7 @@ describe("STRK20 privacy service settings view", () => {
       "discoveryUrl",
       "proverUrl",
       "poolAddress",
-      "subaccountAnonymizerAddress",
+      "shadowAccountAnonymizerAddress",
       "ohttpRelayUrl",
       "paymasterUrl",
       "feeToken",
@@ -31,7 +31,7 @@ describe("STRK20 privacy service settings view", () => {
       paymaster: { feeToken: "0x456", url: "https://paymaster.example" },
       poolAddress: "0x123",
       proverUrl: "https://prover.example",
-      subaccountAnonymizerAddress: "0x789",
+      shadowAccountAnonymizerAddress: "0x789",
     });
 
     for (const value of [

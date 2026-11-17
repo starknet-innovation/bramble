@@ -4,12 +4,9 @@
  * command.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  type LedgerBrokerChannel,
-  serveLedgerBroker,
-} from "@mc-wallet/ledger-browser/broker-server";
-import type { LedgerDeviceClient } from "@mc-wallet/ledger-protocol/client";
-import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { type LedgerBrokerChannel, serveLedgerBroker } from "@bramble/ledger-browser/broker-server";
+import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
+import { ledgerAccountPath } from "@bramble/wallet-model/ledger-path";
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -57,6 +54,7 @@ const okClient = (): LedgerDeviceClient => ({
     r: new Uint8Array(32),
     returnCode: 0x9000,
     s: new Uint8Array(32),
+    v: 1,
   }),
 });
 

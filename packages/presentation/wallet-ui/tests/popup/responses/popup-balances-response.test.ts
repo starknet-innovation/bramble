@@ -1,6 +1,6 @@
 /** Account/network correlation tests for public balance response envelopes. */
 import { describe, expect, test } from "bun:test";
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { isBalancesResponse } from "../../../src/popup/responses/responses";
 import { account } from "../../support/runtime-client-fixtures";
 

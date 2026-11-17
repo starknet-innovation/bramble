@@ -1,20 +1,31 @@
 /** Formula-safe CSV export for persisted wallet activity. */
 
+import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
+
 type ActivityCsvEntry = {
   readonly accountId: string;
   readonly amount?: string;
   readonly counterparty?: string;
+  readonly direction?: "in" | "out";
   readonly hash: string;
   readonly kind: string;
   readonly networkId: string;
   readonly status: string;
   readonly submittedAt: number;
+  readonly submittedPrice?: {
+    readonly currency: string;
+    readonly unitPrice: number;
+  };
   readonly summary: string;
   readonly token?: string;
 };
 
+// Column order is the export contract a spreadsheet imports: the timestamp
+// names its UTC zone in the header, the account is the plain address (the
+// network is its own column), and the transaction hash sits beside its explorer
+// link. The human-readable summary stays last.
 const CSV_HEADER =
-  "datetime,networkId,accountId,kind,status,amount,token,counterparty,hash,summary";
+  "datetimeUtc,networkId,accountAddress,kind,status,amount,token,counterparty,transactionHash,explorerUrl,valueAtSubmission,valueCurrency,summary";
 const CSV_FORMULA_LEAD = /^[\t\r=+@-]/;
 const isPaddingCode = (code: number): boolean => code <= 0x20 || code === 0x7f;
 
@@ -37,9 +48,10 @@ const csvField = (value: string): string => {
 const pad = (value: number, width: number): string => value.toString().padStart(width, "0");
 
 // Pure integer arithmetic keeps ambient clock and locale behavior outside the
-// export path while retaining the exact UTC ISO-8601 representation.
-const toIsoDate = (submittedAt: number): string => {
-  const millis = ((submittedAt % 1000) + 1000) % 1000;
+// export path while retaining an exact UTC calendar date. Milliseconds are
+// dropped so every row carries the same second precision, the form a
+// spreadsheet reads as a date without conversion; the header names the zone.
+const toUtcDateTime = (submittedAt: number): string => {
   const totalSeconds = Math.floor(submittedAt / 1000);
   const secondOfDay = ((totalSeconds % 86400) + 86400) % 86400;
   const seconds = secondOfDay % 60;
@@ -61,7 +73,48 @@ const toIsoDate = (submittedAt: number): string => {
   const day = dayOfYear - Math.floor((153 * monthPart + 2) / 5) + 1;
   const month = monthPart < 10 ? monthPart + 3 : monthPart - 9;
   const year = yearOfEra + era * 400 + (month <= 2 ? 1 : 0);
-  return `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}T${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)}.${pad(millis, 3)}Z`;
+  return `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)} ${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)}`;
+};
+
+// The stored account id is `<networkId>:<address>`; the network is already its
+// own column, so the export shows the plain address an explorer and an
+// accountant both use. A value without the separator is passed through.
+const accountAddress = (accountId: string): string => {
+  const separator = accountId.indexOf(":");
+  return separator === -1 ? accountId : accountId.slice(separator + 1);
+};
+
+// The amount's worth at the unit price captured when the row was submitted,
+// to the cent, in the currency it was priced in. Blank when no price was
+// captured or the amount is not a plain number: never an estimate.
+const submittedValue = (entry: ActivityCsvEntry): readonly [string, string] => {
+  const amount = Number(entry.amount?.trim() || Number.NaN);
+  const price = entry.submittedPrice;
+  if (!price || !Number.isFinite(amount) || amount <= 0) return ["", ""];
+  return [(amount * price.unitPrice).toFixed(2), price.currency.toUpperCase()];
+};
+
+// A transfer's stored summary shortens the counterparty and words its verb by
+// where the row came from ("Send" for a local record, "Sent" or "Received" for
+// a chain read). The export rebuilds it from the structured fields so every
+// transfer names its counterparty in full and reads with one verb, while a row
+// that is not a plain transfer, or that is missing a detail, keeps whatever was
+// recorded. The direction comes only from the recorded \`direction\` field, which
+// the feed also reads first: the summary embeds a token symbol a third party can
+// choose (Sherlock 196), so its wording is never parsed. A row without a
+// recorded direction keeps its summary as recorded.
+const csvSummary = (entry: ActivityCsvEntry): string => {
+  if (entry.kind !== "transfer") {
+    return entry.summary;
+  }
+  const amount = entry.amount?.trim();
+  const token = entry.token?.trim();
+  const counterparty = entry.counterparty?.trim();
+  if (!amount || !token || !counterparty || entry.direction === undefined) {
+    return entry.summary;
+  }
+  const inbound = entry.direction === "in";
+  return `${inbound ? "Received" : "Sent"} ${amount} ${token} ${inbound ? "from" : "to"} ${counterparty}`;
 };
 
 /**
@@ -73,16 +126,18 @@ export const activityToCsv = (entries: readonly ActivityCsvEntry[]): string =>
     CSV_HEADER,
     ...entries.map((entry) =>
       [
-        toIsoDate(entry.submittedAt),
+        toUtcDateTime(entry.submittedAt),
         entry.networkId,
-        entry.accountId,
+        accountAddress(entry.accountId),
         entry.kind,
         entry.status,
         entry.amount ?? "",
         entry.token ?? "",
         entry.counterparty ?? "",
         entry.hash,
-        entry.summary,
+        explorerTransactionUrl(entry.networkId, entry.hash) ?? "",
+        ...submittedValue(entry),
+        csvSummary(entry),
       ]
         .map(csvField)
         .join(","),

@@ -7,9 +7,9 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import {
+  type ActivityUiDeps,
   activityExportToast,
   bindActivity,
-  type TransferUiDeps,
 } from "../../../../src/sidepanel/journeys/send/transfer-ui";
 import { registerDom, unregisterDom } from "../../../support/groups-harness";
 import { flush, makeWallet, paint } from "../../../support/transfer-ui-harness";
@@ -77,12 +77,15 @@ describe("bindActivity", () => {
     document.body.append(app);
     const { calls, wallet } = makeWallet(walletOverrides);
     const renderCalls: WalletStatus[] = [];
-    const deps: TransferUiDeps = {
+    const deps: ActivityUiDeps = {
       app,
       render: async (next: WalletStatus) => {
         renderCalls.push(next);
       },
-      wallet: wallet as unknown as TransferUiDeps["wallet"],
+      // This suite covers refresh and export; the sort's local repaint is
+      // covered in sidepanel-activity-filter.test.ts.
+      repaint: () => undefined,
+      wallet: wallet as unknown as ActivityUiDeps["wallet"],
     };
     bindActivity(deps);
     return { app, calls, renderCalls };

@@ -81,10 +81,11 @@ describe("createApprovalQueue", () => {
     }
 
     expect(queue.request("https://app-0.example")).toEqual(first);
-    const overflow = queue.request("https://overflow.example");
+    // Every origin holds one prompt, so none is displaced for a newcomer
+    // (Sherlock 128): the new origin is refused and the first prompt stays.
+    expect(() => queue.request("https://overflow.example")).toThrow("Too many pending approvals");
     expect(queue.list()).toHaveLength(MAX_PENDING_APPROVALS);
-    expect(queue.get(first.id)).toBeNull();
-    expect(queue.get(overflow.id)).toEqual(overflow);
+    expect(queue.get(first.id)).toEqual(first);
   });
 
   test("queues watch-asset prompts per origin and token", () => {
@@ -185,13 +186,6 @@ describe("createApprovalQueue payload discrimination", () => {
     expect(queue.payload(id)).toEqual({ chainId: "0x534e5f4d41494e", networkId: "SN_MAIN" });
   });
 
-  test("reconstructs an add-chain payload", () => {
-    const queue = createApprovalQueue();
-    const chain = { chainId: "0x1", chainName: "Custom" } as never;
-    const { id } = queue.requestAddChain({ chain, origin: ORIGIN, summaries: ["Add"] });
-    expect(queue.payload(id)).toEqual({ chain });
-  });
-
   test("reconstructs a declare payload", () => {
     const queue = createApprovalQueue();
     const declare = { compiledClassHash: "0x1", contract: {} } as never;
@@ -237,8 +231,8 @@ describe("createApprovalQueue payload discrimination", () => {
       },
     },
     {
-      kind: "strk20-subaccount",
-      request: { dappName: "Example", nonce: "0x1", type: "subaccount" },
+      kind: "strk20-shadow-account",
+      request: { anonymizer: "0x4", dappName: "Example", nonce: "0x1", type: "shadowAccount" },
     },
   ] as const) {
     test(`reconstructs a deep-cloned ${input.kind} request`, () => {
@@ -281,44 +275,22 @@ describe("createApprovalQueue payload discrimination", () => {
     const payload = queue.payload(id);
 
     expect(payload).toEqual({ calls });
+    expect(queue.get(id)?.callReviews).toEqual(calls);
     // The reconstructed calldata is a fresh array, not the caller's reference.
     (payload?.calls?.[0]?.calldata as string[])[0] = "0xdead";
     expect(queue.payload(id)).toEqual({ calls });
+    expect(queue.get(id)?.callReviews).toEqual(calls);
   });
 });
 
 // The per-kind request builders each reject a non-wallet origin, and the
-// add-chain / switch-chain builders dedupe an in-flight prompt so a dapp that
+// switch-chain builders dedupe an in-flight prompt so a dapp that
 // re-issues the same request never stacks a second card.
 describe("createApprovalQueue per-kind origin guards and dedup", () => {
   const ORIGIN = "https://guard.example";
   const BAD_ORIGIN = "http://insecure.example";
-  const chain = { chainId: "0x1", chainName: "Custom" } as never;
   const declare = { compiledClassHash: "0x1", contract: {} } as never;
   const actions = [{ amount: "1", kind: "transfer", to: "0x2", token: "0x3" }] as never;
-
-  test("rejects add-chain requests from an invalid origin", () => {
-    const queue = createApprovalQueue();
-    expect(() => queue.requestAddChain({ chain, origin: BAD_ORIGIN, summaries: ["Add"] })).toThrow(
-      "Invalid origin",
-    );
-    expect(queue.list()).toEqual([]);
-  });
-
-  test("dedupes an add-chain request by origin and chain id", () => {
-    const queue = createApprovalQueue();
-    const first = queue.requestAddChain({ chain, origin: ORIGIN, summaries: ["Add"] });
-    const repeat = queue.requestAddChain({ chain, origin: ORIGIN, summaries: ["Add again"] });
-    const otherChain = queue.requestAddChain({
-      chain: { chainId: "0x2", chainName: "Other" } as never,
-      origin: ORIGIN,
-      summaries: ["Add other"],
-    });
-
-    expect(repeat).toEqual(first);
-    expect(otherChain.id).not.toBe(first.id);
-    expect(queue.list()).toHaveLength(2);
-  });
 
   test("rejects declare requests from an invalid origin", () => {
     const queue = createApprovalQueue();
@@ -396,7 +368,7 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
         context: CONTEXT,
         kind: "strk20-balances",
         origin: ORIGIN,
-        request: { dappName: "Example", type: "subaccount" },
+        request: { anonymizer: "0x4", dappName: "Example", type: "shadowAccount" },
         summaries: ["Share"],
       }),
     ).toThrow("Invalid STRK20 approval");

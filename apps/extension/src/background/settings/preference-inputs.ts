@@ -2,21 +2,18 @@
  * Preference message input readers: address book, labels, display settings,
  * RPC overrides, and backup imports.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import { type AccountGroupIcon, isAccountGroupIcon } from "@mc-wallet/settings/groups";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "@bramble/privacy/config";
+import { type AccountGroupIcon, isAccountGroupIcon } from "@bramble/settings/groups";
+import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-} from "@mc-wallet/wallet-model/networks";
-import { isNostrPublicKey, isNostrRelayUrl } from "@mc-wallet/wallet-model/nostr";
-import {
-  isApprovalSurfacePreference,
-  isDisplayCurrency,
-} from "@mc-wallet/wallet-model/preferences";
+} from "@bramble/wallet-model/networks";
+import { isNostrPublicKey, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
+import { isApprovalSurfacePreference, isDisplayCurrency } from "@bramble/wallet-model/preferences";
 
 const isGroupNameText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;
@@ -101,6 +98,22 @@ export const readSetAccountLabelInput = (
     : null;
 
 /**
+ * Parses account hide/reveal toggles from extension pages. Whether the account
+ * may be hidden (it must not be the last one a network still shows) is decided
+ * by the background handler, so the reader only checks the id is well formed.
+ */
+export const readSetAccountHiddenInput = (
+  message: unknown,
+): { readonly accountId: string; readonly hidden: boolean } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["accountId", "hidden", "type"]) &&
+  message["type"] === "wallet.setAccountHidden" &&
+  isAccountId(message["accountId"]) &&
+  typeof message["hidden"] === "boolean"
+    ? { accountId: message["accountId"], hidden: message["hidden"] }
+    : null;
+
+/**
  * Parses new-group creation messages from extension pages.
  */
 export const readCreateGroupInput = (
@@ -173,9 +186,12 @@ export const readSetAccountInGroupInput = (
  */
 type DisplayPreferenceInput = {
   readonly approvalSurface?: "popup" | "side-panel";
+  readonly collectiblesPreview?: boolean;
   readonly displayCurrency?: "eur" | "gbp" | "usd";
+  readonly productAnalytics?: boolean;
   readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
+  readonly vipNotice?: boolean;
 };
 
 const hasValidDisplayValues = (
@@ -191,8 +207,9 @@ const hasValidDisplayValues = (
     return false;
   }
   if (
-    message["reliabilityDiagnostics"] !== undefined &&
-    typeof message["reliabilityDiagnostics"] !== "boolean"
+    ["collectiblesPreview", "productAnalytics", "reliabilityDiagnostics", "vipNotice"].some(
+      (flag) => message[flag] !== undefined && typeof message[flag] !== "boolean",
+    )
   ) {
     return false;
   }
@@ -209,10 +226,13 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
   if (
     !hasOnlyKnownKeys(message, [
       "approvalSurface",
+      "collectiblesPreview",
       "displayCurrency",
+      "productAnalytics",
       "reliabilityDiagnostics",
       "theme",
       "type",
+      "vipNotice",
     ])
   ) {
     return null;
@@ -224,14 +244,20 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
     return null;
   }
   const approvalSurface = message["approvalSurface"];
+  const collectiblesPreview = message["collectiblesPreview"];
   const displayCurrency = message["displayCurrency"];
+  const productAnalytics = message["productAnalytics"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
+  const vipNotice = message["vipNotice"];
   return {
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
+    ...(collectiblesPreview === undefined ? {} : { collectiblesPreview }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
+    ...(productAnalytics === undefined ? {} : { productAnalytics }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),
+    ...(vipNotice === undefined ? {} : { vipNotice }),
   };
 };
 
@@ -335,4 +361,22 @@ export const readSetStrk20NetworkConfigInput = (
     return null;
   }
   return { config: message["config"], networkId: message["networkId"] };
+};
+
+/**
+ * Parses which multisig sites should see. Null returns to the active
+ * single-signer account. Any other value must be a canonical account id.
+ */
+export const readSetSelectedMultisigInput = (
+  message: unknown,
+): { readonly multisigId: string | null } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["multisigId", "type"]) ||
+    message["type"] !== "wallet.setSelectedMultisig"
+  ) {
+    return null;
+  }
+  if (message["multisigId"] === null) return { multisigId: null };
+  return isAccountId(message["multisigId"]) ? { multisigId: message["multisigId"] } : null;
 };

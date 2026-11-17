@@ -8,7 +8,14 @@
  */
 
 /**
- * Spacing scale on a 4px grid, from tightest inset to section rhythm.
+ * Spacing scale on a 4px grid, from tightest inset to page rhythm. Every
+ * padding and margin in the wallet stylesheets comes from here.
+ *
+ * - `xxs` (2px) — the half step: hairline insets inside compact controls and
+ *   optical nudges that align an icon or a heading to the line beside it.
+ * - `xs`…`xl` — component insets and the rhythm between blocks.
+ * - `xxl`, `xxxl` — page-level rhythm on the full-page onboarding canvas, the
+ *   one surface whose margins are larger than a card's.
  */
 export const SPACE = {
   lg: "16px",
@@ -16,11 +23,26 @@ export const SPACE = {
   sm: "8px",
   xl: "24px",
   xs: "4px",
+  xxl: "32px",
+  xxs: "2px",
+  xxxl: "48px",
 } as const;
 
 /**
  * Corner radius scale for controls, cards, and pills. Generous rounding for
- * soft, premium surfaces.
+ * soft, premium surfaces. Each step has one role, so two surfaces that sit
+ * side by side on a screen always share a corner:
+ *
+ * - `lg` — every card: receipts, review panels, callouts, disclosures, grouped
+ *   lists, and the send/swap composer cards.
+ * - `md` — fields, standalone rows, and their hover fills.
+ * - `sm` — compact controls and marks inside a card (toggles, icon choices).
+ * - `full` — pills, chips, avatars, and the dock.
+ * - `xl` — full-page chrome only: the onboarding card and the account
+ *   drawer's edge.
+ *
+ * A row inside a grouped card takes no radius of its own: the card clips its
+ * outer corners, so a fill never shows a second, mismatched curve.
  */
 export const RADIUS = {
   full: "999px",
@@ -53,6 +75,9 @@ export const TYPE = {
   micro: { line: "1.25", size: "12px" },
   mono: { line: "1.5", size: "12px" },
   portfolio: { line: "1.05", size: "44px" },
+  // The kit's `body` text style (16px on a 20px line): the verb and figure of
+  // a list row, one step above `body` here so a row reads before its detail.
+  row: { line: "1.25", size: "16px" },
   title: { line: "1.2", size: "17px" },
 } as const;
 
@@ -66,9 +91,11 @@ export const MOTION = {
   ease: "cubic-bezier(0.2, 0.7, 0.3, 1)",
   enterMs: 200,
   liftMs: 160,
-  onboardingPulseMs: 3200,
   pressMs: 90,
-  pulseStaggerMs: 1050,
+  // The least time one step of a progress list stays on screen, so a step the
+  // work finished in a few milliseconds is still read rather than flashed.
+  // Display-only: the stage pacer holds what is painted, never the work.
+  stageMinMs: 500,
   tabMs: 220,
   toastMs: 220,
   waitLoopMs: 2000,
@@ -79,7 +106,7 @@ export const MOTION = {
  */
 export const CONTROL = {
   dockIcon: "24px",
-  dockItem: "44px",
+  dockItem: "52px",
   hit: "40px",
   hitSmall: "40px",
   icon: "18px",
@@ -172,7 +199,7 @@ export const EASE = {
  * (seconds-to-target, not a fixed duration) and `damping` (damping ratio —
  * 1.0 = critically damped, no overshoot; <1.0 bounces). Reserve bounce
  * (`drawer`/`momentum`) for motion that carried momentum. Convert to a WAAPI
- * `linear()` easing + duration via @mc-wallet/ui-kit/spring.ts.
+ * `linear()` easing + duration via @bramble/ui-kit/spring.ts.
  */
 export const SPRING = {
   default: { damping: 1, response: 0.4 },

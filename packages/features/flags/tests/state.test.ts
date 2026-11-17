@@ -10,8 +10,8 @@ import {
   readFlagState,
   readOrCreateFlagBucket,
   writeFlagState,
-} from "@mc-wallet/flags/state";
-import { createMemoryStore, type KeyValueStore } from "@mc-wallet/store/kv";
+} from "@bramble/flags/state";
+import { createMemoryStore, type KeyValueStore } from "@bramble/store/kv";
 
 const NOW = 1_000_000;
 
@@ -77,9 +77,9 @@ describe("install bucket", () => {
     expect(await readOrCreateFlagBucket(store, () => 9)).toBe(9);
   });
 
-  test("rejects an out-of-range draw instead of storing it", async () => {
+  test("refuses an out-of-range draw instead of storing it", async () => {
     const store = createMemoryStore();
-    await expect(readOrCreateFlagBucket(store, () => 10_000)).rejects.toThrow(RangeError);
+    expect(await readOrCreateFlagBucket(store, () => 10_000)).toBeNull();
     expect(await store.get(FEATURE_FLAG_BUCKET_KEY)).toBeUndefined();
   });
 

@@ -2,25 +2,53 @@
  * Public signer-account metadata and exact runtime validation. These values
  * carry no signing material and are safe to project outside the vault.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
-  sameFelt,
 } from "../networks/networks";
 import {
-  isLedgerAccountIndex,
-  isLedgerAccountPath,
+  type AccountContractMetadata,
+  type AccountRecordEra,
+  accountContractFields,
+  hasValidContractMetadata,
+} from "./account-contract-types";
+import {
+  type ArgentXBip44Derivation,
+  type Bip44Derivation,
+  type ImportedKeyDerivation,
+  isArgentXBip44Derivation,
+  isBip44Derivation,
+  isImportedKeyDerivation,
+  isLedgerDerivation,
+  type LedgerDerivation,
+} from "./derivations";
+import {
   LEDGER_EIP2645_APPLICATION,
-  ledgerAccountIndexOfPath,
+  type LedgerEip2645Application,
+  READY_EIP2645_APPLICATION,
 } from "./ledger-path";
 
-/**
- * Supported contract families for accounts controlled by one wallet signer.
- */
-export type AccountContractType = "argent" | "openzeppelin";
+export {
+  type AccountContractMetadata,
+  type AccountContractType,
+  accountContractFields,
+  type CreatableAccountContractType,
+  isAccountContractType,
+  isCreatableAccountContractType,
+  isLedgerAccountContractType,
+  type LedgerAccountContractType,
+} from "./account-contract-types";
+
+// Path schemes a Ledger derivation may name: both at the current vault schema,
+// Bramble's alone before v9 (all those vaults could ever have stored).
+const CURRENT_LEDGER_APPLICATIONS: readonly LedgerEip2645Application[] = [
+  LEDGER_EIP2645_APPLICATION,
+  READY_EIP2645_APPLICATION,
+];
+const LEDGERW_ONLY: readonly LedgerEip2645Application[] = [LEDGER_EIP2645_APPLICATION];
 
 /**
  * Pinned OpenZeppelin AccountUpgradeable 3.0 class understood by the account
@@ -29,49 +57,23 @@ export type AccountContractType = "argent" | "openzeppelin";
 export const OPENZEPPELIN_ACCOUNT_CLASS_HASH =
   "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381";
 
-/**
- * Pinned Argent Account 0.4 class understood by the account model. The
- * platform descriptor reuses this value for deployment and supply checks.
- */
-export const ARGENT_ACCOUNT_CLASS_HASH =
-  "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f";
+// Owned by the class table in ./account-families, which is where every other
+// account class hash lives; re-exported here so the many callers that import it
+// from this module are unaffected. The table cannot import from this module, or
+// the validators below that consult it would form a dependency cycle.
+export { ARGENT_ACCOUNT_CLASS_HASH, BRAAVOS_DEPLOYMENT_CLASS_HASH } from "./account-families";
 
-/**
- * Validates the closed set of supported single-signer account contracts.
- */
-export const isAccountContractType = (value: unknown): value is AccountContractType =>
-  value === "argent" || value === "openzeppelin";
-
-/**
- * BIP-44 provenance for an account derived from the recovery phrase.
- */
-export type Bip44Derivation = {
-  readonly accountIndex: number;
-  readonly addressIndex: number;
-  readonly kind: "starknet-bip44";
-};
-
-/**
- * Provenance for an account imported from a raw Starknet signing key.
- */
-export type ImportedKeyDerivation = {
-  readonly kind: "imported-raw-key";
-};
-
-/**
- * Public coordinates needed to ask a Ledger to sign for an account again.
- */
-export type LedgerDerivation = {
-  readonly accountIndex: number;
-  readonly eip2645application: string;
-  readonly kind: "ledger";
-  readonly path: string;
-};
-
-/**
- * Account provenance discriminated by the signer kind.
- */
-export type AccountDerivation = Bip44Derivation | ImportedKeyDerivation | LedgerDerivation;
+// Derivation provenance lives in ./derivations; re-exported here so the
+// "./accounts" subpath keeps its surface.
+export {
+  type AccountDerivation,
+  type ArgentXBip44Derivation,
+  type Bip44Derivation,
+  type ImportedKeyDerivation,
+  isImportedSeedId,
+  type LedgerDerivation,
+  recoveryLadderIndex,
+} from "./derivations";
 
 type AccountRefIdentity = {
   readonly address: string;
@@ -80,17 +82,6 @@ type AccountRefIdentity = {
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
 };
-
-type AccountContractMetadata =
-  | {
-      readonly accountContractType: "argent";
-      /** Exact DEPLOY_ACCOUNT salt used to derive this Argent address. */
-      readonly deploymentSalt: string;
-    }
-  | {
-      readonly accountContractType: "openzeppelin";
-      readonly deploymentSalt?: never;
-    };
 
 type AccountRefCore = AccountRefIdentity & AccountContractMetadata;
 
@@ -112,7 +103,20 @@ export type ImportedAccountRef = AccountRefCore & {
 };
 
 /**
+ * Ready-scheme account metadata; x-only, so no public-key y-coordinate.
+ */
+export type ArgentXAccountRef = AccountRefCore & {
+  readonly derivation: ArgentXBip44Derivation;
+};
+
+/**
  * Ledger account metadata containing no locally held signing key.
+ *
+ * A device account is OpenZeppelin (created here), Argent (created here or
+ * restored from Ready), or Braavos (restored — Braavos owns it with a Ledger key
+ * at Ready's `argentx` path). The family is bounded at the message boundary by
+ * {@link isLedgerAccountContractType} rather than in this type, so the guard is
+ * one runtime check instead of a narrowing threaded through every caller.
  */
 export type LedgerAccountRef = AccountRefCore & {
   readonly derivation: LedgerDerivation;
@@ -121,7 +125,11 @@ export type LedgerAccountRef = AccountRefCore & {
 /**
  * Public signer-account metadata safe to expose to granted origins.
  */
-export type AccountRef = DerivedAccountRef | ImportedAccountRef | LedgerAccountRef;
+export type AccountRef =
+  | ArgentXAccountRef
+  | DerivedAccountRef
+  | ImportedAccountRef
+  | LedgerAccountRef;
 
 /**
  * Schema-v6 account metadata before Argent deployment salts were retained.
@@ -152,30 +160,8 @@ export type LedgerPubKeyEntry = {
   readonly publicKeyX: string;
 };
 
-const isSafeIndex = (value: unknown): value is number =>
-  Number.isSafeInteger(value) && Number(value) >= 0;
-
 const isNonZeroFelt = (value: unknown): value is string =>
   typeof value === "string" && isNonZeroStarkFieldElement(value);
-
-const isBip44Derivation = (value: unknown): value is Bip44Derivation =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountIndex", "addressIndex", "kind"]) &&
-  value["kind"] === "starknet-bip44" &&
-  isSafeIndex(value["accountIndex"]) &&
-  isSafeIndex(value["addressIndex"]);
-
-const isImportedKeyDerivation = (value: unknown): value is ImportedKeyDerivation =>
-  isRecord(value) && hasOnlyKnownKeys(value, ["kind"]) && value["kind"] === "imported-raw-key";
-
-const isLedgerDerivation = (value: unknown): value is LedgerDerivation =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountIndex", "eip2645application", "kind", "path"]) &&
-  value["kind"] === "ledger" &&
-  isLedgerAccountIndex(value["accountIndex"]) &&
-  value["eip2645application"] === LEDGER_EIP2645_APPLICATION &&
-  isLedgerAccountPath(value["path"]) &&
-  ledgerAccountIndexOfPath(value["path"]) === value["accountIndex"];
 
 /**
  * Returns the one minimal-hex spelling of an account id, accepting historical
@@ -197,8 +183,10 @@ export const canonicalAccountId = (value: unknown): string | null => {
 
 /**
  * Validates the canonical account id spelling and its supported-network scope.
+ * Non-strings canonicalise to null and must never compare equal to it.
  */
-export const isAccountId = (value: unknown): value is string => canonicalAccountId(value) === value;
+export const isAccountId = (value: unknown): value is string =>
+  typeof value === "string" && canonicalAccountId(value) === value;
 
 /**
  * Checks that an account id is structurally valid for the claimed network.
@@ -236,31 +224,6 @@ const hasValidSingleSignerCore = (
   (!requireCanonical || canonicalFelt(value["publicKeyX"]) === value["publicKeyX"]) &&
   hasValidAccountCore(value, requireCanonical);
 
-const hasValidContractMetadata = (
-  value: Record<string, unknown>,
-  requireCanonical: boolean,
-  requireArgentSalt: boolean,
-): boolean => {
-  if (!isAccountContractType(value["accountContractType"])) {
-    return false;
-  }
-  const deploymentSalt = value["deploymentSalt"];
-  if (value["accountContractType"] === "openzeppelin") {
-    return deploymentSalt === undefined;
-  }
-  if (!sameFelt(value["classHash"], ARGENT_ACCOUNT_CLASS_HASH)) {
-    return false;
-  }
-  if (!requireArgentSalt && deploymentSalt === undefined) {
-    return true;
-  }
-  return (
-    typeof deploymentSalt === "string" &&
-    canonicalFelt(deploymentSalt) !== null &&
-    (!requireCanonical || canonicalFelt(deploymentSalt) === deploymentSalt)
-  );
-};
-
 const KEYLESS_ACCOUNT_KEYS = [
   "accountContractType",
   "address",
@@ -271,7 +234,6 @@ const KEYLESS_ACCOUNT_KEYS = [
   "networkId",
   "publicKeyX",
 ] as const;
-const DERIVED_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
 const LEGACY_V6_KEYLESS_ACCOUNT_KEYS = [
   "accountContractType",
   "address",
@@ -281,7 +243,6 @@ const LEGACY_V6_KEYLESS_ACCOUNT_KEYS = [
   "networkId",
   "publicKeyX",
 ] as const;
-const LEGACY_V6_DERIVED_ACCOUNT_KEYS = [...LEGACY_V6_KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
 const LEGACY_KEYLESS_ACCOUNT_KEYS = [
   "address",
   "classHash",
@@ -290,82 +251,72 @@ const LEGACY_KEYLESS_ACCOUNT_KEYS = [
   "networkId",
   "publicKeyX",
 ] as const;
-const LEGACY_DERIVED_ACCOUNT_KEYS = [...LEGACY_KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
-/**
- * Validates public account metadata. Imported and Ledger accounts omit
- * `publicKeyY`; an HD-derived account must include it.
- */
-const isAccountRefShape = (value: unknown, requireCanonical: boolean): value is AccountRef => {
-  if (!isRecord(value)) {
-    return false;
-  }
+
+// Shared body of every account shape: imported and Ledger accounts carry the
+// keyless key set and omit `publicKeyY`; an HD-derived account adds it and must
+// include it. `ledgerApplications` is the set of path schemes a Ledger
+// derivation may name at the schema being validated.
+const hasValidSignerShape = (
+  value: Record<string, unknown>,
+  keylessKeys: readonly string[],
+  requireCanonical: boolean,
+  ledgerApplications: readonly LedgerEip2645Application[],
+  argentxAllowed = true,
+): boolean => {
   const derivation = value["derivation"];
-  if (!hasValidContractMetadata(value, requireCanonical, true)) {
-    return false;
-  }
-  if (isImportedKeyDerivation(derivation) || isLedgerDerivation(derivation)) {
+  if (
+    isImportedKeyDerivation(derivation) ||
+    (argentxAllowed && isArgentXBip44Derivation(derivation)) ||
+    isLedgerDerivation(derivation, ledgerApplications)
+  ) {
     return (
-      hasOnlyKnownKeys(value, KEYLESS_ACCOUNT_KEYS) &&
-      hasValidSingleSignerCore(value, requireCanonical)
+      hasOnlyKnownKeys(value, keylessKeys) && hasValidSingleSignerCore(value, requireCanonical)
     );
   }
   return (
-    hasOnlyKnownKeys(value, DERIVED_ACCOUNT_KEYS) &&
+    hasOnlyKnownKeys(value, [...keylessKeys, "publicKeyY"]) &&
     isBip44Derivation(derivation) &&
     isNonZeroFelt(value["publicKeyY"]) &&
     (!requireCanonical || canonicalFelt(value["publicKeyY"]) === value["publicKeyY"]) &&
     hasValidSingleSignerCore(value, requireCanonical)
   );
 };
+
+const isAccountRefShape = (
+  value: unknown,
+  requireCanonical: boolean,
+  ledgerApplications: readonly LedgerEip2645Application[] = CURRENT_LEDGER_APPLICATIONS,
+  era: AccountRecordEra = "current",
+  argentxAllowed = true,
+): value is AccountRef =>
+  isRecord(value) &&
+  hasValidContractMetadata(value, requireCanonical, true, era) &&
+  hasValidSignerShape(
+    value,
+    KEYLESS_ACCOUNT_KEYS,
+    requireCanonical,
+    ledgerApplications,
+    argentxAllowed,
+  );
 
 const isLegacyV6AccountRefShape = (
   value: unknown,
   requireCanonical: boolean,
-): value is LegacyV6AccountRef => {
-  if (!isRecord(value) || !hasValidContractMetadata(value, requireCanonical, false)) {
-    return false;
-  }
-  if (value["deploymentSalt"] !== undefined) {
-    return false;
-  }
-  const derivation = value["derivation"];
-  if (isImportedKeyDerivation(derivation) || isLedgerDerivation(derivation)) {
-    return (
-      hasOnlyKnownKeys(value, LEGACY_V6_KEYLESS_ACCOUNT_KEYS) &&
-      hasValidSingleSignerCore(value, requireCanonical)
-    );
-  }
-  return (
-    hasOnlyKnownKeys(value, LEGACY_V6_DERIVED_ACCOUNT_KEYS) &&
-    isBip44Derivation(derivation) &&
-    isNonZeroFelt(value["publicKeyY"]) &&
-    (!requireCanonical || canonicalFelt(value["publicKeyY"]) === value["publicKeyY"]) &&
-    hasValidSingleSignerCore(value, requireCanonical)
-  );
-};
+): value is LegacyV6AccountRef =>
+  isRecord(value) &&
+  // v6 writers emitted only the pinned Argent class. Leaving the era at its
+  // "current" default would accept an Argent 0.3.x class and migrate a record
+  // no v6 vault could have stored.
+  hasValidContractMetadata(value, requireCanonical, false, "pre-braavos") &&
+  value["deploymentSalt"] === undefined &&
+  hasValidSignerShape(value, LEGACY_V6_KEYLESS_ACCOUNT_KEYS, requireCanonical, LEDGERW_ONLY, false);
 
 const isLegacyAccountRefShape = (
   value: unknown,
   requireCanonical: boolean,
-): value is LegacyAccountRef => {
-  if (!isRecord(value)) {
-    return false;
-  }
-  const derivation = value["derivation"];
-  if (isImportedKeyDerivation(derivation) || isLedgerDerivation(derivation)) {
-    return (
-      hasOnlyKnownKeys(value, LEGACY_KEYLESS_ACCOUNT_KEYS) &&
-      hasValidSingleSignerCore(value, requireCanonical)
-    );
-  }
-  return (
-    hasOnlyKnownKeys(value, LEGACY_DERIVED_ACCOUNT_KEYS) &&
-    isBip44Derivation(derivation) &&
-    isNonZeroFelt(value["publicKeyY"]) &&
-    (!requireCanonical || canonicalFelt(value["publicKeyY"]) === value["publicKeyY"]) &&
-    hasValidSingleSignerCore(value, requireCanonical)
-  );
-};
+): value is LegacyAccountRef =>
+  isRecord(value) &&
+  hasValidSignerShape(value, LEGACY_KEYLESS_ACCOUNT_KEYS, requireCanonical, LEDGERW_ONLY, false);
 
 /**
  * Validates public account metadata in its single canonical felt spelling.
@@ -375,6 +326,44 @@ export const isAccountRef = (value: unknown): value is AccountRef => isAccountRe
 /** Validates phrase-derived account metadata at runtime boundaries. */
 export const isDerivedAccountRef = (value: unknown): value is DerivedAccountRef =>
   isAccountRef(value) && value.derivation.kind === "starknet-bip44";
+
+/**
+ * Account metadata a recovery scan may surface: an account on this wallet's
+ * own BIP-44 ladder, or one on the Ready scheme (issue 505). Both carry a
+ * ladder position the picker can display and a restore can re-derive.
+ */
+export type RecoverableAccountRef = ArgentXAccountRef | DerivedAccountRef;
+
+/** Validates scan candidates at runtime boundaries. */
+export const isRecoverableAccountRef = (value: unknown): value is RecoverableAccountRef =>
+  isAccountRef(value) &&
+  (value.derivation.kind === "starknet-bip44" || value.derivation.kind === "argentx-bip44");
+
+/**
+ * Validates canonical schema-v9 account metadata for its one-step migration:
+ * the current shape, but no Braavos record and Argent only at the release this
+ * wallet creates. No v9 writer produced anything else, so a v9 record claiming
+ * otherwise is corrupt rather than merely new. Legacy vault validators only.
+ */
+export const isLegacyV9AccountRef = (value: unknown): value is AccountRef =>
+  isAccountRefShape(value, true, CURRENT_LEDGER_APPLICATIONS, "pre-braavos", false);
+
+/**
+ * Validates canonical schema-v10 account metadata for its one-step migration:
+ * the current shape, but no Ready-scheme (`argentx-bip44`) record — schema v11
+ * introduced that kind, so a v10 record claiming it is corrupt rather than
+ * merely new. Legacy vault validators only.
+ */
+export const isLegacyV10AccountRef = (value: unknown): value is AccountRef =>
+  isAccountRefShape(value, true, CURRENT_LEDGER_APPLICATIONS, "current", false);
+
+/**
+ * Validates canonical schema-v7/v8 account metadata: the v9 shape, but a Ledger
+ * derivation may only follow Bramble's `LedgerW` scheme (Ready's `argentx` is
+ * admitted from schema v9). Legacy vault validators only.
+ */
+export const isLegacyV8AccountRef = (value: unknown): value is AccountRef =>
+  isAccountRefShape(value, true, LEDGERW_ONLY, "pre-braavos", false);
 
 /**
  * Validates canonical schema-v6 account metadata for its one-step migration.
@@ -407,16 +396,14 @@ export const canonicalAccountRef = (value: unknown): AccountRef | null => {
   const id = `${value.networkId}:${address}`;
   const publicKeyX = canonicalFelt(value.publicKeyX);
   const deploymentSalt =
-    value.accountContractType === "argent" && typeof value.deploymentSalt === "string"
-      ? canonicalFelt(value.deploymentSalt)
-      : undefined;
-  if (publicKeyX === null || deploymentSalt === null) {
+    typeof value.deploymentSalt === "string" ? canonicalFelt(value.deploymentSalt) : undefined;
+  const contract =
+    deploymentSalt === null
+      ? null
+      : accountContractFields(value.accountContractType, deploymentSalt);
+  if (publicKeyX === null || contract === null) {
     return null;
   }
-  const contract: AccountContractMetadata =
-    value.accountContractType === "argent"
-      ? { accountContractType: "argent", deploymentSalt: deploymentSalt as string }
-      : { accountContractType: "openzeppelin" };
   if (value.derivation.kind === "starknet-bip44") {
     const derived = value as DerivedAccountRef;
     const publicKeyY = canonicalFelt(derived.publicKeyY);
@@ -432,6 +419,18 @@ export const canonicalAccountRef = (value: unknown): AccountRef | null => {
           publicKeyX,
           publicKeyY,
         };
+  }
+  if (value.derivation.kind === "argentx-bip44") {
+    const argentx = value as ArgentXAccountRef;
+    return {
+      ...contract,
+      address,
+      classHash,
+      derivation: argentx.derivation,
+      id,
+      networkId: value.networkId,
+      publicKeyX,
+    };
   }
   if (value.derivation.kind === "ledger") {
     const ledger = value as LedgerAccountRef;
@@ -491,3 +490,10 @@ export const canonicalLegacyAccountRef = (value: unknown): LegacyAccountRef | nu
  */
 export const isKeylessAccount = (account: AccountRef): account is LedgerAccountRef =>
   account.derivation.kind === "ledger";
+
+/**
+ * Refusal for deriving an account in a vault set up from a Ledger or a pasted
+ * key. One string for the vault, the background handler and the panel, which
+ * routes on it to import instead of an error page (#740).
+ */
+export const NO_RECOVERY_PHRASE_REFUSAL = "No recovery phrase stored for this wallet";

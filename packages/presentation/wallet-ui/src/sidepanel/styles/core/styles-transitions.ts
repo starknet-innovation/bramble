@@ -14,7 +14,7 @@
  * the transition collapses to no animation (the entrypoint also skips the
  * transition entirely, cutting straight to the new screen).
  */
-import { EASE } from "@mc-wallet/ui-kit/tokens";
+import { EASE } from "@bramble/ui-kit/tokens";
 
 /**
  * View-transition stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -26,31 +26,31 @@ export const TRANSITION_STYLES = `
   }
   ::view-transition-old(root) { animation-duration: 120ms; }
 
-  html[data-nav-direction="forward"]::view-transition-new(root) { animation-name: mc-vt-in-right; }
-  html[data-nav-direction="forward"]::view-transition-old(root) { animation-name: mc-vt-out-left; }
-  html[data-nav-direction="back"]::view-transition-new(root) { animation-name: mc-vt-in-left; }
-  html[data-nav-direction="back"]::view-transition-old(root) { animation-name: mc-vt-out-right; }
-  html[data-nav-direction="swap"]::view-transition-new(root) { animation-duration: 140ms; animation-name: mc-vt-fade-in; }
-  html[data-nav-direction="swap"]::view-transition-old(root) { animation-duration: 100ms; animation-name: mc-vt-fade-out; }
+  html[data-nav-direction="forward"]::view-transition-new(root) { animation-name: bramble-vt-in-right; }
+  html[data-nav-direction="forward"]::view-transition-old(root) { animation-name: bramble-vt-out-left; }
+  html[data-nav-direction="back"]::view-transition-new(root) { animation-name: bramble-vt-in-left; }
+  html[data-nav-direction="back"]::view-transition-old(root) { animation-name: bramble-vt-out-right; }
+  html[data-nav-direction="swap"]::view-transition-new(root) { animation-duration: 140ms; animation-name: bramble-vt-fade-in; }
+  html[data-nav-direction="swap"]::view-transition-old(root) { animation-duration: 100ms; animation-name: bramble-vt-fade-out; }
 
-  @keyframes mc-vt-in-right {
+  @keyframes bramble-vt-in-right {
     from { opacity: 0; transform: translateX(12px); }
     to { opacity: 1; transform: translateX(0); }
   }
-  @keyframes mc-vt-out-left {
+  @keyframes bramble-vt-out-left {
     from { opacity: 1; transform: translateX(0); }
     to { opacity: 0; transform: translateX(-8px); }
   }
-  @keyframes mc-vt-in-left {
+  @keyframes bramble-vt-in-left {
     from { opacity: 0; transform: translateX(-12px); }
     to { opacity: 1; transform: translateX(0); }
   }
-  @keyframes mc-vt-out-right {
+  @keyframes bramble-vt-out-right {
     from { opacity: 1; transform: translateX(0); }
     to { opacity: 0; transform: translateX(8px); }
   }
-  @keyframes mc-vt-fade-in { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes mc-vt-fade-out { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes bramble-vt-fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes bramble-vt-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
   @media (prefers-reduced-motion: reduce) {
     ::view-transition-old(root), ::view-transition-new(root) { animation: none; }

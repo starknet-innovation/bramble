@@ -10,7 +10,7 @@ import {
   isFlagKey,
   parseFlagPayload,
   parseFlagTimestamp,
-} from "@mc-wallet/flags/contract";
+} from "@bramble/flags/contract";
 import { NOW, payload, stamp } from "./support/flag-fixture";
 
 const rejects = (value: unknown): void => {

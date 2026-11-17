@@ -13,15 +13,15 @@
  * bundled defaults until the next good fetch; for the bucket it means a fresh
  * draw. Store failures never throw out of these helpers.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import type { KeyValueStore } from "@bramble/store/kv";
 import { MAX_FLAG_DOCUMENT_BYTES, MAX_ROLLOUT } from "./contract";
 
 /** Storage key for the last accepted document record. */
-export const FEATURE_FLAG_STORE_KEY = "mc-wallet:feature-flags";
+export const FEATURE_FLAG_STORE_KEY = "bramble:feature-flags";
 
 /** Storage key for the per-install rollout bucket. */
-export const FEATURE_FLAG_BUCKET_KEY = "mc-wallet:feature-flag-bucket";
+export const FEATURE_FLAG_BUCKET_KEY = "bramble:feature-flag-bucket";
 
 const STATE_VERSION = 1;
 const STATE_KEYS = ["checkedAt", "document", "schemaVersion", "sequence"];
@@ -83,19 +83,20 @@ export const isFlagBucket = (value: unknown): value is number =>
 /**
  * Returns the stored install bucket, drawing and persisting one from `draw`
  * (the RNG boundary) on first use or when the stored value is invalid. A draw
- * that fails validation throws: the caller falls back to bundled defaults.
+ * that fails validation yields null and is not stored: the caller falls back
+ * to bundled defaults.
  */
 export const readOrCreateFlagBucket = async (
   store: KeyValueStore,
   draw: () => number,
-): Promise<number> => {
+): Promise<number | null> => {
   const stored = await store.get(FEATURE_FLAG_BUCKET_KEY).catch(() => undefined);
   if (isFlagBucket(stored)) {
     return stored;
   }
   const bucket = draw();
   if (!isFlagBucket(bucket)) {
-    throw new RangeError("flag bucket draw out of range");
+    return null;
   }
   await store.set(FEATURE_FLAG_BUCKET_KEY, bucket).catch(() => undefined);
   return bucket;

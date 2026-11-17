@@ -1,8 +1,17 @@
 import type { PrivateCallAndProof } from "../../wallet/privacy/privacy-wallet";
 import { validatedPrivateActions } from "../../wallet/privacy/privacy-wallet";
-import { PRIVATE_SWAP_FEE_TOKEN } from "../../../shared/privacy";
-import { sameAddress } from "../support/networks";
+import {
+  checkPinnedExecutorClass,
+  PRIVATE_SWAP_EXECUTOR,
+  PRIVATE_SWAP_EXECUTOR_CLASS_HASH,
+  PRIVATE_SWAP_FEE_TOKEN,
+} from "../../../shared/privacy";
+import { DEFAULT_NETWORK, sameAddress } from "../support/networks";
+import { withRpcFallback } from "../support/provider";
 import type { Strk20Action } from "../support/strk20-schemas";
+
+import { checkPrivateSwapCalldata } from "./private-swap-intent";
+import { boundedFetch } from "../support/bounded-network";
 
 const FELT = /^0x[0-9a-fA-F]{1,64}$/;
 const STARK_FIELD_PRIME = 0x800000000000011000000000000000000000000000000000000000000000001n;
@@ -23,6 +32,7 @@ export type PrivateSwapPlan = {
   readonly actions: readonly Strk20Action[];
   readonly buyAmount: string;
   readonly executor: string;
+  readonly minBuyAmount: string;
   readonly fee: PrivateSwapFee;
   readonly quoteId: string;
   readonly sellAmount: string;
@@ -40,14 +50,18 @@ const isNonZeroFelt = (value: unknown): value is string =>
   BigInt(value) > 0n &&
   BigInt(value) < STARK_FIELD_PRIME;
 
+/** Private-swap proving and submission can legitimately take minutes. */
+const PRIVATE_SWAP_DEADLINE_MS = 120_000;
+
 const post = async (action: "fee" | "plan" | "submit", body: unknown): Promise<unknown> => {
-  const response = await fetch(`/api/private-swap/${action}`, {
+  const response = await boundedFetch(`/api/private-swap/${action}`, {
     body: JSON.stringify(body),
+    deadlineMs: PRIVATE_SWAP_DEADLINE_MS,
     headers: { "content-type": "application/json" },
     method: "POST",
-    signal: AbortSignal.timeout(120_000),
   });
   if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
     throw new Error("Private swap service is unavailable.");
   }
   return response.json();
@@ -87,17 +101,77 @@ const actionsMatchPlan = (
   );
 };
 
+// Private swaps stay off until a reviewed executor is pinned in
+// `PRIVATE_SWAP_EXECUTOR` (#269); every client entry refuses before any request.
+const reviewedExecutor = (): string => {
+  if (PRIVATE_SWAP_EXECUTOR === null) {
+    throw new Error("Private swaps are unavailable while executor verification is pending.");
+  }
+  return PRIVATE_SWAP_EXECUTOR;
+};
+
+/** Reads a contract's live mainnet class hash; injectable for tests. */
+export type ClassHashReader = (address: string) => Promise<unknown>;
+
+const readClassHashOnMainnet: ClassHashReader = (address) =>
+  withRpcFallback([...DEFAULT_NETWORK.rpcUrls], (provider) => provider.getClassHashAt(address));
+
+/** Refusal when the pinned executor runs a class other than the pinned one. */
+export const PRIVATE_SWAP_EXECUTOR_CHANGED =
+  "AVNU's private swap contract changed. Private swaps are off until Bramble reviews it.";
+
+/** Refusal when the executor's class could not be read. */
+export const PRIVATE_SWAP_EXECUTOR_UNVERIFIED =
+  "Couldn't verify AVNU's private swap contract. Try again.";
+
+/**
+ * Refuses unless the pinned executor's live class hash equals
+ * `PRIVATE_SWAP_EXECUTOR_CLASS_HASH` (#269). Called at plan time and again right
+ * before the wallet proves the swap. Fails closed when the class cannot be read.
+ */
+export const verifyPrivateSwapExecutor = async (
+  readClassHash: ClassHashReader = readClassHashOnMainnet,
+): Promise<string> => {
+  const executor = reviewedExecutor();
+  const result = await checkPinnedExecutorClass(
+    readClassHash,
+    executor,
+    PRIVATE_SWAP_EXECUTOR_CLASS_HASH,
+  );
+  if (result === "class_mismatch") throw new Error(PRIVATE_SWAP_EXECUTOR_CHANGED);
+  if (result !== "ok") throw new Error(PRIVATE_SWAP_EXECUTOR_UNVERIFIED);
+  return executor;
+};
+
+/**
+ * Wallet handoff for a reviewed private swap: re-reads the executor's class
+ * (#269) and only then runs `prove`, which hands the actions to the wallet.
+ * Refuses, without calling `prove`, on a different class or a failed read.
+ */
+export const provePrivateSwap = async <T>(
+  prove: () => Promise<T>,
+  readClassHash: ClassHashReader = readClassHashOnMainnet,
+): Promise<T> => {
+  await verifyPrivateSwapExecutor(readClassHash);
+  return prove();
+};
+
 /**
  * Builds an AVNU private route on the server, where the pinned SDK and
- * paymaster credential stay out of the browser bundle. Every returned action is
- * revalidated locally before display or wallet handoff.
+ * paymaster credential stay out of the browser bundle. Refuses before any
+ * request unless the pinned executor runs the pinned class. Every returned
+ * action is revalidated locally before display or wallet handoff.
  */
-export const fetchPrivateSwapPlan = async (input: {
-  readonly buyToken: string;
-  readonly sellAmount: string;
-  readonly sellToken: string;
-  readonly takerAddress: string;
-}): Promise<PrivateSwapPlan> => {
+export const fetchPrivateSwapPlan = async (
+  input: {
+    readonly buyToken: string;
+    readonly sellAmount: string;
+    readonly sellToken: string;
+    readonly takerAddress: string;
+  },
+  readClassHash: ClassHashReader = readClassHashOnMainnet,
+): Promise<PrivateSwapPlan> => {
+  const executor = await verifyPrivateSwapExecutor(readClassHash);
   const value = await post("plan", {
     ...input,
     feeMode: { poolFeeToken: PRIVATE_SWAP_FEE_TOKEN, tip: "normal" },
@@ -108,6 +182,7 @@ export const fetchPrivateSwapPlan = async (input: {
     !Array.isArray(value["actions"]) ||
     !isNonZeroFelt(value["buyAmount"]) ||
     !isNonZeroFelt(value["executor"]) ||
+    !sameAddress(value["executor"], executor) ||
     !isRecord(value["fee"]) ||
     !hasOnlyKeys(value["fee"], ["amount", "recipient", "token"]) ||
     !isNonZeroFelt(value["fee"]["amount"]) ||
@@ -131,8 +206,17 @@ export const fetchPrivateSwapPlan = async (input: {
   if (!actionsMatchPlan(actions, input, value["executor"], fee)) {
     throw new Error("Private swap service returned a substituted route.");
   }
+  const invoke = actions[3];
+  if (invoke?.type !== "invoke") throw new Error("Missing private swap invocation.");
+  const minBuyAmount = checkPrivateSwapCalldata(
+    invoke.calldata,
+    input,
+    value["buyAmount"],
+    value["executor"],
+  );
   return {
     actions,
+    minBuyAmount,
     buyAmount: value["buyAmount"],
     executor: value["executor"],
     fee,
@@ -149,6 +233,7 @@ export const submitPrivateSwapProof = async (
   callAndProof: PrivateCallAndProof,
   feeMode: PrivateFeeMode,
 ): Promise<string> => {
+  reviewedExecutor();
   const value = await post("submit", {
     callAndProof: {
       call: {

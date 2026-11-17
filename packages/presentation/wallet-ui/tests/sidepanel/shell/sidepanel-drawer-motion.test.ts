@@ -7,7 +7,7 @@
  * genuine open and stays off across a repaint-while-open.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { preferences } from "@mc-wallet/testkit/sidepanel";
+import { preferences } from "@bramble/testkit/sidepanel";
 import { bindHomeUi, type HomeUiDeps } from "../../../src/sidepanel/journeys/portfolio/home-ui";
 import { accountDrawer } from "../../../src/sidepanel/shell/account-drawer";
 import { acctA, registerDom, status, unregisterDom } from "../../support/groups-harness";
@@ -32,18 +32,14 @@ const setup = () => {
     );
     bindHomeUi({
       app,
-      drawerGroupFilter: () => null,
       drawerOpen: () => open,
-      homeTab: () => "tokens",
       networkId: () => "SN_MAIN",
       render: async () => {
         paint();
       },
-      setDrawerGroupFilter: () => undefined,
       setDrawerOpen: (next) => {
         open = next;
       },
-      setHomeTab: () => undefined,
       wallet: {} as HomeUiDeps["wallet"],
     });
   };

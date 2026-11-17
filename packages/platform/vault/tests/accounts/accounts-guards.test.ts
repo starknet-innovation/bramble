@@ -7,9 +7,9 @@
  * tests/wallet/accounts.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { deriveAccountRef, deriveImportedAccount } from "@mc-wallet/vault/accounts";
-import type { KmsPort } from "@mc-wallet/vault/kms-port";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { deriveAccountRef, deriveImportedAccount } from "@bramble/vault/accounts";
+import type { KmsPort } from "@bramble/vault/kms-port";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 // A valid, non-zero, in-range stark private key felt.

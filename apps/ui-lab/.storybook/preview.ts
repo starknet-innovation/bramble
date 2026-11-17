@@ -1,4 +1,4 @@
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
+import { darkSkin } from "@bramble/ui-kit/dark-skin";
 import type { Preview } from "@storybook/html-vite";
 
 const preview: Preview = {
@@ -11,7 +11,7 @@ const preview: Preview = {
       options: {
         "review bench": {
           name: "Review bench",
-          value: darkSkin.tokens["--mc-bg"],
+          value: darkSkin.tokens["--bramble-bg"],
         },
       },
     },
@@ -51,13 +51,13 @@ const preview: Preview = {
     },
     viewport: {
       options: {
-        "mc-sidepanel": {
-          name: "MC side panel · 400 × 760",
+        "bramble-sidepanel": {
+          name: "Bramble side panel · 400 × 760",
           styles: { height: "760px", width: "400px" },
           type: "desktop",
         },
-        "mc-popup": {
-          name: "MC popup · 380 × 600",
+        "bramble-popup": {
+          name: "Bramble popup · 380 × 600",
           styles: { height: "600px", width: "380px" },
           type: "desktop",
         },

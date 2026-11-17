@@ -6,7 +6,7 @@
  * feature is hidden", never "what the user signs changes".
  *
  * Enforced structurally, deny-by-default: every shipped source file that
- * imports flag code (the `@mc-wallet/flags` package or the background
+ * imports flag code (the `@bramble/flags` package or the background
  * `flags/` folder) or touches the router's `featureFlags` collaborator must be
  * on the short allowlist below. The protected decision paths are named
  * explicitly so a failure says which rule was broken, and the flags package
@@ -59,7 +59,7 @@ const isFlagModule = (file: string): boolean =>
 
 const importsFlagCode = (absolute: string, source: string): boolean =>
   sourceImports(absolute, source).specifiers.some((specifier) => {
-    if (specifier === "@mc-wallet/flags" || specifier.startsWith("@mc-wallet/flags/")) {
+    if (specifier === "@bramble/flags" || specifier.startsWith("@bramble/flags/")) {
       return true;
     }
     if (!specifier.startsWith(".")) {
@@ -101,13 +101,13 @@ describe("feature-flag isolation", () => {
       readFileSync(join(REPO_DIR, "packages/features/flags/package.json"), "utf8"),
     ) as { dependencies?: Record<string, string> };
     expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([
-      "@mc-wallet/core",
-      "@mc-wallet/store",
+      "@bramble/core",
+      "@bramble/store",
     ]);
   });
 
   test("flags package sources import only core, store, and each other", () => {
-    const allowed = /^(@mc-wallet\/(core|store)\/|\.\/)/;
+    const allowed = /^(@bramble\/(core|store)\/|\.\/)/;
     const offenders = workspaceSourceFiles()
       .filter((absolute) => repoRelative(absolute).startsWith(FLAGS_PACKAGE_SRC))
       .flatMap((absolute) =>

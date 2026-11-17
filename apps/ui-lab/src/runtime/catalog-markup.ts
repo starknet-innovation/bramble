@@ -1,4 +1,4 @@
-import { escapeHtml } from "@mc-wallet/core/html";
+import { escapeHtml } from "@bramble/core/html";
 
 /**
  * Wraps related specimens in a documented catalog section.

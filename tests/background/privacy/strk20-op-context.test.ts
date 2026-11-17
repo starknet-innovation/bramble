@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { WalletError } from "@bramble/core/errors";
 import type {
   ActivePrivacyContext,
   Strk20WalletOpsDeps,
@@ -72,9 +73,9 @@ describe("publicBalance", () => {
 });
 
 describe("errorText", () => {
-  test("prefers a real message and falls back for anything else", () => {
-    expect(errorText(new Error("prover unavailable"), "fallback")).toBe("prover unavailable");
-    // An empty message carries no information, so the caller's wording wins.
+  test("returns only curated wallet errors and otherwise the fallback", () => {
+    expect(errorText(new WalletError("Not enough STRK"), "fallback")).toBe("Not enough STRK");
+    expect(errorText(new Error("prover unavailable"), "fallback")).toBe("fallback");
     expect(errorText(new Error(""), "fallback")).toBe("fallback");
     expect(errorText("a thrown string", "fallback")).toBe("fallback");
     expect(errorText(undefined, "fallback")).toBe("fallback");

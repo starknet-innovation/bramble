@@ -7,8 +7,8 @@
  * harness of tests/starknet/prices.test.ts and tests/starknet/prices-tokens-fixes.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createPriceService, type HttpResponse } from "@mc-wallet/portfolio/prices";
-import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createPriceService, type HttpResponse } from "@bramble/portfolio/prices";
+import { createMemoryStore } from "@bramble/store/kv";
 
 const jsonResponse = (body: unknown): HttpResponse => ({ json: async () => body, ok: true });
 

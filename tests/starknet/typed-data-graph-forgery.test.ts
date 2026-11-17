@@ -17,12 +17,12 @@
  * vocabularies are pinned in `typed-data-revisions.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
 import { typedData as snip12 } from "starknet";
 
 const ACCOUNT = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 
-const REV1_DOMAIN = { chainId: "SN_MAIN", name: "MC Test", revision: "1", version: "1" };
+const REV1_DOMAIN = { chainId: "SN_MAIN", name: "Bramble Test", revision: "1", version: "1" };
 const REV1_DOMAIN_TYPE = [
   { name: "name", type: "shortstring" },
   { name: "version", type: "shortstring" },
@@ -43,7 +43,7 @@ describe("SNIP-12 revision 0 type-name injection", () => {
     { name: "version", type: "felt" },
   ];
   const victim = {
-    domain: { chainId: "SN_MAIN", name: "MC Test", version: "1" },
+    domain: { chainId: "SN_MAIN", name: "Bramble Test", version: "1" },
     message: { details: { amount: "0x3", token: "0x2" }, maker: "0x1" },
     primaryType: "Order",
     types: {
@@ -59,7 +59,7 @@ describe("SNIP-12 revision 0 type-name injection", () => {
     },
   };
   const attacker = {
-    domain: { chainId: "SN_MAIN", name: "MC Test", version: "1" },
+    domain: { chainId: "SN_MAIN", name: "Bramble Test", version: "1" },
     message: {
       details: snip12.getStructHash(victim.types, "Details", victim.message.details),
       maker: "0x1",
@@ -92,7 +92,7 @@ describe("SNIP-12 revision 0 type-name injection", () => {
 
   test("every separator is refused in a revision 0 type name, field name, and field type", () => {
     const withTypes = (types: Record<string, unknown>): unknown => ({
-      domain: { chainId: "SN_MAIN", name: "MC Test", version: "1" },
+      domain: { chainId: "SN_MAIN", name: "Bramble Test", version: "1" },
       message: { content: "hello" },
       primaryType: "Message",
       types: { StarkNetDomain: legacyDomainType, ...types },
@@ -455,7 +455,7 @@ describe("domain keys are bound to the domain type", () => {
       { name: "revision", type: "shortstring" },
     ];
     const payload = (chainId: string): unknown => ({
-      domain: { chainId, name: "MC Test", revision: "1", version: "1" },
+      domain: { chainId, name: "Bramble Test", revision: "1", version: "1" },
       message: { content: "hello" },
       primaryType: "Message",
       types: { Message: [{ name: "content", type: "felt" }], StarknetDomain: domainType },
@@ -470,7 +470,7 @@ describe("domain keys are bound to the domain type", () => {
   test("a domain type may omit revision, since revision selects the hash method", () => {
     expect(
       isTypedDataShape({
-        domain: { name: "MC Test", revision: "1", version: "1" },
+        domain: { name: "Bramble Test", revision: "1", version: "1" },
         message: { content: "hello" },
         primaryType: "Message",
         types: {

@@ -5,7 +5,7 @@
  */
 import { createServer, type IncomingMessage } from "node:http";
 import type { Socket } from "node:net";
-import { sanitizeStrk20Detail } from "@mc-wallet/privacy/official-sdk-errors";
+import { sanitizeStrk20Detail } from "@bramble/privacy/official-sdk-errors";
 
 const HOST = "127.0.0.1";
 const PORT = 5_050;

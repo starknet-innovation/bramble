@@ -8,30 +8,42 @@
  * layer; on deny the held request settles as a refusal.
  */
 
-import { walletErrorMessage } from "@mc-wallet/core/errors";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
-import { isProviderDeclare, type ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
+import { walletErrorMessage } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { normalizeWalletOrigin } from "@bramble/core/origin";
+import type { MultisigStore } from "@bramble/multisig/repository";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import type { WalletPreferencesStore } from "@bramble/settings/preferences";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import type { ActivityLog } from "@bramble/transactions/activity";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { isProviderDeclare, type ProviderDeclare } from "@bramble/wallet-protocol/declare";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
+import { recordAutoDeployment } from "../accounts/deployment-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
+import { withApprovalReservation } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import type { PendingApproval } from "../approvals/approval-snapshot";
 import type { ApprovalQueue } from "../approvals/approvals";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { presentedVaultAccount } from "../provider/dapp-account";
+import type { MultisigOriginGrantStore } from "../provider/multisig-grants";
 import { readRetryApprovalFeeInput } from "../provider/provider-inputs";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import {
+  type ExtensionIdentity,
+  isClaimedSenderOrigin,
+  type RuntimeSender,
+} from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
+import { afterBroadcast } from "./activity-recording";
 import { FEE_REVIEW_REQUIRED } from "./fee-review";
 
 /**
@@ -39,8 +51,10 @@ import { FEE_REVIEW_REQUIRED } from "./fee-review";
  */
 export type DeclareOpsDeps = {
   readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
+  readonly extension: ExtensionIdentity;
   readonly guard?: OriginGuard;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   /**
@@ -70,6 +84,8 @@ export type DeclareExecuteDeps = {
    * stubs stay valid; a Ledger declare with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly multisigGrants?: MultisigOriginGrantStore;
+  readonly multisigStore?: Pick<MultisigStore, "listMultisigs">;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   /**
@@ -84,7 +100,7 @@ export type DeclareExecuteDeps = {
  * Parses a `wallet.addDeclareTransaction` runtime message crossed from the
  * content bridge, re-validating the declare payload and normalizing the origin.
  */
-const readAddDeclareTransactionInput = (
+export const readAddDeclareTransactionInput = (
   message: unknown,
 ): { readonly declare: ProviderDeclare; readonly origin: string } | null => {
   if (
@@ -217,6 +233,12 @@ const retryDeclarationFee = async (
   }
   const revision = deps.approvals.beginFeeEstimate(input.id);
   if (!revision) return { error: "approval not found" };
+  // Withdraw the reviewed fee while the estimate is redone, so nothing can be
+  // approved against it. The withdrawn shape is a failed estimate, the one
+  // fee-less shape the panel accepts: an "estimating" shape (no fee, no
+  // failure) is dropped by the panel's validator, which hid the card, and an
+  // early return below would have left it hidden (Sherlock 241). A failed
+  // estimate keeps the card on screen with its retry control.
   if (
     !approval.declaration ||
     !deps.approvals.updateFee(revision, {
@@ -226,7 +248,7 @@ const retryDeclarationFee = async (
         deploymentFee: null,
         deploymentFeeEstimateFailed: false,
         fee: null,
-        feeEstimateFailed: false,
+        feeEstimateFailed: true,
       },
       kind: "declare",
     })
@@ -240,14 +262,16 @@ const retryDeclarationFee = async (
   if (preferences.activeNetworkId !== approval.context.networkId) {
     return { error: "approval context changed" };
   }
-  const granted = await deps.wallet.getGrantedAccounts(approval.origin, passphrase);
-  const account = granted.find(
+  const account = await presentedVaultAccount(
+    deps,
+    approval.origin,
+    passphrase,
     (stored) =>
       stored.id === approval.context?.accountId &&
       stored.networkId === approval.context.networkId &&
       stored.networkId === preferences.activeNetworkId,
   );
-  if (!account) return { error: "origin not connected" };
+  if ("error" in account) return account;
   const declaration = await declarationReview(
     deps,
     account,
@@ -260,6 +284,58 @@ const retryDeclarationFee = async (
   }
   notifyApprovalsChanged();
   return { ok: true };
+};
+
+// Everything a declare does between admission and the queue: the session and
+// vault reads, the class hash and both fee estimates. It runs under the
+// origin's admission reservation, released in the same step that queues the
+// approval.
+const queueDeclare = async (
+  deps: DeclareOpsDeps,
+  input: NonNullable<ReturnType<typeof readAddDeclareTransactionInput>>,
+  release: () => void,
+): Promise<{ readonly approval: PendingApproval } | RuntimeResponse> => {
+  const { approvals, preferencesStore, session } = deps;
+  // Captured before the first read and re-checked after every await, so a
+  // lock that lands mid-request admits no card under the unlock the user just
+  // revoked (Sherlock 166).
+  const authorized = captureSessionAuthorization(session);
+  const passphrase = session.peekPassphrase();
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  const preferences = await preferencesStore.read();
+  const account = await presentedVaultAccount(
+    deps,
+    input.origin,
+    passphrase,
+    (stored) => stored.networkId === preferences.activeNetworkId,
+  );
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
+  if ("error" in account) return account;
+  const context = await createApprovalContext(account, { declare: input.declare });
+  const declaration = await declarationReview(
+    deps,
+    account,
+    input.declare,
+    preferences,
+    passphrase,
+  );
+  if (!authorized.isCurrent()) {
+    return { error: "wallet locked" };
+  }
+  const approval = approvals.requestDeclare({
+    context,
+    declare: input.declare,
+    declaration,
+    origin: input.origin,
+    summaries: declareSummaries(input.declare),
+  });
+  release();
+  notifyApprovalsChanged();
+  return { approval };
 };
 
 /**
@@ -277,13 +353,13 @@ export const handleDeclareOps = async (
   if (messageType !== "wallet.addDeclareTransaction") {
     return null;
   }
-  const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
+  const { approvals, extension, waiters } = deps;
   const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
   const input = readAddDeclareTransactionInput(message);
   if (!input) {
     return { error: "invalid declare request" };
   }
-  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+  if (!isClaimedSenderOrigin(sender, extension, input.origin)) {
     return { error: "sender origin mismatch" };
   }
   if (guard.isBlocked(input.origin)) {
@@ -293,26 +369,15 @@ export const handleDeclareOps = async (
   // a vault read, then a declaration review that hashes the contract class and
   // estimates two fees. An origin already holding its share of the queue is
   // refused at admission regardless, so it is refused here instead of after.
-  requireApprovalAdmission(approvals, input.origin);
-  const passphrase = session.peekPassphrase();
-  if (!passphrase) {
-    return { error: "wallet locked" };
-  }
-  const preferences = await preferencesStore.read();
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
-  const approval = approvals.requestDeclare({
-    context: await createApprovalContext(account, { declare: input.declare }),
-    declare: input.declare,
-    declaration: await declarationReview(deps, account, input.declare, preferences, passphrase),
-    origin: input.origin,
-    summaries: declareSummaries(input.declare),
-  });
-  notifyApprovalsChanged();
-  return waiters.register(approval.id);
+  // The reservation counts this request against the caps while that work
+  // runs, so concurrent requests cannot all start it (Sherlock 151).
+  const queued = await withApprovalReservation(approvals, input.origin, (release) =>
+    queueDeclare(deps, input, release),
+  );
+  // Registered once the reservation is released: the queued approval now
+  // counts against the caps itself, and the held response settles only when
+  // the user decides.
+  return "approval" in queued ? waiters.register(queued.approval.id) : queued;
 };
 
 /**
@@ -339,7 +404,7 @@ export const executeDeclareApproval = async (
     readonly reviewedFee?: FeeEstimate;
   },
 ): Promise<RuntimeResponse> => {
-  const { preferencesStore, runtimeRpc, session, wallet } = deps;
+  const { preferencesStore, runtimeRpc, session } = deps;
   if (!input.reviewedFee) {
     return FEE_REVIEW_REQUIRED;
   }
@@ -352,18 +417,14 @@ export const executeDeclareApproval = async (
   if (input.context && preferences.activeNetworkId !== input.context.networkId) {
     return { error: "approval context changed" };
   }
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  const account = input.context
-    ? granted.find(
-        (stored) =>
-          stored.id === input.context?.accountId &&
-          stored.networkId === input.context.networkId &&
-          stored.networkId === preferences.activeNetworkId,
-      )
-    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-  if (!account) {
-    return { error: "origin not connected" };
-  }
+  const account = await presentedVaultAccount(deps, input.origin, passphrase, (stored) =>
+    input.context
+      ? stored.id === input.context.accountId &&
+        stored.networkId === input.context.networkId &&
+        stored.networkId === preferences.activeNetworkId
+      : stored.networkId === preferences.activeNetworkId,
+  );
+  if ("error" in account) return account;
   // A keyless Ledger account signs on the device (verified against publicKeyX),
   // every other account through the vault — the same seam wallet-initiated txns
   // use. A device rejection/timeout/verify-failure, or a Ledger account with no
@@ -371,7 +432,11 @@ export const executeDeclareApproval = async (
   // `{ error }` (mirroring executeStrk20InvokeApproval) so the applier settles
   // the held dapp request with the real reason instead of leaving it to hang on
   // an unhandled throw. Fails closed — nothing is submitted on error.
-  let result: { readonly classHash: string; readonly transactionHash: string };
+  let result: {
+    readonly classHash: string;
+    readonly deploymentTransactionHash?: string;
+    readonly transactionHash: string;
+  };
   try {
     result = await runtimeRpc.submitDeclareTransaction({
       account,
@@ -390,8 +455,18 @@ export const executeDeclareApproval = async (
       ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
     });
   } catch (error) {
-    return { error: declarationErrorMessage(error) };
+    // An accepted automatic deployment is recorded whatever happened next (mc-wallet 719).
+    await afterBroadcast(() => recordAutoDeployment(deps.activity, account, error));
+    // A lost reply stays typed as status-unknown, so the site is never told a
+    // declaration that may be on chain failed (mc-wallet 719 review).
+    const message = declarationErrorMessage(error);
+    return error instanceof IndeterminateRpcWriteError
+      ? submissionUnknownResponse(message)
+      : { error: message };
   }
+  await afterBroadcast(() =>
+    recordAutoDeployment(deps.activity, account, result.deploymentTransactionHash),
+  );
   // Journal the submitted declare like every other submitted transaction, so it
   // appears in the activity feed and CSV export and background reconciliation
   // follows it to acceptance or revert. The transaction is already on chain by

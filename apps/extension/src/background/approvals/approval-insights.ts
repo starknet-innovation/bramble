@@ -4,8 +4,8 @@
  * grant access. Reputation context (first-seen timestamp, current time) comes
  * from the injected origin-history store; the pure blocklist decides the text.
  */
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { OriginHistoryStore } from "@mc-wallet/permissions/origin-history";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@bramble/permissions/blocklist";
+import type { OriginHistoryStore } from "@bramble/permissions/origin-history";
 import type { PendingApproval } from "./approvals";
 
 /**

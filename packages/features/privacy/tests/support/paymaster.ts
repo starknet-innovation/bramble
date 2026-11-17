@@ -21,7 +21,7 @@ export const paymasterTypedData = (calls: readonly Call[] = [paymasterCall]): Ty
 
 /** Wraps a result in the exact JSON-RPC response envelope the client accepts. */
 export const paymasterResponse = (result: unknown): Response =>
-  new Response(JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0", result }), {
+  new Response(JSON.stringify({ id: "bramble-strk20", jsonrpc: "2.0", result }), {
     headers: { "content-type": "application/json" },
     status: 200,
   });

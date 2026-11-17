@@ -5,15 +5,16 @@
  * so one site never sees another site's accounts or connection state.
  */
 import { describe, expect, test } from "bun:test";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountRef } from "@bramble/wallet-model/accounts";
 import {
   accountsChangedEvent,
   networkChangedEvent,
   pageEventsFor,
-} from "@mc-wallet/wallet-protocol/events";
+} from "@bramble/wallet-protocol/events";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { testExtension } from "../../support/background-wallet-stub";
 
 const ORIGIN_A = "https://a.test";
 const ORIGIN_B = "https://b.test";
@@ -89,7 +90,7 @@ const wallet = {
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
-  return createMessageHandler(wallet, "extension-id", { session });
+  return createMessageHandler(wallet, testExtension, { session });
 };
 
 describe("multi-session grants", () => {

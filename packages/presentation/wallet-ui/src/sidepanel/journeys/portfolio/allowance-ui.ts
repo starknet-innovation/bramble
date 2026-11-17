@@ -2,10 +2,11 @@
  * Allowance-manager bindings: one-tap revoke that submits `approve(spender, 0)`
  * through the verified send path and refreshes the tracked list.
  */
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { failureTone, isOutcomeUnknown } from "../../runtime/runtime-errors";
+import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { formatFeeEstimate } from "../../shared/review-render";
 
 const REVIEWED_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
@@ -31,7 +32,7 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
       .loadStatus()
       .then(render)
       .catch((error: unknown) => {
-        showToast(errorMessage(error, "Allowance refresh failed"), "error", refresh);
+        showToast(errorDetails(error, "Allowance refresh failed"), "error", refresh);
         buttonBusy(refresh, false);
       });
   });
@@ -48,8 +49,8 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
       if (review) {
         review.hidden = false;
         review.textContent = REVIEWED_FEES.has(button)
-          ? "Submitting the reviewed revoke…"
-          : "Preparing the revoke and estimating its maximum fee…";
+          ? "Submitting…"
+          : "Estimating the maximum fee…";
       }
       if (result) {
         result.textContent = "";
@@ -71,17 +72,18 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
           if (result) {
             result.textContent = `Submitted ${response}`;
           }
-          if (review)
-            review.textContent = "Revoke submitted. Activity will show its network status.";
+          if (review) review.textContent = "Revoke submitted. Follow it in Activity.";
         },
         (error: unknown) => {
           REVIEWED_FEES.delete(button);
-          showToast(errorMessage(error, "Revoke failed"), "error", button);
+          // A revoke whose reply was lost may be on chain: amber, and the
+          // button stays down until the list repaints (errors audit F3).
+          showToast(errorDetails(error, "Revoke failed"), failureTone(error), button);
           if (result) {
-            result.textContent = errorMessage(error, "Revoke failed");
+            result.textContent = errorLine(error, "Revoke failed");
           }
-          if (review) review.textContent = errorMessage(error, "Revoke failed");
-          buttonBusy(button, false);
+          if (review) review.textContent = errorLine(error, "Revoke failed");
+          if (!isOutcomeUnknown(error)) buttonBusy(button, false);
         },
       );
     });

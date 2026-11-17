@@ -2,16 +2,22 @@
  * Validated value conversions at the official privacy-SDK boundary.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { buildErc20ApproveCall } from "@mc-wallet/starknet/rpc-assets";
+import { WalletError } from "@bramble/core/errors";
 import {
+  isTransportRpcError,
+  RpcTransportError,
+  withRpcFallback,
+} from "@bramble/starknet/provider";
+import { buildErc20ApproveCall } from "@bramble/starknet/rpc-assets";
+import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   STARK_FIELD_PRIME,
   STRK_TOKEN_ADDRESS,
-} from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action, Strk20BalanceEntry } from "@mc-wallet/wallet-protocol/strk20";
-import { STRK20_LIMITS } from "@mc-wallet/wallet-protocol/strk20";
+} from "@bramble/wallet-model/networks";
+import type { Strk20Action, Strk20BalanceEntry } from "@bramble/wallet-protocol/strk20";
+import { STRK20_LIMITS } from "@bramble/wallet-protocol/strk20";
 import type { BigNumberish, Call, RpcProvider } from "starknet";
 import { num } from "starknet";
 import type { Strk20NetworkConfig } from "../config";
@@ -55,50 +61,59 @@ export const requireStrk20Config = (context: Strk20AccountContext): Strk20Networ
   return context.config;
 };
 
-const readNoteTotal = (
-  tokenNotes: readonly SdkNote[],
-  initialCount: number,
-): { readonly count: number; readonly total: bigint } => {
+// Only nonzero notes count against the note cap, which applies per token. The
+// pool lets any registered account write zero-amount notes to any other, under
+// any nonzero token felt, and they can never be spent or removed, so counting
+// them would let a third party push a victim's real balance past the cap
+// (Sherlock 162).
+const readNoteTotal = (tokenNotes: readonly SdkNote[]): bigint => {
   let total = 0n;
-  let count = initialCount;
+  let count = 0;
   for (const note of tokenNotes) {
-    count += 1;
-    if (count > STRK20_LIMITS.discoveredNotes) {
-      throw new Error("too many notes");
-    }
     const amount = BigInt(note.amount);
     if (amount < 0n || amount >= STARK_FIELD_PRIME || total + amount >= STARK_FIELD_PRIME) {
       throw new Error("invalid note amount");
     }
+    if (amount === 0n) {
+      continue;
+    }
+    count += 1;
+    if (count > STRK20_LIMITS.discoveredNotes) {
+      throw new Error("too many notes");
+    }
     total += amount;
   }
-  return { count, total };
+  return total;
 };
 
-const readNoteTotals = (notes: SdkNoteMap): ReadonlyMap<bigint, bigint> => {
+// Totals only the tokens `counts` selects, and keeps only nonzero totals.
+// Notes in other tokens are checked for shape but never summed or counted: a
+// third party can open subchannels to anyone under made-up token felts, so
+// those notes must not fail a read of the tokens the caller asked for.
+const readNoteTotals = (
+  notes: SdkNoteMap,
+  counts: (token: bigint) => boolean,
+): ReadonlyMap<bigint, bigint> => {
   const totals = new Map<bigint, bigint>();
-  let discoveredNotes = 0;
   for (const [token, tokenNotes] of notes.entries()) {
-    if (
-      (!totals.has(token) && totals.size >= STRK20_LIMITS.balances) ||
-      token <= 0n ||
-      token >= STARK_FIELD_PRIME ||
-      !Array.isArray(tokenNotes)
-    ) {
+    if (token <= 0n || token >= STARK_FIELD_PRIME || !Array.isArray(tokenNotes)) {
       throw new Error("invalid token note set");
     }
-    const tokenTotal = readNoteTotal(tokenNotes, discoveredNotes);
-    discoveredNotes = tokenTotal.count;
-    const nextTotal = (totals.get(token) ?? 0n) + tokenTotal.total;
+    if (!counts(token)) {
+      continue;
+    }
+    const nextTotal = (totals.get(token) ?? 0n) + readNoteTotal(tokenNotes);
     if (nextTotal >= STARK_FIELD_PRIME) {
       throw new Error("private balance overflow");
     }
-    totals.set(token, nextTotal);
+    if (nextTotal > 0n) {
+      totals.set(token, nextTotal);
+    }
   }
   return totals;
 };
 
-const readRequestedTokens = (requested: readonly string[]): readonly string[] => {
+const readRequestedTokens = (requested: readonly string[]): ReadonlySet<bigint> => {
   if (requested.length > STRK20_LIMITS.tokens) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
@@ -108,30 +123,40 @@ const readRequestedTokens = (requested: readonly string[]): readonly string[] =>
     }
     return BigInt(token);
   });
-  if (new Set(keys).size !== keys.length) {
+  const unique = new Set(keys);
+  if (unique.size !== keys.length) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
-  return requested;
+  return unique;
 };
 
 /**
  * Sums SDK notes into canonical token balances and rejects malformed or
  * oversized SDK output before it reaches wallet state.
+ *
+ * With `requested` tokens, only those tokens are summed and the note cap
+ * applies to each one's nonzero notes, so notes other accounts place in unrelated
+ * or made-up tokens cannot fail the read. With none, every token holding a
+ * nonzero balance is listed, and more than `STRK20_LIMITS.balances` of them
+ * fails the read.
  */
 export const balancesFrom = (
   notes: SdkNoteMap,
   requested: readonly string[],
 ): readonly Strk20BalanceEntry[] => {
+  const requestedTokens = readRequestedTokens(requested);
   let totals: ReadonlyMap<bigint, bigint>;
   try {
-    totals = readNoteTotals(notes);
+    totals = readNoteTotals(
+      notes,
+      requestedTokens.size > 0 ? (token) => requestedTokens.has(token) : () => true,
+    );
   } catch {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
-  const requestedTokens = readRequestedTokens(requested);
   const tokens =
-    requestedTokens.length > 0
-      ? requestedTokens
+    requested.length > 0
+      ? requested
       : [...totals.keys()]
           .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
           .map((token) => `0x${token.toString(16)}`);
@@ -151,6 +176,9 @@ export const balancesFrom = (
 const poolFeeUnavailable = (reason: string): WalletError =>
   new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: could not read the pool fee (${reason})`);
 
+// Fee reads stay on the first configured endpoint. The public-key read below
+// is the one that walks every endpoint; folding failover into this helper
+// would change a fee failure into a different node's answer.
 const readPoolCall = async (
   providerFor: (nodeUrl: string) => RpcProvider,
   rpcUrls: readonly string[],
@@ -247,6 +275,94 @@ const registrationUnreadable = (reason: string): WalletError =>
   new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: could not read pool registration (${reason})`);
 
 /**
+ * A node that did not answer `get_public_key`. Extends {@link RpcTransportError}
+ * so {@link withRpcFallback} moves to the next endpoint. A JSON-RPC rate limit
+ * carries a numeric code, which that helper would otherwise treat as a semantic
+ * answer and not fail over.
+ */
+class PoolEndpointError extends RpcTransportError {
+  public constructor(readonly rateLimited: boolean) {
+    super("RPC endpoint did not answer get_public_key");
+    this.name = "PoolEndpointError";
+  }
+}
+
+const registrationFailure = (error: unknown): WalletError => {
+  if (
+    (error instanceof PoolEndpointError && error.rateLimited) ||
+    isRetryableStrk20ServiceError(error)
+  ) {
+    return registrationUnreadable("rate limited; retry shortly");
+  }
+  return registrationUnreadable("the node did not answer get_public_key");
+};
+
+/**
+ * Reads the public viewing key an address registered with the pool
+ * (`get_public_key`), canonical, or `0x0` when it never registered. The pool
+ * writes it once, so a non-zero answer is permanent for that pool.
+ *
+ * Walks every configured endpoint. A node that does not answer — including a
+ * rate limit the same-node retry has already exhausted — is failed over.
+ * A malformed answer is not: that is the pool's response, not downtime. An
+ * unreachable or malformed response throws rather than guessing.
+ */
+export const readStrk20PublicKey = async (
+  providerFor: (nodeUrl: string) => RpcProvider,
+  rpcUrls: readonly string[],
+  poolAddress: string,
+  address: string,
+  pauseForServiceRetry: ServiceRetryPause = defaultServiceRetryPause,
+): Promise<string> => {
+  if (!isNonZeroStarkFieldElement(address)) {
+    throw registrationUnreadable("the address is not a field element");
+  }
+  if (rpcUrls.length === 0) {
+    throw registrationUnreadable("no RPC endpoint is configured");
+  }
+  let response: readonly string[];
+  try {
+    response = await withRpcFallback(
+      rpcUrls,
+      async (provider) => {
+        try {
+          return await retryStrk20ServiceRead(
+            () =>
+              provider.callContract({
+                calldata: [address],
+                contractAddress: poolAddress,
+                entrypoint: "get_public_key",
+              }),
+            pauseForServiceRetry,
+          );
+        } catch (error) {
+          if (isTransportRpcError(error)) {
+            throw error;
+          }
+          // Numeric-code rate limits are not transport errors, but this node
+          // still did not produce a key. Fail over instead of stopping.
+          if (isRetryableStrk20ServiceError(error)) {
+            throw new PoolEndpointError(true);
+          }
+          throw error;
+        }
+      },
+      providerFor,
+    );
+  } catch (error) {
+    throw registrationFailure(error);
+  }
+  const felt = response.length === 1 ? response[0] : undefined;
+  if (felt === undefined) {
+    throw registrationUnreadable("the pool returned an unexpected result shape");
+  }
+  if (!isStarkFieldElement(felt)) {
+    throw registrationUnreadable("the pool returned an out-of-field public key");
+  }
+  return canonicalFelt(felt) as string;
+};
+
+/**
  * Reads whether an address has a viewing key registered with the pool
  * (`get_public_key`, zero when unregistered).
  *
@@ -265,28 +381,10 @@ export const readStrk20Registered = async (
   poolAddress: string,
   address: string,
   pauseForServiceRetry: ServiceRetryPause = defaultServiceRetryPause,
-): Promise<boolean> => {
-  if (!isNonZeroStarkFieldElement(address)) {
-    throw registrationUnreadable("the address is not a field element");
-  }
-  const response = await readPoolCall(
-    providerFor,
-    rpcUrls,
-    poolAddress,
-    "get_public_key",
-    [address],
-    pauseForServiceRetry,
-    registrationUnreadable,
-  );
-  const felt = response.length === 1 ? response[0] : undefined;
-  if (felt === undefined) {
-    throw registrationUnreadable("the pool returned an unexpected result shape");
-  }
-  if (!isStarkFieldElement(felt)) {
-    throw registrationUnreadable("the pool returned an out-of-field public key");
-  }
-  return BigInt(felt) !== 0n;
-};
+): Promise<boolean> =>
+  BigInt(
+    await readStrk20PublicKey(providerFor, rpcUrls, poolAddress, address, pauseForServiceRetry),
+  ) !== 0n;
 
 /**
  * The pool fee to approve on the relay route: none.

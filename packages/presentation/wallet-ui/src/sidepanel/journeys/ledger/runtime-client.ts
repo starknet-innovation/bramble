@@ -7,10 +7,10 @@
  * account index, a derivation path, and a public `(r, s)` signature pair.
  */
 
-import type { AccountContractType, LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
+import type { AccountContractType, LedgerPubKeyEntry } from "@bramble/wallet-model/accounts";
+import type { LedgerEip2645Application } from "@bramble/wallet-model/ledger-path";
 import {
   isCreateAccountResponse,
-  isErrorResponse,
   isLedgerAccountStatusResponse,
   isLedgerAccountsResponse,
   isLedgerSignPendingResponse,
@@ -18,6 +18,7 @@ import {
   type LedgerAccountsResponse,
   type LedgerSignRequestSummary,
 } from "../../../popup/responses/responses";
+import { refusalText } from "../../runtime/runtime-errors";
 
 /**
  * One Ledger candidate's best-effort on-chain state as the panel consumes it:
@@ -26,6 +27,7 @@ import {
 type LedgerAccountStatus = {
   readonly balance: string | null;
   readonly deployed: boolean | null;
+  readonly funded: boolean | null;
 };
 
 /**
@@ -39,7 +41,9 @@ export type LedgerSignOutcome =
   | { readonly error: string; readonly id: string };
 
 /**
- * The Ledger slice of the side-panel wallet client.
+ * The Ledger slice of the side-panel wallet client. The optional trailing
+ * `eip2645application` names the path scheme the device key was enumerated at;
+ * omitted, the background keeps Bramble's own `LedgerW` scheme.
  */
 export type LedgerRuntimeClient = {
   readonly addLedgerAccount: (
@@ -47,6 +51,7 @@ export type LedgerRuntimeClient = {
     accountIndex: number,
     publicKeyX: string,
     accountContractType: AccountContractType,
+    eip2645application?: LedgerEip2645Application,
   ) => Promise<string>;
   readonly completeLedgerSign: (outcome: LedgerSignOutcome) => Promise<void>;
   readonly createLedgerVault: (
@@ -55,11 +60,13 @@ export type LedgerRuntimeClient = {
     publicKeyX: string,
     vaultPassphrase: string,
     accountContractType: AccountContractType,
+    eip2645application?: LedgerEip2645Application,
   ) => Promise<string>;
   readonly deriveLedgerAccounts: (
     networkId: string,
     entries: readonly LedgerPubKeyEntry[],
     accountContractType: AccountContractType,
+    eip2645application?: LedgerEip2645Application,
   ) => Promise<LedgerAccountsResponse["accounts"]>;
   readonly ledgerAccountStatus: (
     address: string,
@@ -69,7 +76,14 @@ export type LedgerRuntimeClient = {
 };
 
 const failure = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
+  new Error(refusalText(response, fallback));
+
+// The scheme is sent only when the caller named one, so the envelope of every
+// pre-existing (Bramble-path) call is byte-for-byte unchanged.
+const applicationField = (
+  eip2645application: LedgerEip2645Application | undefined,
+): { readonly eip2645application?: LedgerEip2645Application } =>
+  eip2645application === undefined ? {} : { eip2645application };
 
 /**
  * Builds the Ledger wrappers over a runtime send function. Spread into the main
@@ -78,10 +92,17 @@ const failure = (response: unknown, fallback: string): Error =>
 export const createLedgerRuntimeClient = (
   sendMessage: (message: unknown) => Promise<unknown>,
 ): LedgerRuntimeClient => ({
-  async addLedgerAccount(networkId, accountIndex, publicKeyX, accountContractType) {
+  async addLedgerAccount(
+    networkId,
+    accountIndex,
+    publicKeyX,
+    accountContractType,
+    eip2645application,
+  ) {
     const response = await sendMessage({
       accountContractType,
       accountIndex,
+      ...applicationField(eip2645application),
       networkId,
       publicKeyX,
       type: "wallet.addLedgerAccount",
@@ -106,10 +127,12 @@ export const createLedgerRuntimeClient = (
     publicKeyX,
     vaultPassphrase,
     accountContractType,
+    eip2645application,
   ) {
     const response = await sendMessage({
       accountContractType,
       accountIndex,
+      ...applicationField(eip2645application),
       networkId,
       publicKeyX,
       type: "wallet.createLedgerVault",
@@ -123,9 +146,10 @@ export const createLedgerRuntimeClient = (
     }
     throw failure(response, "create Ledger wallet failed");
   },
-  async deriveLedgerAccounts(networkId, entries, accountContractType) {
+  async deriveLedgerAccounts(networkId, entries, accountContractType, eip2645application) {
     const response = await sendMessage({
       accountContractType,
+      ...applicationField(eip2645application),
       entries,
       networkId,
       type: "wallet.deriveLedgerAccounts",
@@ -140,8 +164,8 @@ export const createLedgerRuntimeClient = (
     // Fail soft: an unrecognised reply degrades to "checking/unavailable" so the
     // picker never blocks or shows a fabricated deployed status or balance.
     return isLedgerAccountStatusResponse(response)
-      ? { balance: response.balance, deployed: response.deployed }
-      : { balance: null, deployed: null };
+      ? { balance: response.balance, deployed: response.deployed, funded: response.funded }
+      : { balance: null, deployed: null, funded: null };
   },
   async loadLedgerSignPending() {
     const response = await sendMessage({ type: "wallet.ledgerSignPending" });

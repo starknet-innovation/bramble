@@ -1,0 +1,263 @@
+/**
+ * Encrypted record of which multisigs a site may see. Origin grants for
+ * single-signer accounts stay in the vault. This ledger is a separate
+ * encrypted blob so a multisig id, which is not a vault account, never has to
+ * enter that schema. A locked session cannot read it. Downgrade-safe: an older
+ * build ignores the key and the vault still opens.
+ */
+
+import { WalletError } from "@bramble/core/errors";
+import { hasOnlyKnownKeys, isJson, isRecord } from "@bramble/core/json";
+import { type ConnectedSite, isWalletOrigin } from "@bramble/core/origin";
+import type { EncryptedStore } from "@bramble/vault/encrypted-store";
+import { isAccountId } from "@bramble/wallet-model/accounts";
+
+/**
+ * Storage key for the encrypted multisig-origin ledger.
+ */
+export const MULTISIG_ORIGIN_GRANTS_KEY = "bramble:multisig-origin-grants";
+
+type OriginGrant = {
+  readonly multisigIds: readonly string[];
+  readonly origin: string;
+};
+
+type GrantDocument = {
+  readonly grants: readonly OriginGrant[];
+  readonly schemaVersion: 1;
+};
+
+/**
+ * Privileged ledger of multisig connection grants. `credential` is the vault
+ * unlock secret; callers already hold it and this module only forwards it to
+ * the encrypted store.
+ */
+export type MultisigOriginGrantStore = {
+  readonly clear: () => Promise<void>;
+  readonly clearKeys: () => void;
+  readonly grant: (input: {
+    readonly credential: string;
+    readonly isAuthorized: () => boolean;
+    readonly multisigId: string;
+    readonly origin: string;
+  }) => Promise<void>;
+  readonly idsFor: (origin: string, credential: string) => Promise<readonly string[]>;
+  /**
+   * Drops a removed multisig from every site, so re-adding it later does not
+   * reconnect anything. Throws, changing nothing, when the ledger can't be read.
+   */
+  readonly removeAccount: (input: {
+    readonly credential: string;
+    readonly isAuthorized: () => boolean;
+    readonly multisigId: string;
+  }) => Promise<void>;
+  /** Throws, changing nothing, when the ledger can't be read. */
+  readonly revoke: (origin: string, credential: string) => Promise<void>;
+  readonly sites: (credential: string) => Promise<readonly ConnectedSite[]>;
+};
+
+const emptyDocument = (): GrantDocument => ({ grants: [], schemaVersion: 1 });
+
+const isGrant = (value: unknown): value is OriginGrant =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["multisigIds", "origin"]) &&
+  typeof value["origin"] === "string" &&
+  isWalletOrigin(value["origin"]) &&
+  Array.isArray(value["multisigIds"]) &&
+  value["multisigIds"].length > 0 &&
+  value["multisigIds"].every((id) => isAccountId(id));
+
+const parseDocument = (value: unknown): GrantDocument | null => {
+  if (!isRecord(value) || !isJson(value) || !hasOnlyKnownKeys(value, ["grants", "schemaVersion"])) {
+    return null;
+  }
+  if (value["schemaVersion"] !== 1 || !Array.isArray(value["grants"])) return null;
+  if (!value["grants"].every(isGrant)) return null;
+  const origins = value["grants"].map((grant) => grant.origin);
+  if (new Set(origins).size !== origins.length) return null;
+  return value as GrantDocument;
+};
+
+const requireAuthorized = (isAuthorized: () => boolean): void => {
+  if (!isAuthorized()) throw new WalletError("wallet locked");
+};
+
+const withGrantedId = (
+  current: GrantDocument,
+  origin: string,
+  multisigId: string,
+): GrantDocument => {
+  const rest = current.grants.filter((grant) => grant.origin !== origin);
+  const existing = current.grants.find((grant) => grant.origin === origin);
+  const multisigIds = [...new Set([...(existing?.multisigIds ?? []), multisigId])];
+  return { grants: [...rest, { multisigIds, origin }], schemaVersion: 1 };
+};
+
+/** What a grant or revoke reports when the ledger can't be read. */
+export const GRANTS_UNREADABLE = "Couldn't read your connected sites. Try again.";
+
+const withoutId = (current: GrantDocument, multisigId: string): GrantDocument => ({
+  grants: current.grants
+    .map((grant) => ({
+      ...grant,
+      multisigIds: grant.multisigIds.filter((id) => id !== multisigId),
+    }))
+    .filter((grant) => grant.multisigIds.length > 0),
+  schemaVersion: 1,
+});
+
+// withoutId only removes, so an unchanged count means nothing to write.
+const idCount = (ledger: GrantDocument): number =>
+  ledger.grants.reduce((total, grant) => total + grant.multisigIds.length, 0);
+
+const byOrigin = (left: ConnectedSite, right: ConnectedSite): number =>
+  left.origin < right.origin ? -1 : left.origin > right.origin ? 1 : 0;
+
+/**
+ * In-memory ledger for tests and for a worker with no browser storage.
+ */
+export const memoryMultisigGrantStore = (): MultisigOriginGrantStore => {
+  let ledger = emptyDocument();
+  const read = (): GrantDocument => ledger;
+  const write = (next: GrantDocument, isAuthorized?: () => boolean): void => {
+    if (isAuthorized && !isAuthorized()) throw new WalletError("wallet locked");
+    ledger = next;
+  };
+  return {
+    async clear() {
+      ledger = emptyDocument();
+    },
+    clearKeys() {
+      // Nothing derived is cached in memory.
+    },
+    async grant(input) {
+      if (!input.isAuthorized()) throw new WalletError("wallet locked");
+      const current = read();
+      const rest = current.grants.filter((grant) => grant.origin !== input.origin);
+      const existing = current.grants.find((grant) => grant.origin === input.origin);
+      const multisigIds = [...new Set([...(existing?.multisigIds ?? []), input.multisigId])];
+      write(
+        { grants: [...rest, { multisigIds, origin: input.origin }], schemaVersion: 1 },
+        input.isAuthorized,
+      );
+    },
+    async idsFor(origin) {
+      return read().grants.find((grant) => grant.origin === origin)?.multisigIds ?? [];
+    },
+    async removeAccount(input) {
+      write(withoutId(read(), input.multisigId), input.isAuthorized);
+    },
+    async revoke(origin) {
+      ledger = {
+        grants: ledger.grants.filter((grant) => grant.origin !== origin),
+        schemaVersion: 1,
+      };
+    },
+    async sites() {
+      return read()
+        .grants.map((grant) => ({ accountCount: grant.multisigIds.length, origin: grant.origin }))
+        .sort(byOrigin);
+    },
+  };
+};
+
+// No blob, or one that doesn't parse, grants nothing. A read or decrypt
+// failure throws: a write built from it could claim a revoke it never stored,
+// or drop every other site's grant.
+const readForWrite = async (store: EncryptedStore, credential: string): Promise<GrantDocument> => {
+  let value: unknown;
+  try {
+    value = await store.read(credential);
+  } catch {
+    throw new WalletError(GRANTS_UNREADABLE);
+  }
+  if (value === undefined) return emptyDocument();
+  return parseDocument(value) ?? emptyDocument();
+};
+
+// Read-only callers fail closed: an unreadable ledger grants nothing.
+const readEncrypted = (store: EncryptedStore, credential: string): Promise<GrantDocument> =>
+  readForWrite(store, credential).catch(() => emptyDocument());
+
+/**
+ * Encrypts the ledger with the vault unlock secret. `clearKeys` drops the
+ * derived key and must run on lock beside the vault store.
+ */
+export const encryptedMultisigGrantStore = (store: EncryptedStore): MultisigOriginGrantStore => {
+  let pending: Promise<unknown> = Promise.resolve();
+  const serialize = <T>(run: () => Promise<T>): Promise<T> => {
+    const next = pending.then(run, run);
+    pending = next.catch(() => undefined);
+    return next;
+  };
+  return {
+    clear: () => serialize(() => store.remove()),
+    clearKeys() {
+      store.clearKeys();
+    },
+    grant: (input) =>
+      serialize(async () => {
+        requireAuthorized(input.isAuthorized);
+        if (!isWalletOrigin(input.origin) || !isAccountId(input.multisigId)) {
+          throw new WalletError("Invalid multisig grant");
+        }
+        const current = await readForWrite(store, input.credential);
+        requireAuthorized(input.isAuthorized);
+        const next = withGrantedId(current, input.origin, input.multisigId);
+        // Re-checked after encryption, right before the commit starts. A lock during
+        // the storage writes themselves is rolled back to the pre-grant snapshot,
+        // the same window the vault origin grant closes (Sherlock 255).
+        await store.write(next, input.credential, () => {
+          requireAuthorized(input.isAuthorized);
+        });
+        if (input.isAuthorized()) return;
+        await store.write(current, input.credential);
+        throw new WalletError("wallet locked");
+      }),
+    async idsFor(origin, credential) {
+      const ledger = await readEncrypted(store, credential);
+      return ledger.grants.find((grant) => grant.origin === origin)?.multisigIds ?? [];
+    },
+    removeAccount: (input) =>
+      serialize(async () => {
+        requireAuthorized(input.isAuthorized);
+        const current = await readForWrite(store, input.credential);
+        requireAuthorized(input.isAuthorized);
+        const next = withoutId(current, input.multisigId);
+        if (idCount(next) === idCount(current)) return;
+        await store.write(next, input.credential, () => {
+          requireAuthorized(input.isAuthorized);
+        });
+      }),
+    revoke: (origin, credential) =>
+      serialize(async () => {
+        const current = await readForWrite(store, credential);
+        const grants = current.grants.filter((grant) => grant.origin !== origin);
+        if (grants.length === current.grants.length) return;
+        await store.write({ grants, schemaVersion: 1 }, credential);
+      }),
+    async sites(credential) {
+      const ledger = await readEncrypted(store, credential);
+      return ledger.grants
+        .map((grant) => ({ accountCount: grant.multisigIds.length, origin: grant.origin }))
+        .sort(byOrigin);
+    },
+  };
+};
+
+/**
+ * Merges single-signer and multisig connected-site rows. An origin present in
+ * both is one row whose count is the sum.
+ */
+export const mergeConnectedSites = (
+  vaultSites: readonly ConnectedSite[],
+  multisigSites: readonly ConnectedSite[],
+): readonly ConnectedSite[] => {
+  const counts = new Map<string, number>();
+  for (const site of [...vaultSites, ...multisigSites]) {
+    counts.set(site.origin, (counts.get(site.origin) ?? 0) + site.accountCount);
+  }
+  return [...counts.entries()]
+    .map(([origin, accountCount]) => ({ accountCount, origin }))
+    .sort(byOrigin);
+};

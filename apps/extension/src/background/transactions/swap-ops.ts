@@ -1,31 +1,36 @@
 /**
- * In-wallet swap operations over the AVNU aggregator, dispatched from the
+ * In-wallet swap operations over the avnu aggregator, dispatched from the
  * background message handler. Both messages are privileged (extension pages
  * only, deny-by-default in ../routing/senders.ts) and follow the wallet's
  * execution contract: token addresses come from the user's TRACKED registry
- * (never from the UI message), AVNU responses are validated at the
- * @mc-wallet/transactions/avnu boundary, the COMPLETE built call set passes the
+ * (never from the UI message), avnu responses are validated at the
+ * @bramble/transactions/avnu boundary, the COMPLETE built call set passes the
  * intent policy gate in ../privacy/swap-build-policy.ts — against the router
  * address and swap selector the WALLET pins per network and the route calldata
- * DECODED against the pinned exchange ABI (@mc-wallet/transactions/avnu-route),
+ * DECODED against the pinned exchange ABI (@bramble/transactions/avnu-route),
  * not against anything the response asserts — plus the shared call verifier,
  * and signing happens only through the session-gated Krusty signer. Failure
  * behaviour: any validation, quote, build, or policy failure returns an error
  * response — nothing is signed on a path that could not be fully checked.
  */
 
-import type { TokenConfig } from "@mc-wallet/settings/preferences";
-import { formatTokenAmount, parseTokenAmount } from "@mc-wallet/starknet/rpc";
-import { avnuRouterAddress, type SwapService } from "@mc-wallet/transactions/avnu";
-import { reviewedMinBuyAmount } from "@mc-wallet/transactions/avnu-route";
+import type { PriceService } from "@bramble/portfolio/prices";
+import type { TokenConfig } from "@bramble/settings/preferences";
+import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
+import { activityToken } from "@bramble/transactions/activity";
+import { avnuRouterAddress, type SwapService } from "@bramble/transactions/avnu";
+import { reviewedMinBuyAmount } from "@bramble/transactions/avnu-route";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
-} from "@mc-wallet/transactions/verify";
-import { canonical, shortAddress } from "@mc-wallet/transactions/verify-decode";
-import { isApproveEntrypoint } from "@mc-wallet/transactions/verify-selectors";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/transactions/verify";
+import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
+import { isApproveEntrypoint } from "@bramble/transactions/verify-selectors";
+import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
+import { recordAutoDeployment } from "../accounts/deployment-ops";
 import { signerForContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import {
   approvalPayloadMatchesContext,
@@ -36,16 +41,20 @@ import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { captureSessionAuthorization } from "../runtime/session";
-import { recordSubmittedActivity } from "./activity-recording";
+import { afterBroadcast, recordSubmittedActivity } from "./activity-recording";
 import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
+import { walletSwapValueDelta } from "./swap-value-check";
+import { withTrustedRecipients } from "./trusted-recipients";
 
 /**
- * Dependencies for the swap handler: the shared wallet-ops set plus the AVNU
+ * Dependencies for the swap handler: the shared wallet-ops set plus the avnu
  * swap service (injected fetch; unavailable default fails closed).
  */
 export type SwapOpsDeps = WalletOpsDeps & {
+  // The wallet's own price feed, for the quote's value check (Sherlock 137).
+  readonly prices?: PriceService;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
 };
@@ -61,7 +70,11 @@ const swapPair = async (
   if (context.error !== undefined) {
     return { error: context.error } as const;
   }
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    context.accounts,
+  );
   const tokenById = (id: string): TokenConfig | undefined =>
     preferences.tokens.find((token) => token.id === id && token.networkId === context.networkId);
   const sellToken = tokenById(input.sellTokenId);
@@ -109,7 +122,7 @@ const swapQuoteResponse = async (
   if ("error" in context) {
     return { error: context.error };
   }
-  const { account, buyToken, networkId, sellToken } = context;
+  const { account, buyToken, networkId, preferences, sellToken } = context;
   const sellAmount = sellAmountHex(input.amount, sellToken.decimals);
   if (!sellAmount) {
     return { error: "enter an amount to swap" };
@@ -122,15 +135,26 @@ const swapQuoteResponse = async (
       sellTokenAddress: sellToken.address,
       takerAddress: account.address,
     });
+    const buyAmount = formatTokenAmount(BigInt(quote.buyAmount), buyToken.decimals);
+    const valueDeltaPercent = await walletSwapValueDelta({
+      buyAmount,
+      buyToken,
+      currency: preferences.displayCurrency ?? "usd",
+      networkId,
+      prices: deps.prices,
+      sellAmount: input.amount,
+      sellToken,
+    });
     return {
       ok: true,
       swapQuote: {
-        buyAmount: formatTokenAmount(BigInt(quote.buyAmount), buyToken.decimals),
+        buyAmount,
         buyAmountInUsd: quote.buyAmountInUsd,
         gasFeesInUsd: quote.gasFeesInUsd,
         quoteId: quote.quoteId,
         sellAmount: input.amount,
         sellAmountInUsd: quote.sellAmountInUsd,
+        ...(valueDeltaPercent === undefined ? {} : { valueDeltaPercent }),
       },
     };
   } catch (error) {
@@ -206,7 +230,7 @@ const swapPrepareResponse = async (
     if (!reviewedFee) {
       return {
         error:
-          "The network fee could not be estimated. Check the RPC endpoint and retry before signing.",
+          "Couldn't estimate the network fee for this swap, so nothing was prepared. The quote may have moved, or the account may not hold enough to cover the swap and its fee. Try again, or reduce the amount.",
       };
     }
     const minBuyText = formatTokenAmount(policy.route.minBuyAmount, buyToken.decimals);
@@ -225,6 +249,7 @@ const swapPrepareResponse = async (
       minBuyAmount: minBuyText,
       reviewedFee,
       sellSymbol: sellToken.symbol,
+      sellTokenAddress: sellToken.address,
       summaries: report.calls.map((call, index) =>
         index === routeIndex
           ? `Swap ${input.amount} ${sellToken.symbol} for at least ${minBuyText} ${buyToken.symbol}, paid to ${shortAddress(canonical(account.address))}`
@@ -256,7 +281,11 @@ const swapExecuteResponse = async (
     return { error: context.error };
   }
   const authorized = captureSessionAuthorization(deps.session);
-  const preferences = await deps.preferencesStore.read();
+  const preferences = await withTrustedRecipients(
+    deps,
+    await deps.preferencesStore.read(),
+    context.accounts,
+  );
   if (
     context.account.id !== preparation.context.accountId ||
     context.networkId !== preparation.context.networkId ||
@@ -285,38 +314,76 @@ const swapExecuteResponse = async (
     if (refusal) {
       return refusal;
     }
-    const result = await deps.runtimeRpc.submitInvokeTransaction({
-      account: context.account,
-      calls: preparation.calls,
-      isAuthorized: authorized.isCurrent,
-      reviewedFee: preparation.reviewedFee,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
-      signHash: signerForContext(deps, context),
-    });
-    // The build always carries an approval of the sell token to the router
-    // (buildPolicy refuses one without it). The route is expected to spend it
-    // in the same transaction, but the wallet cannot prove it did — a residual
-    // allowance must be listed and revokable like any other, so it is tracked
-    // here on exactly the terms the dapp-invoke path tracks a dapp's approval.
-    // Filed BEFORE the activity line: an activity write that fails (a storage
-    // quota, an IO fault) must not be able to lose the record of a grant that
-    // is already on chain.
-    await recordApproveAllowances({
-      assets,
-      calls: preparation.calls,
-      owner: allowanceOwner(context.account),
-      store: deps.allowanceStore,
-    });
-    await recordSubmittedActivity(deps.activity, {
-      accountId: context.account.id,
-      amount: preparation.amount,
-      hash: result.transactionHash,
-      kind: "invoke",
-      networkId: context.networkId,
-      summary: `Swap ${preparation.amount} ${preparation.sellSymbol} for ~${preparation.buyAmount} ${preparation.buySymbol} via AVNU`,
-      token: preparation.sellSymbol,
-    });
-    return { ok: true, transactionHash: result.transactionHash };
+    // The router approval and the activity line are filed for every hash that
+    // may be on chain: the confirmed one, or the signed one when the reply was
+    // lost (audit #173 — a live grant must not go missing from the allowance
+    // manager, and the swap must stay traceable in Activity).
+    const recordSubmitted = async (hash: string): Promise<void> => {
+      // The build always carries an approval of the sell token to the router
+      // (buildPolicy refuses one without it). The route is expected to spend it
+      // in the same transaction, but the wallet cannot prove it did — a residual
+      // allowance must be listed and revokable like any other, so it is tracked
+      // here on exactly the terms the dapp-invoke path tracks a dapp's approval.
+      // Filed BEFORE the activity line: an activity write that fails (a storage
+      // quota, an IO fault) must not be able to lose the record of a grant that
+      // is already on chain.
+      await recordApproveAllowances({
+        assets,
+        calls: preparation.calls,
+        owner: allowanceOwner(context.account),
+        store: deps.allowanceStore,
+        transactionHash: hash,
+      });
+      await recordSubmittedActivity(deps.activity, {
+        accountId: context.account.id,
+        amount: preparation.amount,
+        hash,
+        kind: "invoke",
+        networkId: context.networkId,
+        summary: `Swap ${preparation.amount} ${preparation.sellSymbol} for ~${preparation.buyAmount} ${preparation.buySymbol} via avnu`,
+        ...activityToken({ address: preparation.sellTokenAddress, symbol: preparation.sellSymbol }),
+      });
+    };
+    // The hash of the invoke as signed, captured before it is sent. Only used
+    // when the reply is lost.
+    let signedHash: string | undefined;
+    let transactionHash: string;
+    let deploymentHash: string | undefined;
+    try {
+      const result = await deps.runtimeRpc.submitInvokeTransaction({
+        account: context.account,
+        calls: preparation.calls,
+        isAuthorized: authorized.isCurrent,
+        onSigned: async (signed) => {
+          signedHash = signed.transactionHash;
+        },
+        reviewedFee: preparation.reviewedFee,
+        rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
+        signHash: signerForContext(deps, context),
+      });
+      ({ deploymentTransactionHash: deploymentHash, transactionHash } = result);
+    } catch (error) {
+      // An accepted automatic deployment is recorded whatever happened next (mc-wallet 719).
+      await afterBroadcast(() => recordAutoDeployment(deps.activity, context.account, error));
+      if (!(error instanceof IndeterminateRpcWriteError)) {
+        throw error;
+      }
+      // The swap may already be on chain: record it as pending and tell the
+      // panel the outcome is unknown, so it never re-quotes into a blind second
+      // swap of the same amount.
+      const pending = signedHash;
+      if (pending !== undefined) {
+        await afterBroadcast(() => recordSubmitted(pending));
+      }
+      return submissionUnknownResponse(error.message, signedHash);
+    }
+    // Outside the catch below: once a hash exists the reply carries it, so the
+    // panel never re-quotes a swap that is already on chain (audit 173).
+    await afterBroadcast(() =>
+      recordAutoDeployment(deps.activity, context.account, deploymentHash),
+    );
+    await afterBroadcast(() => recordSubmitted(transactionHash));
+    return { ok: true, transactionHash };
   } catch (error) {
     return { error: errorText(error, "swap failed") };
   }

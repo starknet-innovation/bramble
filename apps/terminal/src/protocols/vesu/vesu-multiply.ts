@@ -1,19 +1,32 @@
 /**
  * Vesu V2 Multiply open/increase path using a live Ekubo route. The quote is
- * untrusted HTTP data and is fully validated before it is serialized into the
- * deployed Multiply ABI. Returned calls always require terminal and wallet
- * review; this module never signs or broadcasts.
+ * untrusted HTTP data: its shape, its totals and its route are checked before
+ * it is serialized into the deployed Multiply ABI, and every split must be a
+ * connected path from the specified token to the calculated one. The quoter
+ * still chooses the pools and the input it reports, and that input sets the
+ * position's swap cap, so the quote functions anchor that cap to an
+ * independent price (Sherlock 147, #646; see `vesu-multiply-anchor.ts`) and
+ * refuse the route without one. Returned calls always require terminal and
+ * wallet review; this module never signs or broadcasts.
  */
 import { CairoCustomEnum, type Call, CallData, cairo } from "starknet";
 import { VESU_ADDRESSES } from "../constants";
 import { CAIRO_U128_MAX, CAIRO_U256_MAX } from "../support/cairo-integers";
+import { boundedFetch } from "../support/bounded-network";
 import { WalletError } from "../support/errors";
 import { isRecord } from "../support/json";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
+  sameAddress,
 } from "../support/networks";
 import { buildErc20ApproveCall } from "../support/rpc-assets";
+import {
+  anchorVesuMultiplyQuote,
+  isAnchoredVesuMultiplyQuote,
+  type VesuMultiplyAnchor,
+  type VesuMultiplyAnchoredQuote,
+} from "./vesu-multiply-anchor";
 
 const MAINNET_CHAIN_DECIMAL = BigInt("0x534e5f4d41494e").toString();
 const EKUBO_QUOTER = "https://prod-api-quoter.ekubo.org";
@@ -38,6 +51,8 @@ type QuoteSplit = {
 
 /** Validated exact-output Ekubo route used to wind or unwind Multiply. */
 export type VesuMultiplyExactOutQuote = {
+  /** The slippage behind `maxInputAmount`, which the price anchor allows for (#646). */
+  readonly slippageBps: number;
   readonly outputAmount: bigint;
   readonly maxInputAmount: bigint;
   readonly requiredInputAmount: bigint;
@@ -65,11 +80,44 @@ const felt = (value: unknown): string | null =>
     ? value.toLowerCase()
     : null;
 
-/** Parses an exact-output quote and derives normalized split weights. */
+/**
+ * The two tokens of an exact-output route: `specified` is the token whose
+ * exact amount is requested (the route starts there) and `calculated` the one
+ * the quoter prices it in (the route ends there).
+ */
+export type VesuMultiplyRouteTokens = {
+  readonly calculated: string;
+  readonly specified: string;
+};
+
+// Ekubo's router walks a route from the token-amount token: each pool must
+// hold the current token, and the walk moves to the pool's other token. A
+// split that does not end at the calculated token swaps something else.
+const connectsTokens = (route: readonly RouteNode[], tokens: VesuMultiplyRouteTokens): boolean => {
+  let current = tokens.specified;
+  for (const node of route) {
+    if (sameAddress(current, node.poolKey.token0)) {
+      current = node.poolKey.token1;
+    } else if (sameAddress(current, node.poolKey.token1)) {
+      current = node.poolKey.token0;
+    } else {
+      return false;
+    }
+  }
+  return sameAddress(current, tokens.calculated);
+};
+
+/**
+ * Parses an exact-output quote and derives normalized split weights. Refuses a
+ * malformed body, totals that disagree with the splits or with `outputAmount`,
+ * and any split whose route is not a connected path from `tokens.specified`
+ * to `tokens.calculated` (Sherlock 147).
+ */
 export const parseVesuMultiplyExactOutQuote = (
   body: unknown,
   outputAmount: bigint,
   slippageBps: number,
+  tokens: VesuMultiplyRouteTokens,
 ): VesuMultiplyExactOutQuote => {
   if (
     !Number.isInteger(slippageBps) ||
@@ -137,6 +185,9 @@ export const parseVesuMultiplyExactOutQuote = (
       });
     }
     if (route.length === 0) throw new WalletError("Empty Ekubo unwind route");
+    if (!connectsTokens(route, tokens)) {
+      throw new WalletError("Ekubo route does not connect the Multiply assets");
+    }
     specifiedTotal += amountSpecified;
     calculatedTotal += amountCalculated;
     splits.push({ amountCalculated, amountSpecified, route });
@@ -158,6 +209,7 @@ export const parseVesuMultiplyExactOutQuote = (
         ? body.price_impact * 100
         : 0,
     requiredInputAmount,
+    slippageBps,
     splits,
     weights,
   };
@@ -166,14 +218,17 @@ export const parseVesuMultiplyExactOutQuote = (
 /**
  * Quotes the exact additional collateral output for opening/increasing a
  * Multiply position. Ekubo returns the debt input required and Vesu enforces
- * the slippage-increased maximum inside the same atomic call.
+ * the slippage-increased maximum inside the same atomic call. That maximum is
+ * anchored to `anchor.priceUsd` (#646), and the quote is refused when it
+ * exceeds the allowed premium or no independent price is available.
  */
 export const quoteVesuMultiplyIncrease = async (
   collateralAsset: string,
   debtAsset: string,
   collateralOutputRaw: bigint,
+  anchor: VesuMultiplyAnchor,
   slippageBps = 100,
-): Promise<VesuMultiplyExactOutQuote> => {
+): Promise<VesuMultiplyAnchoredQuote> => {
   if (
     !isNonZeroStarkFieldElement(collateralAsset) ||
     !isNonZeroStarkFieldElement(debtAsset) ||
@@ -182,25 +237,41 @@ export const quoteVesuMultiplyIncrease = async (
   ) {
     throw new WalletError("Invalid Vesu wind request");
   }
-  const response = await fetch(
+  const response = await boundedFetch(
     `${EKUBO_QUOTER}/${MAINNET_CHAIN_DECIMAL}/-${collateralOutputRaw}/${collateralAsset}/${debtAsset}`,
     { headers: { accept: "application/json" } },
   );
-  if (!response.ok) throw new WalletError("Could not quote Vesu wind route");
-  return parseVesuMultiplyExactOutQuote(
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new WalletError("Could not quote Vesu wind route");
+  }
+  const quote = parseVesuMultiplyExactOutQuote(
     await response.json(),
     collateralOutputRaw,
     slippageBps,
+    { calculated: debtAsset, specified: collateralAsset },
+  );
+  return anchorVesuMultiplyQuote(
+    quote,
+    {
+      calculated: { address: debtAsset, decimals: anchor.debtDecimals },
+      specified: { address: collateralAsset, decimals: anchor.collateralDecimals },
+    },
+    anchor.priceUsd,
   );
 };
 
-/** Quotes the collateral required to repay all debt and close a Multiply position. */
+/**
+ * Quotes the collateral required to repay all debt and close a Multiply
+ * position, with the swap cap anchored like {@link quoteVesuMultiplyIncrease}.
+ */
 export const quoteVesuMultiplyClose = async (
   debtAsset: string,
   collateralAsset: string,
   debtAmountRaw: bigint,
+  anchor: VesuMultiplyAnchor,
   slippageBps = 100,
-): Promise<VesuMultiplyExactOutQuote> => {
+): Promise<VesuMultiplyAnchoredQuote> => {
   if (
     !isNonZeroStarkFieldElement(debtAsset) ||
     !isNonZeroStarkFieldElement(collateralAsset) ||
@@ -209,12 +280,26 @@ export const quoteVesuMultiplyClose = async (
   ) {
     throw new WalletError("Invalid Vesu unwind request");
   }
-  const response = await fetch(
+  const response = await boundedFetch(
     `${EKUBO_QUOTER}/${MAINNET_CHAIN_DECIMAL}/-${debtAmountRaw}/${debtAsset}/${collateralAsset}`,
     { headers: { accept: "application/json" } },
   );
-  if (!response.ok) throw new WalletError("Could not quote Vesu unwind route");
-  return parseVesuMultiplyExactOutQuote(await response.json(), debtAmountRaw, slippageBps);
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new WalletError("Could not quote Vesu unwind route");
+  }
+  const quote = parseVesuMultiplyExactOutQuote(await response.json(), debtAmountRaw, slippageBps, {
+    calculated: collateralAsset,
+    specified: debtAsset,
+  });
+  return anchorVesuMultiplyQuote(
+    quote,
+    {
+      calculated: { address: collateralAsset, decimals: anchor.collateralDecimals },
+      specified: { address: debtAsset, decimals: anchor.debtDecimals },
+    },
+    anchor.priceUsd,
+  );
 };
 
 const delegationCall = (poolAddress: string, enabled: boolean): Call => ({
@@ -230,8 +315,10 @@ export const buildVesuMultiplyIncreaseCalls = (
   debtAsset: string,
   accountAddress: string,
   marginAmountRaw: bigint,
-  quote: VesuMultiplyExactOutQuote,
+  quote: VesuMultiplyAnchoredQuote,
 ): readonly Call[] => {
+  // Only a quote the price anchor passed may become calls (#646).
+  if (!isAnchoredVesuMultiplyQuote(quote)) throw new WalletError("Invalid Multiply route");
   for (const [label, value] of [
     ["pool", poolAddress],
     ["collateral", collateralAsset],
@@ -301,8 +388,10 @@ export const buildVesuMultiplyCloseCalls = (
   collateralAsset: string,
   debtAsset: string,
   accountAddress: string,
-  quote: VesuMultiplyExactOutQuote,
+  quote: VesuMultiplyAnchoredQuote,
 ): readonly Call[] => {
+  // Only a quote the price anchor passed may become calls (#646).
+  if (!isAnchoredVesuMultiplyQuote(quote)) throw new WalletError("Invalid unwind route");
   for (const [label, value] of [
     ["pool", poolAddress],
     ["collateral", collateralAsset],

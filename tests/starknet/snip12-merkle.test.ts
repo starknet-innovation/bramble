@@ -14,7 +14,7 @@
  * encode.
  */
 import { describe, expect, test } from "bun:test";
-import { snip12MerkleLayout, snip12MerkleRoot } from "@mc-wallet/starknet/snip12-merkle";
+import { snip12MerkleLayout, snip12MerkleRoot } from "@bramble/starknet/snip12-merkle";
 import { hash, typedData as snip12 } from "starknet";
 
 const TYPES = {

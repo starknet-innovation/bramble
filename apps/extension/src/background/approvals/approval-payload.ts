@@ -3,31 +3,41 @@
  * so adding approval kinds does not make the queue's trust boundary opaque.
  */
 
-import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { ProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
-import type { ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
-import type { ApprovalKind } from "@mc-wallet/wallet-protocol/extension-responses";
-import type { Strk20Action, Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
+import type { Strk20SubmissionPlan } from "@bramble/privacy/service";
+import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { ProviderDeclare } from "@bramble/wallet-protocol/declare";
+import type { ApprovalKind } from "@bramble/wallet-protocol/extension-responses";
+import type { Strk20Action, Strk20Proof } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { Strk20DisclosureRequest } from "../privacy/strk20-approval-types";
 
 /**
  * Every approval kind admitted by the background approval queue.
  */
-export type { ApprovalKind } from "@mc-wallet/wallet-protocol/extension-responses";
+export type { ApprovalKind } from "@bramble/wallet-protocol/extension-responses";
 
 /**
  * Private execution data retained until the corresponding approval is claimed.
  */
 export type ApprovalPayload = {
   readonly actions?: readonly Strk20Action[];
+  /** Trusted background-authored summary for the submitted activity entry. */
+  readonly activitySummary?: string;
   readonly calls?: readonly Call[];
-  readonly chain?: ProviderChain;
   readonly chainId?: string;
   readonly declare?: ProviderDeclare;
   readonly networkId?: StarknetNetworkId;
+  /**
+   * The refusal a `strk20-unavailable` notice delivers to the site once the
+   * user closes it — the same error the request would have got at once.
+   */
+  readonly noticeRefusal?: string;
   readonly proof?: Strk20Proof;
+  /**
+   * The shadow-account anonymizer a `strk20-invoke` card named, present exactly
+   * when its batch holds a `shadow_account_invoke`.
+   */
+  readonly shadowAccountAnonymizer?: string;
   readonly strk20Request?: Strk20DisclosureRequest;
   readonly strk20Plan?: Strk20SubmissionPlan;
   readonly typedData?: unknown;
@@ -57,6 +67,9 @@ const readStrk20Invoke: PayloadReader = (approval) =>
     ? null
     : {
         actions: cloneApprovalValue(approval.actions),
+        ...(approval.shadowAccountAnonymizer === undefined
+          ? {}
+          : { shadowAccountAnonymizer: approval.shadowAccountAnonymizer }),
         strk20Plan: cloneApprovalValue(approval.strk20Plan),
       };
 
@@ -70,14 +83,15 @@ const readInvoke: PayloadReader = (approval) =>
     ? null
     : {
         calls: approval.calls.map(cloneApprovalCall),
+        ...(approval.activitySummary === undefined
+          ? {}
+          : { activitySummary: approval.activitySummary }),
         ...(approval.proof === undefined ? {} : { proof: cloneApprovalValue(approval.proof) }),
       };
 
 const empty: PayloadReader = () => null;
 
 const READERS: Readonly<Record<ApprovalKind, PayloadReader>> = {
-  "add-chain": (approval) =>
-    approval.chain === undefined ? null : { chain: cloneApprovalValue(approval.chain) },
   connect: empty,
   declare: (approval) =>
     approval.declare === undefined ? null : { declare: cloneApprovalValue(approval.declare) },
@@ -88,7 +102,9 @@ const READERS: Readonly<Record<ApprovalKind, PayloadReader>> = {
   "strk20-invoke": readStrk20Invoke,
   "strk20-prepare": readStrk20Disclosure,
   "strk20-register": readStrk20Disclosure,
-  "strk20-subaccount": readStrk20Disclosure,
+  "strk20-shadow-account": readStrk20Disclosure,
+  "strk20-unavailable": (approval) =>
+    approval.noticeRefusal === undefined ? null : { noticeRefusal: approval.noticeRefusal },
   "switch-chain": readSwitch,
   "watch-asset": empty,
 };

@@ -4,7 +4,12 @@
 
 import { isRetryableStrk20ServiceError, strk20RetryAfterMilliseconds } from "./official-sdk-errors";
 
-const MAX_SERVICE_ATTEMPTS = 3;
+/**
+ * How many times one read-only service operation is attempted before a
+ * throttling failure is final. Exported so a proof can report which of its
+ * bounded rounds it is in.
+ */
+export const MAX_SERVICE_ATTEMPTS = 3;
 
 /**
  * Pause boundary for a retryable private-service read. The optional delay is a

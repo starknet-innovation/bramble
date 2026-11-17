@@ -3,8 +3,8 @@
  * that produces documents byte-compatible with bramble-ff's `build.ts`
  * (canonical envelope). Never a production dependency.
  */
-import { canonicalBytes } from "@mc-wallet/flags/canonical";
-import { importTrustedFlagKeys, type TrustedFlagKeys } from "@mc-wallet/flags/verify";
+import { canonicalBytes } from "@bramble/flags/canonical";
+import { importTrustedFlagKeys, type TrustedFlagKeys } from "@bramble/flags/verify";
 
 /** Fixed test clock: 2026-11-16T12:00:00Z. */
 export const NOW = Date.UTC(2026, 10, 16, 12, 0, 0);
@@ -31,6 +31,14 @@ const b64url = (bytes: Uint8Array): string =>
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 
+// Fixture bodies are always in the contract's value space; a null here is a
+// broken test, not a case under test.
+const signable = (value: unknown): Uint8Array<ArrayBuffer> => {
+  const bytes = canonicalBytes(value);
+  if (bytes === null) throw new Error("fixture body is not canonicalizable");
+  return bytes;
+};
+
 /** An ephemeral publisher key, its keyId, and helpers to sign with it. */
 export type TestPublisher = {
   readonly keyId: string;
@@ -51,10 +59,10 @@ export const createTestPublisher = async (keyId = "flags-test"): Promise<TestPub
     publicKey,
     async sign(body, signer = keyId) {
       const proof = new Uint8Array(
-        await crypto.subtle.sign({ name: "Ed25519" }, pair.privateKey, canonicalBytes(body)),
+        await crypto.subtle.sign({ name: "Ed25519" }, pair.privateKey, signable(body)),
       );
       return `${new TextDecoder().decode(
-        canonicalBytes({ keyId: signer, payload: body, signature: b64url(proof) }),
+        signable({ keyId: signer, payload: body, signature: b64url(proof) }),
       )}\n`;
     },
     trusted: () => importTrustedFlagKeys({ [keyId]: publicKey }),

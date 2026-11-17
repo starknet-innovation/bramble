@@ -25,8 +25,8 @@
  * tests/starknet/typed-data-value-conformance.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import type { Json } from "@mc-wallet/core/json";
-import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import type { Json } from "@bramble/core/json";
+import { isTypedDataShape, typedDataHash } from "@bramble/starknet/typed-data";
 import { hash, typedData as snip12 } from "starknet";
 import { signRequestView } from "../../../../src/sidepanel/shared/sign-request";
 import {

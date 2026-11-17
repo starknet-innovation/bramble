@@ -1,29 +1,56 @@
 /** Privileged read-only first-run account derivation and mnemonic checks. */
 
-import { WalletError } from "@mc-wallet/core/errors";
+import { WalletError } from "@bramble/core/errors";
 import {
-  defaultWalletPreferences,
+  recoveryProbeTokens,
   type TokenConfig,
   type WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
-import { type DerivedAccountRef, isDerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+} from "@bramble/settings/preferences";
+import type { AccountDerivationInput } from "@bramble/vault/accounts";
+import {
+  ARGENT_ACCOUNT_CLASS_HASH,
+  BRAAVOS_DEPLOYMENT_CLASS_HASH,
+  deploymentClasses,
+  XVERSE_ARGENT_CLASS_HASH,
+} from "@bramble/wallet-model/account-families";
+import type { AccountContractType } from "@bramble/wallet-model/accounts";
+import {
+  isRecoverableAccountRef,
+  type RecoverableAccountRef,
+} from "@bramble/wallet-model/accounts";
+import {
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import {
   RECOVERY_SCAN_LIMITS,
+  RESERVED_AGENT_ACCOUNT_INDEX,
   type RecoveryAccountCandidate,
-} from "@mc-wallet/wallet-model/recovery";
+  type RecoveryDerivationKind,
+  recoveryScanTarget,
+} from "@bramble/wallet-model/recovery";
+import { readAccountActivity } from "../accounts/account-activity";
 import {
+  readDiscoverOwnAccountsInput,
   readDiscoverRecoveryAccountsInput,
+  readFindOwnAccountByAddressInput,
+  readFindRecoveryAccountByAddressInput,
   readPreviewAccountInput,
   readRecoverAccountsInput,
   readValidateMnemonicInput,
 } from "../accounts/account-creation-inputs";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { runVaultCreationWithNetwork } from "../runtime/active-network-mutation";
+import { strk20PoolAddress, strk20RegisteredElsewhere } from "../privacy/strk20-registration-owner";
+import {
+  refuseExistingVault,
+  runVaultCreationWithNetwork,
+} from "../runtime/active-network-mutation";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { type ActiveStateCoordinator, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { UnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
+import { findAccountByAddress, verifyAddressSelections } from "./address-import";
 import type { RecoveryDiscoveryCache } from "./recovery-cache";
 
 type OnboardingOpsDeps = {
@@ -35,27 +62,67 @@ type OnboardingOpsDeps = {
   readonly wallet: WalletStatusReader;
 };
 
-const describeRecoveryAccount = async (
+// Advisory only: a deployed account another wallet registered with the privacy
+// pool is listed with a note, never refused. Read for deployed candidates only,
+// since an undeployed address cannot have registered.
+const privacyPoolNote = async (
   deps: OnboardingOpsDeps,
-  account: DerivedAccountRef,
-  tokens: readonly TokenConfig[],
+  derivation: AccountDerivationInput & { readonly networkId: StarknetNetworkId },
+  address: string,
+  poolAddress: string | null,
   rpcUrls: readonly string[],
-): Promise<RecoveryAccountCandidate> => {
-  const deployed = await deps.runtimeRpc.getDeploymentStatus({
-    accountAddress: account.address,
+): Promise<{ readonly privacyPool?: "other-wallet" }> => {
+  const previewOwn = deps.wallet.previewStrk20ViewingPublicKey;
+  if (!previewOwn) return {};
+  const elsewhere = await strk20RegisteredElsewhere({
+    address,
+    networkId: derivation.networkId,
+    ownPublicKey: (pool) => previewOwn({ ...derivation, ...pool }),
+    poolAddress,
+    readRegistered: deps.runtimeRpc.getStrk20PublicKey,
     rpcUrls,
   });
-  if (deployed) return { account, deployed: true, funded: false };
-  const balances = await deps.runtimeRpc.getTokenBalances({
+  return elsewhere ? { privacyPool: "other-wallet" } : {};
+};
+
+const describeRecoveryAccount = async (
+  deps: OnboardingOpsDeps,
+  account: RecoverableAccountRef,
+  tokens: readonly TokenConfig[],
+  rpcUrls: readonly string[],
+  privacyPool: () => Promise<{ readonly privacyPool?: "other-wallet" }>,
+): Promise<RecoveryAccountCandidate> => {
+  const activity = await readAccountActivity(deps.runtimeRpc, {
     accountAddress: account.address,
     rpcUrls,
     tokens,
   });
-  return {
-    account,
-    deployed: false,
-    funded: balances.some((balance) => BigInt(balance.balance) > 0n),
-  };
+  if (activity.deployed) {
+    // Advisory signability verdict (issue 542): a deployed vendor account can
+    // carry a guardian or strong signer, a rotated owner, or an unauthorizable
+    // live class. A missing probe or a throw lists the row unlabelled — the
+    // transaction path re-checks authoritatively, so this can mislabel but
+    // never move funds.
+    const probe =
+      account.accountContractType === "argent"
+        ? deps.runtimeRpc.getArgentSigningRestriction
+        : account.accountContractType === "braavos"
+          ? deps.runtimeRpc.getBraavosSigningRestriction
+          : undefined;
+    const restriction = await probe?.({
+      accountAddress: account.address,
+      publicKeyX: account.publicKeyX,
+      rpcUrls,
+    }).catch(() => null);
+    return {
+      account,
+      deployed: true,
+      funded: false,
+      ...(restriction ? { restriction } : {}),
+      ...(await privacyPool()),
+    };
+  }
+  return { account, deployed: false, funded: activity.funded };
 };
 
 const discoveryFingerprint = (
@@ -69,64 +136,175 @@ const discoveryFingerprint = (
     networkId: input.networkId,
   });
 
+// One derivation per class an account could have been deployed with, not one
+// per family. A Ready account deployed at Argent 0.3.x keeps that address
+// forever, whatever it upgraded to, so scanning only the release this wallet
+// creates finds nobody who arrived from Ready. The wallet's own OpenZeppelin
+// class stays resolved per network by Krusty rather than listed here.
+//
+// Argent walks two ladders, and every Argent release is scanned on both. The
+// Ready extension derives its keys on an ETH-seeded tree ("argentx-bip44",
+// issue 505). Other Argent-account apps, Ready mobile among them, derive
+// straight from the phrase on this wallet's own ladder, and their accounts
+// date from Argent 0.3.x too: one deployed at 0.3.1 and since upgraded was
+// missed because only the release this wallet creates was scanned there.
+// Xverse derives on that own ladder at its own Argent build (issue 734), so
+// that class is scanned there and never on Ready's. Braavos keys live on the
+// plain BIP-44 address axis, which the vault derivation maps to by family.
+const recoveryScanShapes = (): readonly {
+  readonly accountContractType: AccountContractType;
+  readonly classHash?: string;
+  readonly derivation?: RecoveryDerivationKind;
+}[] => [
+  { accountContractType: "openzeppelin" },
+  ...deploymentClasses("argent").map((entry) => ({
+    accountContractType: "argent" as const,
+    classHash: entry.classHash,
+  })),
+  ...deploymentClasses("argent")
+    .filter((entry) => !sameFelt(entry.classHash, XVERSE_ARGENT_CLASS_HASH))
+    .map((entry) => ({
+      accountContractType: "argent" as const,
+      classHash: entry.classHash,
+      derivation: "argentx-bip44" as const,
+    })),
+  ...deploymentClasses("braavos").map((entry) => ({
+    accountContractType: "braavos" as const,
+    classHash: entry.classHash,
+  })),
+];
+
+// Whether this candidate is listed before it exists on chain: one row per
+// family at the class it creates today (its own OpenZeppelin account, Argent at
+// the release it deploys, Braavos at the current app's deployment class), so
+// every group shows its index-zero address. Only OpenZeppelin is selectable
+// unused; the picker shows the other two view-only, since an undeployed,
+// unfunded Ready or Braavos address belongs to nobody. Older releases and
+// classes are only ever found.
+const isCreatableCandidate = (account: RecoverableAccountRef): boolean =>
+  account.derivation.kind === "starknet-bip44" &&
+  (account.accountContractType === "openzeppelin" ||
+    (account.accountContractType === "argent" &&
+      sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)) ||
+    (account.accountContractType === "braavos" &&
+      sameFelt(account.classHash, BRAAVOS_DEPLOYMENT_CLASS_HASH)));
+
 const scanRecoveryIndex = async (
   deps: OnboardingOpsDeps,
   input: { readonly mnemonic: string; readonly networkId: StarknetNetworkId },
   accountIndex: number,
   tokens: readonly TokenConfig[],
   rpcUrls: readonly string[],
+  poolAddress: string | null,
 ): Promise<readonly RecoveryAccountCandidate[]> =>
   Promise.all(
-    (["openzeppelin", "argent"] as const).map(async (accountContractType) => {
-      const account = await deps.wallet.previewAccount?.({
-        accountContractType,
+    recoveryScanShapes().map(async (shape) => {
+      const derivation = {
+        accountContractType: shape.accountContractType,
         accountIndex,
+        ...(shape.classHash === undefined ? {} : { classHash: shape.classHash }),
+        ...(shape.derivation === undefined ? {} : { derivation: shape.derivation }),
         mnemonic: input.mnemonic,
         networkId: input.networkId,
-      });
-      if (!isDerivedAccountRef(account)) {
+      };
+      const account = await deps.wallet.previewAccount?.(derivation);
+      if (!isRecoverableAccountRef(account)) {
         throw new WalletError("Account discovery is unavailable");
       }
-      return describeRecoveryAccount(deps, account, tokens, rpcUrls);
+      return describeRecoveryAccount(deps, account, tokens, rpcUrls, () =>
+        privacyPoolNote(deps, derivation, account.address, poolAddress, rpcUrls),
+      );
     }),
   );
 
-const discoverRecoveryAccounts = async (
+type DiscoverySnapshot = NonNullable<Awaited<ReturnType<RecoveryDiscoveryCache["read"]>>>;
+
+// The progress a scan continues from. A stored scan for the same phrase and
+// network is resumed while it is still short of its horizon. Once it has
+// finished, the next page request starts a fresh walk from index 0 (Sherlock
+// 218): Retry, or reopening the picker, must read the chain again rather than
+// replay a stored "Search complete". The candidates found so far are kept, so
+// picks survive and fresh reads replace them by id. A manual-index search
+// never moves the walk's own progress.
+const discoverySnapshot = (
+  previous: DiscoverySnapshot | null,
+  fingerprint: string,
+  networkId: StarknetNetworkId,
+  manualIndex: number | undefined,
+): DiscoverySnapshot => {
+  if (previous?.fingerprint !== fingerprint || previous.networkId !== networkId) {
+    return { candidates: [], fingerprint, networkId, nextIndex: 0 };
+  }
+  const finished = previous.nextIndex >= recoveryScanTarget(previous.candidates);
+  return manualIndex === undefined && finished ? { ...previous, nextIndex: 0 } : previous;
+};
+
+// One bounded read-only discovery walk shared by first-run recovery, the
+// settings-surface import of a foreign phrase, and the rescan of the wallet's
+// own phrase. It runs OUTSIDE the vault mutation queue: each index derives a
+// preview and probes the chain, and holding the serialized write boundary across
+// those round-trips would block every other vault mutation.
+const runRecoveryDiscovery = async (
   deps: OnboardingOpsDeps,
-  message: unknown,
+  input: {
+    readonly manualIndex?: number;
+    readonly mnemonic: string;
+    readonly networkId: StarknetNetworkId;
+  },
+  // Re-checked between indices when the phrase came from the unlocked vault: a
+  // lock mid-scan stops the walk, so the phrase is not held across further
+  // chain round-trips and nothing is cached under a session that has ended.
+  stillAuthorized: () => boolean = () => true,
 ): Promise<RuntimeResponse> => {
-  const input = readDiscoverRecoveryAccountsInput(message);
-  if (!input) return { error: "invalid recovery discovery request" };
   const fingerprintAccount = await discoveryFingerprint(deps, input);
   if (!fingerprintAccount) return { error: "account discovery is unavailable" };
   const previous = await deps.recoveryDiscovery.read().catch(() => null);
-  const matching =
-    previous?.fingerprint === fingerprintAccount.address && previous.networkId === input.networkId;
-  const snapshot = matching
-    ? previous
-    : {
-        candidates: [],
-        fingerprint: fingerprintAccount.address,
-        networkId: input.networkId,
-        nextIndex: 0,
-      };
+  const snapshot = discoverySnapshot(
+    previous,
+    fingerprintAccount.address,
+    input.networkId,
+    input.manualIndex,
+  );
   const manual = input.manualIndex;
   const preferences = await deps.preferencesStore.read();
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[input.networkId], preferences);
-  const tokens = defaultWalletPreferences().tokens.filter(
-    (token) => token.networkId === input.networkId,
-  );
+  const poolAddress = strk20PoolAddress(preferences, input.networkId);
+  // Probe the recovery activity set, not just the display defaults: an
+  // undeployed account funded only in native USDC has no ETH or STRK, so the
+  // display-token probe would read it as empty and skip it (issue: USDC-only
+  // accounts invisible to discovery).
+  const tokens = recoveryProbeTokens().filter((token) => token.networkId === input.networkId);
   const start = manual ?? snapshot.nextIndex;
+  // The scan horizon is a gap limit, not a fixed window: it always reaches
+  // `defaultCount` indices past the last evidence of activity (issue 503), so
+  // each batch is bounded by the target the candidates found so far justify.
   const end =
     manual ??
-    Math.min(start + RECOVERY_SCAN_LIMITS.batchSize - 1, RECOVERY_SCAN_LIMITS.defaultCount - 1);
+    Math.min(
+      start + RECOVERY_SCAN_LIMITS.batchSize - 1,
+      recoveryScanTarget(snapshot.candidates) - 1,
+    );
   const discovered: RecoveryAccountCandidate[] = [];
   for (let accountIndex = start; accountIndex <= end; accountIndex += 1) {
-    const candidates = await scanRecoveryIndex(deps, input, accountIndex, tokens, rpcUrls);
+    if (!stillAuthorized()) return { error: "wallet locked" };
+    // strkd's agent branch (#336) is never derived. The walk is bounded by
+    // `maxScannedIndexes` far below it and a manual index is refused at input,
+    // so this only holds the line if either bound ever moves.
+    if (accountIndex === RESERVED_AGENT_ACCOUNT_INDEX) continue;
+    const candidates = await scanRecoveryIndex(
+      deps,
+      input,
+      accountIndex,
+      tokens,
+      rpcUrls,
+      poolAddress,
+    );
     discovered.push(
       ...candidates.filter(
         (candidate) =>
-          candidate.deployed || candidate.funded || accountIndex === 0 || manual !== undefined,
+          candidate.deployed ||
+          candidate.funded ||
+          (isCreatableCandidate(candidate.account) && (accountIndex === 0 || manual !== undefined)),
       ),
     );
   }
@@ -134,13 +312,90 @@ const discoverRecoveryAccounts = async (
   for (const candidate of discovered) byId.set(candidate.account.id, candidate);
   const nextIndex = manual === undefined ? end + 1 : snapshot.nextIndex;
   const next = { ...snapshot, candidates: [...byId.values()], nextIndex };
+  if (!stillAuthorized()) return { error: "wallet locked" };
   await deps.recoveryDiscovery.write(next).catch(() => undefined);
   return {
     candidates: next.candidates,
-    complete: nextIndex >= RECOVERY_SCAN_LIMITS.defaultCount,
+    // Judged against what this batch found, so activity near the horizon's
+    // edge reopens the scan — including activity a manual search turned up.
+    complete: nextIndex >= recoveryScanTarget(next.candidates),
     nextIndex,
     ok: true,
   };
+};
+
+const discoverRecoveryAccounts = async (
+  deps: OnboardingOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readDiscoverRecoveryAccountsInput(message);
+  if (!input) return { error: "invalid recovery discovery request" };
+  return runRecoveryDiscovery(deps, input);
+};
+
+// Rescans the wallet's OWN phrase from the settings surface. The phrase is read
+// inside the vault boundary through the live unlock session and never returned
+// to the panel; only public candidate metadata crosses back.
+const discoverOwnAccounts = async (
+  deps: OnboardingOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readDiscoverOwnAccountsInput(message);
+  if (!input) return { error: "invalid account discovery request" };
+  // getPassphrase renews the inactivity window: this scan is user-initiated.
+  const vaultPassphrase = deps.session.getPassphrase();
+  if (!vaultPassphrase) return { error: "wallet locked" };
+  const authorized = captureSessionAuthorization(deps.session);
+  // Keep only the phrase: the decrypted vault (signing keys included) is not
+  // held across the scan's chain round-trips.
+  const { mnemonic } = await deps.wallet.readVault(vaultPassphrase);
+  if (mnemonic === null) {
+    return { error: "This wallet has no recovery phrase to scan" };
+  }
+  return runRecoveryDiscovery(
+    deps,
+    {
+      ...(input.manualIndex === undefined ? {} : { manualIndex: input.manualIndex }),
+      mnemonic,
+      networkId: input.networkId,
+    },
+    authorized.isCurrent,
+  );
+};
+
+// Finds the account at a pasted address among the keys of the wallet's OWN
+// phrase (issue 398). As in the own-phrase rescan, the phrase is read inside
+// the vault boundary and only public candidate metadata crosses back.
+const findOwnAccountByAddress = async (
+  deps: OnboardingOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readFindOwnAccountByAddressInput(message);
+  if (!input) return { error: "invalid account lookup request" };
+  const vaultPassphrase = deps.session.getPassphrase();
+  if (!vaultPassphrase) return { error: "wallet locked" };
+  const authorized = captureSessionAuthorization(deps.session);
+  const { mnemonic } = await deps.wallet.readVault(vaultPassphrase);
+  if (mnemonic === null) {
+    return { error: "This wallet has no recovery phrase to scan" };
+  }
+  return findAccountByAddress(deps, { ...input, mnemonic }, authorized.isCurrent);
+};
+
+// The two import-by-address lookups (issue 398), or null for any other message.
+const handleAddressLookup = (
+  deps: OnboardingOpsDeps,
+  messageType: string,
+  message: unknown,
+): Promise<RuntimeResponse> | null => {
+  if (messageType === "wallet.findOwnAccountByAddress") {
+    return findOwnAccountByAddress(deps, message);
+  }
+  if (messageType !== "wallet.findRecoveryAccountByAddress") return null;
+  const input = readFindRecoveryAccountByAddressInput(message);
+  return input
+    ? findAccountByAddress(deps, input)
+    : Promise.resolve({ error: "invalid account lookup request" });
 };
 
 const recoverAccounts = async (
@@ -151,12 +406,25 @@ const recoverAccounts = async (
   const recover = deps.wallet.recoverAccounts;
   if (!input) return { error: "invalid recover accounts request" };
   if (!recover) return { error: "wallet unavailable" };
-  const accounts = await deps.activeStateCoordinator.run(() =>
-    runVaultCreationWithNetwork(deps.session, deps.preferencesStore, input.networkId, () =>
-      recover(input),
-    ),
-  );
-  deps.session.unlock(input.vaultPassphrase);
+  // An account picked by its address is re-proved before anything is written.
+  const refusal = await verifyAddressSelections(deps, input);
+  if (refusal) return refusal;
+  // The unlock lands inside the coordinator task, as every other vault-creation
+  // path does: a queued task (a Ready-key import holding the old session's
+  // authorization) must see the new generation the moment it runs, never a
+  // replaced vault under the old one.
+  const accounts = await deps.activeStateCoordinator.run(async () => {
+    await refuseExistingVault(deps.session, deps.wallet, input.vaultPassphrase);
+    const recovered = await runVaultCreationWithNetwork(
+      deps.session,
+      deps.preferencesStore,
+      deps.wallet,
+      input.networkId,
+      () => recover(input),
+    );
+    deps.session.unlock(input.vaultPassphrase);
+    return recovered;
+  });
   return { accounts, ok: true };
 };
 
@@ -177,6 +445,11 @@ export const handleOnboardingOps = async (
   if (messageType === "wallet.discoverRecoveryAccounts") {
     return discoverRecoveryAccounts(deps, message);
   }
+  if (messageType === "wallet.discoverOwnAccounts") {
+    return discoverOwnAccounts(deps, message);
+  }
+  const addressLookup = handleAddressLookup(deps, messageType, message);
+  if (addressLookup) return addressLookup;
   if (messageType === "wallet.previewAccount") {
     const input = readPreviewAccountInput(message);
     if (!input) {

@@ -4,9 +4,9 @@
  * until a single confirm action atomically claims them.
  */
 
-import { WalletError } from "@mc-wallet/core/errors";
-import { isSha256Digest } from "@mc-wallet/core/ids";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { WalletError } from "@bramble/core/errors";
+import { isSha256Digest } from "@bramble/core/ids";
+import type { FeeEstimate } from "@bramble/starknet/fee-bounds";
 import type { Call } from "starknet";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalRiskFlag } from "../approvals/approvals";
@@ -31,19 +31,30 @@ export type SwapPreparation = {
   readonly minBuyAmount: string;
   readonly reviewedFee: FeeEstimate;
   readonly sellSymbol: string;
+  // The sold token's contract, so the activity line names the token by
+  // address and not only by a symbol another contract may share (issue 643).
+  readonly sellTokenAddress: string;
   readonly summaries: readonly string[];
 };
 
 /**
  * Public review subset returned to the extension side panel.
  */
-export type SwapPreparationReview = {
+type SwapPreparationReview = {
   readonly flags: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly minBuyAmount: string;
   readonly payloadDigest: string;
   readonly reviewedFee: FeeEstimate;
   readonly summaries: readonly string[];
+};
+
+/**
+ * Frozen executable swap review returned before the final one-time confirm.
+ */
+export type SwapPreparationResponse = {
+  readonly ok: true;
+  readonly swapPreparation: SwapPreparationReview;
 };
 
 const clonePreparation = (preparation: SwapPreparation): SwapPreparation =>
@@ -63,6 +74,7 @@ export const swapPreparationPayload = (
   minBuyAmount: preparation.minBuyAmount,
   reviewedFee: preparation.reviewedFee,
   sellSymbol: preparation.sellSymbol,
+  sellTokenAddress: preparation.sellTokenAddress,
   summaries: preparation.summaries,
 });
 

@@ -1,7 +1,6 @@
-# MC Wallet Trade Terminal
+# Bramble Trade Terminal
 
-A standalone Starknet trade terminal (Vite + React SPA). It connects to the MC
-Wallet browser extension at runtime as a dApp and reads live market data from
+A standalone Starknet trade terminal (Vite + React SPA). It connects to the Bramble browser extension at runtime as a dApp and reads live market data from
 several public APIs.
 
 ## Scripts
@@ -29,24 +28,41 @@ privacy pool:
 
 It reads a minimal typed pool view (`version`, fee, fee collector, and proof
 validity), provides the explicit one-time **Activate private balances** flow,
-requests aggregate private balances from MC Wallet, and supports shield,
+requests aggregate private balances from Bramble, and supports shield,
 withdraw, private transfer, and AVNU private swap flows. Notes, viewing keys,
 signing material, and proof generation remain inside the wallet.
 
-Activation uses the MC-namespaced `mc_strk20Register` capability because the
-standard Wallet API defines `NOT_REGISTERED` but no registration RPC. MC Wallet
+Activation uses the Bramble-namespaced `mc_strk20Register` capability because the
+standard Wallet API defines `NOT_REGISTERED` but no registration RPC. Bramble
 holds that request for an explicit review and binds it to the origin, account,
 network, configured pool, tracked token, and payload digest before submitting
 the public one-time transaction.
 
-AVNU private swap is deliberately split:
+AVNU private swaps use a pinned executor (#269). `shared/privacy.ts` holds
+`PRIVATE_SWAP_EXECUTOR` (AVNU PrivacySwapHelper,
+`0x0426dcd1ab5fa2f852f138d07cb37708b00a4db999677fe2d0c9a440702dbe5e`) and the class
+hash it must run (`0x3ff37c9dc8c2ea3930fbf27f62d7b9bdd6f0a63c8e77b11c64be4a69230fcee`),
+with their provenance. The server route and the browser both read the executor's live
+class hash before planning a route, and again before relaying a proof (server) or
+asking the wallet to prove (browser); a different class or a failed read refuses. A
+build response that names any other executor is refused. A quote response is never a
+source for the pin.
+
+**Runbook:** if AVNU rotates the executor or upgrades its class, private swaps refuse
+until the pin is updated by PR, with the new address and class hash re-verified against
+the STRK20 contract-addresses page, AVNU's build response and a mainnet
+`starknet_getClassHashAt` read. Setting `PRIVATE_SWAP_EXECUTOR` to `null` turns private
+swaps off. Core private balances, shield, withdraw and private transfers are unaffected.
+
+The AVNU private-swap flow is split:
 
 1. A same-origin server function asks the pinned AVNU SDK for the exact private
    route and paymaster fee. The browser receives a bounded action plan and
-   independently validates it.
-2. The Terminal shows sell amount, expected buy amount, slippage, executor,
+   independently validates it, including exactly two embedded calls, their spender,
+   amounts, tokens, beneficiary and enforced minimum output.
+2. The Terminal shows sell amount, expected and minimum buy amounts, slippage, executor,
    pool fee, and action count.
-3. MC Wallet independently validates the actions, checks private balances and
+3. Bramble independently validates the actions, checks private balances and
    privacy-leak warnings, asks for approval, and generates the proof.
 4. The server submits only that pool-bound proof through AVNU's private
    paymaster. It returns a validated transaction hash.
@@ -64,18 +80,25 @@ STRK20_DISCOVERY_UPSTREAM=
 STRK20_PROVER_UPSTREAM=
 STRK20_PAYMASTER_UPSTREAM=https://starknet.paymaster.avnu.fi
 AVNU_PAYMASTER_API_KEY=
-MC_WALLET_EXTENSION_ORIGINS=chrome-extension://<released-extension-id>
-TERMINAL_ALLOWED_ORIGINS=https://mc-wallet-terminal.vercel.app,http://localhost:3000
+BRAMBLE_EXTENSION_ORIGINS=chrome-extension://<released-extension-id>
+TERMINAL_ALLOWED_ORIGINS=https://mc-wallet-terminal.vercel.app
 ```
+
+The loopback origins `http://localhost:3000`, `http://localhost:5273` and their
+`127.0.0.1` forms are accepted only when `VERCEL_ENV=development`, which
+`bun run dev:full` sets. Production and preview deployments never accept them,
+even if they are listed in `TERMINAL_ALLOWED_ORIGINS`.
 
 Never prefix upstream URLs or the paymaster key with `VITE_`; Vite variables
 are browser-readable. The public gateway URL is visible by design, while the
 upstream discovery/prover URLs stay server-side.
 
-`MC_WALLET_EXTENSION_ORIGINS` accepts only exact Chrome extension origins. This
-blocks other browser origins but is not cryptographic build attestation: a
-standalone HTTP client can spoof an Origin header, and no secret can safely be
-embedded in an extension. Production must additionally apply Vercel Firewall
+`BRAMBLE_EXTENSION_ORIGINS` accepts only exact Chrome extension origins for the
+CORS allowlist. Browser-stamped privileged extension fetches are also accepted,
+including originless GETs, independently of that allowlist. This excludes normal
+website fetches but does not identify a particular extension build: another
+extension can use the privileged shape, and a standalone HTTP client can spoof
+headers. No secret can safely be embedded in an extension. Production must additionally apply Vercel Firewall
 rate limits and abuse controls to `/api/strk20/*` and
 `/api/private-swap/*`. The code intentionally does not pretend an in-memory
 serverless counter is durable protection.
@@ -92,17 +115,17 @@ handles private notes according to that dapp's rules, so its contract appears
 as an explicit target in that dapp's reviewed action plan. AVNU private swap
 uses AVNU's private executor, while Vesu or another dapp uses its own audited
 adapter. Core pool operations do not configure one. The wallet's optional
-`subaccountAnonymizerAddress` setting is a separate SDK module used only for
-generic `subaccount_invoke` actions.
+`shadowAccountAnonymizerAddress` setting is a separate SDK module used only for
+generic `shadow_account_invoke` actions.
 
 ## NFT Studio
 
 The **NFT Studio** tab is a mint-only surface for the deployed, owner-controlled
 MC Punks ERC-721 collection on Starknet Mainnet:
 
-1. Connect MC Wallet and select Starknet Mainnet.
+1. Connect Bramble and select Starknet Mainnet.
 2. Choose an unclaimed catalog id from `0` through `9999`.
-3. Choose the recipient and review the mint through MC Wallet.
+3. Choose the recipient and review the mint through Bramble.
 
 The UI is pinned to
 `0xda8b762dcb301e6b144e521ede1e2870ce9c723e5b4e6856c870ad341098a9`.
@@ -117,9 +140,9 @@ per-token metadata. It is intentionally non-upgradeable.
 
 ```bash
 cd apps/terminal
-SCARB_CACHE=/tmp/mc-wallet-scarb-cache bun run build:contract
+SCARB_CACHE=/tmp/bramble-scarb-cache bun run build:contract
 cd contracts/punk_collection
-SCARB_CACHE=/tmp/mc-wallet-scarb-cache snforge test
+SCARB_CACHE=/tmp/bramble-scarb-cache snforge test
 ```
 
 `build:contract` uses Scarb 2.18.0, rebuilds both Sierra and CASM, verifies the
@@ -165,6 +188,12 @@ through the terminal review before the wallet opens. Multiply wind/unwind
 reviews show the target multiplier or full debt, route slippage, LTV, and
 delegation lifecycle.
 
+Vault deposits, redemption requests and claims may only target the curated vaults
+pinned in `VESU_CURATED_VAULTS` (`src/protocols/constants.ts`: address, class hash and
+asset; #270). The vault's class hash is read again right before the wallet sees the
+calls, and a different class or a failed read refuses. The Vesu API's vault list only
+decides what is shown. A new curated vault is added by PR after the same checks.
+
 The data boundary only accepts `protocolVersion=v2`, Vesu-verified,
 non-deprecated pools. API JSON is validated and normalized before rendering;
 deployed `modify_position`, `modify_delegation`, ERC-4626, and `modify_lever`
@@ -179,7 +208,7 @@ single, consistent lifecycle:
 - terminal-side review with account, network, call count, and action details;
 - spec-shaped `invoke_transaction` payloads with compiled calldata copied into
   plain JSON before it crosses the wallet provider trust boundary;
-- explicit hand-off while MC Wallet is waiting for approval;
+- explicit hand-off while Bramble is waiting for approval;
 - calm rejection copy with a safe retry;
 - validated transaction-hash feedback after submission.
 
@@ -201,7 +230,7 @@ The terminal reads from these hosts:
 | Perps (WebSocket)          | `wss://api.starknet.extended.exchange`         | `/proxy/extended-ws` in dev|
 | Vesu V2 pools/positions    | `https://api.vesu.xyz`                         | Direct (CORS-enabled)      |
 | Vesu Multiply routes       | `https://prod-api-quoter.ekubo.org`            | Direct (CORS-enabled)      |
-| Indexed holdings/activity  | `https://starkscan.co/v1/SN_MAIN`              | `/proxy/starkscan` in dev  |
+| Indexed activity           | `https://starkscan.co/v1/SN_MAIN`              | `/proxy/starkscan` in dev  |
 | Starknet RPC               | `https://mainnet.nodes.starknet.org/rpc/v0_10` | Direct (CORS-enabled)      |
 
 Ekubo and Cartridge allow browser origins. AVNU market data is routed through
@@ -245,7 +274,7 @@ The data layer stays within public API limits by:
 - Polls at calm intervals — prices every 60s, token universe every 120s, chart
   history per-timeframe (60s intraday → 30m for yearly), spot fills every 5s,
   perps stats every 20s,
-  Starkscan chain activity every 5s, indexed holdings every 30s, Vesu markets
+  Starkscan chain activity every 5s, RPC balances every 30s, Vesu markets
   every 60s, positions/redemptions every 30s, and vaults every 120s.
 - Backs off exponentially on `429`/`5xx`, honoring `Retry-After` while keeping
   the last-good data on screen. Chart history and pair fills do not blindly
@@ -275,7 +304,7 @@ the `data/extended/parse.ts` functions). It covers:
 - AVNU v3 swap quote/build and an Extended public WebSocket frame
 - verified Vesu V2 pool parsing, an Ekubo exact-output unwind route, and the
   deployed Pool/Multiply ABI entrypoints
-- exact Starkscan token holdings plus recent block and transfer parsing
+- Starkscan recent block and transfer parsing
 - Extended `/info/markets`, `/info/markets/{m}/stats`,
   `/info/candles/{m}/{type}`, `/info/{m}/funding`, `/info/markets/{m}/orderbook`
 - Starknet RPC `starknet_chainId` + a sample `balanceOf`

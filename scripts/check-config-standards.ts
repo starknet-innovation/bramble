@@ -64,6 +64,7 @@ if (
     "devDependencies",
     "license",
     "name",
+    "overrides",
     "packageManager",
     "private",
     "scripts",
@@ -73,6 +74,47 @@ if (
   ])
 ) {
   failures.push("package.json top-level keys must stay explicit");
+}
+
+// Reviewed security pins for transitive dependencies used by build/terminal tooling.
+// source-map-js (postcss via vite, jsdom, web-ext's addons-linter, and madge):
+// 1.2.2 is the first release without GHSA-68fv-2mgg-jv7q. sharp (wrangler/miniflare):
+// 0.35.5 is the first release without GHSA-wq5f-xc86-pv6w. shell-quote (web-ext via
+// fx-runner, which pins 1.10.0): 1.11.0 is the first release without GHSA-pqg4-j6r4-53mv.
+// moment (terminal private-swap route via @avnu/avnu-sdk ^2.30.1): 2.31.0 is the first
+// release without GHSA-4p3w-j4w9-5jqw (moderate, so the high-level audit gate would not
+// catch it). happy-dom (vitest optional peer and @happy-dom/global-registrator): 21.0.4
+// is the first release without GHSA-834v-8h66-3h79. vite (vitest, Storybook, Vite plugins;
+// ^8 ranges had kept 8.2.2): 8.3.3, the direct pin, is the first 8.3 release without
+// GHSA-587h-7wmj-h5pm. zod (starknet, @avnu/avnu-sdk, knip; ^4 ranges): 4.6.6 is the
+// first release without GHSA-mrhx-c7xc-m3w5. undici (miniflare exact 7.29.1; also jsdom's
+// already-patched ^8.10.2): 7.30.1 is the first 7.x without GHSA-xjj6-f33q-929c. An 8.x
+// pin would move miniflare off 7.x. Drop it once miniflare no longer pins 7.29.1.
+const overrides = packageJson["overrides"];
+if (
+  !isRecord(overrides) ||
+  !hasOnlyKeys(overrides, [
+    "happy-dom",
+    "moment",
+    "qs",
+    "sharp",
+    "shell-quote",
+    "source-map-js",
+    "undici",
+    "vite",
+    "zod",
+  ]) ||
+  overrides["happy-dom"] !== "21.0.4" ||
+  overrides["moment"] !== "2.31.0" ||
+  overrides["qs"] !== "6.16.0" ||
+  overrides["sharp"] !== "0.35.5" ||
+  overrides["shell-quote"] !== "1.11.0" ||
+  overrides["source-map-js"] !== "1.2.2" ||
+  overrides["undici"] !== "7.30.1" ||
+  overrides["vite"] !== "8.3.3" ||
+  overrides["zod"] !== "4.6.6"
+) {
+  failures.push("package.json must retain the reviewed security overrides");
 }
 
 if (!hasOnlyKeys(tsconfigJson, ["compilerOptions", "include"])) {
@@ -119,15 +161,15 @@ if (!hasStringList(packageJson["workspaces"], EXPECTED_WORKSPACES)) {
 }
 
 if (
-  packageJson["name"] !== "mc-wallet" ||
+  packageJson["name"] !== "bramble" ||
   packageJson["private"] !== true ||
   packageJson["type"] !== "module"
 ) {
-  failures.push("package.json must stay private ESM mc-wallet package metadata");
+  failures.push("package.json must stay private ESM bramble package metadata");
 }
 
-if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.8/schema.json") {
-  failures.push("biome.json schema must stay pinned to 2.5.8");
+if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.11/schema.json") {
+  failures.push("biome.json schema must stay pinned to 2.5.11");
 }
 
 const biomeVcs = isRecord(biomeJson["vcs"]) ? biomeJson["vcs"] : null;
@@ -147,8 +189,10 @@ if (
     "!.playwright-cli",
     "!apps/terminal",
     "!apps/ui-lab",
+    "!apps/website",
     "!bun.lock",
     "!dist",
+    "!dist-firefox",
     "!node_modules",
     "!output",
     "!playwright-report",
@@ -276,6 +320,7 @@ if (!compilerOptions) {
       "lib",
       "module",
       "moduleResolution",
+      "paths",
       "target",
       "types",
     ])
@@ -300,6 +345,26 @@ if (!compilerOptions) {
   if (!hasStringList(compilerOptions["types"], ["bun"])) {
     failures.push("tsconfig.json compilerOptions.types must stay Bun-only");
   }
+  const paths = compilerOptions["paths"];
+  const walletStandardFeatures =
+    "packages/platform/starknet/src/wallet/wallet-standard-features.d.ts";
+  if (
+    !isRecord(paths) ||
+    !hasOnlyKeys(paths, [
+      "@starknet-io/get-starknet-wallet-standard/features",
+      "@starknet-io/get-starknet-wallet-standard-v6/features",
+    ]) ||
+    !hasStringList(paths["@starknet-io/get-starknet-wallet-standard/features"], [
+      `./${walletStandardFeatures}`,
+    ]) ||
+    !hasStringList(paths["@starknet-io/get-starknet-wallet-standard-v6/features"], [
+      `./${walletStandardFeatures}`,
+    ])
+  ) {
+    failures.push(
+      "tsconfig.json paths must unify get-starknet v5 and v6 feature types for starknet@10.8.0",
+    );
+  }
 }
 if (
   !hasStringList(tsconfigJson["include"], [
@@ -307,9 +372,12 @@ if (
     "packages/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts",
+    "tools/**/*.ts",
   ])
 ) {
-  failures.push("tsconfig.json include must cover the extension, packages, scripts, and tests");
+  failures.push(
+    "tsconfig.json include must cover the extension, packages, scripts, tests, and tools",
+  );
 }
 
 const gitignoreLines = gitignore.split("\n").map((line) => line.trim());
@@ -402,6 +470,12 @@ const ciCommands = [
   "bun run build",
   "bun run test:e2e",
   "bun run package:extension",
+  // The Gecko artifact is built, packaged and validated in the same job. Its
+  // linter wraps the validator addons.mozilla.org runs at submission, so an
+  // add-on that would be rejected there fails here instead — which is how the
+  // wrong-browser artifact reached AMO once already.
+  "bun run package:extension:firefox",
+  "bun run check:firefox",
 ];
 const ciLines = ciWorkflow.split("\n").map((line) => line.trim());
 let previousCiCommand = -1;

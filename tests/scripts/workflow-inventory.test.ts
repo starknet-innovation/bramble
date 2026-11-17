@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { readWorkflowSources, WORKFLOW_DIR } from "../../scripts/workflow-inventory";
 
 const scratchDirectory = async (files: Readonly<Record<string, string>>): Promise<string> => {
-  const directory = await mkdtemp(join(tmpdir(), "mc-wallet-workflows-"));
+  const directory = await mkdtemp(join(tmpdir(), "bramble-workflows-"));
   for (const [name, contents] of Object.entries(files)) {
     await writeFile(join(directory, name), contents, "utf8");
   }

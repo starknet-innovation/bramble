@@ -15,6 +15,7 @@ import "./styles/lending-manage.css";
 import "./styles/wallet-ui.css";
 import "./styles/nft-studio.css";
 import "./styles/nft-studio-finishing.css";
+import "./styles/token-create.css";
 import "./styles/privacy.css";
 import "./styles/privacy-registration.css";
 

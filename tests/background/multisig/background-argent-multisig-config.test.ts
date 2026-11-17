@@ -5,8 +5,8 @@ import { describe, expect, test } from "bun:test";
 import {
   type ArgentMultisigSigningIntent,
   memoryMultisigStore,
-} from "@mc-wallet/multisig/repository";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+} from "@bramble/multisig/repository";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
 import {
   HARNESS_KEYS,
   HARNESS_MULTISIG_ID,

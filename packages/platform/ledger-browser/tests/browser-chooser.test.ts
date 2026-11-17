@@ -9,11 +9,8 @@ import {
   type LedgerRawTransport,
   newStarknetClient,
   requestTransportRaw,
-} from "@mc-wallet/ledger-browser/webhid";
-import {
-  ledgerAppStateResponse,
-  ledgerNanoXOsResponse,
-} from "@mc-wallet/testkit/ledger-management";
+} from "@bramble/ledger-browser/webhid";
+import { ledgerAppStateResponse, ledgerNanoXOsResponse } from "@bramble/testkit/ledger-management";
 
 type UsbPickerOptions = {
   readonly filters: readonly { readonly classCode?: number; readonly vendorId?: number }[];

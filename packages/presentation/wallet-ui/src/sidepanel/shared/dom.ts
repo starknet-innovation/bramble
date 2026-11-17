@@ -3,8 +3,8 @@
  * and the audited fragment sink. Focus preservation across repaints lives in
  * ./focus-memo.
  */
-import { friendlyNetworkError } from "@mc-wallet/core/network-error";
-import { resolveSpring } from "@mc-wallet/ui-kit/spring";
+import { friendlyNetworkError } from "@bramble/core/network-error";
+import { resolveSpring } from "@bramble/ui-kit/spring";
 import { friendlyError } from "../runtime/friendly-error";
 import { icon } from "./icons";
 import { animate } from "./motion";
@@ -23,6 +23,21 @@ export const errorDetails = (error: unknown, fallback: string): string =>
   error instanceof Error ? error.message : fallback;
 
 /**
+ * What a status line under a control shows.
+ *
+ * An error toast hands the raw string to `showToast`, which displays the
+ * friendly form and keeps the raw one behind its copy control. A status line
+ * has no copy control and no second chance, so it takes the reader-facing
+ * sentence directly — without this it printed "add token failed" in the page.
+ * It classifies the raw diagnostic, as the toast does, so both name the same
+ * cause. It passes no context sentence: a fallback such as "Private transaction
+ * failed" translates to "may not have gone through", which would be false for
+ * a refusal raised before anything was sent (issue 652 review, F2).
+ */
+export const errorLine = (error: unknown, fallback: string): string =>
+  friendlyError(errorDetails(error, fallback)).message;
+
+/**
  * Marks a button busy so repeated submits are impossible while work runs.
  */
 export const buttonBusy = (button: HTMLButtonElement | null | undefined, busy: boolean): void => {
@@ -37,10 +52,15 @@ export const buttonBusy = (button: HTMLButtonElement | null | undefined, busy: b
 /**
  * Writes a message to the nearest section status line. Returns whether a
  * status line existed, so callers can fall back to a toast when the control
- * lives outside any announced section.
+ * lives outside any announced section. Only a text line (`p`/`span` with
+ * `role="status"`) is a sink: outcome and working stages are live-region
+ * containers that also carry the role, and writing into one would replace its
+ * markup.
  */
 export const scopedStatus = (element: Element, message: string): boolean => {
-  const target = element.closest(".section")?.querySelector<HTMLElement>('[role="status"]');
+  const target = element
+    .closest(".section")
+    ?.querySelector<HTMLElement>('p[role="status"], span[role="status"]');
   if (target) {
     target.textContent = message;
     return true;
@@ -51,9 +71,11 @@ export const scopedStatus = (element: Element, message: string): boolean => {
 /**
  * The visual tone a toast is shown with. Exported as the one source of truth so
  * callers that decide a toast's tone type against it rather than re-declaring
- * the literal union.
+ * the literal union. `warning` is for an outcome the wallet cannot establish,
+ * such as a write whose reply was lost: it keeps the error toast's copy control
+ * and duration but never the danger styling, which reads as "failed".
  */
-export type ToastTone = "error" | "success";
+export type ToastTone = "error" | "success" | "warning";
 
 const SUCCESS_TOAST_MS = 3200;
 const ERROR_TOAST_MS = 8000;
@@ -187,7 +209,7 @@ const TOAST_SPRING = resolveSpring("momentum");
 /**
  * Shows a transient toast in the fixed stack at the bottom of the shell.
  * Anatomy is a fixed scannable heuristic: a leading tone chip (green check /
- * red alert) the eye reads before any text, then the message, then every
+ * red alert / amber alert) the eye reads before any text, then the message, then every
  * error's copy control. It springs in with a little momentum, can be swiped
  * away, and error toasts stay longer. `details` lets a compact display line
  * retain the complete diagnostic behind its copy control.
@@ -197,6 +219,44 @@ export const showToast = (
   tone: ToastTone,
   context: Document | Element | null | undefined,
   details: string = message,
+): void =>
+  renderToast(
+    tone === "success" ? message : friendlyError(message).message,
+    tone,
+    context,
+    details,
+  );
+
+/**
+ * Shows a sentence the wallet wrote itself as an error toast, exactly as
+ * written. `showToast` maps an error through `friendlyError`, which rewrites a
+ * message by the words it contains; a wallet-authored notice quoting a
+ * dapp-chosen summary must not be rewritten into unrelated copy, such as a
+ * revert warning shown as a rate-limit message because the summary says 429
+ * (Sherlock 219).
+ */
+export const showNoticeToast = (
+  message: string,
+  context: Document | Element | null | undefined,
+): void => renderToast(message, "error", context, message);
+
+/**
+ * Shows a refusal of something the user typed (a wrong passphrase) as an error
+ * toast with no copy control. Its reviewed sentence says all there is: there
+ * is no diagnostic for support, and a copy button beside it only reads as one
+ * (QA C2). Real failures keep `showToast`, whose copy control holds the raw
+ * diagnostic.
+ */
+export const showRefusalToast = (
+  message: string,
+  context: Document | Element | null | undefined,
+): void => renderToast(friendlyError(message).message, "error", context, null);
+
+const renderToast = (
+  display: string,
+  tone: ToastTone,
+  context: Document | Element | null | undefined,
+  details: string | null,
 ): void => {
   const doc = documentFor(context);
   const stackId = "toast-stack";
@@ -208,18 +268,18 @@ export const showToast = (
     doc.body.append(stack);
   }
 
-  const friendly = tone === "error" ? friendlyError(message) : null;
+  const problem = tone !== "success";
   const toast = doc.createElement("div");
   toast.className = `toast ${tone}`;
   const mark = doc.createElement("span");
   mark.className = "toast-icon";
-  mark.innerHTML = icon(tone === "error" ? "alert" : "check");
+  mark.innerHTML = icon(problem ? "alert" : "check");
   toast.append(mark);
   const text = doc.createElement("span");
   text.className = "toast-text";
-  text.textContent = friendly ? friendly.message : message;
+  text.textContent = display;
   toast.append(text);
-  if (tone === "error") {
+  if (problem && details !== null) {
     toast.append(toastCopyButton(doc, details));
   }
   stack.append(toast);
@@ -232,7 +292,7 @@ export const showToast = (
     { duration: TOAST_SPRING.durationMs, easing: TOAST_SPRING.easing },
   );
   bindToastSwipe(toast);
-  setTimeout(() => dismissToast(toast, 0), tone === "error" ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);
+  setTimeout(() => dismissToast(toast, 0), problem ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);
 };
 
 // Swaps the button's copy glyph for a check while the confirmation lands,
@@ -256,12 +316,23 @@ const confirmCopyGlyph = (button: HTMLButtonElement): void => {
   }, 1400);
 };
 
+// Controls already wired to the clipboard. Sub-regions re-bind their own root
+// (a deployment funding review binds its whole form on every check), so
+// without this a control gains one more listener per pass and copies, toasts,
+// and flips its glyph that many times per click.
+const boundCopyButtons = new WeakSet<HTMLButtonElement>();
+
 /**
  * Binds every `[data-copy]` control under the app root to the clipboard with
- * scoped-status or toast feedback and a transient check glyph.
+ * scoped-status or toast feedback and a transient check glyph. Idempotent: a
+ * control that is already bound is skipped, so any caller may re-bind a root.
  */
 export const bindCopyButtons = (app: Element | null): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => {
+    if (boundCopyButtons.has(button)) {
+      return;
+    }
+    boundCopyButtons.add(button);
     button.addEventListener("click", () => {
       const value = button.dataset["copy"];
       if (!value) {
@@ -297,3 +368,30 @@ export const bindCopyButtons = (app: Element | null): void => {
 export const renderFragment = (target: Element, markup: string): void => {
   target.replaceChildren(target.ownerDocument.createRange().createContextualFragment(markup));
 };
+
+/**
+ * Appends a hidden overlay host to the document body for a runtime that
+ * reveals itself later (Ledger prompts). The caller owns the returned element;
+ * nothing is rendered into it here.
+ */
+export const hiddenOverlayMount = (className: string): HTMLDivElement => {
+  const mount = document.createElement("div");
+  mount.className = className;
+  mount.hidden = true;
+  document.body.append(mount);
+  return mount;
+};
+
+/**
+ * Whether this UI is running in the toolbar popup rather than the side panel or
+ * the full-page onboarding surface. `popup.html` is the only entry that sets
+ * `body.popup-surface`, so the surface is readable without a message, a stored
+ * preference, or any new plumbing.
+ *
+ * Load-bearing for hardware flows rather than cosmetic: a Chrome action popup
+ * closes the moment it loses focus, and every Ledger operation opens a focused
+ * browser tab to reach Chrome's device chooser — which Chrome exposes only from
+ * an ordinary tab. A Ledger flow begun in the popup therefore cannot finish.
+ */
+export const isPopupSurface = (reference: Element | null | undefined): boolean =>
+  reference?.ownerDocument.body.classList.contains("popup-surface") ?? false;

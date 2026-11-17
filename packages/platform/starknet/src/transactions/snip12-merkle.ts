@@ -21,7 +21,7 @@
  * than no root at all.
  */
 
-import { canonicalFelt, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import { typedData as snip12 } from "starknet";
 import type { Snip12Revision } from "./snip12-vocabulary";
 

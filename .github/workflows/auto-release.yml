@@ -9,13 +9,13 @@ name: Auto release on merge
 #
 # TRIGGER + GUARD. It runs on every push to `main`, but only cuts a release when
 # BOTH conditions hold, so ordinary chore/docs merges never trigger one:
-#   1. the merged head branch is `release/vX.Y` or `hotfix/*` (resolved from the
+#   1. the merged head branch is `release/vX.Y[.Z]` or `hotfix/*` (resolved from the
 #      PR associated with the merge commit, with a merge-message fallback); and
 #   2. the single-source gate (scripts/release-version.ts) resolves a version and
 #      the GitHub Release does not already exist (idempotent — a re-run never
 #      double-cuts, but DOES finish a prior run that tagged then failed to build).
-# For a `release/vX.Y` promotion the gate ALSO asserts the branch-implied version
-# (X.Y.0) equals package.json/manifest, so a promotion that forgot the version
+# For a release-branch promotion the gate ALSO asserts the branch-implied version
+# (X.Y.0, or X.Y.Z for a patch branch) equals package.json/manifest, so a promotion that forgot the version
 # bump FAILS here instead of shipping a mislabeled artifact (the v0.4.0-as-0.3.0
 # defect). Nothing pushes to `main`; the changelog is maintained on the release
 # branch during prep and consumed as notes here.

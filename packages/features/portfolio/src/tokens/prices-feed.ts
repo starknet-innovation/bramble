@@ -14,14 +14,10 @@
  * reported as such so the caller can fall back to its cache rather than
  * publishing zeros.
  */
-import {
-  type BoundedHttpFetch,
-  fetchBoundedJson,
-  HTTP_BODY_LIMITS,
-} from "@mc-wallet/core/http-json";
-import { isRecord } from "@mc-wallet/core/json";
-import { canonicalAddress, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { DisplayCurrency } from "@mc-wallet/wallet-model/preferences";
+import { type BoundedHttpFetch, fetchBoundedJson, HTTP_BODY_LIMITS } from "@bramble/core/http-json";
+import { isRecord } from "@bramble/core/json";
+import { canonicalAddress, type StarknetNetworkId } from "@bramble/wallet-model/networks";
+import type { DisplayCurrency } from "@bramble/wallet-model/preferences";
 
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CHART_DAYS = 7;

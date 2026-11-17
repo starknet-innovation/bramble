@@ -26,6 +26,10 @@ export const makeRuntimeRpc = (overrides: Partial<RuntimeRpc> = {}): RuntimeRpc 
   async getNftOwner() {
     return "0x0";
   },
+  async getStrk20PublicKey() {
+    // Unregistered. A privacy check treats zero as clear and does not cache it.
+    return "0x0";
+  },
   async getTokenBalances() {
     return [];
   },
@@ -34,6 +38,11 @@ export const makeRuntimeRpc = (overrides: Partial<RuntimeRpc> = {}): RuntimeRpc 
   },
   async getTransactionStatuses() {
     return {};
+  },
+  async resolveStarkName() {
+    // Benign default: no name resolves, so no suite implies a resolution it did
+    // not set up. Suites that assert resolution override this per test.
+    return { status: "not-found" };
   },
   async submitAccountDeployment() {
     return { transactionHash: "0x7de" };

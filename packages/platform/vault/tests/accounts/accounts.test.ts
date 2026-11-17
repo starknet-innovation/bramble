@@ -5,10 +5,12 @@ import { describe, expect, test } from "bun:test";
 import {
   ARGENT_ACCOUNT_CONTRACT,
   argentAccountAddress,
-} from "@mc-wallet/starknet/account-contracts";
-import { fakeKms } from "@mc-wallet/testkit/fake-kms";
-import { deriveAccountRef } from "@mc-wallet/vault/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+  familyAccountAddress,
+} from "@bramble/starknet/account-contracts";
+import { fakeKms } from "@bramble/testkit/fake-kms";
+import { deriveAccountRef } from "@bramble/vault/accounts";
+import { deploymentClasses } from "@bramble/wallet-model/account-families";
+import { sameFelt } from "@bramble/wallet-model/networks";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 
@@ -323,5 +325,104 @@ describe("deriveAccountRef", () => {
       ),
     ).rejects.toThrow("Krusty KMS returned invalid account key material");
     expect(addressDerived).toBe(false);
+  });
+
+  test("derives an Argent account at any release it could have been deployed with", async () => {
+    // A Ready account deployed at 0.3.x keeps that address forever, whatever it
+    // upgrades to afterwards. Deriving only at the class this wallet creates is
+    // why such an account could never be found.
+    const entry = deploymentClasses("argent").find(
+      (candidate) => candidate.label === "argent 0.3.0",
+    );
+    if (!entry) {
+      throw new Error("argent 0.3.0 missing from the class table");
+    }
+    const account = await deriveAccountRef(fakeKms(), {
+      accountContractType: "argent",
+      classHash: entry.classHash,
+      mnemonic,
+      networkId: "SN_MAIN",
+    });
+
+    expect(sameFelt(account.classHash, entry.classHash)).toBe(true);
+    expect(sameFelt(account.address, familyAccountAddress(entry, account.publicKeyX))).toBe(true);
+    // The class alone does not determine the address: 0.3.x and 0.4.0 use
+    // different constructor calldata, so the same key lands elsewhere. Deriving
+    // with the wrong shape is the mistake this asserts against.
+    expect(sameFelt(account.address, argentAccountAddress(account.publicKeyX))).toBe(false);
+  });
+});
+
+describe("vendor-ladder derivation (issue 505)", () => {
+  test("derives a Ready-scheme Argent account through Krusty's legacy export", async () => {
+    const account = await deriveAccountRef(fakeKms(), {
+      accountContractType: "argent",
+      accountIndex: 3,
+      derivation: "argentx-bip44",
+      mnemonic,
+    });
+    expect(account.derivation).toEqual({ addressIndex: 3, kind: "argentx-bip44" });
+    // fakeKms' legacy keys are distinct from its plain ladder on purpose.
+    expect(account.publicKeyX).toBe("0xa93bc");
+    expect("publicKeyY" in account).toBe(false);
+    expect(account.accountContractType).toBe("argent");
+  });
+
+  test("hands a BIP-39 passphrase to the KMS derivation, and none when absent", async () => {
+    // Import-paths scope doc TA-46 / B7: no screen sends one, so this pins the
+    // plumbing — the passphrase reaches the KMS untouched and only when given.
+    const seen: Array<string | undefined> = [];
+    const kms = {
+      ...fakeKms(),
+      async deriveStarknetKeypair(
+        ...args: Parameters<ReturnType<typeof fakeKms>["deriveStarknetKeypair"]>
+      ) {
+        seen.push(args[3]);
+        return fakeKms().deriveStarknetKeypair(...args);
+      },
+    };
+    await deriveAccountRef(kms, {
+      accountContractType: "openzeppelin",
+      mnemonic,
+      mnemonicPassphrase: "x",
+    });
+    await deriveAccountRef(kms, { accountContractType: "openzeppelin", mnemonic });
+    expect(seen).toEqual(["x", undefined]);
+  });
+
+  test("refuses the Ready scheme off Argent and under a passphrase", async () => {
+    await expect(
+      deriveAccountRef(fakeKms(), {
+        accountContractType: "openzeppelin",
+        accountIndex: 0,
+        derivation: "argentx-bip44",
+        mnemonic,
+      }),
+    ).rejects.toThrow("Ready derivation is only valid for Argent accounts");
+    await expect(
+      deriveAccountRef(fakeKms(), {
+        accountContractType: "argent",
+        accountIndex: 0,
+        derivation: "argentx-bip44",
+        mnemonic,
+        mnemonicPassphrase: "extra word",
+      }),
+    ).rejects.toThrow("Ready derivation does not take a passphrase");
+  });
+
+  test("walks the address axis for Braavos and records the real coordinate", async () => {
+    const braavosClass = deploymentClasses("braavos")[0];
+    if (!braavosClass) throw new Error("no braavos deployment class");
+    const account = await deriveAccountRef(fakeKms(), {
+      accountContractType: "braavos",
+      accountIndex: 2,
+      classHash: braavosClass.classHash,
+      mnemonic,
+    });
+    expect(account.derivation).toEqual({
+      accountIndex: 0,
+      addressIndex: 2,
+      kind: "starknet-bip44",
+    });
   });
 });

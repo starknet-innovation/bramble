@@ -13,34 +13,30 @@
  * headers, no cookies, no referrer, redirects refused. The rollout bucket,
  * version, and chain stay on the device.
  */
-import {
-  type BoundedHttpFetch,
-  fetchBoundedText,
-  HTTP_BODY_LIMITS,
-} from "@mc-wallet/core/http-json";
+import { type BoundedHttpFetch, fetchBoundedText, HTTP_BODY_LIMITS } from "@bramble/core/http-json";
 import {
   BUNDLED_FLAGS,
   FEATURE_FLAG_CHANNEL,
   FEATURE_FLAG_URL,
   type FlagCatalog,
   TRUSTED_FLAG_KEYS,
-} from "@mc-wallet/flags/catalog";
-import type { FlagChannel, FlagPayload } from "@mc-wallet/flags/contract";
-import { evaluateFlags, type FlagValues } from "@mc-wallet/flags/evaluate";
+} from "@bramble/flags/catalog";
+import type { FlagChannel, FlagPayload } from "@bramble/flags/contract";
+import { evaluateFlags, type FlagValues } from "@bramble/flags/evaluate";
 import {
   EMPTY_FLAG_STATE,
   type FlagState,
   readFlagState,
   readOrCreateFlagBucket,
   writeFlagState,
-} from "@mc-wallet/flags/state";
+} from "@bramble/flags/state";
 import {
   type FlagRejection,
   importTrustedFlagKeys,
   type TrustedFlagKeys,
   verifyFlagDocument,
-} from "@mc-wallet/flags/verify";
-import type { KeyValueStore } from "@mc-wallet/store/kv";
+} from "@bramble/flags/verify";
+import type { KeyValueStore } from "@bramble/store/kv";
 
 /** Minimum spacing between non-forced refreshes (worker wakes). */
 export const FEATURE_FLAG_REFRESH_MS = 30 * 60_000;

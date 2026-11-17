@@ -4,9 +4,10 @@
  * missing-params branch.
  */
 import { describe, expect, test } from "bun:test";
-import type { Json } from "@mc-wallet/core/json";
-import { providerInvokeCalls } from "@mc-wallet/wallet-protocol/invoke";
-import { readApiVersionParam, readTypedDataParam } from "@mc-wallet/wallet-protocol/results";
+import type { Json } from "@bramble/core/json";
+import { providerInvokeCalls } from "@bramble/wallet-protocol/invoke";
+import { readApiVersionParam } from "@bramble/wallet-protocol/results";
+import { readTypedDataParam } from "@bramble/wallet-protocol/typed-data-params";
 
 const asJson = (value: unknown): Json => value as Json;
 

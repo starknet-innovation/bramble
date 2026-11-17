@@ -16,7 +16,8 @@
  */
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { bindCopyButtons, renderFragment } from "../../shared/dom";
+import { bindCopyButtons, isPopupSurface, renderFragment } from "../../shared/dom";
+import { createStagePacer, type StageTimers } from "../../shared/stage-pacer";
 import {
   createLedgerSignController,
   type LedgerConnector,
@@ -35,14 +36,32 @@ export type LedgerSignRuntimeDeps = {
   readonly mount: HTMLElement;
   readonly onSignatureReported?: () => void;
   readonly status: () => WalletStatus;
+  /** Timer seam for the takeover's stage pacing; platform timers when absent. */
+  readonly timers?: StageTimers;
   readonly wallet: Pick<SidepanelWallet, "completeLedgerSign" | "loadLedgerSignPending">;
 };
 
+// Phases that wait on the reader rather than the device: painted as soon as the
+// steps queued ahead of them have been read, and not held themselves.
+const READER_PHASES: ReadonlySet<LedgerSignView["phase"]["kind"]> = new Set([
+  "connect",
+  "devices",
+  "error",
+]);
+
+const sameLedgerStage = (a: LedgerSignView | null, b: LedgerSignView | null): boolean =>
+  a === null || b === null
+    ? a === b
+    : a.request.id === b.request.id && a.phase.kind === b.phase.kind;
+
 /**
  * The side-panel Ledger signing runtime. `poll` fetches parked device signs and
- * presents the first one; it is idempotent while a request is being fulfilled.
+ * presents the first one; it is idempotent while a request is being fulfilled,
+ * and it takes the overlay down when the presented request is no longer parked.
+ * `dismiss` takes it down without a round-trip, for a panel that is locking.
  */
 export type LedgerSignRuntime = {
+  readonly dismiss: () => void;
   readonly poll: () => Promise<void>;
 };
 
@@ -68,6 +87,9 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-cancel]")
       ?.addEventListener("click", () => void controller.cancel());
+    mount
+      .querySelector<HTMLButtonElement>("[data-ledger-close]")
+      ?.addEventListener("click", () => controller.close());
     for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-ledger-device]")) {
       button.addEventListener("click", () => {
         const deviceId = button.dataset["ledgerDevice"];
@@ -89,9 +111,32 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
     bindControls();
   };
 
+  // The controller reports each device phase the moment it starts; on a granted,
+  // unlocked device the first three are over in milliseconds. The pacer holds
+  // each painted step long enough to read without holding the device work, and
+  // takes the overlay down at once on a cancel or dismissal. Only the close
+  // after a reported signature waits, behind the "Finish" step it follows.
+  const pacer = createStagePacer<LedgerSignView | null>({
+    render: renderOverlay,
+    sameStage: sameLedgerStage,
+    ...(deps.timers ? { timers: deps.timers } : {}),
+  });
+  let offered: LedgerSignView | null = null;
+  const pacedRender = (view: LedgerSignView | null): void => {
+    const previous = offered;
+    offered = view;
+    if (view === null) {
+      if (previous?.phase.kind === "submitting") pacer.settle(null);
+      else pacer.cut(null);
+      return;
+    }
+    if (READER_PHASES.has(view.phase.kind)) pacer.settle(view);
+    else pacer.stage(view);
+  };
+
   controller = createLedgerSignController({
     connector,
-    render: renderOverlay,
+    render: pacedRender,
     report: async (outcome) => {
       await wallet.completeLedgerSign(outcome);
       if ("r" in outcome) {
@@ -100,13 +145,47 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
     },
   });
 
-  return {
-    async poll() {
-      const pending = await wallet.loadLedgerSignPending();
-      const first = pending[0];
-      if (first) {
-        controller.present(first);
+  let repollArmed = false;
+
+  const poll = async (): Promise<void> => {
+    // A toolbar popup closes as soon as the device chooser's tab takes
+    // focus, orphaning the grant tab with the device still claimed (Sherlock
+    // 227). The parked request stays queued for the side panel instead.
+    if (isPopupSurface(mount)) {
+      return;
+    }
+    const pending = await wallet.loadLedgerSignPending();
+    // The overlay survives repaints, so its lifetime must follow the queue's:
+    // a lock or the queue's timeout settles a parked request in the
+    // background, and the prompt must not keep showing its hash (Sherlock 228).
+    const active = controller.activeId();
+    if (active !== null && !pending.some((request) => request.id === active)) {
+      controller.dismiss();
+    }
+    // A request closed after an unfinished signature is not offered again.
+    const first = pending.find((request) => !controller.closed(request.id));
+    if (first) {
+      controller.present(first);
+      // A dismissed request's device operation may still be closing its
+      // transport, so the controller skipped this one. Nothing else re-polls
+      // when it finishes, so offer the queue again once it has.
+      if (controller.activeId() === null && !repollArmed) {
+        repollArmed = true;
+        void controller
+          .whenIdle()
+          .then(() => {
+            repollArmed = false;
+            return poll();
+          })
+          // Best effort, like the render cycle's own poll: the next wallet
+          // event polls again.
+          .catch(() => undefined);
       }
-    },
+    }
+  };
+
+  return {
+    dismiss: () => controller.dismiss(),
+    poll,
   };
 };

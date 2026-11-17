@@ -2,7 +2,8 @@ name: Nightly
 
 # Full-suite nightly run against the ACTIVE release branch (DEVELOPMENT.md).
 # This is the heaviest tier of the layered CI model: full E2E (Playwright),
-# dependency audit, the extension build, and a placeholder for perf/regression
+# the live Sepolia import-path run (issue 821), dependency audit, the
+# extension build, and a placeholder for perf/regression
 # checks (none exist in-repo yet — the step is an explicit NO-OP, never a fake
 # pass). It writes a categorized summary and, on failure, upserts ONE tracking
 # issue for the release.
@@ -106,20 +107,33 @@ jobs:
       properties: ${{ steps.properties.outcome }}
       e2e_install: ${{ steps.e2e_install.outcome }}
       e2e: ${{ steps.e2e.outcome }}
+      sepolia: ${{ steps.sepolia.outcome }}
+      sepolia_configured: ${{ steps.sepolia_seeds.outputs.configured }}
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      # The token is not left in .git/config while dependency and vendoring code
+      # runs (supply audit F3). The one fetch below that needs it gets it through
+      # its own environment for that command only.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Check out resolved release commit
         env:
           REVISION: ${{ needs.resolve.outputs.revision }}
+          FETCH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::Nightly revision must be a full lowercase SHA-1."
             exit 1
           fi
-          git fetch --no-tags --depth=1 origin "$REVISION"
+          basic="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$basic"
+          GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0="http.https://github.com/.extraheader" \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic" \
+            git fetch --no-tags --depth=1 origin "$REVISION"
           if [ "$(git rev-parse FETCH_HEAD)" != "$REVISION" ]; then
             echo "::error::Fetched nightly revision does not match the resolved commit."
             exit 1
@@ -128,7 +142,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.3
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
       - run: bun install --frozen-lockfile
@@ -159,6 +173,65 @@ jobs:
         id: properties
         continue-on-error: true
         run: bun test tests/property
+      # Live Sepolia run of every in-wallet import path against the issue-821
+      # test accounts (tools/vendor-dataset/verify-sepolia.ts). Read-only: it
+      # never signs or sends. Its testnet-only seed file is the one secret this
+      # workflow holds, and only this step sees it: written owner-only to the
+      # runner's temp directory and removed when the step ends. The run's own
+      # redactor keeps seeds and derived keys out of every line it prints. It
+      # records no tape and uploads nothing: this is a public repository, and
+      # a run's network traffic is not for publishing (replay is local-only).
+      # Until the secret is configured the gate is skipped: the summary lists it
+      # under "Not run" and says not to promote, and it is never shown as passed.
+      # Any other skip (an earlier hard failure) counts as failing. Only a
+      # boolean leaves this step; the secret itself reaches the live step alone.
+      - name: Sepolia seeds configured
+        id: sepolia_seeds
+        env:
+          CONFIGURED: ${{ secrets.BRAMBLE_SEPOLIA_SEEDS != '' }}
+        run: echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
+      - name: Sepolia import paths (live)
+        id: sepolia
+        if: steps.sepolia_seeds.outputs.configured == 'true'
+        continue-on-error: true
+        env:
+          BRAMBLE_SEPOLIA_SEEDS: ${{ secrets.BRAMBLE_SEPOLIA_SEEDS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BRAMBLE_SEPOLIA_SEEDS:-}" ]; then
+            echo "::error::The BRAMBLE_SEPOLIA_SEEDS secret is not set (tools/vendor-dataset/README.md)."
+            exit 1
+          fi
+          if [ ! -f tools/vendor-dataset/verify-sepolia.ts ]; then
+            echo "::error::This release branch predates the Sepolia runner (issue 821)."
+            exit 1
+          fi
+          umask 077
+          seeds="$RUNNER_TEMP/sepolia-seeds.env"
+          trap 'rm -f "$seeds"' EXIT
+          printf '%s\n' "$BRAMBLE_SEPOLIA_SEEDS" > "$seeds"
+          unset BRAMBLE_SEPOLIA_SEEDS
+          # GitHub masks a multi-line secret line by line, and a line here is
+          # NAME="value", so each value is masked on its own as well.
+          while IFS= read -r line; do
+            value="${line#*=}"
+            value="${value%$'\r'}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            value="${value#\"}"
+            value="${value%\"}"
+            value="${value#"${value%%[![:space:]]*}"}"
+            value="${value%"${value##*[![:space:]]}"}"
+            if [ -n "$value" ]; then echo "::add-mask::$value"; fi
+          done < "$seeds"
+          # The newest committed scorecard, if this branch has one (dated names sort in order).
+          set -- "$RUNNER_TEMP/sepolia/scorecard.json"
+          for previous in tools/vendor-dataset/verification-sepolia-*.json; do
+            if [ -f "$previous" ]; then set -- "$RUNNER_TEMP/sepolia/scorecard.json" "$previous"; fi
+          done
+          mkdir -p "$RUNNER_TEMP/sepolia"
+          BRAMBLE_DATASET_ENV_FILE="$seeds" BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia \
+            bun tools/vendor-dataset/verify-sepolia.ts "$@"
 
       - name: Categorized summary
         if: always()
@@ -170,6 +243,8 @@ jobs:
           PROPERTIES: ${{ steps.properties.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
+          SEPOLIA: ${{ steps.sepolia.outcome }}
+          SEPOLIA_CONFIGURED: ${{ steps.sepolia_seeds.outputs.configured }}
         run: |
           set -euo pipefail
           declare -A GATES=(
@@ -179,9 +254,16 @@ jobs:
             ["Security property suite"]="$PROPERTIES"
             ["E2E browser install"]="$E2E_INSTALL"
             ["Full E2E (Playwright)"]="$E2E"
+            ["Sepolia import paths (live)"]="$SEPOLIA"
           )
           failing=()
           passing=()
+          not_run=()
+          # Not run only when the check step saw no secret; any other skip fails.
+          if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then
+            unset 'GATES[Sepolia import paths (live)]'
+            not_run+=("Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured")
+          fi
           for name in "${!GATES[@]}"; do
             if [ "${GATES[$name]}" = "success" ]; then passing+=("$name"); else failing+=("$name (${GATES[$name]})"); fi
           done
@@ -198,6 +280,11 @@ jobs:
             echo "### Passing"
             if [ "${#passing[@]}" -eq 0 ]; then echo "_None._"; else for p in "${passing[@]}"; do echo "- ${p}"; done; fi
             echo ""
+            if [ "${#not_run[@]}" -gt 0 ]; then
+              echo "### Not run"
+              for n in "${not_run[@]}"; do echo "- ${n}"; done
+              echo ""
+            fi
             echo "### Known failures"
             echo "_Not auto-classified. A failure is only 'known' once triaged against"
             echo "the nightly tracking issue below; treat everything under 'Newly"
@@ -213,11 +300,14 @@ jobs:
             echo ""
             echo "### Release-blocking"
             echo "Any failing gate above blocks promoting \`$BRANCH\` to \`main\`. Vendor,"
-            echo "build, and E2E failures are release-blocking; a dependency-audit"
+            echo "build, E2E and Sepolia import-path failures are release-blocking; a dependency-audit"
             echo "failure is release-blocking per CONTRIBUTING.md (high/critical advisory)."
             echo ""
             echo "### Recommended next work"
-            if [ "${#failing[@]}" -eq 0 ]; then
+            if [ "${#failing[@]}" -eq 0 ] && [ "${#not_run[@]}" -gt 0 ]; then
+              echo "- Do not promote this release branch to main until every gate has run:"
+              echo "  configure the BRAMBLE_SEPOLIA_SEEDS secret (tools/vendor-dataset/README.md)."
+            elif [ "${#failing[@]}" -eq 0 ]; then
               echo "- Proceed with the release-completion checklist in RELEASING.md."
             else
               echo "- Triage the failing gates above against the nightly tracking issue."
@@ -234,15 +324,19 @@ jobs:
           PROPERTIES: ${{ steps.properties.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
+          SEPOLIA: ${{ steps.sepolia.outcome }}
+          SEPOLIA_CONFIGURED: ${{ steps.sepolia_seeds.outputs.configured }}
         run: |
           set -euo pipefail
-          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E"; do
+          # Skipped because the secret is unset: not run, not failed. Any other skip fails.
+          if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then SEPOLIA=success; fi
+          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E" "$SEPOLIA"; do
             if [ "$o" != "success" ]; then
               echo "At least one nightly gate did not pass — failing the job."
               exit 1
             fi
           done
-          echo "All nightly gates passed."
+          echo "All nightly gates that ran passed."
 
   # Source and dependencies execute only in the read-only self-hosted job above.
   # This hosted job receives issue write permission and runs trusted workflow
@@ -265,6 +359,8 @@ jobs:
           PROPERTIES: ${{ needs.nightly.outputs.properties }}
           E2E_INSTALL: ${{ needs.nightly.outputs.e2e_install }}
           E2E: ${{ needs.nightly.outputs.e2e }}
+          SEPOLIA: ${{ needs.nightly.outputs.sepolia }}
+          SEPOLIA_CONFIGURED: ${{ needs.nightly.outputs.sepolia_configured }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -276,8 +372,15 @@ jobs:
               ["Security property suite", process.env.PROPERTIES],
               ["E2E browser install", process.env.E2E_INSTALL],
               ["Full E2E (Playwright)", process.env.E2E],
+              ["Sepolia import paths (live)", process.env.SEPOLIA],
             ];
-            const failing = gates.filter(([, outcome]) => outcome !== "success");
+            // Skipped because its secret is unset: not run, not failed. Any other skip fails.
+            const sepoliaNotRun =
+              process.env.SEPOLIA === "skipped" && process.env.SEPOLIA_CONFIGURED === "false";
+            const failing = gates.filter(
+              ([name, outcome]) =>
+                outcome !== "success" && !(name === "Sepolia import paths (live)" && sepoliaNotRun),
+            );
             const title = `Nightly: ${branch} — failing checks`;
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
 
@@ -309,6 +412,9 @@ jobs:
               "",
               "### Failing gates",
               ...failing.map(([name, outcome]) => `- ${name} (${outcome})`),
+              ...(sepoliaNotRun
+                ? ["", "### Not run", "- Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured"]
+                : []),
               "",
               "See the run's job summary for the full categorized report",
               "(newly failing / known / flaky / regressions / release-blocking).",

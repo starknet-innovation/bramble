@@ -1,6 +1,6 @@
 /** Argent multisig registry reads keep their multi-call RPC fan-out bounded. */
 import { expect, test } from "bun:test";
-import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
 import {
   HARNESS_KEYS,
   harnessExtensionSender,

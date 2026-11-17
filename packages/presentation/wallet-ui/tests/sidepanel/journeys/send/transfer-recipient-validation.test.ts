@@ -43,9 +43,11 @@ test("maps the background review error onto the friendly recipient message", () 
   );
 });
 
-test("passes other review errors through unchanged", () => {
-  expect(friendlyReviewError(new Error("network unreachable"))).toBe("network unreachable");
-  expect(friendlyReviewError("boom")).toBe("Transfer review failed");
+test("translates other review errors, never passing a raw diagnostic through", () => {
+  expect(friendlyReviewError(new Error("network unreachable"))).toBe(
+    "Something went wrong. Please try again.",
+  );
+  expect(friendlyReviewError("boom")).toBe("Couldn't prepare this transfer. Try again.");
 });
 
 test("labels a CSV export as device-records-only when on-chain history was unavailable", () => {

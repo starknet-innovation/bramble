@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { readWorkflowSources } from "../../scripts/workflow-inventory";
 
 const packageName = "@starknetfoundation/krusty-kms-wasm";
-const packageVersion = "0.10.0";
+const packageVersion = "0.11.0";
 
 describe("published Krusty package", () => {
   test("is an exact runtime dependency with no source-vendoring script", async () => {
@@ -14,7 +14,9 @@ describe("published Krusty package", () => {
     };
     expect(manifest.dependencies?.[packageName]).toBe(packageVersion);
     expect(await readFile("bun.lock", "utf8")).toMatch(
-      /@starknetfoundation\/krusty-kms-wasm@0\.10\.0.*sha512-/,
+      new RegExp(
+        `@starknetfoundation\\/krusty-kms-wasm@${packageVersion.replaceAll(".", "\\.")}.*sha512-`,
+      ),
     );
     expect(manifest.scripts?.["vendor:krusty"]).toBeUndefined();
     expect(await Bun.file("scripts/vendor-krusty.ts").exists()).toBe(false);

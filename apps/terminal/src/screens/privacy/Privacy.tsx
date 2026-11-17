@@ -1,3 +1,5 @@
+import { PRIVATE_SWAP_EXECUTOR } from "../../../shared/privacy";
+import { userErrorMessage } from "../../protocols/support/user-error";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -8,7 +10,11 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { TokenIcon } from "../../components/index";
-import { fetchPrivateSwapPlan, submitPrivateSwapProof } from "../../protocols/avnu/private-swap-client";
+import {
+  fetchPrivateSwapPlan,
+  provePrivateSwap,
+  submitPrivateSwapProof,
+} from "../../protocols/avnu/private-swap-client";
 import { readPrivacyPool, type PrivacyPoolSnapshot } from "../../protocols/privacy/privacy-pool";
 import {
   buildPrivacyDeposit,
@@ -18,6 +24,7 @@ import {
 import { useWallet } from "../../wallet/connection/WalletProvider";
 import { isPrivateRegistrationRequired } from "../../wallet/privacy/privacy-wallet";
 import type { ScreenId } from "../../shell/screens";
+import { PrivateSwapReview } from "./PrivateSwapReview";
 import { PrivateBalanceGrid } from "./PrivateBalanceGrid";
 import { PrivacyRegistration } from "./PrivacyRegistration";
 import {
@@ -53,7 +60,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
   const [recipient, setRecipient] = useState("");
   const [pool, setPool] = useState<PrivacyPoolSnapshot | null>(null);
   const [balances, setBalances] = useState<ReadonlyMap<bigint, string>>(new Map());
-  const [status, setStatus] = useState("Connect MC Wallet to inspect private balances.");
+  const [status, setStatus] = useState("Connect Bramble to inspect private balances.");
   const [busy, setBusy] = useState(false);
   const [swapReview, setSwapReview] = useState<SwapReview | null>(null);
   const [registration, setRegistration] = useState<"active" | "required" | "unknown">("unknown");
@@ -74,14 +81,14 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
   }, []);
 
   const selectedBalance = balances.get(BigInt(token.address)) ?? "0x0";
-  const isMainnet =
-    chainId === "SN_MAIN" || chainId?.toLowerCase() === "0x534e5f4d41494e";
+  const isMainnet = chainId === "SN_MAIN" || chainId?.toLowerCase() === "0x534e5f4d41494e";
   const actionSummary = useMemo(() => {
     if (mode === "deposit") return "Move a public ERC20 balance into private notes.";
     if (mode === "register") return "Complete the one-time public registration for this account.";
     if (mode === "withdraw") return "Return a private balance to a public Starknet address.";
     if (mode === "transfer") return "Send notes privately to a registered pool recipient.";
-    if (mode === "swap") return "Trade through AVNU while settling inputs and output as private notes.";
+    if (mode === "swap")
+      return "Trade through AVNU while settling inputs and output as private notes.";
     return "Only aggregate token balances leave the wallet. Notes and viewing keys stay inside it.";
   }, [mode]);
 
@@ -100,7 +107,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
         setStatus("Activate this account before requesting private balances.");
         return;
       }
-      setStatus(cause instanceof Error ? cause.message : "Private balances are unavailable.");
+      setStatus(userErrorMessage(cause, "Private balances are unavailable."));
     } finally {
       setBusy(false);
     }
@@ -108,14 +115,14 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
 
   const activatePrivateBalances = async (): Promise<void> => {
     setBusy(true);
-    setStatus("Opening MC Wallet for one-time registration review…");
+    setStatus("Opening Bramble for one-time registration review…");
     try {
       const transactionHash = await registerPrivate();
       setRegistration("active");
       setMode("balances");
       setStatus(`Registration accepted on Starknet · ${short(transactionHash)}`);
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Private activation failed.");
+      setStatus(userErrorMessage(cause, "Private activation failed."));
     } finally {
       setBusy(false);
     }
@@ -137,7 +144,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       setAmount("");
       await refreshBalances();
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Private transaction failed.");
+      setStatus(userErrorMessage(cause, "Private transaction failed."));
     } finally {
       setBusy(false);
     }
@@ -145,7 +152,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
 
   const quotePrivateSwap = async (): Promise<void> => {
     if (!address) {
-      setStatus("Connect MC Wallet before preparing a private swap.");
+      setStatus("Connect Bramble before preparing a private swap.");
       return;
     }
     setBusy(true);
@@ -165,6 +172,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       setSwapReview({
         actions: plan.actions,
         buyAmount: BigInt(plan.buyAmount),
+        minBuyAmount: BigInt(plan.minBuyAmount),
         buyToken,
         executor: plan.executor,
         fee: plan.fee,
@@ -173,7 +181,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       });
       setStatus("Route ready. Review every value before asking the wallet to prove it.");
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Private route preparation failed.");
+      setStatus(userErrorMessage(cause, "Private route preparation failed."));
     } finally {
       setBusy(false);
     }
@@ -184,7 +192,8 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
     setBusy(true);
     setStatus("Wallet review open · waiting for proof authorization…");
     try {
-      const proof = await preparePrivateInvoke(swapReview.actions);
+      // The executor's class is read again right before the wallet proves (#269).
+      const proof = await provePrivateSwap(() => preparePrivateInvoke(swapReview.actions));
       setStatus("Proof ready · submitting through the AVNU private paymaster…");
       const transactionHash = await submitPrivateSwapProof(proof, FEE_MODE);
       setStatus(`Private swap accepted · ${short(transactionHash)}`);
@@ -192,7 +201,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
       setAmount("");
       await refreshBalances();
     } catch (cause) {
-      setStatus(cause instanceof Error ? cause.message : "Private swap failed.");
+      setStatus(userErrorMessage(cause, "Private swap failed."));
     } finally {
       setBusy(false);
     }
@@ -204,8 +213,8 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
         <div>
           <h1>Private balances, without leaving the wallet.</h1>
           <p>
-            Shield, transfer, withdraw, and privately swap through one reviewed action surface.
-            The Terminal never receives viewing keys or individual notes.
+            Shield, transfer, withdraw, and privately swap through one reviewed action surface. The
+            Terminal never receives viewing keys or individual notes.
           </p>
         </div>
         <div className="privacy-pool-status">
@@ -213,7 +222,12 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
           <div>
             <small>Production pool</small>
             <strong>{pool ? "On-chain configuration read" : "Checking pool…"}</strong>
-            <code>{short(pool?.address ?? "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a")}</code>
+            <code>
+              {short(
+                pool?.address ??
+                  "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a",
+              )}
+            </code>
           </div>
         </div>
       </header>
@@ -241,7 +255,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
           ))}
           <div className="privacy-trust">
             <small>Execution boundary</small>
-            <strong>MC Wallet</strong>
+            <strong>Bramble</strong>
             <span>Review · prove · authorize</span>
           </div>
         </aside>
@@ -258,7 +272,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
           {!isConnected ? (
             <div className="privacy-connect">
               <LockKeyhole size={28} />
-              <h3>Connect MC Wallet</h3>
+              <h3>Connect Bramble</h3>
               <p>Private state is requested only after an explicit action.</p>
               <button disabled={isConnecting} onClick={() => void connect()} type="button">
                 {isConnecting ? "Checking wallet…" : "Connect wallet"}
@@ -363,11 +377,15 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
                 {mode === "swap" ? (
                   <button
                     className="privacy-primary"
-                    disabled={busy || amount.length === 0}
+                    disabled={busy || amount.length === 0 || PRIVATE_SWAP_EXECUTOR === null}
                     onClick={() => void quotePrivateSwap()}
                     type="button"
                   >
-                    {busy ? "Finding route…" : "Review private route"}
+                    {PRIVATE_SWAP_EXECUTOR === null
+                      ? "Private swaps unavailable pending security verification"
+                      : busy
+                        ? "Finding route…"
+                        : "Review private route"}
                   </button>
                 ) : (
                   <button
@@ -381,57 +399,20 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
                 )}
               </div>
 
-              <aside className="privacy-review-card">
-                <span>Review</span>
-                {swapReview ? (
-                  <>
-                    <h3>
-                      {formatRaw(`0x${swapReview.sellAmount.toString(16)}`, swapReview.sellToken.decimals)}{" "}
-                      {swapReview.sellToken.symbol} →{" "}
-                      {formatRaw(`0x${swapReview.buyAmount.toString(16)}`, swapReview.buyToken.decimals)}{" "}
-                      {swapReview.buyToken.symbol}
-                    </h3>
-                    <dl>
-                      <div><dt>Estimated received</dt><dd>{formatRaw(`0x${swapReview.buyAmount.toString(16)}`, swapReview.buyToken.decimals)} {swapReview.buyToken.symbol}</dd></div>
-                      <div><dt>Slippage limit</dt><dd>0.50%</dd></div>
-                      <div><dt>Private executor</dt><dd><code>{short(swapReview.executor)}</code></dd></div>
-                      <div><dt>Pool fee</dt><dd>{formatRaw(swapReview.fee.amount, 18)} STRK</dd></div>
-                      <div><dt>Wallet actions</dt><dd>{swapReview.actions.length}</dd></div>
-                    </dl>
-                    <p>
-                      The wallet independently validates this batch, checks balances and privacy
-                      leakage, then creates the proof. The server receives only the final proof.
-                    </p>
-                    <button
-                      className="privacy-primary"
-                      disabled={busy}
-                      onClick={() => void submitPrivateSwap()}
-                      type="button"
-                    >
-                      {busy ? "Proving…" : "Authorize proof and submit"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <h3>No hidden execution</h3>
-                    <p>
-                      Route, exact inputs, expected output, executor, pool fee, and action count
-                      appear here before the wallet opens.
-                    </p>
-                    <dl>
-                      <div><dt>Pool</dt><dd><code>{short(pool?.address ?? "0x040337…812a")}</code></dd></div>
-                      <div><dt>Proof validity</dt><dd>{pool ? `${pool.proofValidityBlocks} blocks` : "Reading…"}</dd></div>
-                      <div><dt>Auto retry</dt><dd>Off</dd></div>
-                    </dl>
-                  </>
-                )}
-              </aside>
+              <PrivateSwapReview
+                busy={busy}
+                pool={pool}
+                swapReview={swapReview}
+                onSubmit={() => void submitPrivateSwap()}
+              />
             </div>
           )}
           <div className="privacy-live-status" aria-live="polite" role="status">
             <span className={busy ? "status-pulse active" : "status-pulse"} />
             {status}
-            <button onClick={() => onNavigate("portfolio")} type="button">View portfolio</button>
+            <button onClick={() => onNavigate("portfolio")} type="button">
+              View portfolio
+            </button>
           </div>
         </section>
       </div>

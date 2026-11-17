@@ -16,7 +16,66 @@ const meta: LabMeta = {
 export default meta;
 
 export const SendRecipient = checkpointStory("Send · recipient", "send", "recipient");
+export const SendRecipientByName = checkpointStory(
+  "Send · recipient by name",
+  "send",
+  "recipient-name",
+);
+export const SendRecipientNameReview = checkpointStory(
+  "Send · review a name recipient",
+  "send",
+  "recipient-name-review",
+);
+export const SendRecipientNameMissing = checkpointStory(
+  "Send · name not found",
+  "send",
+  "recipient-name-missing",
+);
+export const SendRecipientNameLong = checkpointStory(
+  "Send · long name wraps",
+  "send",
+  "recipient-name-long",
+);
 export const SendDetails = checkpointStory("Send · amount", "send", "details");
+export const SendAmountFee: LabStory = {
+  args: { checkpointId: "details-fee", scenarioId: "send" },
+  name: "Send · amount and estimated fee",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    // The figure the review would bind, on the screen before it.
+    await expect(body?.querySelector("#send-fee-lines")).toHaveTextContent(
+      "Estimated fee: 0.0024 STRK",
+    );
+  },
+};
+export const SendShieldFee: LabStory = {
+  args: { checkpointId: "shield-fee", scenarioId: "send" },
+  name: "Send · shield pool fee",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    // A pool route states the pool's charge and no network fee it cannot know.
+    await expect(body?.querySelector("#send-fee-lines")).toHaveTextContent(
+      "Pool fee: 6 STRK from your public balance",
+    );
+  },
+};
+export const SendInsufficientPrivateBalance: LabStory = {
+  args: { checkpointId: "private-shortfall", scenarioId: "send" },
+  name: "Send · insufficient private balance",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const body =
+      canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
+    const needed =
+      "Not enough private STRK for this amount plus the pool fee. Keep 6 STRK for the fee.";
+    await expect(body?.querySelector("#send-route-reason")).toHaveTextContent(needed);
+    await expect(body?.querySelector("#transfer-result")).toHaveTextContent(needed);
+  },
+};
 export const SendAsset = checkpointStory("Send · asset picker", "send", "asset");
 export const SendReview = checkpointStory("Send · review", "send", "review");
 export const SendFeeFailure = checkpointStory("Send · fee failure", "send", "fee-failure");
@@ -40,14 +99,21 @@ export const SwapPickerKeyboard: LabStory = {
     await assertCheckpointReady(canvasElement);
     const frame = canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]");
     const body = frame?.contentDocument?.body;
-    const sheet = body?.querySelector<HTMLElement>("#swap-picker");
-    const search = body?.querySelector<HTMLInputElement>("#swap-picker-search");
-    if (!body || !sheet || !search) throw new Error("Missing swap picker fixture");
-    await expect(search).toHaveFocus();
-    await step("Escape closes the modal sheet and returns focus", async () => {
-      await userEvent.type(search, "{Escape}");
-      await waitFor(() => expect(sheet).not.toBeVisible());
-      await waitFor(() => expect(body.querySelector("#swap-buy-token")).toHaveFocus());
+    const trigger = body?.querySelector<HTMLButtonElement>("#swap-buy-token");
+    const panel = body?.querySelector<HTMLElement>("#swap-buy-options");
+    if (!body || !trigger || !panel) throw new Error("Missing swap dropdown fixture");
+    await expect(panel).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    // Opening moves focus into the panel: onto the catalog search when the list
+    // has one, otherwise onto the first option.
+    const focused = body.ownerDocument.activeElement;
+    if (!focused || !panel.contains(focused)) throw new Error("Focus did not enter the dropdown");
+    await step("Escape closes the dropdown and returns focus to its trigger", async () => {
+      // Typed at the focused element itself: the key has to reach the frame's
+      // document, and a click first would pick whatever option holds focus.
+      await userEvent.type(focused as HTMLElement, "{Escape}", { skipClick: true });
+      await waitFor(() => expect(panel).not.toBeVisible());
+      await waitFor(() => expect(trigger).toHaveFocus());
     });
   },
 };
@@ -82,7 +148,7 @@ export const SwapReview: LabStory = {
       canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]")?.contentDocument?.body;
     await expect(body?.querySelector("#swap-confirm")).toBeVisible();
     await expect(body?.querySelector("#swap-confirm-receipt")).toHaveTextContent(
-      /Minimum received\s*19,260 STRK \(wallet-enforced\)/,
+      /Minimum received\s*19,260 STRK/,
     );
     await expect(body?.querySelectorAll(".swap-review-pair .token-logo")).toHaveLength(2);
     await expect(body?.querySelector("#swap-risk-review")).toBeEmptyDOMElement();
