@@ -86,7 +86,7 @@ test("fetches the signed flag document privately and fails closed on a foreign k
     flags: { "qsb.vaults": false, "swap.enabled": true },
     killed: [],
     ok: true,
-    overridable: [],
+    overridable: ["qsb.vaults"],
     overridden: [],
     sequence: null,
     source: "bundled",

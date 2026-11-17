@@ -10,7 +10,10 @@
  * are unchanged. Until the flags load, and on any failure, every gated feature
  * reads as off.
  */
-import type { ExperimentalFeatures } from "../journeys/settings/experimental-features-runtime";
+import type {
+  ExperimentalFeatures,
+  ExperimentalFeaturesState,
+} from "../journeys/settings/experimental-features-runtime";
 import { isParkedCollectibleView } from "./parts";
 
 /** Effective boolean per flag key, as the background answered it. */
@@ -38,8 +41,13 @@ export const applyFeatureVisibility = (root: ParentNode, flags: FeatureFlagValue
 
 /** The panel's gate: the flags as last loaded, and the two checks that read them. */
 export type FeatureGate = {
-  /** Re-marks gated elements under the panel root; call after every render. */
-  readonly apply: () => void;
+  /**
+   * Re-marks gated elements under the panel root; call after every render.
+   * `latest` is the panel's newest Experimental features reply, if any (for
+   * example right after a tester changes an override): its flags replace the
+   * ones loaded at startup, so the change shows without reopening the panel.
+   */
+  readonly apply: (latest?: ExperimentalFeaturesState) => void;
   /** Whether `view` belongs to a gated feature that is off, or not yet known. */
   readonly hidesView: (view: string) => boolean;
   /** Whether navigation to `view` is refused: a parked collectible view, or a hidden feature's. */
@@ -57,7 +65,10 @@ export type FeatureFlagSource = {
  */
 export const createFeatureGate = (root: ParentNode, source: FeatureFlagSource): FeatureGate => {
   let flags: FeatureFlagValues = {};
-  const apply = (): void => applyFeatureVisibility(root, flags);
+  const apply = (latest?: ExperimentalFeaturesState): void => {
+    if (typeof latest === "object") flags = latest.flags;
+    applyFeatureVisibility(root, flags);
+  };
   void source.loadExperimentalFeatures().then(
     (loaded) => {
       flags = loaded.flags;

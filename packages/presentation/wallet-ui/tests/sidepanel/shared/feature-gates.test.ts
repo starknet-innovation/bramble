@@ -80,6 +80,28 @@ describe("gating", () => {
     expect(gate.blocks("home", null)).toBe(false);
   });
 
+  test("a newer Experimental features reply replaces the startup flags", async () => {
+    const root = mount();
+    const gate = createFeatureGate(root, {
+      loadExperimentalFeatures: async () => features({ "qsb.vaults": false }),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(gate.hidesView("qsb-accounts")).toBe(true);
+    // A tester turns the override on; the panel re-renders with the new reply.
+    gate.apply({ ...features({ "qsb.vaults": true }), overridden: ["qsb.vaults"] });
+    expect(gated(root)?.hasAttribute("data-feature-on")).toBe(true);
+    expect(gate.hidesView("qsb-accounts")).toBe(false);
+    // Loading and error states carry no flags, so they keep the last known ones.
+    gate.apply("loading");
+    gate.apply("error");
+    expect(gate.hidesView("qsb-accounts")).toBe(false);
+    // A remote hard kill comes back as the flag off, and hides it again.
+    gate.apply({ ...features({ "qsb.vaults": false }), killed: ["qsb.vaults"] });
+    expect(gated(root)?.hasAttribute("data-feature-on")).toBe(false);
+    expect(gate.hidesView("qsb-accounts")).toBe(true);
+  });
+
   test("a failed load keeps every gated feature hidden", async () => {
     const root = mount();
     const gate = createFeatureGate(root, {

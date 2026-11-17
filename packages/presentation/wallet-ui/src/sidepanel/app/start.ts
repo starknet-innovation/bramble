@@ -376,7 +376,7 @@ export const startWalletUi = async (
     }
     lastContent = content;
     renderScene(content, animate, direction);
-    features.apply();
+    features.apply(cache.experimentalFeatures);
   };
   privacy = createPrivacyController({
     app,

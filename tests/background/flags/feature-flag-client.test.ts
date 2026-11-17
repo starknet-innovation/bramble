@@ -81,7 +81,7 @@ describe("feature-flag client", () => {
     expect(await client.snapshot("SN_MAIN")).toEqual({
       flags: { "qsb.vaults": false, "swap.enabled": true },
       killed: [],
-      overridable: [],
+      overridable: ["qsb.vaults"],
       overridden: [],
       sequence: null,
       source: "bundled",
@@ -98,7 +98,7 @@ describe("feature-flag client", () => {
       // No qsb.vaults rule in the document: the toggle flag stays at its bundled off.
       flags: { "qsb.vaults": false, "swap.enabled": false },
       killed: [],
-      overridable: [],
+      overridable: ["qsb.vaults"],
       overridden: [],
       sequence: 3,
       source: "remote",

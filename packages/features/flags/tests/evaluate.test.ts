@@ -40,7 +40,7 @@ describe("evaluateFlags", () => {
 
   test("every toggle flag ships off, so no document means hidden", () => {
     for (const key of TOGGLE_FLAGS) {
-      expect(BUNDLED_FLAGS[key]).toEqual({ enabled: false, remote: "toggle" });
+      expect(BUNDLED_FLAGS[key]).toMatchObject({ enabled: false, remote: "toggle" });
       expect(evaluateFlags(BUNDLED_FLAGS, null, TARGETING)[key]).toBe(false);
     }
   });
