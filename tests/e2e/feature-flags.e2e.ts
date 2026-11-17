@@ -17,7 +17,7 @@ import {
   stamp,
 } from "../../packages/features/flags/tests/support/flag-fixture";
 import { expect, test } from "./fixtures";
-import { sendRuntimeMessage } from "./wallet-helpers";
+import { IMPORT_MNEMONIC, importWalletFromPhrase, sendRuntimeMessage } from "./wallet-helpers";
 
 type ServedRequest = {
   readonly headers: Record<string, string>;
@@ -99,4 +99,29 @@ test("fetches the signed flag document privately and fails closed on a foreign k
       value: false,
     }),
   ).toEqual({ error: "wallet locked" });
+});
+
+// The path a tester takes, and the one the QSB E2E uses to show QSB vaults:
+// turn the `qsb.vaults` override on in an unlocked wallet, and it persists
+// across a panel reload, where the side panel's gate reads it again.
+test("a tester can turn qsb.vaults on locally, and it persists", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
+  const before = await sendRuntimeMessage<Record<string, unknown>>(sidepanel, {
+    type: "wallet.featureFlags",
+  });
+  expect(before).toMatchObject({ flags: { "qsb.vaults": false }, overridable: ["qsb.vaults"] });
+
+  const set = await sendRuntimeMessage<Record<string, unknown>>(sidepanel, {
+    key: "qsb.vaults",
+    type: "wallet.setFeatureFlagOverride",
+    value: true,
+  });
+  expect(set).toMatchObject({ flags: { "qsb.vaults": true }, overridden: ["qsb.vaults"] });
+
+  await sidepanel.reload();
+  await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
+  expect(
+    await sendRuntimeMessage<Record<string, unknown>>(sidepanel, { type: "wallet.featureFlags" }),
+  ).toMatchObject({ flags: { "qsb.vaults": true }, overridden: ["qsb.vaults"] });
 });
