@@ -25,6 +25,11 @@ export type FlagRemoteMode = "kill-only" | "toggle";
 /** A flag this build knows. */
 export type KnownFlag = {
   readonly enabled: boolean;
+  /**
+   * Whether an advanced user may override this flag locally (Settings >
+   * Experimental features). Defaults to false. A remote hard kill still wins.
+   */
+  readonly localOverride?: boolean;
   readonly remote?: FlagRemoteMode;
 };
 

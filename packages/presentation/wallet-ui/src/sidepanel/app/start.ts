@@ -78,7 +78,7 @@ export const startWalletUi = async (
   const runtime = extensionApi?.runtime;
   const mutationRuntime = createMutationRuntime(runtime);
   const wallet = createSidepanelRuntime(mutationRuntime);
-  const features = createFeatureGate(document, () => wallet.loadFeatureFlags());
+  const features = createFeatureGate(document, wallet);
   const multisig = createMultisigClient(mutationRuntime);
   const swapClient = createSwapClient(mutationRuntime);
   let activeView: WalletView = "home";

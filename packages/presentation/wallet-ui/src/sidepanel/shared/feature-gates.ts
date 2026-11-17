@@ -10,9 +10,11 @@
  * are unchanged. Until the flags load, and on any failure, every gated feature
  * reads as off.
  */
-import type { FeatureFlagValues } from "../runtime/runtime-feature-flags";
+import type { ExperimentalFeatures } from "../journeys/settings/experimental-features-runtime";
 import { isParkedCollectibleView } from "./parts";
 
+/** Effective boolean per flag key, as the background answered it. */
+type FeatureFlagValues = ExperimentalFeatures["flags"];
 type View = Parameters<typeof isParkedCollectibleView>[0];
 type Preferences = Parameters<typeof isParkedCollectibleView>[1];
 
@@ -44,19 +46,21 @@ export type FeatureGate = {
   readonly blocks: (view: View, preferences: Preferences) => boolean;
 };
 
+/** Where the gate reads flags: the panel's Experimental features client. */
+export type FeatureFlagSource = {
+  readonly loadExperimentalFeatures: () => Promise<ExperimentalFeatures>;
+};
+
 /**
  * Loads the flags once and re-marks `root` when they arrive. Before they do,
- * every gated feature is hidden.
+ * and when the read fails or is refused, every gated feature is hidden.
  */
-export const createFeatureGate = (
-  root: ParentNode,
-  load: () => Promise<FeatureFlagValues>,
-): FeatureGate => {
+export const createFeatureGate = (root: ParentNode, source: FeatureFlagSource): FeatureGate => {
   let flags: FeatureFlagValues = {};
   const apply = (): void => applyFeatureVisibility(root, flags);
-  void load().then(
+  void source.loadExperimentalFeatures().then(
     (loaded) => {
-      flags = loaded;
+      flags = loaded.flags;
       apply();
     },
     () => undefined,

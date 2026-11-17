@@ -36,6 +36,7 @@ import { createOnboardingRuntimeClient } from "../journeys/onboarding/onboarding
 import { createPrivacyRuntimeClient } from "../journeys/privacy/privacy-runtime";
 import { createPrivacyUnlockClient } from "../journeys/privacy/privacy-unlock-runtime";
 import { createShadowAccountsRuntimeClient } from "../journeys/privacy/shadow-accounts-runtime";
+import { createExperimentalFeaturesClient } from "../journeys/settings/experimental-features-runtime";
 import { createStakingRuntimeClient } from "../journeys/staking/staking-client";
 import { createStakingDirectoryRuntimeClient } from "../journeys/staking/staking-directory-client";
 import { createStakingPositionsRuntimeClient } from "../journeys/staking/staking-positions-client";
@@ -60,7 +61,6 @@ export type {
 import { createAccountRuntimeClient } from "./runtime-accounts";
 import { createDeployRuntimeClient } from "./runtime-deploy";
 import { lostReplySend, refusalText, relabelLostReply, responseError } from "./runtime-errors";
-import { createFeatureFlagRuntimeClient } from "./runtime-feature-flags";
 import { createAccountGroupClient } from "./runtime-groups";
 import { createLookupRuntimeClient } from "./runtime-lookups";
 import { createRecoveryRuntimeClient } from "./runtime-recovery";
@@ -87,6 +87,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     ...createUpdateClient(sendMessage),
     ...createSidePanelNoticeClient(sendMessage),
     ...createShadowAccountsRuntimeClient(sendMessage),
+    ...createExperimentalFeaturesClient(sendMessage),
     ...createAccountRuntimeClient(sendMessage),
     ...createDeployRuntimeClient(sendMessage),
     ...createRecoveryRuntimeClient(sendMessage),
@@ -344,7 +345,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     },
     ...createAccountGroupClient(sendMessage),
     ...createSettingsRuntimeClient(sendMessage),
-    ...createFeatureFlagRuntimeClient(sendMessage),
     /** Sends under the reviewed fees. A missing ceiling is refused before signing. */
     async submitTransfer(
       accountId: string,

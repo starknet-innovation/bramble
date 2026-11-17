@@ -8,6 +8,10 @@
  *    keys failed to import, or the install bucket is unavailable — the bundled
  *    defaults apply unchanged.
  *
+ * Local overrides (Settings > Experimental features) apply last, through
+ * `@bramble/flags/overrides`: only catalog flags marked `localOverride`, and
+ * never over a remote hard kill.
+ *
  * Network, clock, RNG, and storage are injected. The request is a bare `GET`
  * of one fixed URL through {@link fetchBoundedText}: no query string, no
  * headers, no cookies, no referrer, redirects refused. The rollout bucket,
@@ -23,6 +27,14 @@ import {
 } from "@bramble/flags/catalog";
 import type { FlagChannel, FlagPayload } from "@bramble/flags/contract";
 import { evaluateFlags, type FlagValues } from "@bramble/flags/evaluate";
+import {
+  applyFlagOverrides,
+  type FlagOverrides,
+  isOverridableFlag,
+  overridableFlags,
+  readFlagOverrides,
+  writeFlagOverrides,
+} from "@bramble/flags/overrides";
 import {
   EMPTY_FLAG_STATE,
   type FlagState,
@@ -41,19 +53,34 @@ import type { KeyValueStore } from "@bramble/store/kv";
 /** Minimum spacing between non-forced refreshes (worker wakes). */
 export const FEATURE_FLAG_REFRESH_MS = 30 * 60_000;
 
-/** Effective flags plus where they came from. Carries no identifiers. */
+/**
+ * Effective flags plus where they came from. Carries no identifiers.
+ * `source` describes the base values; `overridden` lists flags a local
+ * override replaced, and `killed` the overridable flags a remote hard kill
+ * pins off.
+ */
 type FeatureFlagSnapshot = {
   readonly flags: FlagValues;
+  readonly killed: readonly string[];
+  readonly overridable: readonly string[];
+  readonly overridden: readonly string[];
   readonly sequence: number | null;
   readonly source: "bundled" | "remote";
 };
 
+/** Outcome of an override write: applied, not allowed, or not persisted. */
+export type FeatureFlagOverrideResult = "applied" | "not-overridable" | "unavailable";
+
 /** Response for `wallet.featureFlags`. */
 export type FeatureFlagsResponse = FeatureFlagSnapshot & { readonly ok: true };
 
-/** Read side handed to message handlers. */
+/** Read side plus local overrides, handed to message handlers. */
 export type FeatureFlagReader = {
   readonly snapshot: (chain: string | null) => Promise<FeatureFlagSnapshot>;
+  /** Sets (`true`/`false`) or clears (`null`) one flag's local override. */
+  readonly setOverride: (key: string, value: boolean | null) => Promise<FeatureFlagOverrideResult>;
+  /** Removes every local override. */
+  readonly clearOverrides: () => Promise<FeatureFlagOverrideResult>;
 };
 
 /** Result of one refresh attempt, for tests and scheduling only. */
@@ -80,15 +107,24 @@ export type FeatureFlagClientOptions = {
 
 type Loaded = { payload: FlagPayload | null; state: FlagState };
 
-const bundledSnapshot = (catalog: FlagCatalog): FeatureFlagSnapshot => ({
-  flags: { ...Object.fromEntries(Object.entries(catalog).map(([k, v]) => [k, v.enabled])) },
-  sequence: null,
-  source: "bundled",
-});
+const bundledValues = (catalog: FlagCatalog): FlagValues =>
+  Object.fromEntries(Object.entries(catalog).map(([k, v]) => [k, v.enabled]));
 
-/** Bundled-defaults reader, for contexts with no wired client. */
+/**
+ * Bundled-defaults reader, for contexts with no wired client (no storage).
+ * Overrides cannot be stored, so every write answers `unavailable`.
+ */
 export const bundledFeatureFlags: FeatureFlagReader = {
-  snapshot: async () => bundledSnapshot(BUNDLED_FLAGS),
+  clearOverrides: async () => "unavailable",
+  setOverride: async () => "unavailable",
+  snapshot: async () => ({
+    flags: bundledValues(BUNDLED_FLAGS),
+    killed: [],
+    overridable: [],
+    overridden: [],
+    sequence: null,
+    source: "bundled",
+  }),
 };
 
 /**
@@ -156,8 +192,34 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
     return verdict.ok ? "accepted" : verdict.reason;
   };
 
+  // Overrides are read once and then kept in memory, like the document state.
+  let overrides: Promise<FlagOverrides> | null = null;
+  const currentOverrides = (): Promise<FlagOverrides> => {
+    overrides ??= readFlagOverrides(options.store, catalog).catch(() => ({}));
+    return overrides;
+  };
+  const saveOverrides = async (next: FlagOverrides): Promise<FeatureFlagOverrideResult> => {
+    if (!(await writeFlagOverrides(options.store, next))) {
+      return "unavailable";
+    }
+    overrides = Promise.resolve(next);
+    return "applied";
+  };
+
   let inflight: Promise<FeatureFlagRefreshOutcome> | null = null;
   return {
+    async clearOverrides() {
+      return saveOverrides({});
+    },
+    async setOverride(key, value) {
+      if (!isOverridableFlag(catalog, key)) {
+        return "not-overridable";
+      }
+      const rest = Object.fromEntries(
+        Object.entries(await currentOverrides()).filter(([existing]) => existing !== key),
+      );
+      return saveOverrides(value === null ? rest : { ...rest, [key]: value });
+    },
     refresh(refreshOptions) {
       inflight ??= attempt(refreshOptions?.force ?? false)
         .catch((): FeatureFlagRefreshOutcome => "unreachable")
@@ -167,19 +229,22 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
       return inflight;
     },
     async snapshot(chain) {
-      const [live, installed] = await Promise.all([current(), installBucket()]);
-      const payload = live.payload && options.now() < live.payload.expiresAt ? live.payload : null;
-      if (payload === null || installed === null) {
-        return bundledSnapshot(catalog);
-      }
+      const [live, installed, local] = await Promise.all([
+        current(),
+        installBucket(),
+        currentOverrides(),
+      ]);
+      const verified = live.payload && options.now() < live.payload.expiresAt ? live.payload : null;
+      const payload = installed === null ? null : verified;
+      const base =
+        payload === null || installed === null
+          ? bundledValues(catalog)
+          : evaluateFlags(catalog, payload, { bucket: installed, chain, version: options.version });
       return {
-        flags: evaluateFlags(catalog, payload, {
-          bucket: installed,
-          chain,
-          version: options.version,
-        }),
-        sequence: payload.sequence,
-        source: "remote",
+        ...applyFlagOverrides(base, local, catalog, payload),
+        overridable: overridableFlags(catalog),
+        sequence: payload?.sequence ?? null,
+        source: payload === null ? "bundled" : "remote",
       };
     },
   };

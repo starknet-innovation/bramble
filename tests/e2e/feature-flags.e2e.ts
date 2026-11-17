@@ -84,8 +84,19 @@ test("fetches the signed flag document privately and fails closed on a foreign k
   const page = await extension.openExtensionPage("popup.html");
   expect(await sendRuntimeMessage(page, { type: "wallet.featureFlags" })).toEqual({
     flags: { "qsb.vaults": false, "swap.enabled": true },
+    killed: [],
     ok: true,
+    overridable: [],
+    overridden: [],
     sequence: null,
     source: "bundled",
   });
+  // Local overrides need an unlocked wallet; this one has no vault yet.
+  expect(
+    await sendRuntimeMessage(page, {
+      key: "swap.enabled",
+      type: "wallet.setFeatureFlagOverride",
+      value: false,
+    }),
+  ).toEqual({ error: "wallet locked" });
 });
