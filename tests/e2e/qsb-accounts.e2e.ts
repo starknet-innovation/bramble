@@ -9,6 +9,7 @@
  */
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
+import { showQsbVaults } from "./qsb-e2e-support";
 import { IMPORT_MNEMONIC, importWalletFromPhrase, VAULT_PASSPHRASE } from "./wallet-helpers";
 
 // The published BIP-39 vector for 32 bytes of 0x7f: a valid 24-word phrase
@@ -41,6 +42,8 @@ test("creates, backs up and imports QSB vaults", async ({ extension }) => {
   test.setTimeout(60_000);
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);
+  // QSB vaults ship hidden behind `qsb.vaults`; the override persists across the reload below.
+  await showQsbVaults(sidepanel);
 
   await openQsbAccounts(sidepanel);
   await expect(sidepanel.locator("#qsb-accounts-list")).toContainText(

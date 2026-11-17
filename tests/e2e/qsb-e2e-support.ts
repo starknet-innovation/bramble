@@ -77,6 +77,28 @@ export const send = async (page: Page, message: Record<string, unknown>): Promis
 };
 
 /**
+ * Shows QSB vaults in a build that gates them behind the `qsb.vaults` feature
+ * flag (off by default), the way a tester would: turns its local override on,
+ * as Settings > Experimental features does, then reloads the panel so its
+ * gate reads the new value. Only the router's "unsupported message" reply
+ * means the build has no feature flags and so no gate; any other refusal, or
+ * an override that does not turn the flag on, fails the test.
+ */
+export const showQsbVaults = async (sidepanel: Page): Promise<void> => {
+  const flags = await sendRuntimeMessage<Reply>(sidepanel, { type: "wallet.featureFlags" });
+  if (flags?.error === "unsupported message") return;
+  const reply = await send(sidepanel, {
+    key: "qsb.vaults",
+    type: "wallet.setFeatureFlagOverride",
+    value: true,
+  });
+  const set = reply["flags"] as Readonly<Record<string, unknown>> | undefined;
+  if (set?.["qsb.vaults"] !== true) throw new Error("the qsb.vaults override did not turn it on");
+  await sidepanel.reload();
+  await sidepanel.getByRole("button", { name: "Lock wallet" }).waitFor();
+};
+
+/**
  * Answers the coordinator from whatever stand-in `current` returns now,
  * keeping every request body in `bodies` when given.
  */
