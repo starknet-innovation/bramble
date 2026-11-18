@@ -51,6 +51,7 @@ import { createApprovalSurfaceOpener, showPendingApprovals } from "./approvals/a
 import { createApprovalSurfaceControl } from "./approvals/approval-surface-control";
 import { createApprovalQueue } from "./approvals/approvals";
 import { createSignatureWaiters } from "./approvals/signature-waiters";
+import { startFeatureFlags } from "./flags/feature-flag-boot";
 import { createArgentMultisigDeploymentReviews } from "./multisig/multisig-deployment-reviews";
 import { openOnboardingOnInstall } from "./onboarding/onboarding-surface";
 import { createRecoveryDiscoveryCache } from "./onboarding/recovery-cache";
@@ -371,6 +372,7 @@ const handleMessage = createMessageHandler(walletReader, extension, {
   approvals,
   waiters: signatureWaiters,
   balanceSnapshots,
+  featureFlags: startFeatureFlags(extensionApi, storageReady, createBrowserLocalStore),
   nftSnapshots,
   pendingDeployments,
   session,

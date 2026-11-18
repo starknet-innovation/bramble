@@ -6,6 +6,7 @@
       "name": "bramble",
       "dependencies": {
         "@bramble/core": "workspace:*",
+        "@bramble/flags": "workspace:*",
         "@bramble/kms-krusty": "workspace:*",
         "@bramble/ledger-protocol": "workspace:*",
         "@bramble/multisig": "workspace:*",
@@ -46,6 +47,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@bramble/core": "workspace:*",
+        "@bramble/flags": "workspace:*",
         "@bramble/kms-krusty": "workspace:*",
         "@bramble/ledger-browser": "workspace:*",
         "@bramble/ledger-protocol": "workspace:*",
@@ -149,6 +151,14 @@
         "typescript": "7.0.2",
         "vite": "8.3.3",
         "wrangler": "4.145.0",
+      },
+    },
+    "packages/features/flags": {
+      "name": "@bramble/flags",
+      "version": "0.0.0",
+      "dependencies": {
+        "@bramble/core": "workspace:*",
+        "@bramble/store": "workspace:*",
       },
     },
     "packages/features/multisig": {
@@ -401,6 +411,8 @@
     "@bramble/core": ["@bramble/core@workspace:packages/foundation/core"],
 
     "@bramble/extension": ["@bramble/extension@workspace:apps/extension"],
+
+    "@bramble/flags": ["@bramble/flags@workspace:packages/features/flags"],
 
     "@bramble/kms-krusty": ["@bramble/kms-krusty@workspace:packages/platform/kms-krusty"],
 

@@ -8,6 +8,7 @@ import { handleApprovalDecision } from "../approvals/approval-decisions";
 import { enrichApprovals } from "../approvals/approval-insights";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import { handleSidePanelNoticeOps } from "../approvals/side-panel-notice-ops";
+import { handleFeatureFlagOps } from "../flags/feature-flag-ops";
 import { handleLedgerOps } from "../ledger/ledger-ops";
 import { MULTISIG_ACTIVE_STATE_MESSAGES } from "../multisig/multisig-active-messages";
 import { handleMultisigCoordinationOps } from "../multisig/multisig-coordination-ops";
@@ -421,6 +422,7 @@ const HANDLERS: readonly RouterHandler[] = [
   handleRevealSecrets,
   handleGetGrantedAccounts,
   handleDiagnostics,
+  handleFeatureFlagOps,
   async (ctx, messageType, message) => handleUpdateOps(ctx.updates, messageType, message),
   (ctx, messageType, message, sender) =>
     handleSidePanelNoticeOps(ctx.sidePanelLearning, messageType, message, sender),

@@ -273,6 +273,40 @@ export const settingsScenario: WalletScenario = {
       state: { accountKind: "ledger", keysLeaveDevice: false },
     },
     ...stakingCheckpoints,
+    {
+      content: () =>
+        walletDashboard({
+          experimentalFeatures: {
+            flags: { "swap.enabled": false },
+            killed: [],
+            overridable: ["swap.enabled"],
+            overridden: ["swap.enabled"],
+          },
+          preferences: journeyPreferences,
+          view: "experimental-features",
+        }),
+      id: "experimental-features",
+      label: "Experimental features",
+      narrative: "Each overridable flag shows its effective value and a Default / On / Off choice.",
+      state: { overrides: 1 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          experimentalFeatures: {
+            flags: { "swap.enabled": false },
+            killed: ["swap.enabled"],
+            overridable: ["swap.enabled"],
+            overridden: [],
+          },
+          preferences: journeyPreferences,
+          view: "experimental-features",
+        }),
+      id: "experimental-features-killed",
+      label: "Feature turned off remotely",
+      narrative: "A remote kill disables the choice and says Bramble turned the feature off.",
+      state: { killed: 1 },
+    },
     ...stakingExitCheckpoints,
   ],
   description:
@@ -296,6 +330,7 @@ export const settingsScenario: WalletScenario = {
     "backup-export",
     "backup-restore",
     "connected-sites",
+    "experimental-features",
     "reveal",
   ],
 };
