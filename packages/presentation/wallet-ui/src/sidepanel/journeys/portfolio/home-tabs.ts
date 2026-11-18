@@ -28,6 +28,7 @@ import { inlineCopyButton } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
 import {
   deploymentKnownFromPrivacy,
+  PRIVACY_NETWORK_UNAVAILABLE,
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
@@ -361,12 +362,17 @@ const tokensPanel = (
               .join("")}</ul>`;
   return `${body}
     ${
-      privacy.error
-        ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
+      privacy.blockerKind === "network"
+        ? `<div class="private-balance-summary muted">
+            <span class="private-balance-label">${icon("lock")}<span>Private balances</span></span>
+            <span class="token-fiat">${escapeHtml(PRIVACY_NETWORK_UNAVAILABLE)}</span>
+          </div>`
+        : privacy.error
+          ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
             <span class="private-balance-label">${icon("lock")}<span>Private balances</span></span>
             <span class="token-fiat">Try again</span>
           </button>`
-        : ""
+          : ""
     }
     ${
       hiddenCount > 0

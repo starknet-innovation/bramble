@@ -107,6 +107,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Queues approvals only. Since the execution half moved out, its sole match
   // is the `./signature-waiters` import path; no secret material transits here.
   "apps/extension/src/background/privacy/strk20-ops.ts",
+  // Registration queueing split out of strk20-ops.ts by size. Like it, the sole
+  // match is the `./signature-waiters` import path; no secret material transits.
+  "apps/extension/src/background/privacy/strk20-register-ops.ts",
   // Active-account context split from strk20-wallet-ops; the vault passphrase
   // only transits into the protected signer wiring, never logged or stored.
   "apps/extension/src/background/privacy/strk20-op-context.ts",

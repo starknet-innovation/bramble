@@ -32,6 +32,7 @@ import { networkDisplayName } from "../../shared/network-label";
 import { flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
 import {
   deploymentKnownFromPrivacy,
+  PRIVACY_NETWORK_UNAVAILABLE,
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
@@ -269,6 +270,14 @@ const privacyActions = (
   });
 };
 
+// Answers that no retry changes, stated in place of the retry control.
+const privateFinalAnswer = (privacy: PrivacyDisclosureState): string | null =>
+  privacy.blockerKind === "other-wallet"
+    ? `${PRIVACY_OTHER_WALLET} ${PRIVACY_OTHER_WALLET_NEXT}`
+    : privacy.blockerKind === "network"
+      ? PRIVACY_NETWORK_UNAVAILABLE
+      : null;
+
 /**
  * Token detail flow: current price, a 7-day sparkline, holdings, and the
  * contract facts. `chart` holds the recent price series; `price` is the
@@ -297,6 +306,7 @@ export const tokenDetailFlow = (
   const seen = deploymentKnownFromPrivacy(deployment, privacy);
   const registered = seen !== false && privacy.value?.registration === "registered";
   const registrationPending = seen !== false && privacy.value?.registration === "pending";
+  const privateNote = privateFinalAnswer(privacy);
   return (
     flowHeader(token.symbol, status, token.name) +
     flowScreen(
@@ -314,10 +324,10 @@ export const tokenDetailFlow = (
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
         ${
-          privacy.blockerKind === "other-wallet"
+          privateNote !== null
             ? `<div class="private-balance-summary muted">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
-                <span class="token-fiat">${escapeHtml(PRIVACY_OTHER_WALLET)} ${escapeHtml(PRIVACY_OTHER_WALLET_NEXT)}</span>
+                <span class="token-fiat">${escapeHtml(privateNote)}</span>
               </div>`
             : privacy.error && deployment !== false
               ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
