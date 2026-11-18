@@ -69,6 +69,7 @@
   },
   "dependencies": {
     "@bramble/core": "workspace:*",
+    "@bramble/flags": "workspace:*",
     "@bramble/kms-krusty": "workspace:*",
     "@bramble/ledger-protocol": "workspace:*",
     "@bramble/multisig": "workspace:*",

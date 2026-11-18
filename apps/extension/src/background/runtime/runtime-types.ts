@@ -26,6 +26,7 @@ import type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocke
 import type { DappMultisigAccount } from "@bramble/wallet-protocol/results";
 import type { SubmissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { PendingApproval } from "../approvals/approvals";
+import type { FeatureFlagsResponse } from "../flags/feature-flag-client";
 import type { PendingLedgerSign } from "../ledger/ledger-sign-queue";
 import type {
   ArgentMultisigDeploymentReview,
@@ -413,6 +414,7 @@ export type RuntimeResponse =
   | DeploymentStatusResponse
   | DetectTokensResponse
   | DiscoverNftsResponse
+  | FeatureFlagsResponse
   | {
       readonly candidates: readonly RecoveryAccountCandidate[];
       readonly complete: boolean;

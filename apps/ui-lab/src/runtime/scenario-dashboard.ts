@@ -9,6 +9,7 @@ import type {
   BalanceState,
   ConnectedSite,
   DiscoveredNft,
+  ExperimentalFeaturesState,
   PendingApproval,
   PrivacyDisclosureState,
   PrivacyJourneyState,
@@ -56,6 +57,8 @@ export type DashboardOptions = {
   readonly addFolderOpen?: boolean;
   readonly collapsedFolders?: readonly string[];
   readonly expandedGroupId?: string | null;
+  /** Settings > Experimental features; defaults to the production loading state. */
+  readonly experimentalFeatures?: ExperimentalFeaturesState;
   readonly historyUnavailable?: boolean;
   /**
    * The open Home portfolio tab, kept where production keeps it: in the
@@ -160,5 +163,6 @@ export const walletDashboard = (options: DashboardOptions = {}): string => {
     false,
     stakingFor(options),
     options.nftCoverage ?? "none",
+    options.experimentalFeatures ?? "loading",
   );
 };

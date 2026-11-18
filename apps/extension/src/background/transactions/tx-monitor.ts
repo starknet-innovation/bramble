@@ -45,7 +45,11 @@ const PERIOD_MINUTES: Readonly<Record<ObservationTier, number>> = {
  * panel reconciles when it is open" instead of throwing.
  */
 export type AlarmsApi = {
-  readonly create: (name: string, info: { readonly periodInMinutes: number }) => void;
+  /** Returns a promise on MV3 Chrome; callers must not let it float. */
+  readonly create: (
+    name: string,
+    info: { readonly periodInMinutes: number },
+  ) => Promise<void> | void;
   readonly get: (name: string) => Promise<{ readonly name: string } | undefined>;
   readonly onAlarm: {
     readonly addListener: (listener: (alarm: { readonly name: string }) => void) => void;
@@ -64,7 +68,7 @@ const ensureAlarm = async (
   tier: ObservationTier,
 ): Promise<void> => {
   if ((await alarms.get(name)) === undefined) {
-    alarms.create(name, { periodInMinutes: PERIOD_MINUTES[tier] });
+    await alarms.create(name, { periodInMinutes: PERIOD_MINUTES[tier] });
   }
 };
 
