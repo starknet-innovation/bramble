@@ -14,6 +14,7 @@ import { isStrk20CallAndProof, type Strk20Action } from "@bramble/wallet-protoco
 import type { Page } from "@playwright/test";
 import { RpcProvider } from "starknet";
 import { expect, test } from "../e2e/fixtures";
+import { BRAMBLE_PROVIDER_STATUS } from "../e2e/test-dapp-server";
 import {
   IMPORT_MNEMONIC,
   importWalletFromPhrase,
@@ -373,7 +374,7 @@ test("runs the STRK20 core lifecycle through an acknowledged public caller", asy
     const protocolFee = await readProtocolFee(provider);
     const dapp = await extension.context.newPage();
     await dapp.goto(dappServer.url);
-    await expect(dapp.getByTestId("provider-status")).toHaveText("bramble|Bramble|0.1.0");
+    await expect(dapp.getByTestId("provider-status")).toHaveText(BRAMBLE_PROVIDER_STATUS);
 
     await test.step("Connect only the funded account", async () => {
       const connection = connectLiveProvider(dapp);

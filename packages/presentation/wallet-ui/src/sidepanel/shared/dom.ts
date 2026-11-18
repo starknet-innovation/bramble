@@ -267,6 +267,12 @@ const renderToast = (
     stack.setAttribute("aria-live", "polite");
     doc.body.append(stack);
   }
+  // The same sentence already on screen says nothing new; stacking a copy of it
+  // only reads as a second failure (issue 951).
+  const showing = Array.from(stack.querySelectorAll(`.toast.${tone} .toast-text`));
+  if (showing.some((existing) => existing.textContent === display)) {
+    return;
+  }
 
   const problem = tone !== "success";
   const toast = doc.createElement("div");
