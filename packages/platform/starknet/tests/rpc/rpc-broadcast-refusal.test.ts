@@ -3,8 +3,10 @@
  * endpoint proved it turned the request away (HTTP 429 or JSON-RPC -32005). A
  * proxy 5xx with a small `error` body can follow a node that already accepted
  * the transaction, so it must stay outcome-unknown, never "Nothing was submitted".
- * The one exception is the gateway's own coded refusal, written before it
- * forwards: a 4xx `{"error":"<code>"}`, or a 503 screening hold (issue 910).
+ * The one exception is the wallet gateway's own coded refusal, written before
+ * it forwards: a documented `{"error":"<code>"}` on the status the gateway uses
+ * for it, from the gateway's own endpoint (issue 910). A custom node, an
+ * unknown code or a documented code on another status proves nothing.
  */
 import { beforeEach, describe, expect, test } from "bun:test";
 import {
@@ -19,13 +21,19 @@ import {
   withRpcFallback,
   withRpcWrite,
 } from "@bramble/starknet/provider";
-import { RpcGatewayRefusalError } from "@bramble/starknet/rpc-gateway-refusal";
+import {
+  GATEWAY_SCREENING_CODES,
+  RpcGatewayRefusalError,
+} from "@bramble/starknet/rpc-gateway-refusal";
 import { logger, type RpcProvider } from "starknet";
 
 logger.setLogLevel("FATAL");
 
 const CHAIN_ID = "0x534e5f4d41494e";
-const NODE_URL = "https://broadcast-refusal.example";
+// The wallet gateway's own endpoint: the only one whose coded refusals count.
+const NODE_URL = "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10";
+const CUSTOM_URL = "https://broadcast-refusal.example";
+const FOUNDATION_URL = "https://mainnet.nodes.starknet.org/rpc/v0_10";
 
 type Answer = { readonly body: string; readonly status: number };
 
@@ -52,9 +60,9 @@ const fetchThroughChannel = (provider: RpcProvider, method: string): Promise<unk
   return fetchEndpoint.call(provider.channel, method, {});
 };
 
-const broadcastFailure = (answer: Answer): Promise<unknown> =>
+const broadcastFailure = (answer: Answer, url: string = NODE_URL): Promise<unknown> =>
   withRpcWrite(
-    [NODE_URL],
+    [url],
     CHAIN_ID,
     (selected) => fetchThroughChannel(selected, "starknet_addInvokeTransaction"),
     scriptedProvider(answer),
@@ -64,8 +72,12 @@ const GATEWAY_TIMEOUT = { body: '{"error":"upstream timeout"}', status: 502 } as
 
 const rpcBody = (method: string): string => JSON.stringify({ id: 1, jsonrpc: "2.0", method });
 
-const transportOutcome = (answer: Answer, method: string): Promise<unknown> =>
-  timedRpcFetch(1_000, async () => new Response(answer.body, { status: answer.status }))(NODE_URL, {
+const transportOutcome = (
+  answer: Answer,
+  method: string,
+  url: string = NODE_URL,
+): Promise<unknown> =>
+  timedRpcFetch(1_000, async () => new Response(answer.body, { status: answer.status }))(url, {
     body: rpcBody(method),
     method: "POST",
   }).catch((error: unknown) => error);
@@ -207,12 +219,11 @@ describe("a gateway's coded refusal of a broadcast is definitely not sent", () =
     }
   });
 
-  test("an unknown code on a 4xx is still a refusal, with generic copy", async () => {
-    const rejection = await broadcastFailure(gatewayAnswer("quota_exhausted", 400));
-    expect(rejection).toBeInstanceOf(RpcGatewayRefusalError);
-    expect((rejection as Error).message).toBe(
-      "The RPC endpoint refused this transaction. Nothing was submitted.",
-    );
+  test("the gasless lane and the RPC lane name the same screening codes", () => {
+    for (const refusal of GATEWAY_REFUSALS) {
+      if (refusal.code === "transaction_rejected") continue;
+      expect(GATEWAY_SCREENING_CODES).toContain(refusal.code);
+    }
   });
 
   test("a refusal leaves the endpoint usable for the retry", async () => {
@@ -255,6 +266,14 @@ describe("anything short of a gateway's coded refusal stays outcome-unknown", ()
     gatewayAnswer("upstream_unavailable", 503),
     gatewayAnswer("screening_denied", 500),
     gatewayAnswer("screening_pending", 200),
+    // An undocumented code: the gateway never wrote it before forwarding.
+    gatewayAnswer("quota_exhausted", 400),
+    gatewayAnswer("timeout", 408),
+    // A documented code on a status the gateway does not use for it.
+    gatewayAnswer("address_not_allowed", 503),
+    gatewayAnswer("screening_pending", 403),
+    gatewayAnswer("transaction_rejected", 403),
+    gatewayAnswer("screening_unavailable", 400),
     { body: '{"error":"Address Not Allowed"}', status: 403 },
     { body: '{"error":"address_not_allowed","detail":"x"}', status: 403 },
     { body: '{"jsonrpc":"2.0","id":1,"error":"address_not_allowed"}', status: 403 },
@@ -270,6 +289,26 @@ describe("anything short of a gateway's coded refusal stays outcome-unknown", ()
       const rejection = await broadcastFailure(answer);
       expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
       expect((rejection as Error).message).toBe(INDETERMINATE_RPC_WRITE_MESSAGE);
+    }
+  });
+
+  test("the same coded answer from any other endpoint stays outcome-unknown", async () => {
+    // A custom RPC URL or a plain node can sit behind a proxy that answers a
+    // 4xx after the node took the transaction; only the wallet gateway's own
+    // endpoint documents its codes as written before forwarding.
+    for (const url of [CUSTOM_URL, FOUNDATION_URL]) {
+      for (const refusal of GATEWAY_REFUSALS) {
+        resetRpcEndpointCooldownsForTests();
+        const rejection = await broadcastFailure(gatewayAnswer(refusal.code, refusal.status), url);
+        expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
+        expect((rejection as Error).message).toBe(INDETERMINATE_RPC_WRITE_MESSAGE);
+      }
+      const outcome = await transportOutcome(
+        gatewayAnswer("address_not_allowed", 403),
+        "starknet_addInvokeTransaction",
+        url,
+      );
+      expect(outcome).not.toBeInstanceOf(RpcGatewayRefusalError);
     }
   });
 

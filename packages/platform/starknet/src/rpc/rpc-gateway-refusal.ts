@@ -4,8 +4,12 @@
  *
  * Trust boundary: the response is untrusted. Only an exact `{"error":"<code>"}`
  * body, with a short lowercase code, counts as the gateway speaking; a
- * JSON-RPC envelope, prose, or any extra key does not. The displayed message is
- * curated per code and never carries the body.
+ * JSON-RPC envelope, prose, or any extra key does not. On top of that, only the
+ * wallet gateway's own endpoint and only the code-and-status pairs it documents
+ * as written before forwarding are read as "not sent"; a custom endpoint, a
+ * proxy, or an undocumented code stays outcome-unknown, because any of those
+ * can answer after a node already holds the transaction. The displayed message
+ * is curated per code and never carries the body.
  */
 
 import { WalletError } from "@bramble/core/errors";
@@ -30,12 +34,21 @@ export const GATEWAY_CODE_PATTERN = /^[a-z0-9_]{1,64}$/;
 // A gateway code body is well under this; anything longer is not one.
 const GATEWAY_BODY_LIMIT_BYTES = 256;
 
-// Screening holds that stopped before the node was asked. These are the only
-// codes a 503 may carry and still prove nothing was sent: any other 5xx can
-// follow a node that already accepted the transaction.
-const RETRY_LATER_CODES: ReadonlySet<string> = new Set([
-  "screening_pending",
-  "screening_unavailable",
+/**
+ * The refusals the gateway writes before it asks a node, each with the one
+ * status it uses for that code (issue 910). An allowlist, like the gasless
+ * lane's pre-forward codes: anything else, including a documented code on an
+ * unexpected status, is not proof that nothing was sent.
+ */
+const PRE_FORWARD_REFUSALS: ReadonlyMap<string, number> = new Map([
+  ["transaction_rejected", 400],
+  ["invalid_screening_transaction", 400],
+  ["address_not_allowed", 403],
+  ["screening_denied", 403],
+  // Screening holds: the only 503s that stop before the node is asked. Any
+  // other 5xx can follow a node that already accepted the transaction.
+  ["screening_pending", 503],
+  ["screening_unavailable", 503],
 ]);
 
 /**
@@ -63,6 +76,7 @@ const messageFor = (code: string): string => {
       return "This account's check is still pending. Nothing was submitted — try again shortly.";
     case "screening_unavailable":
       return "This account could not be checked. Nothing was submitted — try again.";
+    case "invalid_screening_transaction":
     default:
       return "The RPC endpoint refused this transaction. Nothing was submitted.";
   }
@@ -91,18 +105,21 @@ const parsedBody = (text: string): unknown => {
 };
 
 /**
- * Classifies a broadcast response as a gateway refusal. A 4xx (the transport
- * handles 429 first) with a gateway code body is one; a 503 is one only for a
- * screening hold. Everything else, including any other 5xx, returns null and
- * keeps the transport's outcome-unknown rule.
+ * Classifies a broadcast response as a gateway refusal. Only the wallet
+ * gateway's own endpoint qualifies, and only a documented pre-forward code on
+ * the status the gateway uses for it. Everything else (a custom or foundation
+ * node, an unknown code, a documented code on another status, any other 5xx)
+ * returns null and keeps the transport's outcome-unknown rule.
  */
 export const gatewayBroadcastRefusal = (
+  fromWalletGateway: boolean,
   status: number,
   text: string,
 ): RpcGatewayRefusalError | null => {
+  if (!fromWalletGateway) return null;
   if (!((status >= 400 && status < 500) || status === 503)) return null;
-  if (text.length > GATEWAY_BODY_LIMIT_BYTES) return null;
+  if (new TextEncoder().encode(text).length > GATEWAY_BODY_LIMIT_BYTES) return null;
   const code = gatewayErrorCode(parsedBody(text));
-  if (code === null || (status === 503 && !RETRY_LATER_CODES.has(code))) return null;
+  if (code === null || PRE_FORWARD_REFUSALS.get(code) !== status) return null;
   return new RpcGatewayRefusalError(code);
 };

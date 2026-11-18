@@ -108,6 +108,7 @@ const boundedRpcResponse = async (
   response: Response,
   deadline: AbortSignal,
   broadcast: boolean,
+  fromWalletGateway: boolean,
 ): Promise<Response> => {
   if (response.status === 429) {
     void response.body?.cancel().catch(() => undefined);
@@ -121,7 +122,9 @@ const boundedRpcResponse = async (
         },
       )
     : "";
-  const gatewayRefusal = broadcast ? gatewayBroadcastRefusal(response.status, text) : null;
+  const gatewayRefusal = broadcast
+    ? gatewayBroadcastRefusal(fromWalletGateway, response.status, text)
+    : null;
   if (gatewayRefusal) throw gatewayRefusal;
   if (endpointRefusal(text, broadcast)) {
     throw new RpcRefusedError(RPC_REFUSED_MESSAGE, response.headers.get("retry-after"));
@@ -160,6 +163,7 @@ export const timedRpcFetch =
         await baseFetch(input, { ...init, signal }),
         deadline,
         isBroadcastRequest(init),
+        endpoint === "wallet-gateway",
       );
       recordRpcDiagnostic(endpoint, "ok", now() - startedAt);
       return response;
