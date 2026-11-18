@@ -268,5 +268,48 @@
       "deployed 0x6ffa710adcfd1073680e34384efd5a32f563a294debb84cd5e4f5243947cc08",
       "upgrade 0x57f7987432ae86e8ebe0a110dafc6d13b7b709965cb3e5819184c313bdaa5c5"
     ]
+  },
+  "s-scr/TA-64": {
+    "id": "s-scr/TA-64",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 10,
+    "address": "0x556901841e131754f275b6dca46771f02e7a321d38204d16e4ca6e7fff98528",
+    "pubkey": "0x6bd11676d04d0462c5d8b3f4ccd9b3adea4cc1666ba1e3056cfaf05865c9453",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "deployed, then emptied to exactly zero: the class probe alone must list it",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x6bd11676d04d0462c5d8b3f4ccd9b3adea4cc1666ba1e3056cfaf05865c9453",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+      "swept": true
+    },
+    "log": [
+      "funded STRK 0x364c8da016cbc01f79fa3bf297c8c442316dc3df00327ba172a683fb194bca3",
+      "deployed 0x1325d9f099c4bebd81eb9ddc86079c79b2846ab2bbda9b0f91f73911f6b2cff",
+      "swept 0x5dd6a3de6e2e8f357f5dd6e5bfec28572bf4ae490cb4f946a8be422daf38fad"
+    ]
+  },
+  "s-scr/TA-65": {
+    "id": "s-scr/TA-65",
+    "seed": "BRAMBLE_DATASET_SEED_S_SCR",
+    "vendorDerivation": "ready-double",
+    "index": 11,
+    "address": "0x28c2609521be9bee8deaba29e97206fe0fe659e5f088541f6463d6d86da7579",
+    "pubkey": "0x1c83f5c2bf126fc9388fd6e4a36915f1067761ef6ad3d3d7bd7e8033127e28b",
+    "classAtDeploy": null,
+    "expected": "undeployed, holds only an ERC-721: no balance probe sees it",
+    "detectability": "D3",
+    "backedBy": "none",
+    "state": {
+      "deployed": false,
+      "collectible": "0x28b7b443745b941dfa88bbfde5cd737b983c9ede2392fd1d07b528f16f9c408",
+      "tokenId": "0x1"
+    },
+    "log": [
+      "collectible-deployed 0x1c11eed5978672f6b9fd73656ab0845924e3dceaf755ffbabd536069cdcd166"
+    ]
   }
 }
