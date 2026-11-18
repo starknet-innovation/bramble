@@ -3,6 +3,7 @@
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import {
   addressLabel,
+  addressText,
   DEFAULT_TOKENS,
   STRK_TOKEN_ADDRESS,
   sameFelt,
@@ -255,7 +256,7 @@ export const summarizeStrk20Plan = (
   const ceiling = plan.feeCeiling ? displayFeeAmount(plan.feeCeiling.ceiling, feeAsset) : null;
   return [
     amount === null
-      ? `Private relay fee ${plan.feeAction.amount} (${plan.feeAction.token})`
+      ? `Private relay fee ${plan.feeAction.amount} (${addressText(plan.feeAction.token)})`
       : `Private relay fee ${amount}`,
     ...(ceiling === null ? [] : [`capped at ${ceiling}`]),
     ...(plan.authorization

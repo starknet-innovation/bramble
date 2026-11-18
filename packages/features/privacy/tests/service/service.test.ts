@@ -341,7 +341,7 @@ describe("STRK20 wallet policy", () => {
       summarizeStrk20Plan({
         feeAction: { amount: "0x124f80", recipient: "0x5", token: "0x6", type: "withdraw" },
       }),
-    ).toBe("Private relay fee 0x124f80 (0x6)");
+    ).toBe(`Private relay fee 0x124f80 (0x${"6".padStart(64, "0")})`);
   });
 
   test("delegates registration status and execution only when the adapter supports them", async () => {

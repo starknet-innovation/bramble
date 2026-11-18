@@ -5,6 +5,7 @@
  * back into private notes, and who can move what the calls leave behind.
  */
 import { describe, expect, test } from "bun:test";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import {
   SHADOW_INVOKE_ANONYMIZER,
@@ -48,7 +49,7 @@ describe("shadow account invoke review", () => {
     });
     expect(summaries.slice(2)).toEqual([
       "Runs 3 calls through your shadow account #2 for https://app.example",
-      `Shadow account anonymizer ${ANONYMIZER}`,
+      `Shadow account anonymizer ${addressText(ANONYMIZER)}`,
       "Settles STRK, 0x0123…cdef back into private notes",
       SHADOW_INVOKE_CONTROL,
     ]);

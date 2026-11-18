@@ -7,6 +7,7 @@
 import { DEFAULT_ORIGIN_GUARD } from "@bramble/permissions/blocklist";
 import { quoteStrk20Plan, summarizeStrk20Plan } from "@bramble/privacy/service";
 import { SHADOW_INVOKE_ANONYMIZER } from "@bramble/privacy/shadow-account-copy";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import {
   strk20BatchRefusalError,
@@ -121,7 +122,7 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
           ? ["Share all private token balances"]
           : [
               `Share private balances for ${input.tokens.length} token${input.tokens.length === 1 ? "" : "s"}`,
-              ...input.tokens.map((token) => `Token ${token}`),
+              ...input.tokens.map((token) => `Token ${addressText(token)}`),
             ],
     });
   });

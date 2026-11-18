@@ -7,7 +7,7 @@
  * be signed.
  */
 
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressText, sameFelt } from "@bramble/wallet-model/networks";
 import {
   decodeMultisigStrk20CompileActions,
   type MultisigStrk20PoolAction,
@@ -35,7 +35,7 @@ export const multisigStrk20Summary = (kind: MultisigStrk20ActionRequest["kind"])
         : "Transfer from this multisig's private balance";
 
 const party = (recipient: string, scope: MultisigStrk20ReviewScope): string =>
-  sameFelt(recipient, scope.accountAddress) ? "this multisig" : recipient;
+  sameFelt(recipient, scope.accountAddress) ? "this multisig" : addressText(recipient);
 
 const actionLine = (
   action: MultisigStrk20PoolAction,
@@ -49,7 +49,7 @@ const actionLine = (
   if (action.kind === "withdraw") return `Withdraw ${value} to ${party(action.recipient, scope)}`;
   return sameFelt(action.recipient, scope.accountAddress)
     ? `Keep ${value} in this multisig`
-    : `Send ${value} to ${action.recipient}`;
+    : `Send ${value} to ${addressText(action.recipient)}`;
 };
 
 /**
@@ -120,7 +120,7 @@ export const reviewMultisigStrk20Relay = (
   if (!value || !fee) return null;
   const action =
     request.kind === "transfer"
-      ? `Send ${value} to ${request.recipient}`
+      ? `Send ${value} to ${addressText(request.recipient)}`
       : `Withdraw ${value} to ${party(request.recipient, scope)}`;
   return {
     lines: [...reviewScopeLines(scope), action, `Relay fee ${fee}`],

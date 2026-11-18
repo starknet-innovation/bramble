@@ -14,6 +14,7 @@ import {
 } from "@bramble/privacy/service";
 import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { ActivityLog } from "@bramble/transactions/activity";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import {
   STRK20_PREPARE_REGISTER_SUMMARY,
@@ -217,7 +218,7 @@ export const queueStrk20Registration = async (
       request: { poolAddress, simulate: mode.simulate, type: "prepare-register" },
       summaries: [
         mode.simulate ? STRK20_SIMULATE_REGISTER_SUMMARY : STRK20_PREPARE_REGISTER_SUMMARY,
-        `Privacy pool ${poolAddress}`,
+        `Privacy pool ${addressText(poolAddress)}`,
         "Publishes a viewing-key commitment, never the viewing key",
         "Opens this account's own private channel",
         mode.simulate
@@ -237,8 +238,8 @@ export const queueStrk20Registration = async (
     },
     summaries: [
       "Activate private balances for this account",
-      `Privacy pool ${poolAddress}`,
-      `Registration preflight token ${token}`,
+      `Privacy pool ${addressText(poolAddress)}`,
+      `Registration preflight token ${addressText(token)}`,
       `Approve and pay the reviewed ${formatStrk20PoolFee(poolFeeFri)} pool fee`,
       "Publishes a viewing-key commitment, never the viewing key",
       "Opens this account's own private channel",
