@@ -10,7 +10,10 @@
  */
 
 import type { RpcProvider } from "starknet";
+import { RpcGatewayRefusalError } from "./rpc-gateway-refusal";
 import { RpcRefusedError } from "./rpc-transport";
+
+type WalletRefusal = RpcGatewayRefusalError | RpcRefusedError;
 
 type ChannelMethod = (this: object, ...args: readonly unknown[]) => unknown;
 
@@ -19,7 +22,7 @@ type ChannelMethod = (this: object, ...args: readonly unknown[]) => unknown;
 // channel never see each other's refusal.
 const refusalPreservingFetchEndpoint = (fetchEndpoint: ChannelMethod): ChannelMethod =>
   async function (this: object, ...args: readonly unknown[]): Promise<unknown> {
-    let refusal: RpcRefusedError | null = null;
+    let refusal: WalletRefusal | null = null;
     const receiver = new Proxy(this, {
       get(target, property) {
         const value: unknown = Reflect.get(target, property, target);
@@ -28,7 +31,7 @@ const refusalPreservingFetchEndpoint = (fetchEndpoint: ChannelMethod): ChannelMe
         }
         return (...fetchArgs: readonly unknown[]): Promise<unknown> =>
           Promise.resolve(Reflect.apply(value, target, fetchArgs)).catch((error: unknown) => {
-            if (error instanceof RpcRefusedError) {
+            if (error instanceof RpcRefusedError || error instanceof RpcGatewayRefusalError) {
               refusal = error;
             }
             throw error;
@@ -38,16 +41,17 @@ const refusalPreservingFetchEndpoint = (fetchEndpoint: ChannelMethod): ChannelMe
     try {
       return await Reflect.apply(fetchEndpoint, receiver, args);
     } catch (error) {
-      // Only the wallet's own transport mints an RpcRefusedError, and only for
-      // a 429 or a -32005 it read itself, so no node text can reach this branch.
+      // Only the wallet's own transport mints these, from a status and body it
+      // read itself, and their messages are curated, so no node text can reach
+      // this branch.
       throw refusal ?? error;
     }
   };
 
 /**
  * Makes a provider's JSON-RPC channel rethrow the exact {@link RpcRefusedError}
- * its transport raised, instead of starknet.js's message-only copy. Trust
- * boundary: the original object is matched by identity to the one request that
+ * or {@link RpcGatewayRefusalError} its transport raised, instead of
+ * starknet.js's message-only copy. Trust boundary: the original object is matched by identity to the one request that
  * produced it, never by message text, so a node that echoes the refusal
  * sentence still reads as an ordinary failure, and a broadcast stays
  * outcome-unknown unless the wallet itself saw the refusal. Failure behaviour:

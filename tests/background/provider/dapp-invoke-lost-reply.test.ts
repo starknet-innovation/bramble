@@ -8,6 +8,7 @@
 import { describe, expect, test } from "bun:test";
 import { createPreferencesStore } from "@bramble/settings/preferences";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
+import { RpcGatewayRefusalError } from "@bramble/starknet/rpc-gateway-refusal";
 import { postDeploymentFailure } from "@bramble/starknet/rpc-submit";
 import { createMemoryStore } from "@bramble/store/kv";
 import { memoryActivityLog } from "@bramble/transactions/activity";
@@ -94,6 +95,26 @@ describe("a dapp invoke with a lost broadcast reply", () => {
     expect(rows.map((row) => [row.hash, row.status, row.kind])).toEqual([
       [SIGNED, "pending", "invoke"],
     ]);
+  });
+
+  // Issue 910: a refusal the gateway wrote before forwarding is not a lost
+  // reply. The site gets the curated reason, the panel is not told "status
+  // unknown", and no pending row is recorded for a hash no node ever saw.
+  test("answers a gateway refusal as failed, with no pending row", async () => {
+    const refusal = new RpcGatewayRefusalError("transaction_rejected");
+    const { activity, dapp, panel } = await approveInvoke(async (input) => {
+      await input.onSigned?.({
+        nonce: "0x1",
+        senderAddress: account.address,
+        transactionHash: SIGNED,
+      });
+      throw refusal;
+    });
+
+    expect(readSubmissionUnknownError(panel)).toBeNull();
+    expect(panel).toEqual({ error: refusal.message });
+    expect(dapp).toHaveProperty("error");
+    expect(await activity.list()).toEqual([]);
   });
 
   // #678: the grant a lost-reply approve may have made must stay listed and
