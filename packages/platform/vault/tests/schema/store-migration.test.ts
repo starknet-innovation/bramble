@@ -95,6 +95,46 @@ describe("readMigratedVault", () => {
     expect(await staging.exists()).toBe(false);
   });
 
+  // Pins today's behaviour (audit of PR 949): when the primary only fails its
+  // freshness check (rollback health), an authenticated older stage still
+  // replaces it through replaceUnverified, without the user's explicit consent.
+  // Safe only while every successful unlock removes the stage; change this
+  // test deliberately if that recovery is ever sent to explicit user recovery.
+  test("an authenticated older stage replaces a rollback-flagged primary", async () => {
+    const { primary, staging } = stores();
+    const newer = migrateVault({
+      ...legacyV3,
+      accounts: [account, { ...account, address: "0x124", id: "SN_MAIN:0x124" }],
+      signingKeys: [
+        ...legacyV3.signingKeys,
+        { accountId: "SN_MAIN:0x124", privateKey: "0x654322" },
+      ],
+    });
+    await primary.write(newer, vaultPassphrase);
+    const historical = { ...migrateVault(legacyV3), schemaVersion: 13 };
+    await staging.write(historical, vaultPassphrase);
+    let replaced: unknown;
+    const rolledBack: EncryptedStore = {
+      ...primary,
+      health: async () => (replaced === undefined ? "rollback" : "ok"),
+      read: async (passphrase) => {
+        if (replaced === undefined) throw new Error("vault rollback detected");
+        return primary.read(passphrase);
+      },
+      replaceUnverified: async (value, passphrase) => {
+        replaced = value;
+        await primary.write(value, passphrase);
+      },
+    };
+
+    const recovered = await readMigratedVault({ primary: rolledBack, staging }, vaultPassphrase);
+
+    expect(replaced).toEqual(recovered);
+    expect(recovered.accounts).toEqual(historical.accounts);
+    expect(await primary.read(vaultPassphrase)).toEqual(recovered);
+    expect(await staging.exists()).toBe(false);
+  });
+
   test("refuses absent, empty or malformed recovery stages without replacing the primary", async () => {
     for (const candidate of [undefined, null, {}, { schemaVersion: 13 }]) {
       const { backend, primary, staging } = stores();

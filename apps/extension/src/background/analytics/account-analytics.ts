@@ -1,7 +1,7 @@
 /** Request-bound account pseudonyms. No active-account fallback or secret material. */
 import { isRecord } from "@bramble/core/json";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 
 /** Public inventory projected inside the background; absent provenance stays unknown. */
 export type AnalyticsAccounts = {
@@ -32,12 +32,14 @@ const callSubject = (params: unknown): unknown => {
     return calldata[0];
   return field(call, "contract_address");
 };
+// A deploy-and-invoke names the account twice; two different addresses make
+// the subject ambiguous, so neither is attributed.
 const paymasterSubject = (params: unknown): unknown => {
   const transaction = field(firstParam(params), "transaction");
-  return (
-    field(field(transaction, "invoke"), "user_address") ??
-    field(field(transaction, "deployment"), "address")
-  );
+  const invoker = field(field(transaction, "invoke"), "user_address");
+  const deployed = field(field(transaction, "deployment"), "address");
+  if (invoker === undefined || deployed === undefined) return invoker ?? deployed;
+  return sameFelt(invoker, deployed) ? invoker : null;
 };
 const subject = (request: unknown): unknown => {
   const params = field(request, "params");
@@ -69,41 +71,48 @@ const requestBody = async (input: RequestInfo | URL, init?: RequestInit): Promis
   }
 };
 
-const rpcAccount = async (
-  inventory: AnalyticsAccounts,
+// The one network and canonical address a request could be attributed to,
+// worked out from the request alone so the vault is read only when needed.
+const candidateSubject = async (
   url: URL,
   input: RequestInfo | URL,
   init?: RequestInit,
-): Promise<AccountRef | undefined> => {
+): Promise<{ readonly address: string; readonly networkId: string } | null> => {
+  if (url.pathname === "/api/strk20" || url.pathname.startsWith("/api/strk20/")) return null;
   const network = /\/(mainnet|sepolia)(?:\/|$)/.exec(url.pathname)?.[1];
   const networkId =
     network === "mainnet" ? "SN_MAIN" : network === "sepolia" ? "SN_SEPOLIA" : undefined;
-  if (networkId === undefined) return undefined;
+  if (networkId === undefined) return null;
   const decoded = await requestBody(input, init);
   const requests: readonly unknown[] = Array.isArray(decoded) ? decoded : [decoded];
   const resolved = requests.map(subject).map(felt);
   // One unresolved member makes the whole batch's account context ambiguous.
-  if (resolved.length === 0 || resolved.includes(null)) return undefined;
+  if (resolved.length === 0 || resolved.includes(null)) return null;
   const subjects = new Set(resolved);
-  if (subjects.size !== 1) return undefined;
-  return inventory.accounts.find(
-    (entry) => entry.networkId === networkId && subjects.has(entry.address),
-  );
+  const [address] = subjects;
+  return subjects.size === 1 && typeof address === "string" ? { address, networkId } : null;
 };
 
 /**
  * Resolves one owned request subject. Opaque SDK traffic has no transport-bound
  * account context; it is always omitted, including after timed-out operations.
+ * `loadInventory` (a vault read) runs only once the request names exactly one
+ * candidate account, so unattributable RPC traffic never waits on the vault;
+ * a null inventory (locked or unavailable) omits attribution.
  */
 export const requestAccountAnalytics = async (
-  inventory: AnalyticsAccounts,
+  loadInventory: () => Promise<AnalyticsAccounts | null>,
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<AccountAnalytics | null> => {
   const url = new URL(input instanceof Request ? input.url : String(input));
-  if (url.pathname === "/api/strk20" || url.pathname.startsWith("/api/strk20/")) return null;
-  const account = await rpcAccount(inventory, url, input, init);
-  if (account === undefined) return null;
+  const candidate = await candidateSubject(url, input, init);
+  if (candidate === null) return null;
+  const inventory = await loadInventory();
+  const account = inventory?.accounts.find(
+    (entry) => entry.networkId === candidate.networkId && entry.address === candidate.address,
+  );
+  if (inventory === null || account === undefined) return null;
   const identity = new TextEncoder().encode(
     `mc-account:v1:${account.networkId}:${account.address}`,
   );

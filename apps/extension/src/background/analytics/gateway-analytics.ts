@@ -259,7 +259,9 @@ export const createGatewayAnalytics = ({
   };
 
   const withFlow = async <T>(run: () => Promise<T>): Promise<T> => {
-    const enabledAtStart = await isEnabled();
+    // With analytics off there is no flow id to scope, so operations keep
+    // running concurrently; only consented flows are serialized.
+    if (!(await isEnabled())) return run();
     let release = (): void => undefined;
     const previous = flowQueue;
     flowQueue = new Promise<void>((resolve) => {
@@ -268,7 +270,7 @@ export const createGatewayAnalytics = ({
     await previous;
     try {
       try {
-        const generated = enabledAtStart ? randomUuid() : "";
+        const generated = randomUuid();
         activeFlowId = validUuid(generated) ? generated : undefined;
       } catch {
         // Optional metadata must neither reject wallet work nor strand the queue.

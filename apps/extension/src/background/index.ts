@@ -36,7 +36,7 @@ import {
 } from "../browser-storage";
 import { resolveExtensionApi } from "../extension-api";
 import { createPendingDeployments } from "./accounts/pending-deployments";
-import { createWalletReader } from "./accounts/wallet-reader";
+import { analyticsInventoryLoader, createWalletReader } from "./accounts/wallet-reader";
 import { requestAccountAnalytics } from "./analytics/account-analytics";
 import { observeTechnicalDataConsent, technicalDataAllowed } from "./analytics/data-consent";
 import {
@@ -209,16 +209,12 @@ const readPreferences = (): Promise<WalletPreferences> => preferenceStore.read()
 const nativeFetch = globalThis.fetch.bind(globalThis);
 const browserNavigator = globalThis.navigator as Navigator & { readonly brave?: unknown };
 const gatewayAnalytics = createGatewayAnalytics({
-  account: async (input, init) => {
-    const passphrase = session.peekPassphrase();
-    if (!passphrase) return null;
-    const service = await wallet;
-    if (!service) return null;
-    const vault = await service.readVault(passphrase);
-    if (session.peekPassphrase() !== passphrase) return null;
-    const inventory = { accounts: vault.accounts, provenance: vault.accountProvenance ?? {} };
-    return requestAccountAnalytics(inventory, input, init);
-  },
+  account: (input, init) =>
+    requestAccountAnalytics(
+      analyticsInventoryLoader(wallet, () => session.peekPassphrase()),
+      input,
+      init,
+    ),
   enabled: async () => {
     await preferenceSignalsReady;
     return productAnalyticsEnabled && technicalDataConsent;
