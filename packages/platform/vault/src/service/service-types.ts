@@ -291,6 +291,7 @@ export type WalletVaultService = {
    * Compares public keys only and returns a boolean; no secret leaves. Throws
    * on a wrong passphrase or a Krusty failure, so callers can tell "unknown"
    * from "not affected". An unknown or non-Ready account answers `false`.
+   * A successful answer is cached per account until `clearGrantCache` (lock).
    */
   readonly hasPreFixReadyKey: (input: {
     readonly accountId: string;
@@ -412,9 +413,10 @@ export type WalletVaultService = {
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
   /**
-   * Drops the in-memory grant projection `getGrantedAccounts` answers from.
-   * Called when the wallet locks, beside the derived-key caches; the next
-   * read after unlock repopulates it.
+   * Drops the in-memory grant projection `getGrantedAccounts` answers from,
+   * and the per-unlock Ready key verdicts `hasPreFixReadyKey` caches. Called
+   * when the wallet locks, beside the derived-key caches; the next read after
+   * unlock repopulates both.
    */
   readonly clearGrantCache: () => void;
   /**
