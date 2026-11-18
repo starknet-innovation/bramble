@@ -41,13 +41,15 @@ export const startFeatureFlagRefresh = ({
           refresh(true);
         }
       });
+      // `create` returns a promise on MV3 Chrome: it is returned into the
+      // chain so a rejection lands in the catch instead of going unhandled.
       void alarms
         .get(FEATURE_FLAG_ALARM)
-        .then((existing) => {
-          if (existing === undefined) {
-            alarms.create(FEATURE_FLAG_ALARM, { periodInMinutes: FEATURE_FLAG_REFRESH_MINUTES });
-          }
-        })
+        .then((existing) =>
+          existing === undefined
+            ? alarms.create(FEATURE_FLAG_ALARM, { periodInMinutes: FEATURE_FLAG_REFRESH_MINUTES })
+            : undefined,
+        )
         .catch(() => undefined);
     } catch {
       // A context-invalidated runtime can throw synchronously; startup refresh still runs.

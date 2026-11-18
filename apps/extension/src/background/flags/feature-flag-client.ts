@@ -4,9 +4,13 @@
  *
  * Fail-closed ladder, evaluated on every snapshot:
  * 1. a verified, unexpired document (fresh, or the last good one) applies;
- * 2. otherwise — nothing accepted yet, the last good copy expired, the bundled
- *    keys failed to import, or the install bucket is unavailable — the bundled
- *    defaults apply unchanged.
+ * 2. otherwise — nothing accepted yet, the last good copy expired, the stored
+ *    state could not be read, or the bundled keys failed to import — the
+ *    bundled defaults apply unchanged. Expiry falling back to the defaults is
+ *    by design: a kill lasts only as long as the signed copy that carries it.
+ *
+ * An install bucket that cannot be drawn or stored only withholds the
+ * rollout-dependent decisions; a remote kill still applies without one.
  *
  * Local overrides (Settings > Experimental features) apply last, through
  * `@bramble/flags/overrides`: only catalog flags marked `localOverride`, and
@@ -105,7 +109,12 @@ export type FeatureFlagClientOptions = {
   readonly version: string | null;
 };
 
-type Loaded = { payload: FlagPayload | null; state: FlagState };
+// `readable` is false when the stored state could not be read: nothing is
+// applied or fetched then, so a transient storage failure can neither lower
+// the rollback floor nor be mistaken for a fresh install.
+type Loaded = { payload: FlagPayload | null; readable: boolean; state: FlagState };
+
+const UNREADABLE: Loaded = { payload: null, readable: false, state: EMPTY_FLAG_STATE };
 
 const bundledValues = (catalog: FlagCatalog): FlagValues =>
   Object.fromEntries(Object.entries(catalog).map(([k, v]) => [k, v.enabled]));
@@ -149,17 +158,28 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
 
   const load = async (): Promise<Loaded> => {
     const state = await readFlagState(options.store, options.now());
+    if (state === null) {
+      return UNREADABLE;
+    }
     if (state.document === null) {
-      return { payload: null, state };
+      return { payload: null, readable: true, state };
     }
     const stored = await verify(state.document, state.sequence);
     // A stored copy that no longer verifies (expired, tampered, key dropped in
     // this release) keeps its sequence as the rollback floor but stops applying.
-    return { payload: stored.ok ? stored.payload : null, state };
+    return { payload: stored.ok ? stored.payload : null, readable: true, state };
   };
+  // Memoised once read; an unreadable store is retried on the next call.
   let loaded: Promise<Loaded> | null = null;
   const current = (): Promise<Loaded> => {
-    loaded ??= load().catch(() => ({ payload: null, state: EMPTY_FLAG_STATE }));
+    loaded ??= load()
+      .catch(() => UNREADABLE)
+      .then((result) => {
+        if (!result.readable) {
+          loaded = null;
+        }
+        return result;
+      });
     return loaded;
   };
 
@@ -171,6 +191,9 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
 
   const attempt = async (force: boolean): Promise<FeatureFlagRefreshOutcome> => {
     const live = await current();
+    if (!live.readable) {
+      return "unreachable";
+    }
     const checkedAt = options.now();
     if (!force && checkedAt - live.state.checkedAt < FEATURE_FLAG_REFRESH_MS) {
       return "skipped";
@@ -206,19 +229,30 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
     return "applied";
   };
 
+  // Override writes are read-modify-write on the whole map, so they run one
+  // after another; two rapid writes would otherwise clobber each other.
+  let overrideQueue: Promise<unknown> = Promise.resolve();
+  const serialised = <T>(work: () => Promise<T>): Promise<T> => {
+    const run = overrideQueue.then(work, work);
+    overrideQueue = run.catch(() => undefined);
+    return run;
+  };
+
   let inflight: Promise<FeatureFlagRefreshOutcome> | null = null;
   return {
-    async clearOverrides() {
-      return saveOverrides({});
+    clearOverrides() {
+      return serialised(() => saveOverrides({}));
     },
-    async setOverride(key, value) {
+    setOverride(key, value) {
       if (!isOverridableFlag(catalog, key)) {
-        return "not-overridable";
+        return Promise.resolve("not-overridable");
       }
-      const rest = Object.fromEntries(
-        Object.entries(await currentOverrides()).filter(([existing]) => existing !== key),
-      );
-      return saveOverrides(value === null ? rest : { ...rest, [key]: value });
+      return serialised(async () => {
+        const rest = Object.fromEntries(
+          Object.entries(await currentOverrides()).filter(([existing]) => existing !== key),
+        );
+        return saveOverrides(value === null ? rest : { ...rest, [key]: value });
+      });
     },
     refresh(refreshOptions) {
       inflight ??= attempt(refreshOptions?.force ?? false)
@@ -234,10 +268,9 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
         installBucket(),
         currentOverrides(),
       ]);
-      const verified = live.payload && options.now() < live.payload.expiresAt ? live.payload : null;
-      const payload = installed === null ? null : verified;
+      const payload = live.payload && options.now() < live.payload.expiresAt ? live.payload : null;
       const base =
-        payload === null || installed === null
+        payload === null
           ? bundledValues(catalog)
           : evaluateFlags(catalog, payload, { bucket: installed, chain, version: options.version });
       return {

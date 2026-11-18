@@ -99,6 +99,25 @@ describe("evaluateFlags", () => {
     expect(evaluate({ "c.toggle": rule }, { chain: null })["c.toggle"]).toBe(false);
   });
 
+  test("without an install bucket a kill applies and rollout rules keep the default", () => {
+    const targeting = { bucket: null };
+    expect(evaluate({ "a.killonly": { enabled: false } }, targeting)["a.killonly"]).toBe(false);
+    expect(evaluate({ "c.toggle": { enabled: false } }, targeting)["c.toggle"]).toBe(false);
+    // A kill with a rollout is still a kill: it can never turn the flag on.
+    expect(
+      evaluate({ "a.killonly": { enabled: false, rollout: 1 } }, targeting)["a.killonly"],
+    ).toBe(false);
+    // Rollout-dependent "on" rules cannot be decided: the bundled default stays.
+    expect(evaluate({ "a.killonly": { enabled: true, rollout: 1 } }, targeting)["a.killonly"]).toBe(
+      true,
+    );
+    expect(evaluate({ "c.toggle": { enabled: true, rollout: 9999 } }, targeting)["c.toggle"]).toBe(
+      false,
+    );
+    // Rules without a rollout need no bucket.
+    expect(evaluate({ "c.toggle": { enabled: true } }, targeting)["c.toggle"]).toBe(true);
+  });
+
   test("an off-target kill-only rule kills the flag for that target", () => {
     const rule: FlagRule = { chains: ["SN_SEPOLIA"], enabled: true };
     expect(evaluate({ "a.killonly": rule }, { chain: "SN_MAIN" })["a.killonly"]).toBe(false);

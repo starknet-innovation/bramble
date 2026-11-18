@@ -18,8 +18,12 @@ import {
 
 /** Local targeting inputs. Never leave the device. */
 export type FlagTargeting = {
-  /** Per-install random integer in [0, 9999]. */
-  readonly bucket: number;
+  /**
+   * Per-install random integer in [0, 9999], or null when none could be drawn
+   * or stored. Without one, a rule whose outcome depends on `rollout` keeps
+   * the bundled default; a kill (`enabled: false`) still applies.
+   */
+  readonly bucket: number | null;
   /** Active chain id (`SN_MAIN`, `SN_SEPOLIA`, ...), or null when unknown. */
   readonly chain: string | null;
   /** This build's `x.y.z` manifest version, or null when unreadable. */
@@ -58,10 +62,20 @@ const versionMatches = (rule: FlagRule, version: string | null): boolean => {
   );
 };
 
+// Whether the install's rollout position admits it. Only reached with a
+// bucket when the rule has a rollout (see `needsBucket`).
+const rolloutAdmits = (key: string, rule: FlagRule, bucket: number | null): boolean =>
+  rule.rollout === undefined || (bucket !== null && flagBucket(key, bucket) < rule.rollout);
+
+// A rule can only be decided with the install bucket when it could turn the
+// flag on for some installs and not others. A kill needs no bucket.
+const needsBucket = (rule: FlagRule, targeting: FlagTargeting): boolean =>
+  rule.enabled && rule.rollout !== undefined && targeting.bucket === null;
+
 /** Whether a remote rule turns its flag on for this install. */
 const ruleOn = (key: string, rule: FlagRule, targeting: FlagTargeting): boolean =>
   rule.enabled &&
-  (rule.rollout === undefined || flagBucket(key, targeting.bucket) < rule.rollout) &&
+  rolloutAdmits(key, rule, targeting.bucket) &&
   versionMatches(rule, targeting.version) &&
   (rule.chains === undefined ||
     (targeting.chain !== null && (rule.chains as readonly string[]).includes(targeting.chain)));
@@ -69,7 +83,9 @@ const ruleOn = (key: string, rule: FlagRule, targeting: FlagTargeting): boolean 
 /**
  * Evaluates every catalog flag. A flag without a remote rule keeps its bundled
  * default; `kill-only` flags can only be lowered (`default && remote`);
- * `toggle` flags take the remote decision.
+ * `toggle` flags take the remote decision. A rollout rule that cannot be
+ * decided without an install bucket keeps the bundled default, so a missing
+ * bucket never blocks a kill and never widens a rollout.
  */
 export const evaluateFlags = (
   catalog: FlagCatalog,
@@ -79,7 +95,7 @@ export const evaluateFlags = (
   const values: Record<string, boolean> = {};
   for (const [key, known] of Object.entries(catalog)) {
     const rule = payload && Object.hasOwn(payload.flags, key) ? payload.flags[key] : undefined;
-    if (rule === undefined) {
+    if (rule === undefined || needsBucket(rule, targeting)) {
       values[key] = known.enabled;
       continue;
     }

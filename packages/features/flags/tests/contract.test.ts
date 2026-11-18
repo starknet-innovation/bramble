@@ -87,12 +87,17 @@ describe("parseFlagTimestamp", () => {
     "2026-11-16T12:00:00.000Z",
     "2026-11-16 12:00:00Z",
     "2026-11-16T12:00:00+00:00",
+    // Years below 2000: `Date.UTC(99, ...)` would read 0099 as 1999.
+    "0099-01-01T00:00:00Z",
+    "0100-01-01T00:00:00Z",
+    "1999-12-31T23:59:59Z",
   ])("rejects %s", (value) => {
     expect(() => parseFlagTimestamp(value)).toThrow(FlagContractError);
   });
 
   test("accepts a leap day and matches Date.parse", () => {
     expect(parseFlagTimestamp("2028-02-29T23:59:59Z")).toBe(Date.parse("2028-02-29T23:59:59Z"));
+    expect(parseFlagTimestamp("2000-01-01T00:00:00Z")).toBe(Date.parse("2000-01-01T00:00:00Z"));
   });
 });
 

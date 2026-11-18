@@ -11,7 +11,12 @@
  *
  * Malformed records read as "nothing stored". For the document that means
  * bundled defaults until the next good fetch; for the bucket it means a fresh
- * draw. Store failures never throw out of these helpers.
+ * draw. A document record whose check time lies in the future (a clock that
+ * stepped back) keeps its document and sequence: only the check time is
+ * clamped, because it drives nothing but the refresh throttle, while the
+ * sequence is the rollback floor. A store that cannot be read is reported as
+ * unknown (null), never as empty, so a transient read failure cannot lower
+ * that floor. Writes never throw out of these helpers.
  */
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
@@ -33,34 +38,47 @@ export type FlagState = {
   readonly sequence: number;
 };
 
-/** The state a fresh install (or an unreadable record) starts from. */
+/** The state a fresh install (or a malformed record) starts from. */
 export const EMPTY_FLAG_STATE: FlagState = { checkedAt: 0, document: null, sequence: 0 };
 
-const isTime = (value: unknown, now: number): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= now;
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
-/** Reads the persisted state, or {@link EMPTY_FLAG_STATE} when absent or invalid. */
-export const readFlagState = async (store: KeyValueStore, now: number): Promise<FlagState> => {
-  const value = await store.get(FEATURE_FLAG_STORE_KEY).catch(() => undefined);
+/**
+ * Reads the persisted state: {@link EMPTY_FLAG_STATE} when absent or
+ * malformed, or null when the store could not be read at all. A check time
+ * after `now` is clamped to `now`; the document and sequence are kept.
+ */
+export const readFlagState = async (
+  store: KeyValueStore,
+  now: number,
+): Promise<FlagState | null> => {
+  const value = await store.get(FEATURE_FLAG_STORE_KEY).then(
+    (stored) => ({ stored }),
+    () => null,
+  );
+  if (value === null) {
+    return null;
+  }
+  const { stored } = value;
   if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, STATE_KEYS) ||
-    value["schemaVersion"] !== STATE_VERSION ||
-    !isTime(value["checkedAt"], now) ||
-    typeof value["sequence"] !== "number" ||
-    !Number.isSafeInteger(value["sequence"]) ||
-    value["sequence"] < 0 ||
+    !isRecord(stored) ||
+    !hasOnlyKnownKeys(stored, STATE_KEYS) ||
+    stored["schemaVersion"] !== STATE_VERSION ||
+    !isCount(stored["checkedAt"]) ||
+    !isCount(stored["sequence"]) ||
     !(
-      value["document"] === null ||
-      (typeof value["document"] === "string" && value["document"].length <= MAX_FLAG_DOCUMENT_BYTES)
+      stored["document"] === null ||
+      (typeof stored["document"] === "string" &&
+        stored["document"].length <= MAX_FLAG_DOCUMENT_BYTES)
     )
   ) {
     return EMPTY_FLAG_STATE;
   }
   return {
-    checkedAt: value["checkedAt"],
-    document: value["document"],
-    sequence: value["sequence"],
+    checkedAt: Math.min(stored["checkedAt"], now),
+    document: stored["document"],
+    sequence: stored["sequence"],
   };
 };
 
