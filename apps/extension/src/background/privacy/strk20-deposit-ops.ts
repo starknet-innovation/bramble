@@ -21,7 +21,7 @@ import {
 } from "@bramble/privacy/service";
 import { summarizeSponsoredShield } from "@bramble/privacy/sponsored-shield";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressText, sameFelt } from "@bramble/wallet-model/networks";
 import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
 import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics";
 import { createApprovalContext } from "../approvals/approval-context";
@@ -106,7 +106,7 @@ const depositSummaries = (input: {
     ? `Activate private balances and shield ${input.value}`
     : input.toSelf
       ? `Shield ${input.value}`
-      : `Shield ${input.value} into ${input.recipient}'s private balance`,
+      : `Shield ${input.value} into ${addressText(input.recipient)}'s private balance`,
   ...(input.activate
     ? ["Registration is public and links this wallet address to its viewing key"]
     : []),

@@ -5,7 +5,7 @@ import { type ArgentMultisigRecord, argentMultisigOperationId } from "@bramble/m
 import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
-import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import { addressText, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { signerForContext } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
@@ -408,7 +408,7 @@ const submitDeployment = async (
     hash: transactionHash,
     kind: "deploy",
     networkId: record.networkId,
-    summary: `Deploy Argent multisig ${record.name ?? record.address}`,
+    summary: `Deploy Argent multisig ${record.name ?? addressText(record.address)}`,
   });
   return {
     address: record.address,

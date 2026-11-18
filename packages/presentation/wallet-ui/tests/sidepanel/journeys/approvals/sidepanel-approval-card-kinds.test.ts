@@ -7,6 +7,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
+import { addressText } from "@bramble/wallet-model/networks";
 import {
   STRK20_PREPARE_REGISTER_SUMMARY,
   STRK20_SIMULATE_REGISTER_SUMMARY,
@@ -61,7 +62,7 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).not.toContain("request-technical");
     // The familiar display name leads, stacked over the address it shares.
     expect(html).toContain(`<strong>${accountDisplayName(account, null)}</strong>`);
-    expect(html).toContain(`title="${active?.address}"`);
+    expect(html).toContain(`title="${addressText(active?.address ?? "")}"`);
     expect(html).toContain(`<dt>Network</dt><dd>${status.network}</dd>`);
     expect(html).toContain(`data-approval-account="${status.activeAccountId}"`);
     expect(html).toContain(`data-approval-action="approve"`);
@@ -253,7 +254,7 @@ describe("approvalCard renders each approval kind", () => {
     // A listed relay fee is a charge, so the card must not claim there is none.
     expect(html).not.toContain("charges no fee");
     expect(html).toContain("no public wallet fee");
-    expect(html).toContain("0x99");
+    expect(html).toContain(addressText("0x99"));
     expect(html).toContain("3 actions · including relay fee");
     expect(html).toContain("public deposit approval");
     expect(html).toContain("Split the deposit and private actions");
@@ -456,7 +457,7 @@ describe("approvalCard renders each approval kind", () => {
 
     // The account id's network prefix never leaks into the shown value.
     expect(html).toContain(
-      `<dt>Account</dt><dd><code title="${account.address}">0x1234…bcde</code><button class="icon-button ghost copy-inline" data-copy="${account.address}" type="button" aria-label="Copy account address"`,
+      `<dt>Account</dt><dd><code title="${addressText(account.address)}">0x0123…bcde</code><button class="icon-button ghost copy-inline" data-copy="${addressText(account.address)}" type="button" aria-label="Copy account address"`,
     );
     expect(html).not.toContain("SN_MAI…");
     expect(html).not.toContain(`data-copy="${account.id}"`);

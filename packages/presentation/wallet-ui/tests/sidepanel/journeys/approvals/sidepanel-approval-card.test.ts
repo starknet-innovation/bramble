@@ -6,6 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { account, preferences } from "@bramble/testkit/sidepanel";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
@@ -51,7 +52,7 @@ describe("invoke approval card (A-H1)", () => {
     expect(html).toContain("Send 1000 units to 0x0005…0005");
     expect(html).toContain("Verify the contract before continuing.");
     expect(html).toContain("Exact call parameters");
-    expect(html).toContain("0x049d36570d4e46f8");
+    expect(html).toContain(addressText("0x049d36570d4e46f8"));
     expect(html).toContain("0x0005, 0x3e8, 0x0");
     expect(html).toContain(`data-approval-action="approve" data-approval-id="${INVOKE_ID}"`);
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${INVOKE_ID}"`);

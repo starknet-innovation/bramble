@@ -4,10 +4,14 @@
  * to the parent transfer state machine.
  */
 import { normalizeStarkName } from "@bramble/starknet/stark-name";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  addressText,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import type { StarkNameResolutionResponse } from "../../../popup/responses/responses";
 import { formatFiat } from "../../shared/fiat";
-import { accountLabel } from "../../shared/parts";
 import { bindTokenDropdown } from "../../shared/token-dropdown";
 import { setAddressBookDraft } from "../../shell/address-draft";
 import { isUnlistedRecipient, knownRecipientLabel, matchingRecipients } from "./recipient-rows";
@@ -70,11 +74,11 @@ export const restoreTransferCompose = (form: HTMLFormElement, fields: TransferFi
     const node = form.querySelector(`#${id}`);
     if (node) node.textContent = value;
   };
-  text("send-recipient-name", fields.recipientLabel || accountLabel(fields.recipient));
-  text("send-recipient-label", accountLabel(fields.recipient));
+  text("send-recipient-name", fields.recipientLabel || addressLabel(fields.recipient));
+  text("send-recipient-label", addressLabel(fields.recipient));
   const recipientCopy = form.querySelector<HTMLButtonElement>("#send-recipient-copy");
   if (recipientCopy) {
-    recipientCopy.dataset["copy"] = fields.recipient;
+    recipientCopy.dataset["copy"] = addressText(fields.recipient);
     recipientCopy.hidden = fields.recipient === "";
   }
   text("send-selected-token-symbol", fields.tokenSymbol);
@@ -97,18 +101,16 @@ export const restoreTransferCompose = (form: HTMLFormElement, fields: TransferFi
   }
 };
 
-// The display currency rides on the toggle itself. The label beside it is not
-// a source: in fiat mode it names the token, so reading the currency back from
-// it turned EUR and GBP into USD after one round trip.
+// The display currency rides on the toggle itself, not the label beside it: in
+// fiat mode that names the token, so reading it back turned EUR and GBP into USD.
 const currencyFor = (form: HTMLFormElement): Currency => {
   const value = form.querySelector<HTMLElement>("#send-unit-toggle")?.dataset["currency"];
   return value === "eur" || value === "gbp" ? value : "usd";
 };
 
-// The toggle names the unit it switches to: the currency while entering a
-// token amount, the selected token while entering a fiat one. Repainted
-// whenever the mode or the token changes, so it never names a token the user
-// has since replaced.
+// The toggle names the unit it switches to: the currency for a token amount,
+// the selected token for a fiat one. Repainted whenever the mode or the token
+// changes, so it never names a token the user has since replaced.
 const syncUnitToggle = (form: HTMLFormElement): void => {
   const unit =
     form.dataset["amountMode"] === "fiat"
@@ -311,7 +313,7 @@ const bindRecipientControls = (
     if (recipientFieldError(typed) === null) {
       // A pasted address that is already on the screen reads as the row it
       // matches, the same as tapping that row would.
-      choose(typed, knownRecipientLabel(form, typed) || accountLabel(typed));
+      choose(typed, knownRecipientLabel(form, typed) || addressLabel(typed));
       return;
     }
     // The box is also the address-book search, so a text that names a listed
@@ -347,11 +349,8 @@ const bindRecipientControls = (
     } finally {
       resolving = false;
     }
-    // A repaint or close while the read was in flight leaves this form
-    // detached; a resolution that lands there must not commit a recipient. The
-    // same applies when the text was edited since, or when the answer was read
-    // on a network this screen no longer shows: the commit is for a name the
-    // field no longer spells, or for another chain.
+    // No commit to a form a repaint or close detached mid-read, to text edited
+    // since, or for an answer read on a network this screen no longer shows.
     if (
       !form.isConnected ||
       (search?.value.trim() ?? "") !== typed ||

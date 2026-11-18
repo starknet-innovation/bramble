@@ -12,7 +12,13 @@
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import { AVNU_MULTI_ROUTE_SWAP, decodeAvnuRoute } from "@bramble/wallet-model/avnu-route";
-import { asFelt, canonicalFelt, sameFelt, uint256Felts } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  asFelt,
+  canonicalFelt,
+  sameFelt,
+  uint256Felts,
+} from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { Call } from "starknet";
 import type { VerificationContext } from "./verification-context";
@@ -61,12 +67,6 @@ export {
   type VerificationContext,
   verificationContext,
 } from "./verification-context";
-
-/**
- * Abbreviates an address for display as `0x1234…abcd`.
- */
-export const shortAddress = (address: string): string =>
-  `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 /**
  * Display-oriented canonicalization: an unparseable value passes through
@@ -147,15 +147,15 @@ const decodeTransferFromCall: CallDecoder = (call, calldata, context) => {
     return null;
   }
   const token = tokenFor(context.tokens, call.contractAddress);
-  const fromLabel = from ? ` from ${shortAddress(canonical(from))}` : "";
+  const fromLabel = from ? ` from ${addressLabel(from)}` : "";
   return {
     contractAddress: call.contractAddress,
     entrypoint: call.entrypoint,
     // Treated as a transfer so self-send and address-poisoning checks run.
     kind: "transfer",
     summary: token
-      ? `Send ${amountLabel(amountOrId, token)}${fromLabel} to ${shortAddress(canonical(recipient))}`
-      : `Send NFT #${amountOrId} to ${shortAddress(canonical(recipient))}`,
+      ? `Send ${amountLabel(amountOrId, token)}${fromLabel} to ${addressLabel(recipient)}`
+      : `Send NFT #${amountOrId} to ${addressLabel(recipient)}`,
   };
 };
 
@@ -202,7 +202,7 @@ const decodeSafeTransferCall: CallDecoder = (call, calldata) => {
   if (value === null && !erc721) {
     return null;
   }
-  const party = shortAddress(canonical(recipient));
+  const party = addressLabel(recipient);
   const summary =
     value !== null && erc721
       ? `Safe transfer of NFT #${tokenId} to ${party}`
@@ -243,12 +243,12 @@ const decodeErc1155BatchTransferCall: CallDecoder = (call, calldata) => {
   ) {
     return null;
   }
-  const collection = shortAddress(canonical(call.contractAddress));
+  const collection = addressLabel(call.contractAddress);
   return {
     contractAddress: call.contractAddress,
     entrypoint: call.entrypoint,
     kind: "transfer",
-    summary: `Send ${count} token id${count === 1 ? "" : "s"} of collection ${collection} to ${shortAddress(canonical(recipient))}`,
+    summary: `Send ${count} token id${count === 1 ? "" : "s"} of collection ${collection} to ${addressLabel(recipient)}`,
   };
 };
 
@@ -266,8 +266,8 @@ const decodeOperatorApprovalCall: CallDecoder = (call, calldata) => {
   if (!operator || approved === null) {
     return null;
   }
-  const party = shortAddress(canonical(operator));
-  const collection = shortAddress(canonical(call.contractAddress));
+  const party = addressLabel(operator);
+  const collection = addressLabel(call.contractAddress);
   return {
     contractAddress: call.contractAddress,
     entrypoint: call.entrypoint,
@@ -295,7 +295,7 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
     return null;
   }
   const token = tokenFor(context.tokens, call.contractAddress);
-  const party = shortAddress(canonical(counterparty));
+  const party = addressLabel(counterparty);
   if (call.entrypoint === "transfer") {
     return {
       contractAddress: call.contractAddress,
@@ -309,7 +309,7 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
       contractAddress: call.contractAddress,
       entrypoint: call.entrypoint,
       kind: "nft-approval",
-      summary: `Allow ${party} to transfer NFT #${amount} of collection ${shortAddress(canonical(call.contractAddress))}`,
+      summary: `Allow ${party} to transfer NFT #${amount} of collection ${addressLabel(call.contractAddress)}`,
     };
   }
   if (!token) {
@@ -317,7 +317,7 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
       contractAddress: call.contractAddress,
       entrypoint: call.entrypoint,
       kind: "approve",
-      summary: `Authorize ${party} for amount or NFT #${amount} on unknown contract ${shortAddress(canonical(call.contractAddress))}`,
+      summary: `Authorize ${party} for amount or NFT #${amount} on unknown contract ${addressLabel(call.contractAddress)}`,
     };
   }
   // An increase adds to whatever allowance already stands, and the resulting
@@ -337,7 +337,7 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
 // states a quantity without saying what it is a quantity of.
 const routeAmountLabel = (amount: bigint, tokenAddress: string, context: VerificationContext) => {
   const token = tokenFor(context.tokens, tokenAddress);
-  return token ? amountLabel(amount, token) : `${amount} units of ${shortAddress(tokenAddress)}`;
+  return token ? amountLabel(amount, token) : `${amount} units of ${addressLabel(tokenAddress)}`;
 };
 
 // AVNU multi_route_swap, read through the wallet's one pinned route decoder —
@@ -358,7 +358,7 @@ const decodeAvnuSwapCall: CallDecoder = (call, calldata, context) => {
     contractAddress: call.contractAddress,
     entrypoint: call.entrypoint,
     kind: "swap",
-    summary: `Swap ${sell} for at least ${floor}, paid to ${shortAddress(route.beneficiary)}`,
+    summary: `Swap ${sell} for at least ${floor}, paid to ${addressLabel(route.beneficiary)}`,
   };
 };
 
@@ -366,7 +366,7 @@ const decodeUnknownCall = (call: Call): DecodedCall => ({
   contractAddress: call.contractAddress,
   entrypoint: call.entrypoint,
   kind: "unknown",
-  summary: `Call ${call.entrypoint} on ${shortAddress(canonical(call.contractAddress))}`,
+  summary: `Call ${call.entrypoint} on ${addressLabel(call.contractAddress)}`,
 });
 
 // Dispatch table keyed by entrypoint. EVERY row is derived from a shared

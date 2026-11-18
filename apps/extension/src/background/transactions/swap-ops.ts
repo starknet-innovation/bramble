@@ -26,9 +26,8 @@ import {
   verificationContext,
   verifyCalls,
 } from "@bramble/transactions/verify";
-import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
 import { isApproveEntrypoint } from "@bramble/transactions/verify-selectors";
-import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import { recordAutoDeployment } from "../accounts/deployment-ops";
 import { signerForContext, type WalletOpsDeps } from "../accounts/wallet-ops";
@@ -252,7 +251,7 @@ const swapPrepareResponse = async (
       sellTokenAddress: sellToken.address,
       summaries: report.calls.map((call, index) =>
         index === routeIndex
-          ? `Swap ${input.amount} ${sellToken.symbol} for at least ${minBuyText} ${buyToken.symbol}, paid to ${shortAddress(canonical(account.address))}`
+          ? `Swap ${input.amount} ${sellToken.symbol} for at least ${minBuyText} ${buyToken.symbol}, paid to ${addressLabel(account.address)}`
           : call.summary,
       ),
     };

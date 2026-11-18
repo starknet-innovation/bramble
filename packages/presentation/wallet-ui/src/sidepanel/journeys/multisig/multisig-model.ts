@@ -6,18 +6,18 @@ import type {
 } from "@bramble/multisig/repository";
 import { isArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import {
+  addressLabel,
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigIntentPackage } from "../../../popup/responses/multisig-responses";
-import { accountLabel } from "../../shared/parts";
 
 /**
  * Resolves the user-facing name shared by Argent multisig surfaces.
  */
 export const multisigDisplayName = (record: ArgentMultisigRecord): string =>
-  record.name ?? accountLabel(record.address);
+  record.name ?? addressLabel(record.address);
 
 const sameAction = (
   left: ArgentMultisigSigningIntent,

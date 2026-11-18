@@ -54,9 +54,3 @@ export const screenFromHash = (hash: string, tabs: readonly ScreenTab[] = SCREEN
     ? (candidate as ScreenId)
     : "discover";
 };
-
-/**
- * Formats a Starknet address as the mockup's `0x04a1…8f2c` short form.
- */
-export const shortenAddress = (address: string): string =>
-  address.length <= 12 ? address : `${address.slice(0, 6)}…${address.slice(-4)}`;

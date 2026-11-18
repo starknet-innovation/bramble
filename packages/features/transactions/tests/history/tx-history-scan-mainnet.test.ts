@@ -115,7 +115,7 @@ describe("scanTransactionHistory against real mainnet payloads", () => {
         networkId: "SN_MAIN",
         status: "accepted",
         submittedAt: 1_788_832_699_000,
-        summary: "Sent 0.311133446749725792 STRK to 0x1176…f3d8",
+        summary: "Sent 0.311133446749725792 STRK to 0x0117…f3d8",
         token: "STRK",
         tokenAddress: "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
       },
