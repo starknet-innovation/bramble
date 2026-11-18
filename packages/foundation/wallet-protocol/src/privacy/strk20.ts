@@ -5,7 +5,7 @@
  * validated here so a single source of truth backs both the provider bridge and
  * the background handler. These guards are pure and never touch secret material.
  *
- * The action shapes track the canonical Wallet-API 0.10.5-rc.0 STRK20 definitions
+ * The action shapes track the canonical Wallet-API 0.10.5 STRK20 definitions
  * (starkware-libs/starknet-specs wallet-api/wallet_rpc.json): actions are
  * discriminated by a `type` field; register is a parameterless action that must
  * be the only one in its request, so it is parsed into its own request kind

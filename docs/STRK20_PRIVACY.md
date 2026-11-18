@@ -6,7 +6,7 @@ permalink: /strk20-privacy/
 
 # STRK20 privacy integration
 
-Bramble implements the Wallet API `0.10.5-rc.0` STRK20 surface through the official Starknet
+Bramble implements the Wallet API `0.10.5` STRK20 surface through the official Starknet
 Privacy SDK browser bundle. It supports shielded balance discovery, action preparation, private
 submission, dapp-scoped shadow-account commitments, explicit account registration, and reviewed
 public-to-private token deposits.
@@ -211,7 +211,7 @@ non-simulated prepare request does not sign or generate that submittable proof u
 approves its exact action list. Private balances and the deterministic, origin-scoped shadow-account
 commitment are likewise never disclosed under the general account connection grant alone.
 
-Wallet API `0.10.5-rc.0` adds the `register` action. It must be the only action in a
+Wallet API `0.10.5` adds the `register` action. It must be the only action in a
 `wallet_strk20InvokeTransaction` or `wallet_strk20PrepareInvoke` request: register mixed with other
 actions returns `INVALID_REQUEST_PAYLOAD` at once, from the input alone. A register request for an
 account the pool already lists as registered is held on the close-only notice like every other

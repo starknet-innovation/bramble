@@ -155,8 +155,8 @@ describe("optional api_version on state-changing methods", () => {
   const specCall = { calldata: ["0x1"], contract_address: "0x123", entry_point: "transfer" };
   const proof = { data: "proof", output: ["0x1"], proof_facts: ["0x2"] };
   const typedData = { domain: {}, message: {}, primaryType: "Mail", types: {} };
-  const wellFormed = ["0.10", "0.10.4", "0.10.4-rc.0"];
-  const malformed = ["not.a.version.x", "", "v0.10.4", 10, null];
+  const wellFormed = ["0.10", "0.10.4", "0.10.5"];
+  const malformed = ["not.a.version.x", "", "v0.10.4", "0.10.4-rc.0", 10, null];
   const map = (method: ProviderRequest["method"], params: unknown) =>
     toRuntimeMessage({ id: requestId, method, params } as ProviderRequest, origin);
 

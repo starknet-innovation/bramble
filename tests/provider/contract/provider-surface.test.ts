@@ -230,7 +230,7 @@ describe("readProviderWatchAsset", () => {
   });
 
   test("accepts the optional api_version beside type and drops it", () => {
-    for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
+    for (const api_version of ["0.10", "0.10.4", "0.10.5"]) {
       expect(readProviderWatchAsset({ ...watchParams, api_version })).toEqual({
         address: tokenAddress,
         decimals: 6,
@@ -240,7 +240,7 @@ describe("readProviderWatchAsset", () => {
   });
 
   test("rejects a malformed api_version, or one nested inside options", () => {
-    for (const api_version of ["not.a.version.x", "", "v0.10.4", 10, null]) {
+    for (const api_version of ["not.a.version.x", "", "v0.10.4", "0.10.4-rc.0", 10, null]) {
       expect(readProviderWatchAsset({ ...watchParams, api_version })).toBeNull();
     }
     expect(
