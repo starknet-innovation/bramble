@@ -186,6 +186,9 @@ export type Strk20Service = {
   readonly prepareRegistration?: (
     input: Strk20AccountContext & { readonly poolFeeFri: string },
   ) => Promise<PreparedStrk20AccountSubmission>;
+  readonly prepareRegistrationCall?: (
+    input: Strk20AccountContext & { readonly simulate: boolean },
+  ) => Promise<Strk20CallAndProof>;
   /** Builds a deposit-only public-account proof and calls without broadcasting. */
   readonly prepareAccountActions?: (
     input: Strk20AccountActionsInput,
