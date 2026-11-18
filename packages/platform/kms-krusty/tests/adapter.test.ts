@@ -12,6 +12,9 @@ const createModule = (signatureR = "0x1") => ({
       public_key_x: "0xcba",
     };
   },
+  deriveArgentLegacyPublicKey() {
+    return { public_key_x: "0xcba" };
+  },
   deriveNostrPublicKey() {
     return { public_key: "11".repeat(32) };
   },
@@ -38,7 +41,10 @@ const createModule = (signatureR = "0x1") => ({
     return JSON.stringify({
       content: "payload",
       identifier: "bramble.multisig",
+      createdAt: "1",
+      rumorId: "55".repeat(32),
       senderPublicKey: "22".repeat(32),
+      wrapId: "11".repeat(32),
     });
   },
   signStarkHash() {
@@ -330,7 +336,10 @@ describe("createKrustyKms", () => {
         return JSON.stringify({
           content: "payload",
           identifier: "bramble.multisig",
+          createdAt: "1",
+          rumorId: "55".repeat(32),
           senderPublicKey: "22".repeat(32),
+          wrapId: "11".repeat(32),
         });
       },
       wrapNostrApplicationData(...args: unknown[]) {

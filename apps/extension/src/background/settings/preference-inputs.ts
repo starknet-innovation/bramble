@@ -189,6 +189,7 @@ type DisplayPreferenceInput = {
   readonly collectiblesPreview?: boolean;
   readonly displayCurrency?: "eur" | "gbp" | "usd";
   readonly productAnalytics?: boolean;
+  readonly readyKeyNoticeDismissed?: string;
   readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
   readonly vipNotice?: boolean;
@@ -213,6 +214,12 @@ const hasValidDisplayValues = (
   ) {
     return false;
   }
+  if (
+    message["readyKeyNoticeDismissed"] !== undefined &&
+    !isAccountId(message["readyKeyNoticeDismissed"])
+  ) {
+    return false;
+  }
   return (
     message["theme"] === undefined || message["theme"] === "dark" || message["theme"] === "light"
   );
@@ -229,6 +236,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
       "collectiblesPreview",
       "displayCurrency",
       "productAnalytics",
+      "readyKeyNoticeDismissed",
       "reliabilityDiagnostics",
       "theme",
       "type",
@@ -247,6 +255,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
   const collectiblesPreview = message["collectiblesPreview"];
   const displayCurrency = message["displayCurrency"];
   const productAnalytics = message["productAnalytics"];
+  const readyKeyNoticeDismissed = message["readyKeyNoticeDismissed"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
   const vipNotice = message["vipNotice"];
@@ -255,6 +264,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
     ...(collectiblesPreview === undefined ? {} : { collectiblesPreview }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
     ...(productAnalytics === undefined ? {} : { productAnalytics }),
+    ...(readyKeyNoticeDismissed === undefined ? {} : { readyKeyNoticeDismissed }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),
     ...(vipNotice === undefined ? {} : { vipNotice }),

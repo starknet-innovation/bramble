@@ -128,6 +128,10 @@ describe("STRK20 (review F1, F2)", () => {
     for (const [category, shown] of [
       ["execution-reverted", "Starknet rejected the private transaction: reason"],
       ["proof-rejected", "The privacy pool rejected the proof: reason"],
+      [
+        "unsupported-builtin",
+        "The privacy prover can't prove this transaction (unsupported builtin): reason",
+      ],
       ["validation-failed", "The private transaction failed validation: reason"],
       // The nonce sentence names the reader's move; the reason stays behind
       // the toast's copy control.

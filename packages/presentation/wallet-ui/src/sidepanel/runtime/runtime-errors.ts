@@ -143,6 +143,7 @@ export const READ_ONLY_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.preferences",
   "wallet.previewAccount",
   "wallet.prices",
+  "wallet.readyKeyStatus",
   "wallet.resolveMultisigSigner",
   "wallet.resolveStarkName",
   "wallet.reviewArgentMultisigDeployment",

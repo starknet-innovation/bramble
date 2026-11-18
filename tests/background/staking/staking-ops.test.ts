@@ -37,7 +37,8 @@ import {
   testStakingNetworks,
 } from "../../support/staking-chain";
 
-const VALIDATOR = `validator ${STAKER}`;
+// The review names the staker in full, padded to 64 digits.
+const VALIDATOR = `validator 0x0${STAKER.slice(2)}`;
 const OVERVIEW = { staker: STAKER, type: "wallet.stakingOverview" } as const;
 
 const NOW_SECONDS = 1_800_000_000;
@@ -202,7 +203,7 @@ describe("staking actions", () => {
     }
     expect(submitted[0]?.reviewedFee).toEqual(FEE);
     expect(await activity.list()).toMatchObject([
-      { hash: "0x5ab", kind: "invoke", summary: "Stake 5 STRK with validator 0x5a20…beef" },
+      { hash: "0x5ab", kind: "invoke", summary: "Stake 5 STRK with validator 0x05a2…beef" },
     ]);
     expect(await allowanceStore.list()).toMatchObject([{ spender: STAKING_POOL }]);
   });
@@ -348,7 +349,7 @@ describe("staking actions", () => {
     const { review } = await act({ action: "claim" });
     expect(review).toMatchObject({
       stakingPreparation: {
-        review: `Claim your STRK rewards from ${VALIDATOR}. Rewards are paid to 0xabc1…c123, not this account.`,
+        review: `Claim your STRK rewards from ${VALIDATOR}. Rewards are paid to 0x0000…c123, not this account.`,
       },
     });
     expect(await send(OVERVIEW)).toMatchObject({

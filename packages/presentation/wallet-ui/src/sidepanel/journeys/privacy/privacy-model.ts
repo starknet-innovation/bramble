@@ -38,6 +38,13 @@ export type PrivacyDisclosureState = {
 export type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
 
 /**
+ * Inline statement for a network with no privacy pool configured. The answer
+ * is the same on every read until the network changes, so it is shown in place
+ * and never offered as a retry or repeated as a toast (issue 951).
+ */
+export const PRIVACY_NETWORK_UNAVAILABLE = "Not available on this network";
+
+/**
  * A blocker and the display-safe reason behind it. The message is what the
  * privileged runtime or the disclosure loader reported; it is rendered escaped
  * and never interpreted beyond the classification below.

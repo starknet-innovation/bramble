@@ -57,6 +57,8 @@ export const DEVELOPMENT_SOURCE_FILES = new Set(["apps/terminal/src/data/extende
 export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
   ["packages/presentation/wallet-ui/tests/support/groups-harness.ts", 1],
   ["scripts/check-privacy-sdk.ts", 1],
+  // Cache-busting query so the provider runs again under this test's stand-ins.
+  ["tests/conformance/inpage-provider-version.test.ts", 1],
 ]);
 
 /**

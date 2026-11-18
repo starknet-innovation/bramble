@@ -7,13 +7,15 @@
  * fact?" (docs/COPY_STYLE.md), never shortened for length.
  */
 
+import { addressText } from "@bramble/wallet-model/networks";
+
 /** What runs, through which shadow account, for which site. Issue wording. */
 export const SHADOW_INVOKE_RUNS = (calls: number, nonce: string, origin: string): string =>
   `Runs ${calls} call${calls === 1 ? "" : "s"} through your shadow account #${nonce} for ${origin}`;
 
 /** The configured anonymizer the calls run through. Mirrors "Privacy pool <address>". */
 export const SHADOW_INVOKE_ANONYMIZER = (address: string): string =>
-  `Shadow account anonymizer ${address}`;
+  `Shadow account anonymizer ${addressText(address)}`;
 
 /** The tokens the invoke settles back into private notes. Issue wording. */
 export const SHADOW_INVOKE_SETTLES = (tokens: string): string =>
@@ -24,7 +26,7 @@ export const SHADOW_INVOKE_SETTLES = (tokens: string): string =>
  * this account. Mirrors "Transfer … privately to <address>".
  */
 export const SHADOW_INVOKE_SETTLES_TO = (tokens: string, recipient: string): string =>
-  `Settles ${tokens} into a private note for ${recipient}`;
+  `Settles ${tokens} into a private note for ${addressText(recipient)}`;
 
 /**
  * `collect_policy: all` with an OPEN note for someone other than this account:
@@ -32,7 +34,7 @@ export const SHADOW_INVOKE_SETTLES_TO = (tokens: string, recipient: string): str
  * what earlier calls left behind.
  */
 export const SHADOW_INVOKE_COLLECTS_ALL_TO = (tokens: string, recipient: string): string =>
-  `This shadow account's whole ${tokens} balance goes to ${recipient}`;
+  `This shadow account's whole ${tokens} balance goes to ${addressText(recipient)}`;
 
 /** No OPEN transfer in the batch: nothing returns to the private balance. Issue wording, negated. */
 export const SHADOW_INVOKE_SETTLES_NOTHING = "Nothing settles back into private notes";

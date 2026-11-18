@@ -1,3 +1,4 @@
+import { addressText } from "@bramble/wallet-model/networks";
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import type { TokenDeployment } from "../../create/token-create";
@@ -90,7 +91,7 @@ export const CreateReview = ({
       <p className="create-review__empty">{problem ?? "Fill in the form to see the contract address."}</p>
     ) : (
       <>
-        <code className="create-review__address">{deployment.address}</code>
+        <code className="create-review__address">{addressText(deployment.address)}</code>
         <dl className="create-review__facts">
           {deployment.details.map((detail) => (
             <div key={detail.label}>

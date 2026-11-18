@@ -1,9 +1,9 @@
 /**
  * Bottom status bar with wallet, network, and live data-source state.
  */
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { ReactNode } from "react";
 import { useWallet } from "../wallet/connection/WalletProvider";
-import { shortenAddress } from "./screens";
 
 /**
  * The application chrome's bottom bar.
@@ -14,7 +14,7 @@ export const BottomBar = (): ReactNode => {
     <div className="bottombar">
       <span className="bal">
         <span className="status-dot" />
-        {isConnected ? `Connected ${shortenAddress(address ?? "")}` : "Wallet disconnected"}
+        {isConnected ? `Connected ${addressLabel(address ?? "")}` : "Wallet disconnected"}
       </span>
       <div className="right">
         <span>{chainId ?? "Starknet"}</span>

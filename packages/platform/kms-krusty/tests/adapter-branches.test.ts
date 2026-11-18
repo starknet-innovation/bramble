@@ -16,6 +16,9 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
       public_key_x: "0xcba",
     };
   },
+  deriveArgentLegacyPublicKey() {
+    return { public_key_x: "0xcba" };
+  },
   deriveNostrPublicKey() {
     return { public_key: "11".repeat(32) };
   },
@@ -38,7 +41,10 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
     return JSON.stringify({
       content: "payload",
       identifier: "bramble.multisig",
+      createdAt: "1",
+      rumorId: "55".repeat(32),
       senderPublicKey: "22".repeat(32),
+      wrapId: "11".repeat(32),
     });
   },
   signStarkHash() {
@@ -113,5 +119,52 @@ describe("validateMnemonic output validation", () => {
     await expect(
       createKrustyKms(createModule({ validateMnemonic: () => "yes" })).validateMnemonic(MNEMONIC),
     ).rejects.toThrow("Krusty KMS returned an invalid mnemonic validation result");
+  });
+});
+
+describe("deriveArgentLegacyPublicKey", () => {
+  test("returns only the canonical x-only public key, pinning the account field", async () => {
+    const calls: unknown[][] = [];
+    const kms = createKrustyKms(
+      createModule({
+        deriveArgentLegacyPublicKey: (...args: unknown[]) => {
+          calls.push(args);
+          return { public_key_x: "0x0cba" };
+        },
+      }),
+    );
+    await expect(kms.deriveArgentLegacyPublicKey(MNEMONIC, 3)).resolves.toBe("0xcba");
+    expect(calls).toEqual([[MNEMONIC, 3, 0]]);
+  });
+
+  test("refuses bad input before calling WASM", async () => {
+    let called = false;
+    const kms = createKrustyKms(
+      createModule({
+        deriveArgentLegacyPublicKey: () => {
+          called = true;
+          return { public_key_x: "0xcba" };
+        },
+      }),
+    );
+    await expect(kms.deriveArgentLegacyPublicKey(" ", 0)).rejects.toThrow(
+      "Invalid Stark derivation input",
+    );
+    await expect(kms.deriveArgentLegacyPublicKey(MNEMONIC, -1)).rejects.toThrow(
+      "Invalid Stark derivation input",
+    );
+    expect(called).toBe(false);
+  });
+
+  test.each([
+    ["a zero key", { public_key_x: "0x0" }],
+    ["a non-felt", { public_key_x: "cba" }],
+    ["a missing field", {}],
+  ])("fails closed on %s", async (_label, result) => {
+    await expect(
+      createKrustyKms(
+        createModule({ deriveArgentLegacyPublicKey: () => result }),
+      ).deriveArgentLegacyPublicKey(MNEMONIC, 0),
+    ).rejects.toThrow("Krusty KMS result missing");
   });
 });

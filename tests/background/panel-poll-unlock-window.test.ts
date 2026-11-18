@@ -104,8 +104,16 @@ const POLLED_OUTSIDE_HYDRATION: readonly string[] = [
   "wallet.strk20RecipientStatus",
 ];
 
+// Messages a hydrated loader sends beside its keyed one: `signability.load`
+// also asks for the Ready key verdict in the same probe.
+const HYDRATED_COMPANION_MESSAGES: readonly string[] = ["wallet.readyKeyStatus"];
+
 const AMBIENT_MESSAGES: readonly string[] = [
-  ...new Set([...Object.values(HYDRATED_CALL_MESSAGES), ...POLLED_OUTSIDE_HYDRATION]),
+  ...new Set([
+    ...Object.values(HYDRATED_CALL_MESSAGES),
+    ...HYDRATED_COMPANION_MESSAGES,
+    ...POLLED_OUTSIDE_HYDRATION,
+  ]),
 ];
 
 // Ambient reads that answer without ever consulting the session: prices and

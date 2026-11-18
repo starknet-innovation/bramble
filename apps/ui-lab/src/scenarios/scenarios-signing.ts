@@ -1,4 +1,5 @@
 import { ledgerMessage } from "@bramble/ledger-protocol/errors";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { LedgerSignView, PrivacyDisclosureState, SendIntent } from "@bramble/wallet-ui/lab";
 import {
   bindTransfer,
@@ -161,7 +162,7 @@ const fixtureReview = async (
       feeEstimateFailed,
       flags: [],
       requiresDeployment: false,
-      summaries: ["Transfer 0.24 ETH", `Recipient ${RECIPIENT_ADDRESS}`],
+      summaries: ["Transfer 0.24 ETH", `Recipient ${addressText(RECIPIENT_ADDRESS)}`],
     },
   };
 };

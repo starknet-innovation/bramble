@@ -13,6 +13,7 @@ import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-stor
 import type { Strk20Service } from "@bramble/privacy/service";
 import { createMemoryStore } from "@bramble/store/kv";
 import {
+  addressText,
   canonicalFelt,
   STARKNET_NETWORKS,
   STRK_TOKEN_ADDRESS,
@@ -223,7 +224,7 @@ describe("Argent multisig STRK20 relay coordination", () => {
     );
     expect(shown.authorizations[0]?.summary).toBe("Privacy pool · compile_actions");
     expect(shown.authorizations[0]?.lines).toContain("Deposit 1 STRK");
-    expect(shown.authorizations[0]?.lines).toContain(`Account ${HARNESS_MULTISIG}`);
+    expect(shown.authorizations[0]?.lines).toContain(`Account ${addressText(HARNESS_MULTISIG)}`);
     expect(JSON.stringify(shown.authorizations)).not.toContain(FORGED);
   });
 });

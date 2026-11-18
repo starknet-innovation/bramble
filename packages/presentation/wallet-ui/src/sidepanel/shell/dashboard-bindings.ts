@@ -5,6 +5,8 @@
  */
 
 import {
+  addressLabel,
+  addressText,
   canonicalAddress,
   isStarknetNetworkId,
   normalizeFeltInput,
@@ -16,7 +18,6 @@ import { RECEIVE_QR_LABELS } from "../journeys/send/receive-view";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { isOutcomeUnknown } from "../runtime/runtime-errors";
 import { buttonBusy, errorDetails, errorLine, renderFragment, showToast } from "../shared/dom";
-import { accountLabel } from "../shared/parts";
 import { qrSvg } from "../shared/qr";
 import { createStagePacer, type StagePacer, type StageTimers } from "../shared/stage-pacer";
 import {
@@ -215,7 +216,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
         qr,
         payload === "card" && card
           ? qrSvg(card, RECEIVE_QR_LABELS.card)
-          : qrSvg(address, RECEIVE_QR_LABELS.address),
+          : qrSvg(addressText(address), RECEIVE_QR_LABELS.address),
       );
       qr.dataset["qrPayload"] = payload;
     }
@@ -268,7 +269,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
       }
       if (keyStatus) keyStatus.hidden = true;
       if (key) {
-        key.textContent = accountLabel(nostrPublicKey);
+        key.textContent = addressLabel(nostrPublicKey);
         key.title = nostrPublicKey;
       }
       if (keyCopy) keyCopy.dataset["copy"] = nostrPublicKey;

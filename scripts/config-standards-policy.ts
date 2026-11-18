@@ -65,7 +65,7 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/wallet-ui": "workspace:*",
   "@bramble/wallet-model": "workspace:*",
   "@bramble/wallet-protocol": "workspace:*",
-  "@starknetfoundation/krusty-kms-wasm": "0.11.0",
+  "@starknetfoundation/krusty-kms-wasm": "3.1.0",
   starknet: "10.8.0",
 };
 

@@ -99,6 +99,14 @@ export type WalletStatusReader = {
     readonly poolAddress: string;
     readonly vaultPassphrase: string;
   }) => Promise<string>;
+  /**
+   * Whether a Ready account's stored key predates Krusty 3.0's Argent X fix.
+   * Public-key comparison inside the vault. Optional only for partial stubs.
+   */
+  readonly hasPreFixReadyKey?: (input: {
+    readonly accountId: string;
+    readonly vaultPassphrase: string;
+  }) => Promise<boolean>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
   /** Derives only the wallet-level public Nostr identity. */
@@ -241,6 +249,9 @@ export const createWalletReader = (
     },
     async deriveStrk20ViewingKey(input) {
       return (await required()).deriveStrk20ViewingKey(input);
+    },
+    async hasPreFixReadyKey(input) {
+      return (await required()).hasPreFixReadyKey(input);
     },
     async ensureNetworkAccount(input) {
       return (await required()).ensureNetworkAccount(input);
