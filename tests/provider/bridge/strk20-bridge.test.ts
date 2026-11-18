@@ -59,7 +59,7 @@ describe("strk20 bridge params", () => {
       { valid_until: 1_790_000_000 },
       { valid_until: 0 },
       { api_version: "0.10.4" },
-      { api_version: "0.10.4-rc.2", valid_until: 1_790_000_000 },
+      { api_version: "0.10.5", valid_until: 1_790_000_000 },
     ]) {
       expect(
         toRuntimeMessage(request("wallet_strk20Balances", { tokens: [token], ...extra }), origin),
@@ -75,6 +75,7 @@ describe("strk20 bridge params", () => {
       { valid_until: Number.MAX_SAFE_INTEGER + 1 },
       { valid_until: null },
       { api_version: "not.a.version.x" },
+      { api_version: "0.10.4-rc.2" },
       { api_version: 10 },
       { authorization: "forever" },
     ]) {
@@ -86,7 +87,7 @@ describe("strk20 bridge params", () => {
 
   test("accepts the optional api_version on prepare, invoke, and commitment and drops it", () => {
     const actions = [{ amount: "0x0a", token, type: "deposit" as const }];
-    for (const api_version of ["0.10", "0.10.4", "0.10.4-rc.0"]) {
+    for (const api_version of ["0.10", "0.10.4", "0.10.5"]) {
       expect(
         toRuntimeMessage(request("wallet_strk20PrepareInvoke", { actions, api_version }), origin),
       ).toEqual({ actions, origin, simulate: false, type: "wallet.strk20PrepareInvoke" });
@@ -155,7 +156,7 @@ describe("strk20 bridge params", () => {
 
   test("rejects a malformed api_version on prepare, invoke, and commitment", () => {
     const actions = [{ amount: "0x0a", token, type: "deposit" as const }];
-    for (const api_version of ["not.a.version.x", "", "v0.10.4", 10, null]) {
+    for (const api_version of ["not.a.version.x", "", "v0.10.4", "0.10.4-rc.0", 10, null]) {
       for (const [method, params] of [
         ["wallet_strk20PrepareInvoke", { actions, api_version }],
         ["wallet_strk20PrepareInvoke", { actions, api_version, simulate: true }],
@@ -233,6 +234,23 @@ describe("strk20 bridge params", () => {
     });
   });
 
+  test("forwards a lone register action from invoke and prepare (Wallet API 0.10.5)", () => {
+    const actions = [{ type: "register" as const }];
+    expect(
+      toRuntimeMessage(request("wallet_strk20InvokeTransaction", { actions }), origin),
+    ).toEqual({ actions, origin, type: "wallet.strk20InvokeTransaction" });
+    expect(
+      toRuntimeMessage(request("wallet_strk20PrepareInvoke", { actions, simulate: true }), origin),
+    ).toEqual({ actions, origin, simulate: true, type: "wallet.strk20PrepareInvoke" });
+    const mixed = [{ type: "register" }, { amount: "0x0a", token, type: "deposit" }];
+    expect(
+      toRuntimeMessage(request("wallet_strk20InvokeTransaction", { actions: mixed }), origin),
+    ).toBeNull();
+    expect(
+      toRuntimeMessage(request("wallet_strk20PrepareInvoke", { actions: mixed }), origin),
+    ).toBeNull();
+  });
+
   test("rejects an action using the old `action` discriminator", () => {
     expect(
       toRuntimeMessage(
@@ -307,6 +325,16 @@ describe("strk20 bridge results", () => {
     expect(toProviderPayload({ error: "insufficient private balance" }).error?.code).toBe(119);
     expect(toProviderPayload({ error: "strk20 privacy leak" }).error?.code).toBe(120);
     expect(toProviderPayload({ error: "invalid strk20 prepare request" }).error?.code).toBe(114);
+    // Wallet API 0.10.5: registering an already registered account is 114, and
+    // neither "already" message is mistaken for NOT_REGISTERED.
+    expect(
+      toProviderPayload({
+        error: "invalid strk20 registration request: account already registered",
+      }).error?.code,
+    ).toBe(114);
+    expect(toProviderPayload({ error: "Private balances are already active" }).error?.code).toBe(
+      114,
+    );
     expect(toProviderPayload({ error: "request rejected" }).error?.code).toBe(113);
     expect(
       toProviderPayload({

@@ -64,7 +64,7 @@ describe("operator approvals reach the review card as grants", () => {
 
       expect(report.calls[0]?.kind).toBe("operator-approval");
       expect(report.calls[0]?.summary).toContain("EVERY item");
-      expect(report.calls[0]?.summary).toContain("0x1111…1111");
+      expect(report.calls[0]?.summary).toContain("0x0111…1111");
       expect(report.flags.map((flag) => flag.code)).toContain("operator-approval");
     }
   });

@@ -1,3 +1,4 @@
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { useCallback } from "react";
 import { isRecord } from "../../protocols/support/json";
 import { fetchJson } from "../core/client";
@@ -89,9 +90,6 @@ const pageItems = (value: unknown): readonly unknown[] | null => {
   return value["items"];
 };
 
-const shortAddress = (value: string): string =>
-  value.length > 13 ? `${value.slice(0, 7)}…${value.slice(-5)}` : value;
-
 const sentenceCase = (value: string): string =>
   value
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -149,7 +147,7 @@ export const parseWalletActivity = (value: unknown): readonly WalletActivity[] =
       transferCount > 0
         ? `${transferCount} token ${transferCount === 1 ? "movement" : "movements"}`
         : null,
-      counterparty === null ? null : shortAddress(counterparty),
+      counterparty === null ? null : addressLabel(counterparty),
     ].filter((part): part is string => part !== null);
     return [
       {

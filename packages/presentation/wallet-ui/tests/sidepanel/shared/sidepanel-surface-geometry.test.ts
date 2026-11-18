@@ -120,6 +120,17 @@ describe("sidepanel surface geometry", () => {
     );
   });
 
+  test("keyboard focus scrolls a row clear of the dock", () => {
+    // Content may scroll under the dock (#425), but a focused row must not
+    // stay there (#950). The root is the scroll container, so its scroll
+    // padding is the focus-scroll stop: the dock footprint plus the ring.
+    expect(rule("html:has(.wallet-dock)")).toContain(
+      `scroll-padding-bottom: calc(var(--bramble-dock-h) + ${SPACE.sm})`,
+    );
+    // Only dock screens reserve it; no other root rule sets a scroll padding.
+    expect(CSS.match(/scroll-padding/g)).toHaveLength(1);
+  });
+
   test("an empty status line ending a dock screen takes no room", () => {
     // Home and Activity end on an empty live region. Its reserved line and the
     // gap before it were invisible space that pushed the page past the panel.

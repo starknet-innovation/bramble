@@ -32,6 +32,7 @@ import {
 import type { Strk20DisclosureRequest } from "./strk20-approval-types";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
 import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
+import { registerActionBlock } from "./strk20-registration";
 import { bindStrk20ActionsToOrigin } from "./strk20-shadow-account";
 
 type Strk20StagingDeps = Strk20ExecuteDeps & {
@@ -145,7 +146,7 @@ const prepareApprovedStrk20Registration = async (
     return resolved;
   }
   const owner = await strk20RegistrationBlockFor(deps, resolved);
-  if (owner) return owner;
+  if (owner) return approval.request.spec ? registerActionBlock(owner) : owner;
   const context = strk20AccountContext(deps, resolved);
   try {
     const registration = approval.request;

@@ -20,6 +20,7 @@ import {
   clampActivitySummary,
 } from "@bramble/transactions/activity";
 import {
+  addressLabel,
   canonicalFelt,
   isStarkFieldElement,
   type StarknetNetworkId,
@@ -170,9 +171,6 @@ export const decodeTransferEvent = (
   };
 };
 
-const shortAddress = (address: string): string =>
-  address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
-
 /**
  * Folds a decoded on-chain transfer into a canonical {@link ActivityEntry} for
  * the feed. The status is always `accepted` — `getEvents` only returns events
@@ -191,7 +189,7 @@ export const onChainActivityEntry = (input: {
 }): ActivityEntry => {
   const { accountId, decoded, networkId, timestampMs, token } = input;
   const amount = formatTokenAmount(BigInt(decoded.amountRaw), token.decimals);
-  const shortCounterparty = shortAddress(decoded.counterparty);
+  const shortCounterparty = addressLabel(decoded.counterparty);
   const summary =
     decoded.direction === "in"
       ? `Received ${amount} ${token.symbol} from ${shortCounterparty}`

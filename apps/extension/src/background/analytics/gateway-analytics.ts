@@ -254,6 +254,7 @@ export const withGatewayAnalyticsFlows = (
   const poolFee = service.poolFee;
   const prepareAccountActions = service.prepareAccountActions;
   const prepareRegistration = service.prepareRegistration;
+  const prepareRegistrationCall = service.prepareRegistrationCall;
   const register = service.register;
   const registrationStatus = service.registrationStatus;
   const shadowAccountCommitment = service.shadowAccountCommitment;
@@ -270,6 +271,9 @@ export const withGatewayAnalyticsFlows = (
       : {}),
     ...(prepareRegistration
       ? { prepareRegistration: (input) => withFlow(() => prepareRegistration(input)) }
+      : {}),
+    ...(prepareRegistrationCall
+      ? { prepareRegistrationCall: (input) => withFlow(() => prepareRegistrationCall(input)) }
       : {}),
     ...(register ? { register: (input) => withFlow(() => register(input)) } : {}),
     ...(registrationStatus

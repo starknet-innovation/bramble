@@ -3,8 +3,9 @@
  * screen and "Your stakes". Every figure is a background string from an
  * on-chain read; every line is escaped.
  */
+
 import { escapeHtml } from "@bramble/core/html";
-import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { formatUtcClock, formatUtcDate } from "../../shared/timestamp";
 import { compactAmount } from "../portfolio/token-row";
 import type { StakingRow } from "./staking-client";
@@ -27,7 +28,7 @@ export const positionLines = (row: StakingRow, tag: "p" | "span" = "p"): string 
   if (row.staked && row.staked !== "0") lines.push(`Staked ${amount(row.staked)} ${row.symbol}`);
   if (row.unclaimed && row.unclaimed !== "0")
     lines.push(`Rewards ${amount(row.unclaimed)} ${row.rewardSymbol ?? "STRK"}`);
-  if (row.rewardsTo) lines.push(`Rewards are paid to ${shortAddress(canonical(row.rewardsTo))}`);
+  if (row.rewardsTo) lines.push(`Rewards are paid to ${addressLabel(row.rewardsTo)}`);
   if (row.state === "exit-pending" && row.unpoolTime !== undefined) {
     lines.push(
       `Unstaking ${amount(row.unpoolAmount)} ${row.symbol} · withdraw from ${unlockText(row.unpoolTime)}`,

@@ -9,16 +9,20 @@ import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences
 import { reviewedInvokeTotal } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import {
   PRIVACY_OTHER_WALLET_ACTION,
   PRIVATE_REQUEST_FAILED_NOTICE,
   PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import {
+  STRK20_PREPARE_REGISTER_SUMMARY,
+  STRK20_SIMULATE_REGISTER_SUMMARY,
+} from "@bramble/wallet-protocol/strk20";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
+import { accountIdAddress, inlineCopyButton } from "../../shared/parts";
 import {
   type ReviewFeeState,
   reviewCallItems,
@@ -80,7 +84,7 @@ const contextDetails = (approval: PendingApproval): string => {
     return "";
   }
   const address = accountIdAddress(context.accountId);
-  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
+  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(addressText(address))}">${escapeHtml(addressLabel(address))}</code>${inlineCopyButton(addressText(address), "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
 };
 
 const contextDisclosure = (approval: PendingApproval): string => {
@@ -117,7 +121,7 @@ const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[
     action.recipient !== undefined &&
     !sameFelt(action.recipient, account)
       ? [
-          `This deposit pays ${accountLabel(action.recipient)}: the amount becomes that account's private note, not your private balance.`,
+          `This deposit pays ${addressLabel(action.recipient)}: the amount becomes that account's private note, not your private balance.`,
         ]
       : [],
   );
@@ -273,6 +277,30 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
     ${paymentDecisionRow(approval, "Approve", status.locked)}
   </li>`;
 
+// The register card's copy: a simulated prepare produces nothing submittable,
+// a prepare hands the proof to the site, and the wallet's own registration is
+// followed by a separate network-fee approval.
+const registerCardCopy = (first: string | undefined) => {
+  const lockedHint = "Unlock the wallet to review this private-balance activation.";
+  if (first === STRK20_SIMULATE_REGISTER_SUMMARY) {
+    return {
+      action: "Simulate",
+      hint: "This only simulates activation for the site. It returns no submittable proof, publishes nothing, and costs nothing.",
+      lockedHint,
+      title: "Simulate private-balance activation",
+    };
+  }
+  return {
+    action: "Activate",
+    hint:
+      first === STRK20_PREPARE_REGISTER_SUMMARY
+        ? "This prepares the one-time registration commitment and proof and hands them to the site, which submits them itself and must cover the pool fee. The viewing key and private notes are never published."
+        : "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
+    lockedHint,
+    title: "Activate private balances",
+  };
+};
+
 const strk20DisclosureCard = (
   approval: PendingApproval,
   status: WalletStatus,
@@ -387,12 +415,7 @@ export const approvalCard = (
         title: "Private proof request",
       });
     case "strk20-register":
-      return strk20DisclosureCard(approval, status, {
-        action: "Activate",
-        hint: "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
-        lockedHint: "Unlock the wallet to review this private-balance activation.",
-        title: "Activate private balances",
-      });
+      return strk20DisclosureCard(approval, status, registerCardCopy(approval.summaries?.[0]));
     case "strk20-shadow-account":
       return strk20DisclosureCard(approval, status, {
         action: "Share commitment",

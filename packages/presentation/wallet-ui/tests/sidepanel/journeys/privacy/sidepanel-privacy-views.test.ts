@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import type {
   PrivacyBlockerKind,
@@ -134,12 +135,12 @@ describe("privacy journey templates", () => {
       tokenId: token.id,
     });
 
-    expect(html).toContain("<code>0x123456…67890</code>");
-    expect(html).toContain('data-copy="0x12345678901234567890"');
+    expect(html).toContain("<code>0x0000…7890</code>");
+    expect(html).toContain(`data-copy="${addressText("0x12345678901234567890")}"`);
     expect(html).toContain('aria-label="Copy privacy pool address"');
-    expect(html).toContain('data-copy="0x99"');
+    expect(html).toContain(`data-copy="${addressText("0x99")}"`);
     expect(html).toContain('aria-label="Copy authorization caller address"');
-    expect(html).not.toContain("<code>0x12345678901234567890</code>");
+    expect(html).not.toContain(`<code>${addressText("0x12345678901234567890")}</code>`);
   });
 
   test("working, success, failure, and empty checkpoints communicate liveness and recovery", () => {

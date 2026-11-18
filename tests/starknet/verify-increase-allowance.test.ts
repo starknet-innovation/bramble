@@ -63,7 +63,7 @@ describe("increase_allowance spend review", () => {
       expect(decoded?.entrypoint).toBe(entrypoint);
       // The spender and the amount are both named, so the reviewer sees who is
       // being trusted and for how much.
-      expect(decoded?.summary).toContain("Allow 0x555a");
+      expect(decoded?.summary).toContain("Allow 0x0555");
       expect(decoded?.summary).toContain("to spend 1.5 ETH");
       expect(decoded?.summary).not.toContain(`Call ${entrypoint} on`);
     }
@@ -73,13 +73,13 @@ describe("increase_allowance spend review", () => {
     // The resulting allowance is prior + added and is not knowable from the
     // call, so the summary must not read like a limit the wallet verified.
     const report = verifyCalls([increaseCall("1000000000000000000")], context);
-    expect(report.calls[0]?.summary).toBe("Allow 0x555a…bbcc to spend 1 ETH more");
+    expect(report.calls[0]?.summary).toBe("Allow 0x0555…bbcc to spend 1 ETH more");
 
     const approved = verifyCalls(
       [{ ...increaseCall("1000000000000000000"), entrypoint: "approve" }],
       context,
     );
-    expect(approved.calls[0]?.summary).toBe("Allow 0x555a…bbcc to spend 1 ETH");
+    expect(approved.calls[0]?.summary).toBe("Allow 0x0555…bbcc to spend 1 ETH");
   });
 
   test("both spellings raise the unlimited-approval flag", () => {

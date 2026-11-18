@@ -390,7 +390,7 @@ describe("reward address spelling", () => {
     for (const rewardsTo of [padded, `0x5e1${"0".repeat(56)}f2e4`]) {
       const line = positionLines({ ...ROW, rewardsTo });
       const short = /Rewards are paid to (\S+)</.exec(line)?.[1];
-      expect(short).toBe("0x5e10…f2e4");
+      expect(short).toBe("0x05e1…f2e4");
       expect(sentence).toContain(`Rewards are paid to ${short},`);
     }
   });

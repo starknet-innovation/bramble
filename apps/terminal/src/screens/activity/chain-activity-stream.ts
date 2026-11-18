@@ -1,3 +1,4 @@
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { useEffect, useRef, useState } from "react";
 import type { ChainPulse } from "../../data/index";
 
@@ -20,9 +21,6 @@ const MAX_VISIBLE = 22;
 const MAX_SEEN = 1_000;
 const CACHE_SIZE = 20;
 const CACHE_KEY = "bramble-terminal:chain-activity:v1";
-
-const shortAddress = (value: string): string =>
-  value.length > 13 ? `${value.slice(0, 7)}…${value.slice(-5)}` : value;
 
 const sentenceCase = (value: string): string =>
   (value === value.toUpperCase() ? value.toLowerCase() : value)
@@ -99,11 +97,11 @@ const eventDetail = (
   value: string | null,
   contractAddress: string,
 ): string => {
-  const contract = `Contract ${shortAddress(contractAddress)}`;
+  const contract = `Contract ${addressLabel(contractAddress)}`;
   if (label === null || value === null) return contract;
   const leaf = label.split(".").at(-1) ?? label;
   if (leaf === "variant") return `${sentenceCase(value)} · ${contract}`;
-  const display = value.length > 32 ? shortAddress(value) : value;
+  const display = value.length > 32 ? addressLabel(value) : value;
   return `${sentenceCase(leaf)} ${display} · ${contract}`;
 };
 
@@ -140,7 +138,7 @@ const toChainActivities = (pulse: ChainPulse): readonly ChainActivity[] => {
     ...pulse.transactions.slice(0, 10).map(
       (transaction): ChainActivity => ({
         blockNumber: transaction.blockNumber,
-        detail: `${shortAddress(transaction.fromAddress)} → ${shortAddress(transaction.toAddress)}`,
+        detail: `${addressLabel(transaction.fromAddress)} → ${addressLabel(transaction.toAddress)}`,
         href: `https://starkscan.co/tx/${transaction.txHash}`,
         id: transaction.id,
         kind: "transaction",
@@ -167,9 +165,9 @@ const toChainActivities = (pulse: ChainPulse): readonly ChainActivity[] => {
     ...recentMessages.map(
       (message): ChainActivity => ({
         blockNumber: message.blockNumber,
-        detail: `${sentenceCase(message.status)} · ${shortAddress(
+        detail: `${sentenceCase(message.status)} · ${addressLabel(
           message.fromAddress,
-        )} → ${shortAddress(message.toAddress)}`,
+        )} → ${addressLabel(message.toAddress)}`,
         href: `https://starkscan.co/tx/${message.txHash}`,
         id: message.id,
         kind: "message",

@@ -44,10 +44,16 @@ declare global {
       readonly on: (event: unknown, handler: unknown) => void;
       readonly request: (args: unknown) => Promise<unknown>;
       readonly selectedAddress?: string;
-      readonly version: "0.1.0";
+      readonly version: string;
     };
   }
 }
+
+declare const __MC_BUILD_VERSION__: string | undefined;
+
+// Release version, stamped by apps/extension/build.ts from manifest.json. Dapps
+// show it as the wallet version; unbundled (tests) it is empty.
+const PROVIDER_VERSION = typeof __MC_BUILD_VERSION__ === "string" ? __MC_BUILD_VERSION__ : "";
 
 const pending = new Map<string, PendingRequest>();
 const events = createProviderEventHub();
@@ -182,7 +188,7 @@ const starknetWallet = {
   get selectedAddress(): string | undefined {
     return connectedAddresses[0];
   },
-  version: "0.1.0" as const,
+  version: PROVIDER_VERSION,
 };
 
 if (!window.bramble) {

@@ -1,7 +1,7 @@
 /** First-run recovery, account preview, and persistence bindings. */
 
 import { isCreatableAccountContractType } from "@bramble/wallet-model/accounts";
-import { DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
+import { addressLabel, DEFAULT_NETWORK } from "@bramble/wallet-model/networks";
 import { isVaultPassphrase } from "@bramble/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -406,7 +406,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           return;
         }
         if (previewAddress) {
-          previewAddress.textContent = `${account.address.slice(0, 10)}…${account.address.slice(-8)}`;
+          previewAddress.textContent = addressLabel(account.address);
           previewAddress.title = account.address;
         }
         if (previewLabel) {

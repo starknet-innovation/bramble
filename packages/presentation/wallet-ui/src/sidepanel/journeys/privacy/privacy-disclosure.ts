@@ -126,6 +126,8 @@ let inFlight: {
  * never grow a second disclosure path. A failure is toasted unless a caller is
  * about to explain it on a screen of its own (`silent`) — including a caller
  * that joined a read already in flight, whose screen makes the toast redundant.
+ * A network with no privacy pool is never toasted: the portfolio states it
+ * inline, and it would otherwise repeat on every account switch.
  */
 export const loadPrivacyDisclosure = (
   deps: PrivacyUiDeps,
@@ -162,14 +164,13 @@ export const loadPrivacyDisclosure = (
     } catch (error) {
       if (deps.disclosure() === pending && scopeMatches(deps, scope)) {
         const message = errorLine(error, "Private balances unavailable");
-        deps.setDisclosure({
-          error: message,
-          blockerKind: privacyBlockerFor(error).kind,
-          loading: false,
-          value: null,
-        });
+        const blockerKind = privacyBlockerFor(error).kind;
+        deps.setDisclosure({ error: message, blockerKind, loading: false, value: null });
         deps.paint();
-        if (!record.silent)
+        // A network with no pool gives the same answer on every read, and every
+        // account switch reads again, so it is stated inline rather than toasted
+        // once per switch (issue 951).
+        if (!record.silent && blockerKind !== "network")
           showToast(
             message,
             "error",
