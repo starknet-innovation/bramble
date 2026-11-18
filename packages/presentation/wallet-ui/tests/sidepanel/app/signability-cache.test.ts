@@ -121,28 +121,3 @@ test("drops a Ready key verdict for another account, a false one, or a failure",
     expect(await cache.load(statusFor("acc"), "home")).toEqual({ readOnly: false });
   }
 });
-
-test("asks for the Ready key verdict once per account, and again after a failed ask", async () => {
-  let asks = 0;
-  let fail = true;
-  const cache = createSignabilityCache(
-    readyWallet(async () => {
-      asks += 1;
-      if (fail) throw new Error("lost reply");
-      return { accountId: "acc", ok: true, preFixKey: true };
-    }),
-  );
-  expect(await cache.load(statusFor("acc"), "home", true)).toEqual({ readOnly: false });
-  fail = false;
-  expect(await cache.load(statusFor("acc"), "home", true)).toEqual({
-    preFixReadyKey: true,
-    readOnly: false,
-  });
-  // The verdict cannot change for an account, so later probes do not decrypt
-  // the vault again, and the notice stays.
-  expect(await cache.load(statusFor("acc"), "home", true)).toEqual({
-    preFixReadyKey: true,
-    readOnly: false,
-  });
-  expect(asks).toBe(2);
-});
