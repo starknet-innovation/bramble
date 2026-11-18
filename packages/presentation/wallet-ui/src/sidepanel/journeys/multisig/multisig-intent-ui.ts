@@ -228,10 +228,10 @@ const bindDeletes = (deps: MultisigUiDeps): void => {
 const bindCosignerHintDismiss = (sync: HTMLElement | null): void => {
   if (!sync) return;
   const dismiss = (event: KeyboardEvent): void => {
-    if (event.key === "Escape") sync.dataset["hintDismissed"] = "";
+    if (event.key === "Escape") sync.setAttribute("data-hint-dismissed", "");
   };
   const restore = (): void => {
-    delete sync.dataset["hintDismissed"];
+    sync.removeAttribute("data-hint-dismissed");
   };
   sync.addEventListener("keydown", dismiss);
   sync.addEventListener("focusout", restore);
