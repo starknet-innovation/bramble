@@ -1,7 +1,7 @@
 /**
  * Top navigation bar with real screen navigation and wallet connection state.
  */
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { Check, ChevronDown, Copy, LogOut, WalletCards } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useWallet } from "../wallet/connection/WalletProvider";
@@ -38,7 +38,7 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
   const copyAddress = async (): Promise<void> => {
     if (address === null) return;
     try {
-      await navigator.clipboard.writeText(address);
+      await navigator.clipboard.writeText(addressText(address));
       setCopied(true);
     } catch {
       setCopied(false);
@@ -90,7 +90,7 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
               </div>
               <div className="wallet-session-account">
                 <span>Active account</span>
-                <code>{address}</code>
+                <code>{addressText(address)}</code>
               </div>
               <div className="wallet-session-actions">
                 <button type="button" onClick={() => void copyAddress()}>

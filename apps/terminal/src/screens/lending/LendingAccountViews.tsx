@@ -1,4 +1,4 @@
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import {
   ArrowRight,
   Banknote,
@@ -284,7 +284,7 @@ export const LendingVaults = ({ resource, positions, redeems }: VaultProps): Rea
             <dl>
               <div><dt>Deposit cap</dt><dd>{selected.depositLimit.toLocaleString()} {selected.assetSymbol}</dd></div>
               <div><dt>Average redemption</dt><dd>{Math.round(selected.averageRedeemDelaySeconds / 3600)} hours</dd></div>
-              <div><dt>Vault contract</dt><dd title={selected.address}>{addressLabel(selected.address)}</dd></div>
+              <div><dt>Vault contract</dt><dd title={addressText(selected.address)}>{addressLabel(selected.address)}</dd></div>
             </dl>
             <label className="lending-input-block compact">
               <span>Deposit amount</span>
