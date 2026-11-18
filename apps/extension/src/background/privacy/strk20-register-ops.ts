@@ -87,26 +87,19 @@ export type Strk20RegistrationMode =
   | { readonly kind: "submit"; readonly spec: boolean };
 
 // The reviewed pool fee for "submit" ("" for "prepare", where the site pays
-// and no token is needed), or null when the register action meets an already
-// registered account. Throws the service's mapped error on a failed read or
-// unaffordable fee.
+// and no token is needed). Throws the service's mapped error on a failed read
+// or unaffordable fee.
 const registrationFee = async (
   deps: Strk20OpsDeps,
   resolved: ResolvedAccount,
   token: TokenConfig | undefined,
   mode: Strk20RegistrationMode,
   poolFee: Strk20Service["poolFee"],
-): Promise<string | null> => {
-  const accountContext = strk20AccountContext(deps, resolved);
-  if (
-    (mode.kind === "prepare" || mode.spec) &&
-    (await isStrk20AccountRegistered(deps.runtimeRpc, accountContext))
-  ) {
-    return null;
-  }
+): Promise<string> => {
   if (mode.kind === "prepare" || !poolFee || !token) {
     return "";
   }
+  const accountContext = strk20AccountContext(deps, resolved);
   const poolFeeFri = await poolFee(accountContext);
   await assertPublicPoolSpendAffordable(
     deps,
@@ -173,20 +166,28 @@ const registrationSetup = async (
   const blocked = await registrationBlockHold(deps, origin, admission, resolved, mode);
   if (blocked) return { hold: blocked };
   const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
+  if (!config) return hold(STRK20_SERVICE_UNAVAILABLE);
   const token = resolved.preferences.tokens.find(
     (candidate) => candidate.networkId === resolved.account.networkId,
   );
   const poolFee = strk20ServiceForRuntime(deps.runtimeRpc).poolFee;
-  // Only the wallet-submitted registration pays (and so reviews) a pool fee in
-  // a tracked token; prepare-register needs just the account and pool.
-  if (!config || (mode.kind === "submit" && (!token || !poolFee))) {
-    return hold(STRK20_SERVICE_UNAVAILABLE);
-  }
   try {
+    // The register action answers "already registered" (114) from the pool's
+    // public registry before any submit prerequisite, so an account with no
+    // tracked token still gets the spec's code rather than "unavailable".
+    if (
+      (mode.kind === "prepare" || mode.spec) &&
+      (await isStrk20AccountRegistered(deps.runtimeRpc, strk20AccountContext(deps, resolved)))
+    ) {
+      return hold(STRK20_ALREADY_REGISTERED, "request-failed");
+    }
+    // Only the wallet-submitted registration pays (and so reviews) a pool fee
+    // in a tracked token; prepare-register needs just the account and pool.
+    if (mode.kind === "submit" && (!token || !poolFee)) {
+      return hold(STRK20_SERVICE_UNAVAILABLE);
+    }
     const poolFeeFri = await registrationFee(deps, resolved, token, mode, poolFee);
-    return poolFeeFri === null
-      ? hold(STRK20_ALREADY_REGISTERED, "request-failed")
-      : { poolAddress: config.poolAddress, poolFeeFri, resolved, token: token?.address ?? "" };
+    return { poolAddress: config.poolAddress, poolFeeFri, resolved, token: token?.address ?? "" };
   } catch (error) {
     return hold(strk20ErrorMessage(error), "request-failed");
   }

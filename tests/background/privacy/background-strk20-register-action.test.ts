@@ -159,6 +159,33 @@ describe("strk20 register action", () => {
     }
   });
 
+  test("an already registered account with no tracked token is still refused with 114", async () => {
+    // The registry answer comes before the submit route's tracked-token
+    // prerequisite, so the site gets the spec's code, not "unavailable" (163).
+    const defaults = defaultWalletPreferences();
+    const pool = defaults.strk20Networks?.SN_MAIN;
+    if (!pool) throw new Error("missing default STRK20 config");
+    for (const [message, method] of [
+      [invokeRegister, "wallet_strk20InvokeTransaction"],
+      [prepareRegister(false), "wallet_strk20PrepareInvoke"],
+    ] as const) {
+      const handler = buildStrk20Handler({
+        preferences: {
+          ...defaults,
+          activeNetworkId: "SN_SEPOLIA",
+          strk20Networks: { ...defaults.strk20Networks, SN_SEPOLIA: pool },
+          tokens: [],
+        },
+        registered: true,
+      });
+      const held = handler(message, STRK20_CONTENT_SENDER);
+      const pending = await waitForPendingApprovals<Listed>(handler, STRK20_EXTENSION_SENDER);
+      expect(pending.map((approval) => approval.kind)).toEqual(["strk20-unavailable"]);
+      await handler({ id: pending[0]?.id, type: "wallet.denyOrigin" }, STRK20_EXTENSION_SENDER);
+      expect(toProviderPayload(await held, method).error?.code).toBe(114);
+    }
+  });
+
   test("a key another wallet registered is still refused with 114, on the other-wallet notice", async () => {
     const own = `0x${"1".repeat(63)}`;
     const foreign = `0x${"2".repeat(63)}`;
