@@ -12,9 +12,9 @@ See DEVELOPMENT.md and RELEASING.md.
 ## [Unreleased]
 
 ### Changed
-- Addresses are shortened the same way on every screen. Contacts, tokens, NFTs
-  and the watch-asset request read `0x5e1d…f2e4`, as the review you sign
-  already did (#884).
+- Every address keeps its 64-digit padding on every screen, shortened as
+  `0x05e1…f2e4` or shown in full, including review and signing lines, copy
+  buttons and QR codes (#884).
 
 ## [0.10.10] - Unreleased
 
