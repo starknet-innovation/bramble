@@ -12,6 +12,9 @@ const createModule = (signatureR = "0x1") => ({
       public_key_x: "0xcba",
     };
   },
+  deriveArgentLegacyPublicKey() {
+    return { public_key_x: "0xcba" };
+  },
   deriveNostrPublicKey() {
     return { public_key: "11".repeat(32) };
   },

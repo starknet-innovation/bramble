@@ -27,6 +27,7 @@ const KRUSTY_RESULT_CLASSES = new Set([
   "WasmNostrPublicKey",
   "WasmStarkSignature",
   "WasmStarkXOnlyKeypair",
+  "WasmStarkXOnlyPublicKey",
 ]);
 const encodedLength = (value: string): number => new TextEncoder().encode(value).length;
 const isNostrIdentifier = (value: string): boolean =>
@@ -134,6 +135,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
   const deriveNostrPublicKey = requireFunction(module, "deriveNostrPublicKey");
   const deriveScopedStrk20ViewingKey = requireFunction(module, "deriveScopedStrk20ViewingKey");
   const deriveArgentLegacyKeypair = requireFunction(module, "deriveArgentLegacyKeypair");
+  const deriveArgentLegacyPublicKey = requireFunction(module, "deriveArgentLegacyPublicKey");
   const deriveStarknetKeypair = requireFunction(module, "deriveStarknetKeypair");
   const generateMnemonic = requireFunction(module, "generateMnemonic");
   const getAccountClassHashes = requireFunction(module, "getAccountClassHashes");
@@ -206,6 +208,15 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
         privateKey: requirePrivateKeyField(result, "private_key"),
         publicKeyX: requireFieldElementField(result, "public_key_x"),
       };
+    },
+    async deriveArgentLegacyPublicKey(mnemonic, addressIndex) {
+      await ready;
+      if (!isMnemonicText(mnemonic) || !isDerivationIndex(addressIndex)) {
+        throw new WalletError("Invalid Stark derivation input");
+      }
+      // Same pinned zero account field as the keypair export above.
+      const result = await deriveArgentLegacyPublicKey(mnemonic, addressIndex, 0);
+      return requireNonZeroFieldElementField(result, "public_key_x");
     },
     async deriveStarknetKeypair(mnemonic, addressIndex, accountIndex, passphrase) {
       await ready;

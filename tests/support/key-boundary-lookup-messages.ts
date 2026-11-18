@@ -6,6 +6,7 @@ import type { KeyBoundaryMessage } from "./key-boundary-types";
 export const LOOKUP_KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.accountSignability" }, sender: extensionSender },
   { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
+  { message: { type: "wallet.readyKeyStatus" }, sender: extensionSender },
   { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
   {
     message: { name: "fricoben.stark", networkId: "SN_MAIN", type: "wallet.resolveStarkName" },
