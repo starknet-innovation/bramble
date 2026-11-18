@@ -97,4 +97,59 @@ describe("Show art on a discovered NFT", () => {
     await handler({ type: "wallet.loadWatchedNfts" }, sender);
     expect(metadataCalls).toBe(0);
   });
+
+  // Issue 901: a watched NFT whose metadata or art cannot be found used to stay
+  // a silent placeholder. The watched lane now marks it so the card can say so.
+  test("marks a watched NFT whose metadata read fails or names no art", async () => {
+    const watch = {
+      contract: discovered.contract,
+      networkId: "SN_MAIN",
+      tokenId: discovered.tokenId,
+      type: "wallet.addNft",
+    };
+    for (const getNftMetadata of [
+      async (): Promise<NftTokenMetadata> => {
+        throw new Error("Could not read NFT metadata URI");
+      },
+      async (): Promise<null> => null,
+      async (): Promise<NftTokenMetadata> => ({ ...ART, image: "" }),
+    ]) {
+      const { handler } = makeHandler({
+        candidates: [discovered],
+        getNftMetadata,
+        owners: { [discovered.contract]: account.address },
+      });
+      await handler(watch, sender);
+      await expect(handler({ type: "wallet.loadWatchedNfts" }, sender)).resolves.toMatchObject({
+        nfts: [{ artUnavailable: true, id: discovered.id, image: "" }],
+        ok: true,
+      });
+    }
+  });
+
+  test("leaves a watched NFT with art or an animation unmarked", async () => {
+    for (const metadata of [ART, { ...ART, animationUrl: "data:text/html,<p>hi</p>", image: "" }]) {
+      const { handler } = makeHandler({
+        candidates: [discovered],
+        async getNftMetadata() {
+          return metadata;
+        },
+        owners: { [discovered.contract]: account.address },
+      });
+      await handler(
+        {
+          contract: discovered.contract,
+          networkId: "SN_MAIN",
+          tokenId: discovered.tokenId,
+          type: "wallet.addNft",
+        },
+        sender,
+      );
+      const loaded = (await handler({ type: "wallet.loadWatchedNfts" }, sender)) as {
+        readonly nfts: readonly Record<string, unknown>[];
+      };
+      expect(loaded.nfts).toHaveLength(1);
+      expect(loaded.nfts[0]).not.toHaveProperty("artUnavailable");
+    }
+  });
 });
