@@ -49,8 +49,9 @@ export const mergeNftCandidates = (
 };
 
 // Marks a watched NFT whose art the wallet could not find, unless it already
-// carries an image or an animation to show instead.
-const withoutArt = (nft: DiscoveredNft): DiscoveredNft =>
+// carries an image or an animation to show instead. A mark carried over from an
+// earlier read is dropped once art is found.
+const withoutArt = ({ artUnavailable: _stale, ...nft }: DiscoveredNft): DiscoveredNft =>
   nft.image || nft.animationUrl ? nft : { ...nft, artUnavailable: true };
 
 const enrichWatchedNft = async (

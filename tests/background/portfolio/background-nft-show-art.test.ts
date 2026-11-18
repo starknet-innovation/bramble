@@ -152,4 +152,35 @@ describe("Show art on a discovered NFT", () => {
       expect(loaded.nfts[0]).not.toHaveProperty("artUnavailable");
     }
   });
+
+  test("clears the mark once a later read finds art", async () => {
+    let fail = true;
+    const { handler } = makeHandler({
+      candidates: [discovered],
+      async getNftMetadata() {
+        if (fail) {
+          throw new Error("Could not read NFT metadata URI");
+        }
+        return ART;
+      },
+      owners: { [discovered.contract]: account.address },
+    });
+    await handler(
+      {
+        contract: discovered.contract,
+        networkId: "SN_MAIN",
+        tokenId: discovered.tokenId,
+        type: "wallet.addNft",
+      },
+      sender,
+    );
+    await expect(handler({ type: "wallet.loadWatchedNfts" }, sender)).resolves.toMatchObject({
+      nfts: [{ artUnavailable: true }],
+    });
+    fail = false;
+    const loaded = (await handler({ type: "wallet.loadWatchedNfts" }, sender)) as {
+      readonly nfts: readonly Record<string, unknown>[];
+    };
+    expect(loaded.nfts[0]).not.toHaveProperty("artUnavailable");
+  });
 });
