@@ -61,6 +61,17 @@ describe("readSetDisplayInput", () => {
     expect(readSetDisplayInput({ productAnalytics: "yes", type: "wallet.setDisplay" })).toBeNull();
     expect(readSetDisplayInput({ type: "wallet.setDisplay", vipNotice: "off" })).toBeNull();
   });
+
+  test("reads a Ready key notice dismissal only for a canonical account id", () => {
+    expect(
+      readSetDisplayInput({ readyKeyNoticeDismissed: "SN_MAIN:0x2a", type: "wallet.setDisplay" }),
+    ).toEqual({ readyKeyNoticeDismissed: "SN_MAIN:0x2a" });
+    for (const bad of ["", "0x2a", "SN_MAIN:zz", 42, ["SN_MAIN:0x2a"], null]) {
+      expect(
+        readSetDisplayInput({ readyKeyNoticeDismissed: bad, type: "wallet.setDisplay" }),
+      ).toBeNull();
+    }
+  });
 });
 
 describe("readSetAccountHiddenInput", () => {

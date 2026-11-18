@@ -163,7 +163,16 @@ export const homeScreen = (
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
       ${staking ? stakedLine(staking, preferences?.tokens ?? []) : ""}
       ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
-      ${readyKeyNotice(signability?.preFixReadyKey === true)}
+      ${
+        account
+          ? readyKeyNotice({
+              accountId: account.id,
+              affected: signability?.preFixReadyKey === true,
+              canMoveFunds: !readOnly,
+              dismissed: preferences?.readyKeyNoticeDismissedIds?.includes(account.id) === true,
+            })
+          : ""
+      }
       ${account ? vipNotice(vipEligible({ currency, preferences, showTotal, total })) : noAccountEmpty(status)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">
