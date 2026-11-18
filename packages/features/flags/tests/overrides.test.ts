@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import { BUNDLED_FLAGS, type FlagCatalog } from "@bramble/flags/catalog";
 import { type FlagRule, parseFlagPayload } from "@bramble/flags/contract";
+import { flagKills } from "@bramble/flags/evaluate";
 import {
   applyFlagOverrides,
   FEATURE_FLAG_OVERRIDES_KEY,
@@ -93,7 +94,7 @@ describe("override storage", () => {
 
 describe("applyFlagOverrides", () => {
   test("no overrides leaves the evaluated values untouched", () => {
-    expect(applyFlagOverrides(BASE, {}, CATALOG, null)).toEqual({
+    expect(applyFlagOverrides(BASE, {}, CATALOG, [])).toEqual({
       flags: BASE,
       killed: [],
       overridden: [],
@@ -101,7 +102,7 @@ describe("applyFlagOverrides", () => {
   });
 
   test("an override replaces the evaluated value in either direction", () => {
-    expect(applyFlagOverrides(BASE, { "b.open": true, "c.open": false }, CATALOG, null)).toEqual({
+    expect(applyFlagOverrides(BASE, { "b.open": true, "c.open": false }, CATALOG, [])).toEqual({
       flags: { "a.locked": true, "b.open": true, "c.open": false },
       killed: [],
       overridden: ["b.open", "c.open"],
@@ -110,14 +111,23 @@ describe("applyFlagOverrides", () => {
 
   test("an override beats remote targeting that leaves the flag off", () => {
     const doc = docWith({ "b.open": { enabled: true, rollout: 0 } });
-    expect(applyFlagOverrides(BASE, { "b.open": true }, CATALOG, doc).flags["b.open"]).toBe(true);
+    expect(
+      applyFlagOverrides(BASE, { "b.open": true }, CATALOG, flagKills(CATALOG, doc)).flags[
+        "b.open"
+      ],
+    ).toBe(true);
   });
 
   test("a remote hard kill beats an override", () => {
     const doc = docWith({ "b.open": { enabled: false }, "c.open": { enabled: false } });
     const killedBase = { ...BASE, "c.open": false };
     expect(
-      applyFlagOverrides(killedBase, { "b.open": true, "c.open": true }, CATALOG, doc),
+      applyFlagOverrides(
+        killedBase,
+        { "b.open": true, "c.open": true },
+        CATALOG,
+        flagKills(CATALOG, doc),
+      ),
     ).toEqual({
       flags: killedBase,
       killed: ["b.open", "c.open"],
@@ -126,7 +136,7 @@ describe("applyFlagOverrides", () => {
   });
 
   test("overrides for flags that are not overridable are ignored", () => {
-    expect(applyFlagOverrides(BASE, { "a.locked": false }, CATALOG, null)).toEqual({
+    expect(applyFlagOverrides(BASE, { "a.locked": false }, CATALOG, [])).toEqual({
       flags: BASE,
       killed: [],
       overridden: [],

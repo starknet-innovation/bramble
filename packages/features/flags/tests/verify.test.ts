@@ -128,6 +128,20 @@ describe("verifyFlagDocument rejects", () => {
     );
   });
 
+  test("expired: hands back the payload for its kills, never as a current document", async () => {
+    const result = await verifyFlagDocument(
+      await publisher.sign(payload({ expiresAt: stamp(NOW) })),
+      options(),
+    );
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason === "expired" && result.expired.sequence).toBe(5);
+  });
+
+  test("rollback: reported before expiry, so an older expired copy carries nothing", async () => {
+    const text = await publisher.sign(payload({ expiresAt: stamp(NOW) }));
+    expect(await reason(text, { minSequence: 6 })).toBe("rollback");
+  });
+
   test("not-yet-valid: issuedAt beyond the clock-skew allowance", async () => {
     const body = payload({ issuedAt: stamp(NOW + 10 * 60_000) });
     expect(await reason(await publisher.sign(body))).toBe("not-yet-valid");

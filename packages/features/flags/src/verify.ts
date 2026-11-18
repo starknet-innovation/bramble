@@ -36,10 +36,16 @@ export type FlagRejection =
   | "wrong-channel"
   | "wrong-schema";
 
-/** Outcome of {@link verifyFlagDocument}. */
+/**
+ * Outcome of {@link verifyFlagDocument}. An `expired` refusal also carries the
+ * payload, which passed every other check: it must never be applied as a
+ * current document, and is read only for the kills it carries when it is the
+ * last document this install accepted.
+ */
 export type FlagVerification =
   | { readonly ok: true; readonly payload: FlagPayload }
-  | { readonly ok: false; readonly reason: FlagRejection };
+  | { readonly expired: FlagPayload; readonly ok: false; readonly reason: "expired" }
+  | { readonly ok: false; readonly reason: Exclude<FlagRejection, "expired"> };
 
 /** Imported Ed25519 verification keys, by publisher keyId. */
 export type TrustedFlagKeys = ReadonlyMap<string, CryptoKey>;
@@ -59,7 +65,10 @@ const ENVELOPE_KEYS = ["keyId", "payload", "signature"];
 // Tolerated client clock skew for an `issuedAt` slightly in the future.
 const MAX_CLOCK_SKEW_MS = 300_000;
 
-const reject = (reason: FlagRejection): FlagVerification => ({ ok: false, reason });
+const reject = (reason: Exclude<FlagRejection, "expired">): FlagVerification => ({
+  ok: false,
+  reason,
+});
 
 /**
  * Imports the bundled public keys (`keyId` -> base64url raw 32-byte Ed25519).
@@ -115,11 +124,11 @@ const checkPayload = (payload: FlagPayload, options: FlagVerifyOptions): FlagVer
   if (payload.issuedAt > options.now + MAX_CLOCK_SKEW_MS) {
     return reject("not-yet-valid");
   }
-  if (options.now >= payload.expiresAt) {
-    return reject("expired");
-  }
   if (payload.sequence < options.minSequence) {
     return reject("rollback");
+  }
+  if (options.now >= payload.expiresAt) {
+    return { expired: payload, ok: false, reason: "expired" };
   }
   return { ok: true, payload };
 };

@@ -7,7 +7,13 @@ import { describe, expect, test } from "bun:test";
 import type { FlagCatalog } from "@bramble/flags/catalog";
 import { BUNDLED_FLAGS } from "@bramble/flags/catalog";
 import { type FlagRule, parseFlagPayload } from "@bramble/flags/contract";
-import { evaluateFlags, type FlagTargeting, flagBucket } from "@bramble/flags/evaluate";
+import {
+  evaluateFlags,
+  type FlagTargeting,
+  flagBucket,
+  flagKills,
+  killedDefaults,
+} from "@bramble/flags/evaluate";
 import { payload } from "./support/flag-fixture";
 
 const CATALOG: FlagCatalog = {
@@ -122,5 +128,26 @@ describe("evaluateFlags", () => {
     const rule: FlagRule = { chains: ["SN_SEPOLIA"], enabled: true };
     expect(evaluate({ "a.killonly": rule }, { chain: "SN_MAIN" })["a.killonly"]).toBe(false);
     expect(evaluate({ "a.killonly": rule }, { chain: "SN_SEPOLIA" })["a.killonly"]).toBe(true);
+  });
+});
+
+describe("kept kills", () => {
+  test("flagKills lists only catalog flags with an enabled: false rule, sorted", () => {
+    const doc = docWith({
+      "a.killonly": { enabled: false },
+      "c.toggle": { enabled: true },
+      "z.unknown": { enabled: false },
+    });
+    expect(flagKills(CATALOG, doc)).toEqual(["a.killonly"]);
+    expect(flagKills(CATALOG, null)).toEqual([]);
+  });
+
+  test("killedDefaults turns off only the kills and keeps every other default", () => {
+    expect(killedDefaults(CATALOG, ["a.killonly"])).toEqual({
+      "a.killonly": false,
+      "b.killonly-off": false,
+      "c.toggle": false,
+    });
+    expect(killedDefaults(CATALOG, [])).toEqual(evaluateFlags(CATALOG, null, TARGETING));
   });
 });

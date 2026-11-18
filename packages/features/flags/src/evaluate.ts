@@ -104,3 +104,24 @@ export const evaluateFlags = (
   }
   return values;
 };
+
+/**
+ * Catalog flags that `payload` kills outright: a rule with `enabled: false`,
+ * which turns the flag off for every install whatever its targeting. Sorted.
+ */
+export const flagKills = (catalog: FlagCatalog, payload: FlagPayload | null): readonly string[] =>
+  payload === null
+    ? []
+    : Object.keys(catalog)
+        .filter((key) => Object.hasOwn(payload.flags, key) && payload.flags[key]?.enabled === false)
+        .sort();
+
+/**
+ * The bundled defaults with `kills` turned off. Used once the last accepted
+ * document has expired: its kills stay in force until a newer signed document
+ * replaces it, while everything else returns to the defaults.
+ */
+export const killedDefaults = (catalog: FlagCatalog, kills: readonly string[]): FlagValues =>
+  Object.fromEntries(
+    Object.entries(catalog).map(([key, known]) => [key, known.enabled && !kills.includes(key)]),
+  );

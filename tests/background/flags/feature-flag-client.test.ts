@@ -134,13 +134,17 @@ describe("feature-flag client", () => {
     expect(await client.snapshot("SN_MAIN")).toMatchObject({ sequence: 3, source: "remote" });
   });
 
-  test("falls back to bundled defaults once the last good document expires", async () => {
+  test("keeps a kill after the last good document expires and the CDN is unreachable", async () => {
     const clock = { now: NOW };
     const client = clientFor(serve(await killed(3), new Error("offline")), { clock });
     await client.refresh();
     clock.now = NOW + 31 * 86_400_000;
     expect(await client.refresh({ force: true })).toBe("unreachable");
-    expect((await client.snapshot("SN_MAIN")).source).toBe("bundled");
+    expect(await client.snapshot("SN_MAIN")).toMatchObject({
+      flags: { "swap.enabled": false },
+      sequence: null,
+      source: "bundled",
+    });
   });
 
   test("rejects rollback across a worker restart, then accepts a newer document", async () => {
@@ -215,7 +219,10 @@ describe("feature-flag client", () => {
       document: String(stored["document"]).replace('"enabled":false', '"enabled":true'),
     });
     const restarted = clientFor(serve(new Error("offline")), { store });
-    expect((await restarted.snapshot("SN_MAIN")).source).toBe("bundled");
+    expect(await restarted.snapshot("SN_MAIN")).toMatchObject({
+      flags: { "swap.enabled": true },
+      source: "bundled",
+    });
   });
 
   test("rejects documents for other channels and expired documents", async () => {

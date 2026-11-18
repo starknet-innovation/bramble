@@ -4,10 +4,14 @@
  *
  * Fail-closed ladder, evaluated on every snapshot:
  * 1. a verified, unexpired document (fresh, or the last good one) applies;
- * 2. otherwise — nothing accepted yet, the last good copy expired, the stored
- *    state could not be read, or the bundled keys failed to import — the
- *    bundled defaults apply unchanged. Expiry falling back to the defaults is
- *    by design: a kill lasts only as long as the signed copy that carries it.
+ * 2. once the last accepted document has expired, the bundled defaults apply
+ *    except for its kills (rules with `enabled: false`), which stay in force
+ *    until a newer signed document is accepted, so a kill cannot lapse because
+ *    the CDN is unreachable or nobody republished;
+ * 3. otherwise — nothing accepted yet, the stored copy no longer verifies (a
+ *    tampered copy, or its key dropped in this release), the stored state
+ *    could not be read, or the bundled keys failed to import — the bundled
+ *    defaults apply unchanged.
  *
  * An install bucket that cannot be drawn or stored only withholds the
  * rollout-dependent decisions; a remote kill still applies without one.
@@ -30,7 +34,7 @@ import {
   TRUSTED_FLAG_KEYS,
 } from "@bramble/flags/catalog";
 import type { FlagChannel, FlagPayload } from "@bramble/flags/contract";
-import { evaluateFlags, type FlagValues } from "@bramble/flags/evaluate";
+import { evaluateFlags, type FlagValues, flagKills, killedDefaults } from "@bramble/flags/evaluate";
 import {
   applyFlagOverrides,
   type FlagOverrides,
@@ -59,9 +63,10 @@ export const FEATURE_FLAG_REFRESH_MS = 30 * 60_000;
 
 /**
  * Effective flags plus where they came from. Carries no identifiers.
- * `source` describes the base values; `overridden` lists flags a local
- * override replaced, and `killed` the overridable flags a remote hard kill
- * pins off.
+ * `source` is `remote` while an unexpired document applies and `bundled`
+ * otherwise (a kept kill from an expired document still shows in `flags`);
+ * `overridden` lists flags a local override replaced, and `killed` the
+ * overridable flags a remote hard kill pins off.
  */
 type FeatureFlagSnapshot = {
   readonly flags: FlagValues;
@@ -111,10 +116,22 @@ export type FeatureFlagClientOptions = {
 
 // `readable` is false when the stored state could not be read: nothing is
 // applied or fetched then, so a transient storage failure can neither lower
-// the rollback floor nor be mistaken for a fresh install.
-type Loaded = { payload: FlagPayload | null; readable: boolean; state: FlagState };
+// the rollback floor nor be mistaken for a fresh install. `accepted` is the
+// last accepted document even once expired, read only for its kills;
+// `payload` is the same document while it is still current.
+type Loaded = {
+  accepted: FlagPayload | null;
+  payload: FlagPayload | null;
+  readable: boolean;
+  state: FlagState;
+};
 
-const UNREADABLE: Loaded = { payload: null, readable: false, state: EMPTY_FLAG_STATE };
+const UNREADABLE: Loaded = {
+  accepted: null,
+  payload: null,
+  readable: false,
+  state: EMPTY_FLAG_STATE,
+};
 
 const bundledValues = (catalog: FlagCatalog): FlagValues =>
   Object.fromEntries(Object.entries(catalog).map(([k, v]) => [k, v.enabled]));
@@ -162,12 +179,17 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
       return UNREADABLE;
     }
     if (state.document === null) {
-      return { payload: null, readable: true, state };
+      return { accepted: null, payload: null, readable: true, state };
     }
     const stored = await verify(state.document, state.sequence);
-    // A stored copy that no longer verifies (expired, tampered, key dropped in
-    // this release) keeps its sequence as the rollback floor but stops applying.
-    return { payload: stored.ok ? stored.payload : null, readable: true, state };
+    // A stored copy that no longer verifies keeps its sequence as the rollback
+    // floor. An expired one keeps only its kills; a tampered one, or one whose
+    // key this release dropped, keeps nothing.
+    if (stored.ok) {
+      return { accepted: stored.payload, payload: stored.payload, readable: true, state };
+    }
+    const accepted = stored.reason === "expired" ? stored.expired : null;
+    return { accepted, payload: null, readable: true, state };
   };
   // Memoised once read; an unreadable store is retried on the next call.
   let loaded: Promise<Loaded> | null = null;
@@ -203,6 +225,7 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
     );
     const verdict = text === null ? null : await verify(text, live.state.sequence);
     if (verdict?.ok) {
+      live.accepted = verdict.payload;
       live.payload = verdict.payload;
       live.state = { checkedAt, document: text, sequence: verdict.payload.sequence };
     } else {
@@ -269,12 +292,13 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
         currentOverrides(),
       ]);
       const payload = live.payload && options.now() < live.payload.expiresAt ? live.payload : null;
+      const kills = flagKills(catalog, payload ?? live.accepted);
       const base =
         payload === null
-          ? bundledValues(catalog)
+          ? killedDefaults(catalog, kills)
           : evaluateFlags(catalog, payload, { bucket: installed, chain, version: options.version });
       return {
-        ...applyFlagOverrides(base, local, catalog, payload),
+        ...applyFlagOverrides(base, local, catalog, kills),
         overridable: overridableFlags(catalog),
         sequence: payload?.sequence ?? null,
         source: payload === null ? "bundled" : "remote",

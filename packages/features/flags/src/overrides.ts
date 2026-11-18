@@ -4,8 +4,9 @@
  *
  * Bounded by the catalog: only flags that declare `localOverride: true` can be
  * overridden, and a stored entry for any other key is dropped on read. A
- * remote hard kill (a rule with `enabled: false`) always beats an override, so
- * the publisher's kill switch stays a guarantee rather than a suggestion.
+ * remote hard kill (a rule with `enabled: false`, kept even after its document
+ * expires) always beats an override, so the publisher's kill switch stays a
+ * guarantee rather than a suggestion.
  *
  * Overrides are plain, non-secret device state. They are never sent anywhere,
  * never exported with preferences, and a malformed record reads as "no
@@ -14,7 +15,6 @@
 import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
 import type { FlagCatalog } from "./catalog";
-import type { FlagPayload } from "./contract";
 import type { FlagValues } from "./evaluate";
 
 /** Storage key for the local override record. */
@@ -97,27 +97,23 @@ export const writeFlagOverrides = async (
   );
 };
 
-/** Whether the remote document hard-kills `key` (a rule with `enabled: false`). */
-const hardKilled = (payload: FlagPayload | null, key: string): boolean =>
-  payload !== null && Object.hasOwn(payload.flags, key) && payload.flags[key]?.enabled === false;
-
 /**
  * Applies overrides to evaluated values. Pure. Order, highest first: remote
  * hard kill, local override, the evaluated value (remote rule or bundled
  * default). Overrides for flags outside `catalog` or not overridable are
- * ignored; `payload` must be the verified, unexpired document or null.
+ * ignored; `kills` are the remote hard kills in force (see `flagKills`).
  */
 export const applyFlagOverrides = (
   values: FlagValues,
   overrides: FlagOverrides,
   catalog: FlagCatalog,
-  payload: FlagPayload | null,
+  kills: readonly string[],
 ): OverriddenFlagValues => {
   const flags: Record<string, boolean> = { ...values };
   const killed: string[] = [];
   const overridden: string[] = [];
   for (const key of overridableFlags(catalog)) {
-    if (hardKilled(payload, key)) {
+    if (kills.includes(key)) {
       killed.push(key);
       continue;
     }
