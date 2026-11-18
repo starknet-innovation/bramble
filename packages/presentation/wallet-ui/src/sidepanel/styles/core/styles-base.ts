@@ -337,11 +337,11 @@ export const BASE_STYLES = `
   .hero-stale .icon { height: 13px; width: 13px; }
   /* Read-only flag: label, optional recovery detail, and recover button stacked
      in one quiet column beneath the total. */
-  .read-only-notice { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xs}; }
-  .read-only-notice .read-only-detail {
+  .read-only-notice, .ready-key-notice { align-items: center; display: flex; flex-direction: column; gap: ${SPACE.xs}; }
+  .read-only-notice .read-only-detail, .ready-key-notice .read-only-detail {
     color: var(--bramble-muted); font-size: ${TYPE.caption.size}; margin: 0; max-width: 32ch; text-align: center;
   }
-  .read-only-notice #recover-account { margin-top: ${SPACE.xxs}; }
+  .read-only-notice #recover-account, .ready-key-notice button { margin-top: ${SPACE.xxs}; }
 
   /* The frequent money actions are equal rounded-square tools. Their common
      shape makes the row instantly scannable; distinctive glyph silhouettes,
