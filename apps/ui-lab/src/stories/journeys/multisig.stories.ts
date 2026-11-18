@@ -378,6 +378,13 @@ export const HomeIntents: LabStory = {
     await expect(body?.querySelector(".multisig-sync-hint")).not.toBeVisible();
     sync?.focus();
     await expect(body?.querySelector(".multisig-sync-hint")).toBeVisible();
+    // Escape hides the hint without moving focus; it returns once focus moves on.
+    sync?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
+    await expect(body?.querySelector(".multisig-sync-hint")).not.toBeVisible();
+    await expect(sync).toHaveFocus();
+    sync?.blur();
+    sync?.focus();
+    await expect(body?.querySelector(".multisig-sync-hint")).toBeVisible();
     await expect(body?.querySelector("[data-ms-intent]")).not.toBeInTheDocument();
   },
 };
