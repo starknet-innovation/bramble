@@ -10,6 +10,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import {
   PRIVACY_OTHER_WALLET,
   PRIVACY_OTHER_WALLET_NEXT,
@@ -20,10 +21,11 @@ import { networkDisplayName } from "../../shared/network-label";
 import { flowHeader, flowScreen, formatFri, inlineCopyButton } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import { formatFeeEstimate, reviewPanel } from "../../shared/review-render";
-import type {
-  PrivacyBlockerKind,
-  PrivacyDisclosureState,
-  PrivacyJourneyState,
+import {
+  PRIVACY_NETWORK_UNAVAILABLE,
+  type PrivacyBlockerKind,
+  type PrivacyDisclosureState,
+  type PrivacyJourneyState,
 } from "./privacy-model";
 import { type PreparationProgress, preparationProgressText } from "./privacy-preparation-job";
 
@@ -97,9 +99,6 @@ const preparing = (
   </section>`;
 };
 
-const shortAddress = (value: string): string =>
-  value.length <= 15 ? value : `${value.slice(0, 8)}…${value.slice(-5)}`;
-
 // Owner-approved consent copy (issue 438). The fee sentence rides on the same
 // condition as the Cost section's "Pool fee … from public STRK" line, so the
 // two never disagree; the amount itself stays only in Cost. Registration from
@@ -162,29 +161,29 @@ const preparationDetails = (
             },
             {
               label: "Authorization window",
-              value: `${shortAddress(preparation.authorization.executeAfter)} → ${shortAddress(preparation.authorization.executeBefore)}`,
+              value: `${preparation.authorization.executeAfter} → ${preparation.authorization.executeBefore}`,
               valueStyle: "code" as const,
             },
             {
               action: {
-                attributes: { "data-copy": preparation.authorization.caller },
+                attributes: { "data-copy": addressText(preparation.authorization.caller) },
                 icon: "copy" as const,
                 label: "Copy authorization caller address",
               },
               label: "Authorization caller",
-              value: shortAddress(preparation.authorization.caller),
+              value: addressLabel(preparation.authorization.caller),
               valueStyle: "code" as const,
             },
           ]
         : []),
       {
         action: {
-          attributes: { "data-copy": preparation.poolAddress },
+          attributes: { "data-copy": addressText(preparation.poolAddress) },
           icon: "copy",
           label: "Copy privacy pool address",
         },
         label: "Privacy pool",
-        value: shortAddress(preparation.poolAddress),
+        value: addressLabel(preparation.poolAddress),
         valueStyle: "code",
       },
     ])}
@@ -302,7 +301,7 @@ const BLOCKED_COPY: Readonly<Record<PrivacyBlockerKind, BlockedCopy>> = {
       label: "Choose a network",
     }),
     body: "Switch to a network with a privacy pool.",
-    title: "Not available on this network",
+    title: PRIVACY_NETWORK_UNAVAILABLE,
   },
   "other-wallet": {
     action: "",

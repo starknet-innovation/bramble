@@ -10,9 +10,8 @@
 import type { DisplayCurrency, TokenConfig } from "@bramble/settings/preferences";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import type { IconName } from "@bramble/ui-kit/icons";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
-import { accountLabel } from "../../shared/parts";
 import { compactAmount } from "./token-row";
 
 // Decimal places an activity row shows at most.
@@ -266,7 +265,7 @@ const activityDetail = (
   hasAmount: boolean,
 ): string | null => {
   if (counterparty) {
-    return `${COUNTERPARTY_PREPOSITION[counterparty.role]} ${accountLabel(counterparty.address)}`;
+    return `${COUNTERPARTY_PREPOSITION[counterparty.role]} ${addressLabel(counterparty.address)}`;
   }
   const summary = compactSummary(entry.summary.trim());
   if (appearance.type === "swap") {

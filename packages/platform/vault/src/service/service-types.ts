@@ -286,6 +286,18 @@ export type WalletVaultService = {
     readonly vaultPassphrase: string;
   }) => Promise<string>;
   /**
+   * Whether a Ready-scheme account holds a key from Krusty's pre-3.0 Argent
+   * legacy derivation, which Argent X would not derive from the same phrase.
+   * Compares public keys only and returns a boolean; no secret leaves. Throws
+   * on a wrong passphrase or a Krusty failure, so callers can tell "unknown"
+   * from "not affected". An unknown or non-Ready account answers `false`.
+   * A successful answer is cached per account until `clearGrantCache` (lock).
+   */
+  readonly hasPreFixReadyKey: (input: {
+    readonly accountId: string;
+    readonly vaultPassphrase: string;
+  }) => Promise<boolean>;
+  /**
    * Stores a co-owner's viewing key for one multisig scope. A different key
    * already stored is kept, and the result is `conflict`.
    */
@@ -401,9 +413,10 @@ export type WalletVaultService = {
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
   /**
-   * Drops the in-memory grant projection `getGrantedAccounts` answers from.
-   * Called when the wallet locks, beside the derived-key caches; the next
-   * read after unlock repopulates it.
+   * Drops the in-memory grant projection `getGrantedAccounts` answers from,
+   * and the per-unlock Ready key verdicts `hasPreFixReadyKey` caches. Called
+   * when the wallet locks, beside the derived-key caches; the next read after
+   * unlock repopulates both.
    */
   readonly clearGrantCache: () => void;
   /**

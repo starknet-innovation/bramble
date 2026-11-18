@@ -72,6 +72,7 @@ const CONTEXT = "Context sentence from the calling screen.";
 const STRK20_RUNTIME_SHAPES = [
   "strk20 services unavailable (submission/execution-reverted): reason",
   "strk20 services unavailable (submission/proof-rejected): reason",
+  "strk20 services unavailable (proving/unsupported-builtin): reason",
   "strk20 services unavailable (submission/validation-failed): reason",
   "strk20 services unavailable (submission/invalid-nonce): reason",
   "strk20 services unavailable (proving/service-unavailable): reason",

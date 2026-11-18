@@ -1,7 +1,7 @@
 /** Participant selection preserves its origin and accepts only resolved public signer data. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
-import { canonicalAddress } from "@bramble/wallet-model/networks";
+import { addressText, canonicalAddress } from "@bramble/wallet-model/networks";
 import { walletContactCard } from "@bramble/wallet-model/preferences";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import { multisigSignersFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-management-views";
@@ -64,7 +64,7 @@ describe("multisig participant selection", () => {
     expect(copy?.hidden).toBe(false);
     copy?.click();
     await flush();
-    expect(copied).toEqual(["0xabc"]);
+    expect(copied).toEqual([addressText("0xabc")]);
   });
 
   test("a signer change offers the chosen participant's address for copying", async () => {
@@ -91,7 +91,7 @@ describe("multisig participant selection", () => {
     app.querySelector<HTMLButtonElement>("[data-confirm-participant]")?.click();
     await flush();
     expect(copy()?.hidden).toBe(false);
-    expect(copy()?.dataset["copy"]).toBe("0xabc");
+    expect(copy()?.dataset["copy"]).toBe(addressText("0xabc"));
 
     // A participant given only by public key has no address to copy.
     form?.querySelector<HTMLButtonElement>("[data-open-participant-picker]")?.click();

@@ -33,8 +33,12 @@ extension.
   rewrite it in place, so run `bun run format` after a stage.
 - `verify-dataset.ts` drives the built extension (`bun run build` first)
   through onboarding against live mainnet:
-  `BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json]`.
-  The `verification*.json` files are dated scorecard snapshots from earlier runs.
+  `BRAMBLE_E2E_LIVE_NETWORK=1 bun tools/vendor-dataset/verify-dataset.ts [out.json] [seed filter]`.
+  The filter is a substring of a seed variable (for example `GAPS`) and runs only
+  the matching seeds; `BRAMBLE_DATASET_HEADED=1` shows the browser. When a scan
+  dies, the seed's status keeps the browser's last page errors, console errors
+  and crash or worker-exit events. The `verification*.json` files are dated
+  scorecard snapshots from earlier runs.
 - `verify-sepolia.ts` is the Sepolia counterpart: one fresh profile onboarded
   with S-BRM, switched to Sepolia, then every in-wallet import path (P2…P8, P10)
   driven against the fixtures and scored against the scope doc's "Now" line per
@@ -57,8 +61,9 @@ extension.
 - The nightly (`.github/workflows/nightly.yml`) runs `verify-sepolia.ts`, without
   the Ledger, on the active release branch against the newest committed
   scorecard, so a failing import path blocks the release like any other nightly
-  gate. Until the `BRAMBLE_SEPOLIA_SEEDS` repository secret exists the gate is
-  skipped and the summary lists it under "Not run", never as passed. It reads
+  gate. The `BRAMBLE_SEPOLIA_SEEDS` repository secret has been set since
+  2026-11-10; if it is ever removed, the gate is skipped and the summary lists
+  it under "Not run", never as passed. It reads
   the seed file from the `BRAMBLE_SEPOLIA_SEEDS` repository
   secret, which holds only the eleven lines the runner reads:
   `BRAMBLE_DATASET_SEED_S_{BRM,SCR,BRV,RDY,XVS,W15,W18,W21}` and

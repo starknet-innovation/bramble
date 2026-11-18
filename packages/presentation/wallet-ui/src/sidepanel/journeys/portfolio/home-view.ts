@@ -48,6 +48,7 @@ import type { StakingState } from "../staking/staking-directory-client";
 import { stakedLine } from "../staking/staking-home";
 import { heroChange } from "./hero-change";
 import { homeTabs, unifiedHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
+import { readyKeyNotice } from "./ready-key-notice";
 import { readOnlyNotice } from "./recovery-view";
 import { vipEligible, vipNotice } from "./vip-notice";
 
@@ -162,6 +163,16 @@ export const homeScreen = (
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
       ${staking ? stakedLine(staking, preferences?.tokens ?? []) : ""}
       ${readOnly ? readOnlyNotice(signability, account !== null && isKeylessAccount(account)) : ""}
+      ${
+        account
+          ? readyKeyNotice({
+              accountId: account.id,
+              affected: signability?.preFixReadyKey === true,
+              canMoveFunds: !readOnly,
+              dismissed: preferences?.readyKeyNoticeDismissedIds?.includes(account.id) === true,
+            })
+          : ""
+      }
       ${account ? vipNotice(vipEligible({ currency, preferences, showTotal, total })) : noAccountEmpty(status)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">

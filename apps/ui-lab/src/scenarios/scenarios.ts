@@ -1,3 +1,4 @@
+import { addressText } from "@bramble/wallet-model/networks";
 import {
   bindActivity,
   bindNfts,
@@ -249,7 +250,7 @@ const prepareNft =
               requiresDeployment: false,
               summaries: [
                 "Transfer Bramble Test Collection #342",
-                `Recipient ${RECIPIENT_ADDRESS}`,
+                `Recipient ${addressText(RECIPIENT_ADDRESS)}`,
               ],
             },
           };

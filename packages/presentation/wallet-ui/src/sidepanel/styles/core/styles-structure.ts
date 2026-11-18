@@ -311,14 +311,15 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     line-height: ${TYPE.caption.line};
   }
   .approval-takeover .review-flag .icon { color: var(--bramble-danger); flex: none; }
-  /* The decline column never drops below its own label: with a zero floor
-     the 320px panel squeezed "Cancel" and "Deny" to a 44px pill they spilled
-     out of while the primary kept its one-line width. */
+  /* Decline leads the row, so it hugs its label and the primary flexes (a 1fr
+     first track stretched "Cancel" across a wide panel). Neither drops below
+     its label: a zero floor squeezed "Cancel" to a 44px pill at 320px. */
   .approval-takeover .button-row {
-    grid-template-columns: minmax(min-content, 1fr) minmax(104px, auto);
+    grid-template-columns: minmax(min-content, auto) minmax(min-content, 1fr);
     margin-top: auto;
     padding-top: ${SPACE.sm};
   }
+  .approval-takeover .button-row > :only-child { grid-column: 1 / -1; }
   .takeover-queue { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; text-align: center; }
   .takeover-foot { display: grid; gap: ${SPACE.sm}; }
   .takeover-foot button.ghost { justify-self: center; min-height: ${CONTROL.hitSmall}; }

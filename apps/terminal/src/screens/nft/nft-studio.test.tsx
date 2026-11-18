@@ -81,7 +81,7 @@ describe("NFT Studio", () => {
       contractAddress: PUNK_MAINNET_CONTRACT,
       entrypoint: "mint",
     });
-    await screen.findByText("Punk #42 minted to 0x5678.");
+    await screen.findByText("Punk #42 minted to 0x0000…5678.");
     expect(runtime.waitForPunkTransaction).toHaveBeenCalledWith("SN_MAIN", "0xaaa");
   });
 

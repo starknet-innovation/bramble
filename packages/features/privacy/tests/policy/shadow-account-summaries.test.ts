@@ -5,6 +5,7 @@
  * back into private notes, and who can move what the calls leave behind.
  */
 import { describe, expect, test } from "bun:test";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import {
   SHADOW_INVOKE_ANONYMIZER,
@@ -48,8 +49,8 @@ describe("shadow account invoke review", () => {
     });
     expect(summaries.slice(2)).toEqual([
       "Runs 3 calls through your shadow account #2 for https://app.example",
-      `Shadow account anonymizer ${ANONYMIZER}`,
-      "Settles STRK, 0x012345…cdef back into private notes",
+      `Shadow account anonymizer ${addressText(ANONYMIZER)}`,
+      "Settles STRK, 0x0123…cdef back into private notes",
       SHADOW_INVOKE_CONTROL,
     ]);
     // The OPEN transfers keep their own lines, in batch order.
@@ -70,13 +71,14 @@ describe("shadow account invoke review", () => {
   test("an untrusted token is named by its address, never a guessed symbol", () => {
     expect(
       summarizeStrk20Batch([open(OTHER), invoke(1)], { depositor: ACCOUNT, shadow }),
-    ).toContain(SHADOW_INVOKE_SETTLES("0x012345…cdef"));
+    ).toContain(SHADOW_INVOKE_SETTLES("0x0123…cdef"));
   });
 
   // Audit F1: "back into private notes" is claimed only for this account's own
   // notes. A note for anyone else names its recipient, and under `all` says the
   // whole shadow-account balance of that token goes to them.
-  const STRANGER = "0x0bad000000000000000000000000000000000000000000000000000000000001";
+  // Two leading zeros: a 0x0bad… spelling sits above the field prime and is not an address.
+  const STRANGER = "0x00bad00000000000000000000000000000000000000000000000000000000001";
   test("an OPEN note for someone else names them instead of settling back", () => {
     const summaries = summarizeStrk20Batch([open(STRK, STRANGER), invoke(1)], {
       assetFor,
@@ -86,12 +88,12 @@ describe("shadow account invoke review", () => {
     expect(summaries.slice(1, -1)).toEqual([
       SHADOW_INVOKE_RUNS(1, "2", shadow.origin),
       SHADOW_INVOKE_ANONYMIZER(ANONYMIZER),
-      SHADOW_INVOKE_SETTLES_TO("STRK", "0x0bad00…0001"),
-      SHADOW_INVOKE_COLLECTS_ALL_TO("STRK", "0x0bad00…0001"),
+      SHADOW_INVOKE_SETTLES_TO("STRK", "0x00ba…0001"),
+      SHADOW_INVOKE_COLLECTS_ALL_TO("STRK", "0x00ba…0001"),
     ]);
     expect(summaries.join("\n")).not.toContain("back into private notes");
-    expect(SHADOW_INVOKE_COLLECTS_ALL_TO("STRK", "0x0bad00…0001")).toBe(
-      "This shadow account's whole STRK balance goes to 0x0bad00…0001",
+    expect(SHADOW_INVOKE_COLLECTS_ALL_TO("STRK", "0x00ba…0001")).toBe(
+      "This shadow account's whole STRK balance goes to 0x00ba…0001",
     );
   });
 
@@ -101,7 +103,7 @@ describe("shadow account invoke review", () => {
       depositor: ACCOUNT,
       shadow,
     });
-    expect(summaries).toContain(SHADOW_INVOKE_SETTLES_TO("STRK", "0x0bad00…0001"));
+    expect(summaries).toContain(SHADOW_INVOKE_SETTLES_TO("STRK", "0x00ba…0001"));
     expect(summaries.join("\n")).not.toContain("whole");
     expect(summaries.join("\n")).not.toContain("back into private notes");
   });
@@ -113,14 +115,14 @@ describe("shadow account invoke review", () => {
       shadow,
     });
     expect(summaries).toContain(SHADOW_INVOKE_SETTLES("STRK"));
-    expect(summaries).toContain(SHADOW_INVOKE_SETTLES_TO("0x012345…cdef", "0x0bad00…0001"));
-    expect(summaries).toContain(SHADOW_INVOKE_COLLECTS_ALL_TO("0x012345…cdef", "0x0bad00…0001"));
+    expect(summaries).toContain(SHADOW_INVOKE_SETTLES_TO("0x0123…cdef", "0x00ba…0001"));
+    expect(summaries).toContain(SHADOW_INVOKE_COLLECTS_ALL_TO("0x0123…cdef", "0x00ba…0001"));
   });
 
   test("without a proven depositor, no note is claimed as the user's own", () => {
     const summaries = summarizeStrk20Batch([open(STRK), invoke(1)], { assetFor, shadow });
     expect(summaries.join("\n")).not.toContain("back into private notes");
-    expect(summaries).toContain(SHADOW_INVOKE_SETTLES_TO("STRK", ACCOUNT));
+    expect(summaries).toContain(SHADOW_INVOKE_SETTLES_TO("STRK", "0x0000…11ce"));
   });
 
   test("other actions summarize exactly as before", () => {
@@ -131,7 +133,7 @@ describe("shadow account invoke review", () => {
       type: "withdraw",
     };
     expect(summarizeStrk20Batch([withdraw], { shadow })).toEqual([
-      "Withdraw 0x5 to 0x012345…cdef (0x04718f…938d)",
+      "Withdraw 0x5 to 0x0123…cdef (0x0471…938d)",
     ]);
   });
 });

@@ -22,6 +22,7 @@ import {
   findNetworkAccount,
   selectSourceAccount,
 } from "../accounts/network-account";
+import { findPreFixReadyAccountIds } from "../accounts/ready-key-drift";
 import {
   deriveVaultStrk20ViewingKey,
   previewImportedStrk20ViewingPublicKey,
@@ -100,6 +101,11 @@ export const createWalletVaultService = ({
 }: WalletVaultServiceOptions): WalletVaultService => {
   assertStoreAccess("vault", actor);
   const grants = createGrantCache();
+  // Ready key verdicts for this unlock, keyed by account id. The answer is a
+  // function of the account's phrase and stored key, which cannot change while
+  // the id stands, so the phrase is decrypted and derived once per unlock
+  // rather than on every Home poll. Only successful checks are kept.
+  const readyKeyVerdicts = new Map<string, boolean>();
   const encryptedStore = grants.watch(primaryStore);
   const requirePassphrase = (vaultPassphrase: string): void => {
     if (!isVaultPassphrase(vaultPassphrase)) {
@@ -162,6 +168,17 @@ export const createWalletVaultService = ({
         input.chainId,
         input.poolAddress,
       );
+    },
+    async hasPreFixReadyKey(input) {
+      const cached = readyKeyVerdicts.get(input.accountId);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
+      const accounts = vault.accounts.filter((account) => account.id === input.accountId);
+      const affected = (await findPreFixReadyAccountIds(kms, { ...vault, accounts })).length > 0;
+      readyKeyVerdicts.set(input.accountId, affected);
+      return affected;
     },
     async ensureNetworkAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
@@ -317,7 +334,10 @@ export const createWalletVaultService = ({
         findVaultAccount(vault, accountId),
       );
     },
-    clearGrantCache: grants.clear,
+    clearGrantCache() {
+      grants.clear();
+      readyKeyVerdicts.clear();
+    },
     readVault,
     importSeedAccounts: (input) =>
       serialized(() => importSeedVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),
