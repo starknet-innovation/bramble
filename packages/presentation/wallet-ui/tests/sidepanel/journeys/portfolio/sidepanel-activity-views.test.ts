@@ -9,7 +9,7 @@ import type { TokenConfig } from "@bramble/settings/preferences";
 import { ARGENT_MULTISIG_CONTRACT } from "@bramble/starknet/account-contracts";
 import { account } from "@bramble/testkit/sidepanel";
 import type { ActivityEntry } from "@bramble/transactions/activity";
-import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { addressText, STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import type { ActivityPricing } from "../../../../src/sidepanel/journeys/portfolio/activity-format";
 import {
@@ -304,7 +304,7 @@ describe("activity journey boundaries", () => {
     // with the full value on its copy control.
     expect(html).toContain(`<dt>Recipient</dt>`);
     expect(html).toContain(`<dt>Sender</dt>`);
-    expect(html).toContain(`data-copy="${party}"`);
+    expect(html).toContain(`data-copy="${addressText(party)}"`);
     expect(html).not.toContain(`>To ${party}<`);
     // No fiat anywhere: a figure from today's price is not what these were
     // worth when they were sent.

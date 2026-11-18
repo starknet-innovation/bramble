@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account, preferences } from "@bramble/testkit/sidepanel";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { nftSendFlow } from "../../../../src/sidepanel/journeys/collectibles/nft-send-view";
 import {
@@ -120,7 +121,7 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain('data-view="nft-hidden"');
     const hidden = nftHiddenFlow(status, withSpam, account);
     expect(hidden).toContain('data-nft-spam-value="false"');
-    expect(hidden).toContain('data-copy="0x511a2b3"');
+    expect(hidden).toContain(`data-copy="${addressText("0x511a2b3")}"`);
     expect(html).toContain("0 shown");
   });
 
@@ -190,7 +191,7 @@ describe("NFT gallery auto-discovery", () => {
     const html = nftDetailFlow(status, account, preferences, "SN_MAIN:0x511a2b3:5", [discovered]);
     expect(html).toContain('data-view="nft-send"');
     expect(html).toContain("Everai #5");
-    expect(html).toContain("0x511a2b3");
+    expect(html).toContain("0x0000…a2b3");
     expect(html).toContain('<img class="nft-image nft-image--pixelated"');
     expect(html).toContain('loading="eager"');
     expect(html).toContain("A test collectible");
@@ -204,12 +205,12 @@ describe("NFT gallery auto-discovery", () => {
   test("detail and send receipts copy the collection contract in full", () => {
     const detail = nftDetailFlow(status, account, preferences, discovered.id, [discovered]);
     expect(detail).toContain(
-      `<dt>Contract</dt><dd><code>0x511a2b3</code><button class="icon-button" data-copy="${discovered.contract}" type="button" aria-label="Copy contract address"`,
+      `<dt>Contract</dt><dd><code>0x0000…a2b3</code><button class="icon-button" data-copy="${addressText(discovered.contract)}" type="button" aria-label="Copy contract address"`,
     );
     // The send receipt names the collection, so the control says what it copies.
     const send = nftSendFlow(status, account, preferences, discovered.id, [discovered]);
     expect(send).toContain(
-      `<dt>Collection</dt><dd>Everai<button class="icon-button" data-copy="${discovered.contract}" type="button" aria-label="Copy collection contract address"`,
+      `<dt>Collection</dt><dd>Everai<button class="icon-button" data-copy="${addressText(discovered.contract)}" type="button" aria-label="Copy collection contract address"`,
     );
   });
 

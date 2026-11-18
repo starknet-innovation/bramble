@@ -58,10 +58,11 @@ describe("isLookalikeAddress padded window (audit #242)", () => {
     // 62 significant digits sharing only "555" + "bbcc" with the contact: its
     // canonical (0x555b) and fully padded (0x0055) windows both differ, yet the
     // one-leading-zero spelling an attacker hands out once showed 0x0555…bbcc.
-    // Labels now canonicalize every spelling, so the display no longer collides,
-    // but the check still flags the spelling rather than trusting the label.
+    // Labels now pad every spelling to 64 digits, so the display no longer
+    // collides, but the check still flags the spelling rather than trusting the
+    // label.
     const spelling = `0x0555b${"1".repeat(54)}bbcc`;
-    expect(addressLabel(spelling)).toBe("0x555b…bbcc");
+    expect(addressLabel(spelling)).toBe("0x0055…bbcc");
     expect(addressLabel(spelling)).not.toBe(addressLabel(CONTACT));
     expect(isLookalikeAddress(spelling, CONTACT)).toBe(true);
   });

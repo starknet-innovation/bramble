@@ -407,32 +407,32 @@ export const canonicalFelt = (value: string): string | null => {
 };
 
 /**
- * Cuts a felt for display as `0x5e1d…f2e4`, canonical first so a padded contact
- * and a canonical account read the same. A non-felt, or a felt that already
- * fits, is returned unchanged. The one shared shortener; do not re-derive it.
+ * Cuts a felt for display as `0x05e1…f2e4` from its padded spelling, so every
+ * stored spelling reads the same and matches {@link addressText}. A non-felt is
+ * returned unchanged. The one shared shortener; do not re-derive it.
  */
 export const addressLabel = (value: string): string => {
-  const felt = isStarkFieldElement(value.toLowerCase()) ? canonicalFelt(value) : null;
-  if (felt === null || felt.length <= 12) return felt ?? value;
-  return `${felt.slice(0, 6)}…${felt.slice(-4)}`;
+  const felt = paddedFelt(value);
+  return felt === null ? value : `${felt.slice(0, 6)}…${felt.slice(-4)}`;
 };
+
+/**
+ * Spells a felt in full for display and copying, padded to 64 digits so every
+ * screen shows one address the same way. A non-felt is returned unchanged.
+ */
+export const addressText = (value: string): string => paddedFelt(value) ?? value;
 
 /**
  * Renders a felt at its full 64-hex-digit width: lowercase, `0x`-prefixed, and
  * left-padded with zeros. Returns null when the value is not a field element.
  *
- * This is the spelling a felt takes once serialized to its fixed 32-byte form,
- * which is also what a Ledger is handed — and therefore displays — when it is
- * asked to blind-sign a hash: the device library strips `0x` and any leading
- * zeros, then left-pads back to exactly this width before the APDU. The panel renders
- * the same form so a user comparing the wallet against the device screen is
- * comparing identical characters, not two spellings of one number. Zero is
- * accepted here (unlike {@link canonicalAddress}) because a hash is not an
- * address and carries no non-zero invariant.
+ * A felt's fixed 32-byte spelling: what a Ledger shows when it blind-signs a
+ * hash, and the spelling every address on screen takes.
+ * Zero is accepted here (unlike {@link canonicalAddress}) because a hash is not
+ * an address and carries no non-zero invariant.
  *
- * The one shared padding helper: {@link canonicalAddress} builds on it rather
- * than re-deriving the width, so a stored address and a displayed hash can never
- * drift apart on how many digits a felt has. Do not re-derive the padding.
+ * The one shared padding helper: {@link canonicalAddress}, {@link addressLabel}
+ * and {@link addressText} build on it. Do not re-derive the padding.
  */
 export const paddedFelt = (value: string): string | null => {
   const lower = `${value}`.trim().toLowerCase();

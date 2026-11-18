@@ -9,7 +9,7 @@ import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences
 import { reviewedInvokeTotal } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
-import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import {
   PRIVACY_OTHER_WALLET_ACTION,
   PRIVATE_REQUEST_FAILED_NOTICE,
@@ -84,7 +84,7 @@ const contextDetails = (approval: PendingApproval): string => {
     return "";
   }
   const address = accountIdAddress(context.accountId);
-  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(address)}">${escapeHtml(addressLabel(address))}</code>${inlineCopyButton(address, "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
+  return `<dl class="request-detail"><div><dt>Account</dt><dd><code title="${escapeHtml(addressText(address))}">${escapeHtml(addressLabel(address))}</code>${inlineCopyButton(addressText(address), "Copy account address")}</dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
 };
 
 const contextDisclosure = (approval: PendingApproval): string => {

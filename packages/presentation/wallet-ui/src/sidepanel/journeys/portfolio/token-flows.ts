@@ -17,6 +17,7 @@ import { button, iconButton } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import {
   addressLabel,
+  addressText,
   isDefaultToken,
   STRK_TOKEN_ADDRESS,
   sameFelt,
@@ -357,7 +358,7 @@ export const tokenDetailFlow = (
         ${receipt([
           {
             action: {
-              attributes: { "data-copy": token.address },
+              attributes: { "data-copy": addressText(token.address) },
               icon: "copy",
               label: "Copy token address",
             },

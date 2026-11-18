@@ -19,7 +19,7 @@ import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import type { DiscoveredNft, NftCoverage, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
@@ -172,7 +172,7 @@ const hiddenRow = (nft: WatchedNft): string => `
   <li class="address-line">
     <div class="stack-tight">
       <strong>${escapeHtml(watchedTitle(nft))}</strong>
-      <span class="copy-line"><code title="${escapeHtml(nft.contract)}">${escapeHtml(addressLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>${inlineCopyButton(nft.contract, "Copy collection contract address")}</span>
+      <span class="copy-line"><code title="${escapeHtml(addressText(nft.contract))}">${escapeHtml(addressLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>${inlineCopyButton(addressText(nft.contract), "Copy collection contract address")}</span>
     </div>
     ${button({
       attributes: { "data-nft-spam": nft.id, "data-nft-spam-value": "false" },
@@ -421,7 +421,7 @@ export const nftDetailFlow = (
             ${receipt([
               {
                 action: {
-                  attributes: { "data-copy": nft.contract },
+                  attributes: { "data-copy": addressText(nft.contract) },
                   icon: "copy",
                   label: "Copy contract address",
                 },

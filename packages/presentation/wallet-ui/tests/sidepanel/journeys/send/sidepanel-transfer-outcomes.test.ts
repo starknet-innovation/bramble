@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
 import type { ActivityStatus } from "@bramble/transactions/activity";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/journeys/send/send-views";
 import {
@@ -155,8 +155,8 @@ describe("Send confirmation outcomes", () => {
     );
     const copies = [...(receipt?.querySelectorAll<HTMLElement>("[data-copy]") ?? [])];
     expect(copies.map((button) => button.dataset["copy"] ?? null)).toEqual([
-      account.address,
-      RECIPIENT,
+      addressText(account.address),
+      addressText(RECIPIENT),
     ]);
     // The hash row is the shared outcome hash: shortened, linked to the
     // explorer, and copyable in full.
@@ -195,7 +195,7 @@ describe("Send confirmation outcomes", () => {
       app.querySelector<HTMLButtonElement>(`#send-success [aria-label="${label}"]`)?.click();
       await flush();
     }
-    expect(copied).toEqual([account.address, HASH]);
+    expect(copied).toEqual([addressText(account.address), HASH]);
     // The error line is an alert, so copy feedback goes to the success toast.
     expect(app.querySelector("#transfer-result")?.textContent).toBe("");
   });

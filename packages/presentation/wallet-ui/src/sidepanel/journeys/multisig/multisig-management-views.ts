@@ -6,7 +6,7 @@ import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -254,7 +254,7 @@ export const multisigSignersFlow = (
           { label: "Contract", value: argentMultisigContractLabel() },
           {
             action: {
-              attributes: { "data-copy": record.address },
+              attributes: { "data-copy": addressText(record.address) },
               icon: "copy",
               label: "Copy multisig address",
             },

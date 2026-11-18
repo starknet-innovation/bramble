@@ -4,7 +4,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { inlineCopyButton } from "../../shared/parts";
 import {
@@ -24,7 +24,7 @@ const BUCKET_NAMES = { private: "Private balance", public: "Public balance" } as
 // The full address behind a truncated one, revealed in place by a native
 // disclosure so a keyboard user can inspect it without leaving the review.
 const fullAddressReveal = (address: string, label: string): string =>
-  `<details class="address-reveal"><summary>${escapeHtml(label)}</summary><code>${escapeHtml(address)}</code></details>`;
+  `<details class="address-reveal"><summary>${escapeHtml(label)}</summary><code>${escapeHtml(addressText(address))}</code></details>`;
 
 /**
  * Copy for a name-resolved recipient that is not already saved. A name is a
@@ -57,11 +57,11 @@ export const reviewSummaryHtml = (
   const copyLabel = mode === "send" ? "Copy recipient address" : "Copy account address";
   const recipientIdentity =
     fields.recipientResolvedFrom === "stark-name"
-      ? `<span class="send-review-address send-review-address-full copy-line"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(fields.recipient)}</code>${inlineCopyButton(fields.recipient, copyLabel)}</span><small class="send-review-source">Resolved from Starknet ID</small>`
-      : `<span class="send-review-address copy-line"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(addressLabel(fields.recipient))}</code>${inlineCopyButton(fields.recipient, copyLabel)}</span>${fields.recipient ? fullAddressReveal(fields.recipient, mode === "send" ? "Show full recipient address" : "Show full account address") : ""}`;
+      ? `<span class="send-review-address send-review-address-full copy-line"><code title="${escapeHtml(addressText(fields.recipient))}">${escapeHtml(addressText(fields.recipient))}</code>${inlineCopyButton(addressText(fields.recipient), copyLabel)}</span><small class="send-review-source">Resolved from Starknet ID</small>`
+      : `<span class="send-review-address copy-line"><code title="${escapeHtml(addressText(fields.recipient))}">${escapeHtml(addressLabel(fields.recipient))}</code>${inlineCopyButton(addressText(fields.recipient), copyLabel)}</span>${fields.recipient ? fullAddressReveal(fields.recipient, mode === "send" ? "Show full recipient address" : "Show full account address") : ""}`;
   return `
   <dl class="send-review-facts">
-    <div><dt>From</dt><dd><strong>${escapeHtml(sender.label || addressLabel(sender.address))}</strong><span class="send-review-address"><code title="${escapeHtml(sender.address)}">${escapeHtml(addressLabel(sender.address))}</code></span>${sender.address ? fullAddressReveal(sender.address, "Show full sender address") : ""}</dd></div>
+    <div><dt>From</dt><dd><strong>${escapeHtml(sender.label || addressLabel(sender.address))}</strong><span class="send-review-address"><code title="${escapeHtml(addressText(sender.address))}">${escapeHtml(addressLabel(sender.address))}</code></span>${sender.address ? fullAddressReveal(sender.address, "Show full sender address") : ""}</dd></div>
     <div><dt>${mode === "send" ? "To" : "Account"}</dt><dd><strong>${escapeHtml(fields.recipientLabel || addressLabel(fields.recipient))}</strong>${recipientIdentity}</dd></div>
     ${network ? `<div><dt>Network</dt><dd>${escapeHtml(network)}</dd></div>` : ""}
     <div><dt>Amount</dt><dd><span class="send-review-amount">${tokenGlyph(fields.tokenAddress, fields.tokenSymbol)}<strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong></span><small>${escapeHtml(fields.fiatEstimate || "Fiat estimate unavailable")}</small></dd></div>
@@ -127,7 +127,7 @@ export const reviewPanelHtml = (review: TransferReview): string =>
 // A truncated address beside a copy control carrying the full value, so the
 // receipt reads as a sentence yet every party can still be checked exactly.
 const receiptAddress = (address: string, copyLabel: string): string =>
-  `<span class="send-receipt-address"><code title="${escapeHtml(address)}">${escapeHtml(addressLabel(address))}</code>${inlineCopyButton(address, copyLabel)}</span>`;
+  `<span class="send-receipt-address"><code title="${escapeHtml(addressText(address))}">${escapeHtml(addressLabel(address))}</code>${inlineCopyButton(addressText(address), copyLabel)}</span>`;
 
 /**
  * Renders the Send receipt sentence: "<sender> sent <amount> to <recipient>",

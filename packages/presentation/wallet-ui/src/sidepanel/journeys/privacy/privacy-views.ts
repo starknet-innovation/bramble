@@ -10,7 +10,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import {
   PRIVACY_OTHER_WALLET,
   PRIVACY_OTHER_WALLET_NEXT,
@@ -166,7 +166,7 @@ const preparationDetails = (
             },
             {
               action: {
-                attributes: { "data-copy": preparation.authorization.caller },
+                attributes: { "data-copy": addressText(preparation.authorization.caller) },
                 icon: "copy" as const,
                 label: "Copy authorization caller address",
               },
@@ -178,7 +178,7 @@ const preparationDetails = (
         : []),
       {
         action: {
-          attributes: { "data-copy": preparation.poolAddress },
+          attributes: { "data-copy": addressText(preparation.poolAddress) },
           icon: "copy",
           label: "Copy privacy pool address",
         },

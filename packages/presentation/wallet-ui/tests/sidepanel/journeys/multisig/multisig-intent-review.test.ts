@@ -4,6 +4,7 @@
  * they were told against the one being signed.
  */
 import { describe, expect, test } from "bun:test";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { multisigDetailFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-views";
 import { makeArgentMultisigFixture } from "../../../support/argent-multisig-fixtures";
 
@@ -29,7 +30,7 @@ describe("multisig intent technical details", () => {
     // Current and resulting signer lists: truncated text, full key on hover,
     // one copy control per key.
     expect(review).toContain(
-      `<li><code title="${currentKey}">0x${currentKey.slice(2, 6)}…${currentKey.slice(-4)}</code><button class="icon-button ghost copy-inline" data-copy="${currentKey}" type="button" aria-label="Copy signer public key"`,
+      `<li><code title="${currentKey}">${addressLabel(currentKey)}</code><button class="icon-button ghost copy-inline" data-copy="${currentKey}" type="button" aria-label="Copy signer public key"`,
     );
     expect(review.match(new RegExp(`data-copy="${currentKey}"`, "g"))).toHaveLength(2);
     // The exact change names the key it adds, whole when short, and copies it.
@@ -39,7 +40,7 @@ describe("multisig intent technical details", () => {
     // Each call's contract address copies in full beside its truncated label.
     const calls = html.slice(callsStart);
     expect(calls).toContain(
-      '<p>Contract · <code title="0x123">0x123</code><button class="icon-button ghost copy-inline" data-copy="0x123" type="button" aria-label="Copy call 1 contract address"',
+      `<p>Contract · <code title="${addressText("0x123")}">0x0000…0123</code><button class="icon-button ghost copy-inline" data-copy="${addressText("0x123")}" type="button" aria-label="Copy call 1 contract address"`,
     );
   });
 });

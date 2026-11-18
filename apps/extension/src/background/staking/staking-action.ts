@@ -26,6 +26,7 @@ import { stakingReviewSentence } from "@bramble/transactions/staking-review";
 import { refuseOnPoisonedRecipient, verifyCalls } from "@bramble/transactions/verify";
 import {
   addressLabel,
+  addressText,
   STARKNET_NETWORKS,
   STRK_TOKEN_ADDRESS,
   sameFelt,
@@ -126,12 +127,12 @@ export const prepareStakingResponse = async (
   if (!reviewedFee) {
     return { error: "Couldn't estimate the network fee, so nothing was signed. Try again." };
   }
-  // The review names the full verified staker address; Activity the short
-  // form. Neither is ever a directory name.
+  // The review names the full verified staker address, padded; Activity the
+  // short form. Neither is ever a directory name.
   const facts = {
     amount: input.amount,
     symbol: token.symbol,
-    validator: `validator ${input.staker}`,
+    validator: `validator ${addressText(input.staker)}`,
   };
   const unsigned = {
     action: input.action,

@@ -4,7 +4,12 @@ import {
   argentMultisigConfigChangeCall,
 } from "@bramble/multisig/chain";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
-import { addressLabel, normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  addressText,
+  normalizeFeltInput,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import {
   bindMultisigParticipantPicker,
@@ -68,7 +73,7 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
           "[data-participant-selection-copy]",
         );
         if (copy) {
-          copy.dataset["copy"] = participant.address ?? "";
+          copy.dataset["copy"] = addressText(participant.address ?? "");
           copy.hidden = !participant.address;
         }
         selection.hidden = false;

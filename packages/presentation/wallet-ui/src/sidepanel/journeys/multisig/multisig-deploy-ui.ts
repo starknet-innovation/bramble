@@ -1,6 +1,7 @@
 /** Linear exact-review binding for stable Argent multisig creation. */
 import {
   addressLabel,
+  addressText,
   explorerTransactionUrl,
   isNonZeroStarkFieldElement,
   normalizeFeltInput,
@@ -249,7 +250,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       name.textContent = participant.label;
       label.textContent = `${participant.source}${participant.address ? ` · ${addressLabel(participant.address)}` : ""} · Key ${addressLabel(publicKey)}`;
       remove.dataset["removeSignerPublicKey"] = publicKey;
-      copy.dataset["copy"] = participant.address ?? "";
+      copy.dataset["copy"] = addressText(participant.address ?? "");
       copy.hidden = !participant.address;
       signerList.append(fragment);
       // Cloned after the shell bound its copy controls, so bind this one here.

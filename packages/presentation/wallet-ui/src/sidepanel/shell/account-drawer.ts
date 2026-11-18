@@ -23,7 +23,7 @@ import { emptyState, pill } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { icon } from "../shared/icons";
@@ -53,7 +53,7 @@ const drawerMultisigRow = (
       <span class="option-avatar">${accountAvatar(record.address)}</span>
       <span class="drawer-copy">
         <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
-        <code title="${escapeHtml(record.address)}">${escapeHtml(addressLabel(record.address))}</code>
+        <code title="${escapeHtml(addressText(record.address))}">${escapeHtml(addressLabel(record.address))}</code>
         <span class="account-groups-line">Multisig · ${authority}${openLabel}</span>
       </span>
       <span class="option-mark">${icon(record.id === selectedId ? "check" : "chevronRight")}</span>
@@ -78,7 +78,7 @@ const drawerAccountRow = (
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
-          <code title="${escapeHtml(stored.address)}">${escapeHtml(addressLabel(stored.address))}</code>
+          <code title="${escapeHtml(addressText(stored.address))}">${escapeHtml(addressLabel(stored.address))}</code>
           ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.record.name ?? "selected multisig")}</span>` : ""}
         </span>
         ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}

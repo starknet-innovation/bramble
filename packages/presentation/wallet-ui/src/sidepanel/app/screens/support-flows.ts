@@ -8,7 +8,7 @@ import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton, switchControl } from "@bramble/ui-kit/controls";
 import { textareaField, textField } from "@bramble/ui-kit/fields";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { ConnectedSite, WalletStatus } from "../../../popup/responses/responses";
 import { copyButton, flowHeader, flowScreen } from "../../shared/parts";
 
@@ -167,7 +167,7 @@ export const addressBookFlow = (
                       ${entry.publicKeyX ? `<span class="hint">Signer key ${escapeHtml(addressLabel(entry.publicKeyX))}</span>` : ""}
                       ${entry.nostrPublicKey ? `<span class="hint">Secure coordination ready</span>` : ""}
                     </div>
-                    ${copyButton(entry.address, `Copy ${entry.label}`)}
+                    ${copyButton(addressText(entry.address), `Copy ${entry.label}`)}
                     ${entry.publicKeyX ? copyButton(entry.publicKeyX, `Copy ${entry.label} signer public key`) : ""}
                     ${entry.nostrPublicKey ? copyButton(entry.nostrPublicKey, `Copy ${entry.label} coordination public key`) : ""}
                     ${iconButton({

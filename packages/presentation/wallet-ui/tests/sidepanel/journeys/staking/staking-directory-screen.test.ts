@@ -164,7 +164,7 @@ describe("the list screen", () => {
     const html = screen(listed([entry()]));
     expect(html).toContain("Listed by Starkscan. Check the address before you stake.");
     expect(html).toContain("Validator One");
-    expect(html).toContain("0x5a20…beef");
+    expect(html).toContain("0x05a2…beef");
     expect(html).toContain("Commission 5% · 30-day uptime 99.5%");
     expect(html).toContain("1,500 STRK delegated");
     expect(html).toContain("validator.example");

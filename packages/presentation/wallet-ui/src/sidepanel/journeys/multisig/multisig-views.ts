@@ -12,7 +12,7 @@ import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -257,7 +257,7 @@ const intentCard = (
             {
               label: "Sender",
               action: {
-                attributes: { "data-copy": intent.prepared.senderAddress },
+                attributes: { "data-copy": addressText(intent.prepared.senderAddress) },
                 icon: "copy",
                 label: "Copy sender",
               },

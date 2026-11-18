@@ -8,7 +8,12 @@ import { receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { addressLabel, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  addressText,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
   AllowanceListing,
@@ -149,7 +154,7 @@ const deployAccountFlow = (
                 { label: "Account", value: accountDisplayName(account, preferences) },
                 {
                   action: {
-                    attributes: { "data-copy": account.address },
+                    attributes: { "data-copy": addressText(account.address) },
                     icon: "copy",
                     label: "Copy address",
                   },

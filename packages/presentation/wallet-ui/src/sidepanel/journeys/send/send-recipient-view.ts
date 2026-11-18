@@ -19,7 +19,7 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { accountAvatar, accountDisplayName, inlineCopyButton } from "../../shared/parts";
@@ -129,7 +129,7 @@ export const recipientStage = (
         <span class="send-recipient-avatar">${accountAvatar(account?.address ?? "")}</span>
         <span class="send-recipient-copy">
           <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
-          ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(addressLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy sending account address")}</span>` : "<code>—</code>"}
+          ${account ? `<span class="copy-line"><code title="${escapeHtml(addressText(account.address))}">${escapeHtml(addressLabel(account.address))}</code>${inlineCopyButton(addressText(account.address), "Copy sending account address")}</span>` : "<code>—</code>"}
         </span>
       </div>
     </div>

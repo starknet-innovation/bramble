@@ -11,7 +11,7 @@ import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { DiscoveredNft, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
@@ -57,7 +57,7 @@ export const nftSendFlow = (
           { label: "NFT", value: nft.title },
           {
             action: {
-              attributes: { "data-copy": nft.contract },
+              attributes: { "data-copy": addressText(nft.contract) },
               icon: "copy",
               label: "Copy collection contract address",
             },

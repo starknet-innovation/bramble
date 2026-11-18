@@ -6,7 +6,7 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import type { WalletPreferences } from "@bramble/settings/preferences";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { accountDisplayName, inlineCopyButton } from "../../shared/parts";
@@ -33,7 +33,7 @@ const connectIdentity = (status: WalletStatus, preferences: WalletPreferences | 
   if (!account) {
     return `<p class="hint">${status.locked ? "Unlock the wallet to see which account will be shared." : "Select an account on this network to share it."}</p>`;
   }
-  return `<dl class="request-detail"><div><dt>Account</dt><dd class="request-account"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong><span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(addressLabel(account.address))}</code>${inlineCopyButton(account.address, "Copy account address")}</span></dd></div><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
+  return `<dl class="request-detail"><div><dt>Account</dt><dd class="request-account"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong><span class="copy-line"><code title="${escapeHtml(addressText(account.address))}">${escapeHtml(addressLabel(account.address))}</code>${inlineCopyButton(addressText(account.address), "Copy account address")}</span></dd></div><div><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div></dl>`;
 };
 
 const connectChoices = (

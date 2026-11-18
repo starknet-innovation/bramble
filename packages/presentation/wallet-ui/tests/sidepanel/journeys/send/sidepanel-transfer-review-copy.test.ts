@@ -8,7 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { account } from "@bramble/testkit/sidepanel";
 import type { DerivedAccountRef } from "@bramble/wallet-model/accounts";
-import { addressLabel, canonicalFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, canonicalFelt } from "@bramble/wallet-model/networks";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
 import { sendFlow } from "../../../../src/sidepanel/app/screens/flows";
 import { bindTransfer } from "../../../../src/sidepanel/journeys/send/transfer-ui";
@@ -30,8 +30,9 @@ afterAll(unregisterDom);
 
 const originalSetTimeout = globalThis.setTimeout;
 // The composed recipient is canonicalised as it leaves the form; that spelling
-// is what the background signs, so it is the one the control copies.
+// is what the background signs. The screen shows and copies it padded.
 const CANONICAL = canonicalFelt(RECIPIENT) ?? RECIPIENT;
+const SHOWN = addressText(CANONICAL);
 
 beforeEach(() => {
   document.body.replaceChildren();
@@ -66,9 +67,9 @@ describe("send review recipient copy", () => {
 
     expect(CANONICAL).not.toBe(RECIPIENT);
     expect(code?.textContent).toBe(addressLabel(CANONICAL));
-    expect(code?.textContent).not.toBe(CANONICAL);
-    expect(code?.getAttribute("title")).toBe(CANONICAL);
-    expect(copy?.dataset["copy"]).toBe(CANONICAL);
+    expect(code?.textContent).not.toBe(SHOWN);
+    expect(code?.getAttribute("title")).toBe(SHOWN);
+    expect(copy?.dataset["copy"]).toBe(SHOWN);
     expect(copy?.getAttribute("aria-label")).toBe("Copy recipient address");
     expect(copy?.classList.contains("copy-inline")).toBe(true);
     // Never nested inside another control.
@@ -101,8 +102,8 @@ describe("send review recipient copy", () => {
       "Show full sender address",
       "Show full recipient address",
     ]);
-    expect(reveals[0]?.querySelector("code")?.textContent).toBe(sender);
-    expect(reveals[1]?.querySelector("code")?.textContent).toBe(CANONICAL);
+    expect(reveals[0]?.querySelector("code")?.textContent).toBe(addressText(sender));
+    expect(reveals[1]?.querySelector("code")?.textContent).toBe(SHOWN);
     // Closed by default: the confirm face still reads as a summary first.
     expect(reveals.every((entry) => entry.open === false)).toBe(true);
   });
@@ -132,7 +133,7 @@ describe("send review recipient copy", () => {
     await flush();
     observer.disconnect();
 
-    expect(copied).toEqual([CANONICAL]);
+    expect(copied).toEqual([SHOWN]);
     // The screen's result line is an error alert, so feedback goes to one
     // success toast rather than showing "Copied" in the danger tone.
     expect(app.querySelector("#transfer-result")?.textContent).toBe("");
@@ -222,9 +223,9 @@ describe("send review of a name-resolved recipient", () => {
       .querySelector("#send-review-summary [data-copy]")
       ?.closest(".send-review-address");
 
-    // The full canonical address, not the shortened label the other facts use.
+    // The full padded address, not the shortened label the other facts use.
     expect(fact?.classList.contains("send-review-address-full")).toBe(true);
-    expect(fact?.querySelector("code")?.textContent).toBe(CANONICAL);
+    expect(fact?.querySelector("code")?.textContent).toBe(SHOWN);
     expect(app.querySelector("#send-review-summary .send-review-source")?.textContent).toBe(
       "Resolved from Starknet ID",
     );
@@ -240,9 +241,7 @@ describe("send review of a name-resolved recipient", () => {
       .querySelector("#send-review-summary [data-copy]")
       ?.closest(".send-review-address");
 
-    expect(fact?.querySelector("code")?.textContent).toBe(
-      canonicalFelt(account.address) ?? account.address,
-    );
+    expect(fact?.querySelector("code")?.textContent).toBe(addressText(account.address));
     expect(app.querySelector("#send-review-summary .send-review-source")?.textContent).toBe(
       "Resolved from Starknet ID",
     );

@@ -6,6 +6,7 @@
 
 import {
   addressLabel,
+  addressText,
   canonicalAddress,
   isStarknetNetworkId,
   normalizeFeltInput,
@@ -215,7 +216,7 @@ export const bindReceiveWalletCard = ({ app, wallet }: BindingContext): void => 
         qr,
         payload === "card" && card
           ? qrSvg(card, RECEIVE_QR_LABELS.card)
-          : qrSvg(address, RECEIVE_QR_LABELS.address),
+          : qrSvg(addressText(address), RECEIVE_QR_LABELS.address),
       );
       qr.dataset["qrPayload"] = payload;
     }

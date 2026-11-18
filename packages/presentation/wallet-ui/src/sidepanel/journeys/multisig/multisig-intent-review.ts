@@ -15,7 +15,7 @@ import {
 } from "@bramble/multisig/chain";
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import { inlineCopyButton } from "../../shared/parts";
 
@@ -31,7 +31,7 @@ export const exactCalls = (intent: ArgentMultisigSigningIntent): string =>
     .map(
       (call, index) => `<li class="review-panel">
         <p><strong>Call ${index + 1}</strong> · <code>${escapeHtml(call.entrypoint)}</code></p>
-        <p>Contract · <code title="${escapeHtml(call.contractAddress)}">${escapeHtml(addressLabel(call.contractAddress))}</code>${inlineCopyButton(call.contractAddress, `Copy call ${index + 1} contract address`)}</p>
+        <p>Contract · <code title="${escapeHtml(addressText(call.contractAddress))}">${escapeHtml(addressLabel(call.contractAddress))}</code>${inlineCopyButton(addressText(call.contractAddress), `Copy call ${index + 1} contract address`)}</p>
         <p>Calldata · <code>${escapeHtml(call.calldata.join(" ") || "none")}</code></p>
       </li>`,
     )

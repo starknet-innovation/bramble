@@ -130,12 +130,14 @@ const displayPrefixes = (value: string): ReadonlySet<string> => {
  * Detects address poisoning: a candidate that visually mimics a trusted
  * address (same leading and trailing digits) while being a different account.
  * Every spelling the wallet can render is compared, not only the canonical
- * form (accounts) and the 64-digit padded form (contacts): a typed recipient is
- * labelled with the spelling the user pasted, so an attacker who hands out a
- * partially zero-padded address controls which window is displayed. Matching
+ * form (accounts) and the 64-digit padded form (contacts): a typed recipient was
+ * once labelled with the spelling the user pasted, so an attacker who handed out
+ * a partially zero-padded address controlled which window was displayed. Matching
  * only the canonical window let 15 of every 16 twins of a padded contact pass,
  * and matching canonical plus padded still let a one-leading-zero spelling
- * render exactly like the padded contact (audit #242).
+ * render exactly like the padded contact (audit #242). Labels now always show
+ * the padded window, but the check still compares every spelling rather than
+ * trusting the label.
  */
 export const isLookalikeAddress = (candidate: string, trusted: string): boolean => {
   const left = canonical(candidate).toLowerCase();

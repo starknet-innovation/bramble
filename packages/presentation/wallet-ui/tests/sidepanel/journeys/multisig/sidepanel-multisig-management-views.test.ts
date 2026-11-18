@@ -3,7 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { addressLabel } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { multisigDeployFlow } from "../../../../src/sidepanel/journeys/multisig/multisig-deploy-view";
 import {
   multisigAddFlow,
@@ -143,7 +143,9 @@ describe("Argent multisig management views", () => {
       }),
     ).toContain("Check the network and retry");
     expect(multisigReceiveFlow(fixture.status, null)).toContain("no longer watched");
-    expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(fixture.record.address);
+    expect(multisigReceiveFlow(fixture.status, fixture.view)).toContain(
+      addressText(fixture.record.address),
+    );
     expect(multisigTrackFlow(fixture.status, null)).toContain("Select a watched multisig");
     expect(multisigTrackFlow(fixture.status, fixture.view)).toContain('id="multisig-track-form"');
   });
@@ -156,14 +158,14 @@ describe("Argent multisig management views", () => {
     // Signers screen: the address receipt row and each roster row's signer key.
     const signers = multisigSignersFlow(fixture.status, account, fixture.view);
     expect(signers).toContain(
-      `<dd><code>${addressLabel(fixture.record.address)}</code><button class="icon-button" data-copy="${fixture.record.address}" type="button" aria-label="Copy multisig address"`,
+      `<dd><code>${addressLabel(fixture.record.address)}</code><button class="icon-button" data-copy="${addressText(fixture.record.address)}" type="button" aria-label="Copy multisig address"`,
     );
     const roster = signers.slice(
       signers.indexOf('class="multisig-signer-roster"'),
       signers.indexOf("Add participant"),
     );
     expect(roster).toContain(`<span class="option-sub" title="${signerKey}">`);
-    expect(roster).toContain(`Key 0x${signerKey.slice(2, 6)}…${signerKey.slice(-4)}`);
+    expect(roster).toContain(`Key ${addressLabel(signerKey)}`);
     // The signer's shown name (friendly, no user label on this fixture) names the control.
     expect(roster).toMatch(
       new RegExp(

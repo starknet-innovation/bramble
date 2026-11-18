@@ -3,7 +3,7 @@
  * `addressLabel`, and every surface that once carried a private copy answers
  * identically to it. Accounts are stored canonical and contacts padded, so one
  * address reached the drawer as 0x05e1… and the review sentence as 0x5e1d…
- * until the label canonicalized first.
+ * until the label padded first. Every screen shows the padded spelling.
  *
  * Sibling of shared-helper-single-source.test.ts, which is at the file budget.
  */
@@ -25,8 +25,8 @@ const account: Pick<AccountRef, "address" | "networkId"> = {
 
 describe("the address label has one definition", () => {
   test("both stored spellings of one address give one label", () => {
-    expect(addressLabel(PADDED)).toBe("0x5e1d…f2e4");
-    expect(addressLabel(CANONICAL)).toBe("0x5e1d…f2e4");
+    expect(addressLabel(PADDED)).toBe("0x05e1…f2e4");
+    expect(addressLabel(CANONICAL)).toBe("0x05e1…f2e4");
   });
 
   test("the signing sentence, the Activity row, and the private summary cut it the same way", () => {
