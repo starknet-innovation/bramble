@@ -4,8 +4,9 @@
  * in force until a newer signed document is accepted, while every other rule
  * returns to the bundled default. Only the last *accepted* document can keep
  * a kill; a freshly fetched expired one, a tampered copy, or one whose key the
- * build no longer trusts contributes nothing. A kept kill beats a local
- * override, like a current one.
+ * build no longer trusts contributes nothing. Moving the device clock back
+ * before the document was issued keeps its kills too. A kept kill beats a
+ * local override, like a current one.
  */
 import { describe, expect, test } from "bun:test";
 import type { BoundedHttpFetch } from "@bramble/core/http-json";
@@ -103,6 +104,16 @@ describe("kept kills after expiry", () => {
       flags: { "beta.panel": false, "swap.enabled": true },
       sequence: 4,
       source: "remote",
+    });
+  });
+
+  test("survive the device clock moving back before the document was issued", async () => {
+    const store = createMemoryStore();
+    await clientFor(serving(await doc(3, KILL_AND_ENABLE)), { now: NOW }, store).refresh();
+    const restarted = clientFor(serving(null), { now: NOW - 30 * DAY }, store);
+    expect(await restarted.snapshot("SN_MAIN")).toMatchObject({
+      flags: { "beta.panel": false, "beta.screen": false, "swap.enabled": false },
+      source: "bundled",
     });
   });
 

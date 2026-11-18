@@ -183,12 +183,14 @@ export const createFeatureFlagClient = (options: FeatureFlagClientOptions): Feat
     }
     const stored = await verify(state.document, state.sequence);
     // A stored copy that no longer verifies keeps its sequence as the rollback
-    // floor. An expired one keeps only its kills; a tampered one, or one whose
-    // key this release dropped, keeps nothing.
+    // floor. An expired one, or one the clock has moved back before, keeps
+    // only its kills; a tampered one, or one whose key this release dropped,
+    // keeps nothing.
     if (stored.ok) {
       return { accepted: stored.payload, payload: stored.payload, readable: true, state };
     }
-    const accepted = stored.reason === "expired" ? stored.expired : null;
+    const accepted =
+      stored.reason === "expired" || stored.reason === "not-yet-valid" ? stored.expired : null;
     return { accepted, payload: null, readable: true, state };
   };
   // Memoised once read; an unreadable store is retried on the next call.

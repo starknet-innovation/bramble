@@ -147,6 +147,15 @@ describe("verifyFlagDocument rejects", () => {
     expect(await reason(await publisher.sign(body))).toBe("not-yet-valid");
   });
 
+  test("not-yet-valid: hands back the payload for its kills; rollback still wins", async () => {
+    const text = await publisher.sign(payload({ issuedAt: stamp(NOW + 10 * 60_000) }));
+    const result = await verifyFlagDocument(text, options());
+    expect(
+      result.ok === false && result.reason === "not-yet-valid" && result.expired.sequence,
+    ).toBe(5);
+    expect(await reason(text, { minSequence: 6 })).toBe("rollback");
+  });
+
   test("rollback: a lower sequence than the last accepted one", async () => {
     expect(await reason(await publisher.sign(payload()), { minSequence: 6 })).toBe("rollback");
   });

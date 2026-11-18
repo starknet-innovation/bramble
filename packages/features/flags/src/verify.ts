@@ -37,15 +37,20 @@ export type FlagRejection =
   | "wrong-schema";
 
 /**
- * Outcome of {@link verifyFlagDocument}. An `expired` refusal also carries the
- * payload, which passed every other check: it must never be applied as a
- * current document, and is read only for the kills it carries when it is the
- * last document this install accepted.
+ * Outcome of {@link verifyFlagDocument}. An `expired` or `not-yet-valid`
+ * refusal also carries the payload, which passed every other check: it must
+ * never be applied as a current document, and is read only for the kills it
+ * carries when it is the last document this install accepted (an expired copy,
+ * or one the device clock has since moved back before).
  */
 export type FlagVerification =
   | { readonly ok: true; readonly payload: FlagPayload }
-  | { readonly expired: FlagPayload; readonly ok: false; readonly reason: "expired" }
-  | { readonly ok: false; readonly reason: Exclude<FlagRejection, "expired"> };
+  | {
+      readonly expired: FlagPayload;
+      readonly ok: false;
+      readonly reason: "expired" | "not-yet-valid";
+    }
+  | { readonly ok: false; readonly reason: Exclude<FlagRejection, "expired" | "not-yet-valid"> };
 
 /** Imported Ed25519 verification keys, by publisher keyId. */
 export type TrustedFlagKeys = ReadonlyMap<string, CryptoKey>;
@@ -65,7 +70,7 @@ const ENVELOPE_KEYS = ["keyId", "payload", "signature"];
 // Tolerated client clock skew for an `issuedAt` slightly in the future.
 const MAX_CLOCK_SKEW_MS = 300_000;
 
-const reject = (reason: Exclude<FlagRejection, "expired">): FlagVerification => ({
+const reject = (reason: Exclude<FlagRejection, "expired" | "not-yet-valid">): FlagVerification => ({
   ok: false,
   reason,
 });
@@ -121,11 +126,12 @@ const checkPayload = (payload: FlagPayload, options: FlagVerifyOptions): FlagVer
   if (payload.channel !== options.channel) {
     return reject("wrong-channel");
   }
-  if (payload.issuedAt > options.now + MAX_CLOCK_SKEW_MS) {
-    return reject("not-yet-valid");
-  }
+  // Rollback first, so an older copy never qualifies to keep its kills.
   if (payload.sequence < options.minSequence) {
     return reject("rollback");
+  }
+  if (payload.issuedAt > options.now + MAX_CLOCK_SKEW_MS) {
+    return { expired: payload, ok: false, reason: "not-yet-valid" };
   }
   if (options.now >= payload.expiresAt) {
     return { expired: payload, ok: false, reason: "expired" };
