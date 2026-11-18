@@ -139,7 +139,7 @@ export const privacyMessages = {
     "privacy.blocked.network.body": "切换到有隐私池的网络。",
     "privacy.blocked.network.title": "此网络不可用",
     "privacy.blocked.pending.body":
-      "你的注册已在 Starknet 上，正在等待索引。完成后即可转入隐私余额，无需再次注册。",
+      "你的注册已在 Starknet 上，正在等待索引。转入隐私余额功能会自动解锁——请勿再次注册。",
     "privacy.blocked.pending.title": "注册正在处理中",
     "privacy.blocked.poolFeeNeeded": "注册需要 {fee} 的隐私池费用，另加一笔网络费。",
     "privacy.blocked.service.body": "无法连接隐私服务，或服务拒绝了请求。没有提交任何内容。",

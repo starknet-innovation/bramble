@@ -27,6 +27,13 @@ describe("localeForLanguages", () => {
     expect(localeForLanguages(["zh-TW", "zh-CN"])).toBe("zh-Hans");
   });
 
+  test("skips Traditional or non-Han script behind a language extension", () => {
+    for (const tag of ["zh-cmn-Hant", "zh-yue-Hant-HK", "zh-Latn", "zh-Latn-pinyin"]) {
+      expect(localeForLanguages([tag])).toBe("en");
+    }
+    expect(localeForLanguages(["zh-cmn-Hans"])).toBe("zh-Hans");
+  });
+
   test("takes the first supported tag in the browser's order", () => {
     expect(localeForLanguages(["fr-FR", "en-US", "zh-CN"])).toBe("en");
     expect(localeForLanguages(["fr-FR", "zh-CN", "en-US"])).toBe("zh-Hans");
@@ -80,6 +87,16 @@ describe("translator", () => {
 describe("catalogFailures", () => {
   test("passes a complete, matching catalog set", () => {
     expect(catalogFailures({ en: { a: "Send {x}" }, "zh-Hans": { a: "发送 {x}" } })).toEqual([]);
+  });
+
+  test("reports a placeholder used a different number of times", () => {
+    // Same names, but the translation would print the amount twice.
+    expect(
+      catalogFailures({
+        en: { a: "Send {amount}" },
+        "zh-Hans": { a: "发送 {amount}{amount}" },
+      }),
+    ).toEqual(["zh-Hans: a placeholders differ from en"]);
   });
 
   test("reports missing, unknown, mismatched, markup and padded entries", () => {

@@ -28,9 +28,11 @@ export const SOURCE_LOCALE = "en" satisfies Locale;
 export const isLocale = (value: unknown): value is Locale =>
   typeof value === "string" && (LOCALES as readonly string[]).includes(value);
 
-// Traditional-script tags and regions. Simplified text is not a substitute for
-// a reader of Traditional, so these keep looking down the browser's list.
-const TRADITIONAL = /^zh-(?:hant|tw|hk|mo)(?:-|$)/u;
+// Traditional-script tags and regions, and non-Han scripts. Simplified text is
+// not a substitute for those readers, so these keep looking down the list.
+// A script subtag may follow a language extension (`zh-cmn-Hant`), and only
+// Han script in its Simplified form is served: `zh-Latn` (Pinyin) is not.
+const TRADITIONAL = /^zh-(?:[a-z]{3}-)?(?:hant|tw|hk|mo|latn)(?:-|$)/u;
 
 /**
  * Picks the shipped locale for a browser's ordered language list (as
@@ -64,6 +66,19 @@ export type MessageArgs<S extends string> = [Placeholders<S>] extends [never]
   : [params: Readonly<Record<Placeholders<S>, string>>];
 
 const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9]*)\}/gu;
+
+/** Each placeholder name with how often a template uses it, as sorted `name×n`. */
+const placeholderCounts = (template: string): string => {
+  const counts = new Map<string, number>();
+  for (const match of template.matchAll(PLACEHOLDER)) {
+    const name = match[1] ?? "";
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts]
+    .map(([name, count]) => `${name}×${count}`)
+    .sort()
+    .join();
+};
 
 /** The distinct placeholder names in a template, sorted. */
 export const placeholderNames = (template: string): readonly string[] =>
@@ -114,7 +129,8 @@ const entryFailures = (
 ): readonly string[] => {
   if (english === undefined) return [`${locale}: unknown ${key}`];
   const failures: string[] = [];
-  if (placeholderNames(text).join() !== placeholderNames(english).join()) {
+  // Counts, not just names: a repeated `{amount}` would print the value twice.
+  if (placeholderCounts(text) !== placeholderCounts(english)) {
     failures.push(`${locale}: ${key} placeholders differ from ${SOURCE_LOCALE}`);
   }
   if (MARKUP.test(text)) failures.push(`${locale}: ${key} contains markup`);
@@ -126,7 +142,7 @@ const entryFailures = (
 /**
  * Every structural problem in a catalog set, for a test to assert empty:
  * a key missing from or extra to a locale, a translation whose placeholders
- * differ from English, markup characters, and empty or padded text.
+ * (names or how often each appears) differ from English, markup characters, and empty or padded text.
  */
 export const catalogFailures = (catalogs: Catalogs<string>): readonly string[] => {
   const source = catalogs[SOURCE_LOCALE];

@@ -12,11 +12,20 @@ import {
 
 const SEPT_2 = Date.UTC(2026, 8, 2, 14, 5);
 
+// The en-GB short month is "Sep" or "Sept" depending on the ICU data in the
+// runtime, so English is pinned to the exact formatter the panel shipped with
+// before localization rather than to a literal.
+const releaseEnglish = (options: Intl.DateTimeFormatOptions): string =>
+  new Intl.DateTimeFormat("en-GB", { ...options, timeZone: "UTC" }).format(SEPT_2);
+
 afterEach(() => setUiLocale("en"));
 
 test("English keeps the padded day-month order", () => {
-  expect(formatUtcDay(SEPT_2)).toBe("02 Sep");
-  expect(formatUtcDate(SEPT_2)).toBe("02 Sep 2026");
+  expect(formatUtcDay(SEPT_2)).toBe(releaseEnglish({ day: "2-digit", month: "short" }));
+  expect(formatUtcDate(SEPT_2)).toBe(
+    releaseEnglish({ day: "2-digit", month: "short", year: "numeric" }),
+  );
+  expect(formatUtcDay(SEPT_2)).toMatch(/^02 Sept?$/u);
   expect(formatUtcClock(SEPT_2)).toBe("14:05 UTC");
 });
 
