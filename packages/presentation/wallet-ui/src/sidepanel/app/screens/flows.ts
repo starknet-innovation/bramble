@@ -58,6 +58,8 @@ const poolNoticeAction = (ctx: {
 
 import type { SendIntent } from "../../journeys/send/send-model";
 import { sendFlow } from "../../journeys/send/send-views";
+import type { ExperimentalFeaturesState } from "../../journeys/settings/experimental-features-runtime";
+import { experimentalFeaturesFlow } from "../../journeys/settings/experimental-features-ui";
 import { advancedNetworkFlow, networkFlow } from "../../journeys/settings/network-views";
 import { privacyUnlockFlow } from "../../journeys/settings/privacy-unlock";
 import {
@@ -348,6 +350,7 @@ export const simpleFlowScreen = (
     readonly currency: DisplayCurrency;
     readonly deployment: boolean | null;
     readonly expandedGroupId: string | null;
+    readonly experimentalFeatures: ExperimentalFeaturesState;
     /** Whether a successful balance read found STRK; `null` when unread. */
     readonly fundedForFees?: boolean | null;
     readonly multisigs?: readonly ArgentMultisigView[];
@@ -408,6 +411,8 @@ export const simpleFlowScreen = (
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":
       return connectedSitesFlow(ctx.status, ctx.connectedSites);
+    case "experimental-features":
+      return experimentalFeaturesFlow(ctx.status, ctx.experimentalFeatures);
     case "staking":
       return stakingFlow(ctx.status, ctx.account, ctx.staking ?? STAKING_LOADING);
     case "allowances":

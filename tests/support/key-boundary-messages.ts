@@ -30,6 +30,7 @@ import {
 import { LOOKUP_KEY_BOUNDARY_MESSAGES } from "./key-boundary-lookup-messages";
 import { MULTISIG_KEY_BOUNDARY_MESSAGES } from "./key-boundary-multisig-messages";
 import { RECOVERY_KEY_BOUNDARY_MESSAGES } from "./key-boundary-recovery-messages";
+import { SETTINGS_KEY_BOUNDARY_MESSAGES } from "./key-boundary-settings-messages";
 import { STAKING_KEY_BOUNDARY_MESSAGES } from "./key-boundary-staking-messages";
 import { STRK20_KEY_BOUNDARY_MESSAGES } from "./key-boundary-strk20-messages";
 import { TOKEN_KEY_BOUNDARY_MESSAGES } from "./key-boundary-token-messages";
@@ -118,8 +119,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     message: { id: "", type: "wallet.retryApprovalFee" },
     sender: extensionSender,
   },
-  { message: { type: "wallet.preferences" }, sender: extensionSender },
-  { message: { type: "wallet.diagnostics" }, sender: extensionSender },
+  ...SETTINGS_KEY_BOUNDARY_MESSAGES,
   {
     message: { origin: KEY_BOUNDARY_ORIGIN, type: "wallet.requestAccounts" },
     sender: contentSender,

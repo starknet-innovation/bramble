@@ -26,6 +26,7 @@ import { createMemoryStore } from "@bramble/store/kv";
 import { memoryAllowanceStore } from "@bramble/transactions/allowance-store";
 import { ec } from "starknet";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
+import { createFeatureFlagClient } from "../../apps/extension/src/background/flags/feature-flag-client";
 import { createLedgerSignQueue } from "../../apps/extension/src/background/ledger/ledger-sign-queue";
 import type {
   ArgentMultisigDeploymentReview,
@@ -125,6 +126,16 @@ export const makeKeyBoundaryHarness = async (
   const handler = createMessageHandler(walletStub, testExtension, {
     allowanceStore,
     approvals,
+    // A storage-backed flag client, so override writes answer live rather
+    // than "unavailable" (the storage-less default).
+    featureFlags: createFeatureFlagClient({
+      catalog: { "swap.enabled": { enabled: true, localOverride: true, remote: "kill-only" } },
+      drawBucket: () => 0,
+      fetch: async () => Response.error(),
+      now: () => 0,
+      store: createMemoryStore(),
+      version: null,
+    }),
     ledgerSignQueue,
     multisigStore,
     preferencesStore,
