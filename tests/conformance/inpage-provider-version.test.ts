@@ -9,6 +9,7 @@
  */
 import { describe, expect, test } from "bun:test";
 
+// Kept literal below as well: the architecture check counts non-literal module loads.
 const INPAGE_ENTRY = "src/provider/inpage.ts";
 
 type FakeWindow = {
@@ -50,7 +51,7 @@ describe("in-page provider version", () => {
     try {
       // The query gives this test its own module instance; other suites load
       // the provider too, and a cached instance would not run again.
-      await import(`../../apps/extension/${INPAGE_ENTRY}?stamped`);
+      await import("../../apps/extension/src/provider/inpage.ts?stamped");
     } finally {
       delete scope.__MC_BUILD_VERSION__;
       scope.window = previous;
