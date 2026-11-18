@@ -49,6 +49,7 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@bramble/core": "workspace:*",
+  "@bramble/flags": "workspace:*",
   "@bramble/kms-krusty": "workspace:*",
   "@bramble/ledger-protocol": "workspace:*",
   "@bramble/multisig": "workspace:*",

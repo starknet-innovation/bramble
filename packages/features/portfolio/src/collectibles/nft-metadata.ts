@@ -50,10 +50,13 @@ const IPFS_GATEWAY = "https://ipfs.io/ipfs/";
  * drop into an <img src>; `animationUrl`, when present, is a self-contained
  * `data:text/html` renderer shown only inside the sandboxed iframe on explicit
  * user action; `id` is the deterministic `${networkId}:${contract}:${tokenId}`
- * key shared with watched NFTs so the two lists dedupe cleanly.
+ * key shared with watched NFTs so the two lists dedupe cleanly. `artUnavailable`
+ * is set only for a watched NFT whose metadata read failed or named no art, so
+ * the card can say so instead of showing a silent placeholder.
  */
 export type DiscoveredNft = {
   readonly animationUrl?: string;
+  readonly artUnavailable?: true;
   readonly attributes?: readonly NftAttribute[];
   readonly collection: string;
   readonly contract: string;
@@ -254,6 +257,7 @@ export const isDiscoveredNft = (value: unknown): value is DiscoveredNft =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
     "animationUrl",
+    "artUnavailable",
     "attributes",
     "collection",
     "contract",
@@ -268,6 +272,7 @@ export const isDiscoveredNft = (value: unknown): value is DiscoveredNft =>
   (value["animationUrl"] === undefined ||
     (typeof value["animationUrl"] === "string" &&
       normalizeAnimationUri(value["animationUrl"]) === value["animationUrl"])) &&
+  (value["artUnavailable"] === undefined || value["artUnavailable"] === true) &&
   (value["attributes"] === undefined ||
     (Array.isArray(value["attributes"]) &&
       value["attributes"].length <= 32 &&

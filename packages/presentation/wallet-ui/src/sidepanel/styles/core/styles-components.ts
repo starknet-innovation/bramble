@@ -290,7 +290,7 @@ ${SIGN_REQUEST_STYLES}
     color: var(--bramble-muted); display: inline-flex; justify-content: center;
     overflow: hidden; position: relative; transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease}; width: 100%;
   }
-  .nft-art .icon { height: 28px; width: 28px; } .nft-image { border-radius: inherit; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; } .nft-image--pixelated { image-rendering: pixelated; } .nft-image--broken { display: none; }
+  .nft-art .icon { height: 28px; width: 28px; } .nft-image { border-radius: inherit; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; } .nft-image--pixelated { image-rendering: pixelated; } .nft-image--broken { display: none; } .nft-art-note { bottom: ${SPACE.xs}; color: var(--bramble-muted); display: none; font-size: ${TYPE.caption.size}; inset-inline: 0; position: absolute; text-align: center; } .nft-art-note[data-shown="true"], .nft-image--broken ~ .nft-art-note { display: block; }
   /* The detail hero owns an explicit width. Without it, the inline-flex art
      square shrink-wrapped to the image's intrinsic thumbnail dimensions. */
   .nft-hero { display: grid; gap: ${SPACE.sm}; margin: 0 auto ${SPACE.sm}; max-width: 240px; width: 100%; }
