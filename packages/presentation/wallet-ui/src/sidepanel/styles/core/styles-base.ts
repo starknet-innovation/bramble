@@ -144,6 +144,12 @@ export const BASE_STYLES = `
      the end of a long screen the last row meets the pill's edge, and the
      pill's shadow separates the two. Flow screens carry no dock. */
   .screen:not(.flow) { padding-bottom: calc(var(--bramble-dock-h) - ${SPACE.md}); }
+  /* Scrolling under the dock is by design, but a control reached by keyboard
+     must never sit behind it (issue 950, WCAG 2.2 SC 2.4.11). The document is the
+     scroll container, so the root's scroll padding is what focus scrolling and
+     scrollIntoView stop at: the dock footprint plus room for the focus ring.
+     Flow screens render no dock and keep the whole viewport. */
+  html:has(.wallet-dock) { scroll-padding-bottom: calc(var(--bramble-dock-h) + ${SPACE.sm}); }
   /* An empty status line that ends a dock screen holds nothing yet, and there
      is nothing below it to keep from shifting, so it takes no room: out of flow
      it drops both its reserved line and the grid gap before it. It stays in the
