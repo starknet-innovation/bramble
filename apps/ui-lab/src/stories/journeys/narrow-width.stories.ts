@@ -29,6 +29,12 @@ export const Portfolio = narrowSidepanelStory("Portfolio · 320px", "portfolio",
   (document) => assertValueFits(document, ".token-amount"),
 ]);
 
+export const PortfolioReadyKeyNotice = narrowSidepanelStory(
+  "Ready key notice · 320px",
+  "portfolio",
+  "ready-key-notice",
+);
+
 export const PortfolioPricesOffline = narrowSidepanelStory(
   "Portfolio prices offline · 320px",
   "portfolio",
