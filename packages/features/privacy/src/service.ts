@@ -164,6 +164,14 @@ export type Strk20AccountActionsInput = Strk20AccountContext & {
 export type Strk20Service = {
   readonly privateBalances: (input: Strk20BalancesInput) => Promise<readonly Strk20BalanceEntry[]>;
   readonly prepare: (input: Strk20PrepareInput) => Promise<Strk20CallAndProof>;
+  /**
+   * Records a pool write another path broadcast (an Argent multisig's own
+   * transaction), so the account's next proof waits until it is past it.
+   */
+  readonly recordSubmission?: (
+    input: Pick<Strk20AccountContext, "account" | "config" | "rpcUrls">,
+    transactionHash: string,
+  ) => Promise<void>;
   /** "Unlock anyway": clears a stuck `submitting` marker; that write may still land. */
   readonly releasePendingWrite?: (input: Strk20AccountContext) => Promise<boolean>;
   readonly registrationStatus?: (

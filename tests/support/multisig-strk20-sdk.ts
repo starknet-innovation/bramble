@@ -35,6 +35,8 @@ export type RandomizedSdkLog = {
   readonly compiled: Call[];
   /** Requests proved, in order. */
   readonly proved: Strk20HeldProofRequest[];
+  /** Pool writes recorded for maturity: the account id and the hash. */
+  readonly recorded: { readonly accountId: string; readonly transactionHash: string }[];
 };
 
 /**
@@ -44,7 +46,7 @@ export type RandomizedSdkLog = {
 export const randomizedStrk20Sdk = (
   options: { readonly tamper?: boolean } = {},
 ): { readonly log: RandomizedSdkLog; readonly service: Strk20Service } => {
-  const log: RandomizedSdkLog = { compiled: [], proved: [] };
+  const log: RandomizedSdkLog = { compiled: [], proved: [], recorded: [] };
   const poolCall = (random: number): Call => ({
     calldata: [
       ...compileActionsCalldata(HARNESS_MULTISIG, HARNESS_SCALAR, [["0x0", num.toHex(random)]]),
@@ -60,6 +62,12 @@ export const randomizedStrk20Sdk = (
     },
     async prepare() {
       throw new Error("unused");
+    },
+    async recordSubmission(
+      input: { readonly account: { readonly id: string } },
+      transactionHash: string,
+    ) {
+      log.recorded.push({ accountId: input.account.id, transactionHash });
     },
     async prepareRegistration(input: {
       readonly heldProof?: {

@@ -117,6 +117,20 @@ describe("a multisig private action is proved as compiled", () => {
     expect(signature.every((felt) => /^0x[0-9a-f]+$/.test(felt))).toBe(true);
     // Proved and frozen, so it is not held any more.
     expect(await store.listHeld(HARNESS_MULTISIG_ID)).toEqual([]);
+
+    // Both owners sign the registration and it is sent. The write goes into
+    // the multisig's maturity journal, so the next proof is built past it.
+    const intentId = (second["intent"] as { readonly id: string }).id;
+    for (const signerAccountId of [harnessAccountA.id, harnessAccountB.id]) {
+      await expect(
+        call({ intentId, signerAccountId, type: "wallet.signArgentMultisigIntent" }),
+      ).resolves.toMatchObject({ ok: true });
+    }
+    const sent = await call({ intentId, type: "wallet.submitArgentMultisigIntent" });
+    expect(sent).toMatchObject({ ok: true });
+    expect(sdk.log.recorded).toEqual([
+      { accountId: HARNESS_MULTISIG_ID, transactionHash: sent["transactionHash"] as string },
+    ]);
   });
 
   test("a compile whose calldata is not the signed call is refused and not held", async () => {

@@ -3,6 +3,7 @@ import type {
   ArgentMultisigRecord,
   ArgentMultisigSigningIntent,
 } from "@bramble/multisig/repository";
+import type { Strk20AccountContext } from "@bramble/privacy/service";
 import { verificationContext } from "@bramble/transactions/verify";
 import { canonicalFelt, STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
@@ -40,11 +41,14 @@ const recordSubmittedIntentActivity = (
  * hash either way.
  */
 export const recordBroadcastIntent = async (
-  deps: Pick<MultisigOpsDeps, "activity" | "allowanceStore" | "preferencesStore">,
+  deps: Pick<MultisigOpsDeps, "activity" | "allowanceStore" | "preferencesStore" | "runtimeRpc">,
   intent: ArgentMultisigSigningIntent,
   record: ArgentMultisigRecord,
   transactionHash: string,
 ): Promise<void> => {
+  if (intent.prepared.proofFacts && intent.prepared.proofFacts.length > 0) {
+    await recordPoolWrite(deps, record, transactionHash).catch(() => {});
+  }
   await deps.preferencesStore
     .read()
     .then((preferences) =>
@@ -58,6 +62,35 @@ export const recordBroadcastIntent = async (
     )
     .catch(() => {});
   await recordSubmittedIntentActivity(deps, intent, record.networkId, transactionHash);
+};
+
+// A registration or deposit changes the multisig's pool state. The privacy
+// service proves against a block some depth behind the head, so the next proof
+// must wait until that block is past this write, or it would read the state
+// before it (a deposit would look like an empty balance). The single-signer
+// path journals its writes; this records the multisig's in the same journal.
+const recordPoolWrite = async (
+  deps: Pick<MultisigOpsDeps, "preferencesStore" | "runtimeRpc">,
+  record: ArgentMultisigRecord,
+  transactionHash: string,
+): Promise<void> => {
+  const recordSubmission = deps.runtimeRpc.strk20?.recordSubmission;
+  if (!recordSubmission) return;
+  const preferences = await deps.preferencesStore.read();
+  const config = preferences.strk20Networks?.[record.networkId] ?? null;
+  if (!config) return;
+  await recordSubmission(
+    {
+      account: {
+        address: record.address,
+        id: record.id,
+        networkId: record.networkId,
+      } as Strk20AccountContext["account"],
+      config,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[record.networkId], preferences),
+    },
+    transactionHash,
+  );
 };
 
 /**

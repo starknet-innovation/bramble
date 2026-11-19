@@ -42,7 +42,7 @@ export { defaultServiceRetryPause } from "./official-sdk-retry";
  * Builds the persisted maturity key for one account and privacy pool.
  */
 export const maturityScope = (
-  input: Strk20AccountContext,
+  input: Pick<Strk20AccountContext, "account">,
   poolAddress: string,
 ): Strk20MaturityScope => ({
   accountId: input.account.id,
