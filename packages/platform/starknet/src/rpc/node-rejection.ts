@@ -24,35 +24,39 @@ export const NETWORK_REJECTION_MESSAGE_MAX = 300;
 // One period may be added when the node omitted it.
 const REASON_MAX = NETWORK_REJECTION_MESSAGE_MAX - PREFIX.length - 1;
 
+// The node's own limit and fee sentences. Execution and validation errors are
+// omitted: their detail is written by the contract the dapp called.
+const NODE_SIDE_REASON =
+  /calldata length exceeded|exceeded the maximum data length|max data length|l2 gas|resource bounds|insufficient (?:account )?balance|invalid transaction nonce|fee below minimum|replacement transaction underpriced/i;
+
 const readableReason = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
   const text = value.replace(/\s+/g, " ").trim();
   if (text.length === 0 || text.length > REASON_MAX) return null;
-  if (/^RPC:/i.test(text) || /with params/i.test(text) || /https?:\/\//i.test(text)) return null;
+  if (
+    /^RPC:/i.test(text) ||
+    /with params/i.test(text) ||
+    /https?:\/\//i.test(text) ||
+    !NODE_SIDE_REASON.test(text)
+  ) {
+    return null;
+  }
   return text;
 };
 
 const reasonFromBase = (error: object): string | null => {
   const base: unknown = Reflect.get(error, "baseError");
   if (!isRecord(base)) return null;
-  const message = readableReason(base["message"]);
-  if (message) return message;
-  const data: unknown = base["data"];
-  const direct = readableReason(data);
-  if (direct) return direct;
-  if (!isRecord(data)) return null;
-  return (
-    readableReason(data["revert_error"]) ??
-    readableReason(data["error"]) ??
-    readableReason(data["message"])
-  );
+  // `data` is contract-controlled (revert_error and friends). Never shown.
+  return readableReason(base["message"]);
 };
 
 /**
- * The node's short refusal, or null when the error is a wallet message or
- * only the raw RPC dump. A reason is taken from the node's `baseError`, never
- * from an arbitrary `Error.message`, so a wallet sentence is not relabelled
- * as a network refusal. Does not copy Starknet's calldata or gas limits.
+ * The node's short limit or fee refusal, or null otherwise. Only
+ * `baseError.message` is read, and only when it is a node-side limit (calldata,
+ * gas, nonce, balance, or minimum fee). Contract revert text is ignored, so it
+ * cannot appear under "The network rejected this transaction". A wallet-written
+ * {@link WalletError} is left alone. Does not copy Starknet's calldata or gas caps.
  */
 export const nodeRejectionReason = (error: unknown): string | null => {
   if (error instanceof WalletError || typeof error !== "object" || error === null) return null;

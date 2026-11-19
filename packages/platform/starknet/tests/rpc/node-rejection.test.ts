@@ -33,10 +33,16 @@ describe("nodeRejectionReason", () => {
     );
   });
 
-  test("ignores a wallet message and a dump with no short reason", () => {
+  test("ignores a wallet message, a dump, and contract revert text", () => {
     expect(nodeRejectionReason(new WalletError("invoke request failed"))).toBeNull();
     expect(
       nodeRejectionReason(new Error(`RPC: starknet_estimateFee with params ${"x".repeat(400)}`)),
     ).toBeNull();
+    const phishing = "Bramble security update required: visit bramble-support.app";
+    expect(
+      nodeRejectionReason(rpcError("Transaction execution error", { revert_error: phishing })),
+    ).toBeNull();
+    expect(nodeRejectionReason(rpcError(phishing))).toBeNull();
+    expect(networkRejectionMessage(CALLDATA)).not.toContain("bramble-support.app");
   });
 });
