@@ -11,8 +11,8 @@
  * fixtures are never sent from. Everything printed is redacted (sepolia-redact).
  *
  * Run from the repository root after `bun run build`:
- *   bun run verify:sepolia:sends
- * Exits non-zero when any check fails, so the nightly can gate on it.
+ *   bun run verify:sepolia:sends [TX-xx]
+ * The optional id checks that one account only. Exits non-zero when any check fails, so the nightly can gate on it.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -42,8 +42,12 @@ if (process.env["DEBUG"] || process.env["PWDEBUG"]) throw new Error("unset DEBUG
 const MAX_FEE_STRK = "0.5";
 const STRK = defaultToken("SN_SEPOLIA", "STRK");
 const AMOUNT_RAW = selfTransferRaw(STRK.decimals);
+// Optional: run one account only, e.g. `bun run verify:sepolia:sends TX-07`.
+const ONLY = process.argv[2];
 // The public node rate-limits bursts; one pause between sends keeps the run under it.
 const BETWEEN_SENDS_MS = 10_000;
+// Long enough for a send the node accepted to show in the pre-confirmed nonce.
+const RETRY_PAUSE_MS = 20_000;
 
 /** How each S-TXN account reaches the wallet, and what a send from it should do. */
 type Case = {
@@ -91,18 +95,34 @@ type Verdict = {
   readonly why: string;
 };
 
+/**
+ * Makes `address` the active account the way a person does: Home's account
+ * button, then the account's row in the drawer. Only finding the row's id and
+ * confirming the switch read the wallet's status; the send's review then shows
+ * the account on screen as From.
+ */
 const activate = async (session: Session, address: string): Promise<void> => {
-  const status = await sendRuntimeMessage<{
+  type Status = {
     readonly accounts?: readonly { readonly address: string; readonly id: string }[];
-  }>(session.panel, { type: "wallet.status" });
+    readonly activeAccountId?: string | null;
+  };
+  const status = await sendRuntimeMessage<Status>(session.panel, { type: "wallet.status" });
   const account = status?.accounts?.find((a) => sameFelt(a.address, address));
   if (!account) throw new Error("the account is not in the wallet");
-  await sendRuntimeMessage(session.panel, {
-    accountId: account.id,
-    type: "wallet.setActiveAccount",
+  const { panel } = session;
+  await panel.reload();
+  await panel.locator("#account-trigger").click({ timeout: 30_000 });
+  await panel.locator(`.account-drawer [data-switch-account="${account.id}"]`).click({
+    timeout: 30_000,
   });
-  await session.panel.reload();
-  await expect(session.panel.locator("#account-trigger")).toBeVisible({ timeout: 30_000 });
+  await expect
+    .poll(
+      async () =>
+        (await sendRuntimeMessage<Status>(panel, { type: "wallet.status" }))?.activeAccountId,
+      { timeout: 30_000 },
+    )
+    .toBe(account.id);
+  await expect(panel.locator(".account-drawer")).toBeHidden({ timeout: 30_000 });
 };
 
 /**
@@ -121,14 +141,18 @@ const shown = async (session: Session): Promise<string> => {
   return parts.length ? ` [wallet showed ${parts.join(" | ")}]` : "";
 };
 
+/** The account's nonce including pre-confirmed transactions, so a send in flight counts. */
+const nonceOf = async (address: string): Promise<bigint> =>
+  BigInt(await provider.getNonceForAddress(address, "pre_confirmed"));
+
 /** A read-only account: Home says so, and nothing reaches the chain from it. */
 const refusedFor = async (session: Session, address: string): Promise<void> => {
-  const nonce = await provider.getNonceForAddress(address);
+  const nonce = await nonceOf(address);
   await activate(session, address);
   await expect(session.panel.locator(".read-only-notice")).toContainText("Read only", {
     timeout: 30_000,
   });
-  if (BigInt(await provider.getNonceForAddress(address)) !== BigInt(nonce)) {
+  if ((await nonceOf(address)) !== nonce) {
     throw new Error("the nonce moved");
   }
 };
@@ -140,7 +164,9 @@ const sendFrom = async (session: Session, address: string): Promise<string> => {
   const hash = await selfTransfer(session.panel, {
     amount: SELF_TRANSFER_AMOUNT,
     maxFeeStrk: MAX_FEE_STRK,
+    networkId: "SN_SEPOLIA",
     recipient: address,
+    sender: address,
     symbol: "STRK",
   });
   const receipt = await waitForSuccessfulReceipt(NODE, hash);
@@ -176,7 +202,7 @@ const ok = await guarded(async () => {
     secret(key.priv);
     await session.key({ type: "openzeppelin", key: key.priv });
 
-    for (const c of CASES) {
+    for (const c of CASES.filter((c) => !ONLY || c.id === ONLY)) {
       const address = addressOf(c.id);
       if (c.skip) {
         verdicts.push({ id: c.id, verdict: "skip", why: c.skip });
@@ -189,29 +215,52 @@ const ok = await guarded(async () => {
       // A read-only account keeps the allowlist empty, so any broadcast it
       // attempts is blocked and counted rather than sent.
       if (!c.readOnly) allowed.splice(0, allowed.length, address);
-      const blockedBefore = firewall.blocked.length;
-      try {
-        let why: string;
-        if (c.readOnly) {
-          await refusedFor(session, address);
-          why = `read only, as expected: ${c.readOnly}`;
-        } else {
-          why = await sendFrom(session, address);
+      const fw = firewall;
+      const attempt = async (): Promise<{ readonly ok: boolean; readonly why: string }> => {
+        const blockedBefore = fw.blocked.length;
+        try {
+          let why: string;
+          if (c.readOnly) {
+            await refusedFor(session, address);
+            why = `read only, as expected: ${c.readOnly}`;
+          } else {
+            why = await sendFrom(session, address);
+          }
+          if (fw.blocked.length > blockedBefore) {
+            throw new Error("the wallet attempted a broadcast the firewall blocked");
+          }
+          return { ok: true, why };
+        } catch (error) {
+          const blocked =
+            fw.blocked.length > blockedBefore ? " (firewall blocked a broadcast)" : "";
+          // A timeout's first line does not name its element; the call log does.
+          const text = String(error);
+          const waited = text.match(/waiting for (locator\(.+?\))/u)?.[1];
+          const first = `${text.split("\n")[0] ?? ""}${waited ? ` waiting for ${waited}` : ""}`;
+          return { ok: false, why: `${first}${blocked}${await shown(session)}` };
         }
-        if (firewall.blocked.length > blockedBefore) {
-          throw new Error("the wallet attempted a broadcast the firewall blocked");
+      };
+      const blockedAtStart = fw.blocked.length;
+      const nonce = await nonceOf(address);
+      let result = await attempt();
+      // The public node sometimes refuses a request or stalls a step. Retry a
+      // sender once, and only when provably nothing went out: no blocked
+      // broadcast, and after a pause the nonce (pre-confirmed included) has
+      // not moved. The verdict keeps the first failure so flakiness shows.
+      if (!result.ok && !c.readOnly && fw.blocked.length === blockedAtStart) {
+        await pace(RETRY_PAUSE_MS);
+        if ((await nonceOf(address)) === nonce) {
+          const first = result.why;
+          const second = await attempt();
+          result = {
+            ok: second.ok,
+            why: second.ok
+              ? `${second.why} (passed on retry; first try: ${first})`
+              : `${second.why} (first try: ${first})`,
+          };
         }
-        verdicts.push({ id: c.id, verdict: "pass", why });
-      } catch (error) {
-        const blocked =
-          firewall.blocked.length > blockedBefore ? " (firewall blocked a broadcast)" : "";
-        const first = String(error).split("\n")[0] ?? "";
-        verdicts.push({
-          id: c.id,
-          verdict: "fail",
-          why: `${first}${blocked}${await shown(session)}`,
-        });
       }
+      verdicts.push({ id: c.id, verdict: result.ok ? "pass" : "fail", why: result.why });
       allowed.length = 0;
       await pace(BETWEEN_SENDS_MS);
     }
