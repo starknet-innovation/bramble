@@ -35,7 +35,9 @@ explicitly enable it. AVNU receives the asset and amount details needed for a us
 CoinGecko receives public asset identifiers needed for prices. The phishing feed is MetaMask's
 public eth-phishing-detect denylist, downloaded in full from `raw.githubusercontent.com` about every
 six hours without cookies; sites are checked against it on the device, and Bramble does not send the
-current site to that feed.
+current site to that feed. Bramble also downloads a signed feature-flag document from
+`flags.bramble.fi` about every 30 minutes, without cookies or a referrer. The request carries no
+account address or wallet identifier, and any gradual rollout is decided on the device.
 
 When the user explicitly shares or checks for an Argent multisig handoff, Bramble connects to the
 reviewed public Nostr relays `relay.primal.net` and `nos.lol`, or to one custom relay the user chose
