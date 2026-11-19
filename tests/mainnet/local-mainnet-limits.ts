@@ -4,7 +4,6 @@
  * principal returns to the same account; the cap bounds the fee.
  */
 import { parseTokenAmount } from "@bramble/starknet/rpc";
-import { STRK_TOKEN_DECIMALS } from "@bramble/wallet-model/networks";
 
 /** Decimal STRK/ETH moved to the same account. Small enough to be dust. */
 export const SELF_TRANSFER_AMOUNT = "0.000001";
@@ -31,42 +30,6 @@ const GASLESS_HUMAN_CAP: Readonly<Record<string, string>> = {
  */
 export const selfTransferRaw = (decimals: number): bigint =>
   parseTokenAmount(SELF_TRANSFER_AMOUNT, decimals);
-
-const feeCapRaw = (): bigint => parseTokenAmount(MAX_TX_FEE_STRK, STRK_TOKEN_DECIMALS);
-
-const decimalRaw = (amount: string): bigint | null => {
-  if (/^0(?:\.0+)?$/u.test(amount)) {
-    return 0n;
-  }
-  try {
-    return parseTokenAmount(amount, STRK_TOKEN_DECIMALS);
-  } catch {
-    return null;
-  }
-};
-
-/** A displayed STRK fee the suite is willing to submit. */
-export type FeeCapCheck =
-  | { readonly kind: "missing" }
-  | { readonly kind: "ok"; readonly raw: bigint }
-  | { readonly kind: "over"; readonly raw: bigint };
-
-/**
- * Reads the shared "Estimated fee:" line. Anything that is not a STRK figure
- * is `missing`, which callers treat as a refusal.
- */
-export const checkDisplayedStrkFee = (text: string): FeeCapCheck => {
-  const match = /Estimated fee: ([0-9]+(?:\.[0-9]+)?) STRK/u.exec(text);
-  const amount = match?.[1];
-  if (amount === undefined) {
-    return { kind: "missing" };
-  }
-  const raw = decimalRaw(amount);
-  if (raw === null) {
-    return { kind: "missing" };
-  }
-  return raw <= feeCapRaw() ? { kind: "ok", raw } : { kind: "over", raw };
-};
 
 /**
  * Whether a gasless offer's raw `amount` is inside the symbol's ceiling.
