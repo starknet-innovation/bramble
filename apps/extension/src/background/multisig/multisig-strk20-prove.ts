@@ -5,6 +5,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
 import {
   type ArgentMultisigSigningIntent,
   argentMultisigIntentId,
@@ -23,6 +24,7 @@ import {
   prepareStrk20Registration,
   quoteStrk20Plan,
   type Strk20AccountContext,
+  type Strk20PrivateRelayPlan,
 } from "@bramble/privacy/service";
 import { preparedArgentMultisigFee } from "@bramble/starknet/multisig-invoke";
 import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
@@ -46,6 +48,7 @@ const contextWithScalar = (
 ): Strk20AccountContext => ({
   account: session.privacyAccount,
   config: session.privacyConfig,
+  heldProof: session.heldProof,
   isAuthorized: session.isAuthorized,
   rpcUrls: session.context.rpcUrls,
   signCallSet: session.signCallSet,
@@ -272,14 +275,32 @@ const freezeRelay = async (
   return relayStored(stored, relay.id, locallySigned.state);
 };
 
+// A fee plan stored with a held request. Only its private-relay shape is used.
+const relayPlanFrom = (stored: unknown): Strk20PrivateRelayPlan | null => {
+  if (!isRecord(stored) || !isRecord(stored["feeAction"])) return null;
+  const fee = stored["feeAction"];
+  return typeof fee["amount"] === "string" &&
+    typeof fee["recipient"] === "string" &&
+    typeof fee["token"] === "string" &&
+    fee["type"] === "withdraw"
+    ? (stored as unknown as Strk20PrivateRelayPlan)
+    : null;
+};
+
 const proveRelay = async (
   deps: MultisigOpsDeps,
   session: MultisigStrk20Session,
   context: Strk20AccountContext,
   request: MultisigStrk20ActionRequest,
 ): Promise<RuntimeResponse> => {
-  const plan = await quoteStrk20Plan(session.strk20, { ...context, actions: actionsFor(request) });
-  if (!("feeAction" in plan)) return { error: "strk20 private submission unavailable" };
+  // A request compiled earlier already contains its relay fee; quoting again
+  // would name a fee the signed calldata does not.
+  const held = (await session.resumable())?.plan;
+  const plan = held
+    ? relayPlanFrom(held)
+    : await quoteStrk20Plan(session.strk20, { ...context, actions: actionsFor(request) });
+  if (!plan || !("feeAction" in plan)) return { error: "strk20 private submission unavailable" };
+  session.notePlan(plan);
   const proved = await session.strk20.prepare({
     ...context,
     actions: [...actionsFor(request), plan.feeAction],
@@ -338,10 +359,15 @@ export const proveMultisigStrk20 = async (
   const context = contextWithScalar(session, scalar);
   try {
     // Awaited inside the try, so an asynchronous waiting refusal is caught here.
-    if (request.kind === "register" || request.kind === "deposit") {
-      return await proveAccount(deps, session, context, request);
-    }
-    return await proveRelay(deps, session, context, request);
+    const proved =
+      request.kind === "register" || request.kind === "deposit"
+        ? await proveAccount(deps, session, context, request)
+        : await proveRelay(deps, session, context, request);
+    // A resumed request is used once. Proved and stored, proving it again
+    // would spend the same notes; refused (an expired relay quote, say), the
+    // same request would be refused again. A thrown error keeps it to retry.
+    await session.releaseHeld();
+    return proved;
   } catch (error) {
     if (error instanceof WalletError && error.message === MULTISIG_STRK20_WAITING) {
       const id = session.waitingId();

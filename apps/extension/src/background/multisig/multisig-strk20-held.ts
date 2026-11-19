@@ -1,0 +1,185 @@
+/**
+ * Held proof requests for multisig STRK20 actions. The privacy SDK draws new
+ * random values every time it compiles, so a request is compiled once, kept
+ * while co-owners sign its pool authorization, and later proved exactly as
+ * compiled. The kept row holds no calldata: it is rebuilt from the stored
+ * authorization's calls, whose digest every fragment was verified against.
+ */
+
+import { WalletError } from "@bramble/core/errors";
+import type { Json } from "@bramble/core/json";
+import { strk20ProofSubmittable } from "@bramble/privacy/multisig-proof-window";
+import {
+  type MultisigStrk20ActionRequest,
+  type MultisigStrk20Authorization,
+  multisigStrk20CallSetAggregate,
+} from "@bramble/privacy/multisig-strk20";
+import {
+  multisigStrk20ExecuteCalldata,
+  multisigStrk20HeldEnvelope,
+  multisigStrk20HeldPlan,
+  sameMultisigStrk20Felts,
+} from "@bramble/privacy/multisig-strk20-held";
+import { restoreStrk20Calldata } from "@bramble/privacy/multisig-strk20-redaction";
+import type { MultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
+import type { Strk20HeldProofRequest } from "@bramble/privacy/service";
+import { canonicalFelt } from "@bramble/wallet-model/networks";
+
+const HELD_PROOF_INVALID = "Invalid Argent multisig private proof";
+
+/** A held request whose signature is complete, ready to prove. */
+export type MultisigStrk20Resumed = {
+  /** The authorization it is signed under. */
+  readonly id: string;
+  /** The relay fee plan it was compiled with. Absent for an account action. */
+  readonly plan?: { readonly [key: string]: Json };
+  readonly request: Strk20HeldProofRequest;
+};
+
+/** The live signer set an aggregate is ordered by. */
+type SignerSet = { readonly signerPublicKeys: readonly string[]; readonly threshold: number };
+
+// The `__execute__` calldata of the authorization's one pool call, with the
+// scalar put back. Null for anything else.
+const executeCalldata = (
+  authorization: MultisigStrk20Authorization,
+  scalar: string,
+): readonly string[] | null => {
+  const [call] = authorization.calls;
+  if (!call || authorization.calls.length !== 1) return null;
+  const calldata = restoreStrk20Calldata(call.calldata, scalar);
+  return calldata ? multisigStrk20ExecuteCalldata({ ...call, calldata }) : null;
+};
+
+const signed = (
+  request: Strk20HeldProofRequest,
+  calldata: readonly string[],
+  authorization: MultisigStrk20Authorization,
+  signers: SignerSet,
+): Strk20HeldProofRequest => ({
+  invocation: {
+    ...request.invocation,
+    calldata: [...calldata],
+    signature: [...multisigStrk20CallSetAggregate(authorization.fragments, signers)],
+  },
+  provingBlock: request.provingBlock,
+});
+
+const optionalFelt = (value: string | undefined): string | null =>
+  value === undefined ? null : canonicalFelt(value);
+
+const sameRequest = (
+  left: MultisigStrk20ActionRequest,
+  right: MultisigStrk20ActionRequest,
+): boolean =>
+  left.kind === right.kind &&
+  optionalFelt(left.amount) === optionalFelt(right.amount) &&
+  optionalFelt(left.token) === optionalFelt(right.token) &&
+  optionalFelt(left.recipient) === optionalFelt(right.recipient);
+
+/**
+ * Handles a freshly compiled request. When its authorization already holds
+ * the threshold, returns it with the aggregate as its signature. Otherwise
+ * keeps it and returns `waiting`. Throws when the compiled calldata is not
+ * the call the authorization digest covers.
+ */
+export const holdCompiledStrk20Request = async (input: {
+  readonly authorization: MultisigStrk20Authorization | null;
+  readonly isAuthorized: () => boolean;
+  readonly plan: unknown;
+  readonly request: Strk20HeldProofRequest;
+  readonly scalar: string;
+  readonly signers: SignerSet;
+  readonly store: MultisigStrk20Store;
+}): Promise<Strk20HeldProofRequest | "waiting"> => {
+  const { authorization, request } = input;
+  const calldata = authorization ? executeCalldata(authorization, input.scalar) : null;
+  const compiled = request.invocation["calldata"];
+  if (
+    !authorization ||
+    !calldata ||
+    !Array.isArray(compiled) ||
+    !sameMultisigStrk20Felts(compiled, calldata)
+  ) {
+    throw new WalletError(HELD_PROOF_INVALID);
+  }
+  if (authorization.state === "ready") {
+    return signed(request, calldata, authorization, input.signers);
+  }
+  const envelope = multisigStrk20HeldEnvelope(request.invocation);
+  const plan = input.plan === undefined ? undefined : multisigStrk20HeldPlan(input.plan);
+  if (!envelope || plan === null) throw new WalletError(HELD_PROOF_INVALID);
+  const stored = await input.store.putHeld(
+    {
+      accountId: authorization.accountId,
+      envelope,
+      id: authorization.id,
+      ...(plan ? { plan } : {}),
+      provingBlock: request.provingBlock,
+    },
+    input.isAuthorized,
+  );
+  if (stored === "unauthorized") throw new WalletError("wallet locked");
+  if (stored !== "stored") throw new WalletError(HELD_PROOF_INVALID);
+  return "waiting";
+};
+
+// The authorization `id` names when it holds the threshold for this exact
+// action, with the calldata it covers.
+const readyFor = async (
+  input: {
+    readonly action: MultisigStrk20ActionRequest;
+    readonly scalar: string;
+    readonly store: MultisigStrk20Store;
+  },
+  id: string,
+): Promise<{
+  readonly authorization: MultisigStrk20Authorization;
+  readonly calldata: readonly string[];
+} | null> => {
+  const authorization = await input.store.getAuthorization(id, input.scalar);
+  if (authorization?.state !== "ready" || !sameRequest(authorization.request, input.action)) {
+    return null;
+  }
+  const calldata = executeCalldata(authorization, input.scalar);
+  return calldata ? { authorization, calldata } : null;
+};
+
+/**
+ * The newest held request for `action` whose authorization now holds the
+ * threshold and whose block is still inside the pool's proof window; a held
+ * request past that window is dropped, so the action is compiled and signed
+ * again. A relay action is resumed only with the fee plan it was compiled with.
+ */
+export const findResumableStrk20Request = async (input: {
+  readonly accountId: string;
+  readonly action: MultisigStrk20ActionRequest;
+  readonly readWindow: () => Promise<{
+    readonly currentBlock: bigint;
+    readonly validityBlocks: bigint;
+  }>;
+  readonly scalar: string;
+  readonly signers: SignerSet;
+  readonly store: MultisigStrk20Store;
+}): Promise<MultisigStrk20Resumed | null> => {
+  const relay = input.action.kind === "transfer" || input.action.kind === "withdraw";
+  const held = [...(await input.store.listHeld(input.accountId))].reverse();
+  for (const row of held) {
+    if (relay !== (row.plan !== undefined)) continue;
+    const ready = await readyFor(input, row.id);
+    if (!ready) continue;
+    const proofWindow = await input.readWindow();
+    if (!strk20ProofSubmittable({ baseBlock: BigInt(row.provingBlock), ...proofWindow })) {
+      await input.store.dropHeld(row.id);
+      continue;
+    }
+    const request = signed(
+      { invocation: row.envelope, provingBlock: row.provingBlock },
+      ready.calldata,
+      ready.authorization,
+      input.signers,
+    );
+    return { id: row.id, ...(row.plan ? { plan: row.plan } : {}), request };
+  }
+  return null;
+};

@@ -19,7 +19,7 @@ import {
   reviewMultisigStrk20Calls,
 } from "@bramble/privacy/multisig-strk20-review";
 import type { MultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
-import type { Strk20AccountContext } from "@bramble/privacy/service";
+import type { Strk20AccountContext, Strk20HeldProofHooks } from "@bramble/privacy/service";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { withRpcFallback } from "@bramble/starknet/provider";
 import { readMultisigStrk20KeyPackage } from "@bramble/vault/multisig-strk20-key";
@@ -31,6 +31,11 @@ import { captureSessionAuthorization } from "../runtime/session";
 import { type ArgentMultisigContext, contextFor } from "./multisig-context";
 import type { MultisigOpsDeps } from "./multisig-deps";
 import { currentConfigFor } from "./multisig-ops";
+import {
+  findResumableStrk20Request,
+  holdCompiledStrk20Request,
+  type MultisigStrk20Resumed,
+} from "./multisig-strk20-held";
 import { multisigStrk20ReviewScope } from "./multisig-strk20-scope";
 
 /** Thrown when co-owners still have to authorize the pool CallSet. */
@@ -45,6 +50,10 @@ export const MULTISIG_STRK20_SHARE_FIRST = "Share the key with a co-owner first.
 /** Refusal when this multisig already has as many open private rounds as it can keep. */
 export const MULTISIG_STRK20_FULL = "Argent multisig has a pending or unresolved operation";
 
+// Placeholder handed to the SDK while co-owners have not signed. Zero is never
+// a valid Stark signature, and the compiled request is held, not proved.
+const UNSIGNED = "0x0";
+
 /** Thrown when the pool would reject the stored proof. */
 export const MULTISIG_STRK20_PROOF_EXPIRED = "This private transaction expired. Refresh it.";
 
@@ -55,8 +64,12 @@ export type MultisigStrk20Session = {
   readonly chainId: string;
   readonly config: Awaited<ReturnType<typeof currentConfigFor>>;
   readonly context: ArgentMultisigContext;
+  /** Keeps the request compiled for this action and proves it once co-owners signed. */
+  readonly heldProof: Strk20HeldProofHooks;
   readonly isAuthorized: () => boolean;
   readonly poolAddress: string;
+  /** Records the relay fee plan the next compiled request includes. */
+  readonly notePlan: (plan: unknown) => void;
   /** Records which action the next CallSet authorization belongs to. */
   readonly prepareRequest: (request: MultisigStrk20ActionRequest) => void;
   readonly privacyConfig: Strk20NetworkConfig;
@@ -67,6 +80,13 @@ export type MultisigStrk20Session = {
   readonly readContext: () => Strk20AccountContext;
   /** Shared scalar for the privacy service. Callers must not persist or return it. */
   readonly readScalar: () => Promise<string>;
+  /** Forgets the held request this session resumed, once proving it returned. */
+  readonly releaseHeld: () => Promise<void>;
+  /**
+   * The held request for the current action whose signature is complete, or
+   * null. Its plan is the relay fee plan the request was compiled with.
+   */
+  readonly resumable: () => Promise<MultisigStrk20Resumed | null>;
   readonly signCallSet: (messageHash: string, calls: readonly Call[]) => Promise<string[]>;
   readonly store: MultisigStrk20Store;
   readonly strk20: NonNullable<MultisigOpsDeps["runtimeRpc"]["strk20"]>;
@@ -141,6 +161,15 @@ export const openMultisigStrk20Session = async (
   const config = await currentConfigFor(deps, resolved);
   let pending: string | null = null;
   let request: MultisigStrk20ActionRequest = { kind: "register" };
+  // The authorization the SDK's last compile was signed under, the relay fee
+  // plan it included, and the held request this session resumed.
+  let compiled: string | null = null;
+  let plan: unknown;
+  let resumed: MultisigStrk20Resumed | null | undefined;
+  const signers = {
+    signerPublicKeys: config.signerPublicKeys,
+    threshold: config.threshold,
+  };
   const chainId = STARKNET_NETWORKS[resolved.record.networkId].chainId;
   const reviewScope = multisigStrk20ReviewScope(resolved.record, poolAddress, preferences.tokens);
   const signCallSet = async (messageHash: string, calls: readonly Call[]): Promise<string[]> => {
@@ -159,26 +188,57 @@ export const openMultisigStrk20Session = async (
       throw new WalletError("Invalid Argent multisig private proof");
     }
     const id = `${resolved.record.id}:${hash}`;
+    compiled = id;
     const existing = await store.getAuthorization(id, scalar);
     if (existing?.state === "ready") {
-      return [
-        ...multisigStrk20CallSetAggregate(existing.fragments, {
-          signerPublicKeys: config.signerPublicKeys,
-          threshold: config.threshold,
-        }),
-      ];
+      return [...multisigStrk20CallSetAggregate(existing.fragments, signers)];
     }
-    return collectFragment(deps, resolved, config, store, scalar, {
+    const collected = await collectFragment(deps, resolved, config, store, scalar, {
       calls: callsForHash,
       hash,
       id,
       existing,
     });
+    // Not a valid signature. `heldProof.hold` keeps this compile and stops
+    // before proving, so it never reaches the prover.
+    return collected ?? [UNSIGNED];
+  };
+  const resumable = async (): Promise<MultisigStrk20Resumed | null> => {
+    resumed ??= await findResumableStrk20Request({
+      accountId: resolved.record.id,
+      action: request,
+      readWindow: () => readMultisigStrk20Window(resolved.rpcUrls, poolAddress),
+      scalar,
+      signers,
+      store,
+    });
+    return resumed;
+  };
+  const heldProof: Strk20HeldProofHooks = {
+    async hold(compiledRequest) {
+      const authorization = compiled ? await store.getAuthorization(compiled, scalar) : null;
+      const held = await holdCompiledStrk20Request({
+        authorization,
+        isAuthorized: authorized.isCurrent,
+        plan,
+        request: compiledRequest,
+        scalar,
+        signers,
+        store,
+      });
+      if (held !== "waiting") return held;
+      pending = compiled;
+      throw new WalletError(MULTISIG_STRK20_WAITING);
+    },
+    async resume() {
+      return (await resumable())?.request ?? null;
+    },
   };
   return {
     chainId,
     config,
     context: resolved,
+    heldProof,
     isAuthorized: authorized.isCurrent,
     poolAddress,
     privacyAccount: {
@@ -199,10 +259,19 @@ export const openMultisigStrk20Session = async (
       signHash: () => Promise.reject(new WalletError("Invalid Argent multisig private proof")),
       viewingKey: async () => scalar,
     }),
+    notePlan: (next: unknown): void => {
+      plan = next;
+    },
     prepareRequest: (next: MultisigStrk20ActionRequest): void => {
       request = next;
+      resumed = undefined;
     },
     readScalar: async () => scalar,
+    releaseHeld: async (): Promise<void> => {
+      if (resumed) await store.dropHeld(resumed.id);
+      resumed = undefined;
+    },
+    resumable,
     signCallSet,
     store,
     strk20,
@@ -221,7 +290,7 @@ export const openMultisigStrk20Session = async (
       readonly hash: string;
       readonly id: string;
     },
-  ): Promise<string[]> {
+  ): Promise<string[] | null> {
     const base: MultisigStrk20Authorization = draft.existing ?? {
       accountAddress: scope.record.address,
       accountId: scope.record.id,
@@ -251,10 +320,7 @@ export const openMultisigStrk20Session = async (
     }
     const stored = await records.upsertAuthorization(next, key, authorized.isCurrent);
     requireStoredAuthorization(stored);
-    if (next.state !== "ready") {
-      pending = next.id;
-      throw new WalletError(MULTISIG_STRK20_WAITING);
-    }
+    if (next.state !== "ready") return null;
     return [
       ...multisigStrk20CallSetAggregate(next.fragments, {
         signerPublicKeys: authority.signerPublicKeys,

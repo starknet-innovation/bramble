@@ -25,11 +25,13 @@ import {
   spentTokens,
 } from "./policy/fee-guards";
 import { canonicalStrk20PoolFee, STRK20_SERVICE_UNAVAILABLE } from "./policy/fee-policy";
+import type { Strk20HeldProofHooks } from "./policy/held-proof";
 import type { Strk20PhaseSink } from "./policy/phases";
 import type {
   SponsoredShieldConfig,
   Strk20SponsoredShieldPlan,
   Strk20SubmissionPlan,
+  Strk20SubmissionResult,
 } from "./policy/submission-plan";
 
 export { STRK20_INSUFFICIENT_BALANCE } from "./policy/fee-guards";
@@ -42,6 +44,8 @@ export {
   STRK20_SERVICE_UNAVAILABLE,
   type Strk20FeeReference,
 } from "./policy/fee-policy";
+/** Hooks for proving a request compiled before an account finished signing it. */
+export type { Strk20HeldProofHooks, Strk20HeldProofRequest } from "./policy/held-proof";
 /**
  * Frozen account and relay route types, defined beside privacy policy and
  * re-exported here as the stable service contract.
@@ -50,6 +54,7 @@ export type {
   Strk20AccountPlan,
   Strk20PrivateRelayPlan,
   Strk20SubmissionPlan,
+  Strk20SubmissionResult,
 } from "./policy/submission-plan";
 export {
   formatStrk20PoolFee,
@@ -79,6 +84,8 @@ export const STRK20_SUBMISSION_UNAVAILABLE = "strk20 private submission unavaila
 export type Strk20AccountContext = {
   readonly account: AccountRef;
   readonly config: Strk20NetworkConfig | null;
+  /** Multisig only: proves a request compiled before co-owners signed it. */
+  readonly heldProof?: Strk20HeldProofHooks;
   /** Live unlock authorization checked at the final public-account write. */
   readonly isAuthorized: () => boolean;
   /** Phase labels for a tracked job. Absent on the request path. */
@@ -127,23 +134,6 @@ export type PreparedStrk20AccountSubmission = {
   readonly allowanceGrants: readonly Call[];
   readonly calls: readonly Call[];
   readonly proof: Strk20Proof;
-};
-
-/**
- * Outcome of a pool submission: the broadcast transaction, plus the ERC20
- * approvals that submission granted so the caller can track them.
- *
- * A deposit (and the pool fee) is pulled by the pool, so entering the pool
- * necessarily approves it to spend the account's PUBLIC balance. Those grants
- * are ordinary standing allowances owned by the submitting account, and the
- * allowance manager can only show or revoke a residual one if the submitter
- * reports it — reconstructing it from the actions at the call site would be a
- * second definition of the pool's own approval rule. `allowanceGrants` is
- * absent (never a lie) for a submission that approves nothing.
- */
-export type Strk20SubmissionResult = {
-  readonly allowanceGrants?: readonly Call[];
-  readonly transactionHash: string;
 };
 
 /**

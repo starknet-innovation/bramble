@@ -49,6 +49,7 @@ import {
   makeStrk20Cosigner,
   STRANGER_NOSTR,
 } from "../../support/multisig-strk20-cosigner";
+import { sdkExecuteCalldata } from "../../support/multisig-strk20-sdk";
 
 const SCALAR = "0x654321";
 const POOL = canonicalFelt(STRK20_MAINNET_POOL) ?? "0x1";
@@ -284,6 +285,12 @@ describe("this wallet's own first signature (review before signing)", () => {
         throw new Error("unused");
       },
       async prepareRegistration(input: {
+        readonly heldProof?: {
+          readonly hold: (request: {
+            readonly invocation: Record<string, unknown>;
+            readonly provingBlock: number;
+          }) => Promise<unknown>;
+        };
         readonly signCallSet: (hash: string, calls: readonly Call[]) => Promise<unknown>;
       }) {
         const calls = [
@@ -298,7 +305,12 @@ describe("this wallet's own first signature (review before signing)", () => {
           calls,
           STARKNET_NETWORKS.SN_MAIN.chainId,
         );
-        await input.signCallSet(num.toHex(hash), calls);
+        const signature = await input.signCallSet(num.toHex(hash), calls);
+        // As the SDK does: the compiled request goes to `hold` before proving.
+        await input.heldProof?.hold({
+          invocation: { calldata: [...sdkExecuteCalldata(calls[0] as Call)], signature },
+          provingBlock: 100,
+        });
         throw new Error("unreachable");
       },
     }) as unknown as Strk20Service;

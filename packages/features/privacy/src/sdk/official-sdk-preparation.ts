@@ -3,9 +3,11 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
+import { isRecord } from "@bramble/core/json";
 import type { Strk20CallAndProof } from "@bramble/wallet-protocol/strk20";
 import type { RpcProvider } from "starknet";
 import type { Strk20NetworkConfig } from "../config";
+import type { Strk20HeldProofRequest } from "../policy/held-proof";
 import type { Strk20MaturityScope } from "../policy/maturity";
 import { reportStrk20Phase } from "../policy/phases";
 import {
@@ -98,6 +100,37 @@ export const historicalReadiness = (
  */
 type ProofRound = { readonly attempt: number; readonly attempts: number };
 
+// The compiled invocation inside the SDK's createProofInvocation result.
+const compiledRequest = (result: unknown, provingBlock: number): Strk20HeldProofRequest => {
+  const invocation = isRecord(result) ? result["invocation"] : undefined;
+  if (!isRecord(invocation)) throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  return { invocation, provingBlock };
+};
+
+// The SDK's executeWithInvocation input for a request compiled earlier. Its
+// registry and warnings are passed back unread; no wallet code uses them.
+const provable = (result: unknown, request: Strk20HeldProofRequest): unknown => ({
+  ...(isRecord(result) ? result : { registry: null, warnings: [] }),
+  invocation: request.invocation,
+});
+
+const prove = async (
+  input: { readonly transfers: SdkTransfers; readonly waits: Strk20Waits },
+  config: Strk20NetworkConfig,
+  preparation: Strk20PrepareInput,
+  invocation: unknown,
+  block: number,
+): Promise<Strk20CallAndProof> => {
+  const result = await withinStrk20WaitBudget(
+    "proving",
+    input.waits.budgets.proving,
+    () => input.transfers.executeWithInvocation(invocation, block),
+    input.waits.schedule,
+  );
+  assertNoSdkWarnings(result);
+  return readCallAndProof(result, config, preparation.simulate);
+};
+
 const prepareOnce = async (input: {
   readonly beforeProof: () => Promise<void>;
   readonly builder: SdkBuilder;
@@ -110,8 +143,22 @@ const prepareOnce = async (input: {
   readonly transfers: SdkTransfers;
   readonly waits: Strk20Waits;
 }): Promise<Strk20CallAndProof> => {
-  const { onPhase } = input.preparation;
+  const { heldProof, onPhase } = input.preparation;
   const { budgets, schedule } = input.waits;
+  const resumed = await heldProof?.resume();
+  if (resumed) {
+    // A request compiled earlier and signed since: prove it as compiled, at
+    // its own block. Compiling again would draw new random values.
+    if (!input.preparation.simulate) await input.beforeProof();
+    reportStrk20Phase(onPhase, "proving", input.round);
+    return prove(
+      input,
+      input.config,
+      input.preparation,
+      provable(null, resumed),
+      resumed.provingBlock,
+    );
+  }
   const readinessKind =
     input.historicalState ??
     (input.preparation.actions.some((action) => action.type === "deposit")
@@ -152,15 +199,13 @@ const prepareOnce = async (input: {
     schedule,
   );
   assertNoSdkWarnings(invocation);
+  // An account that signs later keeps this request and may stop here; what it
+  // returns carries the complete authorization.
+  const toProve = heldProof
+    ? provable(invocation, await heldProof.hold(compiledRequest(invocation, block)))
+    : invocation;
   reportStrk20Phase(onPhase, "proving", input.round);
-  const result = await withinStrk20WaitBudget(
-    "proving",
-    budgets.proving,
-    () => input.transfers.executeWithInvocation(invocation, block),
-    schedule,
-  );
-  assertNoSdkWarnings(result);
-  return readCallAndProof(result, input.config, input.preparation.simulate);
+  return prove(input, input.config, input.preparation, toProve, block);
 };
 
 /**
