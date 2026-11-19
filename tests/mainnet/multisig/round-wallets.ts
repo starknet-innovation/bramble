@@ -5,7 +5,8 @@
  * own runtime messages, the same boundary the wallet's pages use, so a step
  * fails with the background's refusal rather than with a missing selector.
  */
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { isRecord } from "@bramble/core/json";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Page } from "@playwright/test";
@@ -161,6 +162,11 @@ export const openOwnerWallet = async (input: {
 }): Promise<OwnerWallet> => {
   const profile = ownerProfile(input.directory, input.role);
   await mkdir(profile, { mode: 0o700, recursive: true });
+  // Chromium keeps running the background script it cached when the profile
+  // was made, even after dist/ is rebuilt, so a resumed round would test old
+  // wallet code. Dropping the service-worker cache makes it load the current
+  // build. The wallet's own data is in extension storage, not here.
+  await rm(join(profile, "Default", "Service Worker"), { force: true, recursive: true });
   const extension = await launchExtension({ userDataDir: profile });
   try {
     let page = await extension.openExtensionPage("sidepanel.html");
