@@ -21,8 +21,14 @@ import {
   sweepPublicStrk,
   waitForPrivateStrk,
 } from "./round-actions";
-import { planRound, ROUND_LIMITS } from "./round-budget";
-import { isRegisteredInPool, publicStrk, strkLabel } from "./round-chain";
+import { depositDone, planRound, ROUND_LIMITS, resumeFunding } from "./round-budget";
+import {
+  fundFromAccount,
+  isDeployed,
+  isRegisteredInPool,
+  publicStrk,
+  strkLabel,
+} from "./round-chain";
 import { shareViewingKey } from "./round-cosign";
 import { establishMultisig, roundMultisigAddress } from "./round-multisig";
 import { ownerPhrase } from "./round-owners";
@@ -39,6 +45,23 @@ import { closeOwnerWallets, type OwnerWallet, openOwnerWallet, saveCoOwner } fro
 const RESUME = "Run the command again from this checkout.";
 const KEPT =
   "The round's directory was kept. Run the command again from this checkout to return what is left.";
+
+// Refuses before anything is sent when the funding account cannot bring the
+// multisig at `address` up to `target` and still pay for that transfer.
+const requireFunds = async (
+  startBalance: bigint,
+  target: bigint,
+  address: string,
+  rpcUrl: string,
+): Promise<void> => {
+  const held = await publicStrk(rpcUrl, address);
+  const needed = (target > held ? target - held : 0n) + ROUND_LIMITS.maxTransferFee;
+  if (startBalance < needed) {
+    throw new Error(
+      `The funding account holds ${strkLabel(startBalance)} STRK; this round needs ${strkLabel(needed)}. Nothing was sent.`,
+    );
+  }
+};
 
 const freshSalt = (): string => {
   const salt = canonicalFelt(`0x${randomBytes(31).toString("hex")}`);
@@ -93,34 +116,51 @@ test("an Argent multisig uses private balances and returns its funds", async () 
     if (record.multisigAddress !== undefined && record.multisigAddress !== address) {
       throw new Error("The kept round names a different multisig than these owners derive.");
     }
-    // A kept round resumes where it stopped: funded, deployed, or registered.
-    // Only what its address still lacks has to come from the funding account.
-    const held = await publicStrk(rpcUrl, address);
-    const needed = (plan.funding > held ? plan.funding - held : 0n) + ROUND_LIMITS.maxTransferFee;
-    if (startBalance < needed) {
-      throw new Error(
-        `The funding account holds ${strkLabel(startBalance)} STRK; this round needs ${strkLabel(needed)}. Nothing was sent.`,
-      );
-    }
+    // A kept round resumes where it stopped. A multisig an earlier run
+    // deployed is listed first with nothing sent, then funded for what it has
+    // left to do; an undeployed address is funded for the whole round.
+    const deployedBefore = await isDeployed(rpcUrl, address);
+    if (!deployedBefore) await requireFunds(startBalance, plan.funding, address, rpcUrl);
     record = { ...record, multisigAddress: address };
     await writeRound(ROUND_DIRECTORY, record);
 
     const round = await test.step("Fund and deploy the multisig", () =>
-      establishMultisig({ a, account, address, b, funding: plan.funding, salt: record.salt }));
+      establishMultisig({
+        a,
+        account,
+        address,
+        b,
+        funding: deployedBefore ? 0n : plan.funding,
+        salt: record.salt,
+      }));
     context = round;
     const { multisigId } = round;
 
     await test.step("Share the viewing key with the co-owner", () =>
       shareViewingKey(a, b, multisigId));
 
+    const registered = await isRegisteredInPool(rpcUrl, address);
+    const progress = {
+      privateBalance: registered ? await settledPrivateStrk(a, multisigId) : 0n,
+      registered,
+    };
+    if (deployedBefore) {
+      const target = resumeFunding(plan, progress);
+      await requireFunds(startBalance, target, address, rpcUrl);
+      const held = await publicStrk(rpcUrl, address);
+      if (held < target) await fundFromAccount(account, address, target - held);
+    }
+
     await test.step("Register the multisig with the pool", async () => {
       // A kept round that registered already paid the pool for it.
-      if (await isRegisteredInPool(rpcUrl, address)) return;
+      if (registered) return;
       await sendAccountAction(round, { kind: "register" });
       expect(await isRegisteredInPool(rpcUrl, address)).toBe(true);
     });
 
     const deposited = await test.step("Deposit STRK", async () => {
+      // A kept round whose deposit is in carries on from its private balance.
+      if (depositDone(plan, progress)) return progress.privateBalance;
       const publicBefore = await publicStrk(rpcUrl, address);
       await sendAccountAction(round, { amount: plan.deposit, kind: "deposit" });
       expect(await publicStrk(rpcUrl, address)).toBeLessThanOrEqual(publicBefore - plan.deposit);

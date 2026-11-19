@@ -89,22 +89,46 @@ export const planRound = (poolFee: bigint): RoundPlan => {
 
 /**
  * How much of `privateBalance` a withdrawal may name while leaving enough for
- * its own pool fee and relay fee. `observedActionCost` is what the self-transfer
- * cost; half as much again is kept for a fee that moved. Without an
- * observation the fixed reserve is used. Null means there is nothing worth
- * withdrawing.
+ * its own pool fee and relay fee. That reserve is the pool fee plus the relay
+ * fee cap, or `observedActionCost` (what the self-transfer cost) when that is
+ * larger. Null means there is nothing worth withdrawing.
  */
 export const withdrawableAmount = (
   privateBalance: bigint,
   poolFee: bigint,
   observedActionCost: bigint | null,
 ): bigint | null => {
+  const fixed = poolFee + ROUND_LIMITS.relayReserve;
   const reserve =
-    observedActionCost !== null && observedActionCost > 0n
-      ? (observedActionCost * 3n) / 2n
-      : poolFee + ROUND_LIMITS.relayReserve;
+    observedActionCost !== null && observedActionCost > fixed ? observedActionCost : fixed;
   const amount = privateBalance - reserve;
   return amount > 0n ? amount : null;
+};
+
+/** How far an earlier run of a kept round got. */
+export type RoundProgress = {
+  /** The multisig's private STRK, as its viewing key reads it. */
+  readonly privateBalance: bigint;
+  readonly registered: boolean;
+};
+
+/**
+ * True when a kept multisig already holds a deposit's worth privately, so the
+ * round goes straight to the relayed actions.
+ */
+export const depositDone = (plan: RoundPlan, progress: RoundProgress): boolean =>
+  progress.registered && progress.privateBalance >= plan.deposit - plan.poolFee;
+
+/**
+ * Public STRK a deployed multisig must hold for the steps it has left. Nothing
+ * once its deposit is in: relayed actions pay from the private balance. The
+ * deposit, its pool fee and one proof-carrying fee, plus the sweep's, when it
+ * is registered. The whole funding otherwise.
+ */
+export const resumeFunding = (plan: RoundPlan, progress: RoundProgress): bigint => {
+  if (depositDone(plan, progress)) return 0n;
+  if (!progress.registered) return plan.funding;
+  return plan.deposit + plan.poolFee + ROUND_LIMITS.maxProofTxFee + ROUND_LIMITS.maxTransferFee;
 };
 
 /**

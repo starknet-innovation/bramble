@@ -8,9 +8,11 @@ import { validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { MAX_PROTOCOL_FEE_RAW } from "../strk20-pool-fee";
 import {
+  depositDone,
   feeRefusal,
   planRound,
   ROUND_LIMITS,
+  resumeFunding,
   sweepableAmount,
   withdrawableAmount,
 } from "./round-budget";
@@ -66,8 +68,16 @@ describe("fee refusal", () => {
 });
 
 describe("withdrawable amount", () => {
-  test("keeps one and a half times the observed action cost", () => {
-    expect(withdrawableAmount(10n * STRK, STRK, 2n * STRK)).toBe(7n * STRK);
+  test("keeps the observed action cost when it is above the fixed reserve", () => {
+    expect(withdrawableAmount(10n * STRK, STRK, 3n * STRK)).toBe(7n * STRK);
+  });
+
+  test("keeps the pool fee and relay cap when the observed cost is below them", () => {
+    // A 4.5 STRK pool fee and a 0.3 STRK relay fee: 5.6 STRK left after the
+    // transfer still withdraws 0.1, where a 1.5x margin would withdraw nothing.
+    const poolFee = 45n * (STRK / 10n);
+    const left = 56n * (STRK / 10n);
+    expect(withdrawableAmount(left, poolFee, 48n * (STRK / 10n))).toBe(STRK / 10n);
   });
 
   test("keeps the pool fee and the relay reserve when nothing was observed", () => {
@@ -79,6 +89,31 @@ describe("withdrawable amount", () => {
   test("is null when the balance cannot pay for its own withdrawal", () => {
     expect(withdrawableAmount(STRK, STRK, null)).toBeNull();
     expect(withdrawableAmount(0n, STRK, 2n * STRK)).toBeNull();
+  });
+});
+
+describe("resuming a kept round", () => {
+  const plan = planRound(45n * (STRK / 10n));
+
+  test("needs no funding once the deposit is in", () => {
+    const progress = { privateBalance: plan.deposit, registered: true };
+    expect(depositDone(plan, progress)).toBe(true);
+    expect(resumeFunding(plan, progress)).toBe(0n);
+  });
+
+  test("funds only the deposit and its fees once registered", () => {
+    const progress = { privateBalance: 0n, registered: true };
+    expect(depositDone(plan, progress)).toBe(false);
+    expect(resumeFunding(plan, progress)).toBe(
+      plan.deposit + plan.poolFee + ROUND_LIMITS.maxProofTxFee + ROUND_LIMITS.maxTransferFee,
+    );
+    expect(resumeFunding(plan, progress)).toBeLessThan(plan.funding);
+  });
+
+  test("funds the whole round when not registered, whatever the balance reads", () => {
+    expect(resumeFunding(plan, { privateBalance: plan.deposit, registered: false })).toBe(
+      plan.funding,
+    );
   });
 });
 

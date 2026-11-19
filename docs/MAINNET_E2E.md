@@ -225,10 +225,11 @@ git-ignored and is removed when a round finishes.
 - A round that fails after deployment returns the funds at once and says what
   it moved: the private balance through a withdrawal, then the public STRK.
 - If the multisig was already registered with the pool, the directory stays,
-  and the next run resumes that multisig: it tops the address up, skips the
-  registration the pool already has (checked with `get_public_key`), and
-  carries on from the deposit. That saves the pool fee a new registration
-  would cost.
+  and the next run resumes that multisig. It skips the registration the pool
+  already has (checked with `get_public_key`) and, when the private balance
+  already holds the deposit, the deposit too. It then sends only what the
+  remaining steps need: nothing once the deposit is in, since the transfer
+  and withdrawal pay their fees from the private balance.
 - Otherwise the directory is removed and the next run starts a fresh round.
   What stays in the old multisig is a fee margin, about 0.2 STRK.
 - If returning the funds fails too, the directory stays, and the next run
