@@ -342,3 +342,22 @@ export const createWalletReader = (
     },
   };
 };
+
+/**
+ * Lazily loads the public account inventory used for gateway account
+ * attribution (`requestAccountAnalytics`). Reads the unlocked vault only when
+ * called, so a request that names no candidate account never waits on it.
+ * Returns null when locked, when the service is unavailable, or when the
+ * session changed during the read; only account refs and provenance leave.
+ */
+export const analyticsInventoryLoader =
+  (service: Promise<WalletVaultService | null>, peekPassphrase: () => string | null) =>
+  async (): Promise<{
+    readonly accounts: Vault["accounts"];
+    readonly provenance: NonNullable<Vault["accountProvenance"]>;
+  } | null> => {
+    const passphrase = peekPassphrase();
+    const vault = passphrase ? await (await service)?.readVault(passphrase) : undefined;
+    if (!vault || peekPassphrase() !== passphrase) return null;
+    return { accounts: vault.accounts, provenance: vault.accountProvenance ?? {} };
+  };

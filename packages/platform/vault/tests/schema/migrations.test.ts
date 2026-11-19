@@ -10,7 +10,7 @@ import {
   isVaultV7,
   isVaultV8,
   isVaultV9,
-  isVaultV13,
+  isVaultV14,
   type Vault,
 } from "@bramble/vault/schema";
 import { deploymentClasses } from "@bramble/wallet-model/account-families";
@@ -107,7 +107,7 @@ describe("migrateVault", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV13(migrated)).toBe(true);
+    expect(isVaultV14(migrated)).toBe(true);
     expect(migrated).toEqual({
       ...legacyVault,
       accounts: legacyVault.accounts.map((account) => ({
@@ -139,7 +139,7 @@ describe("migrateVault", () => {
       currentVault,
     ]) {
       const migrated = migrateVault(source);
-      expect(isVaultV13(migrated)).toBe(true);
+      expect(isVaultV14(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
   });
@@ -163,7 +163,7 @@ describe("migrateVault", () => {
       signingKeys: [{ accountId: aliasedId, privateKey: "0x0456" }],
     });
 
-    expect(isVaultV13(migrated)).toBe(true);
+    expect(isVaultV14(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({
       accountContractType: "openzeppelin",
       address: "0x123",
@@ -193,20 +193,20 @@ describe("migrateVault", () => {
     });
 
     expect(isVaultV6({ ...legacyV6, accounts: [argent] })).toBe(true);
-    expect(isVaultV13(migrated)).toBe(true);
+    expect(isVaultV14(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({ deploymentSalt: argent.publicKeyX });
 
     // The adjacent v7→v8 step retains the founding phrase and every account,
     // adding only the empty imported-seeds collection; v8→v9 then re-stamps.
     const fromV7 = migrateVault(legacyV7);
     expect(isVaultV7(legacyV7)).toBe(true);
-    expect(isVaultV13(fromV7)).toBe(true);
+    expect(isVaultV14(fromV7)).toBe(true);
     expect(fromV7).toEqual({
       ...legacyV7,
       importedSeeds: [],
       multisigStrk20KeyConflicts: [],
       multisigStrk20ViewingKeys: [],
-      schemaVersion: 13,
+      schemaVersion: 14,
       shadowAccountScopes: [],
     });
   });
@@ -266,7 +266,7 @@ describe("migrateVault", () => {
       ...bramble,
       multisigStrk20KeyConflicts: [],
       multisigStrk20ViewingKeys: [],
-      schemaVersion: 13,
+      schemaVersion: 14,
       shadowAccountScopes: [],
     });
     expect(isVaultV9({ ...bramble, schemaVersion: 9 })).toBe(true);
