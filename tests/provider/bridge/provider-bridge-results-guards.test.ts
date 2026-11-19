@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Json } from "@bramble/core/json";
 import { providerInvokeCalls } from "@bramble/wallet-protocol/invoke";
+import { INVOKE_LIMITS } from "@bramble/wallet-protocol/invoke-limits";
 import { readApiVersionParam } from "@bramble/wallet-protocol/results";
 import { readTypedDataParam } from "@bramble/wallet-protocol/typed-data-params";
 
@@ -74,7 +75,9 @@ describe("providerInvokeCalls calldata arms", () => {
   test("rejects call-count and calldata fan-out above the shared limits", () => {
     const call = { calldata: [], contractAddress: "0x1", entrypoint: "t" };
     expect(
-      providerInvokeCalls(asJson({ calls: Array.from({ length: 17 }, () => call) })),
+      providerInvokeCalls(
+        asJson({ calls: Array.from({ length: INVOKE_LIMITS.calls + 1 }, () => call) }),
+      ),
     ).toBeNull();
     expect(
       providerInvokeCalls(
