@@ -15,14 +15,22 @@ const strk = (amount: string): bigint => parseTokenAmount(amount, STRK_TOKEN_DEC
  * round before the step that would have spent it.
  */
 export const ROUND_LIMITS = {
-  /** Network fee the multisig keeps for deploy, register, deposit and the sweep. */
-  gasReserve: strk("3"),
+  /**
+   * Network fee the multisig keeps for deploy, register, deposit and the sweep.
+   * An account must hold a transaction's maximum fee to submit it, so this
+   * covers two proof-carrying transactions at their ceiling, plus the deploy
+   * and the sweep. What is not spent is swept back.
+   */
+  gasReserve: strk("15"),
   /** Most the funding account ever sends to the multisig in one round. */
-  maxFunding: strk("30"),
+  maxFunding: strk("40"),
   /** Displayed fee ceiling for the multisig deployment. */
   maxDeployFee: strk("1"),
-  /** Fee ceiling for a transaction that carries a proof (register, deposit). */
-  maxProofTxFee: strk("3"),
+  /**
+   * Fee ceiling for a transaction that carries a proof (register, deposit). A
+   * mainnet registration was quoted at most 5.4 STRK on 2026-11-19.
+   */
+  maxProofTxFee: strk("7"),
   /** Fee ceiling for an ordinary transfer: the funding transfer and the sweep. */
   maxTransferFee: strk("0.5"),
   /** Private balance set aside for one relayed action's relay fee. */

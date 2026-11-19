@@ -199,19 +199,22 @@ anything is sent. A fee above 5 STRK stops the round.
 
 | Amount | Size |
 | --- | --- |
-| Funding sent to the multisig | `4p + 5.1` STRK, never above 30 |
+| Funding sent to the multisig | `4p + 17.1` STRK, never above 40 |
 | Deposit | `2p + 2.1` STRK |
 | Private self-transfer | 0.1 STRK, which stays in the multisig |
 
-The sncast account must hold the funding plus 0.5 STRK. What does not come
-back is four pool fees (register, deposit, transfer, withdraw), two relay
-fees, the network fees, and a private remainder smaller than one relayed
-action's cost, which is not worth withdrawing. The round prints its cost and
-what it left behind. These figures have not been measured on mainnet yet.
+The sncast account must hold the funding plus 0.5 STRK; at a 4.5 STRK pool
+fee that is 35.6 STRK. Most of it is a 15 STRK gas reserve: an account must
+hold a transaction's maximum fee to submit it, and registration and deposit
+each carry a proof (a registration was quoted at most 5.4 STRK). What the
+reserve does not spend is swept back. What does not come back is four pool
+fees (register, deposit, transfer, withdraw), two relay fees, the network
+fees, and a private remainder smaller than one relayed action's cost, which
+is not worth withdrawing. The round prints its cost and what it left behind.
 
 Ceilings, fixed in `tests/mainnet/multisig/round-budget.ts`: 1 STRK for the
-deployment fee, 3 STRK for a transaction carrying a proof, 0.5 STRK for a
-transfer. A fee above its ceiling stops the round before it is sent.
+deployment fee, 7 STRK for a transaction carrying a proof, 0.5 STRK for a
+transfer. A refusal names the quoted figure. A fee above its ceiling stops the round before it is sent.
 
 ## If a round stops early
 
