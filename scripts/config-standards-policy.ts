@@ -178,6 +178,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e:ledger": "bun run tests/e2e/ledger/run-speculos.ts",
   "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
   "test:e2e:mainnet:setup": "bun run scripts/mainnet-e2e-setup.ts",
+  "test:e2e:mainnet:multisig": "bun run scripts/mainnet-wallet-e2e.ts multisig",
   "test:e2e:mainnet:wallet": "bun run scripts/mainnet-wallet-e2e.ts",
   "test:mainnet": "bun run scripts/gasless-mainnet-e2e.ts",
   "vendor:argent": "bun run scripts/vendor-argent-contracts.ts",

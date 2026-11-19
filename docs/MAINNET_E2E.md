@@ -137,3 +137,104 @@ move funds even when the rest of the flow stops. Add it only with its own cap
 and a token you can afford to sell.
 
 The STRK20 privacy lifecycle stays on `bun run test:e2e:mainnet`.
+
+# Multisig privacy round
+
+`bun run test:e2e:mainnet:multisig` runs STRK20 private balances on an Argent
+multisig against mainnet, with real STRK. It needs the same funded sncast
+account, the same three variables and the same build as the wallet suite above,
+and nothing else. It is local-only and is not part of `bun run check` or CI.
+
+```shell
+bun run build
+export BRAMBLE_MAINNET_E2E_ACK=I_UNDERSTAND_THIS_WRITES_TO_MAINNET
+export BRAMBLE_MAINNET_E2E_RPC_URL=https://your-dedicated-mainnet-rpc
+export BRAMBLE_MAINNET_SNCAST_ACCOUNT=bramble
+bun run test:e2e:mainnet:multisig
+```
+
+## What one round does
+
+1. Opens two wallets on two browser profiles. Their recovery phrases are
+   computed from the sncast key, so the sncast account is the only secret.
+2. Each wallet saves the other as a co-signer. Together they own a new 2-of-2
+   Argent multisig.
+3. The sncast account sends STRK to the multisig address. This is the only
+   transfer the sncast key signs, and it never enters a browser.
+4. Owner A deploys the multisig. Owner B adds it from the chain.
+5. Owner A creates the viewing key and shares it. Owner B receives it.
+6. The multisig registers with the pool, then deposits.
+7. It transfers privately to itself, then withdraws to the sncast account.
+   Both go through the private relay.
+8. It sweeps its remaining public STRK to the sncast account.
+
+Every signature is collected the way two people would: one wallet shares over
+Nostr, the other syncs, reviews and signs. The test copies nothing between the
+wallets. It drives them through the background's runtime messages, not by
+clicking, so it does not cover the multisig screens.
+
+## What it checks
+
+- Each transaction has a successful receipt.
+- The deposit leaves the public balance and appears in the private balance.
+- Owner B reads the same private balance as owner A, with the key it was sent.
+- The withdrawal and the sweep arrive at the sncast account, to the FRI.
+- The multisig ends with no more public STRK than a sweep's fee margin.
+- The sncast account ends no more than the funded amount below its start.
+
+## What it costs
+
+Sizes follow the pool's own fee `p`, read from `get_fee_amount` before
+anything is sent. A fee above 5 STRK stops the round.
+
+| Amount | Size |
+| --- | --- |
+| Funding sent to the multisig | `4p + 5.1` STRK, never above 30 |
+| Deposit | `2p + 2.1` STRK |
+| Private self-transfer | 0.1 STRK, which stays in the multisig |
+
+The sncast account must hold the funding plus 0.5 STRK. What does not come
+back is four pool fees (register, deposit, transfer, withdraw), two relay
+fees, the network fees, and a private remainder smaller than one relayed
+action's cost, which is not worth withdrawing. The round prints its cost and
+what it left behind. These figures have not been measured on mainnet yet.
+
+Ceilings, fixed in `tests/mainnet/multisig/round-budget.ts`: 1 STRK for the
+deployment fee, 3 STRK for a transaction carrying a proof, 0.5 STRK for a
+transfer. A fee above its ceiling stops the round before it is sent.
+
+## If a round stops early
+
+The round keeps `.mainnet-multisig-e2e/` in the checkout: the two profiles and
+`round.json`, which names the multisig and holds no key. The directory is
+git-ignored and is removed when a round finishes.
+
+- A round that fails after deployment tries to return the funds at once and
+  says what it moved.
+- Run the command again from the same checkout. A run that finds a deployed
+  multisig only returns what it holds, then asks you to run once more.
+- Do not delete `.mainnet-multisig-e2e/` while a round is unfinished. The two
+  profiles hold the only copies of the multisig's viewing key. Without it the
+  private balance cannot be read or withdrawn. Public STRK can still be
+  recovered, because the owners are computed from the sncast key.
+- The profiles are bound to the checkout path. A different worktree sees an
+  empty wallet in the same directory.
+
+The profiles are protected by the test suite's published vault passphrase, so
+treat the directory like the sncast accounts file: anyone who can read it can
+sign for the multisig.
+
+## Options
+
+| Variable | Meaning |
+| --- | --- |
+| `BRAMBLE_MAINNET_MULTISIG_NOSTR_RELAY` | One `wss://` relay both wallets use instead of the wallet's defaults |
+
+## Not covered
+
+- The multisig screens. `tests/e2e/multisig-round-wallets.e2e.ts` runs the
+  two-wallet setup offline in CI so the driver does not rot.
+- The broadcast firewall from the wallet suite. This round's wallets hold no
+  funded key of their own; they sign only for the multisig.
+- Tokens other than STRK, thresholds other than 2-of-2, and a proof that
+  expires while co-owners sign.
