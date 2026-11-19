@@ -118,6 +118,13 @@ const answer = async (locator: Locator, search: () => Promise<void>): Promise<st
 /** A launched profile holding S-BRM, switched to Sepolia, with helpers for each import path. */
 export type Session = {
   readonly close: () => Promise<void>;
+  /** The side panel, on Sepolia. Navigated by every other helper, so re-read its state after one. */
+  readonly panel: Page;
+  /**
+   * On a scan page, ticks the rows at `addresses` and imports them. Returns
+   * the addresses whose row was missing or not selectable, which stay unimported.
+   */
+  readonly importRows: (page: Page, addresses: readonly string[]) => Promise<string[]>;
   /** P2 (a foreign phrase) or P3 (`null`: this wallet's own phrase); the page stays on the scan. */
   readonly scan: (mnemonic: string | null) => Promise<{ page: Page; status: string; rows: Row[] }>;
   /** P4 on a scan page: paste `address`, return the finder's answer and the rows after it. */
@@ -309,6 +316,36 @@ export async function openSession(
     return { message: await text(toast) };
   };
 
+  const importRows: Session["importRows"] = async (page, addresses) => {
+    const same = (a: string, b: string): boolean => a !== "" && BigInt(a) === BigInt(b);
+    const rows = await scanRows(page);
+    const missed: string[] = [];
+    for (const address of addresses) {
+      const row = rows.find((r) => same(r.address, address));
+      if (!row?.selectable) {
+        missed.push(address);
+        continue;
+      }
+      const check = page
+        .locator("li.allowance-row")
+        .filter({ has: page.locator(`code[title="${row.address}"]`) })
+        .locator("input.select-check");
+      if (!(await check.isChecked())) await check.check();
+    }
+    await page.locator("#recover-accounts-button").click();
+    const wanted = addresses.filter((a) => !missed.includes(a));
+    await expect
+      .poll(
+        async () => {
+          const held = await accountsOf(panel);
+          return wanted.every((a) => held.some((h) => same(h, a)));
+        },
+        { timeout: STEP_TIMEOUT_MS },
+      )
+      .toBe(true);
+    return missed;
+  };
+
   const phraseEntry: Session["phraseEntry"] = async (phrase) => {
     const page = await open(["import", "import-phrase"]);
     await fillSecret(page.locator('input[name="import-word-0"]'), phrase, "recovery phrase");
@@ -350,6 +387,8 @@ export async function openSession(
 
   return {
     close: () => loaded.close(),
+    panel,
+    importRows,
     ledger,
     scan,
     paste,
