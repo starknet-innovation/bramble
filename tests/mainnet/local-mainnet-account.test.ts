@@ -97,7 +97,7 @@ describe("local mainnet account loader", () => {
     const denied = await load({ ...optedIn(), BRAMBLE_MAINNET_E2E_ACK: "no" });
     expect(denied).toEqual({
       kind: "error",
-      message: `Set BRAMBLE_MAINNET_E2E_ACK=${ACK} to permit mainnet writes`,
+      message: `BRAMBLE_MAINNET_E2E_ACK is set to something else. Unset it, or set it to ${ACK}`,
     });
     expect(JSON.stringify(denied)).not.toContain(KEY);
     const shared = await load({
@@ -112,6 +112,23 @@ describe("local mainnet account loader", () => {
     expect(localOnlyMessage("local mainnet wallet suite")).toBe(
       "The local mainnet wallet suite is local-only",
     );
+  });
+
+  test("needs only the account: the acknowledgement and the Foundation RPC are defaults", async () => {
+    const foundation = "https://mainnet.nodes.starknet.org/rpc/v0_10";
+    const named = { BRAMBLE_MAINNET_SNFOUNDRY: "/tmp/snfoundry.toml" };
+    const loaded = await load(named, readyProbe());
+    expect(loaded.kind).toBe("ready");
+    if (loaded.kind !== "ready") return;
+    expect(loaded.account.address).toBe(ADDRESS);
+    expect(loaded.account.rpcUrl).toBe(foundation);
+    // Naming the default is the same as leaving it out; an empty value too.
+    for (const value of [foundation, ""]) {
+      const again = await load({ ...named, BRAMBLE_MAINNET_E2E_RPC_URL: value }, readyProbe());
+      expect(again.kind === "ready" && again.account.rpcUrl).toBe(foundation);
+    }
+    // The defaults do not loosen CI.
+    expect((await load({ ...named, CI: "true" }, readyProbe())).kind).toBe("error");
   });
 
   test("does not echo an RPC query secret when the URL is rejected", async () => {

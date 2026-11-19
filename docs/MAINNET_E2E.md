@@ -11,10 +11,17 @@ are separate. This suite covers the wallet UI.
 ## Safety
 
 - Refuses to start when `CI` is set.
-- Requires `BRAMBLE_MAINNET_E2E_ACK=I_UNDERSTAND_THIS_WRITES_TO_MAINNET`.
-- Requires `BRAMBLE_MAINNET_E2E_RPC_URL`, HTTPS, and not the shared wallet or
-  Foundation RPC (`wallet.nodes.starknet.org`, `mainnet.nodes.starknet.org`).
-  The extension is pointed at that same URL before it reads balances or sends.
+- Naming the account is the opt-in. Once `BRAMBLE_MAINNET_SNCAST_ACCOUNT` (or
+  a direct address and key) is set, the suite may write to mainnet from that
+  shell. Unset it when you are done.
+- `BRAMBLE_MAINNET_E2E_ACK` is optional. If it is set, it must be
+  `I_UNDERSTAND_THIS_WRITES_TO_MAINNET`; any other value stops the run.
+- The RPC defaults to the Foundation's public endpoint,
+  `https://mainnet.nodes.starknet.org/rpc/v0_10`. It is shared and rate
+  limited, so a run can fail there for reasons that are not the wallet's.
+  `BRAMBLE_MAINNET_E2E_RPC_URL` replaces it with your own HTTPS endpoint;
+  `wallet.nodes.starknet.org` is refused. The extension is pointed at the
+  chosen URL before it reads balances or sends.
 - The RPC must answer mainnet's chain id. A URL that does not is not used.
 - The account must already be deployed as OpenZeppelin class
   `0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381`
@@ -84,17 +91,15 @@ another capped fee token) is optional and only unlocks the gasless spec.
 
 ```shell
 bun run build
-export BRAMBLE_MAINNET_E2E_ACK=I_UNDERSTAND_THIS_WRITES_TO_MAINNET
-export BRAMBLE_MAINNET_E2E_RPC_URL=https://your-dedicated-mainnet-rpc
 export BRAMBLE_MAINNET_SNCAST_ACCOUNT=bramble
 bun run test:e2e:mainnet:wallet
 ```
 
 | Variable | Meaning |
 | --- | --- |
-| `BRAMBLE_MAINNET_E2E_ACK` | Must be `I_UNDERSTAND_THIS_WRITES_TO_MAINNET` |
-| `BRAMBLE_MAINNET_E2E_RPC_URL` | Dedicated HTTPS mainnet RPC. Required. |
-| `BRAMBLE_MAINNET_SNCAST_ACCOUNT` | Account name in the sncast file |
+| `BRAMBLE_MAINNET_SNCAST_ACCOUNT` | Account name in the sncast file. Setting it permits mainnet writes |
+| `BRAMBLE_MAINNET_E2E_RPC_URL` | Your own HTTPS mainnet RPC. Default: the Foundation's public endpoint |
+| `BRAMBLE_MAINNET_E2E_ACK` | Optional. If set, must be `I_UNDERSTAND_THIS_WRITES_TO_MAINNET` |
 | `BRAMBLE_MAINNET_SNCAST_ACCOUNTS_FILE` | Accounts file. Default is sncast's, or `accounts-file` from the profile |
 | `BRAMBLE_MAINNET_SNCAST_PROFILE` | `[sncast.<profile>]` in `snfoundry.toml` |
 | `BRAMBLE_MAINNET_SNFOUNDRY` | Path to `snfoundry.toml`. Otherwise the loader walks up from the current directory |
@@ -102,7 +107,7 @@ bun run test:e2e:mainnet:wallet
 
 A direct address and key take precedence over the accounts file, same as
 `bun run test:mainnet`. The URL in `snfoundry.toml` is not used as the RPC.
-Set `BRAMBLE_MAINNET_E2E_RPC_URL` even when the profile already has one.
+Set `BRAMBLE_MAINNET_E2E_RPC_URL` to use the profile's endpoint.
 
 `bun run test:e2e:install` once per machine, for Chromium.
 
@@ -142,16 +147,17 @@ The STRK20 privacy lifecycle stays on `bun run test:e2e:mainnet`.
 
 `bun run test:e2e:mainnet:multisig` runs STRK20 private balances on an Argent
 multisig against mainnet, with real STRK. It needs the same funded sncast
-account, the same three variables and the same build as the wallet suite above,
-and nothing else. It is local-only and is not part of `bun run check` or CI.
+account, the same variables and the same build as the wallet suite above, and
+nothing else. It is local-only and is not part of `bun run check` or CI.
 
 ```shell
 bun run build
-export BRAMBLE_MAINNET_E2E_ACK=I_UNDERSTAND_THIS_WRITES_TO_MAINNET
-export BRAMBLE_MAINNET_E2E_RPC_URL=https://your-dedicated-mainnet-rpc
 export BRAMBLE_MAINNET_SNCAST_ACCOUNT=bramble
 bun run test:e2e:mainnet:multisig
 ```
+
+A round makes far more RPC calls than the wallet suite and polls for minutes.
+If the shared default rate-limits it, set `BRAMBLE_MAINNET_E2E_RPC_URL`.
 
 ## What one round does
 
