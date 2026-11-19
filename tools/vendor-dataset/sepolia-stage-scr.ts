@@ -39,6 +39,7 @@ import {
   STRK,
   selfDeploy,
   topUp,
+  upgradeTo,
   viewFelt,
 } from "./sepolia-fixtures";
 import { sepoliaSecret, sepoliaVar } from "./sepolia-seeds";
@@ -117,18 +118,6 @@ function scripted(
 const ta15 = ready(5);
 const TA15_SALT = "0x15a175";
 const ta15Calldata = ["0x0", ta15.pub, "0x0", "0x0", GUARDIAN.pub];
-
-// TA-17 (0.3.0 → 0.4.0) and TA-62 (0.4.0 → 0.5.0): deployed at one release,
-// then upgraded in place, so the address keeps the older shape.
-const upgradeTo =
-  (cls: string, index: number) =>
-  async (e: ManifestEntry): Promise<Record<string, unknown>> => {
-    const live = await classAt(e.address);
-    if (live && BigInt(live) !== BigInt(cls)) {
-      await invokeSelf(e, new LegacySigner([ready(index)]), "upgrade", [cls, "0x0"]);
-    }
-    return { upgradedTo: cls };
-  };
 
 // TA-20: change_owner takes the new owner's SignerSignature over
 // pedersen-array(selector("change_owner"), chain id, account, old owner guid).
@@ -294,7 +283,7 @@ export const SCR_FIXTURES: readonly SepoliaFixture[] = [
     {
       expected: "address from the 0.3.0 shape; live class 0.4.0",
       detectability: "D2",
-      after: upgradeTo(CLASSES.argent040, 1),
+      after: upgradeTo(CLASSES.argent040, ready(1)),
     },
   ),
   scripted(
@@ -408,7 +397,7 @@ export const SCR_FIXTURES: readonly SepoliaFixture[] = [
     {
       expected: "upgraded to Argent 0.5.0: found at its 0.4.0 address, view only (release)",
       detectability: "D2",
-      after: upgradeTo(CLASSES.argent050, 9),
+      after: upgradeTo(CLASSES.argent050, ready(9)),
     },
   ),
   scripted(

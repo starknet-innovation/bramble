@@ -20,6 +20,7 @@ import {
   tokenBalance,
   transfer,
 } from "./matrix-lib";
+import { type KP, LegacySigner } from "./matrix-signers";
 import { type SepoliaSecret, sepoliaSecret } from "./sepolia-seeds";
 
 if (NETWORK !== "sepolia") throw new Error("set BRAMBLE_DATASET_NETWORK=sepolia");
@@ -105,6 +106,21 @@ export async function invokeSelf(
   entry.log.push(`${entrypoint} ${transaction_hash}`);
   console.log(`   ${entrypoint}: ${short(transaction_hash)}`);
 }
+
+/**
+ * Upgrades an Argent account in place to `cls`, signed by its owner `kp`; a
+ * no-op once the live class is `cls`. The address keeps its older shape
+ * (TA-17 0.3.0 → 0.4.0, TA-62 and TX-06 0.4.0 → 0.5.0).
+ */
+export const upgradeTo =
+  (cls: string, kp: KP) =>
+  async (e: ManifestEntry): Promise<Record<string, unknown>> => {
+    const live = await classAt(e.address);
+    if (live && BigInt(live) !== BigInt(cls)) {
+      await invokeSelf(e, new LegacySigner([kp]), "upgrade", [cls, "0x0"]);
+    }
+    return { upgradedTo: cls };
+  };
 
 /** First felt a no-argument view returns, or 0 when the call fails. */
 export async function viewFelt(address: string, entrypoint: string): Promise<bigint> {
