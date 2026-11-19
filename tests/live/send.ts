@@ -9,6 +9,10 @@ import { expect } from "@playwright/test";
 import { checkDisplayedStrkFee } from "./fee-cap";
 
 const HASH_IDS = ["send-success-hash", "send-pending-hash", "send-failure-hash"] as const;
+// Each step waits on the wallet (a fee estimate, a balance read) over a live
+// node. Explicit, because callers outside the Playwright runner (the Sepolia
+// send run) get expect's 5 s default instead of a config's 30 s.
+const STEP = { timeout: 30_000 } as const;
 
 const chooseToken = async (page: Page, symbol: "ETH" | "STRK"): Promise<void> => {
   const current = (await page.locator("#send-selected-token-symbol").textContent())?.trim();
@@ -17,7 +21,7 @@ const chooseToken = async (page: Page, symbol: "ETH" | "STRK"): Promise<void> =>
   }
   await page.locator("#send-token-trigger").click();
   const option = page.locator(`#send-token-options [data-token-symbol="${symbol}"]`);
-  await expect(option).toBeVisible();
+  await expect(option).toBeVisible(STEP);
   await option.click();
   await expect(page.locator("#send-selected-token-symbol")).toHaveText(symbol);
 };
@@ -111,16 +115,16 @@ export const selfTransfer = async (
 ): Promise<string> => {
   await page.locator('.action-tile[data-view="send"]').click();
   await page.locator("#send-recipient-search").fill(input.recipient);
-  await expect(page.locator("#send-recipient-continue")).toBeEnabled();
+  await expect(page.locator("#send-recipient-continue")).toBeEnabled(STEP);
   await page.locator("#send-recipient-continue").click();
-  await expect(page.locator("#send-details")).toBeVisible();
+  await expect(page.locator("#send-details")).toBeVisible(STEP);
   await chooseToken(page, input.symbol);
   await page.locator("#send-amount-input").fill(input.amount);
-  await expect(page.locator("#send-review-button")).toBeEnabled();
+  await expect(page.locator("#send-review-button")).toBeEnabled(STEP);
   await page.locator("#send-review-button").click();
-  await expect(page.locator("#send-review-stage")).toBeVisible();
+  await expect(page.locator("#send-review-stage")).toBeVisible(STEP);
   assertFeeAcceptable(await reviewFeeText(page), input.maxFeeStrk);
-  await expect(page.locator("#send-confirm-button")).toBeEnabled();
+  await expect(page.locator("#send-confirm-button")).toBeEnabled(STEP);
   await page.locator("#send-confirm-button").click();
   return submittedHash(page);
 };
@@ -224,12 +228,12 @@ export const openStrkReview = async (
 ): Promise<void> => {
   await page.locator('.action-tile[data-view="send"]').click();
   await page.locator("#send-recipient-search").fill(input.recipient);
-  await expect(page.locator("#send-recipient-continue")).toBeEnabled();
+  await expect(page.locator("#send-recipient-continue")).toBeEnabled(STEP);
   await page.locator("#send-recipient-continue").click();
-  await expect(page.locator("#send-details")).toBeVisible();
+  await expect(page.locator("#send-details")).toBeVisible(STEP);
   await chooseToken(page, "STRK");
   await page.locator("#send-amount-input").fill(input.amount);
-  await expect(page.locator("#send-review-button")).toBeEnabled();
+  await expect(page.locator("#send-review-button")).toBeEnabled(STEP);
   await page.locator("#send-review-button").click();
-  await expect(page.locator("#send-review-stage")).toBeVisible();
+  await expect(page.locator("#send-review-stage")).toBeVisible(STEP);
 };
