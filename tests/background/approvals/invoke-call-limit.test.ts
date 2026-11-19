@@ -1,14 +1,16 @@
 /**
- * A dapp invoke has no call-count limit. A batch the side panel can review is
- * parsed and listed in full. A batch whose worst-case card does not fit the
- * review budget is refused with "Request too large to review", not by a count.
- * The generic JSON message budget still rejects an array past its own cap.
+ * A dapp invoke is capped at `INVOKE_LIMITS.calls`, the most minimal calls the
+ * side-panel review budget admits. A batch the panel can review is parsed and
+ * listed in full. A batch within the count whose worst-case card does not fit
+ * is refused with "Request too large to review". Both parsers reject a list
+ * past the count before the worker walks it.
  */
 import { describe, expect, test } from "bun:test";
 import { JSON_BUDGETS } from "@bramble/core/json";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import { providerInvokeRequest } from "@bramble/wallet-protocol/invoke";
+import { INVOKE_LIMITS } from "@bramble/wallet-protocol/invoke-limits";
 import { readProviderParams } from "@bramble/wallet-protocol/request-params";
 import { APPROVAL_TOO_LARGE } from "../../../apps/extension/src/background/approvals/approval-limits";
 import { fitsSidePanel } from "../../../apps/extension/src/background/approvals/approval-review-size";
@@ -83,20 +85,39 @@ describe("dapp invoke review budget", () => {
   const fitting = largestReviewable();
   const oversized = fitting + 1;
 
-  test("parses a batch the review budget accepts and one it refuses", () => {
-    expect(fitting).toBeGreaterThan(1);
+  test("the call cap is the largest minimal batch the review budget admits", () => {
+    expect(fitting).toBe(INVOKE_LIMITS.calls);
     expect(fitsSidePanel(approval(fitting))).toBe(true);
     expect(fitsSidePanel(approval(oversized))).toBe(false);
+  });
 
-    expect(providerInvokeRequest(pageParams(oversized))?.calls).toHaveLength(oversized);
-    expect(
+  test("both parsers accept the cap and refuse one more call", () => {
+    const worker = (count: number) =>
       readAddInvokeTransactionInput({
-        calls: calls(oversized),
+        calls: calls(count),
         origin: ORIGIN,
         type: "wallet.addInvokeTransaction",
-      })?.calls,
-    ).toHaveLength(oversized);
-    expect(readProviderParams("wallet_addInvokeTransaction", pageParams(oversized))).not.toBeNull();
+      });
+    expect(providerInvokeRequest(pageParams(INVOKE_LIMITS.calls))?.calls).toHaveLength(
+      INVOKE_LIMITS.calls,
+    );
+    expect(worker(INVOKE_LIMITS.calls)?.calls).toHaveLength(INVOKE_LIMITS.calls);
+    expect(providerInvokeRequest(pageParams(INVOKE_LIMITS.calls + 1))).toBeNull();
+    expect(worker(INVOKE_LIMITS.calls + 1)).toBeNull();
+  });
+
+  test("a realistic batch under the cap is refused by the review budget, not the count", () => {
+    const full = (index: number) => `0x${index.toString(16).padStart(64, "0")}`;
+    const transfers = (count: number): PendingApproval => ({
+      ...approval(count),
+      callReviews: Array.from({ length: count }, (_, index) => ({
+        calldata: [full(7), "0xde0b6b3a7640000", "0x0"],
+        contractAddress: full(1_000 + index),
+        entrypoint: "transfer",
+      })),
+    });
+    expect(fitsSidePanel(transfers(50))).toBe(true);
+    expect(fitsSidePanel(transfers(INVOKE_LIMITS.calls))).toBe(false);
   });
 
   test("refuses an unreviewable batch at enqueue, not by counting calls", () => {

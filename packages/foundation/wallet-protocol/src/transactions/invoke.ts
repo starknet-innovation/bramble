@@ -91,9 +91,9 @@ export const readProviderInvokeCall = (call: unknown): ProviderInvokeCall | null
 };
 
 /**
- * Parses invoke params in spec or legacy shape. There is no call-count limit.
- * Page input is already bounded by the invoke JSON budget before this runs;
- * an empty list and a malformed call fail closed as `null`. The spec's
+ * Parses invoke params in spec or legacy shape. A list longer than
+ * `INVOKE_LIMITS.calls`, an empty list and a malformed call fail closed as
+ * `null`. The spec's
  * optional `api_version` sits beside the call list, never inside a call; a
  * well-formed one is dropped and a malformed one rejects the request.
  */
@@ -107,7 +107,7 @@ export const providerInvokeRequest = (params: Json | undefined): ProviderInvokeR
     return null;
   }
   const source = params["invoke_transaction"] ?? params["calls"];
-  if (!Array.isArray(source) || source.length === 0) {
+  if (!Array.isArray(source) || source.length === 0 || source.length > INVOKE_LIMITS.calls) {
     return null;
   }
   const calls = source.map(readProviderInvokeCall);
