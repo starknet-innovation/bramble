@@ -1,6 +1,7 @@
 /**
  * Local storage for multisig STRK20 authorizations, held proof requests,
- * proof bytes, and relay requests. Authorizations are re-checked against the shared scalar on read,
+ * proof bytes, and relay requests. Proof bytes are kept under one key each
+ * (see ./proof-bytes); rows carry a marker in their place. Authorizations are re-checked against the shared scalar on read,
  * so a tampered call list cannot be signed. Proof bytes never go into a
  * Nostr package; they live only under this key.
  */
@@ -9,6 +10,13 @@ import { isRecord, type Json } from "@bramble/core/json";
 import type { KeyValueStore } from "@bramble/store/kv";
 import { serializeStoreMutations } from "@bramble/store/mutation";
 import { isMultisigStrk20HeldProof, type MultisigStrk20HeldProof } from "./held-proof";
+import {
+  attachedProof,
+  detachedProof,
+  isDetachedProof,
+  proofBytesKey,
+  referencedProofKeys,
+} from "./proof-bytes";
 import {
   isMultisigStrk20Authorization,
   isMultisigStrk20ProofRecord,
@@ -70,6 +78,7 @@ export type MultisigStrk20Store = {
   ) => Promise<readonly MultisigStrk20Authorization[]>;
   readonly listHeld: (accountId: string) => Promise<readonly MultisigStrk20HeldProof[]>;
   readonly listInvites: (accountId: string) => Promise<readonly MultisigStrk20RelayInvite[]>;
+  /** Relays without their proof bytes; `getRelay` reads one with them. */
   readonly listRelays: (accountId: string) => Promise<readonly MultisigStrk20RelayRequest[]>;
   /** Keeps one compiled request; the oldest of this multisig's makes room. */
   readonly putHeld: (
@@ -152,6 +161,29 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
     if (room < 0) return null;
     return [...droppable.slice(droppable.length - room), ...kept];
   };
+  // Removes the bytes of every key in `candidates` the stored rows no longer
+  // point at: a dropped, evicted, purged, or refused row's proof.
+  const tidy = async (candidates: Iterable<string>): Promise<void> => {
+    const kept = referencedProofKeys(await readShape(store));
+    for (const key of candidates) {
+      if (!kept.has(key)) await store.remove(key);
+    }
+  };
+  // Why `record` may not replace the stored relay, or null when it may. A
+  // record from `listRelays` carries the marker and is compared as stored;
+  // otherwise the stored bytes are read back, and missing bytes compare as
+  // the marker, which conflicts. A marker with nothing stored is invalid.
+  const relayRefusal = async (
+    current: unknown,
+    record: MultisigStrk20RelayRequest,
+  ): Promise<"conflict" | "invalid" | null> => {
+    const detached = isDetachedProof(record);
+    if (!current || !isMultisigStrk20RelayRequest(current)) return detached ? "invalid" : null;
+    const stored = detached
+      ? current
+      : ((await attachedProof(store, "relay", record.id, current)) ?? current);
+    return multisigStrk20RelayConflicts(stored, record) ? "conflict" : null;
+  };
   const commit = async (
     previous: Shape,
     next: Shape,
@@ -178,6 +210,7 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
           ...shape,
           proofs: shape.proofs.filter((row) => !isRecord(row) || row["intentId"] !== intentId),
         });
+        await tidy(referencedProofKeys(shape));
       },
       async getAuthorization(id, scalar) {
         const shape = await readShape(store);
@@ -197,12 +230,16 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
       async getProof(intentId) {
         const shape = await readShape(store);
         const found = shape.proofs.find((row) => isRecord(row) && row["intentId"] === intentId);
-        return found && isMultisigStrk20ProofRecord(found) ? found : null;
+        return found && isMultisigStrk20ProofRecord(found)
+          ? attachedProof(store, "intent", intentId, found)
+          : null;
       },
       async getRelay(id) {
         const shape = await readShape(store);
         const found = shape.relays.find((row) => isRecord(row) && row["id"] === id);
-        return found && isMultisigStrk20RelayRequest(found) ? found : null;
+        return found && isMultisigStrk20RelayRequest(found)
+          ? attachedProof(store, "relay", id, found)
+          : null;
       },
       async listHeld(accountId) {
         const shape = await readShape(store);
@@ -251,12 +288,16 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
       },
       async putProof(record, liveIntentIds = [], isAuthorized = () => true) {
         if (!isAuthorized()) return "unauthorized";
-        if (!isMultisigStrk20ProofRecord(record)) return "invalid";
+        if (!isMultisigStrk20ProofRecord(record) || isDetachedProof(record)) return "invalid";
         const shape = await readShape(store);
-        const next = [...shape.proofs.filter((row) => proofId(row) !== record.intentId), record];
+        const key = proofBytesKey("intent", record.intentId);
+        await store.set(key, record.proof.data);
+        const row = detachedProof(record);
+        const next = [...shape.proofs.filter((entry) => proofId(entry) !== record.intentId), row];
         const proofs = cappedProofs(next, new Set([...liveIntentIds, record.intentId]));
-        if (!proofs) return "full";
-        return commit(shape, { ...shape, proofs }, isAuthorized);
+        const result = proofs ? await commit(shape, { ...shape, proofs }, isAuthorized) : "full";
+        await tidy([...referencedProofKeys(shape), key]);
+        return result;
       },
       async upsertAuthorization(record, scalar, isAuthorized = () => true) {
         if (!isAuthorized()) return "unauthorized";
@@ -304,22 +345,20 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
         if (!isMultisigStrk20RelayRequest(record)) return "invalid";
         const shape = await readShape(store);
         const current = shape.relays.find((row) => isRecord(row) && row["id"] === record.id);
-        if (
-          current &&
-          isMultisigStrk20RelayRequest(current) &&
-          multisigStrk20RelayConflicts(current, record)
-        ) {
-          return "conflict";
-        }
+        const refusal = await relayRefusal(current, record);
+        if (refusal) return refusal;
+        const key = proofBytesKey("relay", record.id);
+        if (!isDetachedProof(record)) await store.set(key, record.proof.data);
         // A collecting or ready relay holds the only copy of its proof.
         const relays = placeMultisigStrk20Row(
           shape.relays,
-          record,
+          detachedProof(record),
           MAX_MULTISIG_STRK20_PROOFS,
           (row) => !isMultisigStrk20RelayRequest(row) || row.state === "submitted",
         );
-        if (!relays) return "full";
-        return commit(shape, { ...shape, relays }, isAuthorized);
+        const result = relays ? await commit(shape, { ...shape, relays }, isAuthorized) : "full";
+        await tidy([...referencedProofKeys(shape), key]);
+        return result;
       },
       async hasLiveRelay(accountId) {
         const shape = await readShape(store);
@@ -349,6 +388,7 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
           relays: shape.relays.filter(keep),
           sharedKeys: shape.sharedKeys.filter((id) => id !== accountId),
         });
+        await tidy(referencedProofKeys(shape));
       },
     },
     [
