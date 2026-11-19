@@ -1,50 +1,35 @@
 /**
- * Cross-layer limits for one dapp-provided Starknet invoke. Provider and
+ * Encoding bounds for one dapp-provided Starknet invoke. Provider and
  * background parsers consume the same values so a payload accepted in the page
  * world cannot expand after crossing into the privileged worker.
  *
- * These bound each field for parsing. They are not a promise that an invoke
- * within all of them can be reviewed: one call may still spend the whole
- * approval budget on calldata, and the approval queue refuses that at enqueue
- * with "Request too large to review" (Sherlock 157). The binding check is
- * `fitsSidePanel` against `REVIEWABLE_APPROVAL_BUDGET` (the provider JSON
- * budget minus 16 KiB and 512 nodes, the headroom a fee review adds after
- * admission). Its worst case charges every call one 300-character summary,
- * seven flag slots, and one review asset, which is what a fully flagged card
- * has to render.
+ * There is no call-count limit. Starknet does not cap how many calls a
+ * multicall contains, and these bounds do not copy the network's calldata or
+ * gas caps. The node enforces those at submission, and a refusal is shown
+ * with the node's own reason. What bounds an untrusted payload here is the
+ * side-panel review budget (`fitsSidePanel`, "Request too large to review",
+ * Sherlock 157) plus the generic JSON message budgets.
  *
- * `calls` is the largest count of minimal calls that still passes that check:
- * one calldata felt, a one-character entrypoint, and a single-digit address.
- * 56 fits and 57 does not. An empty calldata array fits 57, and the same call
- * with a 66-character address fits 55; a longer call is refused by the review
- * budget rather than by this count. The count stays finite so the privileged
- * worker rejects an over-long list before it walks it. The page message's
- * array budget is 4,096 and a runtime message of these minimal calls still
- * fits the provider JSON budget past 2,500, so neither is the limit.
+ * `calldataFelts` is that generic array budget (`JSON_BUDGETS` maxArrayLength,
+ * 4,096) applied to one call's calldata, so a single array cannot exceed the
+ * message cap. It is not Starknet's 5,000-felt transaction calldata limit.
+ * That limit is on the compiled execute payload, the node enforces it when
+ * the transaction is submitted, and this parser does not check it.
  *
- * Nothing in the protocol is tighter. Starknet 0.14.4 caps transaction
- * calldata at 5,000 felts. Cairo 1 execute calldata for this shape is one
- * length felt plus four felts per call (to, selector, calldata length, and the
- * one argument): 225 felts at 56 calls, and 1,249 calls before the cap. Argent
- * Account 0.4, the OpenZeppelin account, and Braavos loop the calls array with
- * no length assert. Fee estimation submits that same calldata in one
- * `starknet_estimateFee`. A Ledger account blind-signs the transaction hash;
- * the calls are reviewed on the card, which lists every summary and every
- * exact call in the scrolling approval panel.
+ * `entrypointCharacters` is an identifier bound. A Starknet selector is a
+ * felt; the protocol does not limit the name's length. The parser accepts a
+ * Cairo-style identifier of at most 64 characters and refuses anything else
+ * before it is hashed.
  *
- * The other per-field bounds stay wider than the 56-call worst case on
- * purpose. A site may spend the budget on one long call or on many short ones,
- * and lowering calldata to what 56 calls leave over would refuse a shorter
- * batch that fits.
+ * `feltCharacters` is the character envelope of one felt before it is parsed:
+ * 66 covers `0x` plus 64 hex digits, and 78 also admits the decimal form
+ * starknet.js accepts. A longer string is not a field element.
  *
- * Frozen Argent multisig intents do not use this count. They keep
- * `ARGENT_MULTISIG_INVOKE_LIMITS` (16 calls, 512 calldata felts, execute
- * calldata 1 + 16 * 3 + 512). That budget is the stored proposal, and raising
- * it means re-deriving the encoding and re-checking the gift wrap.
+ * Frozen Argent multisig intents do not use these bounds. They keep
+ * `ARGENT_MULTISIG_INVOKE_LIMITS`, the stored-proposal budget.
  */
 export const INVOKE_LIMITS = {
   calldataFelts: 4_096,
-  calls: 56,
   entrypointCharacters: 64,
   // 66 chars covers 0x-prefixed hex; 78 also admits the equivalent decimal
   // notation accepted by starknet.js without leaving the bounded envelope.

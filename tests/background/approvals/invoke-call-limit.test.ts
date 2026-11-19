@@ -1,26 +1,21 @@
 /**
- * The dapp invoke call count is the largest minimal batch the side panel can
- * still review. A minimal call is one calldata felt, a one-character
- * entrypoint, and a single-digit address: the worst-case card (one summary and
- * seven flag slots per call) fits `INVOKE_LIMITS.calls` of them and refuses one
- * more. Parsers accept that count and reject the next, and the approval card
- * lists every call.
+ * A dapp invoke has no call-count limit. A batch the side panel can review is
+ * parsed and listed in full. A batch whose worst-case card does not fit the
+ * review budget is refused with "Request too large to review", not by a count.
+ * The generic JSON message budget still rejects an array past its own cap.
  */
 import { describe, expect, test } from "bun:test";
-import { isJsonWithinBudget, JSON_BUDGETS } from "@bramble/core/json";
+import { JSON_BUDGETS } from "@bramble/core/json";
 import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "@bramble/wallet-protocol/extension-responses";
 import { providerInvokeRequest } from "@bramble/wallet-protocol/invoke";
-import { INVOKE_LIMITS } from "@bramble/wallet-protocol/invoke-limits";
 import { readProviderParams } from "@bramble/wallet-protocol/request-params";
-import { transaction } from "starknet";
+import { APPROVAL_TOO_LARGE } from "../../../apps/extension/src/background/approvals/approval-limits";
 import { fitsSidePanel } from "../../../apps/extension/src/background/approvals/approval-review-size";
+import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { readAddInvokeTransactionInput } from "../../../apps/extension/src/background/routing/message-inputs";
 import { readPendingApprovals } from "../../../packages/presentation/wallet-ui/src/popup/responses/approvals-responses";
 import { approvalCard } from "../../../packages/presentation/wallet-ui/src/sidepanel/journeys/approvals/approval-cards";
-
-// Starknet 0.14.4 gateway limit (docs.starknet.io chain-info, max calldata length).
-const SEQUENCER_CALLDATA_FELTS = 5_000;
 
 const ORIGIN = "https://a.co";
 const MINIMAL_CALL = { calldata: ["0x1"], contractAddress: "0x1", entrypoint: "a" } as const;
@@ -68,75 +63,111 @@ const pageParams = (count: number) => ({
   })),
 });
 
-describe("dapp invoke call count", () => {
-  test("accepts a minimal batch at the limit and rejects one more call", () => {
-    const accepted = providerInvokeRequest(pageParams(INVOKE_LIMITS.calls));
-    const rejected = providerInvokeRequest(pageParams(INVOKE_LIMITS.calls + 1));
-    expect(accepted?.calls).toHaveLength(INVOKE_LIMITS.calls);
-    expect(rejected).toBeNull();
+const largestReviewable = (): number => {
+  let low = 1;
+  let high = 128;
+  let best = 0;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (fitsSidePanel(approval(mid))) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return best;
+};
 
+describe("dapp invoke review budget", () => {
+  const fitting = largestReviewable();
+  const oversized = fitting + 1;
+
+  test("parses a batch the review budget accepts and one it refuses", () => {
+    expect(fitting).toBeGreaterThan(1);
+    expect(fitsSidePanel(approval(fitting))).toBe(true);
+    expect(fitsSidePanel(approval(oversized))).toBe(false);
+
+    expect(providerInvokeRequest(pageParams(oversized))?.calls).toHaveLength(oversized);
     expect(
       readAddInvokeTransactionInput({
-        calls: calls(INVOKE_LIMITS.calls),
+        calls: calls(oversized),
         origin: ORIGIN,
         type: "wallet.addInvokeTransaction",
       })?.calls,
-    ).toHaveLength(INVOKE_LIMITS.calls);
-    expect(
-      readAddInvokeTransactionInput({
-        calls: calls(INVOKE_LIMITS.calls + 1),
-        origin: ORIGIN,
-        type: "wallet.addInvokeTransaction",
-      }),
-    ).toBeNull();
+    ).toHaveLength(oversized);
+    expect(readProviderParams("wallet_addInvokeTransaction", pageParams(oversized))).not.toBeNull();
   });
 
-  test("fits the review budget at the limit and not one call past it", () => {
-    expect(fitsSidePanel(approval(INVOKE_LIMITS.calls))).toBe(true);
-    expect(fitsSidePanel(approval(INVOKE_LIMITS.calls + 1))).toBe(false);
-    expect(
-      fitsSidePanel({
-        ...approval(INVOKE_LIMITS.calls),
-        fee: { overallFee: "2500000000000000", unit: "FRI" },
-        feeAffordability: "ok",
-        feeEstimatePending: false,
-      }),
-    ).toBe(true);
+  test("refuses an unreviewable batch at enqueue, not by counting calls", () => {
+    const queue = createApprovalQueue();
+    const context = approval(1).context;
+    if (context === undefined) throw new Error("missing approval context");
+    const input = {
+      calls: calls(oversized),
+      context,
+      fee: {
+        fee: null,
+        feeAffordability: "unknown" as const,
+        feeEstimateFailed: false,
+        feeEstimatePending: true,
+        requiresDeployment: false,
+      },
+      flags: [],
+      origin: ORIGIN,
+      summaries: approval(oversized).summaries ?? [],
+    };
+    expect(() => queue.requestInvoke(input)).toThrow(APPROVAL_TOO_LARGE);
+    expect(queue.list()).toEqual([]);
+    const admitted = queue.requestInvoke({
+      ...input,
+      calls: calls(fitting),
+      summaries: approval(fitting).summaries ?? [],
+    });
+    expect(admitted.callReviews).toHaveLength(fitting);
+    expect(readPendingApprovals({ ok: true, pending: [admitted] })).toEqual([admitted]);
   });
 
-  test("keeps every call on the approval card and inside the message budgets", () => {
-    const atLimit = approval(INVOKE_LIMITS.calls);
-    expect(readPendingApprovals({ ok: true, pending: [atLimit] })).toEqual([atLimit]);
-
-    const html = approvalCard(atLimit, status);
+  test("lists every call of a reviewable batch", () => {
+    const html = approvalCard(approval(fitting), status);
     const exactCalls = html.match(/<strong>Call \d+<\/strong>/g) ?? [];
     const summaries = html.match(/<li class="review-call">/g) ?? [];
-    expect(exactCalls).toHaveLength(INVOKE_LIMITS.calls);
+    expect(exactCalls).toHaveLength(fitting);
     expect(exactCalls[0]).toBe("<strong>Call 1</strong>");
-    expect(exactCalls.at(-1)).toBe(`<strong>Call ${INVOKE_LIMITS.calls}</strong>`);
-    expect(summaries).toHaveLength(INVOKE_LIMITS.calls);
-    expect(html).toContain(`Minimal call ${INVOKE_LIMITS.calls}`);
+    expect(exactCalls.at(-1)).toBe(`<strong>Call ${fitting}</strong>`);
+    expect(summaries).toHaveLength(fitting);
+    expect(html).toContain(`Minimal call ${fitting}`);
+  });
 
-    const normalized = readProviderParams(
-      "wallet_addInvokeTransaction",
-      pageParams(INVOKE_LIMITS.calls),
-    );
-    expect(normalized).not.toBeNull();
-    expect(
-      isJsonWithinBudget(
+  test("still rejects a calldata array past the generic message budget", () => {
+    const tooLong = {
+      calls: [
         {
-          calls: calls(INVOKE_LIMITS.calls),
-          origin: ORIGIN,
-          type: "wallet.addInvokeTransaction",
+          calldata: Array.from(
+            { length: JSON_BUDGETS.strk20Proof.maxArrayLength + 1 },
+            () => "0x1",
+          ),
+          contractAddress: "0x1",
+          entrypoint: "a",
         },
-        JSON_BUDGETS.provider,
-      ),
-    ).toBe(true);
-
-    // Cairo 1 execute calldata: length, then to, selector, calldata length, and
-    // the one argument. Starknet rejects a transaction past 5,000 felts.
-    const compiled = transaction.getExecuteCalldata(calls(INVOKE_LIMITS.calls), "1");
-    expect(compiled).toHaveLength(1 + 4 * INVOKE_LIMITS.calls);
-    expect(compiled.length).toBeLessThanOrEqual(SEQUENCER_CALLDATA_FELTS);
+      ],
+      origin: ORIGIN,
+      type: "wallet.addInvokeTransaction",
+    };
+    expect(readAddInvokeTransactionInput(tooLong)).toBeNull();
+    expect(
+      readProviderParams("wallet_addInvokeTransaction", {
+        calls: [
+          {
+            calldata: Array.from(
+              { length: JSON_BUDGETS.strk20Proof.maxArrayLength + 1 },
+              () => "0x1",
+            ),
+            contract_address: "0x1",
+            entry_point: "a",
+          },
+        ],
+      }),
+    ).toBeNull();
   });
 });

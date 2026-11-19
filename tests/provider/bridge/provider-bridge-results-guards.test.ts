@@ -72,20 +72,18 @@ describe("providerInvokeCalls calldata arms", () => {
     ).toBeNull();
   });
 
-  test("rejects call-count and calldata fan-out above the shared limits", () => {
+  test("accepts a long call list and rejects calldata past the message array budget", () => {
     const call = { calldata: [], contractAddress: "0x1", entrypoint: "t" };
     expect(
-      providerInvokeCalls(
-        asJson({ calls: Array.from({ length: INVOKE_LIMITS.calls + 1 }, () => call) }),
-      ),
-    ).toBeNull();
+      providerInvokeCalls(asJson({ calls: Array.from({ length: 80 }, () => call) })),
+    ).toHaveLength(80);
     expect(
       providerInvokeCalls(
         asJson({
           calls: [
             {
               ...call,
-              calldata: Array.from({ length: 4_097 }, () => "0x1"),
+              calldata: Array.from({ length: INVOKE_LIMITS.calldataFelts + 1 }, () => "0x1"),
             },
           ],
         }),

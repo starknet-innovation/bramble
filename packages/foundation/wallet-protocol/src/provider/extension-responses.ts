@@ -153,6 +153,11 @@ export type PendingApproval = {
   readonly fee?: FeeEstimate | null;
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
+  /**
+   * Invoke only: the node's refusal when estimation failed because the network
+   * said no. Absent when the failure was transport and there is no node sentence.
+   */
+  readonly feeEstimateDetail?: string;
   readonly feeEstimatePending?: boolean;
   /**
    * Invoke only: tokens the user may choose for the network fee when STRK is

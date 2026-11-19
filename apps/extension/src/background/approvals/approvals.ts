@@ -72,6 +72,7 @@ const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): 
     deployFirst: _stale,
     deploymentFee: _deployment,
     deploymentFeeEstimateFailed: _deploymentFailed,
+    feeEstimateDetail: _detail,
     gaslessFees: _previous,
     ...current
   } = approval;

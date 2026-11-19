@@ -56,6 +56,11 @@ export type ReviewFeeState = {
    */
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
+  /**
+   * The node's refusal, already a reader-facing sentence. Present only when
+   * estimation failed because the network said no.
+   */
+  readonly feeEstimateDetail?: string;
   readonly feeEstimatePending?: boolean;
   /**
    * Explicit alternatives when STRK does not cover the fee. The wallet does
@@ -317,14 +322,15 @@ export const reviewFeeSection = (
     );
   }
   if (state.requiresDeployment === true) {
+    const both = state.feeEstimateDetail
+      ? escapeHtml(state.feeEstimateDetail)
+      : "Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.";
     return boundary(
-      `<p class="review-flag" role="alert">Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.</p>${button(
-        {
-          attributes: retryAttributes,
-          label: "Retry fee estimate",
-          variant: "secondary",
-        },
-      )}`,
+      `<p class="review-flag" role="alert">${both}</p>${button({
+        attributes: retryAttributes,
+        label: "Retry fee estimate",
+        variant: "secondary",
+      })}`,
     );
   }
   if (state.fee) {
@@ -334,14 +340,15 @@ export const reviewFeeSection = (
     );
   }
   if (state.feeEstimateFailed === true) {
+    const failed = state.feeEstimateDetail
+      ? escapeHtml(state.feeEstimateDetail)
+      : "Couldn't estimate the network fee right now. Check your connection and retry before sending.";
     return boundary(
-      `<p class="review-flag" role="alert">Couldn't estimate the network fee right now. Check your connection and retry before sending.</p>${button(
-        {
-          attributes: retryAttributes,
-          label: "Retry fee estimate",
-          variant: "secondary",
-        },
-      )}`,
+      `<p class="review-flag" role="alert">${failed}</p>${button({
+        attributes: retryAttributes,
+        label: "Retry fee estimate",
+        variant: "secondary",
+      })}`,
     );
   }
   return "";
