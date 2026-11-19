@@ -17,10 +17,12 @@ import {
   type ManifestEntry,
   offLadderKeypair,
   readyKeypair,
+  tokenBalance,
 } from "./matrix-lib";
 import { BraavosDeploySigner, type KP } from "./matrix-signers";
 import {
   appSeed,
+  deployer,
   norm,
   type SepoliaFixture,
   STRK,
@@ -105,8 +107,18 @@ function sender(
       if (!liveClass) throw new Error(`no class at ${e.address} after deploy`);
       const extra = card.after ? await card.after(e) : {};
       await topUp(e, "STRK", card.float ?? SENDER_FLOAT);
-      if (card.eth) await topUp(e, "ETH", card.eth);
-      return { state: { deployed: true, salt: shape.salt, liveClass, ...extra } };
+      // ETH is optional: the bank may hold none, and the suite skips its ETH
+      // spec on an account without ETH. Recorded, never an error.
+      let eth: string | undefined;
+      if (card.eth) {
+        const held = await tokenBalance("ETH", e.address);
+        const spare = await tokenBalance("ETH", deployer.address);
+        if (held >= card.eth || spare >= card.eth - held) await topUp(e, "ETH", card.eth);
+        else eth = "unfunded: the bank holds no Sepolia ETH";
+      }
+      return {
+        state: { deployed: true, salt: shape.salt, liveClass, ...extra, ...(eth && { eth }) },
+      };
     },
   };
 }
