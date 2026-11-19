@@ -431,6 +431,12 @@ change; the owning tests still pass.
 
 ## 5. Storage and migration
 
+> **Superseded by wallet-core `v0.4.0` (M14, 2026-11-19).** The migration chain and its tests
+> are gone: the payload is the extension's v13 schema inside the DEK container, and an earlier
+> vault fails closed as `Storage` once its passphrase is proven; the wallet is removed and
+> imported again. wallet-core's `crates/bramble-core/src/vault_v13.rs` is the current
+> description; this section is the design history.
+
 The records payload is sealed inside vault-security's DEK container (`container.rs`). The vault
 has **one** version number, carried by the container's `version` and, bound to it, by the
 payload's `version`: a container of one version never opens a payload of another.
