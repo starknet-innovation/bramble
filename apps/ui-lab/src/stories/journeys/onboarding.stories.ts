@@ -87,6 +87,19 @@ export const RequestWaiting = checkpointStory(
   "unlock",
   "locked-request",
 );
+export const ForgotPassword: LabStory = {
+  args: { checkpointId: "forgot-password", scenarioId: "unlock" },
+  name: "Returning wallet · forgot password",
+  play: async ({ canvasElement }) => {
+    await assertCheckpointReady(canvasElement);
+    const frame = canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]");
+    const details =
+      frame?.contentDocument?.querySelector<HTMLDetailsElement>("details.gate-forgot");
+    await expect(details?.open).toBe(true);
+    await expect(details?.querySelector("summary")).toHaveTextContent("Forgot password?");
+    await expect(details).toHaveTextContent("Bramble can't recover or reset it.");
+  },
+};
 export const UnlockFailed: LabStory = {
   args: { checkpointId: "unlock-failed", scenarioId: "unlock" },
   name: "Returning wallet · unlock failed",

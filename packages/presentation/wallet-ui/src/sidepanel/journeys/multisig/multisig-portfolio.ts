@@ -8,7 +8,7 @@ import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState } from "@bramble/ui-kit/content";
-import { button } from "@bramble/ui-kit/controls";
+import { button, iconButton } from "@bramble/ui-kit/controls";
 import { explorerAccountUrl } from "@bramble/wallet-model/networks";
 import { formatFiat, portfolioTotal } from "../../shared/fiat";
 import { actionTile, explorerTile } from "../../shell/wallet-shell";
@@ -32,6 +32,18 @@ const portfolioHero = (
     ${heroChange(visible, data.prices, data.changes, data.currency)}
   </section>`;
 };
+
+// One manual co-signer check for the selected multisig. The explanation is a
+// tooltip shown on hover and keyboard focus and is the button's description,
+// so screen readers hear it without either; the empty title stops the native
+// tooltip from repeating the name over it.
+const cosignerRefresh = `<span class="multisig-intent-sync">${iconButton({
+  attributes: { "aria-describedby": "multisig-sync-hint", "data-ms-sync-intents": true },
+  icon: "refresh",
+  label: "Check for co-signer updates",
+  title: "",
+  variant: "ghost",
+})}<span class="multisig-sync-hint" id="multisig-sync-hint" role="tooltip">Check securely for transactions and signatures shared by known contacts.</span></span>`;
 
 const tokenPanel = (preferences: WalletPreferences | null, data: MultisigPortfolioData): string => {
   // Not read yet is not a failure: an empty, busy list until the read lands.
@@ -118,11 +130,7 @@ export const multisigPortfolio = (input: {
     </div>
     <div id="multisig-panel-assets" data-ms-home-panel="assets" role="tabpanel" aria-labelledby="multisig-tab-assets" tabindex="0">${tokenPanel(input.preferences, input.data)}</div>
     <div id="multisig-panel-intents" data-ms-home-panel="intents" role="tabpanel" aria-labelledby="multisig-tab-intents" tabindex="0" hidden>
-      <div class="multisig-intent-sync">
-        <div><strong>Co-signer updates</strong><span>Check securely for transactions and signatures shared by known contacts.</span></div>
-        ${button({ attributes: { "data-ms-sync-intents": true }, icon: "refresh", label: "Check for updates", size: "small", variant: "secondary" })}
-      </div>
-      ${compactIntentListView(input.intentList.heading, input.intentList.items, input.intentList.emptyMessage)}
+      ${compactIntentListView(input.intentList.heading, input.intentList.items, input.intentList.emptyMessage, cosignerRefresh)}
     </div>
   </section>`;
 };

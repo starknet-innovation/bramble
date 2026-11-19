@@ -34,17 +34,24 @@ export const intentDeleteButton = (id: string, accountId: string): string =>
   });
 
 /**
- * Renders pre-reviewed rows without handling wallet or signer data.
+ * Renders pre-reviewed rows without handling wallet or signer data. `action` is
+ * trusted, already-rendered markup placed at the end of the heading row; the
+ * row still renders without a heading when the queue is empty.
  */
 export const compactIntentListView = (
   heading: string,
   items: readonly CompactIntentItem[],
   emptyMessage: string,
+  action = "",
 ): string => {
+  const head =
+    items.length === 0 && action === ""
+      ? ""
+      : `<div class="multisig-intent-head">${items.length === 0 ? "" : `<p class="eyebrow">${escapeHtml(heading)}</p>`}${action}</div>`;
   const list =
     items.length === 0
-      ? emptyState(emptyMessage)
-      : `<p class="eyebrow">${escapeHtml(heading)}</p><ul class="menu-list multisig-intent-list">${items
+      ? `${head}${emptyState(emptyMessage)}`
+      : `${head}<ul class="menu-list multisig-intent-list">${items
           .map((item) => {
             const assetGlyphs =
               item.assets.length === 0

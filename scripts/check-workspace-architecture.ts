@@ -34,6 +34,7 @@ type Workspace = {
 const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   "@bramble/extension": [
     "@bramble/core",
+    "@bramble/flags",
     "@bramble/kms-krusty",
     "@bramble/ledger-browser",
     "@bramble/ledger-protocol",
@@ -52,6 +53,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
     "@bramble/wallet-ui",
   ],
   "@bramble/core": [],
+  "@bramble/flags": ["@bramble/core", "@bramble/store"],
   "@bramble/kms-krusty": ["@bramble/core", "@bramble/vault", "@bramble/wallet-model"],
   "@bramble/ledger-browser": [
     "@bramble/core",
@@ -135,6 +137,7 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   ],
   bramble: [
     "@bramble/core",
+    "@bramble/flags",
     "@bramble/kms-krusty",
     "@bramble/ledger-browser",
     "@bramble/ledger-protocol",

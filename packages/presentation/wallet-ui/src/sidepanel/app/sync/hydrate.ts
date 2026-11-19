@@ -9,6 +9,7 @@
 import { stakingNetwork } from "@bramble/transactions/staking-networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
+import type { ExperimentalFeaturesState } from "../../journeys/settings/experimental-features-runtime";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { RenderData } from "../rendering/render-cache";
 import type { ConnectedSitesState } from "../screens/support-flows";
@@ -376,6 +377,17 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       ),
       (value) => {
         cache.connectedSites = value;
+      },
+    );
+  }
+  if (activeView === "experimental-features" && refreshReason !== "ambient") {
+    fill(
+      wallet.loadExperimentalFeatures().then(
+        (features): ExperimentalFeaturesState => features,
+        (): ExperimentalFeaturesState => "error",
+      ),
+      (value) => {
+        cache.experimentalFeatures = value;
       },
     );
   }
