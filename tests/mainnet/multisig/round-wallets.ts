@@ -45,6 +45,28 @@ type StatusReply = {
 /** A background message: its type and whatever fields that type takes. */
 export type WalletMessage = Readonly<Record<string, unknown>> & { readonly type: string };
 
+const LAGGING_NODE_RETRIES = 4;
+const LAGGING_NODE_PAUSE_MS = 3_000;
+// Messages that broadcast. They are never repeated by this helper, though the
+// wallet guards each against sending twice.
+const BROADCASTS: ReadonlySet<string> = new Set([
+  "wallet.deployArgentMultisig",
+  "wallet.submitArgentMultisigIntent",
+  "wallet.submitArgentMultisigStrk20Relay",
+]);
+
+/**
+ * True when `reply` is a JSON-RPC 24, "Block not found", for a message that
+ * does not broadcast. The shared RPC load-balances across nodes that can be a
+ * block apart; the wallet re-pins three times, and a round makes enough pinned
+ * reads that a short lag can still exhaust them. The read failed before the
+ * message acted, so asking again is safe.
+ */
+export const isLaggingNode = (message: WalletMessage, reply: unknown): boolean => {
+  const refusal = errorOf(reply);
+  return refusal !== null && !BROADCASTS.has(message.type) && /Block not found/.test(refusal);
+};
+
 const errorOf = (reply: unknown): string | null =>
   isRecord(reply) && typeof reply["error"] === "string" ? reply["error"] : null;
 
@@ -63,11 +85,16 @@ const unlock = async (page: Page): Promise<void> => {
  * carrying `error` throws that text, prefixed with the message type. A locked
  * wallet is unlocked once and the message repeated: a round outlasts the
  * session. The repeat follows a refusal, so the first attempt did nothing.
+ * A refusal from a lagging RPC node is retried too; see {@link isLaggingNode}.
  */
 export const callWallet = async <T>(page: Page, message: WalletMessage): Promise<T> => {
   let reply = await sendRuntimeMessage<unknown>(page, message);
   if (errorOf(reply) === LOCKED) {
     await unlock(page);
+    reply = await sendRuntimeMessage<unknown>(page, message);
+  }
+  for (let retry = 1; retry <= LAGGING_NODE_RETRIES && isLaggingNode(message, reply); retry += 1) {
+    await new Promise((resolve) => setTimeout(resolve, LAGGING_NODE_PAUSE_MS * retry));
     reply = await sendRuntimeMessage<unknown>(page, message);
   }
   const refusal = errorOf(reply);

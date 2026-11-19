@@ -17,6 +17,7 @@ import {
 import { strkTransferCall } from "./round-chain";
 import { ownerPhrase } from "./round-owners";
 import { parseRoundRecord } from "./round-state";
+import { isLaggingNode } from "./round-wallets";
 
 const STRK = 10n ** 18n;
 // Full-length felts: a short stub would pass a check a real address fails.
@@ -136,6 +137,25 @@ describe("owner phrases", () => {
   test("differ between funding keys, and refuse a key that is not a felt", () => {
     expect(ownerPhrase(`0x2${"c".repeat(62)}`, "a")).not.toBe(ownerPhrase(KEY, "a"));
     expect(() => ownerPhrase("not-a-key", "a")).toThrow("not a valid felt");
+  });
+});
+
+describe("lagging RPC node", () => {
+  const refused = { error: "RPC: starknet_call\n\n      24: Block not found: undefined" };
+
+  test("retries a read the node refused, and never a broadcast", () => {
+    expect(isLaggingNode({ type: "wallet.shareArgentMultisigStrk20Authorization" }, refused)).toBe(
+      true,
+    );
+    expect(isLaggingNode({ type: "wallet.submitArgentMultisigIntent" }, refused)).toBe(false);
+    expect(isLaggingNode({ type: "wallet.submitArgentMultisigStrk20Relay" }, refused)).toBe(false);
+    expect(isLaggingNode({ type: "wallet.deployArgentMultisig" }, refused)).toBe(false);
+  });
+
+  test("leaves every other refusal and a success alone", () => {
+    const share = { type: "wallet.shareArgentMultisigStrk20Authorization" };
+    expect(isLaggingNode(share, { error: "Invalid Argent multisig private proof" })).toBe(false);
+    expect(isLaggingNode(share, { ok: true })).toBe(false);
   });
 });
 
