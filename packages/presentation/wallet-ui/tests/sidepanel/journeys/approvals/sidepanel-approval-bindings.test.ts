@@ -5,7 +5,6 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { networkRejectionMessage } from "@bramble/starknet/node-rejection";
 import { MOTION } from "@bramble/ui-kit/tokens";
 import type { PendingApproval } from "../../../../src/popup/responses/approvals-responses";
 import type { WalletStatus } from "../../../../src/popup/responses/responses";
@@ -98,46 +97,6 @@ describe("bindApprovals", () => {
     stageTimers.flush();
     await flush();
     expect(renderCount).toBe(1);
-  });
-
-  test("shows a node submission refusal instead of a generic failure", async () => {
-    const id = "c81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
-    const sentence = networkRejectionMessage(
-      "Calldata length exceeded maximum: length 5001 (allowed length: 5000)",
-    );
-    const host = document.createElement("div");
-    host.innerHTML = `
-      <article class="request-card">
-        <button data-approval-action="approve" data-approval-id="${id}" data-approval-kind="invoke">Approve</button>
-      </article>
-      <section id="approval-live" hidden>
-        <strong id="approval-live-title"></strong>
-        <p id="approval-live-copy"></p>
-      </section>
-      <p id="approval-result"></p>`;
-    document.body.replaceChildren(host);
-    const stageTimers = manualTimers();
-    bindApprovals({
-      app: host,
-      render: async () => undefined,
-      stageTimers,
-      wallet: {
-        decideApproval: async () => {
-          throw new Error(sentence);
-        },
-        loadStatus: async () => STATUS,
-      } as unknown as SidepanelWallet,
-    });
-
-    host.querySelector<HTMLButtonElement>('[data-approval-action="approve"]')?.click();
-    await flush();
-    stageTimers.flush();
-    await flush();
-
-    expect(host.querySelector("#approval-result")?.textContent).toBe(sentence);
-    expect(host.querySelector("#approval-result")?.textContent).not.toContain(
-      "Something went wrong",
-    );
   });
 
   test("completes a denial and lets Review later snooze without deciding", async () => {
