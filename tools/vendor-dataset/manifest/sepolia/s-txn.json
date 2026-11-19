@@ -36,7 +36,7 @@
       "deployed": true,
       "salt": "0x0",
       "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
-      "eth": "unfunded: the bank holds no Sepolia ETH"
+      "eth": "unfunded: the bank lacks the Sepolia ETH"
     },
     "log": [
       "funded STRK 0x634996667b17d5534afa068185fdb18fddad89269bc790d8642308da5507180",

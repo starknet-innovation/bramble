@@ -114,7 +114,7 @@ function sender(
         const held = await tokenBalance("ETH", e.address);
         const spare = await tokenBalance("ETH", deployer.address);
         if (held >= card.eth || spare >= card.eth - held) await topUp(e, "ETH", card.eth);
-        else eth = "unfunded: the bank holds no Sepolia ETH";
+        else eth = "unfunded: the bank lacks the Sepolia ETH";
       }
       return {
         state: { deployed: true, salt: shape.salt, liveClass, ...extra, ...(eth && { eth }) },
@@ -129,6 +129,9 @@ const fixtures = (mnemonic: string): readonly SepoliaFixture[] => {
   const ready = (index: number): KP => readyKeypair(mnemonic, index);
   const brv = (index: number): KP => braavosKeypair(mnemonic, index);
   const key = (index: number): KP => offLadderKeypair(mnemonic, index);
+  // Bramble account 0 and Braavos index 0 share a path (m/44'/9004'/0'/0/0),
+  // so TX-00 (the bank) and TX-07 sign with one key, as on any real phrase.
+  // Harmless: separate nonces, and the suite's firewall allows one sender per spec.
   return [
     sender(seed, "s-txn/TX-00", "bramble-account", 0, bramble(0), oz(bramble(0)), {
       expected:
