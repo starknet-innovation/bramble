@@ -43,6 +43,7 @@ fun WalletStore.makeSendModel(startToken: String? = null): SendFlowModel? {
         },
         startToken,
         trackedTokens = portfolio.preferences.trustedTokenAddresses(networkInfo.network),
+        transport = rpc.transport,
     )
 }
 

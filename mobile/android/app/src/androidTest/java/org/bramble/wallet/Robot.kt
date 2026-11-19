@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.captureToImage
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.printToString
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
@@ -55,10 +57,18 @@ class Robot(
 
     private fun exists(matcher: SemanticsMatcher): Boolean = rule.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
 
+    /** Waits for [matcher]; a timeout fails with what the screen showed, so CI logs say why. */
     fun waitFor(
         matcher: SemanticsMatcher,
         timeoutMs: Long = 10_000,
-    ) = rule.waitUntil(timeoutMs) { exists(matcher) }
+    ) {
+        try {
+            rule.waitUntil(timeoutMs) { exists(matcher) }
+        } catch (timeout: ComposeTimeoutException) {
+            val screen = runCatching { rule.onRoot(useUnmergedTree = false).printToString() }.getOrDefault("")
+            throw AssertionError("${matcher.description} not shown after $timeoutMs ms; screen:\n$screen", timeout)
+        }
+    }
 
     fun waitForText(
         text: String,
@@ -85,14 +95,17 @@ class Robot(
         rule.waitForIdle()
     }
 
-    /** An icon button or dock item by its content description. */
+    /** An icon button or dock item by its content description, scrolled into view first. */
     fun tapDescribed(
         label: String,
         timeoutMs: Long = 10_000,
     ) {
         val matcher = hasContentDescription(label) and hasClickAction()
         waitFor(matcher, timeoutMs)
-        rule.onAllNodes(matcher)[0].assertIsEnabled().performClick()
+        val node = rule.onAllNodes(matcher)[0]
+        // A click is a touch at the node's bounds: a control scrolled off screen must come back first.
+        runCatching { node.performScrollTo() }
+        node.assertIsEnabled().performClick()
         rule.waitForIdle()
     }
 

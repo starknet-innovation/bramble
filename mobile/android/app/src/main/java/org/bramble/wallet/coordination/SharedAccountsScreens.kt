@@ -1,5 +1,6 @@
 package org.bramble.wallet.coordination
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -7,68 +8,144 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import org.bramble.core.CoordinationSyncOutcome
-import org.bramble.core.CoreException
 import org.bramble.core.MultisigRecord
 import org.bramble.wallet.WalletStore
 import org.bramble.wallet.describe
 import org.bramble.wallet.design.BrambleField
 import org.bramble.wallet.design.BrambleIconName
-import org.bramble.wallet.design.Disclosure
 import org.bramble.wallet.design.Eyebrow
+import org.bramble.wallet.design.MenuDivider
+import org.bramble.wallet.design.MenuGroup
+import org.bramble.wallet.design.MenuRow
 import org.bramble.wallet.design.OptionCard
 import org.bramble.wallet.design.PillButton
-import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.SecretKind
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.ui.shortAddress
 
-// The shared-account (multisig) screens: the Ready Multisig gateway, the list with add and sync,
-// and the create section (`CreateMultisigSection.kt`). Same conventions as `CoordinationScreens.kt`.
+// The shared-account (multisig) screens, port of iOS `SharedAccountsView.swift` and
+// `CoordinationNavigation.swift`: the Ready Multisig gateway, the list, and adding by address.
+// The create flow is `CreateMultisigScreen.kt`, an account's home `SharedAccountHome.kt`.
+
+private const val ADD_SHARED = "Add shared account"
 
 private const val ADD_SHARED_HINT =
     "If deployed, signer authority syncs from Starknet. If not, the address is saved and deployment " +
         "setup is verified before use."
 
-private const val SYNC_UNAVAILABLE = "Secure co-signer updates are unavailable. Try again shortly"
+/** `multisigDisplayName`: the saved name, else the shortened address. */
+internal fun multisigDisplayName(record: MultisigRecord): String = record.name ?: shortAddress(record.address)
 
-private const val SYNC_UNVERIFIED = "Secure co-signer updates could not be verified. Try again shortly"
-
-private fun configLabel(record: MultisigRecord): String =
+/** The stored-view label: threshold and signer count, or unavailable when authority is unknown. */
+internal fun multisigConfigLabel(record: MultisigRecord): String =
     record.threshold?.let { "$it of ${record.signerCount} signers" } ?: "Authority unavailable"
+
+/** The multisig screens a shared-accounts entry point pushes (iOS `CoordinationFlow`). */
+internal sealed interface MultisigFlow {
+    /** Add a shared account by address. */
+    data object AddShared : MultisigFlow
+
+    /** Create a multisig; [resume] names a saved, undeployed setup to complete. */
+    data class Create(
+        val resume: String?,
+    ) : MultisigFlow
+
+    /** One shared account's home. */
+    data class Account(
+        val id: String,
+    ) : MultisigFlow
+
+    /** One shared account's receive address. */
+    data class Receive(
+        val id: String,
+    ) : MultisigFlow
+}
+
+/**
+ * Hosts [root] and the multisig screens it opens on their own stack, so the shell keeps one flow
+ * per entry point. The system back gesture pops this stack before the shell's.
+ */
+@Composable
+private fun MultisigStack(
+    store: WalletStore,
+    root: @Composable (open: (MultisigFlow) -> Unit) -> Unit,
+) {
+    var stack by remember { mutableStateOf(listOf<MultisigFlow>()) }
+    val open = { next: MultisigFlow -> stack = stack + next }
+    val pop = { stack = stack.dropLast(1) }
+    BackHandler(enabled = stack.isNotEmpty()) { pop() }
+    when (val top = stack.lastOrNull()) {
+        null -> root(open)
+        MultisigFlow.AddShared -> AddSharedAccountScreen(store, back = pop)
+        is MultisigFlow.Create -> CreateMultisigScreen(store, top.resume, back = pop)
+        is MultisigFlow.Account -> SharedAccountHomeScreen(store, top.id, open, back = pop)
+        is MultisigFlow.Receive -> SharedReceiveScreen(store, top.id, back = pop)
+    }
+}
 
 /** `multisig-add`: the Ready Multisig gateway, reached from "Add account". */
 @Composable
 fun ReadyMultisigScreen(
     store: WalletStore,
     back: () -> Unit,
-) {
-    var shared by remember { mutableStateOf(false) }
-    if (shared) return SharedAccountsScreen(store) { shared = false }
+) = MultisigStack(store) { open ->
     Page(store, "Ready Multisig", "Multiple signers approve together", back) {
-        OptionCard(BrambleIconName.USERS, "Create a multisig", "Set participants, fund, and deploy.") { shared = true }
-        OptionCard(BrambleIconName.SEARCH, "Add a shared address", "Sync it or resume setup.") { shared = true }
+        OptionCard(BrambleIconName.USERS, "Create a multisig", "Set participants, fund, and deploy.") {
+            open(MultisigFlow.Create(null))
+        }
+        OptionCard(BrambleIconName.SEARCH, "Add a shared address", "Sync it or resume setup.") {
+            open(MultisigFlow.AddShared)
+        }
     }
 }
 
-/** `multisigs`: add by address, create a setup, and each saved shared account with its updates. */
+/** `multisigs`: the two setup actions and every shared account saved on the active network. */
 @Composable
 fun SharedAccountsScreen(
     store: WalletStore,
     back: () -> Unit,
-) {
+) = MultisigStack(store) { open ->
     val coordination = store.coordination
-    val scope = rememberCoroutineScope()
-    var address by remember { mutableStateOf("") }
-    var addError by remember { mutableStateOf<String?>(null) }
-    var syncResult by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    var open by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { coordination.refresh() }
     val records = coordination.multisigs
     Page(store, "Shared accounts", "${records.size} account${if (records.size == 1) "" else "s"}", back) {
+        MenuGroup {
+            MenuRow(BrambleIconName.PLUS, ADD_SHARED) { open(MultisigFlow.AddShared) }
+            MenuDivider()
+            MenuRow(BrambleIconName.USERS, "Create a multisig") { open(MultisigFlow.Create(null)) }
+        }
+        Eyebrow("Shared accounts")
+        if (records.isEmpty()) {
+            Caption("No shared accounts are saved on this network yet.")
+        } else {
+            MenuGroup {
+                records.forEachIndexed { index, record ->
+                    if (index > 0) MenuDivider()
+                    MenuRow(BrambleIconName.WALLET, multisigDisplayName(record), value = multisigConfigLabel(record)) {
+                        open(MultisigFlow.Account(record.id))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * `multisig-watch`: add a shared account by address. A deployed account's authority is read at
+ * one pinned block; an undeployed one is saved by address alone.
+ */
+@Composable
+private fun AddSharedAccountScreen(
+    store: WalletStore,
+    back: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var address by remember { mutableStateOf("") }
+    var result by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    Page(store, ADD_SHARED, "Sync or resume a Ready multisig", back) {
         BrambleField(
             "Multisig address",
             "0x…",
@@ -77,70 +154,21 @@ fun SharedAccountsScreen(
             kind = SecretKind.ADDRESS,
             hint = ADD_SHARED_HINT,
         )
-        PillButton("Add shared account", enabled = address.isNotBlank()) {
+        PillButton(ADD_SHARED, busy = busy, enabled = address.isNotBlank()) {
             scope.launch {
-                runCatching { coordination.addShared(address) }
+                busy = true
+                runCatching { store.coordination.addShared(address) }
                     .onSuccess {
                         store.showNotice(it)
-                        addError = null
-                        address = ""
-                    }.onFailure { addError = it.message ?: describe(it) }
+                        result = null
+                    }.onFailure {
+                        val message = (it as? CoordinationStore.Refusal)?.message ?: describe(it)
+                        result = message
+                        store.showToast(message)
+                    }
+                busy = false
             }
         }
-        StatusLine(addError, StatusTone.DANGER)
-        CreateMultisigSection(store)
-        Eyebrow("Shared accounts")
-        if (records.isEmpty()) Caption("No shared accounts are saved on this network yet.")
-        records.forEach { record ->
-            Disclosure(
-                record.name ?: shortAddress(record.address),
-                open = open == record.id,
-                onToggle = { open = if (open == record.id) null else record.id },
-                detail = configLabel(record),
-            ) {
-                SharedAccountBody(store, record, scope, syncResult[record.id]) { message ->
-                    syncResult = syncResult + (record.id to message)
-                }
-            }
-        }
+        StatusLine(result, StatusTone.DANGER)
     }
 }
-
-/** One shared account's disclosure body: check for co-signer updates, and stop watching. */
-@Composable
-private fun SharedAccountBody(
-    store: WalletStore,
-    record: MultisigRecord,
-    scope: CoroutineScope,
-    status: String?,
-    synced: (String) -> Unit,
-) {
-    val coordination = store.coordination
-    RowTitle("Co-signer updates")
-    Caption("Check securely for intents and signatures shared by known contacts.")
-    PillButton("Check for updates", kind = PillKind.SECONDARY, icon = BrambleIconName.REFRESH) {
-        scope.launch {
-            val message = syncMessage(runCatching { coordination.sync(record.id) })
-            synced(message)
-        }
-    }
-    StatusLine(status)
-    Caption("Removing stops local tracking only. It never changes the on-chain account.")
-    PillButton("Stop watching", kind = PillKind.GHOST) {
-        scope.launch { runCatching { coordination.removeShared(record.id) }.onFailure(store::showError) }
-    }
-}
-
-/** The status copy for one "Check for updates". */
-private fun syncMessage(outcome: Result<CoordinationSyncOutcome>): String =
-    outcome.fold(
-        {
-            if (it.held == 0u) {
-                "No new co-signer updates"
-            } else {
-                "${it.held} co-signer update${if (it.held == 1u) "" else "s"} received. " +
-                    "Open them after the next Bramble update."
-            }
-        },
-        { if (it is CoreException.Coordination) SYNC_UNAVAILABLE else SYNC_UNVERIFIED },
-    )

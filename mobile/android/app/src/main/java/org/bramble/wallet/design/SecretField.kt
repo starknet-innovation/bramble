@@ -260,7 +260,14 @@ fun SecretField(
     AndroidView(
         factory = { context -> SecretEditText(context).apply { configure(kind, imeAction) } },
         modifier = modifier.fillMaxWidth().testTag(secretFieldTag(accessibilityLabel)),
-        onRelease = { edit -> edit.text?.clear() },
+        // The view's buffer is wiped when the field leaves the screen. For a passphrase or a phrase
+        // word the wipe also reaches the model, so the secret leaves state too (T10). An address or
+        // amount is not a secret and its stage may move on with it (Send's review keeps its
+        // amount and plan), so the callback is detached first.
+        onRelease = { edit ->
+            if (kind == SecretKind.ADDRESS || kind == SecretKind.AMOUNT) edit.onChange = {}
+            edit.text?.clear()
+        },
         update = { edit ->
             edit.onChange = onValueChange
             edit.onFocus = onFocusChange

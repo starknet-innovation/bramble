@@ -1,7 +1,7 @@
 name: mobile
 
 # Mobile wallet CI: the Rust core, the pinned strict linters, the iOS unit tests, and the Android
-# JVM unit tests. Path-scoped so extension-only PRs do not pay for macOS runners.
+# JVM unit and instrumented tests. Path-scoped so extension-only PRs do not pay for macOS runners.
 #
 # Trust boundary (scripts/mobile-workflow-policy.ts): hosted runners only, no privileged
 # triggers, no write scope, no secrets, and checkouts never persist the token, because every job
@@ -132,9 +132,9 @@ jobs:
       - name: SwiftLint analyzer rules
         run: bash mobile/scripts/lint.sh swift-analyze mobile/ios/build/xcodebuild.log
 
-  # Not yet run on GitHub: the same steps build and pass locally (mobile/README.md, SCOPE.md
-  # Phase 1.1). It uses macOS because build-core-android.sh reads the host core as a .dylib for
-  # UniFFI's bindgen.
+  # Builds the core and runs the JVM unit tests. It uses macOS because build-core-android.sh reads
+  # the host core as a .dylib for UniFFI's bindgen; the core it builds (the x86_64 library and the
+  # Kotlin bindings, neither committed) is handed to android-device below.
   android:
     runs-on: macos-15
     timeout-minutes: 60
@@ -166,3 +166,75 @@ jobs:
       - name: JVM unit tests
         working-directory: mobile/android
         run: ./gradlew :app:testDebugUnitTest
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-core
+          path: |
+            mobile/android/app/src/main/jniLibs/x86_64/
+            mobile/android/app/build/generated/uniffi/
+          if-no-files-found: error
+          retention-days: 1
+
+  # The instrumented suite (flows, security, core bridge) on an API 35 x86_64 emulator. Linux,
+  # because hosted macOS runners cannot hardware-accelerate an Android emulator; the core comes
+  # prebuilt from the android job. The send, deploy, token, accounts, multisig and portfolio tests
+  # answer from the offline FixtureNode, which refuses every write; the onboarding and Home tests
+  # read public mainnet data, as the iOS UI suite does (mobile/README.md).
+  android-device:
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: android-core
+          path: mobile/android/app
+      # The artifact keeps paths relative to their common root (src/main/jniLibs, build/generated).
+      - name: Place the prebuilt core
+        run: |
+          test -f mobile/android/app/src/main/jniLibs/x86_64/libbramble_core.so
+          test -f mobile/android/app/build/generated/uniffi/org/bramble/core/bramble_core.kt
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" \
+            "system-images;android-35;google_apis;x86_64"
+      - name: Boot the emulator
+        run: |
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force \
+            -n ci -k "system-images;android-35;google_apis;x86_64" -d pixel_6
+          "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-snapshot \
+            -no-boot-anim -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          "$ANDROID_HOME/platform-tools/adb" wait-for-device
+          for attempt in $(seq 1 60); do
+            booted=$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')
+            [ "$booted" = "1" ] && break
+            sleep 5
+          done
+          test "$booted" = "1"
+      - name: Instrumented tests
+        working-directory: mobile/android
+        run: ./gradlew :app:connectedDebugAndroidTest
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-device-reports
+          path: |
+            mobile/android/app/build/reports/androidTests/
+            mobile/android/app/build/outputs/androidTest-results/
+            ${{ runner.temp }}/emulator.log
+          retention-days: 7

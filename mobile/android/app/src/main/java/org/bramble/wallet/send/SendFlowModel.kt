@@ -18,6 +18,8 @@ import org.bramble.core.TxStatus
 import org.bramble.core.WalletCore
 import org.bramble.core.formatTokenAmount
 import org.bramble.core.parseTokenAmount
+import org.bramble.wallet.RpcClient
+import org.bramble.wallet.RpcPost
 
 /**
  * The Send journey's UI state, mirroring iOS `SendFlowModel`: every protocol decision is the
@@ -38,6 +40,8 @@ class SendFlowModel(
     startToken: String? = null,
     /** The tracked tokens on this network the review warns about paying (`trustedTokenAddresses`). */
     private val trackedTokens: List<String> = emptyList(),
+    /** How each plan step's bytes move: the store's chain transport (a fixture node in tests). */
+    private val transport: RpcPost = RpcClient.https,
 ) {
     /** The screen the journey shows, in the extension's order. */
     enum class Stage {
@@ -183,7 +187,7 @@ class SendFlowModel(
                 dropPlan()
                 val plan = prepare(to) ?: return
                 hooks.track(plan)
-                val driver = SendDriver(plan, network).also { this.driver = it }
+                val driver = SendDriver(plan, network, transport).also { this.driver = it }
                 stage = Stage.REVIEWING
                 settle { driver.run(StepReply.Start) }
             }

@@ -63,7 +63,8 @@ internal val capsule = RoundedCornerShape(percent = 50)
  * panels) with the send stylesheet's geometry. All copy comes from the generated `SendCopy`; every
  * value shown is the core plan's. Routed from Home's Send tile and a token's Send (`WalletShell`,
  * `Flow.SEND`, opening on [startToken]); [openAddressBook] takes the recipient stage's Save to the
- * address book, and [viewActivity] leaves every flow for the Activity tab. The plan is closed when
+ * address book, [manageTokens] opens the token list from the asset stage, and [viewActivity] leaves
+ * every flow for the Activity tab. The plan is closed when
  * the screen leaves, and on lock by `WalletStore`.
  */
 @Composable
@@ -72,6 +73,7 @@ fun SendScreen(
     back: () -> Unit,
     viewActivity: () -> Unit,
     openAddressBook: (() -> Unit)? = null,
+    manageTokens: (() -> Unit)? = null,
     startToken: String? = null,
 ) {
     val model = remember { store.makeSendModel(startToken) }
@@ -95,7 +97,7 @@ fun SendScreen(
         verticalArrangement = Arrangement.spacedBy(BrambleSpace.lg),
     ) {
         FlowHeader(model.title, network = store.networkLabel, back = { stepBack(model, back) })
-        StageContent(store, model, saveContact, back, viewActivity)
+        StageContent(store, model, saveContact, back, viewActivity, manageTokens)
         Spacer(Modifier.height(BrambleSpace.lg))
     }
 }
@@ -108,6 +110,7 @@ private fun StageContent(
     saveContact: ((String) -> Unit)?,
     back: () -> Unit,
     viewActivity: () -> Unit,
+    manageTokens: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     when (model.stage) {
@@ -116,7 +119,7 @@ private fun StageContent(
         }
 
         SendFlowModel.Stage.ASSET -> {
-            AssetStage(store, model)
+            AssetStage(store, model, manageTokens)
         }
 
         SendFlowModel.Stage.DETAILS, SendFlowModel.Stage.REVIEWING -> {

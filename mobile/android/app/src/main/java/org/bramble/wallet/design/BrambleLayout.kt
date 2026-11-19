@@ -185,4 +185,18 @@ object BrambleLayout {
 
     /** Leading inset of the hairline between task rows, past the dot. */
     val taskHairlineInset = 24.dp
+
+    // CoordinationControls.swift `StepProgress` and MultisigSetupStages.swift: the multisig
+    // creation stepper's disc and the deployment review's row height.
+
+    /** Diameter of a numbered step disc. */
+    val stepDisc = 22.dp
+
+    /** Minimum height of a deployment review row. */
+    val reviewRowMin = 44.dp
+
+    // PrivacyViews.swift `privacyLockIconSize`: the lock beside Home's private-balance lines.
+
+    /** Size of the lock icon on Home's private-balance lines. */
+    val privacyLockIcon = 12.dp
 }

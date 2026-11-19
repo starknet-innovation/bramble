@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import org.bramble.core.TokenBalance
 import org.bramble.core.portfolioAmount
 import org.bramble.core.tokenRowFiat
+import org.bramble.wallet.design.BrambleIconName
 import org.bramble.wallet.design.BrambleLayout
 import org.bramble.wallet.design.BrambleSize
 import org.bramble.wallet.design.BrambleSpace
@@ -28,6 +29,8 @@ import org.bramble.wallet.design.BrambleTracking
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.LocalSkin
+import org.bramble.wallet.design.MenuGroup
+import org.bramble.wallet.design.MenuRow
 import org.bramble.wallet.design.StatusLine
 import org.bramble.wallet.design.StatusTone
 import org.bramble.wallet.design.TokenMark
@@ -71,12 +74,15 @@ fun PortfolioHeroSection(store: PortfolioStore) {
 
 /**
  * The visible token rows (STRK first, hidden and likely-spam off), the failure line, the count.
- * Tapping a row opens its detail through [open] with the row's token id.
+ * Tapping a row opens its detail through [open] with the row's token id; [manage] opens the token list.
+ * [privacyRow] sits between the rows and "Manage tokens" (iOS `PortfolioHome` order).
  */
 @Composable
 fun PortfolioTokenList(
     store: PortfolioStore,
     open: (String) -> Unit,
+    manage: () -> Unit,
+    privacyRow: @Composable () -> Unit = {},
 ) {
     val skin = LocalSkin.current
     val prices = store.priceView ?: store.emptyPrices
@@ -87,10 +93,20 @@ fun PortfolioTokenList(
             if (offset > 0) Box(Modifier.fillMaxWidth().height(BrambleLayout.hairline).background(skin.hairline))
             PortfolioTokenRow(row.balance, prices) { open(row.balance.token.id) }
         }
+        privacyRow()
         store.home
             ?.notShown
             ?.takeIf { it > 0u }
-            ?.let { StatusLine("Manage tokens · $it not shown") }
+            ?.let { notShown ->
+                MenuGroup {
+                    MenuRow(
+                        BrambleIconName.COINS,
+                        "Manage tokens",
+                        value = "$notShown not shown",
+                        onClick = manage,
+                    )
+                }
+            }
     }
 }
 

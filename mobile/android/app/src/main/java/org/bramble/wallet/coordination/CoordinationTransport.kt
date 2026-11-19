@@ -34,12 +34,13 @@ private const val NORMAL_CLOSURE = 1000
 internal suspend fun readAuthority(
     address: String,
     info: NetworkInfo,
+    post: ChainPost,
 ): MultisigAuthorityRead =
     withContext(Dispatchers.IO) {
         var last = MultisigAuthorityRead(info.network, address)
         for (url in info.rpcUrls) {
             val read = MultisigAuthorityRead(info.network, address)
-            drive(URL(url), { read.nextRequest() }, read::acceptResponse, read::transportFailed)
+            drive(post, URL(url), { read.nextRequest() }, read::acceptResponse, read::transportFailed)
             last = read
             if (read.status() != MultisigAuthorityStatus.NETWORK_UNAVAILABLE) break
         }
@@ -50,20 +51,38 @@ internal suspend fun readAuthority(
  * Whether the pinned Argent Multisig class is declared on this network, asking each RPC endpoint
  * in turn; null when no endpoint gave an answer. An extension so the store keeps to its state.
  */
-suspend fun CoordinationStore.classDeclared(): Boolean? = withContext(Dispatchers.IO) { readClassDeclared(network()) }
+suspend fun CoordinationStore.classDeclared(): Boolean? =
+    withContext(Dispatchers.IO) { readClassDeclared(network(), chainPost) }
 
 /** Blocking: whether the pinned multisig class is declared, per the first endpoint that answers. */
-internal fun readClassDeclared(info: NetworkInfo): Boolean? {
+internal fun readClassDeclared(
+    info: NetworkInfo,
+    post: ChainPost,
+): Boolean? {
     for (url in info.rpcUrls) {
         val read = ClassDeclaredRead(info.network)
-        drive(URL(url), { read.nextRequest() }, read::acceptResponse, read::transportFailed)
+        drive(post, URL(url), { read.nextRequest() }, read::acceptResponse, read::transportFailed)
         read.declared()?.let { return it }
     }
     return null
 }
 
+/**
+ * Posts one coordination chain read to an endpoint, bounded to the core's byte limit for it, and
+ * returns the reply; throws on any transport failure. The app's is [RpcClient.post].
+ */
+fun interface ChainPost {
+    /** Posts [body] to [url] and returns at most [maxBytes] of reply. */
+    fun post(
+        url: URL,
+        body: String,
+        maxBytes: Int,
+    ): String
+}
+
 /** Posts each request the core plans until it has none; a transport failure is reported, not thrown. */
 private fun drive(
+    post: ChainPost,
     url: URL,
     next: () -> org.bramble.core.RpcRequest?,
     accept: (ULong, String) -> Unit,
@@ -76,7 +95,7 @@ private fun drive(
         runCatching {
             accept(
                 request.id,
-                RpcClient.post(url, request.body, maxBytes = limit),
+                post.post(url, request.body, limit),
             )
         }.onFailure { failed(request.id) }
     }

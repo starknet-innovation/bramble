@@ -1,6 +1,7 @@
 package org.bramble.wallet.portfolio
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.async
@@ -49,11 +50,15 @@ import java.io.File
  * lock carry an old generation and are dropped.
  */
 class PortfolioStore(
-    private val directory: File,
+    /** Where the core's portfolio documents are written (`noBackupFilesDir/portfolio/`). */
+    internal val directory: File,
     /** The core's `activityBook()`: the one activity log. */
     private val activity: ActivityBook,
-    /** Moves the portfolio's HTTP reads (prices, charts, explorer); never throws for a failure. */
-    internal val transport: PortfolioTransport = BoundedHttp,
+    /**
+     * Moves the portfolio's HTTP reads (prices, charts, explorer, JSON-RPC); never throws for a
+     * failure. Settable only so instrumented tests can answer offline, as iOS's Debug-only stub.
+     */
+    internal var transport: PortfolioTransport = BoundedHttp,
     private val clock: () -> Double = { System.currentTimeMillis().toDouble() },
 ) {
     /**
@@ -128,13 +133,25 @@ class PortfolioStore(
     /** The core's price and chart cache, for the chart read (`PortfolioCharts.kt`). */
     internal val priceBook: PriceBook get() = prices
 
-    private val reads = PortfolioReads(transport, rpcLimits())
+    /** The core's saved balances, written with the other documents (`PortfolioTokens.kt`). */
+    internal val balanceSnapshots: BalanceSnapshots get() = snapshots
+
+    internal val reads get() = PortfolioReads(transport, rpcLimits())
 
     /** No prices yet, in the display currency. */
     val emptyPrices get() = PriceView(currency, emptyList(), emptyList(), null, false)
 
+    /**
+     * Bumped whenever the token preferences change. The core's preferences object is not Compose
+     * state, so [tracked] reads this to make a screen listing tokens recompose on Show or Add.
+     */
+    internal var preferencesRevision by mutableIntStateOf(0)
+
     /** The scope's tracked tokens (Home, token detail, Send); empty while locked. */
-    val tracked: List<TrackedToken> get() = scope?.let { preferences.tracked(it.network.network) } ?: emptyList()
+    val tracked: List<TrackedToken>
+        get() =
+            scope?.takeIf { preferencesRevision >= 0 }?.let { preferences.tracked(it.network.network) }
+                ?: emptyList()
     private val addresses get() = tracked.map { it.token.address }
 
     /** Tokens hidden from Home, whose private balances Home must not count either. */
@@ -305,7 +322,8 @@ class PortfolioStore(
         recompute()
     }
 
-    private fun recompute() {
+    /** Recomputes Home's rows, hero and activity groups from the current documents and readings. */
+    internal fun recompute() {
         val view = priceView ?: emptyPrices
         val loaded = balances
         home = loaded?.let { preferences.homeRows(it.balances) }
@@ -360,7 +378,7 @@ private fun readDocument(
 ) = runCatching { File(directory, "$name.json").readText() }.getOrNull()
 
 /** Writes the core's documents, each through a temporary file renamed over the old one. */
-private fun persistDocuments(
+internal fun persistDocuments(
     directory: File,
     preferences: TokenPreferences,
     prices: PriceBook,

@@ -158,7 +158,8 @@ internal class PortfolioReads(
         return RpcReply(call.id, outcome.status, outcome.body?.decodeToString())
     }
 
-    private suspend fun sendAll(
+    /** Posts [calls] to [url] in batches; each reply carries its request id, unanswered on failure. */
+    suspend fun sendAll(
         calls: List<RpcRequest>,
         url: String,
     ): List<RpcReply> =
