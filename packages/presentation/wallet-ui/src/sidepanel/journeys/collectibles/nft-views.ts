@@ -39,6 +39,8 @@ import { nftCoverageNote } from "./nft-coverage";
  */
 export type NftGalleryItem = {
   readonly animationUrl: string;
+  /** The background read this watched NFT's metadata and found no art. */
+  readonly artUnavailable: boolean;
   readonly attributes: readonly NftAttribute[];
   readonly collection: string;
   readonly contract: string;
@@ -97,6 +99,7 @@ export const visibleNftItems = (
     const attributes = nft.attributes ?? [];
     items.push({
       animationUrl: nft.animationUrl ?? "",
+      artUnavailable: nft.artUnavailable === true,
       attributes,
       collection: nft.collection,
       contract: nft.contract,
@@ -135,8 +138,15 @@ export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = fa
     ? `<img class="nft-image${item.pixelated ? " nft-image--pixelated" : ""}" src="${escapeHtml(item.image)}" alt="" loading="${eager ? "eager" : "lazy"}" referrerpolicy="no-referrer" />`
     : "";
 
+// A revealed tile says when its art is missing: shown at once when the
+// background found none, or by CSS once a present image fails to load.
+const nftArtNote = (item: NftGalleryItem, reveal: boolean): string =>
+  reveal && (item.image || item.artUnavailable)
+    ? `<span class="nft-art-note"${item.image ? "" : ' data-shown="true"'}>Art unavailable</span>`
+    : "";
+
 const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
-  `<span class="nft-art">${nftImageMarkup(item, reveal, eager)}${icon("image")}</span>`;
+  `<span class="nft-art">${nftImageMarkup(item, reveal, eager)}${icon("image")}${nftArtNote(item, reveal)}</span>`;
 
 // The tile play affordance for a collectible with an on-chain animation: a
 // button that overlays the art square (revealed on hover/focus) plus the hidden
@@ -357,6 +367,7 @@ export const selectedNftDetail = (
   if (discovered) {
     return {
       animationUrl: discovered.animationUrl ?? "",
+      artUnavailable: discovered.artUnavailable === true,
       attributes: discovered.attributes ?? [],
       collection: discovered.collection,
       contract: discovered.contract,

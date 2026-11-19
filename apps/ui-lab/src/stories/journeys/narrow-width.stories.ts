@@ -136,3 +136,9 @@ export const HomeNftsDiscovered = narrowSidepanelStory(
   "home-nfts-discovered",
   [(document) => assertInsidePanel(document, ".nft-actions button")],
 );
+
+export const ForgotPassword = narrowSidepanelStory(
+  "Forgot password · 320px",
+  "unlock",
+  "forgot-password",
+);
