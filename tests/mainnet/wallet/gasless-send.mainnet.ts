@@ -8,12 +8,7 @@ import { getTokenBalances } from "@bramble/starknet/rpc";
 import { withTokenId } from "@bramble/wallet-model/preferences";
 import { expect, test } from "../../e2e/fixtures";
 import { waitForSuccessfulReceipt } from "../../live/chain";
-import {
-  expectActivity,
-  openStrkReview,
-  readGaslessOffers,
-  submitGaslessOffer,
-} from "../../live/send";
+import { expectActivity, openReview, readGaslessOffers, submitGaslessOffer } from "../../live/send";
 import { requireLocalMainnetAccount } from "../local-mainnet-account";
 import { readPublicBalance } from "../local-mainnet-chain";
 import { gaslessOfferWithinCap, SELF_TRANSFER_AMOUNT } from "../local-mainnet-limits";
@@ -48,7 +43,13 @@ const tokenBalance = async (
 test("pays a gasless fee when a quote is under the cap", async ({ extension }, testInfo) => {
   const page = await openFundedWallet(extension, account);
   const strkBefore = await readPublicBalance(account.rpcUrl, account.address, "STRK");
-  await openStrkReview(page, { amount: SELF_TRANSFER_AMOUNT, recipient: account.address });
+  await openReview(page, {
+    amount: SELF_TRANSFER_AMOUNT,
+    networkId: "SN_MAIN",
+    recipient: account.address,
+    sender: account.address,
+    symbol: "STRK",
+  });
   const offers = await readGaslessOffers(page);
   const chosen = offers.find((offer) => gaslessOfferWithinCap(offer));
   if (!chosen) {

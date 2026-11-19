@@ -33,7 +33,9 @@ test("self-transfers dust STRK and shows it in Activity", async ({ extension }) 
   const hash = await selfTransfer(page, {
     amount: SELF_TRANSFER_AMOUNT,
     maxFeeStrk: MAX_TX_FEE_STRK,
+    networkId: "SN_MAIN",
     recipient: account.address,
+    sender: account.address,
     symbol: "STRK",
   });
   const receipt = await waitForSuccessfulReceipt(account.rpcUrl, hash);
@@ -63,7 +65,9 @@ test("self-transfers dust ETH when the account holds ETH", async ({ extension },
   const hash = await selfTransfer(page, {
     amount: SELF_TRANSFER_AMOUNT,
     maxFeeStrk: MAX_TX_FEE_STRK,
+    networkId: "SN_MAIN",
     recipient: account.address,
+    sender: account.address,
     symbol: "ETH",
   });
   const receipt = await waitForSuccessfulReceipt(account.rpcUrl, hash);

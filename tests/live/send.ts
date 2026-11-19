@@ -3,8 +3,12 @@
  * clicked only after the screen shows a STRK fee inside the caller's cap.
  */
 
-import { sameFelt } from "@bramble/wallet-model/networks";
-import type { Page } from "@playwright/test";
+import {
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
+import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { checkDisplayedStrkFee } from "./fee-cap";
 
@@ -99,30 +103,78 @@ const submittedHash = async (page: Page): Promise<string> => {
   return hash;
 };
 
+/** What a send is meant to do; the review must show exactly this before Confirm. */
+export type SendIntent = {
+  readonly amount: string;
+  readonly networkId: StarknetNetworkId;
+  readonly recipient: string;
+  readonly sender: string;
+  readonly symbol: "ETH" | "STRK";
+};
+
+const reviewFact = (page: Page, term: string): Locator =>
+  page
+    .locator("#send-review-summary .send-review-facts > div")
+    .filter({ has: page.locator("dt", { hasText: new RegExp(`^${term}$`, "u") }) })
+    .locator("dd");
+
+const fullAddress = async (fact: Locator): Promise<string> =>
+  (await fact.locator("code").first().getAttribute("title")) ?? "";
+
 /**
- * Sends `amount` of `symbol` to `recipient` through the review screen.
- * Returns the transaction hash once the wallet has one. Does not click
- * Confirm when the fee is missing, not STRK, or above `maxFeeStrk`.
+ * Checks the review's From, To, Network and Amount against `intent` and throws
+ * on any difference, so nothing is confirmed unless the screen shows what is
+ * being signed. Addresses compare by the full address the review carries, not
+ * the truncated label.
  */
-export const selfTransfer = async (
-  page: Page,
-  input: {
-    readonly amount: string;
-    readonly maxFeeStrk: string;
-    readonly recipient: string;
-    readonly symbol: "ETH" | "STRK";
-  },
-): Promise<string> => {
+const expectReviewShows = async (page: Page, intent: SendIntent): Promise<void> => {
+  await expect(page.locator("#send-review-summary .send-review-facts")).toBeVisible(STEP);
+  const from = await fullAddress(reviewFact(page, "From"));
+  const to = await fullAddress(reviewFact(page, "To"));
+  const network = ((await reviewFact(page, "Network").textContent()) ?? "").trim();
+  const amount = ((await reviewFact(page, "Amount").locator("strong").textContent()) ?? "").trim();
+  const wrong = [
+    sameFelt(from, intent.sender) ? "" : `From ${from || "(missing)"}`,
+    sameFelt(to, intent.recipient) ? "" : `To ${to || "(missing)"}`,
+    network === STARKNET_NETWORKS[intent.networkId].name ? "" : `Network "${network}"`,
+    amount === `${intent.amount} ${intent.symbol}` ? "" : `Amount "${amount}"`,
+  ].filter(Boolean);
+  if (wrong.length > 0) {
+    throw new Error(
+      `Refusing to submit: the review shows ${wrong.join(", ")}, not what was entered. Nothing was submitted.`,
+    );
+  }
+};
+
+/**
+ * Fills the Send form from `intent` and opens its review, then checks the
+ * review shows exactly that intent. Stops before Confirm.
+ */
+export const openReview = async (page: Page, intent: SendIntent): Promise<void> => {
   await page.locator('.action-tile[data-view="send"]').click();
-  await page.locator("#send-recipient-search").fill(input.recipient);
+  await page.locator("#send-recipient-search").fill(intent.recipient);
   await expect(page.locator("#send-recipient-continue")).toBeEnabled(STEP);
   await page.locator("#send-recipient-continue").click();
   await expect(page.locator("#send-details")).toBeVisible(STEP);
-  await chooseToken(page, input.symbol);
-  await page.locator("#send-amount-input").fill(input.amount);
+  await chooseToken(page, intent.symbol);
+  await page.locator("#send-amount-input").fill(intent.amount);
   await expect(page.locator("#send-review-button")).toBeEnabled(STEP);
   await page.locator("#send-review-button").click();
   await expect(page.locator("#send-review-stage")).toBeVisible(STEP);
+  await expectReviewShows(page, intent);
+};
+
+/**
+ * Sends `intent` through the review screen and returns the transaction hash
+ * once the wallet has one. Does not click Confirm when the review shows
+ * anything other than `intent`, or a fee that is missing, not STRK, or above
+ * `maxFeeStrk`.
+ */
+export const selfTransfer = async (
+  page: Page,
+  input: SendIntent & { readonly maxFeeStrk: string },
+): Promise<string> => {
+  await openReview(page, input);
   assertFeeAcceptable(await reviewFeeText(page), input.maxFeeStrk);
   await expect(page.locator("#send-confirm-button")).toBeEnabled(STEP);
   await page.locator("#send-confirm-button").click();
@@ -217,23 +269,4 @@ export const readGaslessOffers = async (page: Page): Promise<readonly GaslessOff
 export const submitGaslessOffer = async (page: Page, tokenAddress: string): Promise<string> => {
   await page.locator(`#send-review-fee [data-gasless-token="${tokenAddress}"]`).click();
   return submittedHash(page);
-};
-
-/**
- * Opens the STRK review used by the gasless spec and stops before Confirm.
- */
-export const openStrkReview = async (
-  page: Page,
-  input: { readonly amount: string; readonly recipient: string },
-): Promise<void> => {
-  await page.locator('.action-tile[data-view="send"]').click();
-  await page.locator("#send-recipient-search").fill(input.recipient);
-  await expect(page.locator("#send-recipient-continue")).toBeEnabled(STEP);
-  await page.locator("#send-recipient-continue").click();
-  await expect(page.locator("#send-details")).toBeVisible(STEP);
-  await chooseToken(page, "STRK");
-  await page.locator("#send-amount-input").fill(input.amount);
-  await expect(page.locator("#send-review-button")).toBeEnabled(STEP);
-  await page.locator("#send-review-button").click();
-  await expect(page.locator("#send-review-stage")).toBeVisible(STEP);
 };
