@@ -3,6 +3,7 @@
  * account's one transfer, and the reads the round checks itself against. The
  * funding key signs here and nowhere else; it never enters a browser.
  */
+import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
 import { getDeploymentStatus } from "@bramble/starknet/deployment";
 import { buildErc20TransferCall, formatTokenAmount } from "@bramble/starknet/rpc";
 import {
@@ -46,6 +47,20 @@ export const strkLabel = (raw: bigint): string => formatTokenAmount(raw, STRK_TO
 /** Public STRK balance of `address`, in FRI. */
 export const publicStrk = async (rpcUrl: string, address: string): Promise<bigint> =>
   (await readPublicBalance(rpcUrl, address, "STRK")).raw;
+
+/**
+ * Whether the privacy pool has a registered viewing key for `address`: its
+ * `get_public_key` answer is nonzero. A failed read throws.
+ */
+export const isRegisteredInPool = async (rpcUrl: string, address: string): Promise<boolean> => {
+  const [key] = await new RpcProvider({ nodeUrl: rpcUrl }).callContract({
+    calldata: [address],
+    contractAddress: STRK20_MAINNET_POOL,
+    entrypoint: "get_public_key",
+  });
+  if (typeof key !== "string") throw new Error("The pool did not answer get_public_key.");
+  return BigInt(key) !== 0n;
+};
 
 /** Whether a contract is deployed at `address`. A failed read throws. */
 export const isDeployed = (rpcUrl: string, address: string): Promise<boolean> =>

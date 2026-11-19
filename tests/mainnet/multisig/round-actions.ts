@@ -27,7 +27,12 @@ const MAX_PREPARES = 8;
 const PROVER_ATTEMPTS = 3;
 const PROVER_RETRY_DELAY_MS = 30_000;
 const TRANSIENT_PROVER = /Proving service HTTP (?:429|50[234])\b|-32005 rate limit exceeded/i;
-const NOT_YET_INDEXED = /regist|preflight|private balances unavailable|not found/i;
+// What the wallet says while the privacy indexer has not caught up with the
+// multisig's registration. The SDK names the self channel "missing channel
+// context" when it compiles a deposit before the indexer knows the channel
+// the registration opened; compiling fails before anything is signed.
+const NOT_YET_INDEXED =
+  /regist|preflight|private balances unavailable|not found|missing channel context/i;
 
 /** The multisig under test and the two wallets that co-own it. */
 export type RoundContext = {

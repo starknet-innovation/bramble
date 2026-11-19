@@ -223,12 +223,16 @@ The round keeps `.mainnet-multisig-e2e/` in the checkout: the two profiles and
 git-ignored and is removed when a round finishes.
 
 - A round that fails after deployment returns the funds at once and says what
-  it moved. When that works, the directory is removed and the next run starts
-  a fresh round. What stays in the old multisig is a fee margin, about 0.2
-  STRK, which costs more to return than it is worth.
-- If returning the funds fails too, the directory stays. Run the command again
-  from the same checkout: a run that finds a deployed multisig only returns
-  what it holds, then removes the directory.
+  it moved: the private balance through a withdrawal, then the public STRK.
+- If the multisig was already registered with the pool, the directory stays,
+  and the next run resumes that multisig: it tops the address up, skips the
+  registration the pool already has (checked with `get_public_key`), and
+  carries on from the deposit. That saves the pool fee a new registration
+  would cost.
+- Otherwise the directory is removed and the next run starts a fresh round.
+  What stays in the old multisig is a fee margin, about 0.2 STRK.
+- If returning the funds fails too, the directory stays, and the next run
+  resumes from where the round stopped.
 - Do not delete `.mainnet-multisig-e2e/` while a round is unfinished. The two
   profiles hold the only copies of the multisig's viewing key. Without it the
   private balance cannot be read or withdrawn. Public STRK can still be

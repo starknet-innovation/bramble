@@ -160,10 +160,10 @@ const deployFromOwnerA = async (
 };
 
 /**
- * Makes sure the multisig at `address` is deployed, listed in both wallets,
- * and that both hold its signer keys. An undeployed address is first topped up from the funding account
- * to `funding` FRI, then deployed by owner A. Pass `funding` of zero to deploy
- * from what the address already holds and send it nothing. Throws before
+ * Makes sure the multisig at `address` holds `funding` FRI, is deployed, is
+ * listed in both wallets, and that both hold its signer keys. What the address
+ * lacks comes from the funding account, whether or not an earlier run already
+ * deployed it; an undeployed address is then deployed by owner A. Throws before
  * deploying when the wallet's review disagrees on the address or quotes a fee
  * above the ceiling.
  */
@@ -176,11 +176,11 @@ export const establishMultisig = async (input: {
   readonly salt: string;
 }): Promise<RoundContext> => {
   const { a, account, address, b } = input;
+  const held = await publicStrk(account.rpcUrl, address);
+  if (held < input.funding) {
+    await fundFromAccount(account, address, input.funding - held);
+  }
   if (!(await isDeployed(account.rpcUrl, address))) {
-    const held = await publicStrk(account.rpcUrl, address);
-    if (held < input.funding) {
-      await fundFromAccount(account, address, input.funding - held);
-    }
     await deployFromOwnerA(a, b, input.salt, address, account.rpcUrl);
   }
   const multisigId = await ensureListed(a, address);

@@ -22,7 +22,7 @@ import {
   waitForPrivateStrk,
 } from "./round-actions";
 import { planRound, ROUND_LIMITS } from "./round-budget";
-import { isDeployed, publicStrk, strkLabel } from "./round-chain";
+import { isRegisteredInPool, publicStrk, strkLabel } from "./round-chain";
 import { shareViewingKey } from "./round-cosign";
 import { establishMultisig, roundMultisigAddress } from "./round-multisig";
 import { ownerPhrase } from "./round-owners";
@@ -36,6 +36,7 @@ import {
 } from "./round-state";
 import { closeOwnerWallets, type OwnerWallet, openOwnerWallet, saveCoOwner } from "./round-wallets";
 
+const RESUME = "Run the command again from this checkout.";
 const KEPT =
   "The round's directory was kept. Run the command again from this checkout to return what is left.";
 
@@ -72,7 +73,6 @@ test("an Argent multisig uses private balances and returns its funds", async () 
   const relay = nostrRelayOverride();
   let context: RoundContext | null = null;
   let actionCost: bigint | null = null;
-  let recovered = false;
   try {
     for (const role of ["a", "b"] as const) {
       wallets.push(
@@ -93,31 +93,17 @@ test("an Argent multisig uses private balances and returns its funds", async () 
     if (record.multisigAddress !== undefined && record.multisigAddress !== address) {
       throw new Error("The kept round names a different multisig than these owners derive.");
     }
-    const unfinished = stored.kind === "kept" && (await isDeployed(rpcUrl, address));
-    // A kept round may have funded its address and stopped before deploying;
-    // only what that address still lacks has to come from the funding account.
+    // A kept round resumes where it stopped: funded, deployed, or registered.
+    // Only what its address still lacks has to come from the funding account.
     const held = await publicStrk(rpcUrl, address);
     const needed = (plan.funding > held ? plan.funding - held : 0n) + ROUND_LIMITS.maxTransferFee;
-    if (!unfinished && startBalance < needed) {
+    if (startBalance < needed) {
       throw new Error(
         `The funding account holds ${strkLabel(startBalance)} STRK; this round needs ${strkLabel(needed)}. Nothing was sent.`,
       );
     }
     record = { ...record, multisigAddress: address };
     await writeRound(ROUND_DIRECTORY, record);
-
-    if (unfinished) {
-      // An earlier run deployed this multisig and did not finish. Its state is
-      // not known, so this run only returns what it holds. One pass is enough:
-      // what a pass leaves behind cannot pay for its own return.
-      context = await establishMultisig({ a, account, address, b, funding: 0n, salt: record.salt });
-      const returned = await returnFunds(context, account.address, plan.poolFee, null);
-      recovered = true;
-      await clearRound(ROUND_DIRECTORY);
-      throw new Error(
-        `Returned an unfinished round's funds: ${strkLabel(returned.withdrawn ?? 0n)} STRK withdrawn, ${strkLabel(returned.swept ?? 0n)} STRK swept. Run the command again for a full round.`,
-      );
-    }
 
     const round = await test.step("Fund and deploy the multisig", () =>
       establishMultisig({ a, account, address, b, funding: plan.funding, salt: record.salt }));
@@ -127,8 +113,12 @@ test("an Argent multisig uses private balances and returns its funds", async () 
     await test.step("Share the viewing key with the co-owner", () =>
       shareViewingKey(a, b, multisigId));
 
-    await test.step("Register the multisig with the pool", () =>
-      sendAccountAction(round, { kind: "register" }));
+    await test.step("Register the multisig with the pool", async () => {
+      // A kept round that registered already paid the pool for it.
+      if (await isRegisteredInPool(rpcUrl, address)) return;
+      await sendAccountAction(round, { kind: "register" });
+      expect(await isRegisteredInPool(rpcUrl, address)).toBe(true);
+    });
 
     const deposited = await test.step("Deposit STRK", async () => {
       const publicBefore = await publicStrk(rpcUrl, address);
@@ -187,20 +177,19 @@ test("an Argent multisig uses private balances and returns its funds", async () 
     await clearRound(ROUND_DIRECTORY);
   } catch (error) {
     const reason = error instanceof Error ? error.message : "The round failed.";
-    if (recovered) {
-      throw error;
-    }
     if (context === null) {
       throw new Error(`${reason}\n${KEPT}`);
     }
     // The round failed with a deployed multisig. Send back what it holds now.
-    // A pass that completes leaves only what cannot pay for its own return, so
-    // the round is cleared; if the pass fails, the next run retries it.
+    // A registered multisig is kept, so the next run resumes it instead of
+    // paying the pool to register a new one; any other is cleared once its
+    // funds are back. If returning fails, the next run retries it.
     let outcome: string;
     try {
       const returned = await returnFunds(context, account.address, plan.poolFee, actionCost);
-      await clearRound(ROUND_DIRECTORY);
-      outcome = `Funds were returned: ${strkLabel(returned.withdrawn ?? 0n)} STRK withdrawn, ${strkLabel(returned.swept ?? 0n)} STRK swept.`;
+      const registered = await isRegisteredInPool(rpcUrl, context.multisigAddress);
+      if (!registered) await clearRound(ROUND_DIRECTORY);
+      outcome = `Funds were returned: ${strkLabel(returned.withdrawn ?? 0n)} STRK withdrawn, ${strkLabel(returned.swept ?? 0n)} STRK swept.${registered ? ` The registered multisig was kept; the next run resumes it. ${RESUME}` : ""}`;
     } catch (returnError) {
       const detail = returnError instanceof Error ? returnError.message : "unknown";
       outcome = `Returning the funds failed too (${detail}). ${KEPT}`;
