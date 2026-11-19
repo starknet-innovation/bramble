@@ -29,6 +29,10 @@ are separate. This suite covers the wallet UI.
   ETH at or under `0.00002`, or WBTC at or under `0.000002`. Any other symbol,
   including STRK, is ignored. No quote under the cap means that spec is skipped
   and nothing is submitted.
+- Only the funded account may broadcast. A firewall in the browser
+  (`tests/live/broadcast-firewall.ts`) blocks any transaction, deploy, or
+  paymaster execute from another account, or one it cannot read, before it
+  leaves. The suite stops before any spec if the firewall saw no wallet traffic.
 - Retries are 0. A run that dies after submit does not send the transaction
   again by itself. Starting the command again will send again.
 - Traces, screenshots, and video are off. The signing key is still typed into

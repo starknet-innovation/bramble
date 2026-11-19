@@ -7,10 +7,16 @@
 import { getTokenBalances } from "@bramble/starknet/rpc";
 import { withTokenId } from "@bramble/wallet-model/preferences";
 import { expect, test } from "../../e2e/fixtures";
+import { waitForSuccessfulReceipt } from "../../live/chain";
+import {
+  expectActivity,
+  openStrkReview,
+  readGaslessOffers,
+  submitGaslessOffer,
+} from "../../live/send";
 import { requireLocalMainnetAccount } from "../local-mainnet-account";
-import { readPublicBalance, waitForSuccessfulReceipt } from "../local-mainnet-chain";
+import { readPublicBalance } from "../local-mainnet-chain";
 import { gaslessOfferWithinCap, SELF_TRANSFER_AMOUNT } from "../local-mainnet-limits";
-import { expectActivity, openStrkReview, readGaslessOffers, submitGaslessOffer } from "./send";
 import { openFundedWallet } from "./session";
 
 const account = await requireLocalMainnetAccount();

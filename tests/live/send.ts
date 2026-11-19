@@ -1,12 +1,12 @@
 /**
- * Drives a public self-transfer through the Send review. Confirm is clicked
- * only after the screen shows a STRK fee inside the hard cap.
+ * Drives a public transfer through the Send review on any network. Confirm is
+ * clicked only after the screen shows a STRK fee inside the caller's cap.
  */
 
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { checkDisplayedStrkFee, MAX_TX_FEE_STRK } from "../local-mainnet-limits";
+import { checkDisplayedStrkFee } from "./fee-cap";
 
 const HASH_IDS = ["send-success-hash", "send-pending-hash", "send-failure-hash"] as const;
 
@@ -47,19 +47,19 @@ const reviewFeeText = async (page: Page): Promise<string> => {
   return latest;
 };
 
-const assertFeeAcceptable = (text: string): void => {
+const assertFeeAcceptable = (text: string, maxFeeStrk: string): void => {
   if (text.includes("less than this transaction needs")) {
     throw new Error(
       "The account does not have enough STRK for this self-transfer and its fee. Nothing was submitted.",
     );
   }
-  const check = checkDisplayedStrkFee(text);
+  const check = checkDisplayedStrkFee(text, maxFeeStrk);
   if (check.kind === "ok") {
     return;
   }
   const why =
     check.kind === "over"
-      ? `the displayed fee is above the ${MAX_TX_FEE_STRK} STRK cap`
+      ? `the displayed fee is above the ${maxFeeStrk} STRK cap`
       : "the review did not show a STRK fee";
   throw new Error(`Refusing to submit: ${why}. Nothing was submitted.`);
 };
@@ -98,11 +98,16 @@ const submittedHash = async (page: Page): Promise<string> => {
 /**
  * Sends `amount` of `symbol` to `recipient` through the review screen.
  * Returns the transaction hash once the wallet has one. Does not click
- * Confirm when the fee is missing, not STRK, or above the cap.
+ * Confirm when the fee is missing, not STRK, or above `maxFeeStrk`.
  */
 export const selfTransfer = async (
   page: Page,
-  input: { readonly amount: string; readonly recipient: string; readonly symbol: "ETH" | "STRK" },
+  input: {
+    readonly amount: string;
+    readonly maxFeeStrk: string;
+    readonly recipient: string;
+    readonly symbol: "ETH" | "STRK";
+  },
 ): Promise<string> => {
   await page.locator('.action-tile[data-view="send"]').click();
   await page.locator("#send-recipient-search").fill(input.recipient);
@@ -114,7 +119,7 @@ export const selfTransfer = async (
   await expect(page.locator("#send-review-button")).toBeEnabled();
   await page.locator("#send-review-button").click();
   await expect(page.locator("#send-review-stage")).toBeVisible();
-  assertFeeAcceptable(await reviewFeeText(page));
+  assertFeeAcceptable(await reviewFeeText(page), input.maxFeeStrk);
   await expect(page.locator("#send-confirm-button")).toBeEnabled();
   await page.locator("#send-confirm-button").click();
   return submittedHash(page);
