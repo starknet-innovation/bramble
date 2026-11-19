@@ -199,8 +199,15 @@ test("an Argent multisig uses private balances and returns its funds", async () 
     await test.step("Sweep the multisig's public STRK back", async () => {
       const before = await publicStrk(rpcUrl, account.address);
       const swept = await sweepPublicStrk(round, account.address);
-      expect(swept).not.toBeNull();
-      expect(await publicStrk(rpcUrl, account.address)).toBe(before + (swept?.amount ?? 0n));
+      // Nothing to sweep is a pass when what is left is only the fee margin a
+      // sweep keeps back, as after a resumed round that sent no public STRK.
+      if (swept === null) {
+        expect(await publicStrk(rpcUrl, address)).toBeLessThanOrEqual(
+          2n * ROUND_LIMITS.maxTransferFee,
+        );
+        return;
+      }
+      expect(await publicStrk(rpcUrl, account.address)).toBe(before + swept.amount);
     });
 
     const endBalance = await publicStrk(rpcUrl, account.address);
