@@ -10,7 +10,7 @@ import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
 import type { LocalMainnetAccount } from "../local-mainnet-account";
 import { waitForSuccessfulReceipt } from "../local-mainnet-chain";
 import type { RoundContext } from "./round-actions";
-import { ROUND_LIMITS } from "./round-budget";
+import { feeRefusal, ROUND_LIMITS } from "./round-budget";
 import { fundFromAccount, isDeployed, publicStrk } from "./round-chain";
 import type { FeeReview } from "./round-cosign";
 import { callWallet, type OwnerWallet } from "./round-wallets";
@@ -127,9 +127,8 @@ const deployFromOwnerA = async (
   if (review.feeAffordability === "insufficient") {
     throw new Error("The multisig address cannot pay for its own deployment.");
   }
-  if (review.fee.unit !== "FRI" || BigInt(review.fee.overallFee) > ROUND_LIMITS.maxDeployFee) {
-    throw new Error("The deployment fee is not in STRK or is above its ceiling. Not deployed.");
-  }
+  const refusal = feeRefusal(review.fee, ROUND_LIMITS.maxDeployFee, "deployment");
+  if (refusal) throw new Error(refusal);
   const sent = await callWallet<{ readonly transactionHash?: string }>(a.page, {
     review,
     type: "wallet.deployArgentMultisig",

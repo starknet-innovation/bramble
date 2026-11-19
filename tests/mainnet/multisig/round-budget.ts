@@ -4,7 +4,7 @@
  * The round moves STRK only: the funding account pays the multisig, and what
  * the multisig does not spend on fees goes back to the funding account.
  */
-import { parseTokenAmount } from "@bramble/starknet/rpc";
+import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
 import { STRK_TOKEN_DECIMALS } from "@bramble/wallet-model/networks";
 import { MAX_PROTOCOL_FEE_RAW } from "../strk20-pool-fee";
 
@@ -30,6 +30,25 @@ export const ROUND_LIMITS = {
   /** Principal of the private self-transfer. It never leaves the multisig. */
   transferAmount: strk("0.1"),
 } as const;
+
+/**
+ * Why a quoted fee is refused, naming the figure so a too-tight ceiling can be
+ * told from a real problem; null when it may be paid. `unit` and `overallFee`
+ * are the wallet's fee review, which quotes the most the transaction may spend.
+ */
+export const feeRefusal = (
+  fee: { readonly overallFee: string; readonly unit: string },
+  ceiling: bigint,
+  what: string,
+): string | null => {
+  if (fee.unit !== "FRI") {
+    return `The ${what} fee is quoted in ${fee.unit}, not STRK. Nothing was sent.`;
+  }
+  const quoted = BigInt(fee.overallFee);
+  return quoted > ceiling
+    ? `The ${what} fee may reach ${formatTokenAmount(quoted, STRK_TOKEN_DECIMALS)} STRK, above its ${formatTokenAmount(ceiling, STRK_TOKEN_DECIMALS)} STRK ceiling. Nothing was sent.`
+    : null;
+};
 
 /** Amounts one round commits to, all in FRI. */
 export type RoundPlan = {

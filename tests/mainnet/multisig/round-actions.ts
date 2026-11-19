@@ -7,7 +7,7 @@
  */
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
 import { mainnetToken, waitForSuccessfulReceipt } from "../local-mainnet-chain";
-import { ROUND_LIMITS, sweepableAmount } from "./round-budget";
+import { feeRefusal, ROUND_LIMITS, sweepableAmount } from "./round-budget";
 import { publicStrk, strkLabel, strkTransferCall } from "./round-chain";
 import {
   cardIn,
@@ -145,9 +145,8 @@ const authorizePrivateAction = async (
 };
 
 const requireFee = (fee: FeeReview, ceiling: bigint, what: string): void => {
-  if (fee.unit !== "FRI" || BigInt(fee.overallFee) > ceiling) {
-    throw new Error(`The ${what} fee is not in STRK or is above its ceiling. Nothing was sent.`);
-  }
+  const refusal = feeRefusal(fee, ceiling, what);
+  if (refusal) throw new Error(refusal);
 };
 
 /**

@@ -7,7 +7,13 @@ import { describe, expect, test } from "bun:test";
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
 import { MAX_PROTOCOL_FEE_RAW } from "../strk20-pool-fee";
-import { planRound, ROUND_LIMITS, sweepableAmount, withdrawableAmount } from "./round-budget";
+import {
+  feeRefusal,
+  planRound,
+  ROUND_LIMITS,
+  sweepableAmount,
+  withdrawableAmount,
+} from "./round-budget";
 import { strkTransferCall } from "./round-chain";
 import { ownerPhrase } from "./round-owners";
 import { parseRoundRecord } from "./round-state";
@@ -38,6 +44,23 @@ describe("round budget", () => {
   test("refuses a pool fee above the ceiling, and a negative one", () => {
     expect(() => planRound(MAX_PROTOCOL_FEE_RAW + 1n)).toThrow("Nothing was funded");
     expect(() => planRound(-1n)).toThrow("Nothing was funded");
+  });
+});
+
+describe("fee refusal", () => {
+  test("names the quoted figure and the ceiling, and passes a fee at the ceiling", () => {
+    const ceiling = 3n * STRK;
+    expect(
+      feeRefusal({ overallFee: (ceiling + 1n).toString(), unit: "FRI" }, ceiling, "register"),
+    ).toBe(
+      "The register fee may reach 3.000000000000000001 STRK, above its 3 STRK ceiling. Nothing was sent.",
+    );
+    expect(
+      feeRefusal({ overallFee: ceiling.toString(), unit: "FRI" }, ceiling, "register"),
+    ).toBeNull();
+    expect(feeRefusal({ overallFee: "1", unit: "WEI" }, ceiling, "deposit")).toBe(
+      "The deposit fee is quoted in WEI, not STRK. Nothing was sent.",
+    );
   });
 });
 
