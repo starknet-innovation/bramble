@@ -29,9 +29,10 @@ Forgot password? guide, remote kill switches, and fixes from user reports.
 > (#956, #962, #968).
 
 ### Added
-- A Forgot password? guide on the unlock screen. It explains how to get back
-  in with your recovery phrase or backup; it doesn't reset anything (#903,
-  #970).
+- A Forgot password? guide on the unlock screen. It explains that the
+  password can't be reset, how to reinstall and restore from your recovery
+  phrase, and what the phrase doesn't bring back. Nothing on it resets the
+  wallet (#903, #970).
 - Bramble checks a signed feature-flag list from `flags.bramble.fi` about every
   30 minutes, without cookies or account details, so a feature that misbehaves
   can be switched off quickly. Features stay off unless they ship on or you
