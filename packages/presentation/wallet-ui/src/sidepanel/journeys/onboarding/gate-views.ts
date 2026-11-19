@@ -8,12 +8,39 @@ import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { callout } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
+import { icon } from "@bramble/ui-kit/icons";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { recoveryGate } from "./gate-recovery-view";
 import { onboardingWizard } from "./onboarding-views";
 
 const gateBrand = (): string => `<div class="gate-brand">${BRAMBLE_MARK}</div>`;
+
+/**
+ * Guidance for a forgotten password (issue 903). Text only: Bramble never
+ * stores the password, so there is nothing to reset here, and nothing on this
+ * screen removes or replaces the wallet (issues 456 and 715). The way back is a
+ * reinstall and restore, and the list says what a phrase leaves behind.
+ */
+const forgotPassword = (): string => `
+  <details class="disclosure gate-forgot" data-disclosure="unlock-forgot-password">
+    <summary>
+      <span class="menu-copy"><strong>Forgot password?</strong></span>
+      <span class="disclosure-mark">${icon("chevronRight")}</span>
+    </summary>
+    <div class="disclosure-body">
+      <p>Bramble can't recover or reset it. It's never stored.</p>
+      <p>To get back in, remove Bramble from this browser, reinstall it and restore from your recovery phrase with a new password. Your funds stay on Starknet.</p>
+      <p>Your recovery phrase doesn't restore:</p>
+      <ul>
+        <li>Accounts from imported keys or other recovery phrases</li>
+        <li>Ledger accounts (add them again with your device)</li>
+        <li>Contacts, site connections and settings</li>
+        <li>Activity history</li>
+      </ul>
+      <p><strong>Without your recovery phrase, removing Bramble loses access to its funds for good.</strong></p>
+    </div>
+  </details>`;
 
 /**
  * First-run screen: a staged fresh-wallet, recovery-phrase, or Ledger journey.
@@ -82,6 +109,7 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
           label: "Unlock",
           type: "submit",
         })}
+        ${forgotPassword()}
       </div>
     </form>
   </section>`;

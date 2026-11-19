@@ -23,6 +23,12 @@ export const PRIVACY_ERROR_COPY: readonly (readonly [string, string])[] = [
     PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   ],
   ["private balances are already active", "Private balances are already active."],
+  // A site's Wallet-API register action for an account already registered
+  // with the pool; the site receives INVALID_REQUEST_PAYLOAD.
+  [
+    "invalid strk20 registration request: account already registered",
+    "Private balances are already active.",
+  ],
   // Settings → Unlock private transactions (mc-wallet 668). Pressing it again
   // is safe: a second release finds nothing to clear.
   ["private unlock failed", "Couldn't unlock private transactions. Try again."],

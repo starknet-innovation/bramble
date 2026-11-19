@@ -88,6 +88,11 @@ const STRK20_STAGE_COPY: ReadonlyMap<string, (detail: string | undefined) => str
   ["insufficient-fee", withReason("The fee couldn't be covered")],
   ["invalid-nonce", () => "The account's nonce changed. Review the transaction again."],
   ["proof-rejected", withReason("The privacy pool rejected the proof")],
+  // Proving API UNSUPPORTED_BUILTIN (1002): the prover can't prove this call.
+  [
+    "unsupported-builtin",
+    withReason("The privacy prover can't prove this transaction (unsupported builtin)"),
+  ],
   ["validation-failed", withReason("The private transaction failed validation")],
 ]);
 

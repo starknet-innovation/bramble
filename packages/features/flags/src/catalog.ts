@@ -37,8 +37,11 @@ export type KnownFlag = {
 export type FlagCatalog = Readonly<Record<string, KnownFlag>>;
 
 /**
- * Bundled defaults. `swap.enabled` mirrors the in-wallet swap that ships
- * today, so the publisher can kill it but never resurrect it past this build.
+ * Bundled defaults. Flags stay off unless someone deliberately turns them on:
+ * a new feature is bundled `enabled: false`, and only a feature that already
+ * ships may be bundled on, as `kill-only` (`tests/catalog.test.ts`).
+ * `swap.enabled` mirrors the in-wallet swap that ships today, so the publisher
+ * can kill it but never resurrect it past this build.
  *
  * `qsb.vaults` shows the QSB vault entry points (the drawer row, the
  * onboarding choices and the `qsb-*` screens). It ships off, and only a

@@ -5,7 +5,7 @@
  */
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressText, sameFelt } from "@bramble/wallet-model/networks";
 
 /** A token the wallet tracks on this network. */
 export type MultisigStrk20ReviewToken = {
@@ -44,6 +44,6 @@ export const reviewAmount = (
 
 /** The account and network lines every card starts with. */
 export const reviewScopeLines = (scope: MultisigStrk20ReviewScope): readonly string[] => [
-  `Account ${scope.accountAddress}`,
+  `Account ${addressText(scope.accountAddress)}`,
   `Network ${scope.network}`,
 ];

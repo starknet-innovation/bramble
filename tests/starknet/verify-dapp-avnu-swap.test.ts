@@ -34,7 +34,8 @@ import {
 const ROUTER = "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f";
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
-const UNTRACKED = "0x0abc000000000000000000000000000000000000000000000000000000000def";
+// Two leading zeros: a 0x0abc… spelling sits above the field prime and is not an address.
+const UNTRACKED = "0x00abc00000000000000000000000000000000000000000000000000000000def";
 
 const tokens: readonly TokenConfig[] = [
   {
@@ -91,7 +92,7 @@ describe("a dapp multi_route_swap is decoded on the review card", () => {
       contractAddress: ROUTER,
       entrypoint: AVNU_MULTI_ROUTE_SWAP,
       kind: "swap",
-      summary: "Swap 500 USDC for at least 0.19 ETH, paid to 0x1234…bcde",
+      summary: "Swap 500 USDC for at least 0.19 ETH, paid to 0x0123…bcde",
     });
     expect(codesOf(report)).not.toContain("foreign-beneficiary");
     expect(codesOf(report)).not.toContain("undecoded-swap");
@@ -107,7 +108,7 @@ describe("a dapp multi_route_swap is decoded on the review card", () => {
     );
 
     expect(report.calls[0]?.summary).toBe(
-      "Swap 500 USDC for at least 190000000000000000 units of 0xabc0…0def, paid to 0x1234…bcde",
+      "Swap 500 USDC for at least 190000000000000000 units of 0x00ab…0def, paid to 0x0123…bcde",
     );
   });
 
@@ -115,12 +116,12 @@ describe("a dapp multi_route_swap is decoded on the review card", () => {
     const report = verifyCalls([swapCall(CLEAN_RECIPIENT)], context);
 
     expect(report.calls[0]?.summary).toBe(
-      "Swap 500 USDC for at least 0.19 ETH, paid to 0x777b…bbcc",
+      "Swap 500 USDC for at least 0.19 ETH, paid to 0x0777…bbcc",
     );
     expect(report.flags).toContainEqual({
       code: "foreign-beneficiary",
       message:
-        "This swap pays its proceeds to 0x777b…bbcc, not to this account. Reject it unless you meant to send them there.",
+        "This swap pays its proceeds to 0x0777…bbcc, not to this account. Reject it unless you meant to send them there.",
     });
     // An annotation, not a refusal: paying a swap to another account can be intended.
     expect(refuseOnPoisonedRecipient(report)).toBeNull();
@@ -144,7 +145,7 @@ describe("a dapp multi_route_swap is decoded on the review card", () => {
       contractAddress: ROUTER,
       entrypoint: AVNU_MULTI_ROUTE_SWAP,
       kind: "unknown",
-      summary: "Call multi_route_swap on 0x4270…3b0f",
+      summary: "Call multi_route_swap on 0x0427…3b0f",
     });
     expect(report.flags).toContainEqual({
       code: "undecoded-swap",

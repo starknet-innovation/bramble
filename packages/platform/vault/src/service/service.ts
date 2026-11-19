@@ -22,6 +22,7 @@ import {
   findNetworkAccount,
   selectSourceAccount,
 } from "../accounts/network-account";
+import { findPreFixReadyAccountIds } from "../accounts/ready-key-drift";
 import {
   deriveVaultStrk20ViewingKey,
   previewImportedStrk20ViewingPublicKey,
@@ -32,7 +33,7 @@ import { findVaultAccount } from "../accounts/vault-account";
 import type { EncryptedStore } from "../encrypted-store";
 import type { KmsPort } from "../kms-port";
 import { migrateVault } from "../schema/migrations";
-import { isVaultV13, type Vault } from "../schema/schema";
+import { isVaultV14, type Vault } from "../schema/schema";
 import { readMigratedVault } from "../schema/store-migration";
 import { requireGrantAuthorization, rollbackRevokedGrant } from "./grant-authorization";
 import { createGrantCache } from "./grant-cache";
@@ -100,6 +101,11 @@ export const createWalletVaultService = ({
 }: WalletVaultServiceOptions): WalletVaultService => {
   assertStoreAccess("vault", actor);
   const grants = createGrantCache();
+  // Ready key verdicts for this unlock, keyed by account id. The answer is a
+  // function of the account's phrase and stored key, which cannot change while
+  // the id stands, so the phrase is decrypted and derived once per unlock
+  // rather than on every Home poll. Only successful checks are kept.
+  const readyKeyVerdicts = new Map<string, boolean>();
   const encryptedStore = grants.watch(primaryStore);
   const requirePassphrase = (vaultPassphrase: string): void => {
     if (!isVaultPassphrase(vaultPassphrase)) {
@@ -163,6 +169,17 @@ export const createWalletVaultService = ({
         input.poolAddress,
       );
     },
+    async hasPreFixReadyKey(input) {
+      const cached = readyKeyVerdicts.get(input.accountId);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
+      const accounts = vault.accounts.filter((account) => account.id === input.accountId);
+      const affected = (await findPreFixReadyAccountIds(kms, { ...vault, accounts })).length > 0;
+      readyKeyVerdicts.set(input.accountId, affected);
+      return affected;
+    },
     async ensureNetworkAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const source = selectSourceAccount(vault);
@@ -190,11 +207,20 @@ export const createWalletVaultService = ({
         throw new WalletError("Account already exists");
       }
 
+      const provenance = vault.accountProvenance?.[source.id];
       await writeVault(
         encryptedStore,
         {
           ...vault,
           accounts: [...vault.accounts, account],
+          ...(provenance === undefined
+            ? {}
+            : {
+                accountProvenance: {
+                  ...vault.accountProvenance,
+                  [account.id]: provenance,
+                },
+              }),
           activeAccountId: account.id,
           signingKeys: [...vault.signingKeys, ...signingKeys],
         },
@@ -308,7 +334,10 @@ export const createWalletVaultService = ({
         findVaultAccount(vault, accountId),
       );
     },
-    clearGrantCache: grants.clear,
+    clearGrantCache() {
+      grants.clear();
+      readyKeyVerdicts.clear();
+    },
     readVault,
     importSeedAccounts: (input) =>
       serialized(() => importSeedVaultAccounts(encryptedStore, kms, readVaultSnapshot, input)),
@@ -371,7 +400,7 @@ export const createWalletVaultService = ({
       serialized(async () => {
         requirePassphrase(vaultPassphrase);
         const vault = migrateVault(await encryptedStore.readUnverified(vaultPassphrase));
-        invariant(isVaultV13(vault), "Unsupported vault schema");
+        invariant(isVaultV14(vault), "Unsupported vault schema");
         // A rollback can restore a revoked site connection or a removed viewing
         // key; the user cannot tell which, so recovery drops them all. A
         // multisig's shared key is kept: co-owners already hold it, so a rolled

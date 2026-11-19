@@ -36,7 +36,8 @@ import {
 } from "../browser-storage";
 import { resolveExtensionApi } from "../extension-api";
 import { createPendingDeployments } from "./accounts/pending-deployments";
-import { createWalletReader } from "./accounts/wallet-reader";
+import { analyticsInventoryLoader, createWalletReader } from "./accounts/wallet-reader";
+import { requestAccountAnalytics } from "./analytics/account-analytics";
 import { observeTechnicalDataConsent, technicalDataAllowed } from "./analytics/data-consent";
 import {
   analyticsPlatform,
@@ -154,11 +155,9 @@ const session = createBackgroundUnlockSession({
     for (const store of [vaultStores?.primary, vaultStores?.staging, vaultStores?.grants]) {
       store?.clearKeys();
     }
-    // Declared below; this runs only when the session locks, long after.
     void wallet.then((service) => service?.clearGrantCache());
   },
 });
-// Storage lockdown is a startup prerequisite. Requests fail closed if it cannot run.
 const storageReady = requireTrustedStorageAccess();
 const sessionReady = storageReady.then(() => session.restore());
 const wallet = vaultStores
@@ -206,13 +205,17 @@ const preferenceSignalsReady = preferences
     await refreshTechnicalDataConsent();
   })
   .catch(() => undefined);
-// The read-only slice of the fail-closed adapter above. A storage lockdown
-// failure rejects here instead of answering from a half-built store, and the
-// explorer read lane (MCW-V09-129) treats that as "not permitted".
+// A lockdown failure rejects reads; the explorer lane treats it as "not permitted".
 const readPreferences = (): Promise<WalletPreferences> => preferenceStore.read();
 const nativeFetch = globalThis.fetch.bind(globalThis);
 const browserNavigator = globalThis.navigator as Navigator & { readonly brave?: unknown };
 const gatewayAnalytics = createGatewayAnalytics({
+  account: (input, init) =>
+    requestAccountAnalytics(
+      analyticsInventoryLoader(wallet, () => session.peekPassphrase()),
+      input,
+      init,
+    ),
   enabled: async () => {
     await preferenceSignalsReady;
     return productAnalyticsEnabled && technicalDataConsent;
@@ -228,10 +231,7 @@ const gatewayAnalytics = createGatewayAnalytics({
   randomUuid: randomAnalyticsUuid,
   store: createBrowserLocalStore(),
 });
-// The pinned privacy SDK performs discovery and proving through its own
-// uninjectable fetch calls. One permanent exact-origin wrapper is therefore the
-// shared boundary for it and starknet.js; every non-gateway request is passed
-// through unchanged.
+// The SDK owns its fetch calls; exact-origin interception shares analytics with RPC.
 globalThis.fetch = gatewayAnalytics.fetch as typeof globalThis.fetch;
 const activityLog = createPricedActivityLog(createBrowserLocalStore(), {
   prices: () => priceService,
@@ -303,9 +303,6 @@ const strk20MaturityStore = (() => {
     return undefined;
   }
 })();
-// Built from the real preferences reader, not the preference-free default, so
-// the third-party explorer read lane obeys the user's per-network choice
-// (MCW-V09-129) instead of the built-in-RPC default.
 const runtimeRpc = {
   ...createDefaultRuntimeRpc({ readPreferences }),
   strk20: strk20MaturityStore

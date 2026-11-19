@@ -10,6 +10,7 @@ import {
   SHADOW_INVOKE_CONTROL,
   SHADOW_INVOKE_SETTLES_NOTHING,
 } from "@bramble/privacy/shadow-account-copy";
+import { addressText } from "@bramble/wallet-model/networks";
 import {
   PRIVACY_OTHER_WALLET_ACTION,
   PRIVATE_REQUEST_FAILED_NOTICE,
@@ -58,7 +59,7 @@ describe("shadow account approval card", () => {
       };
       const html = approvalCard(approval, status);
       expect(html).toContain(`Runs 1 call through your shadow account #7 for ${ORIGIN}`);
-      expect(html).toContain(`Shadow account anonymizer ${ANONYMIZER}`);
+      expect(html).toContain(`Shadow account anonymizer ${addressText(ANONYMIZER)}`);
       expect(html).toContain(SHADOW_INVOKE_SETTLES_NOTHING);
       expect(html).toContain(SHADOW_INVOKE_CONTROL);
       // The site's label is escaped wherever it reaches the card.

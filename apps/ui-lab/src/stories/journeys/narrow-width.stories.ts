@@ -29,6 +29,12 @@ export const Portfolio = narrowSidepanelStory("Portfolio · 320px", "portfolio",
   (document) => assertValueFits(document, ".token-amount"),
 ]);
 
+export const PortfolioReadyKeyNotice = narrowSidepanelStory(
+  "Ready key notice · 320px",
+  "portfolio",
+  "ready-key-notice",
+);
+
 export const PortfolioPricesOffline = narrowSidepanelStory(
   "Portfolio prices offline · 320px",
   "portfolio",
@@ -129,4 +135,10 @@ export const HomeNftsDiscovered = narrowSidepanelStory(
   "nft-home",
   "home-nfts-discovered",
   [(document) => assertInsidePanel(document, ".nft-actions button")],
+);
+
+export const ForgotPassword = narrowSidepanelStory(
+  "Forgot password · 320px",
+  "unlock",
+  "forgot-password",
 );

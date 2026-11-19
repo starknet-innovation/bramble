@@ -68,6 +68,9 @@ const FLAG_KEY_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*){1,3}$/;
 const MAX_FLAG_KEY_LENGTH = 64;
 const MAX_FLAGS = 64;
 const MAX_TTL_MS = 90 * 86_400_000;
+// `Date.UTC` maps years 0-99 to 1900-1999, so a timestamp before this year
+// would read differently here than in the publisher's `Date.parse`.
+const MIN_TIMESTAMP_YEAR = 2000;
 const SEMVER_PATTERN = /^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})$/;
 const TIMESTAMP_PATTERN = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z$/;
 const PAYLOAD_KEYS = ["channel", "expiresAt", "flags", "issuedAt", "schema", "sequence"];
@@ -109,7 +112,8 @@ const daysInMonth = (year: number, month: number): number =>
 
 /**
  * Parses a strict `YYYY-MM-DDTHH:MM:SSZ` timestamp to epoch milliseconds,
- * rejecting impossible calendar dates (2026-02-30) rather than rolling them.
+ * rejecting impossible calendar dates (2026-02-30) rather than rolling them,
+ * and any year before 2000, where `Date.UTC` and `Date.parse` disagree.
  */
 export const parseFlagTimestamp = (value: unknown): number => {
   const match = typeof value === "string" ? TIMESTAMP_PATTERN.exec(value) : null;
@@ -125,6 +129,7 @@ export const parseFlagTimestamp = (value: unknown): number => {
     number,
   ];
   if (
+    year < MIN_TIMESTAMP_YEAR ||
     month < 1 ||
     month > 12 ||
     day < 1 ||

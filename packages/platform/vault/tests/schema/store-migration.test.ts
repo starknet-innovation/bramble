@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createMemoryStore } from "@bramble/store/kv";
 import { createEncryptedStore, type EncryptedStore } from "@bramble/vault/encrypted-store";
 import { migrateVault } from "@bramble/vault/migrations";
-import { isVaultV13 } from "@bramble/vault/schema";
+import { isVaultV14 } from "@bramble/vault/schema";
 import {
   readMigratedVault,
   VAULT_MIGRATION_STORE_KEY,
@@ -48,7 +48,7 @@ describe("readMigratedVault", () => {
 
     const migrated = await readMigratedVault({ primary, staging }, vaultPassphrase);
 
-    expect(isVaultV13(migrated)).toBe(true);
+    expect(isVaultV14(migrated)).toBe(true);
     expect(migrated.accountSecrets).toEqual([]);
     expect(await primary.read(vaultPassphrase)).toEqual(migrated);
     expect(await staging.exists()).toBe(false);
@@ -80,6 +80,76 @@ describe("readMigratedVault", () => {
     );
     expect(await primary.read(vaultPassphrase)).toEqual(current);
     expect(await staging.exists()).toBe(false);
+  });
+
+  test("recovers and migrates an authenticated v13 stage over an unreadable primary", async () => {
+    const { backend, primary, staging } = stores();
+    const historical = { ...migrateVault(legacyV3), schemaVersion: 13 };
+    await staging.write(historical, vaultPassphrase);
+    await backend.set(VAULT_STORE_KEY, { corrupted: true });
+    const recovered = await readMigratedVault({ primary, staging }, vaultPassphrase);
+    expect(isVaultV14(recovered)).toBe(true);
+    expect(recovered.accounts).toEqual(historical.accounts);
+    expect(recovered.accountProvenance).toBeUndefined();
+    expect(await primary.read(vaultPassphrase)).toEqual(recovered);
+    expect(await staging.exists()).toBe(false);
+  });
+
+  // Pins today's behaviour (audit of PR 949): when the primary only fails its
+  // freshness check (rollback health), an authenticated older stage still
+  // replaces it through replaceUnverified, without the user's explicit consent.
+  // Safe only while every successful unlock removes the stage; change this
+  // test deliberately if that recovery is ever sent to explicit user recovery.
+  test("an authenticated older stage replaces a rollback-flagged primary", async () => {
+    const { primary, staging } = stores();
+    const newer = migrateVault({
+      ...legacyV3,
+      accounts: [account, { ...account, address: "0x124", id: "SN_MAIN:0x124" }],
+      signingKeys: [
+        ...legacyV3.signingKeys,
+        { accountId: "SN_MAIN:0x124", privateKey: "0x654322" },
+      ],
+    });
+    await primary.write(newer, vaultPassphrase);
+    const historical = { ...migrateVault(legacyV3), schemaVersion: 13 };
+    await staging.write(historical, vaultPassphrase);
+    let replaced: unknown;
+    const rolledBack: EncryptedStore = {
+      ...primary,
+      health: async () => (replaced === undefined ? "rollback" : "ok"),
+      read: async (passphrase) => {
+        if (replaced === undefined) throw new Error("vault rollback detected");
+        return primary.read(passphrase);
+      },
+      replaceUnverified: async (value, passphrase) => {
+        replaced = value;
+        await primary.write(value, passphrase);
+      },
+    };
+
+    const recovered = await readMigratedVault({ primary: rolledBack, staging }, vaultPassphrase);
+
+    expect(replaced).toEqual(recovered);
+    expect(recovered.accounts).toEqual(historical.accounts);
+    expect(await primary.read(vaultPassphrase)).toEqual(recovered);
+    expect(await staging.exists()).toBe(false);
+  });
+
+  test("refuses absent, empty or malformed recovery stages without replacing the primary", async () => {
+    for (const candidate of [undefined, null, {}, { schemaVersion: 13 }]) {
+      const { backend, primary, staging } = stores();
+      await backend.set(VAULT_STORE_KEY, { corrupted: true });
+      const before = await backend.get(VAULT_STORE_KEY);
+      const invalidStage: EncryptedStore = {
+        ...staging,
+        exists: async () => true,
+        read: async () => candidate,
+      };
+      await expect(
+        readMigratedVault({ primary, staging: invalidStage }, vaultPassphrase),
+      ).rejects.toThrow();
+      expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
+    }
   });
 
   test("leaves a current primary envelope byte-for-byte unchanged", async () => {
@@ -161,12 +231,12 @@ describe("readMigratedVault", () => {
       readMigratedVault({ primary: unwritablePrimary, staging }, vaultPassphrase),
     ).rejects.toThrow("injected primary write failure");
     expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
-    expect(isVaultV13(await staging.read(vaultPassphrase))).toBe(true);
+    expect(isVaultV14(await staging.read(vaultPassphrase))).toBe(true);
 
     await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toMatchObject({
       multisigStrk20KeyConflicts: [],
       multisigStrk20ViewingKeys: [],
-      schemaVersion: 13,
+      schemaVersion: 14,
       shadowAccountScopes: [],
     });
     expect(await staging.exists()).toBe(false);

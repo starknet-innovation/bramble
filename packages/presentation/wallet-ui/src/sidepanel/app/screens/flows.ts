@@ -8,7 +8,12 @@ import { receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  addressText,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
   AllowanceListing,
@@ -30,7 +35,6 @@ import { accountNamesSection, hiddenAccountsSection } from "../../journeys/setti
 import { groupsSection } from "../../journeys/settings/group-members";
 import {
   accountDisplayName,
-  accountLabel,
   flowHeader,
   flowScreen,
   noAccountEmpty,
@@ -152,12 +156,12 @@ const deployAccountFlow = (
                 { label: "Account", value: accountDisplayName(account, preferences) },
                 {
                   action: {
-                    attributes: { "data-copy": account.address },
+                    attributes: { "data-copy": addressText(account.address) },
                     icon: "copy",
                     label: "Copy address",
                   },
                   label: "Address",
-                  value: accountLabel(account.address),
+                  value: addressLabel(account.address),
                   valueStyle: "code",
                 },
                 { label: "Network", value: networkDisplayName(status.network) },

@@ -85,6 +85,7 @@ export const createSettingsRuntimeClient = (
     readonly collectiblesPreview?: boolean;
     readonly displayCurrency?: "eur" | "gbp" | "usd";
     readonly productAnalytics?: boolean;
+    readonly readyKeyNoticeDismissed?: string;
     readonly reliabilityDiagnostics?: boolean;
     readonly theme?: "dark" | "light";
     readonly vipNotice?: boolean;

@@ -7,7 +7,13 @@ import { describe, expect, test } from "bun:test";
 import type { FlagCatalog } from "@bramble/flags/catalog";
 import { BUNDLED_FLAGS, TOGGLE_FLAGS } from "@bramble/flags/catalog";
 import { type FlagRule, parseFlagPayload } from "@bramble/flags/contract";
-import { evaluateFlags, type FlagTargeting, flagBucket } from "@bramble/flags/evaluate";
+import {
+  evaluateFlags,
+  type FlagTargeting,
+  flagBucket,
+  flagKills,
+  killedDefaults,
+} from "@bramble/flags/evaluate";
 import { payload } from "./support/flag-fixture";
 
 const CATALOG: FlagCatalog = {
@@ -118,9 +124,49 @@ describe("evaluateFlags", () => {
     expect(evaluate({ "c.toggle": rule }, { chain: null })["c.toggle"]).toBe(false);
   });
 
+  test("without an install bucket a kill applies and rollout rules keep the default", () => {
+    const targeting = { bucket: null };
+    expect(evaluate({ "a.killonly": { enabled: false } }, targeting)["a.killonly"]).toBe(false);
+    expect(evaluate({ "c.toggle": { enabled: false } }, targeting)["c.toggle"]).toBe(false);
+    // A kill with a rollout is still a kill: it can never turn the flag on.
+    expect(
+      evaluate({ "a.killonly": { enabled: false, rollout: 1 } }, targeting)["a.killonly"],
+    ).toBe(false);
+    // Rollout-dependent "on" rules cannot be decided: the bundled default stays.
+    expect(evaluate({ "a.killonly": { enabled: true, rollout: 1 } }, targeting)["a.killonly"]).toBe(
+      true,
+    );
+    expect(evaluate({ "c.toggle": { enabled: true, rollout: 9999 } }, targeting)["c.toggle"]).toBe(
+      false,
+    );
+    // Rules without a rollout need no bucket.
+    expect(evaluate({ "c.toggle": { enabled: true } }, targeting)["c.toggle"]).toBe(true);
+  });
+
   test("an off-target kill-only rule kills the flag for that target", () => {
     const rule: FlagRule = { chains: ["SN_SEPOLIA"], enabled: true };
     expect(evaluate({ "a.killonly": rule }, { chain: "SN_MAIN" })["a.killonly"]).toBe(false);
     expect(evaluate({ "a.killonly": rule }, { chain: "SN_SEPOLIA" })["a.killonly"]).toBe(true);
+  });
+});
+
+describe("kept kills", () => {
+  test("flagKills lists only catalog flags with an enabled: false rule, sorted", () => {
+    const doc = docWith({
+      "a.killonly": { enabled: false },
+      "c.toggle": { enabled: true },
+      "z.unknown": { enabled: false },
+    });
+    expect(flagKills(CATALOG, doc)).toEqual(["a.killonly"]);
+    expect(flagKills(CATALOG, null)).toEqual([]);
+  });
+
+  test("killedDefaults turns off only the kills and keeps every other default", () => {
+    expect(killedDefaults(CATALOG, ["a.killonly"])).toEqual({
+      "a.killonly": false,
+      "b.killonly-off": false,
+      "c.toggle": false,
+    });
+    expect(killedDefaults(CATALOG, [])).toEqual(evaluateFlags(CATALOG, null, TARGETING));
   });
 });

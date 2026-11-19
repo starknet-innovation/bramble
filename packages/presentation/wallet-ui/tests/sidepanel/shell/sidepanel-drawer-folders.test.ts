@@ -10,6 +10,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { DEFAULT_GROUP_IDS } from "@bramble/settings/groups";
+import { addressText } from "@bramble/wallet-model/networks";
 import {
   bindDrawerFolders,
   createDrawerFolderState,
@@ -312,7 +313,7 @@ describe("account drawer folders", () => {
     const harness = mount([group("briefcase", "work", "Work")], "drawer");
     const row = harness.container.querySelector(`[data-switch-account="${acctA.id}"]`);
 
-    expect(row?.querySelector("code")?.getAttribute("title")).toBe(acctA.address);
+    expect(row?.querySelector("code")?.getAttribute("title")).toBe(addressText(acctA.address));
     expect(harness.container.querySelector(".account-drawer [data-copy]")).toBeNull();
     expect(harness.container.querySelector('.account-drawer [data-view="account"]')).not.toBeNull();
   });

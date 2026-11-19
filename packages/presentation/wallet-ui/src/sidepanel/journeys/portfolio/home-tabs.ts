@@ -20,14 +20,15 @@ import type { ActivityEntry } from "@bramble/transactions/activity";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
-import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
+import { addressLabel, explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { icon } from "../../shared/icons";
-import { accountLabel, inlineCopyButton } from "../../shared/parts";
+import { inlineCopyButton } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
 import {
   deploymentKnownFromPrivacy,
+  PRIVACY_NETWORK_UNAVAILABLE,
   type PrivacyDisclosureState,
   privacyIneligibleKind,
 } from "../privacy/privacy-model";
@@ -208,8 +209,8 @@ export const transactionRow = (
         <dl class="request-detail">
           <div><dt>Transaction</dt><dd class="tx-hash-row">${
             explorer
-              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
-              : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
+              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="View this transaction on Starkscan"><code>${escapeHtml(addressLabel(entry.hash))}</code></a>`
+              : `<code class="tx-hash is-plain">${escapeHtml(addressLabel(entry.hash))}</code>`
           }${inlineCopyButton(entry.hash, "Copy transaction hash")}</dd></div>
           ${
             row.counterparty
@@ -361,12 +362,17 @@ const tokensPanel = (
               .join("")}</ul>`;
   return `${body}
     ${
-      privacy.error
-        ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
+      privacy.blockerKind === "network"
+        ? `<div class="private-balance-summary muted">
+            <span class="private-balance-label">${icon("lock")}<span>Private balances</span></span>
+            <span class="token-fiat">${escapeHtml(PRIVACY_NETWORK_UNAVAILABLE)}</span>
+          </div>`
+        : privacy.error
+          ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
             <span class="private-balance-label">${icon("lock")}<span>Private balances</span></span>
             <span class="token-fiat">Try again</span>
           </button>`
-        : ""
+          : ""
     }
     ${
       hiddenCount > 0

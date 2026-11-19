@@ -275,4 +275,12 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   .gate-alt { border-top: 1px solid var(--bramble-hairline); display: grid; gap: ${SPACE.sm}; padding-top: ${SPACE.lg}; text-align: left; width: 100%; }
   .gate-alt .gate-form { flex: none; }
   .gate-alt .gate-cta { margin-top: ${SPACE.sm}; padding-top: 0; }
+  /* Forgot password: a quiet link-weight disclosure under Unlock that opens to
+     the restore guidance; someone who knows the password should not notice it. */
+  details.disclosure.gate-forgot { background: transparent; }
+  details.disclosure.gate-forgot > summary { color: var(--bramble-muted); justify-content: center; min-height: 44px; }
+  details.disclosure.gate-forgot[open] { background: var(--bramble-panel); }
+  .gate-forgot .disclosure-body { color: var(--bramble-muted); }
+  .gate-forgot .disclosure-body ul { display: grid; gap: ${SPACE.xs}; margin: 0; padding-left: ${SPACE.lg}; }
+  .gate-forgot .disclosure-body strong { color: var(--bramble-text); }
 `;

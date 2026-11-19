@@ -1,6 +1,6 @@
 # Bramble privacy policy
 
-Effective date: 1 September 2026
+Effective date: 14 November 2026
 
 Bramble is a self-custodial Starknet browser-extension wallet. This policy describes what data the
 extension handles, why it is needed, where it goes, and how a user controls it.
@@ -35,7 +35,9 @@ explicitly enable it. AVNU receives the asset and amount details needed for a us
 CoinGecko receives public asset identifiers needed for prices. The phishing feed is MetaMask's
 public eth-phishing-detect denylist, downloaded in full from `raw.githubusercontent.com` about every
 six hours without cookies; sites are checked against it on the device, and Bramble does not send the
-current site to that feed.
+current site to that feed. Bramble also downloads a signed feature-flag document from
+`flags.bramble.fi` about every 30 minutes, without cookies or a referrer. The request carries no
+account address or wallet identifier, and any gradual rollout is decided on the device.
 
 When the user explicitly shares or checks for an Argent multisig handoff, Bramble connects to the
 reviewed public Nostr relays `relay.primal.net` and `nos.lol`, or to one custom relay the user chose
@@ -62,6 +64,18 @@ installation is not an authenticated person or account. Retained events are used
 gateway feature usage, version adoption, failures, and multi-request funnel completion, and expire
 after 90 days. Disabling product analytics stops sending all analytics headers; the local random
 identifier remains so re-enabling does not create a misleading new installation.
+
+For requests attributable to an unlocked wallet account, analytics also includes a
+SHA-256 digest of its network and public address, plus whether it was explicitly
+created or imported. Missing provenance is reported as unknown. The gateway replaces
+this digest with a keyed pseudonym and stores first-seen and provenance days to count
+new, active and cumulative accounts across installations. It does not store the raw
+address or digest in this registry. Accountless, ambiguous and unsupported requests omit these
+fields. Opaque private-service transports also omit account metadata because their
+SDK work can outlive the originating operation. Daily account observations expire after 35 days; cumulative pseudonyms remain
+for the lifetime of account reporting. Turning analytics off stops further transmission
+and does not erase previously retained observations. No keys, phrases, balances or
+transaction details are included in account analytics.
 
 ## Reliability diagnostics
 

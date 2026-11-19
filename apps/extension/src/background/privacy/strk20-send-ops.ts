@@ -21,6 +21,7 @@ import {
 } from "@bramble/privacy/service";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
+  addressText,
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
@@ -140,7 +141,7 @@ const transferPreparation = async (
       poolAddress: config.poolAddress,
       recipient,
       summaries: [
-        `Send ${input.amount} ${context.token.symbol} privately to ${recipient}`,
+        `Send ${input.amount} ${context.token.symbol} privately to ${addressText(recipient)}`,
         summarizeStrk20Plan(
           plan,
           strk20FeeAssetFor(context.accountContext.account.networkId, plan),
@@ -221,7 +222,7 @@ const withdrawPreparation = async (
       poolAddress: config.poolAddress,
       recipient,
       summaries: [
-        `Unshield ${input.amount} ${context.token.symbol} to ${own ? "this account" : recipient}`,
+        `Unshield ${input.amount} ${context.token.symbol} to ${own ? "this account" : addressText(recipient)}`,
         summarizeStrk20Plan(
           plan,
           strk20FeeAssetFor(context.accountContext.account.networkId, plan),

@@ -11,6 +11,7 @@ import { escapeHtml } from "@bramble/core/html";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ActivityEntry } from "@bramble/transactions/activity";
 import {
+  addressText,
   DEFAULT_TRACKED_TOKENS,
   STARKNET_NETWORKS,
   sameFelt,
@@ -22,10 +23,10 @@ import { formatFri, inlineCopyButton } from "../../shared/parts";
 const fact = (term: string, value: string): string =>
   `<div><dt>${escapeHtml(term)}</dt><dd>${value}</dd></div>`;
 
-// A whole identifier with its copy control, shown in full: the expansion is
-// where the user reads an address, so it is not shortened there.
+// A whole address with its copy control, shown in full and padded: the
+// expansion is where the user reads an address, so it is not shortened there.
 const identifier = (value: string, copyLabel: string): string =>
-  `<code>${escapeHtml(value)}</code>${inlineCopyButton(value, copyLabel)}`;
+  `<code>${escapeHtml(addressText(value))}</code>${inlineCopyButton(addressText(value), copyLabel)}`;
 
 // The decimals of a fee token, from the bundled set or the user's tracked
 // tokens. A gasless fee is stored in base units without its scale, so a token

@@ -1,3 +1,4 @@
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { Hammer, ShieldCheck } from "lucide-react";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { confirmTokenDeployment, createNetworkFor, createNetworkNames } from "../../create/create-runtime";
@@ -6,7 +7,6 @@ import { buildTokenDeployment, type TokenDeployment } from "../../create/token-c
 import { TOKEN_PRESETS, type TokenStandard } from "../../create/token-presets";
 import { userErrorMessage } from "../../protocols/support/user-error";
 import type { ScreenId } from "../../shell/screens";
-import { shortenAddress } from "../../shell/screens";
 import { useWallet } from "../../wallet/connection/WalletProvider";
 import {
   type CreateFields,
@@ -128,7 +128,7 @@ export default function CreateToken({ makeSalt = randomSalt }: CreateTokenProps)
       setOperation({
         address: deployment.address,
         chainId,
-        message: `Created at ${shortenAddress(deployment.address)}.`,
+        message: `Created at ${addressLabel(deployment.address)}.`,
         tone: "success",
         transactionHash,
       });

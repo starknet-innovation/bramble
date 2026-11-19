@@ -200,7 +200,7 @@ describe("vault service guard branches", () => {
       importedSeeds: [],
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 13,
+      schemaVersion: 14,
       multisigStrk20KeyConflicts: [],
       multisigStrk20ViewingKeys: [],
       shadowAccountScopes: [],

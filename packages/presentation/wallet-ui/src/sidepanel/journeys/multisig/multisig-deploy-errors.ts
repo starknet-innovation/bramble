@@ -1,6 +1,6 @@
 /** User-facing recovery copy for Argent multisig deployment failures. */
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
-import { accountLabel } from "../../shared/parts";
 import { FEE_FUNDING_SHORTFALL } from "../../shell/deploy-errors";
 import { deploymentFundingMinimumText } from "./multisig-deploy-view";
 
@@ -32,7 +32,7 @@ export const deploymentFailureToast = (
     return "The fee review expired. Review the deployment again before confirming.";
   }
   if (FEE_FUNDING_SHORTFALL.test(raw)) {
-    return `Fund ${accountLabel(review.address)} with at least ${deploymentFundingMinimumText(review)}, then review the deployment again.`;
+    return `Fund ${addressLabel(review.address)} with at least ${deploymentFundingMinimumText(review)}, then review the deployment again.`;
   }
   return raw;
 };

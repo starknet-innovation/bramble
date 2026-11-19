@@ -28,6 +28,7 @@ import {
 const publisher = await createTestPublisher();
 
 const CATALOG: FlagCatalog = {
+  "beta.panel": { enabled: false, localOverride: true, remote: "toggle" },
   "beta.screen": { enabled: false, localOverride: true, remote: "toggle" },
   "swap.enabled": { enabled: true, remote: "kill-only" },
 };
@@ -48,7 +49,7 @@ describe("feature-flag client overrides", () => {
     const client = clientFor();
     expect(await client.snapshot("SN_MAIN")).toMatchObject({
       flags: { "beta.screen": false },
-      overridable: ["beta.screen"],
+      overridable: ["beta.panel", "beta.screen"],
       overridden: [],
     });
     expect(await client.setOverride("beta.screen", true)).toBe("applied");
@@ -92,6 +93,25 @@ describe("feature-flag client overrides", () => {
       overridden: [],
       source: "remote",
     });
+  });
+
+  test("two rapid overrides both persist", async () => {
+    // Each write re-reads the whole map, so unserialised writes would clobber
+    // each other; the second must see the first.
+    const store = createMemoryStore();
+    const client = clientFor(store);
+    const results = await Promise.all([
+      client.setOverride("beta.panel", true),
+      client.setOverride("beta.screen", true),
+    ]);
+    expect(results).toEqual(["applied", "applied"]);
+    expect(await store.get(FEATURE_FLAG_OVERRIDES_KEY)).toMatchObject({
+      flags: { "beta.panel": true, "beta.screen": true },
+    });
+    expect((await clientFor(store).snapshot("SN_MAIN")).overridden).toEqual([
+      "beta.panel",
+      "beta.screen",
+    ]);
   });
 
   test("a store that refuses writes reports unavailable and changes nothing", async () => {

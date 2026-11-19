@@ -107,6 +107,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Queues approvals only. Since the execution half moved out, its sole match
   // is the `./signature-waiters` import path; no secret material transits here.
   "apps/extension/src/background/privacy/strk20-ops.ts",
+  // Registration queueing split out of strk20-ops.ts by size. Like it, the sole
+  // match is the `./signature-waiters` import path; no secret material transits.
+  "apps/extension/src/background/privacy/strk20-register-ops.ts",
   // Active-account context split from strk20-wallet-ops; the vault passphrase
   // only transits into the protected signer wiring, never logged or stored.
   "apps/extension/src/background/privacy/strk20-op-context.ts",
@@ -121,6 +124,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/platform/ledger-protocol/src/broker.ts",
   "apps/extension/src/background/routing/unlock-errors.ts",
   "apps/extension/src/background/accounts/wallet-ops.ts",
+  // Ready key status: hands the non-renewing session passphrase to the vault's
+  // public-key check and returns only an account id and a boolean.
+  "apps/extension/src/background/accounts/ready-key-status.ts",
   // Deploy handlers split from wallet-ops (issue 431); the vault passphrase only
   // transits into the protected hash-signer wiring, never logged or stored.
   "apps/extension/src/background/accounts/deploy-account-ops.ts",
@@ -287,6 +293,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // the phrase key signs here and nothing is logged or persisted.
   "packages/platform/starknet/src/transactions/argent-recovery.ts",
   "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
+  // Pre-3.0 Ready key check: passes each stored phrase to Krusty's public-only
+  // derivation and returns account ids; no key or phrase leaves the call.
+  "packages/platform/vault/src/accounts/ready-key-drift.ts",
   // Multisig STRK20 viewing keys (#826): generated in the vault, stored only
   // here, and wrapped for co-owners. The key never enters a message or the UI.
   "packages/platform/vault/src/accounts/multisig-strk20-key.ts",

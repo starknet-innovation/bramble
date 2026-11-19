@@ -85,3 +85,39 @@ test("does not probe off Home, when locked, or with no account", async () => {
   expect(await cache.load({ ...statusFor("acc"), activeAccountId: null }, "home")).toBeNull();
   expect(reads).toBe(0);
 });
+
+const readyWallet = (readyKey: () => Promise<unknown>, readOnly = false) =>
+  ({
+    loadAccountSignability: async (): Promise<AccountSignabilityResponse> =>
+      readOnly
+        ? { accountId: "acc", ok: true, readOnly: true, reason: "guardian" }
+        : { accountId: "acc", ok: true, readOnly: false },
+    loadReadyKeyStatus: readyKey,
+  }) as unknown as SidepanelWallet;
+
+test("carries the Ready key notice flag for the same account on either verdict", async () => {
+  const affected = async () => ({ accountId: "acc", ok: true, preFixKey: true });
+  expect(
+    await createSignabilityCache(readyWallet(affected)).load(statusFor("acc"), "home"),
+  ).toEqual({ preFixReadyKey: true, readOnly: false });
+  expect(
+    await createSignabilityCache(readyWallet(affected, true)).load(statusFor("acc"), "home"),
+  ).toEqual({ preFixReadyKey: true, readOnly: true, reason: "guardian" });
+});
+
+test("drops a Ready key verdict for another account, a false one, or a failure", async () => {
+  for (const readyKey of [
+    async () => ({ accountId: "other", ok: true, preFixKey: true }),
+    async () => ({ accountId: "acc", ok: true, preFixKey: false }),
+    async () => null,
+    async () => {
+      throw new Error("lost reply");
+    },
+    () => {
+      throw new Error("synchronous");
+    },
+  ]) {
+    const cache = createSignabilityCache(readyWallet(readyKey as () => Promise<unknown>));
+    expect(await cache.load(statusFor("acc"), "home")).toEqual({ readOnly: false });
+  }
+});

@@ -4,8 +4,8 @@ import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField } from "@bramble/ui-kit/fields";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { icon } from "../../shared/icons";
-import { accountLabel } from "../../shared/parts";
 
 /**
  * What a stale multisig card can truthfully say about whether it went out: the
@@ -200,7 +200,7 @@ const collaborationTools = (
           "data-ms-signature-index": String(index),
         },
         icon: "copy",
-        label: `Signature from ${accountLabel(signature.publicKey)}`,
+        label: `Signature from ${addressLabel(signature.publicKey)}`,
         size: "small",
         variant: "ghost",
       }),
@@ -346,7 +346,7 @@ export const multisigIntentOutcome = (intent: ArgentMultisigSigningIntent): stri
       <h2>Transaction submitted</h2>
       <p>${escapeHtml(intent.summary)}</p>
       <div class="address-line">
-        <code title="${escapeHtml(hash)}">${escapeHtml(accountLabel(hash))}</code>
+        <code title="${escapeHtml(hash)}">${escapeHtml(addressLabel(hash))}</code>
         ${button({
           attributes: { "data-copy": hash },
           icon: "copy",

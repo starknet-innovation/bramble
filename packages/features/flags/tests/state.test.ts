@@ -1,6 +1,7 @@
 /**
  * Persisted flag state and the install bucket: malformed records read as
- * nothing stored, the bucket is drawn once, and store failures never throw.
+ * nothing stored, a future check time keeps the rollback floor, an unreadable
+ * store reads as unknown, the bucket is drawn once, and writes never throw.
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -37,7 +38,7 @@ describe("flag state", () => {
     ["absent", undefined],
     ["wrong version", { checkedAt: 0, document: null, schemaVersion: 2, sequence: 0 }],
     ["extra field", { checkedAt: 0, document: null, extra: 1, schemaVersion: 1, sequence: 0 }],
-    ["future checkedAt", { checkedAt: NOW + 1, document: null, schemaVersion: 1, sequence: 0 }],
+    ["non-integer checkedAt", { checkedAt: 1.5, document: null, schemaVersion: 1, sequence: 0 }],
     ["negative sequence", { checkedAt: 0, document: null, schemaVersion: 1, sequence: -1 }],
     [
       "oversized document",
@@ -51,8 +52,20 @@ describe("flag state", () => {
     expect(await readFlagState(store, NOW)).toEqual(EMPTY_FLAG_STATE);
   });
 
-  test("a failing store reads as empty and swallows writes", async () => {
-    expect(await readFlagState(failingStore, NOW)).toEqual(EMPTY_FLAG_STATE);
+  test("a future check time is clamped but keeps the document and sequence", async () => {
+    // A clock that stepped back must not drop the rollback floor: only the
+    // check time (the refresh throttle) is clamped to now.
+    const store = createMemoryStore();
+    await writeFlagState(store, { checkedAt: NOW + 1, document: "{}", sequence: 42 });
+    expect(await readFlagState(store, NOW)).toEqual({
+      checkedAt: NOW,
+      document: "{}",
+      sequence: 42,
+    });
+  });
+
+  test("an unreadable store reads as unknown, not empty, and swallows writes", async () => {
+    expect(await readFlagState(failingStore, NOW)).toBeNull();
     await writeFlagState(failingStore, EMPTY_FLAG_STATE);
   });
 });

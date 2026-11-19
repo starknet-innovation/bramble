@@ -222,6 +222,28 @@ const bindDeletes = (deps: MultisigUiDeps): void => {
   });
 };
 
+// Escape hides the co-signer hint without moving the pointer or focus (WCAG
+// 1.4.13); it shows again once the pointer leaves or focus moves on. While
+// hovered, the hint listens on the document, since focus may be elsewhere.
+const bindCosignerHintDismiss = (sync: HTMLElement | null): void => {
+  if (!sync) return;
+  const dismiss = (event: KeyboardEvent): void => {
+    if (event.key === "Escape") sync.setAttribute("data-hint-dismissed", "");
+  };
+  const restore = (): void => {
+    sync.removeAttribute("data-hint-dismissed");
+  };
+  sync.addEventListener("keydown", dismiss);
+  sync.addEventListener("focusout", restore);
+  sync.addEventListener("mouseenter", () =>
+    sync.ownerDocument.addEventListener("keydown", dismiss),
+  );
+  sync.addEventListener("mouseleave", () => {
+    sync.ownerDocument.removeEventListener("keydown", dismiss);
+    restore();
+  });
+};
+
 /**
  * Binds focused intent navigation, handoff, signing, refresh, and submission.
  */
@@ -266,6 +288,7 @@ export const bindMultisigIntentCards = (deps: MultisigUiDeps): void => {
         },
       );
     });
+  bindCosignerHintDismiss(deps.app?.querySelector<HTMLElement>(".multisig-intent-sync") ?? null);
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-open-intent]").forEach((button) => {
     button.addEventListener("click", () => {
       const accountId = button.dataset["msIntentAccount"];
