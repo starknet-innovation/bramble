@@ -94,9 +94,13 @@ test("an Argent multisig uses private balances and returns its funds", async () 
       throw new Error("The kept round names a different multisig than these owners derive.");
     }
     const unfinished = stored.kind === "kept" && (await isDeployed(rpcUrl, address));
-    if (!unfinished && startBalance < plan.funding + ROUND_LIMITS.maxTransferFee) {
+    // A kept round may have funded its address and stopped before deploying;
+    // only what that address still lacks has to come from the funding account.
+    const held = await publicStrk(rpcUrl, address);
+    const needed = (plan.funding > held ? plan.funding - held : 0n) + ROUND_LIMITS.maxTransferFee;
+    if (!unfinished && startBalance < needed) {
       throw new Error(
-        `The funding account holds ${strkLabel(startBalance)} STRK; a round needs ${strkLabel(plan.funding + ROUND_LIMITS.maxTransferFee)}. Nothing was sent.`,
+        `The funding account holds ${strkLabel(startBalance)} STRK; this round needs ${strkLabel(needed)}. Nothing was sent.`,
       );
     }
     record = { ...record, multisigAddress: address };

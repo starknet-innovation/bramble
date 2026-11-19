@@ -18,6 +18,7 @@ import { callWallet, type OwnerWallet } from "./round-wallets";
 const DEPLOY_TIMEOUT_MS = 4 * 60_000;
 const DEPLOY_INTERVAL_MS = 4_000;
 const AUTHORITY_TIMEOUT_MS = 3 * 60_000;
+const REVIEW_RETRIES = 4;
 
 type DeploymentReview = {
   readonly address: string;
@@ -110,17 +111,30 @@ const deployFromOwnerA = async (
   address: string,
   rpcUrl: string,
 ): Promise<void> => {
-  const reviewed = await callWallet<{ readonly deploymentReview: DeploymentReview }>(a.page, {
-    expectedAddress: address,
-    name: "Privacy round",
-    networkId: "SN_MAIN",
-    salt,
-    signerAccountId: a.accountId,
-    signerPublicKeys: [a.publicKeyX, b.publicKeyX],
-    threshold: 2,
-    type: "wallet.reviewArgentMultisigDeployment",
-  });
-  const review = reviewed.deploymentReview;
+  const reviewOnce = async (): Promise<DeploymentReview> =>
+    (
+      await callWallet<{ readonly deploymentReview: DeploymentReview }>(a.page, {
+        expectedAddress: address,
+        name: "Privacy round",
+        networkId: "SN_MAIN",
+        salt,
+        signerAccountId: a.accountId,
+        signerPublicKeys: [a.publicKeyX, b.publicKeyX],
+        threshold: 2,
+        type: "wallet.reviewArgentMultisigDeployment",
+      })
+    ).deploymentReview;
+  // Funding was just confirmed on one node; the wallet's balance read can land
+  // on a node that has not seen it yet. A review only reads, so ask again.
+  let review = await reviewOnce();
+  for (
+    let retry = 1;
+    retry <= REVIEW_RETRIES && review.feeAffordability === "insufficient";
+    retry += 1
+  ) {
+    await pause(DEPLOY_INTERVAL_MS * retry);
+    review = await reviewOnce();
+  }
   if (!sameFelt(review.address, address)) {
     throw new Error("The wallet reviewed a different multisig address. Nothing was deployed.");
   }
