@@ -58,8 +58,12 @@ extension.
   extension and checks each on-chain: a successful receipt, the exact amount
   moved to self, a balance drop of exactly the fee, and the Activity row. A
   broadcast firewall lets the wallet send only from the account under check,
-  so the import fixtures are never sent from. It spends testnet STRK only and
-  exits non-zero when any send fails.
+  so the import fixtures are never sent from. Accounts on a release the wallet
+  does not sign for (TX-05 Argent 0.3.1, TX-06 Argent 0.5.0, TX-08 Braavos
+  1.1.0) are checked the other way: Home shows "Read only", the allowlist stays
+  empty and the nonce does not move. TX-10 is skipped until the wallet can
+  import an sncast-shaped account (TA-07). About 0.25 testnet STRK a run;
+  exits non-zero when any check fails.
 - The test Ledger is optional. By default TA-32…TA-37 are skipped, so the run
   needs no device. With `BRAMBLE_SEPOLIA_LEDGER=1` the browser opens visibly and,
   after the other checks, asks you to plug in and unlock the test Ledger, open
