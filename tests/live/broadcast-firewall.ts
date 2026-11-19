@@ -29,9 +29,15 @@ export type BroadcastFirewall = {
   readonly inspected: () => number;
 };
 
+const BROADCAST_METHODS: readonly string[] = [...BROADCAST_RPC_METHODS, BROADCAST_PAYMASTER_METHOD];
+
 const isBroadcastMethod = (method: unknown): method is string =>
-  typeof method === "string" &&
-  (BROADCAST_RPC_METHODS.has(method) || method === BROADCAST_PAYMASTER_METHOD);
+  typeof method === "string" && BROADCAST_METHODS.includes(method);
+
+// How many times the raw body names a broadcast method. A body that names more
+// broadcasts than parse out of it (truncated, wrapped, not JSON) is refused.
+const mentions = (body: string): number =>
+  BROADCAST_METHODS.reduce((total, method) => total + body.split(method).length - 1, 0);
 
 // JSON-RPC params may be named (an object) or positional (an array).
 const param = (params: unknown, name: string): unknown =>
@@ -145,17 +151,23 @@ export const broadcastsIn = (body: string | null): readonly Broadcast[] =>
 
 /**
  * The broadcasts in `body` that may not leave: any with no readable sender,
- * and any naming a sender outside `allowed`.
+ * any naming a sender outside `allowed`, and an `unreadable` entry when the
+ * body names a broadcast method that does not parse out as one.
  */
 export const refusedBroadcasts = (
   body: string | null,
   allowed: readonly string[],
-): readonly Broadcast[] =>
-  broadcastsIn(body).filter(
+): readonly Broadcast[] => {
+  const found = broadcastsIn(body);
+  const refused = found.filter(
     (broadcast) =>
       broadcast.senders.length === 0 ||
       !broadcast.senders.every((sender) => allowed.some((ok) => sameFelt(ok, sender))),
   );
+  return body !== null && mentions(body) > found.length
+    ? [...refused, { method: "unreadable", senders: [] }]
+    : refused;
+};
 
 /**
  * Installs the firewall on every HTTP(S) request of `context`, the extension's
@@ -171,18 +183,16 @@ export const installBroadcastFirewall = async (
   const blocked: Broadcast[] = [];
   let inspected = 0;
   await context.route(/^https?:\/\//u, async (route) => {
-    const request = route.request();
-    if (request.method() === "POST") {
-      const body = request.postData();
-      if (rpcItems(body).length > 0) {
-        inspected += 1;
-      }
-      const refused = refusedBroadcasts(body, allowed);
-      if (refused.length > 0) {
-        blocked.push(...refused);
-        await route.abort("blockedbyclient");
-        return;
-      }
+    // Any method with a body is read, not just POST, so nothing slips by on a verb.
+    const body = route.request().postData();
+    if (rpcItems(body).length > 0) {
+      inspected += 1;
+    }
+    const refused = refusedBroadcasts(body, allowed);
+    if (refused.length > 0) {
+      blocked.push(...refused);
+      await route.abort("blockedbyclient");
+      return;
     }
     await route.fallback();
   });

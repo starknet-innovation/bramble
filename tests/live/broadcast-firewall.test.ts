@@ -50,10 +50,19 @@ describe("broadcast firewall", () => {
     }
   });
 
-  test("lets reads and non-JSON bodies through", () => {
+  test("lets reads and bodies that name no broadcast through", () => {
     expect(refusedBroadcasts(rpc("starknet_call", {}), [])).toEqual([]);
     expect(refusedBroadcasts("not json", [])).toEqual([]);
     expect(refusedBroadcasts(null, [])).toEqual([]);
+  });
+
+  test("refuses a body that names a broadcast it cannot parse", () => {
+    const unreadable = { method: "unreadable", senders: [] };
+    expect(refusedBroadcasts(invoke(ALLOWED).slice(0, -1), [ALLOWED])).toEqual([unreadable]);
+    expect(refusedBroadcasts(JSON.stringify({ wrapped: invoke(ALLOWED) }), [ALLOWED])).toEqual([
+      unreadable,
+    ]);
+    expect(refusedBroadcasts(invoke(ALLOWED), [ALLOWED])).toEqual([]);
   });
 
   test("allows an invoke from an allowed sender in any felt spelling", () => {
