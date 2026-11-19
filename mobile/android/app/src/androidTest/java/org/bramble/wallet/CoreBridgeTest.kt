@@ -45,7 +45,7 @@ class CoreBridgeTest {
         // An import is recovery pending with no accounts until discovery restores some (as
         // mobile/core/tests/parity.rs): restore OpenZeppelin 0 and 1, then project the active one
         // onto Mainnet, which is how the Mainnet vectors' records come to exist.
-        core.importWallet("parity password", fixture.getString("mnemonic"), null)
+        core.importWallet("parity password", fixture.getString("mnemonic"))
         val oz = { index: UInt -> RecoverySelection(AccountFamily.OPEN_ZEPPELIN, index, null) }
         val restored = core.restoreRecoveredAccounts(NetworkId.SEPOLIA, listOf(oz(0u), oz(1u)))
         core.selectAccount(restored.first().id)

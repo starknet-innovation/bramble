@@ -22,7 +22,7 @@ suspend fun WalletStore.importWallet(
     password: String,
 ) {
     val ticket = session.ticket()
-    calls.work(ticket) { walletCore.importWallet(password, phrase, null) }
+    calls.work(ticket) { walletCore.importWallet(password, phrase) }
     vaultWritten = true
 }
 

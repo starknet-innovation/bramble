@@ -76,7 +76,7 @@ final class AccountsBridgeTests: XCTestCase {
             vector.networkId == "SN_SEPOLIA" && vector.passphrase == nil && vector.accountIndex == 3
         }
         let core = try WalletCore(dataDir: directory(), clock: DeviceClock())
-        try core.importWallet(password: "parity password", phrase: fixture.mnemonic, passphrase: nil)
+        try core.importWallet(password: "parity password", phrase: fixture.mnemonic)
         let families: [String: AccountFamily] = ["openzeppelin": .openZeppelin, "argent": .argent, "braavos": .braavos]
         let selections = try vectors.map { vector in
             RecoverySelection(
@@ -122,7 +122,7 @@ final class AccountsBridgeTests: XCTestCase {
     @MainActor
     func testDiscoveryPausesRetriesAndRestores() async throws {
         let core = try WalletCore(dataDir: directory(), clock: DeviceClock())
-        try core.importWallet(password: "a strong password", phrase: try fixture().mnemonic, passphrase: nil)
+        try core.importWallet(password: "a strong password", phrase: try fixture().mnemonic)
         let network = try XCTUnwrap(supportedNetworks().first { $0.network == .sepolia })
         let transport = SwitchableTransport(offline: true)
         let driver = RecoveryScanDriver(core: core, rpc: RpcClient(transport: transport))
@@ -154,7 +154,7 @@ final class AccountsBridgeTests: XCTestCase {
     @MainActor
     func testCancelledDiscoveryIgnoresLateResults() async throws {
         let core = try WalletCore(dataDir: directory(), clock: DeviceClock())
-        try core.importWallet(password: "a strong password", phrase: try fixture().mnemonic, passphrase: nil)
+        try core.importWallet(password: "a strong password", phrase: try fixture().mnemonic)
         let network = try XCTUnwrap(supportedNetworks().first { $0.network == .sepolia })
         var driver: RecoveryScanDriver?
         let transport = CancellingTransport { await MainActor.run { driver?.cancel() } }

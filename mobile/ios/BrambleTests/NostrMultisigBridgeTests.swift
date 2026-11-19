@@ -14,7 +14,7 @@ final class NostrMultisigBridgeTests: XCTestCase {
     private func wallet(_ phrase: String) throws -> WalletCore {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
-        try core.importWallet(password: "parity password", phrase: phrase, passphrase: nil)
+        try core.importWallet(password: "parity password", phrase: phrase)
         _ = try core.restoreRecoveredAccounts(network: .sepolia, selections: [
             RecoverySelection(family: .openZeppelin, accountIndex: 0, classHash: nil)
         ])

@@ -24,7 +24,7 @@ final class MainnetSendTests: XCTestCase {
         // The imported vault must not outlive the test on any path, including a throw.
         defer { try? FileManager.default.removeItem(at: dir) }
         let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
-        try core.importWallet(password: "mainnet send test", phrase: phrase, passphrase: nil)
+        try core.importWallet(password: "mainnet send test", phrase: phrase)
         let network = try mainnet()
         let account = try XCTUnwrap(try core.restoreRecoveredAccounts(network: .mainnet, selections: [
             RecoverySelection(family: .openZeppelin, accountIndex: 0, classHash: nil)

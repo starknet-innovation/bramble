@@ -30,7 +30,7 @@ final class MainnetPrivacyTests: XCTestCase {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: dir) }
         let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
-        try core.importWallet(password: "mainnet privacy test", phrase: phrase, passphrase: nil)
+        try core.importWallet(password: "mainnet privacy test", phrase: phrase)
         let account = try XCTUnwrap(try core.ensureNetworkAccount(network: .mainnet))
         if let expected = environment["BRAMBLE_MOBILE_MAINNET_ADDRESS"] {
             XCTAssertEqual(Self.canonical(account.address), Self.canonical(expected))

@@ -129,6 +129,12 @@ ciphertext of W and its IV live in `noBackupFilesDir/biometric-w.bin`, written b
 
 ## 3. Storage and migration
 
+> **Superseded by wallet-core `v0.4.0` (M14, 2026-11-19).** The container below still holds the
+> vault, but its payload is now the extension's v13 schema and its `version` is 13. The v1 → v5
+> migration chain (§3.2) is gone: an earlier vault fails closed as `Storage` once its passphrase is
+> proven, and the wallet is removed and imported again. wallet-core's `crates/bramble-core/src/vault_v13.rs`
+> is the current description; this section is the design history.
+
 ### 3.1 Vault file v2 (`vault.json`, still one file, still write-then-rename)
 
 ```json

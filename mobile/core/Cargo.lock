@@ -207,8 +207,8 @@ dependencies = [
 
 [[package]]
 name = "bramble-core"
-version = "0.3.0"
-source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.3.0#cb0720bbf6017438fc611aceaa27091ef459d6ce"
+version = "0.4.0"
+source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.4.0#4322c9432d90cc49aa8182327481fddc70b97132"
 dependencies = [
  "bip39",
  "serde",
@@ -299,6 +299,7 @@ dependencies = [
  "cfg-if",
  "cipher",
  "cpufeatures 0.3.1",
+ "zeroize",
 ]
 
 [[package]]
@@ -956,9 +957,9 @@ dependencies = [
 
 [[package]]
 name = "krusty-kms"
-version = "2.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b2de9be205653975e0f8662faddea1cc254cc393888c165464506f3c4c4272e"
+checksum = "d54a937f848c566781e3f2a3ab08d15777874c336548395f1e2401e76a87f9ca"
 dependencies = [
  "aes",
  "base64 0.22.1",
@@ -976,23 +977,26 @@ dependencies = [
  "krusty-kms-crypto",
  "num-bigint 0.5.1",
  "num-traits",
+ "ripemd",
  "scrypt",
  "serde",
  "serde_json",
+ "sha1",
  "sha2 0.11.1",
  "sha3 0.12.0",
  "starknet-rust-core",
  "starknet-rust-crypto",
  "starknet-types-core",
  "subtle",
+ "unicode-normalization",
  "zeroize",
 ]
 
 [[package]]
 name = "krusty-kms-common"
-version = "2.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccc30cc0b35ec80f236aafb1bf7fd82c3e17985a87e6ebbee72802a51f07bf57"
+checksum = "25df1696c85dad6b9c97476a87e9bfda3854b40afc73009985febe14af5f606b"
 dependencies = [
  "hex",
  "serde",
@@ -1005,9 +1009,9 @@ dependencies = [
 
 [[package]]
 name = "krusty-kms-crypto"
-version = "2.0.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75f243cc7a9fc2b81b0c2f1049fec6b50f190790cca75e3e354e6ee201a059ba"
+checksum = "d5a8c8239163c05903bcd561e0979fc4812acbed4eccbf0274b02ccd4b0531ab"
 dependencies = [
  "crypto-bigint",
  "getrandom 0.2.17",
@@ -1374,6 +1378,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ripemd"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dd4211456b4172d7e44261920c25acf07367c4f04bb5f5d54fc21b090d9b159"
+dependencies = [
+ "digest 0.11.3",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "2.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1573,6 +1586,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha1"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aacc4cc499359472b4abe1bf11d0b12e688af9a805fa5e3016f9a386dc2d0214"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "digest 0.11.3",
+]
+
+[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1750,8 +1774,8 @@ dependencies = [
 
 [[package]]
 name = "starknet-wallet-core"
-version = "0.3.0"
-source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.3.0#cb0720bbf6017438fc611aceaa27091ef459d6ce"
+version = "0.4.0"
+source = "git+https://github.com/starknet-innovation/wallet-core?tag=v0.4.0#4322c9432d90cc49aa8182327481fddc70b97132"
 dependencies = [
  "aes-gcm",
  "base64 0.22.1",
