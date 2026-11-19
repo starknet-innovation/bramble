@@ -106,9 +106,15 @@ describe("a multisig private action is proved as compiled", () => {
     expect(proved?.["calldata"]).toEqual([
       ...sdkExecuteCalldata(compiledCall ?? { contractAddress: "0x0", entrypoint: "x" }),
     ]);
-    // The 2-of-2 aggregate: a count, then each signer's guid, r, and s.
+    // The 2-of-2 aggregate: a count, then each signer's type tag (0x0, a
+    // Stark key), public key, r, and s. Not the unsigned placeholder.
     expect(proved?.["signature"]).toHaveLength(1 + 2 * 4);
-    expect(proved?.["signature"]).not.toContain("0x0");
+    expect(proved?.["signature"]).not.toEqual(["0x0"]);
+    const signature = (proved?.["signature"] ?? []) as readonly string[];
+    expect(signature[0]).toBe("0x2");
+    // The prover reads every felt as 0x hex, as the SDK's own formatSignature
+    // writes them; the aggregate's leading count is not hex until converted.
+    expect(signature.every((felt) => /^0x[0-9a-f]+$/.test(felt))).toBe(true);
     // Proved and frozen, so it is not held any more.
     expect(await store.listHeld(HARNESS_MULTISIG_ID)).toEqual([]);
   });

@@ -24,6 +24,7 @@ import { restoreStrk20Calldata } from "@bramble/privacy/multisig-strk20-redactio
 import type { MultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
 import type { Strk20HeldProofRequest } from "@bramble/privacy/service";
 import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { num } from "starknet";
 
 const HELD_PROOF_INVALID = "Invalid Argent multisig private proof";
 
@@ -60,7 +61,11 @@ const signed = (
   invocation: {
     ...request.invocation,
     calldata: [...calldata],
-    signature: [...multisigStrk20CallSetAggregate(authorization.fragments, signers)],
+    // As starknet.js formatSignature writes them: the prover reads only 0x hex,
+    // and the aggregate's leading signer count is a decimal string.
+    signature: multisigStrk20CallSetAggregate(authorization.fragments, signers).map((felt) =>
+      num.toHex(felt),
+    ),
   },
   provingBlock: request.provingBlock,
 });
