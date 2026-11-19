@@ -93,9 +93,36 @@ export const PINNED_RUNTIME_FILES = [
   "vendor/starknet-privacy/sdk/starknet-sdk.min.js",
 ] as const;
 
+/**
+ * Exactly what `files.includes` in biome.json must say: the whole repository,
+ * minus generated output, vendored code, separately checked apps, and local
+ * browser profiles.
+ */
+export const EXPECTED_BIOME_INCLUDES = [
+  "**",
+  "!.claude",
+  "!.dev-profile",
+  "!.mainnet-multisig-e2e",
+  "!.impeccable",
+  "!.playwright-cli",
+  "!apps/terminal",
+  "!apps/ui-lab",
+  "!apps/website",
+  "!bun.lock",
+  "!dist",
+  "!dist-firefox",
+  "!node_modules",
+  "!output",
+  "!playwright-report",
+  "!test-results",
+  "!vendor",
+] as const;
+
 export const EXPECTED_GITIGNORE_ENTRIES = [
   ".claude/*",
   ".dev-profile/",
+  // The mainnet multisig round keeps two wallet profiles and its record here.
+  ".mainnet-multisig-e2e/",
   // Bun auto-loads a bare `.env`, which makes it the natural place a developer
   // puts BRAMBLE_DEV_MNEMONIC. Keeping it ignored is what stops a recovery phrase
   // reaching a commit.

@@ -38,7 +38,6 @@ import { closeOwnerWallets, type OwnerWallet, openOwnerWallet, saveCoOwner } fro
 
 const KEPT =
   "The round's directory was kept. Run the command again from this checkout to return what is left.";
-const RUN_AGAIN = "Run the command again from this checkout.";
 
 const freshSalt = (): string => {
   const salt = canonicalFelt(`0x${randomBytes(31).toString("hex")}`);
@@ -105,17 +104,14 @@ test("an Argent multisig uses private balances and returns its funds", async () 
 
     if (unfinished) {
       // An earlier run deployed this multisig and did not finish. Its state is
-      // not known, so this run only returns what it holds. The directory goes
-      // once a pass finds nothing left to move.
+      // not known, so this run only returns what it holds. One pass is enough:
+      // what a pass leaves behind cannot pay for its own return.
       context = await establishMultisig({ a, account, address, b, funding: 0n, salt: record.salt });
       const returned = await returnFunds(context, account.address, plan.poolFee, null);
       recovered = true;
-      if (returned.withdrawn === null && returned.swept === null) {
-        await clearRound(ROUND_DIRECTORY);
-        throw new Error(`An unfinished round held nothing more to return. ${RUN_AGAIN}`);
-      }
+      await clearRound(ROUND_DIRECTORY);
       throw new Error(
-        `Returned an unfinished round's funds: ${strkLabel(returned.withdrawn ?? 0n)} STRK withdrawn, ${strkLabel(returned.swept ?? 0n)} STRK swept. ${RUN_AGAIN}`,
+        `Returned an unfinished round's funds: ${strkLabel(returned.withdrawn ?? 0n)} STRK withdrawn, ${strkLabel(returned.swept ?? 0n)} STRK swept. Run the command again for a full round.`,
       );
     }
 
@@ -194,11 +190,13 @@ test("an Argent multisig uses private balances and returns its funds", async () 
       throw new Error(`${reason}\n${KEPT}`);
     }
     // The round failed with a deployed multisig. Send back what it holds now.
-    // The directory stays: the next run confirms nothing is left and removes it.
+    // A pass that completes leaves only what cannot pay for its own return, so
+    // the round is cleared; if the pass fails, the next run retries it.
     let outcome: string;
     try {
       const returned = await returnFunds(context, account.address, plan.poolFee, actionCost);
-      outcome = `Funds were returned: ${strkLabel(returned.withdrawn ?? 0n)} STRK withdrawn, ${strkLabel(returned.swept ?? 0n)} STRK swept. ${RUN_AGAIN}`;
+      await clearRound(ROUND_DIRECTORY);
+      outcome = `Funds were returned: ${strkLabel(returned.withdrawn ?? 0n)} STRK withdrawn, ${strkLabel(returned.swept ?? 0n)} STRK swept.`;
     } catch (returnError) {
       const detail = returnError instanceof Error ? returnError.message : "unknown";
       outcome = `Returning the funds failed too (${detail}). ${KEPT}`;

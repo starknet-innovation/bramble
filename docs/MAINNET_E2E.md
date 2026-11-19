@@ -174,6 +174,10 @@ If the shared default rate-limits it, set `BRAMBLE_MAINNET_E2E_RPC_URL`.
    Both go through the private relay.
 8. It sweeps its remaining public STRK to the sncast account.
 
+Before any private action, both wallets wait until a fresh read shows the
+multisig's signer keys. Owner B adds the multisig by address, and an add whose
+chain read fails stores it without them.
+
 Every signature is collected the way two people would: one wallet shares over
 Nostr, the other syncs, reviews and signs. The test copies nothing between the
 wallets. It drives them through the background's runtime messages, not by
@@ -215,10 +219,13 @@ The round keeps `.mainnet-multisig-e2e/` in the checkout: the two profiles and
 `round.json`, which names the multisig and holds no key. The directory is
 git-ignored and is removed when a round finishes.
 
-- A round that fails after deployment tries to return the funds at once and
-  says what it moved.
-- Run the command again from the same checkout. A run that finds a deployed
-  multisig only returns what it holds, then asks you to run once more.
+- A round that fails after deployment returns the funds at once and says what
+  it moved. When that works, the directory is removed and the next run starts
+  a fresh round. What stays in the old multisig is a fee margin, about 0.2
+  STRK, which costs more to return than it is worth.
+- If returning the funds fails too, the directory stays. Run the command again
+  from the same checkout: a run that finds a deployed multisig only returns
+  what it holds, then removes the directory.
 - Do not delete `.mainnet-multisig-e2e/` while a round is unfinished. The two
   profiles hold the only copies of the multisig's viewing key. Without it the
   private balance cannot be read or withdrawn. Public STRK can still be

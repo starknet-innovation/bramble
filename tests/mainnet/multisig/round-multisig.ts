@@ -17,6 +17,7 @@ import { callWallet, type OwnerWallet } from "./round-wallets";
 
 const DEPLOY_TIMEOUT_MS = 4 * 60_000;
 const DEPLOY_INTERVAL_MS = 4_000;
+const AUTHORITY_TIMEOUT_MS = 3 * 60_000;
 
 type DeploymentReview = {
   readonly address: string;
@@ -26,7 +27,14 @@ type DeploymentReview = {
 
 type MultisigList = {
   readonly multisigs: readonly {
-    readonly record: { readonly address: string; readonly id: string };
+    readonly authorityStatus?: string;
+    readonly config: unknown;
+    readonly record: {
+      readonly address: string;
+      readonly currentConfig?: unknown;
+      readonly deployment?: unknown;
+      readonly id: string;
+    };
   }[];
 };
 
@@ -68,6 +76,31 @@ const ensureListed = async (wallet: OwnerWallet, address: string): Promise<strin
     readonly multisig: { readonly record: { readonly id: string } };
   }>(wallet.page, { address, networkId: "SN_MAIN", type: "wallet.addMultisig" });
   return added.multisig.record.id;
+};
+
+/**
+ * Waits until `wallet` holds the multisig's signer keys and reads its signer
+ * set from the chain. An address-only add whose chain read failed (a lagging
+ * or throttled RPC right after the deploy) stores the multisig without keys,
+ * and every private action then refuses. The wallet's fresh read, the one its
+ * multisig screen makes, fills them in; this polls that read.
+ */
+const awaitSignerAuthority = async (wallet: OwnerWallet, address: string): Promise<void> => {
+  const deadline = Date.now() + AUTHORITY_TIMEOUT_MS;
+  let last = "not listed";
+  while (Date.now() < deadline) {
+    const list = await callWallet<MultisigList>(wallet.page, { type: "wallet.multisigs" });
+    const view = list.multisigs.find((entry) => sameFelt(entry.record.address, address));
+    const keys = view?.record.currentConfig ?? view?.record.deployment;
+    if (view && keys !== undefined && view.config !== null) {
+      return;
+    }
+    last = view?.authorityStatus ?? "not listed";
+    await pause(DEPLOY_INTERVAL_MS);
+  }
+  throw new Error(
+    `Owner ${wallet.role.toUpperCase()} never read the multisig's signers from the chain (last: ${last}).`,
+  );
 };
 
 const deployFromOwnerA = async (
@@ -114,8 +147,8 @@ const deployFromOwnerA = async (
 };
 
 /**
- * Makes sure the multisig at `address` is deployed and listed in both
- * wallets. An undeployed address is first topped up from the funding account
+ * Makes sure the multisig at `address` is deployed, listed in both wallets,
+ * and that both hold its signer keys. An undeployed address is first topped up from the funding account
  * to `funding` FRI, then deployed by owner A. Pass `funding` of zero to deploy
  * from what the address already holds and send it nothing. Throws before
  * deploying when the wallet's review disagrees on the address or quotes a fee
@@ -142,5 +175,7 @@ export const establishMultisig = async (input: {
   if (listedInB !== multisigId) {
     throw new Error("The two wallets name the multisig differently.");
   }
+  await awaitSignerAuthority(a, address);
+  await awaitSignerAuthority(b, address);
   return { a, b, multisigAddress: address, multisigId, rpcUrl: account.rpcUrl };
 };
