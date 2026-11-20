@@ -79,6 +79,10 @@ const CASES: readonly Case[] = [
     skip: "the wallet cannot import an sncast-shaped OZ account yet (see TA-07)",
   },
 ];
+// A typo would otherwise select nothing and report "0 fail" as a clean run.
+if (ONLY && !CASES.some((c) => c.id === ONLY)) {
+  throw new Error(`${ONLY} is not an S-TXN case; use one of ${CASES.map((c) => c.id).join(", ")}`);
+}
 
 const manifest = JSON.parse(
   readFileSync(resolve(import.meta.dir, "manifest/sepolia/s-txn.json"), "utf8"),
