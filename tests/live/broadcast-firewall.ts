@@ -3,13 +3,17 @@
  * a transaction on the wire (the node's `starknet_add*Transaction` methods and
  * the paymaster relay's execute) is checked against the senders a test may
  * spend from, and is aborted in the browser, never forwarded, unless every
- * sender it names is allowed. A broadcast whose sender cannot be read is
- * refused: the firewall fails closed.
+ * sender it names is allowed. It fails closed: a broadcast whose sender cannot
+ * be read is refused, and so is any request carrying a body it cannot read as
+ * JSON (none, binary, compressed, or OHTTP-encrypted), on any verb but GET or
+ * HEAD.
  *
  * Its job is to keep a wallet bug from spending from an account the test did
  * not choose (an import fixture, a funded bank), and to let a refusal test
  * prove that nothing was sent. It is not a fee or amount cap; the review's
- * fee check stays in charge of that.
+ * fee check stays in charge of that. It sees HTTP(S) only: WebSockets (today
+ * only the multisig Nostr relay) and whatever the privacy service submits on
+ * the wallet's behalf are outside it, so a STRK20 spec cannot rely on it.
  */
 import { isRecord } from "@bramble/core/json";
 import { BROADCAST_PAYMASTER_METHOD } from "@bramble/privacy/paymaster";
@@ -34,12 +38,15 @@ const BROADCAST_METHODS: readonly string[] = [...BROADCAST_RPC_METHODS, BROADCAS
 const isBroadcastMethod = (method: unknown): method is string =>
   typeof method === "string" && BROADCAST_METHODS.includes(method);
 
-// How many times the raw body names a broadcast method. A body that names more
-// broadcasts than parse out of it (truncated, wrapped, not JSON) is refused.
+// How many times a body names a broadcast method. A body that names more
+// broadcasts than parse out of it (one wrapped in another field) is refused.
+// Counted on the re-serialized JSON, so a \u escape cannot hide a name.
 const mentions = (body: string): number =>
   BROADCAST_METHODS.reduce((total, method) => total + body.split(method).length - 1, 0);
 
-// JSON-RPC params may be named (an object) or positional (an array).
+// JSON-RPC params may be named (an object) or positional (an array). Every
+// broadcast method carries its transaction first, so a positional read takes
+// index 0; a wrong guess leaves no sender, which is refused.
 const param = (params: unknown, name: string): unknown =>
   Array.isArray(params) ? params[0] : isRecord(params) ? params[name] : undefined;
 
@@ -114,14 +121,16 @@ const sendersOf = (method: string, params: unknown): readonly (string | null)[] 
   }
 };
 
+const UNPARSED = Symbol("unparsed");
+
 const parse = (body: string | null): unknown => {
   if (body === null) {
-    return undefined;
+    return UNPARSED;
   }
   try {
     return JSON.parse(body);
   } catch {
-    return undefined;
+    return UNPARSED;
   }
 };
 
@@ -149,24 +158,59 @@ export const broadcastsIn = (body: string | null): readonly Broadcast[] =>
       };
     });
 
+const UNREADABLE: Broadcast = { method: "unreadable", senders: [] };
+
 /**
  * The broadcasts in `body` that may not leave: any with no readable sender,
  * any naming a sender outside `allowed`, and an `unreadable` entry when the
- * body names a broadcast method that does not parse out as one.
+ * body is not JSON or names a broadcast method that does not parse out as
+ * one. A null body (no body at all) refuses nothing here; see
+ * {@link refusedRequest} for the verbs that must carry one.
  */
 export const refusedBroadcasts = (
   body: string | null,
   allowed: readonly string[],
 ): readonly Broadcast[] => {
+  if (body === null) {
+    return [];
+  }
+  const parsed = parse(body);
+  if (parsed === UNPARSED) {
+    return [UNREADABLE];
+  }
   const found = broadcastsIn(body);
   const refused = found.filter(
     (broadcast) =>
       broadcast.senders.length === 0 ||
       !broadcast.senders.every((sender) => allowed.some((ok) => sameFelt(ok, sender))),
   );
-  return body !== null && mentions(body) > found.length
-    ? [...refused, { method: "unreadable", senders: [] }]
-    : refused;
+  return mentions(JSON.stringify(parsed)) > found.length ? [...refused, UNREADABLE] : refused;
+};
+
+/** The parts of one HTTP request the firewall judges. */
+export type FirewallRequest = {
+  readonly method: string;
+  readonly body: string | null;
+  readonly contentType: string | undefined;
+};
+
+/**
+ * What the firewall refuses from one request: an OHTTP-encrypted request
+ * outright, a request on any verb but GET or HEAD whose body it cannot read
+ * (none, or not JSON), and the refused broadcasts of a JSON body.
+ */
+export const refusedRequest = (
+  request: FirewallRequest,
+  allowed: readonly string[],
+): readonly Broadcast[] => {
+  if (request.contentType?.toLowerCase().startsWith("message/ohttp")) {
+    return [UNREADABLE];
+  }
+  const bodiless = request.method === "GET" || request.method === "HEAD";
+  if (request.body === null && !bodiless) {
+    return [UNREADABLE];
+  }
+  return refusedBroadcasts(request.body, allowed);
 };
 
 /**
@@ -174,21 +218,33 @@ export const refusedBroadcasts = (
  * service worker included. Install it after any other route on the context
  * (Playwright runs the newest route first) and before the wallet can submit.
  * A refused request is aborted in the browser; everything else falls through
- * to earlier routes or the network untouched.
+ * to earlier routes or the network untouched. `inspected` counts only the
+ * service worker's JSON-RPC, where the wallet broadcasts from, so a nonzero
+ * count proves the worker's traffic is routed. Throws when Playwright is told
+ * to leave service-worker traffic unrouted.
  */
 export const installBroadcastFirewall = async (
   context: BrowserContext,
   allowed: readonly string[],
 ): Promise<BroadcastFirewall> => {
+  if (process.env["PLAYWRIGHT_DISABLE_SERVICE_WORKER_NETWORK"]) {
+    throw new Error(
+      "unset PLAYWRIGHT_DISABLE_SERVICE_WORKER_NETWORK: the firewall must see the wallet",
+    );
+  }
   const blocked: Broadcast[] = [];
   let inspected = 0;
   await context.route(/^https?:\/\//u, async (route) => {
+    const request = route.request();
     // Any method with a body is read, not just POST, so nothing slips by on a verb.
-    const body = route.request().postData();
-    if (rpcItems(body).length > 0) {
+    const body = request.postData();
+    if (request.serviceWorker() && rpcItems(body).length > 0) {
       inspected += 1;
     }
-    const refused = refusedBroadcasts(body, allowed);
+    const refused = refusedRequest(
+      { body, contentType: request.headers()["content-type"], method: request.method() },
+      allowed,
+    );
     if (refused.length > 0) {
       blocked.push(...refused);
       await route.abort("blockedbyclient");

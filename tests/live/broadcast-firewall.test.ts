@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { BROADCAST_PAYMASTER_METHOD } from "@bramble/privacy/paymaster";
 import { BROADCAST_RPC_METHODS } from "@bramble/starknet/rpc-transport";
 import { hash } from "starknet";
-import { broadcastsIn, refusedBroadcasts } from "./broadcast-firewall";
+import { broadcastsIn, refusedBroadcasts, refusedRequest } from "./broadcast-firewall";
 
 const ALLOWED = "0x0123";
 const OTHER = "0x0456";
@@ -52,8 +52,27 @@ describe("broadcast firewall", () => {
 
   test("lets reads and bodies that name no broadcast through", () => {
     expect(refusedBroadcasts(rpc("starknet_call", {}), [])).toEqual([]);
-    expect(refusedBroadcasts("not json", [])).toEqual([]);
-    expect(refusedBroadcasts(null, [])).toEqual([]);
+    expect(refusedBroadcasts(JSON.stringify({ quoteId: "q" }), [])).toEqual([]);
+    expect(refusedRequest({ body: null, contentType: undefined, method: "GET" }, [])).toEqual([]);
+  });
+
+  test("refuses any request body it cannot read", () => {
+    const unreadable = [{ method: "unreadable", senders: [] }];
+    const post = (body: string | null, contentType?: string) =>
+      refusedRequest({ body, contentType, method: "POST" }, [ALLOWED]);
+    expect(post(null)).toEqual(unreadable);
+    expect(post("not json")).toEqual(unreadable);
+    expect(post("\u0000\u001f\u008b\u0008binary")).toEqual(unreadable);
+    expect(post(invoke(ALLOWED), "message/ohttp-req")).toEqual(unreadable);
+    expect(post(invoke(ALLOWED), "application/json")).toEqual([]);
+  });
+
+  test("sees a broadcast name spelled with a JSON escape", () => {
+    const escaped = JSON.stringify({ wrapped: "x" }).replace(
+      '"x"',
+      '"starknet_add\\u0049nvokeTransaction"',
+    );
+    expect(refusedBroadcasts(escaped, [ALLOWED])).toEqual([{ method: "unreadable", senders: [] }]);
   });
 
   test("refuses a body that names a broadcast it cannot parse", () => {

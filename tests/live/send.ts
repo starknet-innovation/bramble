@@ -3,13 +3,16 @@
  * clicked only after the screen shows a STRK fee inside the caller's cap.
  */
 
+import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
   STARKNET_NETWORKS,
+  STRK_TOKEN_DECIMALS,
   type StarknetNetworkId,
   sameFelt,
 } from "@bramble/wallet-model/networks";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import { MAX_TX_FEE_STRK } from "../mainnet/local-mainnet-limits";
 import { checkDisplayedStrkFee } from "./fee-cap";
 
 const HASH_IDS = ["send-success-hash", "send-pending-hash", "send-failure-hash"] as const;
@@ -168,12 +171,22 @@ export const openReview = async (page: Page, intent: SendIntent): Promise<void> 
  * Sends `intent` through the review screen and returns the transaction hash
  * once the wallet has one. Does not click Confirm when the review shows
  * anything other than `intent`, or a fee that is missing, not STRK, or above
- * `maxFeeStrk`.
+ * `maxFeeStrk`. On mainnet the cap can never exceed MAX_TX_FEE_STRK,
+ * whatever a caller passes.
  */
 export const selfTransfer = async (
   page: Page,
   input: SendIntent & { readonly maxFeeStrk: string },
 ): Promise<string> => {
+  if (
+    input.networkId === "SN_MAIN" &&
+    parseTokenAmount(input.maxFeeStrk, STRK_TOKEN_DECIMALS) >
+      parseTokenAmount(MAX_TX_FEE_STRK, STRK_TOKEN_DECIMALS)
+  ) {
+    throw new Error(
+      `A mainnet fee cap above ${MAX_TX_FEE_STRK} STRK is refused. Nothing was submitted.`,
+    );
+  }
   await openReview(page, input);
   assertFeeAcceptable(await reviewFeeText(page), input.maxFeeStrk);
   await expect(page.locator("#send-confirm-button")).toBeEnabled(STEP);
