@@ -2,7 +2,8 @@ name: Nightly
 
 # Full-suite nightly run against the ACTIVE release branch (DEVELOPMENT.md).
 # This is the heaviest tier of the layered CI model: full E2E (Playwright),
-# the live Sepolia import-path run (issue 821), dependency audit, the
+# the live Sepolia import-path run (issue 821), live Sepolia sends and first
+# deploys (issue 976), dependency audit, the
 # extension build, and a placeholder for perf/regression
 # checks (none exist in-repo yet — the step is an explicit NO-OP, never a fake
 # pass). It writes a categorized summary and, on failure, upserts ONE tracking
@@ -109,6 +110,8 @@ jobs:
       e2e: ${{ steps.e2e.outcome }}
       sepolia: ${{ steps.sepolia.outcome }}
       sepolia_configured: ${{ steps.sepolia_seeds.outputs.configured }}
+      sepolia_txn: ${{ steps.sepolia_txn.outcome }}
+      sepolia_txn_configured: ${{ steps.sepolia_txn_seed.outputs.configured }}
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -232,6 +235,39 @@ jobs:
           mkdir -p "$RUNNER_TEMP/sepolia"
           BRAMBLE_DATASET_ENV_FILE="$seeds" BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia \
             bun tools/vendor-dataset/verify-sepolia.ts "$@"
+      # Live Sepolia sends and first deploys (issue 976), testnet STRK only,
+      # behind a broadcast firewall. Same handling as the import gate: the
+      # S-TXN phrase reaches this step alone, and the run uploads nothing. A
+      # short bank fails as "Sepolia bank low" before anything is sent.
+      - name: Sepolia send seed configured
+        id: sepolia_txn_seed
+        env:
+          CONFIGURED: ${{ secrets.BRAMBLE_SEPOLIA_TXN_SEED != '' }}
+        run: echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
+      - name: Sepolia sends and deploys (live)
+        id: sepolia_txn
+        if: steps.sepolia_txn_seed.outputs.configured == 'true'
+        continue-on-error: true
+        env:
+          BRAMBLE_SEPOLIA_TXN_SEED: ${{ secrets.BRAMBLE_SEPOLIA_TXN_SEED }}
+        run: |
+          set -euo pipefail
+          if [ ! -f tools/vendor-dataset/verify-sepolia-deploys.ts ]; then
+            echo "::error::This release branch predates the Sepolia send run (issue 976)."
+            exit 1
+          fi
+          umask 077
+          seeds="$RUNNER_TEMP/sepolia-txn-seed.env"
+          trap 'rm -f "$seeds"' EXIT
+          echo "::add-mask::$BRAMBLE_SEPOLIA_TXN_SEED"
+          printf 'BRAMBLE_DATASET_SEED_S_TXN="%s"\n' "$BRAMBLE_SEPOLIA_TXN_SEED" > "$seeds"
+          unset BRAMBLE_SEPOLIA_TXN_SEED
+          export BRAMBLE_DATASET_ENV_FILE="$seeds" BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia
+          bun tools/vendor-dataset/sepolia-bank-runway.ts
+          status=0
+          bun tools/vendor-dataset/verify-sepolia-sends.ts || status=1
+          bun tools/vendor-dataset/verify-sepolia-deploys.ts || status=1
+          exit "$status"
 
       - name: Categorized summary
         if: always()
@@ -245,6 +281,8 @@ jobs:
           E2E: ${{ steps.e2e.outcome }}
           SEPOLIA: ${{ steps.sepolia.outcome }}
           SEPOLIA_CONFIGURED: ${{ steps.sepolia_seeds.outputs.configured }}
+          SEPOLIA_TXN: ${{ steps.sepolia_txn.outcome }}
+          SEPOLIA_TXN_CONFIGURED: ${{ steps.sepolia_txn_seed.outputs.configured }}
         run: |
           set -euo pipefail
           declare -A GATES=(
@@ -255,6 +293,7 @@ jobs:
             ["E2E browser install"]="$E2E_INSTALL"
             ["Full E2E (Playwright)"]="$E2E"
             ["Sepolia import paths (live)"]="$SEPOLIA"
+            ["Sepolia sends and deploys (live)"]="$SEPOLIA_TXN"
           )
           failing=()
           passing=()
@@ -263,6 +302,10 @@ jobs:
           if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then
             unset 'GATES[Sepolia import paths (live)]'
             not_run+=("Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured")
+          fi
+          if [ "$SEPOLIA_TXN" = "skipped" ] && [ "$SEPOLIA_TXN_CONFIGURED" = "false" ]; then
+            unset 'GATES[Sepolia sends and deploys (live)]'
+            not_run+=("Sepolia sends and deploys (live): the BRAMBLE_SEPOLIA_TXN_SEED secret is not configured")
           fi
           for name in "${!GATES[@]}"; do
             if [ "${GATES[$name]}" = "success" ]; then passing+=("$name"); else failing+=("$name (${GATES[$name]})"); fi
@@ -300,13 +343,14 @@ jobs:
             echo ""
             echo "### Release-blocking"
             echo "Any failing gate above blocks promoting \`$BRANCH\` to \`main\`. Vendor,"
-            echo "build, E2E and Sepolia import-path failures are release-blocking; a dependency-audit"
+            echo "build, E2E, Sepolia import-path and Sepolia send/deploy failures are release-blocking;"
+            echo "a \"Sepolia bank low\" failure means refill the bank, not a wallet bug; a dependency-audit"
             echo "failure is release-blocking per CONTRIBUTING.md (high/critical advisory)."
             echo ""
             echo "### Recommended next work"
             if [ "${#failing[@]}" -eq 0 ] && [ "${#not_run[@]}" -gt 0 ]; then
               echo "- Do not promote this release branch to main until every gate has run:"
-              echo "  configure the BRAMBLE_SEPOLIA_SEEDS secret (tools/vendor-dataset/README.md)."
+              echo "  configure the secrets listed under Not run (tools/vendor-dataset/README.md)."
             elif [ "${#failing[@]}" -eq 0 ]; then
               echo "- Proceed with the release-completion checklist in RELEASING.md."
             else
@@ -326,11 +370,14 @@ jobs:
           E2E: ${{ steps.e2e.outcome }}
           SEPOLIA: ${{ steps.sepolia.outcome }}
           SEPOLIA_CONFIGURED: ${{ steps.sepolia_seeds.outputs.configured }}
+          SEPOLIA_TXN: ${{ steps.sepolia_txn.outcome }}
+          SEPOLIA_TXN_CONFIGURED: ${{ steps.sepolia_txn_seed.outputs.configured }}
         run: |
           set -euo pipefail
           # Skipped because the secret is unset: not run, not failed. Any other skip fails.
           if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then SEPOLIA=success; fi
-          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E" "$SEPOLIA"; do
+          if [ "$SEPOLIA_TXN" = "skipped" ] && [ "$SEPOLIA_TXN_CONFIGURED" = "false" ]; then SEPOLIA_TXN=success; fi
+          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E" "$SEPOLIA" "$SEPOLIA_TXN"; do
             if [ "$o" != "success" ]; then
               echo "At least one nightly gate did not pass — failing the job."
               exit 1
@@ -361,6 +408,8 @@ jobs:
           E2E: ${{ needs.nightly.outputs.e2e }}
           SEPOLIA: ${{ needs.nightly.outputs.sepolia }}
           SEPOLIA_CONFIGURED: ${{ needs.nightly.outputs.sepolia_configured }}
+          SEPOLIA_TXN: ${{ needs.nightly.outputs.sepolia_txn }}
+          SEPOLIA_TXN_CONFIGURED: ${{ needs.nightly.outputs.sepolia_txn_configured }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -373,13 +422,18 @@ jobs:
               ["E2E browser install", process.env.E2E_INSTALL],
               ["Full E2E (Playwright)", process.env.E2E],
               ["Sepolia import paths (live)", process.env.SEPOLIA],
+              ["Sepolia sends and deploys (live)", process.env.SEPOLIA_TXN],
             ];
             // Skipped because its secret is unset: not run, not failed. Any other skip fails.
             const sepoliaNotRun =
               process.env.SEPOLIA === "skipped" && process.env.SEPOLIA_CONFIGURED === "false";
+            const sepoliaTxnNotRun =
+              process.env.SEPOLIA_TXN === "skipped" && process.env.SEPOLIA_TXN_CONFIGURED === "false";
             const failing = gates.filter(
               ([name, outcome]) =>
-                outcome !== "success" && !(name === "Sepolia import paths (live)" && sepoliaNotRun),
+                outcome !== "success" &&
+                !(name === "Sepolia import paths (live)" && sepoliaNotRun) &&
+                !(name === "Sepolia sends and deploys (live)" && sepoliaTxnNotRun),
             );
             const title = `Nightly: ${branch} — failing checks`;
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
@@ -412,8 +466,12 @@ jobs:
               "",
               "### Failing gates",
               ...failing.map(([name, outcome]) => `- ${name} (${outcome})`),
+              ...(sepoliaNotRun || sepoliaTxnNotRun ? ["", "### Not run"] : []),
               ...(sepoliaNotRun
-                ? ["", "### Not run", "- Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured"]
+                ? ["- Sepolia import paths (live): the BRAMBLE_SEPOLIA_SEEDS secret is not configured"]
+                : []),
+              ...(sepoliaTxnNotRun
+                ? ["- Sepolia sends and deploys (live): the BRAMBLE_SEPOLIA_TXN_SEED secret is not configured"]
                 : []),
               "",
               "See the run's job summary for the full categorized report",

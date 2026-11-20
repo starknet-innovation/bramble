@@ -80,6 +80,9 @@ extension.
   imports each from its scan and checks Home from the account. The whole run
   sits behind a broadcast firewall that allows no sender, so a send attempt is
   aborted and counted, and any broadcast during the import cards fails the run.
+- `sepolia-bank-runway.ts` reads the S-TXN balances (no seed needed) and exits
+  non-zero with "Sepolia bank low" when the bank or a sender is short; refill
+  with `matrix-stage-sepolia.ts TX`.
 - The test Ledger is optional. By default TA-32…TA-37 are skipped, so the run
   needs no device. With `BRAMBLE_SEPOLIA_LEDGER=1` the browser opens visibly and,
   after the other checks, asks you to plug in and unlock the test Ledger, open
@@ -95,7 +98,11 @@ extension.
   scorecard, so a failing import path blocks the release like any other nightly
   gate. The `BRAMBLE_SEPOLIA_SEEDS` repository secret has been set since
   2026-11-10; if it is ever removed, the gate is skipped and the summary lists
-  it under "Not run", never as passed. It reads
+  it under "Not run", never as passed. A second gate, "Sepolia sends and
+  deploys", runs `sepolia-bank-runway.ts`, then the send and deploy runs, from
+  the `BRAMBLE_SEPOLIA_TXN_SEED` repository secret: the S-TXN phrase alone,
+  seen by that one step and written to a one-line seed file it removes when it
+  ends. Unset, that gate is listed under "Not run" too. The import gate reads
   the seed file from the `BRAMBLE_SEPOLIA_SEEDS` repository
   secret, which holds only the eleven lines the runner reads:
   `BRAMBLE_DATASET_SEED_S_{BRM,SCR,BRV,RDY,XVS,W15,W18,W21}` and
