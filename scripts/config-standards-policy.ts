@@ -9,7 +9,7 @@ export const DEPENDENCY_FIELDS = [
   "peerDependencies",
 ] as const;
 
-export const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
+export const EXPECTED_PACKAGE_MANAGER = "bun@1.4.4";
 
 export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
 

@@ -17,17 +17,19 @@ built for the source revision; a zip built elsewhere with a different Bun does n
 reproduce, which is the pin mismatch recorded in
 [#352](https://github.com/starknet-innovation/bramble/issues/352).
 
-- **Bun 1.3.3** (<https://bun.sh>)
+- **Bun 1.4.4** (<https://bun.sh>)
 - **Node.js 24** with the **npm** it ships (`bun run vendor:privacy` runs `npm ci`)
 - `git` and `zip`
 - Network access: `bun install`, `vendor:argent` and `vendor:privacy` fetch pinned
   upstream sources.
 
 Mozilla reviews source builds on Ubuntu; the steps below need nothing beyond the tools
-above. They were verified on the `v0.10.5` source with Bun 1.3.3 (macOS arm64): two
-independent rebuilds from the same source archive produced byte-identical
-`bramble-firefox-0.10.5.zip` files. Releases built before the Bun pin (for example
-`v0.10.3`, built with Bun 1.4.2) do not reproduce with this recipe. Before submitting,
+above. With Bun 1.4.4 they were verified on the `v0.10.10` source (macOS arm64): two
+clean rebuilds produced byte-identical `bramble-firefox-0.10.10.zip` files. The
+earlier pin, Bun 1.3.3, was verified the same way on `v0.10.5`. A release reproduces
+only with the Bun its revision pins: releases pinned to Bun 1.3.3 need that release,
+and those built before any pin (for example `v0.10.3`, built with Bun 1.4.2) do not
+reproduce with this recipe. Before submitting,
 confirm that a rebuild on Ubuntu matches the submitted archive's checksum, which is the
 check the reviewer will perform.
 
