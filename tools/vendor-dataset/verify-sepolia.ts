@@ -3,7 +3,10 @@
  * every in-wallet import path against the live Sepolia fixtures in
  * manifest/sepolia/, and scores what the wallet shows against the scope doc's
  * "Now" line for each TA card (the doc's "Desired" line rides along, unscored).
- * Read-only: no deploy, send or signature. Secrets are typed into the UI only;
+ * Read-only: no deploy, send or signature. A broadcast firewall that allows no
+ * sender is installed before any page opens; the "Send is refused" cards
+ * (verify-sepolia-refusals.ts) rely on it, and a broadcast attempted anywhere
+ * else fails the run. Secrets are typed into the UI only;
  * the output carries addresses and visible text, and everything printed or
  * written, a failure included, is redacted (sepolia-redact).
  *
@@ -29,12 +32,17 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { BrowserContext } from "@playwright/test";
+import {
+  type BroadcastFirewall,
+  installBroadcastFirewall,
+} from "../../tests/live/broadcast-firewall";
 import { NETWORK } from "./matrix-lib";
 import { guarded, redact, secret } from "./sepolia-redact";
 import { sepoliaSecret } from "./sepolia-seeds";
 import { readTape, recordTape, replayTape, type Tape, writeTape } from "./sepolia-tape";
-import { runChecks } from "./verify-sepolia-checks";
+import { have, runChecks } from "./verify-sepolia-checks";
 import { runLedgerChecks } from "./verify-sepolia-ledger";
+import { runRefusalChecks } from "./verify-sepolia-refusals";
 import { allResults, type Result, type Verdict } from "./verify-sepolia-score";
 import { openSession, type Session } from "./verify-sepolia-ui";
 
@@ -54,6 +62,7 @@ if (RECORD && REPLAY)
 
 let clean = false;
 let tapeKept = true;
+let strayBroadcasts = 0;
 
 /** Writes the recorded tape; a refusal is reported, never allowed to hide the run's own result. */
 const keepTape = (path: string, tape: Tape): void => {
@@ -69,22 +78,26 @@ const ok = await guarded(async () => {
   const OUT_PATH = resolve(process.argv[2] ?? defaultOutPath());
   let tape: Tape = REPLAY ? readTape(REPLAY) : {};
   let missing = new Set<string>();
-  const network = REPLAY
-    ? async (context: BrowserContext) => {
-        missing = await replayTape(context, tape);
-      }
-    : RECORD
-      ? async (context: BrowserContext) => {
-          tape = await recordTape(context);
-        }
-      : undefined;
+  let firewall: BroadcastFirewall | undefined;
+  // The firewall goes on last, so Playwright runs it before the tape's route.
+  const network = async (context: BrowserContext): Promise<void> => {
+    if (REPLAY) missing = await replayTape(context, tape);
+    if (RECORD) tape = await recordTape(context);
+    firewall = await installBroadcastFirewall(context, []);
+  };
   let session: Session | undefined;
   let results: readonly Result[];
   try {
     session = await openSession(secret(sepoliaSecret("S-BRM")), network, LEDGER);
+    if (!firewall || firewall.inspected() === 0) {
+      throw new Error("the broadcast firewall saw no wallet RPC traffic");
+    }
     await runChecks(session);
     if (LEDGER) await runLedgerChecks(session);
     else console.log("\n## Test Ledger (TA-32…TA-37): skipped; set BRAMBLE_SEPOLIA_LEDGER=1");
+    // Last: importing these accounts would change what the cards above see.
+    strayBroadcasts = firewall.blocked.length;
+    await runRefusalChecks(session, firewall, have);
     results = allResults();
   } finally {
     await session?.close();
@@ -104,7 +117,10 @@ const ok = await guarded(async () => {
     }
   })();
   const count = (v: Verdict): number => results.filter((r) => r.verdict === v).length;
-  clean = count("fail") === 0 && count("error") === 0;
+  clean = count("fail") === 0 && count("error") === 0 && strayBroadcasts === 0;
+  if (strayBroadcasts > 0) {
+    console.log(`${strayBroadcasts} broadcast(s) blocked during the read-only import checks`);
+  }
   console.log(
     `\n${count("pass")} pass · ${count("fail")} fail · ${count("review")} review · ${count("error")} error`,
   );
