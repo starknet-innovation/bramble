@@ -38,6 +38,7 @@ import org.bramble.core.portfolioHero
 import org.bramble.core.rpcLimits
 import org.bramble.core.tokenConfigId
 import org.bramble.core.unifiedHomeBalances
+import org.bramble.wallet.BuildConfig
 import java.io.File
 
 /**
@@ -54,11 +55,6 @@ class PortfolioStore(
     internal val directory: File,
     /** The core's `activityBook()`: the one activity log. */
     private val activity: ActivityBook,
-    /**
-     * Moves the portfolio's HTTP reads (prices, charts, explorer, JSON-RPC); never throws for a
-     * failure. Settable only so instrumented tests can answer offline, as iOS's Debug-only stub.
-     */
-    internal var transport: PortfolioTransport = BoundedHttp,
     private val clock: () -> Double = { System.currentTimeMillis().toDouble() },
 ) {
     /**
@@ -136,7 +132,21 @@ class PortfolioStore(
     /** The core's saved balances, written with the other documents (`PortfolioTokens.kt`). */
     internal val balanceSnapshots: BalanceSnapshots get() = snapshots
 
-    internal val reads get() = PortfolioReads(transport, rpcLimits())
+    /**
+     * Moves the portfolio's HTTP reads (prices, charts, explorer, JSON-RPC); never throws for a
+     * failure. Replaceable only in a debug build, so instrumented tests can answer offline, as
+     * iOS's Debug-only stub; a release build refuses.
+     */
+    internal var transport: PortfolioTransport = BoundedHttp
+        set(value) {
+            check(BuildConfig.DEBUG) { "the portfolio transport is fixed in a release build" }
+            field = value
+            reads = PortfolioReads(value, rpcLimits())
+        }
+
+    /** The JSON-RPC reads over [transport]. */
+    internal var reads = PortfolioReads(transport, rpcLimits())
+        private set
 
     /** No prices yet, in the display currency. */
     val emptyPrices get() = PriceView(currency, emptyList(), emptyList(), null, false)
@@ -149,9 +159,11 @@ class PortfolioStore(
 
     /** The scope's tracked tokens (Home, token detail, Send); empty while locked. */
     val tracked: List<TrackedToken>
-        get() =
-            scope?.takeIf { preferencesRevision >= 0 }?.let { preferences.tracked(it.network.network) }
-                ?: emptyList()
+        get() {
+            // Read so Compose redraws a token list on Show or Add (see [preferencesRevision]).
+            preferencesRevision
+            return scope?.let { preferences.tracked(it.network.network) } ?: emptyList()
+        }
     private val addresses get() = tracked.map { it.token.address }
 
     /** Tokens hidden from Home, whose private balances Home must not count either. */

@@ -17,6 +17,7 @@ import org.bramble.core.MultisigRecord
 import org.bramble.core.NetworkInfo
 import org.bramble.core.RelayPolicy
 import org.bramble.core.WalletCore
+import org.bramble.wallet.BuildConfig
 import org.bramble.wallet.RpcClient
 
 /**
@@ -58,9 +59,14 @@ class CoordinationStore(
 
     /**
      * Moves the multisig chain reads (authority, class declaration). The app's one HTTP path;
-     * settable only so instrumented tests can answer from the offline fixture node.
+     * replaceable only in a debug build, so instrumented tests can answer from the offline
+     * fixture node; a release build refuses.
      */
     internal var chainPost = ChainPost { url, body, maxBytes -> RpcClient.post(url, body, maxBytes = maxBytes) }
+        set(value) {
+            check(BuildConfig.DEBUG) { "the multisig chain transport is fixed in a release build" }
+            field = value
+        }
     private var syncJob: Job? = null
 
     /** Bumped on lock; a core call that finishes after it must not write back. */

@@ -71,7 +71,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    // BuildConfig.DEBUG gates the test-only transport hooks (WalletStore.rpc and friends).
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 tasks.named("preBuild") { dependsOn(copyOnboardingLandscape, copyParityFixture) }
