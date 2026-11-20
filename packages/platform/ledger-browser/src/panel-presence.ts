@@ -15,16 +15,24 @@ export const ledgerPanelLockName = (sessionId: string): string =>
   `bramble-ledger-panel:${sessionId}`;
 
 /**
- * The slice of the Web Locks API this session uses. Injectable so tests do not
- * need a browser.
+ * Web Lock mode. The panel holds the session lock exclusive; the grant tab
+ * waits shared, so its wait is never read as a live panel.
  */
 export type LedgerLockMode = "exclusive" | "shared";
 
+/**
+ * What a lock query returns. Entries are untrusted shape; a missing mode is
+ * read as exclusive, the Web Locks default.
+ */
 export type LedgerLockSnapshot = {
   readonly held?: readonly { readonly mode?: LedgerLockMode; readonly name?: string }[];
   readonly pending?: readonly { readonly mode?: LedgerLockMode; readonly name?: string }[];
 };
 
+/**
+ * The slice of the Web Locks API this session uses. Injectable so tests do not
+ * need a browser.
+ */
 export type LedgerLockManager = {
   readonly query?: () => Promise<LedgerLockSnapshot>;
   readonly request: (
