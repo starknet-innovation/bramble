@@ -47,16 +47,15 @@ const selectiveBalances: PendingApproval = {
   id: approvalId("201"),
   kind: "strk20-balances",
   origin: TERMINAL_ORIGIN,
-  summaries: ["Share private USDC and ETH balances", "No funds or notes will move"],
+  summaries: ["Share private USDC and ETH balances"],
 };
 
 const allBalances: PendingApproval = {
   context: context("2"),
   id: approvalId("202"),
-  insights: ["This request reveals every private token balance discovered for this account."],
   kind: "strk20-balances",
   origin: DAPP_ORIGIN,
-  summaries: ["Share all private token balances", "No funds or notes will move"],
+  summaries: ["Share all private token balances"],
 };
 
 // The dapp-initiated registration review. Its fee line is built through the
