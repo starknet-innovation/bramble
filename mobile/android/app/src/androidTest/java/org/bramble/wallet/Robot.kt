@@ -1,6 +1,7 @@
 package org.bramble.wallet
 
 import android.graphics.Bitmap
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.state.ToggleableState
@@ -23,7 +24,10 @@ import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.bramble.core.AccountFamily
@@ -31,6 +35,7 @@ import org.bramble.core.RecoverySelection
 import org.bramble.core.WalletStatus
 import org.bramble.wallet.design.secretFieldTag
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
 
 /** The repository's published E2E wallet: public, never funded on purpose, safe in a test. */
 object PublicWallet {
@@ -61,14 +66,9 @@ class Robot(
     fun waitFor(
         matcher: SemanticsMatcher,
         timeoutMs: Long = 10_000,
-        /** Runs before each check; [expectToast] steps the held clock here. */
-        step: () -> Unit = {},
     ) {
         try {
-            rule.waitUntil(timeoutMs) {
-                step()
-                exists(matcher)
-            }
+            rule.waitUntil(timeoutMs) { exists(matcher) }
         } catch (timeout: ComposeTimeoutException) {
             val screen = runCatching { rule.onRoot(useUnmergedTree = false).printToString() }.getOrDefault("")
             throw AssertionError("${matcher.description} not shown after $timeoutMs ms; screen:\n$screen", timeout)
@@ -76,21 +76,29 @@ class Robot(
     }
 
     /**
-     * Runs [action], then waits for the toast [text] it raises. The test clock is held and stepped
-     * one frame per check, so the toast's 3 s lifetime cannot run out on the test clock while the
-     * core call behind it (a vault write) is still running in real time.
+     * Runs [action] and waits until the store raises the toast [text]. Every toast is recorded as
+     * it is raised, so one whose 3 s lifetime ran out on the test clock (which advances while the
+     * core's vault write runs in real time) still counts; polling the screen would miss it.
      */
     fun expectToast(
         text: String,
         timeoutMs: Long = 20_000,
         action: () -> Unit,
     ) {
-        rule.mainClock.autoAdvance = false
+        val raised = CopyOnWriteArrayList<String>()
+        val wallet = store
+        // Undispatched, so the recorder is subscribed before the action can raise anything.
+        val watch =
+            CoroutineScope(Dispatchers.Main).launch(start = CoroutineStart.UNDISPATCHED) {
+                snapshotFlow { wallet.toast }.collect { toast -> toast?.let(raised::add) }
+            }
         try {
             action()
-            waitFor(hasText(text), timeoutMs) { rule.mainClock.advanceTimeByFrame() }
+            rule.waitUntil(timeoutMs) { text in raised }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("toast \"$text\" not raised after $timeoutMs ms; raised: $raised", timeout)
         } finally {
-            rule.mainClock.autoAdvance = true
+            watch.cancel()
         }
     }
 
