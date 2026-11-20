@@ -124,9 +124,9 @@ describe("send review step", () => {
     expect(text).toContain("此账户尚未部署");
     expect(text).toContain("新的收款人");
     expect(text).toContain("你正从公开余额发送到隐私余额。");
-    expect(text).toContain("发送地址和金额均保密。收款地址公开。");
+    expect(text).toContain("发送方地址和金额均保密。收款地址公开。");
     expect(leaks(text)).toEqual([]);
-    expect(transferStageTitle("review", "unshield")).toBe("检查转出隐私余额");
+    expect(transferStageTitle("review", "unshield")).toBe("审核转出隐私余额");
     expect(transferModeCopy("shield").reviewNote).toContain("仅在金额和解码后的操作都正确时确认");
   });
 
@@ -183,7 +183,7 @@ describe("multisig review", () => {
       fixture.readyIntent.id,
     );
     const text = readable(detail);
-    expect(text).toContain("已检查的交易");
+    expect(text).toContain("已审核的交易");
     expect(text).toContain("最高网络费");
     expect(text).toContain(fixture.readyIntent.prepared.nonce);
     expect(leaks(text)).toEqual([]);
@@ -259,7 +259,7 @@ describe("privacy activation review", () => {
     );
     expect(text).toContain("启用隐私余额");
     expect(text).toContain("它不会泄露查看密钥或你的隐私余额。");
-    expect(text).toContain("一次性隐私池费用");
+    expect(text).toContain("一次性隐私池手续费");
     expect(leaks(text)).toEqual([]);
   });
 });

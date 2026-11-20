@@ -108,7 +108,7 @@ describe("approval cards in Chinese", () => {
     const text = perceived(html);
     expect(text).toContain("交易请求");
     expect(text).toContain("将会发生什么");
-    expect(text).toContain("预估费用：");
+    expect(text).toContain("预估手续费：");
     expect(text).toContain("0.01 STRK");
     expect(text).toContain("dapp.example");
     expect(text).toContain("批准");
@@ -119,8 +119,8 @@ describe("approval cards in Chinese", () => {
   test("failed fee and deployment fee variants", () => {
     zh();
     const failed = reviewFeeSection({ fee: null, feeEstimateFailed: true }, { id: "r" });
-    expect(perceived(failed)).toContain("目前无法估算网络费");
-    expect(perceived(failed)).toContain("重新估算费用");
+    expect(perceived(failed)).toContain("目前无法预估网络费");
+    expect(perceived(failed)).toContain("重新预估手续费");
     const deploy = reviewFeeSection(
       {
         deploymentFee: { overallFee: "1500000000000000", unit: "FRI" },
@@ -134,10 +134,10 @@ describe("approval cards in Chinese", () => {
     const text = perceived(deploy);
     expect(text).toContain("其中 0.0015 STRK 用于在 Starknet 上创建此账户");
     expect(text).toContain("你的 Ledger 会要求对这两笔交易都签名");
-    expect(text).toContain("预估费用：0.004 STRK");
+    expect(text).toContain("预估手续费：0.004 STRK");
     expect(leaks(failed + deploy)).toEqual([]);
     expect(perceived(reviewFeeSection({ fee: null, feeEstimatePending: true }, {}))).toContain(
-      "正在估算网络费",
+      "正在预估网络费",
     );
   });
 
@@ -216,7 +216,7 @@ describe("approval cards in Chinese", () => {
     const second = { ...first, id: "c81c5dd1-53ff-4b7b-a171-0f0a08e0ff14" } as PendingApproval;
     const html = approvalTakeover([first, second], status, "home");
     const text = perceived(html);
-    expect(text).toContain("检查请求");
+    expect(text).toContain("审核请求");
     expect(text).toContain("后面还有 1 个请求在等待");
     expect(leaks(html)).toEqual([]);
   });

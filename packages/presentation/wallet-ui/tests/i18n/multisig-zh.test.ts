@@ -100,10 +100,10 @@ describe("multisig in Simplified Chinese", () => {
     expect(list).toContain("添加多签账户");
     expect(add).toContain("多个签名者共同批准");
     expect(deploy).toContain("参与者");
-    expect(deploy).toContain("继续设置审批");
+    expect(deploy).toContain("继续设置批准");
     expect(home).toContain("签名者");
     expect(home).toContain("共同签名者更新");
-    expect(propose).toContain("检查交易");
+    expect(propose).toContain("审核交易");
     expect(signers).toContain("当前签名者");
   });
 

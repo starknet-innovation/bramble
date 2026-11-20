@@ -104,7 +104,7 @@ describe("swap in Simplified Chinese", () => {
     const text = textOf(swapFlow(status, account));
     expect(text).toContain("兑换");
     expect(text).toContain("卖出数量");
-    expect(text).toContain("检查兑换");
+    expect(text).toContain("审核兑换");
     expect(text).toContain("兑换完成");
     expect(leaks(text)).toEqual([]);
   });
@@ -153,8 +153,8 @@ describe("swap quote line and outcome in Simplified Chinese", () => {
     setUiLocale("zh-Hans");
     const root = mounted();
     paintSwapMeta(root, figures({}), QUOTE, 1);
-    expect(label(root)).toBe("检查兑换");
-    expect(root.querySelector("#swap-gas")?.textContent).toBe("费用 ≈ $0.02");
+    expect(label(root)).toBe("审核兑换");
+    expect(root.querySelector("#swap-gas")?.textContent).toBe("手续费 ≈ $0.02");
     paintSwapMeta(root, figures({ insufficient: true }), QUOTE, 1);
     expect(label(root)).toBe("STRK 余额不足");
     paintSwapMeta(root, figures({ insufficient: true, sellToken: null }), QUOTE, 1);
@@ -215,7 +215,7 @@ describe("the swap confirm stage", () => {
       valueDelta: null,
     });
     const confirm = host.querySelector("#swap-confirm")?.textContent ?? "";
-    expect(confirm).toContain("检查兑换");
+    expect(confirm).toContain("审核兑换");
     expect(confirm).toContain("你卖出");
     expect(confirm).toContain("最少收到");
     expect(confirm).toContain("1.9 ETH");
