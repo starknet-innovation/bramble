@@ -34,8 +34,10 @@ import {
 import { sepoliaVar } from "./sepolia-seeds";
 import { braavosDeployParams } from "./sepolia-stage-brv";
 
-// ponytail: floats are guesses until the suite's first local run measures one
-// night's cost (#976, PR 3); raise them then, and the nightly flags a low bank.
+// Measured over the first three send runs (2026-11-19): about 0.041 STRK per
+// self-transfer, six senders, so about 0.25 STRK a night and roughly 45 nights
+// per sender float. The bank is spent only by the deploy cases (#976, PR 4);
+// size BANK_FLOAT once those are measured. Re-run this stage to refill.
 const BANK_FLOAT = 20n * STRK;
 const SENDER_FLOAT = 2n * STRK;
 const ETH_FLOAT = 10n ** 15n; // 0.001 ETH, for TX-01's one ETH self-transfer
