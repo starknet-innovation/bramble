@@ -8,6 +8,7 @@ import {
   alternateLedgerTransport,
   ledgerGrantDiagnostic,
   ledgerGrantFailure,
+  ledgerGrantRelease,
   preferredLedgerTransport,
   transportForConnectionMethod,
 } from "../../apps/extension/src/ledger-grant/grant-flow";
@@ -84,5 +85,39 @@ describe("ledgerGrantDiagnostic", () => {
         grantedDeviceCount: null,
       }),
     ).toBe("Support code · BRAMBLE-LDG-BLE-PICKER · API unavailable · saved grants unavailable");
+  });
+});
+
+describe("ledgerGrantRelease", () => {
+  test("frees the device before closing the tab, and a second call waits on the first", async () => {
+    const order: string[] = [];
+    let finishDevice = (): void => undefined;
+    const freeing = new Promise<void>((resolve) => {
+      finishDevice = () => {
+        order.push("device");
+        resolve();
+      };
+    });
+    const started = ledgerGrantRelease(
+      null,
+      () => freeing,
+      async () => {
+        order.push("tab");
+      },
+    );
+    const joined = ledgerGrantRelease(
+      started,
+      async () => {
+        order.push("device-again");
+      },
+      async () => {
+        order.push("tab-again");
+      },
+    );
+    expect(joined).toBe(started);
+    expect(order).toEqual([]);
+    finishDevice();
+    await started;
+    expect(order).toEqual(["device", "tab"]);
   });
 });

@@ -44,6 +44,7 @@ import {
   type LedgerConnectionMethod,
   ledgerGrantDiagnostic,
   ledgerGrantFailure,
+  ledgerGrantRelease,
   transportForConnectionMethod,
 } from "./grant-flow";
 import { grantLocale, gt, setGrantLocale } from "./messages";
@@ -228,7 +229,7 @@ const render = (): void => {
   let activeTransportKind: LedgerTransportKind | null = null;
   let brokerChannel: BroadcastChannel | null = null;
   let stopBroker: (() => void) | null = null;
-  let closing = false;
+  let releasePromise: Promise<void> | null = null;
   const sessionId = ledgerBrokerSessionFromHash(globalThis.location.hash);
   const supportedTransports = supportedGrantTransportKinds();
 
@@ -247,25 +248,25 @@ const render = (): void => {
   };
   renderReadiness();
 
-  const release = async (): Promise<void> => {
-    if (closing) {
-      return;
-    }
-    closing = true;
-    stopBroker?.();
-    stopBroker = null;
-    brokerChannel?.close();
-    brokerChannel = null;
-    const transport = activeTransport;
-    const transportKind = activeTransportKind;
-    activeTransport = null;
-    activeTransportKind = null;
-    const cleanup =
-      transport && transportKind
-        ? closeGrantTransport(transport).catch(() => undefined)
-        : Promise.resolve();
-    await closeThisTab();
-    await cleanup;
+  const release = (): Promise<void> => {
+    releasePromise = ledgerGrantRelease(
+      releasePromise,
+      async () => {
+        stopBroker?.();
+        stopBroker = null;
+        brokerChannel?.close();
+        brokerChannel = null;
+        const transport = activeTransport;
+        const transportKind = activeTransportKind;
+        activeTransport = null;
+        activeTransportKind = null;
+        if (transport && transportKind) {
+          await closeGrantTransport(transport).catch(() => undefined);
+        }
+      },
+      () => closeThisTab(),
+    );
+    return releasePromise;
   };
 
   globalThis.addEventListener("pagehide", () => {

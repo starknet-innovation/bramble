@@ -118,3 +118,15 @@ export const ledgerGrantDiagnostic = (
       : `saved grants ${diagnostics.grantedDeviceCount}`;
   return `Support code · ${supportCode} · ${api} · ${grants}`;
 };
+
+/**
+ * Frees the Ledger before closing the hardware tab. A release already running
+ * is returned unchanged, so a second caller waits until the device is free.
+ * Closing the tab first destroys the document and drops the panel lock while
+ * the claim can still be draining.
+ */
+export const ledgerGrantRelease = (
+  current: Promise<void> | null,
+  freeDevice: () => Promise<void>,
+  closeTab: () => Promise<void>,
+): Promise<void> => current ?? freeDevice().then(() => closeTab());
