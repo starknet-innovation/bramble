@@ -64,7 +64,8 @@ describe("vipNotice", () => {
     expect(html).toContain("Eligible for Starknet VIP");
     expect(html).toContain(`href="${SITE}"`);
     expect(html).toContain('rel="noopener noreferrer"');
-    expect(html).toContain("Don't show again");
+    // Catalog text is escaped on its way into the template; it reads "Don't".
+    expect(html).toContain("Don&#39;t show again");
     expect(html).not.toMatch(/<input|<form|<textarea/);
   });
 

@@ -10,6 +10,7 @@ snfoundry.toml
 target/
 test-results/
 .dev-profile/
+.mainnet-multisig-e2e/
 output/
 vendor/argent-contracts/
 vendor/starknet-privacy/

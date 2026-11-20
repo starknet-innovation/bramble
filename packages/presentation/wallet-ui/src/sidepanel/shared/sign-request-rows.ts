@@ -18,6 +18,7 @@ import {
   type Snip12Field,
   type Snip12Revision,
 } from "@bramble/starknet/snip12-vocabulary";
+import { t } from "../../i18n/messages";
 import { signNameText } from "./sign-request-text";
 
 /**
@@ -44,9 +45,9 @@ export type SignRequestSplit = {
  * rather than a section heading a user might read as the wallet's own words. The
  * angle brackets are outside both the SNIP-12 name grammar and the sanitized
  * spelling `signNameText` produces, so no key decoded from a payload can spell
- * this one.
+ * this one, in any UI language (the words inside them are the wallet's own).
  */
-export const PRIMARY_TYPE_KEY = "⟨primary type⟩";
+export const primaryTypeKey = (): string => `⟨${t("signing.primaryType")}⟩`;
 
 /**
  * The row key one merkle leaf is reported under: the field's own path, then the
@@ -68,9 +69,9 @@ export const merkleLeafKey = (path: string, group: string): string => `${path}{$
  * and it is what makes two different trees two different receipts even when the
  * row cap or a truncated value hides the difference between their leaves. The
  * angle brackets keep it unspellable by any payload key, as with
- * {@link PRIMARY_TYPE_KEY}.
+ * {@link primaryTypeKey}.
  */
-export const merkleRootKey = (path: string): string => `${path} ⟨merkle root⟩`;
+export const merkleRootKey = (path: string): string => `${path} ⟨${t("signing.merkleRoot")}⟩`;
 
 /**
  * The accumulator the walk fills, narrowed to the readonly `SignRequestSplit` by

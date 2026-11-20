@@ -8,6 +8,7 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textField } from "@bramble/ui-kit/fields";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import { sendAssets, sendBalanceLabel } from "../send/send-model";
 import type { MultisigPortfolioData } from "./multisig-portfolio-data";
 
@@ -25,26 +26,26 @@ export const multisigStrk20KeyPanel = (
   if (!preferences?.strk20Networks?.[networkId]?.poolAddress) return "";
   const balances = "balances" in portfolio.balances ? portfolio.balances.balances : [];
   const assets = sendAssets(networkId, preferences, balances, portfolio.prices, portfolio.changes);
-  return `<section class="review-panel" data-ms-strk20-key-panel aria-label="Private balances">
-    <p><strong>Private balances</strong></p>
-    <p class="hint">Anyone with the viewing key can see all of this multisig's private activity.</p>
-    ${emptyState("Loading…", "status", { "data-ms-strk20-key-loading": true })}
+  return `<section class="review-panel" data-ms-strk20-key-panel aria-label="${th("multisig.strk20.title")}">
+    <p><strong>${th("multisig.strk20.title")}</strong></p>
+    <p class="hint">${th("multisig.strk20.keyNote")}</p>
+    ${emptyState(t("multisig.strk20.loading"), "status", { "data-ms-strk20-key-loading": true })}
     <div class="action-row">
       ${button({
         attributes: { "data-ms-strk20-key": "create", hidden: true },
-        label: "Create key",
+        label: t("multisig.strk20.createKey"),
         size: "small",
         variant: "secondary",
       })}
       ${button({
         attributes: { "data-ms-strk20-key": "share", hidden: true },
-        label: "Share key",
+        label: t("multisig.strk20.shareKey"),
         size: "small",
         variant: "secondary",
       })}
       ${button({
         attributes: { "data-ms-strk20-key": "drop", hidden: true },
-        label: "Drop key",
+        label: t("multisig.strk20.dropKey"),
         size: "small",
         tone: "danger",
         variant: "secondary",
@@ -53,50 +54,50 @@ export const multisigStrk20KeyPanel = (
     <div class="action-row">
       ${button({
         attributes: { "data-ms-strk20-action": "register", hidden: true },
-        label: "Register",
+        label: t("multisig.strk20.register"),
         size: "small",
         variant: "secondary",
       })}
       ${button({
         attributes: { "data-ms-strk20-action": "deposit", hidden: true },
-        label: "Deposit",
+        label: t("multisig.strk20.deposit"),
         size: "small",
         variant: "secondary",
       })}
       ${button({
         attributes: { "data-ms-strk20-action": "transfer", hidden: true },
-        label: "Transfer",
+        label: t("multisig.strk20.transfer"),
         size: "small",
         variant: "secondary",
       })}
       ${button({
         attributes: { "data-ms-strk20-action": "withdraw", hidden: true },
-        label: "Withdraw",
+        label: t("multisig.strk20.withdraw"),
         size: "small",
         variant: "secondary",
       })}
       ${button({
         attributes: { "data-ms-strk20-action": "share", hidden: true },
-        label: "Share",
+        label: t("multisig.strk20.share"),
         size: "small",
         variant: "secondary",
       })}
       ${button({
         attributes: { "data-ms-strk20-action": "refresh", hidden: true },
-        label: "Refresh",
+        label: t("multisig.strk20.refresh"),
         size: "small",
         variant: "secondary",
       })}
       ${button({
         attributes: { "data-ms-strk20-action": "send", hidden: true },
-        label: "Send",
+        label: t("multisig.home.send"),
         size: "small",
       })}
     </div>
     <div data-ms-strk20-authorizations></div>
     <form data-ms-strk20-form hidden>
       ${selectField({
-        label: "Token",
+        label: t("multisig.strk20.token"),
         name: "tokenId",
         options: assets.map((asset) => ({
           attributes: { "data-public-balance": asset.formatted, "data-symbol": asset.symbol },
@@ -107,9 +108,9 @@ export const multisigStrk20KeyPanel = (
         })),
         ...(assets[0] ? { selected: assets[0].id } : {}),
       })}
-      ${textField({ autocomplete: "off", inputmode: "decimal", label: "Amount", name: "amount" })}
-      ${textField({ autocomplete: "off", label: "To", name: "recipient" })}
-      ${button({ label: "Continue", type: "submit", variant: "secondary" })}
+      ${textField({ autocomplete: "off", inputmode: "decimal", label: t("multisig.propose.amount"), name: "amount" })}
+      ${textField({ autocomplete: "off", label: t("multisig.propose.to"), name: "recipient" })}
+      ${button({ label: t("multisig.strk20.continue"), type: "submit", variant: "secondary" })}
     </form>
     <p id="multisig-strk20-key-status" role="status"></p>
   </section>`;

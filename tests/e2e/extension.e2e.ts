@@ -309,8 +309,8 @@ test("surfaces a SNIP wire-format multicall as a transaction approval", async ({
 
     await expectInvokeApprovalWithheld(sidepanel, dappServer.origin);
     await expect(sidepanel.getByText("What will happen")).toBeVisible();
-    await expect(sidepanel.getByText("Allow 0x4270…3b0f to spend 0.5 STRK")).toBeVisible();
-    await expect(sidepanel.getByText("Call multi_route_swap on 0x4270…3b0f")).toBeVisible();
+    await expect(sidepanel.getByText("Allow 0x0427…3b0f to spend 0.5 STRK")).toBeVisible();
+    await expect(sidepanel.getByText("Call multi_route_swap on 0x0427…3b0f")).toBeVisible();
     await expect(sidepanel.locator("code", { hasText: /^approve$/ })).toHaveCount(1);
     await expect(sidepanel.locator("code", { hasText: /^multi_route_swap$/ })).toHaveCount(1);
     await expect(dapp.locator("body")).toHaveAttribute("data-multicall", "pending");

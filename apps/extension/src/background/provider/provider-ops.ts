@@ -8,6 +8,7 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import { type ActivityLog, activityOrigin } from "@bramble/transactions/activity";
 import type { AllowanceStore } from "@bramble/transactions/allowance-store";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
+import { reviewTextsFor } from "@bramble/transactions/review-messages";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
@@ -158,9 +159,7 @@ export const queueInvokeApproval = async (
   // Its flag rides on the approval, whose card then offers Deny only, and the
   // execution-time check below still refuses it.
   const refusal = refuseOnAccountSelfCall(input.calls, resolved.account.address);
-  if (refusal) {
-    return refusal;
-  }
+  if (refusal) return refusal;
   const approval = deps.approvals.requestInvoke({
     ...(input.activitySummary === undefined ? {} : { activitySummary: input.activitySummary }),
     calls: input.calls,
@@ -170,13 +169,14 @@ export const queueInvokeApproval = async (
       ...(input.proof === undefined ? {} : { proof: input.proof }),
     }),
     fee: PENDING_INVOKE_FEE,
-    flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+    flags: report.flags.map((flag) => ({ ...flag })),
     origin: input.origin,
     ...(input.proof === undefined ? {} : { proof: input.proof }),
     reviewAssets: trusted.tokens
       .filter((token) => input.calls.some((call) => sameFelt(call.contractAddress, token.address)))
       .map((token) => ({ address: token.address, symbol: token.symbol })),
     summaries: report.calls.map((call) => call.summary),
+    summaryTexts: reviewTextsFor(report.calls),
   });
   notifyApprovalsChanged();
   const revision = deps.approvals.beginFeeEstimate(approval.id);

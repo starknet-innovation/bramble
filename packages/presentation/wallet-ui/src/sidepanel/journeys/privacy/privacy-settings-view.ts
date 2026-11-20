@@ -1,10 +1,10 @@
 /**
  * STRK20 service-routing form for the advanced network screen.
  */
-import { escapeHtml } from "@bramble/core/html";
 import type { Strk20NetworkConfig } from "@bramble/privacy/config";
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
+import { t, th } from "../../../i18n/messages";
 
 /**
  * Renders complete, public per-network privacy infrastructure configuration.
@@ -18,7 +18,7 @@ export const strk20ServicesForm = (
   ${textField({
     autocomplete: "off",
     className: "mono",
-    label: "Discovery service",
+    label: t("privacy.settings.discovery"),
     name: "discoveryUrl",
     placeholder: "https://discovery.example",
     spellcheck: false,
@@ -28,7 +28,7 @@ export const strk20ServicesForm = (
   ${textField({
     autocomplete: "off",
     className: "mono",
-    label: "Transaction prover",
+    label: t("privacy.settings.prover"),
     name: "proverUrl",
     placeholder: "https://prover.example",
     spellcheck: false,
@@ -38,7 +38,7 @@ export const strk20ServicesForm = (
   ${textField({
     autocomplete: "off",
     className: "mono",
-    label: "Privacy pool contract",
+    label: t("privacy.settings.pool"),
     name: "poolAddress",
     placeholder: "0x…",
     spellcheck: false,
@@ -46,14 +46,14 @@ export const strk20ServicesForm = (
   })}
   <label class="field checkbox-field">
     <input ${config?.ohttpEnabled ? "checked" : ""} name="ohttpEnabled" type="checkbox">
-    <span>Encrypt discovery and proving requests with OHTTP</span>
-    <small>Requires OHTTP support at both services. The gateway then sees only encrypted envelopes.</small>
+    <span>${th("privacy.settings.ohttp")}</span>
+    <small>${th("privacy.settings.ohttpHint")}</small>
   </label>
   ${textField({
     autocomplete: "off",
     className: "mono",
-    hint: "Optional SDK module for shadow_account_invoke. Dapp anonymizers are reviewed transaction targets, not network settings.",
-    label: "SDK shadow account module",
+    hint: t("privacy.settings.shadowModuleHint"),
+    label: t("privacy.settings.shadowModule"),
     name: "shadowAccountAnonymizerAddress",
     placeholder: "0x…",
     spellcheck: false,
@@ -62,8 +62,8 @@ export const strk20ServicesForm = (
   ${textField({
     autocomplete: "off",
     className: "mono",
-    hint: "Optional relay that hides prover traffic metadata.",
-    label: "OHTTP relay",
+    hint: t("privacy.settings.relayHint"),
+    label: t("privacy.settings.relay"),
     name: "ohttpRelayUrl",
     placeholder: "https://relay.example",
     spellcheck: false,
@@ -73,8 +73,8 @@ export const strk20ServicesForm = (
   ${textField({
     autocomplete: "off",
     className: "mono",
-    hint: "Required for private transfer, withdrawal, and invoke relay. Registration and deposit-only shielding can use the selected account.",
-    label: "Private paymaster",
+    hint: t("privacy.settings.paymasterHint"),
+    label: t("privacy.settings.paymaster"),
     name: "paymasterUrl",
     placeholder: "https://paymaster.example",
     spellcheck: false,
@@ -84,7 +84,7 @@ export const strk20ServicesForm = (
   ${textField({
     autocomplete: "off",
     className: "mono",
-    label: "Paymaster fee token",
+    label: t("privacy.settings.feeToken"),
     name: "feeToken",
     placeholder: "0x…",
     spellcheck: false,
@@ -92,10 +92,10 @@ export const strk20ServicesForm = (
   })}
   ${button({
     icon: "check",
-    label: "Save privacy services",
+    label: t("privacy.settings.save"),
     type: "submit",
     variant: "secondary",
   })}
-  <p class="hint">Clear every field to disable STRK20 on ${escapeHtml(network)}. API credentials are intentionally unsupported in the extension.</p>
+  <p class="hint">${th("privacy.settings.disableHint", { network })}</p>
   <p id="strk20-services-result" role="status"></p>
 </form>`;

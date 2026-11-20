@@ -7,6 +7,7 @@ import {
   PRIVACY_DEPLOY_REQUIRED,
   PRIVACY_FUNDS_REQUIRED,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import { t } from "../../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { accountDisplayName } from "../../shared/parts";
 import type { SendIntent } from "../send/send-model";
@@ -106,7 +107,7 @@ const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void>
       tokenId,
       {
         kind: ineligible,
-        message: disclosure.error ?? "Private balances unavailable",
+        message: disclosure.error ?? t("privacy.journey.unavailable"),
       },
       before,
     );
@@ -122,7 +123,7 @@ const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void>
       if (!result || result.accountId !== scope.accountId) {
         block(deps, tokenId, {
           kind: "service",
-          message: "Account deployment could not be checked. Try again.",
+          message: t("privacy.journey.deploymentUnchecked"),
         });
         return;
       }
@@ -131,7 +132,7 @@ const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void>
       if (scopeMatches(deps, scope) && deps.journey().stage === "preparing") {
         block(deps, tokenId, {
           kind: "service",
-          message: "Account deployment could not be checked. Try again.",
+          message: t("privacy.journey.deploymentUnchecked"),
         });
       }
       return;
@@ -158,7 +159,7 @@ const startJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<void>
       block(
         deps,
         tokenId,
-        { kind: settledKind, message: settled.error ?? "Private balances unavailable" },
+        { kind: settledKind, message: settled.error ?? t("privacy.journey.unavailable") },
         before,
       );
       return;
@@ -211,8 +212,8 @@ const continueJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<vo
         message:
           disclosure.error ??
           (disclosure.loading
-            ? "Private balances are still being discovered. Try again in a moment."
-            : "Private balances unavailable"),
+            ? t("privacy.journey.stillDiscovering")
+            : t("privacy.journey.unavailable")),
       },
       before,
     );
@@ -227,7 +228,7 @@ const continueJourney = async (deps: PrivacyUiDeps, tokenId: string): Promise<vo
       tokenId,
       {
         kind: "pending",
-        message: "Registration is on its way. You'll be able to shield shortly.",
+        message: t("privacy.journey.registrationPending"),
       },
       before,
     );

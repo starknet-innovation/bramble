@@ -17,12 +17,13 @@ import type { TokenConfig, WalletPreferences } from "@bramble/settings/preferenc
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { sameFelt } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
 import { rankTokenQueryMatch } from "../../shared/token-search";
 import type { SwapCatalogTokenView } from "../swap/swap-client";
-import { CATALOG_EMPTY_TEXT, CATALOG_LOADING_TEXT } from "./token-catalog-view";
+import { catalogEmptyText, catalogLoadingText } from "./token-catalog-view";
 import { tokenGlyph } from "./token-row";
 
 /**
@@ -100,7 +101,7 @@ const ensureCatalog = (deps: TokenCatalogUiDeps, repaint: () => void): void => {
   };
   deps.catalog().then(
     (tokens) => settle(tokens, null),
-    (error: unknown) => settle([], errorLine(error, "Token list unavailable")),
+    (error: unknown) => settle([], errorLine(error, t("portfolio.catalog.unavailable"))),
   );
 };
 
@@ -140,7 +141,7 @@ const entryAction = (deps: TokenCatalogUiDeps, entry: SwapCatalogTokenView): str
   if (!tracked) {
     return button({
       attributes: { "data-catalog-add": entry.address },
-      label: "Add",
+      label: t("portfolio.tokens.add"),
       size: "small",
       variant: "secondary",
     });
@@ -151,7 +152,7 @@ const entryAction = (deps: TokenCatalogUiDeps, entry: SwapCatalogTokenView): str
       "data-catalog-hidden": String(hidden),
       "data-catalog-toggle": tracked.id,
     },
-    label: hidden ? "Show" : "Hide",
+    label: hidden ? t("portfolio.tokens.show") : t("portfolio.tokens.hide"),
     size: "small",
     variant: "secondary",
   });
@@ -169,17 +170,20 @@ const entryRow = (deps: TokenCatalogUiDeps, entry: SwapCatalogTokenView): string
 
 const statusText = (shown: number, total: number): string => {
   if (catalogLoading && catalog === null) {
-    return CATALOG_LOADING_TEXT;
+    return catalogLoadingText();
   }
   if (catalogError) {
     return catalogError;
   }
   if (total === 0) {
-    return CATALOG_EMPTY_TEXT;
+    return catalogEmptyText();
   }
-  return shown === total
-    ? `${total} token${total === 1 ? "" : "s"} verified by avnu.`
-    : `${shown} of ${total} shown.`;
+  if (shown !== total) {
+    return t("portfolio.catalog.shownOf", { shown: String(shown), total: String(total) });
+  }
+  return total === 1
+    ? t("portfolio.catalog.verifiedOne", { count: String(total) })
+    : t("portfolio.catalog.verifiedMany", { count: String(total) });
 };
 
 const rerender = async (deps: TokenCatalogUiDeps): Promise<void> => {
@@ -196,11 +200,11 @@ const bindAdd = (deps: TokenCatalogUiDeps, container: Element): void => {
       buttonBusy(control, true);
       void deps.wallet.addToken(address).then(
         async () => {
-          showToast("Token added", "success", control);
+          showToast(t("portfolio.tokens.added"), "success", control);
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Add token failed"), "error", control);
+          showToast(errorDetails(error, t("portfolio.tokens.addFailed")), "error", control);
           buttonBusy(control, false);
         },
       );
@@ -219,11 +223,15 @@ const bindToggle = (deps: TokenCatalogUiDeps, container: Element): void => {
       buttonBusy(control, true);
       void deps.wallet.setTokenHidden(tokenId, !hidden).then(
         async () => {
-          showToast(hidden ? "Token shown" : "Token hidden", "success", control);
+          showToast(
+            hidden ? t("portfolio.tokens.shown") : t("portfolio.tokens.hidden"),
+            "success",
+            control,
+          );
           await rerender(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Token update failed"), "error", control);
+          showToast(errorDetails(error, t("portfolio.tokens.updateFailed")), "error", control);
           buttonBusy(control, false);
         },
       );
@@ -254,7 +262,7 @@ export const bindTokenCatalog = (deps: TokenCatalogUiDeps): void => {
       shown.length === 0
         ? entries.length === 0
           ? ""
-          : emptyState("No token matches that search.")
+          : emptyState(t("portfolio.catalog.noMatch"))
         : `<ul class="token-list">${shown.map((entry) => entryRow(deps, entry)).join("")}</ul>`;
     bindAdd(deps, results);
     bindToggle(deps, results);

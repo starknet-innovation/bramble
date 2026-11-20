@@ -374,6 +374,7 @@ export const makeMultisigHarness = async (options: MultisigHarnessOptions = {}) 
             input.account,
             input.calls,
             input.config,
+            input.proof,
           );
         },
         async resolveSignerAccount() {

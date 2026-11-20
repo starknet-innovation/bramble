@@ -223,11 +223,15 @@ const KEPT_VISIBLE = new Set([
   "RPC endpoints are temporarily unavailable",
   "Starkscan does not index devnet",
   "Request too large to review",
+  "This multisig can't propose more than 16 calls in one transaction.",
+  "This multisig can't propose that much calldata in one transaction.",
   "Ledger needs attention",
 ]);
 
 // Wallet-written sentences the wider scan found (constants, replies, UI copy).
 const SCANNED_SENTENCES = new Set([
+  // Settings → Language: the write failed; the setting is unchanged.
+  "Couldn't change the language.",
   "Deploy this account first (Settings → Deploy account).",
   "Not enough x",
   "The network fee was not reviewed. Nothing was submitted — review the transaction again.",
