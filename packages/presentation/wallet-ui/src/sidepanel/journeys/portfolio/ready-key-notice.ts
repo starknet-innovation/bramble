@@ -5,6 +5,7 @@
  * or backs up its key while this install still holds the key.
  */
 import { escapeHtml } from "@bramble/core/html";
+import { th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
 
 /** What the notice needs to know about the active account. */
@@ -27,12 +28,12 @@ export type ReadyKeyNoticeInput = {
 export const readyKeyNotice = (input: ReadyKeyNoticeInput): string =>
   input.affected && !input.dismissed
     ? `<div class="ready-key-notice" data-ready-key-notice>
-      <p class="hero-stale">${icon("alert")}<span>Back up this account's key</span></p>
-      <p class="read-only-detail">Restoring your phrase won't find this account. Keep its private key, or move its funds to another account.</p>
+      <p class="hero-stale">${icon("alert")}<span>${th("portfolio.readyKey.title")}</span></p>
+      <p class="read-only-detail">${th("portfolio.readyKey.body")}</p>
       <div class="ready-key-notice-actions">
-        ${input.canMoveFunds ? `<button type="button" data-view="send">Move funds</button>` : ""}
-        <button class="secondary" type="button" data-view="reveal">Back up key</button>
+        ${input.canMoveFunds ? `<button type="button" data-view="send">${th("portfolio.readyKey.moveFunds")}</button>` : ""}
+        <button class="secondary" type="button" data-view="reveal">${th("portfolio.readyKey.backUp")}</button>
       </div>
-      <button class="ghost" id="ready-key-notice-hide" type="button" data-account-id="${escapeHtml(input.accountId)}">Don't show again</button>
+      <button class="ghost" id="ready-key-notice-hide" type="button" data-account-id="${escapeHtml(input.accountId)}">${th("portfolio.readyKey.hide")}</button>
     </div>`
     : "";

@@ -7,9 +7,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import {
-  SHADOW_ACCOUNTS_EMPTY,
-  SHADOW_ACCOUNTS_READ_REASON,
-  SHADOW_ACCOUNTS_SWEEP_SENT,
+  shadowAccountsEmpty,
+  shadowAccountsReadReason,
+  shadowAccountsSweepSent,
 } from "../../../../src/sidepanel/journeys/privacy/shadow-accounts-copy";
 import { createShadowAccountsRuntimeClient } from "../../../../src/sidepanel/journeys/privacy/shadow-accounts-runtime";
 import { bindShadowAccounts } from "../../../../src/sidepanel/journeys/privacy/shadow-accounts-ui";
@@ -79,7 +79,7 @@ describe("shadow accounts screen", () => {
   test("states why balances wait, and reads nothing from the network on open", async () => {
     const calls: string[] = [];
     const app = mount();
-    expect(app.textContent).toContain(SHADOW_ACCOUNTS_READ_REASON);
+    expect(app.textContent).toContain(shadowAccountsReadReason());
     bindShadowAccounts({
       app,
       wallet: {
@@ -125,12 +125,12 @@ describe("shadow accounts screen", () => {
     button("Confirm sweep")?.click();
     await settle();
     expect(calls).toEqual(["list", "balances", "prepare", "execute"]);
-    expect(app.textContent).toContain(SHADOW_ACCOUNTS_SWEEP_SENT);
+    expect(app.textContent).toContain(shadowAccountsSweepSent());
   });
 
   test("an empty record list and a scope under another anonymizer offer no network read", async () => {
     for (const [scopes, expected] of [
-      [[], SHADOW_ACCOUNTS_EMPTY],
+      [[], shadowAccountsEmpty()],
       [[{ ...scope, current: false }], "Recorded under another anonymizer, 0x4f3."],
     ] as const) {
       const app = mount();

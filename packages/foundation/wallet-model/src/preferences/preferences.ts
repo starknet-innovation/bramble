@@ -5,6 +5,8 @@
  * `preferences-store.ts` so that file stays under the repository line cap; the
  * store re-exports the public types so existing import paths are unchanged.
  */
+
+import { isLocale, type Locale } from "@bramble/core/i18n";
 import {
   hasOnlyKnownKeys,
   hasUniqueStrings,
@@ -163,6 +165,13 @@ export type ApprovalSurfacePreference = "popup" | "side-panel";
 export type ThemeChoice = "dark" | "light" | "system";
 
 /**
+ * Wallet language. `"auto"` follows the browser's language list; a locale tag
+ * pins that language. Absent on preferences written before the setting
+ * existed, which reads as `"auto"`.
+ */
+export type LanguagePreference = "auto" | Locale;
+
+/**
  * Shared 1-64 character trimmed-label rule reused for account and contact
  * labels.
  */
@@ -309,6 +318,12 @@ export const isApprovalSurfacePreference = (value: unknown): value is ApprovalSu
  */
 export const isThemeChoice = (value: unknown): value is ThemeChoice =>
   value === "dark" || value === "light" || value === "system";
+
+/**
+ * Checks a wallet language choice: `"auto"` or a shipped locale tag.
+ */
+export const isLanguagePreference = (value: unknown): value is LanguagePreference =>
+  value === "auto" || isLocale(value);
 
 /**
  * Checks a hidden-token id string.

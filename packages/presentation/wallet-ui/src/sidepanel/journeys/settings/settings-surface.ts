@@ -1,7 +1,7 @@
 /**
  * Settings-screen bindings as one unit.
  *
- * All seven share a single dependency object — the same account scope, the same
+ * They all share a single dependency object — the same account scope, the same
  * refresh, and the two pieces of editor state a repaint has to preserve — so they
  * are bound together rather than re-listed at the entry point.
  */
@@ -9,6 +9,7 @@
 import { bindFindAccounts } from "./find-accounts-ui";
 import { bindImportKey } from "./import-key-ui";
 import { bindImportPhrase } from "./import-phrase-ui";
+import { bindLanguage } from "./language-ui";
 import { bindPrivacyUnlock } from "./privacy-unlock";
 import {
   bindAccountLabel,
@@ -40,6 +41,7 @@ export const bindSettingsSurface = (deps: SettingsSurfaceDeps): void => {
   bindImportPhrase(deps);
   bindFindAccounts(deps);
   bindAppearance(deps);
+  bindLanguage(deps);
   bindPrivacyUnlock(deps);
   bindBackup(deps);
   bindContacts(deps);

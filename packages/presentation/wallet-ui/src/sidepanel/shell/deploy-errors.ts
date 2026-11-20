@@ -8,6 +8,8 @@
  * earns a sentence of its own, because the reader can act on it: the account
  * cannot pay the deployment fee.
  */
+
+import { t } from "../../i18n/messages";
 import { isOutcomeUnknown } from "../runtime/runtime-errors";
 import { errorDetails, errorLine, errorMessage } from "../shared/dom";
 
@@ -20,7 +22,7 @@ import { errorDetails, errorLine, errorMessage } from "../shared/dom";
 export const FEE_FUNDING_SHORTFALL = /exceed balance|insufficient[^\n]*balance|address needs STRK/i;
 
 /** The deploy screen's line when the account holds too little STRK for the fee. */
-export const DEPLOY_NEEDS_STRK = "Add STRK to this account to deploy it.";
+export const deployNeedsStrk = (): string => t("cost.deploy.needsStrk");
 
 /**
  * The sentence the deploy screen shows for `error`: the funding line for a
@@ -29,7 +31,7 @@ export const DEPLOY_NEEDS_STRK = "Add STRK to this account to deploy it.";
  * sent; it keeps its "check Activity" sentence.
  */
 export const deployErrorLine = (error: unknown, fallback: string): string =>
-  fundingShortfall(error, fallback) ? DEPLOY_NEEDS_STRK : errorLine(error, fallback);
+  fundingShortfall(error, fallback) ? deployNeedsStrk() : errorLine(error, fallback);
 
 /**
  * What the deploy screen hands `showToast`: the funding line as written, or
@@ -37,7 +39,7 @@ export const deployErrorLine = (error: unknown, fallback: string): string =>
  * copy control. Passing the translated line instead would translate it twice.
  */
 export const deployToastText = (error: unknown, fallback: string): string =>
-  fundingShortfall(error, fallback) ? DEPLOY_NEEDS_STRK : errorMessage(error, fallback);
+  fundingShortfall(error, fallback) ? deployNeedsStrk() : errorMessage(error, fallback);
 
 const fundingShortfall = (error: unknown, fallback: string): boolean =>
   !isOutcomeUnknown(error) && FEE_FUNDING_SHORTFALL.test(errorDetails(error, fallback));

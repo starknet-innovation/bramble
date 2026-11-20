@@ -11,6 +11,7 @@ import type { DiscoveredNft } from "@bramble/portfolio/nft-metadata";
 import { nftsShown } from "@bramble/settings/preferences";
 import type { NftStandard } from "@bramble/starknet/rpc";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { summaryTextsFor } from "@bramble/transactions/review-messages";
 import { refuseOnPoisonedRecipient, verifyCalls } from "@bramble/transactions/verify";
 import { STARKNET_NETWORKS, sameFelt } from "@bramble/wallet-model/networks";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
@@ -258,6 +259,7 @@ const handleReviewNftTransfer = async (
       // the account, a Ledger signs both, and the review says so here too.
       signsTwice: fees.requiresDeployment && context.account.derivation.kind === "ledger",
       summaries: report.calls.map((decoded) => decoded.summary),
+      ...summaryTextsFor(report.calls),
     },
   };
 };

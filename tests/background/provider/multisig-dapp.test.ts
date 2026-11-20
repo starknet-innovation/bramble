@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { MULTISIG_PROPOSAL_CALL_LIMIT } from "../../../apps/extension/src/background/provider/multisig-dapp-budget";
 import { MULTISIG_PROPOSAL_SAVED } from "../../../apps/extension/src/background/provider/multisig-dapp-invoke";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
@@ -173,6 +174,29 @@ describe("multisig dapp accounts", () => {
     const intents = await multisigs.listIntents();
     expect(intents).toHaveLength(1);
     expect(intents[0]).toMatchObject({ accountId: record.id, state: "collecting" });
+  });
+
+  test("a higher threshold refuses more than 16 calls before a card is shown", async () => {
+    const { handler, multisigs, record } = await harness(2);
+    const connect = handler(
+      { origin: grantedOrigin, type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    const connectId = await latestApprovalId(handler, extensionSender);
+    await handler(
+      { id: connectId, reviewedAccountId: record.id, type: "wallet.approveOrigin" },
+      extensionSender,
+    );
+    await connect;
+
+    const calls = Array.from({ length: 17 }, () => invokeCalls[0]);
+    await expect(
+      handler({ calls, origin: grantedOrigin, type: "wallet.addInvokeTransaction" }, contentSender),
+    ).resolves.toEqual({ error: MULTISIG_PROPOSAL_CALL_LIMIT });
+    expect(await multisigs.listIntents()).toHaveLength(0);
+    await expect(
+      handler({ type: "wallet.pendingApprovals" }, extensionSender),
+    ).resolves.toMatchObject({ ok: true, pending: [] });
   });
 
   test("a multisig-only connection is visible to wallet_getPermissions", async () => {

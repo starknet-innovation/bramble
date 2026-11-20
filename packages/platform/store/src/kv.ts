@@ -36,13 +36,23 @@ export const ENCRYPTED_ENVELOPE_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The budget a write to `key` is held to. Only the vault envelope keys get the
- * larger at-rest budget (`JSON_BUDGETS.storage`); every other key keeps the
- * provider budget, so no other value can grow toward the browser's shared
- * storage quota.
+ * Prefix of the keys that each hold one STARK proof's bytes for a multisig
+ * private action, kept until co-owners have signed. A proof may be far larger
+ * than the provider budget charges a key for, so these alone use the
+ * `JSON_BUDGETS.strk20Proof` budget, which admits exactly one proof.
  */
-export const storageBudgetFor = (key: string): JsonBudget =>
-  ENCRYPTED_ENVELOPE_KEYS.has(key) ? JSON_BUDGETS.storage : JSON_BUDGETS.provider;
+export const STRK20_PROOF_KEY_PREFIX = "bramble:multisig-strk20-proof:";
+
+/**
+ * The budget a write to `key` is held to. The vault envelope keys get the
+ * larger at-rest budget (`JSON_BUDGETS.storage`) and proof-bytes keys the
+ * proof budget; every other key keeps the provider budget, so no other value
+ * can grow toward the browser's shared storage quota.
+ */
+export const storageBudgetFor = (key: string): JsonBudget => {
+  if (ENCRYPTED_ENVELOPE_KEYS.has(key)) return JSON_BUDGETS.storage;
+  return key.startsWith(STRK20_PROOF_KEY_PREFIX) ? JSON_BUDGETS.strk20Proof : JSON_BUDGETS.provider;
+};
 
 /**
  * Throws when a value would serialize as lossy JSON or exceed `budget`, by

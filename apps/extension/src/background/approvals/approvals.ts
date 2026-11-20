@@ -18,7 +18,7 @@ import {
   cloneApprovalValue,
   readStoredApprovalPayload,
 } from "./approval-payload";
-import { fitsSidePanel } from "./approval-review-size";
+import { fitsSidePanel, withReferencesThatFit } from "./approval-review-size";
 import {
   type ApprovalRequest,
   approvalSnapshot,
@@ -55,6 +55,11 @@ import type {
   ApprovalQueue,
   ApprovalQueueOptions,
 } from "./approval-queue-types";
+import {
+  copySummaryTexts,
+  switchSummaryTexts,
+  typedDataSummaryTexts,
+} from "./approval-review-texts";
 import { requireRenderableSummaries } from "./approval-summary-bound";
 import { sameWatchTarget, watchTarget } from "./approval-watch-target";
 
@@ -72,6 +77,7 @@ const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): 
     deployFirst: _stale,
     deploymentFee: _deployment,
     deploymentFeeEstimateFailed: _deploymentFailed,
+    feeEstimateDetail: _detail,
     gaslessFees: _previous,
     ...current
   } = approval;
@@ -82,7 +88,14 @@ const copyReviewAssets = (assets: NonNullable<PendingApproval["reviewAssets"]>) 
   assets.length === 0 ? {} : { reviewAssets: assets.map((asset) => ({ ...asset })) };
 
 const copyFlags = (flags: NonNullable<PendingApproval["flags"]>) =>
-  flags.length === 0 ? {} : { flags: flags.map((flag) => ({ ...flag })) };
+  flags.length === 0
+    ? {}
+    : {
+        flags: flags.map((flag) => ({
+          ...flag,
+          ...(flag.text === undefined ? {} : { text: cloneApprovalValue(flag.text) }),
+        })),
+      };
 
 /**
  * Creates a deduplicating approval queue. Connection prompts dedupe per origin;
@@ -197,8 +210,10 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
 
   // `arrivedAt` dates an approval from its request's admission (audit N3); it
   // can only bring the deadline forward, never extend it.
-  const enqueue = (approval: ApprovalRequest, arrivedAt?: number): PendingApproval => {
-    requireRenderableSummaries(approval);
+  const enqueue = (request: ApprovalRequest, arrivedAt?: number): PendingApproval => {
+    requireRenderableSummaries(request);
+    // References past the panel's budget are dropped; the card shows English.
+    const approval = withReferencesThatFit(request, approvalSnapshot(request));
     const live = queued();
     const refusal = approvalAdmissionRefusal(live, approval.origin);
     if (refusal) {
@@ -293,7 +308,10 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         calls: input.calls.map(cloneApprovalCall),
         context: { ...input.context },
         ...invokeFeeReviewFields(input.fee),
-        flags: input.flags.map((flag) => ({ ...flag })),
+        flags: input.flags.map((flag) => ({
+          ...flag,
+          ...(flag.text === undefined ? {} : { text: cloneApprovalValue(flag.text) }),
+        })),
         ...(input.multisigThreshold === undefined
           ? {}
           : { multisigThreshold: input.multisigThreshold }),
@@ -303,6 +321,9 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         ...(input.proof === undefined ? {} : { proof: cloneApprovalValue(input.proof) }),
         ...copyReviewAssets(input.reviewAssets ?? []),
         summaries: [...input.summaries],
+        ...(input.summaryTexts === undefined
+          ? {}
+          : { summaryTexts: input.summaryTexts.map((text) => cloneApprovalValue(text)) }),
       });
     },
     requestSignTypedData({ context, origin, review, summary, typedData }) {
@@ -316,6 +337,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         kind: "sign-typed-data",
         origin,
         summaries: [summary, ...(review?.summaries ?? [])],
+        ...typedDataSummaryTexts(summary, review?.summaryTexts),
         typedData: cloneApprovalValue(typedData),
       });
     },
@@ -328,6 +350,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       request,
       reviewAssets = [],
       summaries,
+      summaryTexts,
     }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
@@ -348,6 +371,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
           ...copyReviewAssets(reviewAssets),
           strk20Request: cloneApprovalValue(request),
           summaries: [...summaries],
+          ...copySummaryTexts(summaryTexts),
         },
         arrivedAt,
       );
@@ -362,6 +386,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
       reviewAssets = [],
       shadowAccountAnonymizer,
       summaries,
+      summaryTexts,
     }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
@@ -380,6 +405,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
           ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
           strk20Plan: cloneApprovalValue(plan),
           summaries: [...summaries],
+          ...copySummaryTexts(summaryTexts),
         },
         arrivedAt,
       );
@@ -419,6 +445,7 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
         networkId,
         origin,
         summaries: [summary],
+        ...switchSummaryTexts(networkId, summary),
       });
     },
     requestWatchAsset(request) {

@@ -32,6 +32,12 @@ const openExplorerData = (context: FrameContext): void => {
   disclosure.open = true;
 };
 
+const expandFirstSite = (context: FrameContext): void => {
+  const site = context.app.querySelector<HTMLDetailsElement>("details.connected-site");
+  if (!site) throw new Error("Missing production connected-site disclosure");
+  site.open = true;
+};
+
 const showRejectedService = (context: FrameContext): void => {
   openExplorerData(context);
   showToast(
@@ -57,6 +63,18 @@ export const settingsScenario: WalletScenario = {
       label: "Appearance & currency",
       narrative: "Theme and valuation preferences share one low-risk display task.",
       state: { currency: "USD", theme: "dark" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          preferences: { ...journeyPreferences, language: "zh-Hans" },
+          view: "language",
+        }),
+      id: "language",
+      label: "Language",
+      narrative:
+        "Follow the browser or pin a language; each language is named in its own script so a reader finds theirs in any UI language.",
+      state: { language: "zh-Hans" },
     },
     {
       content: () => walletDashboard({ preferences: journeyPreferences, view: "request-settings" }),
@@ -198,8 +216,10 @@ export const settingsScenario: WalletScenario = {
         }),
       id: "connected-sites",
       label: "Connected sites",
-      narrative: "Every active origin shows its granted account count and direct revocation.",
-      state: { origins: 2 },
+      narrative:
+        "Every active origin shows its shared account count and expands to each account, disconnectable one at a time or all together.",
+      prepare: expandFirstSite,
+      state: { expanded: "https://terminal.bramble.test", origins: 2 },
     },
     {
       content: () =>
@@ -318,6 +338,7 @@ export const settingsScenario: WalletScenario = {
     "settings",
     "staking",
     "appearance",
+    "language",
     "request-settings",
     "privacy-unlock",
     "network",

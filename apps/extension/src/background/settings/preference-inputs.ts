@@ -13,7 +13,12 @@ import {
   type StarknetNetworkId,
 } from "@bramble/wallet-model/networks";
 import { isNostrPublicKey, isNostrRelayUrl } from "@bramble/wallet-model/nostr";
-import { isApprovalSurfacePreference, isDisplayCurrency } from "@bramble/wallet-model/preferences";
+import {
+  isApprovalSurfacePreference,
+  isDisplayCurrency,
+  isLanguagePreference,
+  type LanguagePreference,
+} from "@bramble/wallet-model/preferences";
 
 const isGroupNameText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;
@@ -188,6 +193,7 @@ type DisplayPreferenceInput = {
   readonly approvalSurface?: "popup" | "side-panel";
   readonly collectiblesPreview?: boolean;
   readonly displayCurrency?: "eur" | "gbp" | "usd";
+  readonly language?: LanguagePreference;
   readonly productAnalytics?: boolean;
   readonly readyKeyNoticeDismissed?: string;
   readonly reliabilityDiagnostics?: boolean;
@@ -205,6 +211,9 @@ const hasValidDisplayValues = (
     return false;
   }
   if (message["displayCurrency"] !== undefined && !isDisplayCurrency(message["displayCurrency"])) {
+    return false;
+  }
+  if (message["language"] !== undefined && !isLanguagePreference(message["language"])) {
     return false;
   }
   if (
@@ -225,35 +234,35 @@ const hasValidDisplayValues = (
   );
 };
 
+// A `wallet.setDisplay` message carrying only known keys, each well-formed.
+const isSetDisplayMessage = (
+  message: unknown,
+): message is Record<string, unknown> & DisplayPreferenceInput =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, [
+    "approvalSurface",
+    "collectiblesPreview",
+    "displayCurrency",
+    "language",
+    "productAnalytics",
+    "readyKeyNoticeDismissed",
+    "reliabilityDiagnostics",
+    "theme",
+    "type",
+    "vipNotice",
+  ]) &&
+  message["type"] === "wallet.setDisplay" &&
+  hasValidDisplayValues(message);
+
 /** Parses exact display-preference updates from an untrusted runtime message. */
 export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | null => {
-  if (!isRecord(message)) {
-    return null;
-  }
-  if (
-    !hasOnlyKnownKeys(message, [
-      "approvalSurface",
-      "collectiblesPreview",
-      "displayCurrency",
-      "productAnalytics",
-      "readyKeyNoticeDismissed",
-      "reliabilityDiagnostics",
-      "theme",
-      "type",
-      "vipNotice",
-    ])
-  ) {
-    return null;
-  }
-  if (message["type"] !== "wallet.setDisplay") {
-    return null;
-  }
-  if (!hasValidDisplayValues(message)) {
+  if (!isSetDisplayMessage(message)) {
     return null;
   }
   const approvalSurface = message["approvalSurface"];
   const collectiblesPreview = message["collectiblesPreview"];
   const displayCurrency = message["displayCurrency"];
+  const language = message["language"];
   const productAnalytics = message["productAnalytics"];
   const readyKeyNoticeDismissed = message["readyKeyNoticeDismissed"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
@@ -263,6 +272,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
     ...(approvalSurface === undefined ? {} : { approvalSurface }),
     ...(collectiblesPreview === undefined ? {} : { collectiblesPreview }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
+    ...(language === undefined ? {} : { language }),
     ...(productAnalytics === undefined ? {} : { productAnalytics }),
     ...(readyKeyNoticeDismissed === undefined ? {} : { readyKeyNoticeDismissed }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),

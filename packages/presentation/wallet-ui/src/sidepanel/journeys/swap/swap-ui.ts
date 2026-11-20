@@ -16,6 +16,7 @@ import type {
   WalletPreferences,
 } from "@bramble/settings/preferences";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import { t, th } from "../../../i18n/messages";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { BalanceState, SidepanelWallet } from "../../runtime/runtime";
 import { awaitConfirmation } from "../../shared/confirm-submitted";
@@ -124,7 +125,7 @@ const tokenById = (deps: SwapUiDeps, id: string | null): TokenConfig | null =>
 const chipMarkup = (token: TokenConfig | null): string =>
   token
     ? `${tokenGlyph(token.address, token.symbol)}<span class="swap-token-copy">${escapeHtml(token.symbol)}</span>${icon("chevronDown")}`
-    : `<span class="swap-token-copy">Select</span>${icon("chevronDown")}`;
+    : `<span class="swap-token-copy">${th("swap.edit.select")}</span>${icon("chevronDown")}`;
 
 const amountNumber = (): number => {
   const value = Number(amountText);
@@ -228,7 +229,7 @@ const requestQuote = (deps: SwapUiDeps, root: Element, note = ""): void => {
     applySwapUi(deps, root);
     return;
   }
-  setResult(root, note || "Finding the best route…");
+  setResult(root, note || t("swap.edit.finding"));
   applySwapUi(deps, root);
   const input = { amount: amountText, buyTokenId, sellTokenId };
   deps.swap.quote(input).then(
@@ -246,7 +247,7 @@ const requestQuote = (deps: SwapUiDeps, root: Element, note = ""): void => {
         return;
       }
       pendingBuyAmount = null;
-      setResult(root, errorLine(error, "No route available right now."));
+      setResult(root, errorLine(error, t("swap.edit.noRoute")));
       applySwapUi(deps, root);
     },
   );
@@ -335,7 +336,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
       return;
     }
     buttonBusy(reviewButton, true);
-    setResult(root, "Building and validating the executable route…");
+    setResult(root, t("swap.edit.preparing"));
     const quoted = quote;
     const preparationSeq = quoteSeq;
     deps.swap
@@ -369,7 +370,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
             buttonBusy(reviewButton, false);
             return;
           }
-          setResult(root, errorLine(error, "Could not prepare a safe swap route."));
+          setResult(root, errorLine(error, t("swap.edit.prepareFailed")));
           buttonBusy(reviewButton, false);
           applySwapUi(deps, root);
         },
@@ -413,7 +414,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     buttonBusy(confirmButton, true);
     submitting = true;
     const restingContent = confirmButton.innerHTML;
-    confirmButton.innerHTML = `${icon("refresh")}Submitting swap…`;
+    confirmButton.innerHTML = `${icon("refresh")}${th("review.swap.submitting")}`;
     const executed = quote;
     const claimedPreparation = preparation;
     const sellText = `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`;
@@ -427,7 +428,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
       // The hash is a handoff, not an outcome. The screen stays on the
       // review, saying what it is doing, until the chain answers.
       const epoch = ++confirmEpoch;
-      confirmButton.innerHTML = `${icon("refresh")}Confirming…`;
+      confirmButton.innerHTML = `${icon("refresh")}${th("review.swap.confirming")}`;
       const outcome = await awaitConfirmation({
         ...(deps.confirmationDelaysMs ? { delaysMs: deps.confirmationDelaysMs } : {}),
         hash: transactionHash,
@@ -480,8 +481,8 @@ export const bindSwap = (deps: SwapUiDeps): void => {
         return;
       }
       submitting = false;
-      showToast(errorDetails(error, "Swap failed"), "error", root);
-      setResult(root, errorLine(error, "Swap failed"));
+      showToast(errorDetails(error, t("review.swap.failed")), "error", root);
+      setResult(root, errorLine(error, t("review.swap.failed")));
       confirmButton.innerHTML = restingContent;
       buttonBusy(confirmButton, false);
       preparation = null;

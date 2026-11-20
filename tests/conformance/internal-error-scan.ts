@@ -11,6 +11,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { uiCatalogs } from "../../packages/presentation/wallet-ui/src/i18n/messages";
 
 const root = join(import.meta.dir, "../..");
 
@@ -54,6 +55,23 @@ const FALLBACK =
 const BLOCKER = /new\s+PrivacyBlockerError\(\s*[^,]+,\s*(["`])((?:(?!\1)[^\\]|\\.)*)\1/g;
 // Literals that open with a guard prefix passed through a helper.
 const GUARD_LITERAL = /"((?:Unlock session|Krusty KMS) [^"]+)"/g;
+// A fallback can be a UI catalog message, passed as `t("key")` or bound first
+// as `const fallback = t("key")`, and a reply can carry one as `error: t("key")`;
+// each is read as its English source text, which is what an English reader
+// sees and what the copy tables are keyed on. A `{fact}` placeholder reads as
+// `x`, exactly as a `${…}` in a template literal does below.
+const FALLBACK_MESSAGE =
+  /\b(?:responseError|errorText|errorDetails|errorLine|errorMessage)\(\s*[^,()]+(?:\([^()]*\))?\s*,\s*t\(\s*"([\w.]+)"/g;
+const FALLBACK_BINDING = /\bconst\s+fallback\s*=\s*t\(\s*"([\w.]+)"/g;
+const REPLY_MESSAGE = /\berror:\s*t\(\s*"([\w.]+)"/g;
+const englishMessages: Readonly<Record<string, string>> = uiCatalogs.en;
+const catalogFallbacks = (src: string): readonly string[] =>
+  [FALLBACK_MESSAGE, FALLBACK_BINDING, REPLY_MESSAGE].flatMap((pattern) =>
+    [...src.matchAll(pattern)].flatMap((match) => {
+      const text = match[1] === undefined ? undefined : englishMessages[match[1]];
+      return text === undefined ? [] : [text.replace(/\{[A-Za-z][A-Za-z0-9]*\}/gu, "x")];
+    }),
+  );
 // Refusals a policy returns rather than throws (`return "…"`, or a ternary
 // branch), read only from the modules that mint them: everywhere else a
 // returned string is ordinary data.
@@ -134,6 +152,7 @@ export const thrownMessages = (dirs: readonly string[]): readonly ThrownMessage[
     for (const [pattern, group] of LITERAL_PATTERNS) {
       for (const match of src.matchAll(pattern)) add(match[group], file);
     }
+    for (const text of catalogFallbacks(src)) add(text, file);
     for (const match of src.matchAll(REPLY_CONSTANT)) {
       if (match[1]) add(constants.get(match[1]), file);
     }

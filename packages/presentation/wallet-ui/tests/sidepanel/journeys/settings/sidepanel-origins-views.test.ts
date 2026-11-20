@@ -26,7 +26,13 @@ const status: WalletStatus = {
 };
 
 const approvalId = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
-const sites = [{ accountCount: 1, origin: "https://dapp.example" }];
+const site = (origin: string, accountIds: readonly string[] = [account.id]) => ({
+  accountCount: accountIds.length,
+  accountIds,
+  multisigIds: [],
+  origin,
+});
+const sites = [site("https://dapp.example")];
 
 describe("connected-sites views", () => {
   test("settings links to the connected-sites flow", () => {
@@ -107,33 +113,19 @@ describe("connected-sites response validators", () => {
   });
 
   test("rejects malformed connected-sites responses", () => {
-    expect(
-      isConnectedSitesResponse({
-        ok: true,
-        sites: [{ accountCount: -1, origin: "https://d.example" }],
-      }),
-    ).toBe(false);
-    expect(
-      isConnectedSitesResponse({
-        ok: true,
-        sites: [{ accountCount: 1, origin: "http://d.example" }],
-      }),
-    ).toBe(false);
-    expect(
-      isConnectedSitesResponse({
-        ok: true,
-        sites: [
-          { accountCount: 1, origin: "https://d.example" },
-          { accountCount: 2, origin: "https://d.example" },
-        ],
-      }),
-    ).toBe(false);
-    expect(
-      isConnectedSitesResponse({
-        ok: true,
-        sites: [{ accountCount: 1, label: "x", origin: "https://d.example" }],
-      }),
-    ).toBe(false);
+    const valid = site("https://d.example");
+    const rejects = (entries: readonly unknown[]) =>
+      expect(isConnectedSitesResponse({ ok: true, sites: entries })).toBe(false);
+    rejects([{ ...valid, accountCount: -1 }]);
+    rejects([{ ...valid, origin: "http://d.example" }]);
+    rejects([valid, valid]);
+    rejects([{ ...valid, label: "x" }]);
+    rejects([{ accountCount: 1, origin: "https://d.example" }]);
+    // The count must match the ids, and every id must be a canonical account id.
+    rejects([{ ...valid, accountCount: 2 }]);
+    rejects([{ ...valid, accountCount: 2, accountIds: [account.id, account.id] }]);
+    rejects([{ ...valid, accountIds: ["SN_MAIN:0x01"] }]);
+    rejects([{ ...valid, accountCount: 2, multisigIds: ["not-an-id"] }]);
   });
 
   test("accepts pending approvals enriched with insights and rejects bad insights", () => {

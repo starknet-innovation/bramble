@@ -10,6 +10,7 @@ const MAX_LINES = 500;
 const EXCLUDED = new Set([
   ".claude",
   ".dev-profile",
+  ".mainnet-multisig-e2e",
   ".git",
   ".impeccable",
   ".playwright-cli",

@@ -33,9 +33,10 @@ describe("Ready key notice", () => {
 
   test("states the consequence, moves funds first, then backs up the key", () => {
     const markup = readyKeyNotice(affected);
-    expect(markup).toContain("Back up this account's key");
+    // Catalog text is escaped on its way into the template; it reads "account's".
+    expect(markup).toContain("Back up this account&#39;s key");
     expect(markup).toContain(
-      "Restoring your phrase won't find this account. Keep its private key, or move its funds to another account.",
+      "Restoring your phrase won&#39;t find this account. Keep its private key, or move its funds to another account.",
     );
     const move = markup.indexOf(">Move funds</button>");
     expect(move).toBeGreaterThan(-1);
@@ -45,14 +46,14 @@ describe("Ready key notice", () => {
       /<button class="secondary" type="button" data-view="reveal">Back up key<\/button>/,
     );
     expect(markup).toContain(`data-account-id="${account.id}"`);
-    expect(markup).toContain(">Don't show again</button>");
+    expect(markup).toContain(">Don&#39;t show again</button>");
   });
 
   test("a read-only account is offered only the key backup", () => {
     const markup = readyKeyNotice({ ...affected, canMoveFunds: false });
     expect(markup).not.toContain("Move funds");
     expect(markup).toContain(">Back up key</button>");
-    expect(markup).toContain(">Don't show again</button>");
+    expect(markup).toContain(">Don&#39;t show again</button>");
   });
 
   test("escapes the account id on the dismiss control", () => {

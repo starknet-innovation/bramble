@@ -6,6 +6,7 @@ import { isAccountId } from "@bramble/wallet-model/accounts";
 import {
   isApprovalSurfacePreference,
   isDisplayCurrency,
+  isLanguagePreference,
   isThemeChoice,
   MAX_READY_KEY_NOTICE_DISMISSALS,
 } from "@bramble/wallet-model/preferences";
@@ -27,6 +28,9 @@ export const isValidDisplayInput = (
     return false;
   }
   if (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) {
+    return false;
+  }
+  if (input.language !== undefined && !isLanguagePreference(input.language)) {
     return false;
   }
   if (DISPLAY_FLAGS.some((flag) => input[flag] !== undefined && typeof input[flag] !== "boolean")) {
