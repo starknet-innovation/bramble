@@ -5,6 +5,8 @@
  */
 
 import { normalizeFeltInput } from "@bramble/wallet-model/networks";
+import { localizeErrorCopy } from "../../../i18n/error-copy";
+import { t } from "../../../i18n/messages";
 import type { TransferReviewResponse, WalletStatus } from "../../../popup/responses/responses";
 import { friendlyError } from "../../runtime/friendly-error";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -55,10 +57,10 @@ const paintNftReceipt = async (
     outcomeReceiptFor(
       outcome,
       {
-        confirmedDescription: "The NFT is now held by the recipient.",
-        confirmedTitle: "Transfer complete",
-        failedTitle: "Transfer failed",
-        submittedTitle: "Transfer submitted",
+        confirmedDescription: t("review.nft.confirmedDescription"),
+        confirmedTitle: t("review.nft.confirmedTitle"),
+        failedTitle: t("review.nft.failedTitle"),
+        submittedTitle: t("review.nft.submittedTitle"),
       },
       hash,
     ),
@@ -98,14 +100,16 @@ const renderNftTransferReview = (
     renderFragment(reviewPanel, reviewPanelHtml(review));
   }
   submitButton?.lastChild?.replaceWith(
-    feeFailed || recipientBlocked ? "Review transfer" : "Confirm transfer",
+    t(feeFailed || recipientBlocked ? "review.nft.review" : "review.nft.confirm"),
   );
   if (result) {
-    result.textContent = recipientBlocked
-      ? "This transfer is blocked. Change the recipient and review it again."
-      : feeFailed
-        ? "Couldn't estimate the fee. Retry before sending."
-        : "Review the details above, then confirm.";
+    result.textContent = t(
+      recipientBlocked
+        ? "review.nft.recipientBlocked"
+        : feeFailed
+          ? "review.nft.feeFailed"
+          : "review.nft.ready",
+    );
   }
   reviewPanel
     ?.querySelector<HTMLButtonElement>("#review-retry-fee")
@@ -205,7 +209,7 @@ export const bindNftSendForm = (deps: NftSendDeps): void => {
       form.dataset["stage"] = "reviewing";
       form.setAttribute("aria-busy", "true");
       if (result) {
-        result.textContent = "Checking the transfer…";
+        result.textContent = t("review.nft.checking");
       }
       void deps.wallet
         .reviewNftTransfer(fields.contract, fields.tokenId, fields.networkId, fields.recipient)
@@ -244,7 +248,7 @@ export const bindNftSendForm = (deps: NftSendDeps): void => {
     form.dataset["stage"] = "submitting";
     form.setAttribute("aria-busy", "true");
     if (result) {
-      result.textContent = "Submitting…";
+      result.textContent = t("review.nft.submitting");
     }
     void deps.wallet
       .transferNft(
@@ -339,12 +343,14 @@ export const bindNftSendForm = (deps: NftSendDeps): void => {
           }
           // Classified like every other sink, so a Ledger code reads as the
           // device catalog's sentence rather than the code itself.
-          const message = friendlyError(details).message;
-          showToast(message, "error", deps.app, details);
+          // Classified on the English; shown in the reader's language.
+          const english = friendlyError(details).message;
+          const message = localizeErrorCopy(english);
+          showToast(english, "error", deps.app, details);
           if (result) {
-            result.textContent = /nothing was (?:submitted|signed)/i.test(message)
+            result.textContent = /nothing was (?:submitted|signed)/i.test(english)
               ? message
-              : `${message} Nothing was submitted; review the recipient and try again.`;
+              : t("review.nft.notSubmitted", { message });
           }
           buttonBusy(submitButton, false);
         },

@@ -315,6 +315,7 @@ export const createPreferencesStore = ({
             ? {}
             : { displayCurrency: input.displayCurrency }),
           ...displayFlags(input),
+          ...(input.language === undefined ? {} : { language: input.language }),
           ...readyKeyNoticeDismissal(preferences, input),
           ...(input.theme === undefined ? {} : { theme: input.theme }),
         };

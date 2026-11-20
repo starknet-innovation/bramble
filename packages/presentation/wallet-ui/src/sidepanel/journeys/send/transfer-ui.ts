@@ -1,6 +1,7 @@
 /** Persistent recipient, review, authorization, confirmation, and receipt bindings. */
 
 import type { SendRouteResolution } from "@bramble/transactions/send-routes";
+import { t } from "../../../i18n/messages";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
@@ -313,11 +314,11 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       return;
     }
     if (!fields.amount || !Number.isFinite(Number(fields.amount)) || Number(fields.amount) <= 0) {
-      visibleAmount?.setCustomValidity("Enter an amount greater than zero.");
+      visibleAmount?.setCustomValidity(t("send.amount.positive"));
       visibleAmount?.reportValidity();
       transferState = {
         ...transferState,
-        error: "Enter an amount greater than zero.",
+        error: t("send.amount.positive"),
         fields,
         stage: "details",
       };

@@ -18,6 +18,7 @@ import { preparedArgentMultisigFee } from "@bramble/starknet/multisig-invoke";
 import { REVIEWED_FEE_EXCEEDED, REVIEWED_FEE_REQUIRED } from "@bramble/starknet/rpc-submit";
 import { activityOrigin } from "@bramble/transactions/activity";
 import { standingAllowanceTotals } from "@bramble/transactions/allowances";
+import { reviewTextsFor } from "@bramble/transactions/review-messages";
 import {
   refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
@@ -49,6 +50,11 @@ import {
   multisigRecordById,
 } from "./dapp-account";
 import type { InvokeExecuteDeps } from "./held-invoke-submit";
+import {
+  frozenMultisigProposalRefusal,
+  MULTISIG_PROPOSAL_CALL_LIMIT,
+  MULTISIG_PROPOSAL_CALLDATA_LIMIT,
+} from "./multisig-dapp-budget";
 import { priceMultisigInvoke } from "./multisig-dapp-price";
 import { freshSignerConfig, MULTISIG_CLASS } from "./multisig-dapp-sign";
 import { invokeFailureResponse } from "./provider-invoke-failure";
@@ -95,6 +101,16 @@ const queueMultisigDappInvoke = async (
   },
 ): Promise<{ readonly approval: PendingApproval } | RuntimeResponse> => {
   if (input.proof !== undefined) return { error: PROOF_REFUSAL };
+  const threshold = record.currentConfig?.threshold;
+  // A higher threshold freezes the calls. The stored intent cannot hold more
+  // than its budget, so the card is not shown for a proposal that cannot be saved.
+  if ((threshold ?? 0) > 1) {
+    const overBudget = frozenMultisigProposalRefusal(input.calls);
+    if (overBudget === MULTISIG_PROPOSAL_CALL_LIMIT) return { error: MULTISIG_PROPOSAL_CALL_LIMIT };
+    if (overBudget === MULTISIG_PROPOSAL_CALLDATA_LIMIT) {
+      return { error: MULTISIG_PROPOSAL_CALLDATA_LIMIT };
+    }
+  }
   requireApprovalAdmission(deps.approvals, input.origin);
   const preferences = await withTrustedRecipients(
     deps,
@@ -112,20 +128,20 @@ const queueMultisigDappInvoke = async (
   const report = verifyCalls(input.calls, trusted, standing);
   const refusal = refuseOnAccountSelfCall(input.calls, record.address);
   if (refusal) return refusal;
-  const threshold = record.currentConfig?.threshold;
   const context = await createApprovalContext(record, { calls: input.calls });
   if (!input.isAuthorized()) return { error: "wallet locked" };
   const approval = deps.approvals.requestInvoke({
     calls: input.calls,
     context,
     fee: PENDING_INVOKE_FEE,
-    flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+    flags: report.flags.map((flag) => ({ ...flag })),
     ...(threshold !== undefined && threshold > 1 ? { multisigThreshold: threshold } : {}),
     origin: input.origin,
     reviewAssets: trusted.tokens
       .filter((token) => input.calls.some((call) => sameFelt(call.contractAddress, token.address)))
       .map((token) => ({ address: token.address, symbol: token.symbol })),
     summaries: report.calls.map((call) => call.summary),
+    summaryTexts: reviewTextsFor(report.calls),
   });
   notifyApprovalsChanged();
   const revision = deps.approvals.beginFeeEstimate(approval.id);

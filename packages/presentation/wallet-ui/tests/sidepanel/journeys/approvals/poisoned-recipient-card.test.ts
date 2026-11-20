@@ -68,7 +68,7 @@ describe("a payment to a lookalike recipient", () => {
     for (const approval of approvals([POISONED])) {
       const html = approvalCard(approval, status);
       expect(html).toContain("closely mimics an address you saved or paid");
-      expect(html).toContain("Bramble won't send this payment.");
+      expect(html).toContain("Bramble won&#39;t send this payment.");
       expect(html).toContain('data-approval-action="deny"');
       expect(html).not.toContain('data-approval-action="approve"');
     }

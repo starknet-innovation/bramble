@@ -6,6 +6,7 @@
 
 import { canonicalServiceUrl, canonicalWebSocketServiceUrl } from "@bramble/core/service-url";
 import type { Strk20NetworkConfig } from "@bramble/privacy/config";
+import { t } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { HostPermissionApi } from "../../runtime/runtime-global";
@@ -64,22 +65,44 @@ const requestHostAccess = (
   return permissions.request({ origins });
 };
 
+// The toast and status lines for one endpoint form, each naming the endpoint.
+type EndpointCopy = {
+  readonly failed: () => string;
+  readonly reset: () => string;
+  readonly saved: () => string;
+};
+
+const RPC_COPY: EndpointCopy = {
+  failed: () => t("settings.endpoints.rpcFailed"),
+  reset: () => t("settings.endpoints.rpcReset"),
+  saved: () => t("settings.endpoints.rpcSaved"),
+};
+const RELAY_COPY: EndpointCopy = {
+  failed: () => t("settings.endpoints.relayFailed"),
+  reset: () => t("settings.endpoints.relayReset"),
+  saved: () => t("settings.endpoints.relaySaved"),
+};
+const INDEXER_COPY: EndpointCopy = {
+  failed: () => t("settings.endpoints.indexerFailed"),
+  reset: () => t("settings.endpoints.indexerReset"),
+  saved: () => t("settings.endpoints.indexerSaved"),
+};
+
 // Wires an endpoint-URL settings form to its save handler, showing a
-// saved/reset toast and re-rendering, or the failure message. `noun` names the
+// saved/reset toast and re-rendering, or the failure message. `copy` names the
 // endpoint in every toast/status line. A relay is a WSS endpoint and, as
 // before, skips the host-permission request.
 const bindEndpointForm = (
   deps: EndpointUiDeps,
   formId: string,
   field: string,
-  noun: string,
+  copy: EndpointCopy,
   submit: (value: string) => Promise<unknown>,
   relay = false,
 ): void => {
   const form = deps.app?.querySelector<HTMLFormElement>(formId);
   const result = deps.app?.querySelector<HTMLElement>(`${formId.replace("-form", "")}-result`);
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  const fail = `${noun} update failed`;
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const typed = String(new FormData(form).get(field) ?? "").trim();
@@ -93,10 +116,11 @@ const bindEndpointForm = (
       })
       .then(
         async () => {
-          showToast(`${noun} ${typed ? "saved" : "reset"}`, "success", form);
+          showToast(typed ? copy.saved() : copy.reset(), "success", form);
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
+          const fail = copy.failed();
           showToast(errorDetails(error, fail), "error", form, errorDetails(error, fail));
           if (result) {
             result.textContent = errorLine(error, fail);
@@ -161,12 +185,16 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
       })
       .then(
         async () => {
-          showToast(`Privacy services ${empty ? "disabled" : "saved"}`, "success", form);
+          showToast(
+            empty ? t("settings.endpoints.privacyDisabled") : t("settings.endpoints.privacySaved"),
+            "success",
+            form,
+          );
           deps.onStrk20ConfigChanged?.();
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          const fallback = "Privacy service configuration failed";
+          const fallback = t("settings.endpoints.privacyFailed");
           showToast(errorDetails(error, fallback), "error", form, errorDetails(error, fallback));
           if (result) {
             result.textContent = errorLine(error, fallback);
@@ -202,11 +230,17 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
       })
       .then(
         async () => {
-          showToast(`Explorer fallback ${enabled ? "allowed" : "turned off"}`, "success", form);
+          showToast(
+            enabled
+              ? t("settings.endpoints.explorerFallbackAllowed")
+              : t("settings.endpoints.explorerFallbackOff"),
+            "success",
+            form,
+          );
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          const fallback = "Explorer fallback update failed";
+          const fallback = t("settings.endpoints.explorerFallbackFailed");
           showToast(errorDetails(error, fallback), "error", form, errorDetails(error, fallback));
           if (result) {
             result.textContent = errorLine(error, fallback);
@@ -223,7 +257,7 @@ const bindExplorerFallback = (deps: EndpointUiDeps): void => {
  * while NFTs are turned on.
  */
 export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
-  bindEndpointForm(deps, "#rpc-form", "rpcUrl", "RPC endpoint", (rpcUrl) =>
+  bindEndpointForm(deps, "#rpc-form", "rpcUrl", RPC_COPY, (rpcUrl) =>
     deps.wallet.setRpcOverride(deps.networkId(), rpcUrl),
   );
   bindExplorerFallback(deps);
@@ -232,11 +266,11 @@ export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
     deps,
     "#nostr-relay-form",
     "relayUrl",
-    "Coordination relay",
+    RELAY_COPY,
     (relayUrl) => deps.wallet.setNostrRelayUrl(relayUrl),
     true,
   );
-  bindEndpointForm(deps, "#nft-indexer-form", "indexerUrl", "Indexer endpoint", (indexerUrl) =>
+  bindEndpointForm(deps, "#nft-indexer-form", "indexerUrl", INDEXER_COPY, (indexerUrl) =>
     deps.wallet.setNftIndexerUrl(indexerUrl),
   );
 };

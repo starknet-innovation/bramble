@@ -220,3 +220,10 @@ templates. Review a journey there, not in the file.
 Changing a string usually breaks a test — roughly 973 `toContain` assertions across 63 files pin
 literal copy, plus 63 Playwright text matchers. That is the intended cost: the assertion is how we
 find every place a string is load-bearing. Update the test in the same commit.
+
+## Translations
+
+Every user-facing string has an English source and a Simplified Chinese translation in a catalog;
+see [`I18N.md`](I18N.md). Changing English copy means changing its translation in the same commit,
+and approval, review and signing sentences are pinned: their test fails until the translation is
+redone.

@@ -7,6 +7,7 @@
  */
 
 import type { OriginGuard } from "@bramble/permissions/blocklist";
+import { strk20Lines, strk20Text } from "@bramble/privacy/review-messages";
 import {
   formatStrk20PoolFee,
   STRK20_SERVICE_UNAVAILABLE,
@@ -16,10 +17,6 @@ import type { WalletPreferencesStore } from "@bramble/settings/preferences";
 import type { ActivityLog } from "@bramble/transactions/activity";
 import { addressText } from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
-import {
-  STRK20_PREPARE_REGISTER_SUMMARY,
-  STRK20_SIMULATE_REGISTER_SUMMARY,
-} from "@bramble/wallet-protocol/strk20";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { ApprovalReservation } from "../approvals/approval-limits";
 import type { ApprovalQueue } from "../approvals/approvals";
@@ -216,15 +213,19 @@ export const queueStrk20Registration = async (
     return queueStrk20Disclosure(deps, resolved, {
       ...common,
       request: { poolAddress, simulate: mode.simulate, type: "prepare-register" },
-      summaries: [
-        mode.simulate ? STRK20_SIMULATE_REGISTER_SUMMARY : STRK20_PREPARE_REGISTER_SUMMARY,
-        `Privacy pool ${addressText(poolAddress)}`,
-        "Publishes a viewing-key commitment, never the viewing key",
-        "Opens this account's own private channel",
-        mode.simulate
-          ? "Simulate only — no submittable proof"
-          : "The site submits it and must cover the pool fee",
-      ],
+      // The first line's English is STRK20_PREPARE/SIMULATE_REGISTER_SUMMARY,
+      // which the approval card keys its hint on.
+      ...strk20Lines([
+        strk20Text(
+          mode.simulate ? "strk20Review.register.simulate" : "strk20Review.register.prepare",
+        ),
+        strk20Text("strk20Review.register.pool", { address: addressText(poolAddress) }),
+        strk20Text("strk20Review.register.commitment"),
+        strk20Text("strk20Review.register.channel"),
+        strk20Text(
+          mode.simulate ? "strk20Review.prepare.simulate" : "strk20Review.register.siteSubmits",
+        ),
+      ]),
     });
   }
   return queueStrk20Disclosure(deps, resolved, {
@@ -236,13 +237,13 @@ export const queueStrk20Registration = async (
       token,
       type: "register",
     },
-    summaries: [
-      "Activate private balances for this account",
-      `Privacy pool ${addressText(poolAddress)}`,
-      `Registration preflight token ${addressText(token)}`,
-      `Approve and pay the reviewed ${formatStrk20PoolFee(poolFeeFri)} pool fee`,
-      "Publishes a viewing-key commitment, never the viewing key",
-      "Opens this account's own private channel",
-    ],
+    ...strk20Lines([
+      strk20Text("strk20Review.register.activate"),
+      strk20Text("strk20Review.register.pool", { address: addressText(poolAddress) }),
+      strk20Text("strk20Review.register.preflightToken", { token: addressText(token) }),
+      strk20Text("strk20Review.register.poolFee", { fee: formatStrk20PoolFee(poolFeeFri) }),
+      strk20Text("strk20Review.register.commitment"),
+      strk20Text("strk20Review.register.channel"),
+    ]),
   });
 };

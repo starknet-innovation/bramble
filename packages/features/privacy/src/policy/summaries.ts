@@ -1,5 +1,6 @@
 /** Review summaries and invoke conversion for STRK20 wire values. */
 
+import type { MessageRef } from "@bramble/core/i18n";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import {
   addressLabel,
@@ -10,14 +11,15 @@ import {
 } from "@bramble/wallet-model/networks";
 import type { Strk20Action, Strk20InvokeCall } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
+import { strk20English, strk20Text } from "./review-messages";
 import {
-  SHADOW_INVOKE_ANONYMIZER,
-  SHADOW_INVOKE_COLLECTS_ALL_TO,
-  SHADOW_INVOKE_CONTROL,
-  SHADOW_INVOKE_RUNS,
-  SHADOW_INVOKE_SETTLES,
-  SHADOW_INVOKE_SETTLES_NOTHING,
-  SHADOW_INVOKE_SETTLES_TO,
+  SHADOW_INVOKE_CONTROL_TEXT,
+  SHADOW_INVOKE_SETTLES_NOTHING_TEXT,
+  shadowInvokeAnonymizerText,
+  shadowInvokeCollectsAllToText,
+  shadowInvokeRunsText,
+  shadowInvokeSettlesText,
+  shadowInvokeSettlesToText,
 } from "./shadow-account-copy";
 import type { Strk20SubmissionPlan } from "./submission-plan";
 
@@ -71,33 +73,54 @@ const actionAmount = (amount: string, token: string, assetFor?: Strk20AssetLooku
  * token's decimals and symbol, beside the token address (Sherlock 154).
  * Without it, or for a token it does not describe, the exact felt is shown.
  */
+export const strk20ActionText = (
+  action: Strk20Action,
+  depositor?: string,
+  assetFor?: Strk20AssetLookup,
+): MessageRef => {
+  if (action.type === "deposit") {
+    const amount = actionAmount(action.amount, action.token, assetFor);
+    const token = addressLabel(action.token);
+    return action.recipient === undefined || sameFelt(action.recipient, depositor)
+      ? strk20Text("strk20Review.action.deposit", { amount, token })
+      : strk20Text("strk20Review.action.pay", {
+          amount,
+          recipient: addressLabel(action.recipient),
+          token,
+        });
+  }
+  if (action.type === "withdraw") {
+    return strk20Text("strk20Review.action.withdraw", {
+      amount: actionAmount(action.amount, action.token, assetFor),
+      recipient: addressLabel(action.recipient),
+      token: addressLabel(action.token),
+    });
+  }
+  if (action.type === "transfer") {
+    return strk20Text("strk20Review.action.transfer", {
+      amount:
+        action.amount === "OPEN"
+          ? strk20Text("strk20Review.amount.openNote")
+          : actionAmount(action.amount, action.token, assetFor),
+      recipient: addressLabel(action.recipient),
+      token: addressLabel(action.token),
+    });
+  }
+  if (action.type === "shadow_account_invoke") {
+    return strk20Text("strk20Review.action.shadowInvoke", {
+      count: String(action.calls.length),
+      dapp: action.dapp_name,
+    });
+  }
+  return strk20Text("strk20Review.action.invoke", { contract: addressLabel(action.contract) });
+};
+
+/** The English of {@link strk20ActionText}, as review cards have always shown it. */
 export const summarizeStrk20Action = (
   action: Strk20Action,
   depositor?: string,
   assetFor?: Strk20AssetLookup,
-): string => {
-  if (action.type === "deposit") {
-    const amount = actionAmount(action.amount, action.token, assetFor);
-    return action.recipient === undefined || sameFelt(action.recipient, depositor)
-      ? `Deposit ${amount} to private balance (${addressLabel(action.token)})`
-      : `Pay ${amount} privately to ${addressLabel(action.recipient)} (${addressLabel(action.token)})`;
-  }
-  if (action.type === "withdraw") {
-    const amount = actionAmount(action.amount, action.token, assetFor);
-    return `Withdraw ${amount} to ${addressLabel(action.recipient)} (${addressLabel(action.token)})`;
-  }
-  if (action.type === "transfer") {
-    const amount =
-      action.amount === "OPEN"
-        ? "an open note"
-        : actionAmount(action.amount, action.token, assetFor);
-    return `Transfer ${amount} privately to ${addressLabel(action.recipient)} (${addressLabel(action.token)})`;
-  }
-  if (action.type === "shadow_account_invoke") {
-    return `Private ${action.dapp_name} shadow account invoke (${action.calls.length} calls)`;
-  }
-  return `Private invoke on ${addressLabel(action.contract)}`;
-};
+): string => strk20English(strk20ActionText(action, depositor, assetFor));
 
 /**
  * The wallet-side facts a shadow-account invoke is reviewed against: the
@@ -156,21 +179,21 @@ const settlementLines = (
   actions: readonly Strk20Action[],
   depositor: string | undefined,
   assetFor: Strk20AssetLookup | undefined,
-): readonly string[] => {
+): readonly MessageRef[] => {
   const groups = settledTokens(actions, depositor, assetFor);
   if (groups.length === 0) {
-    return [SHADOW_INVOKE_SETTLES_NOTHING];
+    return [SHADOW_INVOKE_SETTLES_NOTHING_TEXT];
   }
   return groups.flatMap((group) => {
     const tokens = group.tokens.join(", ");
     if (group.self) {
-      return [SHADOW_INVOKE_SETTLES(tokens)];
+      return [shadowInvokeSettlesText(tokens)];
     }
     const recipient = addressLabel(group.recipient);
     return [
-      SHADOW_INVOKE_SETTLES_TO(tokens, recipient),
+      shadowInvokeSettlesToText(tokens, recipient),
       ...(action.collect_policy.type === "all"
-        ? [SHADOW_INVOKE_COLLECTS_ALL_TO(tokens, recipient)]
+        ? [shadowInvokeCollectsAllToText(tokens, recipient)]
         : []),
     ];
   });
@@ -182,11 +205,11 @@ const shadowInvokeSummaries = (
   review: Strk20ShadowAccountReview,
   depositor: string | undefined,
   assetFor: Strk20AssetLookup | undefined,
-): readonly string[] => [
-  SHADOW_INVOKE_RUNS(action.calls.length, displayNonce(action.nonce), review.origin),
-  SHADOW_INVOKE_ANONYMIZER(review.anonymizer),
+): readonly MessageRef[] => [
+  shadowInvokeRunsText(action.calls.length, displayNonce(action.nonce), review.origin),
+  shadowInvokeAnonymizerText(review.anonymizer),
   ...settlementLines(action, actions, depositor, assetFor),
-  SHADOW_INVOKE_CONTROL,
+  SHADOW_INVOKE_CONTROL_TEXT,
 ];
 
 /**
@@ -201,19 +224,25 @@ const shadowInvokeSummaries = (
  * batch's shadow invokes keep the context-free label of
  * {@link summarizeStrk20Action}. Display-only, like every summary here.
  */
-export const summarizeStrk20Batch = (
+export const strk20BatchTexts = (
   actions: readonly Strk20Action[],
   options: {
     readonly assetFor?: Strk20AssetLookup;
     readonly depositor?: string;
     readonly shadow?: Strk20ShadowAccountReview;
   } = {},
-): readonly string[] =>
+): readonly MessageRef[] =>
   actions.flatMap((action) =>
     action.type === "shadow_account_invoke" && options.shadow
       ? shadowInvokeSummaries(action, actions, options.shadow, options.depositor, options.assetFor)
-      : [summarizeStrk20Action(action, options.depositor, options.assetFor)],
+      : [strk20ActionText(action, options.depositor, options.assetFor)],
   );
+
+/** The English of {@link strk20BatchTexts}, one line per reference. */
+export const summarizeStrk20Batch = (
+  actions: readonly Strk20Action[],
+  options: Parameters<typeof strk20BatchTexts>[1] = {},
+): readonly string[] => strk20BatchTexts(actions, options).map(strk20English);
 
 /**
  * The pool's own fee is charged in STRK on every network, so its display
@@ -245,27 +274,50 @@ export const formatStrk20PoolFee = (poolFeeFri: string): string =>
  * converted token. Without it the raw felt and token address are shown, which
  * is the most that can honestly be said about an unrecognized token.
  */
+export const strk20PlanText = (
+  plan: Strk20SubmissionPlan,
+  feeAsset?: Strk20FeeAsset,
+): MessageRef => {
+  if (plan.mode === "account") {
+    return strk20Text("strk20Review.plan.account", {
+      fee: formatStrk20PoolFee(plan.poolFeeFri),
+    });
+  }
+  const amount = displayFeeAmount(plan.feeAction.amount, feeAsset);
+  const fee =
+    amount ??
+    strk20Text("strk20Review.fee.raw", {
+      amount: plan.feeAction.amount,
+      token: addressText(plan.feeAction.token),
+    });
+  const ceiling = plan.feeCeiling ? displayFeeAmount(plan.feeCeiling.ceiling, feeAsset) : null;
+  const auth = plan.authorization;
+  if (!auth) {
+    return ceiling === null
+      ? strk20Text("strk20Review.plan.relay", { fee })
+      : strk20Text("strk20Review.plan.relayCapped", { ceiling, fee });
+  }
+  const one = auth.publicCallCount === 1;
+  const facts = {
+    after: auth.executeAfter,
+    before: auth.executeBefore,
+    caller: addressLabel(auth.caller),
+    count: String(auth.publicCallCount),
+    fee,
+  };
+  return ceiling === null
+    ? strk20Text(one ? "strk20Review.plan.relayAuthOne" : "strk20Review.plan.relayAuthMany", facts)
+    : strk20Text(
+        one ? "strk20Review.plan.relayCappedAuthOne" : "strk20Review.plan.relayCappedAuthMany",
+        { ...facts, ceiling },
+      );
+};
+
+/** The English of {@link strk20PlanText}, as review cards have always shown it. */
 export const summarizeStrk20Plan = (
   plan: Strk20SubmissionPlan,
   feeAsset?: Strk20FeeAsset,
-): string => {
-  if (plan.mode === "account") {
-    return `Public account pool fee ${formatStrk20PoolFee(plan.poolFeeFri)} — first deposits are linked to this wallet`;
-  }
-  const amount = displayFeeAmount(plan.feeAction.amount, feeAsset);
-  const ceiling = plan.feeCeiling ? displayFeeAmount(plan.feeCeiling.ceiling, feeAsset) : null;
-  return [
-    amount === null
-      ? `Private relay fee ${plan.feeAction.amount} (${addressText(plan.feeAction.token)})`
-      : `Private relay fee ${amount}`,
-    ...(ceiling === null ? [] : [`capped at ${ceiling}`]),
-    ...(plan.authorization
-      ? [
-          `outside execution by ${addressLabel(plan.authorization.caller)} from ${plan.authorization.executeAfter} until ${plan.authorization.executeBefore} for ${plan.authorization.publicCallCount} public approval call${plan.authorization.publicCallCount === 1 ? "" : "s"}`,
-        ]
-      : []),
-  ].join(" · ");
-};
+): string => strk20English(strk20PlanText(plan, feeAsset));
 
 /**
  * Converts a validated wire call without changing target, entrypoint, calldata

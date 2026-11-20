@@ -6,8 +6,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
-  BACKUP_VERIFY_COPY,
   BACKUP_VERIFY_COUNT,
+  backupVerifyCopy,
   backupVerifyPositions,
   backupVerifyState,
   DEFAULT_BACKUP_VERIFY_POSITIONS,
@@ -117,10 +117,10 @@ describe("backupVerifyState", () => {
   });
 
   test("tells a wrong word apart from an empty form", () => {
-    expect(BACKUP_VERIFY_COPY.mismatch).not.toBe(BACKUP_VERIFY_COPY.incomplete);
-    expect(BACKUP_VERIFY_COPY.confirmed).toBe("Backup confirmed.");
+    expect(backupVerifyCopy("mismatch")).not.toBe(backupVerifyCopy("incomplete"));
+    expect(backupVerifyCopy("confirmed")).toBe("Backup confirmed.");
     // The copy never echoes or points at a word.
-    for (const copy of Object.values(BACKUP_VERIFY_COPY)) {
+    for (const copy of (["confirmed", "incomplete", "mismatch"] as const).map(backupVerifyCopy)) {
       expect(copy).not.toMatch(/\bw\d+\b|word [0-9]/i);
     }
   });

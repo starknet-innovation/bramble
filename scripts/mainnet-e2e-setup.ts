@@ -28,11 +28,13 @@ Fund the printed address with STRK (0.5 STRK covers several runs), then:
 
 STRK token: ${STRK_TOKEN_ADDRESS}
 
-Export the dedicated RPC and the acknowledgement, then name the account:
+Name the account. That permits mainnet writes from this shell:
 
-  export BRAMBLE_MAINNET_E2E_ACK=I_UNDERSTAND_THIS_WRITES_TO_MAINNET
-  export BRAMBLE_MAINNET_E2E_RPC_URL=https://your-dedicated-mainnet-rpc
   export BRAMBLE_MAINNET_SNCAST_ACCOUNT=bramble
+
+The RPC defaults to the Foundation's public endpoint. To use your own:
+
+  export BRAMBLE_MAINNET_E2E_RPC_URL=https://your-dedicated-mainnet-rpc
 
 Optional: BRAMBLE_MAINNET_SNCAST_ACCOUNTS_FILE, BRAMBLE_MAINNET_SNCAST_PROFILE,
 BRAMBLE_MAINNET_SNFOUNDRY. Direct key instead of sncast:
