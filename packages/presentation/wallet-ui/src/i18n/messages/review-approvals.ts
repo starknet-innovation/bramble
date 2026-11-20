@@ -172,10 +172,10 @@ export const reviewApprovalMessages = {
     "approval.prepare.title": "隐私证明请求",
     "approval.register.action": "激活",
     "approval.register.hint":
-      "此同意会准备一次性的公开注册承诺和证明；暂不提交。在钱包发布该承诺之前，还会有一项针对确切调用的网络费批准。查看密钥和隐私票据永远不会被公开。",
+      "此同意会准备一次性的公开注册承诺和证明；暂不提交。在钱包发布该承诺之前，还会有一项针对确切调用的网络费批准。查看密钥和隐私票据永远不会被发布。",
     "approval.register.locked": "解锁钱包以审核此隐私余额激活。",
     "approval.register.prepareHint":
-      "这会准备一次性的注册承诺和证明并交给网站，由网站自行提交并须支付隐私池手续费。查看密钥和隐私票据永远不会被公开。",
+      "这会准备一次性的注册承诺和证明并交给网站，由网站自行提交并须支付隐私池手续费。查看密钥和隐私票据永远不会被发布。",
     "approval.register.simulateAction": "模拟",
     "approval.register.simulateHint":
       "这只是为网站模拟激活。不会返回可提交的证明，不发布任何内容，也不产生任何费用。",

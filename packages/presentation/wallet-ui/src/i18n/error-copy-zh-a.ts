@@ -86,7 +86,7 @@ export const ERROR_COPY_ZH_A: Readonly<Record<string, string>> = {
   "Couldn't load balances. Check your connection and try again.":
     "无法加载余额。检查网络连接后重试。",
   "Couldn't load connected sites.": "无法加载已连接的网站。",
-  "Couldn't load experimental features. Try again.": "无法加载实验性功能。重试。",
+  "Couldn't load experimental features. Try again.": "无法加载实验性功能，请重试。",
   "Couldn't load multisig balances. Check your connection and try again.":
     "无法加载多签账户余额。检查网络连接后重试。",
   "Couldn't load private balances. Try again.": "无法加载隐私余额。重试。",
