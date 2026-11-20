@@ -5,8 +5,8 @@
  * spend from, and is aborted in the browser, never forwarded, unless every
  * sender it names is allowed. It fails closed: a broadcast whose sender cannot
  * be read is refused, and so is any request carrying a body it cannot read as
- * JSON (none, binary, compressed, or OHTTP-encrypted), on any verb but GET or
- * HEAD.
+ * JSON (none, binary, compressed, or OHTTP-encrypted), on any verb but GET,
+ * HEAD or OPTIONS (a CORS preflight).
  *
  * Its job is to keep a wallet bug from spending from an account the test did
  * not choose (an import fixture, a funded bank), and to let a refusal test
@@ -196,7 +196,7 @@ export type FirewallRequest = {
 
 /**
  * What the firewall refuses from one request: an OHTTP-encrypted request
- * outright, a request on any verb but GET or HEAD whose body it cannot read
+ * outright, a request on any verb but GET, HEAD or OPTIONS whose body it cannot read
  * (none, or not JSON), and the refused broadcasts of a JSON body.
  */
 export const refusedRequest = (
@@ -206,7 +206,9 @@ export const refusedRequest = (
   if (request.contentType?.toLowerCase().startsWith("message/ohttp")) {
     return [UNREADABLE];
   }
-  const bodiless = request.method === "GET" || request.method === "HEAD";
+  // OPTIONS is a CORS preflight: never a body, never a broadcast. Aborting it
+  // would cut the wallet off from any RPC host it reaches across origins.
+  const bodiless = ["GET", "HEAD", "OPTIONS"].includes(request.method);
   if (request.body === null && !bodiless) {
     return [UNREADABLE];
   }
