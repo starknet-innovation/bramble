@@ -20,7 +20,7 @@ import {
 import { isWalletOrigin } from "@bramble/core/origin";
 import { isFeeEstimate as isFee } from "@bramble/starknet/fee-bounds";
 import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
-import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
+import { isAccountId, isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -426,12 +426,17 @@ const parsePendingApprovals = (value: unknown): ParsedPendingApprovals | null =>
   return { approvals, dropped };
 };
 
+const isGrantedIds = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every(isAccountId) && hasUniqueStrings(value);
+
+// The count must equal the ids listed, so the summary never disagrees with
+// the accounts the row offers to disconnect.
 const isConnectedSite = (value: unknown): value is ConnectedSite =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountCount", "origin"]) &&
-  typeof value["accountCount"] === "number" &&
-  Number.isSafeInteger(value["accountCount"]) &&
-  value["accountCount"] >= 0 &&
+  hasOnlyKnownKeys(value, ["accountCount", "accountIds", "multisigIds", "origin"]) &&
+  isGrantedIds(value["accountIds"]) &&
+  isGrantedIds(value["multisigIds"]) &&
+  value["accountCount"] === value["accountIds"].length + value["multisigIds"].length &&
   typeof value["origin"] === "string" &&
   isWalletOrigin(value["origin"]);
 

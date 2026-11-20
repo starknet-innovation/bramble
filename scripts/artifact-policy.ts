@@ -121,6 +121,12 @@ export const artifactPolicyFailures = (
   if (packageTouch === -1 || packageZip === -1 || packageTouch > packageZip) {
     failures.push("scripts/package-extension.ts must normalize mtimes before zipping");
   }
+  // Permission bits are stored too, and follow the umask the source was unpacked
+  // with; an Ubuntu rebuild differed from a macOS one by mode alone (#991).
+  const packageChmod = packageScript.indexOf("chmod(join(distDir, file), 0o644)");
+  if (packageChmod === -1 || packageZip === -1 || packageChmod > packageZip) {
+    failures.push("scripts/package-extension.ts must normalize file modes before zipping");
+  }
 
   const packageDigest = packageScript.indexOf('createHash("sha256")');
   // Matched on the write itself rather than on the first ".sha256" in the file:

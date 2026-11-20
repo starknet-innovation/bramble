@@ -109,9 +109,12 @@ export type OriginGrantInput = {
 };
 
 /**
- * Origin revocation input for the connected-sites permissions manager.
+ * Origin revocation input for the connected-sites permissions manager. With
+ * `accountId`, only that id leaves the site's grant (the site goes when none
+ * remain); without it, the whole grant goes.
  */
 export type RevokeOriginInput = {
+  readonly accountId?: string;
   readonly origin: string;
   readonly vaultPassphrase: string;
 };

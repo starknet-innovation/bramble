@@ -7,6 +7,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { memoryOriginHistory } from "@bramble/permissions/origin-history";
+import { connectedSitesFromVault } from "@bramble/vault/origin-grants";
 import type { Vault } from "@bramble/vault/schema";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
@@ -44,6 +45,19 @@ const vault = {
   signingKeys: [],
 } as unknown as Vault;
 
+const alpha = {
+  accountCount: 1,
+  accountIds: [account.id],
+  multisigIds: [],
+  origin: "https://alpha.example",
+};
+const beta = {
+  accountCount: 2,
+  accountIds: [account.id, second.id],
+  multisigIds: [],
+  origin: "https://beta.example",
+};
+
 const wallet = {
   async addDerivedAccount() {
     return account;
@@ -67,9 +81,7 @@ const wallet = {
     return vault;
   },
   async revokeOrigin({ origin }: { readonly origin: string }) {
-    return vault.originGrants
-      .filter((grant) => grant.origin !== origin)
-      .map((grant) => ({ accountCount: grant.accountIds.length, origin: grant.origin }));
+    return connectedSitesFromVault(vault).filter((site) => site.origin !== origin);
   },
   async setActiveAccount() {
     return account;
@@ -110,10 +122,7 @@ describe("connected-sites messages", () => {
       unlockedHandler()({ type: "wallet.connectedSites" }, extensionSender),
     ).resolves.toEqual({
       ok: true,
-      sites: [
-        { accountCount: 1, origin: "https://alpha.example" },
-        { accountCount: 2, origin: "https://beta.example" },
-      ],
+      sites: [alpha, beta],
     });
   });
 
@@ -139,7 +148,7 @@ describe("connected-sites messages", () => {
         { origin: "https://alpha.example", type: "wallet.revokeOrigin" },
         extensionSender,
       ),
-    ).resolves.toEqual({ ok: true, sites: [{ accountCount: 2, origin: "https://beta.example" }] });
+    ).resolves.toEqual({ ok: true, sites: [beta] });
   });
 
   test("rejects malformed revoke requests", async () => {

@@ -105,8 +105,18 @@ export const journeyChanges: Readonly<Record<string, number>> = {
 };
 
 export const connectedSites: readonly ConnectedSite[] = [
-  { accountCount: 2, origin: "https://terminal.bramble.test" },
-  { accountCount: 1, origin: "https://app.vesu.xyz" },
+  {
+    accountCount: 2,
+    accountIds: [softwareAccount.id, ledgerAccount.id],
+    multisigIds: [],
+    origin: "https://terminal.bramble.test",
+  },
+  {
+    accountCount: 1,
+    accountIds: [softwareAccount.id],
+    multisigIds: [],
+    origin: "https://app.vesu.xyz",
+  },
 ];
 
 const EKUBO_ROUTER = "0x0404";

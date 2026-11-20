@@ -45,7 +45,11 @@ export {
 } from "./multisig-strk20-key";
 
 import { nostrWalletMethods } from "./nostr";
-import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
+import {
+  connectedSitesFromVault,
+  grantedAccountIdsFor,
+  withoutOriginAccess,
+} from "./origin-grants";
 import { importSeedVaultAccounts, recoverVaultAccounts } from "./recovery";
 import { vaultCreationMethods, writeVault } from "./service-creation";
 import type { VaultRecovery, WalletVaultService } from "./service-types";
@@ -348,9 +352,13 @@ export const createWalletVaultService = ({
         throw new WalletError("Invalid origin");
       }
 
+      if (input.accountId !== undefined && !isAccountId(input.accountId)) {
+        throw new WalletError("Invalid account id");
+      }
+
       const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const originGrants = vault.originGrants.filter((grant) => grant.origin !== input.origin);
-      if (originGrants.length !== vault.originGrants.length) {
+      const originGrants = withoutOriginAccess(vault.originGrants, input.origin, input.accountId);
+      if (originGrants !== vault.originGrants) {
         await writeVault(encryptedStore, { ...vault, originGrants }, input.vaultPassphrase);
       }
       return connectedSitesFromVault({ ...vault, originGrants });

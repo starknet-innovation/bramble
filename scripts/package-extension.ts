@@ -6,7 +6,7 @@
  * `apps/extension/firefox-manifest.ts`).
  */
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import {
   type BuildTarget,
@@ -83,6 +83,11 @@ await rm(zipPath, { force: true });
 await rm(`${zipPath}.sha256`, { force: true });
 
 await run(["touch", "-t", reproducibleZipTime, ...files], distDir);
+// `zip` stores each file's permission bits, and those come from whoever built
+// it: copied assets keep the mode of the source tree, which depends on the
+// umask the source archive was unpacked with (an Ubuntu root unpack keeps
+// git's 0664, a user unpack gives 0644). Fix one mode so the bytes do not.
+await Promise.all(files.map((file) => chmod(join(distDir, file), 0o644)));
 await run(["zip", "-X", "-q", zipPath, ...files], distDir);
 
 const digest = createHash("sha256")

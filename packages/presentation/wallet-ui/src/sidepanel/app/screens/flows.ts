@@ -410,7 +410,12 @@ export const simpleFlowScreen = (
     case "address-book":
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":
-      return connectedSitesFlow(ctx.status, ctx.connectedSites);
+      return connectedSitesFlow(
+        ctx.status,
+        ctx.connectedSites,
+        ctx.preferences,
+        (ctx.multisigs ?? []).map((view) => view.record),
+      );
     case "experimental-features":
       return experimentalFeaturesFlow(ctx.status, ctx.experimentalFeatures);
     case "staking":
