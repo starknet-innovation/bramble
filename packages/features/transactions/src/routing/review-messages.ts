@@ -99,7 +99,7 @@ export const reviewMessages = {
     "review.flag.foreignBeneficiary":
       "此兑换将所得支付给 {payee}，而不是此账户。除非你本意如此，否则拒绝。",
     "review.flag.operatorApproval":
-      "这将允许一个地址转移你在此合集中拥有的全部物品，包括以后获得的，直到你撤销。只授权给你信任的市场。",
+      "此授权将允许该地址转移你在此合集中拥有的【全部】资产，包括你之后获得的，直到你取消授权为止。请仅授权给你信任的交易平台。",
     "review.flag.selfTransfer": "收款地址是此钱包自己的地址。",
     "review.flag.tokenContractRecipient": "这是代币合约，不是钱包。发送到这里的代币通常会丢失。",
     "review.flag.undecodedSwap":
