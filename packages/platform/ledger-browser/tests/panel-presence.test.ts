@@ -19,23 +19,23 @@ type Holder = {
 };
 
 const manager = (): Holder => {
-  const held = new Map<string, () => void>();
-  const pending: { name: string; grant: () => void }[] = [];
+  const held = new Map<string, { grant: () => void; mode: "exclusive" | "shared" }>();
+  const pending: { grant: () => void; mode: "exclusive" | "shared"; name: string }[] = [];
 
   const grantNext = (name: string): void => {
     const index = pending.findIndex((entry) => entry.name === name);
     const next = index < 0 ? undefined : pending.splice(index, 1)[0];
     if (!next) return;
-    held.set(name, next.grant);
+    held.set(name, { grant: next.grant, mode: next.mode });
     next.grant();
   };
 
   const locks: LedgerLockManager = {
     query: async () => ({
-      held: [...held.keys()].map((name) => ({ name })),
-      pending: pending.map((entry) => ({ name: entry.name })),
+      held: [...held.entries()].map(([name, entry]) => ({ mode: entry.mode, name })),
+      pending: pending.map((entry) => ({ mode: entry.mode, name: entry.name })),
     }),
-    request: (name, callback) =>
+    request: (name, callback, mode = "exclusive") =>
       new Promise((resolve, reject) => {
         let started = false;
         const grant = (): void => {
@@ -43,25 +43,25 @@ const manager = (): Holder => {
           started = true;
           void callback()
             .then(() => {
-              if (held.get(name) === grant) held.delete(name);
+              if (held.get(name)?.grant === grant) held.delete(name);
               grantNext(name);
               resolve(undefined);
             })
             .catch(reject);
         };
         if (!held.has(name)) {
-          held.set(name, grant);
+          held.set(name, { grant, mode });
           grant();
           return;
         }
-        pending.push({ grant, name });
+        pending.push({ grant, mode, name });
       }),
   };
 
   return {
     locks,
     release: (name) => {
-      const grant = held.get(name);
+      const grant = held.get(name)?.grant;
       held.delete(name);
       grant?.();
       // The hold callback resolves `released` by calling the function we
@@ -115,12 +115,18 @@ describe("ledger panel lock", () => {
     release();
   });
 
-  test("liveness reports a held lock and an absent one", async () => {
+  test("liveness is the panel's exclusive hold, not the grant tab's wait", async () => {
     const fake = manager();
     expect(await isLedgerPanelLockLive(fake.locks, SESSION)).toBe(false);
     const release = await holdLedgerPanelLock(fake.locks, SESSION);
+    const watching = watchLedgerPanelLock(fake.locks, SESSION);
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(await isLedgerPanelLockLive(fake.locks, SESSION)).toBe(true);
     release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The grant tab's shared wait is pending or briefly held. That is not the panel.
+    expect(await isLedgerPanelLockLive(fake.locks, SESSION)).toBe(false);
+    await watching;
   });
 
   test("a missing lock manager does not block the caller", async () => {

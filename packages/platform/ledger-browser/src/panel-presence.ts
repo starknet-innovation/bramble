@@ -18,12 +18,20 @@ export const ledgerPanelLockName = (sessionId: string): string =>
  * The slice of the Web Locks API this session uses. Injectable so tests do not
  * need a browser.
  */
+export type LedgerLockMode = "exclusive" | "shared";
+
+export type LedgerLockSnapshot = {
+  readonly held?: readonly { readonly mode?: LedgerLockMode; readonly name?: string }[];
+  readonly pending?: readonly { readonly mode?: LedgerLockMode; readonly name?: string }[];
+};
+
 export type LedgerLockManager = {
-  readonly query?: () => Promise<{
-    readonly held?: readonly { readonly name?: string }[];
-    readonly pending?: readonly { readonly name?: string }[];
-  }>;
-  readonly request: (name: string, callback: () => Promise<void>) => Promise<unknown>;
+  readonly query?: () => Promise<LedgerLockSnapshot>;
+  readonly request: (
+    name: string,
+    callback: () => Promise<void>,
+    mode?: LedgerLockMode,
+  ) => Promise<unknown>;
 };
 
 /**
@@ -34,7 +42,7 @@ export const browserLedgerLocks = (): LedgerLockManager | null => {
   const locks = navigator.locks;
   return {
     query: () => locks.query(),
-    request: (name, callback) => locks.request(name, callback),
+    request: (name, callback, mode = "exclusive") => locks.request(name, { mode }, callback),
   };
 };
 
@@ -82,10 +90,11 @@ export const holdLedgerPanelLock = async (
 };
 
 /**
- * True when some document holds or waits on this session's panel lock, which
- * means the side panel that opened the grant tab is still alive. A runtime
- * whose lock manager cannot be queried answers true, so nothing is closed on
- * a guess.
+ * True when a side panel still holds this session's lock. The panel takes it
+ * exclusive. The grant tab only waits with a shared request, and that wait
+ * stays pending or briefly held after the panel is gone, so neither a pending
+ * request nor a shared hold counts. A manager that cannot be queried answers
+ * true, so nothing is closed on a guess.
  */
 export const isLedgerPanelLockLive = async (
   locks: LedgerLockManager,
@@ -94,7 +103,7 @@ export const isLedgerPanelLockLive = async (
   if (!locks.query) return true;
   const name = ledgerPanelLockName(sessionId);
   const state = await locks.query();
-  return [...(state.held ?? []), ...(state.pending ?? [])].some((lock) => lock.name === name);
+  return (state.held ?? []).some((lock) => lock.name === name && lock.mode !== "shared");
 };
 
 /**
@@ -109,6 +118,7 @@ export const watchLedgerPanelLock = async (
 ): Promise<boolean> => {
   if (!locks.query) return false;
   if (!(await isLedgerPanelLockLive(locks, sessionId))) return false;
-  await locks.request(ledgerPanelLockName(sessionId), async () => undefined);
+  // Shared, so this wait is not mistaken for the panel's exclusive hold.
+  await locks.request(ledgerPanelLockName(sessionId), async () => undefined, "shared");
   return true;
 };

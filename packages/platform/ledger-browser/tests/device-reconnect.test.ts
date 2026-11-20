@@ -125,7 +125,10 @@ const PREFIX = "chrome-extension://bramble/ledger-grant.html";
 // Web Locks seen from the panel: only the sessions listed still have a panel.
 const locksHolding = (...sessions: string[]) => ({
   query: async () => ({
-    held: sessions.map((id) => ({ name: `bramble-ledger-panel:${id}` })),
+    held: sessions.map((id) => ({
+      mode: "exclusive" as const,
+      name: `bramble-ledger-panel:${id}`,
+    })),
     pending: [],
   }),
   request: async () => undefined,
@@ -242,6 +245,39 @@ describe("cable reconnect stale handles", () => {
     } finally {
       FakeUSBDevice.prototype.claimInterface = original;
     }
+  });
+
+  test("a grant tab waiting on its own lock is still an orphan", async () => {
+    const host = new UsbHost();
+    const grant = new FakeUSBDevice(host);
+    await grant.open();
+    await grant.claimInterface();
+    const panel = new FakeUSBDevice(host);
+    setNav("usb", usbApi(panel));
+    setNav("locks", {
+      query: async () => ({
+        held: [{ mode: "shared" as const, name: `bramble-ledger-panel:${ORPHAN}` }],
+        pending: [{ mode: "shared" as const, name: `bramble-ledger-panel:${ORPHAN}` }],
+      }),
+      request: async () => undefined,
+    });
+    scope.chrome = {
+      runtime: {
+        getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 8 }],
+        getURL: (path: string) => `chrome-extension://bramble/${path}`,
+      },
+      tabs: {
+        remove: async () => {
+          await grant.releaseInterface();
+          await grant.close();
+        },
+      },
+    };
+
+    const session = await ledgerConnector.openConnected();
+    expect(session).toBeTruthy();
+    expect(grant.claimed).toBe(false);
+    await session?.close();
   });
 
   test("a hardware tab whose panel is still alive is not closed", async () => {
