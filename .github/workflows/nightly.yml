@@ -105,6 +105,7 @@ jobs:
       build: ${{ steps.build.outcome }}
       audit: ${{ steps.audit.outcome }}
       properties: ${{ steps.properties.outcome }}
+      packages: ${{ steps.packages.outcome }}
       e2e_install: ${{ steps.e2e_install.outcome }}
       e2e: ${{ steps.e2e.outcome }}
       sepolia: ${{ steps.sepolia.outcome }}
@@ -173,6 +174,14 @@ jobs:
         id: properties
         continue-on-error: true
         run: bun test tests/property
+      # Each package's own suite, run from its directory with its own script.
+      # Pull-request CI runs these files only inside the root coverage run,
+      # under the shared root preload; this keeps proving that each package's
+      # tests pass on their own, without relying on anything that preload sets.
+      - name: Per-package test suites
+        id: packages
+        continue-on-error: true
+        run: bun run --filter './packages/**' test
       # Live Sepolia run of every in-wallet import path against the issue-821
       # test accounts (tools/vendor-dataset/verify-sepolia.ts). Read-only: it
       # never signs or sends. Its testnet-only seed file is the one secret this
@@ -241,6 +250,7 @@ jobs:
           BUILD: ${{ steps.build.outcome }}
           AUDIT: ${{ steps.audit.outcome }}
           PROPERTIES: ${{ steps.properties.outcome }}
+          PACKAGES: ${{ steps.packages.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
           SEPOLIA: ${{ steps.sepolia.outcome }}
@@ -252,6 +262,7 @@ jobs:
             ["Extension build"]="$BUILD"
             ["Dependency audit (bun audit)"]="$AUDIT"
             ["Security property suite"]="$PROPERTIES"
+            ["Per-package test suites"]="$PACKAGES"
             ["E2E browser install"]="$E2E_INSTALL"
             ["Full E2E (Playwright)"]="$E2E"
             ["Sepolia import paths (live)"]="$SEPOLIA"
@@ -322,6 +333,7 @@ jobs:
           BUILD: ${{ steps.build.outcome }}
           AUDIT: ${{ steps.audit.outcome }}
           PROPERTIES: ${{ steps.properties.outcome }}
+          PACKAGES: ${{ steps.packages.outcome }}
           E2E_INSTALL: ${{ steps.e2e_install.outcome }}
           E2E: ${{ steps.e2e.outcome }}
           SEPOLIA: ${{ steps.sepolia.outcome }}
@@ -330,7 +342,7 @@ jobs:
           set -euo pipefail
           # Skipped because the secret is unset: not run, not failed. Any other skip fails.
           if [ "$SEPOLIA" = "skipped" ] && [ "$SEPOLIA_CONFIGURED" = "false" ]; then SEPOLIA=success; fi
-          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$E2E_INSTALL" "$E2E" "$SEPOLIA"; do
+          for o in "$VENDOR" "$BUILD" "$AUDIT" "$PROPERTIES" "$PACKAGES" "$E2E_INSTALL" "$E2E" "$SEPOLIA"; do
             if [ "$o" != "success" ]; then
               echo "At least one nightly gate did not pass — failing the job."
               exit 1
@@ -357,6 +369,7 @@ jobs:
           BUILD: ${{ needs.nightly.outputs.build }}
           AUDIT: ${{ needs.nightly.outputs.audit }}
           PROPERTIES: ${{ needs.nightly.outputs.properties }}
+          PACKAGES: ${{ needs.nightly.outputs.packages }}
           E2E_INSTALL: ${{ needs.nightly.outputs.e2e_install }}
           E2E: ${{ needs.nightly.outputs.e2e }}
           SEPOLIA: ${{ needs.nightly.outputs.sepolia }}
@@ -370,6 +383,7 @@ jobs:
               ["Extension build", process.env.BUILD],
               ["Dependency audit (bun audit)", process.env.AUDIT],
               ["Security property suite", process.env.PROPERTIES],
+              ["Per-package test suites", process.env.PACKAGES],
               ["E2E browser install", process.env.E2E_INSTALL],
               ["Full E2E (Playwright)", process.env.E2E],
               ["Sepolia import paths (live)", process.env.SEPOLIA],
