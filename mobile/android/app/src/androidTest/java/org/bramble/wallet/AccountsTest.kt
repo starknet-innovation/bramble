@@ -63,8 +63,7 @@ class AccountsTest {
         r.snapshot("drawer")
         r.tap("Add account")
         r.waitForText("Add a new account")
-        r.tap("Regular account")
-        r.waitForText("Account added")
+        r.expectToast("Account added") { r.tap("Regular account") }
         val second = r.activeName()
         assertNotEquals("the new account is active", first, second)
 
@@ -73,8 +72,7 @@ class AccountsTest {
         r.tap("Manage accounts & groups")
         r.waitForText("Accounts & groups")
         r.typeSecret("Name", "Savings")
-        r.tap("Save name")
-        r.waitForText("Label saved")
+        r.expectToast("Label saved") { r.tap("Save name") }
         assertEquals("Savings", r.activeName())
         // API 33+ confirms a copy with the system's own notice, so check the clip itself: the full
         // public address of the active account (iOS checks its "Copied" toast instead).
@@ -82,14 +80,12 @@ class AccountsTest {
         val address = r.onMain { activeRecord?.address }
         assertEquals(address, r.onMain { clipText() })
         r.typeSecret("Name", "")
-        r.tap("Save name")
-        r.waitForText("Label cleared")
+        r.expectToast("Label cleared") { r.tap("Save name") }
         assertEquals("clearing the label restores the nickname", second, r.activeName())
 
         // Groups: create one, then file the active account through the drawer's folder picker.
         r.typeSecret("New group name", "Long term")
-        r.tap("Create group")
-        r.waitForText("Group created")
+        r.expectToast("Group created") { r.tap("Create group") }
         r.tapDescribed("Back")
         r.tapDescribed("Accounts")
         rule.onAllNodes(hasText("Long term") and hasClickAction())[0].performClick()
@@ -97,8 +93,9 @@ class AccountsTest {
         r.tap("All")
         r.tapDescribed("No folder — choose one for $second")
         r.waitFor(hasText("Long term") and hasClickAction())
-        rule.onAllNodes(hasText("Long term") and hasClickAction()).onLast().performClick()
-        r.waitForText("Moved to folder")
+        r.expectToast("Moved to folder") {
+            rule.onAllNodes(hasText("Long term") and hasClickAction()).onLast().performClick()
+        }
         r.waitFor(hasContentDescription("Folder: Long term for $second"))
         r.snapshot("drawer-grouped")
         assertEquals(0, node.writes.get())

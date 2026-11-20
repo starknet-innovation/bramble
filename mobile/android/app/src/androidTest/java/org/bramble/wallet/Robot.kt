@@ -61,12 +61,36 @@ class Robot(
     fun waitFor(
         matcher: SemanticsMatcher,
         timeoutMs: Long = 10_000,
+        /** Runs before each check; [expectToast] steps the held clock here. */
+        step: () -> Unit = {},
     ) {
         try {
-            rule.waitUntil(timeoutMs) { exists(matcher) }
+            rule.waitUntil(timeoutMs) {
+                step()
+                exists(matcher)
+            }
         } catch (timeout: ComposeTimeoutException) {
             val screen = runCatching { rule.onRoot(useUnmergedTree = false).printToString() }.getOrDefault("")
             throw AssertionError("${matcher.description} not shown after $timeoutMs ms; screen:\n$screen", timeout)
+        }
+    }
+
+    /**
+     * Runs [action], then waits for the toast [text] it raises. The test clock is held and stepped
+     * one frame per check, so the toast's 3 s lifetime cannot run out on the test clock while the
+     * core call behind it (a vault write) is still running in real time.
+     */
+    fun expectToast(
+        text: String,
+        timeoutMs: Long = 20_000,
+        action: () -> Unit,
+    ) {
+        rule.mainClock.autoAdvance = false
+        try {
+            action()
+            waitFor(hasText(text), timeoutMs) { rule.mainClock.advanceTimeByFrame() }
+        } finally {
+            rule.mainClock.autoAdvance = true
         }
     }
 

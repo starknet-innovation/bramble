@@ -54,8 +54,7 @@ class TokenManagementTest {
         r.tap("Scan for tokens")
         r.waitForText("1 found.", TIMEOUT_MS)
         r.snapshot("discover")
-        r.tapDescribed("Add USDC")
-        r.waitForText("Token added", TIMEOUT_MS)
+        r.expectToast("Token added", TIMEOUT_MS) { r.tapDescribed("Add USDC") }
         r.tapDescribed("Back")
         r.waitFor(hasTestTag("tracked-USDC"), TIMEOUT_MS)
         assertEquals(tracked + 2, r.onMain { portfolio.tracked.size })
