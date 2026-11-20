@@ -12,6 +12,7 @@
  * scrollable layout because its list can grow past the viewport. All spacing is
  * drawn from the scale tokens in the stylesheet — no inline pixel values here.
  */
+
 import { escapeHtml } from "@bramble/core/html";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
@@ -21,9 +22,10 @@ import {
   type LedgerEip2645Application,
   READY_EIP2645_APPLICATION,
 } from "@bramble/wallet-model/ledger-path";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
-import { accountLabel, accountsDetectedText } from "../../shared/parts";
+import { accountsDetectedText } from "../../shared/parts";
 import type { LedgerOnboardAddKind } from "./onboard-session";
 import {
   type LedgerCandidate,
@@ -275,7 +277,7 @@ const candidateState = (candidate: LedgerCandidate): string => {
 const candidateMeta = (candidate: LedgerCandidate, atBramblePath = false): string => {
   const index = String(candidate.account.derivation.accountIndex);
   return `<strong>${atBramblePath ? th("ledger.candidate.accountBramblePath", { index }) : th("onboarding.picker.accountName", { index })}</strong>
-      <code>${escapeHtml(accountLabel(candidate.account.address))}</code>
+      <code>${escapeHtml(addressLabel(candidate.account.address))}</code>
       <span class="hint">${escapeHtml(candidateState(candidate))}</span>`;
 };
 

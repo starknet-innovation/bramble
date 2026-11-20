@@ -359,7 +359,7 @@ describe("swap operations", () => {
     // read identically for a build that had moved the beneficiary.
     expect(
       "swapPreparation" in prepared ? prepared.swapPreparation.summaries.join(" ") : "",
-    ).toContain("Swap 0.01 ETH for at least 12.4375 STRK, paid to 0x1234…bcde");
+    ).toContain("Swap 0.01 ETH for at least 12.4375 STRK, paid to 0x0123…bcde");
     expect("swapPreparation" in prepared ? prepared.swapPreparation.minBuyAmount : "").toBe(
       "12.4375",
     );

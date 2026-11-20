@@ -4,11 +4,12 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import { reviewStepsSendMessages } from "../../../i18n/messages/review-steps-send";
 import { reviewLines } from "../../../i18n/review";
 import type { SidepanelWallet } from "../../runtime/runtime";
-import { accountLabel, inlineCopyButton } from "../../shared/parts";
+import { inlineCopyButton } from "../../shared/parts";
 import {
   reviewCallsList,
   reviewFeeSection,
@@ -27,7 +28,7 @@ const bucketName = (bucket: "private" | "public"): string => t(`review.send.buck
 // The full address behind a truncated one, revealed in place by a native
 // disclosure so a keyboard user can inspect it without leaving the review.
 const fullAddressReveal = (address: string, label: string): string =>
-  `<details class="address-reveal"><summary>${escapeHtml(label)}</summary><code>${escapeHtml(address)}</code></details>`;
+  `<details class="address-reveal"><summary>${escapeHtml(label)}</summary><code>${escapeHtml(addressText(address))}</code></details>`;
 
 /**
  * Renders the confirm-face summary in the order the decision is made: who it
@@ -53,12 +54,12 @@ export const reviewSummaryHtml = (
   const copyLabel = t(mode === "send" ? "review.send.copyRecipient" : "review.send.copyAccount");
   const recipientIdentity =
     fields.recipientResolvedFrom === "stark-name"
-      ? `<span class="send-review-address send-review-address-full copy-line"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(fields.recipient)}</code>${inlineCopyButton(fields.recipient, copyLabel)}</span><small class="send-review-source">${th("review.send.resolvedFromStarknetId")}</small>`
-      : `<span class="send-review-address copy-line"><code title="${escapeHtml(fields.recipient)}">${escapeHtml(accountLabel(fields.recipient))}</code>${inlineCopyButton(fields.recipient, copyLabel)}</span>${fields.recipient ? fullAddressReveal(fields.recipient, t(mode === "send" ? "review.send.showRecipient" : "review.send.showAccount")) : ""}`;
+      ? `<span class="send-review-address send-review-address-full copy-line"><code title="${escapeHtml(addressText(fields.recipient))}">${escapeHtml(addressText(fields.recipient))}</code>${inlineCopyButton(addressText(fields.recipient), copyLabel)}</span><small class="send-review-source">${th("review.send.resolvedFromStarknetId")}</small>`
+      : `<span class="send-review-address copy-line"><code title="${escapeHtml(addressText(fields.recipient))}">${escapeHtml(addressLabel(fields.recipient))}</code>${inlineCopyButton(addressText(fields.recipient), copyLabel)}</span>${fields.recipient ? fullAddressReveal(fields.recipient, t(mode === "send" ? "review.send.showRecipient" : "review.send.showAccount")) : ""}`;
   return `
   <dl class="send-review-facts">
-    <div><dt>${th("review.send.from")}</dt><dd><strong>${escapeHtml(sender.label || accountLabel(sender.address))}</strong><span class="send-review-address"><code title="${escapeHtml(sender.address)}">${escapeHtml(accountLabel(sender.address))}</code></span>${sender.address ? fullAddressReveal(sender.address, t("review.send.showSender")) : ""}</dd></div>
-    <div><dt>${th(mode === "send" ? "review.send.to" : "review.send.account")}</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong>${recipientIdentity}</dd></div>
+    <div><dt>${th("review.send.from")}</dt><dd><strong>${escapeHtml(sender.label || addressLabel(sender.address))}</strong><span class="send-review-address"><code title="${escapeHtml(addressText(sender.address))}">${escapeHtml(addressLabel(sender.address))}</code></span>${sender.address ? fullAddressReveal(sender.address, t("review.send.showSender")) : ""}</dd></div>
+    <div><dt>${th(mode === "send" ? "review.send.to" : "review.send.account")}</dt><dd><strong>${escapeHtml(fields.recipientLabel || addressLabel(fields.recipient))}</strong>${recipientIdentity}</dd></div>
     ${network ? `<div><dt>${th("review.send.network")}</dt><dd>${escapeHtml(network)}</dd></div>` : ""}
     <div><dt>${th("review.send.amount")}</dt><dd><span class="send-review-amount">${tokenGlyph(fields.tokenAddress, fields.tokenSymbol)}<strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong></span><small>${escapeHtml(fields.fiatEstimate || t("review.send.fiatUnavailable"))}</small></dd></div>
     ${mode === "send" ? "" : `<div><dt>${th("review.send.movement")}</dt><dd><strong>${escapeHtml(bucketName(fields.source))} → ${escapeHtml(bucketName(fields.destination))}</strong></dd></div>`}
@@ -127,7 +128,7 @@ export const reviewPanelHtml = (review: TransferReview): string =>
 // A truncated address beside a copy control carrying the full value, so the
 // receipt reads as a sentence yet every party can still be checked exactly.
 const receiptAddress = (address: string, copyLabel: string): string =>
-  `<span class="send-receipt-address"><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, copyLabel)}</span>`;
+  `<span class="send-receipt-address"><code title="${escapeHtml(addressText(address))}">${escapeHtml(addressLabel(address))}</code>${inlineCopyButton(addressText(address), copyLabel)}</span>`;
 
 /**
  * Renders the Send receipt sentence: "<sender> sent <amount> to <recipient>",
@@ -142,7 +143,7 @@ export const successReceiptHtml = (
   sender: { readonly address: string; readonly label: string },
   mode: TransferMode,
 ): string => {
-  const label = fields.recipientLabel || accountLabel(fields.recipient);
+  const label = fields.recipientLabel || addressLabel(fields.recipient);
   if (mode !== "send") {
     return escapeHtml(transferSuccessSummary(mode, fields.amount, fields.tokenSymbol, label));
   }

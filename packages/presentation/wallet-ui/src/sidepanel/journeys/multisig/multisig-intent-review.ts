@@ -6,6 +6,7 @@
  * co-signer can check the identity they were told against the one being
  * signed. Pure templates over already-validated repository data.
  */
+
 import { escapeHtml } from "@bramble/core/html";
 import {
   type ArgentMultisigConfigReview,
@@ -14,12 +15,13 @@ import {
 } from "@bramble/multisig/chain";
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
-import { accountLabel, inlineCopyButton } from "../../shared/parts";
+import { inlineCopyButton } from "../../shared/parts";
 
 const signerKeyItem = (key: string): string =>
-  `<li><code title="${escapeHtml(key)}">${escapeHtml(accountLabel(key))}</code>${inlineCopyButton(key, t("review.multisig.change.copyKey"))}</li>`;
+  `<li><code title="${escapeHtml(key)}">${escapeHtml(addressLabel(key))}</code>${inlineCopyButton(key, t("review.multisig.change.copyKey"))}</li>`;
 
 /**
  * Renders each prepared call with its entrypoint, target contract (copyable in
@@ -30,7 +32,7 @@ export const exactCalls = (intent: ArgentMultisigSigningIntent): string =>
     .map(
       (call, index) => `<li class="review-panel">
         <p><strong>${th("review.multisig.exact.call", { index: String(index + 1) })}</strong> · <code>${escapeHtml(call.entrypoint)}</code></p>
-        <p>${th("review.multisig.exact.contract")} <code title="${escapeHtml(call.contractAddress)}">${escapeHtml(accountLabel(call.contractAddress))}</code>${inlineCopyButton(call.contractAddress, t("review.multisig.exact.copyContract", { index: String(index + 1) }))}</p>
+        <p>${th("review.multisig.exact.contract")} <code title="${escapeHtml(addressText(call.contractAddress))}">${escapeHtml(addressLabel(call.contractAddress))}</code>${inlineCopyButton(addressText(call.contractAddress), t("review.multisig.exact.copyContract", { index: String(index + 1) }))}</p>
         <p>${th("review.multisig.exact.calldata")} <code>${escapeHtml(call.calldata.join(" ") || t("review.multisig.exact.none"))}</code></p>
       </li>`,
     )

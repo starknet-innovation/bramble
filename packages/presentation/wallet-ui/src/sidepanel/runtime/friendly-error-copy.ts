@@ -205,6 +205,9 @@ export const ERROR_COPY: ReadonlyMap<string, string> = new Map([
   ["preferences unavailable", "Couldn't load your settings. Try again."],
   ["diagnostic export failed", "Couldn't export diagnostics. Try again."],
   ["backup import failed", BACKUP_UNREADABLE],
+  ["feature flag overrides unavailable", SAVE_FAILED],
+  ["feature flag not overridable", "This version of Bramble doesn't let you change that feature."],
+  ["feature flags unavailable", "Couldn't load experimental features. Try again."],
 
   // --- Folders (the UI word; the code still says group) --------------------
   ["group create failed", "Couldn't create that folder. Try again."],

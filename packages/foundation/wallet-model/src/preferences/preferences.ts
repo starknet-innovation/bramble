@@ -347,6 +347,20 @@ export const isHiddenAccountIds = (value: unknown): value is readonly string[] =
   Array.isArray(value) && value.every(isAccountId) && hasUniqueStrings(value);
 
 /**
+ * Most accounts whose Ready key notice can stay dismissed. Past it the oldest
+ * dismissal drops, so its notice can return; a wallet never holds this many
+ * affected Ready accounts.
+ */
+export const MAX_READY_KEY_NOTICE_DISMISSALS = 64;
+
+/**
+ * Validates the accounts whose Ready key notice was dismissed: unique canonical
+ * account ids, at most {@link MAX_READY_KEY_NOTICE_DISMISSALS}.
+ */
+export const isReadyKeyNoticeDismissals = (value: unknown): value is readonly string[] =>
+  isHiddenAccountIds(value) && value.length <= MAX_READY_KEY_NOTICE_DISMISSALS;
+
+/**
  * Validates the per-network RPC override map.
  */
 export const isRpcOverrides = (value: unknown): value is RpcOverrides =>

@@ -19,12 +19,11 @@ import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { DiscoveredNft, NftCoverage, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import {
-  accountLabel,
   flowHeader,
   flowScreen,
   inlineCopyButton,
@@ -41,6 +40,8 @@ import { nftCoverageNote } from "./nft-coverage";
  */
 export type NftGalleryItem = {
   readonly animationUrl: string;
+  /** The background read this watched NFT's metadata and found no art. */
+  readonly artUnavailable: boolean;
   readonly attributes: readonly NftAttribute[];
   readonly collection: string;
   readonly contract: string;
@@ -99,6 +100,7 @@ export const visibleNftItems = (
     const attributes = nft.attributes ?? [];
     items.push({
       animationUrl: nft.animationUrl ?? "",
+      artUnavailable: nft.artUnavailable === true,
       attributes,
       collection: nft.collection,
       contract: nft.contract,
@@ -137,8 +139,15 @@ export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = fa
     ? `<img class="nft-image${item.pixelated ? " nft-image--pixelated" : ""}" src="${escapeHtml(item.image)}" alt="" loading="${eager ? "eager" : "lazy"}" referrerpolicy="no-referrer" />`
     : "";
 
+// A revealed tile says when its art is missing: shown at once when the
+// background found none, or by CSS once a present image fails to load.
+const nftArtNote = (item: NftGalleryItem, reveal: boolean): string =>
+  reveal && (item.image || item.artUnavailable)
+    ? `<span class="nft-art-note"${item.image ? "" : ' data-shown="true"'}>${th("collectibles.artUnavailable")}</span>`
+    : "";
+
 const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
-  `<span class="nft-art">${nftImageMarkup(item, reveal, eager)}${icon("image")}</span>`;
+  `<span class="nft-art">${nftImageMarkup(item, reveal, eager)}${icon("image")}${nftArtNote(item, reveal)}</span>`;
 
 // The tile play affordance for a collectible with an on-chain animation: a
 // button that overlays the art square (revealed on hover/focus) plus the hidden
@@ -163,7 +172,7 @@ export const nftGalleryCard = (item: NftGalleryItem, eager: boolean): string => 
       ${nftArt(item, item.watched, eager)}
       <span class="nft-copy">
         <strong>${escapeHtml(item.title)}</strong>
-        <code>${escapeHtml(item.collection || accountLabel(item.contract))} · #${escapeHtml(item.tokenId)}</code>
+        <code>${escapeHtml(item.collection || addressLabel(item.contract))} · #${escapeHtml(item.tokenId)}</code>
       </span>
     </button>
     ${nftTilePlay(item)}
@@ -174,7 +183,7 @@ const hiddenRow = (nft: WatchedNft): string => `
   <li class="address-line">
     <div class="stack-tight">
       <strong>${escapeHtml(watchedTitle(nft))}</strong>
-      <span class="copy-line"><code title="${escapeHtml(nft.contract)}">${escapeHtml(accountLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>${inlineCopyButton(nft.contract, t("collectibles.copyCollection"))}</span>
+      <span class="copy-line"><code title="${escapeHtml(addressText(nft.contract))}">${escapeHtml(addressLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>${inlineCopyButton(addressText(nft.contract), t("collectibles.copyCollection"))}</span>
     </div>
     ${button({
       attributes: { "data-nft-spam": nft.id, "data-nft-spam-value": "false" },
@@ -366,6 +375,7 @@ export const selectedNftDetail = (
   if (discovered) {
     return {
       animationUrl: discovered.animationUrl ?? "",
+      artUnavailable: discovered.artUnavailable === true,
       attributes: discovered.attributes ?? [],
       collection: discovered.collection,
       contract: discovered.contract,
@@ -430,12 +440,12 @@ export const nftDetailFlow = (
             ${receipt([
               {
                 action: {
-                  attributes: { "data-copy": nft.contract },
+                  attributes: { "data-copy": addressText(nft.contract) },
                   icon: "copy",
                   label: t("collectibles.copyContract"),
                 },
                 label: t("collectibles.contract"),
-                value: accountLabel(nft.contract),
+                value: addressLabel(nft.contract),
                 valueStyle: "code",
               },
               { label: t("collectibles.tokenId"), value: nft.tokenId, valueStyle: "code" },

@@ -9,9 +9,9 @@
  */
 
 import { accountClassEntry } from "@bramble/wallet-model/account-families";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { t } from "../../../i18n/messages";
 import type { ReadyKeyCandidate } from "../../../popup/responses/responses-onboarding";
-import { accountLabel } from "../../shared/parts";
 
 /** The mounted picker: what is ticked, and how to take it down. */
 export type ReadyKeyPicker = {
@@ -22,7 +22,7 @@ export type ReadyKeyPicker = {
 // "argent 0.3.1" reads as "Argent 0.3.1"; an unknown class keeps its hash.
 const releaseName = (classHash: string): string => {
   const label = accountClassEntry(classHash)?.label;
-  return label ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : accountLabel(classHash);
+  return label ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : addressLabel(classHash);
 };
 
 const rowState = (candidate: ReadyKeyCandidate, duplicate: boolean): string => {
@@ -75,7 +75,7 @@ export const mountReadyKeyPicker = (
       release: releaseName(candidate.classHash),
     });
     const address = doc.createElement("code");
-    address.textContent = accountLabel(candidate.address);
+    address.textContent = addressLabel(candidate.address);
     address.title = candidate.address;
     const hint = doc.createElement("span");
     hint.className = "hint";

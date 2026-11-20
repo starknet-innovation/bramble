@@ -5,6 +5,7 @@
  */
 import { walletErrorMessage } from "@bramble/core/errors";
 import { mapStrk20StageError } from "@bramble/privacy/official-sdk-errors";
+import { networkRejectionMessage, nodeRejectionReason } from "@bramble/starknet/node-rejection";
 import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { submissionUnknownResponse } from "@bramble/wallet-protocol/submission-unknown";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -12,6 +13,9 @@ import { afterBroadcast } from "../transactions/activity-recording";
 
 const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
   if (!hasProof) {
+    const reason = nodeRejectionReason(error);
+    // The node's sentence, not a generic failure and not the RPC params dump.
+    if (reason) return networkRejectionMessage(reason);
     return walletErrorMessage(error, "invoke request failed");
   }
   try {

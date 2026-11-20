@@ -6,7 +6,7 @@ import { emptyState, receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
@@ -15,7 +15,6 @@ import {
   accountAvatar,
   accountDisplayName,
   accountFamilyName,
-  accountLabel,
   flowHeader,
   flowScreen,
   inlineCopyButton,
@@ -66,7 +65,7 @@ const signerIdentities = (
       const contract = accountFamilyName(account.accountContractType);
       return {
         address: account.address,
-        detail: `${contract}${account.derivation.kind === "ledger" ? " · Ledger" : ""} · ${t("multisig.participant.key", { key: accountLabel(publicKey) })}`,
+        detail: `${contract}${account.derivation.kind === "ledger" ? " · Ledger" : ""} · ${t("multisig.participant.key", { key: addressLabel(publicKey) })}`,
         label: accountDisplayName(account, preferences),
         publicKey,
       };
@@ -77,13 +76,13 @@ const signerIdentities = (
     return contact
       ? {
           address: contact.address,
-          detail: `${t("multisig.signers.addressBook")} · ${t("multisig.participant.key", { key: accountLabel(publicKey) })}`,
+          detail: `${t("multisig.signers.addressBook")} · ${t("multisig.participant.key", { key: addressLabel(publicKey) })}`,
           label: contact.label,
           publicKey,
         }
       : {
           address: publicKey,
-          detail: t("multisig.signers.signerKey", { key: accountLabel(publicKey) }),
+          detail: t("multisig.signers.signerKey", { key: addressLabel(publicKey) }),
           label: t("multisig.signers.external"),
           publicKey,
         };
@@ -256,12 +255,12 @@ export const multisigSignersFlow = (
           { label: t("multisig.signers.contract"), value: argentMultisigContractLabel() },
           {
             action: {
-              attributes: { "data-copy": record.address },
+              attributes: { "data-copy": addressText(record.address) },
               icon: "copy",
               label: t("multisig.signers.copyAddress"),
             },
             label: t("multisig.signers.address"),
-            value: accountLabel(record.address),
+            value: addressLabel(record.address),
             valueStyle: "code",
           },
           {
@@ -347,7 +346,7 @@ export const multisigSignersFlow = (
                             : signer.unsupported
                               ? `<article class="multisig-signer-recovery-row" role="listitem">
                                   <span class="option-avatar">${icon("shield")}</span>
-                                  <span class="option-copy"><strong>${escapeHtml(unsupportedSignerLabel(signer.unsupported.type))}</strong><span class="option-sub">${th("multisig.signers.recognized")} · ${th("multisig.config.watchOnly")} · GUID ${escapeHtml(accountLabel(signer.unsupported.guid))}</span></span>
+                                  <span class="option-copy"><strong>${escapeHtml(unsupportedSignerLabel(signer.unsupported.type))}</strong><span class="option-sub">${th("multisig.signers.recognized")} · ${th("multisig.config.watchOnly")} · GUID ${escapeHtml(addressLabel(signer.unsupported.guid))}</span></span>
                                 </article>`
                               : `<div class="multisig-signer-recovery-field" role="listitem">
                                 ${textField({

@@ -18,7 +18,11 @@ import {
   summarizeStrk20Action,
   summarizeStrk20Batch,
 } from "@bramble/privacy/service";
-import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
+import {
+  STRK20_PREPARE_REGISTER_SUMMARY,
+  STRK20_SIMULATE_REGISTER_SUMMARY,
+  type Strk20Action,
+} from "@bramble/wallet-protocol/strk20";
 import { STRK20_REVIEW_PINS } from "./review-message-pins";
 
 const pin = (text: string): string =>
@@ -69,4 +73,13 @@ describe("references", () => {
       summaries: ["Generate a submittable private proof for this site", "Token "],
     });
   });
+});
+
+test("the register-prepare first lines render to the constants the approval card keys on", () => {
+  expect(strk20English(strk20Text("strk20Review.register.prepare"))).toBe(
+    STRK20_PREPARE_REGISTER_SUMMARY,
+  );
+  expect(strk20English(strk20Text("strk20Review.register.simulate"))).toBe(
+    STRK20_SIMULATE_REGISTER_SUMMARY,
+  );
 });

@@ -15,6 +15,7 @@ import { formatTokenAmount } from "@bramble/starknet/rpc";
 import type { ReviewText } from "@bramble/transactions/review-messages";
 import { button } from "@bramble/ui-kit/controls";
 import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
+import { localizeErrorCopy } from "../../i18n/error-copy";
 import { t, th } from "../../i18n/messages";
 import { reviewLine } from "../../i18n/review";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
@@ -59,6 +60,11 @@ export type ReviewFeeState = {
    */
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
+  /**
+   * The node's refusal, already a reader-facing sentence. Present only when
+   * estimation failed because the network said no.
+   */
+  readonly feeEstimateDetail?: string;
   readonly feeEstimatePending?: boolean;
   /**
    * Explicit alternatives when STRK does not cover the fee. The wallet does
@@ -318,8 +324,11 @@ export const reviewFeeSection = (
     return boundary(`<p class="review-fee">${th("cost.fee.afterDeploy")}</p>`);
   }
   if (state.requiresDeployment === true) {
+    const both = state.feeEstimateDetail
+      ? escapeHtml(localizeErrorCopy(state.feeEstimateDetail))
+      : th("cost.fee.bothFailed");
     return boundary(
-      `<p class="review-flag" role="alert">${th("cost.fee.bothFailed")}</p>${button({
+      `<p class="review-flag" role="alert">${both}</p>${button({
         attributes: retryAttributes,
         label: t("cost.fee.retry"),
         variant: "secondary",
@@ -333,8 +342,11 @@ export const reviewFeeSection = (
     );
   }
   if (state.feeEstimateFailed === true) {
+    const failed = state.feeEstimateDetail
+      ? escapeHtml(localizeErrorCopy(state.feeEstimateDetail))
+      : th("cost.fee.failed");
     return boundary(
-      `<p class="review-flag" role="alert">${th("cost.fee.failed")}</p>${button({
+      `<p class="review-flag" role="alert">${failed}</p>${button({
         attributes: retryAttributes,
         label: t("cost.fee.retry"),
         variant: "secondary",

@@ -38,6 +38,7 @@ import {
   releaseWaitersOnApprovalDrop,
   type SignatureWaiters,
 } from "../approvals/signature-waiters";
+import { bundledFeatureFlags, type FeatureFlagReader } from "../flags/feature-flag-client";
 import {
   createLedgerSignQueue,
   type LedgerSignQueue,
@@ -97,6 +98,7 @@ export type RouterContext = {
   readonly approvals: ApprovalQueue;
   readonly balanceSnapshots: BalanceSnapshotStore;
   readonly extension: ExtensionIdentity;
+  readonly featureFlags: FeatureFlagReader;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue: LedgerSignQueue;
   readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
@@ -139,6 +141,8 @@ export type MessageHandlerOptions = {
   readonly allowanceStore?: AllowanceStore;
   readonly approvals?: ApprovalQueue;
   readonly balanceSnapshots?: BalanceSnapshotStore;
+  /** Remote feature-flag reader; defaults to the bundled flag values. */
+  readonly featureFlags?: FeatureFlagReader;
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
@@ -238,6 +242,9 @@ const nostrCoordinationStoreFor = (
 const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): WatchAssetAdmission =>
   provided ?? createWatchAssetAdmission();
 
+const featureFlagsFor = (provided: FeatureFlagReader | undefined): FeatureFlagReader =>
+  provided ?? bundledFeatureFlags;
+
 const balanceSnapshotsFor = (provided: BalanceSnapshotStore | undefined): BalanceSnapshotStore =>
   provided ?? memoryBalanceSnapshotStore();
 
@@ -327,6 +334,7 @@ export const routerContext = (
     approvals,
     balanceSnapshots: balanceSnapshotsFor(options.balanceSnapshots),
     extension,
+    featureFlags: featureFlagsFor(options.featureFlags),
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
     multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),

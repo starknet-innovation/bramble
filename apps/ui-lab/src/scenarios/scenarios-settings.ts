@@ -32,6 +32,12 @@ const openExplorerData = (context: FrameContext): void => {
   disclosure.open = true;
 };
 
+const expandFirstSite = (context: FrameContext): void => {
+  const site = context.app.querySelector<HTMLDetailsElement>("details.connected-site");
+  if (!site) throw new Error("Missing production connected-site disclosure");
+  site.open = true;
+};
+
 const showRejectedService = (context: FrameContext): void => {
   openExplorerData(context);
   showToast(
@@ -210,8 +216,10 @@ export const settingsScenario: WalletScenario = {
         }),
       id: "connected-sites",
       label: "Connected sites",
-      narrative: "Every active origin shows its granted account count and direct revocation.",
-      state: { origins: 2 },
+      narrative:
+        "Every active origin shows its shared account count and expands to each account, disconnectable one at a time or all together.",
+      prepare: expandFirstSite,
+      state: { expanded: "https://terminal.bramble.test", origins: 2 },
     },
     {
       content: () =>
@@ -285,6 +293,40 @@ export const settingsScenario: WalletScenario = {
       state: { accountKind: "ledger", keysLeaveDevice: false },
     },
     ...stakingCheckpoints,
+    {
+      content: () =>
+        walletDashboard({
+          experimentalFeatures: {
+            flags: { "swap.enabled": false },
+            killed: [],
+            overridable: ["swap.enabled"],
+            overridden: ["swap.enabled"],
+          },
+          preferences: journeyPreferences,
+          view: "experimental-features",
+        }),
+      id: "experimental-features",
+      label: "Experimental features",
+      narrative: "Each overridable flag shows its effective value and a Default / On / Off choice.",
+      state: { overrides: 1 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          experimentalFeatures: {
+            flags: { "swap.enabled": false },
+            killed: ["swap.enabled"],
+            overridable: ["swap.enabled"],
+            overridden: [],
+          },
+          preferences: journeyPreferences,
+          view: "experimental-features",
+        }),
+      id: "experimental-features-killed",
+      label: "Feature turned off remotely",
+      narrative: "A remote kill disables the choice and says Bramble turned the feature off.",
+      state: { killed: 1 },
+    },
     ...stakingExitCheckpoints,
   ],
   description:
@@ -309,6 +351,7 @@ export const settingsScenario: WalletScenario = {
     "backup-export",
     "backup-restore",
     "connected-sites",
+    "experimental-features",
     "reveal",
   ],
 };

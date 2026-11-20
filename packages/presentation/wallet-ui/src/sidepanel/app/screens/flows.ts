@@ -8,7 +8,12 @@ import { receipt } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  addressText,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
@@ -31,7 +36,6 @@ import { accountNamesSection, hiddenAccountsSection } from "../../journeys/setti
 import { groupsSection } from "../../journeys/settings/group-members";
 import {
   accountDisplayName,
-  accountLabel,
   flowHeader,
   flowScreen,
   noAccountEmpty,
@@ -55,6 +59,8 @@ const poolNoticeAction = (ctx: {
 
 import type { SendIntent } from "../../journeys/send/send-model";
 import { sendFlow } from "../../journeys/send/send-views";
+import type { ExperimentalFeaturesState } from "../../journeys/settings/experimental-features-runtime";
+import { experimentalFeaturesFlow } from "../../journeys/settings/experimental-features-ui";
 import { languageFlow } from "../../journeys/settings/language-ui";
 import { advancedNetworkFlow, networkFlow } from "../../journeys/settings/network-views";
 import { privacyUnlockFlow } from "../../journeys/settings/privacy-unlock";
@@ -155,12 +161,12 @@ const deployAccountFlow = (
                 },
                 {
                   action: {
-                    attributes: { "data-copy": account.address },
+                    attributes: { "data-copy": addressText(account.address) },
                     icon: "copy",
                     label: t("shell.copyAddress"),
                   },
                   label: t("shell.field.address"),
-                  value: accountLabel(account.address),
+                  value: addressLabel(account.address),
                   valueStyle: "code",
                 },
                 { label: t("shell.field.network"), value: networkDisplayName(status.network) },
@@ -357,6 +363,7 @@ export const simpleFlowScreen = (
     readonly currency: DisplayCurrency;
     readonly deployment: boolean | null;
     readonly expandedGroupId: string | null;
+    readonly experimentalFeatures: ExperimentalFeaturesState;
     /** Whether a successful balance read found STRK; `null` when unread. */
     readonly fundedForFees?: boolean | null;
     readonly multisigs?: readonly ArgentMultisigView[];
@@ -416,7 +423,14 @@ export const simpleFlowScreen = (
     case "address-book":
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":
-      return connectedSitesFlow(ctx.status, ctx.connectedSites);
+      return connectedSitesFlow(
+        ctx.status,
+        ctx.connectedSites,
+        ctx.preferences,
+        (ctx.multisigs ?? []).map((view) => view.record),
+      );
+    case "experimental-features":
+      return experimentalFeaturesFlow(ctx.status, ctx.experimentalFeatures);
     case "staking":
       return stakingFlow(ctx.status, ctx.account, ctx.staking ?? STAKING_LOADING);
     case "allowances":

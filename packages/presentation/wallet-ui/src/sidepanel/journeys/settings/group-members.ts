@@ -26,10 +26,11 @@ import {
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { iconButton } from "@bramble/ui-kit/controls";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { NetworkOption } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountAvatar, accountDisplayName, accountLabel } from "../../shared/parts";
+import { accountAvatar, accountDisplayName } from "../../shared/parts";
 import { editGroupForm, newGroupForm } from "./group-controls";
 import { CREATE_GROUP_PANEL } from "./group-state";
 
@@ -72,7 +73,7 @@ const accountChecklistRow = (
     <span class="option-avatar">${accountAvatar(account.address)}</span>
     <span class="account-check-copy">
       <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
-      <code>${escapeHtml(accountLabel(account.address))}</code>
+      <code>${escapeHtml(addressLabel(account.address))}</code>
     </span>
     ${networkName ? `<span class="account-check-net">${escapeHtml(networkName)}</span>` : ""}
     <span class="account-check-mark">${member ? icon("check") : icon("plus")}</span>

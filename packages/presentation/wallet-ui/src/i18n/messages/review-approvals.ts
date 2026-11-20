@@ -70,6 +70,12 @@ const en = {
   "approval.register.hint":
     "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
   "approval.register.locked": "Unlock the wallet to review this private-balance activation.",
+  "approval.register.prepareHint":
+    "This prepares the one-time registration commitment and proof and hands them to the site, which submits them itself and must cover the pool fee. The viewing key and private notes are never published.",
+  "approval.register.simulateAction": "Simulate",
+  "approval.register.simulateHint":
+    "This only simulates activation for the site. It returns no submittable proof, publishes nothing, and costs nothing.",
+  "approval.register.simulateTitle": "Simulate private-balance activation",
   "approval.register.title": "Activate private balances",
   "approval.screen.eyebrow": "Wallet approval",
   "approval.screen.later": "Review later in Activity",
@@ -114,8 +120,10 @@ export const reviewApprovalMessages = {
   "zh-Hans": {
     "approval.approve": "批准",
     "approval.balances.action": "共享余额",
-    "approval.balances.hintAll": "此操作会让该网站获知本账户已发现的所有隐私代币余额，但不会转移资金。",
-    "approval.balances.hintListed": "此操作仅会让该网站获知以下列出的隐私代币余额，但不会转移资金。",
+    "approval.balances.hintAll":
+      "此操作会让该网站获知本账户已发现的所有隐私代币余额，但不会转移资金。",
+    "approval.balances.hintListed":
+      "此操作仅会让该网站获知以下列出的隐私代币余额，但不会转移资金。",
     "approval.balances.locked": "解锁钱包以审核此隐私余额请求。",
     "approval.balances.title": "隐私余额请求",
     "approval.card.close": "关闭",
@@ -166,6 +174,12 @@ export const reviewApprovalMessages = {
     "approval.register.hint":
       "此同意会准备一次性的公开注册承诺和证明；暂不提交。在钱包发布该承诺之前，还会有一项针对确切调用的网络费批准。查看密钥和隐私票据永远不会被公开。",
     "approval.register.locked": "解锁钱包以审核此隐私余额激活。",
+    "approval.register.prepareHint":
+      "这会准备一次性的注册承诺和证明并交给网站，由网站自行提交并须支付隐私池手续费。查看密钥和隐私票据永远不会被公开。",
+    "approval.register.simulateAction": "模拟",
+    "approval.register.simulateHint":
+      "这只是为网站模拟激活。不会返回可提交的证明，不发布任何内容，也不产生任何费用。",
+    "approval.register.simulateTitle": "模拟隐私余额激活",
     "approval.register.title": "激活隐私余额",
     "approval.screen.eyebrow": "钱包确认",
     "approval.screen.later": "稍后在“活动”中审核",

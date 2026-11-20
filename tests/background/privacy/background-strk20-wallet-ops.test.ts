@@ -14,7 +14,7 @@ import {
   type ActivityStatus,
   memoryActivityLog,
 } from "@bramble/transactions/activity";
-import { canonicalFelt } from "@bramble/wallet-model/networks";
+import { addressText, canonicalFelt } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import { readStrk20WalletExecuteInput } from "../../../apps/extension/src/background/privacy/strk20-wallet-inputs";
 import { STRK20_REGISTRATION_SUMMARY } from "../../../apps/extension/src/background/privacy/strk20-wallet-ops";
@@ -397,7 +397,7 @@ describe("background wallet STRK20 operations", () => {
 
     expect(prepared.strk20Preparation.recipient).toBe(CANONICAL_RECIPIENT);
     expect(prepared.strk20Preparation.summaries[0]).toBe(
-      `Shield 1.5 ETH into ${CANONICAL_RECIPIENT}'s private balance`,
+      `Shield 1.5 ETH into ${addressText(CANONICAL_RECIPIENT)}'s private balance`,
     );
     await expect(executeStrk20Preparation(handler, prepared.strk20Preparation.id)).resolves.toEqual(
       { ok: true, transactionHash: "0x222" },

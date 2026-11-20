@@ -111,6 +111,8 @@ export const ERROR_COPY_ZH_B: Readonly<Record<string, string>> = {
   "The operation would leak private information": "此操作会泄露隐私信息",
   "The pinned Ready Multisig 0.2 class isn't declared on this network.":
     "固定的 Ready Multisig 0.2 合约类尚未在此网络上声明。",
+  "The privacy prover can't prove this transaction (unsupported builtin)":
+    "隐私证明器无法证明此交易（不支持的内置函数）",
   "The private transaction may not have gone through. Check Activity before trying again.":
     "隐私交易可能没有成功。重试前先查看活动。",
   "The result is unknown. Check Activity before trying again.": "结果未知。重试前先查看活动。",
@@ -219,6 +221,8 @@ export const ERROR_COPY_ZH_B: Readonly<Record<string, string>> = {
   "This transaction isn't ready to send.": "此交易尚未准备好发送。",
   "This transaction isn't waiting for a signature.": "此交易不在等待签名。",
   "This transaction was already sent.": "此交易已发送。",
+  "This version of Bramble doesn't let you change that feature.":
+    "此版本的 Bramble 不允许更改该功能。",
   "This wallet can't deploy Braavos accounts yet. Deploy it in Braavos first.":
     "此钱包暂时无法部署 Braavos 账户。先在 Braavos 中部署。",
   "This wallet changed while the account was being checked. Search for it again.":

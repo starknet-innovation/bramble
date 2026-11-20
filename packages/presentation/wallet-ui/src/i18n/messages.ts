@@ -30,6 +30,7 @@ import { reviewStepsSendMessages } from "./messages/review-steps-send";
 import { reviewStepsSwapMessages } from "./messages/review-steps-swap";
 import { sendMessages } from "./messages/send";
 import { settingsMessages } from "./messages/settings";
+import { settingsExperimentalMessages } from "./messages/settings-experimental";
 import { shellMessages } from "./messages/shell";
 import { shellScreenMessages } from "./messages/shell-screens";
 import { swapStakingMessages } from "./messages/swap-staking";
@@ -59,6 +60,7 @@ export const UI_AREA_CATALOGS = {
   "review-steps-swap": reviewStepsSwapMessages,
   send: sendMessages,
   settings: settingsMessages,
+  "settings-experimental": settingsExperimentalMessages,
   "shell-screens": shellScreenMessages,
   shell: shellMessages,
   "swap-staking": swapStakingMessages,
@@ -85,6 +87,7 @@ const en = {
   ...reviewStepsSwapMessages.en,
   ...sendMessages.en,
   ...settingsMessages.en,
+  ...settingsExperimentalMessages.en,
   ...shellScreenMessages.en,
   ...shellMessages.en,
   ...swapStakingMessages.en,
@@ -114,6 +117,7 @@ export const uiCatalogs = {
     ...reviewStepsSwapMessages["zh-Hans"],
     ...sendMessages["zh-Hans"],
     ...settingsMessages["zh-Hans"],
+    ...settingsExperimentalMessages["zh-Hans"],
     ...shellScreenMessages["zh-Hans"],
     ...shellMessages["zh-Hans"],
     ...swapStakingMessages["zh-Hans"],

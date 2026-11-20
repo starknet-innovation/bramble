@@ -1,5 +1,7 @@
 /** Linear exact-review binding for stable Argent multisig creation. */
 import {
+  addressLabel,
+  addressText,
   explorerTransactionUrl,
   isNonZeroStarkFieldElement,
   normalizeFeltInput,
@@ -17,7 +19,6 @@ import {
   renderFragment,
   showToast,
 } from "../../shared/dom";
-import { accountLabel } from "../../shared/parts";
 import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import type { SendIntent } from "../send/send-model";
 import {
@@ -251,9 +252,9 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       if (!row || !name || !label || !remove || !copy) return t("multisig.deploy.noSetup");
       row.dataset["signerPublicKey"] = publicKey;
       name.textContent = participant.label;
-      label.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · ${t("multisig.participant.key", { key: accountLabel(publicKey) })}`;
+      label.textContent = `${participant.source}${participant.address ? ` · ${addressLabel(participant.address)}` : ""} · ${t("multisig.participant.key", { key: addressLabel(publicKey) })}`;
       remove.dataset["removeSignerPublicKey"] = publicKey;
-      copy.dataset["copy"] = participant.address ?? "";
+      copy.dataset["copy"] = addressText(participant.address ?? "");
       copy.hidden = !participant.address;
       signerList.append(fragment);
       // Cloned after the shell bound its copy controls, so bind this one here.

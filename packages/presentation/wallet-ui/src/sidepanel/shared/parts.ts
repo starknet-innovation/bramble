@@ -4,7 +4,6 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences";
-import { shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState, pill } from "@bramble/ui-kit/content";
 import { iconButton } from "@bramble/ui-kit/controls";
 import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
@@ -41,6 +40,7 @@ export const WALLET_VIEWS = [
   "backup-export",
   "backup-restore",
   "connected-sites",
+  "experimental-features",
   "appearance",
   "language",
   "request-settings",
@@ -110,11 +110,6 @@ export const DOCK_VIEWS: readonly WalletView[] = ["home", "activity", "settings"
  */
 export const isWalletView = (value: unknown): value is WalletView =>
   typeof value === "string" && WALLET_VIEWS.some((view) => view === value);
-
-/**
- * Truncates a Starknet address for display.
- */
-export const accountLabel = (address: string): string => shortAddress(address);
 
 /**
  * The address half of a `<network>:<address>` account id, for surfaces that

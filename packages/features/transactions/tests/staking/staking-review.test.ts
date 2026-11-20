@@ -41,7 +41,7 @@ describe("stakingReviewSentence", () => {
     const elsewhere = member("0x0000beef00000000000000000000000000000000000000000000000000000001");
     expect(
       stakingReviewSentence({ ...base, action: "claim", amount: null, member: elsewhere }),
-    ).toBe("Claim your STRK rewards from Val. Rewards are paid to 0xbeef…0001, not this account.");
+    ).toBe("Claim your STRK rewards from Val. Rewards are paid to 0x0000…0001, not this account.");
     expect(stakingReviewSentence({ ...base, action: "stake", member: elsewhere })).toContain(
       "not this account.",
     );

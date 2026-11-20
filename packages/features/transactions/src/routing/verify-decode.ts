@@ -12,7 +12,13 @@
 
 import { formatTokenAmount } from "@bramble/starknet/rpc";
 import { AVNU_MULTI_ROUTE_SWAP, decodeAvnuRoute } from "@bramble/wallet-model/avnu-route";
-import { asFelt, canonicalFelt, sameFelt, uint256Felts } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  asFelt,
+  canonicalFelt,
+  sameFelt,
+  uint256Felts,
+} from "@bramble/wallet-model/networks";
 import type { TokenConfig } from "@bramble/wallet-model/preferences";
 import type { Call } from "starknet";
 import { type ReviewText, reviewEnglish, reviewText, withReviewText } from "./review-messages";
@@ -78,12 +84,6 @@ export {
   type VerificationContext,
   verificationContext,
 } from "./verification-context";
-
-/**
- * Abbreviates an address for display as `0x1234…abcd`.
- */
-export const shortAddress = (address: string): string =>
-  `${address.slice(0, 6)}…${address.slice(-4)}`;
 
 /**
  * Display-oriented canonicalization: an unparseable value passes through
@@ -166,7 +166,7 @@ const decodeTransferFromCall: CallDecoder = (call, calldata, context) => {
     return null;
   }
   const token = tokenFor(context.tokens, call.contractAddress);
-  const to = shortAddress(canonical(recipient));
+  const to = addressLabel(recipient);
   // Treated as a transfer so self-send and address-poisoning checks run.
   return decoded(
     call,
@@ -176,7 +176,7 @@ const decodeTransferFromCall: CallDecoder = (call, calldata, context) => {
       : from
         ? reviewText("review.call.sendFrom", {
             amount: amountLabel(amountOrId, token),
-            from: shortAddress(canonical(from)),
+            from: addressLabel(from),
             to,
           })
         : reviewText("review.call.send", { amount: amountLabel(amountOrId, token), to }),
@@ -226,7 +226,7 @@ const decodeSafeTransferCall: CallDecoder = (call, calldata) => {
   if (value === null && !erc721) {
     return null;
   }
-  const to = shortAddress(canonical(recipient));
+  const to = addressLabel(recipient);
   const id = String(tokenId);
   return decoded(
     call,
@@ -266,9 +266,9 @@ const decodeErc1155BatchTransferCall: CallDecoder = (call, calldata) => {
     return null;
   }
   const facts = {
-    collection: shortAddress(canonical(call.contractAddress)),
+    collection: addressLabel(call.contractAddress),
     count: String(count),
-    to: shortAddress(canonical(recipient)),
+    to: addressLabel(recipient),
   };
   return decoded(
     call,
@@ -292,8 +292,8 @@ const decodeOperatorApprovalCall: CallDecoder = (call, calldata) => {
     return null;
   }
   const facts = {
-    collection: shortAddress(canonical(call.contractAddress)),
-    party: shortAddress(canonical(operator)),
+    collection: addressLabel(call.contractAddress),
+    party: addressLabel(operator),
   };
   return decoded(
     call,
@@ -318,7 +318,7 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
     return null;
   }
   const token = tokenFor(context.tokens, call.contractAddress);
-  const party = shortAddress(canonical(counterparty));
+  const party = addressLabel(counterparty);
   if (call.entrypoint === "transfer") {
     return decoded(
       call,
@@ -326,7 +326,7 @@ const decodeTransferOrApproveCall: CallDecoder = (call, calldata, context) => {
       reviewText("review.call.send", { amount: amountLabel(amount, token), to: party }),
     );
   }
-  const contract = shortAddress(canonical(call.contractAddress));
+  const contract = addressLabel(call.contractAddress);
   if (isWatchedNftContract(context, call.contractAddress)) {
     return decoded(
       call,
@@ -363,7 +363,7 @@ const routeAmountLabel = (amount: bigint, tokenAddress: string, context: Verific
     ? amountLabel(amount, token)
     : reviewText("review.amount.unitsOf", {
         amount: String(amount),
-        token: shortAddress(tokenAddress),
+        token: addressLabel(tokenAddress),
       });
 };
 
@@ -384,7 +384,7 @@ const decodeAvnuSwapCall: CallDecoder = (call, calldata, context) => {
   return decoded(
     call,
     "swap",
-    reviewText("review.call.swap", { floor, payee: shortAddress(route.beneficiary), sell }),
+    reviewText("review.call.swap", { floor, payee: addressLabel(route.beneficiary), sell }),
   );
 };
 
@@ -393,7 +393,7 @@ const decodeUnknownCall = (call: Call): DecodedCall =>
     call,
     "unknown",
     reviewText("review.call.unknown", {
-      contract: shortAddress(canonical(call.contractAddress)),
+      contract: addressLabel(call.contractAddress),
       entrypoint: call.entrypoint,
     }),
   );

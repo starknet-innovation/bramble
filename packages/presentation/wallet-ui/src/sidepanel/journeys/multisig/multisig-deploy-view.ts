@@ -6,7 +6,12 @@ import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { selectField, textField } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  addressText,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type {
   ArgentMultisigDeploymentReview,
@@ -18,7 +23,6 @@ import {
   accountAvatar,
   accountDisplayName,
   accountFamilyName,
-  accountLabel,
   copyButton,
   flowHeader,
   flowScreen,
@@ -93,10 +97,10 @@ export const deploymentFundingStage = (
     </div>
     <p class="hint">${th("multisig.fund.sendAtLeast", { minimum: deploymentFundingMinimumText(review) })}</p>
     <div class="multisig-funding-address">
-      <div class="qr-card">${qrSvg(review.address, t("multisig.fund.qrLabel"))}</div>
+      <div class="qr-card">${qrSvg(addressText(review.address), t("multisig.fund.qrLabel"))}</div>
       <div class="address-line">
-        <code title="${escapeHtml(review.address)}">${escapeHtml(accountLabel(review.address))}</code>
-        ${iconButton({ attributes: { "data-copy": review.address }, icon: "copy", label: t("multisig.fund.copyAddress") })}
+        <code title="${escapeHtml(addressText(review.address))}">${escapeHtml(addressLabel(review.address))}</code>
+        ${iconButton({ attributes: { "data-copy": addressText(review.address) }, icon: "copy", label: t("multisig.fund.copyAddress") })}
       </div>
     </div>
     ${button({
@@ -121,8 +125,8 @@ export const deploymentReviewMarkup = (review: ArgentMultisigDeploymentReview): 
   )}
     <div class="multisig-deployment-target" aria-label="${th("review.multisig.deploy.predictedLabel")}">
       <span>${th("review.multisig.deploy.predicted")}</span>
-      <code title="${escapeHtml(review.address)}">${escapeHtml(accountLabel(review.address))}</code>
-      ${copyButton(review.address, t("review.multisig.deploy.copyPredicted"))}
+      <code title="${escapeHtml(addressText(review.address))}">${escapeHtml(addressLabel(review.address))}</code>
+      ${copyButton(addressText(review.address), t("review.multisig.deploy.copyPredicted"))}
     </div>
     ${reviewPanel([], t("review.multisig.deploy.consequence"))}
     ${reviewCostNote(t("review.multisig.deploy.maxFee", { fee: formatFeeEstimate(review.fee) }))}
@@ -133,7 +137,7 @@ export const deploymentReviewMarkup = (review: ArgentMultisigDeploymentReview): 
       </summary>
       <div class="disclosure-body">
         <dl class="request-detail">
-          <div><dt>${th("review.multisig.deploy.address")}</dt><dd><code>${escapeHtml(review.address)}</code>${copyButton(review.address, t("review.multisig.deploy.copyAddress"))}</dd></div>
+          <div><dt>${th("review.multisig.deploy.address")}</dt><dd><code>${escapeHtml(addressText(review.address))}</code>${copyButton(addressText(review.address), t("review.multisig.deploy.copyAddress"))}</dd></div>
           <div><dt>${th("review.multisig.deploy.contract")}</dt><dd>Ready Multisig ${ARGENT_MULTISIG_CONTRACT.version}</dd></div>
           <div><dt>${th("review.multisig.deploy.classHash")}</dt><dd><code>${escapeHtml(ARGENT_MULTISIG_CONTRACT.classHash)}</code>${copyButton(ARGENT_MULTISIG_CONTRACT.classHash, t("review.multisig.deploy.copyClassHash"))}</dd></div>
           <div><dt>${th("review.multisig.deploy.network")}</dt><dd><code>${escapeHtml(review.networkId)}</code></dd></div>
@@ -163,8 +167,8 @@ export const deploymentSubmittedMarkup = (
                 <div><p class="context-label">${th("multisig.deployed.submitted")}</p><h2>${th("multisig.deployed.inProgress")}</h2></div>
                 <p>${th("multisig.deployed.saved")}</p>
                 <dl class="request-detail">
-                  <div><dt>${th("multisig.signers.address")}</dt><dd><code>${escapeHtml(accountLabel(result.address))}</code>${copyButton(result.address, t("multisig.signers.copyAddress"))}</dd></div>
-                  <div><dt>${th("multisig.deployed.transaction")}</dt><dd><code>${escapeHtml(accountLabel(result.transactionHash))}</code>${copyButton(result.transactionHash, t("multisig.deployed.copyHash"))}</dd></div>
+                  <div><dt>${th("multisig.signers.address")}</dt><dd><code>${escapeHtml(addressLabel(result.address))}</code>${copyButton(addressText(result.address), t("multisig.signers.copyAddress"))}</dd></div>
+                  <div><dt>${th("multisig.deployed.transaction")}</dt><dd><code>${escapeHtml(addressLabel(result.transactionHash))}</code>${copyButton(result.transactionHash, t("multisig.deployed.copyHash"))}</dd></div>
                 </dl>
                 <div class="multisig-deployment-success-actions">
                   ${button({ attributes: { "data-open-deployed-multisig": result.multisig.record.id }, label: t("multisig.deployed.open") })}
@@ -176,7 +180,7 @@ const deploymentSignerCopy = (
   account: AccountRef,
   preferences: WalletPreferences | null,
 ): string => `<span class="option-name"><strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>${hardwareBadge(account)}</span>
-    <code>${escapeHtml(accountLabel(account.address))}</code>
+    <code>${escapeHtml(addressLabel(account.address))}</code>
     <span class="option-sub">${escapeHtml(accountFamilyName(account.accountContractType))} · ${th("multisig.deploy.keyMatches")}</span>`;
 
 const deploymentSignerIdentity = (
@@ -222,7 +226,7 @@ const signerKeySources = (
       })) ?? []),
     ...deploymentKeys.map((publicKeyX) => ({
       address: publicKeyX,
-      label: t("multisig.participant.signerLabel", { key: accountLabel(publicKeyX) }),
+      label: t("multisig.participant.signerLabel", { key: addressLabel(publicKeyX) }),
       publicKeyX,
       source: t("multisig.participant.deploymentSetup"),
     })),
@@ -242,7 +246,7 @@ const selectedSignerRow = (
     <span class="option-avatar">${accountAvatar(source.address)}</span>
     <span class="option-copy">
       <strong>${escapeHtml(source.label)}</strong>
-      <span class="option-sub" title="${escapeHtml(source.publicKeyX)}">${escapeHtml(source.source)} · ${th("multisig.participant.key", { key: accountLabel(source.publicKeyX) })}</span>
+      <span class="option-sub" title="${escapeHtml(source.publicKeyX)}">${escapeHtml(source.source)} · ${th("multisig.participant.key", { key: addressLabel(source.publicKeyX) })}</span>
     </span>
     ${inlineCopyButton(source.publicKeyX, t("multisig.signers.copyKey", { name: source.label }))}
     ${iconButton({

@@ -18,16 +18,10 @@ import { ALLOWANCE_LIMITS } from "@bramble/transactions/allowance-store";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { AllowanceListing, WalletStatus } from "../../../popup/responses/responses";
-import {
-  accountLabel,
-  contextHelp,
-  flowHeader,
-  flowScreen,
-  inlineCopyButton,
-} from "../../shared/parts";
+import { contextHelp, flowHeader, flowScreen, inlineCopyButton } from "../../shared/parts";
 import { compactAmount } from "./token-row";
 
 // An allowance is stored in the token's base units — the second felt of the
@@ -116,8 +110,8 @@ const sourceLabel = (source: AllowanceView["source"]): string =>
 const allowanceRow = (allowance: AllowanceView, token: TokenConfig | null): string => `
   <li class="allowance-row">
     <div class="allowance-copy">
-      <span class="allowance-spender"><code title="${escapeHtml(allowance.spender)}">${escapeHtml(accountLabel(allowance.spender))}</code>${inlineCopyButton(allowance.spender, t("portfolio.allowance.copySpender"))}</span>
-      <p class="hint"><span class="allowance-amount" title="${escapeHtml(allowance.token)}">${escapeHtml(amountLabel(allowance, token))}</span>${token ? "" : ` ${th("portfolio.allowance.of")} <span title="${escapeHtml(allowance.token)}">${escapeHtml(accountLabel(allowance.token))}</span>`} · ${escapeHtml(sourceLabel(allowance.source))}${inlineCopyButton(allowance.token, t("portfolio.activity.copyTokenContract"))}</p>
+      <span class="allowance-spender"><code title="${escapeHtml(addressText(allowance.spender))}">${escapeHtml(addressLabel(allowance.spender))}</code>${inlineCopyButton(addressText(allowance.spender), t("portfolio.allowance.copySpender"))}</span>
+      <p class="hint"><span class="allowance-amount" title="${escapeHtml(addressText(allowance.token))}">${escapeHtml(amountLabel(allowance, token))}</span>${token ? "" : ` ${th("portfolio.allowance.of")} <span title="${escapeHtml(addressText(allowance.token))}">${escapeHtml(addressLabel(allowance.token))}</span>`} · ${escapeHtml(sourceLabel(allowance.source))}${inlineCopyButton(addressText(allowance.token), t("portfolio.activity.copyTokenContract"))}</p>
       ${allowance.unconfirmedToken ? `<p class="hint">${escapeHtml(unconfirmedTokenNote())}</p>` : ""}
       ${allowance.revoking ? `<p class="hint">${th("portfolio.allowance.revoking")}</p>` : ""}
       <p class="allowance-review" data-allowance-review-for="${escapeHtml(allowance.id)}" role="status" hidden></p>

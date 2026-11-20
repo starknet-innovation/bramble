@@ -23,7 +23,7 @@ import {
 } from "@bramble/privacy/service";
 import { sponsoredShieldText } from "@bramble/privacy/sponsored-shield";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressText, sameFelt } from "@bramble/wallet-model/networks";
 import { isStrk20Felt } from "@bramble/wallet-protocol/strk20";
 import { runNestedGatewayAnalyticsService } from "../analytics/gateway-analytics";
 import { createApprovalContext } from "../approvals/approval-context";
@@ -110,7 +110,7 @@ const depositSummaries = (input: {
       : input.toSelf
         ? strk20Text("strk20Review.wallet.shield", { value: input.value })
         : strk20Text("strk20Review.wallet.shieldTo", {
-            recipient: input.recipient,
+            recipient: addressText(input.recipient),
             value: input.value,
           }),
     ...(input.activate ? [strk20Text("strk20Review.wallet.registerPublic")] : []),

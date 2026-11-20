@@ -24,7 +24,7 @@ import {
 import { normalizeAccountGroups } from "./groups";
 import { selectedMultisigPreference, withAccountHidden } from "./preferences-accounts";
 import { CONTACT_KEYS_CHANGED, contactKeysChange } from "./preferences-contacts";
-import { displayFlags, isValidDisplayInput } from "./preferences-display";
+import { displayFlags, isValidDisplayInput, readyKeyNoticeDismissal } from "./preferences-display";
 import { withExplorerSettings } from "./preferences-explorer";
 import {
   withAccountInGroup,
@@ -316,6 +316,7 @@ export const createPreferencesStore = ({
             : { displayCurrency: input.displayCurrency }),
           ...displayFlags(input),
           ...(input.language === undefined ? {} : { language: input.language }),
+          ...readyKeyNoticeDismissal(preferences, input),
           ...(input.theme === undefined ? {} : { theme: input.theme }),
         };
         await writePreferences(store, next);

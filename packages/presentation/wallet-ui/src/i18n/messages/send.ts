@@ -49,6 +49,7 @@ const en = {
   "send.failure.copyError": "Copy error details",
   "send.failure.edit": "Edit transaction",
   "send.failure.notSent": "The transaction was not sent. Your balance is unchanged.",
+  "send.failure.notSentReason": "The transaction was not sent. {reason}",
   "send.failure.sentReason":
     "The transaction was sent but did not complete. Check its status in Activity.",
   "send.failure.title.notSent": "Transaction not sent",
@@ -206,6 +207,7 @@ export const sendMessages = {
     "send.failure.copyError": "复制错误详情",
     "send.failure.edit": "编辑交易",
     "send.failure.notSent": "交易未发送。你的余额没有变化。",
+    "send.failure.notSentReason": "交易未发送。{reason}",
     "send.failure.sentReason": "交易已发送但未完成。在活动中查看其状态。",
     "send.failure.title.notSent": "交易未发送",
     "send.failure.title.sentFailed": "交易失败",

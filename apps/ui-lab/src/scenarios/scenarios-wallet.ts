@@ -300,6 +300,22 @@ export const portfolioScenario: WalletScenario = {
       content: () =>
         walletDashboard({
           balanceState: { balances: journeyBalances },
+          changes: journeyChanges,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+          signability: { preFixReadyKey: true, readOnly: false },
+        }),
+      id: "ready-key-notice",
+      label: "Ready key from an older release",
+      narrative:
+        "A Ready account restored before Krusty 3.0 holds a key its phrase no longer finds. Home says so once, offers Move funds before the key backup, and can be dismissed for this account.",
+      prepare: bindFixtureHome,
+      state: { notice: "ready-key", signability: "pre-fix Ready key" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
           preferences: journeyPreferences,
           priceStale: true,
           prices: {},

@@ -53,6 +53,11 @@ export type KmsPort = {
     mnemonic: string,
     addressIndex: number,
   ) => Promise<StarkXOnlyKeypair>;
+  /**
+   * Ready's ETH-seeded public key only, for checks that must never hold a
+   * private key (e.g. spotting accounts a pre-3.0 Krusty derived differently).
+   */
+  readonly deriveArgentLegacyPublicKey: (mnemonic: string, addressIndex: number) => Promise<string>;
   readonly deriveStarknetKeypair: (
     mnemonic: string,
     addressIndex: number,

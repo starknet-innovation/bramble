@@ -8,6 +8,7 @@
  * fact?" (docs/COPY_STYLE.md), never shortened for length.
  */
 import type { MessageRef } from "@bramble/core/i18n";
+import { addressText } from "@bramble/wallet-model/networks";
 import { strk20English, strk20Text } from "./review-messages";
 
 /** What runs, through which shadow account, for which site. Issue wording. */
@@ -20,7 +21,7 @@ export const shadowInvokeRunsText = (calls: number, nonce: string, origin: strin
 
 /** The configured anonymizer the calls run through. Mirrors "Privacy pool <address>". */
 export const shadowInvokeAnonymizerText = (address: string): MessageRef =>
-  strk20Text("strk20Review.shadow.anonymizer", { address });
+  strk20Text("strk20Review.shadow.anonymizer", { address: addressText(address) });
 
 /** The tokens the invoke settles back into private notes. Issue wording. */
 export const shadowInvokeSettlesText = (tokens: string): MessageRef =>
@@ -31,7 +32,7 @@ export const shadowInvokeSettlesText = (tokens: string): MessageRef =>
  * this account. Mirrors "Transfer … privately to <address>".
  */
 export const shadowInvokeSettlesToText = (tokens: string, recipient: string): MessageRef =>
-  strk20Text("strk20Review.shadow.settlesTo", { recipient, tokens });
+  strk20Text("strk20Review.shadow.settlesTo", { recipient: addressText(recipient), tokens });
 
 /**
  * `collect_policy: all` with an OPEN note for someone other than this account:
@@ -39,7 +40,10 @@ export const shadowInvokeSettlesToText = (tokens: string, recipient: string): Me
  * what earlier calls left behind.
  */
 export const shadowInvokeCollectsAllToText = (tokens: string, recipient: string): MessageRef =>
-  strk20Text("strk20Review.shadow.collectsAllTo", { recipient, tokens });
+  strk20Text("strk20Review.shadow.collectsAllTo", {
+    recipient: addressText(recipient),
+    tokens,
+  });
 
 /** No OPEN transfer in the batch: nothing returns to the private balance. Issue wording, negated. */
 export const SHADOW_INVOKE_SETTLES_NOTHING_TEXT: MessageRef = strk20Text(

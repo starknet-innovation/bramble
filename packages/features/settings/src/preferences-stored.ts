@@ -38,6 +38,7 @@ import {
   isHiddenAccountIds,
   isHiddenTokens,
   isLanguagePreference,
+  isReadyKeyNoticeDismissals,
   isRpcOverrides,
   isThemeChoice,
   isTokenConfig,
@@ -71,6 +72,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "nfts",
   "nostrRelayUrl",
   "productAnalytics",
+  "readyKeyNoticeDismissedIds",
   "removedTokens",
   "selectedMultisigId",
   "rpcOverrides",
@@ -111,6 +113,8 @@ const hasValidDisplayEntries = (value: Record<string, unknown>): boolean =>
   (value["nostrRelayUrl"] === undefined || isNostrRelayUrl(value["nostrRelayUrl"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["vipNotice"] === undefined || typeof value["vipNotice"] === "boolean") &&
+  (value["readyKeyNoticeDismissedIds"] === undefined ||
+    isReadyKeyNoticeDismissals(value["readyKeyNoticeDismissedIds"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
 const hasValidGeneralOptionalEntries = (value: Record<string, unknown>): boolean =>
   hasValidIdKeyedEntries(value) && hasValidDisplayEntries(value);

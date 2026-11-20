@@ -22,6 +22,7 @@ import {
 } from "@bramble/privacy/service";
 import { parseTokenAmount } from "@bramble/starknet/rpc";
 import {
+  addressText,
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
@@ -142,7 +143,7 @@ const transferPreparation = async (
       ...strk20Lines([
         strk20Text("strk20Review.wallet.send", {
           amount: input.amount,
-          recipient,
+          recipient: addressText(recipient),
           symbol: context.token.symbol,
         }),
         strk20PlanText(plan, strk20FeeAssetFor(context.accountContext.account.networkId, plan)),
@@ -229,7 +230,7 @@ const withdrawPreparation = async (
             })
           : strk20Text("strk20Review.wallet.unshieldTo", {
               amount: input.amount,
-              recipient,
+              recipient: addressText(recipient),
               symbol: context.token.symbol,
             }),
         strk20PlanText(plan, strk20FeeAssetFor(context.accountContext.account.networkId, plan)),

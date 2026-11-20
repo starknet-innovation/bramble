@@ -52,6 +52,10 @@ const en = {
   "strk20Review.register.pool": "Privacy pool {address}",
   "strk20Review.register.poolFee": "Approve and pay the reviewed {fee} pool fee",
   "strk20Review.register.preflightToken": "Registration preflight token {token}",
+  "strk20Review.register.prepare": "Prepare private-balance activation for this site to submit",
+  "strk20Review.register.simulate":
+    "Simulate private-balance activation for this site (no submittable proof)",
+  "strk20Review.register.siteSubmits": "The site submits it and must cover the pool fee",
   "strk20Review.shadow.anonymizer": "Shadow account anonymizer {address}",
   "strk20Review.shadow.collectsAllTo":
     "This shadow account's whole {tokens} balance goes to {recipient}",
@@ -132,6 +136,9 @@ export const strk20ReviewMessages = {
     "strk20Review.register.pool": "隐私池 {address}",
     "strk20Review.register.poolFee": "批准并支付已审核的 {fee} 隐私池手续费",
     "strk20Review.register.preflightToken": "注册预检代币 {token}",
+    "strk20Review.register.prepare": "准备激活隐私余额，供此网站提交",
+    "strk20Review.register.simulate": "为此网站模拟激活隐私余额（不生成可提交的证明）",
+    "strk20Review.register.siteSubmits": "由网站提交，并须支付隐私池手续费",
     "strk20Review.shadow.anonymizer": "影子账户匿名器 {address}",
     "strk20Review.shadow.collectsAllTo": "此影子账户的全部 {tokens} 余额都归 {recipient}",
     "strk20Review.shadow.control":

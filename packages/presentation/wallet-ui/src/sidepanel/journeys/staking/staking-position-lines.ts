@@ -3,8 +3,9 @@
  * screen and "Your stakes". Every figure is a background string from an
  * on-chain read; every line is escaped.
  */
+
 import { escapeHtml } from "@bramble/core/html";
-import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { t } from "../../../i18n/messages";
 import { formatUtcClock, formatUtcDate } from "../../shared/timestamp";
 import { compactAmount } from "../portfolio/token-row";
@@ -37,9 +38,7 @@ export const positionLines = (row: StakingRow, tag: "p" | "span" = "p"): string 
     );
   }
   if (row.rewardsTo) {
-    lines.push(
-      t("staking.position.rewardsTo", { address: shortAddress(canonical(row.rewardsTo)) }),
-    );
+    lines.push(t("staking.position.rewardsTo", { address: addressLabel(row.rewardsTo) }));
   }
   if (row.state === "exit-pending" && row.unpoolTime !== undefined) {
     lines.push(

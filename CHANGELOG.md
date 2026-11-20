@@ -11,6 +11,11 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+### Changed
+- Every address keeps its 64-digit padding on every screen, shortened as
+  `0x05e1…f2e4` or shown in full, including review and signing lines, copy
+  buttons and QR codes (#884).
+
 ## [0.10.10] - Unreleased
 
 Quick fixes from the v0.10.9 review: the validator list on Mainnet, the Home

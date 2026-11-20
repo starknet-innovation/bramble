@@ -6,6 +6,7 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
+import { addressText } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { PendingApproval } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -19,7 +20,7 @@ const exactCalldata = (calldata: readonly string[]): string =>
 // An exact address in the technical details, printed in full and copyable so
 // the user can check it against an explorer or the dapp's own docs.
 const exactAddress = (address: string, label: string): string =>
-  `<code>${escapeHtml(address)}</code>${inlineCopyButton(address, label)}`;
+  `<code>${escapeHtml(addressText(address))}</code>${inlineCopyButton(addressText(address), label)}`;
 
 /**
  * The "Exact call parameters" disclosure for an invoke approval: every call's

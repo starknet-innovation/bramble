@@ -5,11 +5,11 @@
 
 import { escapeHtml } from "@bramble/core/html";
 import { type SpamReason, tokenSpamReasons } from "@bramble/portfolio/token-registry";
-import { STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import { reviewLines } from "../../../i18n/review";
 import type { PendingApproval } from "../../../popup/responses/responses";
-import { accountLabel, inlineCopyButton } from "../../shared/parts";
+import { inlineCopyButton } from "../../shared/parts";
 import { reviewConstraints, reviewOutcome, reviewPanel } from "../../shared/review-render";
 import { tokenGlyph } from "../portfolio/token-row";
 import { decisionRow, denyButton, requestIdentity } from "./approval-card-parts";
@@ -35,7 +35,7 @@ const watchAssetTrackedCard = (
   <li class="request-card" data-approval-notice>
     <div class="request-copy">
       ${requestIdentity(approval.origin, t("detail.watch.title"))}
-      <dl class="request-detail"><div><dt>${th("detail.params.token")}</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>${th("detail.watch.address")}</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, t("detail.watch.copyToken"))}</dd></div></dl>
+      <dl class="request-detail"><div><dt>${th("detail.params.token")}</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>${th("detail.watch.address")}</dt><dd><code title="${escapeHtml(addressText(token.address))}">${escapeHtml(addressLabel(token.address))}</code>${inlineCopyButton(addressText(token.address), t("detail.watch.copyToken"))}</dd></div></dl>
       <p>${th("detail.watch.alreadyTracked")}</p>
     </div>
     <div class="button-row">${denyButton(approval, t("approval.card.close"))}</div>
@@ -54,7 +54,7 @@ const watchNftCard = (
   <li class="request-card"${preview ? "" : " data-approval-notice"}>
     <div class="request-copy">
       ${requestIdentity(approval.origin, t("detail.watch.nftTitle"))}
-      <dl class="request-detail"><div><dt>${th("detail.params.contract")}</dt><dd><code>${escapeHtml(nft.contract)}</code>${inlineCopyButton(nft.contract, t("detail.watch.copyContract"))}</dd></div><div><dt>${th("detail.watch.tokenId")}</dt><dd><code>${escapeHtml(nft.tokenId)}</code></dd></div><div><dt>${th("approval.context.network")}</dt><dd>${escapeHtml(STARKNET_NETWORKS[nft.networkId].name)}</dd></div></dl>
+      <dl class="request-detail"><div><dt>${th("detail.params.contract")}</dt><dd><code>${escapeHtml(addressText(nft.contract))}</code>${inlineCopyButton(addressText(nft.contract), t("detail.watch.copyContract"))}</dd></div><div><dt>${th("detail.watch.tokenId")}</dt><dd><code>${escapeHtml(nft.tokenId)}</code></dd></div><div><dt>${th("approval.context.network")}</dt><dd>${escapeHtml(STARKNET_NETWORKS[nft.networkId].name)}</dd></div></dl>
       ${
         preview
           ? reviewOutcome(t("detail.watch.nftOutcome"))
@@ -89,7 +89,7 @@ export const watchAssetCard = (approval: PendingApproval, preview = false): stri
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, t("detail.watch.title"))}
-      <dl class="request-detail"><div><dt>${th("detail.params.token")}</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>${th("detail.watch.name")}</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>${th("detail.watch.address")}</dt><dd><code title="${escapeHtml(token.address)}">${escapeHtml(accountLabel(token.address))}</code>${inlineCopyButton(token.address, t("detail.watch.copyToken"))}</dd></div></dl>
+      <dl class="request-detail"><div><dt>${th("detail.params.token")}</dt><dd class="request-token">${tokenGlyph(token.address, token.symbol)}<strong>${escapeHtml(token.symbol)}</strong></dd></div><div><dt>${th("detail.watch.name")}</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>${th("detail.watch.address")}</dt><dd><code title="${escapeHtml(addressText(token.address))}">${escapeHtml(addressLabel(token.address))}</code>${inlineCopyButton(addressText(token.address), t("detail.watch.copyToken"))}</dd></div></dl>
       ${reviewOutcome(t("detail.watch.outcome"))}
     </div>
     ${reviewPanel([...watchAssetWarnings(token), ...reviewLines(approval.insights ?? [], approval.insightTexts)])}

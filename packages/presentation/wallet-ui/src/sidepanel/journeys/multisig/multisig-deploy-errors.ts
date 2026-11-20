@@ -1,7 +1,7 @@
 /** User-facing recovery copy for Argent multisig deployment failures. */
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { t } from "../../../i18n/messages";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
-import { accountLabel } from "../../shared/parts";
 import { FEE_FUNDING_SHORTFALL } from "../../shell/deploy-errors";
 import { deploymentFundingMinimumText } from "./multisig-deploy-view";
 
@@ -33,7 +33,7 @@ export const deploymentFailureToast = (
   }
   if (FEE_FUNDING_SHORTFALL.test(raw)) {
     return t("multisig.deploy.fundAtLeast", {
-      address: accountLabel(review.address),
+      address: addressLabel(review.address),
       minimum: deploymentFundingMinimumText(review),
     });
   }

@@ -13,9 +13,9 @@
 import { escapeHtml } from "@bramble/core/html";
 import type { TokenConfig } from "@bramble/settings/preferences";
 import { formatTokenAmount, parseTokenAmount } from "@bramble/starknet/rpc";
-import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t, th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
@@ -47,7 +47,7 @@ export const stakingPositionCard = (
     <button class="staking-card" type="button" ${attribute}="${escapeHtml(row.staker)}">
       <span class="allowance-copy staking-copy">
         <strong>${escapeHtml(name ?? t("staking.validator.name"))}</strong>
-        <code>${escapeHtml(shortAddress(canonical(row.staker)))}</code>
+        <code>${escapeHtml(addressLabel(row.staker))}</code>
         ${positionLines(row, "span")}
       </span>
       <span class="disclosure-mark" aria-hidden="true">${icon("chevronRight")}</span>

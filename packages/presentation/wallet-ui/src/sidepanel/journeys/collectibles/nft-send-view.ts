@@ -11,10 +11,11 @@ import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { DiscoveredNft, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
+import { flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
 import { nftImageMarkup, selectedNftDetail } from "./nft-views";
 
 /**
@@ -57,12 +58,12 @@ export const nftSendFlow = (
           { label: t("review.nft.nft"), value: nft.title },
           {
             action: {
-              attributes: { "data-copy": nft.contract },
+              attributes: { "data-copy": addressText(nft.contract) },
               icon: "copy",
               label: t("review.nft.copyCollection"),
             },
             label: t("review.nft.collection"),
-            value: nft.collection || accountLabel(nft.contract),
+            value: nft.collection || addressLabel(nft.contract),
           },
           { label: t("review.nft.tokenId"), value: nft.tokenId, valueStyle: "code" },
         ])}
@@ -96,7 +97,7 @@ export const nftSendFlow = (
                           attributes: { "data-nft-recipient": contact.address },
                           icon: "user",
                           label: contact.label,
-                          supportingText: accountLabel(contact.address),
+                          supportingText: addressLabel(contact.address),
                         }),
                       )
                       .join("")}

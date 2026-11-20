@@ -1,12 +1,14 @@
 /** Shared account-address surface used by single-owner and multisig Receive. */
+
 import { escapeHtml } from "@bramble/core/html";
 import type { ClassHashVerification } from "@bramble/starknet/class-hash-verify";
 import { button, switchControl } from "@bramble/ui-kit/controls";
 import { icon } from "@bramble/ui-kit/icons";
 import type { StarknetNetworkId } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { walletContactCard } from "@bramble/wallet-model/preferences";
 import { t, th } from "../../../i18n/messages";
-import { accountLabel, copyButton } from "../../shared/parts";
+import { copyButton } from "../../shared/parts";
 import { qrSvg } from "../../shared/qr";
 import { knownAccountType } from "../../shell/account-types";
 import type { PrivacyDisclosureState } from "../privacy/privacy-model";
@@ -113,7 +115,7 @@ const classHashRows = (
   return `<div class="receive-key-row">
       <strong>${th("receive.classHash")}</strong>
       <span class="receive-key-value">
-        <code title="${escapeHtml(classHash)}">${escapeHtml(accountLabel(classHash))}</code>
+        <code title="${escapeHtml(classHash)}">${escapeHtml(addressLabel(classHash))}</code>
         ${copyButton(classHash, t("receive.classHash.copy"))}
       </span>
     </div>
@@ -198,11 +200,11 @@ export const receiveAddressView = ({
   return `
   <div class="stack receive-address-view"${rootData}>
     ${classHash && isMismatch(classHashVerification) ? classHashVerificationBadge(classHashVerification ?? null) : ""}
-    <div class="qr-card" data-receive-qr data-qr-payload="address">${qrSvg(address, RECEIVE_QR_LABELS.address)}</div>
+    <div class="qr-card" data-receive-qr data-qr-payload="address">${qrSvg(addressText(address), RECEIVE_QR_LABELS.address)}</div>
     <div class="receive-intro">
       <h2>${th("receive.title")}</h2>
-      <button class="receive-address-copy" type="button" data-copy="${escapeHtml(address)}" aria-label="${escapeHtml(copyLabel)}" aria-describedby="receive-address-text" title="${escapeHtml(copyLabel)}">
-        <code id="receive-address-text" data-receive-address-text>${escapeHtml(address)}</code>
+      <button class="receive-address-copy" type="button" data-copy="${escapeHtml(addressText(address))}" aria-label="${escapeHtml(copyLabel)}" aria-describedby="receive-address-text" title="${escapeHtml(copyLabel)}">
+        <code id="receive-address-text" data-receive-address-text>${escapeHtml(addressText(address))}</code>
         <span class="receive-address-copy-mark" aria-hidden="true">${icon("copy")}</span>
       </button>
       <p class="hint receive-network-hint">${escapeHtml(hint)}</p>
@@ -235,7 +237,7 @@ export const receiveAddressView = ({
           <div class="receive-key-row">
             <strong>${th("receive.signer.title")}</strong>
             <span class="receive-key-value">
-              <code title="${escapeHtml(publicKeyX)}">${escapeHtml(accountLabel(publicKeyX))}</code>
+              <code title="${escapeHtml(publicKeyX)}">${escapeHtml(addressLabel(publicKeyX))}</code>
               ${copyButton(publicKeyX, t("receive.signer.copy"))}
             </span>
           </div>
@@ -243,7 +245,7 @@ export const receiveAddressView = ({
             <strong>${th("receive.coordination.title")}</strong>
             <span data-nostr-key-status role="status" aria-live="polite"${nostrPublicKey ? " hidden" : ""}>${th("receive.coordination.preparing")}</span>
             <span class="receive-key-value" data-nostr-key-value${nostrPublicKey ? "" : " hidden"}>
-              <code data-nostr-key title="${escapeHtml(nostrPublicKey ?? "")}">${nostrPublicKey ? escapeHtml(accountLabel(nostrPublicKey)) : ""}</code>
+              <code data-nostr-key title="${escapeHtml(nostrPublicKey ?? "")}">${nostrPublicKey ? escapeHtml(addressLabel(nostrPublicKey)) : ""}</code>
               ${copyButton(nostrPublicKey ?? "", t("receive.coordination.copy"))}
             </span>
           </div>

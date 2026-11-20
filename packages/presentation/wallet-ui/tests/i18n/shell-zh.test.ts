@@ -65,7 +65,14 @@ const screens = (): Readonly<Record<string, string>> => ({
   importPhrase: importPhraseFlow(status),
   noAccount: noAccountEmpty(status),
   pending: pendingCallout(2),
-  sites: connectedSitesFlow(status, [{ accountCount: 2, origin: "https://dapp.example" }]),
+  sites: connectedSitesFlow(status, [
+    {
+      accountCount: 2,
+      accountIds: ["SN_MAIN:0x123", "SN_MAIN:0x456"],
+      multisigIds: [],
+      origin: "https://dapp.example",
+    },
+  ]),
   sitesError: connectedSitesFlow(status, "error"),
   tile: shieldTile("SN_MAIN:STRK:0x1", false, false, false),
 });

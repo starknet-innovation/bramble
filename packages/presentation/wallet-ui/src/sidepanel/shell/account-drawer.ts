@@ -23,12 +23,13 @@ import { emptyState, pill } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { t, th } from "../../i18n/messages";
 import type { ArgentMultisigView } from "../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../popup/responses/responses";
 import { icon } from "../shared/icons";
 import { networkDisplayName } from "../shared/network-label";
-import { accountAvatar, accountDisplayName, accountLabel, hardwareBadge } from "../shared/parts";
+import { accountAvatar, accountDisplayName, hardwareBadge } from "../shared/parts";
 import {
   addFolderControl,
   folderSection,
@@ -56,7 +57,7 @@ const drawerMultisigRow = (
       <span class="option-avatar">${accountAvatar(record.address)}</span>
       <span class="drawer-copy">
         <strong>${escapeHtml(record.name ?? t("shell.header.multisigAccount"))}</strong>
-        <code title="${escapeHtml(record.address)}">${escapeHtml(accountLabel(record.address))}</code>
+        <code title="${escapeHtml(addressText(record.address))}">${escapeHtml(addressLabel(record.address))}</code>
         <span class="account-groups-line">${th("shell.drawer.multisig")} · ${authority}${openLabel}</span>
       </span>
       <span class="option-mark">${icon(record.id === selectedId ? "check" : "chevronRight")}</span>
@@ -81,7 +82,7 @@ const drawerAccountRow = (
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
-          <code title="${escapeHtml(stored.address)}">${escapeHtml(accountLabel(stored.address))}</code>
+          <code title="${escapeHtml(addressText(stored.address))}">${escapeHtml(addressLabel(stored.address))}</code>
           ${selectedMultisigSigner ? `<span class="account-groups-line">${th("shell.drawer.signerFor", { name: selectedMultisig?.record.name ?? t("shell.drawer.selectedMultisig") })}</span>` : ""}
         </span>
         ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}

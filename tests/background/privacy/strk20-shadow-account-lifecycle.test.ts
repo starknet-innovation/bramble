@@ -28,7 +28,7 @@ import { SHADOW_INVOKE_CONTROL, SHADOW_INVOKE_SETTLES } from "@bramble/privacy/s
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { activityToCsv, memoryActivityLog } from "@bramble/transactions/activity";
 import type { ShadowAccountScopeRef } from "@bramble/vault/shadow-account-scopes";
-import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { addressText, STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import type { Strk20Action } from "@bramble/wallet-protocol/strk20";
 import type { RpcProvider } from "starknet";
 import { num, shortString } from "starknet";
@@ -254,7 +254,7 @@ describe.skipIf(!sdkBuilt)("shadow account lifecycle against the rc.8 SDK", () =
     expect(card?.summaries).toEqual(
       expect.arrayContaining([
         `Runs 1 call through your shadow account #1 for ${ORIGIN}`,
-        `Shadow account anonymizer ${ANONYMIZER}`,
+        `Shadow account anonymizer ${addressText(ANONYMIZER)}`,
         SHADOW_INVOKE_SETTLES("STRK"),
         SHADOW_INVOKE_CONTROL,
       ]),
@@ -340,7 +340,7 @@ describe.skipIf(!sdkBuilt)("shadow account lifecycle against the rc.8 SDK", () =
     });
     expect(prepared.strk20Preparation.summaries.slice(0, 3)).toEqual([
       `Sweep your shadow account #1 for ${ORIGIN}`,
-      `Shadow account anonymizer ${ANONYMIZER}`,
+      `Shadow account anonymizer ${addressText(ANONYMIZER)}`,
       SHADOW_INVOKE_SETTLES("STRK"),
     ]);
     const executed = await awaitStrk20Job(

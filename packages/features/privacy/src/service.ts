@@ -67,9 +67,6 @@ export {
 
 /** Wallet-API NOT_REGISTERED (118). */
 export const STRK20_NOT_REGISTERED = "account not registered in strk20";
-/**
- * Wallet-API INSUFFICIENT_PRIVATE_BALANCE (119).
- */
 /** Wallet-API PRIVACY_LEAK (120). */
 export const STRK20_PRIVACY_LEAK = "strk20 privacy leak";
 /** No unlinkable broadcast service is configured. */
@@ -189,6 +186,9 @@ export type Strk20Service = {
   readonly prepareRegistration?: (
     input: Strk20AccountContext & { readonly poolFeeFri: string },
   ) => Promise<PreparedStrk20AccountSubmission>;
+  readonly prepareRegistrationCall?: (
+    input: Strk20AccountContext & { readonly simulate: boolean },
+  ) => Promise<Strk20CallAndProof>;
   /** Builds a deposit-only public-account proof and calls without broadcasting. */
   readonly prepareAccountActions?: (
     input: Strk20AccountActionsInput,

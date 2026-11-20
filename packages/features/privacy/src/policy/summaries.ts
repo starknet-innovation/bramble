@@ -2,7 +2,13 @@
 
 import type { MessageRef } from "@bramble/core/i18n";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
-import { DEFAULT_TOKENS, STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  addressText,
+  DEFAULT_TOKENS,
+  STRK_TOKEN_ADDRESS,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import type { Strk20Action, Strk20InvokeCall } from "@bramble/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import { strk20English, strk20Text } from "./review-messages";
@@ -16,9 +22,6 @@ import {
   shadowInvokeSettlesToText,
 } from "./shadow-account-copy";
 import type { Strk20SubmissionPlan } from "./submission-plan";
-
-const shortAddress = (value: string): string =>
-  value.length <= 13 ? value : `${value.slice(0, 8)}…${value.slice(-4)}`;
 
 /**
  * The fee token's display metadata, when the caller knows it. A converted fee
@@ -77,20 +80,20 @@ export const strk20ActionText = (
 ): MessageRef => {
   if (action.type === "deposit") {
     const amount = actionAmount(action.amount, action.token, assetFor);
-    const token = shortAddress(action.token);
+    const token = addressLabel(action.token);
     return action.recipient === undefined || sameFelt(action.recipient, depositor)
       ? strk20Text("strk20Review.action.deposit", { amount, token })
       : strk20Text("strk20Review.action.pay", {
           amount,
-          recipient: shortAddress(action.recipient),
+          recipient: addressLabel(action.recipient),
           token,
         });
   }
   if (action.type === "withdraw") {
     return strk20Text("strk20Review.action.withdraw", {
       amount: actionAmount(action.amount, action.token, assetFor),
-      recipient: shortAddress(action.recipient),
-      token: shortAddress(action.token),
+      recipient: addressLabel(action.recipient),
+      token: addressLabel(action.token),
     });
   }
   if (action.type === "transfer") {
@@ -99,8 +102,8 @@ export const strk20ActionText = (
         action.amount === "OPEN"
           ? strk20Text("strk20Review.amount.openNote")
           : actionAmount(action.amount, action.token, assetFor),
-      recipient: shortAddress(action.recipient),
-      token: shortAddress(action.token),
+      recipient: addressLabel(action.recipient),
+      token: addressLabel(action.token),
     });
   }
   if (action.type === "shadow_account_invoke") {
@@ -109,7 +112,7 @@ export const strk20ActionText = (
       dapp: action.dapp_name,
     });
   }
-  return strk20Text("strk20Review.action.invoke", { contract: shortAddress(action.contract) });
+  return strk20Text("strk20Review.action.invoke", { contract: addressLabel(action.contract) });
 };
 
 /** The English of {@link strk20ActionText}, as review cards have always shown it. */
@@ -155,7 +158,7 @@ const settledTokens = (
       continue;
     }
     const self = sameFelt(action.recipient, depositor);
-    const token = assetFor?.(action.token)?.symbol ?? shortAddress(action.token);
+    const token = assetFor?.(action.token)?.symbol ?? addressLabel(action.token);
     const group = groups.find(
       (candidate) => candidate.self === self && sameFelt(candidate.recipient, action.recipient),
     );
@@ -186,7 +189,7 @@ const settlementLines = (
     if (group.self) {
       return [shadowInvokeSettlesText(tokens)];
     }
-    const recipient = shortAddress(group.recipient);
+    const recipient = addressLabel(group.recipient);
     return [
       shadowInvokeSettlesToText(tokens, recipient),
       ...(action.collect_policy.type === "all"
@@ -285,7 +288,7 @@ export const strk20PlanText = (
     amount ??
     strk20Text("strk20Review.fee.raw", {
       amount: plan.feeAction.amount,
-      token: plan.feeAction.token,
+      token: addressText(plan.feeAction.token),
     });
   const ceiling = plan.feeCeiling ? displayFeeAmount(plan.feeCeiling.ceiling, feeAsset) : null;
   const auth = plan.authorization;
@@ -298,7 +301,7 @@ export const strk20PlanText = (
   const facts = {
     after: auth.executeAfter,
     before: auth.executeBefore,
-    caller: shortAddress(auth.caller),
+    caller: addressLabel(auth.caller),
     count: String(auth.publicCallCount),
     fee,
   };

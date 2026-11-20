@@ -8,15 +8,16 @@
  * wallet call and the resulting DOM/toast feedback are asserted. Mirrors the
  * registerDom harness used by the account-select and deployment-watch suites.
  */
+
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { account, preferences, secondAccount } from "@bramble/testkit/sidepanel";
 import type { ActivityEntry } from "@bramble/transactions/activity";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import type {
   DeploymentStatusResponse,
   WalletStatus,
 } from "../../../src/popup/responses/responses";
 import { outcomeReceiptSection } from "../../../src/sidepanel/shared/outcome-receipt";
-import { accountLabel } from "../../../src/sidepanel/shared/parts";
 import {
   bindDashboard,
   bindDeploy,
@@ -332,7 +333,7 @@ describe("bindDeploy", () => {
     expect(container.querySelector("#deploy-success-description")?.textContent).toContain(
       "can submit transactions",
     );
-    expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(accountLabel(HASH));
+    expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(addressLabel(HASH));
     // The hash links to the explorer of the network the account was deployed on.
     const explorer = container.querySelector("#deploy-success-hash-link");
     expect(explorer?.getAttribute("href")).toBe(`https://starkscan.co/tx/${HASH}`);
@@ -372,7 +373,7 @@ describe("bindDeploy", () => {
       );
       expect(container.querySelector("#deploy-success-description")?.textContent).toBe(reason);
       // The hash stays: it is how the reader finds out why.
-      expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(accountLabel(HASH));
+      expect(container.querySelector("#deploy-success-hash")?.textContent).toBe(addressLabel(HASH));
       expect(receipt?.classList.contains("send-failure")).toBe(true);
       expect(receipt?.classList.contains("send-success")).toBe(false);
       expect(receipt?.querySelector('[data-outcome-mark="failed"]')?.hasAttribute("hidden")).toBe(

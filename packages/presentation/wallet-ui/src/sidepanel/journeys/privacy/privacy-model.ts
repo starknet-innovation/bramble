@@ -9,6 +9,7 @@ import {
   type PrivacyBlockerKind,
 } from "@bramble/wallet-protocol/privacy-blocker";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
+import { t } from "../../../i18n/messages";
 import { friendlyError } from "../../runtime/friendly-error";
 
 // The sentence a service blocker shows when the lane's own reason is plumbing:
@@ -36,6 +37,13 @@ export type PrivacyDisclosureState = {
  * Shield control that cannot shield yet still leads somewhere.
  */
 export type { PrivacyBlockerKind } from "@bramble/wallet-protocol/privacy-blocker";
+
+/**
+ * Inline statement for a network with no privacy pool configured. The answer
+ * is the same on every read until the network changes, so it is shown in place
+ * and never offered as a retry or repeated as a toast (issue 951).
+ */
+export const privacyNetworkUnavailable = (): string => t("privacy.blocked.network.title");
 
 /**
  * A blocker and the display-safe reason behind it. The message is what the

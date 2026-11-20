@@ -195,6 +195,7 @@ type DisplayPreferenceInput = {
   readonly displayCurrency?: "eur" | "gbp" | "usd";
   readonly language?: LanguagePreference;
   readonly productAnalytics?: boolean;
+  readonly readyKeyNoticeDismissed?: string;
   readonly reliabilityDiagnostics?: boolean;
   readonly theme?: "dark" | "light";
   readonly vipNotice?: boolean;
@@ -222,35 +223,40 @@ const hasValidDisplayValues = (
   ) {
     return false;
   }
+  if (
+    message["readyKeyNoticeDismissed"] !== undefined &&
+    !isAccountId(message["readyKeyNoticeDismissed"])
+  ) {
+    return false;
+  }
   return (
     message["theme"] === undefined || message["theme"] === "dark" || message["theme"] === "light"
   );
 };
 
+// A `wallet.setDisplay` message carrying only known keys, each well-formed.
+const isSetDisplayMessage = (
+  message: unknown,
+): message is Record<string, unknown> & DisplayPreferenceInput =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, [
+    "approvalSurface",
+    "collectiblesPreview",
+    "displayCurrency",
+    "language",
+    "productAnalytics",
+    "readyKeyNoticeDismissed",
+    "reliabilityDiagnostics",
+    "theme",
+    "type",
+    "vipNotice",
+  ]) &&
+  message["type"] === "wallet.setDisplay" &&
+  hasValidDisplayValues(message);
+
 /** Parses exact display-preference updates from an untrusted runtime message. */
 export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | null => {
-  if (!isRecord(message)) {
-    return null;
-  }
-  if (
-    !hasOnlyKnownKeys(message, [
-      "approvalSurface",
-      "collectiblesPreview",
-      "displayCurrency",
-      "language",
-      "productAnalytics",
-      "reliabilityDiagnostics",
-      "theme",
-      "type",
-      "vipNotice",
-    ])
-  ) {
-    return null;
-  }
-  if (message["type"] !== "wallet.setDisplay") {
-    return null;
-  }
-  if (!hasValidDisplayValues(message)) {
+  if (!isSetDisplayMessage(message)) {
     return null;
   }
   const approvalSurface = message["approvalSurface"];
@@ -258,6 +264,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
   const displayCurrency = message["displayCurrency"];
   const language = message["language"];
   const productAnalytics = message["productAnalytics"];
+  const readyKeyNoticeDismissed = message["readyKeyNoticeDismissed"];
   const reliabilityDiagnostics = message["reliabilityDiagnostics"];
   const theme = message["theme"];
   const vipNotice = message["vipNotice"];
@@ -267,6 +274,7 @@ export const readSetDisplayInput = (message: unknown): DisplayPreferenceInput | 
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
     ...(language === undefined ? {} : { language }),
     ...(productAnalytics === undefined ? {} : { productAnalytics }),
+    ...(readyKeyNoticeDismissed === undefined ? {} : { readyKeyNoticeDismissed }),
     ...(reliabilityDiagnostics === undefined ? {} : { reliabilityDiagnostics }),
     ...(theme === undefined ? {} : { theme }),
     ...(vipNotice === undefined ? {} : { vipNotice }),

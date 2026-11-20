@@ -10,10 +10,9 @@
 import type { DisplayCurrency, TokenConfig } from "@bramble/settings/preferences";
 import type { ActivityEntry, ActivityStatus } from "@bramble/transactions/activity";
 import type { IconName } from "@bramble/ui-kit/icons";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, sameFelt } from "@bramble/wallet-model/networks";
 import { t, type UiMessageKey } from "../../../i18n/messages";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
-import { accountLabel } from "../../shared/parts";
 import { compactAmount } from "./token-row";
 
 // The verb and kind words are classification keys as well as copy: the
@@ -343,7 +342,7 @@ const activityDetail = (
   hasAmount: boolean,
 ): string | null => {
   if (counterparty) {
-    const address = accountLabel(counterparty.address);
+    const address = addressLabel(counterparty.address);
     return counterparty.role === "sender"
       ? t("portfolio.activity.from", { address })
       : counterparty.role === "recipient"

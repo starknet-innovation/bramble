@@ -8,6 +8,7 @@ import { BRAMBLE_MARK } from "@bramble/ui-kit/brand-mark";
 import { callout } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
+import { icon } from "@bramble/ui-kit/icons";
 import { MIN_VAULT_PASSPHRASE_LENGTH } from "@bramble/wallet-model/passphrase";
 import { t, th } from "../../../i18n/messages";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
@@ -15,6 +16,32 @@ import { recoveryGate } from "./gate-recovery-view";
 import { onboardingWizard } from "./onboarding-views";
 
 const gateBrand = (): string => `<div class="gate-brand">${BRAMBLE_MARK}</div>`;
+
+/**
+ * Guidance for a forgotten password (issue 903). Text only: Bramble never
+ * stores the password, so there is nothing to reset here, and nothing on this
+ * screen removes or replaces the wallet (issues 456 and 715). The way back is a
+ * reinstall and restore, and the list says what a phrase leaves behind.
+ */
+const forgotPassword = (): string => `
+  <details class="disclosure gate-forgot" data-disclosure="unlock-forgot-password">
+    <summary>
+      <span class="menu-copy"><strong>${th("onboarding.forgot.title")}</strong></span>
+      <span class="disclosure-mark">${icon("chevronRight")}</span>
+    </summary>
+    <div class="disclosure-body">
+      <p>${th("onboarding.forgot.noReset")}</p>
+      <p>${th("onboarding.forgot.wayBack")}</p>
+      <p>${th("onboarding.forgot.notRestored")}</p>
+      <ul>
+        <li>${th("onboarding.forgot.importedAccounts")}</li>
+        <li>${th("onboarding.forgot.ledgerAccounts")}</li>
+        <li>${th("onboarding.forgot.contacts")}</li>
+        <li>${th("onboarding.forgot.activity")}</li>
+      </ul>
+      <p><strong>${th("onboarding.forgot.warning")}</strong></p>
+    </div>
+  </details>`;
 
 /**
  * First-run screen: a staged fresh-wallet, recovery-phrase, or Ledger journey.
@@ -83,6 +110,7 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
           label: t("onboarding.unlock.submit"),
           type: "submit",
         })}
+        ${forgotPassword()}
       </div>
     </form>
   </section>`;

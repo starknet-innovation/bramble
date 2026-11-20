@@ -12,10 +12,10 @@
  * known and withdraws the row entirely when there is none, so an outcome that
  * never got an identifier does not show an empty line with a dead control.
  */
-import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
+import { addressLabel, explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import { t } from "../../i18n/messages";
 import { bindCopyButtons } from "./dom";
-import { accountLabel, inlineCopyButton } from "./parts";
+import { inlineCopyButton } from "./parts";
 
 /**
  * Renders the row for `id`. The caller owns where it sits; the anchor and the
@@ -51,7 +51,7 @@ export const applyOutcomeHash = (
   if (hash.length === 0) {
     return;
   }
-  code.textContent = accountLabel(hash);
+  code.textContent = addressLabel(hash);
   code.setAttribute("title", hash);
   const link = row?.querySelector<HTMLAnchorElement>("a");
   const explorer = explorerTransactionUrl(networkId, hash);

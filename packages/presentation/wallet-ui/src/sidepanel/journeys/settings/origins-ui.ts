@@ -1,7 +1,7 @@
 /**
- * Bindings for the connected-sites permissions manager: each row's revoke
- * button removes an origin's grant through the background and re-renders the
- * refreshed list.
+ * Bindings for the connected-sites permissions manager: each Disconnect
+ * button removes one account from a site's grant, or the whole site, through
+ * the background and re-renders the refreshed list.
  */
 
 import { t } from "../../../i18n/messages";
@@ -20,7 +20,8 @@ export type ConnectedSitesUiDeps = {
 };
 
 /**
- * Binds the revoke buttons on the connected-sites flow.
+ * Binds the Disconnect buttons on the connected-sites flow. A button with
+ * `data-revoke-account` disconnects only that account; without it, the site.
  */
 export const bindConnectedSites = ({ app, render, wallet }: ConnectedSitesUiDeps): void => {
   const result = app?.querySelector<HTMLElement>("#connected-sites-result");
@@ -31,10 +32,19 @@ export const bindConnectedSites = ({ app, render, wallet }: ConnectedSitesUiDeps
       if (!origin) {
         return;
       }
+      const accountId = button.dataset["revokeAccount"];
       buttonBusy(button, true);
-      void wallet.revokeOrigin(origin).then(
+      void wallet.revokeOrigin(origin, accountId).then(
         async () => {
-          showToast(t("settings.origins.revoked"), "success", button);
+          showToast(
+            t(
+              accountId
+                ? "settings.origins.accountDisconnected"
+                : "settings.origins.siteDisconnected",
+            ),
+            "success",
+            button,
+          );
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {

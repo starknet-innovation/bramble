@@ -24,6 +24,7 @@ const WALLET_VIEW_LABELS: Readonly<
   "find-accounts": "shell.view.findAccounts",
   "connected-sites": "shell.view.connectedSites",
   "deploy-account": "shell.view.deployAccount",
+  "experimental-features": "shell.view.experimentalFeatures",
   "privacy-unlock": "shell.view.privacyUnlock",
   home: "shell.view.home",
   "import-key": "shell.view.importKey",

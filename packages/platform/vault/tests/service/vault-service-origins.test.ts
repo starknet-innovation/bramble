@@ -165,13 +165,19 @@ describe("createWalletVaultService origin grants", () => {
       migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
-    await service.createAccount(defaultAccountInput);
+    const account = await service.createAccount(defaultAccountInput);
     await service.grantOrigin({ origin: "https://alpha.example", vaultPassphrase });
     await service.grantOrigin({ origin: "https://beta.example", vaultPassphrase });
+    const beta = {
+      accountCount: 1,
+      accountIds: [account.id],
+      multisigIds: [],
+      origin: "https://beta.example",
+    };
 
     await expect(
       service.revokeOrigin({ origin: "https://alpha.example", vaultPassphrase }),
-    ).resolves.toEqual([{ accountCount: 1, origin: "https://beta.example" }]);
+    ).resolves.toEqual([beta]);
     const vault = await service.readVault(vaultPassphrase);
     expect(vault.originGrants.map((grant) => grant.origin)).toEqual(["https://beta.example"]);
     await expect(
@@ -179,7 +185,84 @@ describe("createWalletVaultService origin grants", () => {
     ).resolves.toEqual([]);
     await expect(
       service.revokeOrigin({ origin: "https://alpha.example", vaultPassphrase }),
-    ).resolves.toEqual([{ accountCount: 1, origin: "https://beta.example" }]);
+    ).resolves.toEqual([beta]);
+  });
+
+  test("revokes one account from a site, then the site with its last account", async () => {
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
+      kms: indexedKms(),
+      migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
+    });
+    const first = await service.createAccount(defaultAccountInput);
+    const second = await service.addDerivedAccount({
+      accountContractType: "openzeppelin",
+      networkId: "SN_MAIN",
+      vaultPassphrase,
+    });
+    const origin = "https://example.com";
+    await service.grantOrigin({ accountId: first.id, origin, vaultPassphrase });
+    await service.grantOrigin({ accountId: second.id, origin, vaultPassphrase });
+    await service.setActiveAccount({ accountId: first.id, vaultPassphrase });
+
+    await expect(
+      service.revokeOrigin({ accountId: first.id, origin, vaultPassphrase }),
+    ).resolves.toEqual([{ accountCount: 1, accountIds: [second.id], multisigIds: [], origin }]);
+    // The active account lost its grant, so the site now sees nothing.
+    await expect(service.getGrantedAccounts(origin, vaultPassphrase)).resolves.toEqual([]);
+    await service.setActiveAccount({ accountId: second.id, vaultPassphrase });
+    await expect(service.getGrantedAccounts(origin, vaultPassphrase)).resolves.toEqual([second]);
+
+    await expect(
+      service.revokeOrigin({ accountId: second.id, origin, vaultPassphrase }),
+    ).resolves.toEqual([]);
+    expect((await service.readVault(vaultPassphrase)).originGrants).toEqual([]);
+  });
+
+  test("treats an account the site was not given as a no-op", async () => {
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
+      kms: indexedKms(),
+      migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
+    });
+    const first = await service.createAccount(defaultAccountInput);
+    const second = await service.addDerivedAccount({
+      accountContractType: "openzeppelin",
+      networkId: "SN_MAIN",
+      vaultPassphrase,
+    });
+    await service.grantOrigin({
+      accountId: first.id,
+      origin: "https://a.example",
+      vaultPassphrase,
+    });
+    await service.grantOrigin({
+      accountId: second.id,
+      origin: "https://b.example",
+      vaultPassphrase,
+    });
+    const before = (await service.readVault(vaultPassphrase)).originGrants;
+
+    // The id exists in the wallet but belongs to another site's grant.
+    await service.revokeOrigin({
+      accountId: second.id,
+      origin: "https://a.example",
+      vaultPassphrase,
+    });
+    await service.revokeOrigin({
+      accountId: `SN_MAIN:0x${"9".repeat(40)}`,
+      origin: "https://a.example",
+      vaultPassphrase,
+    });
+    expect((await service.readVault(vaultPassphrase)).originGrants).toEqual(before);
+    await expect(
+      service.revokeOrigin({
+        accountId: "not-an-id",
+        origin: "https://a.example",
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("Invalid account id");
+    expect((await service.readVault(vaultPassphrase)).originGrants).toEqual(before);
   });
 
   test("rejects revoking an insecure origin", async () => {

@@ -4,10 +4,14 @@ import {
   argentMultisigConfigChangeCall,
 } from "@bramble/multisig/chain";
 import { argentSignerGuid } from "@bramble/starknet/account-contracts";
-import { normalizeFeltInput, sameFelt } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  addressText,
+  normalizeFeltInput,
+  sameFelt,
+} from "@bramble/wallet-model/networks";
 import { t } from "../../../i18n/messages";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../../shared/dom";
-import { accountLabel } from "../../shared/parts";
 import {
   bindMultisigParticipantPicker,
   type MultisigParticipant,
@@ -65,12 +69,12 @@ const bindSignerManagement = (deps: MultisigUiDeps): void => {
         }
         selectedKey.value = participant.publicKeyX;
         selectionName.textContent = participant.label;
-        selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${accountLabel(participant.address)}` : ""} · ${t("multisig.participant.key", { key: accountLabel(participant.publicKeyX) })}`;
+        selectionDetail.textContent = `${participant.source}${participant.address ? ` · ${addressLabel(participant.address)}` : ""} · ${t("multisig.participant.key", { key: addressLabel(participant.publicKeyX) })}`;
         const copy = selection.querySelector<HTMLButtonElement>(
           "[data-participant-selection-copy]",
         );
         if (copy) {
-          copy.dataset["copy"] = participant.address ?? "";
+          copy.dataset["copy"] = addressText(participant.address ?? "");
           copy.hidden = !participant.address;
         }
         selection.hidden = false;

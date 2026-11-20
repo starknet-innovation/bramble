@@ -18,7 +18,7 @@ import {
   cloneApprovalValue,
   readStoredApprovalPayload,
 } from "./approval-payload";
-import { fitsSidePanel } from "./approval-review-size";
+import { fitsSidePanel, withReferencesThatFit } from "./approval-review-size";
 import {
   type ApprovalRequest,
   approvalSnapshot,
@@ -77,6 +77,7 @@ const withInvokeFeeReview = (approval: ApprovalEntry, review: InvokeFeeReview): 
     deployFirst: _stale,
     deploymentFee: _deployment,
     deploymentFeeEstimateFailed: _deploymentFailed,
+    feeEstimateDetail: _detail,
     gaslessFees: _previous,
     ...current
   } = approval;
@@ -209,8 +210,10 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
 
   // `arrivedAt` dates an approval from its request's admission (audit N3); it
   // can only bring the deadline forward, never extend it.
-  const enqueue = (approval: ApprovalRequest, arrivedAt?: number): PendingApproval => {
-    requireRenderableSummaries(approval);
+  const enqueue = (request: ApprovalRequest, arrivedAt?: number): PendingApproval => {
+    requireRenderableSummaries(request);
+    // References past the panel's budget are dropped; the card shows English.
+    const approval = withReferencesThatFit(request, approvalSnapshot(request));
     const live = queued();
     const refusal = approvalAdmissionRefusal(live, approval.origin);
     if (refusal) {

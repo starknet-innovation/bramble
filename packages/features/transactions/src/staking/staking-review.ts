@@ -10,9 +10,8 @@
  * while it waits; and a membership whose on-chain reward address is not this
  * account pays its rewards there, which another app may have set.
  */
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import { type ReviewText, reviewEnglish, reviewText } from "../routing/review-messages";
-import { canonical, shortAddress } from "../routing/verify-decode";
 import type { StakingAction } from "./staking-calls";
 import type { PoolMember } from "./staking-decode";
 
@@ -33,7 +32,7 @@ export const stakingReviewText = (input: {
   const figure = `${amount ?? ""} ${symbol}`.trim();
   const reward = input.member === "none" ? null : input.member.rewardAddress;
   const elsewhere =
-    reward !== null && !sameFelt(reward, input.account) ? shortAddress(canonical(reward)) : null;
+    reward !== null && !sameFelt(reward, input.account) ? addressLabel(reward) : null;
   switch (action) {
     case "cancel-unstake":
       return reviewText("review.stakeAction.cancelUnstake", { symbol, validator });
@@ -54,7 +53,7 @@ export const stakingReviewText = (input: {
 
 /** A validator named by its staker address, as the background's review names it. */
 export const stakingValidatorText = (staker: string): ReviewText =>
-  reviewText("review.stakeAction.validator", { address: staker });
+  reviewText("review.stakeAction.validator", { address: addressText(staker) });
 
 /** The English of {@link stakingReviewText}, as the staking review has always read. */
 export const stakingReviewSentence = (input: Parameters<typeof stakingReviewText>[0]): string =>

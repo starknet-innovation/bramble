@@ -39,6 +39,7 @@ const STRK20_HEADS = [
   "The fee couldn't be covered",
   "The account's nonce changed. Review the transaction again.",
   "The privacy pool rejected the proof",
+  "The privacy prover can't prove this transaction (unsupported builtin)",
   "The private transaction failed validation",
 ];
 

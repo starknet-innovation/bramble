@@ -3,12 +3,16 @@ import { escapeHtml } from "@bramble/core/html";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { inputControl, textareaField } from "@bramble/ui-kit/fields";
 import { icon } from "@bramble/ui-kit/icons";
-import { isNonZeroStarkFieldElement, normalizeFeltInput } from "@bramble/wallet-model/networks";
+import {
+  addressLabel,
+  isNonZeroStarkFieldElement,
+  normalizeFeltInput,
+} from "@bramble/wallet-model/networks";
 import { parseWalletContactCard } from "@bramble/wallet-model/preferences";
 import { t, th } from "../../../i18n/messages";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, errorMessage, showToast } from "../../shared/dom";
-import { accountAvatar, accountLabel } from "../../shared/parts";
+import { accountAvatar } from "../../shared/parts";
 import type { MultisigClient } from "./multisig-runtime";
 
 /**
@@ -37,8 +41,8 @@ const knownParticipant = ({
     <span class="option-avatar">${accountAvatar(address)}</span>
     <span class="option-copy">
       <strong>${escapeHtml(label)}</strong>
-      <code>${escapeHtml(accountLabel(address))}</code>
-      <span class="option-sub">${escapeHtml(source)} · ${th("multisig.participant.key", { key: accountLabel(publicKeyX) })}</span>
+      <code>${escapeHtml(addressLabel(address))}</code>
+      <span class="option-sub">${escapeHtml(source)} · ${th("multisig.participant.key", { key: addressLabel(publicKeyX) })}</span>
     </span>
     <span class="option-mark">${icon("plus")}</span>
   </button>`;
@@ -255,7 +259,7 @@ export const bindMultisigParticipantPicker = (
       return;
     }
     finish({
-      label: t("multisig.participant.signerLabel", { key: accountLabel(publicKeyX) }),
+      label: t("multisig.participant.signerLabel", { key: addressLabel(publicKeyX) }),
       publicKeyX,
       source: t("multisig.participant.sharedKey"),
     });
@@ -327,7 +331,7 @@ export const bindMultisigParticipantPicker = (
           : {}),
         label:
           control.dataset["participantLabel"] ??
-          t("multisig.participant.signerLabel", { key: accountLabel(publicKeyX) }),
+          t("multisig.participant.signerLabel", { key: addressLabel(publicKeyX) }),
         publicKeyX,
         source: control.dataset["participantSource"] ?? t("multisig.participant.known"),
       });

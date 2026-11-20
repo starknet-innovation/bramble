@@ -1,5 +1,5 @@
 /** Argent multisig portfolio styles. */
-import { EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@bramble/ui-kit/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE } from "@bramble/ui-kit/tokens";
 
 /**
  * Stylesheet fragment for current Argent multisig surfaces.
@@ -424,10 +424,10 @@ export const MULTISIG_STYLES = `
   .multisig-portfolio-tabs .tab-set { gap: ${SPACE.lg}; }
   .multisig-portfolio-tabs [data-ms-home-panel] { min-width: 0; }
   .multisig-intent-stack { display: grid; gap: ${SPACE.md}; }
-  .multisig-intent-sync { align-items: center; border-bottom: 1px solid var(--bramble-hairline); display: flex; gap: ${SPACE.md}; justify-content: space-between; margin-bottom: ${SPACE.md}; padding-bottom: ${SPACE.md}; }
-  .multisig-intent-sync > div { display: grid; gap: ${SPACE.xs}; min-width: 0; }
-  .multisig-intent-sync span { color: var(--bramble-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
-  .multisig-intent-sync button { flex: 0 0 auto; }
+  .multisig-intent-head { align-items: center; display: flex; gap: ${SPACE.sm}; justify-content: space-between; min-height: ${CONTROL.hit}; }
+  .multisig-intent-head .eyebrow { margin: 0; } .multisig-intent-sync { margin-left: auto; position: relative; }
+  .multisig-sync-hint { background: var(--bramble-elevated); border-radius: ${RADIUS.sm}; box-shadow: var(--bramble-elev-lg); color: var(--bramble-text); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; padding: ${SPACE.sm} ${SPACE.md}; position: absolute; right: 0; top: calc(100% + ${SPACE.xs}); visibility: hidden; width: min(18em, calc(100vw - ${SPACE.xl} * 2)); z-index: 3; }
+  .multisig-intent-sync:not([data-hint-dismissed]):hover .multisig-sync-hint, .multisig-intent-sync:not([data-hint-dismissed]) button:focus-visible + .multisig-sync-hint { visibility: visible; }
   .multisig-intent { align-items: stretch; display: grid; gap: ${SPACE.md}; min-width: 0; overflow: hidden; }
   .multisig-intent .decision-head .pill { margin-left: auto; }
   .multisig-intent .decision-head h2, .multisig-intent code { overflow-wrap: anywhere; }

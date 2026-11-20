@@ -9,18 +9,22 @@ import { nftsShown, type WalletPreferences } from "@bramble/settings/preferences
 import { reviewedInvokeTotal } from "@bramble/starknet/fee-bounds";
 import { button } from "@bramble/ui-kit/controls";
 import { UNDEPLOYED_BRAAVOS_REFUSAL } from "@bramble/wallet-model/account-families";
-import { sameFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, sameFelt } from "@bramble/wallet-model/networks";
 import {
   PRIVACY_OTHER_WALLET_ACTION,
   PRIVATE_REQUEST_FAILED_NOTICE,
   PRIVATE_SERVICES_UNAVAILABLE_NOTICE,
   SHADOW_ACCOUNT_RECORD_LIMIT_NOTICE,
 } from "@bramble/wallet-protocol/privacy-blocker";
+import {
+  STRK20_PREPARE_REGISTER_SUMMARY,
+  STRK20_SIMULATE_REGISTER_SUMMARY,
+} from "@bramble/wallet-protocol/strk20";
 import { t, th } from "../../../i18n/messages";
 import { reviewLines } from "../../../i18n/review";
 import type { PendingApproval, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
+import { accountIdAddress, inlineCopyButton } from "../../shared/parts";
 import {
   type ReviewFeeState,
   reviewCallItems,
@@ -82,7 +86,7 @@ const contextDetails = (approval: PendingApproval): string => {
     return "";
   }
   const address = accountIdAddress(context.accountId);
-  return `<dl class="request-detail"><div><dt>${th("approval.context.account")}</dt><dd><code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>${inlineCopyButton(address, t("approval.context.copyAccount"))}</dd></div><div><dt>${th("approval.context.network")}</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>${th("approval.context.digest")}</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
+  return `<dl class="request-detail"><div><dt>${th("approval.context.account")}</dt><dd><code title="${escapeHtml(addressText(address))}">${escapeHtml(addressLabel(address))}</code>${inlineCopyButton(addressText(address), t("approval.context.copyAccount"))}</dd></div><div><dt>${th("approval.context.network")}</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>${th("approval.context.digest")}</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
 };
 
 const contextDisclosure = (approval: PendingApproval): string => {
@@ -116,7 +120,7 @@ const strk20DepositPayeeWarnings = (approval: PendingApproval): readonly string[
     action.type === "deposit" &&
     action.recipient !== undefined &&
     !sameFelt(action.recipient, account)
-      ? [t("approval.strk20.depositPayee", { recipient: accountLabel(action.recipient) })]
+      ? [t("approval.strk20.depositPayee", { recipient: addressLabel(action.recipient) })]
       : [],
   );
 };
@@ -194,6 +198,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
           fee: approval.fee ?? null,
           feeAffordability: approval.feeAffordability ?? "unknown",
           feeEstimateFailed: approval.feeEstimateFailed === true,
+          ...(approval.feeEstimateDetail ? { feeEstimateDetail: approval.feeEstimateDetail } : {}),
           feeEstimatePending: approval.feeEstimatePending === true,
           ...(offerGasless && approval.gaslessFees ? { gaslessFees: approval.gaslessFees } : {}),
           ...invokeDeploymentReview(approval, status),
@@ -271,6 +276,31 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
     ${contextDisclosure(approval)}
     ${paymentDecisionRow(approval, t("approval.approve"), status.locked)}
   </li>`;
+
+// The register card's copy: a simulated prepare produces nothing submittable,
+// a prepare hands the proof to the site, and the wallet's own registration is
+// followed by a separate network-fee approval.
+const registerCardCopy = (first: string | undefined) => {
+  const lockedHint = t("approval.register.locked");
+  if (first === STRK20_SIMULATE_REGISTER_SUMMARY) {
+    return {
+      action: t("approval.register.simulateAction"),
+      hint: t("approval.register.simulateHint"),
+      lockedHint,
+      title: t("approval.register.simulateTitle"),
+    };
+  }
+  return {
+    action: t("approval.register.action"),
+    hint: t(
+      first === STRK20_PREPARE_REGISTER_SUMMARY
+        ? "approval.register.prepareHint"
+        : "approval.register.hint",
+    ),
+    lockedHint,
+    title: t("approval.register.title"),
+  };
+};
 
 const strk20DisclosureCard = (
   approval: PendingApproval,
@@ -387,12 +417,7 @@ export const approvalCard = (
         title: t("approval.prepare.title"),
       });
     case "strk20-register":
-      return strk20DisclosureCard(approval, status, {
-        action: t("approval.register.action"),
-        hint: t("approval.register.hint"),
-        lockedHint: t("approval.register.locked"),
-        title: t("approval.register.title"),
-      });
+      return strk20DisclosureCard(approval, status, registerCardCopy(approval.summaries?.[0]));
     case "strk20-shadow-account":
       return strk20DisclosureCard(approval, status, {
         action: t("approval.shadow.action"),

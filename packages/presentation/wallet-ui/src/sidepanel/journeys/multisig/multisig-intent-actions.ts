@@ -4,10 +4,10 @@ import { escapeHtml } from "@bramble/core/html";
 import type { ArgentMultisigSigningIntent } from "@bramble/multisig/repository";
 import { button } from "@bramble/ui-kit/controls";
 import { selectField, textareaField } from "@bramble/ui-kit/fields";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import { reviewStepsMultisigMessages } from "../../../i18n/messages/review-steps-multisig";
 import { icon } from "../../shared/icons";
-import { accountLabel } from "../../shared/parts";
 
 /**
  * What a stale multisig card can truthfully say about whether it went out: the
@@ -240,7 +240,7 @@ const collaborationTools = (
         },
         icon: "copy",
         label: t("review.multisig.collab.signatureFrom", {
-          key: accountLabel(signature.publicKey),
+          key: addressLabel(signature.publicKey),
         }),
         size: "small",
         variant: "ghost",
@@ -390,7 +390,7 @@ export const multisigIntentOutcome = (intent: ArgentMultisigSigningIntent): stri
       <h2>${th("review.multisig.outcome.title")}</h2>
       <p>${escapeHtml(intent.summary)}</p>
       <div class="address-line">
-        <code title="${escapeHtml(hash)}">${escapeHtml(accountLabel(hash))}</code>
+        <code title="${escapeHtml(hash)}">${escapeHtml(addressLabel(hash))}</code>
         ${button({
           attributes: { "data-copy": hash },
           icon: "copy",

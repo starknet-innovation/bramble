@@ -11,10 +11,10 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
-import { canonical, shortAddress } from "@bramble/transactions/verify-decode";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
+import { addressLabel } from "@bramble/wallet-model/networks";
 import { localizeErrorCopy } from "../../../i18n/error-copy";
 import { t, th } from "../../../i18n/messages";
 import { icon } from "../../shared/icons";
@@ -55,7 +55,7 @@ const entryRow = (entry: StakingDirectoryEntry): string => `
     <button class="staking-card" type="button" data-staking-open="${escapeHtml(entry.staker)}">
       <span class="allowance-copy staking-copy">
         <strong>${escapeHtml(entry.name ?? t("staking.directory.unnamed"))}</strong>
-        <code>${escapeHtml(shortAddress(canonical(entry.staker)))}</code>
+        <code>${escapeHtml(addressLabel(entry.staker))}</code>
         <span class="hint">${escapeHtml(figuresLine(entry))}</span>
         ${entry.pools.map((pool) => `<span class="hint">${escapeHtml(poolLine(pool))}</span>`).join("")}
         ${entry.website ? `<span class="hint">${escapeHtml(entry.website)}</span>` : ""}

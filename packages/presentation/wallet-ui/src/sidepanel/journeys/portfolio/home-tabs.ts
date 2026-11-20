@@ -20,17 +20,18 @@ import type { ActivityEntry } from "@bramble/transactions/activity";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
-import { explorerTransactionUrl } from "@bramble/wallet-model/networks";
+import { addressLabel, explorerTransactionUrl } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { TokenBalance } from "../../../popup/responses/responses";
 import type { BalanceState } from "../../runtime/runtime";
 import { icon } from "../../shared/icons";
-import { accountLabel, inlineCopyButton } from "../../shared/parts";
+import { inlineCopyButton } from "../../shared/parts";
 import { formatUtcClock, formatUtcDate, utcDayKey } from "../../shared/timestamp";
 import {
   deploymentKnownFromPrivacy,
   type PrivacyDisclosureState,
   privacyIneligibleKind,
+  privacyNetworkUnavailable,
 } from "../privacy/privacy-model";
 import type { StakingState } from "../staking/staking-directory-client";
 import { type HomeTab, homeTabPanels } from "../staking/staking-home";
@@ -220,8 +221,8 @@ export const transactionRow = (
         <dl class="request-detail">
           <div><dt>${th("portfolio.activity.transaction")}</dt><dd class="tx-hash-row">${
             explorer
-              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="${th("portfolio.activity.viewOnStarkscan")}"><code>${escapeHtml(accountLabel(entry.hash))}</code></a>`
-              : `<code class="tx-hash is-plain">${escapeHtml(accountLabel(entry.hash))}</code>`
+              ? `<a class="tx-hash" href="${escapeHtml(explorer)}" target="_blank" rel="noopener noreferrer" data-tx-hash aria-label="${th("portfolio.activity.viewOnStarkscan")}"><code>${escapeHtml(addressLabel(entry.hash))}</code></a>`
+              : `<code class="tx-hash is-plain">${escapeHtml(addressLabel(entry.hash))}</code>`
           }${inlineCopyButton(entry.hash, t("portfolio.activity.copyHash"))}</dd></div>
           ${
             row.counterparty
@@ -380,12 +381,17 @@ const tokensPanel = (
               .join("")}</ul>`;
   return `${body}
     ${
-      privacy.error
-        ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
+      privacy.blockerKind === "network"
+        ? `<div class="private-balance-summary muted">
+            <span class="private-balance-label">${icon("lock")}<span>${th("portfolio.tokens.privateBalances")}</span></span>
+            <span class="token-fiat">${escapeHtml(privacyNetworkUnavailable())}</span>
+          </div>`
+        : privacy.error
+          ? `<button class="private-balance-summary muted" data-privacy-retry type="button">
             <span class="private-balance-label">${icon("lock")}<span>${th("portfolio.tokens.privateBalances")}</span></span>
             <span class="token-fiat">${th("portfolio.tokens.retry")}</span>
           </button>`
-        : ""
+          : ""
     }
     ${
       hiddenCount > 0

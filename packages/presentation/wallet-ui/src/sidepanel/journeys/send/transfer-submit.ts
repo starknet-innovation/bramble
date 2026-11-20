@@ -8,6 +8,7 @@
  * route rather than once per privacy feature.
  */
 
+import { networkRejectionMessage, nodeRejectionReason } from "@bramble/starknet/node-rejection";
 import { shieldStrkNeed } from "@bramble/transactions/fee-funds";
 import type { SendRoute } from "@bramble/transactions/send-routes";
 import { SubmissionUnknownError } from "@bramble/wallet-protocol/submission-unknown";
@@ -326,6 +327,20 @@ export const submitRejection = (
         submissionUnknown: false,
       },
       toast: null,
+    };
+  }
+  const nodeReason = nodeRejectionReason(error);
+  if (nodeReason) {
+    const sentence = networkRejectionMessage(nodeReason);
+    return {
+      follow: false,
+      state: {
+        ...cleared,
+        error: t("send.failure.notSentReason", { reason: localizeErrorCopy(sentence) }),
+        stage: "failed",
+        submissionUnknown: false,
+      },
+      toast: { details, message: sentence },
     };
   }
   if (knownNotSent(error)) {

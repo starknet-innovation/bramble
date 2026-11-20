@@ -6,6 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { account, preferences } from "@bramble/testkit/sidepanel";
+import { addressText } from "@bramble/wallet-model/networks";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
 import { dashboard } from "../../../../src/sidepanel/app/screens/views";
 
@@ -51,7 +52,7 @@ describe("invoke approval card (A-H1)", () => {
     expect(html).toContain("Send 1000 units to 0x0005…0005");
     expect(html).toContain("Verify the contract before continuing.");
     expect(html).toContain("Exact call parameters");
-    expect(html).toContain("0x049d36570d4e46f8");
+    expect(html).toContain(addressText("0x049d36570d4e46f8"));
     expect(html).toContain("0x0005, 0x3e8, 0x0");
     expect(html).toContain(`data-approval-action="approve" data-approval-id="${INVOKE_ID}"`);
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${INVOKE_ID}"`);
@@ -156,6 +157,29 @@ describe("invoke approval card fee review (#189)", () => {
     expect(html).toContain(
       `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
     );
+  });
+
+  test("a network refusal during estimation shows the node's sentence", () => {
+    const reason =
+      "The network rejected this transaction: Calldata length exceeded maximum: length 5001 (allowed length: 5000).";
+    const failed: PendingApproval = {
+      ...withFee,
+      callReviews: [
+        { calldata: ["0x1"], contractAddress: "0x1", entrypoint: "a" },
+        { calldata: ["0x2"], contractAddress: "0x2", entrypoint: "b" },
+      ],
+      fee: null,
+      feeEstimateDetail: reason,
+      feeEstimateFailed: true,
+      summaries: ["Call 1", "Call 2"],
+    };
+    const html = activity([failed]);
+
+    expect(html).toContain(reason);
+    expect(html).not.toContain("Couldn't estimate the network fee right now.");
+    expect(html).toContain("<strong>Call 1</strong>");
+    expect(html).toContain("<strong>Call 2</strong>");
+    expect(html).toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
   });
 
   test("a pending estimate is visible and prevents approval until review is complete", () => {

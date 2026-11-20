@@ -11,6 +11,7 @@ import type { DisplayCurrency, WalletPreferences } from "@bramble/settings/prefe
 import { button, iconButton, switchControl } from "@bramble/ui-kit/controls";
 import { inputControl } from "@bramble/ui-kit/fields";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { TokenBalance, WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat, tokenFiatValue } from "../../shared/fiat";
@@ -19,7 +20,6 @@ import { networkDisplayName } from "../../shared/network-label";
 import { outcomeHashRow } from "../../shared/outcome-hash";
 import {
   accountDisplayName,
-  accountLabel,
   flowScreen,
   flowSteps,
   inlineCopyButton,
@@ -116,7 +116,7 @@ const amountStage = (
         <dd>
           <span class="send-context-account">
             <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : t("send.context.noAccount"))}</strong>
-            ${account ? `<span class="copy-line"><code title="${escapeHtml(account.address)}">${escapeHtml(accountLabel(account.address))}</code>${inlineCopyButton(account.address, t("send.context.copySender"))}</span>` : "<code>—</code>"}
+            ${account ? `<span class="copy-line"><code title="${escapeHtml(addressText(account.address))}">${escapeHtml(addressLabel(account.address))}</code>${inlineCopyButton(addressText(account.address), t("send.context.copySender"))}</span>` : "<code>—</code>"}
           </span>
           ${routeSwitch("source", t("send.context.sendPrivately"))}
         </dd>

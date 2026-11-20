@@ -19,7 +19,7 @@ import {
 import { isWalletOrigin } from "@bramble/core/origin";
 import { isFeeEstimate as isFee } from "@bramble/starknet/fee-bounds";
 import { isGaslessFeeOffer } from "@bramble/transactions/gasless-request";
-import { isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
+import { isAccountId, isAccountIdForNetwork } from "@bramble/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -197,6 +197,12 @@ const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
     value["feeAffordability"] === "ok" ||
     value["feeAffordability"] === "unknown") &&
   (value["feeEstimateFailed"] === undefined || typeof value["feeEstimateFailed"] === "boolean") &&
+  (value["feeEstimateDetail"] === undefined ||
+    (value["feeEstimateFailed"] === true &&
+      typeof value["feeEstimateDetail"] === "string" &&
+      value["feeEstimateDetail"].length > 0 &&
+      value["feeEstimateDetail"].length <= 300 &&
+      !/[\r\n]/.test(value["feeEstimateDetail"]))) &&
   (value["feeEstimatePending"] === undefined || typeof value["feeEstimatePending"] === "boolean") &&
   (value["requiresDeployment"] === undefined || typeof value["requiresDeployment"] === "boolean") &&
   (value["feeEstimateFailed"] !== true || (value["fee"] ?? null) === null) &&
@@ -232,6 +238,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "fee",
       "feeAffordability",
       "feeEstimateFailed",
+      "feeEstimateDetail",
       "feeEstimatePending",
       "flags",
       "gaslessFees",
@@ -317,6 +324,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
         value["deploymentFeeEstimateFailed"] === undefined &&
         value["fee"] === undefined &&
         value["feeAffordability"] === undefined &&
+        value["feeEstimateDetail"] === undefined &&
         value["feeEstimateFailed"] === undefined &&
         value["feeEstimatePending"] === undefined &&
         value["requiresDeployment"] === undefined;
@@ -422,12 +430,17 @@ const parsePendingApprovals = (value: unknown): ParsedPendingApprovals | null =>
   return { approvals, dropped };
 };
 
+const isGrantedIds = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every(isAccountId) && hasUniqueStrings(value);
+
+// The count must equal the ids listed, so the summary never disagrees with
+// the accounts the row offers to disconnect.
 const isConnectedSite = (value: unknown): value is ConnectedSite =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountCount", "origin"]) &&
-  typeof value["accountCount"] === "number" &&
-  Number.isSafeInteger(value["accountCount"]) &&
-  value["accountCount"] >= 0 &&
+  hasOnlyKnownKeys(value, ["accountCount", "accountIds", "multisigIds", "origin"]) &&
+  isGrantedIds(value["accountIds"]) &&
+  isGrantedIds(value["multisigIds"]) &&
+  value["accountCount"] === value["accountIds"].length + value["multisigIds"].length &&
   typeof value["origin"] === "string" &&
   isWalletOrigin(value["origin"]);
 

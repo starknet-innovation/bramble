@@ -13,6 +13,7 @@
  * membership is shown, not edited here; the Groups accordion below owns
  * that.
  */
+
 import { escapeHtml } from "@bramble/core/html";
 import type { AccountGroups } from "@bramble/settings/groups";
 import type { WalletPreferences } from "@bramble/settings/preferences";
@@ -20,12 +21,12 @@ import { button } from "@bramble/ui-kit/controls";
 import { textField } from "@bramble/ui-kit/fields";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import type { AccountRef } from "@bramble/wallet-model/accounts";
+import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import {
   accountAvatar,
   accountDisplayName,
-  accountLabel,
   friendlyAccountName,
   inlineCopyButton,
   noAccountEmpty,
@@ -58,8 +59,8 @@ const accountNameRow = (
         value: preferences?.accountLabels?.[stored.id] ?? "",
       })}
       <span class="account-name-meta">
-        <code title="${escapeHtml(stored.address)}">${escapeHtml(accountLabel(stored.address))}</code>
-        ${inlineCopyButton(stored.address, t("settings.account.copyAddress", { name: generated }))}
+        <code title="${escapeHtml(addressText(stored.address))}">${escapeHtml(addressLabel(stored.address))}</code>
+        ${inlineCopyButton(addressText(stored.address), t("settings.account.copyAddress", { name: generated }))}
         ${accountGroupsLine(memberGroups)}
       </span>
     </div>
@@ -164,7 +165,7 @@ export const hiddenAccountsSection = (
             <div class="account-name-copy">
               <strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>
               <span class="account-name-meta">
-                <code title="${escapeHtml(stored.address)}">${escapeHtml(accountLabel(stored.address))}</code>
+                <code title="${escapeHtml(addressText(stored.address))}">${escapeHtml(addressLabel(stored.address))}</code>
               </span>
             </div>
             <span class="account-name-actions">

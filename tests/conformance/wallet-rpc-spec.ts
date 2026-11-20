@@ -12,7 +12,7 @@
  */
 
 import type { ProviderMethod } from "@bramble/wallet-protocol/bridge";
-import { SUPPORTED_SPECS } from "@bramble/wallet-protocol/versions";
+import { isApiVersion, SUPPORTED_SPECS } from "@bramble/wallet-protocol/versions";
 import {
   ACCOUNT,
   ADDRESS,
@@ -83,7 +83,7 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
       type: "wallet.supportedWalletApi",
     },
     backgroundResult: { ok: true, versions: [API_VERSION] },
-    validateResult: (r) => isArrayOf(r, isString),
+    validateResult: (r) => isArrayOf(r, isApiVersion),
   },
   {
     method: "wallet_getPermissions",

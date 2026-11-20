@@ -16,11 +16,11 @@ import { pill } from "@bramble/ui-kit/content";
 import { button, iconButton } from "@bramble/ui-kit/controls";
 import { menuRow } from "@bramble/ui-kit/navigation";
 import { ledgerAccountIndexOfPath } from "@bramble/wallet-model/ledger-path";
-import { paddedFelt } from "@bramble/wallet-model/networks";
+import { addressLabel, addressText, paddedFelt } from "@bramble/wallet-model/networks";
 import { t, th } from "../../../i18n/messages";
 import type { LedgerSignRequestSummary, WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
-import { accountIdAddress, accountLabel, inlineCopyButton } from "../../shared/parts";
+import { accountIdAddress, inlineCopyButton } from "../../shared/parts";
 import { liquidDots, liquidDotsFilter } from "../../shared/progress-motion";
 import type { LedgerSignView } from "./sign-session";
 
@@ -31,8 +31,8 @@ const signerLine = (request: LedgerSignRequestSummary): string => {
   const address = accountIdAddress(request.accountId);
   return `<div class="ledger-signer-line">
     <span>${th("ledgerSign.signingWith")}</span>
-    <code title="${escapeHtml(address)}">${escapeHtml(accountLabel(address))}</code>
-    ${inlineCopyButton(address, t("ledgerSign.copyAddress"))}
+    <code title="${escapeHtml(addressText(address))}">${escapeHtml(addressLabel(address))}</code>
+    ${inlineCopyButton(addressText(address), t("ledgerSign.copyAddress"))}
     ${suffix}
   </div>`;
 };
