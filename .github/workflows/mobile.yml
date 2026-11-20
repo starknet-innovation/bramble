@@ -213,23 +213,45 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             "platform-tools" "platforms;android-35" "build-tools;35.0.0" "emulator" \
             "system-images;android-35;google_apis;x86_64"
+      # One AVD directory for avdmanager and the emulator: newer cmdline-tools can otherwise write
+      # the AVD under the XDG config home, where the emulator never looks. Every wait is bounded,
+      # and the emulator's own log is printed here, so a boot failure is visible in the step.
       - name: Boot the emulator
+        timeout-minutes: 15
         run: |
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force \
             -n ci -k "system-images;android-35;google_apis;x86_64" -d pixel_6
-          "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-snapshot \
+          "$ANDROID_HOME/emulator/emulator" -list-avds
+          "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-snapshot -no-metrics \
             -no-boot-anim -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
-          "$ANDROID_HOME/platform-tools/adb" wait-for-device
-          for attempt in $(seq 1 60); do
-            booted=$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed | tr -d '\r')
+          emulator_pid=$!
+          booted=""
+          for attempt in $(seq 1 120); do
+            if ! kill -0 "$emulator_pid" 2> /dev/null; then
+              echo "::error::the emulator exited before booting"
+              break
+            fi
+            booted=$("$ANDROID_HOME/platform-tools/adb" shell getprop sys.boot_completed 2> /dev/null | tr -d '\r' || true)
             [ "$booted" = "1" ] && break
             sleep 5
           done
-          test "$booted" = "1"
+          if [ "$booted" != "1" ]; then
+            cat "$RUNNER_TEMP/emulator.log"
+            exit 1
+          fi
+          # The package manager answers a little after boot completes.
+          for attempt in $(seq 1 30); do
+            "$ANDROID_HOME/platform-tools/adb" shell pm path android > /dev/null 2>&1 && break
+            sleep 2
+          done
       - name: Instrumented tests
         working-directory: mobile/android
         run: ./gradlew :app:connectedDebugAndroidTest
-      - if: failure()
+      # Also on a timeout, which GitHub reports as cancelled rather than failed.
+      - if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-device-reports
