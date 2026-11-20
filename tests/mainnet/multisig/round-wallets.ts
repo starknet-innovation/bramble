@@ -47,6 +47,9 @@ type StatusReply = {
 export type WalletMessage = Readonly<Record<string, unknown>> & { readonly type: string };
 
 const LAGGING_NODE_RETRIES = 4;
+// A pinned read a lagging node could not answer, and the wallet's wording for
+// a signer-set read that failed the same way right after a deploy.
+const LAGGING_NODE = /Block not found|signers aren't available yet/;
 const LAGGING_NODE_PAUSE_MS = 3_000;
 // Messages that broadcast. They are never repeated by this helper, though the
 // wallet guards each against sending twice.
@@ -57,7 +60,8 @@ const BROADCASTS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * True when `reply` is a JSON-RPC 24, "Block not found", for a message that
+ * True when `reply` is a read a lagging node could not answer (a JSON-RPC 24,
+ * "Block not found", or a signer set not yet readable) for a message that
  * does not broadcast. The shared RPC load-balances across nodes that can be a
  * block apart; the wallet re-pins three times, and a round makes enough pinned
  * reads that a short lag can still exhaust them. The read failed before the
@@ -65,7 +69,7 @@ const BROADCASTS: ReadonlySet<string> = new Set([
  */
 export const isLaggingNode = (message: WalletMessage, reply: unknown): boolean => {
   const refusal = errorOf(reply);
-  return refusal !== null && !BROADCASTS.has(message.type) && /Block not found/.test(refusal);
+  return refusal !== null && !BROADCASTS.has(message.type) && LAGGING_NODE.test(refusal);
 };
 
 const errorOf = (reply: unknown): string | null =>

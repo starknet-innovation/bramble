@@ -187,6 +187,11 @@ describe("lagging RPC node", () => {
     expect(isLaggingNode({ type: "wallet.deployArgentMultisig" }, refused)).toBe(false);
   });
 
+  test("retries a signer-set read that failed right after a deploy", () => {
+    const unread = { error: "This multisig's signers aren't available yet." };
+    expect(isLaggingNode({ type: "wallet.shareArgentMultisigStrk20Key" }, unread)).toBe(true);
+  });
+
   test("leaves every other refusal and a success alone", () => {
     const share = { type: "wallet.shareArgentMultisigStrk20Authorization" };
     expect(isLaggingNode(share, { error: "Invalid Argent multisig private proof" })).toBe(false);
