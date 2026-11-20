@@ -3,6 +3,8 @@
  * wallet at the dedicated RPC. The signing key is typed into the audited
  * import field and cleared afterwards. It is not written to a log by this
  * module; a failed Playwright step can still echo the value it typed.
+ * Before onboarding, the broadcast firewall is installed with this account as
+ * the only sender, so no other account can broadcast in any spec.
  */
 
 import { sameFelt } from "@bramble/wallet-model/networks";
@@ -11,6 +13,7 @@ import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import type { LoadedExtension } from "../../e2e/extension-fixture";
 import { sendRuntimeMessage, unlockWallet, VAULT_PASSPHRASE } from "../../e2e/wallet-helpers";
+import { installBroadcastFirewall } from "../../live/broadcast-firewall";
 import type { LocalMainnetAccount } from "../local-mainnet-account";
 
 const redact = (text: string, key: string): string => text.split(key).join("[redacted]");
@@ -84,6 +87,7 @@ export const openFundedWallet = async (
   extension: LoadedExtension,
   account: LocalMainnetAccount,
 ): Promise<Page> => {
+  const firewall = await installBroadcastFirewall(extension.context, [account.address]);
   const onboarding = await extension.openExtensionPage("onboarding.html");
   await importKey(onboarding, account);
   const page = await extension.openExtensionPage("sidepanel.html");
@@ -105,6 +109,10 @@ export const openFundedWallet = async (
   await setDedicatedRpc(page, account.rpcUrl);
   await page.reload();
   await expect(page.locator("#account-trigger")).toBeVisible();
+  // A firewall that never saw the wallet's RPC traffic would guard nothing.
+  await expect
+    .poll(firewall.inspected, { message: "The broadcast firewall saw no wallet RPC traffic." })
+    .toBeGreaterThan(0);
   return page;
 };
 
