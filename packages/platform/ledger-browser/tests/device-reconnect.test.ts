@@ -148,12 +148,12 @@ const locksHolding = (...sessions: string[]) => ({
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+// Chrome omits `url` without the tabs permission. The default models that.
 const grantTabs = (
-  url: string,
   remove: (tabId: number) => Promise<void>,
   current?: { readonly pendingUrl?: string; readonly url?: string },
 ) => ({
-  get: async () => current ?? { url },
+  get: async () => current ?? {},
   remove,
 });
 
@@ -211,7 +211,7 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 11 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async () => {
+      tabs: grantTabs(async () => {
         device.blocked = false;
       }),
     };
@@ -246,7 +246,7 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 7 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async () => {
+      tabs: grantTabs(async () => {
         await grant.releaseInterface();
         await grant.close();
       }),
@@ -306,7 +306,7 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 8 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async () => {
+      tabs: grantTabs(async () => {
         await grant.releaseInterface();
         await grant.close();
       }),
@@ -331,7 +331,7 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 12 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async (tabId) => {
+      tabs: grantTabs(async (tabId) => {
         removed.push(tabId);
         await grant.releaseInterface();
       }),
@@ -356,7 +356,7 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${LIVE}`, tabId: 9 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: grantTabs(`${PREFIX}#session=${LIVE}`, async (tabId) => {
+      tabs: grantTabs(async (tabId) => {
         removed.push(tabId);
       }),
     };
@@ -385,7 +385,7 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 7 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async () => {
+      tabs: grantTabs(async () => {
         throw new Error("No tab with id: 7.");
       }),
     };
@@ -413,7 +413,6 @@ describe("cable reconnect stale handles", () => {
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
       tabs: grantTabs(
-        `${PREFIX}#session=${ORPHAN}`,
         async (tabId) => {
           removed.push(tabId);
           await grant.releaseInterface();
@@ -426,6 +425,25 @@ describe("cable reconnect stale handles", () => {
     expect(error).toMatchObject({ code: "device-busy" });
     expect(removed).toEqual([]);
     expect(grant.claimed).toBe(true);
+
+    // The same tab with no readable URL, once it is no longer an extension page.
+    let listed = false;
+    scope.chrome = {
+      runtime: {
+        getContexts: async () => {
+          if (listed) return [];
+          listed = true;
+          return [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 13 }];
+        },
+        getURL: (path: string) => `chrome-extension://bramble/${path}`,
+      },
+      tabs: grantTabs(async (tabId) => {
+        removed.push(tabId);
+      }),
+    };
+    const again = await ledgerConnector.openConnected().catch((caught: unknown) => caught);
+    expect(again).toMatchObject({ code: "device-busy" });
+    expect(removed).toEqual([]);
   });
 
   test("a repeated close waits for the same teardown", async () => {

@@ -81,16 +81,28 @@ const extensionGlobal = (): ExtensionGlobal | undefined => {
 const isGrantPage = (url: string | undefined, prefix: string): boolean =>
   typeof url === "string" && url.startsWith(prefix);
 
-// The context list is a snapshot. The tab can navigate before `tabs.remove`,
-// so the URL is read again and a tab that has left the grant page is kept.
+// This extension has no `tabs` permission, so `tabs.get` omits `url`. A missing
+// URL is not evidence the user left. A URL that is present and is no longer
+// the grant page is. The context list is read again immediately before
+// removal: it includes the document URL of our own pages.
+const tabLeftGrantPage = (tab: GrantTab, prefix: string): boolean =>
+  (tab.url !== undefined && !isGrantPage(tab.url, prefix)) ||
+  (tab.pendingUrl !== undefined && !isGrantPage(tab.pendingUrl, prefix));
+
 const grantTabStillThere = async (
   extension: ExtensionGlobal,
   tabId: number,
   prefix: string,
 ): Promise<boolean> => {
   const tab = await extension.tabs?.get?.(tabId).catch(() => undefined);
-  if (!tab || !isGrantPage(tab.url, prefix)) return false;
-  return tab.pendingUrl === undefined || isGrantPage(tab.pendingUrl, prefix);
+  if (tab && tabLeftGrantPage(tab, prefix)) return false;
+  const contexts = await extension.runtime
+    ?.getContexts?.({ contextTypes: ["TAB"] })
+    .catch(() => undefined);
+  if (!contexts) return false;
+  return contexts.some(
+    (context) => context.tabId === tabId && isGrantPage(context.documentUrl, prefix),
+  );
 };
 
 /**
