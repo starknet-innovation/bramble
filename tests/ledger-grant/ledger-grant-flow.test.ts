@@ -120,4 +120,30 @@ describe("ledgerGrantRelease", () => {
     await started;
     expect(order).toEqual(["device", "tab"]);
   });
+
+  test("a device close that fails or does not finish still closes the tab", async () => {
+    const failed: string[] = [];
+    await ledgerGrantRelease(
+      null,
+      async () => {
+        failed.push("device");
+        throw new Error("close failed");
+      },
+      async () => {
+        failed.push("tab");
+      },
+    );
+    expect(failed).toEqual(["device", "tab"]);
+
+    const hung: string[] = [];
+    await ledgerGrantRelease(
+      null,
+      () => new Promise(() => undefined),
+      async () => {
+        hung.push("tab");
+      },
+      0,
+    );
+    expect(hung).toEqual(["tab"]);
+  });
 });
