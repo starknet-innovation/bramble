@@ -7,8 +7,8 @@
  */
 import { predictArgentMultisigAddress } from "@bramble/multisig/deploy";
 import { canonicalFelt, sameFelt } from "@bramble/wallet-model/networks";
+import { waitForSuccessfulReceipt } from "../../live/chain";
 import type { LocalMainnetAccount } from "../local-mainnet-account";
-import { waitForSuccessfulReceipt } from "../local-mainnet-chain";
 import type { RoundContext } from "./round-actions";
 import { feeRefusal, ROUND_LIMITS } from "./round-budget";
 import { fundFromAccount, isDeployed, publicStrk } from "./round-chain";

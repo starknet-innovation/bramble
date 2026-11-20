@@ -6,7 +6,8 @@
  * signature is collected.
  */
 import { STRK_TOKEN_ADDRESS, sameFelt } from "@bramble/wallet-model/networks";
-import { mainnetToken, waitForSuccessfulReceipt } from "../local-mainnet-chain";
+import { waitForSuccessfulReceipt } from "../../live/chain";
+import { mainnetToken } from "../local-mainnet-chain";
 import { feeRefusal, ROUND_LIMITS, sweepableAmount } from "./round-budget";
 import { publicStrk, strkLabel, strkTransferCall } from "./round-chain";
 import {

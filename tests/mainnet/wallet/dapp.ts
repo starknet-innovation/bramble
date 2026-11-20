@@ -8,8 +8,9 @@ import { buildErc20TransferCall } from "@bramble/starknet/rpc";
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { openPendingWalletSurface } from "../../e2e/wallet-helpers";
+import { checkDisplayedStrkFee } from "../../live/fee-cap";
 import { mainnetSignTypedData } from "../local-mainnet-chain";
-import { checkDisplayedStrkFee, MAX_TX_FEE_STRK } from "../local-mainnet-limits";
+import { MAX_TX_FEE_STRK } from "../local-mainnet-limits";
 
 /** A running loopback dapp. */
 export type WalletDapp = {
@@ -177,7 +178,7 @@ export const approvePricedTransaction = async (sidepanel: Page, origin: string):
       "The account does not have enough STRK for this transaction and its fee. Nothing was submitted.",
     );
   }
-  const check = checkDisplayedStrkFee(text);
+  const check = checkDisplayedStrkFee(text, MAX_TX_FEE_STRK);
   if (check.kind !== "ok") {
     const why =
       check.kind === "over"
