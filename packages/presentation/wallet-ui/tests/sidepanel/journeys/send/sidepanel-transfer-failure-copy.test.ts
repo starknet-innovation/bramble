@@ -55,6 +55,20 @@ describe("submitRejection keeps the diagnostic beside the sentence", () => {
     expect(rejection.state.errorDetails).toBe(STRK20_PRIOR_WRITE_UNRESOLVED);
   });
 
+  test("a node calldata refusal names the network and keeps the dump for copy", () => {
+    const reason = "Calldata length exceeded maximum: length 5001 (allowed length: 5000)";
+    const dump = `RPC: starknet_addInvokeTransaction with params ${"{}".repeat(20)}`;
+    const error = Object.assign(new Error(dump), { baseError: { code: 63, message: reason } });
+    const rejection = submitRejection(authorizing, error);
+    expect(rejection.state.submissionUnknown).toBe(false);
+    expect(rejection.state.error).toBe(
+      `The transaction was not sent. The network rejected this transaction: ${reason}.`,
+    );
+    expect(rejection.state.error).not.toContain("with params");
+    expect(rejection.state.errorDetails).toBe(dump);
+    expect(rejection.toast?.message).toContain(reason);
+  });
+
   test("an unknown outcome keeps the raw answer its sentence rewrote", () => {
     const rejection = submitRejection(authorizing, new Error(RAW_RPC));
     expect(rejection.state.submissionUnknown).toBe(true);

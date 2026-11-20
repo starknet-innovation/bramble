@@ -159,6 +159,29 @@ describe("invoke approval card fee review (#189)", () => {
     );
   });
 
+  test("a network refusal during estimation shows the node's sentence", () => {
+    const reason =
+      "The network rejected this transaction: Calldata length exceeded maximum: length 5001 (allowed length: 5000).";
+    const failed: PendingApproval = {
+      ...withFee,
+      callReviews: [
+        { calldata: ["0x1"], contractAddress: "0x1", entrypoint: "a" },
+        { calldata: ["0x2"], contractAddress: "0x2", entrypoint: "b" },
+      ],
+      fee: null,
+      feeEstimateDetail: reason,
+      feeEstimateFailed: true,
+      summaries: ["Call 1", "Call 2"],
+    };
+    const html = activity([failed]);
+
+    expect(html).toContain(reason);
+    expect(html).not.toContain("Couldn't estimate the network fee right now.");
+    expect(html).toContain("<strong>Call 1</strong>");
+    expect(html).toContain("<strong>Call 2</strong>");
+    expect(html).toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
+  });
+
   test("a pending estimate is visible and prevents approval until review is complete", () => {
     const pending: PendingApproval = {
       ...withFee,

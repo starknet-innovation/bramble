@@ -49,6 +49,7 @@ const WALLET_FIELDS: ReadonlySet<string> = new Set([
   "existingGrant",
   "fee",
   "feeAffordability",
+  "feeEstimateDetail",
   "feeEstimateFailed",
   "feeEstimatePending",
   "flags",
