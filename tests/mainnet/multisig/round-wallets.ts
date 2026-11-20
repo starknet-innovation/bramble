@@ -123,9 +123,31 @@ export const tryWallet = async <T>(
   }
 };
 
+const BACKGROUND_TIMEOUT_MS = 30_000;
+
+// The wallet's status once the background answers. A freshly started service
+// worker refuses messages ("Receiving end does not exist") until its listener
+// is attached, which takes about a second after the cache is cleared.
+const backgroundStatus = async (page: Page): Promise<StatusReply> => {
+  const deadline = Date.now() + BACKGROUND_TIMEOUT_MS;
+  let last = "no answer";
+  while (Date.now() < deadline) {
+    try {
+      const status = await sendRuntimeMessage<StatusReply>(page, { type: "wallet.status" });
+      if (status && typeof status.hasVault === "boolean") return status;
+      last = "an answer without a vault state";
+    } catch (error) {
+      last = error instanceof Error ? error.message : "an unreadable failure";
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`The wallet background never answered (${last}).`);
+};
+
+// Onboards only a wallet that says it has no vault; a kept profile is unlocked.
 const onboard = async (page: Page, phrase: string): Promise<void> => {
-  const status = await sendRuntimeMessage<StatusReply>(page, { type: "wallet.status" });
-  if (status?.hasVault !== true) {
+  const status = await backgroundStatus(page);
+  if (!status.hasVault) {
     await importWalletFromPhrase(page, phrase);
     return;
   }
