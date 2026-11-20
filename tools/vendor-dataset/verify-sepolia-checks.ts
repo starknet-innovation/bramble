@@ -41,7 +41,8 @@ for (const name of [
     // Absent from the seed file: its cards are skipped or error without it.
   }
 }
-const have = (name: SepoliaSecret): boolean => {
+/** Whether the optional secret `name` is in the seed file. */
+export const have = (name: SepoliaSecret): boolean => {
   try {
     sepoliaSecret(name);
     return true;
