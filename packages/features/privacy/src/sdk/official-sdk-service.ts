@@ -145,6 +145,13 @@ export const createOfficialStrk20Service = ({
     async prepare(input) {
       return prepare(input);
     },
+    async recordSubmission(input, transactionHash) {
+      const config = requireStrk20Config(input);
+      const nodeUrl = input.rpcUrls[0];
+      if (!nodeUrl) throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      const scope = maturityScope(input, config.poolAddress);
+      await maturity.recordSubmission(providerFor(nodeUrl), scope, transactionHash);
+    },
     async releasePendingWrite(input) {
       const config = requireStrk20Config(input);
       return maturity.releasePendingWrite(maturityScope(input, config.poolAddress));

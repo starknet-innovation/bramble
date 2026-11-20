@@ -23,6 +23,7 @@ import {
 } from "../e2e/wallet-helpers";
 import { startLiveDapp } from "./live-dapp-server";
 import { readStrk20MainnetEnvironment } from "./strk20-mainnet-env";
+import { readProtocolFee } from "./strk20-pool-fee";
 import {
   connectLiveProvider,
   type LiveProviderRequest,
@@ -37,7 +38,6 @@ const APPROVAL_TIMEOUT = 90_000;
 const INDEXER_TIMEOUT = 5 * 60_000;
 const PROVER_RETRY_DELAY = 30_000;
 const PROVER_ATTEMPTS = 3;
-const MAX_PROTOCOL_FEE_RAW = 5n * 10n ** 18n;
 
 type PrivateSnapshot = {
   readonly balance: string;
@@ -251,23 +251,6 @@ const waitForAccepted = async (provider: RpcProvider, hash: string): Promise<voi
   if (!receipt.isSuccess()) {
     throw new Error("Mainnet transaction reverted");
   }
-};
-
-const readProtocolFee = async (provider: RpcProvider): Promise<bigint> => {
-  const response = await provider.callContract({
-    calldata: [],
-    contractAddress: STRK20_MAINNET_POOL,
-    entrypoint: "get_fee_amount",
-  });
-  const value = response[0];
-  if (typeof value !== "string") {
-    throw new Error("Privacy pool returned an invalid protocol fee");
-  }
-  const fee = BigInt(value);
-  if (fee < 0n || fee > MAX_PROTOCOL_FEE_RAW) {
-    throw new Error("Privacy pool protocol fee exceeds the live-test safety cap");
-  }
-  return fee;
 };
 
 const approvePoolSpend = async (

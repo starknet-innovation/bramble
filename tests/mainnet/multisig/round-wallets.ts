@@ -1,0 +1,246 @@
+/**
+ * The two wallets of a multisig privacy round. Each is the built extension on
+ * its own kept profile, onboarded from its owner phrase and pointed at the
+ * dedicated RPC. Everything after onboarding goes through the background's
+ * own runtime messages, the same boundary the wallet's pages use, so a step
+ * fails with the background's refusal rather than with a missing selector.
+ */
+import { mkdir, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { sameFelt } from "@bramble/wallet-model/networks";
+import type { Page } from "@playwright/test";
+import { type LoadedExtension, launchExtension } from "../../e2e/extension-fixture";
+import { importWalletFromPhrase, sendRuntimeMessage, unlockWallet } from "../../e2e/wallet-helpers";
+import type { OwnerRole } from "./round-owners";
+import { isLaggingNode, type WalletMessage, walletRefusal } from "./round-rules";
+import { ownerProfile } from "./round-state";
+
+const UNLOCK_TIMEOUT_MS = 30_000;
+const LAGGING_NODE_RETRIES = 4;
+const LAGGING_NODE_PAUSE_MS = 3_000;
+const LOCKED = "wallet locked";
+
+/** One co-owner's wallet and the public identity the other owner saves. */
+export type OwnerWallet = {
+  /** Vault account id of the owner key, as `wallet.status` reports it. */
+  readonly accountId: string;
+  readonly address: string;
+  readonly extension: LoadedExtension;
+  readonly nostrPublicKey: string;
+  readonly page: Page;
+  readonly publicKeyX: string;
+  readonly role: OwnerRole;
+};
+
+type StatusReply = {
+  readonly accounts?: readonly {
+    readonly address: string;
+    readonly id: string;
+    readonly networkId?: string;
+    readonly publicKeyX?: string;
+  }[];
+  readonly activeAccountId?: string | null;
+  readonly hasVault?: boolean;
+  readonly locked?: boolean;
+  readonly networkId?: string;
+};
+
+const unlock = async (page: Page): Promise<void> => {
+  await page.reload();
+  const gate = page.locator('input[name="vaultPassphrase"]');
+  await gate.waitFor({ state: "visible", timeout: UNLOCK_TIMEOUT_MS });
+  await unlockWallet(page);
+  await page
+    .getByRole("button", { name: "Lock wallet" })
+    .waitFor({ state: "visible", timeout: UNLOCK_TIMEOUT_MS });
+};
+
+/**
+ * Sends one background message from `page` and returns the reply. A reply
+ * carrying `error` throws that text, prefixed with the message type. A locked
+ * wallet is unlocked once and the message repeated: a round outlasts the
+ * session. The repeat follows a refusal, so the first attempt did nothing.
+ * A refusal from a lagging RPC node is retried too; see {@link isLaggingNode}.
+ */
+export const callWallet = async <T>(page: Page, message: WalletMessage): Promise<T> => {
+  let reply = await sendRuntimeMessage<unknown>(page, message);
+  if (walletRefusal(reply) === LOCKED) {
+    await unlock(page);
+    reply = await sendRuntimeMessage<unknown>(page, message);
+  }
+  for (let retry = 1; retry <= LAGGING_NODE_RETRIES && isLaggingNode(message, reply); retry += 1) {
+    await new Promise((resolve) => setTimeout(resolve, LAGGING_NODE_PAUSE_MS * retry));
+    reply = await sendRuntimeMessage<unknown>(page, message);
+  }
+  const refusal = walletRefusal(reply);
+  if (refusal !== null) {
+    throw new Error(`${message.type}: ${refusal}`);
+  }
+  if (reply === undefined || reply === null) {
+    throw new Error(`${message.type}: the background did not answer`);
+  }
+  return reply as T;
+};
+
+/**
+ * Like {@link callWallet}, but returns the refusal text instead of throwing,
+ * for a step whose refusals the caller tells apart.
+ */
+export const tryWallet = async <T>(
+  page: Page,
+  message: WalletMessage,
+): Promise<{ readonly error: string } | { readonly reply: T }> => {
+  try {
+    return { reply: await callWallet<T>(page, message) };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "wallet call failed" };
+  }
+};
+
+const BACKGROUND_TIMEOUT_MS = 30_000;
+const ATTEMPT_TIMEOUT_MS = 5_000;
+
+// `work`, or a rejection once one attempt has taken too long.
+const bounded = <T>(work: Promise<T>): Promise<T> =>
+  Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("no answer in time")), ATTEMPT_TIMEOUT_MS);
+    }),
+  ]);
+
+// A wallet page whose background has answered, and the status it gave. A
+// freshly started service worker refuses messages until its listener is
+// attached, and the extension can reload as the worker registers, closing
+// pages opened before that. So each attempt opens a fresh side panel.
+const answeringPage = async (
+  extension: LoadedExtension,
+): Promise<{ readonly page: Page; readonly status: StatusReply }> => {
+  const deadline = Date.now() + BACKGROUND_TIMEOUT_MS;
+  let last = "no answer";
+  while (Date.now() < deadline) {
+    // Bounded per attempt: a navigation or message caught by the reload can
+    // otherwise wait for ever under a runner with no default timeout.
+    const page = await bounded(extension.openExtensionPage("sidepanel.html")).catch(() => null);
+    if (page) {
+      try {
+        const status = await bounded(
+          sendRuntimeMessage<StatusReply>(page, { type: "wallet.status" }),
+        );
+        if (status && typeof status.hasVault === "boolean") return { page, status };
+        last = "an answer without a vault state";
+      } catch (error) {
+        last = error instanceof Error ? error.message : "an unreadable failure";
+      }
+      await page.close().catch(() => undefined);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`The wallet background never answered (${last}).`);
+};
+
+// Onboards only a wallet that says it has no vault; a kept profile is unlocked.
+const onboard = async (extension: LoadedExtension, phrase: string): Promise<void> => {
+  const { page, status } = await answeringPage(extension);
+  if (!status.hasVault) {
+    await importWalletFromPhrase(page, phrase);
+  } else if (status.locked === true) {
+    await unlock(page);
+  }
+  await page.close().catch(() => undefined);
+};
+
+const ownerAccount = (
+  status: StatusReply,
+): { readonly address: string; readonly id: string; readonly publicKeyX: string } => {
+  if (status.networkId !== "SN_MAIN") {
+    throw new Error("The owner wallet is not on Starknet mainnet.");
+  }
+  const account = status.accounts?.find((entry) => entry.id === status.activeAccountId);
+  if (!account || typeof account.publicKeyX !== "string") {
+    throw new Error("The owner wallet has no active account with a Stark key.");
+  }
+  return { address: account.address, id: account.id, publicKeyX: account.publicKeyX };
+};
+
+/**
+ * Opens one owner's wallet on its kept profile. A fresh profile is onboarded
+ * from `phrase`; a kept one is unlocked. The wallet is pointed at `rpcUrl`
+ * before any balance is read, and at `nostrRelayUrl` when one is given. The
+ * phrase is typed into the wallet's own import field and held nowhere else.
+ */
+export const openOwnerWallet = async (input: {
+  readonly directory: string;
+  readonly nostrRelayUrl?: string;
+  readonly phrase: string;
+  readonly role: OwnerRole;
+  readonly rpcUrl: string;
+}): Promise<OwnerWallet> => {
+  const profile = ownerProfile(input.directory, input.role);
+  await mkdir(profile, { mode: 0o700, recursive: true });
+  // Chromium keeps running the background script it cached when the profile
+  // was made, even after dist/ is rebuilt, so a resumed round would test old
+  // wallet code. Dropping the service-worker cache makes it load the current
+  // build. The wallet's own data is in extension storage, not here.
+  await rm(join(profile, "Default", "Service Worker"), { force: true, recursive: true });
+  const extension = await launchExtension({ userDataDir: profile });
+  try {
+    await onboard(extension, input.phrase);
+    // Onboarding can leave its tab on its last screen; start from the panel.
+    const page = await extension.openExtensionPage("sidepanel.html");
+    await page
+      .locator("#account-trigger")
+      .waitFor({ state: "visible", timeout: UNLOCK_TIMEOUT_MS });
+    await callWallet(page, {
+      networkId: "SN_MAIN",
+      rpcUrl: input.rpcUrl,
+      type: "wallet.setRpcOverride",
+    });
+    if (input.nostrRelayUrl !== undefined) {
+      await callWallet(page, {
+        relayUrl: input.nostrRelayUrl,
+        type: "wallet.setNostrRelayUrl",
+      });
+    }
+    const account = ownerAccount(await callWallet<StatusReply>(page, { type: "wallet.status" }));
+    const nostr = await callWallet<{ readonly nostrPublicKey: string }>(page, {
+      type: "wallet.nostrPublicKey",
+    });
+    return {
+      accountId: account.id,
+      address: account.address,
+      extension,
+      nostrPublicKey: nostr.nostrPublicKey,
+      page,
+      publicKeyX: account.publicKeyX,
+      role: input.role,
+    };
+  } catch (error) {
+    await extension.close().catch(() => undefined);
+    throw error;
+  }
+};
+
+/**
+ * Saves `other` as a co-signer card in `wallet`, with the Stark key and Nostr
+ * key the wallet checks before it accepts a viewing key or a signature from
+ * that owner. Saving the same card again replaces it.
+ */
+export const saveCoOwner = async (wallet: OwnerWallet, other: OwnerWallet): Promise<void> => {
+  if (sameFelt(wallet.publicKeyX, other.publicKeyX)) {
+    throw new Error("Both owner wallets hold the same key.");
+  }
+  await callWallet(wallet.page, {
+    address: other.address,
+    label: `Round owner ${other.role.toUpperCase()}`,
+    networkId: "SN_MAIN",
+    nostrPublicKey: other.nostrPublicKey,
+    publicKeyX: other.publicKeyX,
+    type: "wallet.saveAddress",
+  });
+};
+
+/** Closes both browsers. The profiles stay on disk. */
+export const closeOwnerWallets = async (wallets: readonly OwnerWallet[]): Promise<void> => {
+  await Promise.all(wallets.map((wallet) => wallet.extension.close().catch(() => undefined)));
+};

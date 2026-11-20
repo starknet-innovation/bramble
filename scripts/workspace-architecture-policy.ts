@@ -69,10 +69,12 @@ export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
  * gates, and its captured page scripts are not workspace source. Scanning it
  * made this gate fail on any machine that had ever driven the browser locally.
  * `.dev-profile` is the same story for `bun run dev:session`: a git-ignored
- * Chrome profile full of caches and singleton symlinks, never workspace source.
+ * Chrome profile full of caches and singleton symlinks, never workspace source,
+ * and `.mainnet-multisig-e2e` holds two such profiles for the multisig round.
  */
 export const EXCLUDED_DIRECTORIES = new Set([
   ".dev-profile",
+  ".mainnet-multisig-e2e",
   ".git",
   ".playwright-cli",
   "artifacts",
