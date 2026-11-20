@@ -3,10 +3,10 @@
  * every in-wallet import path against the live Sepolia fixtures in
  * manifest/sepolia/, and scores what the wallet shows against the scope doc's
  * "Now" line for each TA card (the doc's "Desired" line rides along, unscored).
- * Read-only: no deploy, send or signature. A broadcast firewall that allows no
- * sender is installed before any page opens; the "Send is refused" cards
- * (verify-sepolia-refusals.ts) rely on it, and a broadcast attempted anywhere
- * else fails the run. Secrets are typed into the UI only;
+ * Sends nothing: a broadcast firewall that allows no sender is installed
+ * before any page opens. The "Send is refused" cards (verify-sepolia-refusals.ts)
+ * rely on it, since TA-08 still gets as far as signing, and a broadcast
+ * attempted anywhere else fails the run. Secrets are typed into the UI only;
  * the output carries addresses and visible text, and everything printed or
  * written, a failure included, is redacted (sepolia-redact).
  *
@@ -97,7 +97,9 @@ const ok = await guarded(async () => {
     else console.log("\n## Test Ledger (TA-32…TA-37): skipped; set BRAMBLE_SEPOLIA_LEDGER=1");
     // Last: importing these accounts would change what the cards above see.
     strayBroadcasts = firewall.blocked.length;
-    await runRefusalChecks(session, firewall, have);
+    // A replay is offline, and these cards read each account's nonce live.
+    if (REPLAY) console.log("\n## Send is refused (SEND): skipped in a replay");
+    else await runRefusalChecks(session, firewall, have);
     results = allResults();
   } finally {
     await session?.close();

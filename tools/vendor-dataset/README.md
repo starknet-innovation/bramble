@@ -48,7 +48,7 @@ extension.
   with S-BRM, switched to Sepolia, then every in-wallet import path (P2…P8, P10)
   driven against the fixtures and scored against the scope doc's "Now" line per
   TA card (`verify-sepolia-checks.ts`; "Desired" rides along unscored).
-  Read-only, about 15 minutes, retries the public node's rate limits:
+  Sends nothing, about 20 minutes, retries the public node's rate limits:
   `BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts [out.json] [previous.json]`.
   Passing a previous scorecard lists the verdicts that changed; keep a release's
   run as a dated `verification-sepolia-*.json`. It exits non-zero when any
@@ -80,6 +80,7 @@ extension.
   imports each from its scan and checks Home from the account. The whole run
   sits behind a broadcast firewall that allows no sender, so a send attempt is
   aborted and counted, and any broadcast during the import cards fails the run.
+  A replay skips these cards, since they read each account's nonce live.
 - The test Ledger is optional. By default TA-32…TA-37 are skipped, so the run
   needs no device. With `BRAMBLE_SEPOLIA_LEDGER=1` the browser opens visibly and,
   after the other checks, asks you to plug in and unlock the test Ledger, open
@@ -109,7 +110,7 @@ extension.
 - `BRAMBLE_SEPOLIA_RECORD=<tape.json>` records the network answers of a live
   run; `BRAMBLE_SEPOLIA_REPLAY=<tape.json>` (without `BRAMBLE_E2E_LIVE_NETWORK`)
   replays it fully offline against the same chain state (`sepolia-tape.ts`):
-  about 90 seconds instead of the live run's 15 minutes, because a replay has
+  about 90 seconds instead of the live run's 20 minutes, because a replay has
   no rate limit to pace around. It tolerates the wallet taking a different
   path than the live run did (another RPC endpoint, another block), and lists
   any request the tape cannot answer. A replay reproduces what the wallet did
