@@ -4,13 +4,21 @@
  */
 
 import { escapeHtml } from "@bramble/core/html";
+import type { ArgentMultisigRecord } from "@bramble/multisig/repository";
 import type { WalletPreferences } from "@bramble/settings/preferences";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, iconButton, switchControl } from "@bramble/ui-kit/controls";
 import { textareaField, textField } from "@bramble/ui-kit/fields";
+import { icon } from "@bramble/ui-kit/icons";
 import { addressLabel, addressText } from "@bramble/wallet-model/networks";
 import type { ConnectedSite, WalletStatus } from "../../../popup/responses/responses";
-import { copyButton, flowHeader, flowScreen } from "../../shared/parts";
+import {
+  accountDisplayName,
+  accountIdAddress,
+  copyButton,
+  flowHeader,
+  flowScreen,
+} from "../../shared/parts";
 
 /**
  * What the connected-sites screen knows: the granted origins, or that the read
@@ -20,29 +28,103 @@ import { copyButton, flowHeader, flowScreen } from "../../shared/parts";
  */
 export type ConnectedSitesState = readonly ConnectedSite[] | "error" | "loading";
 
-const connectedSiteRows = (sites: readonly ConnectedSite[]): string =>
+type SiteEntry = { readonly id: string; readonly name: string; readonly address: string };
+
+// Names each granted id as the wallet shows it elsewhere. Ids carry their own
+// address, so an id the wallet no longer holds still shows which account it was.
+const siteEntries = (
+  site: ConnectedSite,
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+  multisigs: readonly ArgentMultisigRecord[],
+): readonly SiteEntry[] => [
+  ...site.accountIds.map((id) => {
+    const account = status.accounts.find((candidate) => candidate.id === id);
+    return {
+      address: account?.address ?? accountIdAddress(id),
+      id,
+      name: account ? accountDisplayName(account, preferences) : "Account no longer in this wallet",
+    };
+  }),
+  ...site.multisigIds.map((id) => {
+    const record = multisigs.find((candidate) => candidate.id === id);
+    return {
+      address: record?.address ?? accountIdAddress(id),
+      id,
+      name: record?.name ?? "Multisig account",
+    };
+  }),
+];
+
+const siteEntryRow = (origin: string, entry: SiteEntry): string => `<li>
+    <div class="stack-tight">
+      <strong>${escapeHtml(entry.name)}</strong>
+      <code>${escapeHtml(addressLabel(entry.address))}</code>
+    </div>
+    ${button({
+      attributes: {
+        "aria-label": `Disconnect ${entry.name} from ${origin}`,
+        "data-revoke-account": entry.id,
+        "data-revoke-origin": origin,
+      },
+      label: "Disconnect",
+      size: "small",
+      tone: "danger",
+      variant: "ghost",
+    })}
+  </li>`;
+
+// A site with one account needs only that row's Disconnect, which also
+// removes the site; "Disconnect all" appears once there is a choice.
+const connectedSiteRow = (site: ConnectedSite, entries: readonly SiteEntry[]): string => `<li>
+    <details class="disclosure connected-site" data-disclosure="site:${escapeHtml(site.origin)}">
+      <summary>
+        <span class="menu-copy">
+          <strong class="request-origin">${escapeHtml(site.origin)}</strong>
+          <span class="hint">${site.accountCount} account${site.accountCount === 1 ? "" : "s"} shared</span>
+        </span>
+        <span class="disclosure-mark">${icon("chevronRight")}</span>
+      </summary>
+      <div class="disclosure-body">
+        <ul class="address-book">${entries.map((entry) => siteEntryRow(site.origin, entry)).join("")}</ul>
+        ${
+          entries.length > 1
+            ? button({
+                attributes: {
+                  "aria-label": `Disconnect ${site.origin}`,
+                  "data-revoke-origin": site.origin,
+                },
+                label: "Disconnect all",
+                size: "small",
+                tone: "danger",
+                variant: "secondary",
+              })
+            : ""
+        }
+      </div>
+    </details>
+  </li>`;
+
+const connectedSiteRows = (
+  sites: readonly ConnectedSite[],
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+  multisigs: readonly ArgentMultisigRecord[],
+): string =>
   sites.length === 0
     ? emptyState("No sites are connected yet. Approving a connection request lists the site here.")
-    : `<ul class="address-book">${sites
-        .map(
-          (site) => `<li>
-              <div class="stack-tight">
-                <strong class="request-origin">${escapeHtml(site.origin)}</strong>
-                <span class="hint">${site.accountCount} account${site.accountCount === 1 ? "" : "s"} shared</span>
-              </div>
-              ${iconButton({
-                attributes: { "data-revoke-origin": site.origin },
-                icon: "x",
-                label: `Revoke ${site.origin}`,
-                tone: "danger",
-              })}
-            </li>`,
-        )
+    : `<ul class="connected-sites">${sites
+        .map((site) => connectedSiteRow(site, siteEntries(site, status, preferences, multisigs)))
         .join("")}</ul>`;
 
 // The retry reuses the shell's reload control, which re-reads the status and
 // re-hydrates the active screen.
-const connectedSitesBody = (sites: ConnectedSitesState): string => {
+const connectedSitesBody = (
+  sites: ConnectedSitesState,
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+  multisigs: readonly ArgentMultisigRecord[],
+): string => {
   if (sites === "loading") return emptyState("Loading connected sites…");
   if (sites === "error") {
     return `<div class="panel-error">
@@ -56,14 +138,20 @@ const connectedSitesBody = (sites: ConnectedSitesState): string => {
       })}
     </div>`;
   }
-  return connectedSiteRows(sites);
+  return connectedSiteRows(sites, status, preferences, multisigs);
 };
 
 /**
- * Connected sites flow: list origins with active grants and revoke access.
- * The count and the empty state appear only once the list has been read.
+ * Connected sites flow: list origins with active grants; each expands to the
+ * accounts it was given, disconnectable one at a time or all together. The
+ * count and the empty state appear only once the list has been read.
  */
-export const connectedSitesFlow = (status: WalletStatus, sites: ConnectedSitesState): string =>
+export const connectedSitesFlow = (
+  status: WalletStatus,
+  sites: ConnectedSitesState,
+  preferences: WalletPreferences | null = null,
+  multisigs: readonly ArgentMultisigRecord[] = [],
+): string =>
   flowHeader(
     "Connected sites",
     status,
@@ -72,8 +160,8 @@ export const connectedSitesFlow = (status: WalletStatus, sites: ConnectedSitesSt
   flowScreen(
     "connected-sites",
     `<section class="section">
-      <p class="hint">Connected sites see the addresses you granted. Revoke any you no longer trust.</p>
-      ${connectedSitesBody(sites)}
+      <p class="hint">Connected sites see the accounts you shared. Disconnect any you no longer trust.</p>
+      ${connectedSitesBody(sites, status, preferences, multisigs)}
       <p id="connected-sites-result" role="status"></p>
     </section>`,
   );

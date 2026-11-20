@@ -307,7 +307,7 @@ reconnecting queues a fresh approval instead of silently handing back the previo
 account. A page is never handed two of the user's accounts, however many the stored grant has
 accumulated from repeated approvals, so a site cannot correlate them. The connected-sites manager
 still lists the site with its full granted-account count, because it reads the stored grants
-directly, and revoking there is what clears the grant.
+directly, and disconnecting there (one account or the whole site) is what clears the grant.
 
 The active-network consumers (invoke, declare, typed-data signing, STRK-20, deploy discovery) then
 filter that account by the active network and refuse with `origin not connected` if it does not
@@ -327,10 +327,9 @@ Close answers `true` (audit M1), so a page cannot list the tracked tokens.
 The wallet tracks which dapp origins hold account grants and surfaces phishing
 and reputation signals before a connection is approved:
 
-- Connected-sites manager: Settings → Connected sites lists every origin with a
-  persisted grant and how many accounts it can see. Revoking an origin removes
-  its grants from the encrypted vault and broadcasts `accountsChanged` so the
-  revoked page immediately sees an empty account list.
+- Connected-sites manager: Settings → Connected sites lists every origin with a persisted
+  grant, expandable to each vault account and multisig. Disconnecting one (`accountId`) or the
+  site removes those grants and broadcasts `accountsChanged`, so the page re-reads its accounts.
 - Phishing blocklist (seed + live feed): `packages/features/permissions/src/blocklist.ts` decides
   whether an origin is blocked from a bundled seed list (`BLOCKED_DOMAINS`) and
   an injected dynamic snapshot. `wallet.requestAccounts` — and every other dapp
