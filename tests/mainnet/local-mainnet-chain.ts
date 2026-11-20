@@ -85,7 +85,10 @@ export const waitForSuccessfulReceipt = async (rpcUrl: string, hash: string): Pr
   const deadline = Date.now() + RECEIPT_TIMEOUT_MS;
   while (Date.now() < deadline) {
     try {
-      const receipt = await provider.getTransactionReceipt(hash);
+      // starknet.js returns a ReceiptTx class instance; the readers below only
+      // accept plain records, so copy its own fields out. Without this no
+      // receipt ever reads as successful and every wait times out.
+      const receipt = { ...(await provider.getTransactionReceipt(hash)) };
       if (receiptSucceeded(receipt)) {
         return receipt;
       }

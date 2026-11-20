@@ -240,6 +240,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   // shared scalar is redacted before it reaches this module and is only
   // substituted while recomputing the digest.
   "packages/features/privacy/src/multisig/records.ts",
+  // Held proof requests. Names the compiled invocation's signature field only
+  // to keep it out of the stored envelope; the scalar never enters this module.
+  "packages/features/privacy/src/multisig/held-proof.ts",
   // Relay invites carry the same public Stark fragments as CallSet records.
   // The proof never enters this module.
   "packages/features/privacy/src/multisig/relay-invite.ts",
@@ -248,6 +251,9 @@ export const SECRET_MATERIAL_FILES = new Set([
   "apps/extension/src/background/multisig/multisig-strk20-session.ts",
   "apps/extension/src/background/multisig/multisig-strk20-prove.ts",
   "apps/extension/src/background/multisig/multisig-strk20-actions.ts",
+  // Puts the co-owners' public aggregate in a held request's signature field.
+  // The scalar only restores calldata the stored digest already covers.
+  "apps/extension/src/background/multisig/multisig-strk20-held.ts",
   // Relay fragment collection. The vault credential only transits into the
   // hash signer. Proof bytes stay on this device and are never wrapped.
   "apps/extension/src/background/multisig/multisig-strk20-relay.ts",
