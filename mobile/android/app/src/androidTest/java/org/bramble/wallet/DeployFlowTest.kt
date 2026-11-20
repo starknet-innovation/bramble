@@ -20,8 +20,9 @@ import org.junit.runner.RunWith
 /**
  * The Deploy account flow (`bindDeploy`, iOS `DeployAccountView`) on the offline [FixtureNode]:
  * the core's deployment plan quotes the fee as the screen opens, and the one Deploy button signs
- * once and hands the write to the node. The node refuses it, so nothing is broadcast, the core
- * drops the pending record it wrote before the write left, and Deploy is offered again. An account
+ * once and hands the write to the node. The node refuses it, so nothing is reported submitted and
+ * Deploy is offered again; the core keeps the one pending record it wrote before the write left,
+ * since a signed deployment may land whatever the node answers. An account
  * the chain already has offers nothing to deploy. The store reads its deployment through the same
  * node on entry.
  */
@@ -64,9 +65,10 @@ class DeployFlowTest {
         assertFalse("a refused deployment is never reported submitted", showing(SendCopy.deploySubmittedTitle))
         val accountId = onMainThread { activeRecord?.id }.orEmpty()
         val logged = onMainThread { walletCore.activity(accountId) }
-        assertFalse(
-            "a deployment the node refused never existed, so the core drops its pending record",
-            logged.any { it.kind == ActivityKind.DEPLOY },
+        assertEquals(
+            "a signed deployment may land whatever the node answers, so the core keeps its one pending record",
+            1,
+            logged.count { it.kind == ActivityKind.DEPLOY },
         )
     }
 
