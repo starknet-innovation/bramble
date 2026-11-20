@@ -12,11 +12,9 @@
  * no longer looking at. Pure DOM; the value is read and written by the browser
  * alone and never touched here.
  */
+import { t } from "../../../i18n/messages";
 import { renderFragment } from "../../shared/dom";
 import { icon } from "../../shared/icons";
-
-const SHOW = "Show passphrase";
-const HIDE = "Hide passphrase";
 
 // Bound controls, tracked the way the shared copy binding tracks its own: the
 // binder runs on every paint and a second listener would toggle twice per
@@ -42,7 +40,7 @@ export const bindPassphraseReveal = (root: ParentNode | null | undefined): void 
     control.addEventListener("click", () => {
       const shown = input.type === "text";
       input.type = shown ? "password" : "text";
-      const label = shown ? SHOW : HIDE;
+      const label = t(shown ? "onboarding.passphrase.show" : "onboarding.passphrase.hide");
       control.setAttribute("aria-label", label);
       control.setAttribute("title", label);
       control.setAttribute("aria-pressed", String(!shown));

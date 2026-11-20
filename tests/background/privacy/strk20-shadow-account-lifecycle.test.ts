@@ -13,6 +13,7 @@
  * builder has assembled it. Proving and settlement need a prover and mainnet,
  * which this suite cannot reach.
  */
+
 import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -22,6 +23,7 @@ import {
   type PrivacySdkRuntime,
 } from "@bramble/privacy/official-sdk-service";
 import { transfersFor } from "@bramble/privacy/official-sdk-transfers";
+import { strk20English } from "@bramble/privacy/review-messages";
 import { SHADOW_INVOKE_CONTROL, SHADOW_INVOKE_SETTLES } from "@bramble/privacy/shadow-account-copy";
 import { defaultWalletPreferences } from "@bramble/settings/preferences";
 import { activityToCsv, memoryActivityLog } from "@bramble/transactions/activity";
@@ -245,7 +247,10 @@ describe.skipIf(!sdkBuilt)("shadow account lifecycle against the rc.8 SDK", () =
     const [card] = await waitForPendingApprovals<{
       readonly id: string;
       readonly summaries: readonly string[];
+      readonly summaryTexts?: readonly import("@bramble/core/i18n").MessageRef[];
     }>(handler, panel);
+    // Each line carries its review reference, which renders to exactly it.
+    expect(card?.summaryTexts?.map(strk20English)).toEqual([...(card?.summaries ?? [])]);
     expect(card?.summaries).toEqual(
       expect.arrayContaining([
         `Runs 1 call through your shadow account #1 for ${ORIGIN}`,

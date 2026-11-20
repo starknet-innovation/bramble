@@ -36,6 +36,10 @@ export const SECRET_MATERIAL_FILES = new Set([
   // Classifies diagnostics the background threw ("Invalid mnemonic", "…signature
   // key mismatch") by their words; matched here, never read, logged, or persisted.
   "packages/presentation/wallet-ui/src/sidepanel/runtime/friendly-error-internal.ts",
+  // Chinese for the error copy above, keyed by its exact English, so the keys
+  // quote the same sentences ("…passphrase…", "…signature…"). Text only.
+  "packages/presentation/wallet-ui/src/i18n/error-copy-zh-a.ts",
+  "packages/presentation/wallet-ui/src/i18n/error-copy-zh-b.ts",
   // Decides whether a rejected send is known not sent; it names the Ledger
   // catalog code "signature-verify-failed" as a lookup key and reads no secret.
   "packages/presentation/wallet-ui/src/sidepanel/shared/submit-outcome.ts",
@@ -152,6 +156,8 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/gate-views.ts",
   "packages/platform/ledger-protocol/src/client.ts",
   "packages/platform/ledger-protocol/src/errors.ts",
+  // Translations of errors.ts's sentences by rejection code ("signature-verify-failed").
+  "packages/platform/ledger-protocol/src/errors-i18n.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/first-run.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/onboard-entry.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/runtime-client.ts",
@@ -161,6 +167,26 @@ export const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-phrase-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  // Onboarding copy catalog: its sentences and message ids name the passphrase
+  // the reader types ("Vault passphrase", "Incorrect passphrase"). It holds
+  // text only — never a value — and nothing in it reads, logs, or stores one.
+  "packages/presentation/wallet-ui/src/i18n/messages/onboarding.ts",
+  // Multisig account copy catalog: its sentences and message ids name the
+  // co-signer signatures the reader collects ("Signature copied", "That
+  // signature isn't valid"). Text only; nothing in it reads or stores one.
+  "packages/presentation/wallet-ui/src/i18n/messages/multisig.ts",
+  // Multisig review catalog (signing text): it names the co-signer signatures a
+  // reviewer collects and verifies ("Signature fragment"). Text only, pinned.
+  "packages/presentation/wallet-ui/src/i18n/messages/review-steps-multisig.ts",
+  // Ledger journey copy catalog: its chooser and first-run sentences name a
+  // "Private key" import route and the passphrase. Text only, like the above.
+  "packages/presentation/wallet-ui/src/i18n/messages/ledger.ts",
+  // Settings copy catalog: the reveal-secrets screen names the vault passphrase
+  // it asks for ("Confirm vault passphrase"). Text only, like the onboarding one.
+  "packages/presentation/wallet-ui/src/i18n/messages/settings.ts",
+  // Signing-screen copy catalog: the Ledger takeover names the signature the
+  // device returns ("Signature received"). Text only, like the above.
+  "packages/presentation/wallet-ui/src/i18n/messages/review-sign.ts",
   // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
   "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
   "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",

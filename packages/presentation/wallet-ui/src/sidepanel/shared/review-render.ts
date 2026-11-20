@@ -12,8 +12,12 @@
 import { escapeHtml } from "@bramble/core/html";
 import { type FeeEstimate, sumFeeEstimates } from "@bramble/starknet/fee-bounds";
 import { formatTokenAmount } from "@bramble/starknet/rpc";
+import type { ReviewText } from "@bramble/transactions/review-messages";
 import { button } from "@bramble/ui-kit/controls";
 import type { UiAttributes } from "@bramble/ui-kit/html-attributes";
+import { localizeErrorCopy } from "../../i18n/error-copy";
+import { t, th } from "../../i18n/messages";
+import { reviewLine } from "../../i18n/review";
 import { tokenGlyph } from "../journeys/portfolio/token-row";
 import { icon } from "./icons";
 import { formatFri } from "./parts";
@@ -104,11 +108,10 @@ const shortfallHtml = (state: ReviewFeeState): string => {
   if (shield === undefined || shield.short <= 0n) {
     return balanceShortfallHtml(state);
   }
-  const needs = shield.includesAmount
-    ? `This shield needs up to ${friAtLeast(shield.need)}, including the amount.`
-    : `This shield needs up to ${friAtLeast(shield.need)} in fees.`;
-  return `<p class="review-flag" role="alert">${icon("alert")}${escapeHtml(
-    `${needs} Add ${friAtLeast(shield.short)}, then review again.`,
+  const facts = { need: friAtLeast(shield.need), short: friAtLeast(shield.short) };
+  return `<p class="review-flag" role="alert">${icon("alert")}${th(
+    shield.includesAmount ? "cost.fee.shieldShortIncluding" : "cost.fee.shieldShortFees",
+    facts,
   )}</p>`;
 };
 
@@ -116,7 +119,7 @@ const shortfallHtml = (state: ReviewFeeState): string => {
 // predicate says the STRK balance cannot cover the transaction (issue 191).
 const balanceShortfallHtml = (state: ReviewFeeState): string =>
   state.feeAffordability === "insufficient"
-    ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
+    ? `<p class="review-flag" role="alert">${icon("alert")}${th("cost.fee.balanceShort")}</p>`
     : "";
 
 const gaslessChoiceHtml = (state: ReviewFeeState, attributes: UiAttributes): string => {
@@ -142,7 +145,7 @@ const gaslessChoiceHtml = (state: ReviewFeeState, attributes: UiAttributes): str
           "data-gasless-label": offer.label,
           "data-gasless-token": offer.tokenAddress,
         },
-        label: `Pay up to ${formatted} ${offer.label}`,
+        label: t("cost.fee.payUpTo", { amount: formatted, token: offer.label }),
         variant: "secondary",
       });
     })
@@ -170,7 +173,7 @@ export const reviewFeeBlocked = (state: ReviewFeeState): boolean =>
 // `rule: false` drops the hairline above the section, for a surface that already
 // separates its own blocks and does not want a divider drawn inside them. The
 // label must be true of the content: "Cost" over fee lines only.
-const reviewBoundary = (content: string, rule = true, label = "Cost"): string =>
+const reviewBoundary = (content: string, rule = true, label = th("cost.section.cost")): string =>
   `<section class="decision-layer${rule ? " decision-boundary" : ""}" aria-label="${label}">
     <p class="decision-label">${label}</p>
     ${content}
@@ -201,8 +204,8 @@ export const reviewOutcome = (copy: string): string =>
  * reads as one consequence under one heading rather than two in a row.
  */
 export const reviewOutcomeSection = (trustedMarkup: string): string =>
-  `<section class="decision-layer decision-outcome" aria-label="What will happen">
-    <p class="decision-label">What will happen</p>
+  `<section class="decision-layer decision-outcome" aria-label="${th("cost.section.outcome")}">
+    <p class="decision-label">${th("cost.section.outcome")}</p>
     ${trustedMarkup}
   </section>`;
 
@@ -213,7 +216,7 @@ export const reviewOutcomeSection = (trustedMarkup: string): string =>
  * authorize site-specific actions" is not fee information. Escapes `copy`.
  */
 export const reviewConstraints = (copy: string): string =>
-  reviewBoundary(`<p>${escapeHtml(copy)}</p>`, true, "Cost and limits");
+  reviewBoundary(`<p>${escapeHtml(copy)}</p>`, true, th("cost.section.costLimits"));
 
 /**
  * Renders one plain-text fee line (a maximum fee, or why there is none yet)
@@ -237,7 +240,7 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
  * Escapes nothing; callers place it in a text sink.
  */
 export const estimatedFeeText = (fee: NonNullable<ReviewFeeState["fee"]>): string =>
-  `Estimated fee: ${formatFeeEstimate(fee)}`;
+  t("cost.fee.estimated", { fee: formatFeeEstimate(fee) });
 
 /**
  * Renders the shared fee section of a pre-sign review: the estimated fee when
@@ -277,9 +280,9 @@ export const reviewFeeSection = (
       // Both figures reach here as base units, but the pool quotes hex and an
       // estimate may be decimal, so each is parsed rather than compared as text.
       const total = BigInt(network.overallFee) + BigInt(poolFeeFri);
-      return `<p class="review-fee review-fee-total">Total fees: ${escapeHtml(
-        formatFri(`0x${total.toString(16)}`),
-      )}</p>`;
+      return `<p class="review-fee review-fee-total">${th("cost.fee.total", {
+        fee: formatFri(`0x${total.toString(16)}`),
+      })}</p>`;
     } catch {
       return "";
     }
@@ -289,7 +292,7 @@ export const reviewFeeSection = (
   const boundary = (content: string, network?: FeeEstimate): string =>
     reviewBoundary(`${content}${extra}${network ? totalLine(network) : ""}`, rule);
   if (state.feeEstimatePending === true) {
-    return boundary('<p class="review-fee" role="status">Estimating network fee…</p>');
+    return boundary(`<p class="review-fee" role="status">${th("cost.fee.estimating")}</p>`);
   }
   if (state.requiresDeployment === true && state.fee && state.deploymentFee) {
     // One action, one figure. Creating the account and sending are two
@@ -304,9 +307,10 @@ export const reviewFeeSection = (
       return boundary(
         `<div class="review-fee"><p>${escapeHtml(
           estimatedFeeText(total),
-        )}</p><p class="review-fee-part">Creating this account on Starknet is ${escapeHtml(
-          formatFeeEstimate(state.deploymentFee),
-        )} of that${state.signsTwice === true ? ", and your Ledger asks to sign both" : ""}.</p></div>${shortfallHtml(state)}`,
+        )}</p><p class="review-fee-part">${th(
+          state.signsTwice === true ? "cost.fee.deployShareLedger" : "cost.fee.deployShare",
+          { fee: formatFeeEstimate(state.deploymentFee) },
+        )}</p></div>${shortfallHtml(state)}`,
         total,
       );
     }
@@ -317,18 +321,16 @@ export const reviewFeeSection = (
     state.deploymentFeeEstimateFailed === undefined &&
     state.feeEstimateFailed !== true
   ) {
-    return boundary(
-      '<p class="review-fee">The network fee is estimated once this account is deployed.</p>',
-    );
+    return boundary(`<p class="review-fee">${th("cost.fee.afterDeploy")}</p>`);
   }
   if (state.requiresDeployment === true) {
     const both = state.feeEstimateDetail
-      ? escapeHtml(state.feeEstimateDetail)
-      : "Couldn't estimate both the transaction and account deployment fees. Check your connection and retry before sending.";
+      ? escapeHtml(localizeErrorCopy(state.feeEstimateDetail))
+      : th("cost.fee.bothFailed");
     return boundary(
       `<p class="review-flag" role="alert">${both}</p>${button({
         attributes: retryAttributes,
-        label: "Retry fee estimate",
+        label: t("cost.fee.retry"),
         variant: "secondary",
       })}`,
     );
@@ -341,12 +343,12 @@ export const reviewFeeSection = (
   }
   if (state.feeEstimateFailed === true) {
     const failed = state.feeEstimateDetail
-      ? escapeHtml(state.feeEstimateDetail)
-      : "Couldn't estimate the network fee right now. Check your connection and retry before sending.";
+      ? escapeHtml(localizeErrorCopy(state.feeEstimateDetail))
+      : th("cost.fee.failed");
     return boundary(
       `<p class="review-flag" role="alert">${failed}</p>${button({
         attributes: retryAttributes,
-        label: "Retry fee estimate",
+        label: t("cost.fee.retry"),
         variant: "secondary",
       })}`,
     );
@@ -408,7 +410,7 @@ export const reviewPanel = (items: readonly string[], clearCopy?: string): strin
         </div>`
       : ""
     : `<div class="review-panel decision-layer decision-risk" role="note">
-        <p class="decision-label">Risk and recovery</p>
+        <p class="decision-label">${th("cost.section.risk")}</p>
         ${items
           .map((item) => `<p class="review-flag">${icon("alert")}${escapeHtml(item)}</p>`)
           .join("")}
@@ -418,8 +420,9 @@ export const reviewPanel = (items: readonly string[], clearCopy?: string): strin
  * Extracts the user-facing messages from risk flags so both review surfaces
  * feed the shared panel the same way. Accepts any flag-shaped value (the
  * background's `ApprovalRiskFlag` and the transfer review's flag share this
- * structure), keeping the two callers on one path.
+ * structure), keeping the two callers on one path. Each line renders in the
+ * reader's language when its reference agrees with its English (see `reviewLine`).
  */
 export const riskFlagMessages = (
-  flags: readonly { readonly message: string }[],
-): readonly string[] => flags.map((flag) => flag.message);
+  flags: readonly { readonly message: string; readonly text?: ReviewText }[],
+): readonly string[] => flags.map((flag) => reviewLine(flag.text, flag.message));

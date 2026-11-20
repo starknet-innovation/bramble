@@ -6,11 +6,23 @@
 
 import type { AccountRef } from "@bramble/wallet-model/accounts";
 import { PRIVACY_OTHER_WALLET } from "@bramble/wallet-protocol/privacy-blocker";
+import { t } from "../../i18n/messages";
 import type { WalletStatus } from "../../popup/responses/responses";
 import type { PrivacyDisclosureState } from "../journeys/privacy/privacy-model";
 import type { BalanceState } from "../runtime/runtime";
-import { formatSavedDataLabel } from "./fiat";
+import { formatPriceTimestamp } from "./fiat";
 import type { WalletView } from "./parts";
+
+// "Using saved balances (12 Sep, 14:32 UTC).", or without the time when none was kept.
+const savedLine = (kind: "balances" | "prices", asOf: number | null): string => {
+  const time = formatPriceTimestamp(asOf);
+  if (kind === "balances") {
+    return time === null
+      ? t("shell.data.savedBalances")
+      : t("shell.data.savedBalancesAt", { time });
+  }
+  return time === null ? t("shell.data.savedPrices") : t("shell.data.savedPricesAt", { time });
+};
 
 /**
  * Returns public-data freshness details, or an empty list when data is current.
@@ -25,16 +37,12 @@ export const networkDataIssue = (
   ...("loading" in balances
     ? []
     : "error" in balances
-      ? ["Balances are temporarily unavailable."]
+      ? [t("shell.data.balancesUnavailable")]
       : balances.stale
-        ? [`Using saved ${formatSavedDataLabel("balances", balances.asOf ?? null)}.`]
+        ? [savedLine("balances", balances.asOf ?? null)]
         : []),
   ...(priceStale
-    ? [
-        hasPrices
-          ? `Using saved ${formatSavedDataLabel("prices", priceAsOf)}.`
-          : "Live prices are temporarily unavailable.",
-      ]
+    ? [hasPrices ? savedLine("prices", priceAsOf) : t("shell.data.pricesUnavailable")]
     : []),
 ];
 
@@ -50,11 +58,11 @@ export const privacyDataIssue = (
 ): string | null => {
   if (sharedAccount || activeView !== "home" || account === null) return null;
   if (privacy.blockerKind === "other-wallet") return PRIVACY_OTHER_WALLET;
-  if (privacy.error) return "Private balances are temporarily unavailable.";
+  if (privacy.error) return t("shell.data.privateUnavailable");
   return privacy.loading ||
     privacy.value === null ||
     privacy.value.accountId !== account.id ||
     privacy.value.networkId !== status.networkId
-    ? "Private balances are still refreshing."
+    ? t("shell.data.privateRefreshing")
     : null;
 };

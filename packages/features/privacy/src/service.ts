@@ -61,7 +61,10 @@ export {
   type Strk20AssetLookup,
   type Strk20FeeAsset,
   type Strk20ShadowAccountReview,
+  strk20ActionText,
+  strk20BatchTexts,
   strk20CallToInvoke,
+  strk20PlanText,
   summarizeStrk20Action,
   summarizeStrk20Batch,
   summarizeStrk20Plan,
@@ -69,9 +72,6 @@ export {
 
 /** Wallet-API NOT_REGISTERED (118). */
 export const STRK20_NOT_REGISTERED = "account not registered in strk20";
-/**
- * Wallet-API INSUFFICIENT_PRIVATE_BALANCE (119).
- */
 /** Wallet-API PRIVACY_LEAK (120). */
 export const STRK20_PRIVACY_LEAK = "strk20 privacy leak";
 /** No unlinkable broadcast service is configured. */

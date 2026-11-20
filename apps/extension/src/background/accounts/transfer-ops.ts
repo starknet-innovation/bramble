@@ -10,6 +10,7 @@ import { IndeterminateRpcWriteError } from "@bramble/starknet/provider";
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "@bramble/starknet/rpc";
 import { activityToken } from "@bramble/transactions/activity";
 import { resolveFeeAffordability } from "@bramble/transactions/fee-funds";
+import { summaryTextsFor } from "@bramble/transactions/review-messages";
 import {
   refuseOnPoisonedRecipient,
   verificationContext,
@@ -219,6 +220,7 @@ export const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
       requiresDeployment: fees.requiresDeployment,
       signsTwice: fees.requiresDeployment && account.derivation.kind === "ledger",
       summaries: report.calls.map((decoded) => decoded.summary),
+      ...summaryTextsFor(report.calls),
     },
   };
 };

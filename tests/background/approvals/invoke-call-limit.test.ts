@@ -13,7 +13,10 @@ import { providerInvokeRequest } from "@bramble/wallet-protocol/invoke";
 import { INVOKE_LIMITS } from "@bramble/wallet-protocol/invoke-limits";
 import { readProviderParams } from "@bramble/wallet-protocol/request-params";
 import { APPROVAL_TOO_LARGE } from "../../../apps/extension/src/background/approvals/approval-limits";
-import { fitsSidePanel } from "../../../apps/extension/src/background/approvals/approval-review-size";
+import {
+  fitsSidePanel,
+  referencesFitSidePanel,
+} from "../../../apps/extension/src/background/approvals/approval-review-size";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { readAddInvokeTransactionInput } from "../../../apps/extension/src/background/routing/message-inputs";
 import { readPendingApprovals } from "../../../packages/presentation/wallet-ui/src/popup/responses/approvals-responses";
@@ -147,6 +150,32 @@ describe("dapp invoke review budget", () => {
     });
     expect(admitted.callReviews).toHaveLength(fitting);
     expect(readPendingApprovals({ ok: true, pending: [admitted] })).toEqual([admitted]);
+  });
+
+  test("a batch too large for its review references is queued in English, not refused", () => {
+    expect(referencesFitSidePanel(approval(1))).toBe(true);
+    expect(referencesFitSidePanel(approval(fitting))).toBe(false);
+    const queue = createApprovalQueue();
+    const context = approval(1).context;
+    if (context === undefined) throw new Error("missing approval context");
+    const summaries = approval(fitting).summaries ?? [];
+    const admitted = queue.requestInvoke({
+      calls: calls(fitting),
+      context,
+      fee: {
+        fee: null,
+        feeAffordability: "unknown" as const,
+        feeEstimateFailed: false,
+        feeEstimatePending: true,
+        requiresDeployment: false,
+      },
+      flags: [],
+      origin: ORIGIN,
+      summaries,
+      summaryTexts: summaries.map(() => ({ facts: {}, key: "review.switchNetwork" })),
+    });
+    expect(admitted.summaries).toEqual(summaries);
+    expect(admitted.summaryTexts).toBeUndefined();
   });
 
   test("lists every call of a reviewable batch", () => {

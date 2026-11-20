@@ -14,6 +14,7 @@ import { explorerFallbackAllowed, type WalletPreferences } from "@bramble/settin
 import { button } from "@bramble/ui-kit/controls";
 import { checkboxField, textField } from "@bramble/ui-kit/fields";
 import { isStarknetNetworkId, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { t, th } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { contextHelp, flowHeader, flowScreen, walletMenuRow } from "../../shared/parts";
@@ -32,9 +33,9 @@ const devnetHint = (status: WalletStatus, preferences: WalletPreferences | null)
     return "";
   }
   const override = rpcOverrideFor(status, preferences);
-  const endpoint = escapeHtml(override || STARKNET_NETWORKS.SN_DEVNET.rpcUrls[0]);
-  const elsewhere = override ? "" : " Set a custom RPC under Advanced if yours runs elsewhere.";
-  return `<p class="hint">Expects a node at ${endpoint} started with --chain-id SN_DEVNET.${elsewhere}</p>`;
+  const endpoint = override || (STARKNET_NETWORKS.SN_DEVNET.rpcUrls[0] ?? "");
+  const elsewhere = override ? "" : ` ${th("settings.network.devnetElsewhere")}`;
+  return `<p class="hint">${th("settings.network.devnet", { endpoint })}${elsewhere}</p>`;
 };
 
 const strk20ConfigFor = (
@@ -75,7 +76,7 @@ const explorerFallbackForm = (
     ${textField({
       autocomplete: "off",
       className: "mono",
-      label: `Explorer data API for ${status.network}`,
+      label: t("settings.endpoints.explorerApi", { network: status.network }),
       name: "apiUrl",
       placeholder: "https://…/v1",
       spellcheck: false,
@@ -85,11 +86,11 @@ const explorerFallbackForm = (
     ${checkboxField({
       checked: allowed,
       name: "explorerFallback",
-      text: "Use this explorer for activity, and as a fallback when the RPC fails",
+      text: t("settings.endpoints.explorerFallback"),
     })}
     ${button({
       icon: "check",
-      label: "Save explorer",
+      label: t("settings.endpoints.saveExplorer"),
       type: "submit",
       variant: "secondary",
     })}
@@ -118,11 +119,11 @@ const endpointDisclosure = (
  * Renders the primary network picker.
  */
 export const networkFlow = (status: WalletStatus, preferences: WalletPreferences | null): string =>
-  flowHeader("Network", status) +
+  flowHeader(t("settings.network.title"), status) +
   flowScreen(
     "network",
     `<section class="section">
-      <div class="option-list" role="group" aria-label="Networks">
+      <div class="option-list" role="group" aria-label="${th("settings.network.list")}">
         ${status.networks
           .map(
             (
@@ -137,7 +138,7 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
           )
           .join("")}
       </div>
-      <p class="hint">Switching selects or derives an account on the target network.</p>
+      <p class="hint">${th("settings.network.hint")}</p>
       ${devnetHint(status, preferences)}
       <p id="picker-result" role="status"></p>
     </section>
@@ -145,9 +146,11 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
       <div class="menu-list">
         ${walletMenuRow(
           "advanced-network",
-          "Advanced endpoints",
+          t("settings.endpoints.advanced"),
           "settings",
-          rpcOverrideFor(status, preferences) ? "Custom RPC" : "Defaults",
+          rpcOverrideFor(status, preferences)
+            ? t("settings.endpoints.customRpc")
+            : t("settings.endpoints.defaults"),
         )}
       </div>
     </section>`,
@@ -167,26 +170,28 @@ export const advancedNetworkFlow = (
   const privacy = strk20ConfigFor(status, preferences);
   const explorerAllowed = explorerFallbackFor(status, preferences);
   return (
-    flowHeader("Endpoints", status) +
+    flowHeader(t("settings.endpoints.title"), status) +
     flowScreen(
       "advanced-network",
       `<section class="section">
-      <p class="review-flag" role="note">Only use endpoints you trust. Your browser asks before granting access to a new service host.</p>
+      <p class="review-flag" role="note">${th("settings.endpoints.trustNote")}</p>
       ${contextHelp(
         "advanced-endpoint-privacy",
-        "What an endpoint can learn",
-        "Each service sees the requests sent to it. Use only ones you trust. Clear a field to restore the default.",
+        t("settings.endpoints.helpTitle"),
+        t("settings.endpoints.helpBody"),
       )}
       <div class="disclosure-stack">
         ${endpointDisclosure(
           "rpc",
-          "RPC endpoint",
-          rpcOverrideFor(status, preferences) ? "Custom" : "Default",
+          t("settings.endpoints.rpc"),
+          rpcOverrideFor(status, preferences)
+            ? t("settings.endpoints.custom")
+            : t("settings.endpoints.default"),
           `<form id="rpc-form">
             ${textField({
               autocomplete: "off",
               className: "mono",
-              label: `Custom endpoint for ${status.network}`,
+              label: t("settings.endpoints.rpcCustom", { network: status.network }),
               name: "rpcUrl",
               placeholder: "https://…",
               spellcheck: false,
@@ -195,7 +200,7 @@ export const advancedNetworkFlow = (
             })}
             ${button({
               icon: "check",
-              label: "Save endpoint",
+              label: t("settings.endpoints.saveRpc"),
               type: "submit",
               variant: "secondary",
             })}
@@ -204,25 +209,27 @@ export const advancedNetworkFlow = (
         )}
         ${endpointDisclosure(
           "explorer-fallback",
-          "Explorer data",
-          `${explorerApiUrlFor(status, preferences) ? "Custom" : "Default"} · ${explorerAllowed ? "Allowed" : "Off"}`,
+          t("settings.endpoints.explorerData"),
+          `${explorerApiUrlFor(status, preferences) ? t("settings.endpoints.custom") : t("settings.endpoints.default")} · ${explorerAllowed ? t("settings.endpoints.allowed") : t("settings.endpoints.off")}`,
           explorerFallbackForm(status, preferences, explorerAllowed),
         )}
         ${endpointDisclosure(
           "strk20-services",
-          "STRK20 privacy services",
-          privacy ? "Configured" : "Off",
+          t("settings.endpoints.strk20"),
+          privacy ? t("settings.endpoints.configured") : t("settings.endpoints.off"),
           strk20ServicesForm(status.network, privacy),
         )}
         ${endpointDisclosure(
           "nostr-relay",
-          "Multisig coordination relay",
-          nostrRelayUrlFor(preferences) ? "Custom" : "Reviewed defaults",
+          t("settings.endpoints.relay"),
+          nostrRelayUrlFor(preferences)
+            ? t("settings.endpoints.custom")
+            : t("settings.endpoints.reviewedDefaults"),
           `<form id="nostr-relay-form">
             ${textField({
               autocomplete: "off",
               className: "mono",
-              label: "Custom Nostr relay",
+              label: t("settings.endpoints.nostrRelay"),
               name: "relayUrl",
               placeholder: "wss://relay.example",
               spellcheck: false,
@@ -231,7 +238,7 @@ export const advancedNetworkFlow = (
             })}
             ${button({
               icon: "check",
-              label: "Save relay",
+              label: t("settings.endpoints.saveRelay"),
               type: "submit",
               variant: "secondary",
             })}
@@ -241,28 +248,32 @@ export const advancedNetworkFlow = (
         ${collectiblesSettings(preferences, endpointDisclosure)}
         ${endpointDisclosure(
           "product-analytics",
-          "Product analytics",
-          (preferences?.productAnalytics ?? true) ? "On" : "Off",
+          t("settings.analytics.title"),
+          (preferences?.productAnalytics ?? true)
+            ? t("settings.endpoints.on")
+            : t("settings.endpoints.off"),
           `${checkboxField({
             attributes: { id: "product-analytics" },
             checked: preferences?.productAnalytics ?? true,
             name: "productAnalytics",
-            text: "Share pseudonymous gateway usage (on by default)",
+            text: t("settings.analytics.toggle"),
           })}
-          <p class="hint">Helps Bramble understand feature usage and failures.</p>`,
+          <p class="hint">${th("settings.analytics.hint")}</p>`,
         )}
         ${endpointDisclosure(
           "reliability-diagnostics",
-          "Reliability diagnostics",
-          preferences?.reliabilityDiagnostics ? "On" : "Off",
+          t("settings.diagnostics.title"),
+          preferences?.reliabilityDiagnostics
+            ? t("settings.endpoints.on")
+            : t("settings.endpoints.off"),
           `${checkboxField({
             attributes: { id: "reliability-diagnostics" },
             checked: preferences?.reliabilityDiagnostics ?? false,
             name: "reliabilityDiagnostics",
-            text: "Keep anonymous RPC and explorer reliability counters on this device",
+            text: t("settings.diagnostics.toggle"),
           })}
-          <p class="hint">Stays on this device until you export it.</p>
-          ${button({ attributes: { id: "diagnostics-export" }, icon: "receive", label: "Download diagnostics" })}`,
+          <p class="hint">${th("settings.diagnostics.hint")}</p>
+          ${button({ attributes: { id: "diagnostics-export" }, icon: "receive", label: t("settings.diagnostics.download") })}`,
         )}
       </div>
     </section>`,
