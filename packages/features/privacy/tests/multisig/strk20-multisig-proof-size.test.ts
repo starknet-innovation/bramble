@@ -78,6 +78,24 @@ describe("proof bytes of a real size", () => {
     await expect(store.upsertRelay(relay("B".repeat(1_000)))).resolves.toBe("conflict");
   });
 
+  test("a sent relay keeps its row but not its proof bytes", async () => {
+    const { keys, store: kv } = keyed();
+    const store = createMultisigStrk20Store(kv);
+    await store.upsertRelay(relay(PROOF.data));
+    expect(keys()).toContain(
+      `bramble:multisig-strk20-proof:relay:${RELAY_ID.toLowerCase().replace("_", "-")}`,
+    );
+    const ready = await store.getRelay(RELAY_ID);
+    if (!ready) throw new Error("relay missing");
+    await expect(store.upsertRelay({ ...ready, state: "submitted" })).resolves.toBe("stored");
+    expect(keys()).toEqual(["bramble:argent-multisig-strk20:v1"]);
+    const sent = await store.getRelay(RELAY_ID);
+    expect(sent?.state).toBe("submitted");
+    // Writing the sent row back, as read, is the same row and keeps no bytes.
+    if (sent) await expect(store.upsertRelay(sent)).resolves.toBe("stored");
+    expect(keys()).toEqual(["bramble:argent-multisig-strk20:v1"]);
+  });
+
   test("dropping or purging leaves no proof bytes behind", async () => {
     const { keys, store: kv } = keyed();
     const store = createMultisigStrk20Store(kv);

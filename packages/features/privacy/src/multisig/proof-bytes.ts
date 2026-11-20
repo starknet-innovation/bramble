@@ -51,14 +51,19 @@ export const attachedProof = async <T extends { readonly proof: Strk20Proof }>(
     : null;
 };
 
-/** Every proof-bytes key a stored shape still points at. */
+/**
+ * Every proof-bytes key a stored shape still needs. A sent relay needs none:
+ * its proof is never proved, refreshed, or sent again.
+ */
 export const referencedProofKeys = (shape: {
   readonly proofs: readonly unknown[];
   readonly relays: readonly unknown[];
 }): ReadonlySet<string> => {
   const keys = new Set<string>();
   for (const row of shape.proofs) addReferencedKey(keys, "intent", row, "intentId");
-  for (const row of shape.relays) addReferencedKey(keys, "relay", row, "id");
+  for (const row of shape.relays) {
+    if (!isRecord(row) || row["state"] !== "submitted") addReferencedKey(keys, "relay", row, "id");
+  }
   return keys;
 };
 

@@ -1,7 +1,9 @@
 /**
  * Local storage for multisig STRK20 authorizations, held proof requests,
  * proof bytes, and relay requests. Proof bytes are kept under one key each
- * (see ./proof-bytes); rows carry a marker in their place. Authorizations are re-checked against the shared scalar on read,
+ * (see ./proof-bytes); rows carry a marker in their place. Intent proofs are
+ * capped at MAX_MULTISIG_STRK20_PROOFS across every multisig, and a relay's
+ * bytes are dropped once it is sent. Authorizations are re-checked against the shared scalar on read,
  * so a tampered call list cannot be signed. Proof bytes never go into a
  * Nostr package; they live only under this key.
  */
@@ -237,9 +239,9 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
       async getRelay(id) {
         const shape = await readShape(store);
         const found = shape.relays.find((row) => isRecord(row) && row["id"] === id);
-        return found && isMultisigStrk20RelayRequest(found)
-          ? attachedProof(store, "relay", id, found)
-          : null;
+        if (!found || !isMultisigStrk20RelayRequest(found)) return null;
+        // A sent relay keeps only its row; its proof bytes are gone.
+        return found.state === "submitted" ? found : attachedProof(store, "relay", id, found);
       },
       async listHeld(accountId) {
         const shape = await readShape(store);
@@ -348,7 +350,10 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
         const refusal = await relayRefusal(current, record);
         if (refusal) return refusal;
         const key = proofBytesKey("relay", record.id);
-        if (!isDetachedProof(record)) await store.set(key, record.proof.data);
+        // A sent relay's bytes are never needed again, so they are not kept.
+        if (!isDetachedProof(record) && record.state !== "submitted") {
+          await store.set(key, record.proof.data);
+        }
         // A collecting or ready relay holds the only copy of its proof.
         const relays = placeMultisigStrk20Row(
           shape.relays,
