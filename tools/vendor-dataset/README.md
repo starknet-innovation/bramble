@@ -64,6 +64,17 @@ extension.
   empty and the nonce does not move. TX-10 is skipped until the wallet can
   import an sncast-shaped account (TA-07). About 0.25 testnet STRK a run;
   exits non-zero when any check fails.
+- `verify-sepolia-deploys.ts` (`bun run verify:sepolia:deploys`, issue 976)
+  checks a first deploy of every account type the wallet deploys, on a phrase
+  generated for the run and never printed or stored. TX-00 funds its accounts
+  and gets what is left swept back. D7: Add account → Regular account makes an
+  unfunded account whose Deploy screen asks for STRK. D1–D3: the first send
+  deploys OZ, Argent 0.4 on Bramble's ladder and Argent 0.4 on Ready's. D4: an
+  explicit Deploy, self-paid while Sepolia's relay offers no sponsorship. D5:
+  an undeployed Braavos shows "Not deployed" until its explicit Deploy, then
+  sends. Each address must match the dataset's own derivation. About 2
+  testnet STRK a run, mostly the sweep's reserve left as dust; a case that
+  fails before deploying strands its 1 STRK float.
 - The test Ledger is optional. By default TA-32…TA-37 are skipped, so the run
   needs no device. With `BRAMBLE_SEPOLIA_LEDGER=1` the browser opens visibly and,
   after the other checks, asks you to plug in and unlock the test Ledger, open
