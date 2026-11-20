@@ -19,7 +19,7 @@ bun run test:e2e             # Playwright extension E2E (requires dist/; egress 
 bun run check:firefox        # Mozilla's validator over dist-firefox/ (needs build:firefox first)
 bun run package:extension    # writes artifacts/*.zip + .sha256
 bun run dev:session          # headed browser on a kept profile, onboards/unlocks itself
-bun run verify:sepolia       # live Sepolia import scorecard (needs dist/ + seed file; ~15 min)
+bun run verify:sepolia       # live Sepolia import scorecard (needs dist/ + seed file; ~20 min)
 bun run verify:sepolia:sends # live Sepolia self-transfer from every S-TXN account (testnet STRK)
 bun run verify:sepolia:deploys # live Sepolia first deploy of each account type (testnet STRK)
 ```

@@ -177,9 +177,9 @@ jobs:
         continue-on-error: true
         run: bun test tests/property
       # Live Sepolia run of every in-wallet import path against the issue-821
-      # test accounts (tools/vendor-dataset/verify-sepolia.ts). Read-only: it
-      # never signs or sends. Its testnet-only seed file is the one secret this
-      # workflow holds, and only this step sees it: written owner-only to the
+      # test accounts (tools/vendor-dataset/verify-sepolia.ts). It sends nothing:
+      # a broadcast firewall aborts every send. Its testnet-only seed file is a
+      # secret only this step sees: written owner-only to the
       # runner's temp directory and removed when the step ends. The run's own
       # redactor keeps seeds and derived keys out of every line it prints. It
       # records no tape and uploads nothing: this is a public repository, and
@@ -252,7 +252,7 @@ jobs:
           BRAMBLE_SEPOLIA_TXN_SEED: ${{ secrets.BRAMBLE_SEPOLIA_TXN_SEED }}
         run: |
           set -euo pipefail
-          if [ ! -f tools/vendor-dataset/verify-sepolia-deploys.ts ]; then
+          if [ ! -f tools/vendor-dataset/sepolia-bank-runway.ts ]; then
             echo "::error::This release branch predates the Sepolia send run (issue 976)."
             exit 1
           fi
@@ -260,7 +260,7 @@ jobs:
           seeds="$RUNNER_TEMP/sepolia-txn-seed.env"
           trap 'rm -f "$seeds"' EXIT
           echo "::add-mask::$BRAMBLE_SEPOLIA_TXN_SEED"
-          printf 'BRAMBLE_DATASET_SEED_S_TXN="%s"\n' "$BRAMBLE_SEPOLIA_TXN_SEED" > "$seeds"
+          printf 'BRAMBLE_DATASET_SEED_S_TXN="%s"\n' "${BRAMBLE_SEPOLIA_TXN_SEED//[$'\r\n']/}" > "$seeds"
           unset BRAMBLE_SEPOLIA_TXN_SEED
           export BRAMBLE_DATASET_ENV_FILE="$seeds" BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia
           bun tools/vendor-dataset/sepolia-bank-runway.ts
