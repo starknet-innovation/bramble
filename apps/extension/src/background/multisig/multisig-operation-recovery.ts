@@ -46,9 +46,7 @@ export const recordBroadcastIntent = async (
   record: ArgentMultisigRecord,
   transactionHash: string,
 ): Promise<void> => {
-  if (intent.prepared.proofFacts && intent.prepared.proofFacts.length > 0) {
-    await recordPoolWrite(deps, record, transactionHash).catch(() => {});
-  }
+  await journalPoolWrite(deps, intent, record, transactionHash);
   await deps.preferencesStore
     .read()
     .then((preferences) =>
@@ -62,6 +60,19 @@ export const recordBroadcastIntent = async (
     )
     .catch(() => {});
   await recordSubmittedIntentActivity(deps, intent, record.networkId, transactionHash);
+};
+
+// Records `intent` in the multisig's maturity journal when it carries a proof.
+// A failed record is not a failed submission, so it never throws.
+const journalPoolWrite = async (
+  deps: Pick<MultisigOpsDeps, "preferencesStore" | "runtimeRpc">,
+  intent: ArgentMultisigSigningIntent,
+  record: ArgentMultisigRecord,
+  transactionHash: string,
+): Promise<void> => {
+  if (intent.prepared.proofFacts && intent.prepared.proofFacts.length > 0) {
+    await recordPoolWrite(deps, record, transactionHash).catch(() => {});
+  }
 };
 
 // A registration or deposit changes the multisig's pool state. The privacy
@@ -161,6 +172,9 @@ const journalObservedSubmission = async (
   intent: ArgentMultisigSigningIntent,
   observed: Extract<ObservedSubmission, { readonly kind: "found" }>,
 ): Promise<void> => {
+  // Found on chain rather than broadcast here: a proof-carrying write still
+  // has to hold back the next proof, as a direct broadcast does.
+  await journalPoolWrite(deps, intent, observed.record, intent.prepared.transactionHash);
   await recordApproveAllowances({
     assets: verificationContext(observed.record, observed.preferences),
     calls: normalizedArgentMultisigCalls(intent.prepared.calls),

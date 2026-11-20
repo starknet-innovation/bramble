@@ -7,7 +7,14 @@
  * that draws a new value on every compile.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { argentMultisigOperationId } from "@bramble/multisig/repository";
+import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
+import { createMemoryStore } from "@bramble/store/kv";
 import { num } from "starknet";
+import {
+  findResumableStrk20Request,
+  isRelayPlanLive,
+} from "../../../apps/extension/src/background/multisig/multisig-strk20-held";
 import {
   HARNESS_MULTISIG_ID,
   harnessAccountA,
@@ -54,9 +61,19 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-const owners = async (options: { readonly tamper?: boolean } = {}) => {
+const owners = async (options: { readonly onChain?: boolean; readonly tamper?: boolean } = {}) => {
   const sdk = randomizedStrk20Sdk(options);
-  const cosigner = await makeStrk20Cosigner({ strk20: sdk.service });
+  const cosigner = await makeStrk20Cosigner({
+    strk20: sdk.service,
+    // The chain reports every hash as landed, for the recovery path.
+    ...(options.onChain
+      ? {
+          getTransactionStatuses: async (hash: string) => ({
+            [hash]: { finalizedOnL1: false, found: true, status: "pending" as const },
+          }),
+        }
+      : {}),
+  });
   const store = cosigner.owner.strk20MultisigStore;
   // A co-owner holds the key, so registration is not refused as the only copy.
   await store.markKeyShared(HARNESS_MULTISIG_ID, true);
@@ -69,7 +86,27 @@ const owners = async (options: { readonly tamper?: boolean } = {}) => {
       multisigId: HARNESS_MULTISIG_ID,
       type: "wallet.prepareArgentMultisigStrk20",
     });
-  return { as, call, register, sdk, store };
+  // Registers through both rounds and returns the frozen, fully signed intent.
+  const signedRegistration = async (): Promise<string> => {
+    const first = await register();
+    await as(harnessAccountA.id);
+    await call({ id: first["id"], type: "wallet.signArgentMultisigStrk20Authorization" });
+    await as(harnessAccountB.id);
+    const intentId = ((await register())["intent"] as { readonly id: string }).id;
+    for (const signerAccountId of [harnessAccountA.id, harnessAccountB.id]) {
+      await call({ intentId, signerAccountId, type: "wallet.signArgentMultisigIntent" });
+    }
+    return intentId;
+  };
+  return {
+    as,
+    call,
+    multisigStore: cosigner.owner.multisigStore,
+    register,
+    sdk,
+    signedRegistration,
+    store,
+  };
 };
 
 describe("a multisig private action is proved as compiled", () => {
@@ -133,6 +170,26 @@ describe("a multisig private action is proved as compiled", () => {
     ]);
   });
 
+  test("a registration found on chain by recovery is journaled too", async () => {
+    const { call, multisigStore, sdk, signedRegistration } = await owners({ onChain: true });
+    const intentId = await signedRegistration();
+    const intent = await multisigStore.getIntent(intentId);
+    const hash = intent?.prepared.transactionHash ?? "";
+    // An earlier send left its claim, so this submit resolves from the chain.
+    const operationId = argentMultisigOperationId("submit", HARNESS_MULTISIG_ID, hash);
+    if (!operationId) throw new Error("submission operation id unavailable");
+    await multisigStore.claimOperation({
+      accountId: HARNESS_MULTISIG_ID,
+      id: operationId,
+      kind: "submit",
+      target: hash,
+    });
+    await expect(
+      call({ intentId, type: "wallet.submitArgentMultisigIntent" }),
+    ).resolves.toMatchObject({ ok: true, transactionHash: hash });
+    expect(sdk.log.recorded).toEqual([{ accountId: HARNESS_MULTISIG_ID, transactionHash: hash }]);
+  });
+
   test("a compile whose calldata is not the signed call is refused and not held", async () => {
     const { register, sdk, store } = await owners({ tamper: true });
     await expect(register()).resolves.toEqual({ error: "Invalid Argent multisig private proof" });
@@ -156,5 +213,50 @@ describe("a multisig private action is proved as compiled", () => {
     expect((await store.listHeld(HARNESS_MULTISIG_ID)).map((row) => row.id)).toEqual([
       second["id"] as string,
     ]);
+  });
+});
+
+describe("a held relay's fee authorization", () => {
+  const NOW = 1_800_000_000;
+  const plan = (executeBefore: number | string) => ({
+    authorization: {
+      caller: "0x1",
+      executeAfter: "0x0",
+      executeBefore: typeof executeBefore === "number" ? num.toHex(executeBefore) : executeBefore,
+      publicCallCount: 0,
+    },
+    feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" },
+  });
+
+  test("is live only with more than two minutes left", () => {
+    expect(isRelayPlanLive(plan(NOW + 121), NOW)).toBe(true);
+    expect(isRelayPlanLive(plan(NOW + 120), NOW)).toBe(false);
+    expect(isRelayPlanLive(plan(NOW - 1), NOW)).toBe(false);
+    expect(isRelayPlanLive(plan("not a felt"), NOW)).toBe(false);
+    // A plan with no authorization window has no deadline.
+    expect(isRelayPlanLive({ feeAction: plan(0).feeAction }, NOW)).toBe(true);
+  });
+
+  test("a held relay past its authorization is dropped instead of proved", async () => {
+    const store = createMultisigStrk20Store(createMemoryStore());
+    const id = `${HARNESS_MULTISIG_ID}:0x${"a".repeat(63)}`;
+    await store.putHeld({
+      accountId: HARNESS_MULTISIG_ID,
+      envelope: { nonce: "0x0" },
+      id,
+      plan: plan(NOW - 1),
+      provingBlock: COMPILED_BLOCK,
+    });
+    const resumed = await findResumableStrk20Request({
+      accountId: HARNESS_MULTISIG_ID,
+      action: { amount: "0x1", kind: "transfer", recipient: "0x2", token: "0x3" },
+      nowSeconds: NOW,
+      readWindow: async () => ({ currentBlock: BigInt(COMPILED_BLOCK + 1), validityBlocks: 100n }),
+      scalar: HARNESS_SCALAR,
+      signers: { signerPublicKeys: [], threshold: 2 },
+      store,
+    });
+    expect(resumed).toBeNull();
+    expect(await store.listHeld(HARNESS_MULTISIG_ID)).toEqual([]);
   });
 });

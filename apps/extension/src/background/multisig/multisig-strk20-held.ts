@@ -7,7 +7,7 @@
  */
 
 import { WalletError } from "@bramble/core/errors";
-import type { Json } from "@bramble/core/json";
+import { isRecord, type Json } from "@bramble/core/json";
 import { strk20ProofSubmittable } from "@bramble/privacy/multisig-proof-window";
 import {
   type MultisigStrk20ActionRequest,
@@ -27,6 +27,27 @@ import { canonicalFelt } from "@bramble/wallet-model/networks";
 import { num } from "starknet";
 
 const HELD_PROOF_INVALID = "Invalid Argent multisig private proof";
+
+// A relay plan is resumed only while its paymaster authorization has this
+// long left: co-owners still sign the relay's typed data, and the relay has to
+// accept it, after the proof is made.
+const RELAY_PLAN_MARGIN_SECONDS = 120n;
+
+/**
+ * True while a stored relay fee plan can still be sent: it names no
+ * authorization window, or that window closes more than the margin from
+ * `nowSeconds`. A malformed deadline is not live.
+ */
+export const isRelayPlanLive = (plan: unknown, nowSeconds: number): boolean => {
+  if (!isRecord(plan) || !isRecord(plan["authorization"])) return true;
+  const before = plan["authorization"]["executeBefore"];
+  if (typeof before !== "string") return false;
+  try {
+    return BigInt(before) > BigInt(nowSeconds) + RELAY_PLAN_MARGIN_SECONDS;
+  } catch {
+    return false;
+  }
+};
 
 /** A held request whose signature is complete, ready to prove. */
 export type MultisigStrk20Resumed = {
@@ -150,15 +171,28 @@ const readyFor = async (
   return calldata ? { authorization, calldata } : null;
 };
 
+// A relay whose fee authorization has lapsed would be proved and then refused
+// at signing, every time; it is dropped so the action is quoted again.
+const droppedAsLapsed = async (
+  input: { readonly nowSeconds: number; readonly store: MultisigStrk20Store },
+  row: { readonly id: string; readonly plan?: unknown },
+): Promise<boolean> => {
+  if (row.plan === undefined || isRelayPlanLive(row.plan, input.nowSeconds)) return false;
+  await input.store.dropHeld(row.id);
+  return true;
+};
+
 /**
  * The newest held request for `action` whose authorization now holds the
  * threshold and whose block is still inside the pool's proof window; a held
  * request past that window is dropped, so the action is compiled and signed
- * again. A relay action is resumed only with the fee plan it was compiled with.
+ * again. A relay action is resumed only with the fee plan it was compiled with,
+ * and only while that plan's authorization is live; a lapsed one is dropped.
  */
 export const findResumableStrk20Request = async (input: {
   readonly accountId: string;
   readonly action: MultisigStrk20ActionRequest;
+  readonly nowSeconds: number;
   readonly readWindow: () => Promise<{
     readonly currentBlock: bigint;
     readonly validityBlocks: bigint;
@@ -171,6 +205,7 @@ export const findResumableStrk20Request = async (input: {
   const held = [...(await input.store.listHeld(input.accountId))].reverse();
   for (const row of held) {
     if (relay !== (row.plan !== undefined)) continue;
+    if (await droppedAsLapsed(input, row)) continue;
     const ready = await readyFor(input, row.id);
     if (!ready) continue;
     const proofWindow = await input.readWindow();

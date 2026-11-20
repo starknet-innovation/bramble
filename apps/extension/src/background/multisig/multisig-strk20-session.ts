@@ -207,6 +207,7 @@ export const openMultisigStrk20Session = async (
     resumed ??= await findResumableStrk20Request({
       accountId: resolved.record.id,
       action: request,
+      nowSeconds: Math.floor(deps.now() / 1000),
       readWindow: () => readMultisigStrk20Window(resolved.rpcUrls, poolAddress),
       scalar,
       signers,
