@@ -206,9 +206,11 @@ jobs:
   # check:argent/check:privacy, which require the vendored artifacts.)
   #
   # The gates are split across three parallel jobs so the PR waits for the
-  # slowest one rather than for their sum. `bun install`, `check:files` and
-  # `check:coverage` use the name+run form on purpose: they also appear in
-  # release-validation, and the ci-order gate in scripts/check-config-standards.ts
+  # slowest one rather than for their sum. Each has a 15-minute timeout, well
+  # above its normal run, so a hung run cannot hold a runner for 6 hours.
+  # `bun install`, `check:files` and `check:coverage` use the name+run form on
+  # purpose: they also appear in release-validation, and the ci-order gate in
+  # scripts/check-config-standards.ts
   # matches bare "- run: <cmd>" lines by first occurrence. Writing them as
   # name+run keeps their lines out of that match so release-validation stays the
   # single source of the ordered heavy pipeline the gate expects.
@@ -220,6 +222,7 @@ jobs:
   fast-static:
     if: github.event.action != 'edited'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -244,6 +247,7 @@ jobs:
   fast-types:
     if: github.event.action != 'edited'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -268,6 +272,7 @@ jobs:
   fast-tests:
     if: github.event.action != 'edited'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -286,6 +291,7 @@ jobs:
     if: always() && github.event.action != 'edited'
     needs: [fast-static, fast-types, fast-tests]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Require every fast gate to pass
         env:
