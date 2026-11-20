@@ -34,11 +34,13 @@ import {
 import { sepoliaVar } from "./sepolia-seeds";
 import { braavosDeployParams } from "./sepolia-stage-brv";
 
-// Measured over the first three send runs (2026-11-19): about 0.041 STRK per
-// self-transfer, six senders, so about 0.25 STRK a night and roughly 45 nights
-// per sender float. The bank is spent only by the deploy cases (#976, PR 4);
-// size BANK_FLOAT once those are measured. Re-run this stage to refill.
-const BANK_FLOAT = 20n * STRK;
+// Measured on Sepolia (2026-11-19/20). Send run: about 0.041 STRK per
+// self-transfer from each of six senders, about 0.25 STRK a night, so roughly
+// 45 nights per sender float. Deploy run: about 2 STRK a night from the bank,
+// mostly the sweep's reserve (three times its fee estimate) left as dust on
+// five throwaway accounts, so 50 STRK lasts about 25 nights. The nightly's
+// runway check (#976, PR 6) flags a low bank; re-run this stage to refill.
+const BANK_FLOAT = 50n * STRK;
 const SENDER_FLOAT = 2n * STRK;
 const ETH_FLOAT = 10n ** 15n; // 0.001 ETH, for TX-01's one ETH self-transfer
 // TX-10's salt, standing in for the random one sncast picks.
