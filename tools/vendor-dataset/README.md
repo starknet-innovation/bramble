@@ -75,6 +75,11 @@ extension.
   sends. Each address must match the dataset's own derivation. About 2
   testnet STRK a run, in fees and the sweep's reserve left as dust; a case that
   fails before deploying strands its 1 STRK float.
+- `verify-sepolia.ts` also checks that Send is refused for TA-08, TA-20, TA-29
+  and TA-12 (path `SEND`, `verify-sepolia-refusals.ts`): last in the run, it
+  imports each from its scan and checks Home from the account. The whole run
+  sits behind a broadcast firewall that allows no sender, so a send attempt is
+  aborted and counted, and any broadcast during the import cards fails the run.
 - The test Ledger is optional. By default TA-32…TA-37 are skipped, so the run
   needs no device. With `BRAMBLE_SEPOLIA_LEDGER=1` the browser opens visibly and,
   after the other checks, asks you to plug in and unlock the test Ledger, open
