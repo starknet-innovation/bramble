@@ -108,10 +108,12 @@ function sender(
       // A shape that computes a different address than the deploy used would
       // leave the recorded address empty; never record that as deployed.
       if (!deployedClass) throw new Error(`no class at ${e.address} after deploy`);
+      // Top up before `after`, so an upgrade (TX-06) that used up the fee
+      // float on a failed attempt has STRK for its retry.
+      await topUp(e, "STRK", card.float ?? SENDER_FLOAT);
       const extra = card.after ? await card.after(e) : {};
       // Read again after `after`: an upgrade (TX-06) changes the live class.
       const liveClass = card.after ? await classAt(e.address) : deployedClass;
-      await topUp(e, "STRK", card.float ?? SENDER_FLOAT);
       // ETH is optional: the bank may hold none, and the suite skips its ETH
       // spec on an account without ETH. Recorded, never an error.
       let eth: string | undefined;
