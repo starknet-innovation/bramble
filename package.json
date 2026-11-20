@@ -50,6 +50,7 @@
     "vendor:ledger-app": "bun run scripts/vendor-ledger-app.ts",
     "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
     "verify:sepolia": "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia.ts",
+    "verify:sepolia:deploys": "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia-deploys.ts",
     "verify:sepolia:sends": "BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia bun tools/vendor-dataset/verify-sepolia-sends.ts"
   },
   "devDependencies": {

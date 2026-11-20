@@ -120,6 +120,8 @@ export type Session = {
   readonly close: () => Promise<void>;
   /** The side panel, on Sepolia. Navigated by every other helper, so re-read its state after one. */
   readonly panel: Page;
+  /** Opens Add account on a fresh side panel and clicks down through `kinds` (e.g. ["regular"]). */
+  readonly openAdd: (kinds: readonly string[]) => Promise<Page>;
   /**
    * On a scan page, ticks the rows at `addresses` and imports them. Returns
    * the addresses whose row was missing or not selectable, which stay unimported.
@@ -388,6 +390,7 @@ export async function openSession(
   return {
     close: () => loaded.close(),
     panel,
+    openAdd: open,
     importRows,
     ledger,
     scan,
