@@ -124,20 +124,41 @@ export const tryWallet = async <T>(
 };
 
 const BACKGROUND_TIMEOUT_MS = 30_000;
+const ATTEMPT_TIMEOUT_MS = 5_000;
 
-// The wallet's status once the background answers. A freshly started service
-// worker refuses messages ("Receiving end does not exist") until its listener
-// is attached, which takes about a second after the cache is cleared.
-const backgroundStatus = async (page: Page): Promise<StatusReply> => {
+// `work`, or a rejection once one attempt has taken too long.
+const bounded = <T>(work: Promise<T>): Promise<T> =>
+  Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("no answer in time")), ATTEMPT_TIMEOUT_MS);
+    }),
+  ]);
+
+// A wallet page whose background has answered, and the status it gave. A
+// freshly started service worker refuses messages until its listener is
+// attached, and the extension can reload as the worker registers, closing
+// pages opened before that. So each attempt opens a fresh side panel.
+const answeringPage = async (
+  extension: LoadedExtension,
+): Promise<{ readonly page: Page; readonly status: StatusReply }> => {
   const deadline = Date.now() + BACKGROUND_TIMEOUT_MS;
   let last = "no answer";
   while (Date.now() < deadline) {
-    try {
-      const status = await sendRuntimeMessage<StatusReply>(page, { type: "wallet.status" });
-      if (status && typeof status.hasVault === "boolean") return status;
-      last = "an answer without a vault state";
-    } catch (error) {
-      last = error instanceof Error ? error.message : "an unreadable failure";
+    // Bounded per attempt: a navigation or message caught by the reload can
+    // otherwise wait for ever under a runner with no default timeout.
+    const page = await bounded(extension.openExtensionPage("sidepanel.html")).catch(() => null);
+    if (page) {
+      try {
+        const status = await bounded(
+          sendRuntimeMessage<StatusReply>(page, { type: "wallet.status" }),
+        );
+        if (status && typeof status.hasVault === "boolean") return { page, status };
+        last = "an answer without a vault state";
+      } catch (error) {
+        last = error instanceof Error ? error.message : "an unreadable failure";
+      }
+      await page.close().catch(() => undefined);
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -145,15 +166,14 @@ const backgroundStatus = async (page: Page): Promise<StatusReply> => {
 };
 
 // Onboards only a wallet that says it has no vault; a kept profile is unlocked.
-const onboard = async (page: Page, phrase: string): Promise<void> => {
-  const status = await backgroundStatus(page);
+const onboard = async (extension: LoadedExtension, phrase: string): Promise<void> => {
+  const { page, status } = await answeringPage(extension);
   if (!status.hasVault) {
     await importWalletFromPhrase(page, phrase);
-    return;
-  }
-  if (status.locked === true) {
+  } else if (status.locked === true) {
     await unlock(page);
   }
+  await page.close().catch(() => undefined);
 };
 
 const ownerAccount = (
@@ -191,11 +211,9 @@ export const openOwnerWallet = async (input: {
   await rm(join(profile, "Default", "Service Worker"), { force: true, recursive: true });
   const extension = await launchExtension({ userDataDir: profile });
   try {
-    let page = await extension.openExtensionPage("sidepanel.html");
-    await onboard(page, input.phrase);
-    // Onboarding can leave this tab on its last screen; start from the panel.
-    await page.close().catch(() => undefined);
-    page = await extension.openExtensionPage("sidepanel.html");
+    await onboard(extension, input.phrase);
+    // Onboarding can leave its tab on its last screen; start from the panel.
+    const page = await extension.openExtensionPage("sidepanel.html");
     await page
       .locator("#account-trigger")
       .waitFor({ state: "visible", timeout: UNLOCK_TIMEOUT_MS });
