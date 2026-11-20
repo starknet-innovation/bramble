@@ -52,6 +52,10 @@ Forgot password? guide, remote kill switches, and fixes from user reports.
   and address, not the address itself (#948, #949).
 - Multisig co-signer updates are a compact refresh button with a tooltip;
   Escape hides the tooltip (#952, #971).
+- A dapp can ask for up to 56 calls in one transaction, up from 16, as long as
+  the review fits on screen. A multisig proposal stays at 16. When the network
+  refuses a transaction for a size or fee limit, the wallet shows the node's
+  reason (#974, #975).
 
 ### Fixed
 - Older NFTs such as SPOKs show their art; Bramble now reads token URIs stored
