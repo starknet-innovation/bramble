@@ -114,6 +114,8 @@ function sender(
       const extra = card.after ? await card.after(e) : {};
       // Read again after `after`: an upgrade (TX-06) changes the live class.
       const liveClass = card.after ? await classAt(e.address) : deployedClass;
+      // And top up again, so the upgrade's fee does not leave it below float.
+      if (card.after) await topUp(e, "STRK", card.float ?? SENDER_FLOAT);
       // ETH is optional: the bank may hold none, and the suite skips its ETH
       // spec on an account without ETH. Recorded, never an error.
       let eth: string | undefined;

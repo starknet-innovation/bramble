@@ -53,7 +53,9 @@ describe("broadcast firewall", () => {
   test("lets reads and bodies that name no broadcast through", () => {
     expect(refusedBroadcasts(rpc("starknet_call", {}), [])).toEqual([]);
     expect(refusedBroadcasts(JSON.stringify({ quoteId: "q" }), [])).toEqual([]);
-    expect(refusedRequest({ body: null, contentType: undefined, method: "GET" }, [])).toEqual([]);
+    for (const method of ["GET", "HEAD", "OPTIONS"]) {
+      expect(refusedRequest({ body: null, contentType: undefined, method }, [])).toEqual([]);
+    }
   });
 
   test("refuses any request body it cannot read", () => {
