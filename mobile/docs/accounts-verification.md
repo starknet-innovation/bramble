@@ -169,6 +169,12 @@ machine): the drawer, manage and discovery screens, and `Clipboard.kt`. This is 
 
 ## 11. The merged vault migration chain
 
+> **Superseded by wallet-core `v0.4.0` (M14, 2026-11-19).** The migration chain and its tests
+> are gone: the payload is the extension's v13 schema inside the DEK container, and an earlier
+> vault fails closed as `Storage` once its passphrase is proven; the wallet is removed and
+> imported again. wallet-core's `crates/bramble-core/src/vault_v13.rs` is the current
+> description; this section is the design history.
+
 Both branches minted a "version 2" from the original v1, so the merge defines one chain over
 every vault ever written, with exactly one adjacent step per version, as the extension's
 `schema/migrations.ts` does:

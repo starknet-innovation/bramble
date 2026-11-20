@@ -33,7 +33,7 @@ final class CoreBridgeTests: XCTestCase {
     func testParityWithTheExtension() throws {
         let fixture = try fixture()
         let core = try core()
-        try core.importWallet(password: "parity password", phrase: fixture.mnemonic, passphrase: nil)
+        try core.importWallet(password: "parity password", phrase: fixture.mnemonic)
         // An import waits for discovery; restore OZ 0 and 1, then project index 0 onto Mainnet.
         let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: [0, 1].map { index in
             RecoverySelection(family: .openZeppelin, accountIndex: index, classHash: nil)

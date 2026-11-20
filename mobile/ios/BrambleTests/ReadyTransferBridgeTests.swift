@@ -31,7 +31,7 @@ final class ReadyTransferBridgeTests: XCTestCase {
     private func readyWallet(_ scenario: [String: Any]) throws -> (WalletCore, AccountRecord) {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
-        try core.importWallet(password: testPassword, phrase: publicPhrase, passphrase: nil)
+        try core.importWallet(password: testPassword, phrase: publicPhrase)
         let label: String = try fixtureValue(scenario, "recordClass")
         let classHash = try XCTUnwrap(accountClasses().first { $0.label == label }).classHash
         // The capture signs as `deriveAccount` derives by default: this wallet's ladder, not

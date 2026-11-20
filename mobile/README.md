@@ -5,7 +5,7 @@ Krusty KMS. Read [SCOPE.md](SCOPE.md) for the architecture, security posture, an
 
 ```
 mobile/
-  core/        Shell over the Rust core, wallet-core's bramble-core (UniFFI), pinned by rev
+  core/        Shell over the Rust core, wallet-core's bramble-core (UniFFI), pinned by tag
   ios/         SwiftUI app (XcodeGen spec; the .xcodeproj is generated)
   android/     Compose app (Gradle Kotlin DSL)
   scripts/     build-core-ios.sh, build-core-android.sh, lint.sh, lint-tools.sh
@@ -63,7 +63,7 @@ run them there with `cargo test -p bramble-core --features mobile,testing`. The 
 against a real mainnet wallet (`--test mainnet`, `BRAMBLE_MOBILE_MAINNET_MNEMONIC` and
 `BRAMBLE_MOBILE_MAINNET_ADDRESS`; never commit the phrase) and the Sepolia vendor-import dataset
 (`--test sepolia_dataset`, reading `.env.vendor-seeds.local` or `BRAMBLE_DATASET_ENV_FILE`) run
-there too, with `-- --ignored`, never in CI. A core change is a wallet-core PR, then a `rev` move in `core/Cargo.toml`.
+there too, with `-- --ignored`, never in CI. A core change is a wallet-core PR and release, then a `tag` move in `core/Cargo.toml`.
 
 `mobile/core` builds that crate for the apps (`cargo build -p bramble-core --lib`, as the build
 scripts do) and runs the bindings generator. Its own tests hold `generated/` to the catalogs the

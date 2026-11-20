@@ -141,7 +141,7 @@ final class WalletStore {
     func importWallet(phrase: String, password: String) async throws {
         let walletCore = core
         do {
-            try await work { try walletCore.importWallet(password: password, phrase: phrase, passphrase: nil) }
+            try await work { try walletCore.importWallet(password: password, phrase: phrase) }
         } catch {
             routeToUnlockIfLockedDuringCreation(error)
             throw error

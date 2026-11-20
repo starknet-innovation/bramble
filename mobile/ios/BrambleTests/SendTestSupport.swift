@@ -13,7 +13,7 @@ let account1 = "0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a
 func unlockedCore() throws -> WalletCore {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let core = try WalletCore(dataDir: dir.path, clock: DeviceClock())
-    try core.importWallet(password: testPassword, phrase: publicPhrase, passphrase: nil)
+    try core.importWallet(password: testPassword, phrase: publicPhrase)
     let restored = try core.restoreRecoveredAccounts(network: .sepolia, selections: [0, 1].map { index in
         RecoverySelection(family: .openZeppelin, accountIndex: index, classHash: nil)
     })

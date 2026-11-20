@@ -132,12 +132,15 @@ describe("mobile core parity", () => {
   });
 
   // The extension stays on its own Krusty release until it adopts the shared core, so the two
-  // pins are no longer compared; the parity fixtures hold the releases to the same output.
-  // Mobile's core is wallet-core's `bramble-core` (mobile/core is a shell over it, pinned by `rev`
-  // until the tag that follows 2.7), which names Krusty nowhere (its tests/privacy_key_boundary.rs):
+  // pins are no longer compared; the parity fixtures hold the releases to the same output, except
+  // Ready keys for the ~0.4% of phrases whose Ethereum key starts with a zero byte (Krusty 3.x drops
+  // it as Argent X does; the extension's 0.11 keeps it; no fixture has one).
+  // Mobile's core is wallet-core's `bramble-core` (mobile/core is a shell over it, pinned by tag),
+  // which names Krusty nowhere (its tests/privacy_key_boundary.rs):
   // Krusty comes only through `starknet-wallet-core`. So the lockfile must resolve one copy of each
-  // Krusty crate, at one version, as wallet-core's dependency and neither the core's nor the
-  // shell's; mobile/core/tests/core_info.rs holds what `core_info()` reports to that version.
+  // Krusty crate (common may trail: krusty-kms 3.1.0 takes krusty-kms-common 3.0.0), as
+  // wallet-core's dependency and neither the core's nor the shell's; mobile/core/tests/core_info.rs
+  // holds what `core_info()` reports to the krusty-kms version.
   test("the Rust core links one Krusty release, the shared core's", async () => {
     const cargo = await readFile("mobile/core/Cargo.toml", "utf8");
     expect(cargo).not.toMatch(/^krusty-kms(-common)?\s*=/m);
@@ -146,9 +149,8 @@ describe("mobile core parity", () => {
       [...lock.matchAll(new RegExp(`^name = "${name}"\nversion = "([^"]+)"`, "gm"))].map(
         (match) => match[1],
       );
-    const kms = resolved("krusty-kms");
-    expect(kms).toHaveLength(1);
-    expect(resolved("krusty-kms-common")).toEqual(kms);
+    expect(resolved("krusty-kms")).toHaveLength(1);
+    expect(resolved("krusty-kms-common")).toHaveLength(1);
     const entry = (name: string) =>
       lock.split("[[package]]").find((block) => block.includes(`\nname = "${name}"\n`)) ?? "";
     for (const krusty of ["krusty-kms", "krusty-kms-common"]) {

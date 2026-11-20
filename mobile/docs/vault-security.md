@@ -129,6 +129,9 @@ ciphertext of W and its IV live in `noBackupFilesDir/biometric-w.bin`, written b
 
 ## 3. Storage and migration
 
+> **Superseded by wallet-core `v0.4.0` (M14):** the container now holds the extension's v13 payload; earlier
+> vaults fail closed after the passphrase is proven, with no migration (`vault_v13.rs`). Design history below.
+
 ### 3.1 Vault file v2 (`vault.json`, still one file, still write-then-rename)
 
 ```json
@@ -448,7 +451,7 @@ pub fn biometric_invalidated(&self);
 ```
 
 Unchanged signatures, new behaviour: `unlock`, `reveal_recovery_phrase` and `delete_wallet` are
-throttled and counted under the attempt mutex; a successful passphrase open migrates v1 → v2;
+throttled and counted under the attempt mutex; a successful passphrase open migrated v1 → v2 (until wallet-core `v0.4.0`, which refuses earlier vaults instead; §3);
 every session method checks idle expiry;
 `status()` checks idle expiry. `password: String` and `wrap_secret: Vec<u8>` move into
 `Zeroizing` on entry (this also closes the SCOPE.md gap for today's `password` arguments).
