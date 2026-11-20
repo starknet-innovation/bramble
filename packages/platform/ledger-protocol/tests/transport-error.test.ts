@@ -54,7 +54,7 @@ describe("classifyLedgerTransportError", () => {
     ];
     for (const [, error] of cases) {
       const failure = classifyLedgerTransportError(error);
-      expect(failure.code).toBe("unexpected-device-error");
+      expect(failure.code).toBe("replug");
       expect(failure.ownStale).toBe(true);
       expect(failure.code).not.toBe("device-busy");
     }
@@ -85,7 +85,7 @@ describe("classifyLedgerTransportError", () => {
     expect(rejection).toBeInstanceOf(LedgerRejection);
     expect(rejection.causeName).toBe("InvalidStateError");
     expect(rejection.ownStale).toBe(true);
-    expect(rejection.message).toBe("unexpected-device-error");
+    expect(rejection.message).toBe("replug");
     expect(rejection.message).not.toContain("9f3a");
   });
 });

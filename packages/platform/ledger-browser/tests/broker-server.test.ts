@@ -166,7 +166,7 @@ describe("serveLedgerBroker", () => {
     await tick();
     expect(fake.posts[1]).toEqual({
       cause: "BrokerBusy",
-      error: "unexpected-device-error",
+      error: "replug",
       id: 2,
       kind: "response",
       ok: false,
@@ -218,7 +218,7 @@ describe("serveLedgerBroker", () => {
     await tick();
     expect(fake.posts[1]).toEqual({
       cause: "InvalidStateError",
-      error: "unexpected-device-error",
+      error: "replug",
       id: 1,
       kind: "response",
       ok: false,

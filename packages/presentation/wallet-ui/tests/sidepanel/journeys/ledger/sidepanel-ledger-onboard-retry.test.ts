@@ -142,4 +142,61 @@ describe("onboarding device session", () => {
     });
     expect(JSON.stringify(h.views.at(-1))).not.toContain("Another app");
   });
+
+  test("connect restarts a device listing that never settles", async () => {
+    let lists = 0;
+    const h = onboardHarness({
+      connector: {
+        listConnected: () => {
+          lists += 1;
+          return new Promise(() => undefined);
+        },
+        openConnected: async () => null,
+        request: async () => {
+          throw new Error("unused");
+        },
+      },
+    });
+    const controller = createLedgerOnboardController(h.deps);
+    controller.connect();
+    await tick();
+    controller.connect();
+    await tick();
+    expect(lists).toBe(2);
+    expect(h.views.at(-1)).toEqual({ kind: "reading" });
+  });
+
+  test("cancel during address lookup keeps the guard for the old read", async () => {
+    const lookups: (() => void)[] = [];
+    let reads = 0;
+    const h = onboardHarness({
+      describe: () =>
+        new Promise((resolve) =>
+          lookups.push(() => resolve({ balance: "0 STRK", deployed: false, funded: false })),
+        ),
+    });
+    const controller = createLedgerOnboardController({
+      ...h.deps,
+      enumerate: (...args) => {
+        reads += 1;
+        return h.deps.enumerate(...args);
+      },
+    });
+    controller.connect();
+    for (let i = 0; i < 8 && lookups.length === 0; i += 1) await tick();
+    expect(lookups.length).toBeGreaterThan(0);
+    const firstReads = reads;
+
+    // The old page is still looking up addresses: Connect waits for it.
+    controller.cancel();
+    controller.connect();
+    await tick();
+    expect(reads).toBe(firstReads);
+
+    for (let i = 0; i < 12; i += 1) {
+      for (const done of lookups.splice(0)) done();
+      await tick();
+    }
+    expect(reads).toBeGreaterThan(firstReads);
+  });
 });

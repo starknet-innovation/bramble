@@ -116,10 +116,11 @@ export const serveLedgerBroker = (
   ): Promise<void> => {
     if (busy || closed) {
       // Our own pipe is already running a command. That is not another app
-      // holding the device; the support token tells the two apart.
+      // holding the device, and the command never reached it, so it uses a
+      // code the wallet reads as "not sent". The support token tells them apart.
       respond({
         cause: "BrokerBusy",
-        error: "unexpected-device-error",
+        error: "replug",
         id: command.id,
         kind: "response",
         ok: false,

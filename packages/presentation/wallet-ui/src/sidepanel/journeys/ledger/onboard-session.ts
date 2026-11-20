@@ -97,12 +97,13 @@ export const createLedgerOnboardController = (
   let nextIndex = 0;
   let busy = false;
   let flowEpoch = 0;
-  // "Show more" mid-page is queued, not dropped; the button stays busy until it's in.
+  // "Show more" mid-page is queued; the button stays busy until it's in.
   let pageLoading = false;
   let readingMore = false;
   let moreQueued = false;
   let pendingConnect = false;
   let listTicket = 0;
+  let listing = false; // `busy` held only by a listing; Cancel/Connect may drop it.
   const gate = createLedgerDeviceGate();
 
   const deviceError = (error: unknown): Extract<LedgerOnboardView, { kind: "error" }> => {
@@ -276,11 +277,11 @@ export const createLedgerOnboardController = (
       void loadPage(() => deps.connector.request(), 0, true);
       return;
     }
-    busy = true;
+    busy = listing = true;
     deps.render({ kind: "reading" });
     const settleList = (): boolean => {
       if (ticket !== listTicket) return false;
-      busy = false;
+      busy = listing = false;
       if (epoch === flowEpoch) return true;
       flushConnect();
       return false;
@@ -377,6 +378,7 @@ export const createLedgerOnboardController = (
       }
     } finally {
       busy = false;
+      flushConnect();
     }
   };
 
@@ -406,6 +408,7 @@ export const createLedgerOnboardController = (
       );
     } finally {
       busy = false;
+      flushConnect();
     }
   };
 
@@ -459,18 +462,16 @@ export const createLedgerOnboardController = (
       deps.onCancel();
       deps.render(null);
       void gate.release();
-      // Listing holds `busy` with no device open. Drop it now so a Connect
-      // after Cancel is not stuck if that list never settles.
-      if (!gate.isBusy()) busy = false;
+      if (listing) busy = listing = false; // A read or add clears its own `busy`.
     },
     choose,
     chooseDevice,
     connect() {
-      if (gate.isBusy()) {
+      // A hung list is restarted; any other run queues this for its finally.
+      if ((busy && !listing) || gate.isBusy()) {
         pendingConnect = true;
         return;
       }
-      if (busy) return;
       startConnect();
     },
     loadMore() {

@@ -23,6 +23,7 @@ import {
   newStarknetClient,
   openConnectedTransportRaw,
 } from "@bramble/ledger-browser/webhid";
+import { ledgerBrokerSessionFromHash } from "@bramble/ledger-protocol/broker";
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
 import { LedgerRejection } from "@bramble/ledger-protocol/errors";
 import type { LedgerDeviceChoice } from "@bramble/ledger-protocol/session";
@@ -30,6 +31,7 @@ import {
   classifyLedgerTransportError,
   ledgerTransportRejection,
 } from "@bramble/ledger-protocol/transport-error";
+import { browserLedgerLocks, isLedgerPanelLockLive } from "./panel-presence";
 
 type NavigatorWithLedgerTransport = {
   readonly bluetooth?: unknown;
@@ -71,24 +73,44 @@ const extensionGlobal = (): ExtensionGlobal | undefined => {
 };
 
 /**
- * Closes this extension's own hardware tabs. Returns true when at least one
- * tab was closed, so the caller can retry an open that failed because that
- * tab still held the device. A missing extension API returns false and the
- * caller shows the busy error instead of looping.
+ * Closes this extension's orphaned hardware tabs: those whose side panel no
+ * longer holds the session's panel lock (it crashed, reloaded, or closed).
+ * A tab another live panel is using keeps its lock and is left alone. Returns
+ * true when at least one tab was closed, so the caller may retry an open that
+ * failed because that tab still held the device. With no extension API or no
+ * Web Locks it closes nothing and the caller shows the busy error.
  */
-const releaseOwnLedgerGrantTabs = async (): Promise<boolean> => {
+const releaseOrphanLedgerGrantTabs = async (): Promise<boolean> => {
   const extension = extensionGlobal();
   const prefix = extension?.runtime?.getURL?.("ledger-grant.html");
-  if (!prefix || !extension?.runtime?.getContexts) return false;
+  const remove = extension?.tabs?.remove;
+  const locks = browserLedgerLocks();
+  if (!prefix || !extension?.runtime?.getContexts || !remove || !locks) return false;
   const contexts = await extension.runtime.getContexts({ contextTypes: ["TAB"] }).catch(() => []);
   let released = false;
   for (const context of contexts) {
-    if (typeof context.tabId !== "number" || !context.documentUrl?.startsWith(prefix)) continue;
-    await extension.tabs?.remove?.(context.tabId).catch(() => undefined);
-    released = true;
+    const url = context.documentUrl;
+    if (typeof context.tabId !== "number" || !url?.startsWith(prefix)) continue;
+    const sessionId = ledgerBrokerSessionFromHash(url.slice(prefix.length));
+    if (!sessionId) continue;
+    const live = await isLedgerPanelLockLive(locks, sessionId).catch(() => true);
+    if (live) continue;
+    const removed = await remove(context.tabId).then(
+      () => true,
+      () => false,
+    );
+    released ||= removed;
   }
   return released;
 };
+
+// A closed tab's document can take a moment to give the USB claim back.
+const CLAIM_SETTLE_MS = 250;
+
+const settle = (): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, CLAIM_SETTLE_MS);
+  });
 
 // The open path has already retried its own stale handle inside the cable
 // transport. Drop `ownStale` so the caller does not open a second time.
@@ -105,12 +127,20 @@ const openConnectedOnce = async (deviceId?: string): Promise<LedgerTransport | n
   } catch (error) {
     const failure = classifyLedgerTransportError(error);
     if (failure.code !== "device-busy") throw finalRejection(error);
-    const released = await releaseOwnLedgerGrantTabs();
+    const released = await releaseOrphanLedgerGrantTabs();
     if (!released) throw finalRejection(error);
     try {
       return await openConnectedTransportRaw(deviceId);
     } catch (retryError) {
-      throw finalRejection(retryError);
+      if (classifyLedgerTransportError(retryError).code !== "device-busy") {
+        throw finalRejection(retryError);
+      }
+    }
+    await settle();
+    try {
+      return await openConnectedTransportRaw(deviceId);
+    } catch (lastError) {
+      throw finalRejection(lastError);
     }
   }
 };

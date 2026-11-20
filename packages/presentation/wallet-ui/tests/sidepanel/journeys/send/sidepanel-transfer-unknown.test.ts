@@ -424,6 +424,12 @@ describe("the rendered Send receipt for each rejection", () => {
       "The transaction was not sent. You rejected the request on your Ledger. Nothing was submitted.",
     ],
     [
+      "this page's own stale Ledger handle, refused before the device signed",
+      () => new Error("replug"),
+      "Transaction not sent",
+      "The transaction was not sent. Reconnect your Ledger, then try again.",
+    ],
+    [
       "a locked wallet",
       () => new Error("wallet locked"),
       "Transaction not sent",

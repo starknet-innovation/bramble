@@ -60,7 +60,20 @@ export const holdLedgerPanelLock = async (
       markHeld();
       await released;
     });
-    await held;
+    // A request that settles before its callback ran (rejected, or a document
+    // that is not fully active) never marks the lock held. Race it so the
+    // caller gets the no-op instead of waiting forever.
+    let granted = false;
+    await Promise.race([
+      held.then(() => {
+        granted = true;
+      }),
+      request.then(
+        () => undefined,
+        () => undefined,
+      ),
+    ]);
+    if (!granted) return () => undefined;
     void request.catch(() => undefined);
     return release;
   } catch {
@@ -69,28 +82,33 @@ export const holdLedgerPanelLock = async (
 };
 
 /**
- * Resolves true once a panel lock that was held or pending is released, which
- * means the panel is gone. Resolves false when no such lock appears, so a tab
- * opened without a panel is not closed on a timer of its own.
+ * True when some document holds or waits on this session's panel lock, which
+ * means the side panel that opened the grant tab is still alive. A runtime
+ * whose lock manager cannot be queried answers true, so nothing is closed on
+ * a guess.
+ */
+export const isLedgerPanelLockLive = async (
+  locks: LedgerLockManager,
+  sessionId: string,
+): Promise<boolean> => {
+  if (!locks.query) return true;
+  const name = ledgerPanelLockName(sessionId);
+  const state = await locks.query();
+  return [...(state.held ?? []), ...(state.pending ?? [])].some((lock) => lock.name === name);
+};
+
+/**
+ * Resolves true once the panel lock is released, which means the panel is
+ * gone. The panel takes the lock before it creates the grant tab, so one
+ * query is enough: when no lock is there (no Web Locks in the panel, or its
+ * request failed) this resolves false and the idle timer stays the backstop.
  */
 export const watchLedgerPanelLock = async (
   locks: LedgerLockManager,
   sessionId: string,
-  pause: () => Promise<void>,
-  attempts = 20,
 ): Promise<boolean> => {
   if (!locks.query) return false;
-  const name = ledgerPanelLockName(sessionId);
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const state = await locks.query();
-    const seen = [...(state.held ?? []), ...(state.pending ?? [])].some(
-      (lock) => lock.name === name,
-    );
-    if (seen) {
-      await locks.request(name, async () => undefined);
-      return true;
-    }
-    await pause();
-  }
-  return false;
+  if (!(await isLedgerPanelLockLive(locks, sessionId))) return false;
+  await locks.request(ledgerPanelLockName(sessionId), async () => undefined);
+  return true;
 };

@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   holdLedgerPanelLock,
+  isLedgerPanelLockLive,
   type LedgerLockManager,
   ledgerPanelLockName,
   watchLedgerPanelLock,
@@ -89,11 +90,9 @@ describe("ledger panel lock", () => {
     const fake = manager();
     const release = await holdLedgerPanelLock(fake.locks, SESSION);
     let gone = false;
-    const watching = watchLedgerPanelLock(fake.locks, SESSION, async () => undefined).then(
-      (value) => {
-        gone = value;
-      },
-    );
+    const watching = watchLedgerPanelLock(fake.locks, SESSION).then((value) => {
+      gone = value;
+    });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(gone).toBe(false);
     release();
@@ -103,8 +102,25 @@ describe("ledger panel lock", () => {
 
   test("watch does not fire when the panel never took the lock", async () => {
     const fake = manager();
-    const gone = await watchLedgerPanelLock(fake.locks, SESSION, async () => undefined, 2);
+    const gone = await watchLedgerPanelLock(fake.locks, SESSION);
     expect(gone).toBe(false);
+  });
+
+  test("a lock request that fails before granting resolves to a no-op", async () => {
+    const locks: LedgerLockManager = {
+      request: () => Promise.reject(new DOMException("not active", "InvalidStateError")),
+    };
+    const release = await holdLedgerPanelLock(locks, SESSION);
+    expect(typeof release).toBe("function");
+    release();
+  });
+
+  test("liveness reports a held lock and an absent one", async () => {
+    const fake = manager();
+    expect(await isLedgerPanelLockLive(fake.locks, SESSION)).toBe(false);
+    const release = await holdLedgerPanelLock(fake.locks, SESSION);
+    expect(await isLedgerPanelLockLive(fake.locks, SESSION)).toBe(true);
+    release();
   });
 
   test("a missing lock manager does not block the caller", async () => {

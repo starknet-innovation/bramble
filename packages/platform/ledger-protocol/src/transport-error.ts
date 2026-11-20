@@ -59,7 +59,9 @@ export const classifyLedgerTransportError = (error: unknown): LedgerTransportFai
     return { causeName, code: "device-busy", ownStale: false };
   }
   if (OWN_STALE.test(text)) {
-    return { causeName, code: "unexpected-device-error", ownStale: true };
+    // `replug`, not the catch-all: these fail before the device signs, and
+    // the submit outcome must stay "nothing was sent" (PRE_SIGNATURE codes).
+    return { causeName, code: "replug", ownStale: true };
   }
   if (NO_APP.test(text)) {
     return { causeName, code: "no-app-open", ownStale: false };

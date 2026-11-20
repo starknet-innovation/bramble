@@ -469,16 +469,12 @@ const render = (): void => {
   // this tab releases the device instead of keeping it until the idle timer.
   const panelLocks = sessionId ? browserLedgerLocks() : null;
   if (sessionId && panelLocks) {
-    void watchLedgerPanelLock(
-      panelLocks,
-      sessionId,
-      () =>
-        new Promise((resolve) => {
-          setTimeout(resolve, 100);
-        }),
-    ).then((gone) => {
-      if (gone) void release();
-    });
+    void watchLedgerPanelLock(panelLocks, sessionId).then(
+      (gone) => {
+        if (gone) void release();
+      },
+      () => undefined,
+    );
   }
 
   if (!sessionId) {
