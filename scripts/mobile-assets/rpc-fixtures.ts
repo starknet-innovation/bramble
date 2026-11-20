@@ -114,23 +114,124 @@ const primaryAccounts = (): string[] => {
   return [...new Set(addresses)].sort();
 };
 
+/** Kotlin twin of the Swift fixtures, for the Android instrumented suite's `FixtureNode`. */
+export const KOTLIN_RPC_FIXTURES_PATH =
+  "mobile/android/app/src/androidTest/java/org/bramble/wallet/RpcFixtures.generated.kt";
+
+/** Every fixture value, computed once and rendered for each platform. */
+interface FixtureData {
+  readonly chainIds: readonly (readonly [string, string])[];
+  readonly primaryAccounts: readonly string[];
+  readonly readyBalances: readonly (readonly [string, string, string])[];
+  readonly replies: readonly (readonly [string, string, unknown])[];
+}
+
+const fixtureData = (): FixtureData => {
+  const chainIds = NETWORK_IDS.flatMap((id) =>
+    STARKNET_NETWORKS[id].rpcUrls.map((url) => [url, STARKNET_NETWORKS[id].chainId] as const),
+  );
+  const seen = new Set<string>();
+  const readyBalances = DEFAULT_TOKENS.filter((token) =>
+    NETWORK_IDS.some((id) => id === token.networkId),
+  ).flatMap((token) => {
+    const address = canonical(token.address);
+    if (seen.has(address)) return [];
+    seen.add(address);
+    const units = baseUnits(READY_AMOUNTS[token.symbol] ?? "1", token.decimals);
+    return [[address, hex(units % UINT128_LIMIT), hex(units / UINT128_LIMIT)] as const];
+  });
+  // [Swift name, doc, reply]: replies recorded from the extension's own send path.
+  const replies = [
+    [
+      "deployedClassHash",
+      "`starknet_getClassHashAt` for a deployed account.",
+      recorded(DEPLOYED_SCENARIO, "starknet_getClassHashAt").reply,
+    ],
+    [
+      "undeployedClassHash",
+      "`starknet_getClassHashAt` for an account that is not deployed yet.",
+      recorded(UNDEPLOYED_SCENARIO, "starknet_getClassHashAt").reply,
+    ],
+    [
+      "deployedNonce",
+      "`starknet_getNonce` for a deployed account.",
+      recorded(DEPLOYED_SCENARIO, "starknet_getNonce").reply,
+    ],
+    [
+      "undeployedNonce",
+      "`starknet_getNonce` for an account that is not deployed yet.",
+      recorded(UNDEPLOYED_SCENARIO, "starknet_getNonce").reply,
+    ],
+    [
+      "invokeEstimate",
+      "One `starknet_estimateFee` entry for the transfer's INVOKE.",
+      estimateEntry(recorded(DEPLOYED_SCENARIO, "starknet_estimateFee", "INVOKE"), 0),
+    ],
+    [
+      "deployEstimate",
+      "One `starknet_estimateFee` entry for the account's DEPLOY_ACCOUNT.",
+      estimateEntry(
+        recorded(UNDEPLOYED_SCENARIO, "starknet_estimateFee", "DEPLOY_ACCOUNT,INVOKE"),
+        0,
+      ),
+    ],
+    ["estimateFailure", "`starknet_estimateFee` in the `feeFailure` state.", EXECUTION_ERROR],
+  ] as const;
+  return { chainIds, primaryAccounts: primaryAccounts(), readyBalances, replies };
+};
+
+/** `deployedClassHash` → `DEPLOYED_CLASS_HASH`. */
+const constantName = (name: string): string => name.replace(/[A-Z]/g, (c) => `_${c}`).toUpperCase();
+
+/** The Kotlin source for the Android instrumented suite's `RpcFixtures`. */
+export const renderKotlinRpcFixtures = (): string => {
+  const data = fixtureData();
+  return [
+    `// ${HEADER}`,
+    "package org.bramble.wallet",
+    "",
+    "/**",
+    " * Deterministic JSON-RPC answers for the instrumented suite's offline `FixtureNode`, the same",
+    " * values as the iOS `RpcFixtures.generated.swift`, rendered from the extension's network catalog",
+    " * and its recorded send path. Public data only; test source set, never on the app's classpath.",
+    " */",
+    "object RpcFixtures {",
+    "    /** Bundled endpoint → the chain id its `starknet_chainId` answers. */",
+    "    val chainIds: Map<String, String> =",
+    "        mapOf(",
+    ...data.chainIds.map(([url, id]) => `            "${url}" to "${id}",`),
+    "        )",
+    "",
+    "    /** The published wallet's primary account (OZ index 0): the only deployed or funded address. */",
+    "    val primaryAccounts: Set<String> =",
+    "        setOf(",
+    ...data.primaryAccounts.map((address) => `            "${address}",`),
+    "        )",
+    "",
+    "    /** Canonical token address → `balanceOf` u256 limbs (low, high) in the `ready` state. */",
+    "    val readyBalances: Map<String, List<String>> =",
+    "        mapOf(",
+    ...data.readyBalances.map(
+      ([address, low, high]) => `            "${address}" to listOf("${low}", "${high}"),`,
+    ),
+    "        )",
+    ...data.replies.flatMap(([name, doc, reply]) => [
+      "",
+      `    /** ${doc} */`,
+      `    const val ${constantName(name)} = """${JSON.stringify(reply)}"""`,
+    ]),
+    "}",
+    "",
+  ].join("\n");
+};
+
 /** The Swift source for `RpcFixtures`. */
 export const renderRpcFixtures = (): string => {
-  const endpoints = NETWORK_IDS.flatMap((id) =>
-    STARKNET_NETWORKS[id].rpcUrls.map(
-      (url) => `        "${url}": "${STARKNET_NETWORKS[id].chainId}",`,
-    ),
+  const data = fixtureData();
+  const endpoints = data.chainIds.map(([url, id]) => `        "${url}": "${id}",`);
+  const balances = data.readyBalances.map(
+    ([address, low, high]) => `        "${address}": ["${low}", "${high}"],`,
   );
-  const balances = DEFAULT_TOKENS.filter((token) =>
-    NETWORK_IDS.some((id) => id === token.networkId),
-  )
-    .map((token) => {
-      const units = baseUnits(READY_AMOUNTS[token.symbol] ?? "1", token.decimals);
-      const low = units % UINT128_LIMIT;
-      const high = units / UINT128_LIMIT;
-      return `        "${canonical(token.address)}": ["${hex(low)}", "${hex(high)}"],`;
-    })
-    .filter((line, index, all) => all.indexOf(line) === index);
   return [
     `// ${HEADER}`,
     "#if DEBUG",
@@ -151,7 +252,7 @@ export const renderRpcFixtures = (): string => {
     "    /// The published wallet's primary account (OZ index 0) on each network: the only address",
     "    /// this node reports as deployed or funded, so discovery finds exactly that account.",
     "    static let primaryAccounts: Set<String> = [",
-    ...primaryAccounts().map((address) => `        "${address}",`),
+    ...data.primaryAccounts.map((address) => `        "${address}",`),
     "    ]",
     "",
     "    /// Canonical token address → `balanceOf` u256 limbs (low, high) in the `ready` state.",
@@ -162,20 +263,10 @@ export const renderRpcFixtures = (): string => {
     "    // Replies recorded from the extension's own send path (extension-transactions-wire.json):",
     "    // a JSON object carrying `result` or `error`, merged into a reply under the request's id.",
     "",
-    "    /// `starknet_getClassHashAt` for a deployed account.",
-    `    static let deployedClassHash = ${rawJson(recorded(DEPLOYED_SCENARIO, "starknet_getClassHashAt").reply)}`,
-    "    /// `starknet_getClassHashAt` for an account that is not deployed yet.",
-    `    static let undeployedClassHash = ${rawJson(recorded(UNDEPLOYED_SCENARIO, "starknet_getClassHashAt").reply)}`,
-    "    /// `starknet_getNonce` for a deployed account.",
-    `    static let deployedNonce = ${rawJson(recorded(DEPLOYED_SCENARIO, "starknet_getNonce").reply)}`,
-    "    /// `starknet_getNonce` for an account that is not deployed yet.",
-    `    static let undeployedNonce = ${rawJson(recorded(UNDEPLOYED_SCENARIO, "starknet_getNonce").reply)}`,
-    "    /// One `starknet_estimateFee` entry for the transfer's INVOKE.",
-    `    static let invokeEstimate = ${rawJson(estimateEntry(recorded(DEPLOYED_SCENARIO, "starknet_estimateFee", "INVOKE"), 0))}`,
-    "    /// One `starknet_estimateFee` entry for the account's DEPLOY_ACCOUNT.",
-    `    static let deployEstimate = ${rawJson(estimateEntry(recorded(UNDEPLOYED_SCENARIO, "starknet_estimateFee", "DEPLOY_ACCOUNT,INVOKE"), 0))}`,
-    "    /// `starknet_estimateFee` in the `feeFailure` state.",
-    `    static let estimateFailure = ${rawJson(EXECUTION_ERROR)}`,
+    ...data.replies.flatMap(([name, doc, reply]) => [
+      `    /// ${doc}`,
+      `    static let ${name} = ${rawJson(reply)}`,
+    ]),
     "}",
     "#endif",
     "",

@@ -34,6 +34,8 @@ import org.bramble.wallet.design.BrambleTracking
 import org.bramble.wallet.design.BrambleTypeScale
 import org.bramble.wallet.design.BrambleWeight
 import org.bramble.wallet.design.LocalSkin
+import org.bramble.wallet.design.MenuGroup
+import org.bramble.wallet.design.MenuRow
 import org.bramble.wallet.design.PillButton
 import org.bramble.wallet.design.PillKind
 import org.bramble.wallet.design.SecretKind
@@ -188,6 +190,7 @@ internal fun RecipientStage(
             BrambleField(
                 label = null,
                 placeholder = SendCopy.recipientPlaceholder,
+                spokenLabel = SendCopy.recipientFieldLabel,
                 value = model.recipientInput,
                 onValueChange = model::updateRecipient,
                 kind = SecretKind.ADDRESS,
@@ -273,12 +276,14 @@ private fun OriginAccount(
 
 /**
  * "Tokens you can send": the platform's own screen for the extension's token dropdown, with its
- * one group, "Your tokens", listing this network's tokens with this view's balances.
+ * one group, "Your tokens", listing this network's tokens with this view's balances, then "Manage
+ * tokens" when the shell wires [manageTokens].
  */
 @Composable
 internal fun AssetStage(
     store: WalletStore,
     model: SendFlowModel,
+    manageTokens: (() -> Unit)?,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(BrambleSpace.sm)) {
         Heading(SendCopy.yourTokens, kicker = true)
@@ -290,5 +295,6 @@ internal fun AssetStage(
                 selected = token.address == model.token.address,
             ) { model.choose(token) }
         }
+        manageTokens?.let { MenuGroup { MenuRow(BrambleIconName.COINS, SendCopy.manageTokens, onClick = it) } }
     }
 }

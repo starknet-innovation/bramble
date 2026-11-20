@@ -1,9 +1,11 @@
 package org.bramble.wallet
 
 import android.graphics.Bitmap
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.captureToImage
@@ -16,12 +18,16 @@ import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.printToString
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.replaceText
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.bramble.core.AccountFamily
@@ -29,6 +35,7 @@ import org.bramble.core.RecoverySelection
 import org.bramble.core.WalletStatus
 import org.bramble.wallet.design.secretFieldTag
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
 
 /** The repository's published E2E wallet: public, never funded on purpose, safe in a test. */
 object PublicWallet {
@@ -55,10 +62,45 @@ class Robot(
 
     private fun exists(matcher: SemanticsMatcher): Boolean = rule.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
 
+    /** Waits for [matcher]; a timeout fails with what the screen showed, so CI logs say why. */
     fun waitFor(
         matcher: SemanticsMatcher,
         timeoutMs: Long = 10_000,
-    ) = rule.waitUntil(timeoutMs) { exists(matcher) }
+    ) {
+        try {
+            rule.waitUntil(timeoutMs) { exists(matcher) }
+        } catch (timeout: ComposeTimeoutException) {
+            val screen = runCatching { rule.onRoot(useUnmergedTree = false).printToString() }.getOrDefault("")
+            throw AssertionError("${matcher.description} not shown after $timeoutMs ms; screen:\n$screen", timeout)
+        }
+    }
+
+    /**
+     * Runs [action] and waits until the store raises the toast [text]. Every toast is recorded as
+     * it is raised, so one whose 3 s lifetime ran out on the test clock (which advances while the
+     * core's vault write runs in real time) still counts; polling the screen would miss it.
+     */
+    fun expectToast(
+        text: String,
+        timeoutMs: Long = 20_000,
+        action: () -> Unit,
+    ) {
+        val raised = CopyOnWriteArrayList<String>()
+        val wallet = store
+        // Undispatched, so the recorder is subscribed before the action can raise anything.
+        val watch =
+            CoroutineScope(Dispatchers.Main).launch(start = CoroutineStart.UNDISPATCHED) {
+                snapshotFlow { wallet.toast }.collect { toast -> toast?.let(raised::add) }
+            }
+        try {
+            action()
+            rule.waitUntil(timeoutMs) { text in raised }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("toast \"$text\" not raised after $timeoutMs ms; raised: $raised", timeout)
+        } finally {
+            watch.cancel()
+        }
+    }
 
     fun waitForText(
         text: String,
@@ -85,14 +127,17 @@ class Robot(
         rule.waitForIdle()
     }
 
-    /** An icon button or dock item by its content description. */
+    /** An icon button or dock item by its content description, scrolled into view first. */
     fun tapDescribed(
         label: String,
         timeoutMs: Long = 10_000,
     ) {
         val matcher = hasContentDescription(label) and hasClickAction()
         waitFor(matcher, timeoutMs)
-        rule.onAllNodes(matcher)[0].assertIsEnabled().performClick()
+        val node = rule.onAllNodes(matcher)[0]
+        // A click is a touch at the node's bounds: a control scrolled off screen must come back first.
+        runCatching { node.performScrollTo() }
+        node.assertIsEnabled().performClick()
         rule.waitForIdle()
     }
 

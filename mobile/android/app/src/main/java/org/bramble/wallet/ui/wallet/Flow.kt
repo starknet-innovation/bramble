@@ -43,4 +43,13 @@ enum class Flow {
 
     /** A tracked token's detail: price, balance, private balance and contract. */
     TOKEN_DETAIL,
+
+    /** Every tracked token with Show/Hide, and the add and discover tasks. */
+    TOKENS,
+
+    /** Add a token by its contract address. */
+    ADD_TOKEN,
+
+    /** Scan the token registry for held tokens. */
+    DISCOVER_TOKENS,
 }

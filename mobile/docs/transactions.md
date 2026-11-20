@@ -85,7 +85,7 @@ a search that matches nothing shows "No matching recipient.".
   opens "Tokens you can send", mirroring the extension's token dropdown: a sheet on iOS, a stage
   of its own on Android. It has one group, "Your tokens", listing the network's bundled
   `networks.json` tokens with the chosen one marked, and no search field. iOS adds a "Manage
-  tokens" row under the list that opens the token list; Android has no token-management screen.
+  tokens" row under the list that opens the token list; so does Android (#977).
   STRK is preselected unless Send was opened from a token screen. Choosing a token clears the
   amount.
 - **Amount.** Placeholder "0". The balance line reads "Balance <compact> SYMBOL", or "Balance

@@ -234,6 +234,7 @@ fun IconButton(
  * `dangerSoft` fill with `danger` text. The input inside is always the one hardened [SecretField]
  * (passphrases, phrase words, and the Send recipient and amount, by [kind]). [trailing] sits at
  * the field's end (`.field-action`, the passphrase show control), and [revealed] is its state.
+ * [spokenLabel] names an unlabelled field for accessibility (else the label, else the placeholder).
  */
 @Composable
 fun BrambleField(
@@ -247,6 +248,7 @@ fun BrambleField(
     hint: String? = null,
     onSubmit: (() -> Unit)? = null,
     revealed: Boolean = false,
+    spokenLabel: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val skin = LocalSkin.current
@@ -265,7 +267,7 @@ fun BrambleField(
             SecretField(
                 value = value,
                 onValueChange = onValueChange,
-                accessibilityLabel = label ?: placeholder,
+                accessibilityLabel = spokenLabel ?: label ?: placeholder,
                 kind = kind,
                 modifier = Modifier.weight(1f),
                 placeholder = placeholder,

@@ -17,13 +17,15 @@ import org.bramble.core.MultisigRecord
 import org.bramble.core.NetworkInfo
 import org.bramble.core.RelayPolicy
 import org.bramble.core.WalletCore
+import org.bramble.wallet.BuildConfig
+import org.bramble.wallet.RpcClient
 
 /**
  * Public UI state for the wallet card, contacts, shared accounts, and Nostr coordination, as the
  * iOS `CoordinationStore`. The core keeps the coordination private key, gift-wrap plaintext, and
  * raw relay events; this class holds public values, and `CoordinationTransport.kt` moves bytes
- * (chain reads through `RpcClient.post`, one OkHttp WebSocket per relay for a sync). `reset()`
- * runs on lock and cancels any sync (mobile/docs/nostr-multisig.md §10).
+ * (chain reads through `chainPost`, `RpcClient.post` in the app; one OkHttp WebSocket per relay
+ * for a sync). `reset()` runs on lock and cancels any sync (mobile/docs/nostr-multisig.md §10).
  */
 class CoordinationStore(
     private val core: WalletCore,
@@ -54,6 +56,17 @@ class CoordinationStore(
      * to prefill once (it clears this as it takes it); dropped on lock.
      */
     var contactDraft: String? = null
+
+    /**
+     * Moves the multisig chain reads (authority, class declaration). The app's one HTTP path;
+     * replaceable only in a debug build, so instrumented tests can answer from the offline
+     * fixture node; a release build refuses.
+     */
+    internal var chainPost = ChainPost { url, body, maxBytes -> RpcClient.post(url, body, maxBytes = maxBytes) }
+        set(value) {
+            check(BuildConfig.DEBUG) { "the multisig chain transport is fixed in a release build" }
+            field = value
+        }
     private var syncJob: Job? = null
 
     /** Bumped on lock; a core call that finishes after it must not write back. */
@@ -152,7 +165,7 @@ class CoordinationStore(
     suspend fun addShared(raw: String): String {
         val info = network()
         val read =
-            runCatching { readAuthority(raw.trim().lowercase(), info) }
+            runCatching { readAuthority(raw.trim().lowercase(), info, chainPost) }
                 .getOrElse { throw Refusal("Enter a valid non-zero Starknet account address.") }
         authorityRefusal(read.status())?.let { throw it }
         val record = work { core.addMultisig(read) }

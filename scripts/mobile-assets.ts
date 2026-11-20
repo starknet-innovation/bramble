@@ -23,7 +23,12 @@ import { TOAST_SOURCE } from "./mobile-assets/feedback";
 import { renderKotlin } from "./mobile-assets/kotlin";
 import { MULTISIG_JSON_PATH, renderMultisigConstants } from "./mobile-assets/multisig";
 import { PRIVACY_JSON_PATH, renderPrivacyRouting } from "./mobile-assets/privacy";
-import { RPC_FIXTURES_PATH, renderRpcFixtures } from "./mobile-assets/rpc-fixtures";
+import {
+  KOTLIN_RPC_FIXTURES_PATH,
+  RPC_FIXTURES_PATH,
+  renderKotlinRpcFixtures,
+  renderRpcFixtures,
+} from "./mobile-assets/rpc-fixtures";
 import { renderKotlinCopy, renderPolicyJson, renderSwiftCopy } from "./mobile-assets/security-copy";
 import { HEADER } from "./mobile-assets/shared";
 import { renderSwift, renderSwiftLayout } from "./mobile-assets/swift";
@@ -161,6 +166,7 @@ export const renderMobileAssets = (sources: readonly string[]): ReadonlyMap<stri
     [SWIFT_COPY_PATH, renderSwiftCopy()],
     [KOTLIN_COPY_PATH, renderKotlinCopy()],
     [RPC_FIXTURES_PATH, renderRpcFixtures()],
+    [KOTLIN_RPC_FIXTURES_PATH, renderKotlinRpcFixtures()],
     [ACCOUNTS_JSON_PATH, renderAccountsCatalog()],
     [MULTISIG_JSON_PATH, renderMultisigConstants()],
     [TOKEN_REGISTRY_JSON_PATH, renderTokenRegistry()],

@@ -2,7 +2,7 @@
 
 Status: prototype on `feature/mobile-wallet` (2026-09-24). iOS builds and passes its unit and
 mainnet UI suites on the simulator. Android compiles and passes its JVM and instrumented suites
-on an API 35 emulator (2026-09-25); its CI job has not run on GitHub yet.
+on an API 35 emulator (2026-09-25), and CI runs both (`android`, `android-device`, #977).
 
 ## Goal
 
@@ -147,7 +147,8 @@ authorization (`docs/accounts.md` §2.7a). Not yet: private-key import and Braav
    core's `prepareDeployment` plan), the Activity list over the core's one activity
    store with explorer links and pending-record reconciliation, token detail with the private
    balance section, and the real deployment state in every privacy gate and in the journey.
-   Running the `android` job in `.github/workflows/mobile.yml` on GitHub is still **open**.
+   The `android` job in `.github/workflows/mobile.yml` builds the core and runs the JVM suite,
+   and `android-device` runs the instrumented suite on an emulator (#977).
 2. Transactions in the core — **done** (`docs/transactions.md`). ERC-20 transfer via a core-owned
    `TransferPlan` bound to the session generation (`lock_epoch`), automatic OZ deployment, a
    standalone Deploy flow, and the extension's review, fixture-checked against the extension.
@@ -213,7 +214,9 @@ audit of the core and FFI surface, reproducible builds, crash reporting without 
   buffer after the send, but HTTP/TLS internals cannot be wiped (docs/privacy.md §1.1, §5). This is
   the owner-approved exemption under Security posture.
 - Send (ERC-20 from an OpenZeppelin account, with automatic deployment) is implemented on iOS
-  and Android; Android's Send screens compile but have no instrumented send-flow test yet (the
-  deployment plan they share is covered by `DeployFlowTest`). See docs/transactions.md.
-- Android has token detail but not yet the token management screens (add by contract, find held
-  tokens, hide/show) that iOS has.
+  and Android, each with its send-flow UI test (`SendFlowTests`, `SendFlowTest`). See
+  docs/transactions.md.
+- `tests/conformance/mobile-host-parity.test.ts` (#977) catches part of the drift between the two
+  apps: a generated copy key read by one app and not the other, or a top-level core function
+  Android imports that iOS never calls, fails the check unless it is a named platform difference.
+  It cannot see methods on core objects, or core functions only iOS calls.

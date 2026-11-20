@@ -96,7 +96,7 @@ fun ReceiveScreen(
     ) {
         FlowHeader("Receive", network = store.networkLabel, back = back)
         // The description keys on the toggle alone, as it always has (`card` was shadowed there).
-        if (matrix != null) QrCard(matrix, describesCard = showCard)
+        if (matrix != null) QrCard(matrix, qrDescription(showCard))
         AddressDetails(address, networkName)
         CopyAddressButton(store, address)
         if (offersCard) ContactCardOptions(store, card, showCard) { showCard = it }
@@ -146,11 +146,15 @@ private fun CopyAddressButton(
     }
 }
 
-/** The white QR card with its four-module quiet zone; [describesCard] picks the spoken label. */
+/** How the QR card is spoken: the contact card's, or the address's. */
+private fun qrDescription(showCard: Boolean): String =
+    if (showCard) "QR code for wallet contact card" else "QR code for your Starknet address"
+
+/** The white QR card with its four-module quiet zone, spoken as [description]. */
 @Composable
-private fun QrCard(
+internal fun QrCard(
     matrix: List<BooleanArray>,
-    describesCard: Boolean,
+    description: String,
 ) {
     val card = RoundedCornerShape(BrambleRadius.md)
     Box(
@@ -159,14 +163,7 @@ private fun QrCard(
             .brambleShadow(BrambleShadow.md, card)
             .background(Color.White, card)
             .padding(BrambleSpace.md)
-            .semantics {
-                contentDescription =
-                    if (describesCard) {
-                        "QR code for wallet contact card"
-                    } else {
-                        "QR code for your Starknet address"
-                    }
-            },
+            .semantics { contentDescription = description },
     ) {
         Canvas(Modifier.size(BrambleLayout.qrSide)) {
             // The extension's `viewBox="-4 -4 n+8 n+8"`: a four-module quiet zone.

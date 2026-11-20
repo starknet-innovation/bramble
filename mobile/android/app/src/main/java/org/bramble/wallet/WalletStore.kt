@@ -78,9 +78,14 @@ class WalletStore(
 
     /**
      * Chain reads for deployment state, deployment and activity observation. HTTPS in the app;
-     * instrumented tests swap in an offline fixture node before the wallet opens.
+     * instrumented tests swap in an offline fixture node before the wallet opens. Replaceable
+     * only in a debug build; a release build refuses.
      */
     internal var rpc = RpcClient()
+        set(value) {
+            check(BuildConfig.DEBUG) { "the chain transport is fixed in a release build" }
+            field = value
+        }
 
     /**
      * The core's judgement of the active account's deployment (`WalletStoreDeploy.kt`), for the

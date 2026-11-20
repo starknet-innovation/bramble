@@ -6,14 +6,21 @@ import android.util.SparseArray
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.FrameLayout
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import org.bramble.wallet.design.BrambleTheme
 import org.bramble.wallet.design.SecretEditText
+import org.bramble.wallet.design.SecretField
 import org.bramble.wallet.design.SecretInput
 import org.bramble.wallet.design.SecretKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -23,6 +30,8 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class SecretFieldTest {
+    @get:Rule val rule = createComposeRule()
+
     private val secret = "abandon ability able"
 
     private fun <T> onMain(block: () -> T): T {
@@ -38,6 +47,37 @@ class SecretFieldTest {
         SecretEditText(InstrumentationRegistry.getInstrumentation().targetContext).apply { configure(kind, action) }
 
     private fun editorInfo(edit: SecretEditText): EditorInfo = EditorInfo().also { edit.onCreateInputConnection(it) }
+
+    @Test
+    fun releaseWipesWithoutAnEdit() {
+        // Leaving the screen wipes the view's buffer, but the model must not see that as typing:
+        // a Send review once lost its amount and plan as the details stage left the screen.
+        val reported = mutableListOf<String>()
+        var shown by mutableStateOf(true)
+        rule.setContent {
+            BrambleTheme {
+                if (shown) SecretField("125.5", { reported += it }, "Amount to send", SecretKind.AMOUNT)
+            }
+        }
+        rule.runOnIdle { shown = false }
+        rule.waitForIdle()
+        assertTrue("the wipe reached the model as ${reported.map { "\"$it\"" }}", reported.isEmpty())
+    }
+
+    @Test
+    fun releaseWipesPassphraseState() {
+        // A passphrase is a secret: leaving the screen wipes it from the model too (T10).
+        val reported = mutableListOf<String>()
+        var shown by mutableStateOf(true)
+        rule.setContent {
+            BrambleTheme {
+                if (shown) SecretField("hunter2 hunter2", { reported += it }, "Vault passphrase", SecretKind.PASSPHRASE)
+            }
+        }
+        rule.runOnIdle { shown = false }
+        rule.waitForIdle()
+        assertEquals(listOf(""), reported)
+    }
 
     @Test
     fun passphraseMaskedNoSuggestions() =

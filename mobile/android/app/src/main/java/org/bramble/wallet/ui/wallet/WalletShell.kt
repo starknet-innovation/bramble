@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import org.bramble.core.explorerAccountUrl
@@ -54,6 +55,7 @@ import org.bramble.wallet.design.IconButton
 import org.bramble.wallet.design.LocalSkin
 import org.bramble.wallet.design.StatusDot
 import org.bramble.wallet.design.textStyle
+import org.bramble.wallet.privacy.privacyStatusText
 import org.bramble.wallet.refreshBalances
 import org.bramble.wallet.send.SendScreen
 
@@ -159,6 +161,7 @@ private fun FlowScreen(
                 back = pop,
                 viewActivity = arguments.showActivity,
                 openAddressBook = { push(Flow.ADDRESS_BOOK) },
+                manageTokens = { push(Flow.TOKENS) },
                 startToken = arguments.sendToken,
             )
         }
@@ -202,13 +205,13 @@ private fun FlowScreen(
                 .ReadyMultisigScreen(store, back = pop)
         }
 
-        Flow.PRIVACY, Flow.DEPLOY, Flow.TOKEN_DETAIL -> {
+        Flow.PRIVACY, Flow.DEPLOY, Flow.TOKEN_DETAIL, Flow.TOKENS, Flow.ADD_TOKEN, Flow.DISCOVER_TOKENS -> {
             PortfolioFlowScreen(flow, store, arguments, pop, push)
         }
     }
 }
 
-/** The flows that act on the active account's portfolio: privacy, deployment, token detail. */
+/** The flows that act on the active account's portfolio: privacy, deployment, tokens. */
 @Composable
 private fun PortfolioFlowScreen(
     flow: Flow,
@@ -231,6 +234,25 @@ private fun PortfolioFlowScreen(
                 send = arguments.openSend,
                 journey = { push(Flow.PRIVACY) },
             )
+        }
+
+        Flow.TOKENS -> {
+            org.bramble.wallet.portfolio.TokensScreen(
+                store,
+                back = pop,
+                addToken = { push(Flow.ADD_TOKEN) },
+                discoverTokens = { push(Flow.DISCOVER_TOKENS) },
+            )
+        }
+
+        Flow.ADD_TOKEN -> {
+            org.bramble.wallet.portfolio
+                .AddTokenScreen(store, back = pop)
+        }
+
+        Flow.DISCOVER_TOKENS -> {
+            org.bramble.wallet.portfolio
+                .DiscoverTokensScreen(store, back = pop)
         }
 
         else -> {
@@ -260,6 +282,7 @@ private fun DockScreen(
                     send = openSend,
                     privacy = { push(Flow.PRIVACY) },
                     openToken = openToken,
+                    manageTokens = { push(Flow.TOKENS) },
                 ),
             )
         }
@@ -341,6 +364,8 @@ private fun WalletHeader(
                 .semantics(mergeDescendants = true) {
                     contentDescription = "Accounts"
                     role = Role.Button
+                    // `aria-describedby="network-status-detail"`: the header's data-freshness copy.
+                    stateDescription = headerStatus(store, account?.displayName.orEmpty())
                 }.clickable(onClick = openAccounts),
             horizontalArrangement = Arrangement.spacedBy(BrambleSpace.md),
             verticalAlignment = Alignment.CenterVertically,
@@ -364,7 +389,7 @@ private fun WalletHeader(
                     horizontalArrangement = Arrangement.spacedBy(BrambleLayout.pillGap),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    StatusDot(store.networkHealthy)
+                    StatusDot(store.networkHealthy && store.portfolio.issue == null)
                     Text(store.networkLabel, color = skin.muted, style = textStyle(BrambleTypeScale.caption))
                 }
             }
@@ -398,4 +423,17 @@ private fun HeaderActions(
         }
         IconButton(BrambleIconName.LOCK, "Lock wallet", tint = skin.muted) { store.lock() }
     }
+}
+
+/**
+ * The account trigger's spoken value (iOS `WalletShell` header): the name, the network, then the
+ * portfolio's data issue (else a degraded-network note) and the private-balance status.
+ */
+private fun headerStatus(
+    store: WalletStore,
+    name: String,
+): String {
+    val network = store.portfolio.issue?.let { ", $it" } ?: if (store.networkHealthy) "" else ", network degraded"
+    val privacy = store.privacyStatusText?.let { ", $it" }.orEmpty()
+    return "$name, ${store.networkLabel}$network$privacy"
 }

@@ -51,9 +51,9 @@ Linux and on machines without a JDK; it runs in `.github/workflows/mobile.yml`.
 `.github/workflows/mobile.yml` runs on PRs touching `mobile/**`: `cargo fmt --check`, clippy
 (`-D warnings`) and `cargo test --locked` on Linux; `bun run mobile:lint` on macOS; the iOS core
 build, XcodeGen, `BrambleTests` on a simulator and SwiftLint's analyzer rules on macOS; and the
-Android core build plus `./gradlew :app:testDebugUnitTest`. The UI tests (`BrambleUITests`) and the
-Android instrumented suite stay local. The Android job has not run on GitHub yet; its steps pass
-locally (see Android below).
+Android core build plus `./gradlew :app:testDebugUnitTest`, then `android-device`, which runs the
+instrumented suite on an API 35 x86_64 emulator on Linux with the core the `android` job built. The
+iOS UI tests (`BrambleUITests`) stay local.
 
 ## Rust core
 
@@ -136,13 +136,15 @@ with `clearPackageData=true`, so each starts from a fresh install state. The opt
 arguments and is refused with `ci=true`, which the build sets whenever the host's `CI` is set.
 `bun mobile/android/scripts/qr-fixture.ts` regenerates the QR parity fixture. Design and threat model: [docs/android-parity.md](docs/android-parity.md).
 
-Status (2026-09-25, JDK 17, SDK 35, NDK 27.2, API 35 emulator): `:app:assembleDebug` builds;
-`:app:testDebugUnitTest` passes 38 JVM tests; `:app:connectedDebugAndroidTest` passes 36
-instrumented tests, with the opt-in `LiveMainnetWalletTest` skipped. Several instrumented tests
-(onboarding, Home, Activity) read public mainnet data, as the iOS UI suite does; the deploy, token
-detail and Settings deploy-row tests route the store's chain reads through an offline fixture node
-(`androidTest/.../FixtureNode.kt`) that refuses every write. `bun run mobile:lint` is clean. The
-Android job has not run in CI yet (SCOPE.md, Phase 1.1).
+Status (2026-11-19, JDK 17, SDK 35, NDK 27.2, API 35 emulator): `:app:assembleDebug` builds;
+`:app:testDebugUnitTest` passes 52 JVM tests; `:app:connectedDebugAndroidTest` runs 50
+instrumented tests, with the opt-in `LiveMainnetWalletTest` skipped and `DeployFlowTest`'s
+refused-deployment case failing as it does on the base branch (#977). The onboarding and Home
+tests read public mainnet data, as the iOS UI suite does; every test that opens the published
+wallet through `openPublicWalletOn` routes the store's, the portfolio's and the multisig chain
+reads through an offline fixture node (`androidTest/.../FixtureNode.kt`, answering from the
+generated `RpcFixtures.generated.kt`, the twin of the iOS fixtures) that refuses every write.
+`bun run mobile:lint` is clean. CI runs the instrumented suite in the `android-device` job.
 
 ## Sending
 

@@ -478,7 +478,7 @@ tests that mirror the iOS XCUITests.
 - Port of 2026-09-30 (extension copy review): Home lost its deploy notice; Settings "This account"
   opens Deploy account, which quotes on open and has one Deploy button; Send, Activity rows and
   privacy follow the regenerated `SendCopy`/`PrivacyCopy` and the core's new row and gate shapes.
-  Not ported: the token picker's "Manage tokens" row (Android has no token-management screen).
+  The token picker's "Manage tokens" row opens the token list (ported with token management, #977).
 
 ## 11. Review resolutions
 
