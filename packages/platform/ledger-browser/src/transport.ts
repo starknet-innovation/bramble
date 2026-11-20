@@ -121,18 +121,25 @@ const finalRejection = (error: unknown): LedgerRejection => {
   });
 };
 
+// WebUSB reports another holder as device-busy. WebHID reports the same
+// situation, including this extension's own grant tab, as NotAllowedError
+// "Failed to open the device." A denied permission uses that name too, so it
+// stays the generic error unless closing an orphan tab lets the open succeed.
+const mayBeGrantTabHold = (failure: ReturnType<typeof classifyLedgerTransportError>): boolean =>
+  failure.code === "device-busy" || failure.causeName === "NotAllowedError";
+
 const openConnectedOnce = async (deviceId?: string): Promise<LedgerTransport | null> => {
   try {
     return await openConnectedTransportRaw(deviceId);
   } catch (error) {
     const failure = classifyLedgerTransportError(error);
-    if (failure.code !== "device-busy") throw finalRejection(error);
+    if (!mayBeGrantTabHold(failure)) throw finalRejection(error);
     const released = await releaseOrphanLedgerGrantTabs();
     if (!released) throw finalRejection(error);
     try {
       return await openConnectedTransportRaw(deviceId);
     } catch (retryError) {
-      if (classifyLedgerTransportError(retryError).code !== "device-busy") {
+      if (!mayBeGrantTabHold(classifyLedgerTransportError(retryError))) {
         throw finalRejection(retryError);
       }
     }
