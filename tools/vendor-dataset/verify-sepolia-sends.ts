@@ -68,6 +68,10 @@ const CASES: readonly Case[] = [
     skip: "the wallet cannot import an sncast-shaped OZ account yet (see TA-07)",
   },
 ];
+// A typo would otherwise select nothing and report "0 fail" as a clean run.
+if (ONLY && !CASES.some((c) => c.id === ONLY)) {
+  throw new Error(`${ONLY} is not an S-TXN case; use one of ${CASES.map((c) => c.id).join(", ")}`);
+}
 
 const manifest = JSON.parse(
   readFileSync(resolve(import.meta.dir, "manifest/sepolia/s-txn.json"), "utf8"),
@@ -125,15 +129,18 @@ const ok = await guarded(async () => {
         }
       };
       const blockedAtStart = fw.blocked.length;
-      const nonce = await nonceOf(address);
+      // null: the node could not say, so a retry could not be proven safe.
+      const readNonce = (): Promise<bigint | null> => nonceOf(address).catch(() => null);
+      const nonce = await readNonce();
       let result = await attempt();
       // The public node sometimes refuses a request or stalls a step. Retry a
       // sender once, and only when provably nothing went out: no blocked
-      // broadcast, and after a pause the nonce (pre-confirmed included) has
-      // not moved. The verdict keeps the first failure so flakiness shows.
-      if (!result.ok && !c.readOnly && fw.blocked.length === blockedAtStart) {
+      // broadcast, and after a pause the nonce (pre-confirmed included) was
+      // read both times and has not moved. The verdict keeps the first
+      // failure so flakiness shows.
+      if (!result.ok && !c.readOnly && fw.blocked.length === blockedAtStart && nonce !== null) {
         await pace(RETRY_PAUSE_MS);
-        if ((await nonceOf(address)) === nonce) {
+        if ((await readNonce()) === nonce) {
           const first = result.why;
           const second = await attempt();
           result = {
