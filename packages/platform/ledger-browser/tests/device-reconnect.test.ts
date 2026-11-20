@@ -68,10 +68,13 @@ class FakeHIDDevice {
   readonly productName = "Nano X";
   readonly collections = [{ usagePage: 0xffa0, usage: 1 }];
   opened = false;
-  constructor(readonly heldByOtherProcess = false) {}
+  blocked: boolean;
+  constructor(heldByOtherProcess = false) {
+    this.blocked = heldByOtherProcess;
+  }
   async open() {
     if (this.opened) throw new DOMException("The device is already open.", "InvalidStateError");
-    if (this.heldByOtherProcess) {
+    if (this.blocked) {
       throw new DOMException("Failed to open the device.", "NotAllowedError");
     }
     this.opened = true;
@@ -173,6 +176,29 @@ describe("cable reconnect stale handles", () => {
     scope.window = globalThis;
     setNav("hid", hidApi(device));
     await device.open();
+
+    const session = await ledgerConnector.openConnected();
+    expect(session).toBeTruthy();
+    expect(device.opened).toBe(true);
+    await session?.close();
+  });
+
+  test("an orphaned tab holding WebHID is released and the open is retried", async () => {
+    const device = new FakeHIDDevice(true);
+    scope.window = globalThis;
+    setNav("hid", hidApi(device));
+    setNav("locks", locksHolding());
+    scope.chrome = {
+      runtime: {
+        getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 11 }],
+        getURL: (path: string) => `chrome-extension://bramble/${path}`,
+      },
+      tabs: {
+        remove: async () => {
+          device.blocked = false;
+        },
+      },
+    };
 
     const session = await ledgerConnector.openConnected();
     expect(session).toBeTruthy();
