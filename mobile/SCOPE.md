@@ -2,8 +2,7 @@
 
 Status: prototype on `feature/mobile-wallet` (2026-09-24). iOS builds and passes its unit and
 mainnet UI suites on the simulator. Android compiles and passes its JVM and instrumented suites
-on an API 35 emulator (2026-09-25). The `android` and `android-device` CI jobs that run them (#977)
-have not run on GitHub yet.
+on an API 35 emulator (2026-09-25), and CI runs both (`android`, `android-device`, #977).
 
 ## Goal
 
@@ -147,8 +146,7 @@ authorization (`docs/accounts.md` §2.7a). Not yet: private-key import and Braav
    store with explorer links and pending-record reconciliation, token detail with the private
    balance section, and the real deployment state in every privacy gate and in the journey.
    The `android` job in `.github/workflows/mobile.yml` builds the core and runs the JVM suite,
-   and `android-device` runs the instrumented suite on an emulator (#977); neither has run on
-   GitHub yet.
+   and `android-device` runs the instrumented suite on an emulator (#977).
 2. Transactions in the core — **done** (`docs/transactions.md`). ERC-20 transfer via a core-owned
    `TransferPlan` bound to the session generation (`lock_epoch`), automatic OZ deployment, a
    standalone Deploy flow, and the extension's review, fixture-checked against the extension.
