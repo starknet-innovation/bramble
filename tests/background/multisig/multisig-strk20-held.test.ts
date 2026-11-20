@@ -8,14 +8,22 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { argentMultisigOperationId } from "@bramble/multisig/repository";
+import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
 import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
+import { argentSignerGuid } from "@bramble/starknet/account-contracts";
 import { createMemoryStore } from "@bramble/store/kv";
-import { num } from "starknet";
+import { canonicalFelt, STARKNET_NETWORKS } from "@bramble/wallet-model/networks";
+import { ec, num } from "starknet";
 import {
   findResumableStrk20Request,
   isRelayPlanLive,
 } from "../../../apps/extension/src/background/multisig/multisig-strk20-held";
 import {
+  callSetAuthorization,
+  setViewingKey,
+} from "../../../packages/features/privacy/tests/support/multisig-callset";
+import {
+  HARNESS_MULTISIG,
   HARNESS_MULTISIG_ID,
   harnessAccountA,
   harnessAccountB,
@@ -190,6 +198,20 @@ describe("a multisig private action is proved as compiled", () => {
     expect(sdk.log.recorded).toEqual([{ accountId: HARNESS_MULTISIG_ID, transactionHash: hash }]);
   });
 
+  test("a co-owner's landed registration is journaled before this wallet's next proof", async () => {
+    const { multisigStore, register, sdk, signedRegistration } = await owners({ onChain: true });
+    const intentId = await signedRegistration();
+    const hash = (await multisigStore.getIntent(intentId))?.prepared.transactionHash ?? "";
+    expect(sdk.log.recorded).toEqual([]);
+    // This wallet signed but never sent it; the chain says it landed.
+    await register();
+    expect(sdk.log.recorded).toEqual([{ accountId: HARNESS_MULTISIG_ID, transactionHash: hash }]);
+    expect((await multisigStore.getIntent(intentId))?.state).toBe("submitted");
+    // Marked submitted, it is not journaled again over a newer write.
+    await register();
+    expect(sdk.log.recorded).toHaveLength(1);
+  });
+
   test("a compile whose calldata is not the signed call is refused and not held", async () => {
     const { register, sdk, store } = await owners({ tamper: true });
     await expect(register()).resolves.toEqual({ error: "Invalid Argent multisig private proof" });
@@ -257,6 +279,56 @@ describe("a held relay's fee authorization", () => {
       store,
     });
     expect(resumed).toBeNull();
+    expect(await store.listHeld(HARNESS_MULTISIG_ID)).toEqual([]);
+  });
+});
+
+describe("a held request after the signer set changes", () => {
+  test("resumes under the set it was signed for, and is dropped under another", async () => {
+    const [a, b] = ["0x11", "0x22"]
+      .map((privateKey) => ({ privateKey, publicKey: ec.starkCurve.getStarkKey(privateKey) }))
+      .sort((left, right) =>
+        BigInt(argentSignerGuid(left.publicKey)) < BigInt(argentSignerGuid(right.publicKey))
+          ? -1
+          : 1,
+      ) as [{ privateKey: string; publicKey: string }, { privateKey: string; publicKey: string }];
+    const signerPublicKeys = [a.publicKey, b.publicKey];
+    const authorization = callSetAuthorization({
+      accountAddress: HARNESS_MULTISIG,
+      accountId: HARNESS_MULTISIG_ID,
+      actions: [setViewingKey()],
+      chainId: STARKNET_NETWORKS.SN_MAIN.chainId,
+      pool: canonicalFelt(STRK20_MAINNET_POOL) ?? "0x1",
+      scalar: HARNESS_SCALAR,
+      signerPublicKeys,
+      signWith: [a, b],
+      threshold: 2,
+    });
+    const store = createMultisigStrk20Store(createMemoryStore());
+    expect(await store.upsertAuthorization(authorization, HARNESS_SCALAR)).toBe("stored");
+    await store.putHeld({
+      accountId: HARNESS_MULTISIG_ID,
+      envelope: { nonce: "0x0" },
+      id: authorization.id,
+      provingBlock: COMPILED_BLOCK,
+    });
+    const resume = (signers: { signerPublicKeys: readonly string[]; threshold: number }) =>
+      findResumableStrk20Request({
+        accountId: HARNESS_MULTISIG_ID,
+        action: { kind: "register" },
+        nowSeconds: 1_800_000_000,
+        readWindow: async () => ({
+          currentBlock: BigInt(COMPILED_BLOCK + 1),
+          validityBlocks: 100n,
+        }),
+        scalar: HARNESS_SCALAR,
+        signers,
+        store,
+      });
+    expect(await resume({ signerPublicKeys, threshold: 2 })).not.toBeNull();
+    // A signer was added since: the old aggregate is for a set that is gone.
+    const grown = [...signerPublicKeys, ec.starkCurve.getStarkKey("0x33")];
+    expect(await resume({ signerPublicKeys: grown, threshold: 2 })).toBeNull();
     expect(await store.listHeld(HARNESS_MULTISIG_ID)).toEqual([]);
   });
 });

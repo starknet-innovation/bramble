@@ -99,7 +99,7 @@ describe("waiting for co-owners (item 3)", () => {
       },
     } as unknown as Strk20Service;
     const session = {
-      context: { rpcUrls: [] },
+      context: { record: { id: HARNESS_MULTISIG_ID }, rpcUrls: [] },
       isAuthorized: () => true,
       prepareRequest: () => undefined,
       privacyAccount: { address: HARNESS_MULTISIG, id: HARNESS_MULTISIG_ID, networkId: "SN_MAIN" },
@@ -112,7 +112,13 @@ describe("waiting for co-owners (item 3)", () => {
       waitingId: () => `${HARNESS_MULTISIG_ID}:0xabc`,
     } as unknown as MultisigStrk20Session;
     await expect(
-      proveMultisigStrk20({} as MultisigOpsDeps, session, { kind: "register" }, async () => SCALAR),
+      proveMultisigStrk20(
+        // No intents to journal: this case is about the waiting refusal.
+        { multisigStore: { listIntents: async () => [] } } as unknown as MultisigOpsDeps,
+        session,
+        { kind: "register" },
+        async () => SCALAR,
+      ),
     ).resolves.toEqual({ id: `${HARNESS_MULTISIG_ID}:0xabc`, ok: true, phase: "authorization" });
   });
 });

@@ -3,7 +3,8 @@
  * proof bytes, and relay requests. Proof bytes are kept under one key each
  * (see ./proof-bytes); rows carry a marker in their place. Intent proofs are
  * capped at MAX_MULTISIG_STRK20_PROOFS across every multisig, and a relay's
- * bytes are dropped once it is sent. Authorizations are re-checked against the shared scalar on read,
+ * bytes are dropped once it is sent. The same cap bounds the proof bytes kept
+ * in all, intents and unsent relays together. Authorizations are re-checked against the shared scalar on read,
  * so a tampered call list cannot be signed. Proof bytes never go into a
  * Nostr package; they live only under this key.
  */
@@ -186,6 +187,11 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
       : ((await attachedProof(store, "relay", record.id, current)) ?? current);
     return multisigStrk20RelayConflicts(stored, record) ? "conflict" : null;
   };
+  // Proof bytes are capped across every multisig, intents and unsent relays
+  // together: each may be 512K characters, and the extension shares one
+  // storage quota.
+  const withinProofBudget = (next: Shape): boolean =>
+    referencedProofKeys(next).size <= MAX_MULTISIG_STRK20_PROOFS;
   const commit = async (
     previous: Shape,
     next: Shape,
@@ -297,7 +303,10 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
         const row = detachedProof(record);
         const next = [...shape.proofs.filter((entry) => proofId(entry) !== record.intentId), row];
         const proofs = cappedProofs(next, new Set([...liveIntentIds, record.intentId]));
-        const result = proofs ? await commit(shape, { ...shape, proofs }, isAuthorized) : "full";
+        const result =
+          proofs && withinProofBudget({ ...shape, proofs })
+            ? await commit(shape, { ...shape, proofs }, isAuthorized)
+            : "full";
         await tidy([...referencedProofKeys(shape), key]);
         return result;
       },
@@ -361,7 +370,10 @@ export const createMultisigStrk20Store = (store: KeyValueStore): MultisigStrk20S
           MAX_MULTISIG_STRK20_PROOFS,
           (row) => !isMultisigStrk20RelayRequest(row) || row.state === "submitted",
         );
-        const result = relays ? await commit(shape, { ...shape, relays }, isAuthorized) : "full";
+        const result =
+          relays && withinProofBudget({ ...shape, relays })
+            ? await commit(shape, { ...shape, relays }, isAuthorized)
+            : "full";
         await tidy([...referencedProofKeys(shape), key]);
         return result;
       },

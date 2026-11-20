@@ -14,6 +14,7 @@ import {
   type MultisigStrk20Authorization,
   multisigStrk20CallSetAggregate,
 } from "@bramble/privacy/multisig-strk20";
+import { sameMultisigSignerSet } from "@bramble/privacy/multisig-strk20-binding";
 import {
   multisigStrk20ExecuteCalldata,
   multisigStrk20HeldEnvelope,
@@ -182,12 +183,39 @@ const droppedAsLapsed = async (
   return true;
 };
 
+// A held request that can no longer be proved: its authorization was signed
+// for a signer set or threshold the multisig no longer has (the aggregate
+// would not serialize), or its block is past the pool's proof window; it is
+// dropped so the action is compiled and signed again.
+const droppedAsStale = async (
+  input: {
+    readonly readWindow: () => Promise<{
+      readonly currentBlock: bigint;
+      readonly validityBlocks: bigint;
+    }>;
+    readonly signers: SignerSet;
+    readonly store: MultisigStrk20Store;
+  },
+  row: { readonly id: string; readonly provingBlock: number },
+  authorization: MultisigStrk20Authorization,
+): Promise<boolean> => {
+  const sameSigners =
+    authorization.threshold === input.signers.threshold &&
+    sameMultisigSignerSet(authorization.signerPublicKeys, input.signers.signerPublicKeys);
+  const live =
+    sameSigners &&
+    strk20ProofSubmittable({ baseBlock: BigInt(row.provingBlock), ...(await input.readWindow()) });
+  if (!live) await input.store.dropHeld(row.id);
+  return !live;
+};
+
 /**
  * The newest held request for `action` whose authorization now holds the
- * threshold and whose block is still inside the pool's proof window; a held
- * request past that window is dropped, so the action is compiled and signed
- * again. A relay action is resumed only with the fee plan it was compiled with,
- * and only while that plan's authorization is live; a lapsed one is dropped.
+ * threshold under the multisig's current signer set, and whose block is still
+ * inside the pool's proof window; a held request that fails either is dropped,
+ * so the action is compiled and signed again. A relay action is resumed only
+ * with the fee plan it was compiled with, and only while that plan's
+ * authorization is live; a lapsed one is dropped.
  */
 export const findResumableStrk20Request = async (input: {
   readonly accountId: string;
@@ -207,12 +235,7 @@ export const findResumableStrk20Request = async (input: {
     if (relay !== (row.plan !== undefined)) continue;
     if (await droppedAsLapsed(input, row)) continue;
     const ready = await readyFor(input, row.id);
-    if (!ready) continue;
-    const proofWindow = await input.readWindow();
-    if (!strk20ProofSubmittable({ baseBlock: BigInt(row.provingBlock), ...proofWindow })) {
-      await input.store.dropHeld(row.id);
-      continue;
-    }
+    if (!ready || (await droppedAsStale(input, row, ready.authorization))) continue;
     const request = signed(
       { invocation: row.envelope, provingBlock: row.provingBlock },
       ready.calldata,

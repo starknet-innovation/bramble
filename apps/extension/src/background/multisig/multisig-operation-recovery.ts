@@ -70,8 +70,11 @@ const journalPoolWrite = async (
   record: ArgentMultisigRecord,
   transactionHash: string,
 ): Promise<void> => {
-  if (intent.prepared.proofFacts && intent.prepared.proofFacts.length > 0) {
-    await recordPoolWrite(deps, record, transactionHash).catch(() => {});
+  if (!intent.prepared.proofFacts || intent.prepared.proofFacts.length === 0) return;
+  try {
+    await recordPoolWrite(deps, record, transactionHash);
+  } catch {
+    // The write itself stands; a later proof still waits on the pool's own depth.
   }
 };
 
@@ -188,6 +191,40 @@ const journalObservedSubmission = async (
     observed.record.networkId,
     intent.prepared.transactionHash,
   );
+};
+
+/**
+ * Journals the proof-carrying writes of `accountId` that a co-owner sent. An
+ * imported intent carries no broadcast hash, so this wallet never journaled
+ * it; its signed hash is the same for every signer, so the chain is asked
+ * about each one still collecting or ready here. One that landed is journaled
+ * and marked submitted, so it is never journaled again over a newer write.
+ * Read failures leave it for the next call. Never throws.
+ */
+export const journalCoOwnerPoolWrites = async (
+  deps: MultisigOpsDeps,
+  accountId: string,
+): Promise<void> => {
+  try {
+    const open = (await deps.multisigStore.listIntents()).filter(
+      (intent) =>
+        intent.accountId === accountId &&
+        (intent.state === "collecting" || intent.state === "ready") &&
+        (intent.prepared.proofFacts?.length ?? 0) > 0,
+    );
+    for (const intent of open) {
+      const observed = await observeSignedHash(deps, intent);
+      if (observed.kind !== "found" || observed.fate === "rejected") continue;
+      await journalObservedSubmission(deps, intent, observed);
+      await deps.multisigStore.upsertIntent({
+        ...intent,
+        broadcastTransactionHash: intent.prepared.transactionHash,
+        state: "submitted",
+      });
+    }
+  } catch {
+    // A read or write that failed is retried on the next proof.
+  }
 };
 
 /**

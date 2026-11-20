@@ -34,6 +34,7 @@ import { signerForContext } from "../accounts/wallet-ops";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { reviewArgentMultisigCalls } from "./multisig-call-review";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-deps";
+import { journalCoOwnerPoolWrites } from "./multisig-operation-recovery";
 import { configSnapshot } from "./multisig-ops";
 import { multisigStrk20ReviewScope } from "./multisig-strk20-scope";
 import {
@@ -355,6 +356,9 @@ export const proveMultisigStrk20 = async (
   request: MultisigStrk20ActionRequest,
   scalar: () => Promise<string>,
 ): Promise<RuntimeResponse> => {
+  // A co-owner may have sent a registration or deposit this wallet only
+  // signed; the proof must be built past it, as past this wallet's own.
+  await journalCoOwnerPoolWrites(deps, session.context.record.id);
   session.prepareRequest(request);
   const context = contextWithScalar(session, scalar);
   try {
