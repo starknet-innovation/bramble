@@ -41,6 +41,11 @@ export type InvokeFeeReview = {
   readonly fee: FeeEstimate | null;
   readonly feeAffordability: FeeAffordability;
   readonly feeEstimateFailed: boolean;
+  /**
+   * The network's refusal, when estimation failed because the node said no.
+   * Absent for a transport failure, which has no node sentence.
+   */
+  readonly feeEstimateDetail?: string;
   readonly feeEstimatePending: boolean;
   /** Tokens the user may pick instead of STRK. Absent when none are offered. */
   readonly gaslessFees?: readonly GaslessFeeOffer[];
@@ -63,6 +68,9 @@ export const invokeFeeReviewFields = (review: InvokeFeeReview): InvokeFeeReview 
   fee: review.fee && { ...review.fee },
   feeAffordability: review.feeAffordability,
   feeEstimateFailed: review.feeEstimateFailed,
+  ...(review.feeEstimateDetail === undefined
+    ? {}
+    : { feeEstimateDetail: review.feeEstimateDetail }),
   feeEstimatePending: review.feeEstimatePending,
   ...(review.gaslessFees === undefined
     ? {}
@@ -110,6 +118,9 @@ const feeReviewSnapshot = (approval: ApprovalRequest): Partial<PendingApproval> 
   ...(approval.feeEstimateFailed === undefined
     ? {}
     : { feeEstimateFailed: approval.feeEstimateFailed }),
+  ...(approval.feeEstimateDetail === undefined
+    ? {}
+    : { feeEstimateDetail: approval.feeEstimateDetail }),
   ...(approval.feeEstimatePending === undefined
     ? {}
     : { feeEstimatePending: approval.feeEstimatePending }),

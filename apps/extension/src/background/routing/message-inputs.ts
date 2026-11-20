@@ -1,5 +1,5 @@
 /** Pure parsers for untrusted background runtime messages. */
-import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isJsonWithinBudget, isRecord, JSON_BUDGETS } from "@bramble/core/json";
 import { normalizeWalletOrigin } from "@bramble/core/origin";
 import { type FeeEstimate, isFeeEstimate } from "@bramble/starknet/fee-bounds";
 import {
@@ -224,8 +224,11 @@ export const readOriginRequestInput = (
 export { readRequestAccountsInput } from "../accounts/request-accounts-input";
 
 /**
- * Parses dapp invoke transaction requests from content-script traffic. A proof
- * must be submittable: a simulate-mode (all-empty) proof is refused here.
+ * Parses dapp invoke transaction requests from content-script traffic. The
+ * call list is capped at `INVOKE_LIMITS.calls`, as in the page parser, and the
+ * message must fit the same JSON budget (`JSON_BUDGETS.strk20Proof`); neither
+ * is a Starknet rule. A proof must be submittable: a
+ * simulate-mode (all-empty) proof is refused here.
  */
 export const readAddInvokeTransactionInput = (
   message: unknown,
@@ -240,7 +243,8 @@ export const readAddInvokeTransactionInput = (
     message["type"] !== "wallet.addInvokeTransaction" ||
     !Array.isArray(message["calls"]) ||
     message["calls"].length === 0 ||
-    message["calls"].length > INVOKE_LIMITS.calls
+    message["calls"].length > INVOKE_LIMITS.calls ||
+    !isJsonWithinBudget(message, JSON_BUDGETS.strk20Proof)
   ) {
     return null;
   }

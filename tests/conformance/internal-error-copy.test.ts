@@ -223,6 +223,8 @@ const KEPT_VISIBLE = new Set([
   "RPC endpoints are temporarily unavailable",
   "Starkscan does not index devnet",
   "Request too large to review",
+  "This multisig can't propose more than 16 calls in one transaction.",
+  "This multisig can't propose that much calldata in one transaction.",
   "Ledger needs attention",
 ]);
 
