@@ -105,7 +105,7 @@ export const reviewMessages = {
     "review.flag.undecodedSwap":
       "钱包无法读取此兑换的收款方或最低兑得数量。除非你信任此网站，否则拒绝。",
     "review.flag.unknownContract": "{contract} 不是此钱包已知的代币或联系人。继续前先核实该合约。",
-    "review.flag.unlimitedApproval": "这将授予几乎无限的花费额度。只批准你打算花费的数额。",
+    "review.flag.unlimitedApproval": "这将授予几乎无限的花费额度。只授权你打算花费的数额。",
     "review.stakeAction.cancelUnstake": "取消解除质押，继续将 {symbol} 质押在 {validator}。",
     "review.stakeAction.claim": "从 {validator} 领取你的 STRK 奖励。",
     "review.stakeAction.claimElsewhere":

@@ -193,7 +193,7 @@ export const onboardingMessages = {
   "zh-Hans": {
     "onboarding.account.deriving": "正在派生账户…",
     "onboarding.account.finish": "完成设置",
-    "onboarding.account.title": "检查你的账户",
+    "onboarding.account.title": "审核你的账户",
     "onboarding.address.explorerLink": "使用区块浏览器的 https:// 链接。",
     "onboarding.address.field": "地址或区块浏览器链接",
     "onboarding.address.find": "查找账户",
@@ -221,7 +221,7 @@ export const onboardingMessages = {
     "onboarding.create.deriving": "正在派生公开账户地址…",
     "onboarding.create.findAccounts": "查找我的账户",
     "onboarding.create.phraseFailed": "无法生成助记词",
-    "onboarding.create.reviewAccount": "检查账户",
+    "onboarding.create.reviewAccount": "审核账户",
     "onboarding.create.unsupportedContract": "选择受支持的账户合约",
     "onboarding.create.verifyFirst": "先确认你的助记词",
     "onboarding.create.waitDeriving": "等待账户派生完成。",

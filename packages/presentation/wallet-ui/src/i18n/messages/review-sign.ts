@@ -134,7 +134,7 @@ export const reviewSignMessages = {
     "signing.raw": "原始类型化数据",
     "signing.shortString": "{quoted} ({type} 短字符串 = {encoded})",
     "signing.truncated": "{text}…（另有 {count} 个字符，见“原始类型化数据”）",
-    "signing.u256Total": "{total}（u256，high 与 low 之和）",
+    "signing.u256Total": "{total}（由 high 和 low 两部分组合而成的 u256 值）",
     "signing.unclassified":
       "此钱包无法确定这条消息的哪些部分会被实际签名，因此不会提供签名。拒绝此请求，并要求网站发送标准的 SNIP-12 消息。",
     "signing.unnamed": "未命名",

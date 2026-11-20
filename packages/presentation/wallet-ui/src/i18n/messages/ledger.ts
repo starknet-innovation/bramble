@@ -70,7 +70,7 @@ const en = {
 export const ledgerMessages = {
   en,
   "zh-Hans": {
-    "ledger.add.close": "关闭添加账户",
+    "ledger.add.close": "关闭“添加账户”",
     "ledger.add.group": "添加账户",
     "ledger.add.import": "导入现有账户",
     "ledger.add.importHint": "带入你已拥有的账户：助记词或私钥。",

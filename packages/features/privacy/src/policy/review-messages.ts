@@ -113,24 +113,24 @@ export const strk20ReviewMessages = {
     "strk20Review.balances.one": "共享 {count} 个代币的隐私余额",
     "strk20Review.balances.token": "代币 {token}",
     "strk20Review.fee.raw": "{amount}（{token}）",
-    "strk20Review.plan.account": "公开账户隐私池费用 {fee} — 首次存入会与此钱包关联",
+    "strk20Review.plan.account": "公开账户隐私池手续费 {fee} — 首次存入会与此钱包关联",
     "strk20Review.plan.relay": "隐私中继费 {fee}",
     "strk20Review.plan.relayAuthMany":
-      "隐私中继费 {fee} · 由 {caller} 在 {after} 之后、{before} 之前进行外部执行，涉及 {count} 个公开批准调用",
+      "隐私中继费 {fee} · 由 {caller} 在 {after} 之后、{before} 之前进行外部执行，涉及 {count} 个公开授权调用",
     "strk20Review.plan.relayAuthOne":
-      "隐私中继费 {fee} · 由 {caller} 在 {after} 之后、{before} 之前进行外部执行，涉及 {count} 个公开批准调用",
+      "隐私中继费 {fee} · 由 {caller} 在 {after} 之后、{before} 之前进行外部执行，涉及 {count} 个公开授权调用",
     "strk20Review.plan.relayCapped": "隐私中继费 {fee} · 上限为 {ceiling}",
     "strk20Review.plan.relayCappedAuthMany":
-      "隐私中继费 {fee} · 上限为 {ceiling} · 由 {caller} 在 {after} 之后、{before} 之前进行外部执行，涉及 {count} 个公开批准调用",
+      "隐私中继费 {fee} · 上限为 {ceiling} · 由 {caller} 在 {after} 之后、{before} 之前进行外部执行，涉及 {count} 个公开授权调用",
     "strk20Review.plan.relayCappedAuthOne":
-      "隐私中继费 {fee} · 上限为 {ceiling} · 由 {caller} 在 {after} 之后、{before} 之前进行外部执行，涉及 {count} 个公开批准调用",
+      "隐私中继费 {fee} · 上限为 {ceiling} · 由 {caller} 在 {after} 之后、{before} 之前进行外部执行，涉及 {count} 个公开授权调用",
     "strk20Review.prepare.proof": "为此网站生成可提交的隐私证明",
     "strk20Review.prepare.simulate": "仅模拟 — 不生成可提交的证明",
     "strk20Review.register.activate": "为此账户启用隐私余额",
     "strk20Review.register.channel": "开通此账户自己的隐私通道",
     "strk20Review.register.commitment": "发布查看密钥的承诺，绝不发布查看密钥本身",
     "strk20Review.register.pool": "隐私池 {address}",
-    "strk20Review.register.poolFee": "批准并支付已审核的 {fee} 隐私池费用",
+    "strk20Review.register.poolFee": "批准并支付已审核的 {fee} 隐私池手续费",
     "strk20Review.register.preflightToken": "注册预检代币 {token}",
     "strk20Review.shadow.anonymizer": "影子账户匿名器 {address}",
     "strk20Review.shadow.collectsAllTo": "此影子账户的全部 {tokens} 余额都归 {recipient}",
@@ -146,19 +146,19 @@ export const strk20ReviewMessages = {
     "strk20Review.shadowShare.label": "网站选择的范围标签 {label}",
     "strk20Review.shadowShare.nonce": "Nonce {nonce}",
     "strk20Review.sponsored.estimateMany":
-      "{sponsor} 支付隐私池费用 {fee} 和网络费（约 {network}）。其付款是公开的，并会显示此账户 · 由其中继进行外部执行，涉及 {count} 个公开批准调用",
+      "{sponsor} 支付隐私池手续费 {fee} 和网络费（约 {network}）。其付款是公开的，并会显示此账户 · 由其中继进行外部执行，涉及 {count} 个公开授权调用",
     "strk20Review.sponsored.estimateOne":
-      "{sponsor} 支付隐私池费用 {fee} 和网络费（约 {network}）。其付款是公开的，并会显示此账户 · 由其中继进行外部执行，涉及 {count} 个公开批准调用",
+      "{sponsor} 支付隐私池手续费 {fee} 和网络费（约 {network}）。其付款是公开的，并会显示此账户 · 由其中继进行外部执行，涉及 {count} 个公开授权调用",
     "strk20Review.sponsored.many":
-      "{sponsor} 支付隐私池费用 {fee} 和网络费。其付款是公开的，并会显示此账户 · 由其中继进行外部执行，涉及 {count} 个公开批准调用",
+      "{sponsor} 支付隐私池手续费 {fee} 和网络费。其付款是公开的，并会显示此账户 · 由其中继进行外部执行，涉及 {count} 个公开授权调用",
     "strk20Review.sponsored.one":
-      "{sponsor} 支付隐私池费用 {fee} 和网络费。其付款是公开的，并会显示此账户 · 由其中继进行外部执行，涉及 {count} 个公开批准调用",
+      "{sponsor} 支付隐私池手续费 {fee} 和网络费。其付款是公开的，并会显示此账户 · 由其中继进行外部执行，涉及 {count} 个公开授权调用",
     "strk20Review.wallet.activateShield": "启用隐私余额并将 {value} 转入隐私余额",
     "strk20Review.wallet.depositOtherNote":
       "存入是公开的：你的地址和金额会上链，只有收款人保持隐藏",
     "strk20Review.wallet.depositSelfNote": "存入是公开的；所得余额可以隐私地花费",
     "strk20Review.wallet.register": "将此账户注册到隐私池",
-    "strk20Review.wallet.registerFee": "从此账户批准并支付已审核的 {fee} 隐私池费用",
+    "strk20Review.wallet.registerFee": "从此账户批准并支付已审核的 {fee} 隐私池手续费",
     "strk20Review.wallet.registerPublic": "注册是公开的，并会将此钱包地址与其查看密钥关联",
     "strk20Review.wallet.send": "向 {recipient} 隐私发送 {amount} {symbol}",
     "strk20Review.wallet.sendNote": "此转账转移的是隐私余额；金额和收款人都不会上链",
