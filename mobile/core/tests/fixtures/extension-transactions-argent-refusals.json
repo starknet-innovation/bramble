@@ -1,0 +1,309 @@
+{
+  "refusals": [
+    {
+      "code": "accountClassUnsupported",
+      "name": "accountClassUnsupported-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.3.1",
+      "reviewDeployment": [],
+      "reviewedFee": null,
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\"},\"reply\":{\"result\":\"0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b\"}}"
+      ],
+      "reviewMessage": "Deployed Argent account class expects an authorization format this wallet does not produce",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5"
+      },
+      "submit": [],
+      "submitMessage": null,
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5"
+      }
+    },
+    {
+      "code": "accountClassUnsupported",
+      "name": "accountClassUnsupported-submit",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.4.0",
+      "reviewDeployment": [],
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "reviewMessage": null,
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5"
+      },
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b\"}}"
+      ],
+      "submitMessage": "Deployed Argent account class expects an authorization format this wallet does not produce",
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "liveClass": "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b"
+      }
+    },
+    {
+      "code": "accountClassUnrecognised",
+      "name": "accountClassUnrecognised-submit",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.4.0",
+      "reviewDeployment": [],
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "reviewMessage": null,
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5"
+      },
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x1234\"}}"
+      ],
+      "submitMessage": "Deployed Argent account class is not a release this wallet recognizes",
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "liveClass": "0x1234"
+      }
+    },
+    {
+      "code": "accountNotDeployable",
+      "name": "accountNotDeployable-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.3.1",
+      "reviewDeployment": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\"},\"reply\":{\"error\":{\"code\":20,\"message\":\"Contract not found\"}}}"
+      ],
+      "reviewedFee": null,
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\"},\"reply\":{\"error\":{\"code\":20,\"message\":\"Contract not found\"}}}"
+      ],
+      "reviewMessage": "Argent account class hash does not match the pinned release",
+      "reviewState": {
+        "deployed": false,
+        "nonce": "0x0"
+      },
+      "submit": [],
+      "submitMessage": null,
+      "submitState": {
+        "deployed": false,
+        "nonce": "0x0"
+      }
+    },
+    {
+      "code": "accountNotDeployable",
+      "name": "accountNotDeployable-submit",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.3.1",
+      "reviewDeployment": [],
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\"},\"reply\":{\"result\":\"0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "reviewMessage": null,
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "liveClass": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+      },
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x5415426335756fd64095c26c0cad256214eab100da0bcfd10782e3b24149ea1\"},\"reply\":{\"error\":{\"code\":20,\"message\":\"Contract not found\"}}}"
+      ],
+      "submitMessage": "Argent account class hash does not match the pinned release",
+      "submitState": {
+        "deployed": false,
+        "nonce": "0x0"
+      }
+    },
+    {
+      "code": "accountOwnerMismatch",
+      "name": "accountOwnerMismatch-review",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.4.0",
+      "reviewDeployment": [],
+      "reviewedFee": null,
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x1234\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}"
+      ],
+      "reviewMessage": "Deployed Argent account owner does not match the wallet signer",
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "owner": "0x1234"
+      },
+      "submit": [],
+      "submitMessage": null,
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "owner": "0x1234"
+      }
+    },
+    {
+      "code": "accountOwnerMismatch",
+      "name": "accountOwnerMismatch-submit",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.4.0",
+      "reviewDeployment": [],
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "reviewMessage": null,
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5"
+      },
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x1234\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}"
+      ],
+      "submitMessage": "Deployed Argent account owner does not match the wallet signer",
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "owner": "0x1234"
+      }
+    },
+    {
+      "code": "accountOwnerTypeUnsupported",
+      "name": "accountOwnerTypeUnsupported-submit",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.4.0",
+      "reviewDeployment": [],
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "reviewMessage": null,
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5"
+      },
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x1\"]}}"
+      ],
+      "submitMessage": "Deployed Argent account owner type is not supported by this wallet",
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "ownerType": "0x1"
+      }
+    },
+    {
+      "code": "accountGuardianUnsupported",
+      "name": "accountGuardianUnsupported-submit",
+      "networkId": "SN_MAIN",
+      "recordClass": "argent 0.4.0",
+      "reviewDeployment": [],
+      "reviewedFee": {
+        "overallFee": "8053560001244160",
+        "unit": "FRI"
+      },
+      "reviewInvoke": [
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_getNonce\",\"params\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"block_id\":\"latest\"},\"reply\":{\"result\":\"0x5\"}}",
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_estimateFee\",\"params\":{\"request\":[{\"type\":\"INVOKE\",\"sender_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"calldata\":[\"0x1\",\"0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d\",\"0x83afd3f4caedc6eebf44246fe54e38c95e3179a5ec9ea81740eca5b482d12e\",\"0x3\",\"0x3fa78c2861131190760b151f3ee110f473940eca3fec8cc423ecc307b5241a3\",\"0x14d1120d7b160000\",\"0x0\"],\"signature\":[\"0x1\",\"0x0\",\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\",\"0x1\",\"0x1\"],\"nonce\":\"0x5\",\"resource_bounds\":{\"l2_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"},\"l1_data_gas\":{\"max_amount\":\"0x0\",\"max_price_per_unit\":\"0x0\"}},\"tip\":\"0x0\",\"paymaster_data\":[],\"nonce_data_availability_mode\":\"L1\",\"fee_data_availability_mode\":\"L1\",\"account_deployment_data\":[],\"version\":\"0x100000000000000000000000000000003\"}],\"block_id\":\"latest\",\"simulation_flags\":[]},\"reply\":{\"result\":[{\"l1_data_gas_consumed\":\"0x180\",\"l1_data_gas_price\":\"0x5a0\",\"l1_gas_consumed\":\"0x0\",\"l1_gas_price\":\"0x2d5c6b1e1ef\",\"l2_gas_consumed\":\"0x1234a0\",\"l2_gas_price\":\"0xb2d05e00\",\"overall_fee\":\"0x1bb0f4d6c0000\",\"unit\":\"FRI\"}]}}"
+      ],
+      "reviewMessage": null,
+      "reviewState": {
+        "deployed": true,
+        "nonce": "0x5"
+      },
+      "submit": [
+        "{\"method\":\"starknet_chainId\",\"params\":null,\"reply\":{\"result\":\"0x534e5f4d41494e\"}}",
+        "{\"method\":\"starknet_blockHashAndNumber\",\"params\":null,\"reply\":{\"result\":{\"block_hash\":\"0x5ea1ed0b10c4\",\"block_number\":812345}}}",
+        "{\"method\":\"starknet_getClassHashAt\",\"params\":{\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"},\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\"},\"reply\":{\"result\":\"0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f\"}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x3ee0bfaf5b124501fef19bbd1312e71f6966d186c42eeb91d1bff729b91d1d4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x426212993d56613e1886a4cbc5b58810570023581c2aab0b423277776b79d2e\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0xae4c53adcf230c976273bd2a636233f06e97b1d4a68208d3d10a80d2f8a0a4\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x0\"]}}",
+        "{\"method\":\"starknet_call\",\"params\":{\"request\":{\"contract_address\":\"0x7be1181834bdcd1e8089152a5288070260d5bbd6c1f25740f7bc24422474510\",\"entry_point_selector\":\"0x24fd89f2d8a7798e705aa5361f39154ca43e03721c05188285138f16018955d\",\"calldata\":[]},\"block_id\":{\"block_hash\":\"0x5ea1ed0b10c4\"}},\"reply\":{\"result\":[\"0x1234\"]}}"
+      ],
+      "submitMessage": "Deployed Argent account guardian is not supported by this wallet",
+      "submitState": {
+        "deployed": true,
+        "nonce": "0x5",
+        "guardian": "0x1234"
+      }
+    }
+  ]
+}

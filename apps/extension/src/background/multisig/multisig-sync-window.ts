@@ -5,8 +5,14 @@
  * sender cannot pin the scan with wraps that are retried forever.
  */
 
-const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
-const NOSTR_INCREMENTAL_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
+/** First-sync relay lookback; mirrored by the mobile core. */
+export const NOSTR_SYNC_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
+/**
+ * Overlap kept behind the last checkpoint. NIP-59 backdates gift wraps by up to two days; the
+ * extra day preserves a safe overlap while cutting later relay scans from 30 days to three.
+ * Mirrored by the mobile core.
+ */
+export const NOSTR_INCREMENTAL_LOOKBACK_SECONDS = 3 * 24 * 60 * 60;
 
 /** Where the next sync may start: now, or just before the oldest retryable wrap. */
 export const retryableSyncedAt = (nowSeconds: number, oldestRetryableAt: number | null): number =>

@@ -202,7 +202,8 @@ export const contextHelp = (id: string, title: string, body: string): string =>
     <div class="disclosure-body"><p>${escapeHtml(body)}</p></div>
   </details>`;
 
-const NAME_ADJECTIVES = [
+/** Nickname adjectives, indexed by `address mod 30`; exported only for the mobile asset generator. */
+export const NAME_ADJECTIVES = [
   "Amber",
   "Bold",
   "Brave",
@@ -234,7 +235,8 @@ const NAME_ADJECTIVES = [
   "Masterful",
   "Chief",
 ] as const;
-const NAME_ANIMALS = [
+/** Nickname animals, indexed by `(address div 131) mod 30`; exported only for the mobile asset generator. */
+export const NAME_ANIMALS = [
   "Otter",
   "Falcon",
   "Lynx",

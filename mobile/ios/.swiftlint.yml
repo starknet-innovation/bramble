@@ -1,0 +1,245 @@
+# SwiftLint 0.65.1 (pinned in mobile/scripts/lint-tools.sh). Run: bash mobile/scripts/lint.sh swift
+#
+# Strict: every warning is an error, and inline `swiftlint:disable` comments are not used anywhere
+# (AGENTS.md: no suppressions). Fix the code, or change a rule here in review.
+strict: true
+
+included:
+  - Bramble
+  - BrambleTests
+  - BrambleUITests
+
+# Generated sources come from the extension's TypeScript (bun run mobile:assets / mobile:parity) or
+# from UniFFI; they are checked for drift by `bun run check`, not linted here.
+excluded:
+  - Generated
+  - Bramble.xcodeproj
+  - build
+  - DerivedData
+  - "**/*.generated.swift"
+
+# Default rules switched off, each because it contradicts what this app must do:
+#   optional_data_string_conversion: the RPC and portfolio transports decode reply bodies lossily
+#   on purpose, as the extension's `fetch().text()` does; the failable initializer it asks for would
+#   turn a reply the extension accepts into a transport failure.
+disabled_rules:
+  - optional_data_string_conversion
+
+# Opt-in rules, listed explicitly so an upgrade never widens the set silently.
+# Deliberately left out, because they contradict an enabled rule or do not apply to this app:
+#   explicit_acl, explicit_top_level_acl, explicit_type_interface (contradict redundant_type_annotation
+#   and Swift's inferred-internal idiom); no_extension_access_modifier (contradicts
+#   extension_access_modifier); object_literal (contradicts discouraged_object_literal);
+#   contrasted_opening_brace (contradicts the default opening_brace); conditional_returns_on_newline
+#   (forbids the one-line `guard ... else { return }`); strict_fileprivate (private_over_fileprivate
+#   already applies); one_declaration_per_file and no_grouping_extension (SwiftUI splits views and
+#   previews by extension); discouraged_default_parameter; explicit_enum_raw_value;
+#   file_header (no header convention); type_contents_order, file_types_order, sorted_enum_cases,
+#   prefixed_toplevel_constant, required_deinit, required_enum_case (need per-project config);
+#   Interface Builder, Nimble, Quick and NSLocalizedString rules (not used by this app).
+opt_in_rules:
+  - accessibility_label_for_image
+  - accessibility_trait_for_button
+  - anonymous_argument_in_multiline_closure
+  - array_init
+  - async_without_await
+  - attributes
+  - balanced_xctest_lifecycle
+  - closure_body_length
+  - closure_end_indentation
+  - closure_spacing
+  - collection_alignment
+  - comma_inheritance
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - convenience_type
+  - direct_return
+  - discarded_notification_center_observer
+  - discouraged_assert
+  - discouraged_none_name
+  - discouraged_object_literal
+  - discouraged_optional_boolean
+  - discouraged_optional_collection
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - empty_xctest_method
+  - enum_case_associated_values_count
+  - expiring_todo
+  - explicit_init
+  - extension_access_modifier
+  - fallthrough
+  - fatal_error_message
+  - file_name
+  - file_name_no_space
+  - final_test_case
+  - first_where
+  - flatmap_over_map_reduce
+  - force_unwrapping
+  - function_default_parameter_at_end
+  - identical_operands
+  - implicit_return
+  - implicitly_unwrapped_optional
+  - incompatible_concurrency_annotation
+  - indentation_width
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - legacy_objc_type
+  - let_var_whitespace
+  - literal_expression_end_indentation
+  - local_doc_comment
+  - lower_acl_than_parent
+  - missing_docs
+  - modifier_order
+  - multiline_arguments
+  - multiline_arguments_brackets
+  - multiline_call_arguments
+  - multiline_function_chains
+  - multiline_literal_brackets
+  - multiline_parameters
+  - multiline_parameters_brackets
+  - no_empty_block
+  - no_magic_numbers
+  - non_overridable_class_declaration
+  - number_separator
+  - operator_usage_whitespace
+  - optional_enum_case_matching
+  - overridden_super_call
+  - override_in_extension
+  - pattern_matching_keywords
+  - period_spacing
+  - prefer_asset_symbols
+  - prefer_condition_list
+  - prefer_key_path
+  - prefer_self_in_static_references
+  - prefer_self_type_over_type_of_self
+  - prefer_zero_over_explicit_init
+  - private_subject
+  - private_swiftui_state
+  - prohibited_super_call
+  - raw_value_for_camel_cased_codable_enum
+  - reduce_into
+  - redundant_final
+  - redundant_nil_coalescing
+  - redundant_self
+  - redundant_type_annotation
+  - return_value_from_void_function
+  - self_binding
+  - shorthand_argument
+  - shorthand_optional_binding
+  - single_test_class
+  - sorted_first_last
+  - sorted_imports
+  - static_operator
+  - superfluous_else
+  - switch_case_on_newline
+  - test_case_accessibility
+  - toggle_bool
+  - trailing_closure
+  - unavailable_function
+  - unhandled_throwing_task
+  - unneeded_escaping
+  - unneeded_parentheses_in_closure_argument
+  - unneeded_throws_rethrows
+  - unowned_variable_capture
+  - untyped_error_in_catch
+  - unused_parameter
+  - variable_shadowing
+  - vertical_parameter_alignment_on_call
+  - vertical_whitespace_between_cases
+  - vertical_whitespace_closing_braces
+  - vertical_whitespace_opening_braces
+  - weak_delegate
+  - xct_specific_matcher
+  - yoda_condition
+
+# Need type information from a compiler log: `bash mobile/scripts/lint.sh swift-analyze <log>`.
+# explicit_self is left out because it contradicts redundant_self.
+analyzer_rules:
+  - capture_variable
+  - typesafe_array_init
+  - unused_declaration
+  - unused_import
+
+# The iOS 18 SDK moved View, Color, EdgeInsets and the rest into SwiftUICore, which SwiftUI
+# re-exports and clients cannot import; without this, unused_import calls every `import SwiftUI` dead.
+unused_import:
+  allowed_transitive_imports:
+    - module: SwiftUI
+      allowed_transitive_imports:
+        - SwiftUICore
+
+# SwiftUI declares property wrappers with arguments on the property's own line
+# (`@Environment(\.skin) private var skin`); the default would split every one of them.
+attributes:
+  attributes_with_arguments_always_on_line_above: false
+
+# `let _ = assert(...)` is the only way to run a statement inside a @ViewBuilder body.
+redundant_discardable_let:
+  ignore_swiftui_view_bodies: true
+
+# Category files group several small declarations and keep the names their Android and extension
+# counterparts, docs and fixture scripts use; every other file must still match a type it declares.
+file_name:
+  excluded:
+    - main.swift
+    - LinuxMain.swift
+    - BrambleTheme.swift
+    - Controls.swift
+    - CoordinationControls.swift
+    - CoordinationNavigation.swift
+    - EdgeSwipeBack.swift
+    - Feedback.swift
+    - HitTarget.swift
+    - Motion.swift
+    - MultisigSetupStages.swift
+    - OnboardingScaffold.swift
+    - OnboardingSteps.swift
+    - PortfolioHome.swift
+    - PrivacyPresentation.swift
+    - PrivacyTestSupport.swift
+    - PrivacyViews.swift
+    - Progress.swift
+    - RecoveryGrid.swift
+    - ScreenProtection.swift
+    - SendProgressView.swift
+    - SendTestSupport.swift
+    - SettingsViews.swift
+    - Surfaces.swift
+    - Toast.swift
+    - Typography.swift
+    - UITestSupport.swift
+
+# Limits. With `strict: true` the warning threshold is the enforced one, so both are set equal.
+# file_length matches the repository's 500-line rule (AGENTS.md), counting every line.
+line_length:
+  warning: 120
+  error: 120
+  ignores_urls: true
+file_length:
+  warning: 500
+  error: 500
+  ignore_comment_only_lines: false
+type_body_length:
+  warning: 300
+  error: 300
+function_body_length:
+  warning: 60
+  error: 60
+closure_body_length:
+  warning: 40
+  error: 40
+cyclomatic_complexity:
+  warning: 10
+  error: 10
+  ignores_case_statements: true
+nesting:
+  type_level: 2
+  function_level: 3
+indentation_width:
+  indentation_width: 4
+  include_comments: true
+  include_multiline_strings: false
