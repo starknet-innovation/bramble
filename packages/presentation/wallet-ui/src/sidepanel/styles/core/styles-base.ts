@@ -113,6 +113,8 @@ export const BASE_STYLES = `
     width: 1px;
   }
   ul { list-style: none; padding: 0; }
+  /* A feature-flagged element stays hidden until its flag is confirmed on (fail closed). */
+  [data-feature]:not([data-feature-on]) { display: none !important; }
   h1 { font-size: ${TYPE.display.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.display.line}; }
   h2 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.01em; line-height: ${TYPE.title.line}; }
   p { color: var(--bramble-muted); }

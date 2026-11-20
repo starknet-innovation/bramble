@@ -42,10 +42,24 @@ export type FlagCatalog = Readonly<Record<string, KnownFlag>>;
  * ships may be bundled on, as `kill-only` (`tests/catalog.test.ts`).
  * `swap.enabled` mirrors the in-wallet swap that ships today, so the publisher
  * can kill it but never resurrect it past this build.
+ *
+ * `qsb.vaults` shows the QSB vault entry points (the drawer row, the
+ * onboarding choices and the `qsb-*` screens). It ships off, and only a
+ * verified bramble-ff rule turns it on, which allows a staged rollout.
+ * Testers may also turn it on for their own device in Settings >
+ * Experimental features (`localOverride`); a remote hard kill still wins. It
+ * hides UI only: the background QSB handlers are unchanged by it.
  */
 export const BUNDLED_FLAGS: FlagCatalog = {
+  "qsb.vaults": { enabled: false, localOverride: true, remote: "toggle" },
   "swap.enabled": { enabled: true, remote: "kill-only" },
 };
+
+/**
+ * The reviewed exceptions to `kill-only`. Each ships off, so a missing,
+ * invalid or expired document leaves it hidden.
+ */
+export const TOGGLE_FLAGS: readonly string[] = ["qsb.vaults"];
 
 /** The publisher channel this build accepts documents for. */
 export const FEATURE_FLAG_CHANNEL: FlagChannel = "production";

@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { FlagCatalog } from "@bramble/flags/catalog";
-import { BUNDLED_FLAGS } from "@bramble/flags/catalog";
+import { BUNDLED_FLAGS, TOGGLE_FLAGS } from "@bramble/flags/catalog";
 import { type FlagRule, parseFlagPayload } from "@bramble/flags/contract";
 import {
   evaluateFlags,
@@ -38,10 +38,29 @@ describe("evaluateFlags", () => {
     });
   });
 
-  test("the shipped catalog declares kill-only unless stated otherwise", () => {
-    for (const known of Object.values(BUNDLED_FLAGS)) {
-      expect(known.remote ?? "kill-only").toBe("kill-only");
+  test("the shipped catalog declares kill-only unless it is a reviewed toggle flag", () => {
+    for (const [key, known] of Object.entries(BUNDLED_FLAGS)) {
+      expect(known.remote ?? "kill-only").toBe(TOGGLE_FLAGS.includes(key) ? "toggle" : "kill-only");
     }
+  });
+
+  test("every toggle flag ships off, so no document means hidden", () => {
+    for (const key of TOGGLE_FLAGS) {
+      expect(BUNDLED_FLAGS[key]).toMatchObject({ enabled: false, remote: "toggle" });
+      expect(evaluateFlags(BUNDLED_FLAGS, null, TARGETING)[key]).toBe(false);
+    }
+  });
+
+  test("qsb.vaults turns on only for a verified rule that targets this install", () => {
+    const qsb = (rule: FlagRule, targeting: Partial<FlagTargeting> = {}) =>
+      evaluateFlags(BUNDLED_FLAGS, docWith({ "qsb.vaults": rule }), { ...TARGETING, ...targeting })[
+        "qsb.vaults"
+      ];
+    expect(qsb({ enabled: true })).toBe(true);
+    expect(qsb({ enabled: false })).toBe(false);
+    const sepoliaOnly: FlagRule = { chains: ["SN_SEPOLIA"], enabled: true };
+    expect(qsb(sepoliaOnly)).toBe(false);
+    expect(qsb(sepoliaOnly, { chain: "SN_SEPOLIA" })).toBe(true);
   });
 
   test("unknown remote flags are ignored and cannot add outputs", () => {

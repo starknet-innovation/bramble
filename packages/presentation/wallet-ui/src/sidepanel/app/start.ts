@@ -32,9 +32,9 @@ import { createSidepanelRuntime } from "../runtime/runtime";
 import type { WalletUiBrowser } from "../runtime/runtime-global";
 import { bindDisclosures } from "../shared/disclosures";
 import { bindCopyButtons, hiddenOverlayMount, showNoticeToast, showToast } from "../shared/dom";
+import { createFeatureGate } from "../shared/feature-gates";
 import { closeAfterGuardedClear } from "../shared/guarded-copy";
 import { networkChangeAnnouncer } from "../shared/network-change";
-import { isParkedCollectibleView } from "../shared/parts";
 import { utcDayKey } from "../shared/timestamp";
 import { bindAddressBook, bindApprovals } from "../shell/dashboard-bindings";
 import { bindDrawerFolders, createDrawerFolderState } from "../shell/drawer-folders-ui";
@@ -79,6 +79,7 @@ export const startWalletUi = async (
   const runtime = extensionApi?.runtime;
   const mutationRuntime = createMutationRuntime(runtime);
   const wallet = createSidepanelRuntime(mutationRuntime);
+  const features = createFeatureGate(document, wallet);
   const multisig = createMultisigClient(mutationRuntime);
   const swapClient = createSwapClient(mutationRuntime);
   let activeView: WalletView = "home";
@@ -158,7 +159,7 @@ export const startWalletUi = async (
       deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),
       render,
       setActiveView: (view: WalletView) => {
-        if (isParkedCollectibleView(view, cache.preferences)) return;
+        if (features.blocks(view, cache.preferences)) return;
         if (view !== "home") {
           activeView = view;
           return;
@@ -377,6 +378,7 @@ export const startWalletUi = async (
     }
     lastContent = content;
     renderScene(content, animate, direction);
+    features.apply(cache.experimentalFeatures);
   };
   privacy = createPrivacyController({
     app,
@@ -472,7 +474,7 @@ export const startWalletUi = async (
       .catch(() => undefined);
   };
   const navigate = (view: WalletView): void => {
-    if (isParkedCollectibleView(view, cache.preferences)) return;
+    if (features.blocks(view, cache.preferences)) return;
     if (view !== activeView) viewHistory = pushView(viewHistory, activeView);
     activeView = view;
     if (view !== "multisig-detail") selectedMultisigIntentId = null;
@@ -484,7 +486,7 @@ export const startWalletUi = async (
     const popped = popView(viewHistory);
     viewHistory = popped.history;
     forcedDirection = "back";
-    activeView = isParkedCollectibleView(popped.view, cache.preferences) ? "home" : popped.view;
+    activeView = features.blocks(popped.view, cache.preferences) ? "home" : popped.view;
     if (activeView !== "multisig-detail") selectedMultisigIntentId = null;
     drawerOpen = false;
     paint();
