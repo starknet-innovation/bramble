@@ -131,12 +131,15 @@ export type Recorder = {
   inject?: Injection;
 };
 
+/** What the canned node knows of the account it serves. */
+export type CannedAccount = Pick<DerivedAccountRef, "address" | "classHash">;
+
 /** The canned node's reply to one request (an OpenZeppelin account's view of the chain). */
 export const reply = (
   recorder: Recorder,
   method: string,
   params: Record<string, unknown> | undefined,
-  account: DerivedAccountRef,
+  account: CannedAccount,
   chainId: string,
 ): { readonly result: unknown } | { readonly error: unknown } => {
   const lastSigned = recorder.signatures.at(-1)?.hash;
@@ -188,38 +191,37 @@ export const reply = (
   }
 };
 
+/** A `fetch` that records every JSON-RPC exchange and answers it with `respond`. */
+export const recordingFetch =
+  (recorder: Recorder, account: CannedAccount, chainId: string, respond: typeof reply = reply) =>
+  async (_input: unknown, init?: RequestInit): Promise<Response> => {
+    const request = JSON.parse(String(init?.body)) as {
+      readonly id: number;
+      readonly method: string;
+      readonly params?: Record<string, unknown>;
+    };
+    const injected = recorder.inject?.(request.method, request.params);
+    if (injected === "transport") {
+      throw new TypeError("fetch failed");
+    }
+    const answer = injected ?? respond(recorder, request.method, request.params, account, chainId);
+    recorder.exchanges.push({
+      method: request.method,
+      params: request.params ?? null,
+      reply: answer,
+    });
+    return new Response(JSON.stringify({ id: request.id, jsonrpc: "2.0", ...answer }), {
+      headers: { "content-type": "application/json" },
+      status: 200,
+    });
+  };
+
 /** A starknet.js provider whose transport records every exchange and answers with `answer`. */
 export const providerFactory =
-  (
-    recorder: Recorder,
-    account: DerivedAccountRef,
-    chainId: string,
-    respond: typeof reply = reply,
-  ) =>
+  (recorder: Recorder, account: CannedAccount, chainId: string, respond: typeof reply = reply) =>
   (nodeUrl: string): RpcProvider =>
     createRpcProvider(nodeUrl, {
-      baseFetch: (async (_input: unknown, init?: RequestInit) => {
-        const request = JSON.parse(String(init?.body)) as {
-          readonly id: number;
-          readonly method: string;
-          readonly params?: Record<string, unknown>;
-        };
-        const injected = recorder.inject?.(request.method, request.params);
-        if (injected === "transport") {
-          throw new TypeError("fetch failed");
-        }
-        const answer =
-          injected ?? respond(recorder, request.method, request.params, account, chainId);
-        recorder.exchanges.push({
-          method: request.method,
-          params: request.params ?? null,
-          reply: answer,
-        });
-        return new Response(JSON.stringify({ id: request.id, jsonrpc: "2.0", ...answer }), {
-          headers: { "content-type": "application/json" },
-          status: 200,
-        });
-      }) as never,
+      baseFetch: recordingFetch(recorder, account, chainId, respond) as never,
       // The deploy wait's poll interval is starknet.js's default (5 s, pinned in the fixture's
       // timing section); shortening it here changes no request body.
       transactionRetryIntervalFallback: 1,
