@@ -14,6 +14,7 @@ export const Appearance = checkpointStory(
   "settings-security",
   "appearance",
 );
+export const Language = checkpointStory("Language", "settings-security", "language");
 export const RequestBehavior = checkpointStory(
   "Wallet request behavior",
   "settings-security",

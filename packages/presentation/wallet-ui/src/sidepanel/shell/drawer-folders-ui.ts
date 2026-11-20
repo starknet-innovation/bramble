@@ -11,6 +11,7 @@
  * offered here yet, and remains the gap to close on this screen.
  */
 
+import { t } from "../../i18n/messages";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorDetails, errorLine, showToast } from "../shared/dom";
 import { INITIAL_COLLAPSED_FOLDERS } from "./drawer-folders";
@@ -135,7 +136,7 @@ const bindDropTargets = (root: Element, deps: DrawerFolderDeps): void => {
           await repaint(deps);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Could not move that account"), "error", folder);
+          showToast(errorDetails(error, t("shell.folder.moveFailed")), "error", folder);
         },
       );
     });
@@ -159,7 +160,7 @@ const bindAddFolder = (root: Element, deps: DrawerFolderDeps): void => {
     event.preventDefault();
     const name = String(new FormData(form).get("folderName") ?? "").trim();
     if (name.length === 0) {
-      if (result) result.textContent = "Name the folder before adding it.";
+      if (result) result.textContent = t("shell.folder.nameFirst");
       return;
     }
     buttonBusy(submit, true);
@@ -172,7 +173,7 @@ const bindAddFolder = (root: Element, deps: DrawerFolderDeps): void => {
       },
       (error: unknown) => {
         buttonBusy(submit, false);
-        if (result) result.textContent = errorLine(error, "Could not add that folder");
+        if (result) result.textContent = errorLine(error, t("shell.folder.addFailed"));
       },
     );
   });
@@ -208,7 +209,7 @@ const bindNetworkSwitch = (root: Element, deps: DrawerFolderDeps): void => {
           await deps.render(status);
         },
         (error: unknown) => {
-          showToast(errorDetails(error, "Network switch failed"), "error", option);
+          showToast(errorDetails(error, t("shell.network.switchFailed")), "error", option);
           buttonBusy(option, false);
         },
       );

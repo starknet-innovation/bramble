@@ -10,6 +10,7 @@
 import { escapeHtml } from "@bramble/core/html";
 import { emptyState } from "@bramble/ui-kit/content";
 import { button, segmentedControl } from "@bramble/ui-kit/controls";
+import { t, th, type UiMessageKey } from "../../../i18n/messages";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import { failureTone } from "../../runtime/runtime-errors";
@@ -22,10 +23,15 @@ import type {
 
 type Choice = "default" | "off" | "on";
 
-const CHOICES: readonly { readonly choice: Choice; readonly label: string }[] = [
-  { choice: "default", label: "Default" },
-  { choice: "on", label: "On" },
-  { choice: "off", label: "Off" },
+type ChoiceLabel = Extract<
+  UiMessageKey,
+  "settings.experimental.default" | "settings.experimental.off" | "settings.experimental.on"
+>;
+
+const CHOICES: readonly { readonly choice: Choice; readonly label: ChoiceLabel }[] = [
+  { choice: "default", label: "settings.experimental.default" },
+  { choice: "on", label: "settings.experimental.on" },
+  { choice: "off", label: "settings.experimental.off" },
 ];
 
 const choiceOf = (features: ExperimentalFeatures, key: string): Choice => {
@@ -34,14 +40,19 @@ const choiceOf = (features: ExperimentalFeatures, key: string): Choice => {
 };
 
 const stateLine = (features: ExperimentalFeatures, key: string): string => {
-  if (features.killed.includes(key)) return "Off · turned off by Bramble";
-  const value = features.flags[key] ? "On" : "Off";
-  return features.overridden.includes(key) ? `${value} · your choice` : `${value} · default`;
+  if (features.killed.includes(key)) return t("settings.experimental.killed");
+  const value = t(features.flags[key] ? "settings.experimental.on" : "settings.experimental.off");
+  return t(
+    features.overridden.includes(key)
+      ? "settings.experimental.stateChosen"
+      : "settings.experimental.stateDefault",
+    { value },
+  );
 };
 
 const featureRows = (features: ExperimentalFeatures): string =>
   features.overridable.length === 0
-    ? emptyState("This version has no features you can change.")
+    ? emptyState(t("settings.experimental.none"))
     : `<ul class="address-book">${features.overridable
         .map((key) => {
           const killed = features.killed.includes(key);
@@ -56,7 +67,7 @@ const featureRows = (features: ExperimentalFeatures): string =>
                 CHOICES.map(({ choice, label }) => ({
                   attributes: { "data-flag-choice": choice, "data-flag-key": key },
                   disabled: killed,
-                  label,
+                  label: t(label),
                   pressed: !killed && current === choice,
                 })),
               )}
@@ -65,17 +76,17 @@ const featureRows = (features: ExperimentalFeatures): string =>
         .join("")}</ul>`;
 
 const body = (state: ExperimentalFeaturesState): string => {
-  if (state === "loading") return emptyState("Loading experimental features…");
+  if (state === "loading") return emptyState(t("settings.experimental.loading"));
   if (state === "error") {
     return `<div class="panel-error">
-      ${emptyState("Couldn't load experimental features.")}
+      ${emptyState(t("settings.experimental.loadFailed"))}
       ${button({
         attributes: {
-          "aria-label": "Retry loading experimental features",
+          "aria-label": t("settings.experimental.retryLabel"),
           "data-reload-balances": true,
         },
         icon: "refresh",
-        label: "Try again",
+        label: t("shell.tryAgain"),
         size: "small",
         variant: "ghost",
       })}
@@ -86,7 +97,7 @@ const body = (state: ExperimentalFeaturesState): string => {
       ? button({
           attributes: { id: "experimental-features-reset" },
           icon: "refresh",
-          label: "Reset all",
+          label: t("settings.experimental.reset"),
           variant: "secondary",
         })
       : "";
@@ -98,11 +109,11 @@ export const experimentalFeaturesFlow = (
   status: WalletStatus,
   state: ExperimentalFeaturesState,
 ): string =>
-  flowHeader("Experimental features", status) +
+  flowHeader(t("settings.experimental.title"), status) +
   flowScreen(
     "experimental-features",
     `<section class="section">
-      <p class="hint">These switch wallet features on or off on this device. A changed feature may not work as expected. A feature Bramble turns off stays off.</p>
+      <p class="hint">${th("settings.experimental.hint")}</p>
       ${body(state)}
     </section>`,
   );
@@ -126,7 +137,7 @@ export const bindExperimentalFeatures = (deps: ExperimentalFeaturesUiDeps): void
     void write().then(
       async (features) => {
         setState(features);
-        showToast("Saved", "success", control);
+        showToast(t("settings.experimental.saved"), "success", control);
         await render(status());
       },
       (error: unknown) => {

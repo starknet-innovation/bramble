@@ -1,9 +1,10 @@
 /**
  * Loads the developer's sncast mainnet account for the opt-in wallet suite.
  * The signing key stays in the ready result and is never copied into a
- * message. CI, a missing acknowledgement, a shared RPC, a non-mainnet chain,
- * and an account class this wallet will not import all stop before a browser
- * starts.
+ * message. Naming the account is the opt-in: the acknowledgement defaults to
+ * given and the RPC to the Foundation's public endpoint. CI, a wrong
+ * acknowledgement, a refused RPC, a non-mainnet chain, and an account class
+ * this wallet will not import all stop before a browser starts.
  */
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -23,15 +24,17 @@ import {
 } from "../../scripts/gasless-mainnet-account";
 import {
   classifyLocalMainnetEnv,
-  dedicatedHttpsRpcUrl,
+  localMainnetRpcUrl,
+  localMainnetWritesAcknowledged,
   localOnlyMessage,
   MAINNET_WRITE_ACK,
 } from "./mainnet-safety";
 
 /** Printed by the npm script when the developer has not opted in. Exit 0. */
 export const LOCAL_MAINNET_SKIP_MESSAGE = `Skipping local mainnet wallet tests: no account configured.
-Set BRAMBLE_MAINNET_E2E_ACK, BRAMBLE_MAINNET_E2E_RPC_URL, and BRAMBLE_MAINNET_SNCAST_ACCOUNT
-(or BRAMBLE_MAINNET_E2E_ADDRESS with BRAMBLE_MAINNET_E2E_PRIVATE_KEY).
+Set BRAMBLE_MAINNET_SNCAST_ACCOUNT (or BRAMBLE_MAINNET_E2E_ADDRESS with
+BRAMBLE_MAINNET_E2E_PRIVATE_KEY). Naming the account permits mainnet writes.
+BRAMBLE_MAINNET_E2E_RPC_URL is optional; the Foundation RPC is the default.
 See docs/MAINNET_E2E.md.`;
 
 /** Account the suite may import. `label` never contains the signing key. */
@@ -128,7 +131,7 @@ const rpcUrlFrom = (
   env: Readonly<Record<string, string | undefined>>,
 ): LocalMainnetLoad | string => {
   try {
-    return dedicatedHttpsRpcUrl(env["BRAMBLE_MAINNET_E2E_RPC_URL"], "BRAMBLE_MAINNET_E2E_RPC_URL");
+    return localMainnetRpcUrl(env["BRAMBLE_MAINNET_E2E_RPC_URL"], "BRAMBLE_MAINNET_E2E_RPC_URL");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid RPC URL";
     return { kind: "error", message };
@@ -182,10 +185,10 @@ export const loadLocalMainnetAccount = async (input: {
   if (classified === "skip") {
     return { kind: "skip", message: LOCAL_MAINNET_SKIP_MESSAGE };
   }
-  if (input.env["BRAMBLE_MAINNET_E2E_ACK"] !== MAINNET_WRITE_ACK) {
+  if (!localMainnetWritesAcknowledged(input.env["BRAMBLE_MAINNET_E2E_ACK"])) {
     return {
       kind: "error",
-      message: `Set BRAMBLE_MAINNET_E2E_ACK=${MAINNET_WRITE_ACK} to permit mainnet writes`,
+      message: `BRAMBLE_MAINNET_E2E_ACK is set to something else. Unset it, or set it to ${MAINNET_WRITE_ACK}`,
     };
   }
   const rpcUrl = rpcUrlFrom(input.env);

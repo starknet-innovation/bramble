@@ -4,10 +4,14 @@
 const LOCAL_HTTP_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
 /**
- * A persisted origin grant summarized without exposing account identities.
+ * A persisted origin grant as the wallet's own permissions manager lists it:
+ * the granted vault account ids and multisig ids, plus their total. Trusted
+ * wallet UI only — never sent to a dapp, which sees at most its active account.
  */
 export type ConnectedSite = {
   readonly accountCount: number;
+  readonly accountIds: readonly string[];
+  readonly multisigIds: readonly string[];
   readonly origin: string;
 };
 

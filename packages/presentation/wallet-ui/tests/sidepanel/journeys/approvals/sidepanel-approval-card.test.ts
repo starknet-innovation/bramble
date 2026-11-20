@@ -152,11 +152,34 @@ describe("invoke approval card fee review (#189)", () => {
     const failed: PendingApproval = { ...withFee, fee: null, feeEstimateFailed: true };
     const html = activity([failed]);
 
-    expect(html).toContain("Couldn't estimate the network fee right now.");
+    expect(html).toContain("Couldn&#39;t estimate the network fee right now.");
     expect(html).toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
     expect(html).toContain(
       `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
     );
+  });
+
+  test("a network refusal during estimation shows the node's sentence", () => {
+    const reason =
+      "The network rejected this transaction: Calldata length exceeded maximum: length 5001 (allowed length: 5000).";
+    const failed: PendingApproval = {
+      ...withFee,
+      callReviews: [
+        { calldata: ["0x1"], contractAddress: "0x1", entrypoint: "a" },
+        { calldata: ["0x2"], contractAddress: "0x2", entrypoint: "b" },
+      ],
+      fee: null,
+      feeEstimateDetail: reason,
+      feeEstimateFailed: true,
+      summaries: ["Call 1", "Call 2"],
+    };
+    const html = activity([failed]);
+
+    expect(html).toContain(reason);
+    expect(html).not.toContain("Couldn't estimate the network fee right now.");
+    expect(html).toContain("<strong>Call 1</strong>");
+    expect(html).toContain("<strong>Call 2</strong>");
+    expect(html).toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
   });
 
   test("a pending estimate is visible and prevents approval until review is complete", () => {
@@ -277,7 +300,7 @@ describe("OutsideExecution sign card (audit 144)", () => {
     const html = activity([
       { ...sign, flags: [{ code: "address-poisoning", message: "The recipient closely mimics" }] },
     ]);
-    expect(html).toContain("Bramble won't send this payment.");
+    expect(html).toContain("Bramble won&#39;t send this payment.");
     expect(html).toContain('data-approval-action="deny"');
     expect(html).not.toContain('data-approval-action="approve"');
   });

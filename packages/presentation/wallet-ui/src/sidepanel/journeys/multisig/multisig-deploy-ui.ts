@@ -7,6 +7,7 @@ import {
   normalizeFeltInput,
   sameFelt,
 } from "@bramble/wallet-model/networks";
+import { t } from "../../../i18n/messages";
 import type { ArgentMultisigDeploymentReview } from "../../../popup/responses/multisig-responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
 
@@ -21,7 +22,7 @@ import {
 import { knownNotSent, outcomeUnknownReason } from "../../shared/submit-outcome";
 import type { SendIntent } from "../send/send-model";
 import {
-  ALREADY_DEPLOYED_MESSAGE,
+  alreadyDeployedMessage,
   deploymentFailureToast,
   deploymentReviewFailure,
   EXPIRED_DEPLOYMENT_REVIEW,
@@ -40,6 +41,7 @@ import {
   deploymentFundingStage,
   deploymentReviewMarkup,
   deploymentSubmittedMarkup,
+  signerCountText,
 } from "./multisig-deploy-view";
 import {
   bindMultisigParticipantPicker,
@@ -110,10 +112,12 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
   const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const reviewEnabled = button?.disabled === false;
   // Names what the one action does: deploy the held review, else check fee.
-  const setDeployLabel = (): void =>
+  const setDeployLabel = (): void => {
+    const held = form && reviews.get(form);
     button?.lastChild?.replaceWith(
-      form && reviews.get(form) ? "Deploy multisig" : "Check fee and address",
+      t(held ? "review.multisig.deploy.deploy" : "review.multisig.deploy.check"),
     );
+  };
   const reviewRoot = deps.app?.querySelector<HTMLElement>("#multisig-deploy-review");
   const signerAccountInput = form?.querySelector<HTMLInputElement>('input[name="signerAccountId"]');
   const signerKeyInput = form?.querySelector<HTMLInputElement>('input[name="signerPublicKeys"]');
@@ -155,7 +159,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     );
     signerKeyInput.value = selectedKeys.join(" ");
     if (signerCount) {
-      signerCount.textContent = `${selected.length} signer${selected.length === 1 ? "" : "s"}`;
+      signerCount.textContent = signerCountText(selected.length);
     }
     form?.querySelectorAll<HTMLButtonElement>("[data-participant-key]").forEach((choice) => {
       const targetChoice = choice;
@@ -206,7 +210,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     if (deploymentSignerStatus) {
       deploymentSignerStatus.textContent = hasDeploymentSigner
         ? ""
-        : "Add an account from this wallet to the signer set before continuing.";
+        : t("multisig.deploy.addLocalSigner");
     }
     if (thresholdInput && Number(thresholdInput.value) > selected.length) {
       thresholdInput.value = String(selected.length);
@@ -227,14 +231,14 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     participantPickerButton?.focus();
   });
   const addParticipant = (participant: MultisigParticipant): string | null => {
-    if (!manualSignerTemplate || !signerList) return "Signer setup is unavailable.";
+    if (!manualSignerTemplate || !signerList) return t("multisig.deploy.noSetup");
     const publicKey = normalizeFeltInput(participant.publicKeyX);
     if (!isNonZeroStarkFieldElement(publicKey)) {
-      return "Enter a valid non-zero Starknet public key.";
+      return t("multisig.participant.invalidKey");
     }
     const knownRow = rowForKey(publicKey);
     if (knownRow && !knownRow.hidden) {
-      return "That participant is already included.";
+      return t("multisig.participant.duplicate");
     }
     if (knownRow) {
       knownRow.hidden = false;
@@ -245,10 +249,10 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       const label = fragment.querySelector<HTMLElement>("[data-manual-signer-label]");
       const remove = fragment.querySelector<HTMLButtonElement>("[data-remove-signer-public-key]");
       const copy = fragment.querySelector<HTMLButtonElement>("[data-manual-signer-copy]");
-      if (!row || !name || !label || !remove || !copy) return "Signer setup is unavailable.";
+      if (!row || !name || !label || !remove || !copy) return t("multisig.deploy.noSetup");
       row.dataset["signerPublicKey"] = publicKey;
       name.textContent = participant.label;
-      label.textContent = `${participant.source}${participant.address ? ` · ${addressLabel(participant.address)}` : ""} · Key ${addressLabel(publicKey)}`;
+      label.textContent = `${participant.source}${participant.address ? ` · ${addressLabel(participant.address)}` : ""} · ${t("multisig.participant.key", { key: addressLabel(publicKey) })}`;
       remove.dataset["removeSignerPublicKey"] = publicKey;
       copy.dataset["copy"] = addressText(participant.address ?? "");
       copy.hidden = !participant.address;
@@ -324,7 +328,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     // Busy throughout: a second press cannot deploy an unread review. Leaving
     // busy re-applies the class and signer gate, so a quote never enables it.
     buttonBusy(button, true);
-    deps.setResult("multisig-deploy-result", "Preparing exact deployment fee…");
+    deps.setResult("multisig-deploy-result", t("multisig.deploy.preparingFee"));
     void deps.multisig
       .reviewDeployment(input)
       .then((next) => {
@@ -339,13 +343,13 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
       })
       .catch((error: unknown) => {
         if (!isCurrent()) return;
-        const message = deploymentReviewFailure(errorMessage(error, "Deployment review failed"));
+        const message = deploymentReviewFailure(
+          errorMessage(error, t("multisig.deploy.reviewFailed")),
+        );
         setDeploymentStage(form, "approval");
         deps.setResult(
           "multisig-deploy-result",
-          message === ALREADY_DEPLOYED_MESSAGE
-            ? message
-            : "Deployment review failed. Check the error and retry.",
+          message === alreadyDeployedMessage() ? message : t("multisig.deploy.reviewFailedRetry"),
         );
         if (explicit) showToast(message, "error", form);
         releaseButton();
@@ -426,8 +430,8 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     try {
       input = deploymentSetup(form);
     } catch (error) {
-      deps.setResult("multisig-deploy-result", "Check the deployment fields and try again.");
-      showToast(errorDetails(error, "Invalid deployment fields"), "error", form);
+      deps.setResult("multisig-deploy-result", t("multisig.deploy.checkFields"));
+      showToast(errorDetails(error, t("multisig.deploy.invalidFields")), "error", form);
       return;
     }
     const stored = reviews.get(form);
@@ -448,7 +452,7 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
     }
     buttonBusy(button, true);
     if (reviewed) {
-      deps.setResult("multisig-deploy-result", "Submitting exact reviewed deployment…");
+      deps.setResult("multisig-deploy-result", t("multisig.deploy.submitting"));
       reviews.delete(form);
       void deps.multisig.deployMultisig(reviewed).then(
         async (result) => {
@@ -472,15 +476,15 @@ export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
           if (!knownNotSent(error)) {
             const line = outcomeUnknownReason(error, "The deployment");
             deps.setResult("multisig-deploy-result", line);
-            showToast(line, "warning", form, errorDetails(error, "Deployment failed"));
+            showToast(line, "warning", form, errorDetails(error, t("multisig.deploy.failed")));
             return;
           }
-          const message = errorMessage(error, "Deployment failed");
+          const message = errorMessage(error, t("multisig.deploy.failed"));
           deps.setResult(
             "multisig-deploy-result",
             message === EXPIRED_DEPLOYMENT_REVIEW
-              ? "Fee review expired. Review the deployment again."
-              : "Deployment failed. Review the error, then try again.",
+              ? t("multisig.deploy.feeExpiredShort")
+              : t("multisig.deploy.failedRetry"),
           );
           setDeploymentStage(form, "deploy");
           showToast(deploymentFailureToast(message, reviewed), "error", form);

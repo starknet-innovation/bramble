@@ -11,6 +11,7 @@ import type {
   RecoveryAccountCandidate,
   RecoverySigningRestriction,
 } from "@bramble/wallet-model/recovery";
+import { t, type UiMessageKey } from "../../../i18n/messages";
 
 // Only the classes this wallet deploys can be brought on chain from here: the
 // pinned Argent release and Xverse's build of it (issue 734). A funded Argent
@@ -26,13 +27,13 @@ const deployableHere = (candidate: RecoveryAccountCandidate): boolean =>
 
 // The scan's advisory verdict, in the reader's terms: why this account is
 // watch-only here, said before they pick it rather than after a send fails.
-const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
-  guardian: "has a guardian",
-  "owner-changed": "owner key changed",
-  "owner-type": "unsupported signer",
-  release: "unsupported release",
-  "strong-signer": "2FA active",
-};
+const RESTRICTION_COPY = {
+  guardian: "onboarding.restriction.guardian",
+  "owner-changed": "onboarding.restriction.ownerChanged",
+  "owner-type": "onboarding.restriction.ownerType",
+  release: "onboarding.restriction.release",
+  "strong-signer": "onboarding.restriction.strongSigner",
+} as const satisfies Record<RecoverySigningRestriction, UiMessageKey>;
 
 // Said before they pick it, on its own line in the danger colour: another
 // wallet registered this account with the privacy pool, and the pool keeps
@@ -41,27 +42,31 @@ const RESTRICTION_COPY: Record<RecoverySigningRestriction, string> = {
 // knows the key is not Bramble's, so other groups say "another wallet".
 /** Row note under a deployed account another wallet registered with the privacy pool. */
 export const privacyPoolCopy = (candidate: RecoveryAccountCandidate): string =>
-  `Private balances off · privacy previously set up in ${
-    candidate.account.accountContractType === "argent" ? "Ready" : "another wallet"
-  } and cannot be imported to Bramble`;
+  t(
+    candidate.account.accountContractType === "argent"
+      ? "onboarding.picker.privacyReady"
+      : "onboarding.picker.privacyOther",
+  );
 
 const deployedState = (candidate: RecoveryAccountCandidate): string =>
   candidate.restriction
-    ? `Deployed on Starknet · ${RESTRICTION_COPY[candidate.restriction]} · view only`
-    : "Deployed on Starknet";
+    ? t("onboarding.picker.deployedRestricted", {
+        restriction: t(RESTRICTION_COPY[candidate.restriction]),
+      })
+    : t("onboarding.picker.deployedOnStarknet");
 
 const activityState = (candidate: RecoveryAccountCandidate): string => {
   if (candidate.deployed) return deployedState(candidate);
   if (candidate.funded) {
     return deployableHere(candidate)
-      ? "Funded and ready to deploy"
-      : "Funded on Starknet — Bramble cannot deploy this Argent release";
+      ? t("onboarding.picker.fundedReady")
+      : t("onboarding.picker.fundedCannotDeploy");
   }
   return candidate.account.accountContractType === "argent"
-    ? "No on-chain activity found — Bramble only imports existing Ready accounts"
+    ? t("onboarding.picker.noActivityReady")
     : candidate.account.accountContractType === "braavos"
-      ? "No on-chain activity found — Bramble only imports existing Braavos accounts"
-      : "No on-chain activity found";
+      ? t("onboarding.picker.noActivityBraavos")
+      : t("onboarding.picker.noActivity");
 };
 
 // A deployed Braavos account is usable exactly when its advisory verdict says
@@ -69,7 +74,7 @@ const activityState = (candidate: RecoveryAccountCandidate): string => {
 // since Bramble cannot deploy Braavos accounts yet.
 /** The row's state line: on-chain evidence and why it may be view only. Pure. */
 export const candidateState = (candidate: RecoveryAccountCandidate, duplicate: boolean): string => {
-  if (duplicate) return "Already in this wallet";
+  if (duplicate) return t("onboarding.picker.alreadyAdded");
   if (
     candidate.account.accountContractType !== "braavos" ||
     (!candidate.deployed && !candidate.funded)
@@ -80,8 +85,8 @@ export const candidateState = (candidate: RecoveryAccountCandidate, duplicate: b
     // The modern deployment class deploys from here like any other account;
     // an older base-class counterfactual still cannot.
     return deployableHere(candidate)
-      ? "Funded and ready to deploy"
-      : "Funded, not deployed · view only for now";
+      ? t("onboarding.picker.fundedReady")
+      : t("onboarding.picker.fundedViewOnly");
   }
   return deployedState(candidate);
 };
@@ -94,7 +99,7 @@ export const candidateState = (candidate: RecoveryAccountCandidate, duplicate: b
 /** `Account N`, with the Argent release when it is not the one Bramble creates. Pure. */
 export const candidateName = (candidate: RecoveryAccountCandidate): string => {
   const { account } = candidate;
-  const title = `Account ${recoveryLadderIndex(account)}`;
+  const title = t("onboarding.picker.accountName", { index: String(recoveryLadderIndex(account)) });
   if (
     account.accountContractType !== "argent" ||
     sameFelt(account.classHash, ARGENT_ACCOUNT_CLASS_HASH)
@@ -108,7 +113,7 @@ export const candidateName = (candidate: RecoveryAccountCandidate): string => {
 /** {@link candidateName} plus the key ladder, so rows sharing an index are distinct. Pure. */
 export const candidateTitle = (candidate: RecoveryAccountCandidate): string =>
   candidate.account.derivation.kind === "argentx-bip44"
-    ? `${candidateName(candidate)} · Ready extension`
+    ? t("onboarding.picker.readyExtension", { name: candidateName(candidate) })
     : candidateName(candidate);
 
 // Bramble creates only Bramble accounts: any other candidate with no on-chain
