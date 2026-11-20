@@ -175,12 +175,15 @@ export function deployerAccount(): Account {
   return new Account({ provider, address, signer: priv, cairoVersion: "1" });
 }
 
-export async function tokenBalance(token: keyof typeof TOKENS, holder: string): Promise<bigint> {
-  const res = await provider.callContract({
-    contractAddress: TOKENS[token].address,
-    entrypoint: "balanceOf",
-    calldata: [holder],
-  });
+export async function tokenBalance(
+  token: keyof typeof TOKENS,
+  holder: string,
+  block: "latest" | "pre_confirmed" = "latest",
+): Promise<bigint> {
+  const res = await provider.callContract(
+    { contractAddress: TOKENS[token].address, entrypoint: "balanceOf", calldata: [holder] },
+    block,
+  );
   const [low, high] = res;
   if (low === undefined || high === undefined)
     throw new Error(`balanceOf returned ${res.length} felts`);
