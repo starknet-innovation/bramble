@@ -125,7 +125,7 @@ export const ledgerGrantDiagnostic = (
  * this, the tab still closes: the grant page has already cancelled its idle
  * timer, so nothing else would.
  */
-export const LEDGER_GRANT_RELEASE_BUDGET_MS = 2_000;
+const LEDGER_GRANT_RELEASE_BUDGET_MS = 2_000;
 
 /**
  * Frees the Ledger before closing the hardware tab. A release already running
