@@ -27,12 +27,13 @@ import {
   requestGrantTransport,
   supportedGrantTransportKinds,
 } from "@bramble/ledger-browser/grant-transport";
+import { browserLedgerLocks, watchLedgerPanelLock } from "@bramble/ledger-browser/panel-presence";
 import { type LedgerTransport, newStarknetClient } from "@bramble/ledger-browser/webhid";
 import {
   ledgerBrokerChannelName,
   ledgerBrokerSessionFromHash,
 } from "@bramble/ledger-protocol/broker";
-import { LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
+import { appendLedgerCause, LedgerRejection, ledgerMessage } from "@bramble/ledger-protocol/errors";
 import { darkSkin } from "@bramble/ui-kit/dark-skin";
 import { applySkin } from "@bramble/ui-kit/skin";
 import { brandMark, element, textElement } from "./dom";
@@ -288,7 +289,10 @@ const render = (): void => {
       appIsClosed ? "Open Starknet on your Ledger" : "Ledger isn't ready",
       ledgerMessage(error.code),
       "danger",
-      `Support code · ${diagnosticId(transport, appIsClosed ? "APP" : "DEVICE")}`,
+      appendLedgerCause(
+        `Support code · ${diagnosticId(transport, appIsClosed ? "APP" : "DEVICE")}`,
+        error,
+      ),
     );
     nextTransport = transport;
     resetButton(appIsClosed ? "Check Starknet again" : "Try again");
@@ -309,7 +313,10 @@ const render = (): void => {
           ? "No Ledger was found to pair with. Choose USB above if the device is cabled."
           : "No Ledger was found. Unlock the device, open the Starknet app, and try again.",
         "danger",
-        ledgerGrantDiagnostic(diagnosticId(transport, "PICKER"), diagnostics),
+        appendLedgerCause(
+          ledgerGrantDiagnostic(diagnosticId(transport, "PICKER"), diagnostics),
+          error,
+        ),
       );
       resetButton(retryTransportLabel(transport));
       return;
@@ -318,7 +325,10 @@ const render = (): void => {
         "Device access blocked",
         "Reconnect the Ledger, then allow device access for Bramble in your browser.",
         "danger",
-        ledgerGrantDiagnostic(diagnosticId(transport, "POLICY"), diagnostics),
+        appendLedgerCause(
+          ledgerGrantDiagnostic(diagnosticId(transport, "POLICY"), diagnostics),
+          error,
+        ),
       );
     } else if (failure === "interface-unavailable" || failure === "transport-unavailable") {
       const alternate = alternateLedgerTransport(transport, supported);
@@ -329,7 +339,10 @@ const render = (): void => {
           ? `Your browser couldn't open that connection. Try ${transportLabel(alternate)} instead.`
           : "Reconnect the Ledger, close other wallet apps, and try again.",
         "danger",
-        ledgerGrantDiagnostic(diagnosticId(transport, "INTERFACE"), diagnostics),
+        appendLedgerCause(
+          ledgerGrantDiagnostic(diagnosticId(transport, "INTERFACE"), diagnostics),
+          error,
+        ),
       );
       resetButton(alternate ? `Try ${transportLabel(alternate)} instead` : "Try again");
       return;
@@ -338,7 +351,10 @@ const render = (): void => {
         "Ledger connection failed",
         "Reconnect the cable, unlock the device, open Starknet, and close other wallet apps.",
         "danger",
-        ledgerGrantDiagnostic(diagnosticId(transport, "TRANSPORT"), diagnostics),
+        appendLedgerCause(
+          ledgerGrantDiagnostic(diagnosticId(transport, "TRANSPORT"), diagnostics),
+          error,
+        ),
       );
     }
     nextTransport = transport;
@@ -448,6 +464,22 @@ const render = (): void => {
   cancel.addEventListener("click", () => {
     void release();
   });
+
+  // The panel holds this lock. When its document is gone the lock drops and
+  // this tab releases the device instead of keeping it until the idle timer.
+  const panelLocks = sessionId ? browserLedgerLocks() : null;
+  if (sessionId && panelLocks) {
+    void watchLedgerPanelLock(
+      panelLocks,
+      sessionId,
+      () =>
+        new Promise((resolve) => {
+          setTimeout(resolve, 100);
+        }),
+    ).then((gone) => {
+      if (gone) void release();
+    });
+  }
 
   if (!sessionId) {
     button.disabled = true;

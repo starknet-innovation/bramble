@@ -37,6 +37,72 @@ const sessionFrom = (transport: LedgerTransport): LedgerDeviceSession => ({
   close: () => closeTransport(transport),
 });
 
+// One device session per page. The next open waits until this session's close
+// has finished, so a cancel and a reconnect cannot claim the browser device
+// at the same time. A thrown open releases the turn; a returned session holds
+// it until `close`.
+let sessionTurn: Promise<void> = Promise.resolve();
+
+const withSessionTurn = async (
+  open: () => Promise<LedgerDeviceSession | null>,
+): Promise<LedgerDeviceSession | null> => {
+  let release = (): void => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const previous = sessionTurn;
+  sessionTurn = gate;
+  await previous;
+  try {
+    const session = await open();
+    if (!session) {
+      release();
+      return null;
+    }
+    let settled = false;
+    return {
+      client: session.client,
+      ...(session.readiness ? { readiness: session.readiness } : {}),
+      close: async () => {
+        if (settled) return;
+        settled = true;
+        try {
+          await session.close();
+        } finally {
+          release();
+        }
+      },
+    };
+  } catch (error) {
+    release();
+    throw error;
+  }
+};
+
+const openCable = async (deviceId?: string): Promise<LedgerDeviceSession | null> => {
+  const transport = await openConnectedTransport(deviceId);
+  return transport ? sessionFrom(transport) : null;
+};
+
+const requestSession = async (): Promise<LedgerDeviceSession> => {
+  // A runtime with no Ledger transport (Firefox has no WebHID, WebUSB or Web
+  // Bluetooth) answers with the browser-support message at once, instead of
+  // opening a grant tab that can only say the same thing.
+  if (!isLedgerTransportAvailable()) {
+    throw new LedgerRejection("webhid-unavailable");
+  }
+  const connected = await listConnectedDevices();
+  if (connected.length > 1) {
+    throw new LedgerRejection("multiple-devices");
+  }
+  const reconnected = await openCable(connected[0]?.id);
+  if (reconnected) return reconnected;
+
+  const browser = extensionBrowser();
+  if (browser) return requestDeviceGrant(browser);
+  throw new LedgerRejection("webhid-unavailable");
+};
+
 /**
  * Connector backed by Ledger's Web Bluetooth, WebUSB, and WebHID transports.
  * `listConnected` exposes non-secret chooser labels and opaque ids for
@@ -52,30 +118,12 @@ const sessionFrom = (transport: LedgerTransport): LedgerDeviceSession => ({
 export const ledgerConnector: LedgerConnector = {
   isAvailable: isLedgerTransportAvailable,
   listConnected: listConnectedDevices,
-  async openConnected(deviceId) {
-    const transport = await openConnectedTransport(deviceId);
-    return transport ? sessionFrom(transport) : null;
+  openConnected(deviceId) {
+    return withSessionTurn(() => openCable(deviceId));
   },
   async request() {
-    // A runtime with no Ledger transport (Firefox has no WebHID, WebUSB or Web
-    // Bluetooth) answers with the browser-support message at once, instead of
-    // opening a grant tab that can only say the same thing.
-    if (!isLedgerTransportAvailable()) {
-      throw new LedgerRejection("webhid-unavailable");
-    }
-    const connected = await listConnectedDevices();
-    if (connected.length > 1) {
-      throw new LedgerRejection("multiple-devices");
-    }
-    const reconnected = await openConnectedTransport(connected[0]?.id);
-    if (reconnected) {
-      return sessionFrom(reconnected);
-    }
-
-    const browser = extensionBrowser();
-    if (browser) {
-      return requestDeviceGrant(browser);
-    }
-    throw new LedgerRejection("webhid-unavailable");
+    const session = await withSessionTurn(requestSession);
+    if (!session) throw new LedgerRejection("webhid-unavailable");
+    return session;
   },
 };

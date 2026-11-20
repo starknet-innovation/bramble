@@ -14,7 +14,7 @@
  * repo's pinned `skipLibCheck: false`), so this typed module maps open failures
  * to the {@link LedgerRejection} catalog and never touches those declarations.
  * Device I/O cannot be exercised without a real Ledger and Chromium, so
- * it is deliberately thin: all decision logic lives in `client.ts` (tested).
+ * it is deliberately thin: open failures are classified in `transport-error.ts`.
  */
 
 import {
@@ -26,6 +26,10 @@ import {
 import type { LedgerDeviceClient } from "@bramble/ledger-protocol/client";
 import { LedgerRejection } from "@bramble/ledger-protocol/errors";
 import type { LedgerDeviceChoice } from "@bramble/ledger-protocol/session";
+import {
+  classifyLedgerTransportError,
+  ledgerTransportRejection,
+} from "@bramble/ledger-protocol/transport-error";
 
 type NavigatorWithLedgerTransport = {
   readonly bluetooth?: unknown;
@@ -44,12 +48,71 @@ export const isLedgerTransportAvailable = (): boolean =>
     (navigator as NavigatorWithLedgerTransport).usb !== undefined ||
     (navigator as NavigatorWithLedgerTransport).hid !== undefined);
 
-const mapOpenError = (error: unknown): LedgerRejection => {
-  const text = error instanceof Error ? `${error.name} ${error.message}` : "";
-  if (/already open|in use|claimed|busy|claim interface|interface.+unavailable/i.test(text)) {
-    return new LedgerRejection("device-busy");
+type GrantContext = {
+  readonly documentUrl?: string;
+  readonly tabId?: number;
+};
+
+type ExtensionGlobal = {
+  readonly runtime?: {
+    readonly getContexts?: (filter: {
+      readonly contextTypes: readonly ["TAB"];
+    }) => Promise<readonly GrantContext[]>;
+    readonly getURL?: (path: string) => string;
+  };
+  readonly tabs?: {
+    readonly remove?: (tabId: number) => Promise<void>;
+  };
+};
+
+const extensionGlobal = (): ExtensionGlobal | undefined => {
+  const scope = globalThis as { browser?: ExtensionGlobal; chrome?: ExtensionGlobal };
+  return scope.browser ?? scope.chrome;
+};
+
+/**
+ * Closes this extension's own hardware tabs. Returns true when at least one
+ * tab was closed, so the caller can retry an open that failed because that
+ * tab still held the device. A missing extension API returns false and the
+ * caller shows the busy error instead of looping.
+ */
+const releaseOwnLedgerGrantTabs = async (): Promise<boolean> => {
+  const extension = extensionGlobal();
+  const prefix = extension?.runtime?.getURL?.("ledger-grant.html");
+  if (!prefix || !extension?.runtime?.getContexts) return false;
+  const contexts = await extension.runtime.getContexts({ contextTypes: ["TAB"] }).catch(() => []);
+  let released = false;
+  for (const context of contexts) {
+    if (typeof context.tabId !== "number" || !context.documentUrl?.startsWith(prefix)) continue;
+    await extension.tabs?.remove?.(context.tabId).catch(() => undefined);
+    released = true;
   }
-  return new LedgerRejection("unexpected-device-error");
+  return released;
+};
+
+// The open path has already retried its own stale handle inside the cable
+// transport. Drop `ownStale` so the caller does not open a second time.
+const finalRejection = (error: unknown): LedgerRejection => {
+  const failure = classifyLedgerTransportError(error);
+  return new LedgerRejection(failure.code, undefined, {
+    ...(failure.causeName ? { causeName: failure.causeName } : {}),
+  });
+};
+
+const openConnectedOnce = async (deviceId?: string): Promise<LedgerTransport | null> => {
+  try {
+    return await openConnectedTransportRaw(deviceId);
+  } catch (error) {
+    const failure = classifyLedgerTransportError(error);
+    if (failure.code !== "device-busy") throw finalRejection(error);
+    const released = await releaseOwnLedgerGrantTabs();
+    if (!released) throw finalRejection(error);
+    try {
+      return await openConnectedTransportRaw(deviceId);
+    } catch (retryError) {
+      throw finalRejection(retryError);
+    }
+  }
 };
 
 /**
@@ -60,15 +123,8 @@ const mapOpenError = (error: unknown): LedgerRejection => {
  * survive restarts, so this is the normal cable reconnect path. Bluetooth
  * sessions are retained and proxied by the dedicated hardware tab instead.
  */
-export const openConnectedTransport = async (
-  deviceId?: string,
-): Promise<LedgerTransport | null> => {
-  try {
-    return await openConnectedTransportRaw(deviceId);
-  } catch (error) {
-    throw mapOpenError(error);
-  }
-};
+export const openConnectedTransport = (deviceId?: string): Promise<LedgerTransport | null> =>
+  openConnectedOnce(deviceId);
 
 /**
  * Lists every already-granted connected Ledger without opening it. Opaque ids
@@ -79,7 +135,7 @@ export const listConnectedDevices = async (): Promise<readonly LedgerDeviceChoic
   try {
     return await listConnectedDevicesRaw();
   } catch (error) {
-    throw mapOpenError(error);
+    throw ledgerTransportRejection(error);
   }
 };
 

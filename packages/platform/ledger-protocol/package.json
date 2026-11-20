@@ -9,7 +9,8 @@
     "./client": "./src/client.ts",
     "./device-transition": "./src/device-transition.ts",
     "./errors": "./src/errors.ts",
-    "./session": "./src/session.ts"
+    "./session": "./src/session.ts",
+    "./transport-error": "./src/transport-error.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

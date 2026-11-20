@@ -115,8 +115,11 @@ export const serveLedgerBroker = (
     command: Exclude<LedgerBrokerCommand, { readonly kind: "close" }>,
   ): Promise<void> => {
     if (busy || closed) {
+      // Our own pipe is already running a command. That is not another app
+      // holding the device; the support token tells the two apart.
       respond({
-        error: "device-busy",
+        cause: "BrokerBusy",
+        error: "unexpected-device-error",
         id: command.id,
         kind: "response",
         ok: false,
@@ -129,8 +132,10 @@ export const serveLedgerBroker = (
       const value = await executeLedgerCommand(client, command);
       respond({ id: command.id, kind: "response", ok: true, value });
     } catch (error) {
+      const rejection = ledgerTransportRejection(error);
       respond({
-        error: ledgerTransportRejection(error).code,
+        ...(rejection.causeName ? { cause: rejection.causeName } : {}),
+        error: rejection.code,
         id: command.id,
         kind: "response",
         ok: false,

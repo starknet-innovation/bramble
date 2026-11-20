@@ -22,6 +22,7 @@ import {
 } from "@bramble/ledger-protocol/broker";
 import { LedgerRejection } from "@bramble/ledger-protocol/errors";
 import type { LedgerDeviceSession } from "@bramble/ledger-protocol/session";
+import { browserLedgerLocks, holdLedgerPanelLock, type LedgerLockManager } from "./panel-presence";
 
 /**
  * Narrow `chrome.tabs`/`chrome.runtime` surface needed to create, track, and
@@ -78,6 +79,14 @@ export type GrantClientChannel = {
  */
 export type GrantSessionRuntime = {
   readonly channel: (name: string) => GrantClientChannel;
+  /**
+   * Holds a lock for the life of the panel document. The grant tab waits on
+   * the same lock and releases the device when it is dropped. Omitted in tests
+   * that do not exercise panel disconnect.
+   */
+  readonly panelLock?: {
+    readonly hold: (sessionId: string) => Promise<() => void>;
+  };
   readonly sessionId: () => string;
   readonly timeout: GrantTabTimeout;
 };
@@ -125,8 +134,15 @@ const GRANT_TAB_TIMEOUT: GrantTabTimeout = {
     return () => clearTimeout(handle);
   },
 };
+const productionPanelLock = (
+  locks: LedgerLockManager | null,
+): NonNullable<GrantSessionRuntime["panelLock"]> => ({
+  hold: (sessionId) => holdLedgerPanelLock(locks, sessionId),
+});
+
 const GRANT_SESSION_RUNTIME: GrantSessionRuntime = {
   channel: (name) => new BroadcastChannel(name),
+  panelLock: productionPanelLock(browserLedgerLocks()),
   sessionId: () => crypto.randomUUID(),
   timeout: GRANT_TAB_TIMEOUT,
 };
@@ -319,9 +335,33 @@ export const requestDeviceGrant = async (
     pending.clear();
   };
 
+  let unlockPanel = (): void => undefined;
+  const releaseLock = (): void => {
+    const unlock = unlockPanel;
+    unlockPanel = () => undefined;
+    unlock();
+  };
+  const onPageHide = (event: Event): void => {
+    if ((event as PageTransitionEvent).persisted || closed) return;
+    // Best-effort: a message posted during unload may not flush. Releasing the
+    // panel lock is what the grant tab waits on, and the browser drops that
+    // lock even when this listener does not run.
+    try {
+      channel.postMessage({ kind: "close" });
+    } catch {
+      // The document is already going away.
+    }
+    releaseLock();
+  };
+  if (typeof globalThis.addEventListener === "function") {
+    globalThis.addEventListener("pagehide", onPageHide);
+  }
+
   const detach = (): void => {
+    releaseLock();
     browser.tabs.onRemoved.removeListener(onRemoved);
     channel.removeEventListener("message", onMessage);
+    globalThis.removeEventListener?.("pagehide", onPageHide);
   };
 
   const onRemoved = (removedId: number): void => {
@@ -355,7 +395,13 @@ export const requestDeviceGrant = async (
     if (response.ok) {
       command.resolve(response.value);
     } else {
-      command.reject(new LedgerRejection(response.error));
+      command.reject(
+        new LedgerRejection(
+          response.error,
+          undefined,
+          response.cause ? { causeName: response.cause } : undefined,
+        ),
+      );
     }
   };
 
@@ -363,6 +409,7 @@ export const requestDeviceGrant = async (
   browser.tabs.onRemoved.addListener(onRemoved);
 
   try {
+    unlockPanel = await (runtime.panelLock?.hold(sessionId) ?? Promise.resolve(() => undefined));
     const created = await browser.tabs.create({
       active: true,
       url: `${browser.runtime.getURL("ledger-grant.html")}#session=${sessionId}`,
