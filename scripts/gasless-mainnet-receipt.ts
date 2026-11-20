@@ -4,35 +4,43 @@
  */
 
 import { hash } from "starknet";
+import { ownField } from "../packages/foundation/core/src/json";
 import { sameFelt, uint256Felts } from "../packages/foundation/wallet-model/src/networks/networks";
-import { ownField } from "../packages/platform/starknet/src/rpc/receipt-record";
 
 const TRANSFER = hash.getSelectorFromName("Transfer");
 
-const strings = (value: unknown): readonly string[] | null =>
-  Array.isArray(value) && value.every((item) => typeof item === "string") ? value : null;
+// An array's items read as own data fields, so an index getter never runs.
+const ownItems = (value: unknown): readonly unknown[] | null =>
+  Array.isArray(value)
+    ? Array.from({ length: value.length }, (_, i) => ownField(value, String(i)))
+    : null;
 
-// A body field, or the same field on a nested `receipt`. Reads no getters.
-const field = (receipt: unknown, key: string): unknown =>
-  ownField(receipt, key) ?? ownField(ownField(receipt, "receipt"), key);
-
-const eventsOf = (receipt: unknown): readonly unknown[] => {
-  const events = field(receipt, "events");
-  return Array.isArray(events) ? events : [];
+const strings = (value: unknown): readonly string[] | null => {
+  const items = ownItems(value);
+  return items?.every((item) => typeof item === "string") ? (items as readonly string[]) : null;
 };
+
+// A body field and the same field on a nested `receipt`, in that order.
+const fields = (receipt: unknown, key: string): readonly unknown[] => [
+  ownField(receipt, key),
+  ownField(ownField(receipt, "receipt"), key),
+];
+
+const eventsOf = (receipt: unknown): readonly unknown[] =>
+  ownItems(fields(receipt, "events").find(Array.isArray)) ?? [];
 
 /**
  * Whether a receipt says the transaction executed successfully.
  * Accepts the JSON-RPC body and starknet.js's ReceiptTx.
  */
 export const receiptSucceeded = (receipt: unknown): boolean =>
-  field(receipt, "execution_status") === "SUCCEEDED";
+  fields(receipt, "execution_status").includes("SUCCEEDED");
 
 /**
  * Whether a receipt says the transaction reverted. Pending receipts are neither.
  */
 export const receiptReverted = (receipt: unknown): boolean =>
-  field(receipt, "execution_status") === "REVERTED";
+  fields(receipt, "execution_status").includes("REVERTED");
 
 /**
  * Sum of ERC-20 Transfer amounts from `from` to `to` on `token` in one receipt.

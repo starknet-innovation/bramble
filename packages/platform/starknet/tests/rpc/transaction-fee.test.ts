@@ -3,7 +3,7 @@
  * `{ amount, unit }` fee is trusted, a hash with no usable fee is left out,
  * and a transport failure fails over like every other read.
  */
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createRpcProvider } from "@bramble/starknet/provider";
 import { getTransactionFees, isTransactionFee, readReceiptFee } from "@bramble/starknet/rpc";
 import {
@@ -14,7 +14,10 @@ import {
   type RpcProviderOptions,
 } from "starknet";
 
-logger.setLogLevel("FATAL");
+// Quiet starknet.js for this file only; the logger is process-global.
+const previousLogLevel = logger.getLogLevel();
+beforeAll(() => logger.setLogLevel("FATAL"));
+afterAll(() => logger.setLogLevel(previousLogLevel));
 
 const nodeError = (code: number): Error =>
   Object.assign(new Error("rpc error"), { baseError: { code, message: "rpc error" } });
@@ -100,23 +103,6 @@ describe("readReceiptFee", () => {
     expect(readReceiptFee({ actual_fee: amount })).toBeUndefined();
     expect(readReceiptFee({ actual_fee: unit })).toBeUndefined();
     expect(ran).toBe(0);
-  });
-
-  test("does not run a getter to recover a wrapped receipt", () => {
-    let ran = false;
-    const hostile: object = Object.create({ wrapped: true });
-    Object.defineProperty(hostile, "value", {
-      enumerable: true,
-      get() {
-        ran = true;
-        return { actual_fee: { amount: "0x1", unit: "FRI" } };
-      },
-    });
-    const boxed: object = Object.create({ wrapped: true });
-    Object.defineProperty(boxed, "value", { enumerable: false, value: 1 });
-    expect(readReceiptFee(hostile)).toBeUndefined();
-    expect(ran).toBe(false);
-    expect(readReceiptFee(boxed)).toBeUndefined();
   });
 
   test("drops a fee it cannot trust rather than guessing", () => {

@@ -4,11 +4,10 @@
  * reviewed. Read once per transaction, after reconciliation has seen it reach
  * an outcome that has a receipt; a missing or malformed fee stays missing.
  */
-import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
+import { hasOnlyKnownKeys, isRecord, ownField } from "@bramble/core/json";
 import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import { isTransportRpcError, withRpcFallback } from "./provider";
-import { ownField } from "./receipt-record";
 import { TRANSACTION_STATUS_CONCURRENCY, type TransactionStatusInput } from "./transaction-status";
 
 /**
@@ -33,8 +32,9 @@ export const isTransactionFee = (value: unknown): value is TransactionFee =>
 /**
  * Reads the fee from one untrusted receipt. A plain JSON-RPC body and
  * starknet.js's `ReceiptTx` both work, and only own data fields are read, so no
- * getter runs ({@link ownField}). Only the RPC
- * 0.7+ shape (`{ amount, unit }`) is accepted; a bare felt carries no unit and
+ * getter runs ({@link ownField}). `ReceiptTx` needs no unwrapping: starknet.js
+ * copies the body onto it as own fields (and drops it for an unknown
+ * `execution_status`, which reads as no fee). Only the RPC 0.7+ shape (`{ amount, unit }`) is accepted; a bare felt carries no unit and
  * is dropped rather than guessed. A missing or malformed fee is undefined.
  */
 export const readReceiptFee = (receipt: unknown): TransactionFee | undefined => {

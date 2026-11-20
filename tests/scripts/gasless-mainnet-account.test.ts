@@ -238,6 +238,11 @@ describe("gasless mainnet receipt", () => {
     expect(receiptSucceeded({ execution_status: "REVERTED" })).toBe(false);
     expect(receiptSucceeded({ receipt: { execution_status: "SUCCEEDED" } })).toBe(true);
     expect(receiptReverted({ receipt: { execution_status: "REVERTED" } })).toBe(true);
+    // The nested receipt still answers when the outer field is present but does not.
+    expect(
+      receiptSucceeded({ execution_status: "PENDING", receipt: { execution_status: "SUCCEEDED" } }),
+    ).toBe(true);
+    expect(transferredAmount({ events: {}, receipt }, token, from, to)).toBe(1000n);
   });
 
   test("reads a starknet.js ReceiptTx, not only a plain object", () => {
@@ -288,6 +293,12 @@ describe("gasless mainnet receipt", () => {
     expect(receiptSucceeded(receipt)).toBe(false);
     expect(receiptSucceeded({ receipt })).toBe(false);
     expect(transferredAmount({ events: [event] }, "0x1", "0x2", "0x3")).toBe(0n);
+    const events = Object.defineProperty([], "0", trap);
+    const keys = Object.defineProperty(["0x1"], "0", trap);
+    expect(transferredAmount({ events }, "0x1", "0x2", "0x3")).toBe(0n);
+    expect(
+      transferredAmount({ events: [{ data: [], from_address: "0x1", keys }] }, "0x1", "0x2", "0x3"),
+    ).toBe(0n);
     expect(ran).toBe(false);
   });
 });
