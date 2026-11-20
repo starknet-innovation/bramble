@@ -50,7 +50,9 @@ export async function topUp(
   amount: bigint,
   address = entry.address,
 ): Promise<void> {
-  const balance = await tokenBalance(token, address);
+  // Pre-confirmed, so a retry after a timed-out wait sees the transfer it
+  // already sent instead of funding the account a second time.
+  const balance = await tokenBalance(token, address, "pre_confirmed");
   if (balance >= amount) return;
   const tx = await transfer(deployer, token, address, amount - balance);
   entry.log.push(`funded ${token} ${tx}`);
