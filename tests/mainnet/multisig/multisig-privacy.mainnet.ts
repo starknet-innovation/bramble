@@ -63,6 +63,13 @@ const requireFunds = async (
   }
 };
 
+// What the round did to the funding account. A resumed round can send
+// nothing and still withdraw, so it may come out ahead.
+const roundOutcome = (startBalance: bigint, endBalance: bigint): string =>
+  endBalance > startBalance
+    ? `The funding account got back ${strkLabel(endBalance - startBalance)} STRK more than it sent.`
+    : `Round cost ${strkLabel(startBalance - endBalance)} STRK.`;
+
 const freshSalt = (): string => {
   const salt = canonicalFelt(`0x${randomBytes(31).toString("hex")}`);
   if (salt === null || BigInt(salt) === 0n) {
@@ -96,6 +103,7 @@ test("an Argent multisig uses private balances and returns its funds", async () 
   const relay = nostrRelayOverride();
   let context: RoundContext | null = null;
   let actionCost: bigint | null = null;
+  let clearWhenClosed = false;
   try {
     for (const role of ["a", "b"] as const) {
       wallets.push(
@@ -214,14 +222,14 @@ test("an Argent multisig uses private balances and returns its funds", async () 
     const leftPublic = await publicStrk(rpcUrl, address);
     const leftPrivate = await privateStrk(a, multisigId);
     console.log(
-      `Round cost ${strkLabel(startBalance - endBalance)} STRK. Left in the multisig: ${strkLabel(leftPublic)} public, ${strkLabel(leftPrivate)} private.`,
+      `${roundOutcome(startBalance, endBalance)} Left in the multisig: ${strkLabel(leftPublic)} public, ${strkLabel(leftPrivate)} private.`,
     );
     expect(leftPublic).toBeLessThanOrEqual(2n * ROUND_LIMITS.maxTransferFee);
     // The funding account can lose at most what it sent, plus its own fee.
     expect(startBalance - endBalance).toBeLessThanOrEqual(
       plan.funding + ROUND_LIMITS.maxTransferFee,
     );
-    await clearRound(ROUND_DIRECTORY);
+    clearWhenClosed = true;
   } catch (error) {
     const reason = error instanceof Error ? error.message : "The round failed.";
     if (context === null) {
@@ -235,7 +243,7 @@ test("an Argent multisig uses private balances and returns its funds", async () 
     try {
       const returned = await returnFunds(context, account.address, plan.poolFee, actionCost);
       const registered = await isRegisteredInPool(rpcUrl, context.multisigAddress);
-      if (!registered) await clearRound(ROUND_DIRECTORY);
+      if (!registered) clearWhenClosed = true;
       outcome = `Funds were returned: ${strkLabel(returned.withdrawn ?? 0n)} STRK withdrawn, ${strkLabel(returned.swept ?? 0n)} STRK swept.${registered ? ` The registered multisig was kept; the next run resumes it. ${RESUME}` : ""}`;
     } catch (returnError) {
       const detail = returnError instanceof Error ? returnError.message : "unknown";
@@ -244,5 +252,8 @@ test("an Argent multisig uses private balances and returns its funds", async () 
     throw new Error(`${reason}\n${outcome}`);
   } finally {
     await closeOwnerWallets(wallets);
+    // Only once the browsers are closed: Chromium writes its profile back as
+    // it shuts down, which would leave part of a cleared round behind.
+    if (clearWhenClosed) await clearRound(ROUND_DIRECTORY);
   }
 });
