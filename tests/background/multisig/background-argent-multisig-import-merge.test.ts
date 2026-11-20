@@ -151,6 +151,20 @@ describe("Argent multisig import merge", () => {
     expect(isArgentMultisigSigningIntent(merged)).toBe(true);
   });
 
+  test("keeps the stored config the cap was counted against", async () => {
+    const { intent } = await openCollectingIntent();
+    const local = withSigners(intent, [signerA], "Local");
+    const incoming = {
+      ...withSigners(intent, [signerB, signerC], "Remote"),
+      configSnapshot: { ...intent.configSnapshot, threshold: 1 },
+    };
+    const merged = mergeImportedArgentMultisigIntent(local, incoming);
+
+    expect(merged.configSnapshot).toEqual(local.configSnapshot);
+    expect(merged.signatures).toHaveLength(2);
+    expect(isArgentMultisigSigningIntent(merged)).toBe(true);
+  });
+
   test("leaves a ready intent unchanged when the import names another signer", async () => {
     const { intent } = await openCollectingIntent();
     const local = withSigners(intent, [signerA, signerB], "Kept locally");

@@ -309,7 +309,8 @@ export const sortedArgentMultisigSignatures = (
  * local signature and fills any remaining slots from the incoming fragments,
  * in incoming order, until the local threshold. The result is then sorted
  * into Argent's signer order and becomes ready once it reaches that
- * threshold. The stored summary is kept: it is local display text that a
+ * threshold. The stored config is kept with it, so the cap and the config
+ * saved beside it always agree. The stored summary is kept: it is local display text that a
  * token or contact added since would word differently, and the frozen hash
  * already pins what is signed (Sherlock 178). This projection never throws
  * and does not re-check fragments the caller has already accepted.
@@ -330,6 +331,7 @@ export const mergeImportedArgentMultisigIntent = (
   const sorted = sortedArgentMultisigSignatures(signatures);
   return {
     ...incoming,
+    configSnapshot: current.configSnapshot,
     signatures: sorted,
     state: sorted.length === threshold ? "ready" : "collecting",
     summary: current.summary,
