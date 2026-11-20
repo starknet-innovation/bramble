@@ -102,6 +102,7 @@ export const createLedgerOnboardController = (
   let readingMore = false;
   let moreQueued = false;
   let pendingConnect = false;
+  let listTicket = 0;
   const gate = createLedgerDeviceGate();
 
   const deviceError = (error: unknown): Extract<LedgerOnboardView, { kind: "error" }> => {
@@ -258,9 +259,7 @@ export const createLedgerOnboardController = (
     }
   };
 
-  // The first page runs the gesture-gated picker; further pages reconnect the
-  // already-granted device SILENTLY, falling back to the picker only if the
-  // device is no longer connected (the "Show more" click supplies the gesture).
+  // Further pages reconnect silently; the "Show more" click is the gesture.
   const obtainConnected = async (deviceId?: string): Promise<LedgerDeviceSession> =>
     (await deps.connector.openConnected(deviceId)) ?? deps.connector.request();
 
@@ -271,6 +270,7 @@ export const createLedgerOnboardController = (
     pendingConnect = false;
     resetState();
     const epoch = flowEpoch;
+    const ticket = ++listTicket;
     const list = deps.connector.listConnected;
     if (!list) {
       void loadPage(() => deps.connector.request(), 0, true);
@@ -278,21 +278,22 @@ export const createLedgerOnboardController = (
     }
     busy = true;
     deps.render({ kind: "reading" });
+    const settleList = (): boolean => {
+      if (ticket !== listTicket) return false;
+      busy = false;
+      if (epoch === flowEpoch) return true;
+      flushConnect();
+      return false;
+    };
     void list().then(
       (connected) => {
-        if (epoch !== flowEpoch) {
-          busy = false;
-          flushConnect();
-          return;
-        }
+        if (!settleList()) return;
         devices = connected;
         if (connected.length > 1) {
-          busy = false;
           deps.render({ devices: connected, kind: "devices" });
           return;
         }
         selectedDeviceId = connected[0]?.id ?? null;
-        busy = false;
         void loadPage(
           () => (selectedDeviceId ? obtainConnected(selectedDeviceId) : deps.connector.request()),
           0,
@@ -300,9 +301,7 @@ export const createLedgerOnboardController = (
         );
       },
       (error) => {
-        busy = false;
-        if (epoch === flowEpoch) deps.render(deviceError(error));
-        else flushConnect();
+        if (settleList()) deps.render(deviceError(error));
       },
     );
   };
@@ -456,15 +455,17 @@ export const createLedgerOnboardController = (
     cancel() {
       pendingConnect = false;
       resetState();
+      listTicket += 1;
       deps.onCancel();
       deps.render(null);
       void gate.release();
+      // Listing holds `busy` with no device open. Drop it now so a Connect
+      // after Cancel is not stuck if that list never settles.
+      if (!gate.isBusy()) busy = false;
     },
     choose,
     chooseDevice,
     connect() {
-      // A click while a cancelled read is still closing the transport waits
-      // for that close, then runs once. A click during a live read is ignored.
       if (gate.isBusy()) {
         pendingConnect = true;
         return;
@@ -485,8 +486,6 @@ export const createLedgerOnboardController = (
       deps.render({ kind: "chooser" });
     },
     start() {
-      // First-run "Set up with a Ledger" creates Bramble accounts and finds
-      // existing Ready and Braavos ones, as a recovery-phrase setup does.
       openConnect(LEDGER_EIP2645_APPLICATION, [
         LEDGER_EIP2645_APPLICATION,
         READY_EIP2645_APPLICATION,

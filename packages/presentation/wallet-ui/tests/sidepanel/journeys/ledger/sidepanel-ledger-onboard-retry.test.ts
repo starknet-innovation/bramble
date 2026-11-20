@@ -9,6 +9,44 @@ import { createLedgerOnboardController } from "../../../../src/sidepanel/journey
 import { onboardHarness, tick } from "../../../support/ledger-onboard-harness";
 
 describe("onboarding device session", () => {
+  test("cancel during device listing still accepts the next connect", async () => {
+    const pending: ((devices: readonly { id: string; label: string }[]) => void)[] = [];
+    let opened = 0;
+    const session = () => {
+      opened += 1;
+      return { client: {} as never, close: async () => undefined, readiness: "verified" as const };
+    };
+    const h = onboardHarness({
+      connector: {
+        listConnected: () => new Promise((resolve) => pending.push(resolve)),
+        openConnected: async () => session(),
+        request: async () => session(),
+      },
+      enumerate: () => Promise.resolve([]),
+    });
+    const controller = createLedgerOnboardController(h.deps);
+    controller.start();
+    controller.connect();
+    await tick();
+    expect(pending).toHaveLength(1);
+    expect(opened).toBe(0);
+
+    controller.cancel();
+    controller.start();
+    controller.connect();
+    await tick();
+    expect(pending).toHaveLength(2);
+    expect(opened).toBe(0);
+
+    pending[1]?.([{ id: "ledger-device-1", label: "Nano X" }]);
+    for (let i = 0; i < 5; i += 1) await tick();
+    expect(opened).toBe(1);
+
+    pending[0]?.([{ id: "ledger-device-1", label: "Nano X" }]);
+    for (let i = 0; i < 5; i += 1) await tick();
+    expect(opened).toBe(1);
+  });
+
   test("cancel then connect does not open a second session over the first", async () => {
     let open = 0;
     let maxOpen = 0;
