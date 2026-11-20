@@ -70,6 +70,10 @@ const roundOutcome = (startBalance: bigint, endBalance: bigint): string =>
     ? `The funding account got back ${strkLabel(endBalance - startBalance)} STRK more than it sent.`
     : `Round cost ${strkLabel(startBalance - endBalance)} STRK.`;
 
+// A balance read right after a receipt can come from a node that has not seen
+// that block yet, so balance checks poll until the transaction shows.
+const SETTLED = { intervals: [2_000, 4_000, 8_000], timeout: 90_000 };
+
 const freshSalt = (): string => {
   const salt = canonicalFelt(`0x${randomBytes(31).toString("hex")}`);
   if (salt === null || BigInt(salt) === 0n) {
@@ -171,7 +175,9 @@ test("an Argent multisig uses private balances and returns its funds", async () 
       if (depositDone(plan, progress)) return progress.privateBalance;
       const publicBefore = await publicStrk(rpcUrl, address);
       await sendAccountAction(round, { amount: plan.deposit, kind: "deposit" });
-      expect(await publicStrk(rpcUrl, address)).toBeLessThanOrEqual(publicBefore - plan.deposit);
+      await expect
+        .poll(() => publicStrk(rpcUrl, address), SETTLED)
+        .toBeLessThanOrEqual(publicBefore - plan.deposit);
       const floor = plan.deposit - plan.poolFee;
       const seenByA = await waitForPrivateStrk(a, multisigId, (balance) => balance >= floor);
       // The co-owner reads the same balance with the key it was sent.
@@ -200,7 +206,9 @@ test("an Argent multisig uses private balances and returns its funds", async () 
       const before = await publicStrk(rpcUrl, account.address);
       const withdrawn = await withdrawPrivateStrk(round, account.address, plan.poolFee, actionCost);
       expect(withdrawn).not.toBeNull();
-      expect(await publicStrk(rpcUrl, account.address)).toBe(before + (withdrawn ?? 0n));
+      await expect
+        .poll(() => publicStrk(rpcUrl, account.address), SETTLED)
+        .toBe(before + (withdrawn ?? 0n));
       await waitForPrivateStrk(a, multisigId, (seen) => seen < afterTransfer);
     });
 
@@ -215,7 +223,9 @@ test("an Argent multisig uses private balances and returns its funds", async () 
         );
         return;
       }
-      expect(await publicStrk(rpcUrl, account.address)).toBe(before + swept.amount);
+      await expect
+        .poll(() => publicStrk(rpcUrl, account.address), SETTLED)
+        .toBe(before + swept.amount);
     });
 
     const endBalance = await publicStrk(rpcUrl, account.address);
