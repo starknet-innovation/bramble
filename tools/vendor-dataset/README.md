@@ -77,9 +77,11 @@ extension.
   fails before deploying strands its 1 STRK float.
 - `verify-sepolia.ts` also checks that Send is refused for TA-08, TA-20, TA-29
   and TA-12 (path `SEND`, `verify-sepolia-refusals.ts`): last in the run, it
-  imports each from its scan and checks Home from the account. The whole run
+  imports each from its scan and checks Home from the account: a "Read only"
+  card passes only with Send disabled and no broadcast attempted. The whole run
   sits behind a broadcast firewall that allows no sender, so a send attempt is
   aborted and counted, and any broadcast during the import cards fails the run.
+  TA-08 alone expects a blocked broadcast (it records today's stale-key bug).
   A replay skips these cards, since they read each account's nonce live.
 - `sepolia-bank-runway.ts` reads the S-TXN balances (no seed needed) and exits
   non-zero with "Sepolia bank low" when the bank or a sender is short; refill

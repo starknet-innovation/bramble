@@ -7,6 +7,7 @@
  * printed passes through the Sepolia redactor.
  */
 
+import { isContractNotFoundError } from "@bramble/starknet/rpc";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import { expect } from "@playwright/test";
 import { sendRuntimeMessage } from "../../tests/e2e/wallet-helpers";
@@ -35,6 +36,8 @@ if (process.env["DEBUG"] || process.env["PWDEBUG"]) throw new Error("unset DEBUG
 export const MAX_FEE_STRK = "0.5";
 export const STRK = defaultToken("SN_SEPOLIA", "STRK");
 const AMOUNT_RAW = selfTransferRaw(STRK.decimals);
+/** Home's Send action; the wallet disables it for an account it will not sign for. */
+export const SEND_TILE = '.action-tile[data-view="send"]';
 /** One check's outcome, as the report prints it. */
 export type Verdict = {
   readonly id: string;
@@ -99,11 +102,17 @@ export const shown = async (session: Session): Promise<string> => {
 
 /**
  * The account's nonce including pre-confirmed transactions, so a send in
- * flight counts. An account with no class yet has sent nothing: 0.
+ * flight counts. An account with no class yet has sent nothing: 0. Any other
+ * failed read throws: a flaky node must never look like "nothing was sent".
  */
 export const nonceOf = async (address: string): Promise<bigint> => {
-  const deployed = await provider.getClassHashAt(address, "pre_confirmed").catch(() => null);
-  return deployed ? BigInt(await provider.getNonceForAddress(address, "pre_confirmed")) : 0n;
+  try {
+    await provider.getClassHashAt(address, "pre_confirmed");
+  } catch (error) {
+    if (isContractNotFoundError(error)) return 0n;
+    throw error;
+  }
+  return BigInt(await provider.getNonceForAddress(address, "pre_confirmed"));
 };
 
 /**
@@ -129,7 +138,7 @@ export const expectDeployedAs = async (address: string, classHash: string): Prom
 /**
  * An account the wallet will not send from: Home's notice says why ("Read
  * only" for a release it does not sign for, "Not deployed" for a Braavos
- * counterfactual), and nothing reaches the chain from it.
+ * counterfactual), Send is disabled, and nothing reaches the chain from it.
  */
 export const refusedFor = async (
   session: Session,
@@ -141,6 +150,7 @@ export const refusedFor = async (
   await expect(session.panel.locator(".read-only-notice")).toContainText(notice, {
     timeout: 30_000,
   });
+  await expect(session.panel.locator(SEND_TILE)).toBeDisabled({ timeout: 30_000 });
   if ((await nonceOf(address)) !== nonce) {
     throw new Error("the nonce moved");
   }

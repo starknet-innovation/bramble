@@ -44,7 +44,7 @@ import {
   tokenBalance,
   transfer,
 } from "./matrix-lib";
-import { guarded, secret } from "./sepolia-redact";
+import { guarded, redact, secret } from "./sepolia-redact";
 import { sepoliaSecret } from "./sepolia-seeds";
 import {
   activate,
@@ -210,7 +210,7 @@ const sweep = async (account: Throwaway, bank: string): Promise<void> => {
     const amount = balance - BigInt(estimate.overall_fee) * 3n;
     if (amount > 0n) await transfer(signer, "STRK", bank, amount);
   } catch (error) {
-    console.log(`sweep of ${account.id} skipped: ${String(error).split("\n")[0]}`);
+    console.log(redact(`sweep of ${account.id} skipped: ${String(error).split("\n")[0]}`));
   }
 };
 

@@ -15,7 +15,7 @@ import { selfTransfer } from "../../tests/live/send";
 import { SELF_TRANSFER_AMOUNT } from "../../tests/mainnet/local-mainnet-limits";
 import { redact } from "./sepolia-redact";
 import { type SepoliaSecret, sepoliaSecret } from "./sepolia-seeds";
-import { activate, MAX_FEE_STRK, nonceOf, shown } from "./verify-sepolia-live";
+import { activate, MAX_FEE_STRK, nonceOf, SEND_TILE, shown } from "./verify-sepolia-live";
 import { addressOf, attempt, type Observed, type RowCard, row } from "./verify-sepolia-score";
 import { pace, type Session } from "./verify-sepolia-ui";
 
@@ -23,13 +23,16 @@ const READ_ONLY = /^Read only/u;
 
 /**
  * What the wallet does when asked to send from `address`: Home's read-only
- * notice when it shows one, otherwise how a dust self-transfer ended. Throws
+ * notice when it shows one with Send disabled, otherwise how a dust
+ * self-transfer ended. A blocked broadcast leads the message, so a "Read only"
+ * card cannot match it, unless `broadcasts` says the card expects one. Throws
  * if the account's nonce moved, which would mean something was sent.
  */
 const refusal = async (
   session: Session,
   firewall: BroadcastFirewall,
   address: string,
+  broadcasts: boolean,
 ): Promise<Observed> => {
   const nonce = await nonceOf(address);
   const blocked = firewall.blocked.length;
@@ -39,8 +42,10 @@ const refusal = async (
     .waitFor({ state: "visible", timeout: 15_000 })
     .then(() => true)
     .catch(() => false);
+  // A notice proves nothing while Send stays enabled, so then Send is tried.
+  const sendOff = noticed && (await session.panel.locator(SEND_TILE).isDisabled());
   let message: string;
-  if (noticed) {
+  if (sendOff) {
     message = ((await notice.textContent()) ?? "").replace(/\s+/gu, " ").trim();
   } else {
     try {
@@ -56,8 +61,12 @@ const refusal = async (
     } catch (error) {
       message = `send stopped: ${String(error).split("\n")[0] ?? ""}${await shown(session)}`;
     }
+    if (noticed) message = `notice shown but Send enabled; ${message}`;
   }
-  if (firewall.blocked.length > blocked) message += " · the firewall blocked a broadcast";
+  if (firewall.blocked.length > blocked) {
+    const what = "the firewall blocked a broadcast";
+    message = broadcasts ? `${message} · ${what}` : `${what} · ${message}`;
+  }
   if ((await nonceOf(address)) !== nonce) throw new Error("the nonce moved: something was sent");
   return { message: redact(message) };
 };
@@ -68,6 +77,7 @@ const group = async (
   firewall: BroadcastFirewall,
   phrase: SepoliaSecret | null,
   cards: readonly RowCard[],
+  broadcasts = false,
 ): Promise<void> => {
   // A pause between phrases keeps the run under the public node's rate limit.
   await pace(15_000);
@@ -89,7 +99,7 @@ const group = async (
   for (const card of cards) {
     await attempt([card], async () => {
       if (missed.includes(addressOf(card.id))) throw new Error(why);
-      return [await refusal(session, firewall, addressOf(card.id))];
+      return [await refusal(session, firewall, addressOf(card.id), broadcasts)];
     });
   }
 };
@@ -104,19 +114,25 @@ export async function runRefusalChecks(
   have: (name: SepoliaSecret) => boolean,
 ): Promise<void> {
   console.log("\n## Send is refused (SEND), behind the broadcast firewall");
-  await group(session, firewall, null, [
-    // Measured 2026-11-20: the wallet does not see that this OZ account's
-    // owner moved off the phrase's key, so it signs with the old key and goes
-    // to broadcast; the firewall blocks it, and the node would reject the
-    // signature anyway. Scored as "Now" so a fix shows up as a change.
-    row(
-      "s-brm/TA-08",
-      "SEND",
-      "signs with the stale key and tries to broadcast; the firewall blocks it",
-      { message: /firewall blocked a broadcast/u },
-      "Read only: owner key changed",
-    ),
-  ]);
+  await group(
+    session,
+    firewall,
+    null,
+    [
+      // Measured 2026-11-20: the wallet does not see that this OZ account's
+      // owner moved off the phrase's key, so it signs with the old key and goes
+      // to broadcast; the firewall blocks it, and the node would reject the
+      // signature anyway. Scored as "Now" so a fix shows up as a change.
+      row(
+        "s-brm/TA-08",
+        "SEND",
+        "signs with the stale key and tries to broadcast; the firewall blocks it",
+        { message: /firewall blocked a broadcast/u },
+        "Read only: owner key changed",
+      ),
+    ],
+    true,
+  );
   await group(session, firewall, "S-SCR", [
     row("s-scr/TA-20", "SEND", "owner changed: 'Read only', nothing sent", { message: READ_ONLY }),
   ]);
