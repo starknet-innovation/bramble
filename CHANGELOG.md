@@ -11,10 +11,66 @@ See DEVELOPMENT.md and RELEASING.md.
 
 ## [Unreleased]
 
+## [0.10.11] - Unreleased
+
+A Krusty upgrade that fixes Ready restores, padded addresses everywhere, a
+Forgot password? guide, remote kill switches, and fixes from user reports.
+
+> This release updates how the wallet stores your data. Older versions of
+> Bramble can't open it after you unlock this one.
+
+> **Ready accounts restored from a recovery phrase.** For about 1 in 256
+> phrases, earlier versions of Bramble derived a different key than Argent X
+> and Ready, so the account they restored isn't the user's Ready account.
+> Accounts already in your wallet keep working: Bramble signs with the key it
+> stored. If one of yours is affected, Home shows a notice with Move funds and
+> Back up key. Move its funds or back up its key on this device, because a
+> fresh restore of the same phrase on another device won't find that account
+> (#956, #962, #968).
+
+### Added
+- A Forgot password? guide on the unlock screen. It explains that the
+  password can't be reset, how to reinstall and restore from your recovery
+  phrase, and what the phrase doesn't bring back. Nothing on it resets the
+  wallet (#903, #970).
+- Bramble checks a signed feature-flag list from `flags.bramble.fi` about every
+  30 minutes, without cookies or account details, so a feature that misbehaves
+  can be switched off quickly. Features stay off unless they ship on or you
+  turn them on in Settings → Experimental features (#953).
+- Dapps can ask for privacy-pool registration with the standard STRK20
+  `register` action (starknet-specs v0.10.5-rc.0). Registration is always
+  approved in the wallet first (#905, #906).
+
 ### Changed
 - Every address keeps its 64-digit padding on every screen, shortened as
   `0x05e1…f2e4` or shown in full, including review and signing lines, copy
-  buttons and QR codes (#884).
+  buttons and QR codes (#884, #912).
+- Ready restores from a recovery phrase now find the same account as Argent X
+  and Ready (#956, #962).
+- With product analytics on, usage reports say whether an account was created
+  or imported in Bramble. The account is identified by a hash of its network
+  and address, not the address itself (#948, #949).
+- Multisig co-signer updates are a compact refresh button with a tooltip;
+  Escape hides the tooltip (#952, #971).
+- A dapp can ask for up to 56 calls in one transaction, up from 16, as long as
+  the review fits on screen. A multisig proposal stays at 16. When the network
+  refuses a transaction for a size or fee limit, the wallet shows the node's
+  reason (#974, #975).
+
+### Fixed
+- Older NFTs such as SPOKs show their art; Bramble now reads token URIs stored
+  the legacy way (#902).
+- A watched NFT whose art can't be shown says "Art unavailable" instead of
+  an empty card (#901, #969).
+- A transaction the wallet gateway turns away shows as failed with a short
+  reason instead of staying pending forever (#910, #961).
+- Dapps see Bramble's real version instead of "0.1.0" (#914, #965).
+- `wallet_supportedWalletApi` returns a valid API version (#913, #905).
+- The Sepolia no-pool notice no longer repeats each time you switch accounts
+  (#951, #964).
+- Settings rows are no longer hidden behind the bottom navigation, and the
+  connection approval's Cancel button no longer stretches on wide windows
+  (#950, #904, #958, #960).
 
 ## [0.10.10] - Unreleased
 
