@@ -19,7 +19,7 @@ const ZH_HANS: Readonly<Record<LedgerRejectionCode, string>> = {
     "你的 Ledger 没有回到主屏幕。解锁设备，停留在 Starknet 应用上，然后重试。",
   "deploy-unfunded": "此账户尚未部署，也没有支付第一笔交易所需的 STRK。添加 STRK 后重试。",
   "device-busy":
-    "另一个应用正在使用你的 Ledger。关闭 Ledger Live 和其他正在使用它的标签页，然后重试。",
+    "有其他程序正在使用你的 Ledger。关闭其他钱包应用和 Bramble 窗口，拔下并重新插上设备，然后重试。",
   "device-locked": "解锁你的 Ledger，然后重试。",
   "disconnected-mid-sign": "你的 Ledger 已断开连接。没有提交任何内容。",
   "locked-mid-sign": "你的 Ledger 自动锁定了。解锁后再次按确认——你会看到同一个请求。",
@@ -41,7 +41,7 @@ const ZH_HANS: Readonly<Record<LedgerRejectionCode, string>> = {
     "你的 Ledger 无法重新打开 Starknet 应用。在设备上打开它，然后重试。没有签名任何内容。",
   "signature-verify-failed": "无法验证来自你的 Ledger 的签名，因此没有提交任何内容。重试。",
   "unexpected-device-error":
-    "与你的 Ledger 通信时出错。打开 Starknet 应用，关闭其他正在使用它的应用，然后重试。",
+    "与你的 Ledger 通信时出错。解锁设备，打开 Starknet 应用，关闭其他钱包和 Bramble 窗口，然后拔下设备并重试。",
   "unsupported-ledger-device":
     "尚不支持此 Ledger 设备或固件。在 Ledger Live 中更新，然后重新连接并打开 Starknet 应用。",
   "webhid-unavailable": "Ledger 支持需要基于 Chromium 的浏览器（Chrome、Brave 或 Edge）。",
