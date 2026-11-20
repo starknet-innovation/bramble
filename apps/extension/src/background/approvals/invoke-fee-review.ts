@@ -163,6 +163,7 @@ type PricedComponents = {
   readonly deployed: boolean;
   readonly deploymentFee: FeeEstimate | null;
   readonly fee: FeeEstimate | null;
+  readonly feeRejection?: string;
 };
 
 // The fee components for this invoke, or the finished review when there is
@@ -229,7 +230,7 @@ export const estimateInvokeApprovalFee = async (
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
   const priced = await priceComponents(deps, review, rpcUrls);
   if (!("deployed" in priced)) return priced;
-  const { deployed, deploymentFee, fee } = priced;
+  const { deployed, deploymentFee, fee, feeRejection } = priced;
   const total = deployed ? fee : fee && deploymentFee && sumFeeEstimates(fee, deploymentFee);
   // Fee-affordability guard (issue 191): compare the reviewed total against the
   // account's STRK balance via the shared predicate. Warn-only and fail-open —
@@ -244,6 +245,7 @@ export const estimateInvokeApprovalFee = async (
     ...(deployed ? {} : { deploymentFee, deploymentFeeEstimateFailed: deploymentFee === null }),
     fee,
     feeAffordability,
+    ...(fee === null && feeRejection ? { feeEstimateDetail: feeRejection } : {}),
     feeEstimateFailed: fee === null,
     feeEstimatePending: false,
     ...gasless,

@@ -91,10 +91,11 @@ export const readProviderInvokeCall = (call: unknown): ProviderInvokeCall | null
 };
 
 /**
- * Parses invoke params in spec or legacy shape. The exact call/calldata limits
- * are enforced before mapping, and malformed inputs fail closed as `null`. The
- * spec's optional `api_version` sits beside the call list, never inside a call;
- * a well-formed one is dropped and a malformed one rejects the request.
+ * Parses invoke params in spec or legacy shape. A list longer than
+ * `INVOKE_LIMITS.calls`, an empty list and a malformed call fail closed as
+ * `null`. The spec's
+ * optional `api_version` sits beside the call list, never inside a call; a
+ * well-formed one is dropped and a malformed one rejects the request.
  */
 export const providerInvokeRequest = (params: Json | undefined): ProviderInvokeRequest | null => {
   if (
