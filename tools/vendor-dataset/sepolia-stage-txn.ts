@@ -36,10 +36,12 @@ import { braavosDeployParams } from "./sepolia-stage-brv";
 
 // Measured on Sepolia (2026-11-19/20). Send run: about 0.041 STRK per
 // self-transfer from each of six senders, about 0.25 STRK a night, so roughly
-// 45 nights per sender float. Deploy run: about 2 STRK a night from the bank,
-// mostly the sweep's reserve (three times its fee estimate) left as dust on
-// five throwaway accounts, so 50 STRK lasts about 25 nights. The nightly's
-// runway check (#976, PR 6) flags a low bank; re-run this stage to refill.
+// 45 nights per sender float. Deploy run: about 2 STRK a night from the bank
+// (1 STRK out to each of five throwaway accounts, about 0.65 swept back): each
+// transfer, deploy, send and sweep costs about 0.05 STRK, and the sweep's
+// reserve (three times its fee estimate) stays behind as dust. 50 STRK lasts
+// about 25 nights. The nightly's runway check (#976, PR 6) flags a low bank;
+// re-run this stage to refill.
 const BANK_FLOAT = 50n * STRK;
 const SENDER_FLOAT = 2n * STRK;
 const ETH_FLOAT = 10n ** 15n; // 0.001 ETH, for TX-01's one ETH self-transfer

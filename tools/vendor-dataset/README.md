@@ -73,7 +73,7 @@ extension.
   explicit Deploy, self-paid while Sepolia's relay offers no sponsorship. D5:
   an undeployed Braavos shows "Not deployed" until its explicit Deploy, then
   sends. Each address must match the dataset's own derivation. About 2
-  testnet STRK a run, mostly the sweep's reserve left as dust; a case that
+  testnet STRK a run, in fees and the sweep's reserve left as dust; a case that
   fails before deploying strands its 1 STRK float.
 - The test Ledger is optional. By default TA-32…TA-37 are skipped, so the run
   needs no device. With `BRAMBLE_SEPOLIA_LEDGER=1` the browser opens visibly and,

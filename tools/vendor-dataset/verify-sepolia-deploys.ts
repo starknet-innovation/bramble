@@ -106,8 +106,9 @@ const SPONSORED = /Network fee: paid by the /u;
 const SELF_PAID = /Maximum network fee: ([0-9]+(?:\.[0-9]+)?) STRK/u;
 
 /**
- * Deploys the active account from its Deploy screen. Returns whether the
- * wallet sponsored it; a self-paid fee above the cap is never confirmed.
+ * Activates `account` and deploys it from its Deploy screen. Returns whether
+ * the wallet sponsored it, and the transaction hash; a self-paid fee above the
+ * cap is never confirmed.
  */
 const deployFrom = async (session: Session, account: Throwaway): Promise<string> => {
   await activate(session, account.address);
