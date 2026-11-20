@@ -9,7 +9,10 @@
  *
  * Only `nightly.yml` may name either, each exactly twice: once as a boolean
  * saying whether it is configured, and once in the environment of its own live
- * step, which may not write to later steps. All four steps are pinned as text.
+ * step. All four steps are pinned as text, the live steps whole, `run:`
+ * included and nothing after it: they write the secret to a file, and an added
+ * line could copy it past the `trap` or hand it to later steps. The send step's
+ * job runs one at a time (`concurrency`), so two runs never race for nonces.
  * Every workflow is also refused the forms that hand every secret on at once,
  * and recording a Sepolia tape (network traffic not fit for a public
  * repository). The secrets context ignores case and accepts bracket access, so
@@ -33,6 +36,8 @@ type Confined = {
   readonly liveStep: string;
   readonly what: string;
   readonly step: string;
+  /** The job's concurrency line, when two runs must never overlap. */
+  readonly concurrency?: string;
 };
 
 const CONFINED: readonly Confined[] = [
@@ -50,6 +55,42 @@ const CONFINED: readonly Confined[] = [
         continue-on-error: true
         env:
           BRAMBLE_SEPOLIA_SEEDS: ${GITHUB_EXPRESSION} secrets.BRAMBLE_SEPOLIA_SEEDS }}
+        run: |
+          set -euo pipefail
+          if [ -z "\${BRAMBLE_SEPOLIA_SEEDS:-}" ]; then
+            echo "::error::The BRAMBLE_SEPOLIA_SEEDS secret is not set (tools/vendor-dataset/README.md)."
+            exit 1
+          fi
+          if [ ! -f tools/vendor-dataset/verify-sepolia.ts ]; then
+            echo "::error::This release branch predates the Sepolia runner (issue 821)."
+            exit 1
+          fi
+          umask 077
+          seeds="$RUNNER_TEMP/sepolia-seeds.env"
+          trap 'rm -f "$seeds"' EXIT
+          printf '%s\\n' "$BRAMBLE_SEPOLIA_SEEDS" > "$seeds"
+          unset BRAMBLE_SEPOLIA_SEEDS
+          # GitHub masks a multi-line secret line by line, and a line here is
+          # NAME="value", so each value is masked on its own as well.
+          while IFS= read -r line; do
+            value="\${line#*=}"
+            value="\${value%$'\\r'}"
+            value="\${value#"\${value%%[![:space:]]*}"}"
+            value="\${value%"\${value##*[![:space:]]}"}"
+            value="\${value#\\"}"
+            value="\${value%\\"}"
+            value="\${value#"\${value%%[![:space:]]*}"}"
+            value="\${value%"\${value##*[![:space:]]}"}"
+            if [ -n "$value" ]; then echo "::add-mask::$value"; fi
+          done < "$seeds"
+          # The newest committed scorecard, if this branch has one (dated names sort in order).
+          set -- "$RUNNER_TEMP/sepolia/scorecard.json"
+          for previous in tools/vendor-dataset/verification-sepolia-*.json; do
+            if [ -f "$previous" ]; then set -- "$RUNNER_TEMP/sepolia/scorecard.json" "$previous"; fi
+          done
+          mkdir -p "$RUNNER_TEMP/sepolia"
+          BRAMBLE_DATASET_ENV_FILE="$seeds" BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia \\
+            bun tools/vendor-dataset/verify-sepolia.ts "$@"
 `,
     what: "the Sepolia seed secret",
     step: "the Sepolia seeds",
@@ -68,9 +109,28 @@ const CONFINED: readonly Confined[] = [
         continue-on-error: true
         env:
           BRAMBLE_SEPOLIA_TXN_SEED: ${GITHUB_EXPRESSION} secrets.BRAMBLE_SEPOLIA_TXN_SEED }}
+        run: |
+          set -euo pipefail
+          if [ ! -f tools/vendor-dataset/sepolia-bank-runway.ts ]; then
+            echo "::error::This release branch predates the Sepolia send run (issue 976)."
+            exit 1
+          fi
+          umask 077
+          seeds="$RUNNER_TEMP/sepolia-txn-seed.env"
+          trap 'rm -f "$seeds"' EXIT
+          echo "::add-mask::$BRAMBLE_SEPOLIA_TXN_SEED"
+          printf 'BRAMBLE_DATASET_SEED_S_TXN="%s"\\n' "\${BRAMBLE_SEPOLIA_TXN_SEED//[$'\\r\\n']/}" > "$seeds"
+          unset BRAMBLE_SEPOLIA_TXN_SEED
+          export BRAMBLE_DATASET_ENV_FILE="$seeds" BRAMBLE_E2E_LIVE_NETWORK=1 BRAMBLE_DATASET_NETWORK=sepolia
+          bun tools/vendor-dataset/sepolia-bank-runway.ts
+          status=0
+          bun tools/vendor-dataset/verify-sepolia-sends.ts || status=1
+          bun tools/vendor-dataset/verify-sepolia-deploys.ts || status=1
+          exit "$status"
 `,
     what: "the Sepolia send seed secret",
     step: "the Sepolia send seed",
+    concurrency: "    concurrency: { group: sepolia-tx, cancel-in-progress: false }",
   },
 ];
 
@@ -92,10 +152,16 @@ const confinedFailures = (path: string, source: string, secret: Confined): strin
     `${path} must scope ${secret.step} to its live Sepolia step`,
   );
   if (uses !== 2) failures.push(`${path} must reference ${secret.what} exactly twice`);
+  // The pin is a substring match, so a line added after it would still run:
+  // the step runs on to the first line indented less than its own keys.
   const at = source.indexOf(secret.liveStep);
-  const step = at < 0 ? "" : source.slice(at, source.indexOf("\n      - ", at + 1));
-  if (/GITHUB_(?:ENV|OUTPUT|PATH|STEP_SUMMARY)/.test(step)) {
-    failures.push(`${path} must not let the live step holding ${secret.step} write to later steps`);
+  const rest = at < 0 ? "" : source.slice(at);
+  const end = rest.search(/\n(?! {8}|\n)/);
+  if (at >= 0 && rest.slice(0, end < 0 ? undefined : end).trimEnd() !== secret.liveStep.trimEnd()) {
+    failures.push(`${path} must not add to the live step holding ${secret.step}`);
+  }
+  if (secret.concurrency && !source.includes(secret.concurrency)) {
+    failures.push(`${path} must run the job holding ${secret.step} one at a time`);
   }
   return failures;
 };
