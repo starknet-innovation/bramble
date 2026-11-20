@@ -71,20 +71,24 @@ const group = async (
 ): Promise<void> => {
   // A pause between phrases keeps the run under the public node's rate limit.
   await pace(15_000);
-  let missed: readonly string[] = [];
-  try {
-    const { page } = await session.scan(phrase === null ? null : sepoliaSecret(phrase));
-    missed = await session.importRows(
-      page,
-      cards.map((card) => addressOf(card.id)),
-    );
-  } catch (error) {
-    missed = cards.map((card) => addressOf(card.id));
-    console.log(`   import failed: ${redact(String(error)).slice(0, 200)}`);
+  const addresses = cards.map((card) => addressOf(card.id));
+  let missed: readonly string[] = addresses;
+  let why = "not importable from the scan";
+  // The public node sometimes stops a scan ("temporarily unavailable"); one
+  // more try after a pause, since these imports come after a long run.
+  for (let tries = 0; tries < 2 && missed.length > 0; tries += 1) {
+    if (tries > 0) await pace(60_000);
+    try {
+      const { page } = await session.scan(phrase === null ? null : sepoliaSecret(phrase));
+      missed = await session.importRows(page, missed);
+    } catch (error) {
+      why = `import failed: ${redact(String(error).split("\n")[0] ?? "")}`;
+      console.log(`   ${why.slice(0, 200)}`);
+    }
   }
   for (const card of cards) {
     await attempt([card], async () => {
-      if (missed.includes(addressOf(card.id))) throw new Error("not importable from the scan");
+      if (missed.includes(addressOf(card.id))) throw new Error(why);
       return [await refusal(session, firewall, addressOf(card.id))];
     });
   }
