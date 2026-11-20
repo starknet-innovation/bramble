@@ -157,19 +157,30 @@ export const readActivityInput = (
   };
 };
 /**
- * Parses connected-site revocation messages and normalizes the origin.
+ * Parses connected-site revocation messages and normalizes the origin. An
+ * optional `accountId` (a vault account or multisig id) narrows the revoke to
+ * that one id; it must already be canonical, so a near-miss spelling is
+ * rejected rather than matched against some other grant.
  */
-export const readRevokeOriginInput = (message: unknown): { readonly origin: string } | null => {
+export const readRevokeOriginInput = (
+  message: unknown,
+): { readonly accountId?: string; readonly origin: string } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["origin", "type"]) ||
-    message["type"] !== "wallet.revokeOrigin"
+    !hasOnlyKnownKeys(message, ["accountId", "origin", "type"]) ||
+    message["type"] !== "wallet.revokeOrigin" ||
+    (message["accountId"] !== undefined && !isAccountId(message["accountId"]))
   ) {
     return null;
   }
 
   const origin = normalizeWalletOrigin(message["origin"]);
-  return origin ? { origin } : null;
+  if (!origin) {
+    return null;
+  }
+  return message["accountId"] === undefined
+    ? { origin }
+    : { accountId: message["accountId"], origin };
 };
 /**
  * Parses account-read messages and optional extension-page passphrases.

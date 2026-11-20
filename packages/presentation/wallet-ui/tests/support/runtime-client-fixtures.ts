@@ -78,7 +78,14 @@ export const classHashResponse = {
 
 export const connectedSitesResponse = {
   ok: true as const,
-  sites: [{ accountCount: 1, origin: "https://example.com" }],
+  sites: [
+    {
+      accountCount: 1,
+      accountIds: ["SN_MAIN:0x1"],
+      multisigIds: [],
+      origin: "https://example.com",
+    },
+  ],
 };
 
 export const pendingApprovalsResponse = {
