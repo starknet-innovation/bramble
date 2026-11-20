@@ -13,6 +13,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { encryptJson } from "@bramble/vault/encrypted-store";
 import { writeNostrCoordinationParity } from "./mobile-assets/write-nostr-coordination-parity";
 import { writeNostrMultisigParity } from "./mobile-assets/write-nostr-multisig-parity";
+import { computeMultisigTransactionFixture } from "./mobile-multisig-refusals";
 import {
   computeParityAccounts,
   computeUiParity,
@@ -115,6 +116,16 @@ console.log(`wrote ${VAULT_PARITY_FIXTURE_PATH}`);
 
 // The transaction fixture and Send copy tables are part of the same `bun run mobile:parity` run.
 await import("./generate-mobile-transaction-vectors");
+
+// So is the multisig transaction fixture (G5), deterministic and recomputed in full.
+const multisig = await computeMultisigTransactionFixture();
+for (const [path, part] of multisig) {
+  await writeFile(path, `${JSON.stringify(part, null, 2)}\n`);
+  console.log(`wrote ${path}`);
+}
+if (Bun.spawnSync(["bunx", "biome", "format", "--write", ...multisig.keys()]).exitCode !== 0) {
+  throw new Error("biome could not format the multisig transaction fixtures");
+}
 
 console.log(`wrote ${await writeNostrMultisigParity()}`);
 for (const path of await writeNostrCoordinationParity()) console.log(`wrote ${path}`);
