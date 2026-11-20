@@ -302,6 +302,18 @@ const registerCardCopy = (first: string | undefined) => {
   };
 };
 
+// One "What will happen" section: the request's summary lines, then the hint
+// that says what approving does and does not do. The hint follows the lines,
+// not instead of them: it carries the consequence ("It does not move funds"),
+// which the lines alone don't state.
+const strk20DisclosureOutcome = (approval: PendingApproval, hint: string): string =>
+  reviewOutcomeSection(
+    reviewCallItems(
+      reviewLines(approval.summaries ?? [], approval.summaryTexts),
+      approval.reviewAssets ?? [],
+    ) + `<p>${escapeHtml(hint)}</p>`,
+  );
+
 const strk20DisclosureCard = (
   approval: PendingApproval,
   status: WalletStatus,
@@ -316,7 +328,7 @@ const strk20DisclosureCard = (
     <div class="request-copy">
       ${requestIdentity(approval.origin, copy.title)}
       ${status.locked ? `<p class="hint">${escapeHtml(copy.lockedHint)}</p>` : ""}
-      ${approvalCalls(approval) || reviewOutcome(copy.hint)}
+      ${strk20DisclosureOutcome(approval, copy.hint)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...strk20DepositPayeeWarnings(approval), ...reviewLines(approval.insights ?? [], approval.insightTexts)])}
     ${reviewConstraints(t("approval.disclosure.constraints"))}

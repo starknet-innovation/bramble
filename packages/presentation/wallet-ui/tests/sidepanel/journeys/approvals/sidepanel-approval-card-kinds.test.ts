@@ -309,6 +309,9 @@ describe("approvalCard renders each approval kind", () => {
 
       expect(html).toContain(input.title);
       expect(html).toContain("Exact private request");
+      // The hint states the consequence, so it shows beside the summary lines.
+      expect(html).toContain(input.hint);
+      expect(html.indexOf("Exact private request")).toBeLessThan(html.indexOf(input.hint));
       expect(html).toContain("Technical details");
       expect(html).toContain(input.action);
     });
@@ -326,6 +329,8 @@ describe("approvalCard renders each approval kind", () => {
     );
 
     expect(html).toContain("Share all private token balances");
+    expect(html).toContain("reveals every private token balance discovered for this account");
+    expect(html).not.toContain("reveals only the listed");
     expect(html).not.toContain("No additional wallet warnings");
   });
 
