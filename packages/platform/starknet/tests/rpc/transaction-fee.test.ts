@@ -4,11 +4,35 @@
  * and a transport failure fails over like every other read.
  */
 import { describe, expect, test } from "bun:test";
+import { createRpcProvider } from "@bramble/starknet/provider";
 import { getTransactionFees, isTransactionFee, readReceiptFee } from "@bramble/starknet/rpc";
-import type { RpcProvider } from "starknet";
+import {
+  createTransactionReceipt,
+  logger,
+  ReceiptTx,
+  type RpcProvider,
+  type RpcProviderOptions,
+} from "starknet";
+
+logger.setLogLevel("FATAL");
 
 const nodeError = (code: number): Error =>
   Object.assign(new Error("rpc error"), { baseError: { code, message: "rpc error" } });
+
+// The object `getTransactionReceipt` actually returns: a ReceiptTx, not the JSON body.
+const libraryReceipt = (fields: Record<string, unknown>) =>
+  createTransactionReceipt({
+    execution_status: "SUCCEEDED",
+    finality_status: "ACCEPTED_ON_L2",
+    transaction_hash: "0x1",
+    type: "INVOKE",
+    ...fields,
+  } as Parameters<typeof createTransactionReceipt>[0]);
+
+const rpcReply = (result: unknown): Response =>
+  new Response(JSON.stringify({ id: 1, jsonrpc: "2.0", result }), {
+    headers: { "content-type": "application/json" },
+  });
 
 describe("readReceiptFee", () => {
   test("reads an RPC 0.7+ fee as a canonical felt with its unit", () => {
@@ -20,6 +44,44 @@ describe("readReceiptFee", () => {
       amount: "0x1",
       unit: "WEI",
     });
+  });
+
+  test("reads the fee starknet.js stores on ReceiptTx", () => {
+    const succeeded = libraryReceipt({ actual_fee: { amount: "0x00ABC", unit: "FRI" } });
+    const reverted = libraryReceipt({
+      actual_fee: { amount: "0x10", unit: "WEI" },
+      execution_status: "REVERTED",
+      revert_reason: "out of gas",
+    });
+    const constructed = new ReceiptTx({
+      actual_fee: { amount: "0x64", unit: "FRI" },
+      execution_status: "SUCCEEDED",
+      finality_status: "ACCEPTED_ON_L2",
+      transaction_hash: "0x1",
+      type: "INVOKE",
+    } as Parameters<typeof createTransactionReceipt>[0]);
+    expect(Object.getPrototypeOf(succeeded)).toBe(ReceiptTx.prototype);
+    expect(Object.getOwnPropertyDescriptor(constructed, "value")?.enumerable).toBe(false);
+    expect(readReceiptFee(succeeded)).toEqual({ amount: "0xabc", unit: "FRI" });
+    expect(readReceiptFee(reverted)).toEqual({ amount: "0x10", unit: "WEI" });
+    expect(readReceiptFee(constructed)).toEqual({ amount: "0x64", unit: "FRI" });
+  });
+
+  test("does not run a getter to recover a wrapped receipt", () => {
+    let ran = false;
+    const hostile: object = Object.create({ wrapped: true });
+    Object.defineProperty(hostile, "value", {
+      enumerable: true,
+      get() {
+        ran = true;
+        return { actual_fee: { amount: "0x1", unit: "FRI" } };
+      },
+    });
+    const boxed: object = Object.create({ wrapped: true });
+    Object.defineProperty(boxed, "value", { enumerable: false, value: 1 });
+    expect(readReceiptFee(hostile)).toBeUndefined();
+    expect(ran).toBe(false);
+    expect(readReceiptFee(boxed)).toBeUndefined();
   });
 
   test("drops a fee it cannot trust rather than guessing", () => {
@@ -62,7 +124,9 @@ describe("getTransactionFees", () => {
             if (hash === "0x2") {
               throw nodeError(29);
             }
-            return hash === "0x1" ? { actual_fee: { amount: "0x5", unit: "FRI" } } : {};
+            return hash === "0x1"
+              ? libraryReceipt({ actual_fee: { amount: "0x5", unit: "FRI" } })
+              : libraryReceipt({});
           },
         }) as unknown as RpcProvider,
     );
@@ -80,11 +144,64 @@ describe("getTransactionFees", () => {
             if (url === "https://down.example") {
               throw new TypeError("fetch failed");
             }
-            return { actual_fee: { amount: "0x7", unit: "WEI" } };
+            return libraryReceipt({ actual_fee: { amount: "0x7", unit: "WEI" } });
           },
         }) as unknown as RpcProvider,
     );
     expect(asked).toEqual(["https://down.example", "https://up.example"]);
     expect(fees).toEqual({ "0x1": { amount: "0x7", unit: "WEI" } });
+  });
+
+  test("reads succeeded and reverted FRI and WEI fees through RpcProvider", async () => {
+    const receipts: Readonly<Record<string, unknown>> = {
+      "0x1": {
+        actual_fee: { amount: "0x00ABC", unit: "FRI" },
+        execution_status: "SUCCEEDED",
+        finality_status: "ACCEPTED_ON_L2",
+        transaction_hash: "0x1",
+        type: "INVOKE",
+      },
+      "0x2": {
+        actual_fee: { amount: "0x010", unit: "WEI" },
+        execution_status: "SUCCEEDED",
+        finality_status: "ACCEPTED_ON_L2",
+        transaction_hash: "0x2",
+        type: "INVOKE",
+      },
+      "0x3": {
+        actual_fee: { amount: "0x064", unit: "FRI" },
+        execution_status: "REVERTED",
+        finality_status: "ACCEPTED_ON_L2",
+        revert_reason: "out of gas",
+        transaction_hash: "0x3",
+        type: "INVOKE",
+      },
+      "0x4": {
+        actual_fee: "0x1",
+        execution_status: "SUCCEEDED",
+        finality_status: "ACCEPTED_ON_L2",
+        transaction_hash: "0x4",
+        type: "INVOKE",
+      },
+    };
+    const baseFetch: NonNullable<RpcProviderOptions["baseFetch"]> = async (_input, init) => {
+      const request = JSON.parse(String(init?.body)) as {
+        readonly method: string;
+        readonly params?: { readonly transaction_hash?: string };
+      };
+      if (request.method !== "starknet_getTransactionReceipt") {
+        throw new Error(`unexpected ${request.method}`);
+      }
+      return rpcReply(receipts[request.params?.transaction_hash ?? ""]);
+    };
+    const fees = await getTransactionFees(
+      { hashes: ["0x1", "0x2", "0x3", "0x4", "0x1"], rpcUrls: ["https://rpc.example"] },
+      (nodeUrl) => createRpcProvider(nodeUrl, { baseFetch }),
+    );
+    expect(fees).toEqual({
+      "0x1": { amount: "0xabc", unit: "FRI" },
+      "0x2": { amount: "0x10", unit: "WEI" },
+      "0x3": { amount: "0x64", unit: "FRI" },
+    });
   });
 });

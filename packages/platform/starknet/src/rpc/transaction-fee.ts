@@ -8,6 +8,7 @@ import { hasOnlyKnownKeys, isRecord } from "@bramble/core/json";
 import { canonicalFelt, isStarkFieldElement } from "@bramble/wallet-model/networks";
 import type { RpcProvider } from "starknet";
 import { isTransportRpcError, withRpcFallback } from "./provider";
+import { receiptRecord } from "./receipt-record";
 import { TRANSACTION_STATUS_CONCURRENCY, type TransactionStatusInput } from "./transaction-status";
 
 /**
@@ -30,12 +31,13 @@ export const isTransactionFee = (value: unknown): value is TransactionFee =>
   canonicalFelt(value["amount"]) === value["amount"];
 
 /**
- * Reads the fee from one untrusted receipt. Only the RPC 0.7+ shape
- * (`{ amount, unit }`) is accepted; a bare felt carries no unit and is dropped
- * rather than guessed.
+ * Reads the fee from one untrusted receipt. A plain JSON-RPC body and
+ * starknet.js's `ReceiptTx` both work ({@link receiptRecord}). Only the RPC
+ * 0.7+ shape (`{ amount, unit }`) is accepted; a bare felt carries no unit and
+ * is dropped rather than guessed. A missing or malformed fee is undefined.
  */
 export const readReceiptFee = (receipt: unknown): TransactionFee | undefined => {
-  const fee = isRecord(receipt) ? receipt["actual_fee"] : undefined;
+  const fee = receiptRecord(receipt)?.["actual_fee"];
   if (!isRecord(fee)) {
     return undefined;
   }

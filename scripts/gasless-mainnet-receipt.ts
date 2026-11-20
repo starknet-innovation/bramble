@@ -6,6 +6,7 @@
 import { hash } from "starknet";
 import { isRecord } from "../packages/foundation/core/src/json";
 import { sameFelt, uint256Felts } from "../packages/foundation/wallet-model/src/networks/networks";
+import { receiptRecord } from "../packages/platform/starknet/src/rpc/receipt-record";
 
 const TRANSFER = hash.getSelectorFromName("Transfer");
 
@@ -13,9 +14,10 @@ const strings = (value: unknown): readonly string[] | null =>
   Array.isArray(value) && value.every((item) => typeof item === "string") ? value : null;
 
 const eventsOf = (receipt: unknown): readonly Record<string, unknown>[] => {
-  if (!isRecord(receipt)) return [];
-  const direct = receipt["events"];
-  const inner = isRecord(receipt["receipt"]) ? receipt["receipt"]["events"] : undefined;
+  const body = receiptRecord(receipt);
+  if (body === undefined) return [];
+  const direct = body["events"];
+  const inner = isRecord(body["receipt"]) ? body["receipt"]["events"] : undefined;
   const events = Array.isArray(direct) ? direct : inner;
   if (!Array.isArray(events)) return [];
   return events.filter(isRecord);
@@ -23,12 +25,13 @@ const eventsOf = (receipt: unknown): readonly Record<string, unknown>[] => {
 
 /**
  * Whether a receipt says the transaction executed successfully.
- * Accepts the JSON-RPC receipt and the starknet.js wrapper around it.
+ * Accepts the JSON-RPC body and starknet.js's ReceiptTx.
  */
 export const receiptSucceeded = (receipt: unknown): boolean => {
-  if (!isRecord(receipt)) return false;
-  if (receipt["execution_status"] === "SUCCEEDED") return true;
-  const inner = receipt["receipt"];
+  const body = receiptRecord(receipt);
+  if (body === undefined) return false;
+  if (body["execution_status"] === "SUCCEEDED") return true;
+  const inner = body["receipt"];
   return isRecord(inner) && inner["execution_status"] === "SUCCEEDED";
 };
 
@@ -36,9 +39,10 @@ export const receiptSucceeded = (receipt: unknown): boolean => {
  * Whether a receipt says the transaction reverted. Pending receipts are neither.
  */
 export const receiptReverted = (receipt: unknown): boolean => {
-  if (!isRecord(receipt)) return false;
-  if (receipt["execution_status"] === "REVERTED") return true;
-  const inner = receipt["receipt"];
+  const body = receiptRecord(receipt);
+  if (body === undefined) return false;
+  if (body["execution_status"] === "REVERTED") return true;
+  const inner = body["receipt"];
   return isRecord(inner) && inner["execution_status"] === "REVERTED";
 };
 
