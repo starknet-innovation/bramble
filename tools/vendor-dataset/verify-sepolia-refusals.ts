@@ -52,7 +52,7 @@ const refusal = async (
         sender: address,
         symbol: "STRK",
       });
-      message = "the wallet reported a submitted send";
+      message = "the wallet went on to submit";
     } catch (error) {
       message = `send stopped: ${String(error).split("\n")[0] ?? ""}${await shown(session)}`;
     }
@@ -101,7 +101,17 @@ export async function runRefusalChecks(
 ): Promise<void> {
   console.log("\n## Send is refused (SEND), behind the broadcast firewall");
   await group(session, firewall, null, [
-    row("s-brm/TA-08", "SEND", "owner changed: refused, nothing sent", { message: READ_ONLY }),
+    // Measured 2026-11-20: the wallet does not see that this OZ account's
+    // owner moved off the phrase's key, so it signs with the old key and goes
+    // to broadcast; the firewall blocks it, and the node would reject the
+    // signature anyway. Scored as "Now" so a fix shows up as a change.
+    row(
+      "s-brm/TA-08",
+      "SEND",
+      "signs with the stale key and tries to broadcast; the firewall blocks it",
+      { message: /firewall blocked a broadcast/u },
+      "Read only: owner key changed",
+    ),
   ]);
   await group(session, firewall, "S-SCR", [
     row("s-scr/TA-20", "SEND", "owner changed: 'Read only', nothing sent", { message: READ_ONLY }),
