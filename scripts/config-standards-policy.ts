@@ -142,6 +142,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run --filter @bramble/extension build",
   "build:all": "bun run --filter @bramble/extension build:all",
   "build:firefox": "bun run --filter @bramble/extension build:firefox",
+  "build-for-amo": "node scripts/build-for-amo.ts",
   check:
     "bun run check:types && bun run check:lint && bun run check:files && bun run check:copy && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:argent && bun run check:privacy && bun run check:ledger-app && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
