@@ -199,7 +199,7 @@ export const privacyMessages = {
     "privacy.settings.save": "保存隐私服务",
     "privacy.settings.shadowModule": "SDK 影子账户模块",
     "privacy.settings.shadowModuleHint":
-      "用于 shadow_account_invoke 的可选 SDK 模块。dapp 匿名器是经过审核的交易目标，不是网络设置。",
+      "用于 shadow_account_invoke 的可选 SDK 模块。Dapp 匿名器属于需在交易时审核的目标，而非网络设置。",
     "privacy.shadow.check": "检查余额",
     "privacy.shadow.empty": "还没有影子账户。",
     "privacy.shadow.loading": "正在加载影子账户…",
