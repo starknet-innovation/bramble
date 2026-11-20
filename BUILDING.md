@@ -28,8 +28,9 @@ above. They were verified on the `v0.10.5` source with Bun 1.3.3 (macOS arm64): 
 independent rebuilds from the same source archive produced byte-identical
 `bramble-firefox-0.10.5.zip` files. Releases built before the Bun pin (for example
 `v0.10.3`, built with Bun 1.4.2) do not reproduce with this recipe. On the `v0.10.10`
-source, `npm run build-for-amo` (Node.js 24, no Bun installed beforehand) and the manual
-steps produced byte-identical zips, also on macOS arm64. Before submitting,
+source, `npm run build-for-amo` (Node.js 24, no Bun installed beforehand) produced the
+same zip on macOS arm64 and in an x86_64 Ubuntu 24.04 container run as root, and the
+manual steps matched it byte for byte. Before submitting,
 confirm that a rebuild on Ubuntu matches the submitted archive's checksum, which is the
 check the reviewer will perform.
 
