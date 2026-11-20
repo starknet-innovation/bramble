@@ -136,18 +136,20 @@ export const isLedgerGrantTabOrphaned = async (
 };
 
 /**
- * Resolves true once the panel lock is released, which means the panel is
- * gone. The panel takes the lock before it creates the grant tab, so one
- * query is enough: when no lock is there (no Web Locks in the panel, or its
- * request failed) this resolves false and the idle timer stays the backstop.
+ * Waits until the panel lock is released, then runs `onGone` while this tab
+ * still holds the shared lock. A reconnect can see that hold and tell the tab
+ * is ours until the device is free. The panel takes the lock before it creates
+ * the grant tab, so one query is enough: when no lock is there this returns
+ * false and does not call `onGone`, and the idle timer stays the backstop.
  */
 export const watchLedgerPanelLock = async (
   locks: LedgerLockManager,
   sessionId: string,
+  onGone: () => Promise<void>,
 ): Promise<boolean> => {
   if (!locks.query) return false;
   if (!(await isLedgerPanelLockLive(locks, sessionId))) return false;
   // Shared, so this wait is not mistaken for the panel's exclusive hold.
-  await locks.request(ledgerPanelLockName(sessionId), async () => undefined, "shared");
+  await locks.request(ledgerPanelLockName(sessionId), () => onGone(), "shared");
   return true;
 };

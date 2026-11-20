@@ -55,6 +55,11 @@ type GrantContext = {
   readonly tabId?: number;
 };
 
+type GrantTab = {
+  readonly pendingUrl?: string;
+  readonly url?: string;
+};
+
 type ExtensionGlobal = {
   readonly runtime?: {
     readonly getContexts?: (filter: {
@@ -63,6 +68,7 @@ type ExtensionGlobal = {
     readonly getURL?: (path: string) => string;
   };
   readonly tabs?: {
+    readonly get?: (tabId: number) => Promise<GrantTab | undefined>;
     readonly remove?: (tabId: number) => Promise<void>;
   };
 };
@@ -70,6 +76,21 @@ type ExtensionGlobal = {
 const extensionGlobal = (): ExtensionGlobal | undefined => {
   const scope = globalThis as { browser?: ExtensionGlobal; chrome?: ExtensionGlobal };
   return scope.browser ?? scope.chrome;
+};
+
+const isGrantPage = (url: string | undefined, prefix: string): boolean =>
+  typeof url === "string" && url.startsWith(prefix);
+
+// The context list is a snapshot. The tab can navigate before `tabs.remove`,
+// so the URL is read again and a tab that has left the grant page is kept.
+const grantTabStillThere = async (
+  extension: ExtensionGlobal,
+  tabId: number,
+  prefix: string,
+): Promise<boolean> => {
+  const tab = await extension.tabs?.get?.(tabId).catch(() => undefined);
+  if (!tab || !isGrantPage(tab.url, prefix)) return false;
+  return tab.pendingUrl === undefined || isGrantPage(tab.pendingUrl, prefix);
 };
 
 /**
@@ -95,6 +116,8 @@ const releaseOrphanLedgerGrantTabs = async (): Promise<boolean> => {
     if (!sessionId) continue;
     const orphaned = await isLedgerGrantTabOrphaned(locks, sessionId).catch(() => false);
     if (!orphaned) continue;
+    const stillThere = await grantTabStillThere(extension, context.tabId, prefix);
+    if (!stillThere) continue;
     const removed = await remove(context.tabId).then(
       () => true,
       () => false,

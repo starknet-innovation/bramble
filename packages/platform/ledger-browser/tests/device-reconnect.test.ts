@@ -148,6 +148,15 @@ const locksHolding = (...sessions: string[]) => ({
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+const grantTabs = (
+  url: string,
+  remove: (tabId: number) => Promise<void>,
+  current?: { readonly pendingUrl?: string; readonly url?: string },
+) => ({
+  get: async () => current ?? { url },
+  remove,
+});
+
 afterEach(() => {
   setNav("usb", undefined);
   setNav("hid", undefined);
@@ -202,11 +211,9 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 11 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: {
-        remove: async () => {
-          device.blocked = false;
-        },
-      },
+      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async () => {
+        device.blocked = false;
+      }),
     };
 
     const session = await ledgerConnector.openConnected();
@@ -239,12 +246,10 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 7 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: {
-        remove: async () => {
-          await grant.releaseInterface();
-          await grant.close();
-        },
-      },
+      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async () => {
+        await grant.releaseInterface();
+        await grant.close();
+      }),
     };
 
     const session = await ledgerConnector.openConnected();
@@ -301,12 +306,10 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 8 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: {
-        remove: async () => {
-          await grant.releaseInterface();
-          await grant.close();
-        },
-      },
+      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async () => {
+        await grant.releaseInterface();
+        await grant.close();
+      }),
     };
 
     const session = await ledgerConnector.openConnected();
@@ -328,12 +331,10 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 12 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: {
-        remove: async (tabId: number) => {
-          removed.push(tabId);
-          await grant.releaseInterface();
-        },
-      },
+      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async (tabId) => {
+        removed.push(tabId);
+        await grant.releaseInterface();
+      }),
     };
 
     const error = await ledgerConnector.openConnected().catch((caught: unknown) => caught);
@@ -355,11 +356,9 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${LIVE}`, tabId: 9 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: {
-        remove: async (tabId: number) => {
-          removed.push(tabId);
-        },
-      },
+      tabs: grantTabs(`${PREFIX}#session=${LIVE}`, async (tabId) => {
+        removed.push(tabId);
+      }),
     };
 
     const error = await ledgerConnector.openConnected().catch((caught: unknown) => caught);
@@ -386,11 +385,9 @@ describe("cable reconnect stale handles", () => {
         getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 7 }],
         getURL: (path: string) => `chrome-extension://bramble/${path}`,
       },
-      tabs: {
-        remove: async () => {
-          throw new Error("No tab with id: 7.");
-        },
-      },
+      tabs: grantTabs(`${PREFIX}#session=${ORPHAN}`, async () => {
+        throw new Error("No tab with id: 7.");
+      }),
     };
 
     try {
@@ -400,5 +397,82 @@ describe("cable reconnect stale handles", () => {
     } finally {
       FakeUSBDevice.prototype.claimInterface = original;
     }
+  });
+
+  test("a grant tab that has started navigating away is not closed", async () => {
+    const host = new UsbHost();
+    const grant = new FakeUSBDevice(host);
+    await grant.open();
+    await grant.claimInterface();
+    setNav("usb", usbApi(new FakeUSBDevice(host)));
+    setNav("locks", locksPanelLeft(ORPHAN));
+    const removed: number[] = [];
+    scope.chrome = {
+      runtime: {
+        getContexts: async () => [{ documentUrl: `${PREFIX}#session=${ORPHAN}`, tabId: 13 }],
+        getURL: (path: string) => `chrome-extension://bramble/${path}`,
+      },
+      tabs: grantTabs(
+        `${PREFIX}#session=${ORPHAN}`,
+        async (tabId) => {
+          removed.push(tabId);
+          await grant.releaseInterface();
+        },
+        { pendingUrl: "https://example.com/", url: `${PREFIX}#session=${ORPHAN}` },
+      ),
+    };
+
+    const error = await ledgerConnector.openConnected().catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: "device-busy" });
+    expect(removed).toEqual([]);
+    expect(grant.claimed).toBe(true);
+  });
+
+  test("a repeated close waits for the same teardown", async () => {
+    const device = new FakeHIDDevice();
+    scope.window = globalThis;
+    setNav("hid", hidApi(device));
+    const session = await ledgerConnector.openConnected();
+    const first = session?.close();
+    const second = session?.close();
+    expect(first).toBe(second);
+    await first;
+    expect(device.opened).toBe(false);
+  });
+
+  test("a close that does not finish rejects the next open", async () => {
+    const device = new FakeHIDDevice();
+    let releaseClose = (): void => undefined;
+    device.close = () =>
+      new Promise((resolve) => {
+        releaseClose = () => {
+          device.opened = false;
+          resolve();
+        };
+      });
+    scope.window = globalThis;
+    setNav("hid", hidApi(device));
+    const session = await ledgerConnector.openConnected();
+    expect(device.opened).toBe(true);
+    const closing = session?.close() ?? Promise.resolve();
+    const next = ledgerConnector.openConnected();
+    const [closeError, openError] = await Promise.all([
+      closing.catch((error: unknown) => error),
+      next.catch((error: unknown) => error),
+    ]);
+    expect(closeError).toMatchObject({ code: "replug" });
+    expect(openError).toMatchObject({ code: "replug" });
+    expect(device.opened).toBe(true);
+    releaseClose();
+    await tick();
+    await tick();
+    device.close = async () => {
+      device.opened = false;
+    };
+    const recovered = await ledgerConnector.openConnected();
+    expect(recovered).toBeTruthy();
+    expect(device.opened).toBe(true);
+    await recovered?.close();
+    expect(device.opened).toBe(false);
   });
 });

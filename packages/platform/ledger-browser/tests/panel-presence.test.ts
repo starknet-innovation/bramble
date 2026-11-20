@@ -91,9 +91,11 @@ describe("ledger panel lock", () => {
     const fake = manager();
     const release = await holdLedgerPanelLock(fake.locks, SESSION);
     let gone = false;
-    const watching = watchLedgerPanelLock(fake.locks, SESSION).then((value) => {
-      gone = value;
-    });
+    const watching = watchLedgerPanelLock(fake.locks, SESSION, async () => undefined).then(
+      (value) => {
+        gone = value;
+      },
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(gone).toBe(false);
     release();
@@ -103,8 +105,12 @@ describe("ledger panel lock", () => {
 
   test("watch does not fire when the panel never took the lock", async () => {
     const fake = manager();
-    const gone = await watchLedgerPanelLock(fake.locks, SESSION);
+    let released = false;
+    const gone = await watchLedgerPanelLock(fake.locks, SESSION, async () => {
+      released = true;
+    });
     expect(gone).toBe(false);
+    expect(released).toBe(false);
   });
 
   test("a lock request that fails before granting resolves to a no-op", async () => {
@@ -120,7 +126,7 @@ describe("ledger panel lock", () => {
     const fake = manager();
     expect(await isLedgerPanelLockLive(fake.locks, SESSION)).toBe(false);
     const release = await holdLedgerPanelLock(fake.locks, SESSION);
-    const watching = watchLedgerPanelLock(fake.locks, SESSION);
+    const watching = watchLedgerPanelLock(fake.locks, SESSION, async () => undefined);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(await isLedgerPanelLockLive(fake.locks, SESSION)).toBe(true);
     release();
@@ -150,6 +156,24 @@ describe("ledger panel lock", () => {
     expect(await isLedgerGrantTabOrphaned(fake.locks, SESSION)).toBe(true);
     finish();
     await waiting;
+  });
+
+  test("the shared lock stays held until the device release finishes", async () => {
+    const fake = manager();
+    const release = await holdLedgerPanelLock(fake.locks, SESSION);
+    let finish = (): void => undefined;
+    const releasing = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const watching = watchLedgerPanelLock(fake.locks, SESSION, () => releasing);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await isLedgerGrantTabOrphaned(fake.locks, SESSION)).toBe(false);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await isLedgerGrantTabOrphaned(fake.locks, SESSION)).toBe(true);
+    finish();
+    await watching;
+    expect(await isLedgerGrantTabOrphaned(fake.locks, SESSION)).toBe(false);
   });
 
   test("a missing lock manager does not block the caller", async () => {

@@ -474,11 +474,11 @@ const render = (): void => {
     void release();
   });
 
-  // When the panel's document is gone its lock drops and this tab lets go of the device.
+  // Let go of the device while the shared lock is still held, so a reconnect
+  // can tell this tab is ours until the Ledger is free.
   const panelLocks = sessionId ? browserLedgerLocks() : null;
   if (sessionId && panelLocks) {
-    const onPanelGone = (gone: boolean): void => (gone ? void release() : undefined);
-    watchLedgerPanelLock(panelLocks, sessionId).then(onPanelGone, () => undefined);
+    watchLedgerPanelLock(panelLocks, sessionId, () => release()).catch(() => undefined);
   }
 
   if (!sessionId) {

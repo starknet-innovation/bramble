@@ -40,8 +40,47 @@ const sessionFrom = (transport: LedgerTransport): LedgerDeviceSession => ({
 // One device session per page. The next open waits until this session's close
 // has finished, so a cancel and a reconnect cannot claim the browser device
 // at the same time. A thrown open releases the turn; a returned session holds
-// it until `close`.
+// it until `close`. A close that does not finish is bounded: later opens fail
+// with `replug` instead of claiming the device a second time, until that
+// teardown actually ends.
+const CLOSE_BUDGET_MS = 2_000;
+
 let sessionTurn: Promise<void> = Promise.resolve();
+let closeStillRunning: Promise<void> | null = null;
+
+const settledClose = (done: Promise<void>): Promise<void> =>
+  done.then(
+    () => undefined,
+    () => undefined,
+  );
+
+const rememberHungClose = (done: Promise<void>): void => {
+  closeStillRunning = settledClose(done).finally(() => {
+    closeStillRunning = null;
+  });
+};
+
+const closeError = (error: unknown): Error =>
+  error instanceof Error ? error : new LedgerRejection("replug");
+
+const finishClose = (done: Promise<void>, release: () => void): Promise<void> =>
+  new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (timedOut: boolean, error?: unknown): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (timedOut) rememberHungClose(done);
+      release();
+      if (error === undefined) resolve();
+      else reject(error);
+    };
+    const timer = setTimeout(() => finish(true, new LedgerRejection("replug")), CLOSE_BUDGET_MS);
+    done.then(
+      () => finish(false),
+      (error: unknown) => finish(false, closeError(error)),
+    );
+  });
 
 const withSessionTurn = async (
   open: () => Promise<LedgerDeviceSession | null>,
@@ -53,24 +92,23 @@ const withSessionTurn = async (
   const previous = sessionTurn;
   sessionTurn = gate;
   await previous;
+  if (closeStillRunning) {
+    release();
+    throw new LedgerRejection("replug");
+  }
   try {
     const session = await open();
     if (!session) {
       release();
       return null;
     }
-    let settled = false;
+    let closing: Promise<void> | null = null;
     return {
       client: session.client,
       ...(session.readiness ? { readiness: session.readiness } : {}),
-      close: async () => {
-        if (settled) return;
-        settled = true;
-        try {
-          await session.close();
-        } finally {
-          release();
-        }
+      close: () => {
+        closing ??= finishClose(session.close(), release);
+        return closing;
       },
     };
   } catch (error) {
