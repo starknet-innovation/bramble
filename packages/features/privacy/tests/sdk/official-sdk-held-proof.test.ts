@@ -7,8 +7,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { WalletError } from "@bramble/core/errors";
+import { createStrk20MaturityStore } from "@bramble/privacy/maturity-store";
 import { createOfficialStrk20Service } from "@bramble/privacy/official-sdk-service";
 import type { Strk20HeldProofRequest } from "@bramble/privacy/service";
+import { createMemoryStore } from "@bramble/store/kv";
 import {
   officialBuilder as builder,
   STRK20_SDK_CONTEXT as context,
@@ -116,6 +118,32 @@ describe("held proof requests", () => {
       }),
     ).rejects.toThrow("Waiting for co-owners");
     expect(proved).toHaveLength(0);
+  });
+
+  test("records a write another path broadcast in the account's journal", async () => {
+    const kv = createMemoryStore();
+    const service = createOfficialStrk20Service({
+      maturityStore: createStrk20MaturityStore(kv),
+      providerFor,
+      sdk: runtime(() => ({
+        build: () => builder(),
+        discoverNotes: async () => ({ notes: new Map() }),
+        executeWithInvocation: async () => executeResult(),
+      })),
+    });
+    const hash = `0x4${"b".repeat(62)}`;
+    await service.recordSubmission?.(context, hash);
+    expect(await kv.get("bramble:strk20-maturity")).toMatchObject([
+      {
+        accountId: context.account.id,
+        acceptedBlock: 10,
+        state: "submitted",
+        transactionHash: hash,
+      },
+    ]);
+    await expect(service.recordSubmission?.({ ...context, rpcUrls: [] }, hash)).rejects.toThrow(
+      "no RPC endpoint",
+    );
   });
 
   test("an account without the hooks proves its compile directly", async () => {

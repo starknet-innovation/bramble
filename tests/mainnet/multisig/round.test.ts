@@ -16,10 +16,9 @@ import {
   sweepableAmount,
   withdrawableAmount,
 } from "./round-budget";
-import { strkTransferCall } from "./round-chain";
 import { ownerPhrase } from "./round-owners";
+import { isLaggingNode, strkLabel, strkTransferCall } from "./round-rules";
 import { parseRoundRecord } from "./round-state";
-import { isLaggingNode } from "./round-wallets";
 
 const STRK = 10n ** 18n;
 // Full-length felts: a short stub would pass a check a real address fails.
@@ -99,6 +98,13 @@ describe("resuming a kept round", () => {
     const progress = { privateBalance: plan.deposit, registered: true };
     expect(depositDone(plan, progress)).toBe(true);
     expect(resumeFunding(plan, progress)).toBe(0n);
+  });
+
+  test("does not count a balance short of a whole deposit as done", () => {
+    // As after the pool fee rose: enough for one relayed action, not two.
+    const progress = { privateBalance: plan.deposit - 1n, registered: true };
+    expect(depositDone(plan, progress)).toBe(false);
+    expect(resumeFunding(plan, progress)).toBeGreaterThan(0n);
   });
 
   test("funds only the deposit and its fees once registered", () => {
@@ -196,6 +202,12 @@ describe("lagging RPC node", () => {
     const share = { type: "wallet.shareArgentMultisigStrk20Authorization" };
     expect(isLaggingNode(share, { error: "Invalid Argent multisig private proof" })).toBe(false);
     expect(isLaggingNode(share, { ok: true })).toBe(false);
+  });
+});
+
+describe("STRK label", () => {
+  test("reads FRI as decimal STRK", () => {
+    expect(strkLabel(3n * STRK + STRK / 4n)).toBe("3.25");
   });
 });
 

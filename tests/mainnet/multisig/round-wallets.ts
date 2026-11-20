@@ -7,15 +7,17 @@
  */
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { isRecord } from "@bramble/core/json";
 import { sameFelt } from "@bramble/wallet-model/networks";
 import type { Page } from "@playwright/test";
 import { type LoadedExtension, launchExtension } from "../../e2e/extension-fixture";
 import { importWalletFromPhrase, sendRuntimeMessage, unlockWallet } from "../../e2e/wallet-helpers";
 import type { OwnerRole } from "./round-owners";
+import { isLaggingNode, type WalletMessage, walletRefusal } from "./round-rules";
 import { ownerProfile } from "./round-state";
 
 const UNLOCK_TIMEOUT_MS = 30_000;
+const LAGGING_NODE_RETRIES = 4;
+const LAGGING_NODE_PAUSE_MS = 3_000;
 const LOCKED = "wallet locked";
 
 /** One co-owner's wallet and the public identity the other owner saves. */
@@ -43,38 +45,6 @@ type StatusReply = {
   readonly networkId?: string;
 };
 
-/** A background message: its type and whatever fields that type takes. */
-export type WalletMessage = Readonly<Record<string, unknown>> & { readonly type: string };
-
-const LAGGING_NODE_RETRIES = 4;
-// A pinned read a lagging node could not answer, and the wallet's wording for
-// a signer-set read that failed the same way right after a deploy.
-const LAGGING_NODE = /Block not found|signers aren't available yet/;
-const LAGGING_NODE_PAUSE_MS = 3_000;
-// Messages that broadcast. They are never repeated by this helper, though the
-// wallet guards each against sending twice.
-const BROADCASTS: ReadonlySet<string> = new Set([
-  "wallet.deployArgentMultisig",
-  "wallet.submitArgentMultisigIntent",
-  "wallet.submitArgentMultisigStrk20Relay",
-]);
-
-/**
- * True when `reply` is a read a lagging node could not answer (a JSON-RPC 24,
- * "Block not found", or a signer set not yet readable) for a message that
- * does not broadcast. The shared RPC load-balances across nodes that can be a
- * block apart; the wallet re-pins three times, and a round makes enough pinned
- * reads that a short lag can still exhaust them. The read failed before the
- * message acted, so asking again is safe.
- */
-export const isLaggingNode = (message: WalletMessage, reply: unknown): boolean => {
-  const refusal = errorOf(reply);
-  return refusal !== null && !BROADCASTS.has(message.type) && LAGGING_NODE.test(refusal);
-};
-
-const errorOf = (reply: unknown): string | null =>
-  isRecord(reply) && typeof reply["error"] === "string" ? reply["error"] : null;
-
 const unlock = async (page: Page): Promise<void> => {
   await page.reload();
   const gate = page.locator('input[name="vaultPassphrase"]');
@@ -94,7 +64,7 @@ const unlock = async (page: Page): Promise<void> => {
  */
 export const callWallet = async <T>(page: Page, message: WalletMessage): Promise<T> => {
   let reply = await sendRuntimeMessage<unknown>(page, message);
-  if (errorOf(reply) === LOCKED) {
+  if (walletRefusal(reply) === LOCKED) {
     await unlock(page);
     reply = await sendRuntimeMessage<unknown>(page, message);
   }
@@ -102,7 +72,7 @@ export const callWallet = async <T>(page: Page, message: WalletMessage): Promise
     await new Promise((resolve) => setTimeout(resolve, LAGGING_NODE_PAUSE_MS * retry));
     reply = await sendRuntimeMessage<unknown>(page, message);
   }
-  const refusal = errorOf(reply);
+  const refusal = walletRefusal(reply);
   if (refusal !== null) {
     throw new Error(`${message.type}: ${refusal}`);
   }

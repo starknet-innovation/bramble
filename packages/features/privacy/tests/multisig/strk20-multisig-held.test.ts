@@ -11,6 +11,7 @@ import {
   type MultisigStrk20HeldProof,
   multisigStrk20ExecuteCalldata,
   multisigStrk20HeldEnvelope,
+  multisigStrk20HeldPlan,
   sameMultisigStrk20Felts,
 } from "@bramble/privacy/multisig-strk20-held";
 import { createMultisigStrk20Store } from "@bramble/privacy/multisig-strk20-store";
@@ -73,6 +74,16 @@ describe("held request rows", () => {
     await expect(store.putHeld(bad as MultisigStrk20HeldProof)).resolves.toBe("invalid");
     await expect(store.putHeld(row(ACCOUNT_ID, 1), () => false)).resolves.toBe("unauthorized");
     await expect(store.listHeld(ACCOUNT_ID)).resolves.toEqual([]);
+  });
+});
+
+describe("held relay plans", () => {
+  test("are kept as plain JSON, and refused when not JSON or too large", () => {
+    const plan = { feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" } };
+    expect(multisigStrk20HeldPlan(plan)).toEqual(plan);
+    expect(multisigStrk20HeldPlan({ amount: 1n })).toBeNull();
+    expect(multisigStrk20HeldPlan({ blob: "x".repeat(20_000) })).toBeNull();
+    expect(multisigStrk20HeldPlan("not a record")).toBeNull();
   });
 });
 

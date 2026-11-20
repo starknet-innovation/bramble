@@ -60,6 +60,7 @@ export const randomizedStrk20Sdk = (
     async poolFee() {
       return "0x1";
     },
+    // Required by the multisig session, which never calls it on this path.
     async prepare() {
       throw new Error("unused");
     },

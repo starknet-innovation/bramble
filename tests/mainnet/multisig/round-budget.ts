@@ -113,11 +113,13 @@ export type RoundProgress = {
 };
 
 /**
- * True when a kept multisig already holds a deposit's worth privately, so the
- * round goes straight to the relayed actions.
+ * True when a kept multisig already holds a whole deposit privately at the
+ * current pool fee: enough for both relayed actions' pool and relay fees plus
+ * the transfer principal. The round then goes straight to those actions. A
+ * smaller balance, as after the pool fee rose, is topped up with a deposit.
  */
 export const depositDone = (plan: RoundPlan, progress: RoundProgress): boolean =>
-  progress.registered && progress.privateBalance >= plan.deposit - plan.poolFee;
+  progress.registered && progress.privateBalance >= plan.deposit;
 
 /**
  * Public STRK a deployed multisig must hold for the steps it has left. Nothing

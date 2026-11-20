@@ -5,44 +5,14 @@
  */
 import { STRK20_MAINNET_POOL } from "@bramble/privacy/config";
 import { getDeploymentStatus } from "@bramble/starknet/deployment";
-import { buildErc20TransferCall, formatTokenAmount } from "@bramble/starknet/rpc";
-import {
-  canonicalFelt,
-  STRK_TOKEN_ADDRESS,
-  STRK_TOKEN_DECIMALS,
-} from "@bramble/wallet-model/networks";
-import { Account, num, RpcProvider } from "starknet";
+import { buildErc20TransferCall } from "@bramble/starknet/rpc";
+import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
+import { Account, RpcProvider } from "starknet";
 import type { LocalMainnetAccount } from "../local-mainnet-account";
 import { readPublicBalance, waitForSuccessfulReceipt } from "../local-mainnet-chain";
 import { ROUND_LIMITS } from "./round-budget";
 
-/** A call in the canonical shape the wallet freezes into a multisig transaction. */
-export type CanonicalCall = {
-  readonly calldata: readonly string[];
-  readonly contractAddress: string;
-  readonly entrypoint: string;
-};
-
-const canonical = (value: unknown): string => {
-  const felt = canonicalFelt(num.toHex(value as Parameters<typeof num.toHex>[0]));
-  if (felt === null) {
-    throw new Error("A call field is not a felt.");
-  }
-  return felt;
-};
-
-/** One STRK transfer of `amount` FRI to `recipient`, with canonical felts. */
-export const strkTransferCall = (recipient: string, amount: bigint): CanonicalCall => {
-  const call = buildErc20TransferCall(STRK_TOKEN_ADDRESS, recipient, amount);
-  return {
-    calldata: (call.calldata as readonly unknown[]).map(canonical),
-    contractAddress: canonical(call.contractAddress),
-    entrypoint: call.entrypoint,
-  };
-};
-
-/** STRK in FRI as the decimal figure a person would read. */
-export const strkLabel = (raw: bigint): string => formatTokenAmount(raw, STRK_TOKEN_DECIMALS);
+export { strkLabel, strkTransferCall } from "./round-rules";
 
 /** Public STRK balance of `address`, in FRI. */
 export const publicStrk = async (rpcUrl: string, address: string): Promise<bigint> =>
