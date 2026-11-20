@@ -25,6 +25,9 @@ const SEPOLIA_SECRETS = {
   "S-W15": "BRAMBLE_DATASET_SEED_S_W15",
   "S-W18": "BRAMBLE_DATASET_SEED_S_W18",
   "S-W21": "BRAMBLE_DATASET_SEED_S_W21",
+  // The nightly send suite's own seed (issue 976): TX-00 (its bank) to TX-10.
+  // Sends and deploys run only from it, never from the import fixtures above.
+  "S-TXN": "BRAMBLE_DATASET_SEED_S_TXN",
   // Standalone hex keys: TA-05 OZ key, TA-08/TA-20 rotation targets, the
   // TA-12/13/15 guardian, TA-25 secp256k1 owner, TA-29 P-256 2FA signer, and
   // TA-07's key from `sncast account create --type oz`.

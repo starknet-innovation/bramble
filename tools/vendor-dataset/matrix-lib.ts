@@ -48,6 +48,9 @@ export const CLASSES = {
   argent050: "0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2",
   braavosImpl110: "0x02c8c7e6fbcfb3e8e15a46648e8914c6aa1fc506fc1e7fb3d1e19630716174bc",
   oz300: "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+  // What `sncast account create --type oz` (0.59.0) picks: the older
+  // OpenZeppelin class starknet-devnet also predeploys (TA-07, TX-10).
+  ozSncast: "0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
 } as const;
 
 // The Universal Deployer Contract, at the same address on mainnet and Sepolia.
@@ -119,6 +122,20 @@ export function braavosKeypair(mnemonic: string, index: number): Keypair {
   return { priv, pub: getStarkKey(priv) };
 }
 
+/**
+ * A standalone key derived from `mnemonic` on a path no vendor ladder or scan
+ * walks (the BIP-44 change branch, 1), for accounts that must import by key
+ * only and never surface in a phrase scan (S-TXN's TX-09, TX-10).
+ */
+export function offLadderKeypair(mnemonic: string, index: number): Keypair {
+  const node = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive(
+    `m/44'/9004'/0'/1/${index}`,
+  );
+  if (!node.privateKey) throw new Error("derivation failed");
+  const priv = `0x${grindKey(node.privateKey)}`;
+  return { priv, pub: getStarkKey(priv) };
+}
+
 /** Bramble (Krusty semantics): BIP-39 seed directly, account axis. */
 export function brambleKeypair(mnemonic: string, account: number): Keypair {
   const node = HDKey.fromMasterSeed(mnemonicToSeedSync(mnemonic)).derive(
@@ -158,12 +175,15 @@ export function deployerAccount(): Account {
   return new Account({ provider, address, signer: priv, cairoVersion: "1" });
 }
 
-export async function tokenBalance(token: keyof typeof TOKENS, holder: string): Promise<bigint> {
-  const res = await provider.callContract({
-    contractAddress: TOKENS[token].address,
-    entrypoint: "balanceOf",
-    calldata: [holder],
-  });
+export async function tokenBalance(
+  token: keyof typeof TOKENS,
+  holder: string,
+  block: "latest" | "pre_confirmed" = "latest",
+): Promise<bigint> {
+  const res = await provider.callContract(
+    { contractAddress: TOKENS[token].address, entrypoint: "balanceOf", calldata: [holder] },
+    block,
+  );
   const [low, high] = res;
   if (low === undefined || high === undefined)
     throw new Error(`balanceOf returned ${res.length} felts`);
