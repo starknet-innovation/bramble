@@ -8,8 +8,9 @@ import { getDeploymentStatus } from "@bramble/starknet/deployment";
 import { buildErc20TransferCall } from "@bramble/starknet/rpc";
 import { STRK_TOKEN_ADDRESS } from "@bramble/wallet-model/networks";
 import { Account, RpcProvider } from "starknet";
+import { waitForSuccessfulReceipt } from "../../live/chain";
 import type { LocalMainnetAccount } from "../local-mainnet-account";
-import { readPublicBalance, waitForSuccessfulReceipt } from "../local-mainnet-chain";
+import { readPublicBalance } from "../local-mainnet-chain";
 import { ROUND_LIMITS } from "./round-budget";
 
 export { strkLabel, strkTransferCall } from "./round-rules";

@@ -1,0 +1,247 @@
+{
+  "s-txn/TX-00": {
+    "id": "s-txn/TX-00",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "bramble-account",
+    "index": 0,
+    "address": "0x28bd0a03df077603f0905234f00f86e5d00d98eab6210b7cfde06b933a9c31c",
+    "pubkey": "0x50fff7654d6b0edc53f31794c0d5afcddc02348f95fc71c28677708e1bf73d2",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "the send suite's bank: funds its throwaway deploy accounts; never sent from in the UI",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x0",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
+    },
+    "log": [
+      "funded STRK 0x66d2c6974cc4b5747e6b0ec2e7b4c4f9e3bde87026ef7dc8bb818cd6d8bdf6b",
+      "deployed 0x1348790229c139159a677b86f852f32516150c1b5fbd709501d6fab82e30f04",
+      "funded STRK 0x7be5e17b4aeb2886b6d85b60a90c40ac4197582953e4317fcf0639d1cee1f8d"
+    ]
+  },
+  "s-txn/TX-01": {
+    "id": "s-txn/TX-01",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "bramble-account",
+    "index": 1,
+    "address": "0x564df5119bf9cb7d3d655181726fa402ccb182604fd48f57be215f212c265fc",
+    "pubkey": "0x2e4ac135ac77e2a6eeb96a8a412f2288b953cc4ba6bb21ab3cbd9f07141c7d8",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "sends: Bramble OZ 3.0 (STRK and ETH)",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x0",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+      "eth": "unfunded: the bank lacks the Sepolia ETH"
+    },
+    "log": [
+      "funded STRK 0x634996667b17d5534afa068185fdb18fddad89269bc790d8642308da5507180",
+      "deployed 0x33fad044ab61ed950aa8efb43bddd287ead71377f496092dddf7560edcd7ff9",
+      "funded STRK 0x74031af1e7aa733adbc0b07f583401bb5a67156f97400ef308dfa2b7b50c638"
+    ]
+  },
+  "s-txn/TX-02": {
+    "id": "s-txn/TX-02",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "bramble-account",
+    "index": 2,
+    "address": "0x55f1944a94f9d67a960a1ef2dcab0e97bda9cee28e6b0a51b1b5d15e90b1b15",
+    "pubkey": "0x41505bfbac50b06a19fe1e320df50ce2a555ed76561ce832830f9d62a685e6a",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "sends: Argent 0.4 on Bramble's ladder",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x41505bfbac50b06a19fe1e320df50ce2a555ed76561ce832830f9d62a685e6a",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "funded STRK 0x814e65441c16ecdd636a0836d5afc74074977439a45b9549ab27a17b2f4868",
+      "deployed 0x77e27217583c165a8eb5369bca3782c96aa8d888e4748266f37c18d4894c159",
+      "funded STRK 0x7a2fa918b96b4384931a5193afd215458fdd016d1dbe789e80dc7fd487c6e31"
+    ]
+  },
+  "s-txn/TX-03": {
+    "id": "s-txn/TX-03",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "bramble-account",
+    "index": 3,
+    "address": "0xf0722087759f7a166e24199c69fdae841bac8deb4e55c473a619faef0b6306",
+    "pubkey": "0x39d0e3545697e182c1a3bc59f8d3ae594cfa5743e09acd9a0538aa74e5a5ded",
+    "classAtDeploy": "0x0663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024",
+    "expected": "sends: Xverse Argent 0.4 on Bramble's ladder",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x39d0e3545697e182c1a3bc59f8d3ae594cfa5743e09acd9a0538aa74e5a5ded",
+      "liveClass": "0x663fc01a0dbe1bacc4cd2a4c856eb9784b255a20988aa33d4d52b6fc20bd024"
+    },
+    "log": [
+      "funded STRK 0x73c10dabd6db8a697976faf9a255ec95ab29df037464b5cfec94aed4933e47b",
+      "deployed 0x5ec3cf18b825d44c5a97c56654a94d259c8a6ad12091a3bddeb5041bac699b5",
+      "funded STRK 0x64d388926f65be81f2ac77245bf6a48b1bdb6eb69c77c0fe87677ec2132781e"
+    ]
+  },
+  "s-txn/TX-04": {
+    "id": "s-txn/TX-04",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "ready-double",
+    "index": 0,
+    "address": "0x33e2bc369662da30e332c8ebd89ad671b0fd658d56a2090f016233ea5bb0d12",
+    "pubkey": "0x44ad49d1a09f74bd61e36124d1e9809480b532e2c03452811f1065d5359ef6f",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "sends: Ready Argent 0.4",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x44ad49d1a09f74bd61e36124d1e9809480b532e2c03452811f1065d5359ef6f",
+      "liveClass": "0x36078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f"
+    },
+    "log": [
+      "funded STRK 0x7256f9ab1d21c6c78c48a97fe135dad7ba277e1e4f282a1e65dcba045884935",
+      "deployed 0x227b86e179299b6b9371bcd7dca0ef1a353ba003353119155729ca46d57c6ed",
+      "funded STRK 0x3ff04f54040288cabc6d42403340757ab9f4b1dbd0de7686dd7caf052e5317b"
+    ]
+  },
+  "s-txn/TX-05": {
+    "id": "s-txn/TX-05",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "ready-double",
+    "index": 1,
+    "address": "0x713d2afc92cbb77d8c136321aab02dfc5e6b90e606d857d78f73049e27412a3",
+    "pubkey": "0x346e1ef29ba8720dddf6cddf9f357e4b5fac8abaeaf66c08c678beb631a88a5",
+    "classAtDeploy": "0x029927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b",
+    "expected": "sends: Ready Argent 0.3.1",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x346e1ef29ba8720dddf6cddf9f357e4b5fac8abaeaf66c08c678beb631a88a5",
+      "liveClass": "0x29927c8af6bccf3f6fda035981e765a7bdbf18a2dc0d630494f8758aa908e2b"
+    },
+    "log": [
+      "funded STRK 0x3a1ee5b27d5a46d033cb772e0a9b6f59b8f65f1cc3c123c00f36b661b4dc90",
+      "deployed 0x20d76f857e09c630b1788f16810bab9726e9e58129034a5d2043a4c5ce88825",
+      "funded STRK 0x5198274e9bb7bb68e3f6eec0901ffa5c2c0373e1fa9b4c4bf0d414838fcf495"
+    ]
+  },
+  "s-txn/TX-06": {
+    "id": "s-txn/TX-06",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "ready-double",
+    "index": 2,
+    "address": "0x4a4a705a73574bb7eef556136b548230516ae1b57c1d913e507d10334844c22",
+    "pubkey": "0x588dac90e637549d0ff7ac3b95e7827be096a2122635c1bf25d1847550848f6",
+    "classAtDeploy": "0x036078334509b514626504edc9fb252328d1a240e4e948bef8d0c08dff45927f",
+    "expected": "Ready Argent 0.4 upgraded to 0.5.0: send or refusal set by the suite's first run",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x588dac90e637549d0ff7ac3b95e7827be096a2122635c1bf25d1847550848f6",
+      "liveClass": "0x73414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2",
+      "upgradedTo": "0x073414441639dcd11d1846f287650a00c60c416b9d3ba45d31c651672125b2c2"
+    },
+    "log": [
+      "funded STRK 0x13c3549c50ef12d2dc8a34fdcdbfd570c99a09b92686b293ec3db3463413d75",
+      "deployed 0x72704047270b5a7236150c12a2d07eaec9f3a4233ec0dfaf1737561c5f22df2",
+      "upgrade 0x604810e0fc8f24121111f60f01c646bf4f6b80fd7278d87a37f374665beafe2",
+      "funded STRK 0x3041f3957121bf8c63ac38bdbd6ff512152f762596dcde2d5710379772ff983"
+    ]
+  },
+  "s-txn/TX-07": {
+    "id": "s-txn/TX-07",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "braavos-direct",
+    "index": 0,
+    "address": "0x3cef65c518f2b99d82d22a6acbae820d1daee042326a5d04c43d1cf76c848ec",
+    "pubkey": "0x50fff7654d6b0edc53f31794c0d5afcddc02348f95fc71c28677708e1bf73d2",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "sends: Braavos, current implementation",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x50fff7654d6b0edc53f31794c0d5afcddc02348f95fc71c28677708e1bf73d2",
+      "liveClass": "0x3957f9f5a1cbfe918cedc2015c85200ca51a5f7506ecb6de98a5207b759bf8a"
+    },
+    "log": [
+      "funded STRK 0x3161cba136d829c84f51399a0199e2d31b4614cf5fe46a3466d8680e0784d61",
+      "deployed 0x16a0afa5c4e8e462eb79b2a62c05b7a1a117f8857b39e23009bfd1b0f74aca9",
+      "funded STRK 0x2ef90ecf1c56325d6d728abdfd05f6bc74e75a909f34bdcd9b1350362d9188b"
+    ]
+  },
+  "s-txn/TX-08": {
+    "id": "s-txn/TX-08",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "braavos-direct",
+    "index": 1,
+    "address": "0x2fe884779367babc284cd687d9351de08f7e223193570ff8c24584f9a24090a",
+    "pubkey": "0x4510bb1d4b82af03fb90ae1b965200bffc6efa66e5a66d3875543b91fee56ab",
+    "classAtDeploy": "0x03d16c7a9a60b0593bd202f660a28c5d76e0403601d9ccc7e4fa253b6a70c201",
+    "expected": "Braavos 1.1.0 implementation: send or refusal set by the suite's first run",
+    "detectability": "D2",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x4510bb1d4b82af03fb90ae1b965200bffc6efa66e5a66d3875543b91fee56ab",
+      "liveClass": "0x2c8c7e6fbcfb3e8e15a46648e8914c6aa1fc506fc1e7fb3d1e19630716174bc"
+    },
+    "log": [
+      "funded STRK 0x7c790f21e2181564b8c6553d2c93376803bacb00a573286c428b215eea10476",
+      "deployed 0x312c8438f7eea6b777ae1217bf42a15fc85c685e57e62f4cb67c5d66778af30",
+      "funded STRK 0x4910a42b162e7c05397f93edcf74b5bd12f633d333936298d8d6710796527b6"
+    ]
+  },
+  "s-txn/TX-09": {
+    "id": "s-txn/TX-09",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "key",
+    "index": 0,
+    "address": "0x7100625deef818b82f06c5d0c2e7fc3b0c8acbae8d1735b918a8d1f1c7f1854",
+    "pubkey": "0x7d246c28b06cf0ad5af09da5f30f2f1ce744a14ffdedd0fe1b8598d1b82b8ab",
+    "classAtDeploy": "0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381",
+    "expected": "sends: OZ 3.0 imported by private key",
+    "detectability": "D1",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x0",
+      "liveClass": "0x1d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"
+    },
+    "log": [
+      "funded STRK 0x703f979a3bc050bbd8a11556d981978466eb9a9a2102d687ffc539f6f72b8c0",
+      "deployed 0x2cdee352d98032655047aa728249bcbba5e79eaf3cc3fefed31930900b9fc72",
+      "funded STRK 0x45a1115fa55fa5240c0db2d7158cabd5dfb382fb91a00b20ae03b6a8ff3b10f"
+    ]
+  },
+  "s-txn/TX-10": {
+    "id": "s-txn/TX-10",
+    "seed": "BRAMBLE_DATASET_SEED_S_TXN",
+    "vendorDerivation": "key",
+    "index": 1,
+    "address": "0x141b1195e9b817f6d9f388b2774a930ea8c4d26a480ea1f8fe15e534af5dc30",
+    "pubkey": "0x2caa1ab0a182d8aa3d8fc9446b235cb30573bd893788f28f1808d51498f0c23",
+    "classAtDeploy": "0x05b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564",
+    "expected": "sends: sncast's OZ class and salt, imported by key and address",
+    "detectability": "D5",
+    "backedBy": "none",
+    "state": {
+      "deployed": true,
+      "salt": "0x7c10",
+      "liveClass": "0x5b4b537eaa2399e3aa99c4e2e0208ebd6c71bc1467938cd52c798c601e43564"
+    },
+    "log": [
+      "funded STRK 0x2414504eb44a8382470f03ba73f299cba9fe7ec7685f6498923e56370a89143",
+      "deployed 0x645586b777762134336849cc45c7e4fed5d6305b35e86cf171bdbaf48485af0",
+      "funded STRK 0x31f4893c3b36da1d55687a92becf8f8f44f10bc55bc215faeca993282045051"
+    ]
+  }
+}
