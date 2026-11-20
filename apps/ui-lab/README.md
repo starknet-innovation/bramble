@@ -9,7 +9,7 @@ broadcast path.
 
 Requirements:
 
-- Bun 1.3.3 (the version pinned by this package and CI).
+- Bun 1.4.4 (the version pinned by this package and CI).
 - The root workspace lockfile. Storybook remains a private app workspace and cannot enter the
   production extension dependency graph.
 
